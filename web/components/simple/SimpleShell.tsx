@@ -35,8 +35,9 @@ export const SIMPLE_DESTINATIONS: Dest[] = [
   { label: "Priorities", href: "/simple/priorities", icon: "priorities", testId: "simple-nav-priorities" },
   { label: "Meetings", href: "/simple/meetings", icon: "clock", testId: "simple-nav-meetings" },
   { label: "Decisions", href: "/simple/decisions", icon: "flag", testId: "simple-nav-decisions" },
-  // inbox-meeting-proposals owner: the one Inbox (Detailed's too), with every proposal waiting on me.
-  { label: "Inbox", href: "/inbox", icon: "inbox", testId: "simple-nav-inbox" },
+  // inbox-meeting-proposals owner: the one Inbox (Detailed's too), with every proposal waiting on me;
+  // S-7: in Simple's shell, so the person stays in Simple.
+  { label: "Inbox", href: "/simple/inbox", icon: "inbox", testId: "simple-nav-inbox" },
 ];
 
 /** Phone tab bar: Home, One-pagers, Roadmap, Decisions, More (Detailed's pattern). */

@@ -1313,7 +1313,7 @@ export function FloatingCard({
             {head}
             <Tabs
               label="The item"
-              className="mt-2.5"
+              className="panel-tabs mt-2.5"
               value={talk ? "talk" : "details"}
               onChange={(t) => setTalk(t === "talk")}
               items={[

@@ -29,7 +29,7 @@
     "/i/[token]": 26,
     "/impact/changes/[id]": 85,
     "/impact/entities/[id]": 54,
-    "/inbox": 31,
+    "/inbox": 0,
     "/intakes/[id]": 172,
     "/plan": 30,
     "/plan/dates": 0,
@@ -74,7 +74,7 @@
     "/simple/meetings/[id]/chat": 9,
     "/simple/one-pagers": 16,
     "/simple/one-pagers/[doc]": 31,
-    "/simple/priorities": 55,
+    "/simple/priorities": 19,
     "/simple/roadmap": 15,
     "/sources": 0,
     "/specs/[id]/design/[versionId]": 16
@@ -154,7 +154,7 @@
     "/simple/meetings/[id]/chat": 10,
     "/simple/one-pagers": 16,
     "/simple/one-pagers/[doc]": 20,
-    "/simple/priorities": 55,
+    "/simple/priorities": 19,
     "/simple/roadmap": 15,
     "/sources": 10,
     "/specs/[id]/design/[versionId]": 16

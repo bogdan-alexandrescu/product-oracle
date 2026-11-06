@@ -1,3 +1,4 @@
+import { DRAFTING_MS } from "../lib/api/mock/simple-changes";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN, login, signOut } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
@@ -285,6 +286,10 @@ for (const phone of [false, true]) {
       await tap(card.getByRole("button", { name: "Accept" }));
       await expect(page.getByText(/^Added .+ as a draft$/)).toBeVisible();
       await expect.poll(() => inboxCount(page, phone)).toBe(n1 - 1);
+      // The added draft settles after DRAFTING_MS and its Oracle's dates then wait in the Inbox
+      // too: the roadmap is read once it has, so the count below already has them.
+      await page.waitForTimeout(DRAFTING_MS + 500);
+      await readRoadmap(page);
 
       // A teammate's proposal, accepted in Needs a decision.
       await openFromInbox("Open Weekly alert digest on its roadmap");

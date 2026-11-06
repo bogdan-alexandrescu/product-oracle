@@ -250,10 +250,18 @@ export function GoalLadder(props: LadderProps) {
         setSel(waiter);
       } catch (e) {
         // A loop is refused (422); the drawn arrow stays red until the next pick, and the words
-        // name both cards: the one drawn from already waits on the one drawn onto.
-        if (e instanceof ChangeFailed && e.status === 422) {
+        // name both cards: the one drawn from already waits on the one drawn onto. Any other
+        // refusal gets one plain line, never the API's field path.
+        const said = e instanceof ChangeFailed && e.status === 422 ? e.message : "";
+        if (said.startsWith("Not added, it would make a loop:")) {
           setRefused([on, waiter]);
           toast({ message: `Not added, it would make a loop: ${named(on)} already waits on ${named(waiter)}` });
+        } else if (said.startsWith("after.depends_on: item or feature keys")) {
+          toast({ message: `Not added: ${byId.get(on)?.f.name ?? "this feature"} has no roadmap item yet to link to` });
+        } else if (said.startsWith("after.depends_on: no item or feature has the key")) {
+          toast({ message: "Not added: no feature has that key" });
+        } else if (said) {
+          toast({ message: "Not added. Try again or pick another feature." });
         } else failed(e);
       }
     },

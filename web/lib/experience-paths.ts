@@ -36,6 +36,7 @@ const PAIRS: [simple: string, detailed: string][] = [
   ["/simple/meetings", "/company/rituals"],
   ["/simple/decisions", "/company/decisions"],
   ["/simple/one-pagers", "/documents"],
+  ["/simple/inbox", "/inbox"],
 ];
 
 /**

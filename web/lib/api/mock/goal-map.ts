@@ -63,6 +63,27 @@ export const goalMapItems = (map: GoalMap): { key: string; id: string; title: st
     return key ? [{ key, id: f.id, title: f.name, section: `f-${100 + Number(key.slice(4))}` }] : [];
   });
 
+/**
+ * pre-demo QA P-6: each feature's goal as its panel reads it (service._ladder_goals): the goal of
+ * a milestone it serves, the first in the goal order (the map's own), with its measure and target.
+ */
+export function goalMapGoals(map: GoalMap, entities: { id: string; key: string; attrs?: Record<string, unknown> | null }[]): Record<string, Schemas["SimpleGoalRef"]> {
+  const out: Record<string, Schemas["SimpleGoalRef"]> = {};
+  const goalOf = new Map(map.milestones.map((m) => [m.id, m.goal]));
+  for (const f of map.features) {
+    const served = new Set(f.milestones.map((m) => goalOf.get(m)));
+    const g = map.goals.find((x) => served.has(x.id));
+    if (!g) continue;
+    const e = entities.find((x) => x.id === g.id);
+    const a = e?.attrs ?? {};
+    const metric = typeof a.metric === "string" && a.metric ? a.metric : g.measure || null;
+    const unit = g.unit || "";
+    const target = unit === "%" ? `${g.target}%` : `${g.target} ${unit}`.trim();
+    out[f.id] = { id: g.id, key: e?.key ?? g.id, title: g.name, metric, position: typeof a.position === "number" ? a.position : null, target, due: null, current: null, unit: unit || null };
+  }
+  return out;
+}
+
 const GOALS: GmGoal[] = [
   {
     id: "signups",

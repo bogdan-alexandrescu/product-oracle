@@ -48,7 +48,7 @@ for (const [name, device] of [["desktop", DESKTOP], ["phone", PHONE]] as const) 
       // A phone keeps the filters behind its Filters button.
       if (name === "phone") await page.getByTestId("filters-toggle").click();
       const prd = filter(page, "PRD");
-      await expect(prd.locator("option")).toHaveText(["All", "User Safety", "Scale"]);
+      await expect(prd.locator("option")).toHaveText(["All", "Scale", "User Safety"]);
       await prd.selectOption({ label: "Scale" });
       for (const title of SCALE) await expect(shown(page, title)).toBeVisible();
       for (const title of SAFETY) await expect(shown(page, title)).toHaveCount(0);

@@ -191,10 +191,10 @@ const FAILED: { name: string; path: string; url: string; what: string; after: (p
     after: (p) => expect(p.getByTestId("request-filters")).toBeVisible(),
   },
   {
-    name: "Baseline",
+    name: "Ground Truth",
     path: "/v1/baseline/graph",
     url: "/baseline",
-    what: "Could not load the baseline.",
+    what: "Could not load the Ground Truth.",
     after: (p) => expect(p.getByRole("tab").first()).toBeVisible(),
   },
   {
@@ -202,7 +202,7 @@ const FAILED: { name: string; path: string; url: string; what: string; after: (p
     path: "/v1/strategy/stack",
     url: "/company/strategy",
     what: "Could not load the strategy.",
-    after: (p) => expect(p.getByText("Strategy stack").first()).toBeVisible(),
+    after: (p) => expect(p.getByRole("heading", { name: "Strategy stack", exact: true })).toBeVisible(),
   },
   {
     name: "Settings › Members",

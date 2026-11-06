@@ -13,7 +13,7 @@ import type { Schemas } from "@/lib/api/client";
 import { PLAN_PRD_SLUG, planOut, planSlices } from "./simple-plan";
 import { closed, companyToday, goalRank, roadmapOut, type SeedItem, type SimpleDb } from "./simple-roadmap";
 import { flowFor } from "./simple-visuals";
-import { stableUuid } from "./ids";
+import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
 import { COMPANY_TITLE } from "./one-roadmap";
 
 type Row = Schemas["SimplePriorityRow"];
@@ -361,6 +361,12 @@ function pickLine(key: string | null, offered: Line[], same?: Map<string, Line>)
   return (key ? same?.get(key) : undefined) ?? offered.find((x) => x.key === key) ?? NOW_LINE;
 }
 
+/**
+ * The "priorities-bucket-only" scenario: a Goal bucket lists a feature the ranked rows do not
+ * (the first goal's first feature), so its bucket row opens the feature panel by its code (S-3).
+ */
+export const PRIORITIES_BUCKET_ONLY_SCENARIO = "priorities-bucket-only";
+
 export function prioritiesOut(
   db: SimpleDb,
   ctx: PrioritiesCtx,
@@ -384,7 +390,10 @@ export function prioritiesOut(
   const all = [...on, ...offCompany(db, on).filter((i) => i.status !== "cut" && !cut.has(i.key))];
   // A draft item is never ranked (priorities.py `_items`): it sits under "Not ranked yet", with no
   // row and no bucket weeks. Here each item stands for its own feature, so a draft has no row at all.
-  const ranked = all.filter((i) => !i.draft);
+  // prio-unranked: an item linked to no feature (its seed's feature_id null, as the Ground Truth
+  // scenario's Export to sheets) has no ranked feature: no row, listed in `unranked` instead.
+  const noFeature = (i: Item) => db.items.find((s) => s.key === i.key)?.feature_id === null;
+  const ranked = all.filter((i) => !i.draft && !noFeature(i));
   const byId = new Map(ranked.map((i) => [i.id, i]));
   const keyOf = (i: Item) => i.key;
   const score = new Map<string, number>();
@@ -485,13 +494,17 @@ export function prioritiesOut(
     .filter((i) => i.draft)
     .map((i) => ({
       item_id: i.id, code: i.key, title: i.title, goal: i.goal ? { key: i.goal.key, title: i.goal.title, position: i.goal.position ?? null } : null, roadmap: i.roadmap, applies: decides(i.id),
-      merge_into: ranked
-        .filter((x) => seen.has(x.id))
+      merge_into: all
+        .filter((x) => !x.draft && seen.has(x.id))
         .filter((x) => x.roadmap.id === i.roadmap.id)
         .sort((a, b) => Number(a.goal?.key !== i.goal?.key) - Number(b.goal?.key !== i.goal?.key) || a.key.localeCompare(b.key))
         .slice(0, 8)
         .map((x) => ({ item_id: x.id, code: x.key, title: x.title })),
     }));
+  // prio-unranked (priorities.py `_unranked`): the reader's live, non-draft items no row holds.
+  const unranked: Schemas["SimplePriorityUnranked"][] = live
+    .filter((i) => !i.draft && noFeature(i))
+    .map((i) => ({ item_id: i.id, code: i.key, title: i.title, goal: i.goal ? { key: i.goal.key, title: i.goal.title, position: i.goal.position ?? null } : null, roadmap: i.roadmap }));
   const buckets: Schemas["SimpleGoalBucket"][] = [];
   for (const r of rows) {
     const key = r.goal?.key ?? "none";
@@ -512,11 +525,12 @@ export function prioritiesOut(
     const prdOf = new Map(read.items.map((i) => [i.id, i.prd?.slug]));
     yours.forEach((i, n) => (rows[n].in_plan = prdOf.get(i.id) === PLAN_PRD_SLUG));
   }
+  const bucketOnly = typeof localStorage !== "undefined" && localStorage.getItem(MOCK_SCENARIO_KEY) === PRIORITIES_BUCKET_ONLY_SCENARIO ? buckets.find((b) => !b.no_goal)?.codes[0] : undefined;
   return {
     // The plan-model lane: with a plan, its span ("Nov 2 - Feb 12"), else the calendar quarter.
     today, quarter: read.span ?? quarter(today), method: "goal_weighted",
     formula: "score = Σ(goal weight × contribution) × confidence × track record ÷ effort",
-    rows, proposals, drafts, buckets, weeks_total: total, can_change: can, line, lines,
+    rows: bucketOnly ? rows.filter((r) => r.code !== bucketOnly) : rows, proposals, drafts, unranked, buckets, weeks_total: total, can_change: can, line, lines,
     company_roadmap: db.company_roadmap ? { id: stableUuid(`simple-doc/${db.company_roadmap}`), slug: db.company_roadmap, title: COMPANY_TITLE } : null,
     // plan-charts: the plan this quarter is, when the reader sees its PRD's items.
     plan,

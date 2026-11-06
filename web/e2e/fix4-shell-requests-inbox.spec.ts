@@ -43,7 +43,7 @@ test("qa-shell-19: a viewer's Inbox has no source to fix; the owner's has it wit
   await page.getByTestId("nav-inbox").filter({ visible: true }).first().click();
   const sources = page.getByTestId("inbox-sources");
   await expect(sources).toContainText("Legacy all-hands chat");
-  await expect(sources.getByRole("link", { name: "Edit Legacy all-hands chat" })).toBeVisible();
+  await expect(sources.getByRole("link", { name: "Pick fewer channels in Legacy all-hands chat" })).toBeVisible();
 });
 
 test("qa-shell-26: on a desktop the sorting control says what it does", async ({ page }) => {

@@ -57,7 +57,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       await expect(bar.getByTestId("run-review-text")).toHaveText("This run's review · 0 of 3 sections reviewed");
       await bar.getByRole("button", { name: "About this run's review" }).click();
       const tip = page.getByRole("tooltip").filter({ visible: true });
-      await expect(tip).toContainText("The review of draft v2 by the Baseline to PRD run");
+      await expect(tip).toContainText("The review of draft v2 by the Ground Truth to PRD run");
     });
   });
 }

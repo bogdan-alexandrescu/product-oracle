@@ -1275,6 +1275,17 @@ class SimplePriorityDraft(BaseModel):
     merge_into: list[SimplePriorityMerge] = []
 
 
+class SimplePriorityUnranked(BaseModel):
+    """prio-unranked: a live, non-draft roadmap item with no ranked feature (none, or one the
+    ranking leaves out): listed under the ranked rows, with no score and no rank."""
+
+    item_id: uuid.UUID
+    code: str
+    title: str
+    goal: SimplePriorityGoal | None = None
+    roadmap: SimpleDocRef
+
+
 class SimpleGoalBucket(BaseModel):
     # The goal's key, or "none".
     key: str
@@ -1312,6 +1323,8 @@ class SimplePrioritiesOut(BaseModel):
     rows: list[SimplePriorityRow]
     proposals: list[SimplePriorityProposal]
     drafts: list[SimplePriorityDraft]
+    # prio-unranked: the items no row holds, by horizon then position.
+    unranked: list[SimplePriorityUnranked] = []
     buckets: list[SimpleGoalBucket]
     weeks_total: float
     # Commenter and up: may reorder and estimate (applies or proposes).

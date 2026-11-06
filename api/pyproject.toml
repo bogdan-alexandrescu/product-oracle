@@ -35,7 +35,7 @@ oracle-seed = "oracle.seed:main"
 
 [dependency-groups]
 dev = [
-    "pytest>=8.2",
+    "pytest>=9.0",
     "pytest-asyncio>=0.23",
     "pytest-xdist>=3.6",
     "ruff>=0.5",

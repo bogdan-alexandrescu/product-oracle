@@ -124,11 +124,10 @@ test.describe("on a desktop", () => {
     await openInbox(page);
     const links = page.locator("[role=tabpanel]").getByTestId("inbox-feedback").locator("tr[data-row] td:nth-child(2) a");
     await expect(links.first()).toBeVisible();
-    let cut = 0;
     for (const link of await links.all()) {
-      const isCut = await link.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
+      // G-5: a long one wraps to two lines, then is cut.
+      const isCut = await link.evaluate((el) => el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1);
       if (!isCut) continue;
-      cut += 1;
       const full = (await link.textContent())!.trim();
       const title = await link.getAttribute("title");
       if (title) {
@@ -139,7 +138,8 @@ test.describe("on a desktop", () => {
       await expect(page.getByTestId("suggestion-peek-summary").filter({ visible: true })).toHaveText(full);
       await page.mouse.move(0, 0);
     }
-    expect(cut).toBeGreaterThan(0);
+    // G-5: none cut on one line: each wraps.
+    for (const space of await links.evaluateAll((els) => els.map((e) => getComputedStyle(e).whiteSpace))) expect(space).not.toBe("nowrap");
   });
 
   test("qa-company-16: the heading and count follow the tab, and Staged's row has an age", async ({ page }) => {
@@ -191,7 +191,8 @@ test.describe("on a desktop", () => {
   test("qa-company-20: a source's reason wraps rather than being cut mid-sentence", async ({ page }) => {
     await login(page);
     await openInbox(page);
-    const text = page.getByTestId("inbox-sources").getByText(/^Pick 100 channels or fewer/);
+    // G-6: the reason in short; the sentence is behind its (i).
+    const text = page.getByTestId("inbox-sources").getByTestId("source-need-text").filter({ hasText: "Too many channels" });
     await expect(text).toBeVisible();
     const [overX, overY] = await text.evaluate((el) => [el.scrollWidth > el.clientWidth + 1, el.scrollHeight > el.clientHeight + 1]);
     expect(overX).toBe(false);

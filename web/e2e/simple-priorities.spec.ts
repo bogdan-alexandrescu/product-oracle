@@ -12,7 +12,12 @@ import { expect, test, type BrowserContext, type Locator, type Page } from "./te
 
 // roadmap-edit-fixes round 1: F-03 Health log is a live, planned roadmap item (not done, cut or in
 // Trash), so Priorities lists it as the roadmap does.
-const ORACLE = ["setup-checklist", "alert-rules", "alert-digest", "alert-mobile", "setup-import", "alert-export", "alert-sso", "setup-health-log", "price-tiers", "setup-video"];
+// P-1: the Goal map's features (gm-f1 ...) are roadmap items from the first load, ranked among the rest.
+const ORACLE = [
+  "setup-checklist", "alert-rules", "alert-digest", "alert-mobile", "setup-import", "alert-export", "alert-sso",
+  "gm-f10", "gm-f4", "gm-f9", "setup-health-log", "gm-f3", "price-tiers",
+  "gm-f1", "gm-f7", "gm-f8", "gm-f5", "gm-f2", "gm-f12", "gm-f11", "gm-f6", "setup-video",
+];
 const PHONE = { width: 390, height: 844 };
 
 const signedIn = new WeakSet<BrowserContext>();
@@ -76,7 +81,7 @@ test.describe("desktop", () => {
    */
   test("an owner drags a row with a reason, sees the ghost and the override, compares and undoes", async ({ page }) => {
     const admin = await as(page, "admin@example.com");
-    await expect(admin.getByTestId("prio-subtitle")).toContainText("a feature never ranks above one it depends on");
+    await expect(admin.locator("#prio-about-text")).toContainText("a feature never ranks above one it depends on");
     expect(await codes(admin)).toEqual(ORACLE);
     await expect(row(admin, "alert-digest").getByTestId("prio-after")).toHaveText("After Alert rules engine, which it needs.");
     await expect(row(admin, "alert-sso").getByTestId("prio-after")).toHaveText("After Alert history export, which it needs.");

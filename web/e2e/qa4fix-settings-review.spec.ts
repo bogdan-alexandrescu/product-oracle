@@ -18,16 +18,16 @@ test("Inbox counts the sources that need attention as Settings › Sources does"
   await expect(group.getByTestId("source-need-text")).toHaveCount(3);
   // The source that lost access to a doc and a folder, and the one that must reconnect.
   await expect(group.getByRole("row").filter({ hasText: "Product docs" }).getByTestId("source-need-text")).toHaveText(
-    "Lost access to 2 items: share them again or remove them from this source",
+    "Lost access to 2 items",
   );
   await expect(group.getByRole("row").filter({ hasText: "Drive folders" }).getByTestId("source-need-text")).toHaveText(
-    "Reconnect to choose files: reconnect its account in Settings › Connections",
+    "Reconnect to choose files",
   );
   await expect(group).toContainText("Legacy all-hands chat");
   // Not the one in error.
   await expect(group).not.toContainText("Example repo");
 
-  await group.getByRole("link", { name: "Edit Drive folders" }).click();
+  await group.getByRole("link", { name: "Share again in Product docs" }).click();
   await expect(page).toHaveURL(/\/settings\/sources#source-/);
 });
 
