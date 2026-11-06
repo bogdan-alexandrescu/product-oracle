@@ -7,13 +7,14 @@ import { login, openRoadmapItem, signOut } from "./helpers";
 /**
  * The Ground Truth check on Detailed's Ground Truth page (docs/ground-truth.md; the owner,
  * Nov 5: allowed but flagged). The "ground-truth-flags" scenario: Export to sheets (a roadmap
- * item on no feature), Weekly digest (on a feature a run only proposed), the slice F-15a Usage
- * report, the PRD's F-09 Guest seats, Smart search (no code), F-02 Audit log (no goal) and
- * F-03 Night alerts (runs today, still on the roadmap), and the mock's other confirmed features
- * with no code or goal. Export to sheets is published: Add and Link set its feature through the
- * roadmap's working draft (a change, so its link rides the next version) and its panel on the
- * Roadmap shows the feature. Each fix is made as a person makes it; a fix sent for approval
- * leaves its row waiting, with no second button, after a reload too.
+ * item on no feature), Weekly digest (on a feature a run only proposed), F-09a Guest invites (an
+ * item of the PRD's F-09, over two milestones), the slices F-15a Usage report and F-15b Usage
+ * chart, the PRD's F-09 Guest seats, Smart search (no code), F-02 Audit log (no goal) and F-03
+ * Night alerts (runs today, still on the roadmap). Export to sheets is published: Add and Link set
+ * its feature through the roadmap's working draft (a change, so its link rides the next version)
+ * and its panel on the Roadmap shows the feature. Each fix is made as a person makes it; a fix sent
+ * for approval leaves its row waiting, with no second button, after a reload too. A PRD's feature
+ * Add to Ground Truth makes serves the PRD's goal; any other serves none yet, so it is flagged for one.
  */
 
 const DESKTOP = { width: 1440, height: 900 };
@@ -51,11 +52,12 @@ for (const viewport of [DESKTOP, PHONE])
     test(`the flags band counts each kind and opens its items (${viewport.width}, ${colorScheme})`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await page.emulateMedia({ colorScheme });
-      const start = await open(page);
-      expect(start).toBeGreaterThan(7);
+      await open(page);
+      await expect(total(page)).toHaveText("9");
       await expect(count(page, "unlinked_item")).toContainText("Not in the Ground Truth");
-      await expect(count(page, "unlinked_item")).toContainText("2");
-      for (const kind of ["slice_parent_missing", "prd_feature_missing", "runs_today_on_roadmap"]) await expect(count(page, kind)).toContainText("1");
+      await expect(count(page, "unlinked_item")).toContainText("3");
+      await expect(count(page, "slice_parent_missing")).toContainText("2");
+      for (const kind of ["prd_feature_missing", "no_code", "no_goal", "runs_today_on_roadmap"]) await expect(count(page, kind)).toContainText("1");
       await openKind(page, "unlinked_item");
       // One short line shows; the flag's sentence is behind the (i).
       const sheets = row(page, "Export to sheets");
@@ -67,6 +69,7 @@ for (const viewport of [DESKTOP, PHONE])
       // Linked to a feature a run only proposed: it says so, with Confirm it.
       await expect(row(page, "Weekly digest")).toContainText("Waiting to be confirmed: F-14 Weekly digest");
       await expect(row(page, "Weekly digest").getByRole("button", { name: /Confirm it/ })).toBeVisible();
+      await expect(row(page, "Guest invites")).toContainText("F-09a");
       await openKind(page, "prd_feature_missing");
       await expect(row(page, "Guest seats")).toContainText("F-09");
       await expect(row(page, "Guest seats")).toContainText("PRD Scale");
@@ -78,35 +81,48 @@ test.describe("as the owner", () => {
   test.use({ viewport: DESKTOP });
 
   test("Add to Ground Truth adds a published item's feature once, and its flag goes", async ({ page }) => {
-    const start = await open(page);
+    await open(page);
     await openKind(page, "unlinked_item");
     await row(page, "Export to sheets").getByRole("button", { name: /Add to Ground Truth/ }).click();
     await expect(page.getByTestId("gt-notice")).toContainText("Added “Export to sheets” to the Ground Truth.");
-    await expect(list(page, "unlinked_item").getByTestId("gt-row").filter({ hasText: "Export to sheets" })).toHaveCount(0);
-    await expect(count(page, "unlinked_item")).toContainText("1");
-    // The new feature is one feature, named as the item; it still needs its code and goal.
+    await expect(row(page, "Export to sheets")).toHaveCount(0);
+    await expect(count(page, "unlinked_item")).toContainText("2");
+    // The new feature is one feature, named as the item; it had no code and serves no goal yet: it is flagged for both instead.
     await openKind(page, "no_code");
     await expect(list(page, "no_code").getByTestId("gt-row").filter({ hasText: "Export to sheets" })).toHaveCount(1);
-    await expect(total(page)).toHaveText(String(start + 1));
+    await expect(count(page, "no_code")).toContainText("2");
+    await expect(count(page, "no_goal")).toContainText("2");
+    await expect(total(page)).toHaveText("10");
   });
 
-  test("Add to Ground Truth adds a PRD's feature with its code and goal, and its slice's", async ({ page }) => {
-    const start = await open(page);
+  test("Add to Ground Truth adds a PRD's feature with its code and goal, and one slice's feature for both slices", async ({ page }) => {
+    await open(page);
     await openKind(page, "prd_feature_missing");
     await row(page, "Guest seats").getByRole("button", { name: /Add to Ground Truth/ }).click();
     await expect(page.getByTestId("gt-notice")).toContainText("Added “Guest seats” to the Ground Truth.");
     await expect(count(page, "prd_feature_missing")).toHaveCount(0);
-    // Kept F-09 and serves the PRD's goal: no new flag for it.
-    await expect(total(page)).toHaveText(String(start - 1));
+    // It is F-09 and serves the PRD's goal: no Give it a code nor Pick a goal, and its roadmap item F-09a is in the Ground Truth by that code.
+    await expect(count(page, "no_code")).toContainText("1");
+    await expect(count(page, "no_goal")).toContainText("1");
+    await expect(count(page, "unlinked_item")).toContainText("2");
+    await expect(total(page)).toHaveText("7");
+    // One add on the slice F-15a adds F-15: both its slices (F-15a, F-15b) go.
     await openKind(page, "slice_parent_missing");
+    await expect(row(page, "Usage chart")).toContainText("F-15b");
     await row(page, "Usage report").getByRole("button", { name: /Add to Ground Truth/ }).click();
+    await expect(page.getByTestId("gt-notice")).toContainText("Added “Usage report” to the Ground Truth.");
     await expect(count(page, "slice_parent_missing")).toHaveCount(0);
-    await expect(total(page)).toHaveText(String(start - 2));
-    await expect(page.getByTestId("gt-row").filter({ hasText: /Guest seats|Usage report/ })).toHaveCount(0);
+    await expect(count(page, "no_code")).toContainText("1");
+    // F-15 is a feature with its code, which serves no goal yet; F-09 serves the PRD's.
+    await openKind(page, "no_goal");
+    await expect(page.getByRole("button", { name: "Pick a goal: F-15 Usage report" })).toBeVisible();
+    await expect(row(page, "Guest seats")).toHaveCount(0);
+    await expect(count(page, "no_goal")).toContainText("2");
+    await expect(total(page)).toHaveText("6");
   });
 
   test("Link to a feature links a published item to a Ground Truth feature by code and name", async ({ page }) => {
-    const start = await open(page);
+    await open(page);
     await openKind(page, "unlinked_item");
     await row(page, "Export to sheets").getByRole("button", { name: /Link to a feature/ }).click();
     const picker = page.getByTestId("gt-picker");
@@ -115,38 +131,30 @@ test.describe("as the owner", () => {
     await expect(picker).toHaveCount(0);
     await expect(page.getByTestId("gt-notice")).toContainText("Linked “Export to sheets” to “Sheets export”.");
     await expect(row(page, "Export to sheets")).toHaveCount(0);
-    await expect(total(page)).toHaveText(String(start - 1));
+    await expect(total(page)).toHaveText("8");
     // The published item is linked through the roadmap's draft: its panel shows the feature.
     await expect(await roadmapPanelName(page, "gt-export-to-sheets")).toHaveText(/^F-11\s*Export to sheets/);
   });
 
   test("Confirm it confirms the feature a run proposed", async ({ page }) => {
-    const start = await open(page);
+    await open(page);
     await openKind(page, "unlinked_item");
     await row(page, "Weekly digest").getByRole("button", { name: /Confirm it/ }).click();
     await expect(page.getByTestId("gt-notice")).toContainText("Confirmed “Weekly digest”.");
     await expect(row(page, "Weekly digest")).toHaveCount(0);
-    await expect(count(page, "unlinked_item")).toContainText("1");
-    await expect(total(page)).toHaveText(String(start - 1));
+    await expect(count(page, "unlinked_item")).toContainText("2");
+    await expect(total(page)).toHaveText("8");
   });
 
   test("Pick a goal links the feature to a goal", async ({ page }) => {
-    const start = await open(page);
+    await open(page);
     await openKind(page, "no_goal");
     await row(page, "Audit log").getByRole("button", { name: /Pick a goal/ }).click();
     const picker = page.getByTestId("gt-picker");
     await picker.getByRole("button").filter({ hasText: "Raise activation" }).click();
     await expect(page.getByTestId("gt-notice")).toContainText("“Audit log” now serves “Raise activation”.");
-    await expect(row(page, "Audit log")).toHaveCount(0);
-    await expect(total(page)).toHaveText(String(start - 1));
-  });
-
-  test("Give it a code shows no button while no route gives one", async ({ page }) => {
-    await open(page);
-    await openKind(page, "no_code");
-    await row(page, "Smart search").getByRole("button", { name: "About Smart search" }).click();
-    await expect(row(page, "Smart search").getByRole("tooltip")).toHaveText("This feature has no feature code yet.");
-    await expect(row(page, "Smart search").getByRole("button", { name: /Give it a code/ })).toHaveCount(0);
+    await expect(count(page, "no_goal")).toHaveCount(0);
+    await expect(total(page)).toHaveText("8");
   });
 });
 
@@ -154,15 +162,15 @@ for (const colorScheme of ["light", "dark"] as const)
   test(`Take it off the roadmap, then Undo (390, ${colorScheme})`, async ({ page }) => {
     await page.setViewportSize(PHONE);
     await page.emulateMedia({ colorScheme });
-    const start = await open(page);
+    await open(page);
     await openKind(page, "runs_today_on_roadmap");
     await row(page, "Night alerts").getByRole("button", { name: /Take it off the roadmap/ }).click();
     await expect(page.getByTestId("gt-notice")).toContainText("Took “Night alerts” off the roadmap.");
     await expect(count(page, "runs_today_on_roadmap")).toHaveCount(0);
-    await expect(total(page)).toHaveText(String(start - 1));
+    await expect(total(page)).toHaveText("8");
     await page.getByTestId("gt-notice").getByRole("button", { name: "Undo" }).click();
     await expect(count(page, "runs_today_on_roadmap")).toContainText("1");
-    await expect(total(page)).toHaveText(String(start));
+    await expect(total(page)).toHaveText("9");
   });
 
 for (const viewport of [DESKTOP, PHONE])
@@ -178,7 +186,7 @@ for (const viewport of [DESKTOP, PHONE])
       await row(page, "Export to sheets").getByRole("button", { name: /Add to Ground Truth/ }).click();
       await expect(page.getByTestId("gt-notice")).toContainText("Added “Export to sheets” to the Ground Truth.");
       // The feature is added at once; the item's link is a roadmap change its decider approves.
-      await expect(row(page, "Export to sheets").getByTestId("gt-pending")).toHaveText("Sent for approval");
+      await expect(row(page, "Export to sheets").getByTestId("gt-pending")).toHaveText("Waiting for an approver");
       await expect(row(page, "Export to sheets").getByRole("button", { name: /Add to Ground Truth|Link to a feature/ })).toHaveCount(0);
       await openKind(page, "no_goal");
       await row(page, "Audit log").getByRole("button", { name: /Pick a goal/ }).click();
@@ -193,7 +201,7 @@ for (const viewport of [DESKTOP, PHONE])
       await openKind(page, "runs_today_on_roadmap");
       await row(page, "Night alerts").getByRole("button", { name: /Take it off the roadmap/ }).click();
       await expect(page.getByTestId("gt-notice")).toContainText("Sent “Night alerts” off the roadmap for approval.");
-      await expect(row(page, "Night alerts").getByTestId("gt-pending")).toHaveText("Sent for approval");
+      await expect(row(page, "Night alerts").getByTestId("gt-pending")).toHaveText("Waiting for an approver");
       await expect(row(page, "Night alerts").getByRole("button", { name: /Take it off the roadmap/ })).toHaveCount(0);
       await expect(total(page)).toHaveText(String(start));
     });
@@ -207,13 +215,13 @@ for (const viewport of [DESKTOP, PHONE])
     await expect(row(page, "Export to sheets").getByRole("button", { name: /Link to a feature/ })).toHaveCount(0);
     await row(page, "Export to sheets").getByRole("button", { name: /Add to Ground Truth/ }).click();
     await expect(page.getByTestId("gt-notice")).toContainText("Sent “Export to sheets” for approval.");
-    await expect(row(page, "Export to sheets").getByTestId("gt-pending")).toHaveText("Sent for approval");
+    await expect(row(page, "Export to sheets").getByTestId("gt-pending")).toHaveText("Waiting for an approver");
     await expect(row(page, "Export to sheets").getByRole("button")).toHaveCount(1); // its (i) only
     await expect(total(page)).toHaveText(String(start));
     // After a reload the row still waits: the open proposal is read back, never made twice.
     await page.reload();
     await openKind(page, "unlinked_item");
-    await expect(row(page, "Export to sheets").getByTestId("gt-pending")).toHaveText("Sent for approval");
+    await expect(row(page, "Export to sheets").getByTestId("gt-pending")).toHaveText("Waiting for an approver");
     await expect(row(page, "Export to sheets").getByRole("button", { name: /Add to Ground Truth/ })).toHaveCount(0);
   });
 
@@ -222,7 +230,7 @@ test("a commenter's Add of a PRD's feature, once approved, serves its goal and i
   const start = await open(page, "commenter@example.com");
   await openKind(page, "prd_feature_missing");
   await row(page, "Guest seats").getByRole("button", { name: /Add to Ground Truth/ }).click();
-  await expect(row(page, "Guest seats").getByTestId("gt-pending")).toHaveText("Sent for approval");
+  await expect(row(page, "Guest seats").getByTestId("gt-pending")).toHaveText("Waiting for an approver");
   // The owner approves it on the Proposals tab.
   await signOut(page);
   await login(page);
@@ -233,7 +241,7 @@ test("a commenter's Add of a PRD's feature, once approved, serves its goal and i
   await expect(page.getByTestId("gt-band")).toBeVisible();
   await expect(count(page, "prd_feature_missing")).toHaveCount(0);
   // F-09 kept its code and serves the PRD's goal: no flag of its own.
-  await expect(total(page)).toHaveText(String(start - 1));
+  await expect(total(page)).toHaveText(String(start - 2));
   await openKind(page, "no_goal");
   await expect(row(page, "Guest seats")).toHaveCount(0);
 });
@@ -241,8 +249,8 @@ test("a commenter's Add of a PRD's feature, once approved, serves its goal and i
 for (const viewport of [DESKTOP, PHONE])
   test(`a viewer reads the flags with no fixes (${viewport.width})`, async ({ page }) => {
     await page.setViewportSize(viewport);
-    const start = await open(page, "viewer@example.com");
-    expect(start).toBeGreaterThan(7);
+    await open(page, "viewer@example.com");
+    await expect(total(page)).toHaveText("9");
     for (const kind of ["unlinked_item", "prd_feature_missing", "no_goal", "runs_today_on_roadmap"]) {
       await openKind(page, kind);
       await expect(list(page, kind).getByTestId("gt-row").first()).toBeVisible();

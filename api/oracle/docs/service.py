@@ -948,6 +948,12 @@ async def _oracle_ref_problems(
             )
         )
         found = {(t, k) for t, k in rows}
+        # A feature's key before it was given a code still names it (oracle.baseline.fixes).
+        if any(t == "feature" for t, _ in wanted - found):
+            from oracle.baseline import fixes
+
+            former = await fixes.former_keys(db, live=True)
+            found |= {(t, k) for t, k in wanted if t == "feature" and k in former}
     # The citation's id is the key the draft's author wrote (as the parser's refusals
     # echo it), not a database id.
     keys = {i: citations[i].id for i, pair in named.items() if pair not in found}

@@ -43,9 +43,12 @@ ConflictStatus = Literal["open", "resolved", "logged"]
 # Public-link evidence is scored like a source of this kind.
 LinkKind = Literal["notion", "google_docs", "web"]
 
-# A slug, or for a feature its code as a PRD names it (F-09: Add to Ground Truth keeps it).
-KEY_PATTERN = r"^(?:[a-z0-9][a-z0-9._-]*|[A-Z]{1,3}-\d+)$"
-CODE_KEY = re.compile(r"[A-Z]{1,3}-\d+")
+KEY_PATTERN = r"^[a-z0-9][a-z0-9._-]*$"
+# A feature's key may be its F-code (F-09, a slice F-15a), as Give it a code stores it, so
+# Add to Ground Truth makes a PRD's feature or a slice's feature with its code
+# (docs/ground-truth.md). A feature's only.
+FEATURE_CODE_KEY = r"[A-Z]{1,3}-\d+[a-j]?"
+CREATE_KEY_PATTERN = rf"^(?:[a-z0-9][a-z0-9._-]*|{FEATURE_CODE_KEY})$"
 
 
 class ORM(BaseModel):
@@ -57,7 +60,7 @@ class ORM(BaseModel):
 
 class EntityCreate(BaseModel):
     type: EntityType
-    key: str = Field(min_length=1, max_length=120, pattern=KEY_PATTERN)
+    key: str = Field(min_length=1, max_length=120, pattern=CREATE_KEY_PATTERN)
     title: str = Field(min_length=1)
     body: str | None = None
     attrs: dict[str, Any] = {}
@@ -75,11 +78,11 @@ class EntityCreate(BaseModel):
     roadmap_item_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
-    def _code_keys_are_features(self) -> "EntityCreate":
-        if CODE_KEY.fullmatch(self.key) and self.type != "feature":
-            raise ValueError("only a feature's key may be a code (F-09)")
+    def _code_key_is_a_features(self) -> "EntityCreate":
+        if self.type != "feature" and re.fullmatch(FEATURE_CODE_KEY, self.key):
+            raise ValueError("Only a feature's key can be a feature code.")
         if (self.serves or self.roadmap_item_id) and self.type != "feature":
-            raise ValueError("serves and roadmap_item_id are a feature's")
+            raise ValueError("Only a feature serves a goal or is a roadmap item.")
         return self
 
 
@@ -717,3 +720,21 @@ class GroundTruthOut(BaseModel):
     # Every kind, zero included.
     counts: dict[str, int]
     total: int
+
+
+class GroundTruthFixOut(BaseModel):
+    """A fix made (``done``: approvers and owners), or sent for an approver (``proposed``:
+    a commenter's, with its proposal). ``code``: the code given, when one was."""
+
+    status: Literal["done", "proposed"]
+    feature: GroundTruthRef
+    code: str | None = None
+    proposal_id: uuid.UUID | None = None
+
+
+class PrdLinkCreate(BaseModel):
+    """Link a feature of a PRD's approved plan (by its code there) to a Ground Truth feature."""
+
+    prd_document_id: uuid.UUID
+    code: str = Field(min_length=1, max_length=20)
+    feature_id: uuid.UUID

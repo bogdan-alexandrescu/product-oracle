@@ -14,12 +14,13 @@ from sqlalchemy import inspect, select
 
 from oracle import autonomy
 from oracle.auth.deps import Principal, TenantDB, body_type
-from oracle.authz import recheck_caller, require_role, require_role_now
+from oracle.authz import has_role, recheck_caller, require_role, require_role_now
 from oracle.baseline import (
     check,
     conflicts,
     describe,
     evidence,
+    fixes,
     goals,
     measurements,
     public_links,
@@ -53,7 +54,9 @@ from oracle.baseline.schemas import (
     FillFromTextResult,
     GoalProgress,
     GraphOut,
+    GroundTruthFixOut,
     GroundTruthOut,
+    GroundTruthRef,
     LinkErrorOut,
     LinkPreviewOut,
     LinkTarget,
@@ -62,6 +65,7 @@ from oracle.baseline.schemas import (
     MergeIn,
     NodeStatus,
     OriginIn,
+    PrdLinkCreate,
     ProposalAccept,
     ProposalAlso,
     ProposalCreate,
@@ -984,6 +988,104 @@ async def get_check(principal: Reader, db: TenantDB) -> GroundTruthOut:
     today while still on the roadmap; each with plain words and its fixes, counted per kind.
     Flags only: nothing is refused on save."""
     return await check.run(db)
+
+
+CommenterNow = Annotated[Principal, Depends(require_role_now("commenter"))]
+
+
+async def _fixed(db, principal, feature: Entity, run, fix: dict) -> GroundTruthFixOut:
+    """An approver's or owner's fix applied at once (``run``); a commenter's proposed."""
+    if has_role(principal.role, "approver"):
+        writer = service.Writer(principal, "user", reason=f"Ground Truth fix: {fix['action']}")
+        code = await run(writer)
+        status_ = "done"
+        proposal = None
+    else:
+        writer = service.Writer(principal, "agent", reason=f"Ground Truth fix: {fix['action']}")
+        proposal = await fixes.propose(db, writer, feature, fix)
+        code, status_ = None, "proposed"
+    out = GroundTruthFixOut(
+        status=status_,
+        feature=GroundTruthRef(
+            id=feature.id, code=await fixes.code_of(db, feature), name=feature.title
+        ),  # fmt: skip
+        code=code,
+        proposal_id=proposal.id if proposal is not None else None,
+    )
+    await db.commit()
+    return out
+
+
+@router.post("/entities/{entity_id}/code", response_model=GroundTruthFixOut)
+async def give_code(
+    entity_id: uuid.UUID, principal: CommenterNow, db: TenantDB
+) -> GroundTruthFixOut:
+    """Give it a code (the check's ``no_code``): the company's next F-number (its highest + 1),
+    or for a slice its feature's number with the next letter (F-15a), stored as the feature's
+    key. Refused for a feature with a code, one not in the Ground Truth, or a slice whose
+    feature has none. Approvers and owners give it at once; a commenter's is a proposal."""
+    try:
+        feature = await fixes._feature(db, entity_id)
+        await fixes.next_code(db, feature)
+        return await _fixed(
+            db, principal, feature, lambda w: fixes.give_code(db, w, feature),
+            {"action": fixes.GIVE_CODE},
+        )  # fmt: skip
+    except service.BaselineError as exc:
+        raise _fail(exc) from exc
+
+
+@router.delete("/entities/{entity_id}/code", response_model=GroundTruthFixOut)
+async def take_code_back(
+    entity_id: uuid.UUID, principal: ApproverNow, db: TenantDB
+) -> GroundTruthFixOut:
+    """Undo Give it a code: the feature's key as it was."""
+    writer = service.Writer(principal, "user", reason="Ground Truth fix undone: give_code")
+    try:
+        feature = await fixes.take_code_back(db, writer, entity_id)
+    except service.BaselineError as exc:
+        raise _fail(exc) from exc
+    out = GroundTruthFixOut(
+        status="done", feature=GroundTruthRef(id=feature.id, code=None, name=feature.title)
+    )
+    await db.commit()
+    return out
+
+
+@router.post("/prd-links", response_model=GroundTruthFixOut)
+async def link_prd_feature(
+    body: PrdLinkCreate, principal: CommenterNow, db: TenantDB
+) -> GroundTruthFixOut:
+    """Link to a feature (the check's ``prd_feature_missing`` and ``slice_parent_missing``): a
+    feature of a PRD's approved plan, by its code there, becomes that confirmed Ground Truth
+    feature: the check stops flagging it and the PRD reads the feature's code. Approvers and
+    owners link at once; a commenter's is a proposal."""
+    code = body.code.strip()
+    try:
+        _, f, feature = await fixes.check_link(db, body.prd_document_id, code, body.feature_id)
+
+        async def run(_w):
+            await fixes.link(db, body.prd_document_id, code, feature.id)
+            return None
+
+        fix = {"action": fixes.LINK_PRD, "prd_document_id": str(body.prd_document_id),
+               "code": code, "name": str(f.get("name") or code)}  # fmt: skip
+        return await _fixed(db, principal, feature, run, fix)
+    except service.BaselineError as exc:
+        raise _fail(exc) from exc
+
+
+@router.delete("/prd-links", status_code=status.HTTP_200_OK)
+async def unlink_prd_feature(
+    prd_document_id: uuid.UUID, code: str, principal: ApproverNow, db: TenantDB
+) -> dict[str, bool]:
+    """Undo Link to a feature: the PRD's feature is its own again (and flagged again)."""
+    try:
+        await fixes.unlink(db, prd_document_id, code.strip())
+    except service.BaselineError as exc:
+        raise _fail(exc) from exc
+    await db.commit()
+    return {"ok": True}
 
 
 @router.get(

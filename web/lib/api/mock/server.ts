@@ -176,7 +176,7 @@ import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
-import { GROUND_TRUTH_FLAGS_SCENARIO, groundTruthCheck, seedGroundTruth } from "./ground-truth";
+import { GROUND_TRUTH_FLAGS_SCENARIO, groundTruthCheck, routeGroundTruthFixes, seedGroundTruth } from "./ground-truth";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, CROWDED_MILESTONES_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
@@ -6171,6 +6171,11 @@ async function route(db: Db, req: Request): Promise<Response> {
   // The Ground Truth check (docs/ground-truth.md): flags only, for anyone who reads the roadmap.
   if (p[1] === "baseline" && p[2] === "check" && !p[3] && req.method === "GET") {
     return json(200, groundTruthCheck(localStorage.getItem(MOCK_SCENARIO_KEY), db.baseline, db.simple_roadmap));
+  }
+  // The check's fixes with routes of their own (Give it a code, Link to a feature), and accepting a commenter's.
+  if (p[1] === "baseline") {
+    const fixed = await routeGroundTruthFixes(db.baseline, db.simple_roadmap, me, req, p, q);
+    if (fixed) return fixed;
   }
   // B6 Goals interview: its routes write discussions and proposals, so they come first.
   if (p[1] === "baseline") {
