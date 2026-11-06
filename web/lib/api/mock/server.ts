@@ -190,7 +190,7 @@ import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_MILESTONES_SCENARIO, OLD_PR
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { knowPrdOrder } from "./prd-rank";
-import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedPrdCalmPage, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, knowGoalMapItems, ownPrd, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, MAP_GOALS, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapGoals, goalMapIdOf, goalMapItems, routeGoalMap, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
@@ -623,6 +623,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * meeting's chat (meet-chat-kind).
  * "meet-chat-right-prd" as "simple-chat" with the meeting reviewing Guided setup, whose features
  * are only on its draft roadmap (Setup checklist, Setup reminders).
+ * "prd-calm-page" as the default company with the Guided setup PRD's F-26 (Calendar invites) on
+ * its onboarding roadmap (PS1 a "Calm page").
  * "simple-unapproved-roadmap" as the default company with Simple's Alerts roadmap built from its
  * PRD and not approved yet (walkb-roadmap review 5a).
  */
@@ -3819,6 +3821,13 @@ function load(): Db {
                     // walkb-roadmap review 5f: a roadmap built from a PRD with a long title.
                     const db = seedSimpleWalkScenario();
                     db.simple_roadmap!.titles = { "onboarding-roadmap": "Guided setup for new workspace admins and their first teams roadmap" };
+                    return db;
+                  }
+              : scenario === "prd-calm-page"
+                ? () => {
+                    // PS1 a "Calm page": the default company with the Guided setup PRD's F-26 on its roadmap.
+                    const db = seed();
+                    db.simple_roadmap = seedPrdCalmPage();
                     return db;
                   }
               : scenario === "simple-unapproved-roadmap"

@@ -1,3 +1,4 @@
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 import { expect, test, type Page } from "./test";
 
@@ -20,6 +21,8 @@ import { expect, test, type Page } from "./test";
 const URL = "/simple/one-pagers/guided-setup";
 
 async function openPage(page: Page, email?: string) {
+  // The "prd-calm-page" scenario: the default company with F-26 Calendar invites on the onboarding roadmap.
+  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "prd-calm-page"] as const);
   await login(page, email);
   await page.goto("/simple/one-pagers");
   await expect(page.getByRole("heading", { level: 1, name: "One-pagers" })).toBeVisible();
