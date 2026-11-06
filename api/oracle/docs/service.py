@@ -233,7 +233,7 @@ def _summary(
 ) -> dict:
     return {
         **DocumentSummary.model_validate(document).model_dump(
-            exclude={"latest_version", "approved_version", "source", "period"}
+            exclude={"latest_version", "approved_version", "source", "period", "order"}
         ),
         "latest_version": latest,
         "approved_version": approved,
@@ -271,10 +271,16 @@ async def _update_periods(db: AsyncSession, documents: list[Document]) -> dict[u
 
 
 async def list_documents(db: AsyncSession, kind: str | None = None) -> list[DocumentSummary]:
+    """Documents, newest first; PRDs alone (``kind`` "prd") in the company PRD order."""
+    from oracle.docs.prd_order import prd_ranks
+
     stmt = select(Document).order_by(Document.updated_at.desc())
     if kind:
         stmt = stmt.where(Document.kind == kind)
     documents = list(await db.scalars(stmt))
+    ranks = await prd_ranks(db) if kind in (None, "prd") else {}
+    if kind == "prd":
+        documents.sort(key=lambda d: ranks.get(d.id, len(ranks) + 1))
     ids = [d.id for d in documents]
     latest = await _latest_numbers(db, ids)
     approved = await _approved_numbers(db, ids)
@@ -301,7 +307,8 @@ async def list_documents(db: AsyncSession, kind: str | None = None) -> list[Docu
                 approved.get(d.id),
                 sources.get(latest_sources.get(d.id)),  # type: ignore[arg-type]
                 periods.get(d.id),
-            )
+            ),
+            order=ranks.get(d.id),
         )
         for d in documents
     ]
@@ -480,6 +487,23 @@ async def set_visibility(
         )
         await db.commit()
     return await read_document(db, str(document.id))
+
+
+async def move_prd(
+    db: AsyncSession, doc: str, to: str, principal: Principal
+) -> list[DocumentSummary]:
+    """prd-order: an owner moves a PRD one place up or down in the company PRD order
+    (audited ``document.move``); the PRDs in their new order."""
+    from oracle.docs.prd_order import move
+
+    document = await find_document(db, doc, for_update=True)
+    if document is None or document.kind != "prd":
+        raise NotFoundError(f"PRD '{doc}' not found")
+    if await move(db, document, to):
+        await audit.record(db, principal, "document.move", "document", document.id,
+                           {"to": to, "position": document.position})  # fmt: skip
+        await db.commit()
+    return await list_documents(db, "prd")
 
 
 async def _latest_verdicts(db: AsyncSession, version_id: uuid.UUID) -> dict[str, SectionVerdict]:
