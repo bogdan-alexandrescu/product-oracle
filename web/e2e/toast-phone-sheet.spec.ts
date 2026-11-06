@@ -28,7 +28,19 @@ test("on a phone, a message shown over the Key dates sheet sits at the top, clea
   const at = (await sheet.boundingBox())!;
   const header = (await page.getByTestId("phone-header").boundingBox())!;
   expect(header.height).toBe(44);
-  await expect(page.getByTestId("toasts")).toHaveCSS("top", "44px");
+  // The top comes from its own rule, not from where the message happens to sit in the page.
+  const tops = await page.getByTestId("toasts").evaluate((el) => {
+    const found: string[] = [];
+    const walk = (rules: CSSRuleList) => {
+      for (const r of Array.from(rules)) {
+        if (r instanceof CSSStyleRule && r.style.top && el.matches(r.selectorText)) found.push(r.style.top);
+        if ("cssRules" in r && (r as CSSGroupingRule).cssRules) walk((r as CSSGroupingRule).cssRules);
+      }
+    };
+    for (const sheet of Array.from(document.styleSheets)) walk(sheet.cssRules);
+    return found;
+  });
+  expect(tops).toContain("var(--phone-top-bar)");
   expect(said.y).toBe(44);
   expect(said.y + said.height).toBeLessThanOrEqual(at.y);
 });
