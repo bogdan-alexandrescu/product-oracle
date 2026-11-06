@@ -786,6 +786,19 @@ class InboxSimpleChange(BaseModel):
     state: Literal["new", "open", "done"]
     # meeting-changes-only-its-agenda: the meeting that asked for it.
     from_meeting: SimpleChangeMeeting | None = None
+    # inbox-meeting-proposals: what was asked, in plain words, the item by its name
+    # ("cut Delivery integrity"), and whether I may accept or decline it now.
+    asked: str | None = None
+    can_decide: bool = False
+    # inbox-meeting-proposals owner: asked through Ask Oracle (by ``by_name``), not on the
+    # page nor in a meeting.
+    from_ask: bool = False
+    # inbox-meeting-proposals fix: what a proposal on no item is on, so its row is named and
+    # opens where it is decided: a PRD question ("Q3 Offline mode scope", ``question_id``) or
+    # a one-pager line (as it reads, ``line_id``).
+    subject: str | None = None
+    question_id: uuid.UUID | None = None
+    line_id: str | None = None
 
 
 DraftStatus = Literal["working", "submitted", "approved", "discarded"]
@@ -902,6 +915,8 @@ class InboxSimpleApproval(BaseModel):
     document: SimpleDocRef
     version: int | None
     submitted_by: uuid.UUID | None
+    # inbox-meeting-proposals fix: who submitted it, by name (or e-mail).
+    submitted_by_name: str | None = None
     submitted_at: dt.datetime | None
     decider_approved: bool
     state: Literal["new", "open"]
@@ -2320,3 +2335,37 @@ OnePagerOut.model_rebuild()
 
 
 SimpleMeetingOut.model_rebuild()
+
+
+class InboxSimpleDateSuggestion(BaseModel):
+    """inbox-meeting-proposals fix: Oracle's open date suggestion on an item I may decide
+    (``simple_date_suggestions``, counted in ``total``): one row per item, its slices'
+    span; decided on the item's roadmap."""
+
+    id: uuid.UUID
+    item_id: uuid.UUID
+    item_title: str
+    # The item's roadmap (where it is decided).
+    document_id: uuid.UUID
+    start_date: dt.date
+    end_date: dt.date
+    basis: str
+    at: dt.datetime
+    state: Literal["new", "open"]
+
+
+class InboxSimpleGoalSuggestion(BaseModel):
+    """inbox-meeting-proposals fix: an open feature suggested for a goal whose suggestions
+    I decide (``simple_goal_suggestions``, counted in ``total``)."""
+
+    id: uuid.UUID
+    goal: SimpleGoalBrief
+    title: str
+    outcome: str
+    # Oracle suggested it; else a person did (``proposed_by_name``).
+    from_oracle: bool
+    proposed_by_name: str | None = None
+    # The goal's roadmap, where its suggestions are decided (none: no roadmap yet).
+    document_id: uuid.UUID | None = None
+    at: dt.datetime
+    state: Literal["new", "open"]

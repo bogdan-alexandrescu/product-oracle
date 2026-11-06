@@ -23,6 +23,7 @@ import { DownloadNote, useDownloadNote } from "@/components/DownloadNote";
 import { DecisionNotes, LeftOutLine } from "@/components/simple/DecisionNotes";
 import { downloadedNote } from "@/lib/export-note";
 import { useMe } from "@/lib/me";
+import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { stripRawTokens } from "@/lib/raw-tokens";
 
@@ -275,6 +276,17 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   const [feature, setFeature] = useState<Parameters<OpenFeature>[0] | null>(null);
   const codesQ = useQuery("simple-roadmap-codes", () => unwrap(api.GET("/v1/simple/roadmap", {})).catch(() => null));
   const codes = new Map((codesQ.data?.items ?? []).map((i) => [i.id, i.code ?? null]));
+  // inbox-meeting-proposals fix: ?line= (the Inbox's Open on a proposed wording) shows the
+  // lines and lands on that one, once the page is read.
+  const pageRead = !!q.data;
+  const landed = useRef(false);
+  useEffect(() => {
+    const line = new URLSearchParams(window.location.search).get("line");
+    if (!pageRead || landed.current || !line || sessionId) return;
+    landed.current = true;
+    setLinesShown(true);
+    requestAnimationFrame(() => document.querySelector(`[data-line="${CSS.escape(line)}"]`)?.scrollIntoView({ block: "center" }));
+  }, [pageRead, sessionId]);
 
   if (q.loading && !q.data) return <div className="px-6 py-8"><Loading /></div>;
   if (q.error || !q.data) {
@@ -314,12 +326,16 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   const sectionNames: Record<string, string> = Object.fromEntries(v.sections.map((s) => [s.key, s.heading]));
   v.blocks.forEach((b) => b.lines.forEach((l) => l.source_keys.forEach((k) => (sectionNames[k] = b.title))));
 
-  async function act(run: () => Promise<unknown>) {
+  /** `waits`: the action changes what waits on someone (a proposal decided or undone), so the rail's counts are read again at once. */
+  async function act(run: () => Promise<unknown>, waits = false) {
     setBusy(true);
     setError(null);
     try {
       await run();
-      await q.reload();
+      if (waits) invalidateWaiting();
+      const reload = q.reload();
+      if (waits) waitingChanged();
+      await reload;
       onChanged?.();
     } catch (e) {
       setError(errorMessage(e));
@@ -342,14 +358,14 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
       setEditing(null);
     });
   const decide = (n: Note, action: "accept" | "decline") =>
-    act(() => unwrap(api.POST(`/v1/simple/changes/{change_id}/${action}`, { params: { path: { change_id: n.change_id } }, body: sessionId ? { session_id: sessionId } : {} })));
+    act(() => unwrap(api.POST(`/v1/simple/changes/{change_id}/${action}`, { params: { path: { change_id: n.change_id } }, body: sessionId ? { session_id: sessionId } : {} })), true);
   const submit = (reviewerIds: string[]) =>
     act(() => unwrap(api.POST("/v1/simple/drafts/{draft_id}/submit", { params: { path: { draft_id: v.draft!.id } }, body: { reviewer_ids: reviewerIds } })));
   // Remind (owner, 2026-10-26): each waiting reviewer gets an Inbox nudge, once a day at most.
   const remind = () =>
     act(() => unwrap(api.POST("/v1/simple/one-pagers/{doc}/remind", { params: { path: { doc } } })));
   const undo = (n: Note) =>
-    act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/undo", { params: { path: { change_id: n.change_id } } })));
+    act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/undo", { params: { path: { change_id: n.change_id } } })), true);
 
   async function exportPdf() {
     setError(null);

@@ -11636,11 +11636,20 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
 
     simple_proposals, simple_decisions = await simple_rows(db, principal, seen)
     counted += len(simple_proposals)
-    # Simple S3b: versions from Simple drafts waiting for my approval as a required reviewer.
+    # Simple S3b: versions from Simple drafts waiting for my approval as a required reviewer;
+    # inbox-meeting-proposals fix: open date and goal suggestions I may decide. The three
+    # are read together, in one read.
+    from oracle.simple.additions import inbox_rows as goal_suggestion_rows
     from oracle.simple.drafts import inbox_rows as simple_approval_rows
+    from oracle.simple.drafts import waiting as simple_waiting
+    from oracle.simple.suggestions import inbox_rows as date_suggestion_rows
 
-    simple_approvals = await simple_approval_rows(db, principal, seen)
+    simple_open = await simple_waiting(db)
+    simple_approvals = await simple_approval_rows(db, principal, seen, simple_open.drafts)
     counted += len(simple_approvals)
+    simple_date_suggestions = await date_suggestion_rows(db, principal, seen, simple_open.dates)
+    simple_goal_suggestions = await goal_suggestion_rows(db, principal, seen, simple_open.goals)
+    counted += len(simple_date_suggestions) + len(simple_goal_suggestions)
     # Simple S8: meeting minutes sent to me as an attendee (nothing to decide: not counted).
     from oracle.simple.meetings import inbox_rows as simple_minutes_rows
 
@@ -11712,6 +11721,8 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         simple_proposals=simple_proposals,
         simple_decisions=simple_decisions,
         simple_approvals=simple_approvals,
+        simple_date_suggestions=simple_date_suggestions,
+        simple_goal_suggestions=simple_goal_suggestions,
         simple_minutes=simple_minutes,
     )
 

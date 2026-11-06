@@ -108,7 +108,9 @@ import { addDigest, addMetricsReview, ritualInbox, routeRituals, seedRituals, ty
 import { emptyMetrics, metricInbox, openVariances, reviewBlocks, routeMetrics, seedMetrics, type MetricsContext, type MetricsDb } from "./metrics";
 import { digestBlocks, emptyMarket, routeMarket, seedMarket, type MarketDb } from "./market";
 import {
+  addFeatureAskRequest,
   addInterviewRequest,
+  dropFeatureAskRequest,
   behindBriefRefusal,
   relinkDocuments,
   releaseDocuments,
@@ -164,13 +166,14 @@ import {
   type PricingDb,
 } from "./pricing";
 import { bucketGoalsInOrder, placeBucketGoal, placeBucketGoals, routeGoalBuckets, seedGoalBuckets, seedGoalBucketsHard, seedGoalBucketsWith } from "./goal-buckets";
-import { proposeGoalDelete, routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
+import { proposeGoalDelete, routeSimpleChanges, seedFeatureAskProposal, seedSimpleProposal, simpleInboxRows, type SimpleChangesCtx } from "./simple-changes";
 import { routeCurrentState, seedCurrentState, type CurrentStateDb } from "./currentstate";
 import { featureKeyOf, prioritiesOut } from "./simple-priorities";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
-import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
+import { goalSuggestionInboxRows, seedGoalSuggestions, seedHeldGoalSuggestion, seedPersonGoalSuggestion } from "./simple-suggestions";
 import { runGroupsOut } from "./simple-runs";
-import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { questionInboxRows } from "./simple-questions";
+import { onePagerInboxRows, planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
@@ -179,7 +182,7 @@ import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStray
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, CROWDED_MILESTONES_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
-import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, knowGoalMapItems, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapItems, routeGoalMap, type GoalMap } from "./goal-map";
@@ -992,6 +995,53 @@ function seedSimpleCrossPrdDates(): Db {
 function seedSimpleDatedMove(): Db {
   const db = seedSimpleHomeScenario();
   dateSourceItem(db.simple_roadmap!);
+  return db;
+}
+
+/**
+ * inbox-meeting-proposals "meeting-agenda-owner" scenario: "meeting-agenda" with the onboarding
+ * roadmap decided by approver@example.com, so a review of Usage alerts that cuts the Welcome
+ * video sends the proposal to that person's Inbox, not the owner's who runs the meeting.
+ */
+function seedMeetingAgendaOwnerScenario(): Db {
+  const db = seedMeetingAgendaScenario();
+  const approver = db.members.find((m) => m.email === "approver@example.com")!;
+  db.simple_roadmap!.deciders = { ...(db.simple_roadmap!.deciders ?? {}), "onboarding-roadmap": approver.id };
+  return db;
+}
+
+/**
+ * inbox-meeting-proposals fix "inbox-reviewer" scenario: "meeting-agenda-owner" with
+ * approver@example.com a required reviewer of the Alerts roadmap, so a draft of it sent for
+ * review waits in that person's Inbox; and commenter@example.com's feature ask Bulk export,
+ * on no roadmap, and their new name for Weekly alert digest, both waiting on the owners.
+ */
+function seedInboxReviewerScenario(): Db {
+  const db = seedMeetingAgendaOwnerScenario();
+  const approver = db.members.find((m) => m.email === "approver@example.com")!;
+  db.simple_roadmap!.reviewers = { "alerts-roadmap": [approver.id] };
+  // A teammate's feature ask on no roadmap waits on the owners (decided in its Inbox row, then filed in Requests).
+  const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
+  const owners = db.members.filter((m) => m.role === "owner").map((m) => m.id);
+  seedFeatureAskProposal(db.simple_roadmap!, { id: commenter.id, name: commenter.name ?? commenter.email, owners }, "Bulk export", "2026-10-26T15:00:00Z");
+  // And their new name for an item on the Alerts roadmap (decided in Needs a decision there).
+  const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
+  seedSimpleProposal(db.simple_roadmap!, { id: commenter.id, name: commenter.name ?? commenter.email, owners, roles }, "edit_title", "alert-digest", { title: "Weekly alert digest" }, { title: "Weekly alert digest for leads" }, "2026-10-26T14:00:00Z");
+  return db;
+}
+
+/**
+ * inbox-meeting-proposals fix "inbox-unknown-proposer" scenario: "inbox-reviewer" plus a
+ * feature suggested for Keep alerts quiet by someone whose account is no longer there (no
+ * member has their id), so the API sends no name for them. Invented data.
+ */
+export const INBOX_UNKNOWN_PROPOSER_SCENARIO = "inbox-unknown-proposer";
+function seedInboxUnknownProposerScenario(): Db {
+  const db = seedInboxReviewerScenario();
+  db.simple_roadmap!.goal_suggestions = [
+    ...seedGoalSuggestions(),
+    seedPersonGoalSuggestion("quiet-alerts", "Snooze digest", "People pause the alert digest for a day", stableUuid("mock-user/gone-teammate")),
+  ];
   return db;
 }
 
@@ -3458,6 +3508,12 @@ function load(): Db {
                 ? seedSimpleCrossPrdDates
               : scenario === "simple-dated-move"
                 ? seedSimpleDatedMove
+              : scenario === "inbox-reviewer"
+                ? seedInboxReviewerScenario
+              : scenario === INBOX_UNKNOWN_PROPOSER_SCENARIO
+                ? seedInboxUnknownProposerScenario
+              : scenario === "meeting-agenda-owner"
+                ? seedMeetingAgendaOwnerScenario
               : scenario === "simple-home"
                 ? seedSimpleHomeScenario
               : scenario === "simple-home-move"
@@ -6646,6 +6702,15 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (res) return res;
   }
   const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));
+  // S9: a feature ask applied from Simple is a request in Requests (targets.py add_feature_ask).
+  const askFiling: Pick<SimpleChangesCtx, "fileAsk" | "dropAsk"> = {
+    fileAsk: (input) => {
+      // With no one named (not a customer's), asked by the teammate who filed it (targets.py _create).
+      const filer = input.requester_name === null && ["unknown", "team"].includes(input.requester_kind) ? db.members.find((x) => x.id === input.filed_by) : undefined;
+      addFeatureAskRequest(ensureRequests(db), filer ? { ...input, requester_name: filer.name ?? filer.email, requester_kind: "team" } : input);
+    },
+    dropAsk: (id) => dropFeatureAskRequest(ensureRequests(db), id),
+  };
   const simpleRoute = async (r: Request): Promise<Response | null> => {
     // goal-order: Simple's goals follow the baseline's one goal order (and the place Move up or Move
     // down stored on a bucket goal the baseline does not hold).
@@ -6734,7 +6799,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const simpleRes = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, r, p, q);
     if (simpleRes) return simpleRes;
     const companyGoals = db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title }));
-    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash, goalBin: bin }, r, p, q);
+    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash, goalBin: bin, ...askFiling }, r, p, q);
   };
   // Simple S8: review meetings, the Decisions page, and changes made through a meeting.
   // Seeded on the first meetings or Decisions read, so the other Simple screens keep their data.
@@ -6816,7 +6881,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       reviews.propose(b.title, b.approver_id, doc, id);
       return id;
     };
-    const chatCtx = { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, proposeDecision, proposeTo: (d: string | null) => reviews.proposeTo(d),
+    const chatCtx = { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, proposeDecision, ...askFiling, proposeTo: (d: string | null) => reviews.proposeTo(d),
       ownsDiscussion: (id: string) => !!(db.discussions ??= emptyDiscussions()).discussions.find((d) => d.id === id && d.origin === "panel" && d.started_by === me.id),
       // Recent chats: a chat whose first line went to Oracle's Ask is named by that line, in its Ask chat.
       askQuestion: (id: string) =>
@@ -6914,12 +6979,33 @@ async function route(db: Db, req: Request): Promise<Response> {
     inbox.total += launchRows.filter((r) => r.counted).length;
     // Simple S3a: proposals waiting for me count; decisions on mine are shown.
     const simpleRows = simpleInboxRows(db.simple_roadmap, me.id, seenBefore, {
+      role: me.role,
       owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
       roles: Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role])),
+      names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
     });
+    // inbox-meeting-proposals fix: proposals on a PRD question or a one-pager line, as the API's one list.
+    const questionRows = db.simple_meetings?.questions
+      ? questionInboxRows({ me: { id: me.id, role: me.role }, members: db.members.filter((x) => x.status !== "disabled").map((x) => ({ id: x.id, name: displayName(x.email, x.name), role: x.role, email: x.email })) }, db.simple_meetings.questions, seenBefore)
+      : { proposals: [], decisions: [] };
+    const onePagerRows = onePagerInboxRows([...(db.simple_one_pager ? [db.simple_one_pager] : []), ...Object.values(db.simple_one_pagers ?? {})], { id: me.id, role: me.role }, seenBefore);
+    const newest = (a: Schemas["InboxSimpleChange"], b: Schemas["InboxSimpleChange"]) => ((b.decided_at ?? b.at) > (a.decided_at ?? a.at) ? 1 : -1);
+    simpleRows.simple_proposals = [...simpleRows.simple_proposals, ...questionRows.proposals, ...onePagerRows.proposals];
+    simpleRows.simple_decisions = [...simpleRows.simple_decisions, ...questionRows.decisions, ...onePagerRows.decisions].sort(newest);
     Object.assign(inbox, simpleRows);
-    inbox.total += simpleRows.simple_proposals.length;
-    inbox.needs_me = (inbox.needs_me ?? 0) + simpleRows.simple_proposals.length;
+    // inbox-meeting-proposals fix: Oracle's open date suggestions and goals' open suggestions I may decide.
+    const simpleCtx = {
+      id: me.id, role: me.role,
+      owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
+      roles: Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role])),
+      names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
+      companyGoals: db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title })),
+    };
+    inbox.simple_date_suggestions = dateSuggestionInboxRows(db.simple_roadmap, simpleCtx, seenBefore);
+    inbox.simple_goal_suggestions = goalSuggestionInboxRows(db.simple_roadmap, simpleCtx, seenBefore);
+    const simpleCounted = simpleRows.simple_proposals.length + simpleRows.simple_approvals.length + inbox.simple_date_suggestions.length + inbox.simple_goal_suggestions.length;
+    inbox.total += simpleCounted;
+    inbox.needs_me = (inbox.needs_me ?? 0) + simpleCounted;
     // Simple S8: minutes sent to me as an attendee (shown, not counted).
     inbox.simple_minutes = meetingInboxRows(db.simple_meetings, me.id, seenBefore);
     // Ritual rows (H2): Pre-read ready until opened, Record notes after the end, failed to prepare.

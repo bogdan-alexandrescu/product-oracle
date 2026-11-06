@@ -13,6 +13,7 @@ import { invalidateWaiting, loadInbox, loadMyQuestions, waitingChanged } from "@
 import { useAccessRequestRows } from "../inbox/_access";
 import { useActed } from "../inbox/_actions";
 import { allNeeds, NeedTable, usePerms, waitingNeeds, type Need, type StatedNeed } from "../inbox/_needs";
+import { approvalRows, dateSuggestionRows, goalSuggestionRows, proposalRows } from "../inbox/_proposals";
 import { useQuestionRows } from "../inbox/_questions";
 import { GoalsPanel } from "./_goals-panel";
 import { FlightInspector, FlightTable, type Flight, type GoalIndex } from "./_in-flight";
@@ -184,12 +185,24 @@ export default function HomePage() {
   // answered here leaves with its count (qa4-company-47).
   // qa-company-3: a line draws only the actions the signed-in person's role can take.
   const perms = usePerms();
-  const all = inbox ? allNeeds(inbox, questionRows.rows, busy, act, inbox.last_seen_at ?? null, onActed, true, undefined, requestRows.rows, perms) : [];
+  // inbox-meeting-proposals fix: Simple's proposals, approvals and Oracle's date and goal
+  // suggestions waiting on me, as the Inbox lists and counts them (the API's total has them).
+  const seen = inbox?.last_seen_at ?? null;
+  const all = inbox
+    ? [
+        ...allNeeds(inbox, questionRows.rows, busy, act, seen, onActed, true, undefined, requestRows.rows, perms),
+        ...proposalRows(inbox.simple_proposals ?? [], busy, act, seen),
+        ...approvalRows(inbox.simple_approvals ?? [], seen),
+        ...dateSuggestionRows(inbox.simple_date_suggestions ?? [], seen),
+        ...goalSuggestionRows(inbox.simple_goal_suggestions ?? [], seen),
+      ]
+    : [];
   const needs = waitingNeeds(all);
   const visible = all.filter((r) => needs.includes(r) || (r.group === "access-requests" && !r.counted && r.state !== "done"));
   // Checkpoints, cost approvals and overruns: "Approvals", what they are (qa-shell-6), not the
   // decision log's Decisions.
-  const approvals = needs.filter((r) => r.group === "checkpoints" || r.group === "approvals" || r.group === "overruns");
+  // A roadmap version waiting for my approval counts here too.
+  const approvals = needs.filter((r) => r.group === "checkpoints" || r.group === "approvals" || r.group === "roadmap-approvals" || r.group === "overruns");
   // Stuck runs and failed imports: counted in the badge, so drawn here too (searches are not).
   const runs = needs.filter((r) => r.group === "lookups" || r.group === "imports");
   // Revokes a removed member's disable could not make, and access changes still failing
@@ -197,6 +210,7 @@ export default function HomePage() {
   const access = needs.filter((r) => r.group === "revoke-failures" || r.group === "access-failures" || r.group === "access-requests");
   const reviews = needs.filter((r) => r.group === "feedback");
   const asked = needs.filter((r) => r.group === "questions");
+  const proposals = needs.filter((r) => r.group === "proposals");
   const { rows: shownNeeds, more: moreNeeds } = pickNeeds(visible, MAX_NEEDS);
   // The rail badge's count: the Inbox's New + Open items.
   const waiting = inbox ? needs.length : undefined;
@@ -286,19 +300,20 @@ export default function HomePage() {
             <>
               {/* qa-shell-16: what this count counts, and why Simple's Home says another number. */}
               <InfoTip label="Needs you" side="bottom">
-                Everything the Inbox has waiting on you: approvals, runs, access requests, reviews and the questions asked of you.
-                Simple&apos;s Home counts something else, the product decisions on PRDs that wait on you, so its number can differ.
+                Everything waiting on you in the Inbox: approvals, runs, access, reviews, questions, proposals, Oracle&apos;s dates and goal suggestions.
+                Simple&apos;s Home counts something else, so its number can differ.
               </InfoTip>
               {/* qa-company-5: plain counts; the Inbox link opens the Inbox, where the items are.
                   qa4-company-50: one group; on a phone it takes its own line under the title, so
                   no count is left alone beside Inbox. */}
-              {(approvals.length > 0 || runs.length > 0 || access.length > 0 || reviews.length > 0 || asked.length > 0) && (
+              {(approvals.length > 0 || runs.length > 0 || access.length > 0 || reviews.length > 0 || asked.length > 0 || proposals.length > 0) && (
                 <span data-testid="home-needs-counts" className="flex flex-wrap items-center gap-x-2.5 max-[600px]:order-last max-[600px]:basis-full">
                   {approvals.length > 0 && <Count label="Approvals" n={approvals.length} testId="home-count-approvals" />}
                   {runs.length > 0 && <Count label="Runs" n={runs.length} testId="home-count-runs" />}
                   {access.length > 0 && <Count label="Access" n={access.length} testId="home-count-access" />}
                   {reviews.length > 0 && <Count label="Reviews" n={reviews.length} testId="home-count-reviews" />}
                   {asked.length > 0 && <Count label="Questions" n={asked.length} testId="home-count-questions" />}
+                  {proposals.length > 0 && <Count label="Proposals" n={proposals.length} testId="home-count-proposals" />}
                 </span>
               )}
               <Link

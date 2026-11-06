@@ -123,6 +123,9 @@ interface SimpleDb {
   /** walkc-meeting (./simple-changes.ts markMeetingProposal): the ids of proposals made in a
    * meeting, which stay with the meeting's deciders (changes.current_route). */
   meeting_proposals?: string[];
+  /** inbox-meeting-proposals owner (changes.inbox_rows from_ask): the ids of proposals asked
+   * through Ask Oracle (a card applied outside a meeting). */
+  ask_proposals?: string[];
   /** Simple S3b (./simple-changes.ts): working drafts, each with its roadmap's published items. */
   drafts?: MockDraft[];
   /** trash-features-goals review 4: each roadmap's versions published in the mock, each with the
@@ -1149,7 +1152,7 @@ export function draftChanges(db: SimpleDb, id: string): number {
   return cs.filter((c) => ["applied", "accepted"].includes(c.status) && (c.draft_ids ?? []).includes(id) && !cs.some((u) => u.undoes_id === c.id)).length;
 }
 
-/** Who sees a draft in the mock (no required reviewers): owners, its people and the roadmap's decider. */
+/** Who sees a draft in the mock: owners, its people, the roadmap's decider and its required reviewers. */
 export function seesDraft(d: MockDraft, me: { id: string; role: Role }, db?: SimpleDb): boolean {
   // drafts.sees: whoever it waits on and its roadmap's required reviewers read it too.
   return me.role === "owner" || d.out.created_by === me.id || d.out.participant_ids.includes(me.id) || db?.deciders?.[d.roadmap] === me.id || (d.out.waiting_on ?? []).includes(me.id) || (db?.reviewers?.[d.roadmap] ?? []).includes(me.id);
@@ -1517,6 +1520,29 @@ export function settleDrafting(db: SimpleDb): void {
       status: "open", created_at: new Date(now).toISOString(), decided_by: null, decided_at: null, can_decide: false,
     });
   }
+}
+
+/**
+ * inbox-meeting-proposals fix (suggestions.inbox_rows): the open date suggestions I may decide,
+ * one row per item (its slices' span), newest first. The mock makes suggestions when the
+ * roadmap is first read, so the Inbox lists them from then on.
+ */
+export function dateSuggestionInboxRows(db: SimpleDb | undefined, me: { id: string; role: Role }, seen: string | null): Schemas["InboxSimpleDateSuggestion"][] {
+  if (!db) return [];
+  const seeds = new Map(visibleItems(db, me.role).map((s) => [db.ids[s.key], s]));
+  const out: Schemas["InboxSimpleDateSuggestion"][] = [];
+  const done = new Set<string>();
+  for (const x of [...db.suggestions].filter((y) => y.status === "open").sort((a, b) => (a.created_at < b.created_at ? 1 : -1))) {
+    const s = seeds.get(x.item_id);
+    if (done.has(x.item_id) || !s || !canDecideItem(db, s, me)) continue;
+    done.add(x.item_id);
+    const span = itemSuggestion(db, x.item_id) ?? x;
+    out.push({
+      id: span.id, item_id: x.item_id, item_title: s.title, document_id: roadmapId(s.roadmap), start_date: span.start_date, end_date: span.end_date,
+      basis: span.basis, at: x.created_at, state: !seen || x.created_at > seen ? "new" : "open",
+    });
+  }
+  return out;
 }
 
 /** /v1/simple/roadmap and its date suggestions (api/oracle/simple/router.py). */

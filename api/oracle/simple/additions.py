@@ -1122,6 +1122,52 @@ async def deciding(
     return out
 
 
+async def inbox_rows(
+    db: AsyncSession, principal: Any, seen: Any, rows: list[SimpleGoalSuggestion] | None = None
+) -> list[Any]:
+    """inbox-meeting-proposals fix: the open suggestions of the goals whose suggestions I
+    decide, oldest first, for the Inbox (a failed-checks one only to owners, as listed).
+    ``rows``: the open suggestions, oldest first, when the Inbox read them already
+    (drafts.waiting)."""
+    from oracle.simple.schemas import InboxSimpleGoalSuggestion
+
+    if _me_or_none(principal) is None or getattr(principal, "is_run", False):
+        return []
+    if rows is None:
+        rows = list(
+            await db.scalars(
+                select(SimpleGoalSuggestion)
+                .where(SimpleGoalSuggestion.status == "open")
+                .order_by(SimpleGoalSuggestion.created_at, SimpleGoalSuggestion.id)
+            )
+        )
+    owner = has_role(principal.role, "owner")
+    rows = [r for r in rows if owner or not r.checks]
+    if not rows:
+        return []
+    goals = [g for g in await _goals(db) if g.id in {r.goal_id for r in rows}]
+    by_id = {g.id: g for g in goals}
+    read_ = await service.load(db, await drafts.overlays_for(db, principal))
+    rule = await deciding(db, principal, goals, read_)
+    docs = {g.id: await _job_document(db, g, read_) for g in goals if rule[g.id][0]}
+    people = await _display_names(db, {r.proposed_by for r in rows if r.proposed_by})
+    return [
+        InboxSimpleGoalSuggestion(
+            id=r.id,
+            goal=_brief(by_id[r.goal_id]),
+            title=r.title,
+            outcome=r.outcome or "",
+            from_oracle=r.origin != "person",
+            proposed_by_name=people.get(r.proposed_by) if r.proposed_by else None,
+            document_id=docs[r.goal_id].id if docs.get(r.goal_id) else None,
+            at=r.created_at,
+            state="new" if seen is None or r.created_at > seen else "open",
+        )
+        for r in rows
+        if r.goal_id in by_id and rule[r.goal_id][0]
+    ]
+
+
 def _me_or_none(principal: Any) -> uuid.UUID | None:
     return getattr(principal, "user_id", None)
 
