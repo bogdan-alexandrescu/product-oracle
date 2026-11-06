@@ -1364,7 +1364,7 @@ function checkOrder(given: OrderSpec, scope: PrdScopeOut["features"] | null, goa
     const keys = named.flatMap((g) => (g.key ? [g.key] : []));
     const zero = new Set(named.filter((g) => g.key && g.contribution === 0).map((g) => g.key!));
     const unknown = goals ? [...new Set(keys)].filter((k) => !goals.has(k)) : [];
-    for (const g of unknown) add("unknown_goal", o.key, `${title} names the goal ${g}, which is not a goal in the baseline: the run must name one that is`);
+    for (const g of unknown) add("unknown_goal", o.key, `${title} names the goal ${g}, which is not a goal of the Ground Truth: the run must name one that is`);
     if (!unknown.length && !keys.some((k) => (!goals || goals.has(k)) && !zero.has(k))) add("new_feature_no_goal", o.key, `${title} is new and names no goal it serves: the run must name one`);
   }
   for (const k of keys) {
@@ -1532,8 +1532,8 @@ function recheckOrderGoals(ctx: Pick<RunsContext, "db" | "goalKeys" | "goalTitle
       if (goals.has(String(g.goal)) || g.contribution === 0) continue;
       const title = ctx.goalTitle?.(String(g.goal));
       const message = title
-          ? `${row.title} serves the goal ${title}, which was rejected after the order was checked: the run must name a goal of the baseline`
-          : `${row.title} names the goal ${g.goal}, which is not a goal in the baseline: the run must name one that is`;
+          ? `${row.title} serves the goal ${title}, which was rejected after the order was checked: the run must name a goal of the Ground Truth`
+          : `${row.title} names the goal ${g.goal}, which is not a goal of the Ground Truth: the run must name one that is`;
       if (said.has(message)) continue;
       said.add(message);
       stale.push({ code: "unknown_goal", blocking: true, feature: row.key, message });

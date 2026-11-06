@@ -82,6 +82,7 @@ export const PAGE_CONTEXT: Record<string, PageContext> = {
   "/sources": nameOnly("A person's own sources"),
   "/specs/[id]/design/[versionId]": shown("The spec's design version as shown"),
   "/settings": nameOnly("Settings are a person's or an owner's own"),
+  "/settings/[...missing]": nameOnly("Settings are a person's or an owner's own"),
   "/settings/analytics": nameOnly("Settings are a person's or an owner's own"),
   "/settings/api-tokens": nameOnly("Settings are a person's or an owner's own"),
   "/settings/autonomy": nameOnly("Settings are a person's or an owner's own"),

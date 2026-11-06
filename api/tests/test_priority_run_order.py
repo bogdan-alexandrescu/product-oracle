@@ -983,7 +983,7 @@ def test_check_a_new_feature_naming_an_unknown_goal_is_blocking(goals, extra):
     out = run_order.check_order(NEW_ONE + extra, known=new_known(goals))
     assert codes(out) == [("unknown_goal", True, "new-one")]
     assert out.problems[0]["message"] == (
-        "Gift notes names the goal no-such-goal, which is not a goal in the baseline: "
+        "Gift notes names the goal no-such-goal, which is not a goal of the Ground Truth: "
         "the run must name one that is"
     )
 
@@ -1067,7 +1067,7 @@ async def test_a_row_goal_with_no_contribution_is_proposed_as_assumed(client, ow
 
 NO_GOAL = "Bulk edit is new and names no goal it serves: the run must name one"
 UNKNOWN_GOAL = (
-    "Bulk edit names the goal no-such-goal, which is not a goal in the baseline: "
+    "Bulk edit names the goal no-such-goal, which is not a goal of the Ground Truth: "
     "the run must name one that is"
 )
 # bulk-edit's row naming its goal with no contribution: the feature set's 0 wins.

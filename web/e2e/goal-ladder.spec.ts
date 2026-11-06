@@ -111,7 +111,7 @@ for (const scheme of ["light", "dark"] as const) {
         await expect(page.getByTestId("gm-guardrail")).toContainText("Pages load in under 2 seconds");
         await expect(page.getByTestId("ld-goal")).toHaveText([/Goal 1Teams stay past their first year/, /Goal 2New teams set up in one day/, /Goal 3Larger teams add paid seats/, /Goal 4Half the support tickets per team/]);
         await expect(page.getByTestId("ld-milestone")).toHaveCount(12);
-        await expect(page.getByTestId("ld-milestone").first()).toContainText("M1Weekly active teams baseline set");
+        await expect(page.getByTestId("ld-milestone").first()).toContainText("M1Weekly active teams first measured");
         // F-03 waits on F-02, and three features wait on it.
         await expect(card(page, "F-03").getByTestId("ld-counts")).toHaveText("←13→");
         await expect(page.getByTestId("ld-arrow")).toHaveCount(0);
@@ -357,7 +357,7 @@ test.describe("visual QA fixes (L-1 to L-8), 1440 light", () => {
     await card(page, "F-03").getByTestId("ld-open").click();
     const panel = page.getByTestId("gm-feature-panel");
     await expect(panel.getByTestId("card-goal")).toContainText("Teams stay past their first year");
-    await expect(panel).toContainText("M1 Weekly active teams baseline set");
+    await expect(panel).toContainText("M1 Weekly active teams first measured");
   });
 
   test("L-3: a commenter's suggested link shows on the card, and Undo takes it back", async ({ page }) => {

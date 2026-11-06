@@ -60,7 +60,7 @@ test("Simple's Welcome: how setup works is in the title's (i)", async ({ page })
   await toSimple(page);
   const card = simple(page).getByTestId("home-setup");
   await expect(card.getByRole("heading", { name: "Welcome: set up Oracle" })).toBeVisible();
-  await behindTip(card, "setting up Oracle", "A few steps make Oracle yours: connect your tools, pick the sources it reads, then build the baseline it plans from. Each step opens where it is done.");
+  await behindTip(card, "setting up Oracle", "A few steps make Oracle yours: connect your tools, pick the sources it reads, then build the Ground Truth it plans from. Each step opens where it is done.");
   await fitsPhone(page);
 });
 
@@ -99,11 +99,11 @@ test("Settings › Company: Horizons, Time zone and Team capacity explain in the
 test("Build the baseline: what it does is in the title's (i)", async ({ page }) => {
   await login(page, "approver@example.com");
   await page.getByTestId("nav-baseline").filter({ visible: true }).first().click();
-  await expect(page).toHaveURL(/\/baseline/);
-  await page.getByRole("button", { name: "Build baseline" }).click();
-  const sheet = page.getByRole("dialog", { name: "Build the baseline" });
+  await expect(page).toHaveURL(/\/ground-truth/);
+  await page.getByRole("button", { name: "Build the Ground Truth" }).click();
+  const sheet = page.getByRole("dialog", { name: "Build the Ground Truth" });
   await expect(sheet).toBeVisible();
-  await behindTip(sheet, "building the baseline", "Oracle reads your connected sources and proposes goals, products, features, constraints and evidence. Nothing is confirmed until you review it.");
+  await behindTip(sheet, "building the Ground Truth", "Oracle reads your connected sources and proposes goals, products, features, constraints and evidence. Nothing is confirmed until you review it.");
   await fitsPhone(page);
 });
 
