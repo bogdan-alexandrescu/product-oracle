@@ -78,14 +78,14 @@ export function leadRest(text: string, codes: CodeIndex): string {
 }
 
 /** Markdown text as Simple reads it: a code with its name, a feature code opens the panel, no citation tokens. */
-function Text({ c, codes, prd }: { c: Inline[]; codes: CodeIndex; prd: Doc }) {
+function Text({ c, codes, prd, named = false }: { c: Inline[]; codes: CodeIndex; prd: Doc; named?: boolean }) {
   return (
     <>
       {c.map((n, i) => {
         if (n.t === "text")
           return (
             <Fragment key={i}>
-              {splitCodes(stripRawTokens(nameCodes(n.v, codes, null)), codes).map((p, j) =>
+              {splitCodes(stripRawTokens(named ? n.v : nameCodes(n.v, codes, null)), codes).map((p, j) =>
                 typeof p === "string" ? p : p.entry.kind === "Feature" ? <FeatureCode key={j} code={p.entry.code} name={p.entry.name} prd={prd}>{p.text}</FeatureCode> : <span key={j} title={`${p.entry.code} ${p.entry.name}`}>{p.text}</span>,
               )}
             </Fragment>
@@ -101,6 +101,13 @@ function Text({ c, codes, prd }: { c: Inline[]; codes: CodeIndex; prd: Doc }) {
       })}
     </>
   );
+}
+
+const cellText = (c: Inline[]) => c.map((x) => (x.t === "text" || x.t === "code" ? x.v : "")).join("").trim();
+/** A cell that is a code alone, in a row whose other cell gives its name ("| F-26 | Calendar invites |"): named already. */
+function namedInRow(cell: Inline[], row: Inline[][], codes: CodeIndex): boolean {
+  const name = lookupCode(cellText(cell), codes)?.name;
+  return !!name && row.some((x) => x !== cell && cellText(x) === name);
 }
 
 /** A section's body: paragraphs, lists, quotes and tables (a table scrolls across in its own box). */
@@ -121,7 +128,7 @@ function Body({ md, codes, prd }: { md: string; codes: CodeIndex; prd: Doc }) {
           <div key={i} className="simple-prd-table" role="region" aria-label="Table" tabIndex={0}>
             <table>
               <thead><tr>{b.head.map((h, j) => <th key={j}><Text c={h} codes={codes} prd={prd} /></th>)}</tr></thead>
-              <tbody>{b.rows.map((r, j) => <tr key={j}>{r.map((c, k) => <td key={k}><Text c={c} codes={codes} prd={prd} /></td>)}</tr>)}</tbody>
+              <tbody>{b.rows.map((r, j) => <tr key={j}>{r.map((c, k) => <td key={k}><Text c={c} codes={codes} prd={prd} named={namedInRow(c, r, codes)} /></td>)}</tr>)}</tbody>
             </table>
           </div>
         );
@@ -141,7 +148,7 @@ export function PrdContents({ prd, blocks }: { prd: PrdSections; blocks: View["b
       {top.length > 0 && <p className="simple-prd-nav-title">The whole PRD</p>}
       {top.map((s) => (
         <a key={s.section_key} href={`#prd-sec-${s.section_key}`} title={plainHeading(s.heading)}>
-          <span className="simple-prd-num">{nums.get(s.section_key)}</span>{" "}
+          <span className="simple-prd-num">{nums.get(s.section_key)}</span><span className="sr-only"> </span>
           {titleOf(s.heading)}
         </a>
       ))}
@@ -162,7 +169,7 @@ export function PrdWhole({ prd, doc }: { prd: PrdSections; doc: Doc }) {
         return (
           <section key={s.section_key} id={`prd-sec-${s.section_key}`} data-prd-sec={s.section_key} data-level={s.level} className="simple-prd-sec">
             <H className="simple-prd-sec-title">
-              {nums.get(s.section_key) && <><span className="simple-prd-num">{nums.get(s.section_key)}</span>{" "}</>}
+              {nums.get(s.section_key) && <><span className="simple-prd-num">{nums.get(s.section_key)}</span><span className="sr-only"> </span></>}
               {titleOf(s.heading)}
             </H>
             {hasWords(s) && <Body md={s.body_md} codes={codes} prd={doc} />}
