@@ -16,6 +16,7 @@ const DOCS = [
 const SIZES = [
   { name: "1024", width: 1024, height: 800 },
   { name: "1440", width: 1440, height: 900 },
+  { name: "1920", width: 1920, height: 1000 },
   { name: "390", width: 390, height: 844 },
 ];
 
@@ -81,6 +82,17 @@ for (const who of [
               box!.width,
               "Label column has room for its word",
             ).toBeGreaterThanOrEqual(60);
+          }
+          // The label gets the spare room on a wide screen: the mock's longest one stays on one line.
+          if (size.width >= 1024 && doc.name === "with links") {
+            const long = table.getByRole("cell").filter({ hasText: "Board, September meeting" }).first();
+            await expect(long).toBeVisible();
+            const lines = await long.evaluate((el) => {
+              const r = document.createRange();
+              r.selectNodeContents(el);
+              return new Set(Array.from(r.getClientRects()).map((x) => Math.round(x.top))).size;
+            });
+            if (size.width >= 1440) expect(lines, "the long label wraps").toBe(1);
           }
           const cells = table.getByRole("cell");
           const n = await cells.count();
