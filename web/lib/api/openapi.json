@@ -129794,16 +129794,24 @@
           "part_of": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/SimpleMergedInto"
+                "$ref": "#/components/schemas/SimplePartRef"
               },
               {
                 "type": "null"
               }
             ]
           },
+          "part_path": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePartRef"
+            },
+            "type": "array",
+            "title": "Part Path",
+            "default": []
+          },
           "parts": {
             "items": {
-              "$ref": "#/components/schemas/SimpleMergedInto"
+              "$ref": "#/components/schemas/SimplePartRef"
             },
             "type": "array",
             "title": "Parts",

@@ -58,8 +58,9 @@ Ops and the fields they write (``before`` must name the key fields):
   feature is 422).
 - ``set_parent`` (feature-parts): the item made part of another, ``{"parent_key"}``: the key
   of an open item (not merged, not cut, not in Trash) of its roadmap, or null to take it
-  out; ``before`` is the stored key as the read shows it (``parent_key``). One level: 422
-  when the parent is itself a part or the item has parts; never the item itself.
+  out; ``before`` is the stored key as the read shows it (``parent_key``). Any depth (owner's
+  answer, Nov 5): 422 only for the item itself or one of its own parts at any depth (a
+  feature is never its own ancestor). A cut item stays a part and may be taken out.
 - ``set_status``: planned, done or cut; ``before`` ``{"status"}`` as the read showed it;
   writes cut and shipped (done: marked shipped; planned: neither, the tracker's again; a
   shipped mark not made in the panel stays).
@@ -77,7 +78,8 @@ Ops and the fields they write (``before`` must name the key fields):
 - ``merge_item`` (S7): an open item (``target.item_id``; feature-parts: any, not only a
   draft) merged into another open item of its roadmap (``target.into_id``): the kept item
   takes its goal links, dependencies and note, its dependents depend on the kept item, its
-  parts become the kept item's (the kept item, if one of them, is a part no more), its own
+  parts become the kept item's (the kept item, if one of them at any depth, takes its
+  place under its parent), its own
   ``parent_key`` clears and it closes (``merged_into``: the kept item's key); or a draft
   linked to a baseline feature (``target.feature_id``, drafts only). Keyed by item id like
   the fixes; ``before`` is read, not given.
@@ -1101,7 +1103,8 @@ async def _track_of_prd(
 async def _parent(
     db: AsyncSession, entry: service.Entry, key: Any, target: dict[str, Any], read_: service.Read
 ) -> str | None:
-    """set_parent: the parent's key, checked (one level, an open item of the roadmap);
+    """set_parent: the parent's key, checked (an open item of the roadmap, never the item
+    itself or one of its parts, at any depth);
     ``target`` names the parent the words name (the new one, else the one left)."""
     row = entry.row
     key = " ".join(str(key).split()) if key is not None else None
@@ -1117,10 +1120,13 @@ async def _parent(
         raise ChangeError(422, "after.parent_key: another item, never the item itself")
     if parent is None or parent.status in ("merged", "cut"):
         raise ChangeError(422, f"after.parent_key: no open item of this roadmap has the key {key}")
-    if parent.row.parent_key:
-        raise ChangeError(422, "after.parent_key: that item is a part itself (one level only)")
-    if any(e.row.parent_key == row.item_key and e.status != "merged" for e in same):
-        raise ChangeError(422, "This item has parts of its own, so it is never a part")
+    if any(a is entry for a in parent.ancestors):
+        # Any depth, never a loop: a feature is never its own ancestor.
+        raise ChangeError(
+            422,
+            f"{row.title} cannot be part of {parent.row.title}: "
+            f"{parent.row.title} is already one of its parts",
+        )
     return key
 
 
@@ -1198,11 +1204,17 @@ async def _merge_plan(
                 continue
             ks = [k for k in n.row.depends_on or [] if k != dk]
             after[str(nid)] = {"depends_on": ks + ([kk] if kk not in ks else [])}
-        # feature-parts: its parts become the kept item's; the kept item, if one, its own.
+        # feature-parts: its parts become the kept item's. The kept item stays where it is,
+        # or, when it is one of the merged item's parts at any depth, takes its place (so
+        # no part is left under a closed item and no loop is made).
+        if any(a is entry for a in kept.ancestors):
+            after.setdefault(str(kept.row.id), {})["parent_key"] = row.parent_key
         for e in by_id.values():
-            if e.roadmap.id != entry.roadmap.id or e is entry or e.row.parent_key != dk:
+            if e.roadmap.id != entry.roadmap.id or e is entry or e is kept:
                 continue
-            after.setdefault(str(e.row.id), {})["parent_key"] = None if e is kept else kk
+            if e.row.parent_key != dk:
+                continue
+            after.setdefault(str(e.row.id), {})["parent_key"] = kk
     rows = {str(e.row.id): e.row for e in by_id.values()}
     before = {k: read(rows[k], tuple(v), target) for k, v in after.items()}
     return entry, target, before, after

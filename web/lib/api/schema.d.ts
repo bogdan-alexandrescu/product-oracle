@@ -43823,12 +43823,17 @@ export interface components {
             merged_into?: components["schemas"]["SimpleMergedInto"] | null;
             /** Parent Key */
             parent_key?: string | null;
-            part_of?: components["schemas"]["SimpleMergedInto"] | null;
+            part_of?: components["schemas"]["SimplePartRef"] | null;
+            /**
+             * Part Path
+             * @default []
+             */
+            part_path: components["schemas"]["SimplePartRef"][];
             /**
              * Parts
              * @default []
              */
-            parts: components["schemas"]["SimpleMergedInto"][];
+            parts: components["schemas"]["SimplePartRef"][];
             /**
              * Drafting
              * @description S7: Oracle's drafting job for this draft is queued or running.

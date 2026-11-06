@@ -444,7 +444,7 @@ class RoadmapItem(Trashable, TenantScoped, Base):
     goal_ids: Mapped[list[uuid.UUID]] = _uuids()
     merged_into: Mapped[str | None] = mapped_column(Text)
     # feature-parts (oracle.simple.changes set_parent): the key of the item of the same
-    # roadmap this one is part of (one level: a parent is never a part); null: its own.
+    # roadmap this one is part of (any depth, never its own ancestor); null: its own.
     parent_key: Mapped[str | None] = mapped_column(Text)
     kept_both: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False,
                                             server_default=false())  # fmt: skip

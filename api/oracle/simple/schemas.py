@@ -364,11 +364,13 @@ class SimpleRoadmapItem(BaseModel):
     )
     merged_into: "SimpleMergedInto | None" = None
     # feature-parts: the key of the item this one is part of as stored (set_parent's
-    # ``before``), that item (null: none, or not in this read), and the item's open parts
-    # in the roadmap's order.
+    # ``before``), that item (null: none, or not on the roadmap; in_trash: in Trash), the
+    # path to it from the top (top first, the parent last), and the item's parts (open or
+    # cut, never merged) in the roadmap's order. Any depth; never a loop.
     parent_key: str | None = None
-    part_of: "SimpleMergedInto | None" = None
-    parts: list["SimpleMergedInto"] = []
+    part_of: "SimplePartRef | None" = None
+    part_path: list["SimplePartRef"] = []
+    parts: list["SimplePartRef"] = []
     drafting: bool = Field(
         default=False, description="S7: Oracle's drafting job for this draft is queued or running."
     )
@@ -399,6 +401,13 @@ class SimpleMergedInto(BaseModel):
     id: str
     code: str
     title: str
+
+
+class SimplePartRef(SimpleMergedInto):
+    """feature-parts: a parent or a part, by its display code ("" when none) and name."""
+
+    cut: bool = False
+    in_trash: bool = False
 
 
 class SimpleGroup(BaseModel):

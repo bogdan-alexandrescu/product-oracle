@@ -405,7 +405,8 @@ async def test_cut_parts_stay_parts(client):
     assert r.status_code == 201, r.text
     items = await w.read(client)
     assert items["p"]["status"] == "cut" and items["p"]["part_of"] == w.ref("a")
-    assert items["a"]["parts"] == [w.ref("p", cut=True), w.ref("c")]
+    # The cut part sits below the line, so after the open one.
+    assert items["a"]["parts"] == [w.ref("c"), w.ref("p", cut=True)]
     # A cut feature's panel can still take it out of its parent.
     r = await w.parent(client, "p", "a", None)
     assert r.status_code == 201, r.text
