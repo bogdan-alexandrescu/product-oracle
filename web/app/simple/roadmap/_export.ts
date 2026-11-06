@@ -42,6 +42,8 @@ export interface Picture {
   height: number;
   /** E-2: the height of its header (the date axis and its marks), repeated on each PDF page. */
   head?: number;
+  /** E-2: the width of its names column, repeated at the left of each PDF page across. */
+  left?: number;
   /** E-2: the y of each row's top below the header, where a PDF page may end. */
   breaks?: number[];
 }
@@ -182,7 +184,7 @@ export function chartPicture(svg: SVGSVGElement, labels: HTMLElement | null): Pi
   });
   const keyH = keyed.length ? 14 + Math.ceil(keyed.length / perRow) * KEY_ROW : 0;
   for (let k = 0; k < Math.ceil(keyed.length / perRow); k++) breaks.push(chartH + 8 + k * KEY_ROW);
-  return { body: rows.join("") + new XMLSerializer().serializeToString(chart) + key.join(""), width, height: chartH + keyH, head, breaks };
+  return { body: rows.join("") + new XMLSerializer().serializeToString(chart) + key.join(""), width, height: chartH + keyH, head, breaks, left: labelW };
 }
 
 const MONTH_WORDS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -344,7 +346,7 @@ export function zoomPicture(scroll: HTMLElement, today: string): Picture {
   const todayLine = todayEl && seen(tx) ? `<line data-testid="export-today" x1="${tx}" x2="${tx}" y1="${T}" y2="${height}" stroke="var(--today)" stroke-width="2"/>` : "";
   const frame = `<rect x="0" y="0" width="${width}" height="${head}" fill="var(--surface)"/><line x1="0" x2="${width}" y1="${head}" y2="${head}" stroke="var(--line)"/><rect x="0" y="0" width="${labelW}" height="${head}" fill="var(--surface)"/><line x1="${labelW}" x2="${labelW}" y1="0" y2="${height}" stroke="var(--line)"/>`;
   // Lines under the rows' words (each on its own white), the header's words over all.
-  return { body: hatch + frame + grid + todayLine + rows.join("") + parts.join(""), width, height, head, breaks };
+  return { body: hatch + frame + grid + todayLine + rows.join("") + parts.join(""), width, height, head, breaks, left: labelW };
 }
 
 /** The board's columns, each group and card as boxes and text. */
@@ -570,18 +572,26 @@ export function pdfOf(pages: PdfPage[]): Blob {
   return new Blob(parts as BlobPart[], { type: "application/pdf" });
 }
 
+/** Never smaller than this many points a pixel: a wider picture goes on across pages. */
+const MIN_PT = 0.45;
+
 /** E-2: the framed picture cut into page-high bands (at its rows, where it can), each page
  * its header (the brand, title, filters and the picture's own header: the date axis) again
- * above its band, and a footer: the disclaimer, the day it was made and "Page 2 of 5". */
+ * above its band, and a footer: the disclaimer, the day it was made and "Page 2 of 5". A
+ * picture too wide to read on one page's width goes on across pages too, its names column
+ * again at the left of each. */
 async function pagesOf(page: { markup: string; width: number; height: number }, pic: Picture, head: ExportHead, today: string): Promise<PdfPage[]> {
   const img = await imageOf(page.markup);
+  const pad = 16;
   const top = HEAD + (pic.head ?? 0);
+  const left = Math.min(page.width / 2, pad + (pic.left ?? 0));
   // Points per CSS pixel: the picture's width across the page (never larger than 1:1 at 72 dpi).
-  const k = Math.min(0.75, (PAGE_W - 2 * MARGIN) / page.width);
+  const across = PAGE_W - 2 * MARGIN;
+  const k = Math.max(MIN_PT, Math.min(0.75, across / page.width));
   const room = (PAGE_H - 2 * MARGIN - PAGE_FOOT) / k - top;
   const bodyEnd = HEAD + pic.height;
-  const cuts: [number, number][] = [];
-  if (room < 60) cuts.push([top, bodyEnd]);
+  const rows: [number, number][] = [];
+  if (room < 60) rows.push([top, bodyEnd]);
   else
     for (let y = top; y < bodyEnd - 0.5;) {
       let end = Math.min(bodyEnd, y + room);
@@ -589,41 +599,55 @@ async function pagesOf(page: { markup: string; width: number; height: number }, 
         const at = (pic.breaks ?? []).map((b) => HEAD + b).filter((b) => b > y + room / 3 && b <= end).at(-1);
         if (at) end = at;
       }
-      cuts.push([y, end]);
+      rows.push([y, end]);
       y = end;
     }
-  const out: PdfPage[] = [];
-  for (const [n, [y0, y1]] of cuts.entries()) {
-    const canvas = document.createElement("canvas");
-    canvas.width = PAGE_W * PAGE_PX;
-    canvas.height = PAGE_H * PAGE_PX;
-    const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const f = k * PAGE_PX;
-    const m = MARGIN * PAGE_PX;
-    // Its header (a band taller than a page is drawn shrunk to fit it).
-    const bandH = y1 - y0;
-    const fitDown = Math.min(1, (PAGE_H - 2 * MARGIN - PAGE_FOOT) / k / (top + bandH));
-    const g = f * fitDown;
-    ctx.drawImage(img, 0, 0, page.width, top, m, m, page.width * g, top * g);
-    ctx.drawImage(img, 0, y0, page.width, bandH, m, m + top * g, page.width * g, bandH * g);
-    ctx.strokeStyle = "#d6e0ea";
-    ctx.lineWidth = PAGE_PX;
-    ctx.beginPath();
-    ctx.moveTo(m, canvas.height - m - (PAGE_FOOT - 6) * PAGE_PX);
-    ctx.lineTo(canvas.width - m, canvas.height - m - (PAGE_FOOT - 6) * PAGE_PX);
-    ctx.stroke();
-    out.push({
-      image: await flate(canvas),
-      w: canvas.width,
-      h: canvas.height,
-      texts: [
-        [MARGIN, MARGIN + 2, 8, cut(head.brand?.disclaimer ?? "", 110), "left"],
-        [PAGE_W - MARGIN, MARGIN + 2, 8, `${stamp(today, head.brand)} · Page ${n + 1} of ${cuts.length}`, "right"],
-      ],
-    });
+  // The columns: the whole width, or (too wide) the part right of the names column in page-wide slices.
+  const cols: [number, number][] = [];
+  if (page.width * k <= across + 0.5) cols.push([left, page.width]);
+  else {
+    const step = across / k - left;
+    for (let x = left; x < page.width - pad - 0.5; x += step) cols.push([x, Math.min(page.width, x + step)]);
   }
+  const out: PdfPage[] = [];
+  const total = rows.length * cols.length;
+  for (const [c, [x0, x1]] of cols.entries())
+    for (const [r, [y0, y1]] of rows.entries()) {
+      const n = c * rows.length + r;
+      const canvas = document.createElement("canvas");
+      canvas.width = PAGE_W * PAGE_PX;
+      canvas.height = PAGE_H * PAGE_PX;
+      const ctx = canvas.getContext("2d")!;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const m = MARGIN * PAGE_PX;
+      // A band taller than a page (a header that leaves no room) is drawn shrunk to fit it.
+      const bandH = y1 - y0;
+      const g = k * PAGE_PX * Math.min(1, (PAGE_H - 2 * MARGIN - PAGE_FOOT) / k / (top + bandH));
+      const w = x1 - x0;
+      // The header's left (brand, title, names column's head), the header over this column, the
+      // names for this band, then the band.
+      ctx.drawImage(img, 0, 0, left, top, m, m, left * g, top * g);
+      ctx.drawImage(img, x0, 0, w, top, m + left * g, m, w * g, top * g);
+      ctx.drawImage(img, 0, y0, left, bandH, m, m + top * g, left * g, bandH * g);
+      ctx.drawImage(img, x0, y0, w, bandH, m + left * g, m + top * g, w * g, bandH * g);
+      ctx.strokeStyle = "#d6e0ea";
+      ctx.lineWidth = PAGE_PX;
+      ctx.beginPath();
+      ctx.moveTo(m, canvas.height - m - (PAGE_FOOT - 6) * PAGE_PX);
+      ctx.lineTo(canvas.width - m, canvas.height - m - (PAGE_FOOT - 6) * PAGE_PX);
+      ctx.stroke();
+      out.push({
+        image: await flate(canvas),
+        w: canvas.width,
+        h: canvas.height,
+        texts: [
+          [MARGIN, MARGIN + 2, 8, cut(head.brand?.disclaimer ?? "", 110), "left"],
+          [PAGE_W - MARGIN - 64, MARGIN + 2, 8, stamp(today, head.brand), "right"],
+          [PAGE_W - MARGIN - 52, MARGIN + 2, 8, `Page ${n + 1} of ${total}`, "left"],
+        ],
+      });
+    }
   return out;
 }
 
