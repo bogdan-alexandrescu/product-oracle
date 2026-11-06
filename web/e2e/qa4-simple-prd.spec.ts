@@ -151,8 +151,15 @@ test.describe("desktop", () => {
     await expect(panel.getByTestId("flow-comments")).toContainText("Name the invite step after the calendar · open");
   });
 
-  test("Start review on Meetings lists every PRD by its title, as the API does", async ({ page }) => {
+  test("Start review on Meetings lists every PRD in the company PRD order, as the API does", async ({ page }) => {
+    // prd-order fails_when: the picker sorts PRDs its own way (by title) instead of the order the PRDs list keeps
     await login(page);
+    // The company order, as the PRDs list draws it by default.
+    await page.goto("/documents");
+    const rows = page.getByTestId("document-row");
+    await expect(rows.first()).toBeVisible();
+    const company = await rows.evaluateAll((trs) => trs.map((tr) => (tr.querySelector("td a")?.textContent ?? "").trim()));
+    expect(company.length).toBeGreaterThan(1);
     await page.goto("/simple/meetings");
     await page.getByRole("button", { name: "Start review" }).first().click();
     const sheet = page.getByRole("dialog", { name: "Start a review" });
@@ -160,7 +167,11 @@ test.describe("desktop", () => {
     const titles = await sheet.getByLabel("PRD").locator("option").allTextContents();
     expect(titles).toContain("Guided setup");
     expect(titles).toContain("Saved carts PRD");
-    expect(titles).toEqual([...titles].sort((a, b) => a.localeCompare(b)));
+    // Each PRD the list ranks keeps its place; one it does not rank comes after them.
+    const ranked = titles.filter((t) => company.includes(t));
+    expect(ranked.length).toBeGreaterThan(1);
+    expect(ranked).toEqual(company.filter((t) => titles.includes(t)));
+    expect(titles.slice(0, ranked.length)).toEqual(ranked);
   });
 
   test("each line is one Tab stop, and the keyboard edits it from the line (qa4-simple-prd-35)", async ({ page }) => {
