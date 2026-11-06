@@ -304,6 +304,10 @@ async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
     # roadmap-draft-wording: the kind of the verified basis each dated milestone names
     # (a capacity date is the item's place in the team's queue).
     kinds = await _date_kinds(db, rows)
+    # E-14: each item's dates and delivery state as Simple reads them, for a link holder's cards.
+    from oracle.simple.service import delivery
+
+    shown = await delivery(db, rows)
     ev.items = []
     for r in rows:
         goal, goal_title = (goal_of or {}).get(r.item_key, ("none", None))
@@ -326,18 +330,11 @@ async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
                 group=group_of.get(r.item_key),
                 group_rank=rank_of.get(r.item_key),
                 date_kind=kinds.get(r.id),
-                start=r.start_date,
-                end=r.end_date or _iso_day((r.milestone or {}).get("date")),
-                shipped=bool(r.shipped),
+                start=shown[r.id].start,
+                end=shown[r.id].end,
+                state=shown[r.id].state,
             )
         )
-
-
-def _iso_day(value: Any) -> date | None:
-    try:
-        return date.fromisoformat(str(value)[:10]) if value else None
-    except ValueError:
-        return None
 
 
 async def _date_kinds(db: AsyncSession, rows: list[Any]) -> dict[uuid.UUID, str]:

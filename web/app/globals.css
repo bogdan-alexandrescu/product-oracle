@@ -1299,9 +1299,11 @@ code .date-mark {
 @media print {
   .simple-noprint { display: none !important; }
   /* E-13: a printed Simple page (a one-pager saved as PDF) is the page alone, across the sheet:
-     no rail, phone top bar or docked Ask panel. */
+     no rail, phone top bar, docked Ask panel or the phone's open Ask sheet (its chat). */
   [data-mode="simple"] [data-testid="phone-header"],
-  [data-mode="simple"] [data-testid="hop-dock"] { display: none !important; }
+  [data-mode="simple"] [data-testid="hop-dock"],
+  [data-mode="simple"] [data-testid="phone-ask-sheet"],
+  [data-mode="simple"] [data-testid="ask-chat"] { display: none !important; }
   [data-mode="simple"] main#main { grid-column: 1 / -1; }
   [data-mode="simple"] .simple-page { max-width: none; }
   /* A one-pager prints in one column across the sheet (landscape or no margins included):

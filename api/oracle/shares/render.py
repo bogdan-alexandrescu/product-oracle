@@ -193,11 +193,11 @@ def reader_body(body_md: str, section_key: str, items: Sequence[ItemView] = ()) 
     line (the company's note on what it left out) nor an item's no-goal flag, and in each
     table no column every row leaves empty and, under a goal group's heading, no Goal
     column (it repeats the heading). The first column always stays. A goal group's rows
-    read ``items`` (by title) for each card's dates and delivery state (E-14)."""
+    are Board's items of that group (:func:`variants.board_group`, by key), each card
+    with its dates and delivery state (E-14): its When and Status columns stay."""
     from oracle.roadmap import variants
 
     group = variants.spans_row(section_key)
-    when = section_key.split("-group-")[0] if group else None
     lines = [
         ln
         for ln in (body_md or "").split("\n")
@@ -217,12 +217,13 @@ def reader_body(body_md: str, section_key: str, items: Sequence[ItemView] = ()) 
             end += 1
         head = variants._split_row(lines[i])
         rows = [variants._split_row(ln) + [""] * len(head) for ln in lines[i + 2 : end]]
-        if when:
-            head, rows = _with_when(head, rows, when, items)
+        if group:
+            head, rows = _with_when(head, rows, variants.board_group(list(items), section_key))
         keep = [
             n
             for n, name in enumerate(head)
             if n == 0
+            or (group and n in (1, 2))
             or (
                 not (group and name.strip("* ").lower() in ("goal", "goals"))
                 and any(r[n].strip() for r in rows)
@@ -235,34 +236,36 @@ def reader_body(body_md: str, section_key: str, items: Sequence[ItemView] = ()) 
     return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip("\n")
 
 
-def _with_when(head: list[str], rows: list[list[str]], horizon: str, items: Sequence[ItemView]):
+# E-14: an item's delivery state (oracle.simple.service delivery) as its card says it.
+STATE_WORDS = {"planned": "Planned", "in_progress": "In progress", "done": "Shipped"}
+
+
+def _with_when(head: list[str], rows: list[list[str]], items: Sequence[ItemView]):
     """E-14: a goal group's item table as a link holder reads it: each item's name, when
-    (its own dates, month first: "Oct 5 – Nov 20" or "Nov 20"; its horizon only when it has
-    none), status (its delivery state: "In progress", "Planned"), its confidence in words
-    ("High confidence"), then the other columns; the reader styles draw each row as a
-    card."""
+    (its dates as Simple reads them, month first: "Oct 5 – Nov 20" or "Nov 20"; nothing
+    when it has none, as the horizon is the heading above it), status (its delivery state:
+    "Planned", "In progress", "Shipped"), its confidence in words ("High confidence"), then
+    the other columns; the reader styles draw each row as a card. ``items`` are the group's,
+    one per row (:func:`variants.board_group`); rows of another count read no item."""
     names = [h.strip("* ").lower() for h in head]
     sure = names.index("confidence") if "confidence" in names else None
     rest = [n for n in range(1, len(head)) if n != sure]
     out_head = [head[0], "When", "Status", "Confidence"] + [head[n] for n in rest]
-    by_title = {i.title.strip().lower(): i for i in items}
+    of_row: Sequence[ItemView | None] = items if len(items) == len(rows) else [None] * len(rows)
 
     def words(cell: str) -> str:
         cell = cell.strip()
         return f"{cell[:1].upper()}{cell[1:]} confidence" if cell else ""
 
-    def card(row: list[str]) -> list[str]:
-        item = by_title.get(variants._plain(row[0]).lstrip())
-        when = _dates(item.start, item.end) if item else None
-        stage = public.STAGE_LABELS.get(public.HORIZON_STAGE.get(horizon, ""), "")
+    def card(row: list[str], item: ItemView | None) -> list[str]:
         return [
             row[0],
-            when or variants.HORIZON_SECTIONS.get(horizon, horizon),
-            "Shipped" if item and item.shipped else stage,
+            (_dates(item.start, item.end) or "") if item else "",
+            STATE_WORDS.get(item.state, STATE_WORDS["planned"]) if item else "",
             words(row[sure]) if sure is not None else "",
         ] + [row[n] for n in rest]
 
-    return out_head, [card(r) for r in rows]
+    return out_head, [card(r, i) for r, i in zip(rows, of_row, strict=True)]
 
 
 def _dates(start: date | None, end: date | None) -> str | None:
