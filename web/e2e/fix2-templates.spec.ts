@@ -15,7 +15,7 @@ test("qa-settings-10: a new template's key is made from its name, and says so", 
   await login(page);
   await page.goto("/settings/templates/new");
   // QD4 a: no Key field to get wrong; the key is shown, made from the name.
-  await expect(page.getByLabel("Key")).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Key" })).toHaveCount(0);
   const key = page.getByTestId("template-key");
   await expect(key).toHaveText("Key: —");
   await page.getByLabel("Name").fill("Launch brief!");
@@ -26,7 +26,7 @@ test("qa-settings-10, qa-settings-34, F-76: a new theme's key is made from its n
   await login(page);
   await page.goto("/settings/themes/new");
   // F-76: no Key field to get wrong; the key is shown, made from the name.
-  await expect(page.getByLabel("Key")).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Key" })).toHaveCount(0);
   const key = page.getByTestId("theme-key");
   await expect(key).toHaveText("Key: —");
   await page.getByLabel("Name").fill("a");

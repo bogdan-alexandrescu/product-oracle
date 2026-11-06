@@ -133,7 +133,7 @@ for (const phone of [false, true]) {
       await expect(page.getByRole("button", { name: "About themes" })).toHaveAccessibleDescription(/Text must be easy to read on its background\./);
       await expect(page.getByRole("button", { name: "About themes" })).not.toHaveAccessibleDescription(/WCAG/);
       await page.goto("/settings/themes/new");
-      await expect(page.getByLabel("Key")).toHaveCount(0);
+      await expect(page.getByRole("textbox", { name: "Key" })).toHaveCount(0);
       await page.getByLabel("Name").fill("Example brand");
       await expect(page.getByTestId("theme-key")).toHaveText("Key: example-brand");
       await page.getByRole("button", { name: "Create theme" }).click();

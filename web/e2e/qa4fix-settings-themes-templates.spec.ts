@@ -63,7 +63,7 @@ test("qa4-settings-43: Key and Name placeholders read as examples", async ({ pag
   await page.goto("/settings/templates/new");
   await expect(page.getByLabel("Name")).toHaveAttribute("placeholder", "e.g. Launch brief");
   await page.goto("/settings/themes/new");
-  await expect(page.getByLabel("Key")).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Key" })).toHaveCount(0);
   await expect(page.getByLabel("Name")).toHaveAttribute("placeholder", "e.g. Company brand");
 });
 

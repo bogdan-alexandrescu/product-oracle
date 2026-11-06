@@ -328,7 +328,7 @@ export function BrandingPanel() {
                   tip={
                     // F-70: why to add one, behind the (i), while there is none.
                     !brand.display_name ? (
-                      <InfoTip label="display name" align="start" testId="brand-name-hint">
+                      <InfoTip label="the company's name" align="start" testId="brand-name-hint">
                         Exports print no company name until you add one.
                       </InfoTip>
                     ) : undefined

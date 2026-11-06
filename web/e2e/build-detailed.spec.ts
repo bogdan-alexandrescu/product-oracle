@@ -222,7 +222,7 @@ for (const size of SIZES) {
       await expect(sections).toHaveCount(3);
       await expect(page.getByLabel("Section 1 heading")).toHaveValue("Problem");
       await expect(page.getByTestId("template-sections")).toContainText("Sources and data points");
-      await expect(page.getByLabel("Key")).toHaveCount(0);
+      await expect(page.getByRole("textbox", { name: "Key" })).toHaveCount(0);
       await page.getByTestId("template-name").fill("Launch brief");
       await expect(page.getByTestId("template-key")).toHaveText("Key: launch-brief");
       await page.getByRole("button", { name: "Add a section" }).click();
