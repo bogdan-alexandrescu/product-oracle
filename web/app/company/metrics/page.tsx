@@ -90,9 +90,16 @@ function Metrics() {
       key: "title",
       header: "Metric",
       phone: "title",
-      cell: (m) => <span className={`truncate font-medium ${m.kind === "input" ? "pl-5 max-[600px]:pl-3" : ""}`}>{m.title}</span>,
+      // D-9: the metric's kind (Result or Driver) as a chip beside its name, in the panel's words; never hidden.
+      cell: (m) => (
+        <span className={`flex min-w-0 items-center gap-2 ${m.kind === "input" ? "pl-5 max-[600px]:pl-3" : ""}`}>
+          <span className="truncate font-medium">{m.title}</span>
+          <Chip kind={m.kind === "output" ? "acc" : "line"} className="flex-none" data-testid="metric-kind">
+            {KIND_LABEL[m.kind]}
+          </Chip>
+        </span>
+      ),
     },
-    { key: "kind", header: "Kind", width: "84px", phone: "hide", narrow: "mid", cell: (m) => <span className="text-sm text-text2">{KIND_LABEL[m.kind]}</span> },
     {
       key: "last",
       header: "Last week",

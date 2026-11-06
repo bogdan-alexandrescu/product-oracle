@@ -294,12 +294,15 @@ function BlockInspector({
   question,
   n,
   kind,
+  canPublish,
   onChanged,
 }: {
   block: Block;
   question: Question | undefined;
   n: number;
   kind?: string;
+  /** D-1: what publishing does is shown only to whoever may publish (can("approve_version")). */
+  canPublish: boolean;
   onChanged: (message: string) => void;
 }) {
   const why = block.blocker?.gate.rationale ?? block.check?.rationale;
@@ -349,9 +352,11 @@ function BlockInspector({
           <AcceptRisk key={block.id} blocker={block.blocker} onDone={onChanged} />
         </InspectorSection>
       )}
-      <InspectorSection label="On publish">
-        <OnPublish n={n} kind={kind} />
-      </InspectorSection>
+      {canPublish && (
+        <InspectorSection label="On publish">
+          <OnPublish n={n} kind={kind} />
+        </InspectorSection>
+      )}
     </Inspector>
   );
 }
@@ -380,8 +385,8 @@ function SubHead({ title, count, muted = false, children }: { title: string; cou
   );
 }
 
-/** One block: icon, title, kind chip, Resolve. Click selects it. */
-function BlockRow({ block, selected, onSelect }: { block: Block; selected: boolean; onSelect: () => void }) {
+/** One block: icon, title, kind chip, Resolve (D-1: only for whoever may publish). Click selects it. */
+function BlockRow({ block, selected, canResolve, onSelect }: { block: Block; selected: boolean; canResolve: boolean; onSelect: () => void }) {
   return (
     <div
       data-testid="block-row"
@@ -409,7 +414,7 @@ function BlockRow({ block, selected, onSelect }: { block: Block; selected: boole
         <Chip kind="crit">{block.kind}</Chip>
       </span>
       <span className="text-right max-[600px]:col-start-3 max-[600px]:row-start-2">
-        {block.href && (
+        {block.href && canResolve && (
           <LinkButton href={block.href} variant={selected ? "solid" : "secondary"} onClick={(e) => e.stopPropagation()}>
             Resolve
           </LinkButton>
@@ -767,8 +772,8 @@ export function PublishView({ doc }: { doc: string }) {
 
   const inspector =
     n == null || !readiness ? undefined : selected ? (
-      <BlockInspector key={selected.id} block={selected} question={questionFor(selected)} n={n} kind={d?.kind} onChanged={changed} />
-    ) : (
+      <BlockInspector key={selected.id} block={selected} question={questionFor(selected)} n={n} kind={d?.kind} canPublish={canPublish} onChanged={changed} />
+    ) : !published && !canPublish ? undefined : (
       <ReadyInspector n={n} published={published} kind={d?.kind} />
     );
 
@@ -824,7 +829,7 @@ export function PublishView({ doc }: { doc: string }) {
                 </div>
                 {blocks.map((b) => (
                   <div key={b.id}>
-                    <BlockRow block={b} selected={b.id === selected?.id} onSelect={() => setPicked(b.id)} />
+                    <BlockRow block={b} selected={b.id === selected?.id} canResolve={canPublish} onSelect={() => setPicked(b.id)} />
                     {phone && b.id === selected?.id && inspector && <div className="border-t border-line p-2">{inspector}</div>}
                   </div>
                 ))}
