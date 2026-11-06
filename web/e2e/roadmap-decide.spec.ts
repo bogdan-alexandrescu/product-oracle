@@ -434,8 +434,10 @@ test("under a filter, Needs a decision says N here, M in all on one basis, and 1
 
 test("the side menu's Roadmap count holds the dates to confirm: it equals Needs a decision", async ({ page }) => {
   await open(page);
-  const waiting = Number(/· (\d+)/.exec(await page.getByTestId("needs-decision").innerText())![1]);
   await page.getByTestId("needs-decision").click();
+  // The goals' suggested features arrive after the roadmap; the button counts them once they have, so read it then.
+  await expect(tray(page).getByTestId("tray-suggested").getByTestId("goal-suggestion").first()).toBeVisible();
+  const waiting = Number(/· (\d+)/.exec(await page.getByTestId("needs-decision").innerText())![1]);
   const dates = Number(await tray(page).getByTestId("tray-counter").filter({ hasText: "Dates to confirm" }).locator("b").innerText());
   // Pre-demo QA S-6: Needs a decision counts the goals' suggested features it lists too, in a
   // tile of their own, so the tiles add up to the button. The side menu's Roadmap count is the
