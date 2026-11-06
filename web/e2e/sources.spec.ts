@@ -19,15 +19,15 @@ test("settings › sources: my sources, status and last error, sync, allowlist, 
   await expect(repo.getByTestId("last-error")).toHaveText("The connection was rejected: token expired");
 
   await chat.getByRole("button", { name: "Sync now" }).click();
-  await expect(chat.getByRole("status")).toContainText("Synced: 2 items seen, 1 new version");
+  await expect(chat.getByRole("status")).toContainText("Synced: 2 items, 1 changed");
 
   // Edit channels and Delete sit in the row's More menu.
   await chat.getByRole("button", { name: "More actions for Product chat" }).click();
   await chat.getByRole("menuitem", { name: "Edit channels" }).click();
   // The channel list names the picks (#product): wait for it before switching to pasting ids.
   await expect(chat.getByRole("checkbox", { name: "#product", exact: true })).toBeChecked();
-  await chat.getByRole("button", { name: "Paste ids" }).click();
-  await chat.getByLabel("Channel ids (one per line)").fill("C0123PRODUCT\nC0789ROADMAP");
+  await chat.getByRole("button", { name: "Paste links" }).click();
+  await chat.getByLabel("Channel links (one per line)").fill("C0123PRODUCT\nC0789ROADMAP");
   await chat.getByRole("button", { name: "Save channels" }).click();
   await expect(chat.getByRole("status")).toHaveText("Channels saved.");
   // A pasted id no list named reads as unknown (Settings' words, qa-settings-23), never by its id.
@@ -53,7 +53,7 @@ test("settings › sources: add from my connections, upload files, delete", asyn
   await form.getByLabel("Kind").selectOption("github");
   await expect(form.getByLabel("Connection")).toHaveValue(/.+/);
   await form.getByLabel("Name").fill("Docs repo");
-  await form.getByRole("button", { name: "Paste ids" }).click();
+  await form.getByRole("button", { name: "Paste links" }).click();
   await form.getByLabel("Repositories (one per line)").fill("example-org/docs");
   await form.getByRole("button", { name: "Add source" }).click();
   const docs = page.getByRole("listitem", { name: "Docs repo" });

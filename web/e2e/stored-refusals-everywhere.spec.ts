@@ -112,7 +112,9 @@ test("a code map the pool refused says when it failed, the refusal in the past",
   const line = page.getByRole("listitem", { name: "Example repo" }).getByTestId("code-map-example-org/example-app");
   await line.getByRole("button", { name: "Map the code" }).click();
   await expect(line.getByTestId("failed-at")).toHaveText(/^Failed Oct \d+, \d+:\d{2} [AP]M PDT\.\s*$/, { timeout: 15_000 });
-  await expect(line).toContainText(`The code map run failed: index: ${THEN}`);
+  // Pass F F-37: plain words, no step name and no reset time.
+  await expect(line).toContainText("Every Claude account is out of quota. Try again later.");
+  await expect(line).not.toContainText("index:");
   await expect(line.getByRole("button", { name: "Map the code" })).toBeVisible();
   await noCurrentRefusal(page);
 });

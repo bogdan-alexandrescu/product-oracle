@@ -120,7 +120,7 @@ test("Sources: plain counts and names, Add a source is the header's main button"
   // Drive notes in words: a dash before the folder's note, "Skipped" apart from its reason.
   const notes = page.getByRole("list", { name: "Sync notes for Product docs" });
   await expect(notes.getByRole("listitem", { name: "Lost access to Vendor research" })).toHaveText(
-    /Vendor research\s*— its docs are hidden until Oracle can read it again/,
+    /Vendor research[\s\S]*Choose another/,
   );
   const skipped = notes.getByRole("listitem").filter({ hasText: "owned outside example.com" });
   await expect(skipped.getByText("Skipped", { exact: true })).toBeVisible();
@@ -130,7 +130,7 @@ test("Sources: plain counts and names, Add a source is the header's main button"
 
   // Company email domains say how they differ from sign-in domains.
   const hint = page.getByTestId("company-domains-hint");
-  await expect(hint).toContainText("Which owners’ Drive files are read.");
+  await expect(hint).toContainText("Same list as");
   await expect(hint.getByRole("link", { name: "Members › Sign-in" })).toHaveAttribute("href", "/settings/members");
 });
 

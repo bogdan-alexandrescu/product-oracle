@@ -44,7 +44,7 @@ async function smallestText(scope: Locator): Promise<number> {
 
 test("notion picker: tree by parent, pick a parent, search, paste a link, save roots, edit", async ({ page }) => {
   const { form, picker } = await openPicker(page);
-  await expect(form.getByText("Only pages you shared with Product Oracle in Notion appear here")).toBeVisible();
+  await expect(form.getByRole("button", { name: "About which pages show" })).toBeVisible();
   await expect(form.getByRole("link", { name: "Share more in Notion" })).toHaveAttribute("target", "_blank");
   // No ids textarea for Notion.
   await expect(form.locator("textarea")).toHaveCount(0);

@@ -32,7 +32,7 @@ test("slack picker: search, pick channels and a since date, add the source", asy
   // Private channels carry a lock; members are counted. No ids to type.
   await expect(picker.getByTestId("pick-row").filter({ hasText: "#roadmap" }).getByTitle("Private")).toBeVisible();
   await expect(picker.getByTestId("pick-row").filter({ hasText: "#general" })).toContainText("128");
-  await expect(form.getByLabel("Channel ids (one per line)")).toHaveCount(0);
+  await expect(form.getByLabel("Channel links (one per line)")).toHaveCount(0);
 
   await picker.getByLabel("Search channels").fill("feed");
   await expect(picker.getByRole("checkbox")).toHaveCount(1);
@@ -89,13 +89,13 @@ test("slack picker: edit a source's channels, load more, paste ids", async ({ pa
   // Paste ids stays as a fallback and keeps the picks.
   await chat.getByRole("button", { name: "More actions for Product chat" }).click();
   await chat.getByRole("menuitem", { name: "Edit channels" }).click();
-  await chat.getByRole("button", { name: "Paste ids" }).click();
-  const ids = chat.getByLabel("Channel ids (one per line)");
+  await chat.getByRole("button", { name: "Paste links" }).click();
+  const ids = chat.getByLabel("Channel links (one per line)");
   await expect(ids).toHaveValue("C0123PRODUCT\nC0120PARTNERS");
   await ids.fill("C0123PRODUCT\nC0999UNLISTED");
   await chat.getByRole("button", { name: "Pick from list" }).click();
   // An id the list does not show is still picked, by id.
-  await expect(picker.getByRole("checkbox", { name: "C0999UNLISTED" })).toBeChecked();
+  await expect(picker.getByRole("checkbox", { name: "Unknown channel" })).toBeChecked();
   await chat.getByRole("button", { name: "Save channels" }).click();
   // A pick no list has named reads as unknown, never by its id (qa-work-46, in Settings' words, qa-settings-23).
   await expect(chat.getByTestId("source-picks")).toHaveText("#product, unknown channel");
@@ -300,7 +300,7 @@ test("named picks: no field asks for ids one per line until Paste ids (AC 13)", 
   await expect(repo.getByRole("checkbox", { name: "example-org/example-app" })).toBeChecked();
   await expect(perLine).toHaveCount(0);
 
-  await repo.getByRole("button", { name: "Paste ids" }).click();
+  await repo.getByRole("button", { name: "Paste links" }).click();
   await expect(perLine).toHaveCount(1);
   await expect(perLine).toBeVisible();
 });
