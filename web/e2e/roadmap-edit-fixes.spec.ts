@@ -109,25 +109,39 @@ for (const phone of [false, true]) {
       await login(page);
       await page.goto(ROADMAP);
       await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-      await page.getByTestId("quick-add-open").click();
-      const sheet = page.getByRole("dialog", { name: "Add an item" });
-      await sheet.getByLabel("Title").fill("Snooze an alert");
-      await sheet.getByLabel("Roadmap").selectOption({ label: "Alerts roadmap" });
-      const goal = (await sheet.getByLabel("Where").locator("option").allTextContents()).find((t) => t.includes("Grow retention"));
-      expect(goal).toBeTruthy();
-      await sheet.getByLabel("Where").selectOption({ label: goal! });
-      await sheet.getByRole("button", { name: "Add", exact: true }).click();
-      await expect(sheet).toBeHidden();
-      await openRoadmapItem(page, "snooze-an-alert");
+      if (phone) {
+        await page.getByTestId("quick-add-open").click();
+        const sheet = page.getByRole("dialog", { name: "Add an item" });
+        await sheet.getByLabel("Title").fill("Snooze an alert");
+        await sheet.getByLabel("Roadmap").selectOption({ label: "Alerts roadmap" });
+        await sheet.getByRole("button", { name: "Add", exact: true }).click();
+        await expect(sheet).toBeHidden();
+      } else {
+        await page.getByLabel("Add an item").fill("Snooze an alert");
+        await page.getByTestId("quick-add-roadmap").selectOption({ label: "Alerts roadmap" });
+        await page.getByLabel("Add an item").press("Enter");
+      }
+      await expect(page.getByRole("status").filter({ hasText: "Added Snooze an alert as a draft" })).toBeVisible();
+      // The added item opens its panel.
       const card = panel(page);
+      await expect(card).toBeVisible();
       await expect(card.getByTestId("item-drafting")).toHaveText("Oracle is drafting…");
-      // The person types the outcome while Oracle drafts.
+      // While Oracle drafts, the person sets the goal and types the outcome.
+      await tap(card.getByRole("button", { name: "Change the goal" }));
+      const pick = card.getByTestId("card-goal-edit").getByLabel("Goal");
+      const grow = (await pick.locator("option").allTextContents()).find((t) => t.startsWith("Grow retention"));
+      expect(grow).toBeTruthy();
+      await pick.selectOption({ label: grow! });
+      await tap(card.getByTestId("card-goal-edit").getByRole("button", { name: "Save" }));
+      await expect(card.getByTestId("card-goal")).toContainText("Grow retention");
       await tap(card.getByRole("button", { name: "Change the outcome" }));
-      await card.getByLabel("Outcome").fill("Admins pause one noisy alert for a day");
-      await tap(card.getByRole("button", { name: "Save" }));
+      await card.getByTestId("card-outcome-edit").getByLabel("Outcome").fill("Admins pause one noisy alert for a day");
+      await tap(card.getByTestId("card-outcome-edit").getByRole("button", { name: "Save" }));
       await expect(card.getByTestId("card-outcome")).toContainText("Admins pause one noisy alert for a day");
       await expect(card.getByTestId("item-drafting")).toHaveCount(0, { timeout: 10_000 });
+      // Oracle's draft leaves what the person set.
       await expect(card.getByTestId("card-outcome")).toContainText("Admins pause one noisy alert for a day");
+      await expect(card.getByTestId("card-goal")).toContainText("Grow retention");
       // Oracle's idea is a suggestion: nothing is added until the person adds it.
       await expect(card.getByTestId("card-depends")).toContainText("Nothing");
       const idea = card.getByTestId("card-depends-idea");
