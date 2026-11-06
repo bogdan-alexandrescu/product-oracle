@@ -57,7 +57,7 @@ import { publishOnePager, type OnePagerDb } from "./simple-one-pager";
 import { APPROVED_KEY, draftAct, draftRoadmapOut } from "./meeting-draft";
 import { goalRank, homeRoadmapOf, roadmapId, roadmapOut, tasksWaiting, type SimpleDb } from "./simple-roadmap";
 import type { ChatMeetings, MeetingAgenda, MeetingNote } from "./simple-chat";
-import { agendaRight, agendaRowsOut, editAgenda, TOPIC_MINS, type AgendaCtx, type AgendaSheetDb } from "./simple-meeting-agenda";
+import { agendaRight, agendaRowsOut, editAgenda, restoreAgendaRow, TOPIC_MINS, type AgendaCtx, type AgendaRowDb, type AgendaSheetDb } from "./simple-meeting-agenda";
 
 export const MOCK_MEETINGS_KEY = "po-mock-simple-meetings";
 /** "minutes-later": the minutes job ends this long after End (the production walk: 14 s). */
@@ -592,7 +592,39 @@ function agendaCtx(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting, p: Prd): Agenda
     decider: p.decider,
     skipped: (m.agenda_state?.skipped ?? []).map((x) => x.id),
     live: m.status === "live",
+    // port-an-decisions (meetings._trash_removed): a removed item waits in Settings › Trash.
+    trash: (c) => {
+      const t = ctx.trash?.();
+      const id = crypto.randomUUID();
+      const at = new Date().toISOString();
+      t?.entries.push({
+        out: {
+          id, root: { type: "agenda_item", id: c.id, slug: null, title: c.name, kind: "agenda_item" }, items: [],
+          deleted_by: ctx.me.id, deleted_by_name: nameOf(ctx, ctx.me.id), deleted_at: at, reason: null, published: false,
+          purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString(),
+        },
+        documents: [], versions: [], runs: [], intakes: [],
+        agenda: { meeting_id: m.id, row: c.row, at: c.at ?? 0 },
+      });
+      return id;
+    },
+    untrash: (ids) => {
+      const t = ctx.trash?.();
+      if (t) t.entries = t.entries.filter((e) => !ids.includes(e.out.id));
+    },
   };
+}
+
+/** port-an-decisions: Trash's Restore of a removed agenda item (meetings.restore_agenda_item); the
+ * refusal's words, else null. */
+export function restoreAgendaItem(ctx: MeetingsCtx, db: MeetingsDb, entry: TrashEntryRow): string | null {
+  const a = entry.agenda!;
+  const m = db.meetings.find((x) => x.id === a.meeting_id);
+  if (!m) return "Its meeting was deleted: there is no agenda to put it back on";
+  if (m.status === "ended") return "Its meeting has ended: the agenda is closed";
+  const p = prds(ctx).find((x) => x.slug === m.prd);
+  if (!p) return "Its meeting's PRD is gone";
+  return restoreAgendaRow(agendaSheet(ctx, db, m, p), agendaCtx(ctx, db, m, p), a.row as AgendaRowDb, a.at, entry.out.id, entry.out.root.title);
 }
 
 function agendaSheet(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting, p: Prd): AgendaSheetDb {

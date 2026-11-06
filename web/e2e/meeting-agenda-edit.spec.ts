@@ -89,7 +89,7 @@ test.describe("desktop", () => {
     // Down by dragging: Mobile alert push dropped on the last row.
     await rows(page).filter({ hasText: "Mobile alert push" }).dragTo(rows(page).last());
     await expect.poll(async () => (await names(page)).at(-1)).toBe("Mobile alert push");
-    // Remove: no Trash for agenda items; it goes, with Undo.
+    // Remove: it goes, with Undo (port-an-decisions: and waits in Settings › Trash).
     await tap(s.getByRole("button", { name: "Remove Alert history export" }));
     await expect.poll(() => names(page)).not.toContain("Alert history export");
     await page.keyboard.press("Escape");

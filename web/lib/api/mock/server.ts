@@ -167,7 +167,7 @@ import { bucketGoalsInOrder, placeBucketGoal, placeBucketGoals, routeGoalBuckets
 import { proposeGoalDelete, routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { routeCurrentState, seedCurrentState, type CurrentStateDb } from "./currentstate";
 import { featureKeyOf, prioritiesOut } from "./simple-priorities";
-import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, sheetDecisionMade, sheetProposals, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
+import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, restoreAgendaItem, sheetDecisionMade, sheetProposals, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
 import { runGroupsOut } from "./simple-runs";
 import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
@@ -184,7 +184,7 @@ import { applyFitDate, knowGoalMapItems, seedFitDateRoadmap } from "./simple-roa
 import { closed, GOALS, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapItems, routeGoalMap, type GoalMap } from "./goal-map";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
-import { emptyTrash, routeTrash, type TrashDb } from "./trash";
+import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience, spansRow, type BoardItem } from "./audience";
@@ -5542,6 +5542,21 @@ function requestsContext(db: Db, userId: string, role: Role): RequestsContext {
     zone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
     intakeTitle: (id) => ensureV2(db).intakes.find((i) => i.id === id)?.title ?? null,
     trashedTitle: (id) => trashedTitle(db, id),
+    // port-an-decisions (requests.service.trash_request): the row waits in a Trash entry.
+    trash: (row, reason) => {
+      const at = now();
+      const entry: TrashEntryRow = {
+        out: {
+          id: uuid(), root: { type: "request", id: (row as { id: string }).id, slug: null, title: (row as { title: string }).title, kind: "request" }, items: [],
+          deleted_by: userId, deleted_by_name: me ? trashName(me) : null, deleted_at: at, reason, published: false,
+          purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString(),
+        },
+        documents: [], versions: [], runs: [], intakes: [],
+        request: row,
+      };
+      (db.trash ??= emptyTrash()).entries.push(entry);
+      return entryOut(entry, at, true);
+    },
     suggestionsShown: () => ["recommend", "act"].includes(levelFor((db.autonomy ??= emptyAutonomy()), "requests")),
     goals: () => db.baseline.entities.filter((e) => e.type === "goal"),
     features: () => db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected"),
@@ -5886,6 +5901,23 @@ async function route(db: Db, req: Request): Promise<Response> {
       // edit-decisions: Restore puts a decision or a PRD's question back on Simple's Decisions too.
       simple: () => db.simple_roadmap && { ...db.simple_roadmap, sheet: [...(db.simple_meetings?.decisions ?? []), ...(db.simple_meetings?.questions?.questions ?? [])] },
       onRestore: (released) => relinkDocuments(ensureRequests(db), released as ReleasedRequest[], (id) => ensureV2(db).intakes.some((i) => i.id === id)),
+      // port-an-decisions: Restore puts a meeting's removed agenda item or a deleted request back.
+      restoreRoot: (entry) => {
+        if (entry.request !== undefined) {
+          ensureRequests(db).requests.push(entry.request as RequestsDb["requests"][number]);
+          return null;
+        }
+        if (!entry.agenda || !db.simple_meetings) return "Its meeting was deleted: there is no agenda to put it back on";
+        const mctx = {
+          me: { id: me.id, role: me.role },
+          members: db.members.filter((x) => x.status !== "disabled").map((x) => ({ id: x.id, name: displayName(x.email, x.name), role: x.role, email: x.email })),
+          roadmap: db.simple_roadmap,
+          onePager: db.simple_one_pager,
+          rituals: ensureRituals(db, me),
+          documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title })),
+        } as MeetingsCtx;
+        return restoreAgendaItem(mctx, db.simple_meetings, entry);
+      },
       uuid,
       now,
     },

@@ -121,6 +121,13 @@ function Requests({ view }: { view: RequestsView }) {
     // Accepting Oracle's theme may create one; a decision moves request counts.
     themes.reload();
   };
+  // port-an-decisions: an owner deleted it to Trash: it leaves the lists and the inspector closes.
+  const deleted = () => {
+    setSelected(null);
+    void requests.reload();
+    void undecided.reload();
+    themes.reload();
+  };
   const themeChanged = (t: Schemas["RequestThemeOut"]) =>
     themes.setData((list) => (list?.some((x) => x.id === t.id) ? list.map((x) => (x.id === t.id ? t : x)) : [...(list ?? []), t]));
   const loaded = listed.data?.items ?? [];
@@ -165,6 +172,7 @@ function Requests({ view }: { view: RequestsView }) {
         goalTitles={goalTitles}
         onChange={changed}
         onTheme={themeChanged}
+        onDeleted={deleted}
       />
     </div>
   );

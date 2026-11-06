@@ -15,7 +15,16 @@ export const TOPIC_MINS = 5;
 /** One stored row: a feature of the PRD (its id is the feature's) or a typed topic. */
 export type AgendaRowDb = { id: string; feature_id: string | null; title: string | null; was?: string | null; mins: number; by?: string | null };
 /** One op's clause for the Undo line (meetings._agenda_apply): what it did to which item. */
-export type AgendaClause = { op: "add" | "remove" | "move" | "rename"; id: string; name: string; dir?: "up" | "down"; to?: string };
+export type AgendaClause = {
+  op: "add" | "remove" | "move" | "rename";
+  id: string;
+  name: string;
+  dir?: "up" | "down";
+  to?: string;
+  /** port-an-decisions: a removed row and where it stood, for its Trash entry's Restore. */
+  row?: AgendaRowDb;
+  at?: number;
+};
 export type AgendaOp = Schemas["SimpleAgendaEditIn"];
 /** What a meeting keeps beside the chat's next and skipped (meetings.agenda's other keys). */
 export type AgendaSheetDb = {
@@ -26,6 +35,8 @@ export type AgendaSheetDb = {
   clauses?: AgendaClause[];
   words?: string[];
   left_out?: string[];
+  /** port-an-decisions: the Trash entries of the items the batch removed (Undo takes them back out). */
+  trashed?: string[];
   proposal?: { by: string; decider: string | null; ops: AgendaOp[]; said: AgendaClause[]; words: string[]; gone?: AgendaClause[]; dropped: string[] } | null;
 };
 
@@ -36,6 +47,10 @@ export type AgendaCtx = {
   decider: string | null;
   skipped: string[];
   live: boolean;
+  /** port-an-decisions: a removed item goes to Settings › Trash; returns the entry's id. */
+  trash?: (c: AgendaClause) => string;
+  /** port-an-decisions: Undo of the batch: its removed items leave Trash. */
+  untrash?: (ids: string[]) => void;
 };
 
 class AgendaError extends Error {
@@ -92,7 +107,7 @@ function states(s: AgendaSheetDb, ctx: AgendaCtx, rows: AgendaRowDb[]): Schemas[
   });
 }
 
-export function agendaRowsOut(s: AgendaSheetDb, ctx: AgendaCtx): Pick<Schemas["SimpleAgenda"], "items" | "addable" | "batch" | "words" | "left_out" | "proposal" | "decider"> {
+export function agendaRowsOut(s: AgendaSheetDb, ctx: AgendaCtx): Pick<Schemas["SimpleAgenda"], "items" | "addable" | "batch" | "words" | "left_out" | "in_trash" | "proposal" | "decider"> {
   const rows = rowsOf(s, ctx);
   const titles = new Map(ctx.features.map((f) => [f.id, f.title]));
   const st = states(s, ctx, rows);
@@ -112,6 +127,7 @@ export function agendaRowsOut(s: AgendaSheetDb, ctx: AgendaCtx): Pick<Schemas["S
     batch: s.batch ?? null,
     words: [...(s.words ?? [])],
     left_out: [...(s.left_out ?? [])],
+    in_trash: (s.trashed ?? []).length > 0,
     decider: ctx.decider ? { id: ctx.decider, name: ctx.nameOf(ctx.decider) } : null,
     proposal: p ? { by: { id: p.by, name: ctx.nameOf(p.by) }, decider: p.decider ? { id: p.decider, name: ctx.nameOf(p.decider) } : null, words: [...p.words], dropped: [...(p.dropped ?? [])] } : null,
   };
@@ -145,8 +161,9 @@ function applyOp(s: AgendaSheetDb, ctx: AgendaCtx, rows: AgendaRowDb[], by: stri
     return { op: "rename", id: x.id, name: was, to: title };
   }
   if (b.op === "remove") {
-    rows.splice(rows.indexOf(x), 1);
-    return { op: "remove", id: x.id, name: was };
+    const at = rows.indexOf(x);
+    rows.splice(at, 1);
+    return { op: "remove", id: x.id, name: was, row: { ...x }, at };
   }
   let first = 0;
   rows.forEach((y, k) => {
@@ -157,6 +174,11 @@ function applyOp(s: AgendaSheetDb, ctx: AgendaCtx, rows: AgendaRowDb[], by: stri
   rows.splice(at, 1);
   rows.splice(to, 0, x);
   return { op: "move", id: x.id, name: was, dir: to < at ? "up" : "down" };
+}
+
+/** port-an-decisions (meetings._trash_removed): each item the batch removed goes to Trash. */
+function trashRemoved(ctx: AgendaCtx, clauses: AgendaClause[]): string[] {
+  return clauses.filter((c) => c.op === "remove" && ctx.trash).map((c) => ctx.trash!(c));
 }
 
 /** One op of the sheet (meetings.edit_agenda); returns the status and detail of a refusal, else null. */
@@ -187,11 +209,14 @@ export function editAgenda(s: AgendaSheetDb, ctx: AgendaCtx, b: AgendaOp): { sta
         }
       });
       Object.assign(s, { items: rows, clauses, words: agendaWords(clauses), proposal: null, left_out: agendaWords(gone) });
+      s.trashed = trashRemoved(ctx, clauses);
     } else if (b.op === "undo") {
       if (right !== "save" || !s.before) throw new AgendaError(404, "Nothing to undo");
       if ((b.batch ?? null) !== (s.batch ?? null)) throw new AgendaError(409, "Someone changed the agenda since");
       Object.assign(s, { items: s.before, clauses: [], words: [], left_out: [], batch: null });
       delete s.before;
+      ctx.untrash?.(s.trashed ?? []);
+      s.trashed = [];
     } else if (right === "propose") {
       // An op of the earlier proposal whose item is gone since is dropped, and the proposal says so
       // (its clauses read together, so a move and a rename of one item read as one).
@@ -213,13 +238,30 @@ export function editAgenda(s: AgendaSheetDb, ctx: AgendaCtx, b: AgendaOp): { sta
       clauses.push(applyOp(s, ctx, trial, ctx.me.id, b));
       s.proposal = { by: ctx.me.id, decider: ctx.decider, ops: [...kept, b], said: clauses, words: agendaWords(clauses), gone, dropped: agendaWords(gone) };
     } else {
-      if (s.batch !== (b.batch ?? null) || !s.before) Object.assign(s, { before: rows.map((x) => ({ ...x })), batch: b.batch ?? null, clauses: [], left_out: [] });
-      const clauses = [...(s.clauses ?? []), applyOp(s, ctx, rows, ctx.me.id, b)];
+      if (s.batch !== (b.batch ?? null) || !s.before) Object.assign(s, { before: rows.map((x) => ({ ...x })), batch: b.batch ?? null, clauses: [], left_out: [], trashed: [] });
+      const clause = applyOp(s, ctx, rows, ctx.me.id, b);
+      const clauses = [...(s.clauses ?? []), clause];
       Object.assign(s, { items: rows, clauses, words: agendaWords(clauses) });
+      s.trashed = [...(s.trashed ?? []), ...trashRemoved(ctx, [clause])];
     }
     return null;
   } catch (e) {
     if (e instanceof AgendaError) return { status: e.status, detail: e.message };
     throw e;
   }
+}
+
+/** port-an-decisions (meetings.restore_agenda_item): Trash's Restore puts a removed row back where it
+ * stood, never before the current item or a done one; the refusal's words when it is on again. */
+export function restoreAgendaRow(s: AgendaSheetDb, ctx: AgendaCtx, row: AgendaRowDb, at: number, entryId: string, name: string): string | null {
+  const rows = rowsOf(s, ctx);
+  if (rows.some((x) => x.id === row.id)) return `'${name}' is on the agenda again already`;
+  let first = 0;
+  states(s, ctx, rows).forEach((st, k) => {
+    if (st === "done" || st === "now") first = k + 1;
+  });
+  rows.splice(Math.max(first, Math.min(at, rows.length)), 0, { ...row });
+  s.items = rows;
+  s.trashed = (s.trashed ?? []).filter((i) => i !== entryId);
+  return null;
 }

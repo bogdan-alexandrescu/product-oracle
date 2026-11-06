@@ -38,6 +38,9 @@ const KIND_LABEL: Record<string, string> = {
   // edit-decisions: a decision and a PRD's question deleted from Simple's sheet.
   decision: "Decision",
   question: "Question",
+  // port-an-decisions: a meeting's removed agenda item and a request an owner deleted.
+  agenda_item: "Agenda item",
+  request: "Request",
 };
 
 export function itemKind(i: TrashItem): string {

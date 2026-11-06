@@ -6,9 +6,10 @@
  * the Agenda sheet (a bottom sheet on a phone): numbered rows with minutes, up and down arrows
  * and dragging, Rename in place, × to remove and an Add box for a feature or a typed topic.
  * The meeting's own can_* fields say who acts: edit_agenda saves, propose_agenda proposes to
- * the decider, anyone else reads. A removed item is not kept in Trash (agenda items are not
- * deletable there): it goes, with Undo.
+ * the decider, anyone else reads. A removed item waits in Settings › Trash (port-an-decisions):
+ * the done line has Undo and Open Trash, where its Restore puts it back.
  */
+import Link from "next/link";
 import { useRef, useState } from "react";
 
 import { InfoTip, Sheet, toast } from "@/components/ds";
@@ -170,6 +171,11 @@ export function AgendaSheet({ meetingId, agenda, can, phone, reload }: { meeting
           <button type="button" className={LINK} disabled={busy} onClick={() => send({ op: "undo", batch: agenda.batch })}>
             Undo
           </button>
+          {agenda.in_trash && (
+            <Link href="/settings/trash" className={LINK} data-testid="agenda-open-trash">
+              Open Trash
+            </Link>
+          )}
         </p>
       )}
       {prop && (
