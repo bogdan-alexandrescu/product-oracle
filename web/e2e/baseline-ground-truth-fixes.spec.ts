@@ -8,9 +8,11 @@ import { login, signOut } from "./helpers";
 /**
  * The two Ground Truth fixes that had no route (the owner's follow-up, Nov 5), on Detailed's
  * Ground Truth page in the "ground-truth-flags" scenario: Give it a code (Smart search, no code:
- * the next F-number, F-16) and Link to a feature for the PRD's F-09 Guest seats and the slice
+ * the next F-number, F-21, past the roadmap's item from a PRD's F-20 section) and Link to a
+ * feature for the PRD's F-09 Guest seats and the slice
  * F-15a Usage report. Approvers and owners fix at once, with Undo; a commenter's fix goes to an
- * approver, who accepts it on the Proposals tab; viewers read the flags with no fixes.
+ * approver, who accepts it on the Proposals tab, and shows on its flag as waiting until then,
+ * also after a reload; viewers read the flags with no fixes.
  */
 
 const DESKTOP = { width: 1440, height: 900 };
@@ -55,7 +57,7 @@ for (const [viewport, who] of [
       await expect(total(page)).toHaveText("7");
       await openKind(page, "no_code");
       await row(page, "Smart search").getByRole("button", { name: "Give it a code: Smart search" }).click();
-      await expect(notice(page)).toContainText("“Smart search” is now F-16.");
+      await expect(notice(page)).toContainText("“Smart search” is now F-21.");
       await expect(count(page, "no_code")).toHaveCount(0);
       await expect(total(page)).toHaveText("6");
       expect(await fits(page)).toBe(true);
@@ -108,6 +110,17 @@ for (const [viewport, colorScheme] of [
     await linkTo(page, "Guest seats", "Audit", "F-02 Audit log");
     await expect(notice(page)).toContainText("Asked an approver to link “Guest seats” to “Audit log”.");
     await expect(total(page)).toHaveText("7");
+    // Each stays on its flag as waiting for an approver, with no second ask, also after a reload.
+    await page.reload();
+    await expect(page.getByTestId("gt-band")).toBeVisible();
+    for (const [kind, name, fix] of [
+      ["no_code", "Smart search", /Give it a code/],
+      ["prd_feature_missing", "Guest seats", /Link to a feature/],
+    ] as const) {
+      await openKind(page, kind);
+      await expect(row(page, name).getByTestId("gt-pending")).toHaveText("Waiting for an approver");
+      await expect(row(page, name).getByRole("button", { name: fix })).toHaveCount(0);
+    }
 
     // The account menu sits in the rail, which a phone folds away: sign out on a wide screen.
     await page.setViewportSize(DESKTOP);

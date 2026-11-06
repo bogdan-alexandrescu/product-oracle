@@ -51,11 +51,13 @@ const FEATURES: [string, string, Entity["status"], boolean][] = [
 ];
 /** Running today (Current state's proof), as feature_states would say. */
 const RUNNING = new Set([featureId("F-03")]);
-/** The scenario's roadmap items: key, title, the feature it is, a draft. */
-const ITEMS: [string, string, string | null, boolean][] = [
+/** The scenario's roadmap items: key, title, the feature it is, a draft, the PRD section it came from. */
+const ITEMS: [string, string, string | null, boolean, string?][] = [
   ["gt-export-to-sheets", "Export to sheets", null, true],
   ["gt-weekly-digest", "Weekly digest", featureId("F-14"), true],
   ["gt-night-alerts", "Night alerts", featureId("F-03"), false],
+  // Digest emails came from a PRD's F-20 section: the next code counts it (F-21).
+  ["gt-digest-emails", "Digest emails", featureId("F-12"), false, "f-20"],
 ];
 /** The PRD Scale's approved plan: its features not in the Ground Truth (F-15 spans two milestones: slice F-15a). */
 const PRD_FEATURES = [{ code: "F-09", name: "Guest seats", slice: null }, { code: "F-15", name: "Usage report", slice: "F-15a" }];
@@ -71,9 +73,9 @@ export function seedGroundTruth(baseline: BaselineState, simple: SimpleDb): void
     baseline.entities.push({ ...template, id, key, title, body: null, attrs: {}, status, parent_id: null, locked: false, locked_by: null, locked_at: null });
     if (serves) baseline.edges.push({ ...edge, id: stableUuid(`ground-truth/serves/${key}`), src_id: id, dst_id: goal.id, status: "confirmed", locked: false, locked_by: null, locked_at: null });
   }
-  for (const [key, title, feature, draft] of ITEMS) {
+  for (const [key, title, feature, draft, section] of ITEMS) {
     if (simple.items.some((x) => x.key === key)) continue;
-    simple.items.push({ key, title, horizon: "next", roadmap: ROADMAP_SLUG, track: "alerts", confidence: "medium", start: 30, end: 70, source: "typed", draft, feature_id: feature });
+    simple.items.push({ key, title, horizon: "next", roadmap: ROADMAP_SLUG, track: "alerts", confidence: "medium", start: 30, end: 70, source: "typed", draft, feature_id: feature, ...(section ? { section } : {}) });
     simple.ids[key] = stableUuid(`simple-item/${key}`);
   }
 }
