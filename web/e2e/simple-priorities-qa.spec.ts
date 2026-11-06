@@ -72,6 +72,11 @@ for (const [size, viewport] of [["1440", DESKTOP], ["390", PHONE]] as const) {
           await open(page, email, theme, "buckets");
           const rows = page.getByTestId("plan-feature");
           await expect(rows.first()).toBeVisible();
+          // Demo 9: Goal buckets' intro is behind the (i), as Value / effort's is.
+          await expect(page.getByTestId("buckets-intro")).toBeHidden();
+          await page.getByTestId("prio-about").click();
+          await expect(page.getByTestId("buckets-intro")).toBeVisible();
+          await page.keyboard.press("Escape");
           const n = await rows.count();
           expect(n).toBeGreaterThan(0);
           await expect(page.getByTestId("plan-feature-open")).toHaveCount(n);
