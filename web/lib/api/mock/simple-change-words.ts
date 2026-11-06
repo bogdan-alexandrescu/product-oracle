@@ -118,6 +118,11 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
     case "archive_goal": return `archived the goal ${quoted(target.title) ?? "a goal"}`;
     case "delete_goal": return `moved the goal ${quoted(target.title) ?? "a goal"} to Trash`;
     case "unarchive_goal": return `restored the goal ${quoted(target.title) ?? "a goal"}`;
+    // roadmap-decide: a cut item's fix, the dependency dropped (change_words.py).
+    case "remove_dependency": {
+      const dep = quoted((target.titles as unknown[] | undefined)?.[1]);
+      return dep ? `removed ${x}'s dependency on ${dep}` : `removed a dependency of ${x}`;
+    }
   }
   return `changed ${x}`;
 }
