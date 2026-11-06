@@ -18,7 +18,7 @@ type Action = Schemas["GroundTruthFix"]["action"];
 /** docs/ground-truth.md's kinds, in the check's order: the count's name and, behind its (i), why. */
 const KINDS: { kind: Kind; label: string; why: string }[] = [
   { kind: "unlinked_item", label: "Not in the Ground Truth", why: "Roadmap items that are no feature of the Ground Truth, or one only proposed so far." },
-  { kind: "slice_parent_missing", label: "Slices not in the Ground Truth", why: "Slices of a PRD feature (one per milestone it spans) whose feature is not in the Ground Truth." },
+  { kind: "slice_parent_missing", label: "Slices not in the Ground Truth", why: "Roadmap slices of a PRD feature (one per milestone it spans) whose feature is not in the Ground Truth." },
   { kind: "prd_feature_missing", label: "PRD features not in the Ground Truth", why: "Features of a PRD's approved version that are not in the Ground Truth." },
   { kind: "no_code", label: "No feature code", why: "Ground Truth features without an F-code, so no PRD or roadmap can name them." },
   { kind: "no_goal", label: "Serves no goal", why: "Ground Truth features that serve no goal." },
@@ -38,8 +38,15 @@ const FIX_LABEL: Record<Action, string> = {
 const subject = (f: Flag) => f.item ?? f.feature!;
 const shown = (r: Schemas["GroundTruthRef"]) => (r.code ? `${r.code} ${r.name}` : r.name);
 
-/** A key for a new feature from its name, not one the graph has (as page.tsx's addSubgoal). */
-function newKey(name: string, graph: GraphOut | undefined): string {
+/** A PRD feature's code (F-09, F-15), the target of its Add to Ground Truth. */
+const CODE = /^[A-Z]{1,3}-\d+$/;
+
+/**
+ * A key for a new feature: the PRD feature's code when the fix names one (the check matches a
+ * PRD's feature by code only), else from its name, not one the graph has (as page.tsx's addSubgoal).
+ */
+function newKey(name: string, graph: GraphOut | undefined, code?: string): string {
+  if (code && CODE.test(code) && !(graph?.entities ?? []).some((e) => e.key === code)) return code;
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "feature";
   const taken = new Set((graph?.entities ?? []).map((e) => e.key));
   let key = slug;
@@ -121,7 +128,7 @@ export function GroundTruthFlags({
   const add = (flag: Flag, target: string) =>
     act(async () => {
       const name = (flag.feature ?? flag.item)!.name;
-      const key = newKey(name, graph);
+      const key = newKey(name, graph, target);
       if (!canWrite) {
         await unwrap(api.POST("/v1/baseline/proposals", { body: { op: "create", kind: "entity", fields: { type: "feature", key, title: name } } }));
         return { text: `Proposed “${name}” for the Ground Truth.` };
@@ -203,7 +210,8 @@ export function GroundTruthFlags({
         case "add_to_ground_truth":
           return canWrite || canPropose ? on(() => void add(flag, t)) : [];
         case "link_to_feature":
-          if (flag.kind === "unlinked_item") return canWrite ? on(() => setPicking({ flag, what: "feature" })) : [];
+          // A roadmap item's link (an unlinked item, a slice item) is a roadmap write; a PRD's feature's is a link.
+          if (flag.item?.id === t) return canWrite ? on(() => setPicking({ flag, what: "feature" })) : [];
           return (canWrite || canPropose) && flag.where.prd ? on(() => setPicking({ flag, what: "feature" })) : [];
         case "give_code":
           return canWrite || canPropose ? on(() => void giveCode(flag, t)) : [];
@@ -307,7 +315,7 @@ export function GroundTruthFlags({
           onClose={() => setPicking(null)}
           onFeature={(feature) => {
             const t = picking.flag.fixes.find((x) => x.action === "link_to_feature")!.target;
-            if (picking.flag.kind === "unlinked_item") void pickFeature(picking.flag, t, feature);
+            if (picking.flag.item?.id === t) void pickFeature(picking.flag, t, feature);
             else void linkPrd(picking.flag, t, feature);
           }}
           onGoal={(goal) => {

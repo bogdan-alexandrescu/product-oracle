@@ -26194,17 +26194,21 @@ export interface components {
         };
         /**
          * GroundTruthFix
-         * @description A fix a person makes in the UI. ``target``: the item's or feature's id, or for a PRD's
-         *     feature or slice the PRD feature's code (with ``where.prd``).
+         * @description A fix a person makes in the UI. ``target``: the item's or feature's id; for a PRD's
+         *     feature its code, or its name when it has none (with ``where.prd``); for a slice's Add to
+         *     Ground Truth its feature's code (F-15); for ``confirm_feature`` the proposed feature's id.
+         *     ``words``: the button's plain words ("Confirm it").
          */
         GroundTruthFix: {
             /**
              * Action
              * @enum {string}
              */
-            action: "add_to_ground_truth" | "link_to_feature" | "give_code" | "pick_goal" | "take_off_roadmap" | "confirm_feature";
+            action: "add_to_ground_truth" | "link_to_feature" | "confirm_feature" | "give_code" | "pick_goal" | "take_off_roadmap";
             /** Target */
             target: string;
+            /** Words */
+            words: string;
         };
         /**
          * GroundTruthFixOut
@@ -26240,6 +26244,9 @@ export interface components {
             words: string;
             /** Fixes */
             fixes: components["schemas"]["GroundTruthFix"][];
+            /** Hint */
+            hint?: string | null;
+            like?: components["schemas"]["GroundTruthRef"] | null;
         };
         /** GroundTruthOut */
         GroundTruthOut: {

@@ -7,17 +7,29 @@ Truth entries by code. Anything that breaks this is allowed (no save is refused)
 here, each flag with one plain sentence and the fixes a person can make in the UI:
 
 - ``unlinked_item``: a roadmap item linked to no Ground Truth feature (none, or one a run
-  only proposed: then Confirm it, ``confirm_feature``, not Add to Ground Truth);
-- ``slice_parent_missing``: a slice (F-15a) of a PRD feature not in the Ground Truth;
-- ``prd_feature_missing``: a feature of a PRD's approved version not in the Ground Truth;
+  only proposed: then "Confirm it" confirms that feature, beside "Link to a feature"); an
+  item linked to none whose own code (F-02) or whose slice's feature (F-15 of F-15a) is a
+  Ground Truth feature's code is in it, by code, and not flagged;
+- ``slice_parent_missing``: a roadmap slice item (section F-15a, or an item of a PRD feature
+  over several milestones) linked to no feature, whose feature (F-15) is not in the Ground
+  Truth; one flagged as ``prd_feature_missing`` already is an ``unlinked_item`` instead, so
+  one missing feature is one flag of its own however many milestones it spans;
+- ``prd_feature_missing``: a feature of a PRD's approved version not in the Ground Truth, by
+  code only (a feature with no code is flagged too; one with the name of a Ground Truth
+  feature carries it as a hint, "Same name as F-05 Bulk import.");
 - ``no_code``: a Ground Truth feature with no F-code;
-- ``no_goal``: a Ground Truth feature serving no goal;
-- ``runs_today_on_roadmap``: a feature running today (Current state) still on the roadmap.
+- ``no_goal``: a Ground Truth feature serving no confirmed goal by a confirmed link;
+- ``runs_today_on_roadmap``: a feature running today (Current state) still on the roadmap,
+  its own feature or the one it matches by code (F-03, F-03a), fixed by taking it off the
+  roadmap (an item can also be an ``unlinked_item``).
+
+Codes read one way: "f-1", "F-001" and 1 are F-01; a negative or malformed number is no code.
 
 "The roadmap" is what every reader is shown: the shown version of each company-visible
 roadmap that feeds Simple (the company roadmap alone while there is one), less cut, shipped,
 merged and taken-off items and the items of a replaced PRD. A PRD's features are those of
-its approved version's plan (``simple_prd_plans``); slices as ``oracle.simple.plan``.
+its approved version's plan (``simple_prd_plans``); slices as ``oracle.simple.plan``. Trash
+is left out, as every read.
 """
 
 import re
@@ -47,7 +59,11 @@ from oracle.simple.models import SimplePrdPlan
 
 # A feature's F-code (F-12; a clash reads F-12.2; a slice F-12a).
 F_CODE = re.compile(r"[A-Z]{1,3}-\d+(?:\.\d+)?[a-j]?")
+# A slice's PRD section (f-15a: the first slice of F-15).
+SLICE_SECTION = re.compile(r"([a-z]{1,3})-(\d+)([a-j])", re.IGNORECASE)
 LETTERS = "abcdefghij"
+# A code to read one way (f-1, F-01, F-12.2).
+CODE = re.compile(r"([a-z]{1,3})-(\d+)((?:\.\d+)?)", re.IGNORECASE)
 # Plan states that take an item off the plan (oracle.simple.approved_roadmap).
 OFF_PLAN = ("shipped", "next_prd")
 
@@ -59,6 +75,42 @@ WORDS = {
     "no_goal": "This feature serves no goal.",
     "runs_today_on_roadmap": "This feature runs today but is still on the roadmap.",
 }
+# Each fix's button.
+FIX_WORDS = {
+    "add_to_ground_truth": "Add to Ground Truth",
+    "link_to_feature": "Link to a feature",
+    "confirm_feature": "Confirm it",
+    "give_code": "Give it a code",
+    "pick_goal": "Pick a goal",
+    "take_off_roadmap": "Take it off the roadmap",
+}
+
+
+def _code(raw: str | None) -> str | None:
+    """A code read one way, its number two digits at least ("f-1", "F-001" read "F-01";
+    F-12.2 keeps its clash suffix), None for no code ("problem")."""
+    m = CODE.fullmatch((raw or "").strip())
+    return f"{m.group(1).upper()}-{int(m.group(2)):02d}{m.group(3)}" if m else None
+
+
+def _plan_code(raw: Any) -> str:
+    """A PRD plan feature's code as an F-code ("f-15", "F-015" and 15 read "F-15"), "" for
+    none or a number that is no code (-3, "3.5")."""
+    if isinstance(raw, int) and not isinstance(raw, bool):
+        return f"F-{raw:02d}" if raw >= 0 else ""
+    code = raw.strip() if isinstance(raw, str) else ""
+    if code.isdigit():
+        return f"F-{int(code):02d}"
+    if not any(c.isalpha() for c in code):
+        return ""
+    return _code(code) or code
+
+
+def _uuid(raw: Any) -> uuid.UUID | None:
+    try:
+        return uuid.UUID(str(raw))
+    except ValueError:
+        return None
 
 
 def _doc(d: Document | None) -> GroundTruthDoc | None:
@@ -136,7 +188,7 @@ async def _prd_plans(db: AsyncSession) -> list[tuple[Document, dict[str, Any]]]:
 
 async def run(db: AsyncSession) -> GroundTruthOut:
     """Every flag in the company (the tenant session), in the order of ``CHECK_KINDS``."""
-    from oracle.simple.priorities import _short_codes, prd_code
+    from oracle.simple.priorities import _short_codes
 
     features = list(
         await db.scalars(
@@ -160,7 +212,10 @@ async def run(db: AsyncSession) -> GroundTruthOut:
             GroundTruthFlag(
                 kind=kind,  # type: ignore[arg-type]
                 words=WORDS[kind],
-                fixes=[GroundTruthFix(action=a, target=t) for a, t in fixes],  # type: ignore[arg-type]
+                fixes=[
+                    GroundTruthFix(action=a, target=t, words=FIX_WORDS[a])  # type: ignore[arg-type]
+                    for a, t in fixes
+                ],
                 **kw,
             )
         )
@@ -173,12 +228,122 @@ async def run(db: AsyncSession) -> GroundTruthOut:
                 d.id: d for d in await db.scalars(select(Document).where(Document.id.in_(prd_ids)))
             }
 
+    def where_of(i: RoadmapItem) -> GroundTruthWhere:
+        return GroundTruthWhere(
+            roadmap=_doc(roadmaps.get(i.roadmap_document_id)),  # type: ignore[arg-type]
+            prd=_doc(prd_docs.get(i.prd_document_id)),  # type: ignore[arg-type]
+        )
+
+    # A PRD's roadmap: the company roadmap first, else by title (one stable pick).
+    active = await company.active(db)
+    active_id = active.id if active is not None else None
+    roadmap_of_prd: dict[uuid.UUID | None, Document] = {}
+    for d in sorted(
+        {i.roadmap_document_id: roadmaps[i.roadmap_document_id] for i in items}.values(),
+        key=lambda d: (d.id != active_id, d.title, str(d.id)),
+    ):
+        for i in items:
+            if i.roadmap_document_id == d.id:
+                roadmap_of_prd.setdefault(i.prd_document_id, d)
+
+    # A PRD's features, by code only (a slice's code, F-12a, as stored).
+    truth_of = {(_code(c) or c): f for f in truth if (c := code_of.get(f.id))}
+    truth_codes = set(truth_of)
+    same_name: dict[str, Entity] = {}
+    for f in truth:
+        same_name.setdefault(f.title.strip().casefold(), f)
+    plans = await _prd_plans(db)
+    spans: dict[tuple[uuid.UUID, str], int] = {}
+    missing: set[tuple[uuid.UUID, str]] = set()
+    # A PRD's feature linked to a Ground Truth feature (Link to a feature,
+    # oracle.baseline.fixes) is that feature: neither it nor its items are flagged.
+    linked: dict[tuple[uuid.UUID, str], Entity] = {}
+    for prd, data in plans:
+        links = data.get("links") or {}
+        roadmap = roadmap_of_prd.get(prd.id) or (active if active in roadmaps.values() else None)
+        for f in data.get("features") or []:
+            if not isinstance(f, dict):
+                continue
+            raw = str(f.get("code") or "").strip()
+            code = _plan_code(f.get("code"))
+            name = str(f.get("name") or "").strip() or code
+            if code:
+                spans[(prd.id, code)] = len([m for m in f.get("milestones") or [] if m])
+            if not name or code in truth_codes:
+                continue
+            to = by_id.get(_uuid(links.get(raw, links.get(code))))  # type: ignore[arg-type]
+            if to is not None and to.id in truth_ids:
+                if code:
+                    linked[(prd.id, code)] = to
+                continue
+            if code:
+                missing.add((prd.id, code))
+            like = same_name.get(name.casefold())
+            hint = None
+            if like is not None:
+                hint = " ".join(x for x in ("Same name as", code_of.get(like.id), like.title) if x)
+            flag(
+                "prd_feature_missing",
+                [("add_to_ground_truth", code or name), ("link_to_feature", code or name)],
+                feature=GroundTruthRef(id=None, code=code or None, name=name),
+                where=GroundTruthWhere(roadmap=_doc(roadmap), prd=_doc(prd)),
+                hint=f"{hint}." if hint else None,
+                like=ref(like) if like is not None else None,
+            )
+
+    # Each roadmap slice item: its code (F-15a) and its feature's (F-15). An item of a PRD
+    # feature over several milestones takes the next letter no slice item has (F-15c after
+    # an F-15b item).
+    slice_of: dict[uuid.UUID, tuple[str, str]] = {}
+    taken: dict[tuple[uuid.UUID | None, str], set[str]] = {}
     for i in items:
-        if i.feature_id in truth_ids:
+        if m := SLICE_SECTION.fullmatch((i.prd_section_key or "").strip()):
+            parent = f"{m.group(1).upper()}-{int(m.group(2)):02d}"
+            slice_of[i.id] = (f"{parent}{m.group(3).lower()}", parent)
+            taken.setdefault((i.prd_document_id, parent), set()).add(m.group(3).lower())
+    for i in items:
+        code = _code(i.prd_section_key)
+        key = (i.prd_document_id, code or "")
+        if code and spans.get(key, 0) > 1:  # type: ignore[arg-type]
+            used = taken.setdefault(key, set())
+            letter = next((x for x in LETTERS if x not in used), LETTERS[-1])
+            used.add(letter)
+            slice_of[i.id] = (f"{code}{letter}", code)
+
+    def item_ref(i: RoadmapItem) -> GroundTruthRef:
+        code = slice_of[i.id][0] if i.id in slice_of else _code(i.prd_section_key)
+        return GroundTruthRef(id=i.id, code=code, name=i.title)
+
+    # The feature of each item linked to none, by code: its own (F-02) or its slice's (F-15).
+    by_code: dict[uuid.UUID, Entity] = {}
+    for i in items:
+        if by_id.get(i.feature_id) is None:  # type: ignore[arg-type]
+            parent = slice_of[i.id][1] if i.id in slice_of else None
+            for code in (item_ref(i).code, parent):
+                if code in truth_of or (i.prd_document_id, code) in linked:
+                    by_code[i.id] = truth_of.get(code) or linked[(i.prd_document_id, code)]  # type: ignore[index]
+                    break
+
+    for i in items:
+        if i.feature_id in truth_ids or i.id in by_code:
             continue
         linked = by_id.get(i.feature_id) if i.feature_id is not None else None
         target = str(i.id)
-        # Linked to a feature a run only proposed: confirming it is the fix, not adding another.
+        parent = slice_of[i.id][1] if i.id in slice_of else None
+        if (
+            linked is None
+            and parent is not None
+            and parent not in truth_codes
+            and (i.prd_document_id, parent) not in missing
+        ):
+            flag(
+                "slice_parent_missing",
+                [("add_to_ground_truth", parent), ("link_to_feature", target)],
+                item=item_ref(i),
+                where=where_of(i),
+            )
+            continue
+        # Linked to a feature a run proposed: an approver confirms it (the owner, Nov 5).
         first = (
             ("confirm_feature", str(linked.id))
             if linked is not None and linked.status == "proposed"
@@ -187,48 +352,10 @@ async def run(db: AsyncSession) -> GroundTruthOut:
         flag(
             "unlinked_item",
             [first, ("link_to_feature", target)],
-            item=GroundTruthRef(id=i.id, code=prd_code(i.prd_section_key), name=i.title),
+            item=item_ref(i),
             feature=ref(linked) if linked is not None else None,
-            where=GroundTruthWhere(
-                roadmap=_doc(roadmaps.get(i.roadmap_document_id)),  # type: ignore[arg-type]
-                prd=_doc(prd_docs.get(i.prd_document_id)),  # type: ignore[arg-type]
-            ),
+            where=where_of(i),
         )
-
-    # A PRD's features, by code, else by name.
-    truth_codes = {code_of[f.id] for f in truth if f.id in code_of}
-    truth_names = {f.title.strip().casefold() for f in truth}
-    active = await company.active(db)
-    roadmap_of_prd = {i.prd_document_id: roadmaps.get(i.roadmap_document_id) for i in items}
-    for prd, data in await _prd_plans(db):
-        roadmap = roadmap_of_prd.get(prd.id) or (active if active in roadmaps.values() else None)
-        for f in data.get("features") or []:
-            if not isinstance(f, dict):
-                continue
-            code = str(f.get("code") or "").strip()
-            name = str(f.get("name") or code).strip()
-            if not code or code in truth_codes or name.casefold() in truth_names:
-                continue
-            # Linked to a Ground Truth feature (Link to a feature, oracle.baseline.fixes).
-            if str((data.get("links") or {}).get(code)) in {str(i) for i in truth_ids}:
-                continue
-            fixes = [("add_to_ground_truth", code), ("link_to_feature", code)]
-            where = GroundTruthWhere(roadmap=_doc(roadmap), prd=_doc(prd))
-            flag(
-                "prd_feature_missing",
-                fixes,
-                feature=GroundTruthRef(id=None, code=code, name=name),
-                where=where,
-            )
-            spans = [m for m in f.get("milestones") or [] if m]
-            if len(spans) > 1:
-                for n in range(min(len(spans), len(LETTERS))):
-                    flag(
-                        "slice_parent_missing",
-                        fixes,
-                        item=GroundTruthRef(id=None, code=f"{code}{LETTERS[n]}", name=name),
-                        where=where,
-                    )
 
     for f in truth:
         if f.id not in code_of:
@@ -236,14 +363,14 @@ async def run(db: AsyncSession) -> GroundTruthOut:
 
     goals = set(
         await db.scalars(
-            select(Entity.id).where(Entity.type == "goal", Entity.status != "rejected")
+            select(Entity.id).where(Entity.type == "goal", Entity.status == "confirmed")
         )
     )
     serving = set(
         await db.scalars(
             select(Edge.src_id).where(
                 Edge.type == "supports",
-                Edge.status != "rejected",
+                Edge.status == "confirmed",
                 Edge.src_id.in_(truth_ids),
                 Edge.dst_id.in_(goals),
             )
@@ -259,16 +386,17 @@ async def run(db: AsyncSession) -> GroundTruthOut:
         if exists(s)
     }
     for i in items:
-        if i.feature_id in running:
+        # Its own feature, else the one it matches by code.
+        fid = (
+            i.feature_id if i.feature_id in by_id else by_code[i.id].id if i.id in by_code else None
+        )
+        if fid in running:
             flag(
                 "runs_today_on_roadmap",
                 [("take_off_roadmap", str(i.id))],
-                item=GroundTruthRef(id=i.id, code=prd_code(i.prd_section_key), name=i.title),
-                feature=ref(by_id[i.feature_id]),  # type: ignore[index]
-                where=GroundTruthWhere(
-                    roadmap=_doc(roadmaps.get(i.roadmap_document_id)),  # type: ignore[arg-type]
-                    prd=_doc(prd_docs.get(i.prd_document_id)),  # type: ignore[arg-type]
-                ),
+                item=item_ref(i),
+                feature=ref(by_id[fid]),  # type: ignore[index]
+                where=where_of(i),
             )
 
     out = [f for k in CHECK_KINDS for f in flags[k]]

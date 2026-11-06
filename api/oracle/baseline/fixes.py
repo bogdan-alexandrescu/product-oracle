@@ -252,8 +252,14 @@ async def _plan(db: AsyncSession, prd_id: uuid.UUID) -> tuple[Document, SimplePr
 
 
 def _plan_feature(row: SimplePrdPlan, code: str) -> dict[str, Any]:
+    """The plan's feature by its code as written or read one way ("f-15" and 15 are F-15)."""
+    from oracle.baseline.check import _plan_code
+
     for f in (row.data or {}).get("features") or []:
-        if isinstance(f, dict) and str(f.get("code") or "").strip() == code:
+        if isinstance(f, dict) and (
+            str(f.get("code") or "").strip() == code
+            or (_plan_code(f.get("code")) or None) == _plan_code(code)
+        ):
             return f
     raise NotFoundError("This PRD has no such feature")
 

@@ -18,8 +18,11 @@ Test cards (protects / fails_when / no_claim):
   key unchanged, the flag kept) that an approver's accept applies; a viewer is refused;
   fails_when=a commenter renumbers at once, or the accept does nothing.
 - test_link_a_prd_feature: protects=linking the PRD's F-09 to F-02 stops its flag, and its
-  plan reads F-02; linking F-15 clears its slices' flags; Undo brings the flag back;
-  fails_when=the link is lost or the PRD keeps its own code.
+  plan reads F-02; linking F-15 clears its flag and leaves its roadmap items (F-15a, F-15)
+  unflagged, as items of that feature; Undo brings the flag back; fails_when=the link is lost,
+  the PRD keeps its own code, or an item of the linked feature is still flagged.
+- test_link_a_plan_code_read_one_way: protects=a plan feature coded f-21, which the check
+  names F-21, is linked by F-21 and its flag goes; fails_when=the link says no such feature.
 - test_link_refusals: protects=an unknown code, a feature only proposed, an existing link and
   a viewer are refused; fails_when=any is linked.
 - test_a_commenter_proposes_a_link: protects=a commenter's link is a proposal an approver's
@@ -35,11 +38,12 @@ from sqlalchemy import select
 
 from oracle import company_time
 from oracle.baseline.models import Entity
+from oracle.docs.models import DocumentVersion
 from oracle.simple.models import SimplePrdPlan
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
-from tests.test_ground_truth_check import _check, _of, world
-from tests.test_simple_roadmap_api import NOW
+from tests.test_ground_truth_check import PLAN, _check, _of, world
+from tests.test_simple_roadmap_api import NOW, Seed
 
 LINKS = "/v1/baseline/prd-links"
 
@@ -171,13 +175,33 @@ async def test_link_a_prd_feature(client):
     assert check["counts"]["prd_feature_missing"] == 1
     # The PRD reads the Ground Truth feature's code.
     assert await _plan_codes(client, ctx, prd) == ["F-01", "F-02", "F-15a", "F-15b"]
-    # Its slices too: linking F-15 clears both slice flags.
+    # Its roadmap items too (a slice item F-15a, an item of F-15): flagged while F-15 is not
+    # in the Ground Truth, unflagged once it is linked to one.
+    prd_id, pv_id, rv_id = w["seed"]
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        rv = await s.get(DocumentVersion, rv_id)
+        pv = await s.get(DocumentVersion, pv_id)
+        part = await seed.item(rv, pv, "usage-a", title="Usage export slice", position=5,
+                               prd_section_key="f-15a")  # fmt: skip
+        whole = await seed.item(rv, pv, "usage-x", title="Usage export start", position=6,
+                                prd_section_key="f-15")  # fmt: skip
+        await s.commit()
+        of_f15 = {str(part.id), str(whole.id)}
+    check = await _check(client, ctx)
+    assert of_f15 <= {f["item"]["id"] for f in _of(check, "unlinked_item")}
     body15 = {"prd_document_id": prd, "code": "F-15", "feature_id": feats["F-03"]}
     r = await client.post(LINKS, json=body15, headers=ctx.as_("owner"))
     assert r.status_code == 200, r.text
     check = await _check(client, ctx)
-    assert check["counts"]["slice_parent_missing"] == 0
     assert check["counts"]["prd_feature_missing"] == 0
+    # They are F-03's now: in the Ground Truth, and flagged only as F-03 runs today.
+    for kind in ("unlinked_item", "slice_parent_missing"):
+        assert of_f15.isdisjoint(f["item"]["id"] for f in _of(check, kind))
+    running = {f["item"]["id"]: f["feature"]["id"] for f in _of(check, "runs_today_on_roadmap")}
+    assert all(running[i] == feats["F-03"] for i in of_f15)
+    # The roadmap's own slice item of F-16 (in no PRD) is not F-15's.
+    assert [f["item"]["id"] for f in _of(check, "slice_parent_missing")] == [w["items"]["report"]]
     assert await _plan_codes(client, ctx, prd) == ["F-01", "F-02", "F-03a", "F-03b"]
     # A newer reading of the same approved version keeps the links.
     async with tenant_session(ctx.tenant_id) as s:
@@ -197,6 +221,20 @@ async def test_link_a_prd_feature(client):
         headers=ctx.as_("approver"),
     )  # fmt: skip
     assert r.status_code == 409
+
+
+async def test_link_a_plan_code_read_one_way(client):
+    plan = {**PLAN, "features": [*PLAN["features"], {"code": "f-21", "name": "Seat limits"}]}
+    w = await world(plan)
+    ctx, prd, feats = w["ctx"], w["prd"][0], w["features"]
+    # The check names it F-21; linking F-21 finds the plan's f-21 and clears its flag.
+    check = await _check(client, ctx)
+    assert "F-21" in [f["feature"]["code"] for f in _of(check, "prd_feature_missing")]
+    body = {"prd_document_id": prd, "code": "F-21", "feature_id": feats["F-02"]}
+    r = await client.post(LINKS, json=body, headers=ctx.as_("approver"))
+    assert r.status_code == 200, r.text
+    check = await _check(client, ctx)
+    assert "F-21" not in [f["feature"]["code"] for f in _of(check, "prd_feature_missing")]
 
 
 async def test_link_refusals(client):

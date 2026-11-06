@@ -6,8 +6,12 @@
  * The "ground-truth-flags" scenario (MOCK_SCENARIO_KEY): one flag of each kind on the Alerts
  * roadmap and its PRD Scale, plus a roadmap item on a feature a run only proposed. The flags are
  * read from the mock's own state, as the API reads them, so each fix made in the UI (a feature
- * added or confirmed, a goal picked, an item linked or taken off) removes its flag. Every other
- * scenario reads no flags. Invented data only.
+ * added or confirmed, a goal picked, an item linked or taken off, a code given, a PRD's feature
+ * linked) removes its flag. The slice is a roadmap item (F-15a Usage report) whose F-15 is in no
+ * PRD flag. As the API: a PRD's feature matches by code only (a same-name feature is a hint), and
+ * an item linked to no feature whose own code or slice's feature is a confirmed feature's code is
+ * in the Ground Truth by code and not flagged unlinked, though it is flagged if that feature runs
+ * today. Every other scenario reads no flags. Invented data only.
  */
 import type { Schemas } from "@/lib/api/client";
 import type { BaselineState } from "./baseline";
@@ -31,6 +35,16 @@ const WORDS: Record<Kind, string> = {
   no_code: "This feature has no feature code yet.",
   no_goal: "This feature serves no goal.",
   runs_today_on_roadmap: "This feature runs today but is still on the roadmap.",
+};
+
+/** Each fix's button, as the API's FIX_WORDS. */
+const FIX_WORDS: Record<Action, string> = {
+  add_to_ground_truth: "Add to Ground Truth",
+  link_to_feature: "Link to a feature",
+  confirm_feature: "Confirm it",
+  give_code: "Give it a code",
+  pick_goal: "Pick a goal",
+  take_off_roadmap: "Take it off the roadmap",
 };
 
 const ROADMAP_SLUG = "alerts-roadmap";
@@ -58,9 +72,11 @@ const ITEMS: [string, string, string | null, boolean, string?][] = [
   ["gt-night-alerts", "Night alerts", featureId("F-03"), false],
   // Digest emails came from a PRD's F-20 section: the next code counts it (F-21).
   ["gt-digest-emails", "Digest emails", featureId("F-12"), false, "f-20"],
+  // A slice item (PRD section f-15a) whose feature, F-15, is in no PRD flag nor the Ground Truth.
+  ["gt-usage-report", "Usage report", null, true, "f-15a"],
 ];
-/** The PRD Scale's approved plan: its features not in the Ground Truth (F-15 spans two milestones: slice F-15a). */
-const PRD_FEATURES = [{ code: "F-09", name: "Guest seats", slice: null }, { code: "F-15", name: "Usage report", slice: "F-15a" }];
+/** The PRD Scale's approved plan: its feature not in the Ground Truth. */
+const PRD_FEATURES = [{ code: "F-09", name: "Guest seats" }];
 
 /** Adds the scenario's features (to the baseline) and items (to the Alerts roadmap). */
 export function seedGroundTruth(baseline: BaselineState, simple: SimpleDb): void {
@@ -86,7 +102,9 @@ const flag = (kind: Kind, fixes: [Action, string][], rest: Partial<Flag>): Flag 
   feature: null,
   where: { roadmap: null, prd: null },
   words: WORDS[kind],
-  fixes: fixes.map(([action, target]) => ({ action, target })),
+  fixes: fixes.map(([action, target]) => ({ action, target, words: FIX_WORDS[action] })),
+  hint: null,
+  like: null,
   ...rest,
 });
 
@@ -98,33 +116,57 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
   const both = { roadmap: ROADMAP, prd: PRD };
   const out: Flag[] = [];
   const items = ITEMS.map(([key]) => simple.items.find((x) => x.key === key)).filter((s): s is NonNullable<typeof s> => !!s && !closed(s) && !s.trashed);
+  // The Ground Truth by code (F-12, a slice F-12a), as check.py's truth_of.
+  const truthOf = new Map(truth.filter((e) => F_CODE.test(e.key)).map((e) => [e.key, e]));
+  // Link to a feature: a PRD feature linked to a Ground Truth feature is that feature.
+  const links = baseline.prdLinks?.[PRD.id] ?? {};
+  const linkedTo = (code: string | null) => {
+    const e = code ? byId.get(links[code] ?? "") : undefined;
+    return e?.status === "confirmed" ? e : undefined;
+  };
+  const missing = PRD_FEATURES.filter((f) => !truthOf.has(f.code) && !linkedTo(f.code));
+  // Each item's code (F-15a for a slice section f-15a) and its slice's feature's (F-15).
+  const codeOf = (s: (typeof items)[number]): [string | null, string | null] => {
+    const m = /^([a-z]{1,3})-(\d+)([a-j])?$/i.exec((s.section ?? "").trim());
+    if (!m) return [null, null];
+    const base = `${m[1].toUpperCase()}-${m[2].padStart(2, "0")}`;
+    return m[3] ? [`${base}${m[3].toLowerCase()}`, base] : [base, null];
+  };
+  const byCode = (s: (typeof items)[number]) => {
+    for (const c of codeOf(s)) if (c && (truthOf.get(c) ?? linkedTo(c))) return truthOf.get(c) ?? linkedTo(c);
+    return undefined;
+  };
   for (const s of items) {
     const linked = byId.get(s.linked_feature ?? s.feature_id ?? "");
-    if (linked?.status === "confirmed") continue;
+    if (linked?.status === "confirmed" || (!linked && byCode(s))) continue;
     const id = simple.ids[s.key];
+    const [code, parent] = codeOf(s);
+    const item = { id, code, name: s.title };
+    if (!linked && parent && !missing.some((f) => f.code === parent)) {
+      out.push(flag("slice_parent_missing", [["add_to_ground_truth", parent], ["link_to_feature", id]], { item, where: both }));
+      continue;
+    }
     out.push(
       flag("unlinked_item", [linked?.status === "proposed" ? ["confirm_feature", linked.id] : ["add_to_ground_truth", id], ["link_to_feature", id]], {
-        item: { id, code: null, name: s.title },
+        item,
         feature: linked ? ref(linked) : null,
         where: both,
       }),
     );
   }
-  const names = new Set(truth.map((e) => e.title.trim().toLowerCase()));
-  // Link to a feature: a PRD feature linked to a Ground Truth feature is in it.
-  const links = baseline.prdLinks?.[PRD.id] ?? {};
-  const linked = (code: string) => byId.get(links[code] ?? "")?.status === "confirmed";
-  const missing = PRD_FEATURES.filter((f) => !names.has(f.name.toLowerCase()) && !linked(f.code));
-  for (const f of missing)
-    if (f.slice) out.push(flag("slice_parent_missing", [["add_to_ground_truth", f.code], ["link_to_feature", f.code]], { item: { id: null, code: f.slice, name: f.name }, where: both }));
-  for (const f of missing)
-    if (!f.slice) out.push(flag("prd_feature_missing", [["add_to_ground_truth", f.code], ["link_to_feature", f.code]], { feature: { id: null, code: f.code, name: f.name }, where: both }));
+  // By code only: the same name as a confirmed feature is a hint, never a match.
+  for (const f of missing) {
+    const like = truth.find((e) => e.title.trim().toLowerCase() === f.name.toLowerCase());
+    const hint = like ? `${["Same name as", F_CODE.test(like.key) ? like.key : null, like.title].filter(Boolean).join(" ")}.` : null;
+    out.push(flag("prd_feature_missing", [["add_to_ground_truth", f.code], ["link_to_feature", f.code]], { feature: { id: null, code: f.code, name: f.name }, where: both, hint, like: like ? ref(like) : null }));
+  }
   for (const e of ours) if (!F_CODE.test(e.key)) out.push(flag("no_code", [["give_code", e.id]], { feature: ref(e) }));
   const serving = new Set(baseline.edges.filter((e) => e.type === "supports" && e.status !== "rejected").map((e) => e.src_id));
   for (const e of ours) if (!serving.has(e.id)) out.push(flag("no_goal", [["pick_goal", e.id]], { feature: ref(e) }));
   for (const s of items) {
-    const f = byId.get(s.feature_id ?? "");
-    if (f && RUNNING.has(f.id)) out.push(flag("runs_today_on_roadmap", [["take_off_roadmap", simple.ids[s.key]]], { item: { id: simple.ids[s.key], code: null, name: s.title }, feature: ref(f), where: both }));
+    // Its own feature, or the one it matches by code (F-03, F-03a).
+    const f = byId.get(s.linked_feature ?? s.feature_id ?? "") ?? byCode(s);
+    if (f && RUNNING.has(f.id)) out.push(flag("runs_today_on_roadmap", [["take_off_roadmap", simple.ids[s.key]]], { item: { id: simple.ids[s.key], code: codeOf(s)[0], name: s.title }, feature: ref(f), where: both }));
   }
   return out;
 }

@@ -82350,25 +82350,30 @@
             "enum": [
               "add_to_ground_truth",
               "link_to_feature",
+              "confirm_feature",
               "give_code",
               "pick_goal",
-              "take_off_roadmap",
-              "confirm_feature"
+              "take_off_roadmap"
             ],
             "title": "Action"
           },
           "target": {
             "type": "string",
             "title": "Target"
+          },
+          "words": {
+            "type": "string",
+            "title": "Words"
           }
         },
         "type": "object",
         "required": [
           "action",
-          "target"
+          "target",
+          "words"
         ],
         "title": "GroundTruthFix",
-        "description": "A fix a person makes in the UI. ``target``: the item's or feature's id, or for a PRD's\nfeature or slice the PRD feature's code (with ``where.prd``)."
+        "description": "A fix a person makes in the UI. ``target``: the item's or feature's id; for a PRD's\nfeature its code, or its name when it has none (with ``where.prd``); for a slice's Add to\nGround Truth its feature's code (F-15); for ``confirm_feature`` the proposed feature's id.\n``words``: the button's plain words (\"Confirm it\")."
       },
       "GroundTruthFixOut": {
         "properties": {
@@ -82462,6 +82467,27 @@
             },
             "type": "array",
             "title": "Fixes"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          },
+          "like": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroundTruthRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
