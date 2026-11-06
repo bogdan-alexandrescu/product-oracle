@@ -124209,6 +124209,17 @@
             ],
             "title": "Version"
           },
+          "next_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Version"
+          },
           "created_by": {
             "type": "string",
             "format": "uuid",

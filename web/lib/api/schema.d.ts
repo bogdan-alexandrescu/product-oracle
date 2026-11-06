@@ -41536,6 +41536,8 @@ export interface components {
             base_version: number | null;
             /** Version */
             version: number | null;
+            /** Next Version */
+            next_version?: number | null;
             /**
              * Created By
              * Format: uuid
