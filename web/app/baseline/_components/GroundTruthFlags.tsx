@@ -47,6 +47,8 @@ function newKey(name: string, graph: GraphOut | undefined): string {
 }
 
 type Picking = { flag: Flag; what: "feature" | "goal" };
+/** What a fix did, in words, and how to undo it when it can be. */
+type Done = { text: string; undo?: () => Promise<unknown> };
 
 /**
  * The Ground Truth check's band (the owner, Nov 5: anything that breaks the Ground Truth is
@@ -66,7 +68,7 @@ export function GroundTruthFlags({
   graph: GraphOut | undefined;
   /** Approvers and owners (can("confirm_entity")): add, link, confirm and pick directly. */
   canWrite: boolean;
-  /** Commenters (can("create_proposal")): Add to Ground Truth sends a proposal for approvers. */
+  /** Commenters (can("create_proposal")): Add to Ground Truth, Give it a code and linking a PRD's feature send a proposal for approvers. */
   canPropose: boolean;
   /** can("create_simple_change"): Take it off the roadmap (a change the item's decider may need to approve). */
   canChangeRoadmap: boolean;
@@ -76,11 +78,11 @@ export function GroundTruthFlags({
   const [picking, setPicking] = useState<Picking | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<{ text: string; undo?: string } | null>(null);
+  const [notice, setNotice] = useState<Done | null>(null);
   const counts = KINDS.filter((k) => (check.counts[k.kind] ?? 0) > 0);
   const shownKind = open && (check.counts[open] ?? 0) > 0 ? open : null;
 
-  async function act(run: () => Promise<{ text: string; undo?: string }>) {
+  async function act(run: () => Promise<Done>) {
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -124,13 +126,37 @@ export function GroundTruthFlags({
       const name = subject(flag).name;
       const { change } = await unwrap(api.POST("/v1/simple/changes", { body: { op: "cut", target: { item_id: target }, before: { cut: false }, after: {} } }));
       if (change.status === "proposed") return { text: `Sent “${name}” off the roadmap for approval.` };
-      return { text: `Took “${name}” off the roadmap.`, undo: change.can_undo ? change.id : undefined };
+      const undo = change.can_undo ? () => unwrap(api.POST("/v1/simple/changes/{change_id}/undo", { params: { path: { change_id: change.id } } })) : undefined;
+      return { text: `Took “${name}” off the roadmap.`, undo };
     });
 
-  const undo = (changeId: string) =>
+  const undo = (run: () => Promise<unknown>) =>
     act(async () => {
-      await unwrap(api.POST("/v1/simple/changes/{change_id}/undo", { params: { path: { change_id: changeId } } }));
+      await run();
       return { text: "Undone." };
+    });
+
+  /** Give it a code: the next F-number (a slice its feature's, with a letter); a commenter's goes to an approver. */
+  const giveCode = (flag: Flag, target: string) =>
+    act(async () => {
+      const name = subject(flag).name;
+      const path = { params: { path: { entity_id: target } } };
+      const out = await unwrap(api.POST("/v1/baseline/entities/{entity_id}/code", path));
+      if (out.status === "proposed") return { text: `Asked an approver to give “${name}” a code.` };
+      return { text: `“${name}” is now ${out.code}.`, undo: () => unwrap(api.DELETE("/v1/baseline/entities/{entity_id}/code", path)) };
+    });
+
+  /** Link a PRD's feature (or a slice's feature) to a Ground Truth feature; a commenter's goes to an approver. */
+  const linkPrd = (flag: Flag, code: string, feature: { id: string; title: string }) =>
+    act(async () => {
+      const prd = flag.where.prd!.id;
+      const name = subject(flag).name;
+      const out = await unwrap(api.POST("/v1/baseline/prd-links", { body: { prd_document_id: prd, code, feature_id: feature.id } }));
+      if (out.status === "proposed") return { text: `Asked an approver to link “${name}” to “${feature.title}”.` };
+      return {
+        text: `Linked “${name}” to “${feature.title}”.`,
+        undo: () => unwrap(api.DELETE("/v1/baseline/prd-links", { params: { query: { prd_document_id: prd, code } } })),
+      };
     });
 
   const pickFeature = (flag: Flag, target: string, feature: { id: string; title: string }) =>
@@ -147,7 +173,7 @@ export function GroundTruthFlags({
       return { text: `“${subject(flag).name}” now serves “${goal.name}”.` };
     });
 
-  /** The fixes this person can make here; a fix with no route yet (Give it a code, linking a PRD's feature) shows none. */
+  /** The fixes this person can make here. */
   function fixes(flag: Flag) {
     return flag.fixes.flatMap((fix) => {
       const t = fix.target;
@@ -156,7 +182,10 @@ export function GroundTruthFlags({
         case "add_to_ground_truth":
           return canWrite || canPropose ? on(() => void add(flag, t)) : [];
         case "link_to_feature":
-          return canWrite && flag.kind === "unlinked_item" ? on(() => setPicking({ flag, what: "feature" })) : [];
+          if (flag.kind === "unlinked_item") return canWrite ? on(() => setPicking({ flag, what: "feature" })) : [];
+          return (canWrite || canPropose) && flag.where.prd ? on(() => setPicking({ flag, what: "feature" })) : [];
+        case "give_code":
+          return canWrite || canPropose ? on(() => void giveCode(flag, t)) : [];
         case "confirm_feature":
           return canWrite ? on(() => void confirm(flag, t)) : [];
         case "pick_goal":
@@ -252,7 +281,8 @@ export function GroundTruthFlags({
           onClose={() => setPicking(null)}
           onFeature={(feature) => {
             const t = picking.flag.fixes.find((x) => x.action === "link_to_feature")!.target;
-            void pickFeature(picking.flag, t, feature);
+            if (picking.flag.kind === "unlinked_item") void pickFeature(picking.flag, t, feature);
+            else void linkPrd(picking.flag, t, feature);
           }}
           onGoal={(goal) => {
             const t = picking.flag.fixes.find((x) => x.action === "pick_goal")!.target;

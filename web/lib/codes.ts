@@ -11,7 +11,8 @@ import { useMe } from "@/lib/me";
  * ("G-B Growth", "OKR-2: Retention"), else a key that is itself code-shaped ("F-2"). Place
  * codes (G1, G2 by position) and slugs ("g-b-growth") are never shown.
  */
-const CODE = String.raw`[A-Z][A-Z0-9]*(?:[-.][A-Z0-9]+)+|[A-Z]{1,4}\d+`;
+// A slice of a feature reads its number with a letter (F-15a).
+const CODE = String.raw`[A-Z][A-Z0-9]*(?:[-.][A-Z0-9]+)+[a-j]?|[A-Z]{1,4}\d+`;
 const TITLED = new RegExp(String.raw`^(${CODE})\s*(?:[:·–—]\s*|\s)(\S.*)$`);
 const KEYED = new RegExp(String.raw`^(?:${CODE})$`);
 

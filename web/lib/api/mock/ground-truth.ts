@@ -38,7 +38,7 @@ const ROADMAP = { id: roadmapId(ROADMAP_SLUG), title: "Alerts roadmap" };
 const PRD = { id: stableUuid("ground-truth/prd/scale"), title: "Scale" };
 const featureId = (key: string) => stableUuid(`ground-truth/feature/${key}`);
 /** A feature's code is its key when the key is one (F-12), as oracle.simple.priorities reads it. */
-const F_CODE = /^[A-Z]{1,3}-\d+$/;
+const F_CODE = /^[A-Z]{1,3}-\d+[a-j]?$/;
 
 /** The scenario's features: key, name, status, whether it serves a goal. */
 const FEATURES: [string, string, Entity["status"], boolean][] = [
@@ -109,7 +109,10 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
     );
   }
   const names = new Set(truth.map((e) => e.title.trim().toLowerCase()));
-  const missing = PRD_FEATURES.filter((f) => !names.has(f.name.toLowerCase()));
+  // Link to a feature: a PRD feature linked to a Ground Truth feature is in it.
+  const links = baseline.prdLinks?.[PRD.id] ?? {};
+  const linked = (code: string) => byId.get(links[code] ?? "")?.status === "confirmed";
+  const missing = PRD_FEATURES.filter((f) => !names.has(f.name.toLowerCase()) && !linked(f.code));
   for (const f of missing)
     if (f.slice) out.push(flag("slice_parent_missing", [["add_to_ground_truth", f.code], ["link_to_feature", f.code]], { item: { id: null, code: f.slice, name: f.name }, where: both }));
   for (const f of missing)
@@ -130,4 +133,136 @@ export function groundTruthCheck(scenario: string | null, baseline: BaselineStat
   const flags = CHECK_KINDS.flatMap((k) => found.filter((f) => f.kind === k));
   const counts = Object.fromEntries(CHECK_KINDS.map((k) => [k, flags.filter((f) => f.kind === k).length]));
   return { flags, counts, total: flags.length };
+}
+
+type Role = Schemas["Me"]["role"];
+const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
+const atLeast = (role: Role, min: Role) => RANK.indexOf(role) >= RANK.indexOf(min);
+const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+const fail = (status: number, detail: string) => json(status, { detail });
+/** A code a slice's feature lends its number from (F-15), and any feature code (F-15, F-15a). */
+const WHOLE = /^[A-Z]{1,3}-\d+$/;
+const ANY_CODE = /^[A-Z]{1,3}-\d+[a-j]?$/;
+
+/** The next code for a feature, as oracle.baseline.fixes.next_code: its feature's number and the next letter for a slice, else the highest F-number + 1. */
+function nextCode(baseline: BaselineState, e: Entity): string | Response {
+  if (e.status !== "confirmed") return fail(409, "This feature is not in the Ground Truth yet.");
+  if (ANY_CODE.test(e.key)) return fail(409, "This feature already has a code.");
+  const keys = new Set(baseline.entities.filter((x) => x.type === "feature").map((x) => x.key));
+  const parent = e.parent_id ? baseline.entities.find((x) => x.id === e.parent_id && x.type === "feature") : undefined;
+  if (parent) {
+    if (!WHOLE.test(parent.key)) return fail(409, "Give its feature a code first.");
+    const letter = [..."abcdefghij"].find((l) => !keys.has(`${parent.key}${l}`));
+    return letter ? `${parent.key}${letter}` : fail(409, "This feature has no slice letter left.");
+  }
+  const numbers = [...keys, ...PRD_FEATURES.map((f) => f.code)].map((k) => /^F-(\d+)/.exec(k)).filter((m) => !!m).map((m) => Number(m![1]));
+  return `F-${String(Math.max(0, ...numbers) + 1).padStart(2, "0")}`;
+}
+
+function propose(baseline: BaselineState, userId: string, feature: Entity, fix: Record<string, string>) {
+  const same = baseline.proposals.find((x) => x.status === "open" && x.entity_id === feature.id && JSON.stringify((x.payload as { fix?: unknown }).fix) === JSON.stringify(fix));
+  if (same) return same;
+  const p = {
+    id: stableUuid(`ground-truth/proposal/${feature.id}/${JSON.stringify(fix)}/${baseline.proposals.length}`),
+    entity_id: feature.id,
+    edge_id: null,
+    payload: { op: "update", kind: "entity", fields: {}, fix, reason: `Ground Truth fix: ${fix.action}`, origin: "agent" },
+    run_id: null,
+    actor: `user:${userId}`,
+    status: "open" as const,
+    decided_by: null,
+    decided_at: null,
+    created_at: new Date().toISOString(),
+  };
+  baseline.proposals.push(p);
+  return p;
+}
+
+function giveCode(baseline: BaselineState, e: Entity): string | Response {
+  const code = nextCode(baseline, e);
+  if (typeof code !== "string") return code;
+  (baseline.codeFrom ??= {})[e.id] = e.key;
+  e.key = code;
+  return code;
+}
+
+function link(baseline: BaselineState, prd: string, code: string, featureId: string): Entity | Response {
+  if (prd !== PRD.id) return fail(404, "No such PRD");
+  if (!PRD_FEATURES.some((f) => f.code === code)) return fail(404, "This PRD has no such feature");
+  const feature = baseline.entities.find((x) => x.id === featureId && x.type === "feature");
+  if (!feature) return fail(404, "No such feature");
+  if (feature.status !== "confirmed") return fail(409, "Link it to a feature in the Ground Truth.");
+  const links = ((baseline.prdLinks ??= {})[prd] ??= {});
+  if (links[code]) return fail(409, "This PRD's feature is already linked; undo that first.");
+  links[code] = feature.id;
+  return feature;
+}
+
+/**
+ * The check's fixes that are no plain entity or edge write, as api/oracle/baseline/fixes.py serves them:
+ * POST and DELETE /v1/baseline/entities/{id}/code (Give it a code, Undo), POST and DELETE
+ * /v1/baseline/prd-links (Link to a feature for a PRD's feature or slice, Undo), and accepting a
+ * commenter's fix proposal. Approvers and owners act at once; a commenter's fix is a proposal. Null for any other route.
+ */
+export async function routeGroundTruthFixes(baseline: BaselineState, me: { id: string; role: Role }, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
+  const m = req.method;
+  const ref = (e: Entity) => ({ id: e.id, code: ANY_CODE.test(e.key) ? e.key : null, name: e.title });
+  const out = (e: Entity, rest: { status: "done" | "proposed"; code?: string | null; proposal_id?: string | null }) =>
+    json(200, { feature: ref(e), code: null, proposal_id: null, ...rest } satisfies Schemas["GroundTruthFixOut"]);
+  if (p[1] !== "baseline") return null;
+  if (p[2] === "entities" && p[3] && p[4] === "code" && !p[5] && (m === "POST" || m === "DELETE")) {
+    if (!atLeast(me.role, m === "POST" ? "commenter" : "approver")) return fail(403, "Your role cannot do this");
+    const e = baseline.entities.find((x) => x.id === p[3] && x.type === "feature");
+    if (!e) return fail(404, "No such feature");
+    if (m === "DELETE") {
+      const old = baseline.codeFrom?.[e.id];
+      if (!old || !ANY_CODE.test(e.key)) return fail(409, "This feature's code was not given here.");
+      if (baseline.entities.some((x) => x.type === "feature" && x.key === old)) return fail(409, "Its old key is taken by another feature.");
+      e.key = old;
+      delete baseline.codeFrom![e.id];
+      return out(e, { status: "done" });
+    }
+    const code = nextCode(baseline, e);
+    if (typeof code !== "string") return code;
+    if (!atLeast(me.role, "approver")) return out(e, { status: "proposed", proposal_id: propose(baseline, me.id, e, { action: "give_code" }).id });
+    giveCode(baseline, e);
+    return out(e, { status: "done", code });
+  }
+  if (p[2] === "prd-links" && !p[3] && (m === "POST" || m === "DELETE")) {
+    if (!atLeast(me.role, m === "POST" ? "commenter" : "approver")) return fail(403, "Your role cannot do this");
+    if (m === "DELETE") {
+      const prd = q.get("prd_document_id") ?? "";
+      const code = (q.get("code") ?? "").trim();
+      if (prd !== PRD.id) return fail(404, "No such PRD");
+      const links = baseline.prdLinks?.[prd];
+      if (!links?.[code]) return fail(409, "This PRD's feature is not linked.");
+      delete links[code];
+      return json(200, { ok: true });
+    }
+    const body = JSON.parse((await req.text()) || "{}") as Schemas["PrdLinkCreate"];
+    const code = body.code.trim();
+    if (!atLeast(me.role, "approver")) {
+      // Checked as the API checks it, then proposed.
+      const trial: BaselineState = { ...baseline, prdLinks: JSON.parse(JSON.stringify(baseline.prdLinks ?? {})) };
+      const checked = link(trial, body.prd_document_id, code, body.feature_id);
+      if (checked instanceof Response) return checked;
+      const name = PRD_FEATURES.find((f) => f.code === code)!.name;
+      return out(checked, { status: "proposed", proposal_id: propose(baseline, me.id, checked, { action: "link_prd_feature", prd_document_id: body.prd_document_id, code, name }).id });
+    }
+    const linked = link(baseline, body.prd_document_id, code, body.feature_id);
+    return linked instanceof Response ? linked : out(linked, { status: "done" });
+  }
+  if (p[2] === "proposals" && p[3] && p[4] === "accept" && m === "POST") {
+    const prop = baseline.proposals.find((x) => x.id === p[3]);
+    const fix = (prop?.payload as { fix?: Record<string, string> } | undefined)?.fix;
+    if (!prop || !fix) return null;
+    if (!atLeast(me.role, "approver")) return fail(403, "Your role cannot do this");
+    if (prop.status !== "open") return fail(409, `Proposal is already ${prop.status}`);
+    const e = baseline.entities.find((x) => x.id === prop.entity_id);
+    if (!e) return fail(404, "No such feature");
+    const done = fix.action === "give_code" ? giveCode(baseline, e) : link(baseline, fix.prd_document_id, fix.code, e.id);
+    if (done instanceof Response) return done;
+    return null; // the baseline's route accepts it (no field to change) and serves its ProposalOut.
+  }
+  return null;
 }

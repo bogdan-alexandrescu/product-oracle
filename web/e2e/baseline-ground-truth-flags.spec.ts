@@ -109,13 +109,6 @@ test.describe("as the owner", () => {
     await expect(count(page, "no_goal")).toHaveCount(0);
     await expect(total(page)).toHaveText("6");
   });
-
-  test("Give it a code shows no button while no route gives one", async ({ page }) => {
-    await open(page);
-    await openKind(page, "no_code");
-    await expect(row(page, "Smart search")).toContainText("This feature has no feature code yet.");
-    await expect(row(page, "Smart search").getByRole("button")).toHaveCount(0);
-  });
 });
 
 for (const colorScheme of ["light", "dark"] as const)

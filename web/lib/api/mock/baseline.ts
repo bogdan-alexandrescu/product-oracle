@@ -41,6 +41,10 @@ export interface BaselineState {
   measurements?: Schemas["MeasurementOut"][];
   /** Which metric wrote each measurement (goal_measurements.metric_id), by measurement id; not served. */
   measurementMetric?: Record<string, string>;
+  /** Link to a feature (./ground-truth.ts): a PRD plan's feature code -> the Ground Truth feature it is, by PRD id. */
+  prdLinks?: Record<string, Record<string, string>>;
+  /** Give it a code (./ground-truth.ts): the key each feature had before its code was given, for Undo. */
+  codeFrom?: Record<string, string>;
 }
 
 type FieldChange = { entity_id: string; field: string; before: unknown; after: unknown; at: string };
