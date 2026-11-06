@@ -818,7 +818,7 @@ export function discussionInboxRows(db: DiscussionsDb, members: Member[], me: { 
   }
   if (atLeast(me.role, "approver")) {
     for (const d of db.discussions) {
-      if (!readable(d)) continue;
+      if (!readable(d) || d.status !== "open") continue;
       const inIt = active(d).some((p) => p.user_id === me.id);
       const waiting = (db.changes ?? []).filter(
         (c) => c.discussion_id === d.id && (c.status === "suggested" || (inIt && c.status === "proposed")),
