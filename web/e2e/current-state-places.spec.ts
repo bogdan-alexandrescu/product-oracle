@@ -4,7 +4,7 @@ import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN } from "./helpers";
 
 /*
- * Current state's word pill where a feature is named outside Priorities and the roadmap:
+ * Running today's word pill where a feature is named outside Priorities and the roadmap:
  * a feature (or its roadmap item) Oracle's Ask answer cites, and the item a review meeting's
  * agenda takes next, and each roadmap item a one-pager's plan strip lists under its row. Each
  * pill is a button whose card says what the mark means and names the feature. Against the mock
