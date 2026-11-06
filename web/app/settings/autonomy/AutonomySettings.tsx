@@ -208,8 +208,8 @@ function Row({ item, owner, onPick }: { item: Item; owner: boolean; onPick: (lev
  * the steps that are shown start at the same x on every row, right-aligned on a wide screen and
  * full width on a phone. The shares follow the labels' lengths.
  */
-const STEP_COLUMNS =
-  "grid w-[400px] flex-none grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_minmax(0,1.4fr)_minmax(0,0.75fr)] max-[600px]:w-full";
+const STEP_SHARE = [1, 0.85, 1.4, 0.75];
+const STEP_TOTAL = STEP_SHARE.reduce((a, b) => a + b, 0);
 
 /**
  * Observe · Draft · Recommend · Act: one line, steps above the ceiling left out (qa-f-71: a
@@ -218,14 +218,22 @@ const STEP_COLUMNS =
  * steps left out are always the trailing ones and the rest keep their place in the row.
  */
 function Steps({ item, onPick }: { item: Item; onPick: (level: Level) => void }) {
+  const shown = LEVELS.flatMap((l, i) => (item.allowed.includes(l.value) ? [i] : []));
+  // F-71: the strip ends at the last level the row allows (no empty box where a locked one was),
+  // its buttons in the same columns as every other row's.
   return (
-    <div
-      role="group"
-      aria-label={`${item.title}: level`}
-      data-testid="autonomy-steps"
-      className={`${STEP_COLUMNS} justify-self-end overflow-hidden rounded-button border border-line-strong bg-surface max-[600px]:justify-self-stretch`}
-    >
-      {LEVELS.filter((l) => item.allowed.includes(l.value)).map((l) => {
+    <div className="flex w-[400px] flex-none justify-self-end max-[600px]:w-full max-[600px]:justify-self-stretch">
+      <div
+        role="group"
+        aria-label={`${item.title}: level`}
+        data-testid="autonomy-steps"
+        className="grid overflow-hidden rounded-button border border-line-strong bg-surface"
+        style={{
+          width: `${(shown.reduce((sum, i) => sum + STEP_SHARE[i], 0) / STEP_TOTAL) * 100}%`,
+          gridTemplateColumns: shown.map((i) => `minmax(0,${STEP_SHARE[i]}fr)`).join(" "),
+        }}
+      >
+        {LEVELS.filter((l) => item.allowed.includes(l.value)).map((l) => {
         const on = item.level === l.value;
         // The current level is already set: picking it again does nothing (Edit limits changes Act's limits).
         const idle = on;
@@ -243,6 +251,7 @@ function Steps({ item, onPick }: { item: Item; onPick: (level: Level) => void })
           </button>
         );
       })}
+      </div>
     </div>
   );
 }

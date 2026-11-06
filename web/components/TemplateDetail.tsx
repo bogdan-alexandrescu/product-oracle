@@ -444,12 +444,16 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
               <WarningList warnings={shown.warnings} />
             </div>
           )}
-          <pre
-            data-testid="version-body"
-            className="max-h-[32rem] overflow-auto rounded-button border border-line bg-surface2 p-3 font-mono text-[13px] leading-5 whitespace-pre-wrap text-text"
-          >
-            {shown.body}
-          </pre>
+          {/* F-75: the sections above say what the version holds; its Markdown is one click away. */}
+          <details data-testid="version-markdown" className="text-sm">
+            <summary className="cursor-pointer font-semibold text-accent-ink">Show as Markdown</summary>
+            <pre
+              data-testid="version-body"
+              className="mt-2 max-h-[32rem] overflow-auto rounded-button border border-line bg-surface2 p-3 font-mono text-[13px] leading-5 whitespace-pre-wrap text-text"
+            >
+              {shown.body}
+            </pre>
+          </details>
         </Panel>
       </Split>
     </>
