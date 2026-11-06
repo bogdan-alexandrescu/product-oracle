@@ -89,10 +89,18 @@ for (const scheme of ["light", "dark"] as const) {
       const unplaced = page.getByTestId("gm-flag-unplaced");
       const before = Number((await unplaced.textContent())?.split(" ")[0]);
       expect(before).toBeGreaterThan(0);
+      // goal-map-editing: the badge leads to the features on no milestone, highlighted on the ladder.
       await unplaced.click();
-      const first = page.getByTestId("gm-flag-list").getByTestId("gm-unplaced").first();
-      const name = (await first.locator("button").first().textContent())!;
-      await first.getByTestId("gm-place").click();
+      const group = page.locator("[data-ld-free][data-flash]").first();
+      await expect(group).toBeVisible();
+      const first = group.getByTestId("ld-feature").first();
+      const code = (await first.locator(".simple-code").count()) ? ((await first.locator(".simple-code").first().textContent()) ?? "") : "";
+      const name = (await first.getAttribute("aria-label"))!.slice(code ? code.length + 1 : 0);
+      // Placed from the gap's own drawer, found by its name.
+      await page.getByTestId("gm-flag-gaps").click();
+      await page.getByTestId("gm-flag-list").getByTestId("gm-place").first().click();
+      await drawer.getByRole("textbox").first().fill(name);
+      await drawer.getByRole("button", { name: new RegExp(name) }).click();
       await expect(drawer.getByRole("button", { name: new RegExp(name) })).toHaveClass(/border-accent/);
       await drawer.getByRole("combobox").first().selectOption({ label: SCOREBOARD.gap });
       await drawer.getByRole("combobox").nth(1).selectOption({ label: "Customer safety" });

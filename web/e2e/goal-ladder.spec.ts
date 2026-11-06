@@ -207,7 +207,7 @@ for (const scheme of ["light", "dark"] as const) {
 
       test("Edit ladder: drag a feature to another milestone; menu Delete to Trash and Restore; + Add a feature", async ({ page }) => {
         // protects=ld3-b-drag, ld3-b-moved, ld3-b-menu, ld3-b-deleted, ld3-b-add, ld3-b-added:
-        // dropped on M6's work, F-21 (last under M5) serves M6 (links/move) with Undo; Delete (to Trash) takes it
+        // dropped on M6's work, F-21 (last under M5) serves M6 (links/move) with Undo; Move to Trash takes it
         // off the ladder and Settings › Trash restores it; + Add feature names one under M5;
         // fails_when=the drop only places the card, Delete removes it for good, or the new
         // feature is not under M5; no_claim=reorder within a list.
@@ -220,9 +220,9 @@ for (const scheme of ["light", "dark"] as const) {
         await expect(m6.getByTestId("ld-feature").filter({ hasText: "F-21" })).toHaveCount(1);
         await shot(page, `ld3-b-moved-${width}-${scheme}`);
         await card(page, "F-21").getByTestId("ld-more").click();
-        await expect(page.getByTestId("ld-feature-menu").getByRole("menuitem")).toHaveText(["Open", "Move to…", "Move up", "Move down", "Waits on…", "Delete (to Trash)"]);
+        await expect(page.getByTestId("ld-feature-menu").getByRole("menuitem")).toHaveText(["Open", "Move to…", "Move up", "Move down", "Waits on…", "Move to Trash"]);
         await shot(page, `ld3-b-menu-${width}-${scheme}`);
-        await page.getByRole("menuitem", { name: "Delete (to Trash)" }).click();
+        await page.getByRole("menuitem", { name: "Move to Trash" }).click();
         await expect(page.getByRole("status").filter({ hasText: "to Trash" })).toContainText("Moved F-21");
         await expect(card(page, "F-21")).toHaveCount(0);
         await shot(page, `ld3-b-deleted-${width}-${scheme}`);
