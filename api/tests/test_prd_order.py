@@ -232,3 +232,70 @@ async def test_ask_oracle_reads_prds_in_the_prd_order():
         await context._documents(s, got)  # type: ignore[arg-type]
         assert got.lines == ["document: Banana", "document: Apple", "document: Cherry",
                              "document: Company Roadmap"]  # fmt: skip
+
+
+async def test_a_prd_made_after_a_reorder_lands_at_the_end(client):
+    """protects=a new PRD (no stored place) after every PRD an owner placed; fails_when=it
+    takes its title's or goal's place among them."""
+    ctx = await make_ctx()
+    await seed(ctx)
+    r = await client.post("/v1/documents/cherry/move", json={"to": "up"},
+                          headers=ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        await Seed(s).doc("aardvark")
+        await s.commit()
+    assert await _order(client, ctx) == ["banana", "cherry", "apple", "aardvark"]
+
+
+async def test_key_date_prds_follow_the_prd_order():
+    """protects=Key dates' PRDs under each roadmap (key_date_prds) in the company PRD order;
+    fails_when=by title."""
+    from types import SimpleNamespace
+
+    from oracle.simple.key_dates import key_date_prds
+
+    ctx = await make_ctx()
+    prds = await seed(ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        docs = {d.id: d for d in await s.scalars(select(Document))}
+        rm = next(d for d in docs.values() if d.kind == "roadmap")
+        named = ("apple", "cherry", "banana")
+        entries = [SimpleNamespace(roadmap=rm, prd=docs[prds[k].id]) for k in named]
+        got = await key_date_prds(s, None, docs, entries)
+        assert [d.slug for d in got[rm.id]] == ["banana", "apple", "cherry"]
+
+
+async def test_the_drafts_from_prds_follow_the_prd_order():
+    """protects=a roadmap draft's from_prds (prd_roadmap.sources_out) in the company PRD
+    order; fails_when=by title."""
+    from types import SimpleNamespace
+
+    from oracle.simple import prd_roadmap
+
+    ctx = await make_ctx()
+    prds = await seed(ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        rm = await s.scalar(select(Document).where(Document.kind == "roadmap"))
+        named = ("apple", "cherry", "banana")
+        sources = {str(prds[k].id): {"version": 1, "items": []} for k in named}
+        d = SimpleNamespace(id=uuid.uuid4(), document_id=rm.id, overlay={prd_roadmap.KEY: sources})
+        got = await prd_roadmap.sources_out(s, d)  # type: ignore[arg-type]
+        assert [p.prd.slug for p in got] == ["banana", "apple", "cherry"]
+
+
+async def test_inbox_staged_rows_follow_the_prd_order():
+    """protects=the Inbox's staged-changes rows (inbox.staged_rows) in the company PRD order;
+    fails_when=by title."""
+    from oracle.review.inbox import staged_rows
+    from oracle.staging.models import NextDraftChange
+
+    ctx = await make_ctx()
+    prds = await seed(ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        for k in ("apple", "cherry", "banana"):
+            s.add(NextDraftChange(document_id=prds[k].id, section_key="gone",
+                                  raised_on_version=1, instruction="Say who it is for.",
+                                  staged_by=uuid.uuid4()))  # fmt: skip
+        await s.commit()
+        assert [r.slug for r in await staged_rows(s)] == ["banana", "apple", "cherry"]
