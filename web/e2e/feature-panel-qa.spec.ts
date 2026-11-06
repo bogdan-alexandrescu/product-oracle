@@ -77,6 +77,47 @@ for (const size of SIZES) {
         await expect(loop).toBeDisabled();
       });
 
+      test("S-4: a feature that would close a loop through others is refused with the loop named", async ({ page }) => {
+        // Alert history export now waits on Alert rules engine; Alert routing by team waits on Alert history export.
+        await openItem(page, "alert-export");
+        await tap(panel(page).getByRole("button", { name: "Add a dependency" }));
+        await panel(page).getByLabel("Feature it depends on").selectOption({ label: "Alert rules engine" });
+        await tap(panel(page).getByRole("button", { name: "Save" }));
+        const needed = panel(page).getByTestId("card-needed");
+        await expect(needed).toContainText("Alert routing by team");
+        await expect(panel(page).getByTestId("card-depends")).toContainText("Alert rules engine");
+        await tap(needed.getByRole("button", { name: "Alert routing by team", exact: true }));
+        await expect(panel(page).getByTestId("card-depends")).toContainText("Alert history export");
+
+        // From Alert routing by team, a feature it waits on (directly or through others) would make a loop.
+        await tap(panel(page).getByRole("button", { name: "Add a feature that needs it" }));
+        const pick = panel(page).getByLabel("Feature that needs it");
+        for (const name of ["Alert history export", "Alert rules engine"]) {
+          const loop = pick.locator("option", { hasText: name });
+          await expect(loop).toHaveText(`${name} · This one needs it: it would make a loop`);
+          await expect(loop).toBeDisabled();
+        }
+        const free = pick.locator("option", { hasText: "Weekly alert digest" });
+        await expect(free).toBeEnabled();
+        await expect(free).not.toContainText("loop");
+        // Nothing is picked, so nothing can be saved, and nothing was added.
+        await expect(panel(page).getByRole("button", { name: "Save" })).toBeDisabled();
+        await expect(panel(page).getByTestId("card-needed")).not.toContainText("Alert rules engine");
+      });
+
+      test("S-4: the server's refusal of a loop reads the same words (a typed key on the Depends on side)", async ({ page }) => {
+        // The Needed by picker never lets a loop through, so the server's refusal is reached from the other side.
+        await openItem(page, "alert-rules");
+        await tap(panel(page).getByRole("button", { name: "Add a dependency" }));
+        await panel(page).getByLabel("Or another PRD's feature key").fill("F-06");
+        await tap(panel(page).getByRole("button", { name: "Save" }));
+        const refusal = page.getByTestId("toasts").getByText(/^Not added, it would make a loop/);
+        await expect(refusal).toBeVisible();
+        await expect(refusal).toContainText("Weekly alert digest");
+        await expect(refusal).toContainText("Alert rules engine");
+        await expect(panel(page).getByTestId("card-depends")).not.toContainText("Weekly alert digest");
+      });
+
       test("S-4: a viewer reads 'Needed by' with no edit controls", async ({ page }) => {
         await openItem(page, "alert-rules", "viewer@example.com");
         await expect(panel(page).getByTestId("card-needed")).toContainText("Mobile alert push");
@@ -127,11 +168,45 @@ for (const size of SIZES) {
           const offBg = (await bg(off)) === "rgba(0, 0, 0, 0)" ? list : await bg(off);
           expect(contrast(await bg(on), offBg)).toBeGreaterThanOrEqual(scheme === "dark" ? 1.6 : 1.05);
         });
+
+        test("P-10: the selected tab is marked in dark (white words on the accent); in light it keeps the panel's own colours", async ({ page }) => {
+          await openItem(page, "alert-digest");
+          const on = panel(page).getByRole("tab", { name: "Details" });
+          const off = panel(page).getByRole("tab", { name: "Talk to Oracle" });
+          await expect(on).toHaveAttribute("aria-selected", "true");
+          const css = (l: Locator) => l.evaluate((el) => ({ bg: getComputedStyle(el).backgroundColor, ink: getComputedStyle(el).color }));
+          const sheet = await css(panel(page));
+          const picked = await css(on);
+          if (scheme === "dark") {
+            expect(picked).toEqual({ bg: "rgb(31, 74, 122)", ink: "rgb(255, 255, 255)" });
+            expect(contrast(picked.bg, sheet.bg), "the selected tab stands out from the sheet").toBeGreaterThanOrEqual(1.6);
+          } else {
+            // Light: the rule's tokens are the surface and text the tab had before it.
+            expect(picked).toEqual({ bg: sheet.bg, ink: sheet.ink });
+          }
+          // The tab not selected is not marked the same way, and moving the pick moves the mark.
+          expect(await css(off)).not.toEqual(picked);
+          await tap(off);
+          await expect(off).toHaveAttribute("aria-selected", "true");
+          expect(await css(off)).toEqual(picked);
+          expect(await css(on)).not.toEqual(picked);
+        });
       } else {
         test("P-8: the desktop look is unchanged (small links stay small)", async ({ page }) => {
           await openItem(page, "alert-digest");
           const box = await panel(page).getByRole("button", { name: "Change the dates" }).boundingBox();
           expect(box!.height).toBeLessThan(30);
+        });
+
+        test("P-10: the desktop panel has no tabs; Talk to Oracle opens beside the details and Hide the talk closes it", async ({ page }) => {
+          await openItem(page, "alert-digest");
+          await expect(panel(page).getByRole("tablist")).toHaveCount(0);
+          await tap(panel(page).getByRole("button", { name: "Talk to Oracle" }));
+          await expect(panel(page).getByTestId("item-talk")).toBeVisible();
+          await expect(panel(page).getByRole("tablist")).toHaveCount(0);
+          await expect(panel(page).getByTestId("card-depends")).toBeVisible();
+          await tap(panel(page).getByRole("button", { name: "Hide the talk" }));
+          await expect(panel(page).getByTestId("item-talk")).toHaveCount(0);
         });
       }
     });
