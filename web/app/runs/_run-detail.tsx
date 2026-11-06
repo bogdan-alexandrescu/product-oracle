@@ -36,6 +36,7 @@ import { RawFileSheet } from "@/components/review/RawFileSheet";
 import { StagingBar } from "@/components/staging/StagingBar";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
+import { named, namedText } from "@/lib/codes";
 import { failedAt, formatDateTime, formatDay, formatTime, plural } from "@/lib/format";
 import { useMe, type Operation } from "@/lib/me";
 import { unknownGoalWords } from "@/lib/order-problems";
@@ -1078,6 +1079,11 @@ function SegmentItem({
       setDraftError(errorMessage(e));
     }
   }
+  // D3: the gate's Waive… says a refusal under its own form, so it rejects instead.
+  const waive = async (body: ActionIn) => {
+    if (!shared) return;
+    draft.accept(await unwrap(api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions", { ...draftPath(shared.checkpoint_id), body })));
+  };
   const draftActs: DraftActs | undefined = shared
     ? {
         review: shared,
@@ -1362,7 +1368,7 @@ function SegmentItem({
               review={shared?.checkpoint_id === cp.id ? shared : null}
               onSaveNote={(text) => saveNote(cp.id, text)}
               onReload={draft.reload}
-              onWaive={shared?.checkpoint_id === cp.id ? draftActs?.act : undefined}
+              onWaive={shared?.checkpoint_id === cp.id ? waive : undefined}
               noteRef={(el) => {
                 noteFields.current[cp.id] = el;
               }}
@@ -1766,7 +1772,18 @@ function actionLabel(a: DraftAction, reasons: ItemReason[]): string {
   const fix = reasons.flatMap((r) => r.fixes).find((f) => same(f.action));
   if (fix) return fix.label;
   if (a.kind === "edit") return `Edit ${(a.field ?? "").replace("clear:", "clear ").replace("_", " ")}`;
+  if (a.kind === "waive") return waiveLabel(a, reasons);
   return ACTION_WORDS[a.kind] ?? a.kind;
+}
+
+/** A waiver in the words of what it waives: "Waive No PRD section on F-12 Usage alerts". */
+function waiveLabel(a: DraftAction, reasons: ItemReason[]): string {
+  const own = reasons.filter((r) => r.item === a.item_key);
+  const feature = namedText(named(own[0]?.item_title || a.item_key, a.item_key));
+  // An answer is the reason's code, or its own ref (the code, "~", a hash).
+  const codes = (a.answers ?? []).map((x) => x.split("~")[0]);
+  const labels = [...new Set(own.filter((r) => codes.includes(r.code)).map((r) => r.label))];
+  return labels.length ? `Waive ${labels.join(", ")} on ${feature}` : `Waive ${feature}`;
 }
 
 /** `summary`: the counts without the per-item reasons (a Roadmap items stop decided on its review screen). */
@@ -2593,8 +2610,9 @@ function GateRow({ x, onWaive }: { x: NonNullable<CheckpointOut["gate"]>["left"]
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   return (
-    <li data-testid="gate-reason">
+    <li data-testid="gate-reason" data-ref={x.ref || x.code}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium">{x.item_title ?? x.item}</span>
         <Chip kind="crit" className={REASON_CHIP}>
@@ -2607,6 +2625,7 @@ function GateRow({ x, onWaive }: { x: NonNullable<CheckpointOut["gate"]>["left"]
             onClick={() => {
               setOpen(true);
               setReason("");
+              setError(null);
             }}
           >
             Waive…
@@ -2619,10 +2638,14 @@ function GateRow({ x, onWaive }: { x: NonNullable<CheckpointOut["gate"]>["left"]
           onSubmit={(e) => {
             e.preventDefault();
             setBusy(true);
-            void onWaive({ item_key: x.item, kind: "waive", answers: [x.ref || x.code], value: { reason: reason.trim() } }).finally(() => {
-              setBusy(false);
-              setOpen(false);
-            });
+            setError(null);
+            // A refused waiver keeps its form and reason, with the API's words under it.
+            onWaive({ item_key: x.item, kind: "waive", answers: [x.ref || x.code], value: { reason: reason.trim() } })
+              .then(
+                () => setOpen(false),
+                (e: unknown) => setError(errorMessage(e)),
+              )
+              .finally(() => setBusy(false));
           }}
         >
           <input
@@ -2636,6 +2659,11 @@ function GateRow({ x, onWaive }: { x: NonNullable<CheckpointOut["gate"]>["left"]
             Waive
           </Button>
         </form>
+      )}
+      {open && error && (
+        <p className="mt-1 text-sm text-crit" role="alert">
+          {error}
+        </p>
       )}
     </li>
   );
