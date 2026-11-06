@@ -176,7 +176,7 @@ import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
-import { groundTruthCheck } from "./ground-truth";
+import { GROUND_TRUTH_FLAGS_SCENARIO, groundTruthCheck, seedGroundTruth } from "./ground-truth";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, CROWDED_MILESTONES_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
@@ -3624,6 +3624,14 @@ function load(): Db {
                 ? seedOneRoadmapScenario
               : scenario === "simple-500"
                 ? () => ({ ...seed(), simple_roadmap: seedSimpleMany() })
+              : scenario === GROUND_TRUTH_FLAGS_SCENARIO
+                ? () => {
+                    // The Ground Truth check: its features in the baseline, its items on the Alerts roadmap.
+                    const db = seed();
+                    db.simple_roadmap = seedSimpleRoadmap();
+                    seedGroundTruth(db.baseline, db.simple_roadmap);
+                    return db;
+                  }
                 : scenario === "strategy" || scenario === "strategy-no-vision"
                   ? () => seedStrategyScenario(scenario === "strategy")
                   : scenario === "strategy-plan"
@@ -6143,7 +6151,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   // The Ground Truth check (docs/ground-truth.md): flags only, for anyone who reads the roadmap.
   if (p[1] === "baseline" && p[2] === "check" && !p[3] && req.method === "GET") {
-    return json(200, groundTruthCheck(localStorage.getItem(MOCK_SCENARIO_KEY)));
+    return json(200, groundTruthCheck(localStorage.getItem(MOCK_SCENARIO_KEY), db.baseline, db.simple_roadmap));
   }
   // B6 Goals interview: its routes write discussions and proposals, so they come first.
   if (p[1] === "baseline") {
