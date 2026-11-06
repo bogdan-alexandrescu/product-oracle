@@ -62900,6 +62900,7 @@
                   "set_goal",
                   "set_depends",
                   "set_status",
+                  "set_feature",
                   "set_goal_measure",
                   "set_owner",
                   "set_decider",
@@ -63324,6 +63325,7 @@
               "set_goal",
               "set_depends",
               "set_status",
+              "set_feature",
               "set_goal_measure",
               "set_owner",
               "set_decider",
@@ -75254,6 +75256,30 @@
               }
             ],
             "title": "Reason"
+          },
+          "serves": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Serves"
+          },
+          "roadmap_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Item Id"
           }
         },
         "type": "object",
@@ -83422,6 +83448,16 @@
               }
             ]
           },
+          "goal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroundTruthRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "where": {
             "$ref": "#/components/schemas/GroundTruthWhere"
           },
@@ -87516,6 +87552,7 @@
               "set_goal",
               "set_depends",
               "set_status",
+              "set_feature",
               "set_goal_measure",
               "set_owner",
               "set_decider",
@@ -121966,6 +122003,7 @@
               "set_goal",
               "set_depends",
               "set_status",
+              "set_feature",
               "set_goal_measure",
               "set_owner",
               "set_decider",
@@ -122124,6 +122162,7 @@
               "set_goal",
               "set_depends",
               "set_status",
+              "set_feature",
               "set_goal_measure",
               "set_owner",
               "set_decider",

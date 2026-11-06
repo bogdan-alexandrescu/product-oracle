@@ -1000,6 +1000,7 @@ OP_WORDS = {
     "set_goal": "New goal for",
     "set_depends": "New dependencies for",
     "set_status": "New status for",
+    "set_feature": "New feature for",
 }
 
 

@@ -935,7 +935,11 @@ async def decide_proposal(
             await fixes.apply_proposal(db, writer, proposal)
         elif p["kind"] == "entity":
             if p["op"] == "create":
-                await create_entity(db, writer, **_entity_create_args(fields))
+                made = await create_entity(db, writer, **_entity_create_args(fields))
+                if made.entity is not None:
+                    await link_new_feature(
+                        db, writer, made.entity, fields.get("serves"), fields.get("roadmap_item_id")
+                    )
             else:
                 target = await get_entity(db, proposal.entity_id or fields.get("id"))
                 if p["op"] == "update":
@@ -1056,6 +1060,13 @@ async def submit_proposal(
             raise InvalidError("unknown entity type")
         if kind == "edge" and fields["type"] not in EDGE_TYPES:
             raise InvalidError("unknown edge type")
+        if kind == "entity" and (fields.get("serves") or fields.get("roadmap_item_id")):
+            # lane-gt-ui: a commenter's Add to Ground Truth carries the goal and the item.
+            if fields["type"] != "feature":
+                raise InvalidError("Only a feature serves a goal or is a roadmap item.")
+            for f in ("serves", "roadmap_item_id"):
+                if fields.get(f) is not None:
+                    fields[f] = str(_uuid_or_none(fields[f]))
     elif kind == "entity":
         if not entity_id or edge_id:
             raise InvalidError("an entity proposal targets entity_id")
@@ -1738,3 +1749,49 @@ async def merge_entity(
     await scoring.rescore_around(db, [into.id], include_supporters=True)
     await db.flush()
     return into
+
+
+async def link_new_feature(
+    db: AsyncSession,
+    writer: Writer,
+    feature: Entity,
+    serves: Any = None,
+    roadmap_item_id: Any = None,
+) -> None:
+    """lane-gt-ui: Add to Ground Truth in one write. The new feature serves ``serves`` (a
+    supports link) and is the feature of roadmap item ``roadmap_item_id``: a set_feature change
+    in the item's roadmap's working draft, made as the person (applied when they decide the
+    roadmap, else a proposal to its decider, like every roadmap edit). Not committed."""
+    from oracle.simple import changes, drafts
+    from oracle.simple.schemas import SimpleChangeIn
+
+    if serves:
+        goal = _uuid_or_none(serves)
+        g = await db.get(Entity, goal)
+        if g is None or g.type != "goal":
+            raise InvalidError("serves must be a goal")
+        if await find_edge(db, feature.id, goal, "supports") is None:  # type: ignore[arg-type]
+            await create_edge(db, writer, src_id=feature.id, dst_id=goal, type_="supports",
+                              attrs={"contribution": 2})  # type: ignore[arg-type]  # fmt: skip
+    if roadmap_item_id:
+        from oracle.roadmap.models import RoadmapItem
+
+        row = await db.get(RoadmapItem, _uuid_or_none(roadmap_item_id))
+        if row is None:
+            raise InvalidError("roadmap_item_id must be a roadmap item")
+        now = (await drafts.effective_row(db, row)).feature_id
+        body = SimpleChangeIn(op="set_feature", target={"item_id": str(row.id)},
+                              before={"feature_id": str(now) if now else None},
+                              after={"feature_id": str(feature.id)})  # fmt: skip
+        try:
+            await changes.create(db, writer.principal, body, commit=False)
+        except changes.ChangeError as exc:
+            raise InvalidError(str(exc)) from exc
+        except drafts.DraftError as exc:
+            # A submitted draft of the roadmap waits for approval: no change until it is decided.
+            raise ConflictError(
+                f"“{row.title}” can't be linked yet: its roadmap has a draft waiting for "
+                "approval. Add it once that draft is approved or withdrawn."
+                if exc.status == 409
+                else str(exc)
+            ) from exc

@@ -168,6 +168,8 @@ const FIELDS: Record<string, string[]> = {
   set_goal: ["goal_id"],
   set_depends: ["depends_on"],
   set_status: ["status"],
+  // lane-gt-ui: the Ground Truth feature the item is (Add to Ground Truth, Link to a feature).
+  set_feature: ["feature_id"],
 };
 const FIXES = ["shift_dependents", "move_dependency"];
 /** fix5-cut-dependents: the item and everything waiting on it, cut as one change (changes.py CUT_ALL). */
@@ -356,6 +358,7 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
     else if (f === "outcome") out[f] = s.outcome ?? null;
     else if (f === "draft") out[f] = !!s.draft;
     else if (f === "confidence") out[f] = s.confidence ?? null;
+    else if (f === "feature_id") out[f] = s.feature_id ?? null;
     else if (f === "track_id") out[f] = s.track ? stableUuid(`simple-track/${s.track}`) : null;
     else if (f === "goal_id") out[f] = s.goal && !goalInTrash(db, s.goal) ? stableUuid(`simple-goal/${s.goal}`) : null;
     else if (f === "prd_document_id") out[f] = ownPrd(s).id;
@@ -380,6 +383,7 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
   if ("outcome" in values) s.outcome = (values.outcome as string | null) ?? null;
   // one-feature-panel: a track, goal or PRD is one another item of the roadmap read has (as the API's are rows).
   const like = (f: (x: typeof s) => unknown, v: unknown) => db.items.find((x) => f(x) === v);
+  if ("feature_id" in values) s.feature_id = (values.feature_id as string | null) ?? null;
   if ("confidence" in values) s.confidence = (values.confidence as typeof s.confidence) ?? undefined;
   if ("track_id" in values) s.track = values.track_id ? like((x) => x.track && stableUuid(`simple-track/${x.track}`), values.track_id)?.track : undefined;
   if ("goal_id" in values) s.goal = values.goal_id ? (Object.keys(GOALS).find((k) => goalId(k) === values.goal_id) ?? like((x) => x.goal && goalId(x.goal), values.goal_id)?.goal) : undefined;
@@ -1034,6 +1038,9 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     else if (body.op === "set_confidence") {
       if (a.confidence != null && !["low", "medium", "high"].includes(String(a.confidence))) return json(422, { detail: "after.confidence: low, medium, high or null" });
       after = { confidence: a.confidence ?? null };
+    } else if (body.op === "set_feature") {
+      // The route checks it names a feature (server.ts), as changes.py's set_feature.
+      after = { feature_id: a.feature_id ?? null };
     } else if (body.op === "set_track" || body.op === "set_prd" || body.op === "set_goal") {
       const f = fields[0];
       const v = a[f] ?? null;

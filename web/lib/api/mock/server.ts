@@ -4383,6 +4383,25 @@ function activeMember(db: Db, userId: string): boolean {
   return db.members.some((m) => m.id === userId && m.status !== "disabled");
 }
 
+/** service.link_new_feature: the new feature's goal (a supports link) and its roadmap item's feature (set_feature, as the person). */
+async function linkNewFeature(db: Db, me: { id: string; role: Schemas["Me"]["role"] }, featureId: string, fields: Record<string, unknown>) {
+  const goal = typeof fields.serves === "string" ? db.baseline.entities.find((e) => e.id === fields.serves && e.type === "goal") : undefined;
+  const edge = db.baseline.edges.find((e) => e.type === "supports");
+  if (goal && edge && !db.baseline.edges.some((e) => e.src_id === featureId && e.dst_id === goal.id && e.type === "supports"))
+    db.baseline.edges.push({ ...edge, id: stableUuid(`gt-serves/${featureId}`), src_id: featureId, dst_id: goal.id, attrs: { contribution: 2 }, status: "confirmed", locked: false, locked_by: null, locked_at: null });
+  const item = typeof fields.roadmap_item_id === "string" ? fields.roadmap_item_id : null;
+  const simple = db.simple_roadmap;
+  const key = item && simple ? Object.keys(simple.ids).find((k) => simple.ids[k] === item) : undefined;
+  if (!simple || !key) return;
+  const was = simple.items.find((x) => x.key === key)?.feature_id ?? null;
+  const roles = Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role]));
+  const owners = db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id);
+  const names = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));
+  const body = { op: "set_feature", target: { item_id: item }, before: { feature_id: was }, after: { feature_id: featureId } };
+  const req = new Request("http://mock/v1/simple/changes", { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
+  await routeSimpleChanges(simple, { id: me.id, role: me.role, owners, names, roles }, req, ["v1", "simple", "changes"], new URLSearchParams());
+}
+
 /** /v1/baseline/... through ./baseline.ts, with the caller and the lookups it needs. */
 function routeBaselineFor(db: Db, me: { id: string; role: Schemas["Me"]["role"] }, req: Request, p: string[], q: URLSearchParams) {
   const runOf = (runId: string): Schemas["ProposalRun"] | null => {
@@ -6507,10 +6526,18 @@ async function route(db: Db, req: Request): Promise<Response> {
     const goalCtx = goalContext(db, me);
     const res = await routeGoalInterview(goalCtx, req, p);
     if (res) return res;
-    if (p[2] === "proposals" && p[3] && p[4] === "accept" && req.method === "POST") {
-      const accepted = await routeBaselineFor(db, me, req, p, q);
-      if (accepted.ok) afterAccept(goalCtx, p[3]);
-      return accepted;
+    // lane-gt-ui: Add to Ground Truth in one call (router.py create_entity, or an accepted
+    // proposal): the new feature serves its goal and is its roadmap item's feature (a set_feature
+    // change in the item's roadmap, applied when the person decides it, else proposed).
+    const adds = (p[2] === "entities" && !p[3]) || (p[2] === "proposals" && p[3] && p[4] === "accept");
+    if (adds && req.method === "POST") {
+      const given = (p[2] === "entities" ? await req.clone().json().catch(() => ({})) : db.baseline.proposals.find((x) => x.id === p[3])?.payload.fields) ?? {};
+      const had = new Set(db.baseline.entities.map((e) => e.id));
+      const res = await routeBaselineFor(db, me, req, p, q);
+      if (res.ok && p[2] === "proposals") afterAccept(goalCtx, p[3]);
+      const made = res.ok ? db.baseline.entities.find((e) => !had.has(e.id) && e.type === "feature") : undefined;
+      if (made) await linkNewFeature(db, me, made.id, given as Record<string, unknown>);
+      return res;
     }
   }
   // goal-order: a goal bucket's Move up or Move down stores its place as the baseline's goals do.
@@ -6997,6 +7024,14 @@ async function route(db: Db, req: Request): Promise<Response> {
   db.simple_roadmap.onePager = db.simple_one_pager;
   // roadmap-keydates: each PRD's milestones as its latest approved version has them (its key dates on the roadmap).
   db.simple_roadmap.prd_milestones = prdMilestonesOf(db);
+  // lane-gt-ui: an item reads its feature's code (service.load's Entry.code).
+  db.simple_roadmap.feature_codes = Object.fromEntries(db.baseline.entities.filter((e) => e.type === "feature" && /^[A-Z]{1,3}-\d+[a-j]?$/.test(e.key)).map((e) => [e.id, e.key]));
+  // changes.py set_feature: the feature is a baseline feature, not rejected.
+  if (p[1] === "simple" && p[2] === "changes" && !p[3] && m === "POST") {
+    const c = await req.clone().json().catch(() => null) as { op?: string; after?: { feature_id?: string | null } } | null;
+    const fid = c?.op === "set_feature" ? c.after?.feature_id : null;
+    if (fid && !db.baseline.entities.some((e) => e.id === fid && e.type === "feature" && e.status !== "rejected")) return json(422, { detail: "after.feature_id: a feature" });
+  }
   const simpleRoles = Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role]));
   const simpleOwners = db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id);
   // Running today: every Simple feature's mark and proof; the approver role (confirm_entity) moves and answers.

@@ -204,6 +204,13 @@ async def run(db: AsyncSession) -> GroundTruthOut:
         return GroundTruthRef(id=f.id, code=code_of.get(f.id), name=f.title)
 
     items, roadmaps = await _roadmap_items(db)
+    # An item's feature as its roadmap's working draft has it: Add to Ground Truth and Link to
+    # a feature set it there (a set_feature change), so a published item's link rides the
+    # next version and its flag goes at once.
+    from oracle.simple import drafts
+
+    effective = await drafts.effective(db, items)
+    feature_of = {i.id: effective[str(i.id)].feature_id for i in items}
     truth_ids = {f.id for f in truth}
     flags: dict[str, list[GroundTruthFlag]] = {k: [] for k in CHECK_KINDS}
 
@@ -255,6 +262,20 @@ async def run(db: AsyncSession) -> GroundTruthOut:
     plans = await _prd_plans(db)
     spans: dict[tuple[uuid.UUID, str], int] = {}
     missing: set[tuple[uuid.UUID, str]] = set()
+    goals = {
+        g.title.strip().casefold(): g
+        for g in await db.scalars(
+            select(Entity).where(Entity.type == "goal", Entity.status != "rejected")
+        )
+    }
+
+    def goal_of(f: dict[str, Any], data: dict[str, Any]) -> GroundTruthRef | None:
+        """The goal the PRD gives a feature: its own, else the plan's one goal."""
+        named = f.get("goal") or ((data.get("goals") or [None])[0]
+                                  if len(data.get("goals") or []) == 1 else None)  # fmt: skip
+        g = goals.get(str(named).strip().casefold()) if isinstance(named, str) else None
+        return GroundTruthRef(id=g.id, code=None, name=g.title) if g is not None else None
+
     # A PRD's feature linked to a Ground Truth feature (Link to a feature,
     # oracle.baseline.fixes) is that feature: neither it nor its items are flagged.
     linked: dict[tuple[uuid.UUID, str], Entity] = {}
@@ -286,6 +307,7 @@ async def run(db: AsyncSession) -> GroundTruthOut:
                 "prd_feature_missing",
                 [("add_to_ground_truth", code or name), ("link_to_feature", code or name)],
                 feature=GroundTruthRef(id=None, code=code or None, name=name),
+                goal=goal_of(f, data),
                 where=GroundTruthWhere(roadmap=_doc(roadmap), prd=_doc(prd)),
                 hint=f"{hint}." if hint else None,
                 like=ref(like) if like is not None else None,
@@ -317,7 +339,7 @@ async def run(db: AsyncSession) -> GroundTruthOut:
     # The feature of each item linked to none, by code: its own (F-02) or its slice's (F-15).
     by_code: dict[uuid.UUID, Entity] = {}
     for i in items:
-        if by_id.get(i.feature_id) is None:  # type: ignore[arg-type]
+        if by_id.get(feature_of[i.id]) is None:  # type: ignore[arg-type]
             parent = slice_of[i.id][1] if i.id in slice_of else None
             for code in (item_ref(i).code, parent):
                 if code in truth_of or (i.prd_document_id, code) in linked:
@@ -325,9 +347,9 @@ async def run(db: AsyncSession) -> GroundTruthOut:
                     break
 
     for i in items:
-        if i.feature_id in truth_ids or i.id in by_code:
+        if feature_of[i.id] in truth_ids or i.id in by_code:
             continue
-        own = by_id.get(i.feature_id) if i.feature_id is not None else None
+        own = by_id.get(feature_of[i.id]) if feature_of[i.id] is not None else None
         target = str(i.id)
         parent = slice_of[i.id][1] if i.id in slice_of else None
         if (
@@ -388,7 +410,11 @@ async def run(db: AsyncSession) -> GroundTruthOut:
     for i in items:
         # Its own feature, else the one it matches by code.
         fid = (
-            i.feature_id if i.feature_id in by_id else by_code[i.id].id if i.id in by_code else None
+            feature_of[i.id]
+            if feature_of[i.id] in by_id
+            else by_code[i.id].id
+            if i.id in by_code
+            else None
         )
         if fid in running:
             flag(

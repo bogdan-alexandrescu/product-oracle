@@ -142,6 +142,8 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             if not dep:
                 return f"changed what {x} depends on"
             return f"{x} no longer depends on {dep}" if gone else f"{x} now depends on {dep}"
+        case "set_feature":
+            return f"linked {x} to a feature" if after.get("feature_id") else f"unlinked {x}"
         case "set_goal_measure":
             return f"changed how the goal of {x} is measured"
         case "set_status":

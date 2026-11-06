@@ -1391,6 +1391,40 @@ export async function routeBaseline(
   const link = await routeEvidenceLinks(s, caller, req, rest);
   if (link) return link;
 
+  // POST /v1/baseline/proposals (router.py create_proposal): a commenter or above suggests a
+  // change; an approver accepts or rejects it. A person's new entity is checked as a create is.
+  if (rest[0] === "proposals" && !rest[1] && m === "POST") {
+    if (ROLE_ORDER.indexOf(caller.role) < ROLE_ORDER.indexOf("commenter")) return fail(403, "Requires the commenter role");
+    const input = await body<Schemas["ProposalCreate"]>();
+    const fields = (input.fields ?? {}) as Attrs;
+    if (input.op === "create" && input.kind === "entity") {
+      const key = String(fields.key ?? "");
+      if (!String(fields.title ?? "").trim()) return fail(422, "title must not be empty");
+      if (!key || key.length > 120 || !(KEY_RE.test(key) || CODE_KEY_RE.test(key))) return fail(422, "key: lowercase letters, digits, . _ -, or a feature code");
+      if (CODE_KEY_RE.test(key) && fields.type !== "feature") return fail(422, "Only a feature's key can be a feature code.");
+      if ((fields.serves || fields.roadmap_item_id) && fields.type !== "feature") return fail(422, "Only a feature serves a goal or is a roadmap item.");
+      if (s.entities.some((e) => e.type === fields.type && e.key === key)) return fail(409, `${String(fields.type)}:${key} already exists`);
+    }
+    const payload = { op: input.op, kind: input.kind, fields, reason: input.reason ?? null, origin: "user" };
+    // service.propose: the same change still open is that proposal, never a second one.
+    const open = s.proposals.find((x) => x.status === "open" && JSON.stringify(x.payload) === JSON.stringify(payload) && (x.entity_id ?? null) === (input.entity_id ?? null));
+    if (open) return json(201, proposalOut(open));
+    const p: ProposalRow = {
+      id: newId(),
+      entity_id: input.entity_id ?? null,
+      edge_id: input.edge_id ?? null,
+      payload,
+      run_id: null,
+      actor: `user:${caller.userId}`,
+      status: "open",
+      decided_by: null,
+      decided_at: null,
+      created_at: now(),
+    };
+    s.proposals.push(p);
+    return json(201, proposalOut(p));
+  }
+
   // Removing evidence: approvers remove any; a commenter only link evidence they added (C2c).
   if (rest[0] === "evidence" && rest[1] && !rest[2] && m === "DELETE") {
     const ev = s.evidence.find((x) => x.id === rest[1]);

@@ -6,8 +6,9 @@
  * The "ground-truth-flags" scenario (MOCK_SCENARIO_KEY): one flag of each kind on the Alerts
  * roadmap and its PRD Scale, plus a roadmap item on a feature a run only proposed. The flags are
  * read from the mock's own state, as the API reads them, so each fix made in the UI (a feature
- * added or confirmed, a goal picked, an item linked or taken off, a code given, a PRD's feature
- * linked) removes its flag. The slices are two roadmap items (F-15a Usage report, F-15b Usage
+ * added or confirmed, a goal picked, an item linked (a set_feature change in its roadmap's working
+ * draft) or taken off, a code given, a PRD's feature linked) removes its flag. Export to sheets is
+ * published, unlinked. The slices are two roadmap items (F-15a Usage report, F-15b Usage
  * chart) of an F-15 in no PRD flag nor the Ground Truth: one Add to Ground Truth (F-15) clears
  * both. The PRD's F-09 Guest seats spans two milestones; its roadmap item (section f-09) reads
  * F-09a. As the API: a PRD's feature matches by code only (a same-name feature is a hint), an
@@ -69,9 +70,10 @@ const FEATURES: [string, string, Entity["status"], boolean][] = [
 ];
 /** Running today (Current state's proof), as feature_states would say. */
 const RUNNING = new Set([featureId("F-03")]);
-/** The scenario's roadmap items: key, title, the feature it is, a draft, the PRD section it came from. */
+/** The scenario's roadmap items: key, title, the feature it is, a draft (Export to sheets is published), the PRD
+ * section it came from. */
 const ITEMS: [string, string, string | null, boolean, string?][] = [
-  ["gt-export-to-sheets", "Export to sheets", null, true],
+  ["gt-export-to-sheets", "Export to sheets", null, false],
   ["gt-weekly-digest", "Weekly digest", featureId("F-14"), true],
   ["gt-night-alerts", "Night alerts", featureId("F-03"), false],
   // Digest emails came from a PRD's F-20 section: the next code counts it (F-21).
@@ -82,7 +84,8 @@ const ITEMS: [string, string, string | null, boolean, string?][] = [
   // An item of the PRD's F-09, over two milestones: it reads F-09a, and is an unlinked item (F-09 is the PRD's flag).
   ["gt-guest-invites", "Guest invites", null, true, "f-09"],
 ];
-/** The PRD Scale's approved plan: its feature not in the Ground Truth, over two milestones. */
+/** The PRD Scale's approved plan: its feature not in the Ground Truth, over two milestones; it serves the
+ * scenario's goal. */
 const PRD_FEATURES = [{ code: "F-09", name: "Guest seats", milestones: ["Beta", "Launch"] }];
 /** The codes the base mock's confirmed features take here, so each of the scenario's kinds has its one flag. */
 const BASE_CODES = ["F-04", "F-05", "F-06", "F-07", "F-08"];
@@ -90,7 +93,7 @@ const BASE_CODES = ["F-04", "F-05", "F-06", "F-07", "F-08"];
 /** Adds the scenario's features (to the baseline) and items (to the Alerts roadmap). */
 export function seedGroundTruth(baseline: BaselineState, simple: SimpleDb): void {
   const template = baseline.entities.find((e) => e.type === "feature")!;
-  const goal = baseline.entities.find((e) => e.type === "goal" && e.status === "confirmed") ?? baseline.entities.find((e) => e.type === "goal")!;
+  const goal = prdGoal(baseline)!;
   const edge = baseline.edges.find((e) => e.type === "supports")!;
   for (const [key, title, status, serves] of FEATURES) {
     const id = featureId(key);
@@ -117,6 +120,7 @@ const flag = (kind: Kind, fixes: [Action, string][], rest: Partial<Flag>): Flag 
   kind,
   item: null,
   feature: null,
+  goal: null,
   where: { roadmap: null, prd: null },
   words: WORDS[kind],
   fixes: fixes.map(([action, target]) => ({ action, target, words: FIX_WORDS[action] })),
@@ -125,9 +129,15 @@ const flag = (kind: Kind, fixes: [Action, string][], rest: Partial<Flag>): Flag 
   ...rest,
 });
 
+/** The goal the PRD gives its features (the plan's one goal), as check.py's goal_of. */
+const prdGoal = (baseline: BaselineState) =>
+  baseline.entities.find((e) => e.type === "goal" && e.status === "confirmed") ?? baseline.entities.find((e) => e.type === "goal" && e.status !== "rejected");
+
 function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
   const byId = new Map(baseline.entities.filter((e) => e.type === "feature").map((e) => [e.id, e]));
   const truth = [...byId.values()].filter((e) => e.status === "confirmed");
+  const g = prdGoal(baseline);
+  const goal = g ? { id: g.id, code: null, name: g.title } : null;
   const ref = (e: Entity) => ({ id: e.id, code: F_CODE.test(e.key) ? e.key : null, name: e.title });
   const both = { roadmap: ROADMAP, prd: PRD };
   const out: Flag[] = [];
@@ -170,6 +180,7 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
   };
   for (const s of items) {
     const linked = byId.get(s.linked_feature ?? s.feature_id ?? "");
+    // Its feature as the roadmap's working draft has it (a set_feature change: Add or Link).
     if (linked?.status === "confirmed" || (!linked && byCode(s))) continue;
     const id = simple.ids[s.key];
     const [code, parent] = codeOf(s);
@@ -190,7 +201,7 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
   for (const f of missing) {
     const like = truth.find((e) => e.title.trim().toLowerCase() === f.name.toLowerCase());
     const hint = like ? `${["Same name as", F_CODE.test(like.key) ? like.key : null, like.title].filter(Boolean).join(" ")}.` : null;
-    out.push(flag("prd_feature_missing", [["add_to_ground_truth", f.code], ["link_to_feature", f.code]], { feature: { id: null, code: f.code, name: f.name }, where: both, hint, like: like ? ref(like) : null }));
+    out.push(flag("prd_feature_missing", [["add_to_ground_truth", f.code], ["link_to_feature", f.code]], { feature: { id: null, code: f.code, name: f.name }, goal, where: both, hint, like: like ? ref(like) : null }));
   }
   // Every confirmed feature, as the API: a goal is served by a confirmed link to a confirmed goal.
   for (const e of truth) if (!F_CODE.test(e.key)) out.push(flag("no_code", [["give_code", e.id]], { feature: ref(e) }));

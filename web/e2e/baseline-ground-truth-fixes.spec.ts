@@ -161,6 +161,7 @@ for (const viewport of [DESKTOP, PHONE])
     for (const kind of ["no_code", "prd_feature_missing", "slice_parent_missing"]) {
       await openKind(page, kind);
       await expect(page.getByTestId(`gt-list-${kind}`).getByTestId("gt-row").first()).toBeVisible();
-      await expect(page.getByTestId(`gt-list-${kind}`).getByRole("button")).toHaveCount(0);
+      // Only each row's (i): no fix.
+      await expect(page.getByTestId(`gt-list-${kind}`).getByRole("button", { name: /Add to Ground Truth|Link to a feature|Give it a code/ })).toHaveCount(0);
     }
   });

@@ -45,6 +45,9 @@ Ops and the fields they write (``before`` must name the key fields):
   belongs to (a PRD document), each null to clear.
 - ``set_goal``: the goal the item serves, ``{"goal_id"}`` (a goal; null: its feature's
   goal again), stored as goal_ids, which win over the feature's goal.
+- ``set_feature`` (lane-gt-ui): the Ground Truth feature the item is, ``{"feature_id"}`` (a
+  feature not rejected; null: none), into the working draft like every field, so a
+  published item's link rides the next version (Add to Ground Truth, Link to a feature).
 - ``set_depends``: the keys the item depends on (``depends_on``: item keys of its roadmap,
   or feature keys, as the dependency checks read them; a new key that names no item or
   feature is 422).
@@ -143,6 +146,7 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "set_goal": ("goal_id",),
     "set_depends": ("depends_on",),
     "set_status": ("status",),
+    "set_feature": ("feature_id",),
 }
 CONFIDENCES = ("low", "medium", "high")
 # set_status: the statuses a person sets (the others come from the tracker or a merge).
@@ -157,6 +161,7 @@ SHOWN = {
     "set_goal": lambda e: {"goal_id": str(e.goal.id) if e.goal else None},
     "set_depends": lambda e: {"depends_on": list(e.row.depends_on or [])},
     "set_status": lambda e: {"status": e.status},
+    "set_feature": lambda e: {"feature_id": str(e.row.feature_id) if e.row.feature_id else None},
 }
 STORED = {"set_track": ("track_id",), "set_prd": ("prd_document_id",), "set_goal": ("goal_ids",)}
 FIXES = ("shift_dependents", "move_dependency")
@@ -874,6 +879,16 @@ async def _plan(
             raise ChangeError(422, "after.goal_id: a goal")
         after = {"goal_ids": [str(goal)] if goal else []}
         stored = STORED[op]
+    elif op == "set_feature":
+        from oracle.baseline.models import Entity
+
+        fid = _uuid(a["feature_id"], "after.feature_id") if a.get("feature_id") else None
+        q = select(Entity.id).where(
+            Entity.id == fid, Entity.type == "feature", Entity.status != "rejected"
+        )
+        if fid is not None and await db.scalar(q) is None:
+            raise ChangeError(422, "after.feature_id: a feature")
+        after = {"feature_id": str(fid) if fid else None}
     elif op == "set_depends":
         keys = a.get("depends_on")
         if not isinstance(keys, list) or len(keys) > DEPENDS_MAX:
@@ -1169,10 +1184,15 @@ async def _flags(
 
 
 async def create(
-    db: AsyncSession, principal: Any, body: SimpleChangeIn, meeting_id: uuid.UUID | None = None
+    db: AsyncSession,
+    principal: Any,
+    body: SimpleChangeIn,
+    meeting_id: uuid.UUID | None = None,
+    commit: bool = True,
 ) -> SimpleChangeResult:
     """``meeting_id``: the meeting the change is made in when its session is not given (its
-    session closed): it still changes only what the meeting reviews (oracle.simple.agenda)."""
+    session closed): it still changes only what the meeting reviews (oracle.simple.agenda).
+    ``commit``: false inside another write (a Ground Truth add's set_feature), which commits."""
     from oracle.simple import (
         additions,
         agenda,
@@ -1290,7 +1310,8 @@ async def create(
     await audit.record(db, principal, f"simple_change.{c.status}", "simple_change", c.id,
                        data={"op": c.op, "target": target, "before": before, "after": after,
                              "document_id": str(entry.roadmap.id)})  # fmt: skip
-    await db.commit()
+    if commit:
+        await db.commit()
     return SimpleChangeResult(change=await one_out(db, principal, c), flags=flags)
 
 

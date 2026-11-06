@@ -71,11 +71,18 @@ class EntityCreate(BaseModel):
     origin: WriteOrigin = "user"
     run_id: uuid.UUID | None = None
     reason: str | None = None
+    # lane-gt-ui: a new feature's goal (a supports link, made with it) and the roadmap item it
+    # is (a set_feature change in the item's roadmap's working draft): Add to Ground Truth is
+    # one call. A proposal's fields may carry both; accepting it writes them.
+    serves: uuid.UUID | None = None
+    roadmap_item_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def _code_key_is_a_features(self) -> "EntityCreate":
         if self.type != "feature" and re.fullmatch(FEATURE_CODE_KEY, self.key):
             raise ValueError("Only a feature's key can be a feature code.")
+        if (self.serves or self.roadmap_item_id) and self.type != "feature":
+            raise ValueError("Only a feature serves a goal or is a roadmap item.")
         return self
 
 
@@ -696,6 +703,9 @@ class GroundTruthFlag(BaseModel):
     kind: CheckKind
     item: GroundTruthRef | None = None
     feature: GroundTruthRef | None = None
+    # A PRD's feature or slice: the goal its PRD gives it (the feature's own, else the
+    # plan's one goal), for Add to Ground Truth to serve; none when it gives none.
+    goal: GroundTruthRef | None = None
     where: GroundTruthWhere
     # One short plain sentence, no ids.
     words: str

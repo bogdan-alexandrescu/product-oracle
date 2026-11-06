@@ -320,7 +320,12 @@ async def create_entity(body: EntityCreate, principal: ApproverNow, db: TenantDB
             status=body.status,
             parent_id=body.parent_id,
         )
+        if result.entity is not None:
+            await service.link_new_feature(
+                db, _writer(principal, body), result.entity, body.serves, body.roadmap_item_id
+            )
     except service.BaselineError as exc:
+        await db.rollback()
         raise _fail(exc) from exc
     return await _entity_write(db, result, created=True)
 

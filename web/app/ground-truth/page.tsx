@@ -560,10 +560,10 @@ export default function BaselinePage() {
         <GroundTruthFlags
           check={check.data}
           graph={graph.data}
+          proposals={proposals.data}
           canWrite={canWrite}
           canPropose={canComment}
           canChangeRoadmap={can("create_simple_change")}
-          pending={proposals.data}
           onChanged={() => {
             refresh();
             stateChanged();
