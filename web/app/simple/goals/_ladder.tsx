@@ -837,7 +837,8 @@ function curve(a: DOMRect, b: DOMRect, box: DOMRect, s: number): { d: string; mi
   if (Math.abs(a.left - b.left) < 40 * s) {
     // In one column: out of the right edge and back in, bowed by how far apart they are.
     const x = (a.right - box.left) / s;
-    const bow = 28 + Math.min(36, Math.abs(by - ay) / 12);
+    // In the gutter (the column's padding and the gap), clear of the card's edge, never into the next column.
+    const bow = 16 + Math.min(6, Math.abs(by - ay) / 80);
     return { d: `M${x},${ay} C${x + bow},${ay} ${x + bow},${by} ${x + 2},${by}`, mid: [x + bow * 0.75, (ay + by) / 2] };
   }
   const right = b.left > a.left;
