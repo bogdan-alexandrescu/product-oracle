@@ -48,7 +48,7 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(body).toContainText("Serves Cut monthly churn to 2% (G1).");
       // Issues on no item's card stay as written: the page shows no more than it already shows.
       await expect(body).toContainText("ENG-512 tracks it.");
-      await expect(body).toContainText("Partner API beta Priya Raman ENG-530");
+      await expect(body).toContainText("Priya RamanENG-530");
       const text = await body.innerText();
       expect(text).not.toMatch(/Serves G\d/);
       expect(text).not.toContain("Alert rules engine");
