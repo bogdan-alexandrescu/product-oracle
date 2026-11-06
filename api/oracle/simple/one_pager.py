@@ -58,7 +58,6 @@ from oracle.simple.models import (
     SimpleChange,
     SimpleDraft,
     SimpleOnePager,
-    SimplePrdPlan,
     SimpleSession,
     SimpleVisual,
 )
@@ -435,60 +434,90 @@ def _feature_code(raw: Any) -> str | None:
 
 
 async def prd_items(
-    db: AsyncSession, document: Document, b: "Built", items: list[Any]
+    db: AsyncSession,
+    document: Document,
+    b: "Built",
+    items: list[Any],
+    view: plan_model.View | None,
 ) -> list[Any]:
     """S-8: the PRD's roadmap items, of the roadmap the reader is shown: its own (the PRD
     they name) and those of its features (docs/ground-truth.md: an item is a Ground Truth
     feature by code), whatever PRD they name: the company roadmap's items that deliver a
-    feature of the PRD's plan or of its own coded sections (F-07), by their code or a
-    slice's feature's (F-07a), or by the feature its plan links."""
+    feature of the PRD's plan (``view``: its stored plan, else its approved version's
+    tables, as the Roadmap reads it) or of its own coded sections (F-07), by their code or a
+    slice's feature's (F-07a), or by the feature its plan links.
+
+    Each is placed by THIS PRD's plan only: its slices are the plan's slices of the feature
+    it delivers; an item of another PRD with none sits under no milestone, never under
+    that PRD's milestone or dates."""
     codes = {c for s in b.sections if (c := _feature_code(s.section_key))}
-    data = await db.scalar(
-        select(SimplePrdPlan.data).where(
-            SimplePrdPlan.document_id == document.id, SimplePrdPlan.status == "ready"
-        )
-    )
-    links: set[uuid.UUID] = set()
-    for f in (data or {}).get("features") or []:
-        if isinstance(f, dict) and (c := _feature_code(f.get("code"))):
-            codes.add(c)
-    for raw in ((data or {}).get("links") or {}).values():
-        try:
-            links.add(uuid.UUID(str(raw)))
-        except ValueError:
-            continue
-    rest = [i.id for i in items if i.prd is None or i.prd.id != document.id]
+    # A code read one way -> the plan's feature code as the PRD writes it.
+    planned: dict[str, str] = {}
+    links: dict[uuid.UUID, str] = {}
+    if view is not None:
+        for raw in view.feature_codes:
+            if c := _feature_code(raw):
+                planned.setdefault(c, raw)
+        for code, raw in view.links.items():
+            try:
+                links[uuid.UUID(raw)] = code
+            except ValueError:
+                continue
+    codes |= set(planned)
     features: dict[uuid.UUID, uuid.UUID] = {}
-    keyed: set[uuid.UUID] = set()
-    if rest and (codes or links):
+    keyed: dict[uuid.UUID, str] = {}
+    ids = [i.id for i in items if i.id]
+    if ids and (codes or links):
         features = {
             i: f
             for i, f in (
                 await db.execute(
                     select(RoadmapItem.id, RoadmapItem.feature_id).where(
-                        RoadmapItem.id.in_(rest), RoadmapItem.feature_id.is_not(None)
+                        RoadmapItem.id.in_(ids), RoadmapItem.feature_id.is_not(None)
                     )
                 )
             ).all()
         }
         if features:
             keyed = {
-                e
+                e: c
                 for e, key in (
                     await db.execute(
                         select(Entity.id, Entity.key).where(Entity.id.in_(set(features.values())))
                     )
                 ).all()
-                if _feature_code(key) in codes
+                if (c := _feature_code(key)) in codes  # type: ignore[assignment]
             }
 
-    def mine(i: Any) -> bool:
-        if i.prd is not None and i.prd.id == document.id:
-            return True
-        f = features.get(i.id)
-        return _feature_code(i.code) in codes or (f is not None and (f in links or f in keyed))
+    def own(i: Any) -> bool:
+        return i.prd is not None and i.prd.id == document.id
 
-    return [i for i in items if mine(i)]
+    def mine(i: Any) -> bool:
+        f = features.get(i.id)
+        return (
+            own(i)
+            or _feature_code(i.code) in codes
+            or (f is not None and (f in links or f in keyed))
+        )
+
+    def feature(i: Any) -> str | None:
+        """The plan's feature the item delivers, when the plan has it."""
+        f = features.get(i.id)
+        for c in (_feature_code(i.code), keyed.get(f) if f else None):
+            if c in planned:
+                return planned[c]
+        return links.get(f) if f else None
+
+    out = []
+    for i in items:
+        if not mine(i):
+            continue
+        code = feature(i)
+        slices = view.slices_of(code) if view is not None and code else []
+        out.append(
+            i.model_copy(update={"slices": slices, "milestone": i.milestone if own(i) else None})
+        )
+    return out
 
 
 # A goal's code in a PRD's words ("G2", a subgoal "G1.2"), and the name the PRD gives it
@@ -1592,7 +1621,8 @@ async def read(
             if x.words is None and (x.full or x.text) != said:
                 x.words = said
     slice_ = await service.build(db, principal)
-    mine = await prd_items(db, document, b, slice_.items)
+    view = (await plan_model.views(db, {document.id})).get(document.id)
+    mine = await prd_items(db, document, b, slice_.items, view)
     items = [
         OnePagerItem(
             id=i.id,
@@ -1608,7 +1638,6 @@ async def read(
     plan = plan_strip.strip(plan_items(mine), slice_.today)
     # A dated plan's span is the one its timeline draws (its milestones, or the dates the
     # lead accepted); else the items' dated milestones.
-    view = (await plan_model.views(db, {document.id})).get(document.id)
     if view is not None and view.dated and view.span:
         span: tuple[date, date] | None = (view.span.start, view.span.end)
     else:
