@@ -34,7 +34,7 @@ test("F-60: connect Slack on Connections, see it on Sources", async ({ page }) =
   await login(page);
   await page.goto("/settings/connections");
   const slack = page.getByTestId("connection-card-slack");
-  await slack.getByRole("button", { name: "Paste a token" }).click();
+  await slack.getByRole("button", { name: "Add another account" }).click();
   await slack.getByLabel("Token", { exact: true }).fill("example-slack-5678");
   await slack.getByLabel("Label (optional)").fill("Design team chat");
   await slack.getByRole("button", { name: "Connect", exact: true }).click();

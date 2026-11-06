@@ -1,5 +1,5 @@
 import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { disconnectAll, login } from "./helpers";
 import { expect, test, type Page } from "./test";
 
 const CUSTOM = "https://ff.example.com/graphql";
@@ -16,7 +16,9 @@ async function openConnections(page: Page) {
   return page.getByTestId("connection-card-fireflies");
 }
 
+/** Connects Fireflies with a key and `endpoint`, the seeded account disconnected first. */
 async function pasteKey(page: Page, endpoint: string) {
+  await disconnectAll(page, "fireflies");
   const card = page.getByTestId("connection-card-fireflies");
   await card.getByRole("button", { name: "Paste a token" }).click();
   const form = card.getByRole("form", { name: "Fireflies token" });

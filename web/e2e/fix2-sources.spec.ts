@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { login } from "./helpers";
+import { disconnectAll, login } from "./helpers";
 
 /**
  * QA fixes on Settings › Sources, Settings › Connections, the Set up checklist's Pick sources
@@ -141,6 +141,7 @@ test("Connections: Connect says why it waits, a bad token is turned down under t
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page);
   await page.goto("/settings/connections");
+  await disconnectAll(page, "slack");
   const slack = page.getByTestId("connection-card-slack");
   await slack.getByRole("button", { name: "Paste a token" }).click();
   const token = slack.getByLabel("Token", { exact: true });
@@ -178,6 +179,7 @@ test("Connections: opening Paste a token leaves the neighbouring card its own he
   await page.setViewportSize({ width: 1280, height: 900 });
   await login(page);
   await page.goto("/settings/connections");
+  await disconnectAll(page, "slack");
   const github = page.getByTestId("connection-card-github");
   const slack = page.getByTestId("connection-card-slack");
   const before = (await github.boundingBox())!.height;
