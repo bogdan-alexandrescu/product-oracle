@@ -1116,7 +1116,8 @@ function Phone({ v }: { v: V }) {
   const first = Math.max(0, v.goals.findIndex((g) => g.id === p.picked));
   const [gi, setGi] = useState(first);
   const g = v.goals[Math.min(gi, v.goals.length - 1)];
-  const next = v.ms.filter((m) => m.due_on && m.due_on >= v.map.today_on).sort((a, b) => a.due_on!.localeCompare(b.due_on!))[0];
+  // The shown goal's next milestone.
+  const next = v.ms.filter((m) => m.goal === g?.id && m.due_on && m.due_on >= v.map.today_on).sort((a, b) => a.due_on!.localeCompare(b.due_on!))[0];
   const t = new Date(`${v.map.today_on}T00:00:00Z`);
   const monday = addDays(v.map.today_on, -((t.getUTCDay() + 6) % 7));
   if (!g) return null;

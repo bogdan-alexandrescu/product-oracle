@@ -285,6 +285,7 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(page.getByTestId("ld-phone")).toContainText("We are here: week of Nov 2");
       await page.getByRole("tab", { name: "Goal 2" }).click();
       await expect(page.getByTestId("ld-goal")).toContainText("New teams set up in one day");
+      await expect(page.getByTestId("ld-phone")).toContainText("next: M4 Setup time under two days, Nov 13");
       await shot(page, `ld1-a-phone-${scheme}`);
       await page.getByTestId("ld-edit").click();
       await card(page, "F-15").getByTestId("ld-more").click();
