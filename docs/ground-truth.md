@@ -30,7 +30,7 @@ from.
 
 ## Running today
 
-"Running today" is Detailed's second tab. It lists the features that run now, each with its
+"Running today" is the Running today tab in Detailed. It lists the features that run now, each with its
 proof: code map hits, merged pull requests, done tasks or a measured value. Oracle reads the
 proof again every night.
 
@@ -42,7 +42,8 @@ It gives each feature its mark:
 
 ## PRDs
 
-- A PRD's goals and features are Ground Truth entries, named by their code.
+- A PRD's goals and features are Ground Truth entries, named by their code. A PRD's feature
+  matches a Ground Truth feature by its code only, never by its name.
 - A new feature a PRD proposes joins the Ground Truth, and gets its F-code, when the PRD is
   approved.
 
@@ -71,18 +72,28 @@ check's `action`, with the button's words):
 | --- | --- | --- |
 | `unlinked_item` | A roadmap item linked to no feature | Add to Ground Truth (`add_to_ground_truth`), Link to a feature (`link_to_feature`) |
 | `unlinked_item` | A roadmap item linked to a feature a run proposed but no approver confirmed | Confirm it (`confirm_feature`), Link to a feature (`link_to_feature`) |
-| `slice_parent_missing` | A slice (F-15a) whose feature is not in the Ground Truth | Add to Ground Truth, Link to a feature |
-| `prd_feature_missing` | A feature of a PRD's approved version that is not in the Ground Truth | Add to Ground Truth, Link to a feature |
+| `slice_parent_missing` | A roadmap slice item (F-15a, or an item of a PRD feature over several milestones) linked to no feature, whose feature (F-15) is not in the Ground Truth | Add to Ground Truth (adds F-15), Link to a feature (links the item) |
+| `prd_feature_missing` | A feature of a PRD's approved version whose code no Ground Truth feature has, or that has no code | Add to Ground Truth, Link to a feature |
 | `no_code` | A Ground Truth feature with no F-code | Give it a code (`give_code`) |
-| `no_goal` | A Ground Truth feature that serves no goal | Pick a goal (`pick_goal`) |
+| `no_goal` | A Ground Truth feature that serves no confirmed goal by a confirmed link (a run's proposed goal or link does not count) | Pick a goal (`pick_goal`) |
 | `runs_today_on_roadmap` | A feature that runs today but is still on the roadmap | Take it off the roadmap (`take_off_roadmap`) |
 
 Each flag says what is wrong in one short plain sentence, with no ids; each fix carries its
 button's words.
 
+- One missing feature is one flag of its own: a PRD feature over two milestones is one
+  `prd_feature_missing`, never also a `slice_parent_missing` per milestone. A roadmap slice
+  item of a feature the PRD flags already is an `unlinked_item`, with its slice code (F-15a).
+- A PRD's feature with the name of a Ground Truth feature but another code is still flagged,
+  with the hint "Same name as F-05 Bulk import." and that feature to link to.
+- An item can carry two flags: `unlinked_item` and `runs_today_on_roadmap` both flag an item
+  linked to a proposed feature that runs today.
+- Entries in Trash are left out: an item linked to a feature in Trash reads as linked to none.
+
 "The roadmap" here is what every reader is shown: the shown version of the company roadmap
 (each company-visible roadmap while there is no company roadmap), without cut, shipped,
-merged or taken-off items, or the items of a replaced PRD. A PRD's features are those of
+merged or taken-off items, or the items of a replaced PRD. A PRD's flags show on one roadmap:
+the company roadmap first, else the first by title. A PRD's features are those of
 the plan read from its approved version.
 
 ## Internal names that keep "baseline"

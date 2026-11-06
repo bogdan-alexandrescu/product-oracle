@@ -5,7 +5,9 @@
  *
  * The "ground-truth-flags" scenario (MOCK_SCENARIO_KEY): one flag of each kind on the one
  * Product roadmap and its PRD Scale (two of unlinked_item: one linked to no feature, one to a
- * feature a run only proposed, fixed by Confirm it). Every other scenario reads no flags.
+ * feature a run only proposed, fixed by Confirm it; two of prd_feature_missing: F-09, and F-20
+ * Bulk import, matched by code only, with the hint of the confirmed F-01 Bulk import). The slice
+ * is a roadmap item (F-15a) whose F-15 is in no PRD flag. Every other scenario reads no flags.
  * Invented data only.
  */
 import type { Schemas } from "@/lib/api/client";
@@ -49,6 +51,8 @@ const flag = (kind: Kind, fixes: [Action, string][], rest: Partial<Schemas["Grou
   where: { roadmap: null, prd: null },
   words: WORDS[kind],
   fixes: fixes.map(([action, target]) => ({ action, target, words: FIX_WORDS[action] })),
+  hint: null,
+  like: null,
   ...rest,
 });
 
@@ -65,13 +69,21 @@ function seedFlags(): Schemas["GroundTruthFlag"][] {
       feature: { id: id("feature/import-history"), code: null, name: "Import history" },
       where: both,
     }),
-    flag("slice_parent_missing", [["add_to_ground_truth", "F-15"], ["link_to_feature", "F-15"]], {
-      item: { id: null, code: "F-15a", name: "Usage report" },
+    // A roadmap slice item: Add to Ground Truth adds its feature (F-15), Link to a feature links the item.
+    flag("slice_parent_missing", [["add_to_ground_truth", "F-15"], ["link_to_feature", id("item/usage-report")]], {
+      item: { id: id("item/usage-report"), code: "F-15a", name: "Usage report" },
       where: both,
     }),
     flag("prd_feature_missing", [["add_to_ground_truth", "F-09"], ["link_to_feature", "F-09"]], {
       feature: { id: null, code: "F-09", name: "Team invites" },
       where: both,
+    }),
+    // By code only: the same name as a confirmed feature is a hint, never a match.
+    flag("prd_feature_missing", [["add_to_ground_truth", "F-20"], ["link_to_feature", "F-20"]], {
+      feature: { id: null, code: "F-20", name: "Bulk import" },
+      where: both,
+      hint: "Same name as F-01 Bulk import.",
+      like: { id: id("feature/bulk-import"), code: "F-01", name: "Bulk import" },
     }),
     flag("no_code", [["give_code", id("feature/smart-search")]], {
       feature: { id: id("feature/smart-search"), code: null, name: "Smart search" },
