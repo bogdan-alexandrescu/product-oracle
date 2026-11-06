@@ -1049,7 +1049,8 @@ export function FloatingCard({
       {pick && <PickFeature key={pick} kind={pick} item={item} items={items} act={act} done={() => setPick(null)} />}
       {item.merged_into && (
         <p className="mt-1 text-sm text-text2" data-testid="item-merged">
-          Merged into <FeatureLink f={item.merged_into} onOpen={onOpen} />
+          {/* The kept feature's display code, never its key. */}
+          Merged into <FeatureLink f={{ ...item.merged_into, code: items.get(item.merged_into.id)?.code ?? "" }} onOpen={onOpen} />
         </p>
       )}
       {item.part_of && (

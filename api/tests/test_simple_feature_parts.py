@@ -93,7 +93,7 @@ class Parts:
         assert r.status_code == 201, r.text
 
     def ref(self, key: str) -> dict:
-        return {"id": self.ids[key], "code": key, "title": key.title()}
+        return {"id": self.ids[key], "code": "", "title": key.title()}
 
 
 async def test_set_parent_applies_reads_and_undoes(client):

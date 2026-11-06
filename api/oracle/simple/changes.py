@@ -1110,7 +1110,7 @@ async def _parent(
     parent = next((e for e in same if named and e.row.item_key == named), None)
     if parent is not None:
         await service.item_codes(db, [parent])
-        target["code"], target["title"] = parent.code or parent.row.item_key, parent.row.title
+        target["code"], target["title"] = parent.code or "", parent.row.title
     if not key:
         return None
     if key == row.item_key:

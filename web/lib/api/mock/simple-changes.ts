@@ -1277,7 +1277,7 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       if (parent?.parent) return json(422, { detail: "after.parent_key: that item is a part itself (one level only)" });
       if (v !== null && seen.items.some((x) => x.parent === key && !closed(x))) return json(422, { detail: "This item has parts of its own, so it is never a part" });
       const named = parent ?? (me.parent ? seen.items.find((x) => x.key === me.parent) : undefined);
-      if (named) Object.assign(target, { code: prdCode(named.section) ?? named.key, title: named.title });
+      if (named) Object.assign(target, { code: prdCode(named.section) ?? "", title: named.title });
       after = { parent_key: v };
     }
     else if (body.op === "set_goals") {
