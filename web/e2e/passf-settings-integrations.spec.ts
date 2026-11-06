@@ -118,15 +118,16 @@ test("F-7: an owner's webhook rows count in the Inbox's header and rail badge, a
 
 test("F-25: a viewer's Inbox lists no webhook rows they could not open", async ({ page }) => {
   await scenario(page, WEBHOOKS_SCENARIO);
-  await page.addInitScript(([key]) => localStorage.setItem(key, "viewer"), [MOCK_ROLE_KEY]);
   await login(page);
-  // The API sends a member their own webhook notices whatever their role (here the seeded
-  // owner's, signed in as a viewer): the Inbox, not the API, leaves them out.
-  const notices = page.waitForResponse((r) => r.url().endsWith("/v1/me/notifications") && r.request().method() === "GET");
   await page.goto("/inbox");
-  const sent = (await (await notices).json()) as { kind: string }[];
-  expect(sent.filter((n) => n.kind === "webhook_paused").length).toBeGreaterThan(0);
-  await expect(page.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible();
+  // The owner's webhook notice is in their Inbox ...
+  await expect(page.getByTestId("inbox-webhooks").getByText("Webhook Deploy notifier paused")).toBeVisible();
+  // ... and once they are a viewer the API still sends it to them (as it does a member whose
+  // role went down): the Inbox, not the API, leaves it out.
+  await page.evaluate(([key]) => localStorage.setItem(key, "viewer"), [MOCK_ROLE_KEY]);
+  await page.reload();
+  // Its rows have loaded (the header counts them) before looking for what is left out.
+  await expect(page.getByText(/^\d+ waiting$/).first()).toBeVisible();
   await expect(page.getByText("Webhook Deploy notifier paused")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Open" }).filter({ hasText: "Open" }).and(page.locator('[href^="/settings/webhooks"]'))).toHaveCount(0);
 });
