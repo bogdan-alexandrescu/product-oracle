@@ -332,5 +332,11 @@
  "- - ## Head\n> lead text\n> ---\n",
  "-\t- item text\n* ```\n  make carts\n  ```\n\n-\t    make carts\n\t    make carts 2\n\n",
  "+ lead text\n  - item text\n- \t- lead text\n```sh\n  \t  make carts\n  \t  make carts 2\n  \t  ```\n\n-\tlead text\n\tSome text\n\tmore text\n- - lead text\n    ~~~\n    make carts\n    ~~~",
- "- \t- ---\r\r- lead text\r\t---\r"
+ "- \t- ---\r\r- lead text\r\t---\r",
+ "\n- lead text\n```\n  make carts\n+ \n-lead text\n  ",
+ "- lead text\n\t\n\n> - - item text\n\t- lead text\n\t  ```sh\n\t  make carts\n\t  make carts 2\n\t  ```\n",
+ "lead text\n-\n\t- lead text\n\t  \tmake carts\n- 1. lead text\n     - item text\n",
+ "- \t- Some text\n  \t  more text\n\t- ```\n\t  make carts\n\t  ```\n",
+ "- a\n-   \n\n    Title",
+ "- a\n-   \n\n\t- Title\n\t  -----"
 ]
