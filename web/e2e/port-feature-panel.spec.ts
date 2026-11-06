@@ -5,7 +5,8 @@ import { expect, test, type Locator, type Page } from "./test";
  * build-feature-panel (AN PR 1204), ported onto this line's one feature panel (PR 1297): what
  * the panel lacked. Its Notes row, changed in place; the goal's Reading row ("Today 61% · target
  * ... by ..."); a name over 200 characters is refused before it is sent; who may only read is
- * told so, with Suggest a change opening the talk. Mock default scenario (Weekly alert digest,
+ * told so, with Suggest a change opening the talk; a change made in the panel shows on the page
+ * behind at once (every query reads again on the card-changed event). Mock default scenario (Weekly alert digest,
  * invented data), desktop 1440 and phone 390.
  */
 
@@ -55,6 +56,24 @@ for (const size of SIZES) {
       await expect(panel(page).getByTestId("field-too-long")).toHaveText("Keep the name to 200 characters");
       await expect(panel(page).getByRole("button", { name: "Save" })).toBeDisabled();
       await expect(panel(page).getByLabel("Name")).toHaveValue("A".repeat(201));
+    });
+
+    test("a rename in the panel shows on the page behind at once, before the panel closes", async ({ page }) => {
+      await login(page);
+      await page.goto("/simple/priorities");
+      const title = page.getByTestId("prio-title").first();
+      await expect(title).toBeVisible();
+      const name = (await title.innerText()).trim();
+      await tap(title);
+      await expect(panel(page)).toBeVisible();
+      await tap(panel(page).getByRole("button", { name: "More actions" }));
+      await tap(page.getByRole("menuitem", { name: "Rename" }));
+      await panel(page).getByLabel("Name").fill(`${name} for teams`);
+      await tap(panel(page).getByRole("button", { name: "Save" }));
+      await expect(panel(page).getByTestId("card-name")).toContainText(`${name} for teams`);
+      // The panel is still open: Priorities read again when the change was made.
+      await expect(page.getByTestId("prio-title").filter({ hasText: `${name} for teams` })).toHaveCount(1);
+      await expect(panel(page)).toBeVisible();
     });
 
     test("a viewer is told they can read it, and Suggest a change opens the talk", async ({ page }) => {
