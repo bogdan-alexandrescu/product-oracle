@@ -150,7 +150,7 @@ async function staticHtml(page, [w, h], { print = false } = {}) {
   const head = [
     `<meta charset="utf-8">`,
     `<meta name="mockup-viewport" content="${w}x${h}">`,
-    `<style>${css}</style>`,
+    `<style>${css}\n[data-pt1] .pt1-toc-row[data-mockup-hover] { background: var(--surface2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-strong); }</style>`,
     // ?theme=light|dark sets data-theme on <html> (a printed page is always light); the saved scroll is restored.
     `<script>(function(){var t=${print ? '"light"' : 'new URLSearchParams(location.search).get("theme")'};if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;addEventListener("load",function(){document.querySelectorAll("[data-mockup-scroll]").forEach(function(e){var p=e.getAttribute("data-mockup-scroll").split(",");e.scrollLeft=+p[0];e.scrollTop=+p[1]});scrollTo(${snap.x},${snap.y});var a=document.querySelector("[data-mockup-top]");if(a)scrollBy(0,a.getBoundingClientRect().top-Number(a.getAttribute("data-mockup-top")))})})()</script>`,
   ].join("\n");
@@ -211,7 +211,10 @@ async function main() {
         const find = page.locator('[data-pt1] input[aria-label="Find a section"]:visible').first();
         await find.fill(heading.split(/\s+/)[0]);
         await page.waitForTimeout(300);
-        await page.locator("[data-pt1] .pt1-toc-row:visible").filter({ hasText: heading }).first().hover();
+        const row = page.locator("[data-pt1] .pt1-toc-row:visible").filter({ hasText: heading }).first();
+        await row.hover();
+        // A static file keeps no :hover: the row is marked and drawn as the app draws a row under the pointer.
+        await row.evaluate((el) => el.setAttribute("data-mockup-hover", ""));
         await page.waitForTimeout(300);
       }
       if (opts.scrollTo) {

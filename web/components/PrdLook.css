@@ -13,7 +13,7 @@
 .pt1-dot-crit { background: var(--crit, #b91c1c); opacity: 1; } /* MOCK-HOOK */
 .pt1-toc-list { list-style: none; margin: 0; padding: 0; } /* MOCK-HOOK */
 .pt1-toc-row { display: flex; width: 100%; align-items: center; gap: 8px; text-align: left; padding: 5px 10px; border-radius: 6px; font-size: 14px; line-height: 20px; color: var(--text2); } /* MOCK-HOOK */
-.pt1-toc-row:hover { background: var(--surface2); color: var(--text); } /* MOCK-HOOK */
+.pt1-toc-row:hover { background: var(--surface2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-strong); } /* MOCK-HOOK */
 .pt1-toc-row[aria-current] { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); } /* MOCK-HOOK */
 .pt1-toc-n { flex: none; min-width: 2.2em; color: var(--text-faint); font-size: 13px; } /* MOCK-HOOK */
 .pt1-toc-row[aria-current] .pt1-toc-n { color: var(--accent-ink); } /* MOCK-HOOK */
@@ -114,7 +114,7 @@
 [data-pt1="c"] .pt1-part-count { margin-left: auto; font-size: 13px; font-weight: 500; color: var(--text2); } /* MOCK-HOOK */
 [data-pt1="c"] .pt1-doc { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; } /* MOCK-HOOK */
 [data-pt1="c"] .pt1-sec + .pt1-sec { border-top: 1px solid var(--line); } /* MOCK-HOOK */
-[data-pt1="c"] .pt1-sec[data-folded] > section > .doc-body { max-height: 220px; overflow: hidden; -webkit-mask-image: linear-gradient(#000 60%, transparent); mask-image: linear-gradient(#000 60%, transparent); } /* MOCK-HOOK */
+[data-pt1="c"] .pt1-sec[data-folded] > section > .doc-body { max-height: 220px; overflow: hidden; -webkit-mask-image: linear-gradient(#000 40%, transparent 92%); mask-image: linear-gradient(#000 40%, transparent 92%); } /* MOCK-HOOK */
 [data-pt1="c"] .pt1-sec[data-current] > section { box-shadow: inset 3px 0 0 var(--accent); } /* MOCK-HOOK */
 [data-pt1="c"] .pt1-cline { display: flex; gap: 10px; align-items: center; font-size: 13px; color: var(--text2); } /* MOCK-HOOK */
 [data-pt1="c"] .pt1-sec > section[data-level="3"] [data-pt1-head] :is(h2, h3) { font-size: 17px; } /* MOCK-HOOK */

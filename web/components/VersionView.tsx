@@ -1620,8 +1620,8 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
           >
             {/* qa4-docs-37: the open section's place, in words: "N/M" elsewhere counts reviews. */}
             <span className="tnum truncate">
-              {pt1.look && openSection && pt1Nums.get(openSection.section_key) ? ( /* MOCK-HOOK: the look's own number, as in its headings */
-                <>Section {pt1Nums.get(openSection.section_key)} <span className="text-text2">of {pt1Top}</span></> /* MOCK-HOOK */
+              {pt1.look && openSection ? ( /* MOCK-HOOK: the look's own number, as in its headings; an unnumbered part by its name */
+                pt1Nums.get(openSection.section_key) ? <>Section {pt1Nums.get(openSection.section_key)} <span className="text-text2">of {pt1Top}</span></> : openSection.heading /* MOCK-HOOK */
               ) : ( /* MOCK-HOOK */
                 <>Section {openIdx + 1} <span className="text-text2">of {shownSections.length}</span></>
               ) /* MOCK-HOOK */}

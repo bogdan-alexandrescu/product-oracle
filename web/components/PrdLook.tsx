@@ -361,7 +361,7 @@ function Contents({
             onChange={(e) => setFilter(e.target.value)}
             aria-label="Find a section"
           />
-          <span className="pt1-toc-count tnum">{sections.filter((s) => s.level > 1).length} sections</span>
+          <span className="pt1-toc-count tnum">{sections.length} sections</span>
           {!rail && (
             <button type="button" className="pt1-toc-close" onClick={onClose} aria-label="Close contents">
               ×
