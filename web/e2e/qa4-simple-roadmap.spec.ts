@@ -101,7 +101,8 @@ for (const [where, size] of [
       await open(page);
       await page.getByTestId("format-board").click();
       await expect(column(page, "now").getByTestId("column-window")).toHaveText("Oct 1 – Dec 31, 2026");
-      await expect(column(page, "later").getByTestId("column-count")).toHaveText("1 item, 1 cut");
+      // roadmap-edit-fixes round 1: F-03 Health log is a live, planned Later item on its PRD's roadmap.
+    await expect(column(page, "later").getByTestId("column-count")).toHaveText("2 items, 1 cut");
       const sugg = page.getByTestId("goal-suggestions-open").first();
       if (await sugg.count()) await expect(sugg).toHaveText(/^✦ \d+ suggested features?$/);
       for (const t of await page.getByTestId("board-looks-like").allTextContents()) expect(t).not.toMatch(/\b[FD]-\d/);
