@@ -4,7 +4,8 @@ import { login } from "./helpers";
 /**
  * QA R-5: on the Detailed roadmap document page, the Share links table's first header
  * ("Label") was squeezed to "Lal" at 1024 wide. Every header and cell reads whole at 1024,
- * 1440 and 390, light and dark, and the page never scrolls sideways.
+ * 1100, 1200, 1280, 1440, 1920 and 390, light and dark, no action button runs onto a
+ * neighbouring cell, and the page never scrolls sideways.
  */
 
 // The Usage alerts roadmap has no links (an empty table); the Platform roadmap's seeded links give rows.
@@ -15,6 +16,10 @@ const DOCS = [
 
 const SIZES = [
   { name: "1024", width: 1024, height: 800 },
+  // R-5 fix 2: from about 1200 to 1320 the owner's buttons spilled onto the State column.
+  { name: "1100", width: 1100, height: 800 },
+  { name: "1200", width: 1200, height: 800 },
+  { name: "1280", width: 1280, height: 800 },
   { name: "1440", width: 1440, height: 900 },
   { name: "1920", width: 1920, height: 1000 },
   { name: "390", width: 390, height: 844 },
@@ -105,19 +110,34 @@ for (const who of [
             }));
             expect(m.s).toBeLessThanOrEqual(m.c + 1);
           }
-          // Every action button sits whole inside its cell.
+          // Every action button sits whole inside its cell and never runs onto the cell beside it.
           const buttons = table.getByRole("row").getByRole("button");
           for (let i = 0, k = await buttons.count(); i < k; i++) {
             const b = buttons.nth(i);
             if (!(await b.isVisible())) continue;
             const fit = await b.evaluate((el) => {
-              const cell = el.closest("td")!.getBoundingClientRect();
+              const td = el.closest("td")!;
+              const cell = td.getBoundingClientRect();
               const r = el.getBoundingClientRect();
+              const shown = (n: Element | null) => {
+                while (n && (n as HTMLElement).offsetParent === null) n = n.previousElementSibling;
+                return n;
+              };
+              const after = (n: Element | null) => {
+                while (n && (n as HTMLElement).offsetParent === null) n = n.nextElementSibling;
+                return n;
+              };
+              const overlaps = [shown(td.previousElementSibling), after(td.nextElementSibling)]
+                .filter((n): n is Element => n != null)
+                .map((n) => n.getBoundingClientRect())
+                .some((o) => r.left < o.right - 1 && r.right > o.left + 1 && r.top < o.bottom && r.bottom > o.top);
               return {
                 inside: r.left >= cell.left - 1 && r.right <= cell.right + 1,
+                overlaps,
                 text: el.textContent,
               };
             });
+            expect(fit.overlaps, `button "${fit.text}" runs onto the cell beside it`).toBe(false);
             expect(fit.inside, `button "${fit.text}" is cut off`).toBe(true);
           }
           const page_ = await page.evaluate(() => ({
