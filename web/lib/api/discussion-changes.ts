@@ -61,7 +61,7 @@ export const KIND_LABEL: Record<string, string> = {
   entity_edit: "Edit a goal or decision",
   conflict_pick: "Settle a conflict",
   answer: "Answer a question",
-  basis_record: "Record a date basis",
+  basis_record: "Add a date source",
   priority_move: "Move a priority",
   priority_pin: "Pin a priority",
   ask_person: "Ask someone",

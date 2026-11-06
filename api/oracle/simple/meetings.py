@@ -887,7 +887,7 @@ def _plain_words(message: str, headings: dict[str, str] | None = None) -> str:
     """An importer message without its raw tokens ([c:key], {#sources}, section ids)."""
     for pattern, put in _RAW:
         message = pattern.sub(lambda m, put=put: put(m, headings), message)
-    return _sentence(message)
+    return _sentence(wording.date_words(message))
 
 
 def _days(days: list[str]) -> str:
