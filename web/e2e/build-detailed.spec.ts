@@ -210,7 +210,7 @@ for (const size of SIZES) {
     });
 
     test("QD4 fields: a new template is sections as fields, with Edit as Markdown kept", async ({ page }) => {
-      // protects=New template shows one row per section (heading, guide, In the brief), Sources
+      // protects=New template shows one row per section (heading, guide, Show in the brief), Sources
       // and data points last; the key is made from the name; a section is added; Edit as
       // Markdown shows the same template as checked text; Create template opens it;
       // fails_when=the page opens on raw Markdown or asks for a key; no_claim=changing a later version.
@@ -222,9 +222,9 @@ for (const size of SIZES) {
       await expect(sections).toHaveCount(3);
       await expect(page.getByLabel("Section 1 heading")).toHaveValue("Problem");
       await expect(page.getByTestId("template-sections")).toContainText("Sources and data points");
-      await expect(page.getByLabel("Key")).toHaveCount(0);
+      await expect(page.getByRole("textbox", { name: "Key" })).toHaveCount(0);
       await page.getByTestId("template-name").fill("Launch brief");
-      await expect(page.getByTestId("template-key")).toHaveText("Saved as launch-brief, made from the name.");
+      await expect(page.getByTestId("template-key")).toHaveText("Key: launch-brief");
       await page.getByRole("button", { name: "Add a section" }).click();
       await page.getByLabel("Section 4 heading").fill("Support readiness");
       await page.getByLabel("Section 4 guide").fill("Who answers the first questions, and with what.");

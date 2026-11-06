@@ -153,7 +153,8 @@ function HorizonsPanel() {
         title="Horizons"
         tools={
           <InfoTip label="horizons" side="bottom">
-            Roadmaps use these for Now, Next and Later. Runs already under way keep what they started with.
+            Roadmaps use these for Now, Next and Later. Runs already under way keep what they started with. Until
+            you change them, Save keeps the defaults.
           </InfoTip>
         }
       >
@@ -247,11 +248,8 @@ function HorizonsPanel() {
               <Button type="submit" variant="solid" disabled={busy || !(changed || setting.is_default)}>
                 Save
               </Button>
-              {!saved && !changed && (
-                <SaveHint testId="horizons-save-reason">
-                  {setting.is_default ? "Save keeps the default horizons." : "Change a horizon to save it."}
-                </SaveHint>
-              )}
+              {/* F-70: with the defaults, what Save does is in the (i). */}
+              {!saved && !changed && !setting.is_default && <SaveHint testId="horizons-save-reason">Change a horizon to save it.</SaveHint>}
               {saved && <SavedNote testId="horizons-saved" />}
               {!setting.is_default && (
                 <Button variant="ghost" disabled={busy} onClick={() => void reset()} className="ml-auto">
@@ -697,10 +695,23 @@ export default function CompanySettingsPage() {
   const readsBranding = can(BRANDING_OPS.get);
   return (
     <>
-      <PageHeader title="Company" status={capsReady && (readsSettings || readsBranding) && !canChange ? <ViewOnly /> : undefined} />
+      <PageHeader
+        title="Company"
+        status={
+          capsReady &&
+          !canChange &&
+          (readsSettings || readsBranding) && (
+            <span className="inline-flex items-center gap-1.5">
+              <ViewOnly />
+              {/* qa-onboarding-25, F-70: why, behind the (i), not a sentence on the page. */}
+              <InfoTip label="View only" align="start" side="bottom" testId="company-owner-only">
+                Only owners set horizons and the time zone.
+              </InfoTip>
+            </span>
+          )
+        }
+      />
       <div className="flex min-w-0 flex-col gap-4">
-        {/* qa-onboarding-25: a role that cannot change them (a Set up link, a shared link) reads why. */}
-        {capsReady && !canChange && <Notice testId="company-owner-only">Only owners set horizons and the time zone.</Notice>}
         {readsSettings && (
           <>
             <HorizonsPanel />

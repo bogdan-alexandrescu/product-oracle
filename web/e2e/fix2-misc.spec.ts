@@ -76,7 +76,8 @@ const autonomyRow = (page: Page, key: string) => page.getByTestId(`autonomy-row-
 const step = (page: Page, key: string, label: string) =>
   autonomyRow(page, key).getByRole("group").getByRole("button", { name: label, exact: true });
 
-// qa-settings-35: every row's control starts and ends at the same x, locked steps or not.
+// qa-settings-35: every row's control starts at the same x. F-71: a row with locked steps ends at
+// its last level, so only the rows that reach Act share one right edge, near the row's own.
 test("autonomy: every level control lines up, right-aligned", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await login(page);
@@ -87,16 +88,25 @@ test("autonomy: every level control lines up, right-aligned", async ({ page }) =
     els.map((e) => {
       const r = e.getBoundingClientRect();
       const li = e.closest("li")!.getBoundingClientRect();
-      return { x: Math.round(r.left), right: Math.round(r.right), rowRight: Math.round(li.right) };
+      const full = [...e.querySelectorAll("button")].some((b) => b.textContent?.trim() === "Act");
+      return { x: Math.round(r.left), right: Math.round(r.right), rowRight: Math.round(li.right), full };
     }),
   );
   expect(boxes.length).toBeGreaterThan(3);
   expect(new Set(boxes.map((b) => b.x)).size).toBe(1);
-  expect(new Set(boxes.map((b) => b.right)).size).toBe(1);
-  // Right-aligned: the control ends near its row's right edge.
-  for (const b of boxes) expect(b.rowRight - b.right).toBeLessThan(40);
-  // The vision row has locked steps and still matches the rest.
-  await expect(step(page, "vision", "Act")).toBeDisabled();
+  const full = boxes.filter((b) => b.full);
+  expect(full.length).toBeGreaterThan(2);
+  expect(new Set(full.map((b) => b.right)).size).toBe(1);
+  // Right-aligned: an unlocked row's control ends near its row's right edge.
+  for (const b of full) expect(b.rowRight - b.right).toBeLessThan(40);
+  // The vision row has locked steps left out: its strip ends at Draft, in a full row's Draft column.
+  await expect(step(page, "vision", "Act")).toHaveCount(0);
+  const strip = (await autonomyRow(page, "vision").getByRole("group").boundingBox())!;
+  const draft = (await step(page, "vision", "Draft").boundingBox())!;
+  const fullDraft = (await step(page, "priorities", "Draft").boundingBox())!;
+  expect(Math.abs(strip.x + strip.width - (draft.x + draft.width))).toBeLessThan(3);
+  expect(Math.abs(draft.x - fullDraft.x)).toBeLessThan(2);
+  expect(strip.x + strip.width).toBeLessThan(full[0].right - 20);
 });
 
 // qa-settings-36: clicking the level already set does nothing; Act's limits have their own button.
@@ -143,22 +153,31 @@ test("webhooks and trash: their empty states explain themselves", async ({ page 
 });
 
 // qa-settings-46: Project ID with where to find it, the key's hint, and why Save waits.
+// qa-f-72: both hints sit behind their field's (i), not loose text on the page.
 test("analytics: the PostHog form says where to find each value and why Save waits", async ({ page }) => {
   await login(page);
   await settings(page, "analytics");
   const form = page.getByTestId("analytics-posthog");
   await expect(form.getByText("Project ID", { exact: true })).toBeVisible();
   await expect(form).not.toContainText("Project id");
-  await expect(form.getByLabel("Project ID")).toHaveAccessibleDescription("Find it in PostHog › Project settings.");
-  await expect(form.getByLabel("Personal API key")).toHaveAccessibleDescription(
-    "Make one in PostHog › Account settings › Personal API keys.",
-  );
+  await form.getByRole("button", { name: "About where to find the project" }).click();
+  await expect(form.getByRole("tooltip").filter({ hasText: "Find it in PostHog › Project settings." })).toBeVisible();
+  await form.getByRole("button", { name: "About where to find the project" }).click();
+  await form.getByRole("button", { name: "About making a key" }).click();
+  await expect(
+    form.getByRole("tooltip").filter({ hasText: "Make one in PostHog › Account settings › Personal API keys." }),
+  ).toBeVisible();
+  await form.getByRole("button", { name: "About making a key" }).click();
   const save = form.getByRole("button", { name: "Save" });
   await expect(save).toHaveAttribute("data-variant", "primary");
   await expect(save).toBeDisabled();
   await expect(form.getByTestId("analytics-save-why")).toBeVisible();
   await form.getByLabel("Project ID").fill("67890");
   await form.getByLabel("Personal API key").fill("phx_example_key_for_tests");
+  // Owner's decision (Nov 5): with nothing saved no host is picked for them; Save waits for one.
+  await expect(save).toBeDisabled();
+  await expect(form.getByTestId("analytics-save-why")).toHaveText("Pick a host to save.");
+  await form.getByLabel("Host").selectOption({ label: "EU" });
   await expect(save).toBeEnabled();
   await expect(form.getByTestId("analytics-save-why")).toHaveCount(0);
 });

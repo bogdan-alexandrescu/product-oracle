@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { entryText, itemKind } from "@/components/ArtifactMenu";
-import { Button, Chip, Empty, InfoTip, Notice, PageHeader, Panel, toast } from "@/components/ds";
+import { entrySummary, entryText, itemKind, itemTitle } from "@/components/ArtifactMenu";
+import { Button, Chip, confirmInPage, Empty, InfoTip, Notice, PageHeader, Panel, toast } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { artifactsChanged } from "@/lib/artifacts";
 import { formatDateTime } from "@/lib/format";
@@ -13,7 +13,10 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 
 type Entry = Schemas["TrashEntryOut"];
 
-function Row({ e, onRestored }: { e: Entry; onRestored: () => void }) {
+/** F-68: deletes an entry for good now (owners; DELETE /v1/trash/{entry_id}). */
+const purge = (e: Entry) => unwrap(api.DELETE("/v1/trash/{entry_id}", { params: { path: { entry_id: e.id } } }));
+
+function Row({ e, mayPurge, onGone }: { e: Entry; mayPurge: boolean; onGone: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function restore() {
@@ -22,8 +25,28 @@ function Row({ e, onRestored }: { e: Entry; onRestored: () => void }) {
     try {
       await unwrap(api.POST("/v1/trash/{entry_id}/restore", { params: { path: { entry_id: e.id } } }));
       artifactsChanged();
-      toast({ message: `Restored ${entryText(e.root, e.items)}` });
-      onRestored();
+      toast({ message: `Restored ${entrySummary(e.root, e.items)}` });
+      onGone();
+    } catch (err) {
+      setError(errorMessage(err));
+      setBusy(false);
+    }
+  }
+  async function deleteForGood() {
+    const ok = await confirmInPage({
+      title: `Delete ${itemTitle(e.root, e.root.title)} for good?`,
+      message: e.items.length ? `${entryText(e.root, e.items)} go for good. This cannot be undone.` : "It goes for good. This cannot be undone.",
+      action: "Delete for good",
+      destructive: true,
+    });
+    if (!ok) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await purge(e);
+      artifactsChanged();
+      toast({ message: `Deleted for good: ${entrySummary(e.root, e.items)}` });
+      onGone();
     } catch (err) {
       setError(errorMessage(err));
       setBusy(false);
@@ -31,22 +54,25 @@ function Row({ e, onRestored }: { e: Entry; onRestored: () => void }) {
   }
   return (
     <li data-testid="trash-entry" className="flex flex-wrap items-start gap-x-4 gap-y-2 px-4 py-3 max-[600px]:px-3">
-      <div className="min-w-0 flex-1">
+      {/* Below 600px the buttons take their own line under the text, so a name never squeezes. */}
+      <div className="min-w-0 flex-1 max-[600px]:basis-full">
         <p className="flex flex-wrap items-baseline gap-x-2">
           {/* port-an-decisions: one list, each entry's kind as a chip (Document, Feature, Agenda item, Request, ...). */}
           <Chip kind="line" data-testid="trash-kind">
             {itemKind(e.root)}
           </Chip>
           {/* A feature's code before its name ("F-26 Alert rules engine"), as the roadmap reads it. */}
-          <span className="min-w-0 font-semibold break-words">{e.root.code ? `${e.root.code} ${e.root.title}` : e.root.title}</span>
+          <span className="min-w-0 font-semibold break-words">{e.root.code ? `${e.root.code} ${e.root.title}` : itemTitle(e.root, e.root.title)}</span>
           {e.published && <Chip kind="warn">Was published</Chip>}
         </p>
         {e.items.length > 0 && (
           <ul aria-label={`Went with ${e.root.title}`} className="mt-1 flex flex-col gap-0.5 text-sm">
             {e.items.map((i) => (
               <li key={i.id} className="flex min-w-0 items-baseline gap-2">
-                <span className="flex-none text-[13px] text-text2">{itemKind(i)}</span>
-                <span className="min-w-0 break-words">{i.title}</span>
+                {/* A run's title says it is a run ("The run of Oct 17 that wrote …"). */}
+                {i.type !== "run" && <span className="flex-none text-[13px] text-text2">{itemKind(i)}</span>}
+                {/* F-69: a run by the same title the delete dialog gave it. */}
+                <span className="min-w-0 break-words">{itemTitle(i, e.root.title)}</span>
               </li>
             ))}
           </ul>
@@ -66,6 +92,11 @@ function Row({ e, onRestored }: { e: Entry; onRestored: () => void }) {
             Restore
           </Button>
         )}
+        {mayPurge && (
+          <Button variant="ghost" aria-label={`Delete ${e.root.title} for good`} disabled={busy} onClick={() => void deleteForGood()}>
+            Delete for good
+          </Button>
+        )}
       </div>
     </li>
   );
@@ -79,6 +110,38 @@ export default function TrashPage() {
   const { can, loading } = useMe();
   const sees = can("list_trash");
   const q = useQuery(sees ? "trash" : "trash|none", () => (sees ? unwrap(api.GET("/v1/trash")) : Promise.resolve([] as Entry[])));
+  const mayPurge = can("purge_trash_entry");
+  const [emptying, setEmptying] = useState(false);
+  const [emptyError, setEmptyError] = useState<string | null>(null);
+  // F-68: every entry for good, at once (owners).
+  async function emptyTrash() {
+    const rows = q.data ?? [];
+    const names = rows.map((e) => (e.root.code ? `${e.root.code} ${e.root.title}` : itemTitle(e.root, e.root.title)));
+    const what = names.length > 3 ? `${names.length} deleted items` : names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
+    const along = rows.reduce((n, e) => n + e.items.length, 0);
+    const ok = await confirmInPage({
+      title: "Empty Trash?",
+      message: `Everything here goes for good: ${what}${along ? `, and the ${along} ${along === 1 ? "item" : "items"} that went with ${rows.length === 1 ? "it" : "them"}` : ""}. This cannot be undone.`,
+      action: "Empty Trash",
+      destructive: true,
+    });
+    if (!ok) return;
+    setEmptying(true);
+    setEmptyError(null);
+    try {
+      for (const e of rows) {
+        await purge(e);
+        q.setData((all) => all?.filter((r) => r.id !== e.id));
+      }
+      toast({ message: "Trash is empty" });
+    } catch (err) {
+      setEmptyError(errorMessage(err));
+    } finally {
+      // Even when one fails partway, what did go is gone: other pages refresh their counts.
+      artifactsChanged();
+      setEmptying(false);
+    }
+  }
   return (
     <>
       <PageHeader
@@ -86,15 +149,27 @@ export default function TrashPage() {
         info={
           <InfoTip label="Trash" align="start" side="bottom">
             Deleted artifacts wait here for 30 days, with everything that went with them. Restore brings them back
-            together; after 30 days they are gone for good.
+            together; Delete for good, or 30 days, ends them.
           </InfoTip>
         }
       />
       {!loading && !sees ? (
         <Notice>Only owners delete and restore artifacts.</Notice>
       ) : (
-        <Panel title="Deleted" count={q.data?.length}>
+        <Panel
+          title="Deleted"
+          count={q.data?.length}
+          tools={
+            mayPurge &&
+            !!q.data?.length && (
+              <Button variant="ghost" disabled={emptying} onClick={() => void emptyTrash()}>
+                Empty Trash
+              </Button>
+            )
+          }
+        >
           {q.error && <Notice tone="error">{q.error}</Notice>}
+          {emptyError && <Notice tone="error">{emptyError}</Notice>}
           {q.data && q.data.length === 0 && (
             <Empty testId="trash-empty">
               <span className="inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
@@ -120,7 +195,7 @@ export default function TrashPage() {
           {q.data && q.data.length > 0 && (
             <ul className="divide-y divide-line">
               {q.data.map((e) => (
-                <Row key={e.id} e={e} onRestored={() => q.setData((rows) => rows?.filter((r) => r.id !== e.id))} />
+                <Row key={e.id} e={e} mayPurge={mayPurge} onGone={() => q.setData((rows) => rows?.filter((r) => r.id !== e.id))} />
               ))}
             </ul>
           )}

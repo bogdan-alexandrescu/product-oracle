@@ -38,12 +38,18 @@ export function AnalyticsSettings() {
   if (q.error) return <ErrorNote>{q.error}</ErrorNote>;
   if (!a) return <Loading />;
   const connected = a.status !== "disconnected";
-  const storedHost = a.host ?? "eu";
-  const hostChoice = host ?? (storedHost in CLOUD ? storedHost : "own");
-  const ownValue = ownHost ?? (storedHost in CLOUD ? "" : storedHost);
+  // Owner's decision (Nov 5): with nothing saved no host is picked for them ("Pick a host").
+  const storedHost = a.host ?? "";
+  const hostChoice = host ?? (!storedHost || storedHost in CLOUD ? storedHost : "own");
+  const ownValue = ownHost ?? (!storedHost || storedHost in CLOUD ? "" : storedHost);
   const projectValue = project ?? a.project_id ?? "";
-  // Why Save waits, in a few words, until both are there.
-  const missing = !projectValue.trim()
+  const hostValue = hostChoice === "own" ? ownValue.trim() : hostChoice;
+  // Why Save waits, in a few words, until a host, the project and a key are there.
+  const missing = !hostChoice
+    ? "Pick a host to save."
+    : !hostValue
+      ? "Add the server address to save."
+      : !projectValue.trim()
     ? key.trim()
       ? "Add the project ID to save."
       : "Add the project ID and a key to save."
@@ -74,7 +80,7 @@ export function AnalyticsSettings() {
     run(() =>
       unwrap(
         api.PUT("/v1/company-integrations/analytics", {
-          body: { provider: "posthog", host: hostChoice === "own" ? ownValue.trim() : hostChoice, project_id: projectValue.trim(), api_key: key.trim() },
+          body: { provider: "posthog", host: hostValue, project_id: projectValue.trim(), api_key: key.trim() },
         }),
       ),
     );
@@ -99,7 +105,16 @@ export function AnalyticsSettings() {
           </InfoTip>
         }
       />
-      <Panel title="PostHog" testId="analytics-posthog">
+      <Panel
+        title="PostHog"
+        testId="analytics-posthog"
+        tools={
+          // qa-f-72: the page's own explanation sits behind the panel's (i), not loose text.
+          <InfoTip label="PostHog">
+            Oracle reads each metric&apos;s weekly value with a query in your PostHog project. Use a personal API key that may only read queries.
+          </InfoTip>
+        }
+      >
         <div className="flex max-w-xl flex-col gap-3 px-4 py-3">
           <p className="text-[15px] font-semibold" data-testid="analytics-state">
             {connectionText(a)}
@@ -111,46 +126,39 @@ export function AnalyticsSettings() {
             </p>
           )}
           {a.last_error && <ErrorNote>{a.last_error}</ErrorNote>}
-          <p className="text-sm text-text2">
-            Oracle reads each metric&apos;s weekly value with a query in your PostHog project. Use a personal API key that may only read queries.
-          </p>
           <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
             Host
-            <select className={INPUT} value={hostChoice} onChange={(e) => setHost(e.target.value)}>
-              <option value="us">US cloud</option>
-              <option value="eu">EU cloud</option>
-              <option value="own">Own host</option>
+            <select aria-label="Host" className={INPUT} value={hostChoice} onChange={(e) => setHost(e.target.value)}>
+              <option value="" disabled>
+                Pick a host
+              </option>
+              <option value="us">US</option>
+              <option value="eu">EU</option>
+              <option value="own">Your own server</option>
             </select>
           </label>
           {hostChoice === "own" && (
             <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
-              Own host address
+              Server address
               <input className={INPUT} value={ownValue} placeholder="https://posthog.example.com" onChange={(e) => setOwnHost(e.target.value)} />
             </label>
           )}
+          {/* qa-f-72: each field's own hint behind its (i), the tip outside the <label> so
+              the control keeps the label text as its exact accessible name. */}
           <div className="flex flex-col gap-1">
-            <label htmlFor="posthog-project" className="text-sm font-semibold text-text2">
-              Project ID
-            </label>
-            <input
-              id="posthog-project"
-              className={INPUT}
-              value={projectValue}
-              inputMode="numeric"
-              aria-describedby="posthog-project-hint"
-              onChange={(e) => setProject(e.target.value)}
-            />
-            <span id="posthog-project-hint" className="text-[13px] text-text2">
-              Find it in PostHog › Project settings.
+            <span className="flex items-center gap-1.5 text-sm font-semibold text-text2">
+              <label htmlFor="posthog-project">Project ID</label>
+              <InfoTip label="where to find the project">Find it in PostHog › Project settings.</InfoTip>
             </span>
+            <input id="posthog-project" className={INPUT} value={projectValue} inputMode="numeric" onChange={(e) => setProject(e.target.value)} />
           </div>
           <div className="flex flex-col gap-1">
-            <label htmlFor="posthog-key" className="text-sm font-semibold text-text2">
-              Personal API key
-            </label>
+            <span className="flex items-center gap-1.5 text-sm font-semibold text-text2">
+              <label htmlFor="posthog-key">Personal API key</label>
+              <InfoTip label="making a key">Make one in PostHog › Account settings › Personal API keys.</InfoTip>
+            </span>
             <input
               id="posthog-key"
-              aria-describedby="posthog-key-hint"
               className={INPUT}
               type="password"
               autoComplete="off"
@@ -158,15 +166,12 @@ export function AnalyticsSettings() {
               placeholder={connected ? "Replace key" : ""}
               onChange={(e) => setKey(e.target.value)}
             />
-            <span id="posthog-key-hint" className="text-[13px] text-text2">
-              Make one in PostHog › Account settings › Personal API keys.
-            </span>
           </div>
           {error && <ErrorNote>{error}</ErrorNote>}
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="primary"
-              disabled={busy || !key.trim() || !projectValue.trim()}
+              disabled={busy || !!missing}
               aria-describedby={missing ? "posthog-save-why" : undefined}
               onClick={save}
             >

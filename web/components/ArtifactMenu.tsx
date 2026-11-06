@@ -48,15 +48,30 @@ export function itemKind(i: TrashItem): string {
   return KIND_LABEL[i.kind] ?? i.kind;
 }
 
-/** "Usage alerts PRD and 2 more": a Trash entry in a line. */
-export function entryText(root: TrashItem, items: TrashItem[]): string {
-  return items.length ? `${root.title} and ${items.length} more` : root.title;
-}
-
 /** qa4-docs-26: "The run of Oct 17 that wrote Early shipping cost: engineering spec". */
 function runText(r: TrashItem, root: string): string {
   const day = r.created_at ? ` of ${formatDay(r.created_at)}` : "";
   return `The run${day} that wrote ${r.wrote ?? root}`;
+}
+
+/** F-69: an item's one title, in the delete dialog and in Trash alike (a run by its day and what it wrote). */
+export function itemTitle(i: TrashItem, root: string): string {
+  return i.type === "run" ? runText(i, root) : i.title;
+}
+
+/** F-68: "Usage alerts PRD, Its spec and The run of Oct 17 that wrote Usage alerts PRD": a Trash entry
+ * in a line, every item named. */
+export function entryText(root: TrashItem, items: TrashItem[]): string {
+  const names = [root.type === "run" ? itemTitle(root, root.title) : root.title, ...items.map((i) => itemTitle(i, root.title))];
+  return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
+}
+
+/** A toast's few words for a Trash entry: "Usage alerts PRD and 3 items that went with it"; a
+ * feature by its code and name ("F-26 Alert rules engine"), as its Trash row reads it. */
+export function entrySummary(root: TrashItem, items: TrashItem[]): string {
+  const name = root.code ? `${root.code} ${root.title}` : root.type === "run" ? itemTitle(root, root.title) : root.title;
+  const n = items.length;
+  return n ? `${name} and ${n} ${n === 1 ? "item" : "items"} that went with it` : name;
 }
 
 /** Undo (= Restore) right after a delete, from the toast. */
@@ -64,7 +79,7 @@ async function undo(entry: Schemas["TrashEntryOut"]) {
   try {
     await unwrap(api.POST("/v1/trash/{entry_id}/restore", { params: { path: { entry_id: entry.id } } }));
     artifactsChanged();
-    toast({ message: `Restored ${entryText(entry.root, entry.items)}` });
+    toast({ message: `Restored ${entrySummary(entry.root, entry.items)}` });
   } catch (e) {
     toast({ message: errorMessage(e) });
   }
@@ -242,7 +257,7 @@ export function DeleteDialog({
       const entry = await remove({ reason: reason.trim() || null, confirm_published: deps?.published || undefined });
       artifactsChanged();
       onClose();
-      toast({ message: `Moved to Trash: ${entryText(entry.root, entry.items)}`, action: { label: "Undo", onClick: () => void undo(entry) } });
+      toast({ message: `Moved to Trash: ${entrySummary(entry.root, entry.items)}`, action: { label: "Undo", onClick: () => void undo(entry) } });
       onDeleted?.();
     } catch (e) {
       setError(errorMessage(e));

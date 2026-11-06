@@ -74,7 +74,7 @@ for (const [name, viewport] of [
       const card = page.getByTestId("branding-panel");
       const field = card.getByLabel("Display name");
       await expect(field).toHaveValue("");
-      await expect(card.getByTestId("brand-name-hint")).toHaveText("Exports print no company name until you add one.");
+      await expect(card.getByTestId("brand-name-hint")).toHaveAccessibleDescription("Exports print no company name until you add one.");
       await card.getByLabel("Accent").fill("#0369a1");
       await card.getByRole("button", { name: "Save branding" }).click();
       await expect(card.getByRole("alert")).toContainText("display name");
