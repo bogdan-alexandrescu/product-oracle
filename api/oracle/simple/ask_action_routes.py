@@ -231,6 +231,10 @@ NOT_OFFERED: frozenset[str] = frozenset(
         "list_simple_tracks",
         "pick_goal_metric",
         "reopen_strategy_finding",
+        # Port AN 5's routes (the one waiting list, Simple's one-pager list): not offered until
+        # allowed by name.
+        "get_simple_roadmap_waiting",
+        "list_simple_one_pagers",
         # This line's routes AN did not have (the Goal map, Current state, Fit a date, Trash,
         # goal archive, a replaced PRD's carried parts; train AQ's request and decision Trash
         # and the meeting agenda sheet): not offered until allowed by name.
