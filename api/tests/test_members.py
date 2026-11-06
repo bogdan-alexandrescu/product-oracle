@@ -204,6 +204,14 @@ V2 = V.replace("{n}", "2")
 MATRIX: list[tuple[str, str, str, dict]] = [
     ("GET", "/v1/documents", "viewer", {}),
     ("GET", "/v1/documents/{doc}", "viewer", {}),
+    # prd-order: an owner moves a PRD in the company PRD order, or puts places back (Undo).
+    ("POST", "/v1/documents/{doc}/move", "owner", {"json": {"to": "up"}}),
+    (
+        "PUT",
+        "/v1/documents/prd-order",
+        "owner",
+        {"json": {"positions": [{"document_id": "00000000-0000-4000-8000-000000000001"}]}},
+    ),
     # H8: on an update (only an update's visibility changes); approvers to approvers.
     (
         "PATCH",
@@ -294,6 +302,8 @@ PAST_THE_ROLE = {
     ("POST", "/v1/access-requests/{request_id}/reopen"): {"approver": 409, "owner": 409},
     # Only an expired token is removed; the world's is active.
     ("POST", "/v1/api-tokens/{token_id}/remove"): {"owner": 409},
+    # No PRD has that id: past the role, the Undo names none it can put back.
+    ("PUT", "/v1/documents/prd-order"): {"owner": 404},
 }
 
 

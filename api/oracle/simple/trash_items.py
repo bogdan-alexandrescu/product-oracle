@@ -363,6 +363,8 @@ async def trash_goal(
     for :func:`after_restore`. Its order, measure, target and due stay on it."""
     from oracle.simple import goal_buckets
 
+    # G-4: Trash says how many features served it, so Restore's words name what comes back.
+    served = len({e.src_id for e in await goal_buckets._links(db) if e.dst_id == goal.id})
     extra: dict[str, Any] = {"to_goal_id": None, "links": [], "goal_ids": {}}
     if to_goal_id is not None:
         before = await goal_buckets.move_off(db, goal, to_goal_id)
@@ -375,7 +377,7 @@ async def trash_goal(
             row.goal_ids = ids if to_goal_id in ids else [to_goal_id, *ids]
         extra = {"to_goal_id": str(to_goal_id), "goal_ids": goal_ids,
                  "links": [snap.model_dump(mode="json") for snap in before]}  # fmt: skip
-    return await _new_entry(db, principal, goal, [goal], extra, reason)
+    return await _new_entry(db, principal, goal, [goal], {**extra, "features": served}, reason)
 
 
 async def before_restore(db: AsyncSession, entry: TrashEntry) -> None:

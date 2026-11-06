@@ -274,6 +274,8 @@ export function trashGoal(db: GoalBucketsDb, bin: GoalBucketsTrash, id: string, 
   const g = db.goals.find((x) => x.id === id && !x.trashed);
   if (!g) return json(404, { detail: "No such goal" });
   if (to && !db.goals.some((x) => x.id === to && !x.archived && !x.trashed && x.id !== g.id)) return json(422, { detail: "Pick another goal" });
+  // G-4: the features that served it, which Trash says come back with it.
+  const features = db.features.filter((f) => f.goal_ids.includes(g.id)).length;
   const before = to ? moveOff(db, g, to) : [];
   g.trashed = true;
   const at = bin.now();
@@ -285,7 +287,7 @@ export function trashGoal(db: GoalBucketsDb, bin: GoalBucketsTrash, id: string, 
   const row: TrashEntryRow = {
     out: {
       id: crypto.randomUUID(),
-      root: { type: "goal", id: g.id, slug: g.key, title: g.title, kind: "goal", code: null },
+      root: { type: "goal", id: g.id, slug: g.key, title: g.title, kind: "goal", code: null, features, meeting: null },
       items: [], deleted_by: bin.id, deleted_by_name: bin.name, deleted_at: at, reason,
       published: false, purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString(),
     },

@@ -47998,6 +47998,10 @@ export interface components {
             created_at?: string | null;
             /** Wrote */
             wrote?: string | null;
+            /** Features */
+            features?: number | null;
+            /** Meeting */
+            meeting?: string | null;
         };
         /**
          * TrashedOut

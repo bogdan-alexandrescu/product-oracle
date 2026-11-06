@@ -31,7 +31,7 @@ test("Fireflies picker: meeting days, times and From/To in the Company time zone
   await expect(form.getByLabel("Connection")).toHaveValue(/.+/);
   const picker = form.getByTestId("fireflies-picker");
   const zone = picker.getByTestId("fireflies-timezone");
-  await expect(zone).toContainText("Pacific/Auckland");
+  await expect(zone).toContainText("New Zealand Time (Auckland)");
   await expect(zone).not.toContainText("UTC");
 
   await picker.getByRole("button", { name: "Choose" }).click();

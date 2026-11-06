@@ -61,12 +61,12 @@ async function pickRequest(page: Page, title: string) {
   await expect(inspector(page).getByRole("heading", { name: title })).toBeVisible();
 }
 
-/** Links the request to the first PRD offered; returns that PRD's title. */
+/** Links the request to a PRD with no run under way (one with a run cannot go to Trash); returns its title. */
 async function linkFirstPrd(page: Page, title: string): Promise<string> {
   await openRequests(page);
   await pickRequest(page, title);
   const select = inspector(page).getByLabel("Linked PRD");
-  await select.selectOption({ index: 1 });
+  await select.selectOption({ label: "Checkout redesign PRD" });
   const prd = (await select.locator("option:checked").innerText()).trim();
   await inspector(page).getByRole("button", { name: "Save links" }).click();
   await expect(inspector(page).getByRole("link", { name: prd })).toBeVisible();

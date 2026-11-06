@@ -111,7 +111,7 @@ for (const scheme of ["light", "dark"] as const) {
         await expect(page.getByTestId("gm-guardrail")).toContainText("Pages load in under 2 seconds");
         await expect(page.getByTestId("ld-goal")).toHaveText([/Goal 1Teams stay past their first year/, /Goal 2New teams set up in one day/, /Goal 3Larger teams add paid seats/, /Goal 4Half the support tickets per team/]);
         await expect(page.getByTestId("ld-milestone")).toHaveCount(12);
-        await expect(page.getByTestId("ld-milestone").first()).toContainText("M1Weekly active teams baseline set");
+        await expect(page.getByTestId("ld-milestone").first()).toContainText("M1Weekly active teams first measured");
         // F-03 waits on F-02, and three features wait on it.
         await expect(card(page, "F-03").getByTestId("ld-counts")).toHaveText("←13→");
         await expect(page.getByTestId("ld-arrow")).toHaveCount(0);
@@ -274,6 +274,13 @@ for (const scheme of ["light", "dark"] as const) {
   test.describe(`phone ${scheme}`, () => {
     test.use(PHONE);
 
+    test("Goal 3's measure row is whole on a phone", async ({ page }) => {
+      // protects=ld1-a-phone's goal card; fails_when=the numbers or the pill wrap; no_claim=layout beside them.
+      await open(page, scheme);
+      await page.getByRole("tab", { name: "Goal 3" }).click();
+      await expectMeasureRowWhole(page.getByTestId("ld-goal"));
+    });
+
     test("one goal at a time; Edit ladder's Move to… opens a sheet", async ({ page }) => {
       // protects=ld1-a-phone, ld3-b-phone: no canvas on a phone, the goal picked from Goal 1 to
       // Goal 4 with its milestones and their features; while editing, no grips, and Move to…
@@ -299,6 +306,20 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(m6.getByTestId("ld-feature").filter({ hasText: "F-15" })).toHaveCount(1);
     });
   });
+}
+
+/** The goal card's measure row: its numbers and its status pill are each one line tall. */
+async function expectMeasureRowWhole(goal: ReturnType<Page["locator"]>) {
+  const row = goal.getByTestId("ld-goal-measure");
+  const numbers = row.getByTestId("ld-goal-numbers");
+  const pill = row.getByTestId("ld-goal-status");
+  await expect(pill).toHaveText("Too early");
+  const line = await numbers.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight));
+  expect((await numbers.boundingBox())!.height).toBeLessThanOrEqual(line + 1);
+  expect((await pill.boundingBox())!.height).toBeLessThanOrEqual(line + 1);
+  const card = (await goal.boundingBox())!;
+  const right = (await pill.boundingBox())!;
+  expect(right.x + right.width).toBeLessThanOrEqual(card.x + card.width);
 }
 
 /** The opacity a person sees on an element: its own times every ancestor's. */
@@ -336,7 +357,7 @@ test.describe("visual QA fixes (L-1 to L-8), 1440 light", () => {
     await card(page, "F-03").getByTestId("ld-open").click();
     const panel = page.getByTestId("gm-feature-panel");
     await expect(panel.getByTestId("card-goal")).toContainText("Teams stay past their first year");
-    await expect(panel).toContainText("M1 Weekly active teams baseline set");
+    await expect(panel).toContainText("M1 Weekly active teams first measured");
   });
 
   test("L-3: a commenter's suggested link shows on the card, and Undo takes it back", async ({ page }) => {
@@ -437,5 +458,80 @@ test.describe("visual QA fixes, phone light", () => {
     expect(g.y).toBeGreaterThan(tabs.y);
     expect(g.height).toBeLessThan(30);
     expect((await page.getByTestId("ld-goal").boundingBox())!.y).toBeLessThan(360);
+  });
+});
+
+test.describe("Goal ladder findings: numbers, first view, week captions, 1440", () => {
+  test.use({ viewport: SIZES[1440] });
+
+  test("numbers on the goal and milestone cards carry a thousands separator", async ({ page }) => {
+    // protects=the rest of the app's "$11,200 of $20,000"; fails_when=a card prints "$11200 of
+    // $20000" or "$10000"; no_claim=the guardrail's tooltip reading.
+    await open(page, "light");
+    await expect(page.getByTestId("ld-goal").filter({ hasText: "Larger teams add paid seats" })).toContainText("$11,200 of $20,000");
+    const m7 = page.getByTestId("ld-milestone").filter({ hasText: "M7" });
+    await expect(m7).toContainText("$10,000 of $10,000");
+    await expect(page.getByTestId("ld-milestone").filter({ hasText: "M9" })).toContainText("— of $20,000");
+    await expect(page.getByTestId("ld-goal").first()).toContainText("81% of 88%");
+  });
+
+  for (const scheme of ["light", "dark"] as const) {
+    test(`Goal 3's measure row keeps its numbers on one line and its pill whole, ${scheme}`, async ({ page }) => {
+      // protects=ld1-d-rest: "$11,200 of $20,000" and the status pill read whole on the 184 px
+      // goal card; fails_when=the numbers wrap onto two lines or "Too early" breaks into two;
+      // no_claim=whether the pill sits beside the numbers or under them.
+      await open(page, scheme);
+      await expectMeasureRowWhole(page.getByTestId("ld-goal").filter({ hasText: "Larger teams add paid seats" }));
+    });
+  }
+
+  test("a short screen opens with the whole ladder in view, the strip above it still showing", async ({ page }) => {
+    // protects=ld1-d-rest at 1440: the canvas is on screen when the page opens, not below the
+    // fold where its own wheel-pan holds the page still; fails_when=the canvas ends below the
+    // viewport (this run uses 1440 x 800, where the owner's fonts at 1440 x 900 also overflow);
+    // no_claim=the exact scroll.
+    await page.setViewportSize({ width: 1440, height: 800 });
+    await open(page, "light");
+    await expect(page.getByTestId("ld-zoom")).toBeVisible();
+    const canvas = (await page.getByTestId("ld-canvas").boundingBox())!;
+    expect(canvas.y).toBeGreaterThanOrEqual(0);
+    expect(canvas.y + canvas.height).toBeLessThanOrEqual(800);
+    expect((await page.getByTestId("ld-periods").boundingBox())!.y).toBeGreaterThanOrEqual(0);
+    await expect(page.getByTestId("ld-zoom")).toBeInViewport();
+  });
+
+  test("picking a card half out of the canvas brings it fully into view", async ({ page }) => {
+    // protects=ld2-a-select: the picked card and its arrows are what the person looks at;
+    // fails_when=the pick leaves the card under the canvas edge; no_claim=how far it moves.
+    await open(page, "light");
+    await reveal(page, card(page, "F-03"));
+    const canvas = await area(page);
+    const b = (await card(page, "F-03").boundingBox())!;
+    // Pan until the card's top half sits under the canvas' bottom edge.
+    await pan(page, canvas.y + canvas.height - 24 - b.y);
+    const half = (await card(page, "F-03").boundingBox())!;
+    expect(half.y + half.height).toBeGreaterThan(canvas.y + canvas.height);
+    await page.mouse.click(half.x + half.width / 2, half.y + 8);
+    await expect(page.getByTestId("ld-arrow").first()).toBeVisible();
+    const after = (await card(page, "F-03").boundingBox())!;
+    const box = (await page.getByTestId("ld-canvas").boundingBox())!;
+    expect(after.y).toBeGreaterThanOrEqual(box.y);
+    expect(after.y + after.height).toBeLessThanOrEqual(box.y + box.height);
+  });
+
+  test("V-6: the week strip's captions name the whole milestone and never end on a small word", async ({ page }) => {
+    // protects=ld1-d-rest's strip: "M9 Seat revenue of $20,000" with the full name as its title;
+    // fails_when=a caption is cut ("M9 Seat revenue of $20,000 per") with no way to read the rest;
+    // no_claim=where the captions sit.
+    await open(page, "light");
+    const m2 = page.getByTestId("ld-week-mark").filter({ hasText: "M2 Renewal" });
+    await expect(m2).toHaveAttribute("title", /M2 Renewal rate at 85% for spring renewals/);
+    const m9 = page.getByTestId("ld-week-mark").filter({ hasText: "M9 Seat" });
+    await expect(m9).toHaveText("M9 Seat revenue of $20,000");
+    await expect(m9).toHaveAttribute("title", /M9 Seat revenue of \$20,000 per month/);
+    // Wrapped, not clipped: no caption is wider than its box.
+    for (const mark of await page.getByTestId("ld-week-mark").all()) {
+      expect(await mark.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    }
   });
 });

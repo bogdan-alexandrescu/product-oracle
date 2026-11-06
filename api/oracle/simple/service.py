@@ -52,7 +52,7 @@ from oracle.roadmap.models import (
     TrackMilestone,
 )
 from oracle.simple import approved_roadmap, constraints, dates, plan_strip
-from oracle.simple.models import RoadmapDateSuggestion, SimpleVisual
+from oracle.simple.models import MilestoneFeature, RoadmapDateSuggestion, SimpleVisual
 from oracle.simple.schemas import (
     DateSuggestionOut,
     SimpleDate,
@@ -420,6 +420,7 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
         else:
             bases_by_ref[(b.prd_document_id, b.tracker_key)].append(b)
     goals = await _goals(db, {r.feature_id for r in rows if r.feature_id})
+    ladder = await _ladder_goals(db, {r.id for r in rows})
     effort = await efforts(db, rows)
     # S7: the goals items are linked to directly (dropped on, suggested for).
     linked = {
@@ -482,6 +483,7 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 # one-feature-panel: a goal the item is linked to directly (set in its
                 # panel, dropped on, suggested for) wins over its feature's.
                 goal=next((linked[g] for g in row.goal_ids or [] if g in linked), None)
+                or ladder.get(row.id)
                 or (goals.get(row.feature_id) if row.feature_id else None),
                 goal_ids=[g for g in row.goal_ids or [] if g in linked],
                 window=window,
@@ -746,6 +748,31 @@ async def _goals(db: AsyncSession, features: set[uuid.UUID]) -> dict[uuid.UUID, 
     ).all()
     for edge_src, goal in sorted(found, key=lambda row: goal_sort_key(row[1])):
         out.setdefault(edge_src, goal)
+    return out
+
+
+async def _ladder_goals(db: AsyncSession, items: set[uuid.UUID]) -> dict[uuid.UUID, Entity]:
+    """Item id -> the goal it serves on the Goal map and its ladder (pre-demo QA P-6): the goal
+    of a goal milestone it is linked to (MilestoneFeature), the first in the one goal order."""
+    out: dict[uuid.UUID, Entity] = {}
+    if not items:
+        return out
+    found = (
+        await db.execute(
+            select(MilestoneFeature.item_id, Entity)
+            .join(TrackMilestone, TrackMilestone.id == MilestoneFeature.milestone_id)
+            .join(Entity, Entity.id == TrackMilestone.goal_id)
+            .where(
+                MilestoneFeature.item_id.in_(items),
+                TrackMilestone.deleted_at.is_(None),
+                TrackMilestone.status != "dropped",
+                Entity.type == "goal",
+                Entity.status == "confirmed",
+            )
+        )
+    ).all()
+    for item_id, goal in sorted(found, key=lambda row: goal_sort_key(row[1])):
+        out.setdefault(item_id, goal)
     return out
 
 

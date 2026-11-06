@@ -82,12 +82,12 @@ test("qa-simple-home-19: the phone's More sheet has a title, close button, handl
   await expect(scrim).toBeVisible();
   expect(await scrim.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toMatch(/^rgba\(0, 0, 0, 0\)$|transparent/);
 
-  // Sized to its content: the sheet ends just under its links (Goal map, Priorities, Meetings).
+  // Sized to its content: the sheet ends just under its links (Goal map, Priorities, Meetings, Inbox).
   const s = await box(sheet);
   const links = sheet.getByRole("link");
-  await expect(links).toHaveText([/^Goal map/, /^Priorities/, /^Meetings/]);
-  // Two to a row: the third starts the second row; the sheet ends under it and beside the second.
-  const last = await box(links.nth(2));
+  await expect(links).toHaveText([/^Goal map/, /^Priorities/, /^Meetings/, /^Inbox/]);
+  // Two to a row: the fourth ends the second row; the sheet ends under it and beside the second.
+  const last = await box(links.nth(3));
   const rowEnd = await box(links.nth(1));
   expect(s.y + s.height - (last.y + last.height)).toBeLessThanOrEqual(16);
   expect(s.x + s.width - (rowEnd.x + rowEnd.width)).toBeLessThanOrEqual(16);

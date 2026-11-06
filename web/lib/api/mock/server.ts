@@ -191,9 +191,9 @@ import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROW
 import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { knowPrdOrder } from "./prd-rank";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
-import { applyFitDate, knowGoalMapItems, ownPrd, seedFitDateRoadmap } from "./simple-roadmap";
+import { applyFitDate, knowGoalMapItems, ownPrd, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, MAP_GOALS, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
-import { goalMapIdOf, goalMapItems, routeGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
+import { goalMapGoals, goalMapIdOf, goalMapItems, routeGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
@@ -4585,9 +4585,11 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
   const company = () => db.documents.find((d) => d.company_roadmap && d.kind === "roadmap");
   const ref = (d: DocumentRow) => ({ id: d.id, slug: d.slug, title: d.title });
   // simple-replaced-prds: GET /v1/simple/one-pagers, as GET /v1/documents?kind=prd without a PRD
-  // marked replaced (Simple shows the PRDs that replaced it; Detailed keeps it as history); newest first.
+  // marked replaced (Simple shows the PRDs that replaced it; Detailed keeps it as history), in the
+  // company PRD order as list_documents(db, "prd") gives them.
   if (p[1] === "simple" && p[2] === "one-pagers" && !p[3] && m === "GET") {
-    return json(200, db.documents.filter((d) => d.kind === "prd" && !(d.replaced_by ?? []).length && canSee(me.role, d.visibility)).map((d) => documentSummary(db, d)).sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at)));
+    const ranks = prdOrder(db);
+    return json(200, db.documents.filter((d) => d.kind === "prd" && !(d.replaced_by ?? []).length && canSee(me.role, d.visibility)).map((d) => documentSummary(db, d, ranks)).sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity)));
   }
   if (p[1] === "roadmaps" && p[2] === "company" && !p[3]) {
     if (m === "GET") {
@@ -7369,6 +7371,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     }, () => db.baseline.entities.filter((e) => e.type === "goal"));
     // one-feature-panel: the map's features are roadmap items (their panel opens on their own item).
     if (db.goal_map) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
+    // pre-demo QA P-6: the panel reads the goal each feature serves on the map (one link, service._ladder_goals).
+    if (db.goal_map && db.simple_roadmap) db.simple_roadmap.map_goals = goalMapGoals(db.goal_map, db.baseline.entities.filter((e) => e.type === "goal"));
     // goal-ladder: add_item may name any confirmed goal by its id (additions._where), as Home's goals are the map's.
     if (db.goal_map) for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") MAP_GOALS[e.id] = e.title;
     if (goalMapRes) return goalMapRes;
@@ -7780,6 +7784,14 @@ async function route(db: Db, req: Request): Promise<Response> {
     return json(200, prds.map((d) => documentSummary(db, d, after)));
   }
   const doc = findDocument(db, p[2]);
+  // simple-prd-calm-page: the seeded one-pager's PRD, which the mock keeps only as its one-pager,
+  // reads as the API's version of it: the sections the page is built from (the whole PRD under it).
+  const op = db.simple_one_pager;
+  if (!doc && op && (op.doc.slug === p[2] || op.doc.id === p[2]) && p[3] === "versions" && Number(p[4]) === op.version && !p[5] && m === "GET") {
+    const row = { id: op.doc.id, slug: op.doc.slug, title: op.doc.title, kind: "prd" } as DocumentRow;
+    const sections = op.sections.map((x) => ({ key: x.key, level: 2, heading: x.heading, body: x.body }));
+    return json(200, versionOut(db, buildVersion(row, { number: op.version, created_at: "2026-10-20T09:00:00Z", sections, citations: [] })));
+  }
   if (!doc) return notFound("Document");
   if (p.length === 3) {
     return json(200, documentOut(db, doc));
@@ -8290,6 +8302,10 @@ export async function mockFetch(req: Request): Promise<Response> {
   const next = queue.then(async () => {
     const db = load();
     const marks = db.webhooks?.hooks.length ? runMarks(db.runs?.runs) : null;
+    // simple-roadmap-500-paint: the roadmap and its waiting counts read the 500 items once while
+    // the roadmap's data is the same; every other call reads afresh.
+    const roadmapRead = req.method === "GET" && (url.pathname === "/v1/simple/roadmap" || url.pathname === "/v1/simple/roadmap/waiting");
+    roadmapReadsAt(roadmapRead);
     let res = await route(db, req);
     // home-waiting-one-list: the waiting list's items, read from the routes each kind lives on.
     if (req.method === "GET" && url.pathname === "/v1/simple/decisions/waiting" && res.ok) res = await withWaitingItems(db, req, res);

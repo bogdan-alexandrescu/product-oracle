@@ -226,7 +226,8 @@ test.describe("phone", () => {
     await openList(page);
     await scrollToEnd(page);
     const last = page.getByTestId("document-row").last();
-    await expect(last).toContainText("Usage alerts PRD");
+    // prd-order: the list keeps the company PRD order, whose last PRD is Visit reminders.
+    await expect(last).toContainText("Visit reminders");
     await aboveTabBar(page, last.locator("[data-status]"));
     await aboveTabBar(page, last.getByRole("link", { name: /^v\d+$/ }));
   });
