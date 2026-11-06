@@ -44356,6 +44356,139 @@
         "x-min-role": "approver"
       }
     },
+    "/v1/simple/goal-map/links/move": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Move Feature Link",
+        "description": "goal-ladder: a feature moved to another milestone's work (Edit ladder).",
+        "operationId": "move_feature_link",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveLinkIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalMapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/simple/goal-map/place-card": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Place Card",
+        "description": "goal-ladder place_card: where this person put a card on the canvas (viewers too: a\nplace is their own view and never changes data).",
+        "operationId": "place_card",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalMapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/goal-map/places": {
+      "delete": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Tidy Up",
+        "description": "goal-ladder Tidy up: this person's cards back where the ladder places them.",
+        "operationId": "tidy_up",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalMapOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/simple/goal-map/goals/{goal_id}/metric": {
       "post": {
         "tags": [
@@ -82367,6 +82500,18 @@
             ],
             "title": "Due"
           },
+          "due_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due On"
+          },
           "days": {
             "items": {
               "anyOf": [
@@ -82453,6 +82598,31 @@
         ],
         "title": "GmOffMap",
         "description": "A confirmed goal left off the map: it has no number to aim at yet."
+      },
+      "GmPlace": {
+        "properties": {
+          "feature": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Feature"
+          },
+          "x": {
+            "type": "number",
+            "title": "X"
+          },
+          "y": {
+            "type": "number",
+            "title": "Y"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feature",
+          "x",
+          "y"
+        ],
+        "title": "GmPlace",
+        "description": "goal-ladder: where this person put a feature's card on the canvas (place_card);\nnever data: the feature's milestones and goal stay as they are."
       },
       "GmUnplaced": {
         "properties": {
@@ -83076,6 +83246,11 @@
             "type": "string",
             "title": "Today"
           },
+          "today_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Today On"
+          },
           "reps": {
             "anyOf": [
               {
@@ -83101,6 +83276,14 @@
           "can_edit": {
             "type": "boolean",
             "title": "Can Edit"
+          },
+          "places": {
+            "items": {
+              "$ref": "#/components/schemas/GmPlace"
+            },
+            "type": "array",
+            "title": "Places",
+            "default": []
           }
         },
         "type": "object",
@@ -83114,6 +83297,7 @@
           "unplaced",
           "off_map",
           "today",
+          "today_on",
           "reps",
           "approver",
           "can_edit"
@@ -97179,6 +97363,33 @@
         ],
         "title": "MoveIn"
       },
+      "MoveLinkIn": {
+        "properties": {
+          "feature": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Feature"
+          },
+          "from_milestone": {
+            "type": "string",
+            "format": "uuid",
+            "title": "From Milestone"
+          },
+          "to_milestone": {
+            "type": "string",
+            "format": "uuid",
+            "title": "To Milestone"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feature",
+          "from_milestone",
+          "to_milestone"
+        ],
+        "title": "MoveLinkIn",
+        "description": "goal-ladder: a feature's link moved from one milestone to another (Edit ladder)."
+      },
       "MyAccountOut": {
         "properties": {
           "user_id": {
@@ -101437,6 +101648,47 @@
           "snapshot_id"
         ],
         "title": "PinnedVersion"
+      },
+      "PlaceIn": {
+        "properties": {
+          "feature": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Feature"
+          },
+          "x": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100000.0,
+                "minimum": -100000.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "y": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100000.0,
+                "minimum": -100000.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feature"
+        ],
+        "title": "PlaceIn",
+        "description": "goal-ladder place_card: a card's place on this person's canvas; null x and y put it\nback where the ladder places it."
       },
       "PlanCounts": {
         "properties": {

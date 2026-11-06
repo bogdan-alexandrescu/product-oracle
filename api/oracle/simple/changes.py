@@ -954,6 +954,8 @@ async def loop_of(
     if not keys:
         return None
     ignore = ignore or set()
+    # goal-ladder: each item named by its code and name, as the read names it.
+    await service.item_codes(db, list(by_id.values()))
     feature_keys = await company.feature_keys_of(db, [e.row for e in by_id.values()])
     wanted = {k.lower() for k in keys}
     for d in by_id.values():
