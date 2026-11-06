@@ -196,11 +196,28 @@ const LONG_GOAL_FEATURES: FeatureSeed[] = [
   longGoal("F-13", "Usage report for workspace owners", [{ goal: "g.long-churn", title: PG2, weight: 2, contribution: 2 }], ["F-4", "F-7", "F-8", "F-11"], 2, 0.5),
   longGoal("F-14", "Project templates for agencies", [{ goal: "g.long-first-project", title: PG1, weight: 3, contribution: 1 }, { goal: "g.long-churn", title: PG2, weight: 2, contribution: 1 }], ["F-3", "F-9", "F-10"], 3, 0.6),
 ];
-// The features of the scenario in use, read each time: the shared list is never changed.
-const featureSeeds = (): FeatureSeed[] =>
-  typeof localStorage !== "undefined" && localStorage.getItem(MOCK_SCENARIO_KEY) === LONG_GOALS_SCENARIO
-    ? [...FEATURES, ...LONG_GOAL_FEATURES]
-    : FEATURES;
+// B-19: the "large" company ranks many features (invented, on the seeded goals).
+const LARGE_AREAS = ["Billing", "Search", "Reports", "Sharing", "Mobile", "Alerts", "Imports", "Exports"];
+const LARGE_ASKS = ["filters", "history", "shortcuts", "bulk edit", "reminders"];
+const LARGE_FEATURES: FeatureSeed[] = LARGE_AREAS.flatMap((area, a) =>
+  LARGE_ASKS.map((ask, i): FeatureSeed => ({
+    key: `F-${100 + a * LARGE_ASKS.length + i}`,
+    title: `${area} ${ask}`,
+    status: "proposed",
+    goals: [i % 2 ? { goal: "g.paid-conversion", title: G2, weight: 2, contribution: 1 + (a % 3) } : { goal: "g.activation", title: G1, weight: 3, contribution: 1 + (i % 3) }],
+    depends_on: [],
+    evidence: [],
+    attrs: { effort: 1 + ((a + i) % 4), reach: 300 * (1 + i + a), impact: 1 + (a % 3), confidence: 0.4 + 0.1 * (i % 5), business_value: 2 + (a % 6), time_criticality: 1 + (i % 4), risk_reduction: 1 + (a % 2), job_size: 1 + ((a + i) % 4), moscow: "could" },
+  })),
+);
+// The features of the scenario in use, read each time: the shared list is never changed. A new
+// company ("empty") has none yet; the "large" one many (B-19).
+const featureSeeds = (): FeatureSeed[] => {
+  const scenario = typeof localStorage !== "undefined" ? localStorage.getItem(MOCK_SCENARIO_KEY) : null;
+  if (scenario === "empty") return [];
+  if (scenario === "large") return [...FEATURES, ...LARGE_FEATURES];
+  return scenario === LONG_GOALS_SCENARIO ? [...FEATURES, ...LONG_GOAL_FEATURES] : FEATURES;
+};
 const round = (n: number) => Math.round(n * 1000) / 1000;
 const num = (v: unknown): number | null => {
   if (typeof v === "number") return v;

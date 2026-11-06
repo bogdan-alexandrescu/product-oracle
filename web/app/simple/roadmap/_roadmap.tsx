@@ -390,7 +390,7 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onRe
       {working
         .filter((d) => d.status === "submitted" && d.can_approve)
         .map((d) => (
-          <p key={d.id} className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm" data-testid="draft-approval">
+          <p key={d.id} tabIndex={-1} className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 rounded text-sm focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-accent" data-testid="draft-approval" data-draft-id={d.id}>
             <span className="min-w-0">
               {d.document.title}
               {d.version ? ` version ${d.version}` : ""} is waiting for your approval
@@ -956,6 +956,21 @@ export function SimpleRoadmap() {
       else if (dated) setPop({ id: dated.id, ...barAnchor(wrap.current, dated.id) });
     });
   }, [data, byId, params]);
+  // The Inbox's Open on a version waiting for my approval (?draft=<id>): once the roadmap and
+  // its drafts are read, the banner's line for that draft comes into sight, focused, with its
+  // Approve; with no such line (approved since, or not mine to approve), the banner itself.
+  const draftLinked = useRef(false);
+  useEffect(() => {
+    const id = params.get("draft");
+    if (draftLinked.current || !id || !data || !drafts.data) return;
+    draftLinked.current = true;
+    requestAnimationFrame(() => {
+      const line = document.querySelector<HTMLElement>(`[data-testid="draft-approval"][data-draft-id="${CSS.escape(id)}"]`);
+      const el = line ?? document.querySelector<HTMLElement>('[data-testid="draft-banner"]');
+      el?.scrollIntoView({ block: "center" });
+      line?.focus({ preventScroll: true });
+    });
+  }, [params, data, drafts.data]);
   const goalLinked = useRef(false);
   useEffect(() => {
     const asked = params.get("suggestions");

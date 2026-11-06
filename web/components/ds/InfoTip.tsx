@@ -14,6 +14,7 @@ export function InfoTip({
   align = "end",
   side = "top",
   hero = false,
+  testId = "info-tip",
 }: {
   /** What the tip is about; the button's name is "About <label>". */
   label: string;
@@ -23,6 +24,8 @@ export function InfoTip({
   side?: "top" | "bottom";
   /** On a dark Inspector head. */
   hero?: boolean;
+  /** The (i) button's test id, where a page tells one tip from another. */
+  testId?: string;
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -30,41 +33,49 @@ export function InfoTip({
   const root = useRef<HTMLSpanElement>(null);
   const tip = useRef<HTMLSpanElement>(null);
   const shown = open || pinned;
-  // Keep an open tip inside the viewport, or inside a scrolling panel that clips it (the
-  // Inspector), with a 12 px margin: narrow it to the room there, then shift it in.
-  // qa-docs-19: `flip` puts it on the other side when the window has no room on its own.
-  const [fit, setFit] = useState<{ shift: number; width?: number; flip?: boolean }>({ shift: 0 });
+  // The open tip is fixed to the window, placed beside its (i), so a cell or panel that cuts
+  // off what overflows it (a truncated table cell, the Inspector) never clips it, and it
+  // paints above the rows round it. It stays inside the window with a 12 px margin: narrowed
+  // to the room there, then shifted in. qa-docs-19: `flip` puts it on the other side when
+  // the window has no room on its own.
+  const [flip, setFlip] = useState(false);
 
   useLayoutEffect(() => {
-    if (!shown || !tip.current) {
-      setFit({ shift: 0 });
+    const el = tip.current;
+    if (!shown || !el || !root.current) {
+      setFlip(false);
       return;
     }
-    let lo = 0;
-    let hi = document.documentElement.clientWidth;
-    for (let el = root.current?.parentElement; el && el !== document.body; el = el.parentElement) {
-      if (getComputedStyle(el).overflowX !== "visible") {
-        const r = el.getBoundingClientRect();
-        lo = Math.max(lo, r.left);
-        hi = Math.min(hi, r.right);
-        break;
-      }
-    }
-    lo += 12;
-    hi -= 12;
-    const box = tip.current.getBoundingClientRect();
-    const width = Math.min(box.width, hi - lo);
-    // Unshifted, the tip keeps the edge `align` names next to the (i).
-    const left = align === "end" ? box.right - fit.shift - width : box.left - fit.shift;
-    const shift = left < lo ? lo - left : left + width > hi ? hi - (left + width) : 0;
-    // Cut off by the window's top (bottom) edge, with more room on the other side of the (i).
-    const view = document.documentElement.clientHeight;
-    const at = root.current?.getBoundingClientRect();
-    const flip = !!at && (side === "top" ? box.top < 0 && view - at.bottom > at.top : box.bottom > view && at.top > view - at.bottom);
-    setFit({ shift, width: width < box.width ? width : undefined, flip });
-    // Measured once per opening; fitting does not re-measure.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shown]);
+    const place = () => {
+      const at = root.current?.getBoundingClientRect();
+      if (!at) return;
+      const vw = document.documentElement.clientWidth;
+      const vh = document.documentElement.clientHeight;
+      Object.assign(el.style, { left: "0px", top: "0px", maxWidth: "" });
+      // A transformed ancestor makes itself the fixed tip's frame: measure that frame's offset.
+      const base = el.getBoundingClientRect();
+      const width = Math.min(base.width, vw - 24);
+      if (width < base.width) el.style.maxWidth = `${width}px`;
+      const height = el.getBoundingClientRect().height;
+      // Unshifted, the tip keeps the edge `align` names 12 px past the (i).
+      const want = align === "end" ? at.right + 12 - width : at.left - 12;
+      const left = Math.min(Math.max(want, 12), vw - 12 - width);
+      const above = at.top - 10 - height;
+      const below = at.bottom + 10;
+      const flipped = side === "top" ? above < 0 && vh - at.bottom > at.top : below + height > vh && at.top > vh - at.bottom;
+      const top = (side === "top") !== flipped ? above : below;
+      Object.assign(el.style, { left: `${left - base.left}px`, top: `${top - base.top}px` });
+      setFlip(flipped);
+    };
+    place();
+    // Kept beside its (i) as the page or a panel scrolls, or the window resizes.
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [shown, align, side]);
 
   useEffect(() => {
     if (!shown) return;
@@ -101,7 +112,7 @@ export function InfoTip({
         aria-label={`About ${label}`}
         aria-describedby={id}
         aria-expanded={shown}
-        data-testid="info-tip"
+        data-testid={testId}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
         onClick={() => setPinned((p) => !p)}
@@ -122,15 +133,9 @@ export function InfoTip({
         ref={tip}
         id={id}
         role="tooltip"
-        data-side={(side === "top") !== !!fit.flip ? "top" : "bottom"}
+        data-side={(side === "top") !== flip ? "top" : "bottom"}
         hidden={!shown}
-        style={{
-          ...(fit.shift ? { transform: `translateX(${fit.shift}px)` } : {}),
-          ...(fit.width ? { maxWidth: fit.width } : {}),
-        }}
-        className={`absolute z-50 w-max max-w-[min(380px,calc(100vw-24px))] rounded-button bg-tip px-3.5 py-2.5 text-left text-sm leading-5 font-normal tracking-normal whitespace-normal text-tip-text not-italic shadow-tip ${
-          (side === "top") !== !!fit.flip ? "bottom-[calc(100%+10px)]" : "top-[calc(100%+10px)]"
-        } ${align === "end" ? "-right-3" : "-left-3"}`}
+        className="fixed z-50 w-max max-w-[min(380px,calc(100vw-24px))] rounded-button bg-tip px-3.5 py-2.5 text-left text-sm leading-5 font-normal tracking-normal whitespace-normal text-tip-text not-italic shadow-tip"
       >
         {children}
       </span>

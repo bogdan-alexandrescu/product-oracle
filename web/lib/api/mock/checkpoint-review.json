@@ -30,7 +30,7 @@
             "code": "unverified_date",
             "severity": "blocking",
             "label": "Date unverified",
-            "text": "No verified estimate, capacity or commitment supports 2026-11-30.",
+            "text": "No verified estimate, capacity or commitment supports Nov 30, 2026.",
             "data": { "date": "2026-11-30" },
             "fixes": [{ "label": "Remove date", "action": { "kind": "edit", "item": "slack-alerts", "field": "milestone_date", "value": null } }]
           }

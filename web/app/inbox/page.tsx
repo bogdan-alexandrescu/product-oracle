@@ -238,7 +238,7 @@ function InboxTabs({
   /** The tab changed: what was settled in place moves on. */
   onTabChange: () => void;
 }) {
-  const count = (st: InboxState) => rows.filter((r) => r.counted && r.state === st).length;
+  const count = (st: InboxState) => rows.filter((r) => r.counted && r.state === st).reduce((n, r) => n + (r.size ?? 1), 0);
   // qa-company-2: the Inbox opens on the tab that holds what waits: New when it has items,
   // else Seen (what I have seen and not handled yet), so "11 waiting" never opens on "Nothing new".
   const [chosen, setTab] = useState<InboxState>(() => (count("new") === 0 && count("open") > 0 ? "open" : "new"));

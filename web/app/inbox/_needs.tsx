@@ -80,6 +80,10 @@ export type Need = {
   children?: Need[];
   /** The parent's key, on a child row. */
   childOf?: string;
+  /** B-22: how many items the row stands for (a group of checkpoints counts each of its runs). */
+  size?: number;
+  /** B-22: its children stay folded until "Show runs" opens them. */
+  folded?: boolean;
 };
 
 /**
@@ -217,7 +221,14 @@ export function NeedTable({
 }) {
   const headingId = useId();
   const [shown, setShown] = useState<ReadonlySet<string>>(new Set());
+  const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(new Set());
   if (rows.length === 0) return null;
+  const unfold = (key: string) =>
+    setUnfolded((s) => {
+      const next = new Set(s);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
   const toggle = (key: string) =>
     setShown((s) => {
       const next = new Set(s);
@@ -225,7 +236,17 @@ export function NeedTable({
       return next;
     });
   // D9: each row's children right under it (Home passes none).
-  const flat = rows.flatMap((r) => [r, ...(r.children ?? []).map((c) => ({ ...c, childOf: r.key }))]);
+  // B-22: a folded group shows its runs once opened, its toggle where an action would be.
+  const flat = rows.flatMap((r) => {
+    if (!r.folded) return [r, ...(r.children ?? []).map((c) => ({ ...c, childOf: r.key }))];
+    const open = unfolded.has(r.key);
+    const action = (
+      <Button aria-expanded={open} onClick={() => unfold(r.key)} data-testid="checkpoint-group-toggle">
+        {open ? "Hide runs" : "Show runs"}
+      </Button>
+    );
+    return [{ ...r, action }, ...(open ? (r.children ?? []).map((c) => ({ ...c, childOf: r.key })) : [])];
+  });
   const drawn = flat.map((n) =>
     n.quote
       ? {
@@ -1299,11 +1320,83 @@ function baselineLabel(title: string, summary: { need_you: number; blocking: num
   return `${title}: ${parts.join(", ")}`;
 }
 
+/** A group's name where the stop's own label says baseline: people read the Ground Truth. */
+const GROUP_LABEL: Partial<Record<InboxOut["checkpoints"][number]["kind"], string>> = { baseline_confirm: "Confirm the Ground Truth" };
+
+/**
+ * B-22: three or more runs of one flow waiting at the same stop read as one row, "Confirm the
+ * Ground Truth · 11 runs", each run under it with its own action. A row with its own rows under
+ * it (a Roadmap items review) stays as it is. The group is New while any of its runs is new: its
+ * new runs show under New, its seen runs under Seen, each tab counting the runs it lists; a
+ * part of fewer than three runs is its runs' own rows, never a group.
+ */
+function groupCheckpoints(rows: InboxOut["checkpoints"], needs: Need[], seenBefore: string | null | undefined): Need[] {
+  const keyOf = (c: InboxOut["checkpoints"][number]) => [c.kind, c.flow, c.can_decide].join("|");
+  const byKey = new Map<string, Need[]>();
+  needs.forEach((n, i) => {
+    if (n.children?.length) return;
+    const key = keyOf(rows[i]);
+    byKey.set(key, [...(byKey.get(key) ?? []), n]);
+  });
+  const done = new Set<string>();
+  return needs.flatMap((n, i) => {
+    const same = n.children?.length ? [] : byKey.get(keyOf(rows[i]))!;
+    if (same.length < 3) return [n];
+    if (done.has(same[0].key)) return [];
+    done.add(same[0].key);
+    const c = rows[i];
+    const parts = [
+      { state: "new", runs: same.filter((x) => isNew(x.at, seenBefore)) },
+      { state: "open", runs: same.filter((x) => !isNew(x.at, seenBefore)) },
+    ].filter((p) => p.runs.length > 0);
+    return parts.flatMap(({ state, runs }) => {
+      if (runs.length < 3) return runs.map((x) => ({ ...x, state }));
+      const members = rows.filter((r) => runs.some((x) => x.key === r.id));
+      const docs = new Set(members.map((r) => r.document_title ?? r.document_slug));
+      const where = docs.size === 1 && members[0].document_title ? `${c.flow_title} · ${members[0].document_title}` : c.flow_title;
+      const title = `${GROUP_LABEL[c.kind] ?? CHECKPOINT_LABEL[c.kind]} · ${plural(runs.length, "run")}`;
+      const latest = runs.map((x) => x.at ?? "").sort().at(-1) || null;
+      return {
+        ...n,
+        key: `checkpoint-group-${same[0].key}-${state}`,
+        item: (
+          <span className="truncate" data-testid="checkpoint-group" title={title}>
+            {title}
+          </span>
+        ),
+        context: (
+          <span className="block truncate" title={where}>
+            {where}
+          </span>
+        ),
+        at: latest,
+        left: null,
+        action: null,
+        state,
+        size: runs.length,
+        folded: true,
+        // Each run keeps its own line and Open; its context names the run.
+        children: runs.map((x) => ({ ...x, state })),
+      };
+    });
+  });
+}
+
 /**
  * The Inbox's rows, each with its action. `compact` (Home) gives an overrun, a stuck run and
  * a failed import one action that opens the run, where the rest are.
  */
-export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compact = false, fixed?: FixedHere, perms: Perms = ALL, onActed?: OnActed) {
+export function inboxNeeds(
+  inbox: InboxOut,
+  busy: string | null,
+  act: Act,
+  compact = false,
+  fixed?: FixedHere,
+  perms: Perms = ALL,
+  onActed?: OnActed,
+  /** When I last saw the Inbox: a group of checkpoints splits into its new and seen runs. */
+  seenBefore?: string | null,
+) {
   // What the signed-in person may do on a run (qa-company-3): its starter may manage it too.
   const may = (op: Operation, r: { created_by?: string | null }) => perms.can(op, !!perms.userId && r.created_by === perms.userId);
   // D3: a console approval held while blocking problems are open waits for a review.
@@ -1715,7 +1808,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
     action: openRun(r),
   }));
 
-  return { checkpoints, deliveries, approvals, overruns, lookups, imports, noDocuments, searches, revising };
+  return { checkpoints: compact ? checkpoints : groupCheckpoints(inbox.checkpoints, checkpoints, seenBefore), deliveries, approvals, overruns, lookups, imports, noDocuments, searches, revising };
 }
 
 /**
@@ -2072,7 +2165,7 @@ export function allNeeds(
   /** What the signed-in person may do (usePerms): rows draw only those actions. */
   perms: Perms = ALL,
 ): StatedNeed[] {
-  const n = inboxNeeds(inbox, busy, act, compact, fixed, perms, onActed);
+  const n = inboxNeeds(inbox, busy, act, compact, fixed, perms, onActed, seenBefore);
   // A row may carry its own state and count (a question answered in place: ./_questions).
   const launches = launchNeeds(inbox);
   const requests = requestNeeds(inbox, busy, act);
@@ -2185,6 +2278,8 @@ export function decisionNeeds(inbox: InboxOut, busy: string | null, act: Act, se
 
 /** What the rail badge counts: the new and open items. */
 export const waitingNeeds = (rows: StatedNeed[]) => rows.filter((r) => r.counted && (r.state === "new" || r.state === "open"));
+/** B-22: how many items wait, a group of checkpoints counting each of its runs. */
+export const waitingCount = (rows: StatedNeed[]) => waitingNeeds(rows).reduce((n, r) => n + (r.size ?? 1), 0);
 
 // --- F2 Track health: one row per track, its open alerts under it -----------------------
 

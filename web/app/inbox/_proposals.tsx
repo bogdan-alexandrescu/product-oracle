@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 
-import { Button, LinkButton } from "@/components/ds";
+import { Button, Chip, InfoTip, LinkButton } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { calendarDay } from "@/lib/dates";
 import { formatDateRange, formatDateTime } from "@/lib/format";
 
 import { isNew, type Act, type StatedNeed } from "./_needs";
@@ -128,6 +129,13 @@ export function proposalRows(proposals: Proposal[], busy: string | null, act: Ac
  * dates and why; Open goes to the item on its roadmap with the suggestion open, where it is
  * accepted, edited or dismissed.
  */
+/**
+ * B-15: the planning horizon's last day, by the owner's rule (no roadmap states its own end).
+ * A suggested date after it is a long guess: it carries a Far out chip.
+ */
+// A roadmap's own horizon end replaces this once the API carries one.
+export const PLANNING_HORIZON_END = "2027-02-28";
+
 export function dateSuggestionRows(rows: DateSuggestion[], seenBefore: string | null | undefined): StatedNeed[] {
   return rows.map((s) => ({
     key: `date-suggestion-${s.id}`,
@@ -138,6 +146,18 @@ export function dateSuggestionRows(rows: DateSuggestion[], seenBefore: string | 
         <FeatureName name={s.item_title} itemId={s.item_id} documentId={s.document_id} />
         <span className="block basis-full text-sm break-words whitespace-normal text-text2" data-testid="date-suggestion-context">
           Oracle suggests {formatDateRange(s.start_date, s.end_date)}
+          {s.end_date > PLANNING_HORIZON_END && (
+            <>
+              {" "}
+              <Chip kind="warn" className="align-middle" data-testid="date-suggestion-far-out">
+                Far out
+              </Chip>{" "}
+              {/* Below its chip: over neither its own date line nor the row above's Open. */}
+              <InfoTip label="Far out" align="start" side="bottom" testId="date-suggestion-far-out-tip">
+                Low confidence, after the planning horizon ({calendarDay(PLANNING_HORIZON_END, { month: "short", day: "numeric", year: "numeric" })})
+              </InfoTip>
+            </>
+          )}
         </span>
       </>
     ),
@@ -193,7 +213,8 @@ export function goalSuggestionRows(rows: GoalSuggestion[], seenBefore: string | 
 /**
  * Simple S3b, inbox-meeting-proposals fix: roadmap versions from Simple drafts waiting for my
  * approval as a required reviewer (the API's `simple_approvals`): the roadmap by name, the
- * version, who sent it and when; Open goes to the roadmap, whose draft banner approves it.
+ * version, who sent it and when; Open goes to the roadmap at that draft (?draft=<id>, which the
+ * roadmap reads to bring its banner into sight), whose Approve approves it.
  */
 export function approvalRows(rows: Approval[], seenBefore: string | null | undefined): StatedNeed[] {
   return rows.map((a) => {
@@ -220,7 +241,7 @@ export function approvalRows(rows: Approval[], seenBefore: string | null | undef
       // An approval: listed and counted with approvals (Home's Approvals), not with proposals.
       group: "roadmap-approvals",
       action: (
-        <LinkButton href={`/simple/roadmap?roadmap=${a.document.id}&approve=${a.draft_id}`} aria-label={`Open ${what} to approve it`}>
+        <LinkButton href={`/simple/roadmap?roadmap=${a.document.id}&draft=${a.draft_id}`} aria-label={`Open ${what} to approve it`}>
           Open
         </LinkButton>
       ),
