@@ -428,7 +428,8 @@ async def rows(
     views = await plan.views(db, set(docs))
     pending = {}
     for c in await db.scalars(select(SimpleChange).where(
-            SimpleChange.op == "decide_question", SimpleChange.status == "proposed")):  # fmt: skip
+            SimpleChange.op == "decide_question", SimpleChange.status == "proposed")
+            .order_by(SimpleChange.at, SimpleChange.seq)):  # fmt: skip
         pending.setdefault(c.target.get("decision_id"), c)
     from oracle.simple import decision_sheet
 

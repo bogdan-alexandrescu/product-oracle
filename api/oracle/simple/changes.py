@@ -554,8 +554,45 @@ def _touched(c: SimpleChange) -> set[str]:
     return {str(c.target.get("item_id"))}
 
 
-async def _last_writer(db: AsyncSession, item_ids: set[str]) -> tuple[Any, Any]:
-    """(SimplePersonRef dict, when) of the last change through Simple that wrote these items."""
+# A conflict's field and the fields of a change that write it (as ``after`` names them).
+WRITES = {"status": {"status", "cut", "shipped"}, "goal_id": {"goal_id", "goal_ids"}}
+
+
+def _fields(current: dict[str, Any]) -> set[str] | None:
+    """The fields a conflict is about: ``current``'s, or its items' when keyed by item id;
+    None (any field) when it names none of an item's own."""
+    keys: set[str] = set()
+    for k, v in current.items():
+        keys |= set(v) if _is_id(k) and isinstance(v, dict) else {k}
+    if not keys or "dependents" in keys:
+        return None
+    return set().union(*(WRITES.get(k, {k}) for k in keys))
+
+
+def _is_id(key: str) -> bool:
+    try:
+        uuid.UUID(key)
+    except ValueError:
+        return False
+    return True
+
+
+def _writes(c: SimpleChange, item_ids: set[str], fields: set[str] | None) -> bool:
+    """Whether the change wrote one of these fields of one of these items."""
+    if not (_touched(c) & item_ids):
+        return False
+    if fields is None:
+        return True
+    if c.op in KEYED:
+        return any(fields & set(c.after.get(i) or {}) for i in item_ids)
+    return bool(fields & set(c.after))
+
+
+async def _last_writer(
+    db: AsyncSession, item_ids: set[str], fields: set[str] | None = None
+) -> tuple[Any, Any]:
+    """(SimplePersonRef dict, when) of the last change through Simple that wrote these
+    fields of these items (any field when None); a tie on when goes to the one made last."""
     rows = await db.scalars(
         select(SimpleChange)
         .where(SimpleChange.status.in_(WRITTEN))
@@ -566,14 +603,14 @@ async def _last_writer(db: AsyncSession, item_ids: set[str]) -> tuple[Any, Any]:
         )
         .limit(500)
     )
-    best: tuple[datetime, uuid.UUID] | None = None
+    best: tuple[datetime, int, uuid.UUID] | None = None
     for c in rows:
-        if not (_touched(c) & item_ids):
+        if not _writes(c, item_ids, fields):
             continue
         at = c.decided_at if c.status == "accepted" and c.decided_at else c.at
         who = c.decided_by if c.status == "accepted" and c.decided_by else c.by
-        if best is None or at > best[0]:
-            best = (at, who)
+        if best is None or (at, c.seq) > best[:2]:
+            best = (at, c.seq, who)
     # roadmap-edit-fixes: Oracle's draft of a new item (oracle.simple.additions) fills its
     # empty fields after the add: when that came last, Oracle changed it, not the person.
     from oracle.jobs.models import LlmJob
@@ -590,14 +627,14 @@ async def _last_writer(db: AsyncSession, item_ids: set[str]) -> tuple[Any, Any]:
                 return {"id": None, "name": ORACLE}, when
     if best is None:
         return None, None
-    names = await _names(db, {best[1]})
-    return {"id": str(best[1]), "name": names.get(best[1], "someone")}, best[0]
+    names = await _names(db, {best[2]})
+    return {"id": str(best[2]), "name": names.get(best[2], "someone")}, best[0]
 
 
 async def _conflict(
     db: AsyncSession, current: dict[str, Any], item_ids: set[str], lead: str
 ) -> ChangeError:
-    who, at = await _last_writer(db, item_ids)
+    who, at = await _last_writer(db, item_ids, _fields(current))
     name = who["name"] if who else "someone outside Simple"
     return ChangeError(
         409,
