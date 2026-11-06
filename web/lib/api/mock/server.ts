@@ -2869,7 +2869,7 @@ function sharesContext(db: Db, me: { id: string; role: Role } | null): SharesCon
       const sections = audienceSections(version.sections, audience, boardItems(db, version));
       // G-3: each goal and tracker code reads beside its name (as the API's render.code_names).
       const names = linkHolder
-        ? codeNames(version.sections.map((s) => s.body_md), db.baseline.entities.filter((e) => e.type === "goal"), [...(db.sharing_records?.[version.id] ?? []), ...(db.roadmap?.records ?? [])], db.roadmap?.items[version.id] ?? db.sharing_items?.[version.id] ?? [])
+        ? codeNames(version.sections.map((s) => s.body_md), db.baseline.entities.filter((e) => e.type === "goal"), [...(db.sharing_records?.[version.id] ?? []), ...(db.roadmap?.records ?? [])], db.roadmap?.items[version.id] ?? db.sharing_items?.[version.id] ?? [], AUDIENCES.find((a) => a.key === audience)?.item_fields)
         : {};
       return exportHtml(row, { ...version, sections: linkHolder ? readerSections(sections, boardItems(db, version), names) : sections }, db.branding, audienceLabel(audience), linkHolder);
     },

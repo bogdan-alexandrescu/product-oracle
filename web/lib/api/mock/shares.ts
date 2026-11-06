@@ -772,21 +772,23 @@ const GOAL_LINE = /^\s*[-*]\s*(G-?\d+)\b[\s.:]+(\S.*?)\s*$/gm;
 /**
  * G-3 (as the API's render.code_names): the name of each goal code and tracker key `texts` write: the roadmap's own
  * Goals list's words up to the measure ("- G1 Activation: 40% to 55% by Q4"), a confirmed goal entity's title by its
- * key (any case, with or without the dash) and a tracker issue's title when the version's own `items` carry its
- * record (the keys the page already shows through an item). A link holder reads no more than the page shows.
+ * key (any case, with or without the dash) and a tracker issue's title from the very record one of the version's own
+ * `items` carries, when the audience's `itemFields` show the items' tracker keys (the keys the page already shows
+ * through an item). A link holder reads no more than the page shows.
  */
 export function codeNames(
   texts: string[],
   goals: { key: string; title: string | null; status?: string }[],
   records: { external_ref: string; title?: string | null; item_key?: string | null; track_id?: string | null }[],
   items: { item_key: string; track_id?: string | null }[] = [],
+  itemFields: readonly string[] = [],
 ): Record<string, string> {
   const codes = new Set(texts.flatMap((t) => [...(t ?? "").matchAll(CODE)].map((m) => m[1])));
   if (!codes.size) return {};
   const out: Record<string, string> = {};
   for (const t of texts) for (const m of (t ?? "").matchAll(GOAL_LINE)) out[m[1]] = m[2].split(/:|\s[–—-]\s/)[0].trim();
   const carried = (r: (typeof records)[number]) => !!r.item_key && items.some((i) => i.item_key === r.item_key && (i.track_id ?? null) === (r.track_id ?? null));
-  for (const r of records) if (codes.has(r.external_ref) && r.title && carried(r)) out[r.external_ref] = r.title;
+  if (itemFields.includes("tracker")) for (const r of records) if (codes.has(r.external_ref) && r.title && carried(r)) out[r.external_ref] = r.title;
   const goalCodes = new Map([...codes].filter((c) => /^G-?\d+$/.test(c)).map((c) => [c.replace("-", "").toLowerCase(), c]));
   for (const g of goals) {
     const code = goalCodes.get((g.key ?? "").replace(/-/g, "").toLowerCase());
@@ -795,14 +797,21 @@ export function codeNames(
   return out;
 }
 
-/** G-3 (as the API's render.with_names): each code `names` knows read by its name with the code beside it ("Activation (G1)"). */
+/**
+ * G-3 (as the API's render.with_names): each code `names` knows read by its name with the code beside it ("Activation
+ * (G1)"); one already beside its name or inside its own name ("Issue ENG-413") stays, so a second pass changes nothing.
+ * A name reads on one line: each whitespace run in it is one space.
+ */
 export function withNames(text: string, names: Record<string, string>): string {
   if (!Object.keys(names).length) return text;
   return text.replace(CODE, (whole, code: string, at: number) => {
-    const name = names[code];
+    const name = (names[code] ?? "").trim().split(/\s+/).join(" ");
     if (!name || name === code || text.slice(at + whole.length).trimStart().startsWith(name)) return whole;
-    const shown = name.replace(/[\\|*_[\]`<>]/g, "\\$&");
-    return name.includes(code) ? shown : `${shown} (${code})`;
+    const shown = name.replace(/[\\|*_[\]`<>~]/g, "\\$&");
+    if (!name.includes(code)) return `${shown} (${code})`;
+    const cut = shown.indexOf(code);
+    const [before, after] = [shown.slice(0, cut), shown.slice(cut + code.length)];
+    return text.slice(0, at).endsWith(before) && text.slice(at + whole.length).startsWith(after) ? whole : shown;
   });
 }
 
