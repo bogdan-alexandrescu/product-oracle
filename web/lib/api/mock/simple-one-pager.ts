@@ -19,12 +19,13 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { planByMonth } from "@/lib/simple-home";
-import { planSlices } from "./simple-plan";
+import { PLAN_PRD_SLUG, planOut, planSlices } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { draftDecisionNotes, leftOut } from "./decision-notes";
 import { stableUuid } from "./ids";
 import { annotate, resolved, type Cites } from "./one-pager-checks";
+import { roadmapOut } from "./simple-roadmap";
 import { betSubject, flowFor, onePagerFlow, requestVisual, type VisualsDb } from "./simple-visuals";
 
 type Role = Schemas["Me"]["role"];
@@ -50,6 +51,8 @@ export interface OnePagerCtx {
   planPages?: string[];
   /** e2e-pdf-export ("one-pager-overflow"): the pages the one-pager runs to past its one (the API lays it out). */
   overflowPages?: number;
+  /** S-9 ("one-pager-pdf-down"): the API cannot make PDFs (its 503, export.pdf.PdfUnavailable). */
+  pdfDown?: boolean;
   /** simple-replaced-prds: the PRDs that replaced this one, when it is marked replaced (its read, PDF and Remind are a 404 naming them). */
   replacedBy?: Schemas["PrdRef"][];
 }
@@ -99,6 +102,8 @@ export interface OnePagerDb {
   owner?: string;
   /** The PRD's roadmap slice, when not the default invented one (SLICE). */
   slice?: SliceItem[];
+  /** S-8: the Simple roadmap a PRD's own page reads its slice from at each read (prdSlice). */
+  roadmap?: RoadmapDb;
   /**
    * oracle.simple.quality: Oracle's build failed its checks twice: its blocks and the failed
    * checks' plain words. Owners read it with a "Needs a look" note; everyone else `blocks`
@@ -172,12 +177,15 @@ export function seedOnePager(ownerless = false): OnePagerDb {
  * milestone; one of those is committed past M3's month (the strip's edge).
  */
 type SliceItem = {
+  /** The roadmap item's own id, when the slice is read from the mock roadmap (prdSlice). */
+  id?: string;
   title: string;
   horizon: "now" | "next" | "later";
   start: string;
   end: string;
   estimated: boolean;
-  milestone: [string, string] | null;
+  /** Its milestone's label and day (null: the PRD's plan does not date it, a row of its own). */
+  milestone: [string, string | null] | null;
   /** The track milestone record naming the item, when any (the strip's row). */
   record?: { id: string; name: string };
   /** The day its milestone starts when the PRD's plan dates it (the strip's row spans it). */
@@ -203,7 +211,7 @@ const BETA_LAUNCH = { id: stableUuid("op-milestone/beta-launch"), name: "Beta la
 // Setup checklist in progress, Sample data import new, Welcome video runs today, Alert routing
 // by team runs with old proof), as the API's slice is the PRD's roadmap items.
 /** A slice item's roadmap item id: the mock roadmap's own (simple-roadmap.ts ids) when it is one. */
-const sliceItemId = (x: SliceItem, i: number) => stableUuid(x.key ? `simple-item/${x.key}` : `op-item-${i + 1}`);
+const sliceItemId = (x: SliceItem, i: number) => x.id ?? stableUuid(x.key ? `simple-item/${x.key}` : `op-item-${i + 1}`);
 const SEEDED: Record<number, [string, string]> = { 0: ["setup-checklist", "Setup checklist"], 1: ["setup-import", "Sample data import"], 12: ["setup-video", "Welcome video"] };
 const SLICE: SliceItem[] = [
   ...Array.from({ length: 12 }, (_, i) => ({ title: SEEDED[i]?.[1] ?? `Setup step ${i + 1}`, key: SEEDED[i]?.[0], horizon: "now" as const, start: "2026-10-05", end: "2026-11-20", estimated: false, milestone: ["M1", "2026-11-20"] as [string, string] })),
@@ -256,6 +264,8 @@ export function seedNotInPrdOnePager(): OnePagerDb {
   const db = seedOnePager();
   db.sections = db.sections.filter((x) => x.key !== "not-doing");
   db.blocks = db.blocks.map((b) => (b.key === "not_doing" ? { ...b, lines: [], missing: true } : b));
+  // P-9: an older build's lines that only say it, twice in one block: the read says it once.
+  db.blocks = db.blocks.map((b) => (b.key === "risks" ? { ...b, lines: [{ id: "risks-1", text: "Not in the PRD yet.", keys: ["risks"] }, { id: "risks-2", text: "Open decisions: Not in the PRD yet", keys: ["risks"] }] } : b));
   return db;
 }
 
@@ -572,6 +582,106 @@ export function prdOnePager(doc: OnePagerDb["doc"], prdSections: PrdSection[], c
   return seedOnePagerFromSections(doc, sections, [], cites);
 }
 
+type RoadmapDb = Parameters<typeof roadmapOut>[0];
+
+/** As one_pager._feature_code: "f-7", "F-007" read "F-07"; a slice F-15a is F-15. */
+function featureCode(raw: string | null | undefined): string | null {
+  const m = /^([a-z]{1,3})-0*(\d{1,4})[a-j]?$/i.exec((raw ?? "").trim());
+  return m ? `${m[1].toUpperCase()}-${m[2].padStart(2, "0")}` : null;
+}
+
+/**
+ * S-8, as one_pager.prd_items: the PRD's roadmap items, of the roadmap the reader is shown:
+ * those naming the PRD and those of its features (its plan's features and its own coded
+ * sections, F-07), by code. Each is placed by THIS PRD's plan only: one per slice of its
+ * feature in this plan (an undated milestone a row of its own); an item of another PRD with
+ * none under no milestone, never under that PRD's milestone or dates.
+ */
+function prdSlice(rm: RoadmapDb, role: Role, db: OnePagerDb): { items: SliceItem[]; span: [string, string] | null } {
+  const planned = !!rm.plan && (db.doc.slug === PLAN_PRD_SLUG || (rm.plan.prds ?? []).includes(db.doc.slug));
+  const plan = planned ? planOut(rm.plan, { id: db.doc.id, slug: db.doc.slug, title: db.doc.title }, role) : null;
+  const codes = new Set(db.sections.map((x) => featureCode(x.key)).filter((c): c is string => !!c));
+  for (const c of [...(plan?.slices ?? []).map((x) => x.feature_code), ...(plan?.milestones ?? []).flatMap((m) => m.feature_codes)]) {
+    const code = featureCode(c);
+    if (code) codes.add(code);
+  }
+  const out = roadmapOut(rm, role, new URLSearchParams());
+  const items = (out?.items ?? [])
+    .filter((i) => i.prd?.slug === db.doc.slug || i.prd?.id === db.doc.id || (!!featureCode(i.code) && codes.has(featureCode(i.code)!)))
+    .filter((i) => i.status !== "cut")
+    .flatMap((i): SliceItem[] => {
+      const own = i.prd?.slug === db.doc.slug || i.prd?.id === db.doc.id;
+      const base = { id: i.id, title: i.title, horizon: i.horizon, start: i.start.date, end: i.end.date, estimated: i.estimated };
+      const slices = (plan?.slices ?? []).filter((x) => !!featureCode(i.code) && featureCode(x.feature_code) === featureCode(i.code));
+      if (slices.length) {
+        return slices.map((x) => ({
+          ...base, start: x.start_date ?? base.start, end: x.end_date ?? base.end, estimated: !(x.milestone_start && x.milestone_end),
+          milestone: [`${x.milestone} · ${x.milestone_name}`, x.milestone_end ?? null] as [string, string | null],
+          ...(x.milestone_start ? { milestoneStart: x.milestone_start } : {}),
+        }));
+      }
+      if (!own) return [{ ...base, milestone: null }];
+      return [{
+        ...base,
+        milestone: i.milestone?.date ? [i.milestone.name ?? "Milestone", i.milestone.date] as [string, string] : null,
+        ...(i.milestone?.record_id ? { record: { id: i.milestone.record_id, name: i.milestone.record_name ?? "Milestone" } } : {}),
+        ...(i.milestone?.start_date ? { milestoneStart: i.milestone.start_date } : {}),
+      }];
+    });
+  // A dated plan's span is the one its timeline draws.
+  return { items, span: plan?.dated && plan.span ? [plan.span.start, plan.span.end] : null };
+}
+
+/** As one_pager._says_not_in_prd: a line that only says the PRD lacks it; the block's mark says it, once. */
+function saysNotInPrd(text: string): boolean {
+  const said = text.split(/\s+/).filter(Boolean).join(" ").replace(/[ .]+$/, "").toLowerCase();
+  const no = "not in the prd yet";
+  return said === no || (said.endsWith(`: ${no}`) && said.length - no.length <= 40);
+}
+
+// P-5, as one_pager.goal_names / with_goal_names: a goal's code ("G2", "G1.2") with its name
+// beside it, the name the PRD gives it ("G2 (retention)", "G2: Retention", a row "| G2 | Retention |").
+const GOAL_CODE = /\bG\d{1,3}(?:\.\d{1,2})?\b/g;
+const GOAL_PAREN = /\b(G\d{1,3}(?:\.\d{1,2})?)\b\**\s*\(([A-Za-z][^()\n]{0,40})\)/g;
+const GOAL_AFTER = /^\**\s*(?:[:=—–]\s*|\s-\s)?\**([A-Z][\w'’-]*(?: [A-Za-z][\w'’-]*){0,4})/;
+const goalName = (t: string) => {
+  const x = t.split(/\s+/).filter(Boolean).join(" ").replace(/^[ *\-—–:]+|[ *\-—–:]+$/g, "");
+  return x.slice(0, 1).toUpperCase() + x.slice(1);
+};
+const GOAL_MD = /[*_`]+|\[([^\]]*)\]\([^)]*\)|\{#[^}]*\}|<!--[\s\S]*?-->/g;
+
+function goalNames(sections: Sec[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const sec of sections) {
+    const text = `${sec.heading}\n${sec.body}`.replace(GOAL_MD, (_m, g: string | undefined) => g ?? "");
+    for (const m of text.matchAll(GOAL_PAREN)) out[m[1]] ??= goalName(m[2]);
+    for (const raw of text.split("\n")) {
+      if (raw.trim().startsWith("|")) {
+        const cells = raw.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+        cells.forEach((c, i) => {
+          const next = cells[i + 1];
+          if (/^G\d{1,3}(?:\.\d{1,2})?$/.test(c) && next && !/\bG\d/.test(next)) out[c] ??= goalName(next);
+        });
+        continue;
+      }
+      for (const m of raw.matchAll(GOAL_CODE)) {
+        const n = GOAL_AFTER.exec(raw.slice(m.index! + m[0].length));
+        if (n) out[m[0]] ??= goalName(n[1]);
+      }
+    }
+  }
+  return out;
+}
+
+function withGoalNames(text: string, names: Record<string, string>): string {
+  if (!text || !Object.keys(names).length) return text;
+  const t = text.replace(GOAL_PAREN, (all, code: string) => (names[code] ? `${code} ${names[code]}` : all));
+  return t.replace(GOAL_CODE, (code, at: number) => {
+    const name = names[code];
+    return !name || t.slice(at + code.length).replace(/^[ :—–\-*]+/, "").toLowerCase().startsWith(name.toLowerCase()) ? code : `${code} ${name}`;
+  });
+}
+
 /**
  * As one_pager.milestone_span (P4): from the earliest start of the items under dated milestones
  * (or that date, when earlier) to the latest milestone date; null with no dated milestone.
@@ -579,8 +689,8 @@ export function prdOnePager(doc: OnePagerDb["doc"], prdSections: PrdSection[], c
 function milestoneSpan(items: SliceItem[]): [string, string] | null {
   const dated = items.filter((i) => i.milestone?.[1]);
   if (!dated.length) return null;
-  const end = dated.map((i) => i.milestone![1]).sort().pop()!;
-  const start = dated.flatMap((i) => [i.start, i.milestone![1]]).sort()[0];
+  const end = dated.map((i) => i.milestone![1]!).sort().pop()!;
+  const start = dated.flatMap((i) => [i.start, i.milestone![1]!]).sort()[0];
   return [start < end ? start : end, end];
 }
 
@@ -737,12 +847,19 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
   const proposed = new Set(notes.filter((n) => n.kind === "proposal").map((n) => n.line_id));
   const hiddenDraft = !sees && db.draft ? Object.keys(db.draft.lines).length : 0;
   const owner = db.ownerless ? undefined : db.owner ?? ctx.owners[0];
-  const span = milestoneSpan(db.slice ?? SLICE);
+  // S-8: a PRD's own page reads its slice from the roadmap at each read (one_pager.prd_items).
+  const read = db.roadmap ? prdSlice(db.roadmap, ctx.role, db) : null;
+  const placed = read ? read.items : (db.slice ?? SLICE);
+  const span = read?.span ?? milestoneSpan(placed);
+  // The Timeline lists each item once; the strip reads one input per slice.
+  const slice = placed.filter((x, i) => !x.id || placed.findIndex((y) => y.id === x.id) === i);
   const held = ctx.role === "owner" ? db.held ?? null : null;
   // A build held for owners (oracle.simple.quality) is what owners read; others the last good.
   const blocks: Schemas["OnePagerBlock"][] = (held?.blocks ?? db.blocks).map((b) => ({
-      key: b.key, title: b.title, rules: b.rules, kind: b.kind, who: null, missing: !!b.missing && b.lines.length === 0,
-      lines: b.lines.filter((l) => (sees && db.draft?.lines[l.id] !== undefined) || !templateOnly(l.text)).map((l): Line => {
+      key: b.key, title: b.title, rules: b.rules, kind: b.kind, who: null,
+      // P-9: a line that only says "Not in the PRD yet" is the block's mark, said once.
+      missing: (!!b.missing || b.lines.some((l) => !(sees && db.draft?.lines[l.id] !== undefined) && saysNotInPrd(l.text))) && !b.lines.some((l) => (sees && db.draft?.lines[l.id] !== undefined) || (!templateOnly(l.text) && !saysNotInPrd(l.text))),
+      lines: b.lines.filter((l) => (sees && db.draft?.lines[l.id] !== undefined) || (!templateOnly(l.text) && !saysNotInPrd(l.text))).map((l): Line => {
         const edited = sees && db.draft?.lines[l.id] !== undefined;
         // As one_pager._tidy: a stored line's citations resolved, as the PRD's PDF resolves them.
         const text = edited ? db.draft!.lines[l.id] : resolved(uncomment(l.text)).split(/\s+/).filter(Boolean).join(" ");
@@ -763,6 +880,18 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     }));
   // Reads clearly (2026-10-30): as one_pager_checks.annotate on the PRD's sections.
   const looks = annotate(blocks, db.sections, db.cites);
+  // P-5: each goal code with its name beside it; the Edit box keeps the PRD's words.
+  const goals = goalNames(db.sections);
+  for (const b of blocks) {
+    for (const x of b.lines) {
+      const said = x.words ?? x.full ?? x.text;
+      x.text = withGoalNames(x.text, goals);
+      if (x.full) x.full = withGoalNames(x.full, goals);
+      if (x.metric) x.metric.name = withGoalNames(x.metric.name, goals);
+      if (x.measure) x.measure = withGoalNames(x.measure, goals);
+      if (!x.words && (x.full ?? x.text) !== said) x.words = said;
+    }
+  }
   return {
     document: db.doc,
     version: db.version,
@@ -775,9 +904,9 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     writing: !!db.writing && !held,
     built_at: "2026-10-20T15:05:00Z",
     blocks,
-    timeline: (db.slice ?? SLICE).map((x, i) => ({ id: sliceItemId(x, i), title: x.title, horizon: x.horizon, start: x.start, end: x.end, estimated: x.estimated })),
+    timeline: slice.map((x, i) => ({ id: sliceItemId(x, i), title: x.title, horizon: x.horizon, start: x.start, end: x.end, estimated: x.estimated })),
     plan: planByMonth(
-      (db.slice ?? SLICE).map((x, i) => ({ id: sliceItemId(x, i), start: x.start, end: x.end, estimated: x.estimated, milestone: x.milestone?.[0] ?? null, milestoneDate: x.milestone?.[1] ?? null, milestoneStart: x.milestoneStart ?? null, record: x.record ?? null })),
+      placed.map((x, i) => ({ id: sliceItemId(x, i), start: x.start, end: x.end, estimated: x.estimated, milestone: x.milestone?.[0] ?? null, milestoneDate: x.milestone?.[1] ?? null, milestoneStart: x.milestoneStart ?? null, record: x.record ?? null })),
       // qa4-simple-prd-10: the company's day, as the API's slice (and the notes' times) read it.
       companyDayIso(new Date(mockNowMs())),
     ),
@@ -836,6 +965,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     if (p[3] !== db.doc.slug && p[3] !== db.doc.id) return json(404, { detail: "No such PRD" });
     if (ctx.replacedBy?.length) return replaced();
     if (p[4] === "pdf") {
+      if (ctx.pdfDown) return json(503, { detail: "PDF export is unavailable: WeasyPrint cannot load its system libraries (install Pango, see api/Dockerfile): cannot load library 'libpango-1.0-0'" });
       const over = !ctx.planPages?.length && ctx.overflowPages ? ctx.overflowPages : 0;
       const pages = ctx.planPages?.length ? ["The timeline", ...ctx.planPages] : over ? Array.from({ length: over }, (_, i) => `Page ${i + 1}`) : ["One page"];
       // The page's lines as the read resolves them (the API's PDF renders one_pager.read).

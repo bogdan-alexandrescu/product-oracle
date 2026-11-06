@@ -40,16 +40,17 @@ from datetime import date, datetime, timedelta
 from html import escape
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time, safe_yaml
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.baseline.models import Entity
 from oracle.docs import visibility
 from oracle.docs.models import Citation, Document, DocumentVersion, Section
 from oracle.review.models import DocumentReviewPolicy
-from oracle.roadmap.models import ProductTrack
+from oracle.roadmap.models import ProductTrack, RoadmapItem
 from oracle.simple import drafts, one_pager_checks, plan_strip, quality
 from oracle.simple import plan as plan_model
 from oracle.simple.changes import IDLE, ChangeError, _session_for_change
@@ -419,6 +420,179 @@ def plan_items(items: list[Any]) -> list[plan_strip.PlanItem]:
             )
         )
     return out
+
+
+# A feature's code read one way ("f-7", "F-007" and 7 read "F-07"; a slice F-15a is F-15).
+_FEATURE_CODE = re.compile(r"([a-z]{1,3})-0*(\d{1,4})[a-j]?", re.IGNORECASE)
+
+
+def _feature_code(raw: Any) -> str | None:
+    if isinstance(raw, int) and not isinstance(raw, bool):
+        raw = f"F-{raw}"
+    m = _FEATURE_CODE.fullmatch(str(raw or "").strip())
+    return f"{m.group(1).upper()}-{int(m.group(2)):02d}" if m else None
+
+
+async def prd_items(
+    db: AsyncSession,
+    document: Document,
+    b: "Built",
+    items: list[Any],
+    view: plan_model.View | None,
+) -> list[Any]:
+    """S-8: the PRD's roadmap items, of the roadmap the reader is shown: its own (the PRD
+    they name) and those of its features (docs/ground-truth.md: an item is a Ground Truth
+    feature by code), whatever PRD they name: the company roadmap's items that deliver a
+    feature of the PRD's plan (``view``: its stored plan, else its approved version's
+    tables, as the Roadmap reads it) or of its own coded sections (F-07), by their code or a
+    slice's feature's (F-07a), or by the feature its plan links.
+
+    Each is placed by THIS PRD's plan only: its slices are the plan's slices of the feature
+    it delivers; an item of another PRD with none sits under no milestone, never under
+    that PRD's milestone or dates."""
+    codes = {c for s in b.sections if (c := _feature_code(s.section_key))}
+    # A code read one way -> the plan's feature code as the PRD writes it.
+    planned: dict[str, str] = {}
+    links: dict[uuid.UUID, str] = {}
+    if view is not None:
+        for raw in view.feature_codes:
+            if c := _feature_code(raw):
+                planned.setdefault(c, raw)
+        for code, raw in view.links.items():
+            try:
+                links[uuid.UUID(raw)] = code
+            except ValueError:
+                continue
+    codes |= set(planned)
+    features: dict[uuid.UUID, uuid.UUID] = {}
+    keyed: dict[uuid.UUID, str] = {}
+    ids = [i.id for i in items if i.id]
+    if ids and (codes or links):
+        features = {
+            i: f
+            for i, f in (
+                await db.execute(
+                    select(RoadmapItem.id, RoadmapItem.feature_id).where(
+                        RoadmapItem.id.in_(ids), RoadmapItem.feature_id.is_not(None)
+                    )
+                )
+            ).all()
+        }
+        if features:
+            keyed = {
+                e: c
+                for e, key in (
+                    await db.execute(
+                        select(Entity.id, Entity.key).where(Entity.id.in_(set(features.values())))
+                    )
+                ).all()
+                if (c := _feature_code(key)) in codes  # type: ignore[assignment]
+            }
+
+    def own(i: Any) -> bool:
+        return i.prd is not None and i.prd.id == document.id
+
+    def mine(i: Any) -> bool:
+        f = features.get(i.id)
+        return (
+            own(i)
+            or _feature_code(i.code) in codes
+            or (f is not None and (f in links or f in keyed))
+        )
+
+    def feature(i: Any) -> str | None:
+        """The plan's feature the item delivers, when the plan has it."""
+        f = features.get(i.id)
+        for c in (_feature_code(i.code), keyed.get(f) if f else None):
+            if c in planned:
+                return planned[c]
+        return links.get(f) if f else None
+
+    out = []
+    for i in items:
+        if not mine(i):
+            continue
+        code = feature(i)
+        slices = view.slices_of(code) if view is not None and code else []
+        out.append(
+            i.model_copy(update={"slices": slices, "milestone": i.milestone if own(i) else None})
+        )
+    return out
+
+
+# A goal's code in a PRD's words ("G2", a subgoal "G1.2"), and the name the PRD gives it
+# beside it: "G2 (retention)", "G2: Retention", "**G2 Retention**", a row "| G2 | Retention |".
+GOAL_CODE = re.compile(r"\bG\d{1,3}(?:\.\d{1,2})?\b")
+_GOAL_PAREN = re.compile(r"\b(G\d{1,3}(?:\.\d{1,2})?)\b\**\s*\(([A-Za-z][^()\n]{0,40})\)")
+_GOAL_AFTER = re.compile(r"\**\s*(?:[:=—–]\s*|\s-\s)?\**([A-Z][\w'’-]*(?: [A-Za-z][\w'’-]*){0,4})")
+
+
+def _goal_name(text: str) -> str:
+    text = " ".join(text.split()).strip(" *-—–:")
+    return text[:1].upper() + text[1:]
+
+
+async def goal_names(db: AsyncSession, sections: list[Section]) -> dict[str, str]:
+    """P-5: each goal code's name: the Ground Truth goal keyed by it (``G2`` -> "Grow
+    retention"), else the name the PRD gives it."""
+    out: dict[str, str] = {}
+    for sec in sections:
+        text = one_pager_checks._plain(f"{sec.heading or ''}\n{sec.body_md or ''}")
+        for m in _GOAL_PAREN.finditer(text):
+            out.setdefault(m.group(1), _goal_name(m.group(2)))
+        for raw in text.splitlines():
+            cells = [c.strip(" *") for c in raw.strip().strip("|").split("|")]
+            if raw.strip().startswith("|"):
+                for c, nxt in zip(cells, cells[1:], strict=False):
+                    if GOAL_CODE.fullmatch(c) and nxt and not GOAL_CODE.search(nxt):
+                        out.setdefault(c, _goal_name(nxt))
+                continue
+            for m in GOAL_CODE.finditer(raw):
+                if n := _GOAL_AFTER.match(raw[m.end() :]):
+                    out.setdefault(m.group(0), _goal_name(n.group(1)))
+    found = {m.group(0) for s in sections for m in GOAL_CODE.finditer(s.body_md or "")}
+    if found:
+        upper = {c.upper(): c for c in found}
+        rows = await db.execute(
+            select(Entity.key, Entity.title, Entity.status).where(
+                Entity.type == "goal",
+                Entity.status != "rejected",
+                func.upper(Entity.key).in_(list(upper)),
+            )
+        )
+        # A confirmed goal's title over a proposed one's, over the PRD's own words.
+        for key, title, _ in sorted(rows.all(), key=lambda r: r[2] == "confirmed"):
+            if title and title.strip():
+                out[upper[key.upper()]] = title.strip()
+    return out
+
+
+def with_goal_names(text: str, names: dict[str, str]) -> str:
+    """The text with each goal code's name beside it ("G2 Grow retention"): a code the PRD
+    named in brackets ("G2 (retention)") reads the name instead of them."""
+    if not text or not names:
+        return text
+
+    def paren(m: re.Match[str]) -> str:
+        return f"{m.group(1)} {names[m.group(1)]}" if m.group(1) in names else m.group(0)
+
+    text = _GOAL_PAREN.sub(paren, text)
+
+    def put(m: re.Match[str]) -> str:
+        code, name = m.group(0), names.get(m.group(0))
+        if not name or text[m.end() :].lstrip(" :—–-*").lower().startswith(name.lower()):
+            return code
+        return f"{code} {name}"
+
+    return GOAL_CODE.sub(put, text)
+
+
+def _says_not_in_prd(text: str) -> bool:
+    """A line that only says the PRD lacks it ("Not in the PRD yet.", "Open decisions: Not in
+    the PRD yet"): the block's own mark says it, once."""
+    said = " ".join(text.split()).rstrip(" .").casefold()
+    no = quality.NOT_IN_PRD.casefold()
+    return said == no or (said.endswith(f": {no}") and len(said) - len(no) <= 40)
 
 
 def _cells(row: str) -> list[str]:
@@ -1366,12 +1540,16 @@ async def read(
     for spec in b.specs:
         raw = next((x for x in page if x["key"] == spec.key), {"lines": []})
         lines = []
+        said_missing = False
         for line in raw["lines"]:
             edited = line["id"] in line_text
             text, full = line_text.get(line["id"], line["text"]), None
             if not edited:
                 if template_only(line["text"]):
                     continue  # a template's guidance in a one-pager built before this rule
+                if _says_not_in_prd(line["text"]):
+                    said_missing = True  # P-9: the block's mark says it, once
+                    continue
                 srcs = [x for x in b.sections if x.section_key in line["source_keys"]]
                 text, full = _tidy(text, spec.max_words, line.get("full"), srcs)
             metric = _metric(line.get("metric"))
@@ -1399,7 +1577,7 @@ async def read(
                 rules=spec.rules,
                 kind=spec.kind,
                 lines=lines,
-                missing=bool(raw.get("missing")) and not lines,
+                missing=(bool(raw.get("missing")) or said_missing) and not lines,
             )
         )  # type: ignore[arg-type]
     # S10: each bet ("What we will build") carries its visual.
@@ -1430,7 +1608,21 @@ async def read(
         for c in await db.scalars(select(Citation).where(Citation.version_id == b.version.id))
     }
     looks = one_pager_checks.annotate(blocks, b.sections, cites)
-    slice_ = await service.build(db, principal, prd=str(document.id))
+    # P-5: each goal code with its name beside it; the Edit box keeps the PRD's words.
+    goals = await goal_names(db, b.sections)
+    for blk in blocks:
+        for x in blk.lines:
+            said = x.words or x.full or x.text
+            x.text = with_goal_names(x.text, goals)
+            x.full = with_goal_names(x.full, goals) if x.full else x.full
+            if x.metric is not None:
+                x.metric.name = with_goal_names(x.metric.name, goals)
+            x.measure = with_goal_names(x.measure, goals) if x.measure else x.measure
+            if x.words is None and (x.full or x.text) != said:
+                x.words = said
+    slice_ = await service.build(db, principal)
+    view = (await plan_model.views(db, {document.id})).get(document.id)
+    mine = await prd_items(db, document, b, slice_.items, view)
     items = [
         OnePagerItem(
             id=i.id,
@@ -1440,17 +1632,16 @@ async def read(
             end=i.end.date,
             estimated=i.estimated,
         )
-        for i in slice_.items
+        for i in mine
         if i.status != "cut"
     ]
-    plan = plan_strip.strip(plan_items(slice_.items), slice_.today)
+    plan = plan_strip.strip(plan_items(mine), slice_.today)
     # A dated plan's span is the one its timeline draws (its milestones, or the dates the
     # lead accepted); else the items' dated milestones.
-    view = (await plan_model.views(db, {document.id})).get(document.id)
     if view is not None and view.dated and view.span:
         span: tuple[date, date] | None = (view.span.start, view.span.end)
     else:
-        span = milestone_span(plan_items(slice_.items))
+        span = milestone_span(plan_items(mine))
     timeline = OnePagerBlock(
         key=TIMELINE.key, title=TIMELINE.title, rules=TIMELINE.rules, kind="timeline", lines=[]
     )

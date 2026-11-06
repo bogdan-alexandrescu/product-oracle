@@ -18,7 +18,7 @@ import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { quoteLine } from "@/components/simple/quote-line";
 import { InReviewBar, PresentMenu, SendForApproval } from "@/components/simple/ReviewFlow";
 import { ErrorNote, Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
 import { DownloadNote, useDownloadNote } from "@/components/DownloadNote";
 import { DecisionNotes, LeftOutLine } from "@/components/simple/DecisionNotes";
@@ -379,9 +379,17 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   async function exportPdf() {
     setError(null);
     setExporting(true);
+    // S-9: the note says the download is starting, then that it is done or why it failed.
+    setSaved("Your PDF is downloading…");
     try {
       const call = api.GET("/v1/simple/one-pagers/{doc}/pdf", { params: { path: { doc } }, parseAs: "blob" });
-      const blob = (await unwrap(call)) as Blob;
+      const res = await call;
+      if (!res.response.ok) {
+        // A failed export's body is a Blob here: read the API's own words out of it.
+        const said = res.error instanceof Blob ? await res.error.text().then((t) => JSON.parse(t) as unknown).catch(() => null) : res.error;
+        await unwrap(Promise.resolve({ ...res, error: said }));
+      }
+      const blob = res.data as Blob;
       // qa4-simple-prd-23: the file says which text it holds when a working draft waits.
       const name = `${v.document.title.replace(/[\\/:*?"<>|]+/g, " ").trim()} v${v.version}${draftShown ? (v.published_at ? " published" : " last version") : ""} one-pager.pdf`;
       const a = document.createElement("a");
@@ -390,10 +398,12 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
       document.body.appendChild(a);
       a.click();
       a.remove();
-      const note = downloadedNote("PDF", (await call).response, "shorten it to fit one");
+      const note = downloadedNote("PDF", res.response, "shorten it to fit one");
       setSaved(draftShown ? note.replace("PDF downloaded", `PDF downloaded · version ${v.version}, without the working draft's changes`) : note);
     } catch (e) {
-      setError(errorMessage(e));
+      setSaved(null);
+      // The API's 503 (its PDF maker cannot load) names libraries: the page says it plainly.
+      setError(e instanceof ApiError && e.status === 503 ? "The PDF did not download: PDF export is not available right now. Try again later." : `The PDF did not download. ${errorMessage(e)}`);
     } finally {
       setExporting(false);
     }
@@ -848,7 +858,8 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
                   ))}
                   {b.lines.length === 0 && <li className="list-none text-base text-text-faint" data-testid="one-pager-empty-block">{b.missing ? "Not in the PRD yet" : "Not written yet"}</li>}
                   {/* qa4-simple-prd-12: said once: not again when the problem's own words already name them. */}
-                  {b.key === "problem" && !(b.who && b.lines.some((l) => norm(l.full ?? l.text).includes(norm(b.who!)))) && (
+                  {/* P-9: an empty problem block says "Not in the PRD yet" once, not again for who has it. */}
+                  {b.key === "problem" && (b.who || b.lines.length > 0) && !(b.who && b.lines.some((l) => norm(l.full ?? l.text).includes(norm(b.who!)))) && (
                     // 2026-10-30: who has the problem, from the PRD's users or personas section.
                     <li className="list-none px-2 text-base" data-testid="problem-who">
                       {b.who ? `Who has it: ${b.who}` : "Who has it is not in the PRD yet"}

@@ -610,6 +610,10 @@ class View:
     dated: bool = False
     message: str | None = None
     summary: list[str] = field(default_factory=list)
+    # The plan's features' codes (each as the PRD writes it) and the Ground Truth features
+    # they link (oracle.baseline.fixes: PRD feature code -> feature id).
+    feature_codes: list[str] = field(default_factory=list)
+    links: dict[str, str] = field(default_factory=dict)
 
     def milestone(self, code: str | None) -> SimplePlanMilestone | None:
         return next((m for m in self.milestones if m.code == code), None)
@@ -661,6 +665,10 @@ def compute(data: dict[str, Any] | None) -> View:
     """The plan's view: milestones with planned weeks, slices placed, goals with targets,
     engineer-weeks per goal per milestone, the span."""
     view = View()
+    if data:
+        features = [f for f in data.get("features") or [] if isinstance(f, dict)]
+        view.feature_codes = [str(f["code"]) for f in features if f.get("code")]
+        view.links = {str(k): str(v) for k, v in (data.get("links") or {}).items()}
     if not data or not data.get("milestones"):
         view.message = NO_PLAN
         return view
@@ -1027,6 +1035,9 @@ async def views(db: AsyncSession, prd_ids: set[uuid.UUID]) -> dict[uuid.UUID, Vi
             data = {**row.data, "source": row.source} if row.status == "ready" else None
         else:
             data = _parsed(v)
+            # Links to Ground Truth features outlive a new reading (as _read keeps them).
+            if data and row is not None and (links := (row.data or {}).get("links")):
+                data = {**data, "links": links}
         if data:
             out[pid] = compute(with_accepted(data, accepted.get(pid, [])))
     return out

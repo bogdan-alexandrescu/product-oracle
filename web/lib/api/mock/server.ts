@@ -1427,6 +1427,19 @@ function seedSimplePlanTwoScenario(): Db {
 }
 
 /**
+ * simple-one-pagers-qa ("one-pager-plan-slices"): "simple-plan" with Usage alerts' own plan
+ * (the plan's features and milestones; only M1 dated) that this reader cannot open, so its
+ * one-pager draws the Timeline strip: Guided setup's items of those features (Public signup,
+ * F-13) under Usage alerts' milestones, the undated M2 a row of its own. Invented data.
+ */
+function seedOnePagerPlanSlicesScenario(): Db {
+  const db = seedSimplePlanScenario();
+  const rm = db.simple_roadmap!;
+  rm.plan = { ...rm.plan!, prds: ["usage-alerts"], hidden: ["usage-alerts"], partly_dated: true };
+  return db;
+}
+
+/**
  * GB2 "goal-buckets-hard" (mk-goalbuckets gb2-a-hard): "simple-plan" (dated) plus its scenario's
  * extra feature (F-22, plan.big_goal) and the goal buckets' Grow partner network goal, which
  * holds all 15 features the plan places only in M2 and M3, four of which also serve Growth.
@@ -3855,6 +3868,8 @@ function load(): Db {
                 ? seedSimplePlanLanesScenario
               : scenario === "simple-plan-two"
                 ? seedSimplePlanTwoScenario
+              : scenario === "one-pager-plan-slices"
+                ? seedOnePagerPlanSlicesScenario
               : scenario === "simple-plan-undated"
                 ? () => {
                     // prd-timeline: Guided setup's plan whose milestones have no dates.
@@ -6298,7 +6313,7 @@ async function onePagerOf(db: Db, req: Request, p: string[]): Promise<OnePagerDb
     // C-13, vqa B-13: every PRD but the seed reads its own sections (one_pager.extract), never a copy
     // of Guided setup's; a PRD with no version yet reads none of them (every block "missing").
     const cites = Object.fromEntries((read?.citations ?? []).map((c) => [c.cite_key, { title: c.title ?? null, excerpt: c.excerpt ?? null }]));
-    return (others[d.id] = { ...prdOnePager({ id: d.id, slug: d.slug, title: d.title }, read?.sections ?? [], cites), visuals: db.simple_visuals, flowKey: d.slug, ...(read ? { version: read.number, published_at: read.approved_at ?? null } : {}) });
+    return (others[d.id] = { ...prdOnePager({ id: d.id, slug: d.slug, title: d.title }, read?.sections ?? [], cites), visuals: db.simple_visuals, roadmap: db.simple_roadmap, flowKey: d.slug, ...(read ? { version: read.number, published_at: read.approved_at ?? null } : {}) });
   };
   if (p[1] !== "simple") return seeded;
   if (p[2] === "one-pagers") return forDoc(p[3]) ?? seeded;
@@ -7341,6 +7356,7 @@ async function route(db: Db, req: Request): Promise<Response> {
           ? planMilestones().map((m) => `${m.code} ${m.name}`)
           : undefined,
         overflowPages: localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-overflow" ? 2 : undefined,
+        pdfDown: localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-pdf-down",
         replacedBy: replacedByRefs(db, db.documents.find((x) => x.kind === "prd" && (x.id === onePagerDb.doc.id || x.slug === onePagerDb.doc.slug))),
       },
       r,
