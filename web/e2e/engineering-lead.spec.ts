@@ -32,11 +32,15 @@ test("engineering lead: the owner ticks Eng lead, it stays after a reload and th
   // wrong; no_claim=the API's audit event (api/tests/test_engineering_lead.py).
   await login(page);
   await page.goto("/settings/members");
-  await expect(page.locator("#engineering-lead")).toHaveText("Eng lead");
+  await expect(page.locator("#engineering-lead")).toHaveText("Engineering lead");
   const box = leadBox(page, "commenter@example.com");
   await expect(box).not.toBeChecked();
   await expect(page.getByTestId("roles-engineering-lead")).toContainText("Engineering lead");
-  await expect(page.getByTestId("engineering-lead-none")).toHaveText("Nobody named yet. Pick who carries engineering checks.");
+  // pass-f F-15: the row says "None yet"; what to do is in its (i).
+  await expect(page.getByTestId("engineering-lead-none")).toHaveText("None yet");
+  await page.getByTestId("roles-engineering-lead").getByRole("button", { name: "About the engineering lead" }).click();
+  await expect(page.getByRole("tooltip").filter({ hasText: "Pick who carries engineering checks." })).toBeVisible();
+  await page.keyboard.press("Escape");
   await box.check();
   await expect(box).toBeChecked();
   await expect(page.getByTestId("engineering-lead-count")).toHaveText("1");
@@ -46,7 +50,7 @@ test("engineering lead: the owner ticks Eng lead, it stays after a reload and th
   await expect(leadBox(page, "commenter@example.com")).toBeChecked();
   await expect(page.getByTestId("engineering-lead-count")).toHaveText("1");
   // The (i) says what the flag does.
-  await page.getByRole("button", { name: "About the engineering lead" }).hover();
+  await page.getByTestId("roles-engineering-lead").getByRole("button", { name: "About the engineering lead" }).hover();
   await expect(page.getByRole("tooltip").filter({ hasText: "decides both engineering stops" })).toBeVisible();
 });
 
@@ -72,7 +76,7 @@ test("engineering lead: making the lead a viewer unticks and disables their box"
   await expect(leadBox(page, "commenter@example.com")).toBeDisabled();
   await page.reload();
   await expect(leadBox(page, "commenter@example.com")).not.toBeChecked();
-  await expect(page.getByTestId("engineering-lead-none")).toHaveText("Nobody named yet. Pick who carries engineering checks.");
+  await expect(page.getByTestId("engineering-lead-none")).toHaveText("None yet");
 });
 
 test("engineering lead: the invite form names a lead, never a viewer", async ({ page }) => {
@@ -91,11 +95,11 @@ test("engineering lead: the invite form names a lead, never a viewer", async ({ 
   await form.getByRole("button", { name: "Send invite", exact: true }).click();
   const row = page.getByTestId("invite-row").filter({ hasText: "lead.hire@example.com" });
   await expect(row).toContainText("Commenter");
-  await expect(row).toContainText("Eng lead");
+  await expect(row).toContainText("Engineering lead");
   await page.reload();
-  await expect(page.getByTestId("invite-row").filter({ hasText: "lead.hire@example.com" })).toContainText("Eng lead");
+  await expect(page.getByTestId("invite-row").filter({ hasText: "lead.hire@example.com" })).toContainText("Engineering lead");
   // The seeded invite names no lead.
-  await expect(page.getByTestId("invite-row").filter({ hasText: "new.hire@example.com" })).not.toContainText("Eng lead");
+  await expect(page.getByTestId("invite-row").filter({ hasText: "new.hire@example.com" })).not.toContainText("Engineering lead");
 });
 
 test("engineering lead: the lead sees the Engineering review stop; a non-lead approver does not", async ({ page, browser }) => {
@@ -142,14 +146,16 @@ test.describe("phone", () => {
     await login(page);
     await page.goto("/settings/members");
     const row = memberRow(page, "commenter@example.com");
-    await expect(row.getByText("Eng lead", { exact: true })).toBeVisible();
-    await expect(memberRow(page, "approver@example.com").getByText("Eng lead", { exact: true })).toHaveCount(0);
+    // pass-f F-52: the chip reads "Engineering lead" (the box's label under the select says it too).
+    const chip = (r: ReturnType<typeof memberRow>) => r.locator("[data-kind]").filter({ hasText: /^Engineering lead$/ });
+    await expect(chip(row)).toBeVisible();
+    await expect(chip(memberRow(page, "approver@example.com"))).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     // The box moved into the role cell, under the select.
     const box = leadBox(page, "approver@example.com");
     await expect(box).toBeVisible();
     await box.check();
-    await expect(memberRow(page, "approver@example.com").getByText("Eng lead", { exact: true })).toBeVisible();
+    await expect(chip(memberRow(page, "approver@example.com"))).toBeVisible();
   });
 });
 
