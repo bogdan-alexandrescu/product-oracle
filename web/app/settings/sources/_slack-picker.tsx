@@ -2,7 +2,7 @@
 
 import { useId } from "react";
 
-import { Icon } from "@/components/ds";
+import { Icon, InfoTip } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
 import { zoneName } from "@/lib/format";
@@ -62,8 +62,9 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
     <BrowseList
       label="Slack channels"
       searchLabel="Search channels"
-      pasteLabel="Channel ids"
-      pasteExample="C0123PRODUCT"
+      pasteLabel="Channel links"
+      pasteExample="https://example.slack.com/archives/C0123PRODUCT"
+      unknownLabel="Unknown channel"
       connectionId={connectionId}
       picked={listOf(config, "channels")}
       onPicked={(channels) => onChange({ ...config, channels })}
@@ -113,9 +114,13 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
               Until must be on or after Since.
             </p>
           ) : (
-            <p id={hintId} className="text-[13px] leading-5 text-text2">
-              Optional, whole days in the Company time zone ({zoneName(zone)}). Nothing posted after Until is read, thread replies included. Narrowing the
-              range removes messages outside it when you save.
+            <p id={hintId} className="flex items-center gap-1 text-[13px] leading-5 text-text2">
+              Optional · {zoneName(zone)}
+              {/* Pass F F-56: the range's rules behind an (i). */}
+              <InfoTip label="the date range" align="start">
+                Whole days in the Company time zone. Nothing posted after Until is read, thread replies included. Narrowing the range
+                removes messages outside it when you save.
+              </InfoTip>
             </p>
           )}
         </div>

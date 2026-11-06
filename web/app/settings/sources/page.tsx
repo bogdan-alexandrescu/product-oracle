@@ -602,7 +602,7 @@ function SourceRow({
         text:
           r.upserted === 0 && r.deleted === 0
             ? "Synced: nothing new."
-            : `Synced: ${count(r.upserted, "item")} seen, ${count(r.versions_written, "new version")}, ${r.deleted} deleted.`,
+            : `Synced: ${count(r.upserted, "item")}, ${r.versions_written} changed, ${r.deleted} removed.`,
       });
     } else if (r.outcome === "rate_limited") {
       setNotice({ tone: "pass", text: "Rate limited: the next sync resumes where this one stopped." });
@@ -810,7 +810,14 @@ function SourceRow({
       {unlinked && !editing && <NoConnection source={source} option={option} onLinked={linked} />}
       {source.kind === "github" && <CodeMaps source={source} />}
       {source.reconnect_reason && mayEdit && <ReconnectToChoose className="mt-2" />}
-      {drive && <DriveNotes notes={unavailable} picked={picked} sourceName={source.name} />}
+      {drive && (
+        <DriveNotes
+          notes={unavailable}
+          picked={picked}
+          sourceName={source.name}
+          onChoose={mayEdit && !unlinked && !editing ? () => setEditing(true) : undefined}
+        />
+      )}
       {!drive && unavailable.length > 0 && (
         // What was left out and why, and what to do about it (qa-settings-25).
         <ul aria-label={`Sync notes for ${source.name}`} className="mt-2 flex flex-col gap-1">
@@ -831,7 +838,7 @@ function SourceRow({
                 </span>
                 <span className="min-w-0 text-text2">
                   {skipped
-                    ? `— ${why}. Nothing to do: Oracle never reads it.`
+                    ? `— ${why}`
                     : source.kind === "slack"
                       ? "— Oracle can’t read it with your account. Rejoin it in Slack, or remove it from this source."
                       : "— Oracle can’t read it with your account. Ask for access again, or remove it from this source."}
@@ -839,8 +846,8 @@ function SourceRow({
                 <InfoTip label={`why ${name} is ${skipped ? "skipped" : "not read"}`} align="start">
                   {skipped
                     ? source.kind === "slack"
-                      ? "A channel shared in from another company is left out on purpose: only the company's own channels are read."
-                      : u.reason
+                      ? "A channel shared in from another company is left out on purpose: only the company's own channels are read. Nothing to do."
+                      : `${u.reason}. Nothing to do.`
                     : `${u.reason}. What was already pulled in from it is kept.`}
                 </InfoTip>
                 {!skipped && allowlist && !editing && mayEdit && (
@@ -1036,7 +1043,8 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3" aria-label="Add a source" id="add-source">
-      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-3">
+      {/* Pass F F-59: Kind above Name, so "Google Docs" is never cut. */}
+      <div className="flex flex-col gap-3">
         <Field label="Kind">
           <select
             value={kind}
@@ -1113,9 +1121,10 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
           Add source
         </Button>
         {reason && option?.connector_available && !(needsConnection && usable.length === 0) && (
-          <span className="text-sm text-text2" data-testid="add-source-reason">
-            {reason}
-          </span>
+          // Pass F F-56: why it is off behind an (i), not a sentence beside the button.
+          <InfoTip label="why Add source is off" align="start">
+            <span data-testid="add-source-reason">{reason}</span>
+          </InfoTip>
         )}
       </div>
     </form>
@@ -1150,6 +1159,14 @@ export default function SourceSettingsPage() {
   const list = sources.data ?? [];
   const errors = list.filter((s) => s.status === "error").length;
   const attention = needingAttention(list).length;
+  // Pass F F-18: each count chip shows the sources it counts; pressing it again shows all.
+  const [only, setOnly] = useState<"error" | "attention" | null>(null);
+  const attentionIds = new Set(needingAttention(list).map((s) => s.id));
+  const shown = only === "error" ? list.filter((s) => s.status === "error") : only === "attention" ? list.filter((s) => attentionIds.has(s.id)) : list;
+  const toggleOnly = (which: "error" | "attention") => {
+    setOnly((o) => (o === which ? null : which));
+    document.getElementById("my-sources")?.scrollIntoView({ block: "start", behavior: "smooth" });
+  };
   const items = list.reduce((n, s) => n + s.item_count, 0);
 
   const target = useTargetedSource();
@@ -1189,7 +1206,7 @@ export default function SourceSettingsPage() {
           <Chip hero>Only you</Chip>
           <InfoTip label="private sources" hero align="start" side="bottom">
             Your sources are yours alone: what they pull in through your connections is visible only to you, and reaches
-            others only as evidence you add to the baseline. Direct messages are never pulled in.
+            others only as evidence you cite in the Desired state. Direct messages are never pulled in.
           </InfoTip>
         </>
       }
@@ -1215,21 +1232,25 @@ export default function SourceSettingsPage() {
         title="Sources"
         info={
           <InfoTip label="sources" align="start" side="bottom">
-            What your connections pull in. Only you see it; it reaches others only as evidence you add to the baseline.
+            What your connections pull in. Only you see it; it reaches others only as evidence you cite in the Desired state.
           </InfoTip>
         }
         status={
           <>
             {capsReady && !mayAdd && <ViewOnly />}
             {errors > 0 && (
-              <Chip kind="crit" dot>
-                {errors} in error
-              </Chip>
+              <button type="button" aria-pressed={only === "error"} onClick={() => toggleOnly("error")} className="rounded-full">
+                <Chip kind="crit" dot>
+                  {errors} in error
+                </Chip>
+              </button>
             )}
             {attention > 0 && (
-              <Chip kind="warn" dot data-testid="sources-attention">
-                {attention} need{attention === 1 ? "s" : ""} attention
-              </Chip>
+              <button type="button" aria-pressed={only === "attention"} onClick={() => toggleOnly("attention")} className="rounded-full">
+                <Chip kind="warn" dot data-testid="sources-attention">
+                  {attention} need{attention === 1 ? "s" : ""} attention
+                </Chip>
+              </button>
             )}
           </>
         }
@@ -1249,7 +1270,21 @@ export default function SourceSettingsPage() {
       />
       <Split inspector={inspector}>
         {sources.error && <Notice tone="error">{sources.error}</Notice>}
-        <Panel title="My sources" count={sources.data ? list.length : undefined}>
+        <div id="my-sources" className="scroll-mt-4">
+        <Panel
+          title="My sources"
+          count={sources.data ? shown.length : undefined}
+          tools={
+            only && (
+              <>
+                <Chip kind={only === "error" ? "crit" : "warn"}>{only === "error" ? "In error" : "Need attention"}</Chip>
+                <Button variant="ghost" onClick={() => setOnly(null)}>
+                  Show all
+                </Button>
+              </>
+            )
+          }
+        >
           {sources.loading && !sources.data && (
             <div aria-busy className="flex flex-col">
               {[0, 1, 2].map((i) => (
@@ -1262,12 +1297,12 @@ export default function SourceSettingsPage() {
           {sources.data && list.length === 0 && (
             <div className="flex flex-col items-center gap-3 px-4 py-8 text-center" data-testid="sources-empty">
               {/* Just words: the header's Add a source is the one way in (qa-onboarding-18). */}
-              <p className="text-[15px] text-text2">{mayAdd ? "No sources yet. Add one with Add a source to give Oracle something to read." : "No sources yet."}</p>
+              <p className="text-[15px] text-text2">No sources yet</p>
             </div>
           )}
           {list.length > 0 && (
             <ul aria-label="My sources" className="flex flex-col">
-              {list.map((s) => (
+              {shown.map((s) => (
                 <SourceRow
                   key={s.id}
                   source={s}
@@ -1281,6 +1316,7 @@ export default function SourceSettingsPage() {
             </ul>
           )}
         </Panel>
+        </div>
         {can("put_setting") && <CompanyDriveSettings />}
         {can("put_setting") && <CodeMapRefreshSetting />}
       </Split>

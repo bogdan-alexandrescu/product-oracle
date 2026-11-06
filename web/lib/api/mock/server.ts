@@ -51,7 +51,7 @@ import {
   type DocumentSection,
   type SubjectInfo,
 } from "./discussions";
-import { routeEngineering, techBriefOf, type CodeMapRow } from "./engineering";
+import { routeEngineering, seedCodeMaps, techBriefOf, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, queueJob, queueQualityReview, seedLlm, seedStoredRefusals, SPENT, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
@@ -6136,7 +6136,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Tech briefs (./engineering.ts): every member reads.
   const briefs = await routeEngineering(req, p, q, {
     documents: db.documents,
-    maps: () => (db.code_maps ??= []),
+    maps: () =>
+      (db.code_maps ??= seedCodeMaps(localStorage.getItem(MOCK_SCENARIO_KEY), (status) => db.runs?.runs.find((r) => r.status === status)?.id ?? null, "admin@example.com")),
     me: { id: me.id, email: me.email, canWrite: atLeast(me.role, "commenter") },
     now,
     uuid,
@@ -6194,7 +6195,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   // The baseline mock checks roles itself (commenters propose, approvers decide).
   if (p[1] === "baseline") return routeBaselineFor(db, me, req, p, q);
-  // Sources and connections belong to each user: every role manages their own.
+  // Sources and connections belong to each user: commenters and up manage their own sources (viewers read).
   if (["sources", "source-items", "snapshots", "search"].includes(p[1])) {
     return routeSources(req, p, q, {
       scenario: localStorage.getItem(MOCK_SCENARIO_KEY),

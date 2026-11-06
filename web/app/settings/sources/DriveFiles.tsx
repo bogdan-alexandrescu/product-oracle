@@ -124,6 +124,9 @@ export function DriveFiles({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [config, setConfig] = useState<PickerConfig | null>(null);
+  // Pass F F-63: Drive's picker could not load: say so in plain words, with Try again.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const latest = useRef(files);
   useEffect(() => {
     latest.current = files;
@@ -137,11 +140,11 @@ export function DriveFiles({
         await preloadDrivePicker();
         if (live) setConfig(c);
       })
-      .catch((e) => live && setError(errorMessage(e)));
+      .catch(() => live && setLoadFailed(true));
     return () => {
       live = false;
     };
-  }, [reconnect]);
+  }, [reconnect, attempt]);
 
   function choose() {
     if (!config || !drivePickerReady()) return;
@@ -175,6 +178,18 @@ export function DriveFiles({
     <div className="flex min-w-0 flex-col gap-2">
       {reconnect ? (
         <ReconnectToChoose />
+      ) : loadFailed ? (
+        <div className="flex flex-wrap items-center gap-2" role="alert">
+          <span className="text-sm text-crit">Could not open Google Drive. Try again.</span>
+          <Button
+            onClick={() => {
+              setLoadFailed(false);
+              setAttempt((n) => n + 1);
+            }}
+          >
+            Try again
+          </Button>
+        </div>
       ) : (
         <div className="flex flex-wrap items-center gap-1">
           <Button variant="solid" icon="doc" onClick={choose} disabled={busy || !config}>
@@ -229,9 +244,9 @@ export function DriveFiles({
       {pasting ? (
         <div className="flex flex-col gap-1.5">
           <label htmlFor={pasteId} className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
-            Drive file ids
+            Drive links
           </label>
-          <span className="text-[13px] leading-4 text-text2">Ids or links copied from Drive, one per line.</span>
+          <span className="text-[13px] leading-4 text-text2">One per line.</span>
           <textarea
             id={pasteId}
             value={pasted}
@@ -242,7 +257,7 @@ export function DriveFiles({
           />
           <div className="flex items-center gap-1">
             <Button onClick={addPasted} disabled={!pasted.trim()}>
-              Add ids
+              Add
             </Button>
             <Button variant="ghost" onClick={() => setPasting(false)}>
               Cancel
@@ -252,7 +267,7 @@ export function DriveFiles({
       ) : (
         <div>
           <Button variant="ghost" className="-ml-2.5" onClick={() => setPasting(true)}>
-            Paste ids
+            Paste links
           </Button>
         </div>
       )}
@@ -306,10 +321,13 @@ export function DriveNotes({
   notes,
   picked,
   sourceName,
+  onChoose,
 }: {
   notes: SourceNote[];
   picked: DriveFile[];
   sourceName: string;
+  /** Pass F F-18: opens the source's file picker, to pick another doc or folder in place of one Oracle cannot read. */
+  onChoose?: () => void;
 }) {
   const byId = new Map(picked.map((f) => [f.id, f]));
   const nameOf = (n: SourceNote) => byId.get(n.external_id)?.name ?? n.name ?? n.external_id;
@@ -345,7 +363,13 @@ export function DriveNotes({
                 {nameOf(n)}
               </span>
             </span>
-            {folder && <span className="text-text2">— its docs are hidden until Oracle can read it again</span>}
+            {/* Pass F F-36: why behind an (i), not a sentence on the card. */}
+            {folder && <InfoTip label={`why ${nameOf(n)} is hidden`}>Its docs are hidden until Oracle can read it again.</InfoTip>}
+            {onChoose && (
+              <Button onClick={onChoose} aria-label={`Choose another in place of ${nameOf(n)}`}>
+                Choose another
+              </Button>
+            )}
           </li>
         );
       })}

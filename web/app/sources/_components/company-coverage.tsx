@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { Chip, DataTable, InfoTip, Inspector, InspectorSection, type Column } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
 import { formatCount, formatPercent, plural } from "@/lib/format";
@@ -19,6 +21,20 @@ const ROLE_LABEL: Record<string, string> = { owner: "Owner", approver: "Approver
 export const memberName = (m: MemberCoverage["member"]) => m.name ?? m.email;
 export const companyRowKey = (r: CompanyRow) => `${r.member.id}:${r.kind?.kind ?? "none"}`;
 
+/**
+ * A member's name with their email secondary; the email alone when there is no name (F-55:
+ * the API/mock may send none, so this derives nothing fake).
+ */
+function MemberLabel({ member }: { member: MemberCoverage["member"] }) {
+  if (!member.name) return <span className="min-w-0 truncate">{member.email}</span>;
+  return (
+    <span className="flex min-w-0 flex-col">
+      <span className="min-w-0 truncate">{member.name}</span>
+      <span className="min-w-0 truncate text-[13px] font-normal text-text2">{member.email}</span>
+    </span>
+  );
+}
+
 /** A member is stale when the fresh share of their live items is below half. */
 function staleMember(m: MemberCoverage): boolean {
   const items = m.kinds.reduce((s, k) => s + k.items, 0);
@@ -37,10 +53,13 @@ export function CountsOnlyTip() {
   return (
     <InfoTip label="Company" align="end">
       Counts only. You see how many sources each member connected and how fresh they are, never their names or what
-      they hold (S5 Connector auth, S6 Private findings).
+      they hold.
     </InfoTip>
   );
 }
+
+/** Which members a filter chip keeps; pressing the same one again, or All, clears it. */
+type MemberFilter = "without-source" | "stale" | null;
 
 /** Company: per member and source kind, grouped by member. */
 export function CompanyTable({
@@ -54,12 +73,22 @@ export function CompanyTable({
   selected: string | null;
   onSelect: (key: string) => void;
 }) {
+  const [filter, setFilter] = useState<MemberFilter>(null);
   if (data && data.members_with_sources === 0) return <NoSources>No member has connected a source yet</NoSources>;
-  const stale = (data?.members ?? []).filter(staleMember).length;
+  const staleIds = new Set((data?.members ?? []).filter(staleMember).map((m) => m.member.id));
+  const stale = staleIds.size;
+  const allRows = data ? companyRows(data) : undefined;
+  const rows =
+    allRows &&
+    (filter === "without-source"
+      ? allRows.filter((r) => r.kind === null)
+      : filter === "stale"
+        ? allRows.filter((r) => staleIds.has(r.member.id))
+        : allRows);
   const columns: Column<CompanyRow>[] = [
     {
       key: "kind",
-      header: "Kind",
+      header: "Member",
       cell: (r) => (
         <span data-testid="company-kind">
           <Chip kind="acc">{r.kind ? KIND_LABEL[r.kind.kind] : NONE}</Chip>
@@ -108,25 +137,35 @@ export function CompanyTable({
       cell: (r) => <Synced at={r.kind?.last_synced_at} testId="company-synced" />,
     },
   ];
+  const toggle = (f: MemberFilter) => setFilter((cur) => (cur === f ? null : f));
   return (
     <>
       <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5 max-[600px]:px-3">
         {data && (
-          <Chip kind="acc" data-testid="company-members-chip">
-            {data.members_with_sources} of {plural(data.members_total, "member")} have a source
-          </Chip>
+          <button type="button" aria-pressed={filter === "without-source"} onClick={() => toggle("without-source")}>
+            <Chip kind="acc" data-testid="company-members-chip">
+              {data.members_with_sources} of {plural(data.members_total, "member")} have a source
+            </Chip>
+          </button>
         )}
         {stale > 0 && (
-          <Chip kind="warn" data-testid="company-stale-chip">
-            {stale} with stale sources
-          </Chip>
+          <button type="button" aria-pressed={filter === "stale"} onClick={() => toggle("stale")}>
+            <Chip kind="warn" data-testid="company-stale-chip">
+              {stale} with stale sources
+            </Chip>
+          </button>
+        )}
+        {filter && (
+          <button type="button" data-testid="company-filter-all" onClick={() => setFilter(null)}>
+            <Chip kind="line">All</Chip>
+          </button>
         )}
       </div>
       <DataTable
         label="Coverage by member"
         testId="company-table"
         columns={columns}
-        rows={data ? companyRows(data) : undefined}
+        rows={rows}
         rowKey={companyRowKey}
         loading={loading}
         selected={selected}
@@ -135,11 +174,12 @@ export function CompanyTable({
         groupOnly={(r) => r.kind === null}
         groupHeader={(r) => (
           <span className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className="min-w-0 truncate">{memberName(r.member)}</span>
+            <MemberLabel member={r.member} />
             <Chip kind="line">{ROLE_LABEL[r.member.role] ?? r.member.role}</Chip>
             {r.kind === null && <Chip kind="na">No sources</Chip>}
           </span>
         )}
+        empty={filter === "without-source" ? "Every member has a source" : filter === "stale" ? "No stale sources" : undefined}
       />
     </>
   );

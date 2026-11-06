@@ -166,9 +166,50 @@ function mapOut(m: CodeMapRow, me: EngineeringContext["me"], detail: boolean): S
   return detail ? { ...view, content } : view;
 }
 
+/**
+ * Pass F F-5: the "code-map-approval" and "code-map-overrun" scenarios seed the Example repo's
+ * code map building on a run that waits for an owner (its cost over the limit, or paused past
+ * its spend limit). `runId`: the seeded run in that state, so the map's line leads to it.
+ */
+export const CODE_MAP_APPROVAL_SCENARIO = "code-map-approval";
+export const CODE_MAP_OVERRUN_SCENARIO = "code-map-overrun";
+export function seedCodeMaps(scenario: string | null, runId: (status: string) => string | null, ownerEmail: string): CodeMapRow[] {
+  const runStatus = scenario === CODE_MAP_APPROVAL_SCENARIO ? "awaiting_approval" : scenario === CODE_MAP_OVERRUN_SCENARIO ? "paused_overrun" : null;
+  if (!runStatus) return [];
+  return [
+    {
+      id: stableUuid(`code-map/${runStatus}`),
+      source_id: "50000000-0000-4000-8000-000000000002",
+      repo: "example-org/example-app",
+      commit_sha: null,
+      status: "building",
+      sharing: "private",
+      shared_by: null,
+      shared_at: null,
+      partial: false,
+      as_of: null,
+      size_bytes: null,
+      counts: { modules: 0, apis: 0, data_models: 0, flags: 0, jobs: 0 },
+      run_id: runId(runStatus),
+      run_status: runStatus,
+      error: null,
+      failed_at: null,
+      stale_at: null,
+      mine: true,
+      created_at: "2026-10-20T09:00:00Z",
+      content: null,
+      owner_email: ownerEmail,
+      reads: 0,
+    },
+  ];
+}
+
+/** A run that waits for an owner holds its map building until the owner acts. */
+const WAITS_FOR_OWNER = new Set(["awaiting_approval", "paused_overrun"]);
+
 /** A building map's run finishes on its first read after the request. */
 function advance(m: CodeMapRow, ctx: EngineeringContext) {
-  if (m.status !== "building") return;
+  if (m.status !== "building" || WAITS_FOR_OWNER.has(m.run_status ?? "")) return;
   m.reads = (m.reads ?? 0) + 1;
   if (m.reads < 2) return;
   const at = ctx.now();
