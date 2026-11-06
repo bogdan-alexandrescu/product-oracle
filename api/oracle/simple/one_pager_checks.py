@@ -611,7 +611,22 @@ def set_number(body: str, said: str, value: str) -> str | None:
     """``body`` with the number of ``said`` set to ``value``; None when it holds no such
     words (changed since)."""
     m = _number_at(body, said)
-    return None if m is None else body[: m.start()] + value + body[m.end() :]
+    return (
+        None if m is None else body[: m.start()] + _as_written(m.group(0), value) + body[m.end() :]
+    )
+
+
+def _as_written(old: str, value: str) -> str:
+    """``value`` as ``old`` is written: a count in words stays in words ("Eight" -> "Six",
+    its case kept); a numeral, or a value with no word for it, as a numeral."""
+    if old.isdigit() or old.lower() not in _WORDS:
+        return value
+    word = next((w for w, i in _WORDS.items() if str(i) == value), None)
+    if word is None:
+        return value
+    if old.isupper():
+        return word.upper()
+    return word.capitalize() if old[:1].isupper() else word
 
 
 def _fix(

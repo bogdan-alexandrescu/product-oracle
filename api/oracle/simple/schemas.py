@@ -1417,6 +1417,15 @@ class OnePagerFix(BaseModel):
     proposal: OnePagerFixProposal | None = None
 
 
+class OnePagerFixed(BaseModel):
+    """A number fix (set_section_number) in the PRD's working draft, read from the draft's
+    live changes: its words ('Fixed: set to 6 in “Later · 6 items”') and its Undo."""
+
+    change_id: uuid.UUID
+    words: str
+    can_undo: bool
+
+
 class OnePagerLook(BaseModel):
     """One "Needs a look" item for the PRD's owners (numbers that disagree, a code with no
     name): what to look at, and the sections it is in. Shared by the one-pager's checks."""
@@ -1624,6 +1633,8 @@ class OnePagerOut(BaseModel):
     # disagree and its codes with no name (the PRD's owners; ad-onepager), and the checks a
     # build held for owners failed twice (kind "check"; oracle.simple.quality).
     needs_look: list[OnePagerLook] = []
+    # The working draft's number fixes, for those who see the draft (fix round 2).
+    fixed: list[OnePagerFixed] = []
 
 
 # --------------------------------------------------------------------------- S7

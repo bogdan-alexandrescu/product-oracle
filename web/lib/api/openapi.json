@@ -99984,6 +99984,31 @@
         "title": "OnePagerFixProposal",
         "description": "An open proposal of the fix: who made it, and whether the reader decides or\nwithdraws it."
       },
+      "OnePagerFixed": {
+        "properties": {
+          "change_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Change Id"
+          },
+          "words": {
+            "type": "string",
+            "title": "Words"
+          },
+          "can_undo": {
+            "type": "boolean",
+            "title": "Can Undo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "change_id",
+          "words",
+          "can_undo"
+        ],
+        "title": "OnePagerFixed",
+        "description": "A number fix (set_section_number) in the PRD's working draft, read from the draft's\nlive changes: its words ('Fixed: set to 6 in \u201cLater \u00b7 6 items\u201d') and its Undo."
+      },
       "OnePagerFlow": {
         "properties": {
           "title": {
@@ -100622,6 +100647,14 @@
             },
             "type": "array",
             "title": "Needs Look",
+            "default": []
+          },
+          "fixed": {
+            "items": {
+              "$ref": "#/components/schemas/OnePagerFixed"
+            },
+            "type": "array",
+            "title": "Fixed",
             "default": []
           }
         },
