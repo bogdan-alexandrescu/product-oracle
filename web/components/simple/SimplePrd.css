@@ -1,12 +1,23 @@
 /* PS1 a "Calm page": the one-pager in one calm column, ruled blocks, the whole PRD under it, a contents list beside it. */
 
-/* The page: contents | one-pager and the whole PRD | margin notes. */
+/* The page: contents | one-pager and the whole PRD | margin notes. Below 1600 the card needs the width (the plan strip's labels stay whole), so the contents lie in one sticky row over it. */
 @media (min-width: 768px) {
-  .simple-calm-cols { max-width: 1400px; grid-template-columns: 220px minmax(0, 760px) var(--simple-margin); column-gap: 40px; }
+  .simple-calm-cols > article { grid-column: 1; grid-row: 2; }
+  .simple-calm-cols > aside { grid-column: 2; grid-row: 2; }
+  .simple-calm .simple-prd-whole { grid-column: 1; grid-row: 3; }
+  .simple-calm .simple-prd-nav { grid-column: 1 / -1; grid-row: 1; display: flex; flex-flow: row nowrap; align-items: baseline; gap: 4px; position: sticky; top: 0; z-index: 5; overflow-x: auto; padding: 6px 0; background: var(--bg); border-bottom: 1px solid var(--simple-rule); font-size: 15px; line-height: 20px; white-space: nowrap; }
+  .simple-calm .simple-prd-nav a { flex: none; }
+  .simple-calm .simple-prd-nav-title { margin: 0 4px 0 0; }
+  .simple-calm .simple-prd-nav-title:not(:first-child) { margin-left: 12px; }
+}
+@media (min-width: 1600px) {
+  .simple-calm-cols { max-width: 1400px; grid-template-columns: 180px minmax(0, 820px) var(--simple-margin); column-gap: 24px; }
   .simple-calm-cols > article { grid-column: 2; grid-row: 1; }
   .simple-calm-cols > aside { grid-column: 3; grid-row: 1; }
   .simple-calm .simple-prd-whole { grid-column: 2; grid-row: 2; }
-  .simple-calm .simple-prd-nav { grid-column: 1; grid-row: 1 / span 2; align-self: start; position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; display: flex; flex-direction: column; gap: 2px; font-size: 15px; line-height: 20px; }
+  .simple-calm .simple-prd-nav { grid-column: 1; grid-row: 1 / span 2; align-self: start; top: 16px; max-height: calc(100vh - 32px); overflow-x: visible; overflow-y: auto; flex-direction: column; align-items: stretch; gap: 2px; padding: 0; background: none; border-bottom: 0; white-space: normal; }
+  .simple-calm .simple-prd-nav a { flex: initial; }
+  .simple-calm .simple-prd-nav-title { margin: 10px 8px 4px; }
 }
 .simple-prd-nav { display: none; }
 .simple-prd-nav a { display: block; padding: 5px 8px; border-radius: 6px; color: var(--text2); overflow-wrap: anywhere; }
@@ -54,7 +65,11 @@ h4.simple-prd-sec-title { font-size: 18px; line-height: 26px; }
 .simple-prd-code { display: inline; padding: 0; margin: 0; border-radius: 3px; color: var(--accent-ink); font-weight: 600; text-decoration: none; background: transparent; text-align: left; cursor: pointer; }
 .simple-prd-code:hover { background: var(--accent-soft); text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 767px) { .simple-prd-whole { padding: 8px 8px 32px; } }
-@media (min-width: 768px) { .simple-calm .simple-prd-nav { display: flex; } }
 
 /* The One-pagers list: calm rows. */
 .simple-calm-list > li { padding-top: 16px; padding-bottom: 16px; font-size: 18px; }
+
+/* Under the sticky contents row a jump lands clear of it. */
+@media (min-width: 768px) and (max-width: 1599px) {
+  .simple-calm article[aria-label="One-pager"] > section, .simple-calm .simple-prd-sec { scroll-margin-top: 64px; }
+}

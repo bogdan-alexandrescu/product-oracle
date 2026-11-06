@@ -10,8 +10,8 @@ import { expect, test, type Page } from "./test";
  * protects = the one-pager keeps its blocks, Edit, Present and Export PDF; under it the whole PRD
  * reads section by section, numbered (1 Problem …), its codes with their names, its tables in
  * their own box; the contents list jumps to a block or a section; a line that starts with a
- * feature code shows the code as a chip that opens its roadmap item's panel (depends on, dates, goal); a viewer reads it all with
- * no Edit; Present shows the one-pager alone;
+ * feature code shows the code as a chip that opens its roadmap item's panel (depends on, dates,
+ * goal); a viewer reads it all with no Edit; Present shows the one-pager alone;
  * fails_when = the page shows the one-pager only, the PRD's sections carry no numbers, a code
  * shows without its name, or a feature code opens nothing;
  * no_claim = the PRD version's API (GET /v1/documents/{doc}/versions/{n}, unchanged).
