@@ -1,3 +1,5 @@
+import { MOCK_SCENARIO_KEY } from "@/lib/api/mock/ids";
+import { PRIORITIES_BUCKET_ONLY_SCENARIO } from "@/lib/api/mock/simple-priorities";
 import { login } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
@@ -16,8 +18,14 @@ const VIEWER = "viewer@example.com";
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 
-async function open(page: Page, email: string, theme: "light" | "dark", tab = ""): Promise<void> {
-  await page.context().addInitScript((t) => localStorage.setItem("oracle-theme", t), theme);
+async function open(page: Page, email: string, theme: "light" | "dark", tab = "", scenario = ""): Promise<void> {
+  await page.context().addInitScript(
+    ([t, key, sc]) => {
+      localStorage.setItem("oracle-theme", t);
+      if (sc) localStorage.setItem(key, sc);
+    },
+    [theme, MOCK_SCENARIO_KEY, scenario] as const,
+  );
   await login(page, email);
   await page.goto(`/simple/priorities${tab ? `?tab=${tab}` : ""}`);
 }
@@ -73,6 +81,22 @@ for (const [size, viewport] of [["1440", DESKTOP], ["390", PHONE]] as const) {
           await expect(page.getByTestId("item-panel")).toContainText(name);
         });
 
+        test(`S-3: ${email}'s Goal bucket feature with no ranked row opens the feature panel`, async ({ page }) => {
+          await open(page, email, theme, "buckets", PRIORITIES_BUCKET_ONLY_SCENARIO);
+          await expect(page.getByTestId("plan-feature").first()).toBeVisible();
+          // The first goal's first feature is not among the ranked rows: its row still opens it.
+          const first = page.getByTestId("bucket-features").first().getByTestId("plan-feature").first();
+          const opener = first.getByTestId("plan-feature-open");
+          await expect(opener).toBeVisible();
+          await opener.click();
+          // The panel finds the feature by its key: its details, what it depends on and its goal.
+          const panel = page.getByTestId("item-panel");
+          await expect(panel).toContainText("Depends on");
+          await expect(panel).toContainText("Goal");
+          await expect(panel).not.toContainText("not on a roadmap you can see");
+          if (email === VIEWER) await expect(panel).toContainText("You can read this feature");
+        });
+
         test(`P-3, V-4: ${email}'s Value / effort marks name their feature and keep apart; bottom names sit off the zero line`, async ({ page }) => {
           await open(page, email, theme, "value-effort");
           const mark = page.locator('[data-testid="vxe-point"][data-code="alert-export"]');
@@ -88,7 +112,9 @@ for (const [size, viewport] of [["1440", DESKTOP], ["390", PHONE]] as const) {
           for (let i = 0; i < boxes.length; i++)
             for (let j = i + 1; j < boxes.length; j++) {
               const [a, b] = [boxes[i], boxes[j]];
-              const apart = a[2] + 3 <= b[0] || b[2] + 3 <= a[0] || a[3] + 3 <= b[1] || b[3] + 3 <= a[1];
+              // GAP: 4 px (less a layout rounding hair).
+              const gap = 4 - 0.05;
+              const apart = a[2] + gap <= b[0] || b[2] + gap <= a[0] || a[3] + gap <= b[1] || b[3] + gap <= a[1];
               expect(apart, `marks ${i} and ${j} touch`).toBe(true);
             }
           // The zero line: the value tick "0".
@@ -104,6 +130,27 @@ for (const [size, viewport] of [["1440", DESKTOP], ["390", PHONE]] as const) {
           await expect(page.getByText("Each mark shows the feature's code")).toBeHidden();
         });
       }
+
+      if (size === "390")
+        test("P-3: a selected mark's name stays on the phone's screen; the page never scrolls sideways", async ({ page }) => {
+          await open(page, OWNER, theme, "value-effort");
+          const marks = page.getByTestId("vxe-point");
+          await expect(marks.first()).toBeVisible();
+          const n = await marks.count();
+          expect(n).toBeGreaterThan(1);
+          for (let k = 0; k < n; k++) {
+            const mark = marks.nth(k);
+            await mark.scrollIntoViewIfNeeded();
+            await mark.click();
+            const tag = mark.getByTestId("vxe-name");
+            await expect(tag).toBeVisible();
+            const b = (await tag.boundingBox())!;
+            const code = await mark.getAttribute("data-code");
+            expect(b.x, `${code}'s name runs off the left`).toBeGreaterThanOrEqual(0);
+            expect(b.x + b.width, `${code}'s name runs off the right`).toBeLessThanOrEqual(PHONE.width);
+            expect(await page.evaluate(() => document.documentElement.scrollWidth), `${code}'s name widens the page`).toBe(PHONE.width);
+          }
+        });
 
       test("V-3: the Compare switch's off knob stands out from its track", async ({ page }) => {
         await open(page, OWNER, theme);

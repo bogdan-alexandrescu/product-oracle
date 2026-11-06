@@ -91,14 +91,11 @@ test.describe("QA pass 4: simple-plan, phone", () => {
     await open(page, "?tab=value-effort");
     await expect(page.getByTestId("vxe-point").first()).toBeVisible();
     await page.waitForTimeout(300);
-    // V-4 spaced the marks apart, so which line's words find room depends on the layout: a line
-    // whose words are left out is named in the legend, and only then.
-    const effort = (await page.getByTestId("vxe-middle-effort").count()) > 0;
-    const value = (await page.getByTestId("vxe-middle-value").count()) > 0;
-    const legend = page.getByTestId("vxe-legend-middles");
-    if (effort && value) await expect(legend).toHaveCount(0);
-    else if (!effort && !value) await expect(legend).toHaveText("The dashed lines are the middle effort (up and down) and the middle value (across).");
-    else await expect(legend).toHaveText(effort ? "The dashed line across is the middle value." : "The dashed line up and down is the middle effort.");
+    // Pinned layout: at 320 wide the middle effort's words fit, the middle value's do not, so the
+    // legend names that line (and only that one).
+    await expect(page.getByTestId("vxe-middle-effort")).toHaveCount(1);
+    await expect(page.getByTestId("vxe-middle-value")).toHaveCount(0);
+    await expect(page.getByTestId("vxe-legend-middles")).toHaveText("The dashed line across is the middle value.");
   });
 });
 
