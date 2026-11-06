@@ -1,4 +1,9 @@
+import { readFileSync } from "node:fs"; // MOCK-HOOK
 import type { NextConfig } from "next";
+
+// MOCK-HOOK (mk-prd-look): MOCK_PRD_FILE names a JSON file of real PRDs; the mock build inlines it
+// (NEXT_PUBLIC_MOCK_PRD) so the mock's PRDs read it. Mock-ups only; the file never leaves the laptop.
+const MOCK_PRD = process.env.MOCK_PRD_FILE ? readFileSync(process.env.MOCK_PRD_FILE, "utf8") : ""; // MOCK-HOOK
 
 // The browser talks to the API through this app (same origin), so the session
 // cookie needs no CORS. Resolved at build time in production builds.
@@ -50,7 +55,10 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   // Simple (#723) behind ORACLE_SIMPLE_MODE, off by default; on in the mock build, whose
   // specs drive Simple's screens (app/simple/_flag.ts).
-  env: { ORACLE_SIMPLE_MODE: process.env.ORACLE_SIMPLE_MODE ?? (process.env.NEXT_PUBLIC_API_MOCKS === "1" ? "1" : "") },
+  env: {
+    ORACLE_SIMPLE_MODE: process.env.ORACLE_SIMPLE_MODE ?? (process.env.NEXT_PUBLIC_API_MOCKS === "1" ? "1" : ""),
+    NEXT_PUBLIC_MOCK_PRD: MOCK_PRD, // MOCK-HOOK
+  },
   partialPrefetching: true,
   experimental: {
     // brief-answers: the /v1 proxy waits as long as a call may take. Next's default (30 s)

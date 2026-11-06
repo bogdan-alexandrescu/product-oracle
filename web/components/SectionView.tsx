@@ -58,6 +58,7 @@ export const SectionView = memo(function SectionView({
   onDiscuss,
   placeholder = false,
   codes,
+  look, // MOCK-HOOK
 }: {
   section: SectionOut;
   blocks: Block[];
@@ -98,6 +99,8 @@ export const SectionView = memo(function SectionView({
   placeholder?: boolean;
   /** #305: the codes this version names, built once per version. */
   codes?: CodeIndex;
+  /** MOCK-HOOK (mk-prd-look): the section's number, a meta line, the review bar hidden, a tool open. */
+  look?: { num?: string; meta?: ReactNode; hideReview?: boolean; tool?: "edit" }; // MOCK-HOOK
 }) {
   const Heading = (`h${Math.min(section.level, 3)}` as "h1" | "h2" | "h3");
   // E1: a spec's part states; the acceptance criteria's proposed half starts at a block.
@@ -119,7 +122,7 @@ export const SectionView = memo(function SectionView({
   }, [blocks, states]);
   const locked = section.verdict?.verdict === "approved" && !section.verdict.lapsed_at;
   // The tool picked from the ⋯ menu, shown under the review bar; a new pick remounts it.
-  const [tool, setTool] = useState<{ kind: Tool; n: number } | null>(null);
+  const [tool, setTool] = useState<{ kind: Tool; n: number } | null>(look?.tool ? { kind: look.tool, n: 1 } : null); // MOCK-HOOK
   // Preselect the baseline item the section names (heading first, then its text).
   const suggested = useMemo(() => {
     if (!evidenceTargets) return null;
@@ -144,15 +147,20 @@ export const SectionView = memo(function SectionView({
       tabIndex={-1}
       aria-labelledby={`h-${section.section_key}`}
       data-layer={section.layer}
+      data-level={section.level} // MOCK-HOOK
       className={`min-w-0 scroll-mt-6 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent ${
         nested ? "py-3" : "px-6 py-5 max-[600px]:px-4 max-[600px]:py-4"
       }`}
     >
-      <div className="mb-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+      <div
+        data-pt1-head // MOCK-HOOK
+        className="mb-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
+      >
         <Heading
           id={`h-${section.section_key}`}
           className={`min-w-0 ${nested ? HEADING_CLASS[3] : HEADING_CLASS[Math.min(section.level, 3)]} text-text`}
         >
+          {look?.num && <span className="pt1-num">{look.num}</span> /* MOCK-HOOK */}
           {section.heading}
           {dateMarks
             ?.filter((m) => m.label && m.where === "heading")
@@ -254,6 +262,7 @@ export const SectionView = memo(function SectionView({
           )}
         </span>
       </div>
+      {look?.meta && <div className="pt1-meta">{look.meta}</div> /* MOCK-HOOK */}
       {topState && (
         <p className="mb-3" data-testid="spec-state-top">
           <SpecStateBadge state={topState} />
@@ -292,7 +301,7 @@ export const SectionView = memo(function SectionView({
           codes={codes}
         />
       </div>
-      {!nested && (
+      {!nested && !look?.hideReview /* MOCK-HOOK */ && (
         <SectionReviewBar
           heading={section.heading}
           verdict={section.verdict}

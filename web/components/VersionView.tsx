@@ -34,6 +34,7 @@ import { DateMarker, type ExpandCtx, type Highlight } from "@/components/Markdow
 import { DraftNewItems } from "@/components/DraftNewItems";
 import { DraftWithOracleButton, isTemplateOnly } from "@/components/DraftWithOracle";
 import { SectionView } from "@/components/SectionView";
+import { PrdLook, usePt1 } from "@/components/PrdLook"; // MOCK-HOOK
 import { SpecDesignLinks } from "@/components/DesignReview";
 import { SpecStaleness } from "@/components/SpecStaleness";
 import { buildCodeIndex } from "@/lib/code-index";
@@ -193,6 +194,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [sheet, setSheet] = useState<"sections" | "review" | "more" | null>(null);
   const phone = usePhone();
+  const pt1 = usePt1(); // MOCK-HOOK (mk-prd-look)
   const [railCollapsed, setRailCollapsed] = useRailCollapsed(me?.user_id ?? me?.token_id ?? null);
   const railFilter = useOutlineFilter();
   const switcherFilter = useOutlineFilter();
@@ -363,7 +365,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   const hasBrief = briefSections.length > 0;
   const linkKey = hashLink?.n === n ? keyFromHash(hashLink.hash, allKeys) : null;
   const linkedDetail = !!linkKey && !briefSections.some((s) => s.section_key === linkKey);
-  const view: DocumentView = hasBrief ? (viewOverride ?? (linkedDetail ? "full" : savedView)) : "full";
+  const view: DocumentView = pt1.look ? "full" /* MOCK-HOOK */ : hasBrief ? (viewOverride ?? (linkedDetail ? "full" : savedView)) : "full";
   // Brief / Full says which sections exist; the strip and the arrows step through these.
   const shownSections = view === "brief" ? briefSections : sections;
   const hashKey = keyFromHash(hash, allKeys);
@@ -427,6 +429,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   }, [openKey, view, opened, sections]);
 
   /** Opens a section: a new history entry, so back and forward step through sections. */
+  const setCurrentKey = useCallback((key: string) => setHash(`#${key}`), []); // MOCK-HOOK
   const select = useCallback((key: string) => {
     setHash(`#${key}`);
     if (decodeURIComponent(window.location.hash.slice(1)) !== key) window.history.pushState(null, "", `#${key}`);
@@ -1464,7 +1467,37 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
 
         {/* The outline rail (>= 1280 px), the section with the switcher above it below that,
             and the review panel; each column sticks and scrolls inside itself. */}
-        {onDocument && (
+        {/* MOCK-HOOK (mk-prd-look): the five PRD looks. */}
+        {onDocument && pt1.look && version && (
+          <PrdLook
+            look={pt1.look}
+            sections={shownSections}
+            states={sectionStates}
+            codes={codes}
+            citations={citations}
+            current={openKey}
+            onCurrent={setCurrentKey}
+            toc={pt1.toc}
+            sec={pt1.sec}
+            edit={pt1.edit}
+            versionAt={version.created_at ? formatDate(version.created_at) : null}
+            side={panel("side")}
+            render={(s, look) => (
+              <SectionView
+                key={s.id}
+                {...sectionProps(s)}
+                showLayer={false}
+                look={look}
+                headTools={
+                  <Button icon="comment" className="min-[1101px]:hidden max-[639px]:hidden" onClick={showFeedback} aria-label={`Open feedback on this section: ${openCounts.get(s.section_key) ?? 0}`}>
+                    Feedback <b className="tnum text-accent-ink">{openCounts.get(s.section_key) ?? 0}</b>
+                  </Button>
+                }
+              />
+            )}
+          />
+        )}
+        {onDocument && !pt1.look /* MOCK-HOOK */ && (
         <div
           data-testid="prd-layout"
           className={`grid items-start gap-4 max-[1100px]:grid-cols-1 max-[600px]:gap-3 ${

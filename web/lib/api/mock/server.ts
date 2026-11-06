@@ -14,6 +14,7 @@ import { MOCK_SCENARIO_KEY, mockUuid, seeded, stableUuid } from "./ids";
 import { addDecisionEntity, addDuplicateProposals, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, addStatusOverlapProposals, addThreeWayConflict, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, readMetricIntoGoal, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
 import { BLOCKER_NARROWED_SCENARIO, documentGate, narrowResolvedBlocker, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
+import { MK_PRD, realPrds, realStatus, withRealPrd } from "./mk-prd-look"; // MOCK-HOOK
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
 import { applied, handOver, membersDetailRoute, type MembersContext, type MembersDb } from "./members";
 import type { HandOver } from "@/lib/api/members-types";
@@ -664,7 +665,8 @@ const ROLES: readonly Schemas["Me"]["role"][] = ["viewer", "commenter", "approve
 
 /** The signed-in member, with the role overridden when a test set MOCK_ROLE_KEY. */
 function withMockRole<T extends { role: Schemas["Me"]["role"] }>(member: T): T {
-  const role = localStorage.getItem(MOCK_ROLE_KEY) as Schemas["Me"]["role"] | null;
+  const asRole = new URLSearchParams(window.location.search).get("as"); // MOCK-HOOK (mk-prd-look): &as=viewer
+  const role = (asRole ?? localStorage.getItem(MOCK_ROLE_KEY)) as Schemas["Me"]["role"] | null; // MOCK-HOOK
   return role && ROLES.includes(role) ? { ...member, role } : member;
 }
 const LATENCY_MS = 60;
@@ -2294,13 +2296,19 @@ function seed(): Db {
     resend_count: 0,
   }));
   const docs = new Map<string, DocumentRow>();
-  for (const d of DOCUMENTS as DocumentSeed[]) {
+  // MOCK-HOOK (mk-prd-look): the invented PRD first, then the mock's PRDs; MOCK_PRD_FILE's PRDs replace them in this order.
+  const mkOrder = [MK_PRD, ...(DOCUMENTS as DocumentSeed[])]; // MOCK-HOOK
+  const mkPrds = mkOrder.filter((x) => (x.kind ?? "prd") === "prd"); // MOCK-HOOK
+  const mkReal = realPrds(); // MOCK-HOOK
+  for (const d0 of mkOrder) { // MOCK-HOOK
+    const real = mkReal[mkPrds.indexOf(d0)]; // MOCK-HOOK
+    const d = withRealPrd(d0, real); // MOCK-HOOK
     const last = d.versions[d.versions.length - 1];
     const row: DocumentRow = {
       id: uuid(),
       slug: d.slug,
       title: d.title,
-      status: "draft",
+      status: realStatus(real, d0 === MK_PRD ? "in_review" : "draft") as DocumentRow["status"], // MOCK-HOOK
       kind: d.kind ?? "prd",
       template: d.template ?? null,
       template_version: d.template_version ?? null,
@@ -2313,8 +2321,19 @@ function seed(): Db {
     for (const v of d.versions) db.versions.push(buildVersion(row, v));
   }
 
-  const ver = (slug: string, n: number) => findVersion(db, docs.get(slug)!, n)!;
+  const ver = (slug: string, n: number) => findVersion(db, docs.get(slug)!, n) ?? db.versions.filter((v) => v.document_id === docs.get(slug)!.id).at(-1)!; // MOCK-HOOK
   const at = (iso: string) => ({ created_at: iso });
+
+  // MOCK-HOOK (mk-prd-look): the invented PRD's review state: some sections approved, one sent back, feedback on two.
+  {
+    const mk = ver(MK_PRD.slug, MK_PRD.versions[0].number); // MOCK-HOOK
+    const has = (k: string) => mk.sections.some((x) => x.section_key === k); // MOCK-HOOK
+    for (const k of ["summary", "goal-trace", "problem", "non-goals", "audience", "why-now", "feature-f-1", "feature-f-2", "feature-f-3"]) // MOCK-HOOK
+      if (has(k)) addReview(db, mk, k, { verdict: "approved", note: "" }, { created_at: "2026-11-05T10:12:00Z" }); // MOCK-HOOK
+    if (has("risks")) addReview(db, mk, "risks", { verdict: "changes_requested", note: "K9 needs a date for the talk with the union reps." }, { created_at: "2026-11-05T11:40:00Z" }); // MOCK-HOOK
+    if (has("requirements")) addComment(db, mk, { section_key: "requirements", anchor: { exact: "A job cannot close without either a signature or a reason for none", prefix: "", suffix: "" }, body: "What counts as a reason? A short list would stop free text here." }, at("2026-11-05T09:30:00Z")); // MOCK-HOOK
+    if (has("risks")) addComment(db, mk, { section_key: "risks", anchor: { exact: "Union reps object to recorded time on site", prefix: "", suffix: "" }, body: "Jonah, can we meet the reps before the pilot rather than after?" }, at("2026-11-05T11:42:00Z")); // MOCK-HOOK
+  }
 
   // Checkout redesign: v1 was reviewed, v2 answered that feedback.
   const c1 = ver("checkout-redesign", 1);
@@ -2524,6 +2543,15 @@ function ensureReviewV2(db: Db): ReviewV2Db {
   if (db.review_v2) return db.review_v2;
   const prd = db.documents.find((d) => d.kind === "prd");
   db.review_v2 = seedReviewV2(prd, prd ? docVersions(db, prd).pop() : undefined, db.user_id, hash);
+  // MOCK-HOOK (mk-prd-look): every section of the invented PRD has an owner.
+  const mkDoc = db.documents.find((d) => d.slug === MK_PRD.slug); // MOCK-HOOK
+  const mkV = mkDoc ? docVersions(db, mkDoc).pop() : undefined; // MOCK-HOOK
+  const mkPeople = db.members.filter((m) => m.role !== "viewer"); // MOCK-HOOK
+  if (mkDoc && mkV && mkPeople.length) // MOCK-HOOK
+    mkV.sections.forEach((x, i) => { // MOCK-HOOK
+      if (db.review_v2!.assignments.some((a) => a.document_id === mkDoc.id && a.section_key === x.section_key)) return; // MOCK-HOOK
+      db.review_v2!.assignments.push({ document_id: mkDoc.id, section_key: x.section_key, owner_id: mkPeople[Math.floor(i / 4) % mkPeople.length].id, reviewer_ids: [], due_at: null, overdue: false, lock_version: 1, updated_at: "2026-11-04T16:20:00Z" }); // MOCK-HOOK
+    }); // MOCK-HOOK
   // The "plan-decider" scenario (#346): the approver is usage-alerts-roadmap's designated decider.
   const roadmapDoc = db.documents.find((d) => d.slug === ALERTS_ROADMAP_SLUG);
   const decider = db.members.find((x) => x.email === "approver@example.com");

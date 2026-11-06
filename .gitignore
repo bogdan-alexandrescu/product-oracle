@@ -11,3 +11,6 @@ __pycache__/
 
 # Node / Next.js (web/.gitignore has the rest)
 node_modules/
+
+# mk-prd-look: real PRD content for the mock-ups never leaves the owner's laptop
+mockups-out/**/real-*
