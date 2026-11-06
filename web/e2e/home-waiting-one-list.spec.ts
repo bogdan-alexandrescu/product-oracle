@@ -28,8 +28,9 @@ import { expect, test, type Page } from "./test";
  * by its name across PRDs, never one PRD's "M1 · …" plan milestones; fails_when = a row is a
  * PRD's milestone code or the strip is drawn for one PRD.
  *
- * Card proposed-goals: protects = Home lists each proposed goal with Confirm and Not this;
- * confirming one puts it in the goal band; fails_when = the line only counts them.
+ * Card proposed-goals: protects = Home lists each proposed goal with Confirm and Not this, read as
+ * Decisions reads it ("Proposed goal · <name>"); confirming one puts it in the goal band;
+ * fails_when = the line only counts them, or Home's row names the goal alone.
  *
  * Card act-on-home: protects = confirming dates in Home's "Also waiting for you" takes the row
  * off Home and the rail's count down at once, with no navigation; fails_when = the row stays on
@@ -70,7 +71,9 @@ import { expect, test, type Page } from "./test";
  * number; fails_when = it names kinds that are not there.
  *
  * Card drafting-cap: protects = while Oracle drafts a new item Home reads again, backing off, and
- * stops after a while with a short line and Refresh; fails_when = it keeps reading forever.
+ * stops after a while with a short line and Refresh; once that item is drafted, a later goal
+ * suggestion's new item is read again by itself; fails_when = it keeps reading forever, or Home
+ * stays on "still drafting" for the later item until Refresh.
  *
  * Card roadmap-badge: protects = the rail's Roadmap count is the Roadmap's "Needs a decision"
  * count and its tooltip says what it counts; fails_when = the two numbers differ.
@@ -247,7 +250,9 @@ for (const phone of [false, true]) {
     test("Home lists a proposed goal with Confirm and Not this", async ({ page }) => {
       await login(page);
       await page.goto("/simple");
-      const proposed = page.getByTestId("home-goal-proposed").filter({ hasText: "Cut early churn" });
+      // It reads as on Decisions: "Proposed goal · Cut early churn", with Confirm and Not this.
+      const proposed = page.getByTestId("home-goals-proposed-list").getByRole("listitem", { name: "Proposed goal: Cut early churn" });
+      await expect(proposed).toContainText("Proposed goal · Cut early churn");
       await expect(proposed.getByRole("button", { name: "Not this" })).toBeVisible();
       await expect(decisionsCount(page)).toHaveText(/^\d+$/);
       const before = await num(decisionsCount(page));
@@ -384,6 +389,8 @@ for (const phone of [false, true]) {
       const mine = page.getByTestId("questions-mine");
       const goal = mine.getByRole("listitem", { name: "Proposed goal: Cut early churn" });
       await expect(goal).toBeVisible();
+      // The same words as Home's row, with no second line saying it again.
+      await expect(goal).toHaveText(/^Proposed goal · Cut early churn\s*Confirm\s*Not this$/);
       await expect(goal.getByRole("button", { name: "Not this" })).toBeVisible();
       const before = Number(await page.getByTestId("questions-mine-count").textContent());
       await expect(decisionsCount(page)).toHaveText(String(before));
@@ -433,6 +440,45 @@ for (const phone of [false, true]) {
       await page.clock.fastForward(5 * 60_000);
       await expect(slow).toBeVisible();
       await slow.getByRole("button", { name: "Refresh" }).click();
+      await expect(slow).toHaveCount(0);
+    });
+
+    test("Once drafting ends, a later goal suggestion's new item is read again on its own", async ({ page }) => {
+      await login(page);
+      await page.evaluate((k) => localStorage.setItem(k, String(30 * 60_000)), MOCK_DRAFTING_MS_KEY);
+      await page.goto("/simple");
+      const also = page.getByTestId("home-also-waiting-list");
+      const suggestion = also.getByRole("listitem", { name: /^Goal suggestion: / });
+      await expect(suggestion.first()).toBeVisible();
+      await suggestion.first().getByRole("button", { name: "Confirm" }).click();
+      const slow = page.getByTestId("home-drafting-slow");
+      await expect
+        .poll(
+          async () => {
+            await page.clock.fastForward(30_000);
+            return slow.count();
+          },
+          { timeout: 60_000, intervals: [1_000] },
+        )
+        .toBe(1);
+      // The first item is drafted meanwhile; the next suggestion's item drafts in seconds.
+      await page.clock.fastForward(30 * 60_000);
+      await page.evaluate((k) => localStorage.setItem(k, "5000"), MOCK_DRAFTING_MS_KEY);
+      const next = suggestion.first();
+      const title = (await next.getAttribute("aria-label"))!.replace(/^Goal suggestion: /, "");
+      await next.getByRole("button", { name: "Confirm" }).click();
+      await expect(also.getByRole("listitem", { name: `Goal suggestion: ${title}` })).toHaveCount(0);
+      // Not stuck on "still drafting": Home reads again by itself and its dates come, with no Refresh.
+      await expect(slow).toHaveCount(0);
+      await expect
+        .poll(
+          async () => {
+            await page.clock.fastForward(2_000);
+            return also.getByRole("listitem", { name: `Dates to confirm: ${title}` }).count();
+          },
+          { timeout: 30_000, intervals: [1_000] },
+        )
+        .toBe(1);
       await expect(slow).toHaveCount(0);
     });
   });
