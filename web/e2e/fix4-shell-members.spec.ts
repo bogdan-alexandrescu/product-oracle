@@ -26,12 +26,12 @@ const selectFits = (select: Locator) =>
     return { whole: box.width + 0.5 >= needs, inCell: box.left >= cell.left - 0.5 && box.right <= cell.right + 0.5 };
   });
 
-/** pass-f F-52: the whole email shows, never cut; it wraps only after its @ or before a dot, and its title holds it. */
+/** pass-f F-52: the whole email shows, never cut; it wraps only after its @, and its title holds it. */
 const emailWhole = (email: Locator) =>
   email.evaluate((e) => {
     // Nothing cut: the box is as wide as its words.
     if (e.scrollWidth > e.clientWidth + 1 || e.getAttribute("title") !== e.textContent) return false;
-    // Each part between breaks (after the @, before a dot) stays on one line.
+    // Each part between breaks (before and after the @) stays on one line.
     const walker = document.createTreeWalker(e, NodeFilter.SHOW_TEXT);
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
       const range = document.createRange();
@@ -77,7 +77,7 @@ for (const width of [1440, 1512]) {
         for (const email of ["commenter@example.com", "approver@example.com", "viewer@example.com"]) {
           expect(await selectFits(page.getByLabel(`Role for ${email}`)), email).toEqual({ whole: true, inCell: true });
         }
-        // Emails read whole, wrapping only after the @ or before a dot.
+        // Emails read whole, wrapping only after the @.
         const emails = page.getByTestId("member-email");
         await expect(emails.first()).toBeVisible();
         for (const el of await emails.all()) expect(await emailWhole(el), await el.innerText()).toBe(true);

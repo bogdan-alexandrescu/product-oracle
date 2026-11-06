@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Field, INPUT, SELECT } from "@/app/settings/_components/fields";
 import { normaliseDomain } from "@/app/settings/sources/CompanyDrive";
 import { Button, Chip, Icon, InfoTip, Notice, Panel, SegmentedControl } from "@/components/ds";
+import { LoadError } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -114,10 +115,18 @@ export function SignInRules() {
       }
     >
       <div className="flex flex-col gap-4 p-4 max-[600px]:p-3">
-        {q.error && <Notice tone="error">{q.error}</Notice>}
+        {q.error && <LoadError what="the sign-in rules" error={q.error} onRetry={() => void q.reload()} />}
         {!rules && !q.error && <span aria-busy className="block h-3 w-1/2 animate-pulse rounded bg-surface2" />}
         {rules && !rules.google_sign_in && (
-          <Notice>Google sign-in is off for this Oracle, so these rules don&apos;t apply: people sign in with a password.</Notice>
+          // pass-f F-30: one short line; why is behind the (i).
+          <Notice testId="google-sign-in-off">
+            <span className="inline-flex items-center gap-1.5">
+              These rules don&apos;t apply here.
+              <InfoTip label="Google sign-in" align="start">
+                Google sign-in is off for this Oracle, so people sign in with a password.
+              </InfoTip>
+            </span>
+          </Notice>
         )}
         {rules?.google_sign_in && rules.new_sign_ins_off && <Notice>New sign-ins are turned off where Oracle is deployed.</Notice>}
         {rules && (

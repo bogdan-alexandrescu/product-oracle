@@ -6125,7 +6125,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     const stored = mockSettingValue("company_email_domains");
     const set = (Array.isArray(stored) ? stored : []).map(String).filter((d) => !SIGN_IN_DOMAINS.includes(d));
     const rules: Schemas["SignInRulesOut"] = {
-      google_sign_in: true,
+      // The no-google-sign-in scenario: an Oracle deployed without Google sign-in in front.
+      google_sign_in: localStorage.getItem(MOCK_SCENARIO_KEY) !== "no-google-sign-in",
       new_sign_ins_off: false,
       domains: [...SIGN_IN_DOMAINS.map((domain) => ({ domain, from: "deployment" as const })), ...set.map((domain) => ({ domain, from: "settings" as const }))],
       without_invite: String(mockSettingValue("sign_in_without_invite") ?? "request") as Schemas["SignInRulesOut"]["without_invite"],

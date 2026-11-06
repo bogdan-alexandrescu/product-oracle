@@ -843,7 +843,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
               </span>
               {personName(m) !== m.email && (
                 // Not `truncate`: on a phone the table undoes that class and wraps anywhere.
-                // pass-f F-52: the whole address, breaking only after its @ or before a dot.
+                // pass-f F-52: the whole address, breaking only after its @.
                 <span data-testid="member-email" title={m.email} className="block max-w-full text-[13px] font-normal break-words text-text2">
                   {/* At its @ only: "admin@" then "example.com", never a lone ".com". */}
                   {m.email.slice(0, m.email.indexOf("@") + 1)}

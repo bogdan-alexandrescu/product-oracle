@@ -100,8 +100,8 @@ test.describe("at 1440 px", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
   // pass-f F-52 replaces qa4-settings-10's one-line rule: the whole address shows, wrapping
-  // only after its @ or before a dot, and its title still holds it.
-  test("qa4-settings-10 / pass-f F-52: member emails read whole, wrapping only at the @ or a dot", async ({ page }) => {
+  // only after its @, and its title still holds it.
+  test("qa4-settings-10 / pass-f F-52: member emails read whole, wrapping only at the @", async ({ page }) => {
     await openMembers(page);
     const emails = page.getByTestId("member-email");
     await expect(emails.first()).toBeVisible();
@@ -109,7 +109,7 @@ test.describe("at 1440 px", () => {
       el.evaluate((e) => {
         // Nothing cut: the box is as wide as its words.
         if (e.scrollWidth > e.clientWidth + 1 || e.getAttribute("title") !== e.textContent) return false;
-        // Each part between breaks (after the @, before a dot) stays on one line.
+        // Each part between breaks (before and after the @) stays on one line.
         const walker = document.createTreeWalker(e, NodeFilter.SHOW_TEXT);
         for (let n = walker.nextNode(); n; n = walker.nextNode()) {
           const range = document.createRange();
