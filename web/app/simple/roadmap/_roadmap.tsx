@@ -958,7 +958,7 @@ export function SimpleRoadmap() {
   // trash-features-goals: a Gantt or Timeline row's context menu (a right-click, or the menu
   // key on a focused bar) offers Delete feature to who decides on it (its own can_decide).
   const [rowMenu, setRowMenu] = useState<{ id: string; x: number; y: number } | null>(null);
-  const removeFeature = useFeatureDelete(reload, toast);
+  const removeFeature = useFeatureDelete(reload, toast, (id) => setCard((c) => (c?.id === id ? null : c)));
   const onRowMenu = (e: ReactMouseEvent) => {
     const el = (e.target as Element).closest("[data-bar-id],[data-item-id]");
     const it = el ? byId.get(el.getAttribute("data-bar-id") ?? el.getAttribute("data-item-id") ?? "") : undefined;
@@ -1482,7 +1482,6 @@ export function SimpleRoadmap() {
             title={rowMenuItem.title}
             onClose={() => setRowMenu(null)}
             onDelete={() => {
-              if (card?.id === rowMenuItem.id) setCard(null);
               void removeFeature(rowMenuItem);
             }}
           />

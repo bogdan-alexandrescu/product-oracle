@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { toast as dsToast, type ToastAsk } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
-import { CARD_CHANGED_EVENT } from "@/lib/api/simple-chat";
+import { CARD_CHANGED_EVENT, GOAL_OPS, sendGoalChanged } from "@/lib/api/simple-chat";
 import { useQuery } from "@/lib/use-query";
 
 import { FloatingCard, type Act } from "./_card";
@@ -86,8 +86,22 @@ export function FeaturePanel({
         const r = await propose(body);
         toast({
           message: resultWords(r, what, item?.deciders),
-          action: r.change.status === "applied" && r.change.can_undo ? { label: "Undo", onClick: () => void undo(r.change.id).then(reload, (e) => toast({ message: String(e.message) })) } : undefined,
+          action:
+            r.change.status === "applied" && r.change.can_undo
+              ? {
+                  label: "Undo",
+                  onClick: () =>
+                    void undo(r.change.id).then(
+                      () => {
+                        if (GOAL_OPS.includes(body.op)) sendGoalChanged();
+                        return reload();
+                      },
+                      (e) => toast({ message: String(e.message) }),
+                    ),
+                }
+              : undefined,
         });
+        if (r.change.status === "applied" && GOAL_OPS.includes(body.op)) sendGoalChanged();
       } catch (e) {
         if (e instanceof ChangeFailed && e.status === 409) {
           const changed = changedWords(e.changed);
@@ -103,6 +117,7 @@ export function FeaturePanel({
     try {
       await decide(c.id, how);
       toast({ message: how === "accept" ? "Accepted: it is in your working draft" : "Declined" });
+      if (how === "accept" && GOAL_OPS.includes(c.op)) sendGoalChanged();
     } catch (e) {
       toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not decide it" });
     }

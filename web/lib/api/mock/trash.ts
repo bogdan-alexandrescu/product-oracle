@@ -46,7 +46,7 @@ export interface TrashEntryRow {
   roadmap?: string;
   /** trash-features-goals: a goal deleted with features moved to another goal: their goal_ids
    * as they were (trash_items' `links`), put back on Restore. */
-  goal_links?: { id: string; goal_ids: string[] }[];
+  goal_links?: { id: string; goal_ids: string[]; left?: string[] }[];
 }
 
 export interface TrashDb {
@@ -199,10 +199,12 @@ export function restoreFromTrash(db: TrashDb, entry: TrashEntryRow, now: string,
   // trash_items._onto_current: back on every version published while it was in Trash.
   if (root.type === "feature")
     for (const v of simple?.versions ?? []) if (!entry.roadmap || v.roadmap === entry.roadmap) v.without = v.without.filter((k) => k !== root.slug);
-  // trash_items.after_restore: the features a delete moved get their goals back exactly.
+  // trash_items.after_restore: the features a delete moved get their goals back exactly; one
+  // whose goals changed since (moved to another goal) keeps them.
   for (const l of entry.goal_links ?? []) {
     const f = simple?.goal_buckets?.features?.find((x) => x.id === l.id);
-    if (f) f.goal_ids = [...l.goal_ids];
+    const left = new Set(l.left ?? f?.goal_ids ?? []);
+    if (f && f.goal_ids.length === left.size && f.goal_ids.every((g) => left.has(g))) f.goal_ids = [...l.goal_ids];
   }
   db.entries = db.entries.filter((e) => e !== entry);
   return entryOut(entry, now);
