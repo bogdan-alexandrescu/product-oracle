@@ -88,7 +88,9 @@ for (const viewport of [DESKTOP, PHONE])
       await expect(sheets.getByRole("tooltip")).toHaveText("This roadmap item is not a feature in the Ground Truth.");
       await expect(sheets.getByRole("button", { name: /Add to Ground Truth/ })).toBeVisible();
       // Linked to a feature a run only proposed: it says so, with Confirm it.
-      await expect(row(page, "Weekly digest")).toContainText("Waiting to be confirmed: F-14 Weekly digest");
+      const unconfirmed = row(page, "Weekly digest").getByTestId("gt-unconfirmed");
+      await expect(unconfirmed).toContainText("Waiting to be confirmed");
+      await expect(unconfirmed.getByTestId("code-chip")).toHaveAccessibleName("F-14 Weekly digest");
       await expect(row(page, "Weekly digest").getByRole("button", { name: /Confirm it/ })).toBeVisible();
       await expect(row(page, "Guest invites")).toContainText("F-09a");
       await openKind(page, "prd_feature_missing");

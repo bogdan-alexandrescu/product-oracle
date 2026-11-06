@@ -18,7 +18,7 @@ import { useQuery } from "@/lib/use-query";
 
 /** One-pagers (#723 S1): the PRDs I may read (the API lists only those), each opening its one-pager. */
 export default function OnePagers() {
-  const q = useQuery("simple|one-pagers", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
+  const q = useQuery("simple|one-pagers", () => unwrap(api.GET("/v1/simple/one-pagers")));
   const zone = useCompanyZone();
   const canStartPrd = useCanStartPrd();
   const [newPrd, setNewPrd] = useState(false);

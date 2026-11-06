@@ -15,7 +15,7 @@ import { MOCK_SCENARIO_KEY, mockUuid, seeded, stableUuid } from "./ids";
 import { acceptNewFeatures, addDecisionEntity, addDuplicateProposals, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, addStatusOverlapProposals, addThreeWayConflict, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, readMetricIntoGoal, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
 import { BLOCKER_NARROWED_SCENARIO, documentGate, narrowResolvedBlocker, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
-import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
+import { BIG_PRD, BIG_PRD_COMMENTS, BIG_STRATEGY, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
 import { applied, handOver, membersDetailRoute, type MembersContext, type MembersDb } from "./members";
 import type { HandOver } from "@/lib/api/members-types";
 import { accountRoute, liveCredentials, openTokens, passwordOk, revokeMemberTokens, seedAccount, type AccountDb } from "./account";
@@ -149,7 +149,7 @@ import {
 } from "./quality";
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
-import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, seedStoredRefusalDraft, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
+import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, seedStoredRefusalDraft, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb, draftItemsRunRetried } from "./draft-roadmap";
 import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, PLAN_SAME_KEY_SCENARIO, SAME_KEY_ITEM, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, NOT_CLAIMS_LINE, NOT_CLAIMS_SCENARIO, SHARED_DATE_SCENARIO, TWO_WAY_DATES_SCENARIO, TWO_WAY_GA, VERSION_WARNINGS_SCENARIO, dateMarks, dateWarnings, versionWarnings, inboxTracks, planEntityTitle, planFeatureRows, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecPerson, type SpecsDb } from "./specs";
 import { inboxStrategy, planDrift, routeStrategy, seedNoStrategy, seedPlanDrift, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
@@ -184,7 +184,7 @@ import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimple
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
-import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
+import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, seedTwoDependencies, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { groundTruthCheck, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth } from "./ground-truth";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
@@ -199,6 +199,7 @@ import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections,
 import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
+import { waitingItems } from "./waiting-list";
 import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience, spansRow, type BoardItem } from "./audience";
 import {
   draftPublicTexts,
@@ -1187,7 +1188,7 @@ function seedSimpleHomeOnePrdScenario(): Db {
     // An undated item would be estimated into this quarter: dated after it instead.
     if (i.start == null || i.end == null) Object.assign(i, { start: 180, end: 220, source: "typed" });
     else Object.assign(i, { start: i.start + 180, end: i.end + 180 });
-    if (i.milestone) i.milestone.day += 180;
+    if (i.milestone?.day != null) i.milestone.day += 180;
   }
   return db;
 }
@@ -1253,6 +1254,12 @@ function seedSimplePlanScenario(datedAll = false): Db {
   const byFeature = new Map<string, ReturnType<typeof planSlices>>();
   for (const x of planSlices()) byFeature.set(x.feature_code, [...(byFeature.get(x.feature_code) ?? []), x]);
   const existing: Record<string, string> = { "F-01": "setup-checklist", "F-02": "setup-import" };
+  // The plan's own item carries each other plan feature's code: the default roadmap's item of the
+  // same PRD section (F-03 Health log) keeps its name but not the code, so one code names one item.
+  // A code is the PRD's own: another PRD's item (Usage alerts' F-06 Weekly alert digest) keeps it.
+  for (const x of rm.items) {
+    if (x.roadmap === "onboarding-roadmap" && x.section && byFeature.has(x.section.toUpperCase()) && !Object.values(existing).includes(x.key)) Object.assign(x, { section: undefined, heading: undefined });
+  }
   for (const [code, of] of byFeature) {
     const section = code.toLowerCase();
     const key = existing[code];
@@ -2428,29 +2435,34 @@ function addCodedPrd(db: Db) {
 /** The default seed plus one PRD of 100+ sections in nested chapters (./big-prd.ts). */
 function seedBigPrd(): Db {
   const db = seed();
-  const row: DocumentRow = {
-    id: uuid(),
-    slug: BIG_PRD.slug,
-    title: BIG_PRD.title,
-    status: "in_review",
-    kind: "prd",
-    template: BIG_PRD.template ?? null,
-    template_version: BIG_PRD.template_version ?? null,
-    theme: null,
-    created_at: BIG_PRD.versions[0].created_at,
-    updated_at: BIG_PRD.versions[0].created_at,
-  };
-  db.documents.push(row);
-  const v = buildVersion(row, BIG_PRD.versions[0]);
-  db.versions.push(v);
   const at = "2026-10-19T10:00:00Z";
-  for (const [key, r] of Object.entries(BIG_PRD_REVIEWS)) addReview(db, v, key, r, { created_at: at });
-  const comments = BIG_PRD_COMMENTS.map(([key, exact, text], i) => {
-    const plain = v.sections.find((s) => s.section_key === key)!.body_text;
-    const start = plain.indexOf(exact);
-    const anchor = { exact, prefix: plain.slice(Math.max(0, start - 32), start), suffix: plain.slice(start + exact.length, start + exact.length + 32) };
-    return addComment(db, v, { section_key: key, anchor, body: text }, { created_at: `2026-10-19T11:${String(10 + i).padStart(2, "0")}:00Z` });
+  // The same reviews and comments on the PRD and on the strategy document made of its outline.
+  const docs = [BIG_PRD, BIG_STRATEGY].map((seedDoc) => {
+    const row: DocumentRow = {
+      id: uuid(),
+      slug: seedDoc.slug,
+      title: seedDoc.title,
+      status: "in_review",
+      kind: seedDoc.kind ?? "prd",
+      template: seedDoc.template ?? null,
+      template_version: seedDoc.template_version ?? null,
+      theme: null,
+      created_at: seedDoc.versions[0].created_at,
+      updated_at: seedDoc.versions[0].created_at,
+    };
+    db.documents.push(row);
+    const v = buildVersion(row, seedDoc.versions[0]);
+    db.versions.push(v);
+    for (const [key, r] of Object.entries(BIG_PRD_REVIEWS)) addReview(db, v, key, r, { created_at: at });
+    const comments = BIG_PRD_COMMENTS.map(([key, exact, text], i) => {
+      const plain = v.sections.find((s) => s.section_key === key)!.body_text;
+      const start = plain.indexOf(exact);
+      const anchor = { exact, prefix: plain.slice(Math.max(0, start - 32), start), suffix: plain.slice(start + exact.length, start + exact.length + 32) };
+      return addComment(db, v, { section_key: key, anchor, body: text }, { created_at: `2026-10-19T11:${String(10 + i).padStart(2, "0")}:00Z` });
+    });
+    return { row, comments };
   });
+  const { row, comments } = docs[0];
   const llm = (db.llm ??= { jobs: [], suggestions: [], disabled: {} });
   for (const s of BIG_PRD_SUGGESTIONS) {
     const c = comments.find((x) => x.body === s.comment)!;
@@ -3433,6 +3445,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       return atLeast(role, c.approver_role);
     },
     leadStop: (c, flow) => ENGINEERING_KINDS.includes(c.kind) && flow !== "prd_to_spec" && engineeringLeads(db).length > 0,
+    draftItemsRetried: (runId) => draftItemsRunRetried(draftDb(db), runId),
     setEffort: (key, size, runId) => setEntityEffort(db.baseline, key, size, member?.id ?? db.user_id, runId),
     member: member ? { id: member.id, email: member.email, role: withMockRole(member).role } : null,
     reviewDecider: (c) => runReviewDecider(db, c),
@@ -3892,7 +3905,7 @@ function load(): Db {
                     db.simple_roadmap!.plan!.goalless = true;
                     return db;
                   }
-              : scenario === "simple-chat" || scenario === "simple-chat-stray" || scenario === "meet-chat-right-prd" || scenario === "roadmap-talk" || scenario === "roadmap-talk-own-decider" || scenario === "roadmap-talk-tracker-done"
+              : scenario === "simple-chat" || scenario === "simple-chat-stray" || scenario === "meet-chat-right-prd" || scenario === "roadmap-talk" || scenario === "roadmap-talk-own-decider" || scenario === "roadmap-talk-tracker-done" || scenario === "roadmap-talk-two-deps"
                 ? () => {
                     const db = seedSimpleHomeScenario();
                     db.simple_chat = seedSimpleChat(db.members);
@@ -3909,6 +3922,9 @@ function load(): Db {
                       const owner = db.members.find((m) => m.role === "owner")!;
                       seedStrayReply(db.simple_chat, { id: owner.id, name: displayName(owner.email, owner.name) });
                     }
+                    // roadmap-decide review: Alert SLA report waits on Alert rules engine and on Reliability
+                    // work (another goal); Uptime alerts (another goal) waits on Alert rules engine too.
+                    if (scenario === "roadmap-talk-two-deps" && db.simple_roadmap) seedTwoDependencies(db.simple_roadmap);
                     // fix5-cut-dependents review: approver@example.com is Alert rules engine's own
                     // decider; the company's owners decide the items that wait on it.
                     if (scenario === "roadmap-talk-own-decider" && db.simple_roadmap) {
@@ -3916,6 +3932,35 @@ function load(): Db {
                       const r = db.simple_roadmap;
                       r.targets = { ...r.targets, [r.ids["alert-rules"]]: { ...r.targets?.[r.ids["alert-rules"]], decider_id: approver.id } };
                     }
+                    return db;
+                  }
+              : scenario === "roadmap-two-drafts"
+                ? () => {
+                    // roadmap-decide review: Priya Raman decides Guided setup's roadmap; the owner decides Alerts.
+                    const db = seed();
+                    const approver = db.members.find((m) => m.email === "approver@example.com")!;
+                    const rm = (db.simple_roadmap ??= seedSimpleRoadmap());
+                    rm.deciders = { ...rm.deciders, "onboarding-roadmap": approver.id };
+                    return db;
+                  }
+              : scenario === "roadmap-two-drafts-reviewer"
+                ? () => {
+                    // fix 2: as roadmap-two-drafts (Priya Raman decides the Onboarding roadmap), with
+                    // commenter@example.com (Theo Brandt) its required reviewer, who may approve first.
+                    const db = seed();
+                    const approver = db.members.find((m) => m.email === "approver@example.com")!;
+                    const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
+                    const rm = (db.simple_roadmap ??= seedSimpleRoadmap());
+                    rm.deciders = { ...rm.deciders, "onboarding-roadmap": approver.id };
+                    rm.reviewers = { ...rm.reviewers, "onboarding-roadmap": [commenter.id] };
+                    return db;
+                  }
+              : scenario === "roadmap-reviewers"
+                ? () => {
+                    // roadmap-decide review: Alerts roadmap has a required reviewer, approver@example.com.
+                    const db = seed();
+                    const approver = db.members.find((m) => m.email === "approver@example.com")!;
+                    (db.simple_roadmap ??= seedSimpleRoadmap()).reviewers = { "alerts-roadmap": [approver.id] };
                     return db;
                   }
               : (FIT_SCENARIOS as readonly string[]).includes(scenario ?? "")
@@ -4552,9 +4597,11 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
   const company = () => db.documents.find((d) => d.company_roadmap && d.kind === "roadmap");
   const ref = (d: DocumentRow) => ({ id: d.id, slug: d.slug, title: d.title });
   // simple-replaced-prds: GET /v1/simple/one-pagers, as GET /v1/documents?kind=prd without a PRD
-  // marked replaced (Simple shows the PRDs that replaced it; Detailed keeps it as history); newest first.
+  // marked replaced (Simple shows the PRDs that replaced it; Detailed keeps it as history), in the
+  // company PRD order as list_documents(db, "prd") gives them.
   if (p[1] === "simple" && p[2] === "one-pagers" && !p[3] && m === "GET") {
-    return json(200, db.documents.filter((d) => d.kind === "prd" && !(d.replaced_by ?? []).length && canSee(me.role, d.visibility)).map((d) => documentSummary(db, d)).sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at)));
+    const ranks = prdOrder(db);
+    return json(200, db.documents.filter((d) => d.kind === "prd" && !(d.replaced_by ?? []).length && canSee(me.role, d.visibility)).map((d) => documentSummary(db, d, ranks)).sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity)));
   }
   if (p[1] === "roadmaps" && p[2] === "company" && !p[3]) {
     if (m === "GET") {
@@ -7374,7 +7421,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       deletedForGood: (kind) =>
         !db.documents.some((d) => d.kind === kind) &&
         !(db.trash?.entries ?? []).some((e) => (e.documents as { kind?: string }[]).some((d) => d.kind === kind)) &&
-        (db.trash?.purged ?? []).includes(kind),
+        (db.trash?.purged ?? []).includes(kind)
+          ? (db.trash?.purged_at?.[kind] ?? null)
+          : null,
       chatLines: (id) =>
         Object.values(db.simple_chat?.threads ?? {})
           .filter((t) => t.meeting_id === id)
@@ -8233,6 +8282,18 @@ if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_API_MOCKS === "1") 
   };
 }
 
+/** GET /v1/simple/decisions/waiting with `items` (./waiting-list.ts), as the signed-in person reads each route. */
+async function withWaitingItems(db: Db, req: Request, res: Response): Promise<Response> {
+  const out = (await res.json()) as Schemas["SimpleDecisionsWaitingOut"];
+  const get = async (path: string) => {
+    const r = await route(db, new Request(new URL(path, req.url), { headers: req.headers }));
+    if (!r.ok) throw new Error(path);
+    return r.json();
+  };
+  const me = (await get("/v1/me").catch(() => undefined)) as { user_id?: string; role?: string } | undefined;
+  return json(200, { ...out, items: await waitingItems(get, me?.user_id ?? "", out.questions, me?.role ?? "") });
+}
+
 export async function mockFetch(req: Request): Promise<Response> {
   // Every call, in order: tests count them (Home's call budget).
   const url = new URL(req.url);
@@ -8253,7 +8314,9 @@ export async function mockFetch(req: Request): Promise<Response> {
   const next = queue.then(async () => {
     const db = load();
     const marks = db.webhooks?.hooks.length ? runMarks(db.runs?.runs) : null;
-    const res = await route(db, req);
+    let res = await route(db, req);
+    // home-waiting-one-list: the waiting list's items, read from the routes each kind lives on.
+    if (req.method === "GET" && url.pathname === "/v1/simple/decisions/waiting" && res.ok) res = await withWaitingItems(db, req, res);
     // I1: the runs' changes this call made, as webhook events (./webhooks.ts).
     if (marks) await captureRunChanges(webhooksDeliveryContext(db), marks, db.runs?.runs);
     // S9: a meeting chat's poll (every 2 s, in each attendee's tab) writes nothing, so it never

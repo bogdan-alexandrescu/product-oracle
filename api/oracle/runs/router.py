@@ -252,6 +252,20 @@ async def retry_import_run(run_id: uuid.UUID, principal: OwnerNow, db: TenantDB)
     return await service.read_run(db, run_id, principal)
 
 
+@router.post("/runs/{run_id}/segments/{seq}/retry", response_model=RunOut)
+async def retry_segment(
+    run_id: uuid.UUID, seq: int, principal: ApproverNow, db: TenantDB
+) -> RunOut:
+    """Retry a failed run from the segment it stopped at (``segments[].can_retry``; why it
+    stopped is ``segments[].error``): that segment is submitted again with the run's
+    approved inputs; the segments and approved stops before it are kept, not run again.
+    An owner or the approver who created the run. 409 when the run is not failed at that
+    segment. Audited."""
+    await _call(service.retry_segment(db, principal, run_id, seq))
+    await service.submit_queued(db, run_id)
+    return await service.read_run(db, run_id, principal)
+
+
 @router.post("/runs/{run_id}/segments/{seq}/retry-draft-import", response_model=RunOut)
 async def retry_draft_import(
     run_id: uuid.UUID, seq: int, principal: CurrentPrincipal, db: TenantDB

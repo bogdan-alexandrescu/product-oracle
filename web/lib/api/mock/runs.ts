@@ -133,6 +133,8 @@ export interface RunsContext {
   mayDecide?: (c: Pick<CheckpointOut, "kind" | "approver_role">, flow: RunOut["flow"]) => boolean;
   /** As oracle.members.leads.lead_stop: an engineering stop outside prd_to_spec once a lead is named. */
   leadStop?: (c: Pick<CheckpointOut, "kind">, flow: RunOut["flow"]) => boolean;
+  /** As the API's draft_items.run_retried: a retried prd_draft_items run re-opens its draft roadmap. */
+  draftItemsRetried?: (runId: string) => void;
   /** F4: Approve at the Engineering check sets a feature's effort (a person's edit, locked). */
   setEffort?: (featureKey: string, size: string, runId: string) => void;
   /** B2: the baseline's rows of a run under its shared draft's actions (absent: no goals rule). */
@@ -597,6 +599,24 @@ function targetGoals(ctx: Omit<RunsContext, "db">, flowKey: string, raw: string[
   return out;
 }
 
+/** As the API: a failed run whose spend is over its ceiling stopped at its budget; it is not retried. */
+const BUDGET_STOPPED = "This run stopped at its budget; start it again with a new estimate";
+function budgetStopped(r: RunOut): boolean {
+  return r.status === "failed" && r.overrun_ceiling_usd != null && r.spent_usd > r.overrun_ceiling_usd;
+}
+
+/** The segment a failed run stopped at (its last failed one), as the API's retry_segment reads it. */
+function retrySegmentOf(r: RunOut): SegmentOut | undefined {
+  if (r.status !== "failed" || budgetStopped(r)) return undefined;
+  return [...r.segments].sort((a, b) => b.seq - a.seq).find((s) => s.status === "failed");
+}
+
+/** As the API: an owner retries any run, an approver only a run they created. */
+function mayRetrySegment(ctx: RunsContext, r: RunOut): boolean {
+  if (ctx.userRole == null || ctx.userRole === "owner") return true;
+  return ctx.userRole === "approver" && r.created_by === ctx.userId;
+}
+
 function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string): SegmentOut[] {
   return flowOf(flowKey).segments.map((s, i) => ({
     id: uuid(),
@@ -616,6 +636,7 @@ function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string
     draft_import: null,
     sent_back: false,
     can_retry_draft_import: false,
+    can_retry: false,
     items_check: null,
     previous_attempt: null,
     feature_set_check: null,
@@ -2217,7 +2238,13 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       lead_stop: !!ctx.leadStop?.(c, r.flow),
     }));
     // As the API (#556, #561 review): stored errors read in words, a failed one in the past.
-    const segments = r.segments.map((s) => (s.error ? { ...s, error: readableRefusal(s.error, s.status === "failed") } : s));
+    // As the API (retry_segment): a failed run's last failed segment, for whoever may retry it.
+    const retryable = mayRetrySegment(ctx, r) ? retrySegmentOf(r)?.seq : undefined;
+    const segments = r.segments.map((s) => ({
+      ...s,
+      ...(s.error ? { error: readableRefusal(s.error, s.status === "failed") } : {}),
+      can_retry: s.seq === retryable,
+    }));
     const can_decide = checkpoints.some((c) => c.status === "pending" && c.can_decide);
     return json(status, { ...r, document_title: docTitle(ctx, r), error: readableRefusal(r.error, r.status === "failed"), segments, checkpoints, can_decide, open_proposals: ctx.openProposals?.(r.id) ?? 0 });
   };
@@ -2345,6 +2372,19 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   if (action === "retry" && m === "POST") {
     if (!r.can_retry) return fail(409, "nothing to retry: no lost submission of this run is past the lookup cap");
     Object.assign(r, { can_retry: false, stuck: null });
+    return done();
+  }
+  // As the API (retry_segment): a failed run runs again from the segment it stopped at; the
+  // segments before it and their approved checkpoints stay. The mock has no queue: it runs at once.
+  if (action === "segments" && p[5] === "retry" && m === "POST") {
+    const s = r.segments.find((x) => x.seq === Number(p[4]));
+    if (!s) return fail(404, `run ${r.id} has no segment ${p[4]}`);
+    if (!mayRetrySegment(ctx, r)) return fail(403, "Only an owner or the approver who created the run can retry it");
+    if (budgetStopped(r)) return fail(409, BUDGET_STOPPED);
+    if (retrySegmentOf(r)?.seq !== s.seq) return fail(409, "nothing to retry: only the segment a failed run stopped at can be retried");
+    Object.assign(s, { status: "running", error: null, finished_at: null, started_at: ctx.now() });
+    Object.assign(r, { status: "running", error: null, finished_at: null });
+    if (r.flow === DRAFT_ITEMS_FLOW) ctx.draftItemsRetried?.(r.id);
     return done();
   }
   if (action === "stop-cancelling" && m === "POST") {

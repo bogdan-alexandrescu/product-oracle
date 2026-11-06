@@ -12,6 +12,9 @@ one-click fixes S3 applies.
   Fixes: accept_risk.
 - ``draft_without_owner``: a draft item (added in Simple) without an owner. No fixes.
 
+roadmap-done (owner, Nov 4): a done (shipped) item is off the roadmap: it is not checked, a
+dependency on it is met, and a done dependent needs nothing of a cut item.
+
 A risk accepted on a flag (``roadmap_items.accepted_risks``: ``{"flag", "subject"?, "note"}``,
 a missing subject covering every subject of that flag) keeps the flag, amber, with its note.
 """
@@ -29,12 +32,13 @@ FlagKind = Literal[
     "cut_with_dependents",
     "draft_without_owner",
 ]
-Fix = Literal["shift_dependents", "move_dependency", "accept_risk"]
+Fix = Literal["shift_dependents", "move_dependency", "accept_risk", "restore", "remove_dependency"]
 FIXES: dict[str, list[str]] = {
     "dependency_order": ["shift_dependents", "move_dependency", "accept_risk"],
     "blocker_date": ["accept_risk"],
     "outside_milestone": ["accept_risk"],
-    "cut_with_dependents": ["accept_risk"],
+    # roadmap-decide: a cut item others depend on is brought back, or a dependent drops it.
+    "cut_with_dependents": ["restore", "remove_dependency", "accept_risk"],
     "draft_without_owner": [],
 }
 TITLE = 40
@@ -124,7 +128,12 @@ def check(nodes: list[Node]) -> dict[str, list[Flag]]:
     out: dict[str, list[Flag]] = {}
     for n in nodes:
         flags: list[Flag] = []
-        for dep_id in n.depends_on:
+        if n.status == "done":
+            out[n.id] = flags
+            continue
+        # roadmap-decide: a cut item (below the line) is not checked for its order; its
+        # dependencies' cut flag says what is left to decide.
+        for dep_id in n.depends_on if n.status != "cut" else []:
             dep = by_id.get(dep_id)
             # roadmap-edit-fixes round 1: a done dependency is met whatever its dates, and a
             # cut item's own links break nothing.
@@ -167,7 +176,7 @@ def check(nodes: list[Node]) -> dict[str, list[Flag]]:
             )
             flags.append(_flag(n, "outside_milestone", reason, name))
         if n.status == "cut":
-            live = [d for d in dependents[n.id] if d.status != "cut"]
+            live = [d for d in dependents[n.id] if d.status not in ("cut", "done")]
             if live:
                 more = f" and {len(live) - 1} other" + ("s" if len(live) > 2 else "")
                 reason = f"Cut, but ‘{_t(live[0].title)}’{more if len(live) > 1 else ''} " + (

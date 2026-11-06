@@ -552,9 +552,9 @@ export default function BaselinePage() {
           </Suspense>
         }
         status={capsReady && !canComment ? <ViewOnly /> : undefined}
+        info={<InfoTip label="Ground Truth">Goals, areas of focus, milestones and every feature, each with its evidence and how far it is built.</InfoTip>}
       />
 
-      <p className="-mt-2 mb-3 max-w-[760px] text-[14px] text-text2">Goals, areas of focus, milestones and every feature, each with its evidence and how far it is built.</p>
       <StateTabs view="desired" all={states.data?.features.length ?? null} running={states.data?.running ?? null} />
       {check.data && (
         <GroundTruthFlags

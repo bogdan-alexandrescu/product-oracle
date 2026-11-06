@@ -92,6 +92,7 @@ from oracle.simple.schemas import (
     SimpleDraftOut,
     SimpleMeetingApproval,
     SimpleNotApproved,
+    SimplePersonRef,
 )
 
 OPEN = ("working", "submitted")
@@ -463,6 +464,16 @@ def _approver_of(principal: Any, d: SimpleDraft, w: Who) -> bool:
     decider = w.deciders.get(d.document_id)
     return me is not None and (
         me == decider if decider is not None else can_edit(principal, d.document_id, w)
+    )
+
+
+def can_publish(principal: Any, d: SimpleDraft, w: Who) -> bool:
+    """Approve and publish on a working draft (its button and POST .../approve alike): the
+    draft's final approver, who may also send it."""
+    return (
+        d.status == "working"
+        and _approver_of(principal, d, w)
+        and can_edit(principal, d.document_id, w)
     )
 
 
@@ -855,6 +866,26 @@ async def _logs(db: AsyncSession, ds: list[SimpleDraft]) -> dict[uuid.UUID, list
         else {}
     )
     people = {c.by for c in rows}
+    # roadmap-decide: each line names its item, however the op stored it.
+    item_ids: set[uuid.UUID] = set()
+    for c in rows:
+        try:
+            item_ids |= (
+                {uuid.UUID(str(c.target.get("item_id")))} if c.target.get("item_id") else set()
+            )
+        except ValueError:
+            pass
+    item_titles = (
+        dict(
+            (
+                await db.execute(
+                    select(RoadmapItem.id, RoadmapItem.title).where(RoadmapItem.id.in_(item_ids))
+                )
+            ).all()
+        )
+        if item_ids
+        else {}
+    )
     names = {
         u.id: u.name or u.email for u in await db.scalars(select(User).where(User.id.in_(people)))
     }
@@ -868,7 +899,8 @@ async def _logs(db: AsyncSession, ds: list[SimpleDraft]) -> dict[uuid.UUID, list
             id=c.id, op=c.op, item_id=item_id, by=c.by, by_name=names.get(c.by, "someone"),
             at=c.at, session_kind=kind, in_meeting=kind == "meeting",  # type: ignore[arg-type]
             titles=[str(t) for t in c.target.get("titles") or []]
-            if c.op == "cut_with_dependents" else [],
+            or ([item_titles[item_id]] if item_id in item_titles else [])
+            or ([str(c.target["name"])] if c.target.get("name") else []),
         )  # fmt: skip
         for i in c.draft_ids:
             if i in out:
@@ -899,9 +931,17 @@ async def outs(
         else set()
     )
     me = _me(principal)
+    # roadmap-decide review: the author's and the decider's names, read with the draft.
+    ids = {d.created_by for d in ds} | {x for d in ds if (x := w.deciders.get(d.document_id))}
+    names = (
+        {u.id: u.name or u.email for u in await db.scalars(select(User).where(User.id.in_(ids)))}
+        if ids
+        else {}
+    )
     out = []
     for d in ds:
         doc = docs[d.document_id]
+        decider = w.deciders.get(d.document_id)
         out.append(
             SimpleDraftOut(
                 id=d.id,
@@ -910,8 +950,12 @@ async def outs(
                 base_version=numbers.get(d.base_version_id),  # type: ignore[arg-type]
                 version=numbers.get(d.version_id),
                 created_by=d.created_by,
+                created_by_name=names.get(d.created_by),
                 created_at=d.created_at,
                 participant_ids=list(d.participant_ids or []),
+                decider=SimplePersonRef(id=decider, name=names[decider])
+                if decider in names
+                else None,
                 changes=n.get(d.id, 0),
                 submitted_at=d.submitted_at,
                 submitted_by=d.submitted_by,
@@ -923,8 +967,16 @@ async def outs(
                 can_resume=d.status == "working"
                 and me is not None
                 and me in (d.created_by, w.deciders.get(d.document_id)),
+                # Review: a decider who approved already waits on the reviewers, not on themself.
                 can_approve=d.status == "submitted"
-                and (_approver_of(principal, d, w) or me in (d.waiting_on or [])),
+                and (
+                    (_approver_of(principal, d, w) and d.decider_approval is None)
+                    or me in (d.waiting_on or [])
+                ),
+                can_publish=can_publish(principal, d, w),
+                required_reviewers=[r for r in w.reviewers.get(d.document_id, []) if r != me]
+                if d.status == "working"
+                else [],
                 change_log=logs.get(d.id, []),
                 published=d.document_id in approved,
                 can_withdraw=d.status == "submitted"
@@ -986,6 +1038,7 @@ OP_WORDS = {
     "restore": "Restored",
     "edit_title": "Renamed",
     "edit_outcome": "New outcome for",
+    "edit_note": "New notes for",
     "accept_risk": "Accepted a risk on",
     "shift_dependents": "Moved the dependents of",
     "move_dependency": "Moved the dependency of",
@@ -1005,6 +1058,7 @@ OP_WORDS = {
     "set_depends": "New dependencies for",
     "set_status": "New status for",
     "set_feature": "New feature for",
+    "set_goals": "Moved to another goal:",
 }
 
 
@@ -1507,8 +1561,22 @@ async def _approve(
 
 async def approve(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) -> SimpleDraftOut:
     """The caller's approval: the decider's (held until the required reviewers have
-    approved) or a required reviewer's (the caller commits)."""
+    approved) or a required reviewer's (the caller commits). roadmap-decide (owner, Nov 4):
+    the decider's approval of a working draft sends it first (Approve and publish), as a
+    meeting's approval does."""
     d, w = await _get(db, principal, draft_id)
+    if d.status == "working":
+        if not can_publish(principal, d, w):
+            raise DraftError(403, "Only the roadmap's decider approves and publishes this draft")
+        await submit(db, principal, d.id)
+        # Review minor 5: the draft as submitting left it, not as read before.
+        d, w = await _get(db, principal, draft_id)
+    # A second press in a stale tab, after this approver's approval published it: the
+    # published draft, not a 409 (inbox-mock-matches-api).
+    if d.status == "approved" and (
+        _approver_of(principal, d, w) or principal.user_id in w.reviewers.get(d.document_id, [])
+    ):
+        return (await outs(db, principal, [d], []))[0]
     other = await _approve(db, principal.tenant_id, d, w, principal, [], None)
     return (await outs(db, principal, [d], other))[0]
 

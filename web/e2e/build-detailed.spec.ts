@@ -42,7 +42,8 @@ for (const size of SIZES) {
       await login(page);
       await page.goto("/documents/checkout-redesign/v/2");
       await expect(page.getByTestId("document-sections")).toBeVisible();
-      const layout = page.getByTestId("prd-layout");
+      // PT1 a: the PRD page has no outer "prd-layout" grid any more; "prd-look" is its layout now.
+      const layout = page.getByTestId("prd-look");
       // Where the page's panels sit in the document (scroll aside).
       const place = () => layout.evaluate((el) => {
         const r = el.getBoundingClientRect();
@@ -201,7 +202,8 @@ for (const size of SIZES) {
       const log = page.getByTestId("delivery-log").filter({ visible: true });
       await expect(log.getByLabel("Status")).toBeVisible();
       await expect(log.getByLabel("Event")).toBeVisible();
-      await expect(log).toContainText("Times are in Company time.");
+      await expect(log).not.toContainText("Times are in Company time");
+      await expect(page.getByRole("button", { name: "About the delivery log" }).filter({ visible: true })).toBeVisible();
       await expect(log.getByRole("table")).toHaveCount(0);
       const cards = log.getByTestId("delivery-cards").getByTestId("delivery-row");
       await expect(cards.first()).toBeVisible();

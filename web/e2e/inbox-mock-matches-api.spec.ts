@@ -7,20 +7,20 @@ import { expect, test } from "./test";
  * proposals reach it. Desktop.
  *
  * Card inbox-approve-again: protects = a required reviewer who approved a roadmap version in
- * one tab and presses Approve again in another tab, still open from before, is told it waits
- * for the other approvals, as the API (drafts._approve: theirs is in already, nothing changes);
- * fails_when = the second press says it could not be approved.
+ * one tab, after the owner's Approve and publish, and presses Approve again in another tab,
+ * still open from before, is told the roadmap is published, as the API (drafts.approve: theirs
+ * published it, the draft comes back); fails_when = the second press says it could not be approved.
  *
  * Card inbox-unknown-proposer: protects = a feature suggested by someone whose account is no
  * longer there reads "A teammate suggests it" in the Inbox, as the API sends no name for them;
  * fails_when = it reads "someone suggests it".
  */
 
-test("a required reviewer who presses Approve again in another tab is told it waits for the other approvals", async ({ page, context }) => {
+test("a required reviewer who presses Approve again in another tab is told the roadmap is published", async ({ page, context }) => {
   test.setTimeout(90_000);
   await context.addInitScript((key) => localStorage.setItem(key, "inbox-reviewer"), MOCK_SCENARIO_KEY);
   await login(page);
-  // The owner changes the Alerts roadmap and sends it for review.
+  // The owner changes the Alerts roadmap and approves it.
   await page.goto("/simple/roadmap");
   await page.getByTestId("filter-roadmap").selectOption({ label: "Alerts roadmap" });
   const bar = page.locator('[data-testid="timeline-row"][data-item="alert-export"] [data-testid="timeline-bar"]').first();
@@ -28,8 +28,9 @@ test("a required reviewer who presses Approve again in another tab is told it wa
   await bar.focus();
   await page.keyboard.press("ArrowRight");
   await expect(page.getByTestId("draft-count")).toHaveText("1");
-  await page.getByTestId("draft-banner").getByRole("button", { name: "Send for review" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Sent for review" })).toBeVisible();
+  // roadmap-decide: the owner decides a roadmap that names no decider: Approve and publish sends it to its required reviewers.
+  await page.getByTestId("draft-banner").getByRole("button", { name: "Approve and publish" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Approved: Alerts roadmap waits for" })).toBeVisible();
 
   // The reviewer opens it from the Inbox, then opens the same page in a second tab.
   await page.goto("/home");
@@ -44,13 +45,13 @@ test("a required reviewer who presses Approve again in another tab is told it wa
   const approvalThere = other.getByTestId("draft-approval");
   await expect(approvalThere).toContainText(/Alerts roadmap version \d+ is waiting for your approval/);
 
-  // Approved in the first tab: it waits on the decider.
+  // Approved in the first tab: the owner approved already, so it is published.
   await page.getByTestId("draft-approval").getByRole("button", { name: "Approve" }).click();
-  await expect(page.getByText("Approved: it waits for the other approvals")).toBeVisible();
+  await expect(page.getByText("Approved: Alerts roadmap is published")).toBeVisible();
 
   // Approve again in the second tab, still open from before: the same answer, no error.
   await approvalThere.getByRole("button", { name: "Approve" }).click();
-  await expect(other.getByText("Approved: it waits for the other approvals")).toBeVisible();
+  await expect(other.getByText("Approved: Alerts roadmap is published")).toBeVisible();
   await expect(other.getByText("Alerts roadmap could not be approved")).toHaveCount(0);
 });
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { Button, SegmentedControl } from "@/components/ds";
 import { FlowDetail, FlowThumb as FlowPicture } from "@/components/simple/Flow";
@@ -12,6 +12,7 @@ import { ItemTalk } from "@/components/simple/chat/ItemTalk";
 import { askThread, itemTalkPage, type ChatCard } from "@/lib/api/simple-chat";
 import { DecidedWho } from "@/components/simple/DecidedWho";
 import { formatDay } from "@/lib/format";
+import { useMe } from "@/lib/me";
 import { useScreenSubject } from "@/lib/screen-subject";
 
 import { HORIZONS, type Horizon } from "./_board";
@@ -28,7 +29,7 @@ import {
 
 /** What a change asks the engine, built by the page and sent through `act`. */
 export type Act = (
-  what: string,
+  what: import("./_lib").ChangeWords,
   body: Parameters<typeof import("./_lib").propose>[0],
 ) => Promise<void>;
 
@@ -36,12 +37,24 @@ const FIX_WORDS: Record<Flag["fixes"][number], string> = {
   shift_dependents: "Move the dependents",
   move_dependency: "Move the dependency",
   accept_risk: "Accept as risk",
+  restore: "Bring it back",
+  remove_dependency: "Remove the dependency",
 };
 
 /** fix4 qa-simple-roadmap-18: a reader who may not decide the item (a commenter) only
  * proposes the fix, and its button says so ("Propose: move the dependents"). */
 const fixWords = (f: Flag["fixes"][number], decides: boolean): string =>
   decides ? FIX_WORDS[f] : `Propose: ${FIX_WORDS[f][0].toLowerCase()}${FIX_WORDS[f].slice(1)}`;
+
+/** How many fixes a flag offers, a cut item's Remove the dependency counted once per dependent. */
+export const fixCount = (flag: Flag): number => flag.fixes.reduce((n, f) => n + (f === "remove_dependency" ? Math.max(1, flag.dependents?.length ?? 0) : 1), 0);
+
+/** Review: a fix proposed already and waiting on its decider: who it waits for ("Avery Stone"),
+ * or null. The roadmap page answers it from its open proposals. */
+export const ProposedFixes = createContext<(op: Flag["fixes"][number], itemId: string, subject: string) => string | null>(() => null);
+
+/** Review: opens an item's feature panel from a name in a fix's line (the page's own card), or null. */
+export const OpenItem = createContext<((itemId: string) => void) | null>(null);
 
 /** D14's one-click fixes of one flag: move the dependents, move the dependency, or accept
  * the risk with a note (the flag then stays amber). */
@@ -61,8 +74,23 @@ export function FixButtons({
   inline?: boolean;
 }) {
   const [note, setNote] = useState<string | null>(null);
+  const proposed = useContext(ProposedFixes);
+  const openItem = useContext(OpenItem);
   if (!canChange) return null;
   const dep = flag.subject ? items.get(flag.subject) : undefined;
+  // roadmap-decide: a cut item others depend on: bring it back, or a dependent drops it. Review:
+  // every live dependent the API names, one a filter hides too.
+  const live = flag.dependents ?? [];
+  const restore = () =>
+    void act(`Brought back '${item.title}'`, { op: "restore", target: { item_id: item.id }, before: { cut: true }, after: { cut: false } });
+  // Review: the API checks only that the item still depends on this one (a filter may hide its other dependencies).
+  const unlink = (n: Flag["dependents"][number]) =>
+    void act({ applied: `Removed the dependency of ‘${n.title}’ on ‘${item.title}’`, proposed: `remove the dependency of ‘${n.title}’ on ‘${item.title}’` }, {
+      op: "remove_dependency",
+      target: { item_id: n.id, subject: item.id },
+      before: {},
+      after: {},
+    });
   const fix = (kind: "shift_dependents" | "move_dependency") => {
     if (!dep) return;
     void act(
@@ -128,7 +156,7 @@ export function FixButtons({
     );
   return (
     <div
-      className={inline ? "flex gap-1.5" : "mt-1 flex flex-wrap gap-1.5"}
+      className={inline ? "flex flex-wrap gap-1.5" : "mt-1 flex flex-wrap gap-1.5"}
       data-testid="fixes"
     >
       {flag.fixes.map((f) =>
@@ -140,6 +168,34 @@ export function FixButtons({
           >
             {fixWords(f, item.can_decide)}
           </Button>
+        ) : f === "restore" ? (
+          <Button key={f} className={inline ? "!h-6 !px-2 !text-xs" : ""} onClick={restore}>
+            {fixWords(f, item.can_decide)}
+          </Button>
+        ) : f === "remove_dependency" ? (
+          live.map((n) => {
+            // Review: proposed already, it says who it waits for and is not offered again.
+            const waits = proposed(f, n.id, item.id);
+            return waits !== null ? (
+              <span key={`${f}-${n.id}`} data-testid="fix-proposed" className="self-center text-sm text-text2">
+                {/* Review: the dependent's name opens its feature panel, as other item names do. */}
+                Removing the dependency of{" "}
+                {openItem ? (
+                  <button type="button" className="font-medium text-accent-ink underline-offset-2 hover:underline" onClick={() => openItem(n.id)}>
+                    ‘{n.title}’
+                  </button>
+                ) : (
+                  `‘${n.title}’`
+                )}
+                {waits ? `: proposed, waits for ${waits}` : ": proposed"}
+              </span>
+            ) : (
+              // A long name wraps inside its button rather than run past a phone's edge.
+              <Button key={`${f}-${n.id}`} className={inline ? "!h-6 !px-2 !text-xs" : "!h-auto min-h-8 max-w-full py-1 text-left !whitespace-normal"} onClick={() => unlink(n)}>
+                {live.length > 1 ? `${fixWords(f, n.can_decide)} of ‘${n.title}’` : fixWords(f, n.can_decide)}
+              </Button>
+            );
+          })
         ) : dep ? (
           <Button
             key={f}
@@ -269,52 +325,33 @@ export function Callout({
   );
 }
 
-/** Oracle's date suggestion: Accept · Edit dates · Dismiss (through the change engine). */
-export function SuggestionPopover({
+/** Oracle's dates and their actions (Accept · Edit dates · Dismiss): the popover's body, and
+ * the item panel's own section (home-waiting-one-list: a "Confirm the dates" link opens it). */
+export function SuggestionBody({
   item,
   canAct,
   onAccept,
   onEdit,
   onDismiss,
-  onClose,
-  style,
-  above,
+  onEditing,
 }: {
   item: Item;
   canAct: boolean;
   onAccept: () => void;
   onEdit: (start: string, end: string) => void;
   onDismiss: () => void;
-  onClose: () => void;
-  style: React.CSSProperties;
-  /** qa-simple-roadmap-29: the bar's top in the chart (px): with no room below the bar
-   * inside the chart, the popover opens above it, clear of the chart's foot and legend. */
-  above?: number;
+  onEditing?: (editing: boolean) => void;
 }) {
   const s = item.suggestion!;
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditingState] = useState(false);
+  const setEditing = (v: boolean) => {
+    setEditingState(v);
+    onEditing?.(v);
+  };
   const [start, setStart] = useState(s.start_date);
   const [end, setEnd] = useState(s.end_date);
-  const box = useRef<HTMLDivElement>(null);
-  const [flip, setFlip] = useState<number | null>(null);
-  useLayoutEffect(() => {
-    const el = box.current;
-    const parent = el?.offsetParent as HTMLElement | null;
-    if (!el || !parent || above == null) return setFlip(null);
-    const top = Number(style.top ?? 0);
-    const h = el.offsetHeight;
-    setFlip(top + h > parent.clientHeight && above - h >= 0 ? above - h : null);
-  }, [above, style.top, editing]);
   return (
-    <div
-      ref={box}
-      role="dialog"
-      aria-label="Oracle's date suggestion"
-      data-testid="suggestion-popover"
-      data-side={flip != null ? "above" : "below"}
-      style={flip != null ? { ...style, top: flip } : style}
-      className="absolute z-30 w-[340px] max-w-[92vw] rounded-xl border border-line bg-surface p-3 shadow-tip"
-    >
+    <>
       <p className="text-sm font-semibold">
         Oracle suggests {yearSpan(s.start_date, s.end_date)}
       </p>
@@ -365,6 +402,54 @@ export function SuggestionPopover({
           </div>
         )
       )}
+    </>
+  );
+}
+
+/** Oracle's date suggestion: Accept · Edit dates · Dismiss (through the change engine). */
+export function SuggestionPopover({
+  item,
+  canAct,
+  onAccept,
+  onEdit,
+  onDismiss,
+  onClose,
+  style,
+  above,
+}: {
+  item: Item;
+  canAct: boolean;
+  onAccept: () => void;
+  onEdit: (start: string, end: string) => void;
+  onDismiss: () => void;
+  onClose: () => void;
+  style: React.CSSProperties;
+  /** qa-simple-roadmap-29: the bar's top in the chart (px): with no room below the bar
+   * inside the chart, the popover opens above it, clear of the chart's foot and legend. */
+  above?: number;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const [flip, setFlip] = useState<number | null>(null);
+  const [editing, setEditing] = useState(false);
+  useLayoutEffect(() => {
+    const el = box.current;
+    const parent = el?.offsetParent as HTMLElement | null;
+    if (!el || !parent || above == null) return setFlip(null);
+    const top = Number(style.top ?? 0);
+    const h = el.offsetHeight;
+    setFlip(top + h > parent.clientHeight && above - h >= 0 ? above - h : null);
+  }, [above, style.top, editing]);
+  return (
+    <div
+      ref={box}
+      role="dialog"
+      aria-label="Oracle's date suggestion"
+      data-testid="suggestion-popover"
+      data-side={flip != null ? "above" : "below"}
+      style={flip != null ? { ...style, top: flip } : style}
+      className="absolute z-30 w-[340px] max-w-[92vw] rounded-xl border border-line bg-surface p-3 shadow-tip"
+    >
+      <SuggestionBody item={item} canAct={canAct} onAccept={onAccept} onEdit={onEdit} onDismiss={onDismiss} onEditing={setEditing} />
       <button
         type="button"
         aria-label="Close"
@@ -384,6 +469,7 @@ const OP_WORDS: Record<string, string> = {
   restore: "Restore it",
   edit_title: "Rename it",
   edit_outcome: "Change the outcome",
+  edit_note: "Change the notes",
   accept_date_suggestion: "Accept Oracle's dates",
   accept_risk: "Accept a risk",
   shift_dependents: "Move the dependents",
@@ -391,6 +477,7 @@ const OP_WORDS: Record<string, string> = {
   add_key_date: "Add a key date",
   edit_key_date: "Change a key date",
   remove_key_date: "Remove a key date",
+  edit_goal_milestone: "Change a milestone",
   add_item: "Add an item",
   merge_item: "Merge a duplicate",
   keep_both: "Keep both",
@@ -402,6 +489,8 @@ const OP_WORDS: Record<string, string> = {
   set_goal: "Change the goal",
   set_depends: "Change what it depends on",
   set_status: "Change the status",
+  set_goals: "Move it to another goal",
+  remove_dependency: "Remove the dependency",
   set_owner: "Change the owner",
   set_goal_measure: "Change how its goal is measured",
 };
@@ -484,8 +573,10 @@ export const opWords = (op: string): string =>
  * ("Cut Alert rules engine and its dependents Weekly alert digest and Mobile alert push"). */
 export function changeRowWords(c: { op: string; titles?: string[] }, title?: string): string {
   const [first, ...rest] = c.titles ?? [];
-  // dod-actions-plan: a row names the item it changed, so Undo's next step reads from the list.
-  if (c.op !== "cut_with_dependents" || !first) return title ? `${opWords(c.op)}: ${title}` : opWords(c.op);
+  // dod-actions-plan: a row names the item it changed, so Undo's next step reads from the list;
+  // roadmap-decide: the change's own titles name it when the page does not show the item.
+  const named = title ?? first;
+  if (c.op !== "cut_with_dependents" || !first) return named ? `${opWords(c.op)}: ${named}` : opWords(c.op);
   const names = rest.length > 1 ? `${rest.slice(0, -1).join(", ")} and ${rest[rest.length - 1]}` : (rest[0] ?? "");
   return `Cut ${first} and its dependents${names ? ` ${names}` : ""}`;
 }
@@ -601,11 +692,18 @@ export function FloatingCard({
   onHorizon,
   near,
   onOpen,
+  onSuggestion,
+  focus,
 }: {
   /** one-feature-panel: opens another feature's own panel (what it depends on, what needs it). */
   onOpen?: (id: string) => void;
   /** Roadmap-plus: the key dates the item ends within 2 weeks of, in words (none: no line). */
   near?: string | null;
+  /** home-waiting-one-list: Oracle's open dates for the item, acted on in the panel. */
+  onSuggestion?: (how: "accept" | "edit" | "dismiss", dates?: { start_date: string; end_date: string }) => void;
+  /** home-waiting-one-list: opened from a "waiting for you" row: what waits (a broken link's
+   * fixes, Oracle's dates, a proposal) is scrolled into view. */
+  focus?: boolean;
   item: Item;
   items: Map<string, Item>;
   proposals: Change[];
@@ -618,6 +716,8 @@ export function FloatingCard({
   /** The board's horizon control (a phone cannot always drag a card to a column off the screen). */
   onHorizon?: (h: Horizon) => void;
 }) {
+  // home-waiting-one-list: Oracle's dates are acted on by the one gate the Roadmap's popover uses.
+  const { can } = useMe();
   // The widened card's visual: a draft's own flow ("item", S7) or a proposal's visual (S10).
   const [wide, setWide] = useState<FlowSubject | "item" | null>(null);
   // roadmap-talk: the item's talk with Oracle, open beside the details (a phone: its tab).
@@ -631,6 +731,10 @@ export function FloatingCard({
   // fix4 qa-simple-roadmap-3: the card, its talk and the chat name the item by its title, no code.
   const about = item.title;
   const ref = useRef<HTMLDivElement>(null);
+  // home-waiting-one-list: the card opened from a waiting row (?item=): scroll its fix into view.
+  useEffect(() => {
+    if (focus) ref.current?.querySelector("[data-waits]")?.scrollIntoView({ block: "center" });
+  }, [focus]);
   // fix4 qa-simple-roadmap-16: the changes waiting in the item's talk (cards not yet applied,
   // proposed or discarded) are proposals on it too: one source, the talk's own thread, read
   // when the card opens and kept as the talk changes.
@@ -854,6 +958,15 @@ export function FloatingCard({
       <LooksLike item={item} act={act} canChange={canChange} />
       <div className={wide && !phone ? "grid grid-cols-2 gap-4" : ""}>
         <div>
+          {!canChange && (
+            // build-feature-panel (AN PR 1204): who may only read says so, with a way to suggest a change.
+            <p className="mt-2 rounded-lg bg-surface2 px-3 py-2 text-sm text-text2" data-testid="card-read-only">
+              You can read this feature. Its owner and approvers can change it.{" "}
+              <button type="button" onClick={() => setTalk(true)} className="font-medium text-accent-ink underline">
+                Suggest a change
+              </button>
+            </p>
+          )}
           <PanelFields item={item} items={items} act={act} canChange={canChange} onOpen={onOpen} />
           <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
           {item.slices.length > 0 && (
@@ -928,8 +1041,19 @@ export function FloatingCard({
           </dl>
         </div>
         <div>
+          {item.suggestion?.status === "open" && onSuggestion && (
+            <section className="mt-3 rounded-lg border border-line p-2" data-testid="card-suggestion" data-waits>
+              <SuggestionBody
+                item={item}
+                canAct={can("accept_date_suggestion")}
+                onAccept={() => onSuggestion("accept")}
+                onEdit={(start_date, end_date) => onSuggestion("edit", { start_date, end_date })}
+                onDismiss={() => onSuggestion("dismiss")}
+              />
+            </section>
+          )}
           {flags.length > 0 && (
-            <section className="mt-3 space-y-1" data-testid="card-flags">
+            <section className="mt-3 space-y-1" data-testid="card-flags" data-waits>
               {flags.map((f) => (
                 <div key={`${f.kind}-${f.subject}`}>
                   <FlagLine flag={f} />
@@ -1033,7 +1157,7 @@ export function FloatingCard({
               </ul>
             )}
             {proposals.length ? (
-              <ul className="mt-1 space-y-2" data-testid="card-proposals">
+              <ul className="mt-1 space-y-2" data-testid="card-proposals" data-waits>
                 {proposals.map((c) => (
                   <li key={c.id} className="flex items-center gap-2">
                     {featureProposal(c, items) && (
@@ -1114,7 +1238,7 @@ export function FloatingCard({
       </div>
       <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-3">
         <Link
-          href={`/plan?item=${encodeURIComponent(item.key)}${item.prd ? `&prd=${item.prd.id}` : ""}`}
+          href={`/plan?item=${encodeURIComponent(item.key)}${item.prd ? `&prd=${item.prd.id}` : ""}&roadmap=${encodeURIComponent(item.roadmap.slug)}`}
           className="inline-flex h-8 items-center rounded-lg border border-line-strong bg-surface px-3 text-[14px] leading-none font-semibold whitespace-nowrap hover:bg-surface2"
         >
           Open the detailed view

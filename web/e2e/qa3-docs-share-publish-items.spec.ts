@@ -158,8 +158,15 @@ test.describe("desktop", () => {
     test(`qa-docs-5: the outline and the Review panel count the same sections (${url})`, async ({ page }) => {
       await login(page);
       await page.goto(url);
+      const stat = page.getByTestId("review-panel").filter({ visible: true }).getByTestId("stat-reviewed");
+      await expect(stat).toBeVisible();
+      // PT1 a: Saved carts reads as a PRD, with no outline rail to cross-check the panel
+      // against; the panel is the one count there.
+      if (await page.getByTestId("prd-contents").filter({ visible: true }).count()) {
+        await expect(stat).toContainText("Reviewed");
+        return;
+      }
       await expect(sectionStrip(page).getByTestId("review-progress")).toBeVisible();
-      await expect(page.getByTestId("review-panel").filter({ visible: true }).getByTestId("stat-reviewed")).toBeVisible();
       const c = await counts(page);
       expect(c.stat, `${c.statText} vs ${c.outlineText}`).toEqual(c.outline);
       // Each says what it counts.

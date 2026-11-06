@@ -194,8 +194,9 @@ for (const email of ["viewer@example.com", "commenter@example.com"]) {
     await login(page, email);
     await page.goto("/documents/team-workspaces/v/2");
     await openSection(page, "problem");
-    // A commenter's ⋯ menu offers evidence only; a viewer has no menu.
-    const actions = page.getByRole("button", { name: /^Actions for/ }).filter({ visible: true });
+    // A commenter's ⋯ menu offers evidence only; a viewer has no menu. Every section keeps its
+    // own ⋯ menu now, so scope to this one.
+    const actions = section(page, "problem").getByRole("button", { name: /^Actions for/ });
     if (email.startsWith("commenter")) {
       await actions.click();
       await expect(page.getByRole("menuitem", { name: /^Add evidence link/ })).toBeVisible();

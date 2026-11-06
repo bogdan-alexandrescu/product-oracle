@@ -15,8 +15,10 @@ Test cards (protects / fails_when / no_claim):
   Nov 3: "show it once"): a plan milestone with the same name and day as a PRD's key date is
   left out of the lines (the key date "From the PRD" stays), while one with the same name on
   another day, or another name on the same day, stays; a saved pick of the left-out
-  milestone draws the same line, as the key date; fails_when=both are listed, the wrong one
-  is dropped, a near one is dropped, or the saved pick falls back to Now; no_claim=the web
+  milestone draws the same line, as the key date; prio-company (Nov 4): a plan milestone of
+  the PRD's code on another day is the same milestone, listed once, and every line names its
+  PRD; fails_when=both are listed, the wrong one is dropped, or the saved pick falls back to
+  Now; no_claim=the web
   (prio-line-once.spec.ts).
 - test_plan_milestone_matches_a_prd_key_date_as_the_roadmap_does: protects=prio-line-once
   review: a plan milestone is the PRD's key date on the same day by the roadmap chart's rule
@@ -124,11 +126,13 @@ async def test_plan_milestone_on_a_prd_key_date_is_listed_once(client):
         ("key_date", "M1 · Prove it · Nov 27, 2026"),
         ("milestone", "Beta · Nov 27, 2026"),
         ("key_date", "M2 · Scale volume · Dec 25, 2026"),
-        ("milestone", "M2 · Scale volume · Dec 26, 2026"),
         ("key_date", "M3 · Open to all · Feb 12, 2027"),
     ], f"the PRD's M1 is not listed once: {shown}"
     keys = {ln["key"] for ln in body["lines"]}
-    assert dup not in keys and {late, beta} <= keys
+    # prio-company (Nov 4): the PRD's M2 on another day is a stale copy of it: listed once.
+    assert dup not in keys and late not in keys and beta in keys
+    # Each line names its PRD, the track milestone too.
+    assert next(ln for ln in body["lines"] if ln["key"] == beta)["prd"]["slug"] == "guided-setup"
     m1 = next(ln for ln in body["lines"] if ln["label"].startswith("M1"))
     assert m1["prd"]["slug"] == "guided-setup"
     # A saved pick of the milestone left out draws the same line, as the PRD's key date.

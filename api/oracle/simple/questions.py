@@ -34,7 +34,7 @@ from oracle.authz import has_role
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document, DocumentVersion
 from oracle.members.names import display_name
-from oracle.simple import plan
+from oracle.simple import plan, waiting_list
 from oracle.simple.changes import ChangeError
 from oracle.simple.models import SimpleChange
 from oracle.simple.schemas import (
@@ -565,6 +565,7 @@ async def waiting(db: AsyncSession, principal: Any) -> SimpleDecisionsWaitingOut
         others=others,
         approvals_waiting=len(await _approvals(db, principal)),
         tasks=await tasks_waiting(db, me),
+        items=await waiting_list.items(db, principal, qs),
     )
 
 

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useId, useRef, useState, type ReactNode } from "react";
 
-import { Button, DataTable, Icon, LinkButton, Notice, Panel, toast, useFocusTrap, type Column } from "@/components/ds";
+import { Button, DataTable, Icon, InfoTip, LinkButton, Notice, Panel, toast, useFocusTrap, type Column } from "@/components/ds";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { dateBlocksOf } from "@/components/PublishView";
@@ -224,7 +224,16 @@ export function RoadmapSharing({ d }: { d: Doc }) {
   return (
     <div className="mb-4 space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <span className="text-sm font-semibold text-text2">Audience</span>
+        <span className="inline-flex items-center gap-1 text-sm font-semibold text-text2">
+          Audience
+          {(canShare || checkPublic) && (
+            <span data-testid="sharing-hint">
+              <InfoTip label="sharing" align="start" side="bottom">
+                {[canShare && SHARE_HINT, checkPublic && CHECK_HINT].filter(Boolean).join(" ")}
+              </InfoTip>
+            </span>
+          )}
+        </span>
         <AudienceSwitch value={audience} onChange={setAudience} showPublic={showPublic} />
         {/* qa-docs-68: two plainly named actions, each with what it does under them. */}
         {canShare && (
@@ -238,11 +247,6 @@ export function RoadmapSharing({ d }: { d: Doc }) {
           </LinkButton>
         )}
       </div>
-      {(canShare || checkPublic) && (
-        <p data-testid="sharing-hint" className="-mt-2 text-[13px] text-text2">
-          {[canShare && SHARE_HINT, checkPublic && CHECK_HINT].filter(Boolean).join(" ")}
-        </p>
-      )}
       <AudienceView doc={d.slug} n={d.latest_version} audience={audience} />
       {can("list_share_links") && <ShareLinks doc={d.slug} reloadKey={linksKey} />}
       {sharing && (

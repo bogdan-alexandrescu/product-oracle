@@ -40,7 +40,7 @@ const STATES: Partial<Record<RunOut["status"], Rebuild["state"]>> = {
 };
 /** The API's CHECKPOINT_TITLES and STOP_ACTIONS. */
 const STOP_TITLES: Record<string, string> = {
-  baseline_confirm: "Baseline",
+  baseline_confirm: "Ground Truth",
   feature_set: "Feature set",
   priority_order: "Priority order",
   prd_review: "PRD review",
@@ -49,7 +49,7 @@ const STOP_TITLES: Record<string, string> = {
   roadmap_review: "Roadmap review",
 };
 const STOP_ACTIONS: Record<string, string> = {
-  baseline_confirm: "confirm the baseline",
+  baseline_confirm: "confirm the Ground Truth",
   feature_set: "approve the feature set",
   eng_review: "check the engineering review",
   eng_dates: "set the engineering dates",

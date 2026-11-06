@@ -722,23 +722,23 @@ async def only_in_trash(db: AsyncSession, kind: str) -> bool:
     return bool(at) and all(d is not None for d in at)
 
 
-async def deleted_for_good(db: AsyncSession, kind: str) -> bool:
-    """No document of this kind is left, live or in Trash, and one was purged: a review of
-    them reviews what was deleted for good (Home's "Next review meeting")."""
+async def deleted_for_good(db: AsyncSession, kind: str) -> datetime | None:
+    """When the last document of this kind was purged, when none is left, live or in
+    Trash: a review of them reviews what was deleted for good (Home's "Next review
+    meeting" says so, with the day). None while one is left or none was ever purged."""
+    from sqlalchemy import func
+
     from oracle.models import AuditEvent
 
     left = await db.scalar(
         select(Document.id).where(Document.kind == kind).limit(1).execution_options(**ALL)
     )
     if left is not None:
-        return False
-    purged = await db.scalar(
-        select(AuditEvent.id)
-        .where(
+        return None
+    return await db.scalar(
+        select(func.max(AuditEvent.created_at)).where(
             AuditEvent.action == "trash.purge",
             (AuditEvent.data["root"]["kind"].astext == kind)
             | AuditEvent.data["items"].contains([{"kind": kind}]),
         )
-        .limit(1)
     )
-    return purged is not None

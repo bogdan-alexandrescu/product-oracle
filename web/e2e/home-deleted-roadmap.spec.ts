@@ -5,14 +5,16 @@ import { onlyTheRoadmapRefresh, trashEvery } from "./trash-helpers";
 
 /*
  * home-deleted-roadmap: once every roadmap has left Trash for good (its 30 days passed),
- * Home's "Next review meeting" says the roadmap refresh's roadmap was deleted, no longer
- * that it is in Trash, and links the ritual's settings.
+ * Home's "Next review meeting" says the roadmap refresh's roadmap was deleted for good and on
+ * which day (month first), no longer that it is in Trash, and links the ritual's settings.
  *
  * Test cards (protects / fails_when / no_claim):
  * - deleted for good: protects=with every roadmap moved to Trash through its menu and 31
- *   days gone by, "Next review meeting" reads "Its roadmap was deleted · Ritual settings"
+ *   days gone by, "Next review meeting" reads "Its roadmap was deleted for good on Nov 22 · Ritual
+ *   settings" (the day Trash deleted it)
  *   and the link opens the ritual; fails_when=it still says the roadmap is in Trash, or
- *   shows the refresh as if its roadmap were live, or only says so once Trash is visited;
+ *   shows the refresh as if its roadmap were live, or only says so once Trash is visited,
+ *   or leaves out the day or writes it ISO;
  *   no_claim=the API's check (pytest:
  *   test_home_ritual_deleted.py).
  */
@@ -46,7 +48,7 @@ async function roadmapDeletedForGood(page: Page) {
   await page.goto("/simple");
   await expect(meeting).toContainText("Monthly roadmap refresh");
   const line = meeting.getByTestId("home-meeting-deleted");
-  await expect(line).toHaveText("Its roadmap was deleted · Ritual settings");
+  await expect(line).toHaveText("Its roadmap was deleted for good on Nov 22 · Ritual settings");
   await expect(meeting.getByTestId("home-meeting-trash")).toHaveCount(0);
   await line.getByRole("link", { name: "Ritual settings" }).click();
   await expect(page).toHaveURL(/\/company\/rituals\?ritual=/);

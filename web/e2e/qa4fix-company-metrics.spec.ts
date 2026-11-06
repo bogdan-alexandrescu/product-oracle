@@ -47,10 +47,12 @@ test.describe("desktop", () => {
   test("qa4-company-3: the Metrics table shows a metric's whole name at 1440 wide", async ({ page }) => {
     await login(page);
     await addMetric(page, "Activation rate");
-    const name = metricRow(page, "Activation rate").getByRole("gridcell").first();
+    // D-9: the kind chip sits beside the name.
+    const cell = metricRow(page, "Activation rate").getByRole("gridcell").first();
+    const name = cell.locator("span.font-medium");
     await expect(name).toHaveText("Activation rate");
+    expect(await cell.evaluate((el) => el.clientWidth)).toBeGreaterThanOrEqual(200);
     const [shown, needed] = await name.evaluate((el) => [el.clientWidth, el.scrollWidth]);
-    expect(shown).toBeGreaterThanOrEqual(200);
     expect(needed).toBeLessThanOrEqual(shown);
   });
 

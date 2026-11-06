@@ -24,8 +24,8 @@ import { DecidedItem, LINK, momentWords } from "../_flow";
 import { DraftDates } from "./_draft";
 import { SimpleSelect } from "@/components/simple/meetings/SimpleSelect";
 import { AgendaSheet } from "@/components/simple/meetings/AgendaSheet";
-import { OpenFeatureContext, type OpenFeature } from "@/components/simple/OpenFeature";
-import { FeaturePanel } from "../../roadmap/_panel";
+import { OpenFeatureContext } from "@/components/simple/OpenFeature";
+import { FeaturePanel, type PanelFeature } from "../../roadmap/_panel";
 
 // Chat actions (notes, open questions): optional until schema.d.ts carries them.
 type Meeting = Schemas["SimpleMeetingOut"] & { notes?: MeetingNote[] };
@@ -186,8 +186,8 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   const name = namer(m);
   const { me, can } = useMe();
   const phone = usePhone();
-  // The agenda's feature names open the one feature panel.
-  const [feature, setFeature] = useState<Parameters<OpenFeature>[0] | null>(null);
+  // build-feature-panel (AN PR 1204 review 5): a feature named on the agenda or the Roadmap step opens the one feature panel.
+  const [feature, setFeature] = useState<PanelFeature | null>(null);
   // walkc-meeting r2 (5a): an invited attendee has not joined until they press Join.
   const joined = m.attendees.some((a) => a.id === me?.user_id && a.joined);
   // qa-simple-decide-2: Approve says what it approves (the one-pager's edits in this meeting); none: no button.
@@ -255,6 +255,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   const roadmapRefresh = `${cardTick}|${m.meeting_decisions.map((d) => d.id).join()}|${m.drafts.map((d) => `${d.status}-${d.changes}`).join()}`;
   return (
     <div className="flex min-h-full flex-col">
+      {feature && <FeaturePanel key={feature.id ?? feature.name} feature={feature} phone={phone} canChange={can("create_simple_change")} onClose={() => setFeature(null)} />}
       {/* qa-simple-decide-48: on a phone the header scrolls away with the page (not sticky). */}
       <header className="sticky top-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-3 max-[600px]:static max-[600px]:gap-y-1 max-[600px]:py-2" aria-label="Meeting">
         {/* qa4-simple-decide-27: the back link and the title share one line and one baseline. */}
@@ -373,13 +374,13 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
           )}
         </div>
       )}
-      {/* agenda-sheet: Now, Next, Item n of N and the Agenda sheet (mk-edit-meetings-tracks, b). */}
+      {/* agenda-sheet: Now, Next, Item n of N and the Agenda sheet (mk-edit-meetings-tracks, b); its
+          feature names open the one feature panel (build-feature-panel). */}
       {(m.agenda.items ?? []).length > 0 && (
         <OpenFeatureContext.Provider value={setFeature}>
           <AgendaSheet meetingId={m.id} agenda={m.agenda} can={m.can} phone={phone} reload={reload} />
         </OpenFeatureContext.Provider>
       )}
-      {feature && <FeaturePanel key={`${feature.id}|${feature.name}`} feature={feature} phone={phone} canChange={can("create_simple_change")} onClose={() => setFeature(null)} />}
       <div className="grid flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_380px]">
         {/* qa-simple-decide-49: the app has the one <main>; the stage is a section. */}
         <section aria-label="Stage" className="min-w-0">
@@ -397,7 +398,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
               />
             </MeetingClock.Provider>
           )}
-          {step === 1 && <RoadmapSlice m={m} reload={reload} refresh={roadmapRefresh} />}
+          {step === 1 && <RoadmapSlice m={m} reload={reload} refresh={roadmapRefresh} open={setFeature} />}
           {step === 2 && <DecisionsStep m={m} reload={reload} />}
         </section>
         <aside aria-label="Chat column" className="flex min-w-0 flex-col gap-4">
@@ -419,8 +420,8 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
                 {m.meeting_decisions.map((d) => (
                   <li key={d.id} data-testid="meeting-decision">
                     <strong>{code(d)}</strong> {d.title}
-                    {/* qa-simple-decide-50: the day too, as elsewhere in Simple; qa4-simple-decide-19: the meeting's one format, no zone letters. */}
-                    <span className="block text-sm text-text-faint">{d.approver.name} · {momentWords(d.at, zone)}</span>
+                    {/* qa-simple-decide-50: the day too, as elsewhere in Simple; RP2 c: the decision stamp keeps its zone ("Wed Nov 4, 4:41 PM PST"). */}
+                    <span className="block text-sm text-text-faint" data-testid="decision-stamp">{d.approver.name} · {momentWords(d.at, zone, false, true)}</span>
                   </li>
                 ))}
               </ul>
@@ -429,6 +430,15 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
         </aside>
       </div>
     </div>
+  );
+}
+
+/** A feature's name that opens its panel (build-feature-panel). */
+function FeatureName({ id, title, open, strong = false }: { id: string; title: string; open: (f: PanelFeature) => void; strong?: boolean }) {
+  return (
+    <button type="button" className="text-left hover:underline" onClick={() => open({ id, code: "", name: title })}>
+      {strong ? <strong>{title}</strong> : title}
+    </button>
   );
 }
 
@@ -497,7 +507,7 @@ function ChangeMode({ m, busy, onSave }: { m: Meeting; busy: boolean; onSave: (b
 
 const HORIZONS = ["now", "next", "later"] as const;
 
-function RoadmapSlice({ m, reload, refresh }: { m: Meeting; reload: () => Promise<unknown>; refresh: string }) {
+function RoadmapSlice({ m, reload, refresh, open }: { m: Meeting; reload: () => Promise<unknown>; refresh: string; open: (f: PanelFeature) => void }) {
   const zone = useCompanyZone();
   const q = useQuery(`simple-meeting-roadmap|${m.prd.slug}`, () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: { prd: m.prd.slug } } })));
   // walkc-meeting r2 (5d): a card applied in the chat (or another attendee's change) shows here at once.
@@ -557,7 +567,7 @@ function RoadmapSlice({ m, reload, refresh }: { m: Meeting; reload: () => Promis
         {items.map((i) => (
           <li key={i.id} data-item={i.key} className="flex flex-wrap items-center justify-between gap-2 py-2">
             <span className="min-w-0 flex-1">
-              <strong>{i.title}</strong> · {i.status === "cut" ? "Cut" : cap(i.horizon)} · <span className="whitespace-nowrap" data-testid="roadmap-span">{dayWords(i.start.date, zone)} – {dayWords(i.end.date, zone)}</span>
+              <FeatureName id={i.id} title={i.title} open={open} strong /> · {i.status === "cut" ? "Cut" : cap(i.horizon)} · <span className="whitespace-nowrap" data-testid="roadmap-span">{dayWords(i.start.date, zone)} – {dayWords(i.end.date, zone)}</span>
             </span>
             {/* qa-simple-decide-45: a cut item comes back with Restore. */}
             {m.can.change && i.status === "cut" && (

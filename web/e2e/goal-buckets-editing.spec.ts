@@ -26,6 +26,9 @@ import { expect, test, type Page } from "./test";
  * Card gb-panel: protects = a feature's name in a bucket opens the Simple item panel (the one the
  * roadmap opens) with that feature's card; Close shuts it; the grip still only moves it;
  * fails_when = clicking a bucket feature opens nothing; no_claim = the card's own edits.
+ * Card gb-assumed (review of PR 1244, round 3): protects = a feature whose link to its bucket's
+ * goal has an assumed contribution (an approved order's new feature) reads "Contribution assumed",
+ * as the Ground Truth drawer does; fails_when = the mark is missing, or shows on a set one.
  */
 
 const SIZES = [
@@ -201,6 +204,14 @@ for (const size of SIZES) {
       await expect(card).toContainText("Plan limits");
       await card.getByRole("button", { name: /Close/ }).first().click();
       await expect(page.getByTestId("item-panel")).toHaveCount(0);
+    });
+
+    test("a feature whose contribution to its goal is assumed is marked, as the Ground Truth marks it", async ({ page }) => {
+      await open(page, size.viewport);
+      const assumed = bucket(page, "Activation").locator('[data-code="F-02"]').getByTestId("contribution-assumed");
+      await expect(assumed).toBeVisible();
+      await expect(assumed).toHaveText("Contribution assumed");
+      await expect(bucket(page, "Activation").locator('[data-code="F-01"]').getByTestId("contribution-assumed")).toHaveCount(0);
     });
 
     test("a viewer reads the goals with no controls; chips and bars name the milestone", async ({ page }) => {
