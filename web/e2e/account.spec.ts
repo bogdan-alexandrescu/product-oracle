@@ -228,7 +228,7 @@ test("my account: change password", async ({ page }) => {
   await form.getByLabel("New password again").fill(fresh);
   await form.getByRole("button", { name: "Change password" }).click();
   await expect(form.getByRole("alert")).toContainText("not correct");
-  await expect(form).toContainText("revokes your personal API tokens, every MCP client you authorized");
+  await expect(form.getByTestId("password-revokes")).toContainText("revokes your personal API tokens, every MCP client you authorized");
 
 
   await form.getByLabel("Current password").fill(ADMIN.password);

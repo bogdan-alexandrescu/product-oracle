@@ -86175,6 +86175,11 @@
             "title": "Dates",
             "default": []
           },
+          "webhooks": {
+            "type": "integer",
+            "title": "Webhooks",
+            "default": 0
+          },
           "total": {
             "type": "integer",
             "title": "Total"

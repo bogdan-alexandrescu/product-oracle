@@ -48,9 +48,9 @@ export function WebhooksSettings() {
             {h.name}
           </span>
           {h.include_approvers_content && (
-            <span title="Owners-and-approvers content on" className="inline-flex flex-none text-text2" data-testid="approvers-content-lock">
+            <span title="Sends private details: what only owners and approvers can see" className="inline-flex flex-none text-text2" data-testid="approvers-content-lock">
               <Icon name="lock" size={16} />
-              <span className="sr-only">Owners-and-approvers content on</span>
+              <span className="sr-only">Sends private details: what only owners and approvers can see</span>
             </span>
           )}
         </span>
@@ -64,9 +64,11 @@ export function WebhooksSettings() {
       header: "Last delivery",
       width: "150px",
       phone: "hide",
+      // F-65: the outcome and its time wrap rather than cut.
+      wrap: true,
       cell: (h) =>
         h.last_delivery ? (
-          <span className="tnum truncate" title={h.last_delivery.at ? formatDateTime(h.last_delivery.at) : undefined}>
+          <span className="tnum" title={h.last_delivery.at ? formatDateTime(h.last_delivery.at) : undefined}>
             {outcomeText(h.last_delivery)}
             {h.last_delivery.at && <span className="text-text2"> · {ago(h.last_delivery.at)}</span>}
           </span>
@@ -87,9 +89,9 @@ export function WebhooksSettings() {
           <InfoTip label="Webhooks" align="start" side="bottom">
             {/* qa-settings-11: the page's intro in its tip, as on every Settings tab. */}
             <span className="block">Tell your other tools when runs, drafts and approvals change.</span>
-            Oracle posts each event as signed JSON (Standard Webhooks: webhook-id, webhook-timestamp, webhook-signature). Check the
-            signature with the secret and refuse a timestamp more than 5 minutes off; the runbook (docs/ops-webhooks.md) has a verify
-            example. Payloads carry ids, states, titles, names and links, never document text.
+            {/* Pass F, F-20: no header names or file names here. */}
+            Oracle signs each event with the webhook&apos;s secret, so your tool can check it came from Oracle and is recent.
+            Events carry states, titles, names and links, never document text.
           </InfoTip>
         }
         action={

@@ -27688,6 +27688,11 @@ export interface components {
              * @default []
              */
             dates: components["schemas"]["InboxDateBasis"][];
+            /**
+             * Webhooks
+             * @default 0
+             */
+            webhooks: number;
             /** Total */
             total: number;
             /**

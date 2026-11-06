@@ -130,7 +130,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import ColumnElement, and_, func, literal_column, or_, select
+from sqlalchemy import ColumnElement, and_, func, literal, literal_column, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, autonomy, company_time, confidence, safe_yaml, webhooks, wording
@@ -11537,8 +11537,9 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     from oracle.intake.read import inbox_due as intake_reads_due
 
     # INT2's intake-read rows, read below only for a reader who has one.
-    seen, (has_intake_reads,) = await inbox_states.last_seen_and(
-        db, principal.id, intake_reads_due(principal)
+    # F-7: my unread webhook notices ride on the same read (R-1: no read of their own).
+    seen, (has_intake_reads,), webhook_notices = await inbox_states.last_seen_and(
+        db, principal.id, intake_reads_due(principal), count=_unread_webhook_notices(principal)
     )
     if has_role(principal.role, "approver"):
         states, counts = await inbox_states.feedback_states(db, seen)
@@ -11776,7 +11777,9 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         + sum(1 for r in discussions if r.state in ("new", "open"))
         # A track is one row, its open alerts its children (#514: as a checkpoint's items).
         + sum(1 for t in track_groups if t.counts.new + t.counts.open > 0)
+        + webhook_notices
         + counted,
+        webhooks=webhook_notices,
         tracks=track_groups,
         launches=launch_rows,
         rituals=rituals,
@@ -11797,6 +11800,30 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         simple_date_suggestions=simple_date_suggestions,
         simple_goal_suggestions=simple_goal_suggestions,
         simple_minutes=simple_minutes,
+    )
+
+
+WEBHOOK_NOTICE_KINDS = ("webhook_paused", "webhook_url_changed")
+
+
+def _unread_webhook_notices(principal: Principal) -> ColumnElement[int]:
+    """How many of my webhook notices (paused, address changed) are unread, counted Inbox
+    rows (F-7), as a clause the Inbox reads in a query it makes anyway; none for a role that
+    cannot open Settings › Webhooks (F-25)."""
+    from oracle.authz import has_role
+    from oracle.review.models import Notification
+
+    if principal.user_id is None or not has_role(principal.role, "approver"):
+        return literal(0)
+    return (
+        select(func.count())
+        .select_from(Notification)
+        .where(
+            Notification.user_id == principal.user_id,
+            Notification.kind.in_(WEBHOOK_NOTICE_KINDS),
+            Notification.read_at.is_(None),
+        )
+        .scalar_subquery()
     )
 
 

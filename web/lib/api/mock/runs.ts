@@ -1984,6 +1984,8 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     launches: [],
     // A5: access request rows are added by the server (./server.ts).
     access_requests: [],
+    // F-7: my unread webhook notices, counted by the server (./server.ts).
+    webhooks: 0,
     // Simple S8: minutes sent to me as an attendee (./simple-meetings.ts adds them).
     simple_minutes: [],
     // H10 request rows: none in the mock yet (lane 2 adds the requests-why-not scenario).

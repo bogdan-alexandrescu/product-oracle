@@ -52,6 +52,7 @@ test("Connections: the Slack card says what the app does once installed, beside 
 test("API tokens: the link names My account's section as it is titled there", async ({ page }) => {
   await login(page);
   await page.goto("/settings/api-tokens");
+  await page.getByRole("button", { name: "About API tokens" }).click();
   const where = page.getByTestId("tokens-made-where");
   await where.getByRole("link", { name: "My account › Personal API tokens" }).click();
   await expect(page).toHaveURL(/\/account$/);

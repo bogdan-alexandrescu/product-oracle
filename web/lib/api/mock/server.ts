@@ -7298,6 +7298,12 @@ async function route(db: Db, req: Request): Promise<Response> {
     inbox.metrics = metricRows;
     inbox.total += metricCounted;
     inbox.needs_me = (inbox.needs_me ?? 0) + metricCounted;
+    // F-7: my unread webhook notices count, for the roles that can open Settings › Webhooks.
+    const webhookNotices = atLeast(me.role, "approver")
+      ? (db.review_v2?.notifications ?? []).filter((n) => n.user_id === me.id && !n.read_at && (n.kind === "webhook_paused" || n.kind === "webhook_url_changed")).length
+      : 0;
+    inbox.webhooks = webhookNotices;
+    inbox.total += webhookNotices;
     // Owners also see the provider revokes a removed member's disable could not make.
     db.revoke_failures ??= [];
     const failures = atLeast(me.role, "owner")

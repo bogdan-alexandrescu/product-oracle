@@ -10,7 +10,7 @@ import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { eventLabel, failureText, OnTop, Outcome, type Delivery, type EventType, type Webhook } from "./parts";
+import { answerText, eventLabel, failureText, OnTop, Outcome, type Delivery, type EventType, type Webhook } from "./parts";
 
 const STATUSES: { value: Delivery["status"]; label: string }[] = [
   { value: "succeeded", label: "Succeeded" },
@@ -89,8 +89,10 @@ export function DeliveryLog({ hook, eventTypes, version, onChanged }: { hook: We
                     {formatDateTime(d.last_at ?? d.created_at)}
                     {d.http_status != null && (
                       <>
-                        {" · HTTP "}
-                        <span data-testid="delivery-http">{d.http_status}</span>
+                        {" · "}
+                        <span data-testid="delivery-http" title={`HTTP ${d.http_status}`}>
+                          {answerText(d.http_status)}
+                        </span>
                       </>
                     )}
                     {d.duration_ms != null ? ` · ${d.duration_ms} ms` : ""}
@@ -183,7 +185,7 @@ function DeliverySheet({
         </section>
         <section>
           <h3 className="mb-1 text-[13px] font-semibold text-text2">
-            Response{d.http_status != null ? ` · HTTP ${d.http_status}` : d.error ? ` · ${failureText(d, d.host ?? hook.host)}` : ""}
+            Response{d.http_status != null ? ` · ${answerText(d.http_status)}` : d.error ? ` · ${failureText(d, d.host ?? hook.host)}` : ""}
           </h3>
           {/* Text only: a receiver's answer is never rendered as HTML. */}
           <pre className={pre} data-testid="delivery-response">

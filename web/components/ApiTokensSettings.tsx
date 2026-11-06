@@ -32,12 +32,6 @@ export const KIND_LABEL: Record<TokenKind, string> = {
   run: "Run",
   mcp_client: "MCP client",
 };
-const KIND_TIP: Record<TokenKind, string> = {
-  personal: "A member's API token (po_…): acts as them, capped by its scopes; expires after 30, 90 or 365 days, or never.",
-  service: "An API token for no one (po_…): acts with its own role.",
-  run: "A run's short-lived token for its agents (ort_…): read and draft scopes, ends with the run.",
-  mcp_client: "An MCP client a member authorized (OAuth, poa_…): acts as them, capped by its scopes.",
-};
 const KINDS: TokenKind[] = ["personal", "service", "run", "mcp_client"];
 
 /** "Oct 18": a chip's date; the full one is in its title. */
@@ -123,38 +117,36 @@ export const when = (iso?: string | null, never = "Never") =>
   );
 
 /**
- * Where each kind is made (qa-settings-35): this page lists and revokes, it makes none. As
- * the API makes them: personal tokens on My account (POST /v1/me/tokens), run tokens by
- * Oracle for each run segment (runtokens.mint_run_token), MCP clients when a member approves
- * one (OAuth consent); no API call makes a service token.
+ * Where each kind is made (qa-settings-35), in plain words behind the title's (i) (pass F,
+ * F-19, F-67). As the API makes them: personal tokens on My account (POST /v1/me/tokens), run
+ * tokens by Oracle for each run segment, MCP clients when a member approves one; no API
+ * call makes a service token.
  */
 function WhereTokensComeFrom() {
   const LINK = "font-medium text-accent underline underline-offset-2";
   return (
-    <Panel title="Where tokens come from" testId="tokens-made-where" className="mb-4">
-      <ul className="flex flex-col gap-1 px-4 py-3 text-[15px] max-[600px]:px-3">
-        <li>
-          <b>Personal</b>: each member makes their own on{" "}
-          <Link href="/account" className={LINK}>
-            My account › Personal API tokens
-          </Link>
-          .
-        </li>
-        <li>
-          <b>Run</b>: Oracle makes one for each run&apos;s agents; it ends with the run.
-        </li>
-        <li>
-          <b>MCP client</b>: made when a member approves an AI tool&apos;s request to connect to Oracle; they manage it on{" "}
-          <Link href="/account" className={LINK}>
-            My account
-          </Link>
-          .
-        </li>
-        <li>
-          <b>Service</b>: Oracle has no way to make one. Any listed here were made outside the app; revoke the ones nobody uses.
-        </li>
-      </ul>
-    </Panel>
+    <span className="mt-2 block" data-testid="tokens-made-where">
+      <span className="block">
+        <b>Personal</b>: a member&apos;s own key. It acts as them and can do only what it was given. Each member makes theirs on{" "}
+        <Link href="/account" className={LINK}>
+          My account › Personal API tokens
+        </Link>
+        .
+      </span>
+      <span className="block">
+        <b>Run</b>: Oracle makes one for each run&apos;s agents; it ends with the run.
+      </span>
+      <span className="block">
+        <b>MCP client</b>: an AI tool a member let connect to Oracle. It acts as them; they manage it on{" "}
+        <Link href="/account" className={LINK}>
+          My account
+        </Link>
+        .
+      </span>
+      <span className="block">
+        <b>Service</b>: a key for no one that acts with its own role. Oracle has no way to make one; revoke the ones nobody uses.
+      </span>
+    </span>
   );
 }
 
@@ -205,6 +197,8 @@ export function ApiTokensSettings({ initialMember }: { initialMember: string | n
 function OwnerTokens({ initialMember }: { initialMember: string | null }) {
   const router = useRouter();
   const [kind, setKind] = useState<TokenKind | "all">("all");
+  // F-66: the title's badges filter the list to the tokens they count.
+  const [status, setStatus] = useState<TokenState | null>(null);
   const [member, setMember] = useState<string>(initialMember ?? "");
   const membersQ = useQuery("members", () => unwrap(api.GET("/v1/members")));
   const tokensQ = useQuery(`api-tokens:${kind}:${member}`, () =>
@@ -252,7 +246,7 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
   }
 
   const rows = tokensQ.data;
-  const shown = rows ? [...rows].reverse() : undefined; // newest first
+  const shown = rows ? [...rows].reverse().filter((t) => !status || tokenState(t) === status) : undefined; // newest first
   const chooseMember = (id: string) => {
     setMember(id);
     router.replace(id ? `/settings/api-tokens?member=${id}` : "/settings/api-tokens", { scroll: false });
@@ -262,8 +256,10 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
     {
       key: "name",
       header: "Name",
+      wrap: true,
       cell: (t) => (
-        <span className="min-w-0 truncate font-medium" title={`${t.name} · created ${formatDate(t.created_at)}`}>
+        // F-67: the whole name, wrapping; never cut.
+        <span className="min-w-0 font-medium [overflow-wrap:anywhere]" title={`${t.name} · created ${formatDate(t.created_at)}`}>
           {t.name}
         </span>
       ),
@@ -271,7 +267,8 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
     {
       key: "kind",
       header: "Kind",
-      width: "124px",
+      // "MCP client" whole.
+      width: "148px",
       cell: (t) => <Chip kind="acc">{KIND_LABEL[t.kind ?? "service"]}</Chip>,
     },
     {
@@ -282,7 +279,7 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
       cell: (t) => <span className={t.owner_email ? "" : "text-text2"}>{t.owner_email ?? "The company"}</span>,
     },
     // Visual QA ST-5: on a phone the scopes take their own line under "For <email>".
-    { key: "scopes", header: "Scopes", width: "15%", wrap: true, className: "max-[600px]:basis-full", cell: (t) => <Scopes scopes={t.scopes} role={t.role} /> },
+    { key: "scopes", header: "What it can do", width: "15%", wrap: true, className: "max-[600px]:basis-full", cell: (t) => <Scopes scopes={t.scopes} role={t.role} /> },
     { key: "used", header: "Last used", width: "124px", phoneLabel: "Used ", cell: (t) => when(t.last_used_at) },
     // Created is in the name's title: the expiry matters more on one line.
     { key: "expires", header: "Expiry", width: "164px", cell: (t) => <Expiry t={t} /> },
@@ -322,7 +319,22 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
   ];
 
   const active = rows?.filter((t) => tokenState(t) === "active").length;
-  const revoked = rows?.filter((t) => t.revoked_at).length;
+  const revoked = rows?.filter((t) => tokenState(t) === "revoked").length;
+  const badge = (state: TokenState, n: number, kind: ChipKind, testId?: string) => (
+    <button
+      type="button"
+      aria-pressed={status === state}
+      aria-label={`Show ${n} ${state}`}
+      title={status === state ? "Show them all" : `Show only the ${state} ones`}
+      onClick={() => setStatus(status === state ? null : state)}
+      className="rounded-full focus-visible:outline-2 focus-visible:outline-accent aria-pressed:ring-2 aria-pressed:ring-accent"
+      data-testid={testId}
+    >
+      <Chip kind={kind}>
+        {n} {state}
+      </Chip>
+    </button>
+  );
   const expired = rows?.filter((t) => tokenState(t) === "expired").length;
   return (
     <>
@@ -330,38 +342,24 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
         title="API tokens"
         info={
           <InfoTip label="API tokens" align="start" side="bottom">
-            Every credential that can call this company&apos;s Oracle; secrets are never shown after they are created.
-            Removing a member revokes all of theirs.
-            <span className="mt-2 block">
-              {KINDS.map((k) => (
-                <span key={k} className="block">
-                  <b>{KIND_LABEL[k]}</b>: {KIND_TIP[k]}
-                </span>
-              ))}
-            </span>
+            Every key that can reach this company&apos;s Oracle. A key is shown only once, when it is made. Removing a member
+            revokes all of theirs.
+            <WhereTokensComeFrom />
           </InfoTip>
         }
         status={
           <>
-            {active != null && !tokensQ.error && (
-              <Chip kind="pass" data-testid="active-count">
-                {active} active
-              </Chip>
-            )}
-            {!!revoked && <Chip kind="na">{revoked} revoked</Chip>}
-            {!!expired && (
-              <Chip kind="na" data-testid="expired-count">
-                {expired} expired
-              </Chip>
-            )}
+            {active != null && !tokensQ.error && badge("active", active, "pass", "active-count")}
+            {/* A pressed one stays at 0 (a member or kind with none), so its filter can be turned off. */}
+            {(!!revoked || status === "revoked") && badge("revoked", revoked ?? 0, "na", "revoked-count")}
+            {(!!expired || status === "expired") && badge("expired", expired ?? 0, "na", "expired-count")}
           </>
         }
       />
-      <WhereTokensComeFrom />
       <Split>
         <Panel
           title="Tokens"
-          count={tokensQ.error ? undefined : rows?.length}
+          count={tokensQ.error ? undefined : shown?.length}
           tools={
             <div className="flex flex-wrap items-end gap-2">
               <Field label="Member" htmlFor="token-member">
@@ -400,7 +398,7 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
                 loading={tokensQ.loading && !rows}
                 rowKey={(t) => t.id}
                 rowProps={(t) => ({ "data-testid": "token-row", "data-kind": t.kind ?? undefined, ...acts.rowAttrs(t.id) })}
-                empty="No tokens"
+                empty={status ? `No ${status} tokens` : "No tokens"}
               />
             </div>
           )}

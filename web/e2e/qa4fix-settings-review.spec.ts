@@ -61,7 +61,7 @@ test.describe("dark theme", () => {
     await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-webhooks").click();
     await page.getByRole("button", { name: "New webhook" }).click();
     const sheet = page.getByRole("dialog", { name: "New webhook" });
-    await expectDarkSwitch(page, sheet.getByRole("switch", { name: "Include owners-and-approvers content" }));
+    await expectDarkSwitch(page, sheet.getByRole("switch", { name: "Private details" }));
     // On, it asks why.
     await expect(sheet.getByLabel("Why")).toBeVisible();
   });
