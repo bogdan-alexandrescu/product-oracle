@@ -3747,6 +3747,15 @@ function load(): Db {
       problem.body_text = problem.body_md;
     }
   }
+  // PR 1300 review round 3: saved-carts v2's Problem holds a 40-line code block, one line on its slide.
+  if (scenario === "long-code") {
+    const carts = db.documents.find((d) => d.slug === "saved-carts");
+    const problem = carts && docVersions(db, carts).find((v) => v.number === 2)?.sections.find((s) => s.section_key === "problem");
+    if (problem) {
+      problem.body_md = "Steps to try:\n\n```\n" + Array.from({ length: 40 }, (_, i) => `step ${i + 1} of the rollout`).join("\n") + "\n```";
+      problem.body_text = problem.body_md;
+    }
+  }
   if (scenario === BLOCKER_NARROWED_SCENARIO) narrowResolvedBlocker(ensureBlockers(db), ensureV2(db));
   // #347 "held-section-gone": a second held rewrite, of a section the latest version no longer has.
   if (scenario === "held-section-gone") {

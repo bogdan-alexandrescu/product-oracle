@@ -140,40 +140,65 @@ function prosePieces(heading: string, text: string, group: number, kind: Unit["k
     glue,
   }));
 }
-/** A code block longer than a slide, cut between lines, each piece fenced again (export/deck.py _code_pieces). */
-function codePieces(heading: string, lines: string[], group: number, budget: number): Unit[] {
-  const lead = heading ? 1.5 : 0;
-  if (lines.length + 0.4 + lead <= budget) return [{ text: heading + lines.join("\n"), cost: lines.length + 0.4, group, kind: "block", header: "" }];
-  const opener = lines[0];
-  const fenceChars = /^\s*(```|~~~)/.exec(opener)![1];
-  const closed = lines.length > 1 && /^\s*(```|~~~)/.test(lines[lines.length - 1]);
-  const inner = closed ? lines.slice(1, -1) : lines.slice(1);
-  const closer = closed ? lines[lines.length - 1] : fenceChars;
-  const out: Unit[] = [];
-  for (let i = 0; i < inner.length || !out.length; ) {
-    const room = Math.max(1, Math.floor(budget - 2.4 - (out.length ? 0 : lead)));
-    const part = [opener, ...inner.slice(i, i + room), closer];
-    out.push({ text: (out.length ? "" : heading) + part.join("\n"), cost: part.length + 0.4 + (out.length ? 0 : lead), group, kind: "block", header: "" });
-    i += room;
+/** A deck shows no code (owner, Nov 5): each fenced block is one line, "Code: 40 lines, in the full PRD", a link to that place in the full PRD (export/deck.py code_left_out). */
+export function codeLeftOut(body: string, href: string): string {
+  const lines = body.split("\n");
+  const out: string[] = [];
+  const fence = (l: string) => /^\s*(```|~~~)/.test(l);
+  for (let i = 0; i < lines.length; ) {
+    if (!fence(lines[i])) {
+      out.push(lines[i++]);
+      continue;
+    }
+    let j = i + 1;
+    while (j < lines.length && !fence(lines[j])) j++;
+    const n = j - i - 1;
+    out.push(`${/^\s*/.exec(lines[i])![0]}[Code: ${n} ${n === 1 ? "line" : "lines"}, in the full PRD](${href})`);
+    i = j + 1;
   }
-  return out;
+  return out.join("\n");
 }
+const cellsOf = (row: string) => row.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+/** Characters a line each column is shown at, as a browser lays the table out: a column whose text fits its share keeps it, the others share the rest by their text (export/deck.py column_widths). */
+function columnWidths(rows: string[][]): number[] {
+  const cols = Math.max(1, ...rows.map((r) => r.length));
+  const natural = Array.from({ length: cols }, (_, c) => Math.max(0, ...rows.map((r) => (r[c] ?? "").length)) + 2);
+  const widths = new Array<number>(cols).fill(0);
+  let left = [...natural.keys()];
+  let room = LINE_CHARS;
+  while (left.length) {
+    const share = room / left.length;
+    const fixed = left.filter((c) => natural[c] <= share);
+    if (!fixed.length) {
+      const total = left.reduce((n, c) => n + natural[c], 0);
+      for (const c of left) widths[c] = Math.floor((room * natural[c]) / total);
+      break;
+    }
+    for (const c of fixed) {
+      widths[c] = natural[c];
+      room -= natural[c];
+    }
+    left = left.filter((c) => !fixed.includes(c));
+  }
+  return widths.map((w) => Math.max(1, w - 2));
+}
+const rowCost = (cells: string[], widths: number[]) => 1.2 * Math.max(1, ...cells.slice(0, widths.length).map((t, c) => Math.ceil(t.length / widths[c])));
 /** A table row longer than a slide as rows that each fit, each cell's text cut in turn (export/deck.py _row_pieces). */
-function rowPieces(lead: string, row: string, extra: number, width: number, group: number, header: string, budget: number): Unit[] {
-  const cells = row.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
-  const room = Math.min(Math.max(1, Math.floor((budget - extra) / 1.2)), Math.max(1, Math.floor(budget / 1.2))) * width;
-  const cut = (cell: string): string[] => {
+function rowPieces(lead: string, row: string, extra: number, widths: number[], group: number, header: string, budget: number): Unit[] {
+  const cells = cellsOf(row);
+  const lines = Math.min(Math.max(1, Math.floor((budget - extra) / 1.2)), Math.max(1, Math.floor(budget / 1.2)));
+  const width = cells.map((_, c) => widths[c] ?? widths[widths.length - 1]);
+  const cut = (cell: string, room: number): string[] => {
     let atoms: [string, string][] = cell.split(SENTENCE_END).map((a, k) => [k ? " " : "", a]);
     if (atoms.some(([, a]) => a.length > room)) atoms = cell.split(" ").map((w, k) => [k ? " " : "", w]);
     const pieces = fill(atoms, () => room, (t) => t.length).map(([, p]) => p);
     return pieces.length ? pieces : [""];
   };
-  const parts = cells.map(cut);
+  const parts = cells.map((c, i) => cut(c, lines * width[i]));
   const count = Math.max(...parts.map((p) => p.length));
   return Array.from({ length: count }, (_, r) => {
     const texts = parts.map((p) => p[r] ?? "");
-    const longest = Math.max(0, ...texts.map((t) => t.length));
-    const cost = 1.2 * Math.max(1, Math.ceil(longest / width)) + (r === 0 ? extra : 0);
+    const cost = rowCost(texts, width) + (r === 0 ? extra : 0);
     return { text: (r === 0 ? lead : "") + `| ${texts.join(" | ")} |`, cost, group, kind: "row" as const, header };
   });
 }
@@ -193,7 +218,8 @@ function units(body: string, budget = SLIDE_LINES): Unit[] {
     } else if (fence(line)) {
       let j = i + 1;
       while (j < lines.length && !fence(lines[j])) j++;
-      out.push(...codePieces(heading, lines.slice(i, j + 1), group, budget));
+      const block = lines.slice(i, j + 1);
+      out.push({ text: heading + block.join("\n"), cost: block.length + 0.4, group, kind: "block", header: "" });
       heading = "";
       i = j + 1;
       group++;
@@ -207,15 +233,13 @@ function units(body: string, budget = SLIDE_LINES): Unit[] {
       const rows = lines.slice(i, j);
       const head = rows.length > 1 && /^\s*\|?\s*:?-{2,}/.test(rows[1]) ? rows.slice(0, 2) : [];
       const header = head.join("\n");
-      const cols = Math.max(1, rows[0].trim().replace(/^\||\|$/g, "").split("|").length);
+      const widths = columnWidths(rows.filter((r) => !/^\s*\|?\s*:?-{2,}/.test(r)).map(cellsOf));
       rows.slice(head.length).forEach((row, k) => {
-        const longest = Math.max(0, ...row.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim().length));
-        const width = Math.max(1, Math.floor(LINE_CHARS / cols));
         const extra = k === 0 && header ? 1.2 : 0;
-        const cost = 1.2 * Math.max(1, Math.ceil(longest / width)) + extra;
+        const cost = rowCost(cellsOf(row), widths) + extra;
         const lead = k === 0 && header ? heading + header + "\n" : "";
         if (cost <= budget) out.push({ text: lead + row, cost, group, kind: "row", header });
-        else out.push(...rowPieces(lead, row, extra, width, group, header, budget));
+        else out.push(...rowPieces(lead, row, extra, widths, group, header, budget));
         heading = "";
       });
       i = j;
@@ -450,10 +474,9 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
   for (const [s, ...rest] of groups) {
     const all = [s, ...rest];
     const notes = all.map((x) => presenterNotes(x.body_md)).filter(Boolean);
-    const whole = withGoalNames(
-      [slideBody(s.body_md), ...rest.map((x) => `### ${x.heading}\n\n${slideBody(x.body_md)}`)].join("\n\n"),
-      goals,
-    );
+    // As the API: a section's code is one line linking to it in the full PRD (export/deck.py code_left_out).
+    const shown = (x: Section) => codeLeftOut(slideBody(x.body_md), `/documents/${d.slug}/v/${d.number}#s-${x.section_key}`);
+    const whole = withGoalNames([shown(s), ...rest.map((x) => `### ${x.heading}\n\n${shown(x)}`)].join("\n\n"), goals);
     // As the API: a spec part's state label takes two lines of the slide (export/deck.py build_deck).
     const states = (s as { spec_states?: { label: string }[] }).spec_states ?? [];
     const pages = slidePages(whole, SLIDE_LINES - (states.length ? 2 : 0));
