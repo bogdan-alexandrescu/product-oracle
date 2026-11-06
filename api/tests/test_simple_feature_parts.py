@@ -33,6 +33,9 @@ Test cards (protects / fails_when / no_claim):
   window estimate; no_claim=the web's tree.
 - test_never_its_own_ancestor: protects=making a feature part of itself, its part or its
   part's part is 422 in plain words; fails_when=a cycle is stored; no_claim=restore.
+- test_a_loop_names_each_feature_by_code_and_name: protects=a refused loop, and a feature
+  made part of itself, name each feature by its code and name ("F-02 Alert routing by
+  team"); fails_when=a code is left out or the words name a field; no_claim=the web.
 - test_merge_into_a_part_keeps_every_part: protects=a feature with parts merged into a
   feature that is itself a part: its parts move under the kept feature, which stays where
   it was; merged into its own part's part, the kept feature takes the merged one's place
@@ -171,6 +174,8 @@ async def test_set_parent_stale_roles_and_bad_parents(client):
     for key, parent in (("p", "p"), ("p", "z"), ("p", "nope")):
         r = await w.parent(client, key, None, parent)
         assert r.status_code == 422, (key, parent, r.text)
+    r = await w.parent(client, "p", None, "p")
+    assert r.json()["detail"] == "P cannot be a part of itself"
     # Any depth: a part of a part, and a feature with parts made a part.
     assert (await w.parent(client, "p", None, "a")).status_code == 201
     r = await w.parent(client, "c", None, "p")
@@ -321,6 +326,37 @@ async def test_never_its_own_ancestor(client):
     assert items["a"]["parent_key"] is None and items["p"]["parent_key"] == "a"
 
 
+async def test_a_loop_names_each_feature_by_code_and_name(client):
+    """A refused loop names both features by code and name, the self case too."""
+    ctx = await make_people()
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        _, pv, _, rv = await seed.roadmap("alerts")
+        ids = {}
+        for i, (key, code, title) in enumerate(
+            (("route", "f-02", "Alert routing by team"), ("push", "f-05", "Alert push"))
+        ):
+            row = await seed.item(rv, pv, key, position=i, prd_section_key=code, title=title)
+            ids[key] = str(row.id)
+        await s.commit()
+
+    async def parent(key, before, after):
+        body = {"op": "set_parent", "target": {"item_id": ids[key]},
+                "before": {"parent_key": before}, "after": {"parent_key": after}}  # fmt: skip
+        return await client.post(CHANGES, json=body, headers=ctx.as_("owner"))
+
+    assert (await parent("push", None, "route")).status_code == 201
+    r = await parent("route", None, "push")
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == (
+        "F-02 Alert routing by team cannot be part of F-05 Alert push: "
+        "F-05 Alert push is already one of its parts"
+    )
+    r = await parent("route", None, "route")
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == "F-02 Alert routing by team cannot be a part of itself"
+
+
 async def test_merge_into_a_part_keeps_every_part(client):
     w = await Parts().build(await make_people())
     # a > b; c > p, own. c merges into b, itself a part.
@@ -442,3 +478,7 @@ async def test_priorities_rows_name_the_parent(client):
     assert rows["pay-2"]["part_of"] == {"id": w.ids["pay-1"], "code": "", "title": "Pay 1",
                                         "cut": False, "in_trash": False}  # fmt: skip
     assert rows["pay-1"]["part_of"] is None
+    # Its parts, from the roadmap's data (not only the rows this list shows): Delete counts them.
+    assert rows["pay-1"]["parts"] == [{"id": w.ids["pay-2"], "code": "", "title": "Pay 2",
+                                       "cut": False, "in_trash": False}]  # fmt: skip
+    assert rows["pay-2"]["parts"] == []
