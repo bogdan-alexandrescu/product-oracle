@@ -251,7 +251,12 @@ def test_approve_problems_group_a_sections_dates():
     assert only["what"].startswith(
         "5 dates are not backed by a confirmed schedule: Nov 20, Dec 3, Jan 4, Feb 9 and Mar 2;"
     )
-    assert "record a date basis" in only["what"]
+    # port-an-decisions: people read "date source", never "date basis" (its stored words too).
+    assert "add a date source on Plan › Dates" in only["what"]
+    assert "basis" not in only["what"]
+    [one] = approve_problems(problems[:1])["problems"]
+    assert "add a date source on Plan › Dates" in one["what"]
+    assert "basis" not in one["what"]
 
 
 async def test_a_cut_with_dependents_names_who_it_asks(client):

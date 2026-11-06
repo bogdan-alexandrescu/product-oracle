@@ -166,7 +166,10 @@ FLAG_KINDS = (
 WRITTEN = ("applied", "accepted", "undone")
 # Roadmap-plus: a roadmap's key dates (oracle.simple.key_dates).
 KEY_DATE_OPS = ("add_key_date", "edit_key_date", "remove_key_date")
-QUESTION_OPS = ("decide_question", "name_decider")
+# edit-decisions (oracle.simple.decision_sheet): the sheet's ops name a decision too and go
+# to its decider now, as a question's do.
+SHEET_OPS = ("edit_decision", "edit_question", "withdraw_decision", "add_question")
+QUESTION_OPS = ("decide_question", "name_decider", *SHEET_OPS)
 
 
 class ChangeError(Exception):
@@ -1043,6 +1046,7 @@ async def create(
     from oracle.simple import (
         additions,
         agenda,
+        decision_sheet,
         goal_asks,
         key_dates,
         one_pager,
@@ -1066,6 +1070,8 @@ async def create(
         return await trash_items.create_change(db, principal, body)
     if body.op in goal_asks.OPS:
         return await goal_asks.create_change(db, principal, body)
+    if body.op in decision_sheet.OPS:
+        return await decision_sheet.create(db, principal, body)
     me, now = _me(principal), company_time.now()
     ids = [_uuid(body.target.get("item_id"), "item_id")]
     if body.op in FIXES and body.target.get("subject"):
@@ -1201,6 +1207,10 @@ async def decide(
         return await trash_items.decide(db, principal, c, action, reason)
     if c.op in goal_asks.OPS:
         return await goal_asks.decide(db, principal, c, action, reason)
+    from oracle.simple import decision_sheet
+
+    if c.op in decision_sheet.OPS:
+        return await decision_sheet.decide(db, principal, c, action, reason)
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
     entry = read_.by_id().get(uuid.UUID(c.target["item_id"]))
     if entry is None:
@@ -1296,6 +1306,10 @@ async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> Simple
 
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
+    from oracle.simple import decision_sheet
+
+    if c.op in decision_sheet.OPS:
+        return await decision_sheet.undo(db, principal, c)
     if c.op in questions.OPS:
         return await questions.undo(db, principal, c)
     if c.op in key_dates.OPS:
@@ -1404,6 +1418,7 @@ class _View:
     def may_decide(self, c: SimpleChange) -> bool:
         from oracle.simple import (
             additions,
+            decision_sheet,
             goal_asks,
             goal_milestones,
             key_dates,
@@ -1412,6 +1427,8 @@ class _View:
             targets,
         )
 
+        if c.op in decision_sheet.OPS:
+            return decision_sheet.may_decide_change(self.principal, c, self.questions)
         if c.op in questions.OPS:
             return questions.may_decide_change(self.principal, c, self.questions)
         if c.op in key_dates.OPS:
@@ -1442,7 +1459,7 @@ class _View:
         owners, decider and reviewers (#723 owner answer)."""
         # S5: a one-pager line's change is on a PRD, not a roadmap of this read.
         if (c.document_id is not None and c.document_id not in self.docs
-                and c.op not in ("edit_line", "decide_question", "name_decider")):  # fmt: skip
+                and c.op not in ("edit_line", *QUESTION_OPS)):  # fmt: skip
             return False
         if self.me is None:
             return False
@@ -1471,21 +1488,33 @@ class _View:
         )
 
 
+def _target(c: SimpleChange, v: _View) -> dict:
+    """edit-decisions: a sheet suggestion still waiting names its decision as it is now (its
+    code and title), not as it was when it was sent (Home's and Waiting for you's rows)."""
+    d = v.questions.get(str((c.target or {}).get("decision_id")))
+    if c.status != "proposed" or c.op not in SHEET_OPS or c.op == "add_question" or d is None:
+        return c.target
+    from oracle.simple.decision_sheet import name_of
+
+    return {**c.target, "name": name_of(d)}
+
+
 def _out(c: SimpleChange, v: _View, names: dict[uuid.UUID, str]) -> SimpleChangeOut:
     asked = v.meeting(c)
+    target = _target(c, v)
     return SimpleChangeOut(
         id=c.id, session_id=c.session_id, document_id=c.document_id, op=c.op,  # type: ignore[arg-type]
         draft_ids=list(c.draft_ids or []),
-        target=c.target, before=c.before, after=c.after, status=c.status,  # type: ignore[arg-type]
+        target=target, before=c.before, after=c.after, status=c.status,  # type: ignore[arg-type]
         by=c.by, by_name=names.get(c.by, "someone"), at=c.at, decided_by=c.decided_by,
         decided_at=c.decided_at, reason=c.reason, decision_reason=c.decision_reason,
         routed_to=v.route(c), undoes_id=c.undoes_id, undone=c.id in v.undone,
         can_decide=c.status == "proposed" and v.may_decide(c), can_undo=v.can_undo(c),
-        words=_words(c, v, names), from_meeting=asked[0], off_agenda=asked[1],
+        words=_words(c, v, names, target), from_meeting=asked[0], off_agenda=asked[1],
     )  # fmt: skip
 
 
-def _words(c: SimpleChange, v: _View, names: dict[uuid.UUID, str]) -> str:
+def _words(c: SimpleChange, v: _View, names: dict[uuid.UUID, str], target: dict) -> str:
     """The change in plain words (oracle.simple.change_words): who, what, the item's code
     and name as this reader reads it, "· undone" once undone."""
     from oracle.simple import change_words
@@ -1496,7 +1525,7 @@ def _words(c: SimpleChange, v: _View, names: dict[uuid.UUID, str]) -> str:
         item = v.deleted.get(str(c.target["item_id"]))
     if c.op == "delete_goal":
         item = v.deleted.get(str(c.target.get("goal_id")))
-    return change_words.sentence(c.op, c.target, c.before, c.after,
+    return change_words.sentence(c.op, target, c.before, c.after,
                                  who=names.get(c.by, "someone"), item=item,
                                  status=c.status, undone=c.id in v.undone)  # fmt: skip
 

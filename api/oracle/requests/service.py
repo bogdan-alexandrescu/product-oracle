@@ -1682,3 +1682,52 @@ async def link_run_document(db: AsyncSession, run: "Run") -> int:
     except ValueError:
         return 0
     return await link_intake_document(db, intake_id, run.document_id)
+
+
+# --------------------------------------------------------------------------- Trash
+
+
+def describe_for_trash(row: ProductRequest) -> dict[str, Any]:
+    return {"type": "request", "id": str(row.id), "slug": None, "title": row.title,
+            "kind": "request"}  # fmt: skip
+
+
+async def trash_request(
+    db: AsyncSession, principal: Principal, request_id: uuid.UUID, reason: str | None
+) -> Any:
+    """port-an-decisions: an owner deletes a request to Settings › Trash (30 days, then
+    gone for good); Restore there brings it back as it was. A request others are merged into
+    stays: their counts and links go through it."""
+    from oracle.trash import service as trash
+    from oracle.trash.models import RETENTION_DAYS, TrashEntry
+
+    row = await db.get(ProductRequest, request_id, with_for_update=True)
+    if row is None:
+        raise _not_found()
+    merged = list(
+        await db.scalars(
+            select(ProductRequest.title).where(ProductRequest.merged_into_id == row.id)
+        )
+    )
+    if merged:
+        n = len(merged)
+        raise _conflict(
+            f"{n} {'request is' if n == 1 else 'requests are'} merged into it "
+            f"('{merged[0]}'{' and more' if n > 1 else ''}): reopen them first"
+        )
+    at = trash.now()
+    entry = TrashEntry(id=uuid.uuid4(), root_type="request", root_id=row.id,
+                       root=describe_for_trash(row), items=[], deleted_by=principal.id,
+                       deleted_by_name=await trash._actor_name(db, principal), reason=reason,
+                       published=False,
+                       purge_after=at + timedelta(days=RETENTION_DAYS))  # fmt: skip
+    entry.created_at = at
+    db.add(entry)
+    await db.flush()
+    row.deleted_at, row.deleted_by, row.deleted_reason = at, principal.id, reason
+    row.trash_entry_id = entry.id
+    await audit.record(db, principal, "trash.delete", "request", row.id,
+                       {"entry_id": str(entry.id), "root": entry.root, "items": [],
+                        "reason": reason})  # fmt: skip
+    await db.flush()
+    return entry

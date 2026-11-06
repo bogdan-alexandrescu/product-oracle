@@ -369,6 +369,9 @@ export const OP_WORDS: Record<string, string> = {
   delete_goal: "Move the goal to Trash",
   archive_goal: "Archive the goal",
   unarchive_goal: "Restore the goal",
+  edit_decision: "Change a decision",
+  withdraw_decision: "Withdraw a decision",
+  edit_question: "Change a question",
 };
 /** A change's words; one the list does not name yet reads "Change", never its code. */
 export const opWords = (op: string): string => OP_WORDS[op] ?? "Change";

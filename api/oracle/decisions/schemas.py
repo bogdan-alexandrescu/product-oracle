@@ -103,6 +103,8 @@ class DecisionCreate(BaseModel):
     evidence_ids: list[uuid.UUID] = Field(default=[], max_length=MAX_IDS)
     entity_ids: list[uuid.UUID] = Field(default=[], max_length=MAX_IDS)
     subjects: list[Subject] = Field(default=[], max_length=MAX_SUBJECTS)
+    # edit-decisions: Simple's new decision sets its review day at once.
+    review_at: date | None = None
 
     @field_validator("options")
     @classmethod

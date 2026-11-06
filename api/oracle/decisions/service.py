@@ -550,6 +550,11 @@ async def create(
         run_id=principal.run_id if by_oracle else None,
         supersedes_id=supersedes.id if supersedes else None,
         created_by=_who(principal),
+        review_at=(
+            None
+            if body.review_at is None
+            else check_review_at(body.review_at, await company_today(db))
+        ),
     )
     db.add(d)
     await db.flush()

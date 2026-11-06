@@ -8,7 +8,7 @@ import { Icon } from "@/components/ds/Icon";
 import { toast } from "@/components/ds/Toast";
 import { FeatureFoundContext, OpenFeatureContext, type OpenFeature } from "@/components/simple/OpenFeature";
 import { usePhone } from "@/components/simple/PrdTimeline";
-import { useMe } from "@/lib/me";
+import { DecisionSheetHost, editedWords, useDecisionSheet } from "@/components/simple/questions/DecisionSheet";
 import { FeaturePanel, itemFor } from "../roadmap/_panel";
 import { QuestionRow, useQuestionActions, useSourceLine, type Question } from "@/components/simple/questions/Questions";
 import { SimpleEmpty, SimplePage } from "@/components/simple/SimplePage";
@@ -16,6 +16,7 @@ import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { calendarDay, useCompanyZone } from "@/lib/dates";
 import { zoneName } from "@/lib/format";
+import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 import { DeliveryLine, emailWords, slackWords } from "../meetings/_delivery";
@@ -112,6 +113,7 @@ export function SimpleDecisions() {
     <SimplePage title="Decisions" lead={`${LEADS[view]} Dates are in ${zoneName(zone)}.`}>
       <OpenFeatureContext.Provider value={setFeature}>
       <FeatureFoundContext.Provider value={found}>
+      <DecisionSheetHost onChanged={() => q.reload()}>
       {feature && (
         <FeaturePanel key={`${feature.code}|${feature.name}`} feature={feature} phone={phone} canChange={can("create_simple_change")} onClose={() => setFeature(null)} />
       )}
@@ -124,6 +126,7 @@ export function SimpleDecisions() {
         </div>
         <ViewSwitch value={view} onChange={pick} />
       </div>
+      {d && <NewDecision />}
       {q.loading && !d && <Loading />}
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
       {d && view === "list" && <QuestionList d={d} actions={actions} filtered={filtered} onClear={clear} />}
@@ -172,9 +175,41 @@ export function SimpleDecisions() {
           </span>
         </p>
       )}
+      </DecisionSheetHost>
       </FeatureFoundContext.Provider>
       </OpenFeatureContext.Provider>
     </SimplePage>
+  );
+}
+
+/** ec1 b: + New decision opens the decision sheet, empty, with Pick for who decides. */
+function NewDecision() {
+  const { can } = useMe();
+  const sheet = useDecisionSheet();
+  if (!sheet || !can("create_decision")) return null;
+  return (
+    <div>
+      <button type="button" className="simple-button simple-button-primary" data-testid="decisions-new" onClick={() => sheet.open({ kind: "new-decision" })}>
+        + New decision
+      </button>
+    </div>
+  );
+}
+
+/** eq2 b: + Ask a question, at the top of Waiting for you: the sheet, with its PRD to pick (every PRD the person reads, as the PRD filter lists them). */
+function AskQuestion({ prds: all, questions }: { prds: { id: string; title: string }[]; questions: Question[] }) {
+  const { can } = useMe();
+  const sheet = useDecisionSheet();
+  // The PRDs that already have questions first (the sheet starts on the first), then the others.
+  const asked = new Set(questions.map((x) => x.prd.slug));
+  const prds = [...all.filter((p) => asked.has(p.id)), ...all.filter((p) => !asked.has(p.id))];
+  if (!sheet || !prds.length || !can("create_simple_change")) return null;
+  return (
+    <div>
+      <button type="button" className="simple-button" data-testid="questions-ask" onClick={() => sheet.open({ kind: "new-question", prds })}>
+        + Ask a question
+      </button>
+    </div>
   );
 }
 
@@ -239,13 +274,16 @@ function QuestionCard({ label, testId, questions, count, source, children }: { l
 function QuestionList({ d, actions, filtered, onClear }: { d: Schemas["SimpleDecisionsOut"]; actions: Actions; filtered: boolean; onClear: () => void }) {
   const [all, setAll] = useState(false);
   const open = d.questions.filter((x) => x.column !== "decided");
+  // eq2 b: one withdrawn here just now keeps its place, struck through, with Undo.
+  const gone = useDecisionSheet()?.withdrawn ?? {};
   // qa-simple-decide-15: only what the person can act on waits for them (a viewer: nothing).
-  const mine = open.filter((x) => x.waiting_for_me && x.status === "proposed" && (x.can.decide || x.can.propose));
-  const others = open.filter((x) => !mine.includes(x));
+  const mine = open.filter((x) => (x.waiting_for_me && x.status === "proposed" && (x.can.decide || x.can.propose)) || (x.status === "withdrawn" && !!gone[x.id]));
+  const others = open.filter((x) => !mine.includes(x) && x.status !== "withdrawn");
   const shown = all ? mine : mine.slice(0, FIRST);
   return (
     <>
-      <QuestionCard label="Waiting for you" testId="questions-mine" questions={mine.length ? mine : open} count={Math.min(d.waiting_count, mine.length)} source>
+      <QuestionCard label="Waiting for you" testId="questions-mine" questions={mine.length ? mine : open} count={Math.min(d.waiting_count, mine.filter((x) => x.status === "proposed").length)} source>
+        <AskQuestion prds={d.prds} questions={d.questions} />
         {mine.length === 0 ? (
           <p className="simple-meta">
             Nothing waits on you. {filtered && <ClearFilters onClear={onClear} />}
@@ -432,6 +470,12 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
   );
 }
 
+/** ec1 b: an open row names who decides ("Avery Stone decides · <when>"), as its sheet does; "waiting for a decider" only when no one is named. */
+function rowMeta(r: Row, when: string, edited: string | null): string {
+  if (r.status === "proposed") return [r.approver ? `${r.approver.name} decides` : "No approver", when, r.approver ? null : STATUS_WORDS.proposed, edited].filter(Boolean).join(" · ");
+  return [r.chosen, r.approver?.name ?? "No approver", when, r.status === "decided" ? null : STATUS_WORDS[r.status] ?? "open", edited].filter(Boolean).join(" · ");
+}
+
 /** qa-simple-decide-19: a decision's state in plain words. */
 const STATUS_WORDS: Record<string, string> = { proposed: "waiting for a decider", superseded: "replaced", rejected: "declined", withdrawn: "withdrawn" };
 
@@ -521,6 +565,8 @@ function StopRow({ run, s }: { run: RunGroup; s: RunGroup["stops"][number] }) {
 /** Decisions taken: the round check (an open one, the flag), "<code> <title>" (a PRD's question keeps its code), then its answer, who decides and the day and time. */
 function Rows({ rows }: { rows: Row[] }) {
   const zone = useCompanyZone();
+  const { me } = useMe();
+  const sheet = useDecisionSheet();
   return (
     <ul>
       {rows.map((r) => {
@@ -528,7 +574,11 @@ function Rows({ rows }: { rows: Row[] }) {
         // qa-simple-decide-19: a question decided in a meeting shows as one decided outside it:
         // its code, its title, then the answer, as the API sends them (never read out of the title).
         const code = r.code ?? `D-${r.number}`;
-        const { title, chosen } = r;
+        const { title } = r;
+        // ec1 b: an open decision's title opens its sheet; one withdrawn here just now stays, struck through, with Undo.
+        const opens = !!sheet && r.status === "proposed" && !!r.can;
+        const gone = r.status === "withdrawn" ? sheet?.withdrawn[r.id] : undefined;
+        const edited = editedWords(r.edited_at, r.edited_by, me?.user_id ?? undefined, zone);
         return (
           <DecidedItem
             key={r.id}
@@ -538,18 +588,36 @@ function Rows({ rows }: { rows: Row[] }) {
             className="!items-start !gap-[14px] border-t border-line py-[14px] first:border-t-0 first:pt-0 last:pb-0 target:bg-[var(--simple-edited)]"
           >
             <span aria-hidden className={`simple-ico ${done ? "simple-ico-done" : ""}`}>
-              <Icon name={done ? "check" : "flag"} size={20} stroke={1.7} />
+              <Icon name={done ? "check" : gone ? "x" : "flag"} size={20} stroke={1.7} />
             </span>
             <span className="simple-rb flex-1">
               <span className="break-words">
-                <span className="simple-code">{code}</span> <b className="font-[650]">{title}</b>
+                <span className="simple-code">{code}</span>{" "}
+                {gone ? (
+                  <s className="font-[650] text-text2" data-testid="decision-withdrawn">
+                    {title}
+                  </s>
+                ) : opens ? (
+                  <button type="button" data-testid="decision-open" className="text-left font-[650] underline decoration-1 underline-offset-4 hover:text-accent-ink" onClick={() => sheet!.open({ kind: "decision", row: r })}>
+                    {title}
+                  </button>
+                ) : (
+                  <b className="font-[650]">{title}</b>
+                )}
               </span>
               <span className="simple-meta">
-                {[chosen, r.approver?.name ?? "No approver", momentWords(r.decided_at ?? r.created_at, zone), done ? null : STATUS_WORDS[r.status] ?? "open"]
-                  .filter(Boolean)
-                  .join(" · ")}
+                {gone
+                  ? "Withdrawn by you just now · kept in the history"
+                  : rowMeta(r, momentWords(r.decided_at ?? r.created_at, zone), edited)}
               </span>
             </span>
+            {gone && (
+              <span className="simple-actions min-[601px]:w-[232px]">
+                <button type="button" className="simple-button" disabled={gone.undoing} onClick={() => sheet!.undoWithdraw(r.id)}>
+                  Undo
+                </button>
+              </span>
+            )}
           </DecidedItem>
         );
       })}
