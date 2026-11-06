@@ -51,11 +51,11 @@ test.describe("desktop", () => {
     await expect(meta).not.toContainText("Oct 20");
     await expect(page.getByRole("link", { name: "Open in Detailed" })).toHaveAttribute("href", "/documents/saved-carts");
 
-    await page.getByRole("button", { name: "Edit “Single sign-on setup" }).click();
+    await page.getByRole("button", { name: "Edit “Carts for guests without" }).click();
     // qa4-simple-prd-16: the editor and its Save come into view.
-    await expect(page.getByRole("button", { name: "Save" })).toBeInViewport();
-    await page.getByLabel("New wording for").fill("Single sign-on setup for every plan");
-    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeInViewport();
+    await page.getByLabel("New wording for").fill("Carts for guests without an account, for now");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
     const banner = page.getByRole("status", { name: "Working draft" });
     await expect(banner).toContainText("nothing is published until approved");
     await expect(banner).not.toContainText("published v");
@@ -63,10 +63,10 @@ test.describe("desktop", () => {
 
   test("the change card says You, once a before/after, and Hide closes it (qa4-simple-prd-17, 18, 23)", async ({ page }) => {
     await openFromList(page, "Saved carts PRD");
-    await page.getByRole("button", { name: "Edit “Single sign-on setup" }).click();
-    await page.getByLabel("New wording for").fill("Single sign-on setup for every plan");
-    await page.getByRole("button", { name: "Save" }).click();
-    const note = page.getByRole("note").filter({ visible: true }).filter({ hasText: "changed “Single sign-on setup" });
+    await page.getByRole("button", { name: "Edit “Carts for guests without" }).click();
+    await page.getByLabel("New wording for").fill("Carts for guests without an account, for now");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    const note = page.getByRole("note").filter({ visible: true }).filter({ hasText: "changed “Carts for guests without" });
     await expect(note).toContainText("You changed");
     await note.getByRole("button", { name: "See before/after" }).click();
     const diff = note.getByTestId("note-diff");
@@ -76,7 +76,7 @@ test.describe("desktop", () => {
     await expect(diff).toHaveCount(0);
 
     await page.reload();
-    await expect(page.getByRole("note").filter({ visible: true }).filter({ hasText: "changed “Single sign-on setup" })).toContainText("You changed");
+    await expect(page.getByRole("note").filter({ visible: true }).filter({ hasText: "changed “Carts for guests without" })).toContainText("You changed");
 
     // qa4-simple-prd-23: the file and the note say which text was exported.
     const download = page.waitForEvent("download");
@@ -85,18 +85,20 @@ test.describe("desktop", () => {
     await expect(page.getByRole("status").filter({ hasText: "PDF downloaded" })).toContainText("without the working draft's changes");
   });
 
-  test("Present centres the page (qa4-simple-prd-5)", async ({ page }) => {
+  test("Present centres each slide (qa4-simple-prd-5, C-8)", async ({ page }) => {
     await openFromList(page, "Saved carts PRD");
     await page.getByRole("button", { name: "Present" }).click();
     await expect(page.getByTestId("one-pager")).toHaveAttribute("data-presenting", "true");
-    const card = (await page.getByRole("article", { name: "One-pager" }).boundingBox())!;
-    expect(Math.abs(card.x + card.width / 2 - DESKTOP.width / 2)).toBeLessThan(24);
+    const slide = (await page.getByTestId("slide").boundingBox())!;
+    expect(Math.abs(slide.x + slide.width / 2 - DESKTOP.width / 2)).toBeLessThan(24);
     const stop = (await page.getByRole("button", { name: "Stop presenting" }).boundingBox())!;
-    expect(stop.x + stop.width).toBeLessThanOrEqual(card.x + card.width + 1);
+    expect(stop.x + stop.width).toBeLessThanOrEqual(DESKTOP.width);
   });
 
   test("the timeline's labels keep their phrases whole and its words agree (qa4-simple-prd-14, 15)", async ({ page }) => {
-    await openFromList(page, "Saved carts PRD");
+    // C-13: Saved carts has no roadmap slice of its own now; Guided setup's strip is the one with milestones.
+    await login(page);
+    await page.goto("/simple/one-pagers/guided-setup");
     const strip = page.getByLabel("Timeline strip");
     const parts = strip.getByTestId("plan-strip-label").locator("span");
     await expect(parts.first()).toBeVisible();
@@ -171,11 +173,11 @@ test.describe("desktop", () => {
     await page.keyboard.press("Enter");
     const sources = page.getByRole("region", { name: /^Sources of/ });
     await sources.getByRole("button", { name: "Edit this line" }).press("Enter");
-    await expect(page.getByRole("button", { name: "Save" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeVisible();
   });
 
   test("a bet's first flow is titled after its line, as Version 1 (qa4-simple-prd-22)", async ({ page }) => {
-    // The same line drawn on Guided setup first: its flow is that PRD's own, never this one's.
+    // A bet drawn on Guided setup first: its flow is that PRD's own, never Saved carts'.
     await login(page);
     await page.goto("/simple/one-pagers/guided-setup");
     const first = page.locator("li", { hasText: "Invite suggestions from the admin" }).first();
@@ -185,11 +187,12 @@ test.describe("desktop", () => {
     await page.goto("/simple/one-pagers");
     await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Saved carts PRD", exact: true }).click();
     await expect(page.getByRole("article", { name: "One-pager" })).toBeVisible();
-    const line = page.locator("li", { hasText: "Invite suggestions from the admin" }).first();
+    const line = page.locator('[data-line="bets-2"]');
     await line.getByRole("button", { name: "Draw the flow" }).click();
-    await page.getByRole("button", { name: /^Flow for “Invite suggestions/ }).click();
+    await page.getByRole("button", { name: /^Flow for “Cart on every device/ }).click();
     const opened = page.getByTestId("flow-detail");
-    await expect(opened).toContainText("Invite suggestions from the admin's calendar · flow");
+    await expect(opened).toContainText("G2 · flow");
+    await expect(opened).not.toContainText("Invite suggestions");
     await expect(opened.getByTestId("flow-drawn")).toContainText("Version 1 · drawn");
     await expect(opened).not.toContainText("(revised)");
   });
