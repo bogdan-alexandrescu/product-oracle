@@ -168,7 +168,7 @@ for (const size of ["desktop", "phone"] as const) {
       const p = (await pill.boundingBox())!;
       if (p.y < t.y + t.height && t.y < p.y + p.height) expect(p.x - (t.x + t.width)).toBeLessThanOrEqual(16);
       // An item with no feature behind it shows none.
-      await expect(rows.filter({ hasText: "Daily alert digest email" }).getByTestId("cs-mark")).toHaveCount(0);
+      await expect(rows.filter({ hasText: "Weekly alert digest" }).getByTestId("cs-mark")).toHaveCount(0);
       await tap(traced.getByRole("button", { name: "What New means" }));
       const card = traced.getByTestId("cs-mark-card");
       await expect(card).toBeVisible();

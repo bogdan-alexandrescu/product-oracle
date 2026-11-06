@@ -178,3 +178,30 @@ const TRACK_HEALTH: Record<Schemas["TrackOverview"]["health"], { kind: ChipKind;
 export function trackHealth(health: Schemas["TrackOverview"]["health"]): { kind: ChipKind; label: string } {
   return TRACK_HEALTH[health] ?? { kind: "na", label: "No roadmap" };
 }
+
+/**
+ * The row a /plan?item= link asks for (plan-open-from-simple). A link that names the item's
+ * roadmap (&roadmap=<slug>: keys are unique only per roadmap version) matches only that roadmap's
+ * rows, never the same key in another roadmap; among them its key, then its PRD (&prd=<id>).
+ * An old link that names no roadmap matches the key in any roadmap.
+ * A report's link names the PRD by slug, "<prd>:<key>", or the PRD alone, "<prd>" (its first row).
+ * Undefined when the Plan holds no such row: never another item in its place.
+ */
+export function wantedRow(rows: PlanItem[], wanted: string, prdId: string | null, roadmap: string | null = null): PlanItem | undefined {
+  const pool = roadmap == null ? rows : rows.filter((i) => i.roadmap.slug === roadmap);
+  const keyed = pool.filter((i) => i.key === wanted);
+  const hit = keyed.find((i) => prdId != null && i.prd?.id === prdId) ?? keyed[0];
+  if (hit) return hit;
+  const ref = prdItemRef(wanted);
+  if (ref) {
+    const row = pool.find((i) => i.key === ref.key && i.prd?.slug === ref.prd);
+    if (row) return row;
+  }
+  return pool.find((i) => i.prd?.slug === wanted);
+}
+
+/** A report's "<prd>:<key>" item link, split; null for a bare key or PRD. */
+export function prdItemRef(wanted: string): { prd: string; key: string } | null {
+  const at = wanted.indexOf(":");
+  return at > 0 ? { prd: wanted.slice(0, at), key: wanted.slice(at + 1) } : null;
+}

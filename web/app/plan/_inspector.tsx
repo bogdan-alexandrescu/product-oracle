@@ -165,20 +165,6 @@ function DateLine({ item, onChanged }: { item: PlanItem; onChanged?: () => void 
   );
 }
 
-/**
- * qa-plan-5: which date the table shows. The row's "Nov 20 ✓" is the item's verified date when it
- * has one, not a tracker due date; say so when the tracker has none or a different one.
- */
-function planDateNote(item: PlanItem): string | null {
-  const { date, date_status, records } = item.engineering;
-  if (!date || records.length === 0) return null;
-  if (records.some((r) => r.target_date === date)) return null;
-  const day = formatDay(date);
-  if (date_status === "verified") return `The roadmap shows ${day} ✓, the verified date (see Date), not a tracker due date.`;
-  if (date_status === "withdrawn") return `The roadmap's date ${day} was withdrawn (see Date); it is not a tracker due date.`;
-  return `The roadmap shows ${day}, not yet verified (see Date); it is not a tracker due date.`;
-}
-
 const RECORD_STATE: Record<PlanItem["engineering"]["records"][number]["state"], string> = {
   todo: "Open",
   in_progress: "In progress",
@@ -199,7 +185,6 @@ function Engineering({ item, links }: { item: PlanItem; links?: PlanLinks }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const records = item.engineering.records;
-  const planDay = planDateNote(item);
   async function unlink(id: string) {
     setBusy(id);
     setError(null);
@@ -228,7 +213,7 @@ function Engineering({ item, links }: { item: PlanItem; links?: PlanLinks }) {
                   <b className="font-semibold">{r.external_ref}</b>
                 )}
                 <span className="text-text2">
-                  {/* qa-plan-5: the tracker's own due date, named as such; the plan's date is said below. */}
+                  {/* qa-plan-5: the tracker's own due date, named as such; B-25: the Date block carries the roadmap's date. */}
                   {` · ${RECORD_STATE[r.state]} · ${r.target_date ? `due ${formatDay(r.target_date)} in the tracker` : "no due date in the tracker"}`}
                 </span>
               </span>
@@ -240,11 +225,6 @@ function Engineering({ item, links }: { item: PlanItem; links?: PlanLinks }) {
             </li>
           ))}
         </ul>
-      )}
-      {planDay && (
-        <span data-testid="plan-record-date" className="text-sm text-text2">
-          {planDay}
-        </span>
       )}
       {links && item.prd && (
         <Button variant="ghost" className="self-start" onClick={() => links.onLink(item)}>

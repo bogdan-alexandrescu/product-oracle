@@ -31,6 +31,10 @@ def _key_date(c_before: dict, c_after: dict) -> str:
 
 def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -> str:
     """What was done, without who: "changed the estimate of F-08 Billing page"."""
+    from oracle.simple import plan_changes
+
+    if op in plan_changes.OPS:
+        return plan_changes.phrase(op, target, before, after, item)
     x = item or _quoted(after.get("title") or target.get("title")) or "an item"
     on = f" on {item}" if item else ""
     title = _quoted(after.get("title"))

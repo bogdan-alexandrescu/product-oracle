@@ -26,9 +26,10 @@ from oracle.db import Base, TenantScoped
 # edit-decisions (oracle.simple.decision_sheet): an open decision or a PRD question.
 # port-an-decisions: a meeting's agenda item (oracle.simple.meetings; its row is kept in the
 # entry, as the agenda is the meeting's JSON) and a request (an owner's delete).
+# removed-tracks: a product track.
 ROOT_TYPES = (
     "document", "intake", "run", "feature", "goal", "decision", "question", "agenda_item",
-    "request",
+    "request", "track",
 )  # fmt: skip
 # Days a deleted artifact waits in Trash before the ticker purges it.
 RETENTION_DAYS = 30
@@ -55,7 +56,7 @@ class TrashEntry(TenantScoped, Base):
     __table_args__ = (
         CheckConstraint(
             "root_type IN ('document', 'intake', 'run', 'feature', 'goal', 'decision', "
-            "'question', 'agenda_item', 'request')",
+            "'question', 'agenda_item', 'request', 'track')",
             name="root_type",
         ),
         Index("ix_trash_entries_purge_after", "purge_after"),

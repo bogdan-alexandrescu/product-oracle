@@ -1275,7 +1275,7 @@ async def build(
         | {p.id for of in kd_prds.values() for p in of},
     )
     kds, kd_roadmaps = await key_dates.read_key_dates(db, principal, kd_docs, read.entries, views)
-    from oracle.simple import goal_milestones
+    from oracle.simple import goal_milestones, old_milestones
 
     shown_goal_milestones = await goal_milestones.list_for_roadmaps(
         db, principal, kd_docs, read.entries, views, kd_prds
@@ -1310,6 +1310,7 @@ async def build(
             for m in read.milestones
         ],
         goal_milestones=shown_goal_milestones,
+        old_milestones=await old_milestones.preview(db, principal),
         span=span,
         changes_in_review=seen.of(chosen.id if chosen else None)[1],
         drafts=seen.of(chosen.id if chosen else None)[0],

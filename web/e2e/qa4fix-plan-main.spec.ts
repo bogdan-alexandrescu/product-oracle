@@ -148,7 +148,7 @@ test.describe("desktop: one approval state", () => {
     await expect(page.getByTestId("plan-live-version")).toHaveCount(0);
     await expect(page.getByTestId("plan-edit")).toHaveCount(0);
     await expect(row(page, "Threshold alerts on spend").getByTestId("plan-state")).toHaveText("Proposed · new");
-    await expect(row(page, "Daily alert digest email").getByTestId("plan-state")).toHaveText("Proposed · new");
+    await expect(row(page, "Weekly alert digest").getByTestId("plan-state")).toHaveText("Proposed · new");
     await row(page, "Threshold alerts on spend").getByTestId("plan-title").click();
     await expect(inspector(page).getByTestId("plan-history").getByTestId("plan-history-version")).toHaveText(["Added to Now in draft 1 from PRD v1"]);
 

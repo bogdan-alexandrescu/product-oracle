@@ -158,7 +158,14 @@ const PLAN_CHANNEL = { id: "C0PLAN", name: "plan" };
 
 /** The "alignment-report" scenarios: the default company with two weekly reports seeded (fix4: "report-prd-moved" has the Usage alerts PRD's v2 approved too). */
 export const REPORT_PRD_MOVED_SCENARIO = "report-prd-moved";
-const reportScenario = () => [REPORT_SCENARIO, REPORT_PRD_MOVED_SCENARIO, REPORT_OFF_TRACK_SCENARIO, REPORT_ITEM_MILESTONE_SCENARIO].includes(localStorage.getItem(SCENARIO_KEY) ?? "");
+/**
+ * plan-open-from-simple "report-draft-item": "alignment-report" whose week of Oct 12 names Quiet
+ * hours for alerts, work started early that is only in a Usage alerts draft on Simple now
+ * (server.ts), so its "<prd>:<key>" link names an item the Plan does not show.
+ */
+export const REPORT_DRAFT_ITEM_SCENARIO = "report-draft-item";
+export const REPORT_DRAFT_ITEM = { key: "alert-quiet-hours", title: "Quiet hours for alerts" };
+const reportScenario = () => [REPORT_SCENARIO, REPORT_PRD_MOVED_SCENARIO, REPORT_OFF_TRACK_SCENARIO, REPORT_ITEM_MILESTONE_SCENARIO, REPORT_DRAFT_ITEM_SCENARIO].includes(localStorage.getItem(SCENARIO_KEY) ?? "");
 
 function seedReports(ownerId: string, live: LiveTracks): ReportsDb {
   // Read the tracks before the seed's id scope: reading them may seed the roadmap mock, whose ids stay its own.
@@ -189,6 +196,13 @@ function seedReports(ownerId: string, live: LiveTracks): ReportsDb {
       live: snapshot,
       slack: { status: "posted", channel: PLAN_CHANNEL, posted_at: "2026-10-19T15:00:14Z", attempts: 1, error: null, next_attempt_at: null },
     });
+    if (localStorage.getItem(SCENARIO_KEY) === REPORT_DRAFT_ITEM_SCENARIO) {
+      const alerts = posted.tracks.find((t) => t.prd.slug === "usage-alerts");
+      alerts?.drift.push({
+        kind: "ahead", item_key: REPORT_DRAFT_ITEM.key, tracker_ref: "ENG-441", detail: "Engineering has started work planned for Next.",
+        title: REPORT_DRAFT_ITEM.title, link: `/plan?item=usage-alerts:${REPORT_DRAFT_ITEM.key}`,
+      });
+    }
     db.reports = [failed, posted];
     db.reads[failed.id] = [ownerId];
     // Installed with F6's scopes before G8: the card asks an owner to reconnect for mirroring.

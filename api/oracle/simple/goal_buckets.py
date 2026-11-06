@@ -472,13 +472,13 @@ async def archive_bucket_goal(
     goal_id: uuid.UUID, body: ArchiveIn, principal: Approver, db: TenantDB
 ) -> GoalBucketWrite:
     """Archive a goal and move its features' links in one step."""
-    undo = await archive(db, goal_id, body.to_goal_id)
+    undo = await archive(db, goal_id, body.to_goal_id, principal.user_id)
     await db.commit()
     return GoalBucketWrite(undo=_signed(principal.tenant_id, undo))
 
 
 async def archive(
-    db: AsyncSession, goal_id: uuid.UUID, to_goal_id: uuid.UUID | None
+    db: AsyncSession, goal_id: uuid.UUID, to_goal_id: uuid.UUID | None, by: uuid.UUID | None
 ) -> GoalBucketsUndo:
     """Archive the goal, its features moved off it (also an accepted Ask to archive)."""
     g = await _entity(db, goal_id, "goal")
@@ -490,7 +490,10 @@ async def archive(
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Pick another goal")
     undo = GoalBucketsUndo(goals=[_goal_snap(g)], features=await move_off(db, g, to_goal_id))
     g.status = "rejected"
-    g.attrs = {**(g.attrs or {}), "archived_at": company_time.now().isoformat()}
+    now = company_time.now()
+    g.attrs = {**(g.attrs or {}), "archived_at": now.isoformat()}
+    # removed-tracks: who archived it and when (Simple's Removed list).
+    g.archived_at, g.archived_by = now, by
     await db.flush()
     return undo
 
@@ -517,6 +520,7 @@ async def unarchive(db: AsyncSession, g: Entity) -> GoalBucketsUndo:
     undo = GoalBucketsUndo(goals=[_goal_snap(g)])
     g.status = "confirmed"
     g.attrs = {k: v for k, v in (g.attrs or {}).items() if k != "archived_at"}
+    g.archived_at = g.archived_by = None
     await db.flush()
     return undo
 
@@ -552,6 +556,8 @@ async def undo_goal_buckets(
     for snap in body.goals:
         g = await _entity(db, snap.id, "goal")
         g.title, g.status, g.attrs = snap.title, snap.status, snap.attrs
+        if g.status != "rejected":
+            g.archived_at = g.archived_by = None
     for f in body.features:
         await _entity(db, f.feature_id, "feature")
         await _restore_links(db, f)
