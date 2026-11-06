@@ -1541,9 +1541,9 @@ async def _waits(db: AsyncSession, m: SimpleMeeting) -> list[dict]:
     )
     proposals = list(
         await db.scalars(
-            select(SimpleChange).where(
-                SimpleChange.session_id == m.session_id, SimpleChange.status == "proposed"
-            )
+            select(SimpleChange)
+            .where(SimpleChange.session_id == m.session_id, SimpleChange.status == "proposed")
+            .order_by(SimpleChange.at, SimpleChange.seq)
         )
     )
     # walkc-meeting r2 (5j): a working draft waits on whoever approves the meeting's drafts

@@ -18,9 +18,9 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
-    Identity,
     Index,
     Integer,
+    Sequence,
     Text,
     UniqueConstraint,
     Uuid,
@@ -36,6 +36,8 @@ from oracle.docs.models import _in
 SUGGESTION_STATUSES = ("open", "accepted", "edited", "dismissed")
 SESSION_KINDS = ("editing", "meeting")
 CHANGE_STATUSES = ("applied", "proposed", "accepted", "declined", "undone")
+# simple_changes.seq's numbers (0113_simple_changes_seq makes it).
+SEQ = Sequence("simple_changes_seq_seq")
 
 
 class RoadmapDateSuggestion(TenantScoped, Base):
@@ -175,7 +177,10 @@ class SimpleChange(TenantScoped, Base):
     )
     # The order changes were made in: ``at`` ties when two land in the same instant, and
     # the id is random, so lists break the tie on this.
-    seq: Mapped[int] = mapped_column(BigInteger, Identity(), nullable=False)
+    # Numbered from a sequence (0113 numbered the rows stored before it by (at, id)).
+    seq: Mapped[int] = mapped_column(
+        BigInteger, SEQ, server_default=SEQ.next_value(), nullable=False
+    )
 
 
 DRAFT_STATUSES = ("working", "submitted", "approved", "discarded")
