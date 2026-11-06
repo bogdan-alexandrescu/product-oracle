@@ -89,7 +89,7 @@ for (const size of SIZES) {
       await expect(looped).toContainText("Needs this one: it would make a loop");
       await panel(page).getByLabel("Or another PRD's feature key").fill("F-06");
       await tap(panel(page).getByRole("button", { name: "Save" }));
-      await expect(page.getByText(/Weekly alert digest needs Alert rules engine: it would make a loop/).first()).toBeVisible();
+      await expect(page.getByText(/it would make a loop: .*Weekly alert digest already depends on .*Alert rules engine/).first()).toBeVisible();
       await expect(panel(page).getByTestId("card-depends")).not.toContainText("Weekly alert digest");
     });
 

@@ -389,7 +389,7 @@ export function loopOf(items: SeedItem[], key: string, keys: string[], ignore: s
       const cur = todo.pop()!;
       if (seen.has(cur)) continue;
       seen.add(cur);
-      if (cur === key) return `${named(d)} already depends on ${named(self)}`;
+      if (cur === key) return `Not added, it would make a loop: ${named(d)} already depends on ${named(self)}`;
       const x = items.find((i) => i.key === cur);
       for (const n of x?.depends ?? []) { const y = dependencyOf(items, n); if (y && !ignore.includes(y.key)) todo.push(y.key); }
     }

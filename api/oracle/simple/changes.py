@@ -1065,7 +1065,10 @@ async def loop_of(
                 continue
             seen.add(cur)
             if cur == entry.row.id:
-                return f"{_named(d)} already depends on {_named(entry)}"
+                return (
+                    f"Not added, it would make a loop: {_named(d)} already depends on "
+                    f"{_named(entry)}"
+                )
             nxt = by_id.get(cur)
             if nxt is not None:
                 todo += [x for x in nxt.depends_on if x not in ignore]
