@@ -29,7 +29,7 @@
     "/i/[token]": 26,
     "/impact/changes/[id]": 85,
     "/impact/entities/[id]": 54,
-    "/inbox": 31,
+    "/inbox": 0,
     "/intakes/[id]": 172,
     "/plan": 30,
     "/plan/dates": 0,
