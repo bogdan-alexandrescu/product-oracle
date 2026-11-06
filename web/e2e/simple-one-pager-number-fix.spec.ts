@@ -19,8 +19,8 @@ import { expect, test, type Page } from "./test";
  *   accepts it, and the item leaves; fails_when=the approver's click writes the PRD, or the
  *   owner cannot accept it there.
  * - protects=each fix in the working draft is listed ("Fixed: set to 6 in “Not this
- *   quarter”") with its own Undo, after a reload too, and a count in words stays in words
- *   ("Six features"); Undo of one leaves the other (fix round 2); fails_when=the draft bar
+ *   quarter”") with its own Undo, after a reload too; Undo of one leaves the other (fix
+ *   round 2; a count in words staying a word is the API's test_a_count_in_words_stays_in_words); fails_when=the draft bar
  *   says "2 changes" and nothing lists them, or only the latest fix has an Undo.
  * - protects=a viewer reads no fix; fails_when=a viewer is offered "Use 6".
  */
@@ -89,8 +89,6 @@ for (const phone of [false, true]) {
         await page.reload();
         await expect(fixed(page)).toHaveText([FIXED_COUNT, FIXED_PER]);
         await expect(look(page).getByRole("button", { name: "Undo" })).toHaveCount(2);
-        // The section reads the count in words, as it was written.
-        await expect(page.getByText("Six features wait for next quarter.").first()).toBeAttached();
         await fixedItem(page, FIXED_COUNT).getByRole("button", { name: "Undo" }).click();
         await expect(look(page).getByTestId("needs-look-line")).toHaveText([COUNT]);
         await expect(fixed(page)).toHaveText([FIXED_PER]);
