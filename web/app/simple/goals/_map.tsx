@@ -377,7 +377,7 @@ export function GoalMapPage() {
   const offId = off?.id ?? null;
   useEffect(() => {
     if (picked) reveal(`[data-goal="${picked}"]`, "start");
-    else if (offId) reveal(`[data-testid="gm-off-map"]`, "start");
+    else if (offId) reveal(`[data-testid="gm-off-map"]`);
   }, [picked, offId]);
 
   if (!map) return <div className="simple-page" role="status">{q.error ? errorMessage(q.error) : "Loading the goal map…"}</div>;
@@ -906,17 +906,17 @@ function MetricDrawer({ goal, draft, set, onClose, onSave }: { goal: GmGoal; dra
 
 function GoalCard({ g, onEdit, canEdit, onPick, picked }: { g: GmGoal; onEdit: () => void; canEdit: boolean; onPick: (goal: string) => void; picked: boolean }) {
   return (
-    <div data-testid="gm-goal" data-goal={g.id} data-picked={picked ? "1" : undefined} className={`simple-card flex-1 gap-1.5! px-4! py-3! ${picked ? "ring-2 ring-accent" : ""}`}>
+    <div data-testid="gm-goal" data-goal={g.id} data-picked={picked ? "1" : undefined} className={`simple-card flex-1 gap-1.5! px-4! py-3! ${picked ? "outline-2 outline-offset-2 outline-accent" : ""}`}>
       <span className="flex items-start justify-between gap-2">
         <span className="font-semibold leading-6">{g.name}</span>
         <StatusPill s={g.status} />
       </span>
-      <span className="flex items-baseline gap-2">
+      <span className="flex flex-wrap items-baseline gap-x-2">
         {/* Not measured: the words stand where the number goes, the target beside them, no empty bar. */}
         {g.current === null ? (
           <>
-            <span data-testid="gm-goal-value" className="text-[18px] font-semibold leading-8 text-na">Not measured yet</span>
-            <span data-testid="gm-goal-target" className="text-text2">Target {num(g.target, g.unit)} a day</span>
+            <span data-testid="gm-goal-value" className="whitespace-nowrap text-[18px] font-semibold leading-8 text-na">Not measured yet</span>
+            <span data-testid="gm-goal-target" className="whitespace-nowrap text-text2">Target {num(g.target, g.unit)} a day</span>
           </>
         ) : (
           <>

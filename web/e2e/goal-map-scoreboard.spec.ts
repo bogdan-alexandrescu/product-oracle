@@ -212,6 +212,8 @@ test.describe("Home", () => {
     await expect(page).toHaveURL(/\/simple\/goals\?goal=/);
     const rev = goal(page, "Revenue per day");
     await expect(rev).toHaveAttribute("data-picked", "1");
+    // Drawn, not only marked: the card's own shadow would hide a ring.
+    await expect(rev).toHaveCSS("outline-style", "solid");
     await expect(rev).toBeInViewport();
     await expect(page.getByTestId("gm-goal").and(page.locator("[data-picked]"))).toHaveCount(1);
   });
