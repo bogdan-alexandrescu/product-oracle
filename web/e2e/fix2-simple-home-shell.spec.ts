@@ -282,11 +282,13 @@ for (const phone of [false, true]) {
       await expect(lines).toHaveCount(ticks.length);
       for (let i = 0; i < ticks.length; i++) expect(Math.abs((await box(lines.nth(i))).x - ticks[i])).toBeLessThanOrEqual(1);
     }
-    // Every label in full (wrapped on a phone, never "No milestone…").
+    // Every label whole, or (vqa B-14: one line each) its whole words behind its (i); never "No milestone…" alone.
     const label = strip.getByTestId("plan-strip-label").filter({ hasText: /^No milestone/ });
     await expect(label).toHaveText(/^No milestone · \d+ roadmap items?$/);
-    for (const l of await strip.getByTestId("plan-strip-label").all())
-      expect(await l.evaluate((el) => el.scrollWidth <= el.clientWidth && getComputedStyle(el).textOverflow !== "ellipsis")).toBe(true);
+    for (const row of await strip.getByTestId("plan-strip-row").all()) {
+      const cut = await row.getByTestId("plan-strip-label").evaluate((el) => el.scrollWidth > el.clientWidth + 1);
+      await expect(row.getByTestId("plan-strip-label-tip")).toHaveCount(cut ? 1 : 0);
+    }
     // A solid bar stands out from its card in dark (contrast at least 1.5:1).
     const ratio = await strip
       .locator('[data-testid="plan-strip-span"]:not([data-estimated])')

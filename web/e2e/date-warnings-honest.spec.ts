@@ -19,7 +19,9 @@ async function openRoadmap(page: Page) {
   await page.goto("/documents/usage-alerts-roadmap/v/1");
 }
 
-const dateWarnings = (page: Page) => page.locator('[data-warning="unverified_date"]').filter({ visible: true });
+// B-09: a version's body shows no warning cards; its dates lacking a basis are counted in the
+// header's own chip, which links to Plan › Dates filtered to those dates.
+const warningCards = (page: Page) => page.locator('[data-warning]:not([data-state="done"])').filter({ visible: true });
 const lacking = (page: Page) => page.getByTestId("dates-lacking").filter({ visible: true });
 
 for (const [label, viewport] of [
@@ -29,16 +31,16 @@ for (const [label, viewport] of [
   test.describe(label, () => {
     test.use({ viewport });
 
-    test("one unbacked date shows one warning that opens Plan › Dates filtered to it; once backed, no warnings", async ({ page }) => {
+    test("one unbacked date is counted once and opens Plan › Dates filtered to it; once backed, no warnings", async ({ page }) => {
       // protects=date-warnings-honest (1)-(5); fails_when=the backed Nov 30 date warns, the
       // unbacked date warns more than once, the header does not count it or link to Plan ›
       // Dates filtered to it, or the warning stays after a basis is verified;
       // no_claim=the API's matching rules (api/tests/test_date_warnings_honest.py).
       await openRoadmap(page);
-      await expect(dateWarnings(page)).toHaveCount(1);
-      await expect(dateWarnings(page)).toContainText("the date Dec 15, 2026");
-      await expect(dateWarnings(page)).not.toContainText("Nov 30");
       await expect(lacking(page)).toHaveText("1 date lacks a basis");
+      await expect(warningCards(page)).toHaveCount(0);
+      // Only Dec 15 is flagged: the chip's link filters to it, not to the backed Nov 30.
+      await expect(lacking(page)).toHaveAttribute("href", /dates=2026-12-15$/);
 
       await lacking(page).click();
       await expect(page).toHaveURL(/\/plan\/dates\?prd=[^&]+&dates=2026-12-15$/);
@@ -58,16 +60,15 @@ for (const [label, viewport] of [
       await page.goto("/documents/usage-alerts-roadmap/v/1");
       await expect(page.getByTestId("doc-status").filter({ visible: true }).first()).toBeVisible();
       await expect(page.locator('[data-date-mark="unverified"]').filter({ visible: true })).toHaveCount(0);
-      await expect(dateWarnings(page)).toHaveCount(0);
       await expect(lacking(page)).toHaveCount(0);
       await expect(page.locator("[data-warning]").filter({ visible: true })).toHaveCount(0);
     });
 
-    test("the warning's own link opens Plan › Dates filtered to its date", async ({ page }) => {
-      // protects=date-warnings-honest (4); fails_when=the warning links to an unfiltered
+    test("the dates chip opens Plan › Dates filtered to its date, and the filter clears", async ({ page }) => {
+      // protects=date-warnings-honest (4); fails_when=the chip links to an unfiltered
       // Plan › Dates; no_claim=recording a basis (the test above).
       await openRoadmap(page);
-      await dateWarnings(page).getByRole("link", { name: "Open Plan › Dates" }).click();
+      await lacking(page).click();
       await expect(page).toHaveURL(/\/plan\/dates\?prd=[^&]+&dates=2026-12-15$/);
       await expect(page.getByTestId("dates-lacking-filter")).toContainText("Dec 15");
       await page.getByTestId("dates-lacking-filter").getByRole("link", { name: "Show every date source" }).click();
@@ -98,16 +99,15 @@ test("Plan › Dates looks up its people once, not again and again", async ({ pa
   await steady();
 });
 
-test("one date written for two items warns for each item but counts as one date", async ({ page }) => {
-  // protects=date-warnings-honest review minors (the header counted date-and-item pairs; the
-  // mock took a warning's item from the section key only); fails_when=the header reads
-  // "2 dates lack a basis" for one date, or the two items share one warning;
-  // no_claim=the API's grouping (api/tests/test_date_warnings_honest.py).
+test("one date written for two items counts as one date", async ({ page }) => {
+  // protects=date-warnings-honest review minors (the header counted date-and-item pairs);
+  // fails_when=the header reads "2 dates lack a basis" for one date, or warning cards show
+  // in the body (B-09); no_claim=the API's grouping (api/tests/test_date_warnings_honest.py).
   await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, SHARED_DATE_SCENARIO]);
   await login(page, LEAD);
   await page.goto("/documents/usage-alerts-roadmap/v/1");
-  await expect(dateWarnings(page)).toHaveCount(2);
   await expect(lacking(page)).toHaveText("1 date lacks a basis");
+  await expect(warningCards(page)).toHaveCount(0);
   await lacking(page).click();
   await expect(page).toHaveURL(/\/plan\/dates\?prd=[^&]+&dates=2026-12-15$/);
   await expect(page.getByTestId("dates-lacking-filter")).toContainText("1 date needs a basis: Dec 15.");
@@ -121,7 +121,7 @@ test("the version's own day, a quoted source's date and a quarter's range do not
   await login(page, LEAD);
   await page.goto("/documents/usage-alerts-roadmap/v/1");
   await expect(page.getByText("The courier said").filter({ visible: true }).first()).toBeVisible();
-  await expect(dateWarnings(page)).toHaveCount(1);
-  await expect(dateWarnings(page)).toContainText("the date Dec 15, 2026");
   await expect(lacking(page)).toHaveText("1 date lacks a basis");
+  await expect(lacking(page)).toHaveAttribute("href", /dates=2026-12-15$/);
+  await expect(warningCards(page)).toHaveCount(0);
 });

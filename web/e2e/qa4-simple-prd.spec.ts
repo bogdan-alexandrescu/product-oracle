@@ -51,11 +51,12 @@ test.describe("desktop", () => {
     await expect(meta).not.toContainText("Oct 20");
     await expect(page.getByRole("link", { name: "Open in Detailed" })).toHaveAttribute("href", "/documents/saved-carts");
 
-    await page.getByRole("button", { name: "Edit “Single sign-on setup" }).click();
+    // vqa B-13: Saved carts' own "Non-goals", never the seed's invented page.
+    await page.getByRole("button", { name: "Edit “Carts for guests without an" }).click();
     // qa4-simple-prd-16: the editor and its Save come into view.
-    await expect(page.getByRole("button", { name: "Save" })).toBeInViewport();
-    await page.getByLabel("New wording for").fill("Single sign-on setup for every plan");
-    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeInViewport();
+    await page.getByLabel("New wording for").fill("Carts for guests without an account, for now");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
     const banner = page.getByRole("status", { name: "Working draft" });
     await expect(banner).toContainText("nothing is published until approved");
     await expect(banner).not.toContainText("published v");
@@ -63,10 +64,10 @@ test.describe("desktop", () => {
 
   test("the change card says You, once a before/after, and Hide closes it (qa4-simple-prd-17, 18, 23)", async ({ page }) => {
     await openFromList(page, "Saved carts PRD");
-    await page.getByRole("button", { name: "Edit “Single sign-on setup" }).click();
-    await page.getByLabel("New wording for").fill("Single sign-on setup for every plan");
-    await page.getByRole("button", { name: "Save" }).click();
-    const note = page.getByRole("note").filter({ visible: true }).filter({ hasText: "changed “Single sign-on setup" });
+    await page.getByRole("button", { name: "Edit “Carts for guests without an" }).click();
+    await page.getByLabel("New wording for").fill("Carts for guests without an account, for now");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    const note = page.getByRole("note").filter({ visible: true }).filter({ hasText: "changed “Carts for guests" });
     await expect(note).toContainText("You changed");
     await note.getByRole("button", { name: "See before/after" }).click();
     const diff = note.getByTestId("note-diff");
@@ -76,7 +77,7 @@ test.describe("desktop", () => {
     await expect(diff).toHaveCount(0);
 
     await page.reload();
-    await expect(page.getByRole("note").filter({ visible: true }).filter({ hasText: "changed “Single sign-on setup" })).toContainText("You changed");
+    await expect(page.getByRole("note").filter({ visible: true }).filter({ hasText: "changed “Carts for guests" })).toContainText("You changed");
 
     // qa4-simple-prd-23: the file and the note say which text was exported.
     const download = page.waitForEvent("download");
@@ -102,8 +103,9 @@ test.describe("desktop", () => {
     await expect(parts.first()).toBeVisible();
     // Each part (the name, the count) on one line: one line's height, never two.
     for (const h of await parts.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height))) expect(h).toBeLessThan(30);
-    await expect(strip.getByTestId("plan-strip-edge")).toHaveText("1 roadmap item with no milestone ends after Jan");
-    await expect(strip.getByTestId("plan-strip-row").filter({ hasText: "No milestone" }).getByTestId("plan-strip-ends")).toHaveText("ends after Jan");
+    // vqa B-14: the footnote and the row count the row's own items.
+    await expect(strip.getByTestId("plan-strip-edge")).toHaveText("1 of the 2 roadmap items with no milestone ends after Jan");
+    await expect(strip.getByTestId("plan-strip-row").filter({ hasText: "No milestone" }).getByTestId("plan-strip-ends")).toHaveText("1 of 2 ends after Jan");
   });
 
   test("today is the company's day, as the change times read (qa4-simple-prd-10)", async ({ page }) => {
@@ -171,7 +173,7 @@ test.describe("desktop", () => {
     await page.keyboard.press("Enter");
     const sources = page.getByRole("region", { name: /^Sources of/ });
     await sources.getByRole("button", { name: "Edit this line" }).press("Enter");
-    await expect(page.getByRole("button", { name: "Save" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeVisible();
   });
 
   test("a bet's first flow is titled after its line, as Version 1 (qa4-simple-prd-22)", async ({ page }) => {
@@ -185,11 +187,12 @@ test.describe("desktop", () => {
     await page.goto("/simple/one-pagers");
     await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Saved carts PRD", exact: true }).click();
     await expect(page.getByRole("article", { name: "One-pager" })).toBeVisible();
-    const line = page.locator("li", { hasText: "Invite suggestions from the admin" }).first();
+    // vqa B-13: Saved carts' one-pager has its own lines; its first flow is its own Version 1.
+    const line = page.locator("li", { hasText: "Beta: Save cart" }).first();
     await line.getByRole("button", { name: "Draw the flow" }).click();
-    await page.getByRole("button", { name: /^Flow for “Invite suggestions/ }).click();
+    await page.getByRole("button", { name: /^Flow for “Beta: Save cart/ }).click();
     const opened = page.getByTestId("flow-detail");
-    await expect(opened).toContainText("Invite suggestions from the admin's calendar · flow");
+    await expect(opened).toContainText("Save cart · flow");
     await expect(opened.getByTestId("flow-drawn")).toContainText("Version 1 · drawn");
     await expect(opened).not.toContainText("(revised)");
   });
