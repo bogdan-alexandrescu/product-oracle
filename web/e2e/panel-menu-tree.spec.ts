@@ -13,6 +13,8 @@ import { expect, test, type Locator, type Page } from "./test";
  * the top's panel nests its parts; every view draws the part under its parent, one level deeper;
  * a feature's own parts (any depth) are never offered as its parent; fails_when = the one-level
  * rule refuses it, the path or the nesting is missing, or a view drops or flattens the part.
+ * Card pm-ancestor-link: protects = a part is never a broken link against any ancestor (its
+ * grandparent included); fails_when = only the direct parent is excused.
  * Card pm-merge-tree: protects = merging a feature with parts into a feature that is itself a part
  * keeps every part on the roadmap, under the kept feature; fails_when = a part's row disappears.
  * Card pm-trash-parent: protects = a part whose parent is in Trash reads "Part of <name> (in Trash)"
@@ -169,6 +171,22 @@ for (const size of SIZES)
           }
           await treeOnEveryView(page, size.phone);
         });
+    });
+
+    test("a part of a part is never a broken link against an ancestor", async ({ page }) => {
+      await page.context().addInitScript(([key]) => localStorage.setItem(key, "parts-tree"), [MOCK_SCENARIO_KEY] as const);
+      await login(page);
+      await roadmap(page);
+      await format(page, "board");
+      // Weekly alert digest depends on Alert rules engine and starts before it ends: broken.
+      await expect(boardCard(page, "alert-digest")).toHaveAttribute("data-broken", "true");
+      await open(page, "alert-digest");
+      await partOf(page, "Alert routing by team");
+      await expect(panel(page).getByTestId("card-part-of")).toHaveText("Part of Alert rules engine > Alert routing by team");
+      // Now its grandparent: no broken link.
+      await roadmap(page);
+      await format(page, "board");
+      await expect(boardCard(page, "alert-digest")).toHaveAttribute("data-broken", "false");
     });
 
     test("merging a feature that has parts into a feature that is itself a part keeps every part, under the kept one", async ({ page }) => {
