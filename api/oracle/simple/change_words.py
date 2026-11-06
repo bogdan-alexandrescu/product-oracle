@@ -145,13 +145,15 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             return f"named who decides {x}"
         # edit-decisions (oracle.simple.decision_sheet): the sheet's changes.
         case "edit_decision" | "edit_question":
-            return f"changed {_quoted(target.get('name')) or x}"
+            kind = "decision" if op == "edit_decision" else "question"
+            name = _quoted(target.get("name"))
+            return f"changed {name}" if name else f"changed a {kind} on {x}"
         case "withdraw_decision":
             return f"withdrew {_quoted(target.get('name')) or x}"
         case "add_question":
             asked = _quoted(after.get("title")) or "a question"
             prd = target.get("name")
-            return f"asked {asked} in {prd}" if prd else f"asked {asked}"
+            return f"asked {asked} in {prd}" if prd else f"asked {asked}{on}"
         # Goal milestones: a PRD's own milestone's date or counts-when rule, asked of its owner.
         case "edit_goal_milestone":
             name = _quoted(target.get("name")) or item
