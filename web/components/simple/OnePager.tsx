@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
-import { Button, LinkButton } from "@/components/ds";
+import { Button, InfoTip, LinkButton } from "@/components/ds";
 import { clock, FlowPanel, meetingMoment } from "@/components/simple/FlowVisual";
 import { WithFeatureMarks } from "@/components/current-state/CurrentState";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
@@ -621,7 +621,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
       {(!planShown || linesShown || sessionId || !!v.draft || v.changes_in_review > 0 || v.notes.length > 0) && (
       <div className={`mx-auto grid gap-6 py-6 ${sessionId && !presenting ? "px-0" : "px-4"} ${presenting ? "max-w-[852px]" : "max-w-[1180px] md:grid-cols-[minmax(0,820px)_var(--simple-margin)]"}`} data-testid="one-pager-columns">
         <article aria-label="One-pager" className={`rounded-md border border-[var(--simple-rule)] bg-[var(--simple-paper)] ${sessionId && !presenting ? "px-4" : "px-6"} py-8 shadow-sm md:col-start-1 md:px-12`}>
-          {prdLooks.length > 0 && !presenting && <NeedsALook items={prdLooks} blocks={v.blocks} sections={v.sections} />}
+          {prdLooks.length > 0 && !presenting && <NeedsALook items={prdLooks} blocks={v.blocks} sections={v.sections} doc={v.document.slug} />}
           {v.blocks.filter((b) => !(planShown && b.kind === "timeline")).map((b) => (
             // qa4-simple-prd-21: the first section starts at the card's own top padding.
             <section key={b.key} aria-label={b.title} className="mt-5 first:mt-0">
@@ -1081,7 +1081,7 @@ function MarginNote({
  * "Needs a look" (2026-10-30): a quiet note for the PRD's owners (the API sends the items to
  * them only) naming what to look at and where. One list any of the one-pager's checks can add to.
  */
-export function NeedsALook({ items, blocks = [], sections = [] }: { items: Schemas["OnePagerLook"][]; blocks?: View["blocks"]; sections?: View["sections"] }) {
+export function NeedsALook({ items, blocks = [], sections = [], doc }: { items: Schemas["OnePagerLook"][]; blocks?: View["blocks"]; sections?: View["sections"]; doc?: string }) {
   // qa4-simple-prd-11: each item names the page's own section (not the PRD's heading) and takes
   // the reader to the first line it concerns.
   const at = (x: Schemas["OnePagerLook"]) => {
@@ -1095,24 +1095,36 @@ export function NeedsALook({ items, blocks = [], sections = [] }: { items: Schem
     el?.scrollIntoView({ block: "center" });
     el?.querySelector<HTMLElement>('[data-testid="one-pager-line-text"]')?.focus({ preventScroll: true });
   };
+  // C-15: one short line each, the detail behind an (i), and the way to fix it: the PRD at that section.
+  const short = (x: Schemas["OnePagerLook"], where: string[]) => {
+    const at = where.length ? ` in ${where.map((w) => `“${w}”`).join(", ")}` : "";
+    if (x.kind === "numbers") return `Numbers disagree${at}`;
+    return x.text;
+  };
   return (
     <section aria-label="Needs a look" className="simple-noprint mb-4 rounded border border-dashed border-[var(--simple-rule)] px-3 py-2 text-sm text-text2">
       <h2 className="font-semibold">Needs a look</h2>
       <ul className="mt-1 space-y-1">
         {items.map((x, i) => {
           const w = at(x);
+          const key = x.source_keys[0];
           return (
-            <li key={i} data-kind={x.kind}>
-              {x.text}
-              {w.names.length > 0 && w.line ? (
-                <>
-                  {" "}
-                  <button type="button" className="text-text-faint underline" data-testid="needs-look-go" onClick={() => go(w.line!)}>
-                    In: {w.names.join(", ")}
-                  </button>
-                </>
-              ) : (
-                w.prd.length > 0 && <span className="text-text-faint"> In the PRD, not on this page: {w.prd.join(", ")}</span>
+            <li key={i} data-kind={x.kind} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span data-testid="needs-look-line">{short(x, w.names.length && w.line ? w.names : w.prd)}</span>
+              {x.kind === "numbers" && (
+                <InfoTip label={short(x, w.names.length && w.line ? w.names : w.prd)} align="start">
+                  {x.text}
+                </InfoTip>
+              )}
+              {w.names.length > 0 && w.line && (
+                <button type="button" className="text-text-faint underline max-md:min-h-11" data-testid="needs-look-go" onClick={() => go(w.line!)}>
+                  In: {w.names.join(", ")}
+                </button>
+              )}
+              {doc && key && (
+                <Link className="font-semibold text-accent-ink underline max-md:inline-flex max-md:min-h-11 max-md:items-center" data-testid="needs-look-open" href={`/documents/${doc}#${key}`}>
+                  Open the section
+                </Link>
               )}
             </li>
           );
