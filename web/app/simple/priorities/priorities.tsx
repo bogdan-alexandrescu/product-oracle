@@ -400,6 +400,17 @@ function MovedTag({ words }: { words: string }) {
 }
 
 /** The row's short code (stays with the item however it ranks), one chip style above and below the line; its name in the title. */
+/** panel-menu: a part names the feature it is part of, by its code and name. */
+function PartOf({ r }: { r: Row }) {
+  if (!r.part_of) return null;
+  return (
+    <span data-testid="prio-part-of" className="text-[length:var(--simple-small)] text-text2">
+      part of {[r.part_of.code, r.part_of.title].filter(Boolean).join(" ")}
+      {r.part_of.in_trash ? " (in Trash)" : ""}
+    </span>
+  );
+}
+
 function CodeChip({ r }: { r: Row }) {
   return (
     <span data-testid="prio-code" title={r.title} className="min-w-[3.25rem] flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1.5 text-center text-[length:var(--simple-small)] font-semibold tabular-nums text-text">
@@ -434,7 +445,7 @@ const SHOW_NOTE: Record<ShowKind, (n: number) => string> = {
   exists: (n) => `${n} features that run today.`,
 };
 
-function Ranked({ data, phone, compare, mayChange, changed, moved, onDelete }: { data: Out; phone: boolean; compare: boolean; mayChange: boolean; changed: Changed; moved: Moved | null; onDelete: (f: { id: string; title: string }) => void }) {
+function Ranked({ data, phone, compare, mayChange, changed, moved, onDelete }: { data: Out; phone: boolean; compare: boolean; mayChange: boolean; changed: Changed; moved: Moved | null; onDelete: (f: { id: string; title: string; parts?: readonly unknown[] }) => void }) {
   const [side, setSide] = useState<"yours" | "oracle">("yours");
   // A goal's list (from a Home goal card) leaves out the features not ranked yet.
   const goalOn = !!useSearchParams().get("goal");
@@ -495,7 +506,7 @@ function Ranked({ data, phone, compare, mayChange, changed, moved, onDelete }: {
   );
 }
 
-function YourList({ data, half = false, mayChange, onMove, changed, moved, onDelete }: { data: Out; half?: boolean; mayChange: boolean; onMove: (row: Row, position: number) => void; changed: Changed; moved: Moved | null; onDelete: (f: { id: string; title: string }) => void }) {
+function YourList({ data, half = false, mayChange, onMove, changed, moved, onDelete }: { data: Out; half?: boolean; mayChange: boolean; onMove: (row: Row, position: number) => void; changed: Changed; moved: Moved | null; onDelete: (f: { id: string; title: string; parts?: readonly unknown[] }) => void }) {
   // A Home goal card opens the list for its goal (?goal=<its key>&name=<its name>): a row's own goal
   // by key, so two goals with one name keep apart; a row known only from the plan, by name.
   const params = useSearchParams();
@@ -659,6 +670,7 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
                 )}
                 <OwnKey r={r} />
                 <MarkFor featureId={r.feature_id} />
+                <PartOf r={r} />
               </span>
               {/* walkb-priorities: no ml-auto, so details that wrap under the title start at the left on every row. */}
               <span data-testid="prio-details" className={`${half ? "basis-full sm:pl-12" : ""} flex min-w-0 max-w-full flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--simple-small)] text-text2`}>
@@ -684,7 +696,7 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
                 <Numbers r={r} mayChange={mayChange} changed={changed} />
               </span>
               {/* trash-features-goals: Delete feature (to Trash, Undo) for who decides on it. */}
-              {mayChange && r.item_id && <FeatureMenu title={nameOf(r)} propose={!r.applies} onDelete={() => onDelete({ id: r.item_id!, title: r.title })} />}
+              {mayChange && r.item_id && <FeatureMenu title={nameOf(r)} propose={!r.applies} onDelete={() => onDelete({ id: r.item_id!, title: r.title, parts: data.rows.filter((x) => x.part_of?.id === r.item_id) })} />}
             </div>
             {/* qa4-simple-plan-25: Oracle's rank and the move sit in a slot of their own under the row, so the row keeps its layout. */}
             {((r.oracle_rank != null && r.oracle_rank !== r.rank) || words) && (
@@ -2299,6 +2311,8 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
                         // S-3: a feature not among the ranked rows opens by its code and name all the same.
                         onOpen={() => setOpened(r ? { code: r.code, name: r.title } : { code: c, name })}
                         actions={tasks.actions(t)}
+                        // panel-menu: a part names the feature it is part of, as on the ranked rows.
+                        partOf={r && <PartOf r={r} />}
                       />
                     );
                   })}

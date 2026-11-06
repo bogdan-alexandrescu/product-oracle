@@ -5,16 +5,19 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { toast as dsToast, type ToastAsk } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
 import { errorMessage } from "@/lib/use-query";
+import { partsWords } from "@/app/simple/roadmap/_lib";
 
 /**
  * trash-features-goals: a roadmap feature's Delete from its row (the Gantt or Timeline row's
  * context menu, the Priorities row's ⋯). It goes to Settings › Trash, never deleted for good
  * here; the note's Undo restores it with its links, goal and milestone. Shown to who decides
  * on the feature (its own `can_decide`, or a Priorities row's `applies`). `onGone`: the feature
- * went to Trash (the page closes its panel).
+ * went to Trash (the page closes its panel). panel-menu: a feature with `parts` says they stay on
+ * the roadmap, at once.
  */
 export function useFeatureDelete(reload: () => Promise<unknown>, toast: (ask: ToastAsk) => void = dsToast, onGone?: (id: string) => void) {
-  return async (f: { id: string; title: string }): Promise<void> => {
+  return async (f: { id: string; title: string; parts?: readonly unknown[] }): Promise<void> => {
+    const parts = partsWords(f.parts?.length ?? 0, "stay");
     try {
       const out = await unwrap(api.DELETE("/v1/simple/roadmap/items/{item_id}", { params: { path: { item_id: f.id } } }));
       // In Trash: its panel, if open, closes with it.
@@ -25,7 +28,7 @@ export function useFeatureDelete(reload: () => Promise<unknown>, toast: (ask: To
         return;
       }
       toast({
-        message: `Moved ${f.title} to Trash.`,
+        message: parts ? `Moved ${f.title} to Trash. ${parts}` : `Moved ${f.title} to Trash.`,
         action: out.can_restore
           ? {
               label: "Undo",

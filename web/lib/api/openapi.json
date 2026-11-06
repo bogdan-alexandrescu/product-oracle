@@ -128835,6 +128835,16 @@
             "title": "Applies",
             "default": false
           },
+          "part_of": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePartRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "before_override": {
             "anyOf": [
               {

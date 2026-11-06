@@ -33,6 +33,8 @@ import {
 export type Act = (
   what: import("./_lib").ChangeWords,
   body: Parameters<typeof import("./_lib").propose>[0],
+  // What else it means, said after it ("Its 2 parts stay on the roadmap.").
+  note?: string,
 ) => Promise<void>;
 
 const FIX_WORDS: Record<Flag["fixes"][number], string> = {
@@ -979,7 +981,7 @@ export function FloatingCard({
               {item.status !== "merged" && menuItem("Part of…", () => setPick("parent"))}
               {!closedItem(item) && menuItem("Merge into…", () => setPick("merge"))}
               {/* As a row's Delete: who decides on it deletes; others propose it (the same DELETE). */}
-              {menuItem(item.can_decide ? "Delete feature" : "Propose: delete", () => void remove({ id: item.id, title: item.title }), true)}
+              {menuItem(item.can_decide ? "Delete feature" : "Propose: delete", () => void remove({ id: item.id, title: item.title, parts: item.parts }), true)}
             </div>
           )}
         </div>

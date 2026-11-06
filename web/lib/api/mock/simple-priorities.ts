@@ -460,6 +460,8 @@ export function prioritiesOut(
       can_reorder: can && (mine || ctx.role === "owner"),
       on_roadmap: mine,
       applies: mine ? decides(i.id) : ctx.role === "owner",
+      // feature-parts: the feature it is part of, as the roadmap reads it.
+      part_of: mine ? (i.part_of ?? null) : null,
       before_override: (stored(db, i.id).override as Record<string, unknown> | undefined) ?? null,
     };
   });

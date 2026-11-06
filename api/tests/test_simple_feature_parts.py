@@ -439,6 +439,6 @@ async def test_priorities_rows_name_the_parent(client):
                        {"parent_key": "pay-1"})  # fmt: skip
     assert r.status_code == 201 and r.json()["change"]["status"] == "applied", r.text
     rows = rows_by_code(await w.read(client))
-    assert rows["pay-2"]["part_of"] == {"id": w.ids["pay-1"], "code": "", "title": "Pay-1",
+    assert rows["pay-2"]["part_of"] == {"id": w.ids["pay-1"], "code": "", "title": "Pay 1",
                                         "cut": False, "in_trash": False}  # fmt: skip
     assert rows["pay-1"]["part_of"] is None

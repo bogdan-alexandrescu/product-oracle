@@ -1234,7 +1234,7 @@ export function SimpleRoadmap() {
 
   /** One change through the engine, its toast (with Undo when it applied) and the reload; null when it failed. */
   const run = useCallback(
-    async (what: Parameters<Act>[0], body: Parameters<Act>[1]): Promise<ChangeResult | null> => {
+    async (what: Parameters<Act>[0], body: Parameters<Act>[1], note?: string): Promise<ChangeResult | null> => {
       try {
         const r = await propose(body);
         const target = latest.current.get(String(body.target?.item_id ?? ""));
@@ -1242,7 +1242,7 @@ export function SimpleRoadmap() {
         const keys = [target?.key, latest.current.get(String(body.target?.subject ?? ""))?.key].filter(Boolean);
         toast({
           avoid: keys.length ? keys.map((k) => `[data-testid="conflict"][data-item="${k}"]`).join(", ") : undefined,
-          message: resultWords(r, what, target?.deciders),
+          message: resultWords(r, what, target?.deciders, note),
           action: r.change.status === "applied" && r.change.can_undo ? { label: "Undo", onClick: () => void undo(r.change.id).then(reloadAfter, (e) => toast({ message: String(e.message) })) } : undefined,
         });
         return r;
@@ -1261,8 +1261,8 @@ export function SimpleRoadmap() {
     [reload, reloadAfter],
   );
   const act: Act = useCallback(
-    async (what, body) => {
-      await run(what, body);
+    async (what, body, note) => {
+      await run(what, body, note);
     },
     [run],
   );

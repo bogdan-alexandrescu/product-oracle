@@ -55,11 +55,11 @@ export function FeaturePanel({ id, code, name, placed, onClose }: { id: string; 
   const own = !!found && found.id === id && !!placed;
   const item = useMemo(() => (found && own && !found.goal ? { ...found, goal: { ...placed!.goal, key: placed!.goal.id, due: null } } : found), [found, own, placed]);
   const act: Act = useCallback(
-    async (what, body) => {
+    async (what, body, note) => {
       try {
         const r = await propose(body);
         toast({
-          message: resultWords(r, what, item?.deciders),
+          message: resultWords(r, what, item?.deciders, note),
           action: r.change.status === "applied" && r.change.can_undo ? { label: "Undo", onClick: () => void undo(r.change.id).then(reload, (e) => toast({ message: String(e.message) })) } : undefined,
         });
       } catch (e) {

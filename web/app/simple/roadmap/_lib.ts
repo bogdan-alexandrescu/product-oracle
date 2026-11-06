@@ -350,12 +350,28 @@ export const deciderWords = (deciders: string[] | undefined): string =>
 export type ChangeWords = string | { applied: string; proposed: string };
 
 /** The words a change's result says: applied (undo) or proposed (to whom, and where it shows). */
-export function resultWords(r: ChangeResult, what: ChangeWords, deciders?: string[]): string {
+export function resultWords(r: ChangeResult, what: ChangeWords, deciders?: string[], note?: string): string {
   const done = typeof what === "string" ? what : what.applied;
-  if (r.change.status === "applied") return `${done} in your working draft`;
   // Review: nothing was done yet: a proposal says what it asks, then whom it waits for.
-  if (typeof what !== "string") return `Proposed: ${what.proposed}; it waits for ${deciderWords(deciders)} in Needs a decision`;
-  return `${what} proposed: it waits for ${deciderWords(deciders)} in Needs a decision`;
+  const said =
+    r.change.status === "applied"
+      ? `${done} in your working draft`
+      : typeof what !== "string"
+        ? `Proposed: ${what.proposed}; it waits for ${deciderWords(deciders)} in Needs a decision`
+        : `${what} proposed: it waits for ${deciderWords(deciders)} in Needs a decision`;
+  return note ? `${said}. ${note}` : said;
+}
+
+/**
+ * panel-menu: what happens to a feature's parts when it goes to Trash, is cut or moves to
+ * another goal or PRD, said at that moment: they stay on the roadmap, each with its own goal and
+ * PRD ("Its 2 parts stay on the roadmap."). "" when it has none.
+ */
+export function partsWords(n: number, how: "stay" | "goal" | "PRD"): string {
+  if (!n) return "";
+  const its = n === 1 ? "Its 1 part" : `Its ${n} parts`;
+  if (how === "stay") return `${its} ${n === 1 ? "stays" : "stay"} on the roadmap.`;
+  return `${its} ${n === 1 ? "keeps its" : "keep their"} own ${how}.`;
 }
 
 const PHASE_SPLIT: [Item["phases"][number]["key"], number][] = [

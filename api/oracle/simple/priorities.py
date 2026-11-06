@@ -47,7 +47,7 @@ from oracle.priorities import service as priorities
 from oracle.priorities.schemas import RankedFeature
 from oracle.roadmap import company
 from oracle.roadmap.models import HORIZONS, RoadmapItem
-from oracle.simple import changes, drafts, key_dates, service, targets
+from oracle.simple import additions, changes, drafts, key_dates, service, targets
 from oracle.simple.models import SimpleChange
 from oracle.simple.router import Reader
 from oracle.simple.schemas import (
@@ -706,6 +706,9 @@ async def build(
     id_of = {f.key: f.entity_id for f in features}
     key_of = {f.entity_id: f.key for f in features}
     by_id = read_.by_id()
+    # feature-parts: each part's parent, as the roadmap reads it.
+    extras: dict[uuid.UUID, dict[str, Any]] = {}
+    additions._parts(read_, list(items.values()), extras)
     rows: list[SimplePriorityRow] = []
     deps: dict[str, list[str]] = {}
     prd_of: list[str | None] = []
@@ -754,6 +757,7 @@ async def build(
                 can_reorder=can_change and (e is not None or owner),
                 on_roadmap=e is not None,
                 applies=service.can_decide(principal, e, read_.deciders) if e else owner,
+                part_of=extras.get(e.row.id, {}).get("part_of") if e is not None else None,
                 before_override=targets._snap(by_feature.get(f.entity_id)),
             )
         )
