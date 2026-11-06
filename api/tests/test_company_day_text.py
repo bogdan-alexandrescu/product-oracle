@@ -332,7 +332,8 @@ async def test_the_served_review_yaml_names_the_company_day(client):
 def test_the_export_dates_are_the_company_time_with_its_short_name():
     from oracle.export import render
 
-    assert render._format_dt(LATE, AUCKLAND) == "Oct 13, 2026, 9:00 AM NZDT"
+    # Each part held on one line, as on the slides (PR 1300 round 3).
+    assert render._format_dt(LATE, AUCKLAND).replace("\u00a0", " ") == "Oct 13, 2026, 9:00 AM NZDT"
     assert render._format_dt(None, AUCKLAND) == ""
 
 
@@ -436,7 +437,8 @@ def test_the_deck_banner_names_the_company_time():
     ev = ExportVersion(
         document=doc, version=version, sections=[], citations=[], latest_number=2, zone=AUCKLAND
     )
-    banner = deck._banner(ev)
+    # A date's parts are held together by no-break spaces (E-11); read as a person does.
+    banner = deck._banner(ev).replace("\u00a0", " ")
     # In words, capitalised, no ISO date (QA docs-30).
     assert "Approved Oct 13, 2026, 9:00 AM NZDT" in banner
     assert "2026-" not in banner

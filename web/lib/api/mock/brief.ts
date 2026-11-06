@@ -8,6 +8,9 @@ import type { Schemas } from "@/lib/api/client";
 import { parseBlocks, type Block, type Inline } from "@/lib/markdown";
 
 import { companyZone } from "./connections";
+import { codeLeftOut } from "./code-left-out";
+
+export { codeLeftOut };
 
 type Section = { section_key: string; level: number; heading: string; body_md: string; layer?: Schemas["SectionOut"]["layer"] };
 type Layered = { brief_source: Schemas["VersionOut"]["brief_source"]; brief: Set<string> };
@@ -58,12 +61,235 @@ export function subtree<T extends { section_key: string; level: number }>(sectio
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** A calendar day standing alone in prose reads month first, "Nov 1, 2026" (export/render.py days_in_words). */
+const PROSE_DAY = /(?<![\w./-])(\d{4})-(\d{2})-(\d{2})(?![\w/-]|:\d)/g;
+export function daysInWords(text: string): string {
+  return text.replace(PROSE_DAY, (all, y: string, m: string, d: string) => {
+    const month = Number(m);
+    const day = Number(d);
+    const valid = month >= 1 && month <= 12 && day >= 1 && day <= new Date(Date.UTC(Number(y), month, 0)).getUTCDate();
+    return valid ? heldTogether(`${MONTHS[month - 1]} ${day}, ${Number(y)}`) : all;
+  });
+}
+/** A date's parts joined by no-break spaces, so it never wraps mid-date (export/render.py held_together, E-11). */
+export const heldTogether = (words: string) => words.replace(/ /g, "\u00a0");
+
+/** A goal's code and its name where the PRD names it, "**G2 (retention)**" (export/deck.py goal_names). */
+const GOAL_NAMED = /\b(G\d{1,3})\b\**\s*\(([A-Za-z][^()\n]{0,40})\)/g;
+const GOAL_CELL = /(?<=\|)([ \t]*)(G\d{1,3})([ \t]*)(?=\|)/g;
+export function goalNames(sections: { heading: string; body_md: string }[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const s of sections)
+    for (const m of `${s.heading}\n${s.body_md ?? ""}`.matchAll(GOAL_NAMED)) {
+      const name = m[2].trim();
+      if (!out.has(m[1])) out.set(m[1], name.charAt(0).toUpperCase() + name.slice(1));
+    }
+  return out;
+}
+/** A table cell holding only a goal's code shows its name too: "G2 Retention" (export/deck.py with_goal_names). */
+export function withGoalNames(body: string, names: Map<string, string>): string {
+  return names.size ? body.replace(GOAL_CELL, (all, a: string, code: string, b: string) => (names.has(code) ? `${a}${code} ${names.get(code)}${b}` : all)) : body;
+}
+
+// A section past what a slide holds goes on continuation slides, "Top risks (2 of 2)" (export/deck.py slide_pages).
+const SLIDE_LINES = 15;
+const LINE_CHARS = 95;
+// A piece of a unit longer than a slide carries the glue that joins it to the piece before it
+// when both land on one slide (" " within a line, "\n" between lines); "" otherwise.
+type Unit = { text: string; cost: number; group: number; kind: "block" | "item" | "row"; header: string; glue?: string };
+const lineCost = (text: string) =>
+  text
+    .replace(/\]\([^)]*\)/g, "]")
+    .replace(/\[c:[^\]]*\]/g, "")
+    .split("\n")
+    .filter((l) => l.trim())
+    .reduce((n, l) => n + Math.max(1, Math.ceil(l.trim().length / LINE_CHARS)), 0);
+const SENTENCE_END = /(?<=[.!?])\s+(?=\S)/;
+/** Atoms ([glue, text]) packed into pieces each within room(i) by cost (export/deck.py _fill). */
+function fill(atoms: [string, string][], room: (i: number) => number, cost: (t: string) => number): [string, string][] {
+  const pieces: [string, string][] = [];
+  let glue = "";
+  let text = "";
+  for (const [g, atom] of atoms) {
+    if (!text) [glue, text] = [g, atom];
+    else if (cost(text + g + atom) > room(pieces.length)) {
+      pieces.push([glue, text]);
+      [glue, text] = [g, atom];
+    } else text += g + atom;
+  }
+  if (text) pieces.push([glue, text]);
+  return pieces;
+}
+/** A paragraph or list item longer than a slide, cut between sentences, else words (export/deck.py _prose_pieces). */
+function prosePieces(heading: string, text: string, group: number, kind: Unit["kind"], budget: number): Unit[] {
+  const lead = heading ? 1.5 : 0;
+  const cost = lineCost(text) + 0.4 + lead;
+  if (cost <= budget) return [{ text: heading + text, cost, group, kind, header: "" }];
+  const atoms: [string, string][] = [];
+  text.split("\n").forEach((line, n) =>
+    line.split(SENTENCE_END).forEach((sentence, m) => {
+      const glue = n === 0 && m === 0 ? "" : m ? " " : "\n";
+      if (lineCost(sentence) + 0.4 + lead > budget) sentence.split(" ").forEach((w, k) => atoms.push([k === 0 ? glue : " ", w]));
+      else atoms.push([glue, sentence]);
+    }),
+  );
+  return fill(atoms, (i) => budget - 0.4 - (i === 0 ? lead : 0), lineCost).map(([glue, piece], i) => ({
+    text: (i === 0 ? heading : "") + piece,
+    cost: lineCost(piece) + 0.4 + (i === 0 ? lead : 0),
+    group,
+    kind: i === 0 || glue === "\n" ? kind : "block",
+    header: "",
+    glue,
+  }));
+}
+const cellsOf = (row: string) => row.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+/** Characters a line each column is shown at, as a browser lays the table out: a column whose text fits its share keeps it, the others share the rest by their text (export/deck.py column_widths). */
+function columnWidths(rows: string[][]): number[] {
+  const cols = Math.max(1, ...rows.map((r) => r.length));
+  const natural = Array.from({ length: cols }, (_, c) => Math.max(0, ...rows.map((r) => (r[c] ?? "").length)) + 2);
+  const widths = new Array<number>(cols).fill(0);
+  let left = [...natural.keys()];
+  let room = LINE_CHARS;
+  while (left.length) {
+    const share = room / left.length;
+    const fixed = left.filter((c) => natural[c] <= share);
+    if (!fixed.length) {
+      const total = left.reduce((n, c) => n + natural[c], 0);
+      for (const c of left) widths[c] = Math.floor((room * natural[c]) / total);
+      break;
+    }
+    for (const c of fixed) {
+      widths[c] = natural[c];
+      room -= natural[c];
+    }
+    left = left.filter((c) => !fixed.includes(c));
+  }
+  return widths.map((w) => Math.max(1, w - 2));
+}
+const rowCost = (cells: string[], widths: number[]) => 1.2 * Math.max(1, ...cells.slice(0, widths.length).map((t, c) => Math.ceil(t.length / widths[c])));
+/** A table row longer than a slide as rows that each fit, each cell's text cut in turn (export/deck.py _row_pieces). */
+function rowPieces(lead: string, row: string, extra: number, widths: number[], group: number, header: string, budget: number): Unit[] {
+  const cells = cellsOf(row);
+  const lines = Math.min(Math.max(1, Math.floor((budget - extra) / 1.2)), Math.max(1, Math.floor(budget / 1.2)));
+  const width = cells.map((_, c) => widths[c] ?? widths[widths.length - 1]);
+  const cut = (cell: string, room: number): string[] => {
+    let atoms: [string, string][] = cell.split(SENTENCE_END).map((a, k) => [k ? " " : "", a]);
+    if (atoms.some(([, a]) => a.length > room)) atoms = cell.split(" ").map((w, k) => [k ? " " : "", w]);
+    const pieces = fill(atoms, () => room, (t) => t.length).map(([, p]) => p);
+    return pieces.length ? pieces : [""];
+  };
+  const parts = cells.map((c, i) => cut(c, lines * width[i]));
+  const count = Math.max(...parts.map((p) => p.length));
+  return Array.from({ length: count }, (_, r) => {
+    const texts = parts.map((p) => p[r] ?? "");
+    const cost = rowCost(texts, width) + (r === 0 ? extra : 0);
+    return { text: (r === 0 ? lead : "") + `| ${texts.join(" | ")} |`, cost, group, kind: "row" as const, header };
+  });
+}
+function units(body: string, budget = SLIDE_LINES): Unit[] {
+  const out: Unit[] = [];
+  const lines = body.split("\n");
+  let group = 0;
+  let heading = "";
+  let i = 0;
+  const item = (l: string) => /^(?:[-*+]|\d{1,3}[.)])\s/.test(l);
+  // What closes the fence a line opens, as CommonMark reads a fence (a backtick fence's info has no backtick); null if none.
+  const fenceClose = (l: string) => {
+    const m = /^\s*(`{3,}|~{3,})(.*)$/.exec(l);
+    return m && !(m[1][0] === "`" && m[2].includes("`")) ? new RegExp(`^\\s*${m[1][0]}{${m[1].length},}\\s*$`) : null;
+  };
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line.trim()) {
+      group++;
+      i++;
+    } else if (fenceClose(line)) {
+      const close = fenceClose(line)!;
+      let j = i + 1;
+      while (j < lines.length && !close.test(lines[j])) j++;
+      const block = lines.slice(i, j + 1);
+      out.push({ text: heading + block.join("\n"), cost: block.length + 0.4, group, kind: "block", header: "" });
+      heading = "";
+      i = j + 1;
+      group++;
+    } else if (line.trimStart().startsWith("#")) {
+      heading += line + "\n\n";
+      i++;
+      group++;
+    } else if (line.trimStart().startsWith("|")) {
+      let j = i;
+      while (j < lines.length && lines[j].trimStart().startsWith("|")) j++;
+      const rows = lines.slice(i, j);
+      const head = rows.length > 1 && /^\s*\|?\s*:?-{2,}/.test(rows[1]) ? rows.slice(0, 2) : [];
+      const header = head.join("\n");
+      const widths = columnWidths(rows.filter((r) => !/^\s*\|?\s*:?-{2,}/.test(r)).map(cellsOf));
+      rows.slice(head.length).forEach((row, k) => {
+        const extra = k === 0 && header ? 1.2 : 0;
+        const cost = rowCost(cellsOf(row), widths) + extra;
+        const lead = k === 0 && header ? heading + header + "\n" : "";
+        if (cost <= budget) out.push({ text: lead + row, cost, group, kind: "row", header });
+        else out.push(...rowPieces(lead, row, extra, widths, group, header, budget));
+        heading = "";
+      });
+      i = j;
+      group++;
+    } else {
+      let j = i + 1;
+      const kind = item(line) ? "item" : "block";
+      if (kind === "item") while (j < lines.length && lines[j].trim() && /^\s/.test(lines[j])) j++;
+      else while (j < lines.length && lines[j].trim() && !/^\s*[|#]/.test(lines[j]) && !item(lines[j]) && !fenceClose(lines[j])) j++;
+      out.push(...prosePieces(heading, lines.slice(i, j).join("\n"), group, kind, budget));
+      heading = "";
+      i = j;
+    }
+  }
+  if (heading) out.push({ text: heading.trim(), cost: 1.5, group: group + 1, kind: "block", header: "" });
+  return out;
+}
+function pack(us: Unit[], budget: number): Unit[][] {
+  const pages: Unit[][] = [[]];
+  let used = 0;
+  for (const u of us) {
+    if (pages[pages.length - 1].length && used + u.cost > budget) {
+      pages.push([]);
+      used = 0;
+    }
+    pages[pages.length - 1].push(u);
+    used += u.cost;
+  }
+  return pages;
+}
+function join(page: Unit[]): string {
+  let out = "";
+  let prev: Unit | null = null;
+  for (const u of page) {
+    let text = u.text;
+    if (!prev && u.kind === "row" && u.header && !text.includes(u.header)) text = `${u.header}\n${text}`;
+    if (prev && u.glue) out += u.glue;
+    else if (prev) out += prev.group === u.group && u.kind === prev.kind && u.kind !== "block" ? "\n" : "\n\n";
+    out += text;
+    prev = u;
+  }
+  return out;
+}
+export function slidePages(body: string, budget = SLIDE_LINES): string[] {
+  const us = units(body, budget);
+  const total = us.reduce((n, u) => n + u.cost, 0);
+  if (total <= budget || us.length < 2) return [body];
+  const count = pack(us, budget).length;
+  let even = Math.max(total / count, ...us.map((u) => u.cost));
+  let pages = pack(us, even);
+  while (pages.length > count) pages = pack(us, (even = Math.min(even + 0.5, budget)));
+  return pages.filter((p) => p.length).map(join);
+}
+
 function inline(nodes: Inline[], links: (key: string, inner: string) => string): string {
   return nodes
     .map((n) => {
       switch (n.t) {
         case "text":
-          return esc(n.v);
+          return esc(daysInWords(n.v));
         case "code":
           return `<code>${esc(n.v)}</code>`;
         case "strong":
@@ -119,6 +345,10 @@ const DECK_CSS = `
 .deck .slide-subtitle { color: var(--color-muted); font-size: 19px; margin: 0; }
 .deck .slide-source { color: var(--color-muted); font-size: 16px; margin: 8px 0 0; }
 .deck .slide-body p, .deck .slide-body ul, .deck .slide-body ol { margin: 0 0 12px; }
+.deck .slide-dense { font-size: 17px; }
+.deck .slide-dense .slide-title { font-size: 28px; margin-bottom: 14px; }
+.deck .slide-dense .slide-body table { font-size: 14px; }
+.deck .slide-dense .slide-body th, .deck .slide-dense .slide-body td { padding: 4px 8px; }
 .deck .slide-body table { border-collapse: collapse; width: 100%; font-size: 17px; }
 .deck .slide-body th, .deck .slide-body td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--color-rule); }
 .deck .slide-body th { color: var(--color-muted); font-size: 14px; text-transform: uppercase; }
@@ -184,7 +414,8 @@ function momentInWords(at: string): string {
       .formatToParts(new Date(at))
       .map((x) => [x.type, x.value]),
   );
-  return `${p.month} ${p.day}, ${p.year}, ${p.hour}:${p.minute} ${p.dayPeriod} ${p.timeZoneName}`;
+  // Each part held on one line (E-11): "Oct 18, 2026," then "1:30 AM PDT".
+  return `${heldTogether(`${p.month} ${p.day}, ${p.year}`)}, ${heldTogether(`${p.hour}:${p.minute} ${p.dayPeriod} ${p.timeZoneName}`)}`;
 }
 
 export function deckOut(d: DeckInput): Schemas["DeckOut"] {
@@ -207,7 +438,8 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
         ? `<span class="detail-ref" data-section-ref="${esc(key)}">${inner}</span><button type="button" class="expand" data-expand="${esc(key)}" aria-label="Expand ${esc(inner.replace(/<[^>]+>/g, ""))}">Expand</button>`
         : inner;
   const plainLinks = (_key: string, inner: string) => inner;
-  type Raw = Omit<Schemas["SlideOut"], "html"> & { inner: string };
+  // dense: the smaller type of a long or continued slide (export/deck.py DENSE_CHARS, DENSE_ROWS).
+  type Raw = Omit<Schemas["SlideOut"], "html"> & { inner: string; dense?: boolean };
   const raw: Raw[] = [
     {
       index: 1,
@@ -228,16 +460,29 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
   // In document order: a group sits where its first section does.
   const order = new Map(brief.map((s, i) => [s.section_key, i]));
   if (d.slides?.length) groups.sort((a, b) => order.get(a[0].section_key)! - order.get(b[0].section_key)!);
+  const goals = goalNames(sections);
   for (const [s, ...rest] of groups) {
     const all = [s, ...rest];
     const notes = all.map((x) => presenterNotes(x.body_md)).filter(Boolean);
+    // As the API: a section's code is one line linking to it in the full PRD (export/deck.py code_left_out).
+    // The link is absolute, as the API's (app_url + "#s-<key>", export/render.py absolute_doc_links).
+    const origin = typeof location !== "undefined" ? location.origin : "http://localhost";
+    const shown = (x: Section) => codeLeftOut(slideBody(x.body_md), `${origin}/documents/${d.slug}/v/${d.number}#s-${x.section_key}`);
+    const whole = withGoalNames([shown(s), ...rest.map((x) => `### ${x.heading}\n\n${shown(x)}`)].join("\n\n"), goals);
+    // As the API: a spec part's state label takes two lines of the slide (export/deck.py build_deck).
+    const states = (s as { spec_states?: { label: string }[] }).spec_states ?? [];
+    const pages = slidePages(whole, SLIDE_LINES - (states.length ? 2 : 0));
+    pages.forEach((body, p) => {
+    const heading = daysInWords(s.heading) + (pages.length > 1 ? ` (${p + 1} of ${pages.length})` : "");
     raw.push({
       index: raw.length + 1,
       kind: "section",
-      heading: s.heading,
+      heading,
       section_key: s.section_key,
-      notes: notes.length ? notes.join("\n\n") : null,
-      expand: [...new Set(all.flatMap((x) => linked(x.body_md)))]
+      ...(states.length ? { state: states[0].label } : {}),
+      dense: pages.length > 1 || body.length > 520 || body.split("\n|").length - 1 > 6,
+      notes: p === 0 && notes.length ? daysInWords(notes.join("\n\n")) : null,
+      expand: [...new Set(linked(body))]
         .filter((k) => detail.has(k))
         .map((k) => ({
           section_key: k,
@@ -246,9 +491,8 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
             .map((x) => `<section class="expand-section" data-section-key="${esc(x.section_key)}"><h3>${esc(x.heading)}</h3>${toHtml(x.body_md, plainLinks)}</section>`)
             .join(""),
         })),
-      inner: `<h2 class="slide-title">${esc(s.heading)}</h2><div class="slide-body">${toHtml(s.body_md, slideLinks)}${rest
-        .map((x) => `<h3 class="slide-subheading" data-section-key="${esc(x.section_key)}">${esc(x.heading)}</h3>${toHtml(x.body_md, slideLinks)}`)
-        .join("")}</div>`,
+      inner: `<h2 class="slide-title">${esc(heading)}</h2><div class="slide-body">${toHtml(body, slideLinks)}</div>`,
+    });
     });
   }
   if (d.citations.length) {
@@ -270,19 +514,19 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
     number: d.number,
     latest_number: d.latest,
     status: d.status,
-    as_of: d.created_at,
+    as_of: momentInWords(d.created_at),
     banner,
     source: d.source ?? null,
     theme: "clean-document",
     theme_name: "Clean document",
     theme_class: "theme-clean-document",
     css: DECK_CSS,
-    slides: raw.map(({ inner, ...s }) => ({
+    slides: raw.map(({ inner, dense, ...s }) => ({
       ...s,
       expand: s.expand ?? [],
       notes: s.notes ?? null,
       section_key: s.section_key ?? null,
-      html: `<section class="slide slide--${s.kind}" data-slide="${s.index}"${s.section_key ? ` data-section-key="${esc(s.section_key)}"` : ""} aria-label="Slide ${s.index} of ${total}: ${esc(s.heading)}"><div class="slide-inner">${inner}</div><footer class="slide-footer"><span class="slide-banner">${esc(banner)}</span><span class="slide-number">${s.index} / ${total}</span></footer></section>`,
+      html: `<section class="slide slide--${s.kind}${dense ? " slide-dense" : ""}" data-slide="${s.index}"${s.section_key ? ` data-section-key="${esc(s.section_key)}"` : ""} aria-label="Slide ${s.index} of ${total}: ${esc(s.heading)}"><div class="slide-inner">${inner}</div><footer class="slide-footer"><span class="slide-banner">${esc(banner)}</span><span class="slide-number">${s.index} / ${total}</span></footer></section>`,
     })),
   };
 }

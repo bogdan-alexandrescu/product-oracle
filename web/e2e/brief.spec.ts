@@ -266,7 +266,9 @@ test("present: viewers present too; a version without a brief has nothing to pre
   await expect(section(page, "summary").getByRole("group", { name: /Verdict for/ })).toHaveCount(0);
 
   await page.goto("/documents/checkout-redesign/v/2/present");
-  await expect(page.getByTestId("present-mode")).toContainText("has no brief sections");
+  await expect(page.getByTestId("present-mode")).toContainText(
+    "Version 2 of Checkout redesign PRD has no brief to present: open the full PRD instead.",
+  );
 });
 
 test("exports: Brief, Full and Deck downloads", async ({ page }) => {

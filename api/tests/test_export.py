@@ -197,7 +197,7 @@ async def test_html_citations_are_numbered_sources_in_the_appendix(client, fx):
         "#product thread on drop-off</a>"
     ) in src1
     assert "Most users abandon at the shipping step" in src1
-    assert "slack" in src1 and "retrieved Oct 16, 2026, 6:10 AM PDT" in src1
+    assert "slack" in src1 and "retrieved Oct 16, 2026, 6:10 AM PDT" in _text(src1)
 
     # A non-http(s) ref is shown as text, never as a link.
     src3 = appendix[appendix.index('id="src-3"') : appendix.index('id="src-4"')]
@@ -220,6 +220,21 @@ async def test_html_version_banner(client, fx):
     assert "Version 1" in banner
     assert "Superseded" in banner
     assert "imported Oct 16, 2026, 7:01 AM PDT" in banner
+
+
+async def test_html_stamps_hold_together(client, fx):
+    # PR 1300 round 3: as on the slides, a stamp's day and its time each stay on one line.
+    nb = "\u00a0"
+    html = (await _export(client, fx, "html", n=2)).text
+    header = html[html.index("<header") : html.index("</header>")]
+    assert f"Oct{nb}17,{nb}2026, 2:30{nb}AM{nb}PDT" in header
+    appendix = html[html.index('class="sources-appendix"') :]
+    assert f"retrieved Oct{nb}16,{nb}2026, 6:10{nb}AM{nb}PDT" in appendix
+    html = (await _export(client, fx, "html", n=1)).text
+    header = html[html.index("<header") : html.index("</header>")]
+    assert f"Oct{nb}16,{nb}2026, 7:01{nb}AM{nb}PDT" in header
+    # The Markdown file is text a person edits: plain spaces.
+    assert nb not in (await _export(client, fx, "md", n=2)).text.splitlines()[0]
 
 
 async def test_html_is_self_contained_and_escapes_raw_html(client, fx):
@@ -379,11 +394,15 @@ def test_prose_dates_read_month_first_in_exports():
     are shown ("to Jan 29, 2027"); a day inside a key, a path or code stays as written."""
     from oracle.export.render import _markdown
 
-    html = _markdown().render(
-        "Raise completion from 61% to 70% by 2027-01-29 (G1). Beta 2026-11-30; "
-        "see launch-2026-11-30 and `2026-12-01`.",
-        {},
-    )
+    html = (
+        _markdown()
+        .render(
+            "Raise completion from 61% to 70% by 2027-01-29 (G1). Beta 2026-11-30; "
+            "see launch-2026-11-30 and `2026-12-01`.",
+            {},
+        )
+        .replace("\u00a0", " ")
+    )  # a date's parts are held together by no-break spaces (E-11)
     assert "by Jan 29, 2027 (G1)" in html and "Beta Nov 30, 2026;" in html
     assert "launch-2026-11-30" in html and "<code>2026-12-01</code>" in html
     assert "2027-01-29" not in html
@@ -401,6 +420,7 @@ def test_prose_dates_read_month_first_in_themed_exports_and_decks():
         _themed_markdown(True).render(text, {"numbers": {}}),
         str(_render_md(text, set())),
     ):
+        html = html.replace("\u00a0", " ")  # no-break spaces hold a date together (E-11)
         assert "by Jan 29, 2027 (G1)" in html
         assert "launch-2026-11-30" in html and "<code>2026-12-01</code>" in html
         assert "2027-01-29" not in html
