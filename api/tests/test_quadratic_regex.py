@@ -159,4 +159,4 @@ def test_source_words_check_is_linear_on_link_openers(unit, lines):
     ]
     for md in texts:
         sections = parse_draft(md).sections
-        _fast(lambda: source_words.check(sections, md), limit=1.0)
+        _fast(lambda sections=sections, md=md: source_words.check(sections, md), limit=1.0)

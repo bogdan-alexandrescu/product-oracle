@@ -41,7 +41,7 @@ _KEY_WORD = re.compile(r"([^\s,:()\[\]]{1,60})([ \t]*[:,])?")
 # A URL or a link's target: read neither for paths nor for file names; a bare domain
 # with a path ("example.com/pricing/plan.html") is a place, not a file.
 _URL = re.compile(
-    r"\]\([^)\s]*\)|\bhttps?://\S+|(?<![\w./-])(?:[\w-]{1,63}\.){1,6}[A-Za-z]{2,24}/\S*"
+    r"\]\([^)\s]{0,300}\)|\bhttps?://\S{1,500}|(?<![\w./-])(?:[\w-]{1,63}\.){1,6}[A-Za-z]{2,24}/\S{0,500}"
 )
 # A path ("docs/alerting.md", "src/app/page.tsx") or a file name ("pricing-notes.md").
 _PATH = re.compile(r"(?<![\w./-])(?:[\w.-]{1,80}/){1,12}[\w.-]{0,80}\.[A-Za-z0-9]{1,5}\b")
@@ -67,7 +67,7 @@ _ISSUE = re.compile(
     re.IGNORECASE,
 )
 # Inline code and a link's target: an issue number is not read in either.
-_CODE_OR_TARGET = re.compile(r"`[^`\n]*`|\]\([^)\s]*\)")
+_CODE_OR_TARGET = re.compile(r"`[^`\n]{0,300}`|\]\([^)\s]{0,300}\)")
 
 
 def _plain(heading: str) -> str:
