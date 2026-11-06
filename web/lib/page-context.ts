@@ -104,6 +104,7 @@ export const PAGE_CONTEXT: Record<string, PageContext> = {
   "/simple": shown("The plan and the page's shown text"),
   "/simple/decisions": shown("The plan and the decisions as listed"),
   "/simple/goals": shown("The plan and the goal map as shown"),
+  "/simple/inbox": nameOnly("A person's own Inbox"),
   "/simple/meetings": shown("The plan and the meetings as listed"),
   "/simple/meetings/[id]": shown("The plan and the meeting as shown"),
   "/simple/meetings/[id]/chat": shown("The plan and the meeting's chat as shown"),

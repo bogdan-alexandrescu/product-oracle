@@ -62,7 +62,7 @@ for (const phone of [false, true]) {
       await expect(row.getByTestId("question-decided")).toHaveText(/^3 invites · Avery Stone · \w{3} \w{3} \d{1,2}, \d{1,2}:\d{2} [AP]M$/);
       await expect(row.getByRole("button", { name: "Another answer" })).toHaveCount(0);
       await expect(card).toContainText("9 decisions you own · also on its review meeting's agenda");
-      await expect(page.getByText(/Decided Q6: 3 invites/)).toHaveCount(0);
+      await expect(page.getByText(/Decided Q6 Invite limit on the free plan: 3 invites/)).toHaveCount(0);
       // Undo puts it back as it was, to decide again.
       await row.getByRole("button", { name: "Undo" }).click();
       await expect(row.getByRole("button", { name: "Another answer" })).toBeVisible();
@@ -97,7 +97,7 @@ for (const phone of [false, true]) {
       const row = card.getByTestId("home-question").filter({ hasText: "Invite limit on the free plan" });
       await row.getByRole("button", { name: "Another answer" }).click();
       await row.getByRole("group", { name: /^Answers for / }).getByRole("button", { name: "3 invites" }).click();
-      await expect(page.getByText("Decided Q6: 3 invites")).toBeVisible();
+      await expect(page.getByText("Decided Q6 Invite limit on the free plan: 3 invites")).toBeVisible();
       await expect(card).toContainText("8 decisions you own · also on its review meeting's agenda");
       await expect(card).not.toContainText("Invite limit on the free plan");
       await expect(card.getByTestId("question-decided")).toHaveCount(0);

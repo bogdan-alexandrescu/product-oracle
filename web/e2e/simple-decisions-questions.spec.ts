@@ -117,10 +117,10 @@ for (const phone of [false, true]) {
         const who = q3.getByRole("group", { name: "Who answers Q3" });
         await expect(who.getByRole("button", { name: "Already Priya Raman" })).toBeDisabled();
         await who.getByRole("button", { name: "Avery Stone", exact: true }).click();
-        await expect(page.getByText("Avery Stone decides Q3")).toBeVisible();
+        await expect(page.getByText("Avery Stone decides Q3 Offline mode scope")).toBeVisible();
         await q2.getByRole("button", { name: "Name a decider" }).click();
         await q2.getByRole("group", { name: "Who decides Q2" }).getByRole("button", { name: "Priya Raman" }).click();
-        await expect(page.getByText("Priya Raman decides Q2")).toBeVisible();
+        await expect(page.getByText("Priya Raman decides Q2 Export format sign-off")).toBeVisible();
         await expect(needs.locator('[data-code="Q2"]')).toHaveCount(0);
         await expect(recommended.locator('[data-code="Q2"]')).toContainText("Priya Raman decides");
 
@@ -142,7 +142,7 @@ for (const phone of [false, true]) {
         await decisions(page);
         const mine = region(page, "Waiting for you");
         await row(page, "Q5").getByRole("button", { name: "Decide as recommended" }).click();
-        await expect(page.getByText("Decided Q5: 9:00 in each person's zone")).toBeVisible();
+        await expect(page.getByText("Decided Q5 Reminder default time: 9:00 in each person's zone")).toBeVisible();
         await waiting(page, 8);
         await expect(outside(page, "Q5")).toContainText("9:00 in each person's zone");
         await page.getByRole("button", { name: "Undo" }).click();
@@ -154,7 +154,7 @@ for (const phone of [false, true]) {
         await decisions(page, "approver@example.com", true);
         await waiting(page, 4);
         await row(page, "Q7").getByRole("button", { name: "Decide as recommended" }).click();
-        await expect(page.getByText("Decided Q7: Ask outside counsel")).toBeVisible();
+        await expect(page.getByText("Decided Q7 Legal input on health notes: Ask outside counsel")).toBeVisible();
         await waiting(page, 3);
 
         await decisions(page, "commenter@example.com", true);
@@ -182,7 +182,7 @@ for (const phone of [false, true]) {
         await expect(row(page, "Q5").getByRole("button", { name: "Another answer" })).toHaveAttribute("aria-pressed", "true");
         await expect(row(page, "Q5").getByTestId("question-answers")).toContainText("Another answer:");
         await row(page, "Q5").getByRole("group", { name: "Answers for Q5" }).getByRole("button", { name: "Noon", exact: true }).click();
-        await expect(page.getByText("Decided Q5: Noon")).toBeVisible();
+        await expect(page.getByText("Decided Q5 Reminder default time: Noon")).toBeVisible();
         await expect(outside(page, "Q5")).toContainText("Noon · Avery Stone");
 
         await row(page, "Q6").getByRole("button", { name: "Another answer" }).click();

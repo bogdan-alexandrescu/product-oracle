@@ -114,6 +114,8 @@ const CODES = {
   "setup-health-log": "F-03",
   "price-tiers": "NPT",
   "setup-video": "WV",
+  // P-1: the Goal map's features, roadmap items from the first load (their PRD section's code).
+  ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`gm-f${i + 1}`, `F-${101 + i}`])),
 };
 
 test.describe("desktop", () => {
