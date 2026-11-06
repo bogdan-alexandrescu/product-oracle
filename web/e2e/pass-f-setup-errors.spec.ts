@@ -140,9 +140,19 @@ test.describe("Simple Home", () => {
 
     await simpleSetup(page).getByRole("button", { name: "Hide" }).click();
     await expect(simpleSetup(page)).toHaveCount(0);
+    // Round 2: the toast says what happened, with Show; no how-to sentence.
+    const toastBox = page.getByTestId("toasts").getByRole("status");
+    await expect(toastBox).toHaveText(/^Set up hiddenShow$/);
+    await toastBox.getByRole("button", { name: "Show" }).click();
+    await expect(simpleSetup(page).getByRole("heading", { name: "Welcome: set up Oracle" })).toBeVisible();
+    await simpleSetup(page).getByRole("button", { name: "Hide" }).click();
+    await expect(simpleSetup(page)).toHaveCount(0);
     // The owner's pick (Nov 5): no chip in the card's place; Show Set up is in Home's menu.
     await expect(page.getByTestId("simple-page").getByTestId("home-setup-chip")).toHaveCount(0);
     const menu = page.getByTestId("home-greeting").getByRole("button", { name: "Home menu" });
+    // Round 2: drawn with the app's "more" icon, not a text glyph (a missing-glyph box in Chromium).
+    await expect(menu.locator("svg")).toHaveCount(1);
+    await expect(menu).toHaveText("");
     await menu.click();
     await page.getByRole("menu").getByRole("menuitem", { name: "Show Set up" }).click();
     await expect(simpleSetup(page).getByRole("heading", { name: "Welcome: set up Oracle" })).toBeVisible();

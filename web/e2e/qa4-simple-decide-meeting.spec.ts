@@ -240,7 +240,6 @@ for (const phone of [false, true]) {
         const box = (await line.getByRole("link").boundingBox())!;
         expect(box.height).toBeGreaterThanOrEqual(44);
         expect(box.width).toBeGreaterThanOrEqual(44);
-        expect(await line.getByRole("link").evaluate((el) => getComputedStyle(el).minHeight)).toBe("44px");
       }
     });
 
@@ -270,3 +269,45 @@ for (const phone of [false, true]) {
     });
   });
 }
+
+test.describe("F-26, round 2: a long decision on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("its link keeps a 44 px tap and hangs under its first line, and ' · ' stays with the approver's name", async ({ page }) => {
+    // "long-decision": the past review also took a decision whose title wraps at 390.
+    await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "long-decision"));
+    await pastMeeting(page);
+    const taken = page.getByRole("list", { name: "Decisions taken" });
+    const line = taken.getByTestId("decision-taken").filter({ hasText: "Send the weekly alert digest" });
+    const link = line.getByRole("link", { name: /^Send the weekly alert digest/ });
+    await expect(link).toBeVisible();
+    const at = await line.evaluate((el) => {
+      const a = el.querySelector("a")!;
+      const rects = [...a.getClientRects()].map((r) => ({ left: Math.round(r.left), top: Math.round(r.top), bottom: Math.round(r.bottom) }));
+      // Where the separator and the name's first letter land, from the text after the link.
+      const tops: Record<string, number> = {};
+      const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+        if (a.contains(n)) continue;
+        const text = n.textContent ?? "";
+        for (const [key, i] of [["dot", text.indexOf("·")], ["name", text.search(/[A-Z]/)]] as const) {
+          if (i < 0 || key in tops) continue;
+          const r = document.createRange();
+          r.setStart(n, i);
+          r.setEnd(n, i + 1);
+          tops[key] = Math.round(r.getBoundingClientRect().top);
+        }
+      }
+      return { rects, tops, left: Math.round(el.getBoundingClientRect().left) };
+    });
+    // The title wraps: its first line starts at the item's left edge, every later line 16 px in.
+    expect(at.rects.length).toBeGreaterThan(1);
+    expect(at.rects[0].left).toBe(at.left);
+    for (const r of at.rects.slice(1)) expect(r.left).toBe(at.left + 16);
+    // Each line of the link is a 44 px tap.
+    for (const r of at.rects) expect(r.bottom - r.top).toBeGreaterThanOrEqual(44);
+    // ' · ' and the approver's name share a line.
+    expect(at.tops.dot).toBeDefined();
+    expect(Math.abs(at.tops.dot - at.tops.name)).toBeLessThanOrEqual(2);
+  });
+});
