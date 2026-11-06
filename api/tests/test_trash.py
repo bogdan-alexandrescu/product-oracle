@@ -127,6 +127,19 @@ async def test_dependents_name_each_run_by_its_day_and_what_it_wrote(client, own
     assert datetime.fromisoformat(item["created_at"]) <= datetime.now(UTC)
 
 
+async def test_trash_names_each_run_as_the_delete_dialog_did(client, owner, runtime):
+    """F-69: Settings › Trash says a run's day and what it wrote, as the delete dialog did."""
+    _, auth, run = await _world(client, owner, runtime)
+    body = (await client.get(f"/v1/documents/{PRD}/dependents", headers=auth)).json()
+    said = next(d for d in body["items"] if d["id"] == run["id"])
+    resp = await client.request("DELETE", f"/v1/documents/{PRD}", headers=auth)
+    assert resp.status_code == 200, resp.text
+    [row] = (await client.get("/v1/trash", headers=auth)).json()
+    item = next(i for i in row["items"] if i["id"] == run["id"])
+    assert item["wrote"] == said["wrote"]
+    assert datetime.fromisoformat(item["created_at"]) == datetime.fromisoformat(said["created_at"])
+
+
 async def test_regenerate_estimate_names_inputs_by_title_and_version_never_slug(
     client, owner, runtime
 ):
