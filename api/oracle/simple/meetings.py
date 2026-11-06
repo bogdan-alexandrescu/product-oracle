@@ -1190,7 +1190,7 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
                     SimpleChange.target["item_id"].astext.in_([str(i) for i in item_ids]),
                 ),
             )
-            .order_by(SimpleChange.at)
+            .order_by(SimpleChange.at, SimpleChange.seq)
         )
     )
     seen = [c for c in proposals if await _sees_change(db, principal, c)]

@@ -1,11 +1,14 @@
 """Simple changes keep the order they were made in (qaC-numfix)
 
-``simple_changes`` gains ``seq``, an identity column: lists of a draft's changes (the
-one-pager's number fixes and their Undo) break a tie on ``at`` by it, not by the random id.
-Existing rows are numbered as they are stored.
+``simple_changes`` gains ``seq``, an identity column: every list of changes (a draft's
+changes and the one-pager's number fixes, GET /v1/simple/changes, the Inbox, proposals)
+breaks a tie on ``at`` by it, not by the random id. Existing rows are numbered as they are
+stored.
 
-Adding an identity column rewrites the table under a short exclusive lock; the wait for it
-is capped (LOCK_TIMEOUT). The downgrade drops the column.
+Adding an identity column rewrites the whole table under an ACCESS EXCLUSIVE lock, so reads
+and writes of ``simple_changes`` wait until it is done. That is fine here: the table holds
+one row per change a person made in Simple, small enough to rewrite in moments. The wait
+for the lock is capped (LOCK_TIMEOUT). The downgrade drops the column.
 
 Revision ID: 0120_simple_changes_seq
 Revises: 0119_trash_milestones

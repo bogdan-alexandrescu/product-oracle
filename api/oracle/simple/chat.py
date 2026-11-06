@@ -2710,7 +2710,7 @@ async def walk(db: AsyncSession, principal: Any) -> WalkOut:
         await db.scalars(
             select(SimpleChange)
             .where(SimpleChange.status == "proposed")
-            .order_by(SimpleChange.at, SimpleChange.id)
+            .order_by(SimpleChange.at, SimpleChange.seq)
         )
     )
     if proposed:
