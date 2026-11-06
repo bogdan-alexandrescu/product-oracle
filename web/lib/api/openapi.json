@@ -48989,7 +48989,7 @@
           "simple"
         ],
         "summary": "Get Simple Priorities",
-        "description": "The live goal-weighted ranking in the company's order joined with the roadmap items\nthe caller sees: each row's Oracle rank, goal, horizon, goal value (a person's estimate\nor the goals'), effort, score, the dependency it waits for, the override that placed it\nand whether the caller's change applies or is proposed; the open priority and estimate\nproposals, the draft items with what they may merge into, and this quarter's\nengineer-weeks per goal. ``line``: where the line is drawn (Now, a key date, a dated\nmilestone or a day; see the module).",
+        "description": "The live goal-weighted ranking in the company's order joined with the roadmap items\nthe caller sees: each row's Oracle rank, goal, horizon, goal value (a person's estimate\nor the goals'), effort, score, the dependency it waits for, the override that placed it\nand whether the caller's change applies or is proposed; the open priority and estimate\nproposals, the draft items with what they may merge into, the items no row holds, and\nthis quarter's engineer-weeks per goal. ``line``: where the line is drawn (Now, a key\ndate, a dated milestone or a day; see the module).",
         "operationId": "get_simple_priorities",
         "security": [
           {
@@ -128172,6 +128172,14 @@
             "type": "array",
             "title": "Drafts"
           },
+          "unranked": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePriorityUnranked"
+            },
+            "type": "array",
+            "title": "Unranked",
+            "default": []
+          },
           "buckets": {
             "items": {
               "$ref": "#/components/schemas/SimpleGoalBucket"
@@ -128748,6 +128756,45 @@
           "title"
         ],
         "title": "SimplePriorityRow"
+      },
+      "SimplePriorityUnranked": {
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Item Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePriorityGoal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "roadmap": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_id",
+          "code",
+          "title",
+          "roadmap"
+        ],
+        "title": "SimplePriorityUnranked",
+        "description": "prio-unranked: a live, non-draft roadmap item with no ranked feature (none, or one the\nranking leaves out): listed under the ranked rows, with no score and no rank."
       },
       "SimpleQuarter": {
         "properties": {
