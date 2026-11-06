@@ -326,3 +326,15 @@ async def test_e15_present_mode_without_a_brief_does_not_say_export(client, tena
     detail = resp.json()["detail"]
     assert "export" not in detail.lower()
     assert detail == "Version 1 of Notes has no brief to present: open the full PRD instead."
+
+
+@requires_pdf
+async def test_e9_a_paragraph_longer_than_a_slide_is_whole_in_the_deck_pdf(client, tenant_id):
+    h = await _token(tenant_id, "approver")
+    assert (await _import(client, h, _paragraph_draft())).status_code == 201
+    resp = await client.get(f"{BASE}/export?layer=deck&format=pdf", headers=h)
+    assert resp.status_code == 200
+    text = " ".join(p.extract_text() for p in PdfReader(io.BytesIO(resp.content)).pages)
+    text = re.sub(r"\s+", " ", text)
+    for i, sentence in enumerate(SENTENCES, start=1):
+        assert text.count(sentence) == 1, i
