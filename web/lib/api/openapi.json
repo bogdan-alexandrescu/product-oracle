@@ -77444,6 +77444,14 @@
             "type": "object",
             "title": "Flags",
             "default": {}
+          },
+          "titles": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Titles",
+            "default": {}
           }
         },
         "type": "object",
@@ -80875,6 +80883,11 @@
           "code": {
             "type": "string",
             "title": "Code"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref",
+            "default": ""
           },
           "label": {
             "type": "string",
@@ -113279,6 +113292,14 @@
           "summary": {
             "type": "string",
             "title": "Summary"
+          },
+          "answers": {
+            "items": {
+              "$ref": "#/components/schemas/RunDecisionAnswer"
+            },
+            "type": "array",
+            "title": "Answers",
+            "default": []
           }
         },
         "type": "object",
@@ -113290,6 +113311,70 @@
         ],
         "title": "RunDecision",
         "description": "A decided checkpoint of a run, as its agents read it (``get_checkpoint_review``):\nwho decided (the person's name beside their role), when, and what. A console\nanswer is a decision once it is followed: one held for an approver is still pending\nand not listed."
+      },
+      "RunDecisionAnswer": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "feature_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Key"
+          },
+          "feature_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Title"
+          },
+          "answered_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answered By Name"
+          },
+          "answered_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answered At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question",
+          "answer"
+        ],
+        "title": "RunDecisionAnswer",
+        "description": "A question answered at a decided stop: the architect's at an approved Engineering\ncheck, or the agents' on the Questions from the agents cards of a stop approved or sent\nback (``oracle.runs.stop_answers``)."
       },
       "RunDiscussion": {
         "properties": {
@@ -115924,6 +116009,11 @@
           "code": {
             "type": "string",
             "title": "Code"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref",
+            "default": ""
           },
           "severity": {
             "type": "string",

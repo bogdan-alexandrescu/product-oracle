@@ -11,7 +11,7 @@ import { parseBlocks, plainText, type Inline } from "@/lib/markdown";
 import { mockName as displayName } from "./people";
 
 import { MOCK_SCENARIO_KEY, mockUuid, seeded, stableUuid } from "./ids";
-import { addDecisionEntity, addDuplicateProposals, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, addStatusOverlapProposals, addThreeWayConflict, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, readMetricIntoGoal, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
+import { acceptNewFeatures, addDecisionEntity, addDuplicateProposals, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, addStatusOverlapProposals, addThreeWayConflict, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, readMetricIntoGoal, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
 import { BLOCKER_NARROWED_SCENARIO, documentGate, narrowResolvedBlocker, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
@@ -52,7 +52,7 @@ import {
 } from "./discussions";
 import { routeEngineering, techBriefOf, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
-import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
+import { addLiveFeature, laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, queueJob, queueQualityReview, seedLlm, seedStoredRefusals, SPENT, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
 import { draftRefusal, emptyAutonomy, inboxActions, levelFor, limitsFor, oracleDid, routeAutonomy, seedLaunchDid, seedOracleDid, seedRequestDid, seedRitualDid, type AutonomyDb } from "./autonomy";
@@ -76,6 +76,7 @@ import {
   routeRuns,
   scopeStop,
   seedEngCheckRun,
+  seedEngCheckAnsweredByIdRun,
   seedEngCheckUnmappedRun,
   shopBriefsCheck,
   briefsCheckOf,
@@ -548,6 +549,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * Now to Next, keep Success metrics and add Spend limits (Now) (E3b);
  * "feature-set" as the default company plus a run waiting at a feature set with a blocking
  * problem (C6, saved-addresses);
+ * "feature-set-two" as "feature-set" with a second blocking problem of the same code on the same
+ * feature (each waived on its own, with its own reason);
  * "scope-review" as the default company plus three runs at their feature set (C7: attempt 1
  * with three rows that need a person, attempt 2, and a held console approval);
  * "scope-review-kept" as "scope-review" with the held run's Bulk edit also new and a likely
@@ -1867,6 +1870,18 @@ function seedEngDates(): Db {
   return db;
 }
 
+/**
+ * "eng-check-answered-by-id" scenario: as "eng-check", its Engineering check approved by the
+ * engineering lead (Theo Brandt) with an answer recorded by its question's id only.
+ */
+function seedEngCheckAnsweredById(): Db {
+  const db = seed();
+  const lead = db.members.find((x) => x.email === "commenter@example.com")!;
+  lead.engineering_lead = true;
+  seeded("eng-check-answered-by-id", () => seedEngCheckAnsweredByIdRun(db.runs!, runsContext(db), lead.id));
+  return db;
+}
+
 /** "eng-check-unmapped" scenario: the "eng-check" run whose briefs cite ids of a repository with no code map. */
 function seedEngCheckUnmapped(): Db {
   const db = seed();
@@ -2013,9 +2028,9 @@ function seedRunReviewDecider(): Db {
 }
 
 /** The default seed plus a run waiting at its feature set with a blocking problem (C6, ./runs.ts). */
-function seedFeatureSet(): Db {
+function seedFeatureSet(twoOfOne = false): Db {
   const db = seed();
-  seeded("feature-set", () => seedFeatureSetRun(db.runs!, runsContext(db)));
+  seeded(twoOfOne ? "feature-set-two" : "feature-set", () => seedFeatureSetRun(db.runs!, runsContext(db), twoOfOne));
   return db;
 }
 
@@ -3206,6 +3221,13 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     draftRefusal: (flow, kind) => draftRefusal((db.autonomy ??= emptyAutonomy()), flow, kind),
     members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role, name: x.name })),
     scopeApproved: (scope, by) => scopeToBaseline(db, scope, by),
+    // C8 RP1: an approved order's new features join the baseline as proposed, and the live ranking.
+    acceptNewFeatures: (snap, by, scope) => {
+      acceptNewFeatures(db.baseline, snap.run_id, snap.ranking, by, scope);
+      addLiveFeature(db, snap.ranking);
+    },
+    goalKeys: () => db.baseline.entities.filter((e) => e.type === "goal" && e.status !== "rejected").map((e) => e.key),
+    goalTitle: (key) => db.baseline.entities.find((e) => e.type === "goal" && e.key === key)?.title,
     ask: (q) => {
       const at = now();
       const id = uuid();
@@ -3440,7 +3462,9 @@ function load(): Db {
         : scenario === "big-prd"
           ? seedBigPrd
           : scenario === "feature-set" || scenario === "run-discussions" || scenario === "discussion-change-kinds"
-            ? seedFeatureSet
+            ? () => seedFeatureSet()
+          : scenario === "feature-set-two"
+            ? () => seedFeatureSet(true)
           : scenario === "baseline-review" || scenario === "baseline-review-console"
             ? () => seedBaselineReview(scenario === "baseline-review-console")
           : scenario === "simple-waits"
@@ -3453,6 +3477,8 @@ function load(): Db {
             ? seedEngCheck
           : scenario === "run-decisions" || scenario === "run-decisions-many"
             ? () => seedRunDecisionsScenario(scenario === "run-decisions-many")
+          : scenario === "eng-check-answered-by-id"
+            ? seedEngCheckAnsweredById
           : scenario === "eng-check-no-lead"
             ? seedEngCheckNoLead
           : scenario === "eng-check-unmapped"
@@ -4211,7 +4237,8 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
             .map((s) => {
               const { start, end } = shownDates(rm, s.key);
               const days = Math.max(1, (Date.parse(end) - Date.parse(start)) / 86_400_000 + 1);
-              return { key: s.key, title: s.title, prd: s.prd_doc ?? null, milestone: null, effort_weeks: Math.round((days / 7) * 10) / 10, start, end };
+              // As company_router: the item's own milestone's name (RoadmapItem.milestone), not a track's.
+              return { key: s.key, title: s.title, prd: s.prd_doc ?? null, milestone: s.milestone?.name ?? null, effort_weeks: Math.round((days / 7) * 10) / 10, start, end };
             })
             .filter((i) => !prd || (i.prd && (i.prd.slug === prd || i.prd.id === prd)))
         : [];
@@ -6232,7 +6259,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "baseline" && p[2] === "from-run" && p[3] && req.method === "GET") {
     db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
     const found = fromRunCheckpoint({ ...runsContext(db), db: db.runs }, p[3]);
-    if (!found) return json(404, { detail: `run ${p[3]} not found` });
+    if (!found) return json(404, { detail: "Run not found" });
     return json(200, { ...found, ...fromRun(db.baseline, p[3], found.actions), checkpoint: found.checkpoint });
   }
   // B6 Goals interview: its routes write discussions and proposals, so they come first.

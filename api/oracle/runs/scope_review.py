@@ -103,11 +103,11 @@ def is_edited(item: PrdScopeItem) -> bool:
 # --------------------------------------------------------------------------- reasons
 
 
-def _answers(action: Any, code: str, kind: str) -> bool:
+def _answers(action: Any, code: str, kind: str, ref: str | None = None) -> bool:
     return (
         getattr(action, "state", None) == "staged"
         and action.kind == kind
-        and (not action.answers or code in action.answers)
+        and (not action.answers or gate.names(action.answers, code, ref))
     )
 
 
@@ -140,14 +140,16 @@ def reasons_of(
         severity = "blocking" if blocking else "to_confirm"
         can_waive = blocking and gate.waivable("feature_set", code)
         mine = by_key.get(key, [])
+        ref = gate.problem_ref(p)
         answered = (
-            any(_answers(a, code, "waive") for a in mine)
+            any(_answers(a, code, "waive", ref) for a in mine)
             if blocking
             else any(_answers(a, code, "accept") for a in mine)
         )
         out.setdefault(key, []).append(
             ScopeReason(
                 code=code,
+                ref=ref,
                 severity=severity,  # type: ignore[arg-type]
                 label=_label(p, key, code),
                 requirement=p.get("requirement"),
@@ -163,6 +165,7 @@ def reasons_of(
             out.setdefault(item.key, []).append(
                 ScopeReason(
                     code=flag,
+                    ref=flag,
                     severity="to_confirm",
                     label=FLAG_LABELS.get(flag, flag.replace("_", " ")),
                     answered=any(_answers(a, flag, "accept") for a in mine),
@@ -1006,7 +1009,12 @@ async def approved(
             )
             entities.append(str(entity.id))
     waived = sorted(
-        {c for a in acts if a.state == "staged" and a.kind == "waive" for c in a.answers or []}
+        {
+            gate.answer_code(c)
+            for a in acts
+            if a.state == "staged" and a.kind == "waive"
+            for c in a.answers or []
+        }
     )
     return {"edits": sum(1 for i in items if is_edited(i)), "waived": waived,
             "entities": entities}  # fmt: skip
@@ -1096,7 +1104,9 @@ def scope_entries(
             continue
         if a.kind == "waive":
             why = a.value.get("reason") if isinstance(a.value, dict) else None
-            codes = list(a.answers) or [r.code for r in reasons.get(a.item_key, [])]
+            codes = list(dict.fromkeys(gate.answer_code(c) for c in a.answers)) or [
+                r.code for r in reasons.get(a.item_key, [])
+            ]
             waived += [{"id": a.item_key, "code": c, "reason": why} for c in codes or [None]]
         elif a.kind == "question":
             text = a.value.get("text") if isinstance(a.value, dict) else None

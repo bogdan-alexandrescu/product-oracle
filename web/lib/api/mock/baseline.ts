@@ -869,6 +869,141 @@ export function addDecisionEntity(s: BaselineState, d: { number: number; title: 
   return e.id;
 }
 
+/** The fields a C8 priority order's new-feature ranking row needs for accept_new below (RankedFeature's `explanation.inputs` is a generic record, read with effortOf). */
+export type NewOrderRow = {
+  key: string;
+  title: string;
+  new: boolean;
+  depends_on: string[];
+  explanation: {
+    inputs: Record<string, unknown>;
+    confidence: { value: number; source?: string };
+    goals: { goal: string; weight: number; contribution: number; contribution_assumed?: boolean }[];
+  };
+};
+
+/** A new-feature row's effort input (explanation.inputs.effort), as newFeature (./runs.ts) sets it. */
+export const effortOf = (row: NewOrderRow): number | null => (row.explanation.inputs.effort as { value: number | null } | undefined)?.value ?? null;
+
+/** Why an approved order rejects a second open create of a feature it already added (api run_order.SAME_FEATURE). */
+export const SAME_FEATURE_NOTE = "The same feature as one the approved order added";
+/** The accepted note an approved order's own create proposal gets (api run_order.accept_new). */
+export const ADDED_BY_ORDER_NOTE = "Added by the approved order";
+
+/** A supports link's contribution as the API takes it (run_order._contribution): an integer 0-3, else none. */
+const contributionOf = (c: unknown): number | null => (typeof c === "number" && Number.isInteger(c) && c >= 0 && c <= 3 ? c : null);
+
+/** A supports link proposed for a goal named with no contribution (api run_order.ASSUMED_LINK): the default, marked assumed for a person to set. */
+export const ASSUMED_LINK: Attrs = { contribution: 1, contribution_assumed: true };
+
+/**
+ * C8 RP1 (api run_order.accept_new): an approved order adds the features new in its PRD
+ * (`new: true` ranking rows) to the baseline as proposed. The run's open create proposals
+ * for the same keys are accepted, one per key; another open create of a key already added,
+ * or of a key that is already a feature, is rejected (SAME_FEATURE_NOTE). A key with no
+ * open create is made from its ranking row, never skipped. Each carries the row's effort
+ * and confidence (attrs), and, as proposed links Oracle made for a person to confirm, the
+ * goals it serves (supports: the row's, then the approved feature set's `scope` entry's)
+ * and what it depends on. A goal named with no contribution still gets its link, the
+ * contribution assumed (ASSUMED_LINK) unless the other names one; a 0 from either source (does not serve)
+ * gets none. Returns how many features were added.
+ */
+export function acceptNewFeatures(
+  s: BaselineState,
+  runId: string | null | undefined,
+  rows: NewOrderRow[],
+  by: string | null,
+  scope: { key: string; goals: { key: string; contribution?: number | null }[] }[] = [],
+): number {
+  const keys = new Set(rows.filter((r) => r.new).map((r) => r.key));
+  if (!keys.size || !runId) return 0;
+  const at = now();
+  const open = s.proposals.filter((p) => p.run_id === runId && p.status === "open").sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const creates = new Map<string, ProposalRow[]>();
+  for (const p of open) {
+    const payload = p.payload as { op?: string; fields?: { key?: string; type?: string } };
+    const key = payload.fields?.key;
+    if (payload.op !== "create" || (payload.fields?.type ?? "feature") !== "feature" || !key || !keys.has(key)) continue;
+    creates.set(key, [...(creates.get(key) ?? []), p]);
+  }
+  const reject = (p: ProposalRow) => Object.assign(p, { status: "rejected", decided_by: by, decided_at: at, payload: { ...p.payload, note: SAME_FEATURE_NOTE } });
+  const added: EntityRow[] = [];
+  for (const key of keys) {
+    const mine = creates.get(key) ?? [];
+    const exists = s.entities.some((e) => e.type === "feature" && e.key === key);
+    // Rejected before the first is accepted (as the API: it would otherwise close it as already done).
+    for (const p of mine.slice(exists ? 0 : 1)) reject(p);
+    if (exists) continue;
+    const row = rows.find((r) => r.key === key)!;
+    const proposal = mine[0];
+    const fields = proposal?.payload.fields as { title?: string; body?: string | null; attrs?: Attrs } | undefined;
+    const effort = effortOf(row);
+    const confidence = row.explanation.confidence.source === "attrs" ? row.explanation.confidence.value : null;
+    const entity: EntityRow = {
+      id: newId(),
+      type: "feature",
+      key,
+      title: fields?.title ?? row.title,
+      body: fields?.body ?? null,
+      attrs: { ...(fields?.attrs ?? {}), ...(effort != null ? { effort } : {}), ...(confidence != null ? { confidence } : {}) },
+      status: "proposed",
+      // Accepted for the person who approved the order, as a person's write: theirs, locked.
+      origin: "user",
+      locked: true,
+      locked_by: by,
+      locked_at: at,
+      confidence: null,
+      run_id: runId,
+      created_at: at,
+      updated_at: at,
+    };
+    s.entities.push(entity);
+    if (proposal) Object.assign(proposal, { status: "accepted", decided_by: by, decided_at: at, payload: { ...proposal.payload, note: ADDED_BY_ORDER_NOTE } });
+    added.push(entity);
+  }
+  for (const entity of added) {
+    const row = rows.find((r) => r.key === entity.key)!;
+    const goals = new Map<string, Attrs>();
+    const entry = scope.find((f) => f.key === entity.key);
+    const named = [...row.explanation.goals, ...(entry?.goals ?? []).map((x) => ({ ...x, goal: x.key }))];
+    // A 0 from either source wins: the feature does not serve that goal.
+    const zero = new Set(named.filter((g) => g.goal && g.contribution === 0).map((g) => g.goal));
+    for (const g of named) {
+      const c = contributionOf(g.contribution);
+      if (!g.goal || zero.has(g.goal)) continue;
+      if (c == null || ("contribution_assumed" in g && g.contribution_assumed)) {
+        if (!goals.has(g.goal)) goals.set(g.goal, ASSUMED_LINK);
+      } else if ((goals.get(g.goal) ?? ASSUMED_LINK) === ASSUMED_LINK) goals.set(g.goal, { contribution: c });
+    }
+    const links = [
+      ...[...goals].map(([goal, attrs]) => ({ target: s.entities.find((e) => e.type === "goal" && e.key === goal), type: "supports" as const, attrs: { ...attrs } })),
+      ...[...new Set(row.depends_on)].filter((d) => d !== entity.key).sort().map((dep) => ({ target: s.entities.find((e) => e.type === "feature" && e.key === dep), type: "depends_on" as const, attrs: {} })),
+    ];
+    for (const { target, type, attrs } of links) {
+      if (!target || target.status === "rejected") continue;
+      if (s.edges.some((e) => e.src_id === entity.id && e.dst_id === target.id && e.type === type)) continue;
+      // Proposed by the run (Oracle), unlocked: a person confirms or declines it on the baseline.
+      s.edges.push({
+        id: newId(),
+        src_id: entity.id,
+        dst_id: target.id,
+        type,
+        attrs,
+        status: "proposed",
+        origin: "agent",
+        locked: false,
+        locked_by: null,
+        locked_at: null,
+        confidence: null,
+        run_id: runId,
+        created_at: at,
+        updated_at: at,
+      });
+    }
+  }
+  return added.length;
+}
+
 /** A person's new link, as service.create_edge: both ends exist, a supports link carries its contribution 0-3. */
 function createEdge(s: BaselineState, input: Schemas["EdgeCreate"], userId: string): EdgeRow {
   if (!s.entities.some((e) => e.id === input.src_id) || !s.entities.some((e) => e.id === input.dst_id)) {
