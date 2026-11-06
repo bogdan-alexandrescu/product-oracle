@@ -24,8 +24,8 @@ import { expect, test } from "./test";
 
 const WEB = path.resolve(__dirname, "..");
 
-/** The old names as words of their own (an id joined to "_ / . : -" is not one). */
-const OLD = /desired state|current state|(?<![\w/.:\-])baseline(?![\w/.:\-])/i;
+/** The old names as words of their own (an id joined to "_ / . : -" is not one; a full stop ends a sentence unless a word follows it). */
+const OLD = /desired state|current state|(?<![\w/.:\-])baseline(?![\w/:\-]|\.\w)/i;
 /**
  * A measure's starting value: "Baseline value", "Baseline 12", a table's "| Baseline |" column,
  * a prediction "above its baseline" (or "{} its baseline", the word filled in), "between the baseline and" the prediction, "the metric's

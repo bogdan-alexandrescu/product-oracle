@@ -4,8 +4,8 @@ import { login } from "./helpers";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 
 /*
- * The scheduled Baseline rebuild (oracle.rituals.rebuild): a built-in ritual, off by default,
- * that starts B1's Build the baseline run on its cadence under H11 "Keep the baseline current".
+ * The scheduled Ground Truth rebuild (oracle.rituals.rebuild): a built-in ritual, off by default,
+ * that starts B1's Build the Ground Truth run on its cadence under H11 "Keep the Ground Truth current".
  * Driven through the UI on the mock layer (lib/api/mock/rituals.ts): an owner turns it on and
  * prepares the next occurrence now, as the ticker would at the first Monday 09:00. Made-up
  * people only. Each test's card: protects=...; fails_when=...; no_claim=...

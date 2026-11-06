@@ -151,12 +151,12 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
         case "delete_item":
             return f"moved {x} to Trash"
         # edit-goals-prds: a goal archived, moved to Trash or restored (oracle.simple.goal_asks).
-        case "archive_goal":
-            return f"archived the goal {_quoted(target.get('title')) or 'a goal'}"
-        case "delete_goal":
-            return f"moved the goal {_quoted(target.get('title')) or 'a goal'} to Trash"
-        case "unarchive_goal":
-            return f"restored the goal {_quoted(target.get('title')) or 'a goal'}"
+        # The goal by its title, or else by the name the reader knows it by.
+        case "archive_goal" | "delete_goal" | "unarchive_goal":
+            verb = {"archive_goal": "archived", "delete_goal": "moved"}.get(op, "restored")
+            goal = _quoted(target.get("title")) or item
+            tail = " to Trash" if op == "delete_goal" else ""
+            return f"{verb} the goal {goal}{tail}" if goal else f"{verb} a goal{tail}"
     return f"changed {x}"
 
 

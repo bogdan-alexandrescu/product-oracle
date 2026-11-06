@@ -23,8 +23,9 @@ from oracle.jobs import prompting
 
 ORACLE = Path(__file__).resolve().parents[1] / "oracle"
 
-#: "Desired state", "Current state", or "baseline" as a word of its own (not part of an id).
-OLD = re.compile(r"desired state|current state|(?<![\w/.:\-])baseline(?![\w/.:\-])", re.I)
+#: "Desired state", "Current state", or "baseline" as a word of its own (not part of an id;
+#: a full stop ends a sentence unless a word or a "{}" follows it: "baseline.yaml").
+OLD = re.compile(r"desired state|current state|(?<![\w/.:\-])baseline(?![\w/:\-]|\.[\w{])", re.I)
 
 #: What may still say baseline, in the starting-value sense or as a name of the old word.
 ALLOWED = re.compile(
@@ -33,9 +34,13 @@ ALLOWED = re.compile(
             # A key result's or goal measure's starting value.
             r"baseline value",
             r"baseline or target",
-            # "its baseline" or "a baseline" only beside the measure's target or value.
-            r"(?:above|below|from|with) (?:its|a|the) baseline\b(?=,? (?:a |and |or )?(?:a )?"
-            r"(?:target|value|number|time frame)|\b(?![ ,]))",
+            # A value above or below its baseline (a prediction's or a measure's).
+            r"(?:above|below) (?:its|a|the) baseline\b",
+            # "from/with its baseline" or "a baseline" only beside the measure's target or
+            # value, or as a metric's: "from the baseline." alone names the graph.
+            r"(?:from|with) (?:its|a|the) baseline\b(?=,? (?:a |and |or )?(?:a )?"
+            r"(?:target|value|number|time frame))",
+            r"(?:metric|measure|key result|KR) (?:from|with) (?:its|a|the) baseline\b",
             r"(?:the KR's|the metric's|the measure's|goal's|key result's) baseline\b"
             r"(?! (?:item|feature|graph|page|build|rebuild|proposal|change))",
             r"metric, baseline, target",

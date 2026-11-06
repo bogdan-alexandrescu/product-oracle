@@ -58,7 +58,7 @@ export interface RitualsContext {
   marketWrites: () => boolean;
   /** H11 "Run rituals" at Act within limits: its max_run_usd (summaries._oracle_acts), else null. */
   ritualsActCap?: () => number | null;
-  /** The Baseline rebuild (rebuild.py): H11 "Keep the baseline current" is at Draft or above. */
+  /** The Ground Truth rebuild (rebuild.py): H11 "Keep the Ground Truth current" is at Draft or above. */
   baselineStarts?: () => boolean;
   /** B1's build at the ritual's knobs (rebuild.estimate_usd): $7.00, unless a scenario prices it otherwise. */
   rebuildUsd?: () => number;

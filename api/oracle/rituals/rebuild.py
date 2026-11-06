@@ -1,7 +1,7 @@
-"""The Baseline rebuild ritual: B1's Build the baseline run on the ritual clock (the
+"""The Ground Truth rebuild ritual: B1's Build the Ground Truth run on the ritual clock (the
 ``baseline_rebuild`` kind, seeded paused).
 
-H11's "Keep the baseline current" (``baseline``) decides what Oracle does when an
+H11's "Keep the Ground Truth current" (``baseline``) decides what Oracle does when an
 occurrence falls due:
 
 - **Observe**: it only reminds. No run; the pre-read's Inbox row reaches the attendees
