@@ -180,6 +180,7 @@ import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStray
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, CROWDED_MILESTONES_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
+import { knowPrdOrder } from "./prd-rank";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, knowGoalMapItems, ownPrd, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, shownDates, storedDates } from "./simple-roadmap";
@@ -4382,7 +4383,7 @@ function sectionLayer(db: Db, versionId: string, key: string): Schemas["SectionO
  * its position first; then, without one, the goal order of the goal most of its roadmap items
  * serve (none last; a tie to the goal first); then its title (case-folded, then as written); then id.
  */
-function prdOrder(db: Db): Map<string, number> {
+export function prdOrder(db: Db): Map<string, number> {
   // The one goal order, as Simple reads it (simpleRoute), read here without naming it for the other routes.
   const baselineGoals = db.baseline.entities.filter((e) => e.type === "goal");
   const goals = sortGoals([...baselineGoals, ...(db.simple_roadmap ? bucketGoalsInOrder(db.simple_roadmap, new Set(baselineGoals.map((e) => e.key))) : [])]);
@@ -5869,6 +5870,8 @@ async function route(db: Db, req: Request): Promise<Response> {
 
   if (p[0] === "healthz") return json(200, { status: "ok", database: "mock" });
   if (p[0] !== "v1" && p[0] !== "uploads") return notFound("Route");
+  // prd-order: every route that lists PRDs ranks them in the company PRD order (./prd-rank.ts).
+  knowPrdOrder(() => ({ order: prdOrder(db), docs: db.documents }));
 
   if (p[1] === "auth" && p[2] === "login" && m === "POST") {
     const { email, password } = await body<Schemas["LoginRequest"]>();
@@ -7191,8 +7194,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       .filter((d) => canSee(me.role, d.visibility))
       .map((d) => documentSummary(db, d, ranks))
       .filter((d) => !kind || d.kind === kind);
-    // prd-order: PRDs alone in the company PRD order.
+    // As list_documents: newest first (updated_at); prd-order: PRDs alone in the company PRD order.
     if (kind === "prd") out.sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity));
+    else out.sort((a, b) => String(b.updated_at ?? "").localeCompare(String(a.updated_at ?? "")));
     return json(200, out);
   }
 

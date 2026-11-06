@@ -1271,7 +1271,7 @@ async def build(
 
     track_prd = {e.track.id: e.track.prd_document_id for e in read.entries if e.track}
     # roadmap-keydates: the key dates read with the PRDs' milestones, as priorities reads them.
-    kd_prds = key_dates.key_date_prds(principal, kd_docs, read.entries)
+    kd_prds = await key_dates.key_date_prds(db, principal, kd_docs, read.entries)
     views = await plans.views(
         db,
         {e.prd.id for e in shown if e.prd}

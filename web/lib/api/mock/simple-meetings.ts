@@ -52,6 +52,7 @@ import { changeSentence } from "./simple-change-words";
 import { mockNowMs } from "./clock";
 import { companyDateInWords } from "./connections";
 import { stableUuid } from "./ids";
+import { byPrdRank, prdRanker } from "./prd-rank";
 import { nextOccurrence, type RitualsDb } from "./rituals";
 import { publishOnePager, type OnePagerDb } from "./simple-one-pager";
 import { APPROVED_KEY, draftAct, draftRoadmapOut } from "./meeting-draft";
@@ -1196,8 +1197,11 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
     // A decided question taken outside meetings is listed here with its code and answer (open ones wait above).
     other: [...(meetingQ ? [] : decidedOutsideRows(ctx, qd, qs)), ...others.map((d) => row(ctx, d))],
     // qa4-simple-decide-37 (as decisions_page: both from the PRDs the reader reads): every PRD whose questions are shown.
+    // prd-order (as decisions_page): the PRD filter lists them in the company PRD order.
     prds: [...new Map([...ps.map((x) => [x.slug, x.title] as const), ...questionsOut(ctx, qd, null).map((x) => [x.prd.slug, x.prd.title] as const)])]
-      .sort((a, b) => a[1].localeCompare(b[1])).map(([id, title]) => ({ id, title })),
+      .map(([slug, title]) => ({ slug, title }))
+      .sort(byPrdRank(prdRanker()))
+      .map(({ slug, title }) => ({ id: slug, title })),
     // goal-order (as decisions_page): the Goal filter lists the goals in the one goal order.
     goals: [...goals.values()].sort((a, b) => goalRank(a.key) - goalRank(b.key) || a.key.localeCompare(b.key)).map((g) => ({ id: g.key, title: g.title })),
     // qa-simple-decide-11: the meeting's title carries its day (the company's zone) and,
@@ -1275,8 +1279,8 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
   }
   if (p[3] === "options" && method === "GET") {
     const prdQ = q.get("prd");
-    // As the API's, every PRD by its title.
-    const list = (prdQ ? ps.filter((x) => x.slug === prdQ || x.id === prdQ) : [...ps]).sort((a, b) => a.title.localeCompare(b.title));
+    // prd-order (as the API's): every PRD in the company PRD order.
+    const list = (prdQ ? ps.filter((x) => x.slug === prdQ || x.id === prdQ) : [...ps]).sort(byPrdRank(prdRanker()));
     if (prdQ && !list.length) return json(404, { detail: "No such PRD" });
     const occQ = q.get("occurrence");
     const occ = occQ ? upcoming(ctx, db, occQ)[0] : null;

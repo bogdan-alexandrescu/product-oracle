@@ -259,5 +259,9 @@ async def staged_rows(db: AsyncSession) -> list[InboxStaged]:
                 draft_job_status=job.status if job else None,
             )
         )
-    out.sort(key=lambda r: r.title.lower())
+    # prd-order: PRDs in the company PRD order, other documents after them by title.
+    from oracle.docs.prd_order import prd_ranks
+
+    ranks = await prd_ranks(db)
+    out.sort(key=lambda r: (ranks.get(r.document_id, len(ranks) + 1), r.title.lower()))
     return [r for r in out if r.count or r.gone_count]

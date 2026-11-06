@@ -28,8 +28,7 @@ export function sortPrds<T extends OrderedPrd>(prds: readonly T[]): T[] {
 
 /** A PRD's place in the company order by its slug or id, read from the PRDs list; null until it loads or for a PRD it does not list. */
 export function usePrdOrder(): (prd: { slug?: string | null; id?: string | null }) => number | null {
-  const q = useQuery("prd-order", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
-  const data = q.data;
+  const data = usePrds().data;
   return useCallback((prd) => data?.find((d) => d.slug === prd.slug || d.id === prd.id)?.order ?? null, [data]);
 }
 
@@ -37,4 +36,15 @@ export function usePrdOrder(): (prd: { slug?: string | null; id?: string | null 
 export function byPrdOrderOf(orderOf: ReturnType<typeof usePrdOrder>) {
   return (a: { slug?: string | null; id?: string | null; title: string }, b: { slug?: string | null; id?: string | null; title: string }) =>
     byPrdOrder({ title: a.title, order: orderOf(a) }, { title: b.title, order: orderOf(b) });
+}
+
+/** A picker of documents: the PRDs (`prds`, the kind=prd list) in the one PRD order first, then every other document of `all` in its own order (roadmaps keep their group); none until both load. */
+export function prdsFirst<T extends OrderedPrd & { kind?: string | null }>(prds: readonly T[] | null | undefined, all: readonly T[] | null | undefined): T[] {
+  if (!prds || !all) return [];
+  return [...sortPrds(prds), ...all.filter((d) => (d.kind ?? "prd") !== "prd")];
+}
+
+/** The PRDs list (kind=prd, each with its `order`), the one query usePrdOrder reads too. */
+export function usePrds() {
+  return useQuery("prd-order", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
 }
