@@ -229,7 +229,7 @@ export function recheck(db: RunsDb, scope: StoredScope) {
     excluded: scope.features.length - included.length,
     problems,
     flags,
-    titles: Object.fromEntries(scope.features.filter((f) => f.title && f.title !== f.key).map((f) => [f.key, f.title])),
+    titles: Object.fromEntries(scope.features.filter((f) => f.title).map((f) => [f.key, f.title])),
   };
   const { run, cp } = checkpointOf(db, scope);
   const seg = run?.segments.find((s) => s.seq === scope.segment_seq);
