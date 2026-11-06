@@ -76,6 +76,7 @@ from oracle.simple.schemas import (
     OnePagerBlock,
     OnePagerDraft,
     OnePagerFix,
+    OnePagerFixed,
     OnePagerFixProposal,
     OnePagerInReview,
     OnePagerItem,
@@ -1287,8 +1288,9 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
     unseen = await drafts._live_changes(db, d) if d is not None and not sees else []
     unseen = [c for c in unseen if c.op == "edit_line"]
     not_shown = [c for c in proposals if not sees_change(principal, c)]
+    number_live = [c for c in live if c.op == NUMBER_OP]
     live = [c for c in live if c.op == "edit_line"]
-    sids = {c.session_id for c in live if c.session_id}
+    sids = {c.session_id for c in live + number_live if c.session_id}
     sessions = (
         {s.id: s for s in await db.scalars(select(SimpleSession).where(SimpleSession.id.in_(sids)))}
         if sids
@@ -1372,6 +1374,23 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
         )
 
     notes = [note(c, "change") for c in live] + [note(c, "proposal") for c in shown]
+
+    def fixed_out(c: SimpleChange) -> OnePagerFixed:
+        s = sessions.get(c.session_id) if c.session_id else None
+        key = str(c.target.get("section") or "")
+        sec = (c.after.get("sections") or {}).get(key) or {}
+        heading = str(sec.get("heading") or key)
+        return OnePagerFixed(
+            change_id=c.id,
+            words=f"Fixed: set to {c.after.get('number') or ''} in “{heading}”",
+            can_undo=c.by == me
+            and s is not None
+            and s.closed_at is None
+            and (s.last_change_at or s.started_at) > now - IDLE,
+        )
+
+    # The draft's number fixes ("Needs a look"), each with its Undo while it can be undone.
+    fixed = [fixed_out(c) for c in number_live]
     proposed = {n.line_id for n in notes if n.kind == "proposal"}
     blocks = []
     for spec in b.specs:
@@ -1589,6 +1608,7 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
         and _me(principal) is not None
         and has_role(principal.role, "commenter"),
         can_start=starts(principal, w),
+        fixed=fixed,
         needs_look=([look_out(x) for x in looks] if owns(principal, w, owner_id) else [])
         + (
             [OnePagerLook(kind="check", text=t) for t in quality.said(b.row.checks)]
@@ -2184,13 +2204,23 @@ def patched_markdown(
         head = (headings or {}).get(sec.section_key)
         if head is None or head == sec.heading:
             continue
-        key = re.escape(sec.section_key)
-        line = re.compile(
-            rf"^(#{{1,6}}[ \t]+){re.escape(sec.heading)}([ \t]*\{{#{key}\}}[ \t]*)$", re.M
-        )
-        md, n = line.subn(lambda m, h=head: m.group(1) + h + m.group(2), md, count=1)
+        key, said = re.escape(sec.section_key), re.escape(sec.heading)
+        # An ATX heading ("## Later · 8 items {#later}") or a setext one (its words over a
+        # line of "=" or "-"), its key kept.
+        atx = re.compile(rf"^(#{{1,6}}[ \t]+){said}([ \t]*\{{#{key}\}}[ \t]*)$", re.M)
+        setext = re.compile(rf"^(){said}([ \t]*\{{#{key}\}}[ \t]*\n(?:=+|-+)[ \t]*)$", re.M)
+        n = 0
+        for line in (atx, setext):
+            md, n = line.subn(lambda m, h=head: m.group(1) + h + m.group(2), md, count=1)
+            if n:
+                break
         if not n:
-            raise ChangeError(409, unpatched.format(sec.heading))
+            raise ChangeError(
+                409,
+                f"The heading “{sec.heading}” is not in the PRD's text as a heading with its"
+                f" key {{#{sec.section_key}}}, so its new words could not be written; open the"
+                " detailed view to edit it",
+            )
     for sec in sections:
         new = patched.get(sec.section_key)
         if new is None or new == sec.body_md:

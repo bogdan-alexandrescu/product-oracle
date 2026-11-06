@@ -32006,6 +32006,22 @@ export interface components {
             can_undo: boolean;
         };
         /**
+         * OnePagerFixed
+         * @description A number fix (set_section_number) in the PRD's working draft, read from the draft's
+         *     live changes: its words ('Fixed: set to 6 in “Later · 6 items”') and its Undo.
+         */
+        OnePagerFixed: {
+            /**
+             * Change Id
+             * Format: uuid
+             */
+            change_id: string;
+            /** Words */
+            words: string;
+            /** Can Undo */
+            can_undo: boolean;
+        };
+        /**
          * OnePagerFlow
          * @description A design bundle's flow (S10's), as the API returns it; none yet: null.
          */
@@ -32261,6 +32277,11 @@ export interface components {
              * @default []
              */
             needs_look: components["schemas"]["OnePagerLook"][];
+            /**
+             * Fixed
+             * @default []
+             */
+            fixed: components["schemas"]["OnePagerFixed"][];
         };
         /**
          * OnePagerRemindOut
