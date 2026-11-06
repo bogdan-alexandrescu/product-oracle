@@ -23,9 +23,9 @@ test("a PRD's goal check names the goal it serves by its name, with the code bes
   await expect(rulesSaid(page)).toContainText("serves a confirmed goal: Raise activation (g.activation)");
 });
 
-test("a proposed goal is named too, never by its code alone", async ({ page }) => {
+test("a PRD whose goals are proposed says so as the API does, never by a bare code", async ({ page }) => {
   await openQuality(page, "/documents/online-deposits/v/3/quality");
   await page.locator('[data-testid="criterion-row"][data-key="goal_alignment"]').click();
-  await expect(rulesSaid(page)).toContainText("cites Fewer missed visits (G4), still proposed");
+  await expect(rulesSaid(page)).toContainText("The PRD's goals are proposed, not confirmed");
   await expect(rulesSaid(page)).not.toContainText("cites G4");
 });

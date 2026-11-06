@@ -36,6 +36,15 @@ def _sources(*lines: str) -> str:
     return replace(DRAFT, "- Calendar survey, as of September.\n", "\n".join(lines) + "\n")
 
 
+def _cited(md: str, *ids: str) -> str:
+    """``md`` with more citations in its front matter."""
+    more = "".join(
+        f"  - id: {i}\n    source: web\n    ref: https://example.com/{i}\n    title: Note {i}\n"
+        for i in ids
+    )
+    return replace(md, "citations:\n", "citations:\n" + more)
+
+
 def _line_of(md: str, text: str) -> int:
     return next(i for i, line in enumerate(md.splitlines(), start=1) if text in line)
 
@@ -72,16 +81,53 @@ def test_clean_sources_raise_nothing():
         "- Calendar survey (web, as of Sep 30)",
         "- Alerting design notes (GitHub, Oct 2)",
         "- Activation (G-A1): 40% of teams plan together weekly",
+        # Words that look like a key and are none of the draft's citations.
+        "- Checkout latency p95, 420 ms (Grafana, Oct 2)",
+        "- p99: 1.2 s over September (Datadog, Oct 1)",
+        "- Pricing page v2, launch notes (web, Oct 2)",
+        "- Test plan for x86, arm64 (Notion)",
+        "- [Alerting runbook](https://example.com/runbook-notes.md) (GitHub, Oct 2)",
+        # A title that is a file name or carries a tag, with its place and date.
+        "- Roadmap 2027.xlsx (Google Drive, Oct 2)",
+        "- Design review [DRAFT] (Notion, Oct 3)",
+        # Lowercase product names and bare domains.
+        "- next.js upgrade notes (web, Oct 1)",
+        "- example.com pricing page (web, Oct 2)",
+        "- Calendar survey (example.com/survey/results.html, Oct 2)",
     )
+    md = _cited(md, "c7", "c45")
     assert source_words.check(parse_draft(md).sections, md) == []
 
 
+def test_a_key_counts_only_when_it_is_one_of_the_drafts_citations_and_names_the_source():
+    md = _cited(
+        _sources(
+            "- c9: a key the draft never cites",
+            "- Survey results (web, Oct 2), see c7 for more",
+            "- Survey results (c7)",
+            "- c45 , Survey results",
+        ),
+        "c7",
+        "c45",
+    )
+    [warning] = source_words.check(parse_draft(md).sections, md)
+    message = warning.message
+    assert f"line {_line_of(md, 'c9:')}" not in message
+    assert f"line {_line_of(md, 'see c7')}" not in message
+    assert f"line {_line_of(md, '(c7)')}: 'c7' is a citation key" in message
+    assert f"line {_line_of(md, 'c45 ,')}: 'c45 ,' is a citation key" in message
+
+
 def test_a_citation_key_a_file_path_and_a_tag_in_sources_are_flagged_with_their_line():
-    md = _sources(
-        "- c7, github: example-org/web docs/alerting.md",
-        "- c45: upload, pricing-notes.md",
-        "- [BE] Billing export plan",
-        "- Calendar survey (web, as of Sep 30)",
+    md = _cited(
+        _sources(
+            "- c7, github: example-org/web docs/alerting.md",
+            "- c45: upload, pricing-notes.md",
+            "- [BE] Billing export plan",
+            "- Calendar survey (web, as of Sep 30)",
+        ),
+        "c7",
+        "c45",
     )
     [warning] = source_words.check(parse_draft(md).sections, md)
     assert warning.code == "source_not_named"
@@ -94,11 +140,16 @@ def test_a_citation_key_a_file_path_and_a_tag_in_sources_are_flagged_with_their_
     )
     assert f"line {first}" in message and f"line {second}" in message
     assert f"line {third}" in message
-    assert "citation key" in message and "file path" in message and "tag" in message
     assert f"line {_line_of(md, 'Calendar survey (web')}" not in message
-    # The message never repeats the raw tokens a person must not read.
-    for raw in ("c7", "c45", "alerting.md", "pricing-notes.md", "[BE]"):
-        assert raw not in message, raw
+    # Each flag names the token and its line, so the writer's retry can fix it.
+    for n, said in (
+        (first, "'c7,' is a citation key; name the source by its title"),
+        (first, "'docs/alerting.md' is a file path; name the source by its title"),
+        (second, "'c45:' is a citation key; name the source by its title"),
+        (second, "'pricing-notes.md' is a file name; name the source by its title"),
+        (third, "'[BE]' is a tag; name the source by its title"),
+    ):
+        assert f"line {n}: {said}" in message, said
     assert "title in plain words" in message
 
 
@@ -108,7 +159,7 @@ def test_a_code_without_its_name_in_sources_or_a_data_points_table_is_flagged():
         "",
         "| Value | Measures | Goal |",
         "|---|---|---|",
-        "| 40% | Weekly planners | G-A1 |",
+        "| 40% | 120 | G-A1 |",
         "",
         "- KR 1.1 rose to 40% by Oct 31",
         "- F-25b ships after the beta",
@@ -117,7 +168,20 @@ def test_a_code_without_its_name_in_sources_or_a_data_points_table_is_flagged():
     [warning] = warnings
     assert warning.code == "source_not_named"
     for code, text in (("G-A1", "| 40% |"), ("KR 1.1", "KR 1.1 rose"), ("F-25b", "F-25b ships")):
-        assert f"line {_line_of(md, text)} ({code} without its name)" in warning.message, code
+        line = _line_of(md, text)
+        said = f"line {line}: '{code}' has no name; write it with its name"
+        assert said in warning.message, code
+
+
+def test_a_code_in_its_own_cell_is_named_by_a_name_in_the_same_row():
+    md = _sources(
+        "### Data points {#sources-data}",
+        "",
+        "| Goal | Name | Value |",
+        "|---|---|---|",
+        "| G-A1 | Grow activation | 40% |",
+    )
+    assert source_words.check(parse_draft(md).sections, md) == []
 
 
 def test_an_issue_named_by_its_number_in_the_body_is_flagged_with_its_line():
@@ -126,15 +190,38 @@ def test_an_issue_named_by_its_number_in_the_body_is_flagged_with_its_line():
     assert warning.code == "issue_number"
     assert warning.section_keys == ["problem"]
     assert f"Problem, line {_line_of(md, 'be#1357')}" in warning.message
-    assert "be#1357" not in warning.message
     assert "by what it is" in warning.message
 
 
 def test_letter_suffixed_and_key_result_codes_need_names_in_the_body():
-    assert named_codes.findings("F-25b ships first.").unnamed == ["F-25b"]
-    assert named_codes.findings("KR 1.1 moves.").unnamed == ["KR 1.1"]
-    assert named_codes.findings("KR 1.1 Weekly planners moves.").unnamed == []
-    assert named_codes.findings("the bulk import slice (F-25b) ships.").unnamed == []
+    assert named_codes.findings("F-25b ships first.", prd=True).unnamed == ["F-25b"]
+    assert named_codes.findings("KR 1.1 moves.", prd=True).unnamed == ["KR 1.1"]
+    assert named_codes.findings("KR 1.1 Weekly planners moves.", prd=True).unnamed == []
+    assert named_codes.findings("the bulk import slice (F-25b) ships.", prd=True).unnamed == []
+
+
+def test_key_result_and_slice_codes_leave_a_roadmap_draft_alone():
+    md = (
+        "---\ndocument: plan\ntitle: Plan\n---\n\n# Plan {#title}\n\n"
+        "## Now {#now}\n\nKR 1.1 moves first, then F-25b ships.\n"
+    )
+    warnings = draft_checks.run_warnings("roadmap", parse_draft(md).sections, md)
+    assert [w for w in warnings if w.code in draft_checks.SENT_BACK] == []
+    assert named_codes.findings("KR 1.1 moves, then F-25b ships.").unnamed == []
+
+
+def test_the_issue_line_names_the_token_too():
+    md = replace(DRAFT, "Teams miss shared deadlines.", "Teams miss shared deadlines (be#1357).")
+    [warning] = source_words.check(parse_draft(md).sections, md)
+    assert f"line {_line_of(md, 'be#1357')}: 'be#1357'" in warning.message
+
+
+def test_the_send_back_subject_says_what_the_warnings_are():
+    assert workflow.warning_subject(["unnamed_code"]) == "codes"
+    assert workflow.warning_subject(["source_not_named"]) == "source lines"
+    assert workflow.warning_subject(["issue_number"]) == "issue numbers"
+    both = workflow.warning_subject(["source_not_named", "issue_number"])
+    assert both == "source lines and issue numbers"
 
 
 def test_a_prd_draft_runs_the_source_check_and_sends_it_back():
