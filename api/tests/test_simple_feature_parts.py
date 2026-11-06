@@ -1,4 +1,4 @@
-"""feature-parts: a feature made part of another (``set_parent``, one level) and any open
+"""feature-parts: a feature made part of another (``set_parent``, any depth) and any open
 feature merged into another (``merge_item`` with ``target.into_id``), through Simple's change
 engine (``POST /v1/simple/changes``). Against Postgres.
 
@@ -11,9 +11,9 @@ Test cards (protects / fails_when / no_claim):
   part keeps its window estimate, or Undo leaves it in; no_claim=the web.
 - test_set_parent_stale_roles_and_bad_parents: protects=a stale ``before`` is 409 with the
   stored key, a commenter's is a proposal (nothing changes), a viewer is refused (403),
-  and the item itself, an item of another roadmap, an unknown or cut key and nesting (the
-  parent is a part, or the item has parts) are 422; fails_when=any of these is let
-  through; no_claim=meetings.
+  and the item itself, an item of another roadmap, an unknown or cut key are 422; a part
+  of a part, and a feature with parts made a part, are fine (any depth, owner's answer
+  Nov 5); fails_when=any of these is let through or refused; no_claim=meetings.
 - test_a_part_is_never_a_broken_link_against_its_parent: protects=no dependency_order flag
   between a part and its parent, either way; fails_when=the flag is raised;
   no_claim=other flags.
@@ -26,6 +26,31 @@ Test cards (protects / fails_when / no_claim):
 - test_a_merged_part_leaves_its_parent: protects=a part merged away drops its own
   parent_key, so its parent lists it no more; fails_when=the parent still lists it;
   no_claim=Undo (above).
+- test_parts_at_any_depth: protects=a three-level tree reads each part's ``part_of``, its
+  ``part_path`` (top first) and each parent's ``parts``; an undated part reads its nearest
+  dated ancestor's dates; no dependency_order flag against any ancestor;
+  fails_when=a level is refused or dropped, the path is short, or the part keeps its
+  window estimate; no_claim=the web's tree.
+- test_never_its_own_ancestor: protects=making a feature part of itself, its part or its
+  part's part is 422 in plain words; fails_when=a cycle is stored; no_claim=restore.
+- test_merge_into_a_part_keeps_every_part: protects=a feature with parts merged into a
+  feature that is itself a part: its parts move under the kept feature, which stays where
+  it was; merged into its own part's part, the kept feature takes the merged one's place
+  (no cycle); Undo puts every field back; fails_when=a part is left under the closed
+  feature, a cycle is stored, or Undo misses a field; no_claim=the web's fallback.
+- test_restore_a_part_keeps_its_live_parent: protects=a part restored from Trash is a
+  part of its parent again when the parent is still live (even moved meanwhile), else
+  (merged meanwhile) a feature of its own, and a restore that would close a loop clears
+  the restored feature's parent; fails_when=a part points at a closed parent or a cycle is
+  stored; no_claim=the Trash page.
+- test_cut_parts_stay_parts: protects=a cut part stays a part: its parent lists it as cut,
+  its own read keeps ``part_of``, and a cut feature can be taken out of its parent (and
+  is listed no more); fails_when=the cut part drops from its parent's list or cannot be
+  taken out; no_claim=the web.
+- test_a_part_of_a_feature_in_trash: protects=a part whose parent is in Trash reads that
+  parent as ``in_trash`` with its name and keeps the dates it read from it;
+  fails_when=``part_of`` is null or the dates fall back to the window's estimate;
+  no_claim=the Trash page.
 """
 
 from datetime import date
@@ -92,8 +117,9 @@ class Parts:
         r = await client.post(f"{CHANGES}/{change['id']}/undo", headers=self.ctx.as_("owner"))
         assert r.status_code == 201, r.text
 
-    def ref(self, key: str) -> dict:
-        return {"id": self.ids[key], "code": "", "title": key.title()}
+    def ref(self, key: str, **kw) -> dict:
+        return {"id": self.ids[key], "code": "", "title": key.title(), "cut": False,
+                "in_trash": False} | kw  # fmt: skip
 
 
 async def test_set_parent_applies_reads_and_undoes(client):
@@ -145,13 +171,14 @@ async def test_set_parent_stale_roles_and_bad_parents(client):
     for key, parent in (("p", "p"), ("p", "z"), ("p", "nope")):
         r = await w.parent(client, key, None, parent)
         assert r.status_code == 422, (key, parent, r.text)
-    # Nesting: one level only.
+    # Any depth: a part of a part, and a feature with parts made a part.
     assert (await w.parent(client, "p", None, "a")).status_code == 201
     r = await w.parent(client, "c", None, "p")
-    assert r.status_code == 422, r.text
-    assert "part" in r.json()["detail"]
+    assert r.status_code == 201, r.text
     r = await w.parent(client, "a", None, "b")
-    assert r.status_code == 422, r.text
+    assert r.status_code == 201, r.text
+    assert (await w.parent(client, "a", "b", None)).status_code == 201
+    assert (await w.parent(client, "c", "p", None)).status_code == 201
     # A cut item is no parent.
     r = await client.post(CHANGES, headers=w.ctx.as_("owner"), json={
         "op": "set_status", "target": {"item_id": w.ids["b"]}, "before": {"status": "planned"},
@@ -218,7 +245,8 @@ async def test_merge_any_open_item(client):
     items = await w.read(client)
     c, p, own, d = items["c"], items["p"], items["own"], items["d"]
     # merged_into keeps its key as the code when the item has none (S7, as before).
-    assert c["status"] == "merged" and c["merged_into"] == {**w.ref("p"), "code": "p"}
+    assert c["status"] == "merged"
+    assert c["merged_into"] == {"id": w.ids["p"], "code": "p", "title": "P"}
     assert c["parent_key"] is None and c["parts"] == []
     # The kept item was c's part: it is a part no more, and takes c's other part.
     assert p["parent_key"] is None and p["part_of"] is None
@@ -252,3 +280,149 @@ async def test_a_merged_part_leaves_its_parent(client):
     # Into another roadmap's item: refused.
     r = await w.merge(client, "c", "z")
     assert r.status_code == 422, r.text
+
+
+ITEMS = "/v1/simple/roadmap/items"
+
+
+async def test_parts_at_any_depth(client):
+    w = await Parts().build(await make_people())
+    # a (dated) > p (undated) > c (undated) > d (dated, depends on a).
+    for key, parent in (("p", "a"), ("c", "p"), ("d", "c")):
+        r = await w.parent(client, key, None, parent)
+        assert r.status_code == 201, (key, r.text)
+    items = await w.read(client)
+    a, p, c, d = items["a"], items["p"], items["c"], items["d"]
+    assert a["parts"] == [w.ref("p")] and p["parts"] == [w.ref("c")]
+    assert c["parts"] == [w.ref("d")]
+    assert c["part_of"] == w.ref("p")
+    assert c["part_path"] == [w.ref("a"), w.ref("p")]
+    assert d["part_path"] == [w.ref("a"), w.ref("p"), w.ref("c")]
+    assert a["part_path"] == [] and a["part_of"] is None
+    # c has no dates and neither has p: c reads a's, its nearest dated ancestor's.
+    assert c["start"] == a["start"] and c["end"] == a["end"] and c["estimated"] is False
+    assert d["start"]["date"] == "2026-10-10"
+    # d depends on a, three levels up: never a broken link against an ancestor.
+    assert d["flags"] == []
+
+
+async def test_never_its_own_ancestor(client):
+    w = await Parts().build(await make_people())
+    assert (await w.parent(client, "p", None, "a")).status_code == 201
+    assert (await w.parent(client, "c", None, "p")).status_code == 201
+    for key, parent, before in (("a", "c", None), ("a", "p", None), ("p", "c", "a")):
+        r = await w.parent(client, key, before, parent)
+        assert r.status_code == 422, (key, parent, r.text)
+        assert r.json()["detail"] == (
+            f"{key.title()} cannot be part of {parent.title()}: "
+            f"{parent.title()} is already one of its parts"
+        )
+    items = await w.read(client)
+    assert items["a"]["parent_key"] is None and items["p"]["parent_key"] == "a"
+
+
+async def test_merge_into_a_part_keeps_every_part(client):
+    w = await Parts().build(await make_people())
+    # a > b; c > p, own. c merges into b, itself a part.
+    for key, parent in (("b", "a"), ("p", "c"), ("own", "c")):
+        assert (await w.parent(client, key, None, parent)).status_code == 201
+    before = await w.read(client)
+    r = await w.merge(client, "c", "b")
+    assert r.status_code == 201, r.text
+    merge = r.json()["change"]
+    items = await w.read(client)
+    assert items["b"]["parent_key"] == "a" and items["b"]["part_path"] == [w.ref("a")]
+    assert items["b"]["parts"] == [w.ref("p"), w.ref("own")]
+    assert items["p"]["part_path"] == [w.ref("a"), w.ref("b")]
+    assert items["c"]["parts"] == [] and items["c"]["status"] == "merged"
+    await w.undo(client, merge)
+    items = await w.read(client)
+    for key in ("a", "b", "c", "p", "own"):
+        for f in ("status", "parent_key", "part_of", "parts", "part_path"):
+            assert items[key][f] == before[key][f], (key, f)
+
+    # Into its own part's part: a > b > own; a merges into own, which takes a's place.
+    w = await Parts().build(await make_people())
+    for key, parent in (("b", "a"), ("own", "b"), ("p", "a")):
+        assert (await w.parent(client, key, None, parent)).status_code == 201
+    r = await w.merge(client, "a", "own")
+    assert r.status_code == 201, r.text
+    items = await w.read(client)
+    assert items["own"]["parent_key"] is None and items["own"]["part_path"] == []
+    assert items["own"]["parts"] == [w.ref("b"), w.ref("p")]
+    assert items["b"]["parent_key"] == "own" and items["p"]["parent_key"] == "own"
+    assert items["b"]["parts"] == []
+
+
+async def test_restore_a_part_keeps_its_live_parent(client):
+    w = await Parts().build(await make_people())
+    owner = w.ctx.as_("owner")
+    # p is part of a; p goes to Trash; a moves under b meanwhile: p comes back under a.
+    assert (await w.parent(client, "p", None, "a")).status_code == 201
+    assert (await client.delete(f"{ITEMS}/{w.ids['p']}", headers=owner)).status_code == 200
+    assert (await w.read(client))["a"]["parts"] == []
+    assert (await w.parent(client, "a", None, "b")).status_code == 201
+    r = await client.post(f"{ITEMS}/{w.ids['p']}/restore", headers=owner)
+    assert r.status_code == 200, r.text
+    items = await w.read(client)
+    assert items["p"]["parent_key"] == "a"
+    assert items["p"]["part_path"] == [w.ref("b"), w.ref("a")]
+
+    # c is part of p; c goes to Trash; p is merged into own meanwhile: c comes back on its own.
+    assert (await w.parent(client, "c", None, "p")).status_code == 201
+    assert (await client.delete(f"{ITEMS}/{w.ids['c']}", headers=owner)).status_code == 200
+    assert (await w.merge(client, "p", "own")).status_code == 201
+    r = await client.post(f"{ITEMS}/{w.ids['c']}/restore", headers=owner)
+    assert r.status_code == 200, r.text
+    items = await w.read(client)
+    assert items["c"]["parent_key"] is None and items["c"]["part_of"] is None
+    assert w.ref("c") not in items["own"]["parts"]
+
+    # b > a > d; a goes to Trash; b is made part of d meanwhile. Restoring a under b would
+    # close a loop (a > d > b > a): a comes back on its own.
+    w = await Parts().build(await make_people())
+    owner = w.ctx.as_("owner")
+    assert (await w.parent(client, "a", None, "b")).status_code == 201
+    assert (await w.parent(client, "d", None, "a")).status_code == 201
+    assert (await client.delete(f"{ITEMS}/{w.ids['a']}", headers=owner)).status_code == 200
+    # a is in Trash, so b may be made part of d (d's parent is not on the roadmap).
+    assert (await w.parent(client, "b", None, "d")).status_code == 201
+    r = await client.post(f"{ITEMS}/{w.ids['a']}/restore", headers=owner)
+    assert r.status_code == 200, r.text
+    items = await w.read(client)
+    assert items["a"]["parent_key"] is None
+    assert items["d"]["parent_key"] == "a" and items["b"]["parent_key"] == "d"
+    assert items["b"]["part_path"] == [w.ref("a"), w.ref("d")]
+
+
+async def test_cut_parts_stay_parts(client):
+    w = await Parts().build(await make_people())
+    for key in ("p", "c"):
+        assert (await w.parent(client, key, None, "a")).status_code == 201
+    r = await client.post(CHANGES, headers=w.ctx.as_("owner"), json={
+        "op": "set_status", "target": {"item_id": w.ids["p"]}, "before": {"status": "planned"},
+        "after": {"status": "cut"}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    items = await w.read(client)
+    assert items["p"]["status"] == "cut" and items["p"]["part_of"] == w.ref("a")
+    assert items["a"]["parts"] == [w.ref("p", cut=True), w.ref("c")]
+    # A cut feature's panel can still take it out of its parent.
+    r = await w.parent(client, "p", "a", None)
+    assert r.status_code == 201, r.text
+    items = await w.read(client)
+    assert items["p"]["part_of"] is None and items["a"]["parts"] == [w.ref("c")]
+
+
+async def test_a_part_of_a_feature_in_trash(client):
+    w = await Parts().build(await make_people())
+    assert (await w.parent(client, "p", None, "a")).status_code == 201
+    shown = (await w.read(client))["p"]
+    assert shown["start"]["date"] == "2026-10-01"
+    r = await client.delete(f"{ITEMS}/{w.ids['a']}", headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    p = (await w.read(client))["p"]
+    assert p["parent_key"] == "a"
+    assert p["part_of"] == w.ref("a", in_trash=True)
+    assert p["part_path"] == [w.ref("a", in_trash=True)]
+    assert p["start"] == shown["start"] and p["end"] == shown["end"]
+    assert p["estimated"] is False

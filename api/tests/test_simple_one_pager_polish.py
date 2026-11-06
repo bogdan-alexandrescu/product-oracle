@@ -28,6 +28,9 @@ Test cards (protects / fails_when / no_claim):
 - test_plan_strip_rules: protects=the strip's pure rules (no items: none; at most 6
   months; undated milestones after dated; estimated rows); fails_when=a long span draws
   every month; no_claim=the web's mirror (web/lib/simple-home.ts, its spec).
+- test_a_merged_feature_is_not_on_the_plan (panel-menu): protects=a published feature
+  merged into another (merged_into) is left off the one-pager's timeline and plan strip
+  counts, as a cut one is; fails_when=it is listed or counted as live; no_claim=the web.
 """
 
 from datetime import date
@@ -255,3 +258,25 @@ def test_plan_strip_rules():
         date(2026, 11, 2),
     ).rows
     assert [(r.name, r.estimated) for r in rows] == [("Beta", True), ("Later", True)]
+
+
+async def test_a_merged_feature_is_not_on_the_plan(client):
+    ctx = await world(client)
+    await seed_slice(ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        rv = await s.scalar(
+            select(DocumentVersion).join(Document).where(Document.slug == "setup-roadmap")
+        )
+        pv = await s.scalar(
+            select(DocumentVersion).join(Document).where(Document.slug == "guided-setup")
+        )
+        m1 = {"name": "M1", "date": "2026-11-20"}
+        await seed.item(rv, pv, "m1-merged", title="Merged away", merged_into="m1-0",
+                        start_date=date(2026, 10, 5), end_date=date(2026, 11, 20),
+                        date_source="typed", milestone=m1)  # fmt: skip
+        await s.commit()
+    view = await get(client, ctx, "viewer")
+    assert "Merged away" not in [i["title"] for i in view["timeline"]]
+    rows = {r["name"]: r["items"] for r in view["plan"]["rows"]}
+    assert rows["M1"] == 3
