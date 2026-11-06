@@ -300,7 +300,8 @@ async def test_key_date_prds_read_the_order_once_for_all_roadmaps():
                 got = await key_date_prds(s, None, docs, entries)
             finally:
                 event.remove(engine, "before_cursor_execute", count)
-            assert all([d.slug for d in got[r.id]] == ["banana", "apple", "cherry"] for r in roadmaps)
+            slugs = [[d.slug for d in got[r.id]] for r in roadmaps]
+            assert slugs == [["banana", "apple", "cherry"]] * len(roadmaps)
             return len(statements)
 
         one = await reads(rms[:1])
