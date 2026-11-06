@@ -57,7 +57,7 @@ test.describe("desktop", () => {
     await expect(tiles).toHaveCount(4);
     const sum = (await tiles.locator("b").allTextContents()).reduce((s, t) => s + Number(t), 0);
     expect(sum).toBe(n);
-    await expect(tray.getByTestId("tray-scope")).toContainText(`${n} on this roadmap view`);
+    await expect(tray.getByTestId("tray-scope")).toContainText(`${n} to decide in your roadmaps' working drafts`);
     await expect(tray.getByTestId("tray-broken").filter({ hasText: "Team invite nudges" })).toHaveCount(0);
     await expect(tray.getByTestId("tray-broken").filter({ hasText: "Weekly alert digest" })).toHaveCount(1);
     await expect(tray.getByTestId("tray-flag").filter({ hasText: "Team invite nudges" })).toBeVisible();
@@ -264,7 +264,7 @@ test.describe("phone", () => {
     const words = (await banner.getByTestId("draft-words").boundingBox())!;
     const b = (await banner.boundingBox())!;
     expect(words.width).toBeGreaterThan(b.width - 40);
-    const buttons = await Promise.all(["Undo", "See changes", "Send for review"].map(async (n) => (await banner.getByRole("button", { name: n }).boundingBox())!));
+    const buttons = await Promise.all(["Undo", "See changes", "Approve and publish"].map(async (n) => (await banner.getByRole("button", { name: n }).boundingBox())!));
     for (const x of buttons) {
       expect(x.y).toBeGreaterThanOrEqual(words.y + words.height - 1);
       expect(Math.abs(x.y - buttons[0].y)).toBeLessThanOrEqual(2);

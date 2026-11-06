@@ -61,6 +61,8 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             return f"cut {x} and its dependents {names}"
         case "edit_title":
             return f"renamed {x} to {title}" if title else f"renamed {x}"
+        case "edit_note":
+            return f"changed the notes of {x}"
         case "edit_outcome":
             return f"changed the outcome of {x}"
         case "accept_risk":
@@ -121,6 +123,8 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             if m is None and "milestone" in after:
                 return f"cleared the milestone of {x}"
             return f"set the milestone of {x} to {name}" if name else f"set the milestone of {x}"
+        case "set_goals":
+            return f"moved {x} to another goal"
         case "add_feature_ask":
             return f"filed the feature ask {title}" if title else "filed a feature ask"
         case "set_owner":
@@ -168,6 +172,8 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
         # Goal milestones: a PRD's own milestone's date or counts-when rule, asked of its owner.
         case "edit_goal_milestone":
             name = _quoted(target.get("name")) or item
+            if "milestone" in before and after.get("milestone") is None:
+                return f"removed the milestone {name}" if name else "removed a milestone"
             return f"changed the milestone {name}" if name else "changed a milestone"
         # trash-features-goals: a feature deleted to Trash (oracle.simple.trash_items).
         case "delete_item":
@@ -179,6 +185,11 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             goal = _quoted(target.get("title")) or item
             tail = " to Trash" if op == "delete_goal" else ""
             return f"{verb} the goal {goal}{tail}" if goal else f"{verb} a goal{tail}"
+        # roadmap-decide: a cut item's fix, the dependency dropped.
+        case "remove_dependency":
+            titles = target.get("titles") or []
+            dep = _quoted(titles[1]) if len(titles) > 1 else None
+            return f"removed {x}'s dependency on {dep}" if dep else f"removed a dependency of {x}"
     return f"changed {x}"
 
 

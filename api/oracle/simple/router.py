@@ -44,6 +44,7 @@ from oracle.simple.schemas import (
     SimpleGoalMilestonePatch,
     SimpleOldMilestonesResult,
     SimpleRoadmapOut,
+    SimpleRoadmapWaiting,
 )
 
 router = APIRouter(prefix="/v1/simple/roadmap", tags=["simple"])
@@ -86,6 +87,20 @@ async def get_simple_roadmap(
     ``roadmap`` (id or slug: one roadmap's items; 404 when the caller cannot read it).
     ``roadmaps``: every roadmap the caller may read, for the Roadmap filter."""
     return await service.build(db, principal, group, prd, goal, track, from_, to, roadmap)
+
+
+@router.get("/waiting", response_model=SimpleRoadmapWaiting)
+async def get_simple_roadmap_waiting(
+    principal: Reader, db: TenantDB, roadmap: str | None = None
+) -> SimpleRoadmapWaiting:
+    """roadmap-decide review: the side menu's light count: the broken links of the whole
+    roadmap as the caller sees it (the working draft's to who sees it), no filter; the same
+    ones the roadmap's strip, its Needs a decision and Home count; and the dates the caller may
+    confirm, so the side menu's count equals Needs a decision. ``roadmap`` (id or slug): one
+    roadmap's alone, as the read's own filter (Needs a decision's "in all" of a chosen roadmap);
+    404 when the caller cannot read it."""
+    links, dates = await service.waiting(db, principal, roadmap)
+    return SimpleRoadmapWaiting(broken_links=links, dates_to_confirm=dates)
 
 
 @router.get("/date-suggestions", response_model=list[DateSuggestionOut])
@@ -217,7 +232,8 @@ async def create_goal_milestone(
     """Add a milestone to a goal on a roadmap: coded the next "M<n>" in that goal on that
     roadmap. Who may change the roadmap directly (an owner, its decider, with none its
     owner while an approver, same as a key date); a commenter is refused (403: milestones
-    are not proposed here, unlike key dates)."""
+    are not proposed here, unlike key dates). A roadmap that is history (the company
+    roadmap exists) is 409."""
     return await goal_milestones.create(db, principal, body)
 
 
@@ -258,7 +274,8 @@ async def patch_goal_milestone(
     own milestone is read-only here: a date or counts-when edit instead proposes a change
     to the PRD's owner (``pending`` filled, the milestone unchanged) through the change
     engine (``POST /v1/simple/changes/{id}/accept|decline``); its name, goal and items are
-    the PRD's own and are 422 here."""
+    the PRD's own and are 422 here, even beside a date. A milestone of a roadmap that is
+    history (the company roadmap exists) is 409."""
     return await goal_milestones.patch(db, principal, milestone_id, body)
 
 
