@@ -33,8 +33,13 @@ ALLOWED = re.compile(
             # A key result's or goal measure's starting value.
             r"baseline value",
             r"baseline or target",
-            r"(?:its|a|the KR's|the metric's|the measure's|goal's|key result's) baseline\b"
+            # "its baseline" or "a baseline" only beside the measure's target or value.
+            r"(?:above|below|from|with) (?:its|a|the) baseline\b(?=,? (?:a |and |or )?(?:a )?"
+            r"(?:target|value|number|time frame)|\b(?![ ,]))",
+            r"(?:the KR's|the metric's|the measure's|goal's|key result's) baseline\b"
             r"(?! (?:item|feature|graph|page|build|rebuild|proposal|change))",
+            r"metric, baseline, target",
+            r"prediction must be \{\} its baseline",
             r"between the baseline and",
             r"baseline, target and horizon",
             r"Success metric and baseline",
@@ -74,22 +79,84 @@ def _docstrings(tree: ast.AST) -> set[int]:
     return out
 
 
+#: A lone internal id or key: lowercase, joined by "_" ("baseline", "baseline_confirm").
+ID = re.compile(r"[a-z][a-z0-9_]*")
+#: A regular expression in the code (it holds a character class such as "\\s").
+PATTERN = re.compile(r"\\[sdwSDWb]|\(\?P<")
+
+
+def _said(value: str) -> list[str]:
+    """The old words a literal ``value`` says, unless its shape is an id or a pattern."""
+    word = value.strip()
+    if ID.fullmatch(word) or PATTERN.search(word):
+        return []
+    return _left(value)
+
+
+def _strings(tree: ast.AST):
+    """Every string literal in ``tree`` with its line, an f-string as one text ("{}" for
+    each value it fills in), docstrings aside."""
+    docs = _docstrings(tree)
+    parts: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.JoinedStr):
+            text = ""
+            for value in node.values:
+                parts.add(id(value))
+                is_text = isinstance(value, ast.Constant) and isinstance(value.value, str)
+                text += value.value if is_text else "{}"
+            yield node.lineno, text
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and id(node) not in docs
+            and id(node) not in parts
+        ):
+            yield node.lineno, node.value
+
+
 def test_no_person_facing_string_in_oracle_says_an_old_name():
     found = []
     for path in sorted(ORACLE.rglob("*.py")):
-        tree = ast.parse(path.read_text())
-        docs = _docstrings(tree)
-        for node in ast.walk(tree):
-            if (
-                not (isinstance(node, ast.Constant) and isinstance(node.value, str))
-                or id(node) in docs
-            ):
-                continue
-            # Words a person reads have a space; a lone id or key ("baseline") does not.
-            if " " in node.value.strip() and _left(node.value):
-                found.append(
-                    f"{path.relative_to(ORACLE.parent)}:{node.lineno}: {node.value[:120]!r}"
-                )
+        for line, value in _strings(ast.parse(path.read_text())):
+            if _said(value):
+                found.append(f"{path.relative_to(ORACLE.parent)}:{line}: {value[:120]!r}")
+    assert not found, "\n".join(found)
+
+
+def _yaml_strings(node):
+    if isinstance(node, str):
+        yield node
+    elif isinstance(node, dict):
+        for key, value in node.items():
+            yield from _yaml_strings(key)
+            yield from _yaml_strings(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _yaml_strings(value)
+
+
+def test_no_yaml_under_oracle_says_an_old_name():
+    """Module and pack labels, descriptions and briefs: every string in each YAML file."""
+    import yaml
+
+    found = []
+    for path in sorted(ORACLE.rglob("*.yaml")):
+        for doc in yaml.safe_load_all(path.read_text()):
+            for value in _yaml_strings(doc):
+                if _said(value):
+                    found.append(f"{path.relative_to(ORACLE.parent)}: {value[:120]!r}")
+    assert not found, "\n".join(found)
+
+
+def test_no_template_says_an_old_name():
+    """A template's briefs and comments are what a run writes from: each line of each one."""
+    found = []
+    for path in sorted((ORACLE / "templates").rglob("*.md")):
+        for n, line in enumerate(path.read_text().splitlines(), 1):
+            if _left(line):
+                found.append(f"{path.relative_to(ORACLE.parent)}:{n}: {line}")
     assert not found, "\n".join(found)
 
 
@@ -132,8 +199,13 @@ def test_the_check_catches_the_old_names_and_spares_the_ids():
         "Baseline to PRD",
         "a linked baseline item changed",
         "Confirm the baseline",
+        "Approve a baseline",
+        "Change it in Baseline",
+        "the feature is in its baseline now",
     ):
         assert _left(said), said
+    for label in ("Baseline", "Current state", "Desired state"):
+        assert _said(label), label
     for kept in (
         "GET /v1/baseline/graph",
         "the baseline_confirm checkpoint",
@@ -141,5 +213,10 @@ def test_the_check_catches_the_old_names_and_spares_the_ids():
         "writes baseline.yaml",
         "No success metric with a baseline value and a target is agreed.",
         "The success metrics have no baseline or target number",
+        "Measurable outcomes with a baseline, a target and a time frame.",
+        "each with a metric, baseline, target and time frame",
+        "an {} prediction must be {} its baseline",
     ):
         assert not _left(kept), kept
+    for kept in ("baseline", "baseline_confirm", r"^\s*baseline\s+(?P<type>[a-z_]+)"):
+        assert not _said(kept), kept

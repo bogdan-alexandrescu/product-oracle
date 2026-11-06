@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
+import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /**
@@ -54,6 +54,11 @@ async function saysNoOldName(page: Page, url: string) {
   await page.goto(url);
   await expect(page.locator("main").first()).toBeVisible();
   await page.waitForLoadState("networkidle");
+  await saysNoOldNameHere(page, url);
+}
+
+/** The page as it is now (a form opened, an empty state) says no old name. */
+async function saysNoOldNameHere(page: Page, url: string) {
   const said = (await words(page)).flatMap((w) => w.split("\n")).filter((line) => OLD.test(line));
   expect(said, `${url} says an old name`).toEqual([]);
 }
@@ -83,4 +88,41 @@ for (const role of ["owner", "viewer"] as const) {
       });
     });
   }
+}
+
+/*
+ * What the walk above does not open: a goal's form in Priorities' goal buckets (it names where
+ * the goal's order is changed) and a new company's empty Priorities and Roadmap (they name where
+ * the goals are confirmed, with a link there). fails_when = "change it in Baseline" or
+ * "Detailed › Baseline" is left.
+ */
+for (const view of VIEWS.filter((v) => v.colorScheme === "light")) {
+  test.describe(`owner, ${view.name}, forms and empty states`, () => {
+    test.use({ viewport: view.viewport, colorScheme: view.colorScheme });
+
+    test(`a goal's form says Ground Truth (${view.name})`, async ({ page }) => {
+      await page.addInitScript(([key]) => localStorage.setItem(key, "simple-plan"), [MOCK_SCENARIO_KEY] as const);
+      await login(page);
+      await page.goto("/simple/priorities?tab=buckets");
+      await page.getByTestId("add-goal").getByRole("button", { name: "+ Add goal" }).click();
+      const form = page.getByTestId("add-goal").getByTestId("goal-form");
+      await expect(form).toContainText("change it in the Ground Truth");
+      await saysNoOldNameHere(page, "/simple/priorities?tab=buckets, + Add goal");
+    });
+
+    test(`a new company's Priorities and Roadmap say Ground Truth and link there (${view.name})`, async ({ page }) => {
+      await page.addInitScript(([key]) => localStorage.setItem(key, "empty"), [MOCK_SCENARIO_KEY] as const);
+      await login(page);
+      for (const [url, empty] of [
+        ["/simple/priorities", "priorities-empty"],
+        ["/simple/roadmap", "roadmap-empty"],
+      ] as const) {
+        await page.goto(url);
+        const note = page.getByTestId(empty);
+        await expect(note).toContainText("Detailed › Ground Truth");
+        await expect(note.getByRole("link", { name: "Detailed › Ground Truth" })).toHaveAttribute("href", "/ground-truth");
+        await saysNoOldNameHere(page, `${url} (no goals)`);
+      }
+    });
+  });
 }
