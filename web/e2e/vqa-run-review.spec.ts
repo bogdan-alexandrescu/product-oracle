@@ -12,12 +12,11 @@ import { login } from "./helpers";
  *   its words (Not decided sets no taller line than the chips beside it), so nine rows fit
  *   the list as in the picked frame; fails_when=the verdict cell adds a line taller than its
  *   words and every undecided row grows.
- * - "list ends at the bar": protects=on a desktop the list runs down to the decision bar's top
- *   edge, as in the picked frame, and never under it (within 1px, as build-engcheck's hard case), at
- *   rest, scrolled and at the page's very end, at 1440x900,
- *   1512x945 and 1920x1080 (whether its rows fill the room or not);
- *   fails_when=a gap above the bar cuts the last row short, or the list stops short of the bar
- *   when its rows are shorter than the window, or the page's end gap pushes it up off the bar.
+ * - "list hugs its rows or ends at the bar": protects=on a desktop the list card hugs its rows
+ *   when they fit and ends at the decision bar's top edge when they do not (the owner's Nov 4
+ *   pick, fidelity-picks-nov4), never under it, at rest, scrolled and at the page's very end, at
+ *   1440x900, 1512x945 and 1920x1080; fails_when=the list runs under the bar, or a short list
+ *   stretches an empty band down to the bar.
  * - "answered in its card" (EC2 b): protects=an answered question keeps its card, the same
  *   border and padding as an open one, with the tick, the question, the answer, who gave it
  *   and Change inside, and no answer box, desktop and phone; fails_when=the answered question
@@ -52,36 +51,42 @@ for (const [device, viewport] of [
   });
 }
 
-// The list's height must not hang on the window or on how tall its rows come out (fonts): at
-// 1512x945 and 1920x1080 nine rows are shorter than the room, and the list still ends at the bar.
+// The list's height must not hang on the window or on how tall its rows come out (fonts). As the
+// owner picked it on Nov 4 (EC1 b, fidelity-picks-nov4): the card hugs its rows when they fit, and
+// a list taller than the room ends at the bar's top edge; it never runs under the bar.
 for (const viewport of [DESKTOP, { width: 1512, height: 945 }, { width: 1920, height: 1080 }]) {
-test(`desktop ${viewport.width}x${viewport.height}: the list runs down to the bar as in the frame, never under it`, async ({ page }) => {
+test(`desktop ${viewport.width}x${viewport.height}: the list hugs its rows or ends at the bar, never under it`, async ({ page }) => {
   await page.setViewportSize(viewport);
   await openCheck(page);
-  const list = (await page.getByRole("region", { name: "Features" }).boundingBox())!;
-  const bar = (await page.getByTestId("decision-bar").boundingBox())!;
-  expect(list.y + list.height, "the list ends at the bar's top edge").toBeGreaterThanOrEqual(bar.y - 1);
-  expect(list.y + list.height, "the list never runs under the bar").toBeLessThanOrEqual(bar.y + 1);
+  // Both edges and the last row read in one frame: a smooth scroll still moving the page between
+  // reads would read a gap the page never draws.
+  const edges = () =>
+    page.evaluate(() => {
+      const l = document.querySelector('[aria-label="Features"]')!;
+      const rows = l.querySelectorAll('[data-testid="brief-row"]');
+      const box = l.getBoundingClientRect();
+      return {
+        toBar: Math.round(document.querySelector('[data-testid="decision-bar"]')!.getBoundingClientRect().top - box.bottom),
+        toLastRow: Math.round(box.bottom - rows[rows.length - 1].getBoundingClientRect().bottom),
+        scrolls: l.scrollHeight > l.clientHeight + 1,
+      };
+    });
+  const check = async (when: string) => {
+    const e = await edges();
+    expect(e.toBar, `the list never runs under the bar ${when}`).toBeGreaterThanOrEqual(-1);
+    if (e.scrolls) expect(e.toBar, `a list taller than the room ends at the bar ${when}`).toBeLessThanOrEqual(1);
+    else expect(e.toLastRow, `the card ends at its last row ${when}`).toBeLessThan(4);
+  };
+  await check("as it opens");
   // Scrolled as a person would, the list sticks and still never runs under the bar.
   await page.mouse.move(900, 400);
   await page.mouse.wheel(0, 300);
   await expect.poll(async () => page.evaluate(() => scrollY)).toBeGreaterThan(0);
-  // Both edges read in one frame: read one call apart, a smooth scroll still moving the page
-  // between them reads a gap the page never draws.
-  const gap = () =>
-    page.evaluate(() => {
-      const l = document.querySelector('[aria-label="Features"]')!.getBoundingClientRect();
-      return Math.round(l.bottom - document.querySelector('[data-testid="decision-bar"]')!.getBoundingClientRect().top);
-    });
-  // The same promise as build-engcheck's hard case: once scrolled the list ends at the bar's top
-  // edge within 1px, never above it and never under it.
-  expect(await gap(), "the list still ends at the bar's top edge").toBeGreaterThanOrEqual(-1);
-  expect(await gap(), "the list never runs under the bar once scrolled").toBeLessThanOrEqual(1);
-  // And at the page's very end, where the page's own gap once pushed the list 16px above the bar.
+  await check("once scrolled");
+  // And at the page's very end.
   await page.mouse.wheel(0, 5000);
   await expect.poll(async () => page.evaluate(() => Math.ceil(scrollY + innerHeight) >= document.documentElement.scrollHeight)).toBe(true);
-  await expect.poll(gap, { message: "the list ends at the bar's top edge at the page's very end" }).toBeGreaterThanOrEqual(-1);
-  expect(Math.abs(await gap()), "the list ends at the bar's top edge at the page's very end, never under it").toBeLessThanOrEqual(1);
+  await check("at the page's very end");
 });
 }
 
