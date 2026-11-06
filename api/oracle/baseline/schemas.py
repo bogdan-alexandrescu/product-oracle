@@ -344,7 +344,8 @@ class ProposalProposer(BaseModel):
     a member, an API token, or Oracle itself."""
 
     kind: Literal["run", "intake", "person", "token", "oracle"]
-    # "Baseline to PRD · Oct 16", "From an intake answer", "First Last", "API token “CI”", "Oracle"
+    # "Ground Truth to PRD · Oct 16", "From an intake answer", "First Last",
+    # "API token “CI”", "Oracle"
     label: str
     run_id: uuid.UUID | None = None
     # A person's: the web says "You" when it is the signed-in member's.
@@ -575,9 +576,9 @@ class BaselineSegmentUsd(BaseModel):
 
 
 class ReviewStatusOut(BaseModel):
-    """Whether a new PRD run may use the current baseline (B1 "Reuse base"): the last
-    baseline review (the newest approved Confirm the baseline) was approved in the past
-    30 days and no baseline build is under way."""
+    """Whether a new PRD run may use the current Ground Truth (B1 "Reuse base"): the last
+    Ground Truth review (the newest approved Confirm the Ground Truth) was approved in the
+    past 30 days and no Ground Truth build is under way."""
 
     last_approved_at: datetime | None = None
     checkpoint_id: uuid.UUID | None = None
@@ -622,3 +623,79 @@ class FillFromTextResult(BaseModel):
     applied: int
     proposed: int
     left_as_text: list[FilledText]
+
+
+# --- the Ground Truth check (oracle.baseline.check, docs/ground-truth.md) --------------------
+
+CheckKind = Literal[
+    "unlinked_item",
+    "slice_parent_missing",
+    "prd_feature_missing",
+    "no_code",
+    "no_goal",
+    "runs_today_on_roadmap",
+]
+CHECK_KINDS: tuple[str, ...] = CheckKind.__args__  # type: ignore[attr-defined]
+CheckAction = Literal[
+    "add_to_ground_truth",
+    "link_to_feature",
+    "confirm_feature",
+    "give_code",
+    "pick_goal",
+    "take_off_roadmap",
+]
+
+
+class GroundTruthRef(BaseModel):
+    """A roadmap item, slice or feature: its id (none for a PRD's feature or slice that is no
+    row of its own), its code (F-15, F-15a; none when it has no F-code) and its name."""
+
+    id: uuid.UUID | None
+    code: str | None
+    name: str
+
+
+class GroundTruthDoc(BaseModel):
+    id: uuid.UUID
+    title: str
+
+
+class GroundTruthWhere(BaseModel):
+    """Where the flag shows: the roadmap and the PRD (with its title), when it has them."""
+
+    roadmap: GroundTruthDoc | None = None
+    prd: GroundTruthDoc | None = None
+
+
+class GroundTruthFix(BaseModel):
+    """A fix a person makes in the UI. ``target``: the item's or feature's id; for a PRD's
+    feature its code, or its name when it has none (with ``where.prd``); for a slice's Add to
+    Ground Truth its feature's code (F-15); for ``confirm_feature`` the proposed feature's id.
+    ``words``: the button's plain words ("Confirm it")."""
+
+    action: CheckAction
+    target: str
+    words: str
+
+
+class GroundTruthFlag(BaseModel):
+    """One place that breaks the Ground Truth: allowed, flagged "Not in the Ground Truth"."""
+
+    kind: CheckKind
+    item: GroundTruthRef | None = None
+    feature: GroundTruthRef | None = None
+    where: GroundTruthWhere
+    # One short plain sentence, no ids.
+    words: str
+    fixes: list[GroundTruthFix]
+    # A PRD's feature: the Ground Truth feature with the same name but another code, to link
+    # to ("Same name as F-05 Bulk import."); never a match by itself.
+    hint: str | None = None
+    like: GroundTruthRef | None = None
+
+
+class GroundTruthOut(BaseModel):
+    flags: list[GroundTruthFlag]
+    # Every kind, zero included.
+    counts: dict[str, int]
+    total: int

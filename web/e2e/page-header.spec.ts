@@ -106,7 +106,7 @@ for (const scheme of ["light", "dark"] as const) {
     // A run waiting at a checkpoint: Decide.
     await page.goto("/runs");
     await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
-    await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
     // One way to decide (rirs-21): the decision below; the header's Decide only goes to it, so it
     // is not drawn as a second primary. The decision's Approve and continue is the page's one
     // filled primary (cld-5).

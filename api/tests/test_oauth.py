@@ -327,7 +327,7 @@ async def test_consent_details_and_deny(client):
     assert [s["name"] for s in detail["scopes"]] == ["oracle:read", "oracle:write"]
     # qa-settings-41: plain words, no jargon (the web mock says the same).
     assert [s["description"] for s in detail["scopes"]] == [
-        "See what you can see: the baseline, documents, runs and your sources. It also sees "
+        "See what you can see: the Ground Truth, documents, runs and your sources. It also sees "
         "the names of all Notion pages shared with Product Oracle, even ones not added as "
         "a source.",
         "Make the changes you are allowed to: propose, comment, approve and edit.",

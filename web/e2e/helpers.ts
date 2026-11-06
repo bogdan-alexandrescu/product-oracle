@@ -387,8 +387,8 @@ export async function seedConsoleHeld(page: Page): Promise<string> {
 export const DECIDED_RUN = "7a11c0de-0000-4000-8000-0000000000d1";
 
 /**
- * Seeds the mock with a finished Baseline to PRD run for checkout-redesign whose stops were
- * decided in the Inbox: the baseline approved with a note, the feature set sent back once and
+ * Seeds the mock with a finished Ground Truth to PRD run for checkout-redesign whose stops were
+ * decided in the Inbox: the Ground Truth approved with a note, the feature set sent back once and
  * approved on its second attempt, the priority order and the PRD review approved. The decision
  * log records each decided stop (H1 checkpoint records). Returns the run's id.
  */

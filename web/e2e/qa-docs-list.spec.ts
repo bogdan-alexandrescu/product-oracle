@@ -186,7 +186,7 @@ test.describe("desktop", () => {
   test("qa-docs-43: the delete dialog names the draft run in words, not its flow", async ({
     page,
   }) => {
-    // run-review: a Baseline to PRD run writes Usage alerts (priority-order's blocked run is
+    // run-review: a Ground Truth to PRD run writes Usage alerts (priority-order's blocked run is
     // for a PRD not imported yet since walk-docs-priorities).
     await open(page, "owner", "run-review");
     await row(page, "Usage alerts PRD")
@@ -201,7 +201,7 @@ test.describe("desktop", () => {
     await expect(goes.getByTestId("delete-run").first()).toHaveText(
       /^The run of [A-Z][a-z]{2} \d{1,2} that wrote /,
     );
-    await expect(goes).not.toContainText("Baseline to PRD");
+    await expect(goes).not.toContainText("Ground Truth to PRD");
     await expect(goes).not.toContainText(/Run\s{2}/);
   });
 

@@ -110,3 +110,49 @@ export function usePlanScope(userId: string | null | undefined): [PlanScope, (s:
   );
   return [scope, set, browser && !!userId];
 }
+
+/** B-26: how the Plan's roadmap reads, a table or a timeline. */
+export type PlanView = "table" | "timeline";
+const PLAN_VIEW_KEY = "oracle-plan-view";
+const viewListeners = new Set<() => void>();
+const unsavedView = new Map<string, PlanView>();
+
+function readPlanView(userId: string): PlanView {
+  const held = unsavedView.get(userId);
+  if (held) return held;
+  try {
+    return localStorage.getItem(`${PLAN_VIEW_KEY}:${userId}`) === "timeline" ? "timeline" : "table";
+  } catch {
+    return "table";
+  }
+}
+
+function subscribePlanView(listener: () => void) {
+  viewListeners.add(listener);
+  return () => {
+    viewListeners.delete(listener);
+  };
+}
+
+/** B-26: the Plan's Table or Timeline, remembered per viewer in this browser (the table by default). */
+export function usePlanView(userId: string | null | undefined): [PlanView, (v: PlanView) => void] {
+  const view = useSyncExternalStore(
+    subscribePlanView,
+    () => (userId ? readPlanView(userId) : "table"),
+    () => "table" as PlanView,
+  );
+  const set = useCallback(
+    (next: PlanView) => {
+      if (!userId) return;
+      unsavedView.delete(userId);
+      try {
+        localStorage.setItem(`${PLAN_VIEW_KEY}:${userId}`, next);
+      } catch {
+        unsavedView.set(userId, next);
+      }
+      viewListeners.forEach((l) => l());
+    },
+    [userId],
+  );
+  return [view, set];
+}

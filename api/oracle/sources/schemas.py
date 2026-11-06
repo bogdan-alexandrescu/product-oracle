@@ -270,7 +270,7 @@ class UsedDocument(BaseModel):
 
 
 class UsedIn(BaseModel):
-    """One use of one of the source's items: baseline evidence (on an entity, or on an
+    """One use of one of the source's items: Ground Truth evidence (on an entity, or on an
     edge, shown on its source entity), a citation in a document version, or a section's
     evidence link."""
 

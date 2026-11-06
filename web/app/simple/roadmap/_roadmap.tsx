@@ -11,6 +11,7 @@ import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { Loading } from "@/components/ui";
 import { getBranding, logoDataUrl } from "@/lib/api/branding";
+import { reloadWaiting } from "@/lib/waiting";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { CARD_CHANGED_EVENT } from "@/lib/api/simple-chat";
 import { displayZone, plainClock } from "@/lib/dates";
@@ -343,8 +344,17 @@ function prdWords(p: { prd: { title: string }; version?: number | null; items: n
   return `${parts.join(" and ")} came from ${p.prd.title}${p.version ? ` (version ${p.version})` : ""}`;
 }
 
+/** Where an item's card or Oracle's dates open: under its bar in the chart (`wrap`), above it when there is no room. */
+function barAnchor(wrap: HTMLElement | null, id: string): { left: number; top: number; above: number } {
+  const el = wrap?.querySelector(`[data-bar-id="${id}"]`);
+  const box = wrap?.getBoundingClientRect();
+  const r = el?.getBoundingClientRect();
+  if (!r || !box) return { left: 0, top: 0, above: 0 };
+  return { left: Math.max(0, Math.min(r.left - box.left, box.width - 390)), top: r.bottom - box.top + 6, above: r.top - box.top - 6 };
+}
+
 /** The working-draft banner (D18 as amended: one shared draft per roadmap). */
-function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onReview, titleOf }: { drafts: Draft[]; inReview: number; meId: string | null; onUndo: (id: string) => void; onSubmit: (d: Draft[]) => void; onReview: (prdSlug: string) => void; titleOf: (id: string | null) => string | undefined }) {
+function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onReview, titleOf }: { drafts: Draft[]; inReview: number; meId: string | null; onUndo: (id: string) => void; onSubmit: (d: Draft[]) => void; onApprove: (d: Draft) => void; onReview: (prdSlug: string) => void; titleOf: (id: string | null) => string | undefined }) {
   const [open, setOpen] = useState(false);
   const working = drafts.filter((d) => d.status === "working" || d.status === "submitted");
   if (!working.length) {
@@ -381,6 +391,20 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onReview, title
           Send for review
         </Button>
       </div>
+      {/* inbox-meeting-proposals fix: a version sent for review that I may approve (a required reviewer, the decider). */}
+      {working
+        .filter((d) => d.status === "submitted" && d.can_approve)
+        .map((d) => (
+          <p key={d.id} tabIndex={-1} className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 rounded text-sm focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-accent" data-testid="draft-approval" data-draft-id={d.id}>
+            <span className="min-w-0">
+              {d.document.title}
+              {d.version ? ` version ${d.version}` : ""} is waiting for your approval
+            </span>
+            <Button variant="solid" onClick={() => onApprove(d)}>
+              Approve
+            </Button>
+          </p>
+        ))}
       {fromPrds.length > 0 && (
         <ul className="mt-1.5 space-y-1 text-sm" data-testid="draft-from-prds">
           {fromPrds.map((p) => (
@@ -797,12 +821,15 @@ export function SimpleRoadmap() {
   const reload = useCallback(async () => {
     await Promise.all([roadmap.reload(), proposals.reload(), drafts.reload()]);
   }, [roadmap, proposals, drafts]);
+  // After an action that may change what waits on someone (a move, an add, an undo, a version
+  // sent or applied): the page and the rail's and More's Inbox counts read again at once.
+  const reloadAfter = useCallback(() => reloadWaiting(reload), [reload]);
   // roadmap-talk: a chat card applied, proposed, rejected or undone (the item's talk, the Ask panel) reads the roadmap again.
   useEffect(() => {
-    const on = () => void reload();
+    const on = () => void reloadAfter();
     window.addEventListener(CARD_CHANGED_EVENT, on);
     return () => window.removeEventListener(CARD_CHANGED_EVENT, on);
-  }, [reload]);
+  }, [reloadAfter]);
   // S7: Oracle's suggested features by goal; an accept (or its undo) changes the roadmap.
   const suggestions = useGoalSuggestions(reload);
   const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
@@ -919,6 +946,44 @@ export function SimpleRoadmap() {
     });
   }
   const byId = useMemo(() => new Map((data?.items ?? []).map((i) => [i.id, i])), [data]);
+  // inbox-meeting-proposals fix: a link (the Inbox) opens one item's feature panel
+  // (?item=<id>), Oracle's dates for one item (?dates=<item id>) or a goal's suggestions
+  // (?suggestions=<goal id>), once, when the roadmap has loaded.
+  const itemLinked = useRef(false);
+  useEffect(() => {
+    if (itemLinked.current || !data) return;
+    const it = byId.get(params.get("item") ?? "");
+    const dated = byId.get(params.get("dates") ?? "");
+    if (!it && !dated?.suggestion) return;
+    itemLinked.current = true;
+    requestAnimationFrame(() => {
+      if (it) setCard({ id: it.id, ...barAnchor(wrap.current, it.id) });
+      else if (dated) setPop({ id: dated.id, ...barAnchor(wrap.current, dated.id) });
+    });
+  }, [data, byId, params]);
+  // The Inbox's Open on a version waiting for my approval (?draft=<id>): once the roadmap and
+  // its drafts are read, the banner's line for that draft comes into sight, focused, with its
+  // Approve; with no such line (approved since, or not mine to approve), the banner itself.
+  const draftLinked = useRef(false);
+  useEffect(() => {
+    const id = params.get("draft");
+    if (draftLinked.current || !id || !data || !drafts.data) return;
+    draftLinked.current = true;
+    requestAnimationFrame(() => {
+      const line = document.querySelector<HTMLElement>(`[data-testid="draft-approval"][data-draft-id="${CSS.escape(id)}"]`);
+      const el = line ?? document.querySelector<HTMLElement>('[data-testid="draft-banner"]');
+      el?.scrollIntoView({ block: "center" });
+      line?.focus({ preventScroll: true });
+    });
+  }, [params, data, drafts.data]);
+  const goalLinked = useRef(false);
+  useEffect(() => {
+    const asked = params.get("suggestions");
+    const g = asked ? suggestions.data?.goals.find((x) => x.goal.id === asked || x.goal.key === asked) : undefined;
+    if (goalLinked.current || !g) return;
+    goalLinked.current = true;
+    setGoalPanel(g.goal);
+  }, [params, suggestions.data]);
   const titleOf = useCallback((id: string | null) => (id ? byId.get(id)?.title : undefined), [byId]);
   const canChange = can("create_simple_change");
   // build-milestones-on-roadmap: the milestones per goal, added on the time axis.
@@ -937,7 +1002,7 @@ export function SimpleRoadmap() {
         const target = latest.current.get(String(body.target?.item_id ?? ""));
         toast({
           message: resultWords(r, what, target?.deciders, note),
-          action: r.change.status === "applied" && r.change.can_undo ? { label: "Undo", onClick: () => void undo(r.change.id).then(reload, (e) => toast({ message: String(e.message) })) } : undefined,
+          action: r.change.status === "applied" && r.change.can_undo ? { label: "Undo", onClick: () => void undo(r.change.id).then(reloadAfter, (e) => toast({ message: String(e.message) })) } : undefined,
         });
         return r;
       } catch (e) {
@@ -949,10 +1014,10 @@ export function SimpleRoadmap() {
         } else toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not make this change" });
         return null;
       } finally {
-        await reload();
+        await reloadAfter();
       }
     },
-    [reload],
+    [reload, reloadAfter],
   );
   const act: Act = useCallback(
     async (what, body, note) => {
@@ -1034,13 +1099,7 @@ export function SimpleRoadmap() {
     [horizons],
   );
 
-  const anchorOf = (id: string): { left: number; top: number; above: number } => {
-    const el = wrap.current?.querySelector(`[data-bar-id="${id}"]`);
-    const box = wrap.current?.getBoundingClientRect();
-    const r = el?.getBoundingClientRect();
-    if (!r || !box) return { left: 0, top: 0, above: 0 };
-    return { left: Math.max(0, Math.min(r.left - box.left, box.width - 390)), top: r.bottom - box.top + 6, above: r.top - box.top - 6 };
-  };
+  const anchorOf = (id: string) => barAnchor(wrap.current, id);
 
   const onDecide = useCallback(
     async (c: Change, how: "accept" | "decline") => {
@@ -1050,9 +1109,10 @@ export function SimpleRoadmap() {
       } catch (e) {
         toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not decide it" });
       }
-      await reload();
+      // The rail's and More's counts read again at once (a decided proposal leaves the Inbox).
+      await reloadAfter();
     },
-    [reload],
+    [reloadAfter],
   );
 
   const onSuggestion = useCallback(
@@ -1066,9 +1126,10 @@ export function SimpleRoadmap() {
         toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not do that" });
       }
       setPop(null);
-      await reload();
+      // As a decided proposal: Oracle's dates leave the Inbox, and the counts read again at once.
+      await reloadAfter();
     },
-    [reload],
+    [reloadAfter],
   );
 
   /** The filters in words, for the export's header. */
@@ -1115,7 +1176,9 @@ export function SimpleRoadmap() {
 
   const cardItem = card ? byId.get(card.id) : undefined;
   const popItem = pop ? byId.get(pop.id) : undefined;
-  const allProposals = proposals.data ?? [];
+  // A feature ask on no roadmap is decided in its Inbox row only (it is filed in Requests, on no
+  // roadmap): no roadmap's Needs a decision lists or counts it.
+  const allProposals = (proposals.data ?? []).filter((c) => !(c.op === "add_feature_ask" && !c.document_id));
   const decides = can("accept_simple_change") || data.items.some((i) => i.can_decide);
   // #13: viewers and commenters never start a review (the PRD's own decider or an owner
   // does, per_item "owner" on start_simple_meeting); gate the button here too, not only
@@ -1176,7 +1239,7 @@ export function SimpleRoadmap() {
                   void undo(c.id).then(
                     () => {
                       toast({ message: "Undone" });
-                      return reload();
+                      return reloadAfter();
                     },
                     (e) => toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not undo it" }),
                   ),
@@ -1185,7 +1248,7 @@ export function SimpleRoadmap() {
         });
       // fix4 qa-simple-roadmap-21: who decides, and where the proposal shows.
       else toast({ message: `Proposed ${title} (${w.label}): it waits for ${deciderWords(undefined)} in Needs a decision` });
-      await reload();
+      await reloadAfter();
       // one-feature-panel: the added item opens its panel, to fill in the rest.
       const added = c.status === "applied" ? c.target.item_id : null;
       if (typeof added === "string") setCard({ id: added, ...anchorOf(added) });
@@ -1371,19 +1434,26 @@ export function SimpleRoadmap() {
       onUndo={(id) =>
         void undo(id).then(
           () => {
-            toast({ message: "Undone" });
-            return reload();
+            toast({ place: "top", message: "Undone" });
+            return reloadAfter();
           },
-          (e) => toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not undo it" }),
+          (e) => toast({ place: "top", message: e instanceof ChangeFailed ? e.message : "Oracle could not undo it" }),
         )
       }
       onSubmit={async (ds) => {
         for (const d of ds) {
           const r = await api.POST("/v1/simple/drafts/{draft_id}/submit", { params: { path: { draft_id: d.id } } });
-          if (!r.data) toast({ message: `${d.document.title} could not be sent for review` });
+          if (!r.data) toast({ place: "top", message: `${d.document.title} could not be sent for review` });
         }
-        toast({ message: ds.every((d) => d.published) ? "Sent for review: the approved roadmap stays published until it passes" : "Sent for review: the roadmap is published once it passes" });
-        await reload();
+        toast({ place: "top", message: ds.every((d) => d.published) ? "Sent for review: the approved roadmap stays published until it passes" : "Sent for review: the roadmap is published once it passes" });
+        // A version sent for review waits on its reviewers and decider, the sender among them when they decide.
+        await reloadAfter();
+      }}
+      onApprove={async (d) => {
+        const r = await api.POST("/v1/simple/drafts/{draft_id}/approve", { params: { path: { draft_id: d.id } } });
+        toast({ place: "top", message: !r.data ? `${d.document.title} could not be approved` : r.data.status === "approved" ? `Approved: ${d.document.title} is published` : "Approved: it waits for the other approvals" });
+        // The rail's and More's counts read again at once (the approval leaves the Inbox).
+        await reloadAfter();
       }}
     />
   );
@@ -1466,7 +1536,7 @@ export function SimpleRoadmap() {
         onApply={async (l) => {
           const r = await api.POST("/v1/simple/roadmap/apply-approved", { params: { query: { roadmap: l.roadmap.id } } });
           toast({ message: r.data ? `Applied version ${l.version} of ${l.roadmap.title}` : `Version ${l.version} could not be applied` });
-          await reload();
+          await reloadAfter();
         }}
       />
       {/* #36: on a phone, Roadmap/Goal/Track and Group by read before the chart, not after
@@ -1480,8 +1550,8 @@ export function SimpleRoadmap() {
           ) : (
             <>
               No features yet: confirm your company&rsquo;s goals in{" "}
-              <Link href="/baseline" className="font-semibold text-accent-ink underline">
-                Detailed › Baseline
+              <Link href="/ground-truth" className="font-semibold text-accent-ink underline">
+                Detailed › Ground Truth
               </Link>{" "}
               and Oracle suggests the features for them here.
             </>

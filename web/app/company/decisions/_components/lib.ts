@@ -103,7 +103,7 @@ export const SUBJECT_LABEL: Record<string, string> = {
   document_version: "Version",
   section: "Section",
   roadmap_item: "Roadmap item",
-  entity: "Baseline item",
+  entity: "Ground Truth item",
   blocker: "Blocker",
   gap: "Gap",
   run: "Run",

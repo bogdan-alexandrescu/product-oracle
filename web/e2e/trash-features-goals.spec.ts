@@ -229,7 +229,8 @@ type RoadmapItem = Item & { key: string; roadmap: { slug: string } };
 
 async function alerts(page: Page): Promise<RoadmapItem[]> {
   const all = (await call(page, "GET", "/v1/simple/roadmap")).body as { items: RoadmapItem[] };
-  return all.items.filter((i) => i.roadmap.slug === "alerts-roadmap");
+  // The Alerts roadmap as the API names it: its document's slug.
+  return all.items.filter((i) => i.roadmap.slug === "usage-alerts-roadmap");
 }
 
 test("a feature deleted before the roadmap's next version is published comes back on it from Trash", async ({ page }) => {

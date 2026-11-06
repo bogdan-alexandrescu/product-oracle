@@ -1,5 +1,5 @@
 /**
- * Current state (api/oracle/currentstate): GET /v1/feature-states and the owner's moves,
+ * Running today (api/oracle/currentstate): GET /v1/feature-states and the owner's moves,
  * over the mock's Simple features (the priorities' rows). Invented proof: a few features run
  * today (one with proof 41 days old), a few are being built (two with every proof in), the rest
  * are new. Check again re-reads the proof; the owner answers; Move / Not yet; Mark as shipped.

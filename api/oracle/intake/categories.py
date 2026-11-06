@@ -189,7 +189,7 @@ BRIEF_FIELDS = {
 # What the brief speaking to a category does to its importance.
 LOWER = {"critical": "critical", "high": "medium", "medium": "low", "low": "low"}
 # A category nothing public speaks to: the same words whoever reads (S6).
-UNKNOWN_REASON = "Nothing in the pinned sources or the baseline answers it."
+UNKNOWN_REASON = "Nothing in the pinned sources or the Ground Truth answers it."
 
 # qa-onboarding-22: the goal question when the company has no goal to choose from yet
 # (the rule-made goal_alignment gap links no goal): never "which confirmed goal".
@@ -291,7 +291,7 @@ def rank_score(
 def rank_reason(category: Category, importance: str, impact: list[str], state: str) -> str:
     areas = ", ".join(a.replace("_", " ") for a in impact) or "nothing listed"
     known = {
-        "unknown": "nothing in the pinned sources or the baseline answers it",
+        "unknown": "nothing in the pinned sources or the Ground Truth answers it",
         "hypothesis": "only the brief states it; nobody has confirmed it",
         "ai_inference": "Oracle inferred it from sources; a person has not confirmed it",
         "user_decision": "a person decided it",

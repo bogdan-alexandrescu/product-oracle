@@ -87,7 +87,7 @@ test.describe("desktop", () => {
     const consent = page.getByTestId("consent");
     await expect(consent).toContainText(`${MOCK_CONSENT.client_name} wants to use Product Oracle as you.`);
     await expect(consent).toContainText(
-      "See what you can see: the baseline, documents, runs and your sources. It also sees the names of all Notion pages shared with Product Oracle, even ones not added as a source.",
+      "See what you can see: the Ground Truth, documents, runs and your sources. It also sees the names of all Notion pages shared with Product Oracle, even ones not added as a source.",
     );
     await expect(consent).toContainText("Make the changes you are allowed to: propose, comment, approve and edit.");
     await expect(consent).not.toContainText("including pages in no source");

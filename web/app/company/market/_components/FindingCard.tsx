@@ -69,7 +69,7 @@ export function FindingCard({
       </div>
       <h3 className="text-[15px] font-semibold">{finding.title}</h3>
       <p className="text-[15px]">{finding.summary}</p>
-      {finding.excerpt && <blockquote className="border-l-2 border-line-strong pl-3 text-sm text-text2">“{finding.excerpt}”</blockquote>}
+      {finding.excerpt && <blockquote className="border-l-2 border-line-strong pl-3 text-sm text-text2" data-user-content>“{finding.excerpt}”</blockquote>}
       <div className="flex flex-wrap items-center gap-2">
         <a href={finding.url} target="_blank" rel="noopener noreferrer nofollow" className="text-sm text-accent-ink hover:underline">
           Open page on {finding.host} ↗

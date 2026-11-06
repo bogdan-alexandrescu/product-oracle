@@ -116,7 +116,7 @@ test("api tokens: every kind, filter by kind and member, revoke with confirm", a
 
   await page.getByRole("group", { name: "Kind" }).getByRole("button", { name: "Run" }).click();
   await expect(rows).toHaveCount(1);
-  await expect(rows.first()).toContainText("Run · Baseline to PRD");
+  await expect(rows.first()).toContainText("Run · Ground Truth to PRD");
   await page.getByRole("group", { name: "Kind" }).getByRole("button", { name: "All" }).click();
   await page.getByLabel("Member").selectOption({ label: "approver@example.com" });
   await expect(rows).toHaveCount(1);
@@ -276,7 +276,7 @@ test("my account: sign out everywhere ends the session, personal tokens, MCP cli
   // Already expired: stays Expired, not Revoked.
   await expect(page.getByTestId("my-token-row").filter({ hasText: "staging sync" })).toContainText("Expired");
   await page.goto("/settings/api-tokens");
-  await expect(tokenRow(page, "Run · Baseline to PRD")).toContainText("Revoked");
+  await expect(tokenRow(page, "Run · Ground Truth to PRD")).toContainText("Revoked");
 });
 
 test("my account: a read-only credential sees Name disabled, with the reason", async ({ page }) => {

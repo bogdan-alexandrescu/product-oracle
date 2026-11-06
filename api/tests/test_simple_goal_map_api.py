@@ -415,7 +415,7 @@ async def test_readings_load_only_the_last_7_days_and_the_latest():
             out = await goal_map._readings(s, [signups], TODAY)
         finally:
             event.remove(conn.sync_connection, "after_cursor_execute", count)
-    assert out[signups] == ([25, 26, 27, 28, 29, 30, 31], 31)
+    assert out[signups] == ([25, 26, 27, 28, 29, 30, 31], 31, TODAY)
     assert sum(fetched) <= 8
 
 

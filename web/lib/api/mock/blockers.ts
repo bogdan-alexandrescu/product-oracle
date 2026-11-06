@@ -202,13 +202,13 @@ function gate(b: BlockerRow): Gate {
   const unresolved = b.status === "open" || b.status === "mitigating";
   if (b.type === "hard" && b.severity === "critical") {
     return unresolved
-      ? { status: "critical", rationale: `Critical hard blocker '${b.statement}' (${b.key}) is unresolved (${b.status}); resolve it, approve a scoped feasibility experiment or accept the risk` }
-      : { status: "pass", rationale: `'${b.statement}' (${b.key}) is ${b.status.replace("_", " ")}` };
+      ? { status: "critical", rationale: `Critical hard blocker '${b.statement}' is unresolved (${b.status}); resolve it, approve a scoped feasibility experiment or accept the risk` }
+      : { status: "pass", rationale: `'${b.statement}' is ${b.status.replace("_", " ")}` };
   }
   if (unresolved && (b.type === "hard" || b.type === "unknown" || b.severity === "critical")) {
-    return { status: "warning", rationale: `'${b.statement}' (${b.key}) is ${b.status}; research it or decide a path` };
+    return { status: "warning", rationale: `'${b.statement}' is ${b.status}; research it or decide a path` };
   }
-  return { status: "pass", rationale: `'${b.statement}' (${b.key}) does not stop a publish` };
+  return { status: "pass", rationale: `'${b.statement}' does not stop a publish` };
 }
 
 function recommended(options: Option[]): string | null {
@@ -312,7 +312,7 @@ export function narrowResolvedBlocker(db: BlockersDb, v2: V2Db) {
   const resolve = { id: crypto.randomUUID(), blocker_id: b.id, option_id: null, experiment_id: null, kind: "status_changed" as const, from_status: b.status, to_status: "resolved" as const, reason: "The provider raised our tier", actor: "user:approver", data: { gate: resolved }, created_at: at(1) };
   b.status = "resolved";
   b.document_ids = [];
-  const narrowed = { id: crypto.randomUUID(), blocker_id: b.id, option_id: null, experiment_id: null, kind: "status_changed" as const, from_status: null, to_status: null, reason: "Baseline import", actor: "user:approver", data: { change: "reclassified", before: resolved, by_decider: false, gate: snapshot(b) }, created_at: at(2) };
+  const narrowed = { id: crypto.randomUUID(), blocker_id: b.id, option_id: null, experiment_id: null, kind: "status_changed" as const, from_status: null, to_status: null, reason: "Ground Truth import", actor: "user:approver", data: { change: "reclassified", before: resolved, by_decider: false, gate: snapshot(b) }, created_at: at(2) };
   for (const e of [resolve, narrowed]) v2.blocker_events.push({ ...e, summary: describeEvent(e) });
 }
 

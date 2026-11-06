@@ -202,7 +202,7 @@ export function questionsCounts(ctx: QuestionsCtx, db: QuestionsDb, shown?: Ques
     waiting_count: mine.length,
     late_count: mine.filter((q) => q.late).length,
     approvals_waiting: approvals,
-    approvals_example: approvals ? "D-30 Approve the baseline check" : null,
+    approvals_example: approvals ? "D-30 Approve the Ground Truth check" : null,
   };
 }
 
@@ -282,6 +282,30 @@ export async function routeQuestionChanges(
     const undo: Change = { ...held.change, id: crypto.randomUUID(), status: "undone", undoes_id: held.change.id, undone: false, at: iso(mockNowMs()) };
     return json(200, { change: undo, flags: [] });
   }
+  if (p.length === 5 && (p[4] === "accept" || p[4] === "decline")) {
+    // As questions.decide: an owner or the question's decider accepts or declines a proposal.
+    const held = db.changes.find((c) => c.change.id === p[3]);
+    if (!held) return null;
+    const c = held.change;
+    const q = db.questions.find((x) => stableUuid(`simple-question/${x.n}`) === c.target.decision_id);
+    if (!q) return json(404, { detail: "No such question" });
+    if (!canOf(ctx, q).decide && !(ctx.me.role === "owner" || q.decider === ctx.me.id)) return json(403, { detail: "Only an owner or the question's decider decides proposals" });
+    if (c.status !== "proposed") return json(409, { detail: `This change is ${c.status} already` });
+    if (p[4] === "accept") {
+      if (c.op === "decide_question") {
+        if (decided(q)) return json(409, { detail: "outdated: the question is decided already" });
+        held.was = structuredClone(q);
+        q.chosen = c.after.option === "recommended" ? "recommended" : (q.pending?.change_id === c.id ? q.pending.answer : String(c.after.answer ?? c.after.option ?? ""));
+        q.decided_by = ctx.me.id;
+        q.decided_at = iso(mockNowMs());
+      } else q.decider = String(c.after.decider_id);
+    }
+    if (q.pending?.change_id === c.id) q.pending = null;
+    c.status = p[4] === "accept" ? "accepted" : "declined";
+    c.decided_by = ctx.me.id;
+    c.decided_at = iso(mockNowMs());
+    return json(200, { change: c, flags: [] });
+  }
   if (p.length !== 3) return null;
   const b = await readBody(req);
   if (SHEET_OPS.has(String(b.op))) return sheetChange(ctx, db, b);
@@ -343,6 +367,38 @@ export async function routeQuestionChanges(
   } else if (b.op === "decide_question") q.pending = { change_id: change.id, by: ctx.me.id, answer };
   db.changes.push({ change, was });
   return json(201, { change, flags: [] });
+}
+
+/**
+ * inbox-meeting-proposals fix (changes.inbox_rows): the proposals on open questions waiting for
+ * `me` (the question's decider now, else whom it was routed to), each named by its question's
+ * code and title, and the decisions on mine.
+ */
+export function questionInboxRows(ctx: QuestionsCtx, db: QuestionsDb, seen: string | null): { proposals: Schemas["InboxSimpleChange"][]; decisions: Schemas["InboxSimpleChange"][] } {
+  const me = ctx.me.id;
+  const of = (c: Change) => db.questions.find((x) => stableUuid(`simple-question/${x.n}`) === c.target.decision_id);
+  const row = (c: Change, q: Q, at: string | null, state?: Schemas["InboxSimpleChange"]["state"]): Schemas["InboxSimpleChange"] => {
+    const subject = `Q${q.n} ${q.title}`;
+    return {
+      id: c.id, op: c.op, status: c.status, item_id: null, item_title: null, document_id: c.document_id, by: c.by, by_name: c.by_name, at: c.at,
+      decided_by: c.decided_by, decided_at: c.decided_at, reason: c.reason, decision_reason: c.decision_reason,
+      state: state ?? (!seen || (at && at > seen) ? "new" : "open"), from_meeting: null,
+      // As the API: still to decide, it reads as proposed.
+      asked: c.status === "proposed" ? `proposed ${c.op === "decide_question" ? "deciding" : "who decides"} ${subject}` : c.op === "decide_question" ? `decided ${subject}` : `named who decides ${subject}`,
+      can_decide: c.status === "proposed" && canOf(ctx, q).decide, from_ask: false,
+      subject, question_id: String(c.target.decision_id), line_id: null,
+    };
+  };
+  const proposals: Schemas["InboxSimpleChange"][] = [];
+  const decisions: Schemas["InboxSimpleChange"][] = [];
+  for (const { change: c } of db.changes) {
+    const q = of(c);
+    if (!q) continue;
+    // As the API's current_route: the question's decider now takes it; a decided or withdrawn question leaves nothing to decide.
+    if (c.status === "proposed" && open(q) && (q.decider ? [q.decider] : c.routed_to).includes(me)) proposals.push(row(c, q, c.at));
+    if (c.by === me && (c.status === "accepted" || c.status === "declined")) decisions.push(row(c, q, c.decided_at, !seen || (c.decided_at ?? "") > seen ? undefined : "done"));
+  }
+  return { proposals, decisions };
 }
 
 /** edit-decisions (eq2 b): the sheet's ops on a PRD's question (oracle.simple.decision_sheet). */

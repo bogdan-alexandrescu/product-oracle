@@ -170,7 +170,8 @@ async def test_approve_is_refused_while_a_blocking_reason_is_open(review):  # no
         "file_problems": 0,
         "left": [
             {"item": "gift-cards", "item_title": "Gift cards", "code": "unknown_prd_section",
-             "label": "No PRD section", "waivable": True, "question_id": None},
+             "ref": "unknown_prd_section", "label": "No PRD section", "waivable": True,
+             "question_id": None},
         ],
     }  # fmt: skip
     assert cp["cannot_approve"] == LEFT

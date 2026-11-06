@@ -51,6 +51,7 @@ from oracle.members.names import display_name
 from oracle.roadmap.models import DraftRoadmap, ProductTrack, RoadmapItem
 from oracle.simple import (
     agenda,
+    card_order,
     change_words,
     changes,
     constraints,
@@ -59,6 +60,7 @@ from oracle.simple import (
     service,
     targets,
 )
+from oracle.simple.card_order import refuse_replaced, replaced_in
 from oracle.simple.changes import ChangeError
 from oracle.simple.models import SimpleChange, SimpleChatCard, SimpleChatRead
 from oracle.simple.schemas import (
@@ -421,6 +423,8 @@ class Ctx:
         self.talk_goals: list[Any] = []
         # meet-chat-right-prd: a meeting's chat reads only the meeting's PRD.
         self.prd: MeetingPrd | None = None
+        # ask-oracle-actions: the role whose reads are offered (a meeting's lowest).
+        self.api_role: str | None = None
 
     async def load(self) -> "Ctx":
         from oracle.simple import chat_actions
@@ -441,6 +445,7 @@ class Ctx:
         span = plan.current_span(list(views.values()), self.read.today)
         self.plan_span = (span.start, span.end) if span is not None else None
         self.people = list(await self.db.scalars(select(User).where(User.disabled_at.is_(None))))
+        self.api_role = await _api().reach_role(self.db, self.principal, self.meeting)
         await _talk().load(self)
         self.meeting_decider_name = await chat_actions.meeting_decider_name(self.db, self)
         self.goals, self.features = await chat_actions.suggest_context(self.db)
@@ -1347,9 +1352,17 @@ async def post(
         page = page_of_thread(await own_chat(db, principal, chat_id))
     ctx = Ctx(db, principal, rules)
     ctx.page = page
-    ctx.wants_decider = _decision_line(text)
+    # chat-latest-card: a line answering the previous card to change it ("no, note: ...")
+    # is that change, made a redo of the previous card's draft (card_order.redo_of).
+    rest = card_order.redo_line(text)
+    ctx.wants_decider = _decision_line(rest or text)
     await ctx.load()
-    reply = _talk().restate(ctx, parse(ctx, text))
+    reply = parse(ctx, rest) if rest is not None else None
+    redo = reply is not None and reply.kind == "cards"
+    if not redo:
+        ctx.wants_decider = _decision_line(text)
+        reply = parse(ctx, text)
+    reply = _talk().restate(ctx, reply)
     if ctx.item is not None and reply.kind == "answer":
         reply.citations = _talk().source_of(ctx, "roadmap")
     if only_understood and not reply.understood and not reply.reader:
@@ -1368,7 +1381,8 @@ async def post(
     if reply.reader:
         reply = Reply("pending", READING)
     asked, answer = await _write(db, principal, meeting_id, text.strip(), reply, page=page,
-                                 chat_id=chat_id, new_chat=new_chat, general=general)  # fmt: skip
+                                 chat_id=chat_id, new_chat=new_chat, general=general,
+                                 redo=redo)  # fmt: skip
     if reply.kind == "pending":
         read = SimpleChatRead(discussion_id=answer.discussion_id, message_id=answer.id,
                               ask_id=asked.id, meeting_id=meeting_id, by=_me(principal),
@@ -1404,9 +1418,10 @@ async def _write(
     chat_id: uuid.UUID | None = None,
     new_chat: bool = False,
     general: bool = False,
+    redo: bool = False,
 ) -> tuple[DiscussionMessage, DiscussionMessage]:
     """The person's line and Oracle's reply with its cards (and choices); the caller
-    commits."""
+    commits. ``redo``: the line asks to change the previous card's draft."""
     me = _me(principal)
     d = await _thread(db, principal, meeting_id, create=True, page=page, chat_id=chat_id,
                       new_chat=new_chat, general=general)  # fmt: skip
@@ -1424,7 +1439,7 @@ async def _write(
     d.last_message_at = at
     await db.flush()
     answer.reply_to = asked.id
-    await _attach(db, principal, answer, meeting_id, reply)
+    await _attach(db, principal, answer, meeting_id, reply, redo)
     if reply.choices:
         db.add(SimpleChatRead(discussion_id=d.id, message_id=answer.id, ask_id=asked.id,
                               meeting_id=meeting_id, by=me, line=line,
@@ -1444,14 +1459,21 @@ async def _attach(
     answer: DiscussionMessage,
     meeting_id: uuid.UUID | None,
     reply: Reply,
+    redo: bool = False,
 ) -> None:
-    """Oracle's cards on its line, in the order asked (real time orders them)."""
+    """Oracle's cards on its line, in the order asked (real time orders them). A new
+    record's card redoes an earlier draft only on an explicit signal: the reader named it
+    (``redo_of``) or the line asks to change the previous card (``redo``)."""
     at = datetime.now(UTC)
     for i, c in enumerate(reply.cards):
+        c = dict(c)
+        named = c.pop("redo_of", None)
+        again = await card_order.redo_of(db, answer, c, named, redo)
         card = SimpleChatCard(discussion_id=answer.discussion_id, message_id=answer.id,
                               meeting_id=meeting_id,
                               owner_id=None if meeting_id else _me(principal), status="open",
-                              created_at=at + timedelta(microseconds=i), **c)  # fmt: skip
+                              created_at=at + timedelta(microseconds=i), redo_of=again,
+                              **c)  # fmt: skip
         db.add(card)
         await db.flush()
         if card.op in FLOW_OPS:
@@ -1578,7 +1600,27 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
         "milestones": [n for n, _ in _talk().milestones(c).values()],
         "today": c.today.isoformat(),
         "ops": [{"op": o.op, "describe": o.describe, "args": o.args} for o in OPS.values()],
+        # chat-latest-card: the chat's open drafts of new records, a line may ask to change
+        # one ("make it April instead"): the reader names it (``redo_of``).
+        "cards": await _open_drafts(db, read),
+        # ask-oracle-actions: every action of the API the person's role reaches (``calls``).
+        "api": _api().offer(c.principal.role, c.api_role, c.meeting is not None),
     }
+
+
+async def _open_drafts(db: AsyncSession, read: SimpleChatRead) -> list[dict[str, str]]:
+    rows = list(
+        await db.scalars(
+            select(SimpleChatCard)
+            .where(SimpleChatCard.discussion_id == read.discussion_id,
+                   SimpleChatCard.message_id != read.message_id,
+                   SimpleChatCard.status == "open", SimpleChatCard.item_id.is_(None),
+                   SimpleChatCard.op.in_(card_order.NEW_OPS))
+            .order_by(SimpleChatCard.created_at.desc(), SimpleChatCard.id.desc())
+            .limit(10)
+        )
+    )  # fmt: skip
+    return [{"id": str(c.id), "op": c.op, "restated": c.summary} for c in reversed(rows)]
 
 
 _TOKEN = re.compile(r"\s*\[(?:c|l):\d+\]")
@@ -1728,6 +1770,10 @@ def interpret(c: Ctx, answer: Any, ask_box: bool = False, line: str | None = Non
                     return Reply("question", r.body)
                 refused.append(r.body if r.kind == "note" else f"I can't do that: {r.body}")
                 continue
+            if a.get("redo_of"):
+                # chat-latest-card: the reader read the line as changing that open draft
+                # (checked when the card is stored: card_order.redo_of).
+                r.cards = [{**x, "redo_of": str(a["redo_of"])} for x in r.cards]
             cards += r.cards
         # qa-simple-decide-24: nothing is dropped without a word: every refusal, the parts the
         # reader could not read, the changes past the fifth.
@@ -1795,8 +1841,9 @@ async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
     c = Ctx(s, principal, rules)
     c.page = read.page
     await c.load()
-    answer = await ask(READER_JOB, await _payload(c, read))
-    reply = _talk().restate(c, interpret(c, answer, read.ask_box, read.line))
+    payload = await _payload(c, read)
+    answer = await ask(READER_JOB, payload)
+    reply = await _with_calls(c, ask, payload, answer, read)
     if read.meeting_id is not None and reply.no_change and read.line.rstrip().endswith("?"):
         # As the mock's question branch: only a line the reader saw nothing to change in;
         # a change it could not build keeps its own reply.
@@ -1818,6 +1865,31 @@ async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
     await _attach(s, principal, msg, read.meeting_id, reply)
     await s.flush()
     return {"kind": reply.kind, "cards": len(reply.cards), "choices": len(reply.choices)}
+
+
+async def _with_calls(c: Ctx, ask: Any, payload: dict, answer: Any, read: SimpleChatRead) -> Reply:
+    """ask-oracle-actions: the reader's ``calls`` of the API's actions beside its ops. Reads
+    run at once as the person and a second call words their results (an answer); writes
+    are cards; a call the person's role does not reach is a plain refusal, never a card."""
+    calls = answer.get("calls") if isinstance(answer, dict) else None
+    if not calls:
+        return _talk().restate(c, interpret(c, answer, read.ask_box, read.line))
+    if c.meeting is not None and not has_role(c.principal.role, "commenter"):
+        return Reply("note", VIEWER_NOTE)
+    results, cards, refused = await _api().calls(c, answer)
+    if results:
+        worded = await ask(READER_JOB, {**payload, "results": results})
+        said = worded.get("answer") if isinstance(worded, dict) else None
+        if not isinstance(said, str) or not said.strip():
+            return Reply("note", " ".join([COULD_NOT_READ, *refused]))
+        return Reply("answer", " ".join([plain(said.strip())[:1500], *refused]))
+    first = (_talk().restate(c, interpret(c, {**answer, "calls": None}, False, read.line))
+             if answer.get("actions") else None)  # fmt: skip
+    cards = [*(first.cards if first is not None and first.kind == "cards" else []), *cards]
+    if not cards:
+        return Reply("note", " ".join(refused) or f"I could not tell what to change. {SAY_AGAIN}")
+    said = [f"I can't do: {' '.join(refused)}"] if refused else []
+    return Reply("cards", " ".join([*said, _count(len(cards))]), cards)
 
 
 async def _keep_question(
@@ -1913,10 +1985,18 @@ async def apply_all(
     cards = list(
         await db.scalars(
             select(SimpleChatCard)
-            .where(SimpleChatCard.message_id == message_id, SimpleChatCard.status == "open")
+            # ask-oracle-actions: an API action card is applied on its own, never in bulk.
+            .where(
+                SimpleChatCard.message_id == message_id,
+                SimpleChatCard.status == "open",
+                SimpleChatCard.op != _api().OP,
+            )
             .order_by(SimpleChatCard.created_at, SimpleChatCard.id)
         )
     )
+    # chat-latest-card: only the line's active cards; a newer card replaced the others.
+    gone = await replaced_in(db, cards)
+    cards = [c for c in cards if c.id not in gone]
     if not cards:
         raise ChatError(409, "No open cards on this line")
     todo = [(c.id, c.summary) for c in cards]
@@ -2009,6 +2089,12 @@ def _actions() -> Any:
     return chat_actions
 
 
+def _api() -> Any:
+    from oracle.simple import ask_actions
+
+    return ask_actions
+
+
 def _card_bar(principal: Any, card: SimpleChatCard, rules: Any) -> str | None:
     if card.op in _actions().DIRECT_OPS:
         return _actions().bar(principal, card, rules)
@@ -2026,6 +2112,8 @@ def _undo_bar(principal: Any, card: SimpleChatCard, rules: Any, read_: service.R
     The rule its Apply takes (the meeting's change mode, the viewer's bar); an engine card
     also needs the caller to decide its item, unless they applied it themselves."""
     bar = _card_bar(principal, card, rules)
+    if bar is None and card.op == _api().OP and not (card.after or {}).get("undo"):
+        return _api().CANNOT_UNDO
     if bar is not None or card.op in _actions().DIRECT_OPS or card.decided_by == _me(principal):
         return bar
     if not _decides(principal, card, read_):
@@ -2111,6 +2199,8 @@ async def cards_out(
     # A meeting's cards may be on its PRD's draft-roadmap items (meet-chat-right-prd).
     await meeting_prd(db, read_, rules)
     proposals = await _proposals(db, cards)
+    # chat-latest-card: a card a newer one in its chat replaced is no longer actionable.
+    gone = await replaced_in(db, cards)
     routes = {i: list(r.routed_to or []) for i, r in proposals.items()}
     declined = {i: r for i, r in proposals.items() if r.status == "declined"}
     names = await _names(db, {c.decided_by for c in cards if c.decided_by}
@@ -2212,6 +2302,9 @@ async def cards_out(
                 asks, here = service.decider_ids(e, read_.deciders) or owners, False
                 asks_all, here_all = asks if may_all else [], False
                 names.update(await _names(db, {i for i in asks if i not in names}))
+        if c.status == "open" and c.id in gone:
+            may = may_all = bar = None
+            asks, asks_all, here, here_all = [], [], True, True
         # walkc-meeting r2: a proposal declined since reads as declined, by whom and when.
         no = declined.get(c.change_id) if c.status == "proposed" and c.change_id else None
         by, at = (no.decided_by, no.decided_at) if no is not None else (c.decided_by, c.decided_at)
@@ -2224,7 +2317,8 @@ async def cards_out(
             flow=await _flow(db, c), change_id=c.change_id,
             decided_by_name=names.get(by) if by else None,  # type: ignore[arg-type]
             decided_at=at, decision_id=c.decision_id, change_words=card_words,
-            correct=correct if c.status == "open" else None,
+            correct=correct if c.status == "open" and c.id not in gone else None,
+            replaced_by=gone.get(c.id),
             dependents=[x.row.title for x in waiting], dependent_ids=[x.row.id for x in waiting],
             may_with_dependents=may_all,  # type: ignore[arg-type]
             can_undo=c.status == "applied" and _undo_bar(principal, c, rules, read_) is None,
@@ -2271,6 +2365,7 @@ async def apply(
     ``dependents``: the ids the card listed; others waiting on it now are 409."""
     me = _me(principal)
     card, rules = await _get(db, principal, card_id)
+    await refuse_replaced(db, card)
     bar = _card_bar(principal, card, rules)
     if bar is not None:
         raise ChatError(403, bar)
@@ -2305,6 +2400,11 @@ async def apply(
     body.session_id = getattr(rules, "session_id", None) if rules is not None else None
 
     async def make() -> SimpleChangeResult:
+        # The chat is locked and the card checked again in the change's own transaction (a
+        # retry's rollback let the first lock go): a newer card acted on meanwhile refuses it.
+        fresh = await db.get(SimpleChatCard, card_id, populate_existing=True)
+        if fresh is not None:
+            await refuse_replaced(db, fresh)
         # The card is taken in the change's own transaction (the engine commits both): two
         # Apply clicks at once make one change.
         if fix is None:
@@ -2352,8 +2452,16 @@ async def apply(
                 )
             except getattr(meetings, "MeetingError", ()) as e:
                 raise ChatError(e.status, e.detail) from e
+    await _logged(db, principal, card)
     await db.commit()
     return await one(db, principal, card, rules), result
+
+
+async def _logged(db: AsyncSession, principal: Any, card: SimpleChatCard) -> None:
+    """ask-oracle-actions: an applied card is in the audit log as made via Ask Oracle."""
+    await audit.record(db, principal, "simple_chat.card_apply", "simple_chat_card", card.id,
+                       {"via": "Ask Oracle", "op": card.op, "summary": card.summary,
+                        "change_id": str(card.change_id) if card.change_id else None})  # fmt: skip
 
 
 async def rebase(db: AsyncSession, card_id: uuid.UUID, detail: Any) -> None:
@@ -2446,6 +2554,8 @@ async def _apply_direct(
     # An applier may leave the card proposed (a commenter's decision on the Ask panel).
     card.status = "proposed" if card.status == "proposed" else "applied"
     card.decided_by, card.decided_at = _me(principal), company_time.now()
+    if card.op != _api().OP:  # an API action logs its own (ask_actions.apply)
+        await _logged(db, principal, card)
     await db.commit()
     return await one(db, principal, card, rules), None
 
@@ -2454,6 +2564,7 @@ async def discard(db: AsyncSession, principal: Any, card_id: uuid.UUID) -> ChatC
     card, rules = await _get(db, principal, card_id)
     if card.status != "open":
         raise ChatError(409, f"This card is {card.status} already")
+    await refuse_replaced(db, card)
     if not has_role(principal.role, "commenter"):
         raise ChatError(403, "Viewers ask questions; they don't discard cards")
     # Those the change mode bars from applying may not discard either.

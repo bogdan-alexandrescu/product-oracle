@@ -51,7 +51,7 @@ for (const width of [1440, 1512]) {
     const box = (await table.boundingBox())!;
 
     // The Next cell: the decision and who takes it, inside the card, nothing cut.
-    const digest = row(page, "Daily alert digest email");
+    const digest = row(page, "Weekly alert digest");
     const next = digest.getByTestId("plan-next");
     await expect(next).toHaveText("Owners decide on the slip");
     const nb = (await next.boundingBox())!;
@@ -103,9 +103,9 @@ test("an item's History has one line per event", async ({ page }) => {
 
 test("Why it needs you says what changed in words", async ({ page }) => {
   await openPlan(page);
-  await row(page, "Daily alert digest email").getByTestId("plan-title").click();
+  await row(page, "Weekly alert digest").getByTestId("plan-title").click();
   const why = inspector(page).getByTestId("plan-why");
-  await expect(why).toContainText("The feature and 2 goals changed; the product was confirmed; 11 baseline items changed");
+  await expect(why).toContainText("The feature and 2 goals changed; the product was confirmed; 11 Ground Truth items changed");
   await expect(why).not.toContainText("feature:");
   await expect(why).not.toContainText("goal:");
   await expect(why).not.toContainText("product:");

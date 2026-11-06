@@ -108,12 +108,15 @@ function Metrics() {
     {
       key: "change",
       header: "Change",
-      width: "140px",
+      width: "184px",
       phone: "meta",
       cell: (m) =>
         m.change ? (
-          <span className="flex min-w-0 items-center gap-1.5 text-sm" data-col="change">
-            <span className="tnum truncate">{changeText(m.change.value, m.change.pct)}</span>
+          // pass F F-40: the whole change, its chip beside it or under it, never cut.
+          <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm" data-col="change">
+            <span className="tnum whitespace-nowrap" data-testid="change-value">
+              {changeText(m.change.value, m.change.pct)}
+            </span>
             {m.change.variance && <Chip kind={VARIANCE_KIND[m.change.variance]}>{VARIANCE_LABEL[m.change.variance]}</Chip>}
           </span>
         ) : (
@@ -151,7 +154,18 @@ function Metrics() {
   ];
 
   const inspector = detail ? (
-    <MetricInspector key={detail.id} metric={detail} metrics={rows} goals={goals} onEdit={() => setForm("edit")} onChanged={changed} />
+    <MetricInspector
+      key={detail.id}
+      metric={detail}
+      metrics={rows}
+      goals={goals}
+      onEdit={() => {
+        // pass F F-4: on a phone the form replaces the metric sheet, never sits behind it.
+        setSheetOpen(false);
+        setForm("edit");
+      }}
+      onChanged={changed}
+    />
   ) : null;
 
   return (
@@ -182,9 +196,9 @@ function Metrics() {
                 Archived
               </label>
               <InfoTip label="metrics" align="end">
-                The numbers Oracle reads every week, Monday to Sunday in the Company time zone. Outputs are results the company wants; inputs are
-                numbers the team can move, listed under the output they drive. A week whose change is outside the normal range is a variance,
-                and the metric&apos;s owner explains it in the Weekly metrics review.
+                The numbers Oracle reads every week, Monday to Sunday in the Company time zone. Results are what the company wants; drivers are
+                numbers the team can move, listed under the result they drive. A week whose change is outside the normal range is an unusual
+                week, and the metric&apos;s owner explains it in the Weekly metrics review.
               </InfoTip>
             </div>
           }
@@ -202,9 +216,12 @@ function Metrics() {
                 ) : undefined
               }
             >
-              The goal values on Home come from each goal. Add a metric here to track a number every week, read from your product
-              analytics, typed by hand or sent by API. A metric linked to a goal keeps that goal&apos;s current value up to date, and Oracle
-              flags a week that changes more than usual.{writer ? "" : " Approvers and owners add metrics."}
+              Track a number every week.{" "}
+              <InfoTip label="metrics">
+                A metric is read from your product analytics, typed by hand or sent from another tool. One linked to a goal keeps that
+                goal&apos;s current value up to date, and Oracle flags a week that changes more than usual.
+                {writer ? "" : " Approvers and owners add metrics."}
+              </InfoTip>
             </CompanyEmpty>
           ) : (
             <DataTable

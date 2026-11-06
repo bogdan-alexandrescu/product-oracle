@@ -5,7 +5,7 @@ import { login, signOut } from "./helpers";
 
 /**
  * S4 Freshness: "N new items since draft k, refresh?" on a PRD draft. On the mock layer
- * ("draft-new-items" scenario: the D10 run-review seed, a Baseline to PRD run the admin started
+ * ("draft-new-items" scenario: the D10 run-review seed, a Ground Truth to PRD run the admin started
  * that drafted usage-alerts v2; a Sync now of Product chat brings in one new message), driven as a
  * person would. Each test states its card: protects / fails_when / no_claim.
  */
@@ -27,7 +27,7 @@ async function syncProductChat(page: Page) {
 
 test("the draft's author sees what synced since the draft and refreshes it", async ({ page }) => {
   // protects=S4 "N new items since draft k, refresh?"; fails_when=no line after a sync brings
-  // in an item, a line before it, or Refresh does not start a Baseline to PRD run on this PRD;
+  // in an item, a line before it, or Refresh does not start a Ground Truth to PRD run on this PRD;
   // no_claim=the API's counting rules (api/tests/test_draft_new_items.py).
   await start(page);
   await page.goto(LATEST);
@@ -41,7 +41,7 @@ test("the draft's author sees what synced since the draft and refreshes it", asy
   await banner(page).getByRole("button", { name: "Refresh" }).click();
   const dialog = page.getByRole("dialog", { name: "Refresh draft" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole("radio", { name: /Baseline to PRD/ })).toBeChecked();
+  await expect(dialog.getByRole("radio", { name: /Ground Truth to PRD/ })).toBeChecked();
   await expect(dialog.getByLabel("PRD document")).toHaveValue("usage-alerts");
 });
 

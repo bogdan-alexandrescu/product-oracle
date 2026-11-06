@@ -2846,7 +2846,7 @@ async def decisions_page(
 
 # build-rundecide RD1 a: a run's stops as people name them in Simple.
 _STOP_WORDS = {
-    "baseline_confirm": "Baseline",
+    "baseline_confirm": "Ground Truth",
     "feature_set": "Feature set",
     "eng_review": "Engineering check",
     "priority_order": "Order",

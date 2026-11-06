@@ -68,11 +68,11 @@ test("qa-settings-28/29: Settings > API tokens names a run token by its flow and
   await page.getByRole("group", { name: "Kind" }).getByRole("button", { name: "Run" }).click();
   await expect(rows).toHaveCount(1);
   const run = rows.first();
-  await expect(run).toContainText("Run · Baseline to PRD");
+  await expect(run).toContainText("Run · Ground Truth to PRD");
   await expect(run).not.toContainText("baseline to prd");
   await expect(run.getByTestId("token-scopes")).toHaveText("Read & draft");
   await expect(run).not.toContainText("read:baseline");
-  await expect(run.getByTestId("token-scopes").locator("[data-kind]")).toHaveAttribute("title", /Read the baseline/);
+  await expect(run.getByTestId("token-scopes").locator("[data-kind]")).toHaveAttribute("title", /Read the Ground Truth/);
 
   await page.getByRole("group", { name: "Kind" }).getByRole("button", { name: "All" }).click();
   await expect(rows.filter({ hasText: "laptop cli" }).getByTestId("token-scopes")).toHaveText("Read");

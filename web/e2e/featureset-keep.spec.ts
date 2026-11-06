@@ -7,7 +7,7 @@ import { login } from "./helpers";
 /**
  * A feature-set call keeps every reason it was asked for. The "scope-review" scenario's
  * saved-addresses run (web/lib/api/mock/runs.ts seedScopeReviewRuns): Pick address in one step
- * needs a call for two reasons, "Low confidence" and "New, not in the baseline"; five of the
+ * needs a call for two reasons, "Low confidence" and "New, not in the Ground Truth"; five of the
  * eight features are handled, so the bar starts at "5 of 8 handled". In the "scope-review-kept"
  * scenario's address-book run, Bulk edit is blocked by its left-out dependency and its two reasons to confirm are kept by one
  * older call that answers both.
@@ -40,7 +40,7 @@ test("keeping both reasons of a feature keeps both, and the tally and tray follo
   await expect(bar(page).getByTestId("decision-tally")).toContainText("5 of 8 handled");
   const pick = row(page, PICK);
   await expect(pick.getByTestId("row-reasons")).toContainText("Low confidence");
-  await expect(pick.getByTestId("row-reasons")).toContainText("New, not in the baseline");
+  await expect(pick.getByTestId("row-reasons")).toContainText("New, not in the Ground Truth");
 
   await pick.getByRole("button", { name: "Include", exact: true }).click();
   await expect(pick.getByTestId("row-reasons")).not.toContainText("Low confidence");
@@ -56,7 +56,7 @@ test("keeping both reasons of a feature keeps both, and the tally and tray follo
   const chips = bar(page).getByTestId("staged-chip").filter({ hasText: PICK });
   await expect(chips).toHaveCount(2);
   await expect(chips.filter({ hasText: "included · low confidence" })).toHaveCount(1);
-  await expect(chips.filter({ hasText: "included · new, not in the baseline" })).toHaveCount(1);
+  await expect(chips.filter({ hasText: "included · new, not in the Ground Truth" })).toHaveCount(1);
 });
 
 // Card keep-2: protects = the side panel keeps each reason's call too, its Undo takes back one
@@ -135,7 +135,7 @@ test("the row's Undo takes back both calls of a feature", async ({ page }) => {
 
   await pick.getByTestId("row-done").getByRole("button", { name: "Undo" }).click();
   await expect(pick.getByTestId("row-reasons")).toContainText("Low confidence");
-  await expect(pick.getByTestId("row-reasons")).toContainText("New, not in the baseline");
+  await expect(pick.getByTestId("row-reasons")).toContainText("New, not in the Ground Truth");
   await expect(bar(page).getByTestId("staged-chip").filter({ hasText: PICK })).toHaveCount(0);
   await expect(bar(page).getByTestId("decision-tally")).toContainText("5 of 8 handled");
 });

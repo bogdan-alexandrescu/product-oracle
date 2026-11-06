@@ -148,7 +148,7 @@ export function Priorities() {
     void api.PATCH("/v1/me/preferences", { body: { priorities_line: key } });
   };
   const data = q.data;
-  // Current state: each feature's word pill, and the Show filter that counts each kind.
+  // Running today: each feature's word pill, and the Show filter that counts each kind.
   const marks = useFeatureMarks();
   const [show, setShow] = useState<ShowKind | null>(null);
   const showCounts = useMemo(() => {
@@ -287,8 +287,8 @@ export function Priorities() {
           ) : (
             <>
               No features yet: confirm your company&rsquo;s goals in{" "}
-              <Link href="/baseline" className="font-medium text-accent-ink underline">
-                Detailed › Baseline
+              <Link href="/ground-truth" className="font-medium text-accent-ink underline">
+                Detailed › Ground Truth
               </Link>{" "}
               and the features Oracle suggests for them rank here.
             </>

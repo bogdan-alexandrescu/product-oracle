@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, useSyncExternalStore } from "react";
 
-import { InfoTip, Panel, Split, ViewOnly } from "@/components/ds";
+import { InfoTip, Panel, Sheet, Split, ViewOnly } from "@/components/ds";
 import { ErrorNote } from "@/components/ui";
 import { goalViews } from "@/app/home/_goals";
 import { api, unwrap } from "@/lib/api/client";
@@ -16,6 +16,22 @@ import { DraftSheet } from "./_components/DraftSheet";
 import { DriftList } from "./_components/DriftList";
 import { StackInspector, StackTable, stackRows } from "./_components/StackTable";
 import type { DocKind, FindingState } from "./_components/lib";
+
+const PHONE = "(max-width: 600px)";
+
+function subscribePhone(onChange: () => void) {
+  const mq = window.matchMedia(PHONE);
+  mq.addEventListener("change", onChange);
+  return () => mq.removeEventListener("change", onChange);
+}
+
+function useIsPhone(): boolean {
+  return useSyncExternalStore(
+    subscribePhone,
+    () => window.matchMedia(PHONE).matches,
+    () => false,
+  );
+}
 
 /**
  * Company › Strategy (H4): the approved vision and product strategy, the strategy stack
@@ -35,6 +51,10 @@ export default function StrategyPage() {
   const [state, setState] = useState<FindingState>("open");
   const [picked, setPicked] = useState<string | null>(null);
   const [drafting, setDrafting] = useState<DocKind | null>(null);
+  // pass F F-44: on a phone a stack line's details open in a sheet.
+  const phone = useIsPhone();
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const stackPanel = useRef<HTMLDivElement>(null);
 
   const stackQ = useQuery("strategy|stack", () => unwrap(api.GET("/v1/strategy/stack")));
   // Every state's list, so each chip counts the findings its list shows (the API does not page).
@@ -66,6 +86,15 @@ export default function StrategyPage() {
   };
   const approvedVersion = (kind: DocKind) => (kind === "vision" ? stack?.vision?.document.version : stack?.strategy?.document.version) ?? null;
 
+  /** Opens a stack line: its details beside the stack, or in a sheet on a phone (F-42, F-44). */
+  function pick(key: string, fromCard = false) {
+    setPicked(key);
+    if (phone) setSheetOpen(true);
+    else if (fromCard) stackPanel.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  // pass F F-13: until the stack answers the cards show a skeleton; a failure says so with Try again.
+  const load = { loading: stackQ.loading, failed: !!stackQ.error && !stack, onRetry: () => void stackQ.reload() };
+
   async function waived() {
     invalidateWaiting();
     await Promise.all([stackQ.reload(), openQ.reload(), waivedQ.reload(), resolvedQ.reload()]);
@@ -75,12 +104,23 @@ export default function StrategyPage() {
   return (
     <div data-testid="strategy-page" className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
       <CompanyHeader status={readOnly && <ViewOnly />} />
-      {(stackQ.error || docsQ.error) && <ErrorNote>{stackQ.error ?? docsQ.error}</ErrorNote>}
+      {docsQ.error && <ErrorNote>{docsQ.error}</ErrorNote>}
       <div className="grid grid-cols-2 items-stretch gap-4 max-[900px]:grid-cols-1 max-[600px]:gap-3">
-        <VisionCard stack={stack} doc={docs ? docOf("vision") : null} owner={owner && !!docs} onDraft={setDrafting} />
-        <StrategyCard stack={stack} doc={docs ? docOf("strategy") : null} owner={owner && !!docs} goals={goals} onDraft={setDrafting} />
+        <VisionCard stack={stack} load={load} doc={docs ? docOf("vision") : null} owner={owner && !!docs} onDraft={setDrafting} />
+        <StrategyCard
+          stack={stack}
+          load={load}
+          doc={docs ? docOf("strategy") : null}
+          owner={owner && !!docs}
+          goals={goals}
+          canAddGoal={can("confirm_entity")}
+          onPick={(key) => pick(key, true)}
+          onDraft={setDrafting}
+          open={open}
+        />
       </div>
-      <Split inspector={selected ? <StackInspector stack={stack} row={selected} onWaived={waived} /> : undefined}>
+      <div ref={stackPanel} className="scroll-mt-4" />
+      <Split inspector={selected && !phone ? <StackInspector stack={stack} row={selected} onWaived={waived} /> : undefined}>
         <Panel
           title="Strategy stack"
           tools={
@@ -94,8 +134,9 @@ export default function StrategyPage() {
           <StackTable
             stack={stack}
             rows={rows}
-            selected={selected?.key ?? null}
-            onSelect={setPicked}
+            selected={phone ? (sheetOpen ? (selected?.key ?? null) : null) : (selected?.key ?? null)}
+            onSelect={(key) => pick(key)}
+            load={load}
             confirmedGoals={goalsQ.data ? goalsQ.data.filter((g) => g.status === "confirmed").length : null}
             hasStrategy={!!docs?.strategy.length}
             canStart={owner && !!docs}
@@ -112,6 +153,11 @@ export default function StrategyPage() {
           onWaived={waived}
         />
       </Split>
+      {phone && (
+        <Sheet open={sheetOpen && !!selected} title="Stack line" onClose={() => setSheetOpen(false)} testId="stack-sheet">
+          {selected ? <StackInspector stack={stack} row={selected} onWaived={waived} /> : null}
+        </Sheet>
+      )}
       {drafting && owner && (
         <DraftSheet
           kind={drafting}

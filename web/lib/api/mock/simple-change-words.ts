@@ -81,7 +81,6 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
     case "set_track": return `changed the track of ${x}`;
     case "set_prd": return `changed the PRD of ${x}`;
     case "set_goal": return `changed the goal of ${x}`;
-    case "set_depends": return `changed what ${x} depends on`;
     case "set_parent": {
       const parent = [target.code, target.title].map((v) => String(v ?? "")).join(" ").trim();
       return after.parent_key ? `made ${x} part of ${parent || "another feature"}` : `took ${x} out of ${parent || "the feature it was part of"}`;
@@ -89,6 +88,12 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
     case "set_goal_measure": return `changed how the goal of ${x} is measured`;
     case "set_status": return `marked ${x} ${after.status ?? "planned"}`;
     case "set_decider": return `changed the decider of ${x}`;
+    // ask-oracle-actions: a dependency added or removed in the feature talk names it (change_words.py).
+    case "set_depends": {
+      const dep = target.dependency ? String(target.dependency) : null;
+      const gone = ((after.depends_on as unknown[] | undefined) ?? []).length < ((before.depends_on as unknown[] | undefined) ?? []).length;
+      return !dep ? `changed what ${x} depends on` : gone ? `${x} no longer depends on ${dep}` : `${x} now depends on ${dep}`;
+    }
     // prd-questions: a PRD question (a decision) answered, or its decider named.
     case "decide_question": return `decided ${x}`;
     case "name_decider": return `named who decides ${x}`;

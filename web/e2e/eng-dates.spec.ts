@@ -5,7 +5,7 @@ import { ENG_DATES_RUN, ENG_DATES_WAITING_RUN } from "../lib/api/mock/runs";
 import { login } from "./helpers";
 
 /**
- * F4 Engineering review stop, lane B: the Engineering dates of Baseline to PRD. After the PRD
+ * F4 Engineering review stop, lane B: the Engineering dates of Ground Truth to PRD. After the PRD
  * review, the engineering lead accepts, changes or marks No date on each proposed date of the
  * draft's Now items, on its own review screen. On the mock layer, driven as a person would.
  */

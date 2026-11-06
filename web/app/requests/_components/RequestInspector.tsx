@@ -646,15 +646,15 @@ function Decision({
                     <>
                       <p>
                         A request is qualified under a confirmed goal, and there are no goals yet. Oracle proposes your goals when it
-                        builds the baseline from your sources; confirm one, then link it here. Or disqualify this request as No goal.
+                        builds the Ground Truth from your sources; confirm one, then link it here. Or disqualify this request as No goal.
                       </p>
                       {can("confirm_entity") ? (
-                        <LinkButton href="/baseline?build=1" className="self-start">
-                          Build the baseline
+                        <LinkButton href="/ground-truth?build=1" className="self-start">
+                          Build the Ground Truth
                         </LinkButton>
                       ) : (
-                        <Link href="/baseline" className="self-start font-semibold text-accent-ink underline-offset-2 hover:underline">
-                          See the baseline
+                        <Link href="/ground-truth" className="self-start font-semibold text-accent-ink underline-offset-2 hover:underline">
+                          See the Ground Truth
                         </Link>
                       )}
                     </>

@@ -8,8 +8,8 @@ import { login } from "./helpers";
  * Second QA walk of Company › Rituals (qa-company-1..3, 6, 21..24, 34, 35), on the mock layer
  * (lib/api/mock/rituals.ts, "rituals" scenario), driven through the UI as a person would.
  * Today is Wed Oct 28 2026; the Company time zone is not set, so Los Angeles is used. The
- * Baseline rebuild and the Investor update are paused; both meet the first Monday of the
- * month at 9:00 AM, next on Mon Nov 2. The Baseline rebuild's build is estimated at $7.00.
+ * Ground Truth rebuild and the Investor update are paused; both meet the first Monday of the
+ * month at 9:00 AM, next on Mon Nov 2. The Ground Truth rebuild's build is estimated at $7.00.
  */
 
 const TODAY = new Date("2026-10-28T17:00:00Z");
@@ -35,19 +35,19 @@ async function pick(page: Page, title: string) {
   await expect(inspector(page)).toContainText(title);
 }
 
-test("qa-company-1: Prepare now on the paused Baseline rebuild asks first, naming the pause and the $7.00 cost", async ({ page }) => {
+test("qa-company-1: Prepare now on the paused Ground Truth rebuild asks first, naming the pause and the $7.00 cost", async ({ page }) => {
   // protects=qa-company-1; fails_when=Prepare now starts the paid build at once, or the
   // question does not say the ritual is paused or what it costs; no_claim=the build itself.
   await openRituals(page);
-  await pick(page, "Baseline rebuild");
+  await pick(page, "Ground Truth rebuild");
   await inspector(page).getByRole("button", { name: "Prepare now" }).click();
   const ask = page.getByRole("alertdialog", { name: "Prepare now" });
-  await expect(ask).toContainText("Baseline rebuild is paused; it stays paused.");
-  await expect(ask).toContainText("starts the baseline build: one Oracle run of about $7.00");
+  await expect(ask).toContainText("Ground Truth rebuild is paused; it stays paused.");
+  await expect(ask).toContainText("starts the Ground Truth build: one Oracle run of about $7.00");
   await ask.getByRole("button", { name: "Back" }).click();
   await expect(ask).toHaveCount(0);
   await expect(page).toHaveURL(/\/company\/rituals$/);
-  await expect(ritualRow(page, "Baseline rebuild").getByTestId("last-pre-read")).toHaveCount(0);
+  await expect(ritualRow(page, "Ground Truth rebuild").getByTestId("last-pre-read")).toHaveCount(0);
   await inspector(page).getByRole("button", { name: "Prepare now" }).click();
   await ask.getByRole("button", { name: "Prepare now" }).click();
   await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
@@ -63,24 +63,24 @@ test("qa-company-1: Prepare now that spends nothing on an active ritual does not
 test("qa-company-2/3: after Prepare now the paused ritual's Last pre-read is Nov 2, and the occurrence says one thing about the build", async ({ page }) => {
   // protects=qa-company-2 (Last pre-read names and links the new pre-read) and qa-company-3
   // (the pre-read's card no longer says the build has not started); fails_when=Last stays
-  // empty, or the page says both "Oracle started the baseline build" and "Oracle starts the build".
+  // empty, or the page says both "Oracle started the Ground Truth build" and "Oracle starts the build".
   await openRituals(page);
-  await pick(page, "Baseline rebuild");
+  await pick(page, "Ground Truth rebuild");
   await inspector(page).getByRole("button", { name: "Prepare now" }).click();
   await page.getByRole("alertdialog", { name: "Prepare now" }).getByRole("button", { name: "Prepare now" }).click();
   await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
   const occurrence = new URL(page.url()).pathname;
 
   const card = page.getByTestId("occurrence-rebuild");
-  await expect(card).toContainText("Oracle started the baseline build");
+  await expect(card).toContainText("Oracle started the Ground Truth build");
   await expect(card.getByRole("link", { name: "Open run" })).toBeVisible();
   const block = page.getByTestId("ritual-block").filter({ hasText: "Estimate $7.00" });
   await expect(block).toBeVisible();
   await expect(block).not.toContainText("Oracle starts the build");
-  await expect(block).not.toContainText("No baseline build yet");
+  await expect(block).not.toContainText("No Ground Truth build yet");
 
   await page.getByRole("link", { name: "← Rituals" }).click();
-  const last = ritualRow(page, "Baseline rebuild").getByTestId("last-pre-read");
+  const last = ritualRow(page, "Ground Truth rebuild").getByTestId("last-pre-read");
   await expect(last).toHaveText("Nov 2, 2026");
   await last.click();
   await expect(page).toHaveURL(new RegExp(`${occurrence}$`));

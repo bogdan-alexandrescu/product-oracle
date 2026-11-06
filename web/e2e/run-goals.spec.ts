@@ -55,7 +55,7 @@ test("goals in Draft with Oracle: the brief's goals are picked, and a change sti
  *   written still estimates in Draft with Oracle, the sheet saying it leaves that goal out;
  *   fails_when=the first estimate is refused ("not a confirmed goal") or the sheet says
  *   nothing; no_claim=which goals the API keeps (test_runs_target_goals.py).
- * - "New run goals": protects=the New run dialog picks the goals a Baseline to PRD run
+ * - "New run goals": protects=the New run dialog picks the goals a Ground Truth to PRD run
  *   serves, beside its PRD document field, and the run page names them; fails_when=the
  *   dialog has no goal picker, or the run serves no goal; no_claim=the prompts.
  */
@@ -77,8 +77,8 @@ test("brief goal rejected since: Draft with Oracle leaves it out, says so, and e
   await expect(page.getByTestId("run-goals")).toHaveText("Serves Raise activation");
 });
 
-test("New run goals: the dialog picks the goals a Baseline to PRD run serves", async ({ page }) => {
-  // The "new-run-prd" scenario keeps Baseline to PRD in the New run dialog (#257).
+test("New run goals: the dialog picks the goals a Ground Truth to PRD run serves", async ({ page }) => {
+  // The "new-run-prd" scenario keeps Ground Truth to PRD in the New run dialog (#257).
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "new-run-prd"));
   await login(page);
   await page.getByTestId("nav-runs").click();

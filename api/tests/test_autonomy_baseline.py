@@ -22,7 +22,7 @@ from tests.test_runs import RUN_BASELINE, get, pending, started, tick
 
 SUPERSEDED = "Superseded: the same run later applied this change directly"
 
-OBSERVE_NOTE = "Baseline merge skipped: Oracle is set to observe the baseline"
+OBSERVE_NOTE = "Ground Truth merge skipped: Oracle is set to observe the Ground Truth"
 
 
 @pytest.fixture
@@ -95,7 +95,7 @@ async def test_at_recommend_every_agent_write_becomes_a_proposal(client, owner, 
     assert merged["proposals"] == 3  # checkout's change, the goal and guided-setup
     assert merged["autonomy"]["level"] == "recommend"
     assert run["segments"][0]["autonomy_note"] == (
-        "Baseline changes became proposals: Oracle is set to recommend for the baseline"
+        "Ground Truth changes became proposals: Oracle is set to recommend for the Ground Truth"
     )
     graph = (await client.get("/v1/baseline/graph", headers=auth)).json()
     assert [(e["key"], e["title"]) for e in graph["entities"]] == [("checkout", "Checkout")]
@@ -150,7 +150,7 @@ async def test_at_observe_propose_change_is_refused_for_run_tokens_only(client):
         token = await run_token(tenant_id, ["write:proposals"], person.user.id)
         async with mcp_client(token) as c:
             refused = await c.call_tool("propose_change", {"body": change})
-        assert refused.is_error and "Oracle is set to observe the baseline" in text_of(refused)
+        assert refused.is_error and "Oracle is set to observe the Ground Truth" in text_of(refused)
         assert (await client.get("/v1/baseline/proposals", headers=person.headers)).json() == []
         resp = await client.post("/v1/baseline/proposals", json=change, headers=person.headers)
         assert resp.status_code == 201, resp.text

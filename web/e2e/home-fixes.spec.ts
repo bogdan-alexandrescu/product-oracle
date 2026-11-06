@@ -10,7 +10,7 @@ import { login } from "./helpers";
 
 const DB_KEY = "po-mock-db-v2";
 
-async function openHome(page: Page, scenario?: "large" | "empty") {
+async function openHome(page: Page, scenario?: "large" | "empty" | "inbox-reviewer") {
   if (scenario) await page.addInitScript((s) => localStorage.setItem("po-mock-scenario", s), scenario);
   await login(page);
   await page.goto("/home");
@@ -179,6 +179,43 @@ test("Questions asked of me: rail badge, Home and the Inbox count the same", asy
   await expect(badge).toHaveText("11");
 });
 
+test("A Simple proposal waiting on me: rail badge, Home and the Inbox count the same", async ({ page }) => {
+  // inbox-meeting-proposals fix: a teammate's feature ask, on no roadmap, and their new name for an item wait on the owners.
+  await openHome(page, "inbox-reviewer");
+  const badge = page.getByTestId("nav-inbox-badge");
+  const needs = page.getByTestId("home-needs");
+  await expect(needs.getByTestId("home-count-proposals")).toHaveText(/Proposals\s*2/);
+  await expect(badge).toHaveText(/^\d+$/);
+  const waiting = (await badge.textContent())!.trim();
+  await expect(page.getByText(`${waiting} waiting`)).toBeVisible();
+  await expect(needs.getByTestId("panel-count")).toHaveText(waiting);
+  // The (i) says what it counts, Simple's proposals, Oracle's dates and goal suggestions among them.
+  await needs.getByRole("button", { name: "About Needs you" }).click();
+  await expect(page.getByText(/approvals, runs, access, reviews, decisions, the questions asked of you, proposals, Oracle's dates and goal suggestions\./)).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await page.getByTestId("nav-inbox").click();
+  await expect(page).toHaveURL(/\/inbox$/);
+  await expect(page.getByRole("row").filter({ hasText: "Bulk export" }).filter({ hasText: "asked for by" })).toHaveCount(1);
+  await expect(page.getByText(`${waiting} waiting`).filter({ visible: true })).toBeVisible();
+  await expect(badge).toHaveText(waiting);
+});
+
+// protects=merge of train AQ: Home's chips come from the Inbox's kinds, and Simple's proposals
+// are a kind of their own: the Proposals chip opens the Inbox on proposals only, its header
+// counting them; fails_when=no Proposals chip, or its rows fall under Other.
+test("the Proposals chip opens the Inbox on proposals only", async ({ page }) => {
+  await openHome(page, "inbox-reviewer");
+  const proposals = page.getByTestId("home-needs").getByTestId("home-count-proposals");
+  await expect(proposals).toHaveText(/Proposals\s*2/);
+  await proposals.click();
+  await expect(page).toHaveURL(/\/inbox\?kind=proposals$/);
+  await expect(page.getByTestId("inbox-kind")).toContainText("Proposals");
+  await expect(page.getByRole("row").filter({ hasText: "Bulk export" }).filter({ hasText: "asked for by" })).toHaveCount(1);
+  await expect(page.getByTestId("inbox-checkpoints")).toHaveCount(0);
+  await expect(page.getByText(/^\d+ waiting$/).filter({ visible: true })).toHaveText("2 waiting");
+});
+
 test("Questions asked of me: Home shows one with 7 or more inbox items, and only mine", async ({ page }) => {
   await openHome(page, "large");
   const needs = page.getByTestId("home-needs");
@@ -194,7 +231,8 @@ test("Questions asked of me: Home shows one with 7 or more inbox items, and only
 
   await page.goto("/inbox");
   await expect(page.getByTestId("inbox-questions").locator("tr[data-row]")).toHaveCount(6);
-  await expect(page.getByText(`${waiting} waiting`).filter({ visible: true })).toBeVisible();
+  // The Inbox header's "N waiting" counts a grouped checkpoint as one line until PR 1298 (fix 1) changes that count
+  // (left to that lane): the rail badge and Needs you count each run.
   await expect(page.getByTestId("nav-inbox-badge")).toHaveText(waiting!);
 });
 
@@ -262,7 +300,7 @@ test("Home: Enter on an In flight row selects it; the inspector's Open opens it"
   await expect(page.getByTestId("home-inspector").getByTestId("row-goals")).toHaveText("Grow paid conversionRaise activation");
 });
 
-test("Home for a viewer: no New PRD, no Build the baseline", async ({ page }) => {
+test("Home for a viewer: no New PRD, no Build the Ground Truth", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("po-mock-role", "viewer"));
   await openHome(page);
   await expect(page.getByTestId("home-goal-G3")).toBeVisible();
@@ -274,7 +312,7 @@ test("Home for a viewer of a new company: one line per block, no actions they ca
   await page.addInitScript(() => localStorage.setItem("po-mock-role", "viewer"));
   await openHome(page, "empty");
   await expect(page.getByTestId("home-goals-empty")).toContainText("No goals yet");
-  await expect(page.getByRole("link", { name: "Build the baseline" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Build the Ground Truth" })).toHaveCount(0);
   await expect(page.getByTestId("home-in-flight-empty")).toContainText("Nothing in flight");
   await expect(page.getByRole("link", { name: "New PRD" })).toHaveCount(0);
 });

@@ -391,6 +391,30 @@ export function addInterviewRequest(
 }
 
 /**
+ * Simple S9 (targets.py add_feature_ask): a feature ask filed from Simple, under the change's own
+ * request id: New, origin person, filed by whoever asked for it.
+ */
+export function addFeatureAskRequest(
+  db: RequestsDb,
+  input: { id: string; title: string; channel: string; requester_name: string | null; requester_kind: string; filed_by: string },
+): void {
+  const at = now();
+  db.requests.push({
+    id: input.id, title: input.title, body: null, channel: input.channel as Row["channel"], origin: "person",
+    requester_name: input.requester_name, requester_kind: input.requester_kind as Row["requester_kind"], verified: true, state: "new",
+    merged_into_id: null, disqualify_reason: null, decision_note: null, theme_id: null, goal_ids: [],
+    feature_id: null, document_id: null, intake_id: null, interview_id: null, source: null,
+    suggestion: null, filed_by: input.filed_by, decided_by: null, decided_at: null, created_at: at, updated_at: at, lock_version: 1,
+  });
+}
+
+/** The undo of a Simple feature ask: it goes while it is still new and unchanged. */
+export function dropFeatureAskRequest(db: RequestsDb, id: string): void {
+  const i = db.requests.findIndex((r) => r.id === id && r.state === "new" && r.lock_version === 1);
+  if (i >= 0) db.requests.splice(i, 1);
+}
+
+/**
  * The daily triage's switch: off unless someone turned it on (the "triage-skipped" scenario has
  * it on with no one to run as). While on it runs as whoever turned it on, while an active
  * approver or owner, else as the longest-standing active owner.

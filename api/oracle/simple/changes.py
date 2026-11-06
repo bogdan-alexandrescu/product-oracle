@@ -100,7 +100,13 @@ from oracle.authz import has_role
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import HORIZONS, RoadmapItem
 from oracle.simple import drafts, service
-from oracle.simple.models import RoadmapDateSuggestion, SimpleChange, SimpleDraft, SimpleSession
+from oracle.simple.models import (
+    RoadmapDateSuggestion,
+    SimpleChange,
+    SimpleChatCard,
+    SimpleDraft,
+    SimpleSession,
+)
 from oracle.simple.schemas import (
     InboxSimpleChange,
     SimpleChangeIn,
@@ -180,6 +186,8 @@ KEY_DATE_OPS = ("add_key_date", "edit_key_date", "remove_key_date")
 # to its decider now, as a question's do.
 SHEET_OPS = ("edit_decision", "edit_question", "withdraw_decision", "add_question")
 QUESTION_OPS = ("decide_question", "name_decider", *SHEET_OPS)
+# removed-tracks: things put back and tracks changed (oracle.simple.plan_changes).
+PLAN_OPS = ("restore_goal_milestone", "add_track", "edit_track", "delete_track")
 
 
 class ChangeError(Exception):
@@ -491,7 +499,12 @@ def current_route(
         if d is not None and d.approver_id is not None:
             return [d.approver_id]
         return list(c.routed_to or [])
-    if c.status != "proposed" or c.op in ("edit_line", *QUESTION_OPS) or c.op in KEY_DATE_OPS:
+    if (
+        c.status != "proposed"
+        or c.op in ("edit_line", *QUESTION_OPS)
+        or c.op in KEY_DATE_OPS
+        or c.op in PLAN_OPS
+    ):
         return list(c.routed_to or [])
     if c.op == CUT_ALL:
         cut = cut_entries(c, by_id)
@@ -950,7 +963,7 @@ async def _merge_plan(
         fid = _uuid(target["feature_id"], "feature_id")
         feature = await db.get(Entity, fid)
         if feature is None or feature.type != "feature":
-            raise ChangeError(422, "target.feature_id: a baseline feature")
+            raise ChangeError(422, "target.feature_id: a Ground Truth feature")
         target["feature_id"], target["code"], target["title"] = str(fid), feature.key, feature.title
         after[str(row.id)] = {"feature_id": str(fid), "kept_both": True}
     else:
@@ -1064,6 +1077,20 @@ async def _current(db: AsyncSession, c: SimpleChange, like: dict[str, Any]) -> d
     return read(await drafts.effective_row(db, row), list(like), c.target)
 
 
+def _depends_back(
+    current: dict[str, Any], before: dict[str, Any], after: dict[str, Any]
+) -> dict[str, Any] | None:
+    """The item's depends_on with only the change's own keys turned back: an added key
+    taken out, a removed one put back (None: one of them changed since)."""
+    now = list(current.get("depends_on") or [])
+    was, made = list(before.get("depends_on") or []), list(after.get("depends_on") or [])
+    added = [k for k in made if k not in was]
+    removed = [k for k in was if k not in made]
+    if any(k not in now for k in added) or any(k in now for k in removed):
+        return None
+    return {"depends_on": [*(k for k in now if k not in added), *removed]}
+
+
 async def _lock_change_items(db: AsyncSession, c: SimpleChange) -> None:
     await _lock(db, [uuid.UUID(k) for k in _touched(c)])
     for r in await db.scalars(
@@ -1109,6 +1136,7 @@ async def create(
         goal_asks,
         key_dates,
         one_pager,
+        plan_changes,
         questions,
         targets,
         trash_items,
@@ -1129,6 +1157,8 @@ async def create(
         return await trash_items.create_change(db, principal, body)
     if body.op in goal_asks.OPS:
         return await goal_asks.create_change(db, principal, body)
+    if body.op in plan_changes.OPS:
+        return await plan_changes.create_change(db, principal, body)
     if body.op in decision_sheet.OPS:
         return await decision_sheet.create(db, principal, body)
     me, now = _me(principal), company_time.now()
@@ -1242,6 +1272,7 @@ async def decide(
         goal_milestones,
         key_dates,
         one_pager,
+        plan_changes,
         questions,
         targets,
         trash_items,
@@ -1249,6 +1280,8 @@ async def decide(
 
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
+    if c.op in plan_changes.OPS:
+        return await plan_changes.decide(db, principal, c, action, reason)
     await off_agenda_bar(db, c, session_id)
     if c.op in questions.OPS:
         return await questions.decide(db, principal, c, action, reason, session_id)
@@ -1361,10 +1394,12 @@ async def withdraw(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> Si
 
 
 async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> SimpleChangeResult:
-    from oracle.simple import additions, key_dates, one_pager, questions, targets
+    from oracle.simple import additions, key_dates, one_pager, plan_changes, questions, targets
 
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
+    if c.op in plan_changes.OPS:
+        return await plan_changes.undo(db, principal, c)
     from oracle.simple import decision_sheet
 
     if c.op in decision_sheet.OPS:
@@ -1392,12 +1427,19 @@ async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> Simple
         raise ChangeError(409, "Its session is closed: undo works only in the change's session")
     await _lock_change_items(db, c)
     current = await _current(db, c, c.after)
-    if current != c.after:
+    back = c.before
+    if c.op == "set_depends":
+        # ask-oracle-actions: only the dependency the change added or removed goes back;
+        # the item's other dependencies stay as they are now.
+        back = _depends_back(current, c.before, c.after)
+        if back is None:
+            raise await _conflict(db, current, _touched(c), "Changed since")
+    elif current != c.after:
         raise await _conflict(db, current, _touched(c), "Changed since")
     u = SimpleChange(session_id=c.session_id, document_id=c.document_id, op=c.op, target=c.target,
-                     before=c.after, after=c.before, status="undone", by=me, at=now,
+                     before=current, after=back, status="undone", by=me, at=now,
                      undoes_id=c.id, routed_to=[], draft_ids=list(c.draft_ids or []))  # fmt: skip
-    await _apply(db, u, c.before, principal, session, undo=True)
+    await _apply(db, u, back, principal, session, undo=True)
     db.add(u)
     session.last_change_at = now
     await db.flush()
@@ -1482,6 +1524,7 @@ class _View:
             goal_milestones,
             key_dates,
             one_pager,
+            plan_changes,
             questions,
             targets,
         )
@@ -1508,6 +1551,8 @@ class _View:
             return trash_items.may_decide_goal(self.principal)
         if c.op in goal_asks.OPS:
             return goal_asks.may_decide(self.principal)
+        if c.op in PLAN_OPS:
+            return plan_changes.may_decide(self.principal, c)
         if c.op == CUT_ALL:
             return decides_all(self.principal, cut_entries(c, self.by_id), self.deciders)
         e = self.entry(c)
@@ -1536,6 +1581,9 @@ class _View:
         return self.may_decide(c)
 
     def can_undo(self, c: SimpleChange) -> bool:
+        if c.op in PLAN_OPS:
+            # removed-tracks: undone by who made it, any time (oracle.simple.plan_changes).
+            return c.status == "applied" and c.by == self.me and c.id not in self.undone
         s = self.sessions.get(c.session_id) if c.session_id else None
         return (
             c.status == "applied"
@@ -1696,6 +1744,21 @@ async def listing(
     return [_out(c, v, names) for c in shown]
 
 
+def _subject(c: SimpleChange, questions: dict[str, Any]) -> dict[str, Any]:
+    """What a proposal on no item is on (InboxSimpleChange's subject, question_id, line_id):
+    its PRD question by code and title, or its one-pager line as it read."""
+    if c.op in QUESTION_OPS:
+        d = questions.get(str(c.target.get("decision_id")))
+        if d is None:
+            return {}
+        code = (d.prd_question or {}).get("code") or ""
+        return {"subject": f"{code} {d.title}".strip(), "question_id": d.id}
+    if c.op == "edit_line":
+        line = " ".join(str((c.before or {}).get("line") or "").split())
+        return {"subject": line or None, "line_id": c.target.get("line_id")}
+    return {}
+
+
 async def inbox_rows(
     db: AsyncSession, principal: Any, seen: datetime | None
 ) -> tuple[list[InboxSimpleChange], list[InboxSimpleChange]]:
@@ -1737,6 +1800,12 @@ async def inbox_rows(
             c
             for c in waiting
             if me in current_route(c, by_id, read_.deciders, owners, qs, c.session_id in met)
+            # A question decided since (on Decisions, in a meeting) leaves nothing to decide.
+            and not (
+                c.op in QUESTION_OPS
+                and (d := qs.get(str(c.target.get("decision_id")))) is not None
+                and d.status != "proposed"
+            )
         ]
     decided = [c for c in rows if c.status != "proposed"]
     if not waiting and not decided:
@@ -1751,16 +1820,56 @@ async def inbox_rows(
         r.id: r.title
         for r in await db.scalars(select(RoadmapItem).where(RoadmapItem.id.in_(item_ids)))
     }
+    # inbox-meeting-proposals fix: the PRD questions they are on (their code and title).
+    on_questions = await _questions(db, waiting + decided)
     names = await _names(db, {c.by for c in waiting + decided})
-    from oracle.simple import agenda
+    from oracle.simple import agenda, change_words
 
     asked = await agenda.meetings_of(db, {c.session_id for c in waiting + decided})
+    # inbox-meeting-proposals: whether I may accept or decline each waiting one now.
+    v = await _view(db, principal, waiting) if waiting else None
+    # inbox-meeting-proposals owner: the waiting ones asked through Ask Oracle (a card
+    # applied outside a meeting became the proposal).
+    via_ask = (
+        set(
+            await db.scalars(
+                select(SimpleChatCard.change_id).where(
+                    SimpleChatCard.change_id.in_([c.id for c in waiting]),
+                    SimpleChatCard.meeting_id.is_(None),
+                )
+            )
+        )
+        if waiting
+        else set()
+    )
+
+    def asked_of(c: SimpleChange, named: str | None) -> str:
+        if c.status == "proposed" and c.op in ("decide_question", "name_decider"):
+            how = "deciding" if c.op == "decide_question" else "who decides"
+            return f"proposed {how} {named or 'a question'}"
+        if c.status == "proposed" and c.op == "edit_line":
+            line = change_words._quoted((c.after or {}).get("line"))
+            return f"proposed new wording for a one-pager line{f': {line}' if line else ''}"
+        if c.status in ("proposed", "declined") and c.op == "add_feature_ask":
+            # Not filed in Requests until it is accepted.
+            ask = change_words._quoted((c.after or {}).get("title"))
+            return f"proposed the feature ask {ask}" if ask else "proposed a feature ask"
+        return change_words.phrase(c.op, c.target, c.before, c.after, named)
 
     def row(c: SimpleChange, at: datetime | None, state: str | None = None) -> InboxSimpleChange:
         iid = uuid.UUID(str(c.target["item_id"])) if c.target.get("item_id") else None
         m = asked.get(c.session_id) if c.session_id else None
+        title = titles.get(iid) if iid else None
+        on = _subject(c, on_questions)
+        named = title or (on.get("subject") if "question_id" in on else None)
         return InboxSimpleChange(
             from_meeting=SimpleChangeMeeting(id=m.id, title=m.title) if m else None,
+            # A question's proposal says the question; still to decide, it reads as proposed
+            # ("proposed deciding Q3 Offline mode scope"), once decided as done.
+            asked=asked_of(c, named),
+            can_decide=v is not None and c.status == "proposed" and v.may_decide(c),
+            from_ask=c.id in via_ask and m is None,
+            **on,
             id=c.id, op=c.op, status=c.status, item_id=iid,  # type: ignore[arg-type]
             item_title=titles.get(iid) if iid else None, document_id=c.document_id, by=c.by,
             by_name=names.get(c.by, "someone"), at=c.at, decided_by=c.decided_by,

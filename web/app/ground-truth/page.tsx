@@ -6,29 +6,45 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { setupReturn } from "@/app/settings/_nav";
 import { Button, InfoTip, KpiStrip, LinkButton, Notice, Page, PageHeader, Split, ViewOnly, type Kpi } from "@/components/ds";
 import { VagueGoalsLine } from "@/components/discuss/VagueGoalsLine";
-import { Loading } from "@/components/ui";
+import { usePhone } from "@/components/ds/page-info";
+import { LoadError, Loading } from "@/components/ui";
 import { startInterview, startInterviews, vagueGoals } from "@/lib/api/goal-interview";
 import { GOALS_OBSERVE, useGoalsLevel } from "@/lib/goals-autonomy";
-import { api, unwrap, type ConflictOut, type EntityOut, type ProposalOut } from "@/lib/api/client";
+import { api, ApiError, unwrap, type ConflictOut, type EntityOut, type ProposalOut } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { CurrentStateView, DesiredList, ReadyBand, StateTabs, useFeatureStates } from "@/components/current-state/CurrentState";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
-import { AddItemSheet, type AddKind } from "./_components/AddItem";
-import { BlockerInspector } from "./_components/BlockerInspector";
-import { BlockersTab } from "./_components/BlockersTab";
-import { BuildBanner, BuildBaselineSheet, BuildChip, currentBuild } from "./_components/BuildBaseline";
-import { goalTags, KPI_PHONE } from "./_components/common";
-import { ConflictsTab } from "./_components/ConflictsTab";
-import { EntityDrawer } from "./_components/EntityDrawer";
-import { FlaggedTab } from "./_components/FlaggedTab";
-import { FromRunBand, FromRunTab, RowActions, WhyCard } from "./_components/FromRunTab";
-import { fillNotice } from "./_components/goal-fields";
-import type { Stepper } from "./_components/GoalInterview";
-import { GraphTab } from "./_components/GraphTab";
-import { ItemsTab } from "./_components/ItemsTab";
-import { cardsOf, fieldName, noChange, ProposalsTab, type FromFilter } from "./_components/ProposalsTab";
-import { Tabs, type TabItem } from "./_components/Tabs";
+import { AddItemSheet, type AddKind } from "@/app/baseline/_components/AddItem";
+import { BlockerInspector } from "@/app/baseline/_components/BlockerInspector";
+import { BlockersTab } from "@/app/baseline/_components/BlockersTab";
+import { BuildBanner, BuildBaselineSheet, BuildChip, currentBuild } from "@/app/baseline/_components/BuildBaseline";
+import { goalTags, KPI_PHONE } from "@/app/baseline/_components/common";
+import { ConflictsTab } from "@/app/baseline/_components/ConflictsTab";
+import { EntityDrawer } from "@/app/baseline/_components/EntityDrawer";
+import { FlaggedTab } from "@/app/baseline/_components/FlaggedTab";
+import { BottomBar, FromRunBand, FromRunTab, RowActions, WhyCard } from "@/app/baseline/_components/FromRunTab";
+import { fillNotice } from "@/app/baseline/_components/goal-fields";
+import type { Stepper } from "@/app/baseline/_components/GoalInterview";
+import { GraphTab } from "@/app/baseline/_components/GraphTab";
+import { ItemsTab } from "@/app/baseline/_components/ItemsTab";
+import { cardsOf, fieldName, noChange, ProposalsTab, type FromFilter } from "@/app/baseline/_components/ProposalsTab";
+import { Tabs, type TabItem } from "@/app/baseline/_components/Tabs";
+
+/**
+ * What a run wrote to the baseline (B2). A 404 is asked once more after a moment: a run just
+ * started, or mock data just reseeded, can answer before the run is there (visual QA B-03).
+ */
+async function loadFromRun(runId: string) {
+  const get = () => unwrap(api.GET("/v1/baseline/from-run/{run_id}", { params: { path: { run_id: runId } } }));
+  try {
+    return await get();
+  } catch (e) {
+    if (!(e instanceof ApiError) || e.status !== 404) throw e;
+    await new Promise((done) => setTimeout(done, 500));
+    return get();
+  }
+}
 
 type Tab = "from-run" | "graph" | "items" | "flagged" | "conflicts" | "proposals" | "blockers";
 const TABS: readonly Tab[] = ["from-run", "graph", "items", "flagged", "conflicts", "proposals", "blockers"];
@@ -82,7 +98,23 @@ function BackHomeFromUrl() {
 function BuildRefusedFromUrl() {
   const build = useSearchParams().get("build") === "1";
   if (!build) return null;
-  return <Notice testId="build-refused">Approvers and owners build the baseline.</Notice>;
+  return <Notice testId="build-refused">Approvers and owners build the Ground Truth.</Notice>;
+}
+
+/** ?add=goal opens Add goal (Company › Strategy's Add a goal, pass F F-42), once: the address drops it, so closing Add goal leaves no ?add behind. */
+function AddFromUrl({ onAdd }: { onAdd: (kind: AddKind) => void }) {
+  const params = useSearchParams();
+  const router = useRouter();
+  const add = params.get("add");
+  useEffect(() => {
+    if (add !== "goal") return;
+    onAdd("goal");
+    const next = new URLSearchParams(params.toString());
+    next.delete("add");
+    const rest = next.toString();
+    router.replace(rest ? `/baseline?${rest}` : "/baseline", { scroll: false });
+  }, [add, onAdd, params, router]);
+  return null;
 }
 
 /** ?entity=<id> opens that item (Publish's Resolve links here); ?blocker=<id> that blocker (its Open blocker). */
@@ -120,12 +152,12 @@ function InterviewFromUrl({ onGoal, onVague }: { onGoal: (id: string) => void; o
     const next = new URLSearchParams(params.toString());
     next.delete("interview");
     const rest = next.toString();
-    router.replace(rest ? `/baseline?${rest}` : "/baseline", { scroll: false });
+    router.replace(rest ? `/ground-truth?${rest}` : "/ground-truth", { scroll: false });
   }, [interview, entity, onGoal, onVague, params, router]);
   return null;
 }
 
-/** ?view=current: Detailed's Current state tab, on Desired state's own URL. */
+/** ?view=current: Detailed's Running today tab, on the Ground Truth's own URL. */
 function StateViewFromUrl({ onView }: { onView: (v: "desired" | "current") => void }) {
   const v = useSearchParams().get("view") === "current" ? "current" : "desired";
   useEffect(() => onView(v), [v, onView]);
@@ -146,6 +178,7 @@ export default function BaselinePage() {
   const canInterview = can("start_goal_interview") && goalsLevel !== undefined && goalsLevel !== "observe";
   const goalsNote = can("start_goal_interview") && goalsLevel === "observe" ? GOALS_OBSERVE : null;
   const onAuth = useAuthRedirect();
+  const phone = usePhone();
 
   const graph = useQuery("baseline-graph", () => unwrap(api.GET("/v1/baseline/graph")));
   const trace = useQuery("baseline-trace", () => unwrap(api.GET("/v1/baseline/trace")));
@@ -156,11 +189,7 @@ export default function BaselinePage() {
   const [from, setFrom] = useState<FromFilter>("");
   // B2: the run whose review this is (?run=), and what it wrote to the baseline.
   const [runId, setRunId] = useState("");
-  const fromRun = useQuery(
-    `baseline-from-run:${runId}`,
-    () => (runId ? unwrap(api.GET("/v1/baseline/from-run/{run_id}", { params: { path: { run_id: runId } } })) : Promise.resolve(null)),
-    { keepPrevious: true },
-  );
+  const fromRun = useQuery(`baseline-from-run:${runId}`, () => (runId ? loadFromRun(runId) : Promise.resolve(null)), { keepPrevious: true });
   // Every open proposal (the tab's count and the From select's runs), and the From filter's.
   const proposals = useQuery("baseline-proposals", () =>
     unwrap(api.GET("/v1/baseline/proposals", { params: { query: { status: "open" } } })),
@@ -175,7 +204,7 @@ export default function BaselinePage() {
   );
   const chooseFrom = (next: FromFilter) => {
     setFrom(next);
-    router.replace(next ? `/baseline?tab=proposals&run=${encodeURIComponent(next)}` : "/baseline?tab=proposals", { scroll: false });
+    router.replace(next ? `/ground-truth?tab=proposals&run=${encodeURIComponent(next)}` : "/ground-truth?tab=proposals", { scroll: false });
   };
   const shown = from ? (filtered.data ?? undefined) : proposals.data;
 
@@ -199,7 +228,7 @@ export default function BaselinePage() {
   const closeBuild = () => {
     setBuilding(false);
     setBuildFromSetup(false);
-    router.replace("/baseline", { scroll: false });
+    router.replace("/ground-truth", { scroll: false });
   };
   const started = () => {
     closeBuild();
@@ -402,8 +431,16 @@ export default function BaselinePage() {
 
   const openConflicts = conflicts.data?.filter((c) => c.status === "open").length;
   const view = runId ? fromRun.data : null;
+  // A review that could not load keeps its tab, which says so with Try again (visual QA B-03). A
+  // review kept from before (an earlier run, or this one before a failed reload) stays under the
+  // notice, dimmed and inert, without its decision bar: it is not the run asked for.
+  const fromRunFailed = !!runId && !!fromRun.error;
+  // Approvers decide in the bar, last in the page column and sticky at the window's foot (B-02).
+  const decisionBar = tab === "from-run" && view && !fromRunFailed ? <BottomBar view={view} busy={busy} act={act} /> : null;
   const tabs: TabItem<Tab>[] = [
-    ...(view ? [{ id: "from-run" as const, label: "From this run", count: view.summary.need_you, kind: "crit" as const }] : []),
+    // A kept review that is not current shows no count: the notice says why (visual QA B-03).
+    ...(view ? [{ id: "from-run" as const, label: "From this run", count: fromRunFailed ? undefined : view.summary.need_you, kind: "crit" as const }] : []),
+    ...(!view && fromRunFailed ? [{ id: "from-run" as const, label: "From this run" }] : []),
     { id: "graph", label: "Graph" },
     { id: "items", label: "Items" },
     { id: "flagged", label: "Flagged", count: trace.data?.summary.flagged, kind: "crit" },
@@ -472,7 +509,7 @@ export default function BaselinePage() {
   if (!capsReady && !capsError)
     return (
       <Page>
-        <PageHeader title="Desired state" />
+        <PageHeader title="Ground Truth" />
         <Loading />
       </Page>
     );
@@ -492,6 +529,7 @@ export default function BaselinePage() {
       <Suspense fallback={null}>
         <StateViewFromUrl onView={setStateView} />
         <OpenFromUrl onOpen={openItem} onBlocker={openBlocker} />
+        {canWrite && <AddFromUrl onAdd={setAdding} />}
         <TabFromUrl onTab={setTab} onFrom={setFrom} onRun={setRunId} />
         {canInterview && <InterviewFromUrl onGoal={makeMeasurable} onVague={() => void interviewVague()} />}
         {canWrite && <BuildFromUrl onBuild={openBuild} />}
@@ -501,9 +539,9 @@ export default function BaselinePage() {
         <AddItemSheet kind={adding} graph={graph.data} tags={tags} onClose={() => setAdding(null)} onAdded={added} />
       )}
       {/* The owner's pick (cs3-b): the header is the title alone; the goals, areas and milestones
-          and their tools (Add item, Build baseline) sit with their views under the features list. */}
+          and their tools (Add item, Build the Ground Truth) sit with their views under the features list. */}
       <PageHeader
-        title="Desired state"
+        title="Ground Truth"
         action={
           <Suspense fallback={null}>
             <BackHomeFromUrl />
@@ -512,8 +550,8 @@ export default function BaselinePage() {
         status={capsReady && !canComment ? <ViewOnly /> : undefined}
       />
 
-      <p className="-mt-2 mb-3 max-w-[760px] text-[14px] text-text2">What the product should become: goals, areas of focus, milestones and the planned features.</p>
-      <StateTabs view="desired" desired={states.data?.desired ?? null} running={states.data?.running ?? null} />
+      <p className="-mt-2 mb-3 max-w-[760px] text-[14px] text-text2">Goals, areas of focus, milestones and every feature, each with its evidence and how far it is built.</p>
+      <StateTabs view="desired" all={states.data?.features.length ?? null} running={states.data?.running ?? null} />
       {states.data && <ReadyBand data={states.data} onChanged={stateChanged} />}
       {states.data && <DesiredList data={states.data} />}
       <div className="mt-6" />
@@ -547,7 +585,8 @@ export default function BaselinePage() {
               }}
               why={
                 openRow &&
-                view && (
+                view &&
+                !fromRunFailed && (
                   <WhyCard
                     row={openRow}
                     fixes={<RowActions view={view} row={openRow} entities={graph.data?.entities ?? []} busy={busy} act={act} onOpen={openItem} inDrawer />}
@@ -569,11 +608,14 @@ export default function BaselinePage() {
           </Suspense>
         )}
         {build && <BuildBanner build={build} />}
-        {view && <FromRunBand view={view} />}
-        {runId && fromRun.error && <Notice tone="error">{fromRun.error}</Notice>}
+        {view && (
+          <div data-testid="from-run-band-wrap" data-current={!fromRunFailed} className={fromRunFailed ? "opacity-60" : undefined}>
+            <FromRunBand view={view} />
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center justify-between gap-2 max-[600px]:flex-col max-[600px]:items-stretch">
-          <Tabs label="Baseline views" items={tabs} value={tab} onChange={setTab} />
+          <Tabs label="Ground Truth views" items={tabs} value={tab} onChange={setTab} />
           <span className="flex flex-wrap items-center gap-2">
             {/* The Items tab has its own Add, on the kind it shows: one Add control there (qa-plan-49). */}
             {canWrite && tab !== "items" && (
@@ -587,7 +629,7 @@ export default function BaselinePage() {
                 <BuildChip build={build} />
               ) : (
                 <Button variant="primary" icon="baseline" onClick={() => openBuild(false)}>
-                  Build baseline
+                  Build the Ground Truth
                 </Button>
               ))}
           </span>
@@ -597,8 +639,16 @@ export default function BaselinePage() {
         {notice && <Notice>{notice}</Notice>}
 
         <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="flex min-w-0 flex-col gap-4">
+          {tab === "from-run" && fromRunFailed && <LoadError what="this run's review" error="" onRetry={() => void reloadFromRun()} />}
           {tab === "from-run" && view && (
-            <FromRunTab view={view} entities={graph.data?.entities ?? []} busy={busy} selectedId={openId} act={act} onOpen={openItem} />
+            <div
+              data-testid="from-run-view"
+              data-current={!fromRunFailed}
+              inert={fromRunFailed}
+              className={fromRunFailed ? "min-w-0 opacity-60" : "min-w-0"}
+            >
+              <FromRunTab view={view} entities={graph.data?.entities ?? []} busy={busy} selectedId={openId} act={act} onOpen={openItem} />
+            </div>
           )}
           {tab === "graph" && (
             <>
@@ -701,7 +751,11 @@ export default function BaselinePage() {
             </>
           )}
         </div>
+        {!phone && decisionBar}
       </Split>
+      {/* On a phone the list above the views is long: the bar is the page's last child, so it
+          can stick at the window's foot from the top of the page, above the tab bar. */}
+      {phone && decisionBar}
     </Page>
   );
 }

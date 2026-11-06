@@ -81,7 +81,7 @@ test("coverage: the first source is selected; its inspector shows freshness and 
   await expect(entry.getByText("Skipped", { exact: true })).toHaveAttribute("title", "Skipped: shared from outside the company");
 });
 
-test("coverage: Used in leads to the baseline item and to the document version", async ({ page }) => {
+test("coverage: Used in leads to the Ground Truth item and to the document version", async ({ page }) => {
   // protects=a person reaches the evidence and the documents a source backs
   // fails_when=a use is missing or links to the wrong place
   // no_claim=section links (none seeded)
@@ -89,7 +89,7 @@ test("coverage: Used in leads to the baseline item and to the document version",
   const used = inspector(page).getByRole("list", { name: "Used in" });
   await expect(used.getByRole("listitem")).toHaveCount(3);
   await used.getByRole("link", { name: /Dark mode/ }).click();
-  await expect(page).toHaveURL(/\/baseline\?entity=[0-9a-f-]+$/);
+  await expect(page).toHaveURL(/\/ground-truth\?entity=[0-9a-f-]+$/);
   await expect(page.getByRole("dialog", { name: "Dark mode" })).toBeVisible();
 
   await page.goBack();

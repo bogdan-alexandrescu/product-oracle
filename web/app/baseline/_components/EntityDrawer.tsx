@@ -267,7 +267,7 @@ export function EntityDrawer({
       if (action === "confirm") return `Confirmed “${title}”.`;
       if (action === "archive") {
         const sub = d?.parent_id ? " Its parent no longer counts it." : "";
-        return `Archived “${title}”: it leaves the baseline; its history keeps the reason.${sub}`;
+        return `Archived “${title}”: it leaves the Ground Truth; its history keeps the reason.${sub}`;
       }
       return `Rejected “${title}”.`;
     });
@@ -759,8 +759,8 @@ function AskReason({
     >
       <p className="text-text2">
         {action === "reject"
-          ? "Reject this proposed item? It leaves the baseline."
-          : "Archive this item? It leaves the baseline and the Ledger; its history keeps it."}
+          ? "Reject this proposed item? It leaves the Ground Truth."
+          : "Archive this item? It leaves the Ground Truth and the Ledger; its history keeps it."}
       </p>
       <label className="flex flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2">
         Reason{action === "reject" && " (optional)"}
@@ -844,6 +844,11 @@ function Links({
                 <div className="flex min-h-8 min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
                   <span className="min-w-[9rem] flex-1">{link(e[end])}</span>
                   {e.status === "proposed" && <Chip kind="warn">Proposed</Chip>}
+                  {contribution && e.attrs?.contribution_assumed === true && (
+                    <span title="Oracle assumed this contribution: the run named the goal but not how much it helps. Set it to what it is.">
+                      <Chip kind="warn">Contribution assumed</Chip>
+                    </span>
+                  )}
                   {contribution && (
                     <span className="flex flex-none items-center gap-2" data-testid="contribution">
                       <ContributionPips value={value} proposed={e.status === "proposed"} />
@@ -853,7 +858,7 @@ function Links({
                             label={`Contribution to ${name}`}
                             value={String(value)}
                             disabled={busy}
-                            onChange={(v) => onPatch(e, { attrs: { contribution: Number(v) } }, `Contribution set to ${v}.`)}
+                            onChange={(v) => onPatch(e, { attrs: { contribution: Number(v), contribution_assumed: null } }, `Contribution set to ${v}.`)}
                           />
                         </span>
                       ) : (

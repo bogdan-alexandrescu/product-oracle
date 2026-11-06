@@ -69,6 +69,13 @@ export function SimpleDecisions() {
     if (!loaded || !window.location.hash) return;
     document.getElementById(window.location.hash.slice(1))?.scrollIntoView({ block: "center" });
   }, [loaded]);
+  // inbox-meeting-proposals fix: ?question= (the Inbox's Open on a proposal) lands on that
+  // question, marked, wherever the view lists it.
+  const linked = params.get("question") ?? "";
+  useEffect(() => {
+    if (!loaded || !linked) return;
+    document.querySelector(`[data-question-id="${CSS.escape(linked)}"]`)?.scrollIntoView({ block: "center" });
+  }, [loaded, linked]);
   const set = (key: string, value: string) => {
     // The address as it is now, written at once (Next keeps useSearchParams in step): a
     // second filter changed right after the first keeps the first's change.
@@ -96,6 +103,8 @@ export function SimpleDecisions() {
   };
   const actions = useQuestionActions(() => q.reload());
   const questions = d?.questions ?? [];
+  // inbox-meeting-proposals fix 4: the Inbox's Open on a question decided since says so here.
+  const linkedDecided = questions.find((x) => x.id === linked && x.column === "decided");
   const filtered = !!(prd || goal || meeting);
   const clear = () => {
     window.history.replaceState(null, "", inUrl ? `${pathname}?view=${inUrl}` : pathname);
@@ -129,8 +138,13 @@ export function SimpleDecisions() {
       {d && <NewDecision />}
       {q.loading && !d && <Loading />}
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
-      {d && view === "list" && <QuestionList d={d} actions={actions} filtered={filtered} onClear={clear} />}
-      {d && view === "board" && <Board questions={questions} actions={actions} />}
+      {linkedDecided && (
+        <p className="simple-meta" role="status" data-testid="linked-decided">
+          {linkedDecided.code} {linkedDecided.title} is decided already{linkedDecided.decided_label ? `. ${linkedDecided.decided_label}` : ""}.
+        </p>
+      )}
+      {d && view === "list" && <QuestionList d={d} actions={actions} filtered={filtered} onClear={clear} linked={linked} />}
+      {d && view === "board" && <Board questions={questions} actions={actions} linked={linked} />}
       {d && view !== "board" && (
         <>
           {d.meetings.length === 0 && other.length === 0 && !d.runs?.length && (
@@ -271,13 +285,14 @@ function QuestionCard({ label, testId, questions, count, source, children }: { l
 }
 
 /** List: waiting for you (first five, then Show N more), then waiting for others; decided ones sit with the meeting that took them, or outside meetings. */
-function QuestionList({ d, actions, filtered, onClear }: { d: Schemas["SimpleDecisionsOut"]; actions: Actions; filtered: boolean; onClear: () => void }) {
-  const [all, setAll] = useState(false);
+function QuestionList({ d, actions, filtered, onClear, linked }: { d: Schemas["SimpleDecisionsOut"]; actions: Actions; filtered: boolean; onClear: () => void; linked: string }) {
   const open = d.questions.filter((x) => x.column !== "decided");
   // eq2 b: one withdrawn here just now keeps its place, struck through, with Undo.
   const gone = useDecisionSheet()?.withdrawn ?? {};
   // qa-simple-decide-15: only what the person can act on waits for them (a viewer: nothing).
   const mine = open.filter((x) => (x.waiting_for_me && x.status === "proposed" && (x.can.decide || x.can.propose)) || (x.status === "withdrawn" && !!gone[x.id]));
+  // A linked question past the first five shows them all.
+  const [all, setAll] = useState(() => mine.findIndex((x) => x.id === linked) >= FIRST);
   const others = open.filter((x) => !mine.includes(x) && x.status !== "withdrawn");
   const shown = all ? mine : mine.slice(0, FIRST);
   return (
@@ -290,7 +305,7 @@ function QuestionList({ d, actions, filtered, onClear }: { d: Schemas["SimpleDec
           </p>
         ) : (
           <ul>
-            {shown.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} />)}
+            {shown.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} linked={x.id === linked} />)}
           </ul>
         )}
         {mine.length > FIRST && (
@@ -301,7 +316,7 @@ function QuestionList({ d, actions, filtered, onClear }: { d: Schemas["SimpleDec
       </QuestionCard>
       {others.length > 0 && (
         <QuestionCard label="Waiting for others" testId="questions-others" questions={others} count={others.length}>
-          <ul>{others.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} forOthers />)}</ul>
+          <ul>{others.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} forOthers linked={x.id === linked} />)}</ul>
         </QuestionCard>
       )}
     </>
@@ -326,8 +341,9 @@ const TWO_COLUMN_PLACE: Record<Question["column"], string> = {
 };
 
 /** Board: three columns by `column`, soonest first (the API's order); on a phone, one column at a time behind tabs. */
-function Board({ questions, actions }: { questions: Question[]; actions: Actions }) {
-  const [tab, setTab] = useState<Question["column"]>("needs_input");
+function Board({ questions, actions, linked }: { questions: Question[]; actions: Actions; linked: string }) {
+  // On a phone, the tab of a linked question.
+  const [tab, setTab] = useState<Question["column"]>(() => questions.find((x) => x.id === linked)?.column ?? "needs_input");
   const of = (k: Question["column"]) => questions.filter((x) => x.column === k);
   return (
     <div data-testid="questions-board" className="flex flex-col gap-3">
@@ -357,7 +373,7 @@ function Board({ questions, actions }: { questions: Question[]; actions: Actions
               ) : (
                 <ul>
                   {/* qa4-simple-decide-6: someone else's question says for whom here too, as on the List. */}
-                  {of(c.key).map((x) => <QuestionRow key={x.id} q={x} mode={c.key} actions={actions} forOthers />)}
+                  {of(c.key).map((x) => <QuestionRow key={x.id} q={x} mode={c.key} actions={actions} forOthers linked={x.id === linked} />)}
                 </ul>
               )}
             </section>
@@ -430,7 +446,7 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
               const n = /^D-(\d+):/.exec(x)?.[1];
               const anchor = n && !rowNumbers.has(Number(n)) ? `d-${n}` : undefined;
               return (
-                <li key={x} id={anchor} className={anchor ? "target:bg-[var(--simple-edited)]" : undefined}>
+                <li key={x} id={anchor} className={anchor ? "target:bg-[var(--simple-edited)]" : undefined} data-user-content>
                   {x}
                 </li>
               );
@@ -442,7 +458,7 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
         <div>
           <h3 className="text-[18px] leading-[26px] font-[650]">Action items</h3>
           <ul className="list-disc pl-5">
-            {minutes.action_items.map((a, i) => <li key={i}>{a.title} · {a.owner_name ?? "no owner"}{a.due_date ? ` · by ${calendarDay(a.due_date, { weekday: "short" })} ${calendarDay(a.due_date)}` : ""}</li>)}
+            {minutes.action_items.map((a, i) => <li key={i}><span data-user-content>{a.title}</span> · {a.owner_name ?? "no owner"}{a.due_date ? ` · by ${calendarDay(a.due_date, { weekday: "short" })} ${calendarDay(a.due_date)}` : ""}</li>)}
           </ul>
         </div>
       )}
@@ -459,7 +475,7 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
           <div key={kind}>
             <h3 className="text-[18px] leading-[26px] font-[650]">{kind === "note" ? "Notes" : "Comments"}</h3>
             <ul className="list-disc pl-5 [overflow-wrap:anywhere]" data-testid={`meeting-group-${kind}s`}>
-              {notes.map((n) => <li key={n.id}>{n.text} · {n.by_name}</li>)}
+              {notes.map((n) => <li key={n.id}><span data-user-content>{n.text}</span> · {n.by_name}</li>)}
             </ul>
           </div>
         );
@@ -594,15 +610,15 @@ function Rows({ rows }: { rows: Row[] }) {
               <span className="break-words">
                 <span className="simple-code">{code}</span>{" "}
                 {gone ? (
-                  <s className="font-[650] text-text2" data-testid="decision-withdrawn">
+                  <s className="font-[650] text-text2" data-testid="decision-withdrawn" data-user-content>
                     {title}
                   </s>
                 ) : opens ? (
-                  <button type="button" data-testid="decision-open" className="text-left font-[650] underline decoration-1 underline-offset-4 hover:text-accent-ink" onClick={() => sheet!.open({ kind: "decision", row: r })}>
+                  <button type="button" data-testid="decision-open" className="text-left font-[650] underline decoration-1 underline-offset-4 hover:text-accent-ink" onClick={() => sheet!.open({ kind: "decision", row: r })} data-user-content>
                     {title}
                   </button>
                 ) : (
-                  <b className="font-[650]">{title}</b>
+                  <b className="font-[650]" data-user-content>{title}</b>
                 )}
               </span>
               <span className="simple-meta">

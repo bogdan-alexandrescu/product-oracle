@@ -94,7 +94,7 @@ test("documents and runs by name, never by slug", () => {
   expect(runLabel(run)).toBe("Usage alerts · Roadmap items for a PRD draft");
   // The run never adds a kind word to the document's own title.
   expect(runLabel({ ...run, document_title: "Example test · Saved carts" })).toBe("Example test · Saved carts · Roadmap items for a PRD draft");
-  expect(runLabel({ flow_title: "Build the baseline", document_slug: null })).toBe("Build the baseline");
+  expect(runLabel({ flow_title: "Build the Ground Truth", document_slug: null })).toBe("Build the Ground Truth");
 });
 
 test("errors: a role refusal names who may act; a message reads as a sentence or not at all", () => {

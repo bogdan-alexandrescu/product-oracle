@@ -206,7 +206,7 @@ export function DraftSheet({
         </AutonomyNote>
       ) : (
         <p className="flex items-center gap-1.5 text-sm text-text2">
-          Oracle writes the draft; an owner reviews and approves it.
+          Oracle writes the draft.
           <InfoTip label="drafting with Oracle" align="start">
             Oracle reads the confirmed goals, approved PRDs and roadmaps, decisions, outcomes and the company&apos;s own strategy material, and
             writes the draft. An owner reviews and approves it.

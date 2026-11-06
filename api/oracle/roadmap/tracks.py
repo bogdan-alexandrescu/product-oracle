@@ -64,6 +64,18 @@ async def track_of_prd(db: AsyncSession, prd_document_id: uuid.UUID) -> ProductT
     )
 
 
+async def any_track_of_prd(db: AsyncSession, prd_document_id: uuid.UUID) -> ProductTrack | None:
+    """The PRD's track, one in Trash too (removed-tracks): a PRD has one track, and one
+    in Trash is restored from there, not started again."""
+    from oracle.trash.filter import INCLUDE_TRASHED
+
+    return await db.scalar(
+        select(ProductTrack)
+        .where(ProductTrack.prd_document_id == prd_document_id)
+        .execution_options(**{INCLUDE_TRASHED: True})
+    )
+
+
 async def _number(db: AsyncSession, version_id: uuid.UUID | None) -> int:
     if version_id is None:
         return 0
@@ -103,7 +115,7 @@ async def ensure_track(
         raise Invalid(f"version {version.number} of '{prd.slug}' is not approved")
     # One track per PRD: concurrent starts (a publish and a person) wait on the PRD row.
     await db.execute(select(Document.id).where(Document.id == prd.id).with_for_update())
-    track = await track_of_prd(db, prd.id)
+    track = await any_track_of_prd(db, prd.id)
     created = track is None
     if track is None:
         track = ProductTrack(
@@ -152,7 +164,10 @@ async def track_for_roadmap(
     prd = await db.get(Document, prd_version.document_id)
     if prd is None or prd.kind != "prd":
         return None
-    track = await track_of_prd(db, prd.id)
+    track = await any_track_of_prd(db, prd.id)
+    if track is not None and track.deleted_at is not None:
+        # removed-tracks: a track in Trash takes no new items.
+        return None
     if track is None and prd_version.approved_at is None:
         return None
     if prd_version.approved_at is None:

@@ -36,14 +36,14 @@ test("qa-plan-3, qa-plan-41: the slipping date is pinned on the item that owns E
   await start(page, { scenario: "alignment-report" });
   const track = await openReport(page);
   const attention = track.getByTestId("needs-attention");
-  await expect(attention).toContainText("Daily alert digest email · Now: ENG-405 targets Dec 9");
+  await expect(attention).toContainText("Weekly alert digest · Now: ENG-405 targets Dec 9");
   await expect(attention).not.toContainText("Threshold alerts");
   const drift = track.getByTestId("report-drift").first();
   await expect(drift.getByRole("link")).toHaveText("Spend forecast for the month");
   await expect(track).not.toContainText("Digest emails");
 
   // The item opens on the Plan, where ENG-405 is its issue.
-  await expect(attention.getByRole("link", { name: "Daily alert digest email" })).toHaveAttribute(
+  await expect(attention.getByRole("link", { name: "Weekly alert digest" })).toHaveAttribute(
     "href",
     "/plan?item=usage-alerts:alert-digest",
   );
@@ -148,7 +148,7 @@ test("qa-plan-46: the actions column is labelled and a withdrawal's reason sits 
   await row.getByRole("button", { name: "Withdraw" }).click();
   const dialog = page.getByTestId("withdraw-basis-dialog");
   await dialog.getByLabel("Reason").fill("The team re-estimated");
-  await dialog.getByRole("button", { name: "Withdraw date basis" }).click();
+  await dialog.getByRole("button", { name: "Withdraw date source" }).click();
   await expect(dialog).toBeHidden();
   await page.getByTestId("dates-filter").getByRole("button", { name: /^Withdrawn/ }).click();
   const reason = table.locator('[data-reason-for="ENG-412"]');
@@ -175,7 +175,7 @@ test("qa-plan-47, qa-plan-19: a filter with nothing in it reads 0 as an ordinary
   await expect(withdrawn).toBeEnabled();
   expect(Number(await withdrawn.evaluate((el) => getComputedStyle(el).opacity))).toBe(1);
   await withdrawn.click();
-  await expect(page.getByTestId("dates-table").filter({ visible: true })).toContainText("No date bases here yet.");
+  await expect(page.getByTestId("dates-table").filter({ visible: true })).toContainText("No date sources yet.");
 });
 
 /* ------------------------------------------ Outcomes ------------------------------------------ */

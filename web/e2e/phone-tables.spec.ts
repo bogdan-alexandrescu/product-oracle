@@ -113,9 +113,9 @@ test("phone run detail: the status chips sit under the phone header, clear of th
   await expectNoSideScroll(page);
 });
 
-test("phone baseline: the feature × goal ledger is a list of whole feature names with their goal tags", async ({ page }) => {
+test("phone Ground Truth: the feature × goal ledger is a list of whole feature names with their goal tags", async ({ page }) => {
   await login(page);
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   const feature = page.getByTestId("feature-f.guided-setup");
   await expect(feature).toBeVisible();
   await expect(feature.getByRole("button", { name: "Guided setup" })).toBeVisible();
@@ -155,7 +155,7 @@ test("phone row actions: every row action a table has on desktop stays on the ph
     "/inbox",
     "/documents",
     "/documents/checkout-redesign",
-    "/baseline",
+    "/ground-truth",
     "/priorities",
     "/settings/members",
     "/settings/claude-accounts",

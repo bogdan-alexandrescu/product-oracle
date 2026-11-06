@@ -8,7 +8,12 @@
  * milestone missed, revenue not measured yet. "goal-map-guardrail-goal" gives the goals with
  * their priorities and a goal marked as a guardrail (guardrailGoal). Under "fit-date-company-roadmap" the company roadmap
  * exists next to an older roadmap that still holds goal milestones of its own: only the company
- * roadmap's show (goal_map._on_map). Invented people, products and numbers only.
+ * roadmap's show (goal_map._on_map). "goal-map-scoreboard" (SCOREBOARD_SCENARIO) gives the
+ * scoreboard's cases: sign-ups measured by its metric, conversions tied to a metric with no
+ * value yet, revenue with no metric (Daily revenue to pick), and one gate with no feature.
+ * Read as the API does (finish): each goal's missing, the gaps, the unplaced roadmap features
+ * and each link's lift from the reading before and after it shipped. Invented people,
+ * products and numbers only.
  */
 import type { Schemas } from "@/lib/api/client";
 
@@ -24,6 +29,14 @@ export type GmFeature = Schemas["GmFeature"];
 export type GmGuardrail = Schemas["GmGuardrail"];
 export type GmStatus = GmMilestone["status"];
 export type GmLift = GmFeature["lift"];
+export type GmLink = Schemas["GmLink"];
+export type GmMetricChoice = Schemas["GmMetricChoice"];
+
+export const SCOREBOARD_SCENARIO = "goal-map-scoreboard";
+/** The scoreboard scenario's names, for its specs. */
+export const SCOREBOARD = { measured: "Weekly sign-ups", empty: "Paid conversions", pick: "Daily revenue", gap: "6 paid conversions per rep", offMap: "Cut early churn" } as const;
+/** The day a metric's weekly value lands on as the goal's reading (the week's last day). */
+const READ_ON = "Nov 1";
 
 /** The mock's ids: stable UUIDs, as the API's. */
 const id = (k: string) => stableUuid(`goal-map/${k}`);
@@ -62,6 +75,10 @@ const GOALS: GmGoal[] = [
       { date: "Oct 30, 2026", text: "Target 30 → 40", by: "Dana Whitlock" },
       { date: "Sep 14, 2026", text: "Goal set at 30", by: "Dana Whitlock" },
     ],
+    metric: { id: "metric-signups", title: "Weekly sign-ups" },
+    missing: null,
+    choices: [],
+    read_on: READ_ON,
   },
   {
     id: "conversions",
@@ -74,6 +91,10 @@ const GOALS: GmGoal[] = [
     math: "Sign-ups per rep × conversion rate (needs 40–65 sign-ups at 15–25%)",
     builds_on: ["signups"],
     history: [{ date: "Oct 2, 2026", text: "Goal set at 10", by: "Dana Whitlock" }],
+    metric: { id: "metric-conversions", title: "Paid conversions" },
+    missing: null,
+    choices: [],
+    read_on: READ_ON,
   },
   {
     id: "revenue",
@@ -86,6 +107,10 @@ const GOALS: GmGoal[] = [
     math: "Reps × conversions per rep × value",
     builds_on: ["conversions"],
     history: [{ date: "Oct 2, 2026", text: "Goal set at $20k", by: "Dana Whitlock" }],
+    metric: { id: "metric-revenue", title: "Daily revenue" },
+    missing: null,
+    choices: [],
+    read_on: READ_ON,
   },
 ];
 
@@ -163,7 +188,12 @@ function ft(
   measured: string | null,
   released = lift !== "not_measured" || measured !== null,
 ): GmFeature {
-  return { id, name, area, milestones, lever, expected, confidence, released, measured, lift, links: milestones.map((m) => ({ milestone: m, expected, confidence, measured, lift })) };
+  return { id, name, area, milestones, lever, expected, confidence, released, measured, lift, links: milestones.map((m) => link(m, expected, confidence, measured, lift)) };
+}
+
+/** A link as seeded: a feature that helped or not shipped on Oct 20; its readings are set by finish(). */
+function link(milestone: string, expected: string, confidence: GmFeature["confidence"], measured: string | null, lift: GmLift): GmLink {
+  return { milestone, expected, confidence, measured, lift, shipped_on: lift === "not_measured" ? null : "Oct 20", before: null, after: null };
 }
 
 const FEATURES: GmFeature[] = [
@@ -178,8 +208,8 @@ const FEATURES: GmFeature[] = [
   ft("f9", "Guided first week", "onboard", ["m2", "m5"], "Value per conversion", "+$40 each", "Medium", "helping", "+$55 each"),
   // Linked to $20k first: its card, under $12k, shows what it is expected to do there (+$90), not for $20k.
   { ...ft("f10", "Annual plan offer", "onboard", ["m7", "m5"], "Value per conversion", "+$60 each", "Low", "not_measured", null, false), links: [
-    { milestone: "m7", expected: "+$60 each", confidence: "Low", measured: null, lift: "not_measured" },
-    { milestone: "m5", expected: "+$90 each", confidence: "Medium", measured: null, lift: "not_measured" },
+    link("m7", "+$60 each", "Low", null, "not_measured"),
+    link("m5", "+$90 each", "Medium", null, "not_measured"),
   ] },
   ft("f11", "Team invite at sign-up", "onboard", ["m7"], "Value per conversion", "+$30 each", "Medium", "not_measured", null, false), // serves the revenue milestone
   ft("f12", "Rep daily scoreboard", "scale", ["m7"], "Sign-ups per rep", "+3 a day", "Medium", "not_measured", null, false),
@@ -188,7 +218,7 @@ const FEATURES: GmFeature[] = [
 /** The hard case: 5 areas, 12 milestones, 40 features, one milestone missed, one goal not measured yet. */
 function hard(): GoalMap {
   const goals: GmGoal[] = GOALS.map((g) => ({ ...g, history: [...g.history] }));
-  goals[2] = { ...goals[2], current: null, status: "not_measured" };
+  goals[2] = { ...goals[2], current: null, status: "not_measured", metric: { id: "metric-revenue-weekly", title: "Weekly revenue" } };
   const areas = [...AREAS, FIFTH];
   const extra: GmMilestone[] = [
     ms("m8", "75 sign-ups per rep", "signups", 75, 31, "on_track", ["scale", "reps"], ["m2"], "Dec"),
@@ -254,7 +284,7 @@ function hard(): GoalMap {
       lift !== "not_measured" || i % 2 === 0,
     );
   });
-  return { goals, areas, guardrail: GUARDRAIL, milestones, features: [...FEATURES, ...more], today: "Nov 3", reps: 9, approver: APPROVER, can_edit: true };
+  return { goals, areas, guardrail: GUARDRAIL, milestones, features: [...FEATURES.map((f) => ({ ...f, links: f.links.map((l) => ({ ...l })) })), ...more], gaps: [], unplaced: [], off_map: [], today: "Nov 3", reps: 9, approver: APPROVER, can_edit: true };
 }
 
 function plain(): GoalMap {
@@ -263,7 +293,10 @@ function plain(): GoalMap {
     areas: [...AREAS],
     guardrail: GUARDRAIL,
     milestones: MILESTONES.map((m) => ({ ...m })),
-    features: FEATURES.map((f) => ({ ...f })),
+    features: FEATURES.map((f) => ({ ...f, links: f.links.map((l) => ({ ...l })) })),
+    gaps: [],
+    unplaced: [],
+    off_map: [],
     today: "Nov 3",
     reps: 10,
     approver: APPROVER,
@@ -276,7 +309,7 @@ function withIds(map: GoalMap): GoalMap {
   const fe = (k: string) => fid(k);
   return {
     ...map,
-    goals: map.goals.map((g) => ({ ...g, id: id(g.id), builds_on: g.builds_on.map(id) })),
+    goals: map.goals.map((g) => ({ ...g, id: id(g.id), builds_on: g.builds_on.map(id), metric: g.metric ? { ...g.metric, id: id(g.metric.id) } : null, choices: g.choices.map((c) => ({ ...c, id: id(c.id) })) })),
     areas: map.areas.map((a) => ({ ...a, id: id(a.id) })),
     milestones: map.milestones.map((m) => ({ ...m, id: id(m.id), goal: id(m.goal), areas: m.areas.map(id), depends: m.depends.map(id) })),
     features: map.features.map((f) => ({ ...f, id: fe(f.id), area: f.area ? id(f.area) : null, milestones: f.milestones.map(id), links: f.links.map((l) => ({ ...l, milestone: id(l.milestone) })) })),
@@ -329,10 +362,112 @@ function companyRoadmap(): GoalMap {
   return map;
 }
 
+/**
+ * The scoreboard's cases: sign-ups measured by its metric; conversions tied to a metric with no
+ * value yet; revenue with no metric and Daily revenue (no goal yet) to pick; one gate
+ * ("6 paid conversions per rep") whose areas have no feature.
+ */
+function scoreboard(): GoalMap {
+  const map = plain();
+  const [, conv, rev] = map.goals;
+  Object.assign(conv, { current: null, status: "not_measured" });
+  Object.assign(rev, { current: null, status: "not_measured", metric: null, choices: [{ id: "metric-daily-revenue", title: SCOREBOARD.pick, last: 11200 }] });
+  conv.choices = [];
+  for (const m of map.milestones)
+    if (m.goal !== "signups") Object.assign(m, { current: null, days: m.days.map(() => null), status: "not_measured", confirmed: null, confirmed_on: null });
+  // Its features move under the next gate: m4 keeps no feature.
+  map.features = map.features.map((f) => {
+    if (!f.milestones.includes("m4")) return f;
+    const ms = f.milestones.includes("m6") ? f.milestones.filter((x) => x !== "m4") : f.milestones.map((x) => (x === "m4" ? "m6" : x));
+    return { ...f, milestones: ms, links: ms.map((x) => ({ ...(f.links.find((l) => l.milestone === x) ?? f.links[0]), milestone: x })) };
+  });
+  // m6 pulls conversions alone (its feature is there); m4 (conversions and safety) has none.
+  map.milestones.find((m) => m.id === "m6")!.areas = ["conv"];
+  return map;
+}
+
+/** A shipped feature's reading before it shipped: lower when it helped, the same when not. */
+function seedReadings(map: GoalMap): void {
+  const cur = (m: string) => map.goals.find((g) => g.id === map.milestones.find((x) => x.id === m)?.goal)?.current ?? null;
+  for (const f of map.features)
+    for (const l of f.links) {
+      const c = cur(l.milestone);
+      if (l.shipped_on && c !== null && l.lift !== "not_measured") l.before = l.lift === "helping" ? Math.round(c * 8) / 10 : c;
+    }
+}
+
 export function seedGoalMap(scenario: string | null): GoalMap {
-  return withIds(
-    scenario === "goal-map-hard" ? hard() : scenario === "goal-map-no-gate" ? noGate() : scenario === "goal-map-guardrail-goal" ? guardrailGoal() : scenario === FIT_COMPANY_SCENARIO ? companyRoadmap() : plain(),
-  );
+  const map =
+    scenario === "goal-map-hard" ? hard() : scenario === "goal-map-no-gate" ? noGate() : scenario === "goal-map-guardrail-goal" ? guardrailGoal() : scenario === FIT_COMPANY_SCENARIO ? companyRoadmap() : scenario === SCOREBOARD_SCENARIO ? scoreboard() : plain();
+  seedReadings(map);
+  return withIds(map);
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** A Baseline goal as the map reads it (goal_map._goals): one store, the same ids. */
+export type BaselineGoal = { id: string; key: string; title: string; status: string; attrs: Record<string, unknown> };
+
+/**
+ * The scoreboard's goals as Baseline goals (the API reads the same Entity rows): the map's three,
+ * same ids, each with its number to aim at.
+ */
+export function scoreboardGoals(): BaselineGoal[] {
+  return GOALS.map((g, i) => ({ id: id(g.id), key: `g.${g.id}`, title: g.name, status: "confirmed", attrs: { metric: g.measure, target: g.target, unit: g.unit, math: g.math, position: i + 1 } }));
+}
+
+/** As the API reads them (goal_map.build): each goal's missing, each link's lift from its readings, the gaps, the unplaced features and the goals left off the map. */
+function finish(map: GoalMap, items: { id: string; title: string; status: string }[], baseline: BaselineGoal[]): GoalMap {
+  const goalOf = (m: string) => map.goals.find((g) => g.id === map.milestones.find((x) => x.id === m)?.goal);
+  for (const g of map.goals) {
+    g.missing = g.current !== null ? null : g.metric ? "values" : "metric";
+    if (g.current === null) g.read_on = null;
+    // One store: a goal that is a Baseline goal reads its name from it.
+    const e = baseline.find((x) => x.id === g.id);
+    if (e) {
+      g.name = e.title;
+      if (typeof e.attrs.target === "number") g.target = e.attrs.target;
+    }
+  }
+  for (const f of map.features) {
+    for (const l of f.links) {
+      const c = goalOf(l.milestone)?.current ?? null;
+      if (c === null) Object.assign(l, { before: null, after: null, lift: "not_measured" });
+      else if (l.shipped_on && l.before !== null) Object.assign(l, { after: c, lift: c > l.before ? "helping" : "not_helping" });
+    }
+    f.lift = f.links[0]?.lift ?? f.lift;
+  }
+  const gaps: GoalMap["gaps"] = [];
+  for (const m of map.milestones) {
+    const cells = new Set(map.features.filter((f) => f.milestones.includes(m.id)).map((f) => f.area));
+    if (m.areas.length) gaps.push(...m.areas.filter((a) => map.areas.some((x) => x.id === a) && !cells.has(a)).map((a) => ({ milestone: m.id, area: a })));
+    else if (!cells.size) gaps.push({ milestone: m.id, area: null });
+  }
+  const placed = new Set(map.features.map((f) => f.id));
+  const unplaced = items.filter((i) => !["draft", "cut", "merged"].includes(i.status) && !placed.has(i.id)).map((i) => ({ id: i.id, name: i.title }));
+  const onMap = new Set(map.goals.map((g) => g.id));
+  // Confirmed goals with no number to aim at, never a guardrail (goal_map.build's off_map).
+  const off_map = baseline
+    .filter((e) => e.status === "confirmed" && !onMap.has(e.id) && typeof e.attrs.target !== "number" && !e.attrs.guardrail)
+    .map((e) => ({ id: e.id, key: e.key, name: e.title }));
+  return { ...map, gaps, unplaced, off_map };
+}
+
+function goalStatus(current: number | null, target: number): GmStatus {
+  if (current === null) return "not_measured";
+  if (current >= target) return "met";
+  return current >= 0.75 * target ? "on_track" : "at_risk";
+}
+
+/** A gate read again from its goal's days (goal_map.gate_status). */
+function gateStatus(m: GmMilestone, today: string): GmStatus {
+  if (m.threshold === null) return "no_gate";
+  if (m.current === null) return "not_measured";
+  if (m.days.every((v) => v !== null && v >= m.threshold!)) return "met";
+  const [mon, day] = (m.due ?? "").split(" ");
+  const [tm, td] = today.split(" ");
+  if (m.due && MONTHS.indexOf(mon) * 40 + Number(day) < MONTHS.indexOf(tm) * 40 + Number(td) && MONTHS.indexOf(mon) >= 9) return "missed";
+  return m.current >= 0.75 * m.threshold ? "on_track" : "at_risk";
 }
 
 /** As the API orders them: by what each comes after, then as added. */
@@ -375,12 +510,17 @@ export async function routeGoalMap(
   p: string[],
   /** A Simple roadmap item by id (any item can be attached, not only those on the map). */
   item: (id: string) => { title: string; merged_into?: string } | null = () => null,
+  /** The Simple roadmap's items as the reader sees them (the unplaced features). */
+  items: () => Promise<{ id: string; title: string; status: string }[]> = async () => [],
+  /** The Baseline goals (the goals left off the map; the map's own goal names). */
+  baseline: () => BaselineGoal[] = () => [],
 ): Promise<Response | null> {
   if (p[1] !== "simple" || p[2] !== "goal-map") return null;
   const map = (db.goal_map ??= seedGoalMap(scenario));
   const canEdit = me.role === "owner" || me.role === "approver";
   // panel-menu (goal_map.build): a feature merged into another is no longer one of the map's.
-  const out = () => json(200, { ...map, features: map.features.filter((f) => !item(f.id)?.merged_into), can_edit: canEdit });
+  const out = async () =>
+    json(200, finish({ ...map, features: map.features.filter((f) => !item(f.id)?.merged_into), can_edit: canEdit }, await items(), baseline()));
   if (req.method === "GET" && !p[3]) return out();
   if (!canEdit) return json(403, { detail: "Only owners and approvers can change the goal map" });
   const body = JSON.parse((await req.text()) || "null");
@@ -397,6 +537,31 @@ export async function routeGoalMap(
     map.areas = ids.map((x) => by.get(x)!);
     return out();
   }
+  if (req.method === "POST" && p[3] === "goals" && p[4] && p[5] === "metric") {
+    const g = map.goals.find((x) => x.id === p[4]);
+    if (!g) return json(404, { detail: "No such goal" });
+    const c = g.choices.find((x) => x.id === body?.metric);
+    // A metric the company does not have: 404, as the API (goal_map.pick_metric).
+    const known = map.goals.some((x) => x.metric?.id === body?.metric || x.choices.some((y) => y.id === body?.metric));
+    if (!known) return json(404, { detail: "No such metric" });
+    if (!c) return json(422, { detail: "Pick an output metric in the goal's unit" });
+    // The goal's old metric lets go: it can be picked again.
+    const old = g.metric ? [{ ...g.metric, last: null }] : [];
+    g.metric = { id: c.id, title: c.title };
+    for (const x of map.goals) x.choices = x.choices.filter((y) => y.id !== c.id);
+    g.choices.push(...old);
+    if (c.last !== null) {
+      // Its weekly value becomes the goal's reading (on the week's last day, Nov 1).
+      g.current = c.last;
+      g.read_on = READ_ON;
+      g.status = goalStatus(c.last, g.target);
+      for (const m of map.milestones.filter((x) => x.goal === g.id)) {
+        Object.assign(m, { current: c.last, days: [null, null, null, null, c.last, null, null] });
+        m.status = gateStatus(m, map.today);
+      }
+    }
+    return out();
+  }
   if (req.method === "PATCH" && p[3] === "goals" && p[4]) {
     const g = map.goals.find((x) => x.id === p[4]);
     if (!g) return json(404, { detail: "No such goal" });
@@ -404,6 +569,9 @@ export async function routeGoalMap(
     if (!(t > 0)) return json(422, { detail: "The target must be above 0" });
     g.history = [{ date: DAY_WORDS, text: `Target ${amount(g.target, g.unit)} → ${amount(t, g.unit)}`, by: me.name }, ...g.history];
     g.target = t;
+    // One store: the Baseline goal's number moves with it.
+    const e = baseline().find((x) => x.id === g.id);
+    if (e) e.attrs = { ...e.attrs, target: t };
     return out();
   }
   if (req.method === "POST" && p[3] === "milestones") {
@@ -454,7 +622,7 @@ export async function routeGoalMap(
     if (!area) return json(422, { detail: "Pick an area of this map" });
     const expected = String(body?.expected ?? "").trim();
     const confidence = ({ high: "High", medium: "Medium", low: "Low" } as const)[body?.confidence as "high" | "medium" | "low"] ?? "Medium";
-    const link = { milestone: m.id, expected, confidence, measured: null, lift: "not_measured" as const };
+    const link: GmLink = { milestone: m.id, expected, confidence, measured: null, lift: "not_measured", shipped_on: null, before: null, after: null };
     if (known) {
       if (!known.milestones.includes(m.id)) {
         known.milestones.push(m.id);

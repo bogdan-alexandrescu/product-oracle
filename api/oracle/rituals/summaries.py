@@ -58,7 +58,7 @@ COVERED = frozenset(
      "alignment_report", "custom", "metrics_review"}
 )  # fmt: skip
 NOT_STARTED = "Summary not started: the ritual's owner can no longer start runs"
-NOTHING_TO_EXPLAIN = "This review has no open variance to explain"
+NOTHING_TO_EXPLAIN = "This review has no open unusual week to explain"
 FAILED = "Summary failed · Summarize with Oracle to retry"
 # A summary run's knob: its prompt carried the pre-read as a member sees it (#541).
 VIEW, MEMBER = "pre_read_view", "member"

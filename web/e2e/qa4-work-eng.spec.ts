@@ -15,7 +15,7 @@ import { login } from "./helpers";
  * - qa4-work-51: the chosen Accept shows as pressed.
  * - qa4-work-53: a feature shows its name only, never its key.
  * - qa4-work-54: a brief without a code map says so in plain words.
- * - qa4-work-55: Ask the architect is a button, not grey text.
+ * - qa4-work-55: Ask the architect is a button, not grey text (on the check, a quiet accent link: EC1 b).
  */
 
 const DESKTOP = { width: 1440, height: 900 };
@@ -130,7 +130,7 @@ for (const [name, size] of [
   });
 }
 
-test("check: no code map reads in plain words, the panel names what a feature depends on, and Ask the architect is a button", async ({ page }) => {
+test("check: no code map reads in plain words, the panel names what a feature depends on, and Ask the architect is an accent link", async ({ page }) => {
   // protects=qa4-work-53 (Depends on), 54, 55; fails_when="No code map" shows, Depends on names a key, or Ask the architect is a ghost button.
   await page.setViewportSize(DESKTOP);
   await openCheck(page);
@@ -145,5 +145,6 @@ test("check: no code map reads in plain words, the panel names what a feature de
   await expect(panel).not.toContainText("No code map");
   await expect(panel).toContainText("Depends on Guided setup");
   await expect(panel).not.toContainText("f.guided-setup");
-  await expect(panel.getByRole("button", { name: "Ask the architect" })).toHaveAttribute("data-variant", "secondary");
+  // EC1 b (owner, Nov 4): a quiet accent link after "None for this feature.", not grey text and not a button below.
+  await expect(panel.getByRole("button", { name: "Ask the architect" })).toHaveClass(/text-accent/);
 });

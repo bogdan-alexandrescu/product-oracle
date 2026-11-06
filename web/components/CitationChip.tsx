@@ -3,7 +3,7 @@
 import { Chip, HoverCard } from "@/components/ds";
 import type { CitationOut } from "@/lib/api/client";
 import { IGNORE_ATTR } from "@/lib/anchor";
-import { citationConfidence, citationHref, citationSourceLabel, formatDate, SOURCE_LABEL } from "@/lib/format";
+import { citationConfidence, citationHref, citationRefText, citationSourceLabel, formatDate, SOURCE_LABEL } from "@/lib/format";
 
 /** The app's low-confidence chip, on a citation its writer marked low confidence. */
 export function LowConfidence() {
@@ -37,7 +37,7 @@ export function CitationChip({ citeKey, citation, number }: { citeKey: string; c
         unstyled
         label={[
           `Citation ${number ?? ""}: ${SOURCE_LABEL[citation.source]}`,
-          citation.title ?? citation.ref,
+          citation.title ?? citationRefText(citation.ref),
           [citation.low_confidence && "low confidence", confidence].filter(Boolean).join(" "),
         ]
           .filter(Boolean)
@@ -59,7 +59,7 @@ export function CitationChip({ citeKey, citation, number }: { citeKey: string; c
             <LowConfidence />
           </span>
         )}
-        <span className="block font-semibold">{citation.title ?? citation.ref}</span>
+        <span className="block font-semibold">{citation.title ?? citationRefText(citation.ref)}</span>
         {citation.excerpt && <span className="mt-2 block border-l-[3px] border-accent-mid pl-2 text-text2">“{citation.excerpt}”</span>}
         {href ? (
           <a
@@ -71,9 +71,9 @@ export function CitationChip({ citeKey, citation, number }: { citeKey: string; c
             Open source ↗
           </a>
         ) : (
-          // A baseline item named in free text: no link to open.
+          // A Ground Truth item named in free text: no link to open.
           <span className="mt-2 block font-mono text-[13px] text-text2" data-testid="cite-ref">
-            {citation.ref}
+            {citationRefText(citation.ref)}
           </span>
         )}
       </HoverCard>

@@ -73,7 +73,7 @@ async def add_scope_requirement(
     scope_id: uuid.UUID, body: ScopeRequirementIn, principal: CurrentPrincipal, db: TenantDB
 ) -> ScopeItemOut:
     """Add a requirement to a feature (approver role or above): ``origin: person``; its
-    goals default to the feature's. Approving writes it to the baseline as the approver's."""
+    goals default to the feature's. Approving writes it to the Ground Truth as the approver's."""
     return await _call(scope_review.add_requirement(db, principal, scope_id, body))
 
 

@@ -90,6 +90,7 @@ from oracle.simple.goal_map_router import router as simple_goal_map_router
 from oracle.simple.meetings_router import router as simple_meetings_router
 from oracle.simple.plan_router import router as simple_plan_router
 from oracle.simple.priorities import router as simple_priorities_router
+from oracle.simple.removed import router as simple_removed_router
 from oracle.simple.router import router as simple_router
 from oracle.simple.trash_items import router as simple_trash_items_router
 from oracle.simple.visuals_router import router as simple_visuals_router
@@ -318,6 +319,7 @@ def create_app() -> FastAPI:
     app.include_router(simple_goal_map_router)
     app.include_router(simple_fit_date_router)
     app.include_router(simple_trash_items_router)
+    app.include_router(simple_removed_router)
     app.include_router(simple_decision_sheet_router)
     app.include_router(simple_changes_router)
     app.include_router(simple_additions_router)
@@ -325,7 +327,7 @@ def create_app() -> FastAPI:
     app.include_router(simple_meetings_router)
     app.include_router(simple_priorities_router)
     app.include_router(simple_visuals_router)
-    # Current state beside Desired state: features that already run, with their proof.
+    # Running today beside the Ground Truth: features that already run, with their proof.
     app.include_router(currentstate_router)
     app.include_router(strategy_router)
     app.include_router(launches_router)

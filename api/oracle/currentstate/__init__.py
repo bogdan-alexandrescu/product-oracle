@@ -1,1 +1,1 @@
-"""Current state beside Desired state: what already runs, with its proof."""
+"""Running today beside the Ground Truth: what already runs, with its proof."""

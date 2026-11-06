@@ -118,7 +118,7 @@ export function AddEvidenceLink({
     e?.preventDefault();
     setSaved(null);
     if (!chosen) {
-      setError("Pick the baseline item this link supports.");
+      setError("Pick the Ground Truth item this link supports.");
       return;
     }
     if (!url.trim()) {
@@ -179,7 +179,7 @@ export function AddEvidenceLink({
       {!target && (
         <div>
           <label htmlFor={ids.target} className={LABEL}>
-            Baseline item it supports
+            Ground Truth item it supports
           </label>
           <select
             id={ids.target}

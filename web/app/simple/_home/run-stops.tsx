@@ -28,7 +28,7 @@ const ACTION: Partial<Record<Stop["kind"], string>> = {
   prd_review: "Review the PRD",
   eng_dates: "Review the dates",
   roadmap_items: "Check the roadmap items",
-  baseline_confirm: "Confirm the baseline",
+  baseline_confirm: "Confirm the Ground Truth",
 };
 
 /** What the stop is, in the run page's own words (only "Feature set" is shortened). */

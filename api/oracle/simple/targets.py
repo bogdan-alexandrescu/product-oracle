@@ -42,7 +42,8 @@ company's owners. A proposal writes nothing, an add creates no row, until accept
 - ``add_feature_ask`` (S9): a feature ask filed in Oracle's Requests (``product_requests``,
   state new, ``target.request_id``): ``after`` {title, requester_name, requester_kind,
   channel}. Anyone who may file a request (commenter and up) files it directly, as in
-  Requests; its undo deletes it while it is still new and unchanged.
+  Requests; its undo deletes it while it is still new and unchanged. With no one named
+  (not a customer's), it was asked by the teammate who filed it.
 - ``add_launch_task`` / ``set_launch_task_status``: a task on the item's live launch
   (a launch of its track whose items include it; ``target.launch_id``, ``task_id`` once
   added) through oracle.launches.service. The launches service deletes no task: the undo
@@ -388,7 +389,7 @@ async def _plan(
     if kind == "override":
         row = entry.row  # type: ignore[union-attr]
         if row.feature_id is None:
-            raise ChangeError(422, "This item has no feature in the baseline to rank")
+            raise ChangeError(422, "This item has no feature in the Ground Truth to rank")
         target["feature_id"] = str(row.feature_id)
         clear = a.get("clear") is True
         pos = a.get("position")
@@ -431,7 +432,7 @@ async def _plan(
     if kind == "estimate":
         row = entry.row  # type: ignore[union-attr]
         if row.feature_id is None:
-            raise ChangeError(422, "This item has no feature in the baseline to estimate")
+            raise ChangeError(422, "This item has no feature in the Ground Truth to estimate")
         target["feature_id"] = str(row.feature_id)
         after = {}
         for k in ESTIMATES:
@@ -454,7 +455,7 @@ async def _plan(
             raise ChangeError(422, f"before: {', '.join(missing)} as you saw them")
         f = await _feature(db, row.feature_id)
         if f is None:
-            raise ChangeError(422, "This item has no feature in the baseline to estimate")
+            raise ChangeError(422, "This item has no feature in the Ground Truth to estimate")
         current = estimates(f.attrs)
         seen = {k: given[k] for k in ESTIMATES}
         if any(not (v is None or (isinstance(v, int | float) and not isinstance(v, bool)))
@@ -677,10 +678,14 @@ async def _apply(
 async def _create(db: AsyncSession, principal: Any, c: SimpleChange) -> None:
     kind, t, a = KIND[c.op], c.target, c.after
     if kind == "ask":
+        name, rkind = a["requester_name"], a["requester_kind"]
+        if name is None and rkind in ("unknown", "team"):
+            # Named by no one (a teammate's own ask): asked by the teammate who filed it.
+            u = await db.get(User, c.by)
+            name, rkind = (u.name or u.email, "team") if u is not None else (None, rkind)
         db.add(ProductRequest(id=uuid.UUID(t["request_id"]), title=a["title"],
-                              channel=a["channel"], origin="person",
-                              requester_name=a["requester_name"],
-                              requester_kind=a["requester_kind"], filed_by=c.by))  # fmt: skip
+                              channel=a["channel"], origin="person", requester_name=name,
+                              requester_kind=rkind, filed_by=c.by))  # fmt: skip
         return
     item = await db.get(RoadmapItem, uuid.UUID(t["item_id"])) if t.get("item_id") else None
     if t.get("item_id") and item is None:

@@ -4,7 +4,7 @@ import { login } from "./helpers";
 
 /*
  * B6 Goals interview under H11 Autonomy (Shape goals) through the UI, on the mock layer: an
- * owner sets the level on Settings › Autonomy with a reason, then the Baseline follows it.
+ * owner sets the level on Settings › Autonomy with a reason, then the Ground Truth follows it.
  * At Observe Oracle opens no goals interview (the plain sentence stands where Make measurable
  * was; the Not measurable flags stay); at Draft Oracle drafts one version for the goal's owner
  * to edit and own, with no "Use version 1" default. The seed's "Cut early churn" is vague.
@@ -37,8 +37,8 @@ async function setShapeGoals(page: Page, level: "Observe" | "Draft", why: string
 }
 
 async function openBaseline(page: Page) {
-  await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
+  await page.goto("/ground-truth");
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
   await expect(churnRow(page)).toBeVisible();
 }
 
@@ -47,7 +47,7 @@ async function openBaseline(page: Page) {
 // with what the goal misses; fails_when=a Make measurable or Interview vague goals button is
 // still offered, the sentence is missing, or the flag disappears; no_claim=the API's 409
 // (pytest tests/test_goals_autonomy.py covers it).
-test("goals autonomy: at Observe the Baseline shows the sentence instead of Make measurable", async ({ page }) => {
+test("goals autonomy: at Observe the Ground Truth shows the sentence instead of Make measurable", async ({ page }) => {
   await login(page);
   await setShapeGoals(page, "Observe", "We set our goals ourselves this quarter");
   await openBaseline(page);

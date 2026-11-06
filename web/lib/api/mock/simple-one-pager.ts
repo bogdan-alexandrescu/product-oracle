@@ -217,7 +217,7 @@ const SLICE: SliceItem[] = [
  * and a problem line the API cut at a word with its whole text kept. Invented data.
  */
 const NOTED_SLICE: SliceItem[] = [
-  { title: "Baseline export", horizon: "now", start: "2026-10-05", end: "2026-11-18", estimated: false, milestone: ["M1 · Measure it, make it safe (baseline needs the export); Alert digest in M2 · Ship to beta", "2026-11-20"] },
+  { title: "Usage export", horizon: "now", start: "2026-10-05", end: "2026-11-18", estimated: false, milestone: ["M1 · Measure it, make it safe (the usage report needs the export); Alert digest in M2 · Ship to beta", "2026-11-20"] },
   { title: "Dry run", horizon: "now", start: "2026-10-12", end: "2026-11-20", estimated: true, milestone: ["M1 · Measure it, make it safe (owner asks for a dry run)", "2026-11-20"] },
   { title: "Setup audit", horizon: "now", start: "2026-10-19", end: "2026-11-13", estimated: false, milestone: ["M1 · Measure it, make it safe; follow-up in M3", "2026-11-20"] },
   { title: "Beta invites", horizon: "next", start: "2026-11-23", end: "2026-12-18", estimated: false, milestone: ["M2 · Ship to beta (two teams first)", "2026-12-18"] },
@@ -930,4 +930,37 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     return json(201, { change: out(db, ctx, u), flags: [] });
   }
   return null;
+}
+
+/**
+ * inbox-meeting-proposals fix (changes.inbox_rows): the proposed wordings waiting for `me` (an
+ * owner, or whom the proposal is routed to), each named by its line as it read, and the
+ * decisions on mine of these one-pagers.
+ */
+export function onePagerInboxRows(
+  dbs: OnePagerDb[],
+  me: { id: string; role: Role },
+  seen: string | null,
+): { proposals: Schemas["InboxSimpleChange"][]; decisions: Schemas["InboxSimpleChange"][] } {
+  const row = (c: Change, at: string | null, state?: Schemas["InboxSimpleChange"]["state"]): Schemas["InboxSimpleChange"] => {
+    const line = String(c.before.line ?? "").split(/\s+/).filter(Boolean).join(" ");
+    const next = String(c.after.line ?? "").split(/\s+/).filter(Boolean).join(" ");
+    return {
+      id: c.id, op: c.op, status: c.status, item_id: null, item_title: null, document_id: c.document_id, by: c.by, by_name: c.by_name, at: c.at,
+      decided_by: c.decided_by, decided_at: c.decided_at, reason: c.reason, decision_reason: c.decision_reason,
+      state: state ?? (!seen || (at && at > seen) ? "new" : "open"), from_meeting: null,
+      // Still to decide, it reads as proposed (changes.inbox_rows asked_of); once decided, as done.
+      asked: c.status === "proposed" ? `proposed new wording for a one-pager line${next ? `: “${next}”` : ""}` : next ? `edited a one-pager line to “${next}”` : "edited a one-pager line",
+      can_decide: c.status === "proposed" && (me.role === "owner" || c.routed_to.includes(me.id)), from_ask: false,
+      subject: line || null, question_id: null, line_id: String(c.target.line_id ?? "") || null,
+    };
+  };
+  const all = dbs.flatMap((d) => d.changes);
+  return {
+    // As the API: routed to me (the mock routes a proposal to the owners).
+    proposals: all.filter((c) => c.status === "proposed" && c.routed_to.includes(me.id)).map((c) => row(c, c.at)),
+    decisions: all
+      .filter((c) => c.by === me.id && (c.status === "accepted" || c.status === "declined") && c.decision_reason !== "Withdrawn by its author")
+      .map((c) => row(c, c.decided_at, !seen || (c.decided_at ?? "") > seen ? undefined : "done")),
+  };
 }

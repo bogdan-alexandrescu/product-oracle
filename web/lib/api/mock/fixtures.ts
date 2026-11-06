@@ -602,7 +602,7 @@ const SPEC_ACCEPTANCE: SectionSeed = {
   key: "acceptance-criteria",
   level: 2,
   heading: "Acceptance criteria",
-  body: "In the baseline (decided with the PRD):\n\n- req-shipping-cost: A shopper sees the shipping cost on the cart page.\n\nProposed by this spec (not product requirements until the PRD adopts them):\n\n- The quote refreshes when the cart changes.",
+  body: "In the Ground Truth (decided with the PRD):\n\n- req-shipping-cost: A shopper sees the shipping cost on the cart page.\n\nProposed by this spec (not product requirements until the PRD adopts them):\n\n- The quote refreshes when the cart changes.",
 };
 const SPEC_ASSUMPTIONS: SectionSeed = { key: "assumptions", level: 2, heading: "Assumptions", body: "The cart service can call an internal endpoint." };
 const SPEC_SOURCES: SectionSeed = {
@@ -1006,7 +1006,7 @@ export const UPDATE_SOURCES = (rows: string[], evidence: string[]): SectionSeed[
     key: "sources-list",
     level: 3,
     heading: "Sources",
-    body: "- g1: oracle, Goals in the baseline, retrieved 2026-10-20\n- t1: oracle, Product tracks and milestones, retrieved 2026-10-20",
+    body: "- g1: oracle, Goals in the Ground Truth, retrieved 2026-10-20\n- t1: oracle, Product tracks and milestones, retrieved 2026-10-20",
   },
   { key: "sources-data", level: 3, heading: "Data points", body: rows.map((r) => `- ${r}`).join("\n") },
   { key: "sources-evidence", level: 3, heading: "Evidence by section", body: evidence.map((r) => `- ${r}`).join("\n") },
@@ -1017,7 +1017,7 @@ export const UPDATE_SEED_CITATIONS: CitationSeed[] = [
     id: "g1",
     source: "oracle",
     ref: "oracle://baseline/goals",
-    title: "Goals in the baseline",
+    title: "Goals in the Ground Truth",
     excerpt: "Confirmed goals with their targets and current values.",
     retrieved_at: "2026-10-20T08:00:00Z",
   },

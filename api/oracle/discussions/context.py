@@ -146,7 +146,7 @@ async def _entity(db: AsyncSession, ctx: Context, e: Entity, label: str | None =
         str(e.id),
         label or f"{e.type.capitalize()}: {e.title}",
         sharing.one_line(e.body or "", 600),
-        url=f"/baseline#{e.id}",
+        url=f"/ground-truth#{e.id}",
         confidence=_num(e.confidence),
     )
     rows = await db.scalars(
@@ -364,10 +364,10 @@ def _view(ctx: Context, d: Discussion) -> None:
 
 # G7 Head-of-product panel (3.4): a ``screen`` subject's page names, by first path segment.
 PAGES = {
-    "home": "Home", "requests": "Requests", "baseline": "Baseline",
+    "home": "Home", "requests": "Requests", "baseline": "Ground Truth",
     "documents": "PRDs", "priorities": "Priorities", "plan": "Plan", "roadmap": "Plan",
     "runs": "Runs", "inbox": "Inbox", "company": "Company", "sources": "Sources",
-    "settings": "Settings",
+    "settings": "Settings", "ground-truth": "Ground Truth",
 }  # fmt: skip
 # The walk: Simple's pages by their segment after ``/simple`` ("Home" for ``/simple``).
 SIMPLE_PAGES = {
@@ -420,7 +420,7 @@ async def _home(db: AsyncSession, ctx: Context) -> None:
         a, b = _figure(current), _figure(target)
         if a is not None and b is not None:
             line += f", {abs(b - a):g} to go"
-        ctx.add("entity", str(g.id), f"Goal: {g.title}", line, url=f"/baseline#{g.id}")
+        ctx.add("entity", str(g.id), f"Goal: {g.title}", line, url=f"/ground-truth#{g.id}")
     tracks = await db.scalars(select(ProductTrack).order_by(ProductTrack.created_at).limit(20))
     for t in tracks:
         ctx.add("track", str(t.id), f"Track: {t.title}", f"status {t.status}", url="/plan")
@@ -460,7 +460,7 @@ async def _features(db: AsyncSession, ctx: Context) -> None:
     for src, title in rows.all():
         serves.setdefault(src, []).append(title)
     start = ctx.size
-    ctx.note("The baseline's features, with their status and the goals they serve:")
+    ctx.note("The Ground Truth's features, with their status and the goals they serve:")
     for f in features:
         goals_of = serves.get(f.id)
         line = f"status {f.status}; " + (
@@ -470,7 +470,7 @@ async def _features(db: AsyncSession, ctx: Context) -> None:
             ctx.note("The rest of the features are not shown.")
             break
         if (
-            ctx.add("entity", str(f.id), f"Feature: {f.title}", line, url=f"/baseline#{f.id}")
+            ctx.add("entity", str(f.id), f"Feature: {f.title}", line, url=f"/ground-truth#{f.id}")
             is None
         ):
             break

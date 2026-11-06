@@ -81,7 +81,7 @@ const SETUP_STEPS: Record<string, string> = {
   eng_lead: "/settings/members?from=simple-setup#engineering-lead",
   horizons: "/settings/company?from=simple-setup#horizons",
   timezone: "/settings/company?from=simple-setup#timezone",
-  build_baseline: "/baseline?build=1",
+  build_baseline: "/ground-truth?build=1",
 };
 
 /** An item code before a name ("F-06 Weekly alert digest"): Simple says the name alone (qa-simple-home-13). */
@@ -716,6 +716,15 @@ export default function SimpleHome() {
                           {g.needYou} {g.needYou === 1 ? "item needs" : "items need"} you
                         </span>
                       )}
+                      {/* goal-map-scoreboard: the goal on the Goal map, the scoreboard of its gates. */}
+                      <Link
+                        href={`/simple/goals?goal=${encodeURIComponent(g.id)}&name=${encodeURIComponent(g.name)}`}
+                        data-testid="home-goal-map"
+                        aria-label={`${g.name} on the Goal map`}
+                        className="simple-small font-semibold text-accent-ink hover:underline"
+                      >
+                        Goal map
+                      </Link>
                     </div>
                     <SuggestionsButton goal={{ id: g.id, key: g.id, title: g.name }} api={suggestions} onOpen={setGoalPanel} className="self-start" />
                   </li>
@@ -1227,7 +1236,7 @@ function SetupCard({ setup, owner, onHide }: { setup: Schemas["SetupOut"]; owner
     >
       <p className="simple-small">
         {owner
-          ? "A few steps make Oracle yours: connect your tools, pick the sources it reads, then build the baseline it plans from. Each step opens where it is done."
+          ? "A few steps make Oracle yours: connect your tools, pick the sources it reads, then build the Ground Truth it plans from. Each step opens where it is done."
           : "Two steps make Oracle yours: connect your tools and pick the sources it reads for you. Each step opens where it is done."}
       </p>
       <ul className="flex flex-col">

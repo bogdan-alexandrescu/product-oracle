@@ -1214,7 +1214,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
               {dateWarnings.length > 0 && (
                 <Link href={datesHref(lackingDays)} data-testid="dates-lacking" className="inline-flex">
                   <Chip kind="warn">
-                    {lackingCount} date{lackingCount === 1 ? " lacks" : "s lack"} a basis
+                    {lackingCount} date{lackingCount === 1 ? " lacks" : "s lack"} a date source
                   </Chip>
                 </Link>
               )}
@@ -1238,8 +1238,9 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                   Discuss
                 </Button>
               )}
-              {/* C1e: accepted changes staged for the next draft, built in one job. */}
-              {document_?.kind === "prd" && <BuildDraftButton doc={doc} />}
+              {/* C1e: accepted changes staged for the next draft, built in one job; a roadmap's
+                  staged changes build its next draft the same way (next to Approve version). */}
+              {(document_?.kind === "prd" || document_?.kind === "roadmap") && <BuildDraftButton doc={doc} />}
               {/* H9: an approved pricing memo's Decide (the pricing owner), or who it waits for. */}
               {document_?.kind === "pricing" && n === latest && <PricingDecide slug={document_.slug} />}
               {templateOnly && !replaced && document_ && <DraftWithOracleButton slug={document_.slug} />}

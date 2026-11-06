@@ -13,7 +13,7 @@ import { expect, test, type Page } from "./test";
  * goal; Save goal stays off until the measure, the target and the date are all set; a saved goal
  * reads "<measure>: <target> by <date>"; the pencil turns a header into the same form, filled in;
  * every save offers Undo, which puts it back; fails_when = Save is on with a field missing, the
- * goal does not show, or Undo leaves the change; no_claim = Baseline's own goal checks (pytest).
+ * goal does not show, or Undo leaves the change; no_claim = Ground Truth's own goal checks (pytest).
  * Card gb-archive: protects = Archive goal asks first and says what the goal holds (its features
  * and the milestones their work is in); one that serves another goal goes there; Archive goal is
  * off until a goal is picked for the rest; archiving moves them and drops the bucket; Undo
@@ -58,7 +58,7 @@ for (const size of SIZES) {
       await page.getByTestId("add-goal").getByRole("button", { name: "+ Add goal" }).click();
       const form = page.getByTestId("add-goal").getByTestId("goal-form");
       await expect(form.getByRole("heading", { name: "New goal" })).toBeVisible();
-      await expect(form).toContainText("Goal 5 in the order; change it in Baseline");
+      await expect(form).toContainText("Goal 5 in the order; change it in the Ground Truth");
       const save = form.getByRole("button", { name: "Save goal" });
       await expect(save).toBeDisabled();
       await form.getByLabel("Goal").fill("Quieter support inbox");

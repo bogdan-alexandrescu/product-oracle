@@ -56,5 +56,5 @@ test("a commenter without date rights cannot record and sees why", async ({ page
   await openDiscussion(page);
   const record = change(page, RECORD).getByRole("button", { name: "Record" });
   await expect(record).toBeDisabled();
-  await expect(record).toHaveAttribute("title", RECORDERS);
+  await expect(record).toHaveAccessibleDescription(RECORDERS);
 });

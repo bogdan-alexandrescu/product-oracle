@@ -74,7 +74,7 @@ SETTLED = ("answered", "withdrawn", "retired")
 UNNAMED_CLIENT = "An API token"
 # The checkpoint kinds, as the Inbox names them.
 CHECKPOINT_LABEL = {
-    "baseline_confirm": "Confirm the baseline",
+    "baseline_confirm": "Confirm the Ground Truth",
     "feature_set": "Feature set and dependencies",
     "priority_order": "Priority order",
     "prd_review": "PRD review",
@@ -141,7 +141,7 @@ async def _subject_columns(db: AsyncSession, subject, principal: Principal) -> d
         return {"document_id": subject.document_id, "item_ref": subject.item_key}
     assert isinstance(subject, EntitySubject)
     if await db.get(Entity, subject.entity_id) is None:
-        raise IntakeError(422, "No such baseline entity")
+        raise IntakeError(422, "No such Ground Truth entity")
     return {"entity_id": subject.entity_id}
 
 
@@ -282,8 +282,8 @@ async def subject_of(
     if q.entity_id is not None:
         ent = await db.get(Entity, q.entity_id)
         return InboxSubject(
-            kind="entity", title=f"Baseline · {ent.title if ent else 'an entity'}",
-            href=f"/baseline?entity={q.entity_id}",
+            kind="entity", title=f"Ground Truth · {ent.title if ent else 'an entity'}",
+            href=f"/ground-truth?entity={q.entity_id}",
         )  # fmt: skip
     doc = await db.get(Document, q.document_id) if q.document_id else None
     if q.item_ref and doc is not None:

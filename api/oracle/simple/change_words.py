@@ -31,6 +31,10 @@ def _key_date(c_before: dict, c_after: dict) -> str:
 
 def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -> str:
     """What was done, without who: "changed the estimate of F-08 Billing page"."""
+    from oracle.simple import plan_changes
+
+    if op in plan_changes.OPS:
+        return plan_changes.phrase(op, target, before, after, item)
     x = item or _quoted(after.get("title") or target.get("title")) or "an item"
     on = f" on {item}" if item else ""
     title = _quoted(after.get("title"))
@@ -132,7 +136,12 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
         case "set_goal":
             return f"changed the goal of {x}"
         case "set_depends":
-            return f"changed what {x} depends on"
+            # ask-oracle-actions: a dependency added or removed in the feature talk names it.
+            dep = target.get("dependency")
+            gone = len(after.get("depends_on") or []) < len(before.get("depends_on") or [])
+            if not dep:
+                return f"changed what {x} depends on"
+            return f"{x} no longer depends on {dep}" if gone else f"{x} now depends on {dep}"
         # feature-parts: target names the parent (the new one, else the one left).
         case "set_parent":
             parent = " ".join(str(target.get(k) or "") for k in ("code", "title")).strip()
@@ -166,12 +175,12 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
         case "delete_item":
             return f"moved {x} to Trash"
         # edit-goals-prds: a goal archived, moved to Trash or restored (oracle.simple.goal_asks).
-        case "archive_goal":
-            return f"archived the goal {_quoted(target.get('title')) or 'a goal'}"
-        case "delete_goal":
-            return f"moved the goal {_quoted(target.get('title')) or 'a goal'} to Trash"
-        case "unarchive_goal":
-            return f"restored the goal {_quoted(target.get('title')) or 'a goal'}"
+        # The goal by its title, or else by the name the reader knows it by.
+        case "archive_goal" | "delete_goal" | "unarchive_goal":
+            verb = {"archive_goal": "archived", "delete_goal": "moved"}.get(op, "restored")
+            goal = _quoted(target.get("title")) or item
+            tail = " to Trash" if op == "delete_goal" else ""
+            return f"{verb} the goal {goal}{tail}" if goal else f"{verb} a goal{tail}"
     return f"changed {x}"
 
 
