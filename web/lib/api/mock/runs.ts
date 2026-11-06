@@ -579,6 +579,18 @@ function targetGoals(ctx: Omit<RunsContext, "db">, flowKey: string, raw: string[
   return out;
 }
 
+/** The segment a failed run stopped at (its last failed one), as the API's retry_segment reads it. */
+function retrySegmentOf(r: RunOut): SegmentOut | undefined {
+  if (r.status !== "failed") return undefined;
+  return [...r.segments].sort((a, b) => b.seq - a.seq).find((s) => s.status === "failed");
+}
+
+/** As the API: an owner retries any run, an approver only a run they created. */
+function mayRetrySegment(ctx: RunsContext, r: RunOut): boolean {
+  if (ctx.userRole == null || ctx.userRole === "owner") return true;
+  return ctx.userRole === "approver" && r.created_by === ctx.userId;
+}
+
 function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string): SegmentOut[] {
   return flowOf(flowKey).segments.map((s, i) => ({
     id: uuid(),
@@ -598,6 +610,7 @@ function segmentsFor(flowKey: string, knobs: RunOut["knobs"], uuid: () => string
     draft_import: null,
     sent_back: false,
     can_retry_draft_import: false,
+    can_retry: false,
     items_check: null,
     previous_attempt: null,
     feature_set_check: null,
@@ -2116,7 +2129,13 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       lead_stop: !!ctx.leadStop?.(c, r.flow),
     }));
     // As the API (#556, #561 review): stored errors read in words, a failed one in the past.
-    const segments = r.segments.map((s) => (s.error ? { ...s, error: readableRefusal(s.error, s.status === "failed") } : s));
+    // As the API (retry_segment): a failed run's last failed segment, for whoever may retry it.
+    const retryable = mayRetrySegment(ctx, r) ? retrySegmentOf(r)?.seq : undefined;
+    const segments = r.segments.map((s) => ({
+      ...s,
+      ...(s.error ? { error: readableRefusal(s.error, s.status === "failed") } : {}),
+      can_retry: s.seq === retryable,
+    }));
     const can_decide = checkpoints.some((c) => c.status === "pending" && c.can_decide);
     return json(status, { ...r, document_title: docTitle(ctx, r), error: readableRefusal(r.error, r.status === "failed"), segments, checkpoints, can_decide, open_proposals: ctx.openProposals?.(r.id) ?? 0 });
   };
@@ -2244,6 +2263,17 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   if (action === "retry" && m === "POST") {
     if (!r.can_retry) return fail(409, "nothing to retry: no lost submission of this run is past the lookup cap");
     Object.assign(r, { can_retry: false, stuck: null });
+    return done();
+  }
+  // As the API (retry_segment): a failed run runs again from the segment it stopped at; the
+  // segments before it and their approved checkpoints stay. The mock has no queue: it runs at once.
+  if (action === "segments" && p[5] === "retry" && m === "POST") {
+    const s = r.segments.find((x) => x.seq === Number(p[4]));
+    if (!s) return fail(404, `run ${r.id} has no segment ${p[4]}`);
+    if (!mayRetrySegment(ctx, r)) return fail(403, "Only an owner or the approver who started this run can retry it");
+    if (retrySegmentOf(r)?.seq !== s.seq) return fail(409, `run is ${r.status}, not failed at segment ${s.seq}`);
+    Object.assign(s, { status: "running", error: null, finished_at: null, started_at: ctx.now() });
+    Object.assign(r, { status: "running", error: null, finished_at: null });
     return done();
   }
   if (action === "stop-cancelling" && m === "POST") {

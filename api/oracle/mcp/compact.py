@@ -138,12 +138,26 @@ def text_page(text: str, offset: Any, max_chars: Any) -> str:
     return f"[characters {start}-{end} of {len(text)}{more}]\n{page}"
 
 
-# A search hit's item keeps these; its body is the snippet's to show.
-ITEM_FIELDS = ("id", "kind", "title", "url", "source_id", "external_id", "updated_at")
+# A search hit's item keeps these (not its acl or fetch bookkeeping); the snippet shows
+# the text, get_source_item reads the whole item.
+ITEM_FIELDS = (
+    "id",
+    "source_id",
+    "source_kind",
+    "kind",
+    "title",
+    "url",
+    "author",
+    "occurred_at",
+    "source_updated_at",
+    "version_id",
+    "confidence",
+)
 
 
 def search_view(data: Any, *, full: bool) -> Any:
-    """Search hits without their items' full bodies (the snippet stays), unless ``full``."""
+    """Search hits with their items cut to :data:`ITEM_FIELDS` (the snippet stays), unless
+    ``full``."""
     if full or not isinstance(data, dict) or not isinstance(data.get("hits"), list):
         return data
     hits = []
