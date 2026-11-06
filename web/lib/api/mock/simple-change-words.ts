@@ -60,6 +60,10 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
       const line = quoted(after.line);
       return line ? `edited a one-pager line to ${line}` : "edited a one-pager line";
     }
+    case "set_section_number": {
+      const n = String(after.number ?? "");
+      return n ? `set a number in a PRD section to ${n}` : "set a number in a PRD section";
+    }
     case "add_key_date": return `added ${keyDate(before, after)}`;
     case "edit_key_date": return `changed ${keyDate(before, after)}`;
     case "remove_key_date": return `removed ${keyDate(before, after)}`;

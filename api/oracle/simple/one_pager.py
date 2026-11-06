@@ -24,6 +24,13 @@ the decider (else that track owner, else the company's owners); viewers read. Th
 its sections are written together, so they never disagree; submitting the draft imports
 the PRD's next version with the patched sections, through its review policy.
 
+**Fixing a number** (owner, Nov 5): each "Needs a look" numbers item carries its fix (the
+count set to the items listed, the company-wide target to what its parts add up to), the
+change engine's ``set_section_number`` op: the number in the words ``said`` of one section,
+through the same working draft, with the same rights, Undo and approval as a line edit; a
+stale ``before`` is 409 naming who changed the section. The item clears for those who see
+the draft (the numbers are checked on the drafted sections).
+
 **Remind** (owner, 2026-10-26): on a submitted draft, the PRD's owners (company owners, its
 track owners) and its decider press Remind (:func:`remind`): each reviewer the draft waits
 on gets an Inbox nudge "<name> is waiting for your review of <PRD>" (``review_reminder``),
