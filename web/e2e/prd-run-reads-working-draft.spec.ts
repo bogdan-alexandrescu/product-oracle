@@ -1,5 +1,5 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login, openRoadmapItem } from "./helpers";
+import { login, openRoadmapItem, signOut } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /*
@@ -22,9 +22,9 @@ async function tap(l: Locator) {
   await l.click();
 }
 
-async function open(page: Page) {
+async function open(page: Page, email?: string) {
   await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "one-roadmap"] as const);
-  await login(page);
+  await login(page, email);
 }
 
 async function regenerate(page: Page) {
@@ -38,8 +38,7 @@ async function regenerate(page: Page) {
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
 }
 
-test("after an edit in Simple, the regenerated PRD's run says it read the working draft", async ({ page }) => {
-  await open(page);
+async function rename(page: Page) {
   await page.goto("/simple/roadmap");
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   await openRoadmapItem(page, "report-button");
@@ -49,7 +48,11 @@ test("after an edit in Simple, the regenerated PRD's run says it read the workin
   await panel(page).getByLabel("Name").fill("Report button on posts and comments");
   await tap(panel(page).getByRole("button", { name: "Save" }));
   await expect(panel(page).getByTestId("card-name")).toContainText("Report button on posts and comments");
+}
 
+test("after an edit in Simple, the regenerated PRD's run says it read the working draft", async ({ page }) => {
+  await open(page);
+  await rename(page);
   await regenerate(page);
   const read = page.getByTestId("run-roadmap-read");
   await expect(read).toHaveText(/^Roadmap read: Company roadmap, working draft \(edited [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d{2} [AP]M P[SD]T\)$/);
@@ -57,6 +60,17 @@ test("after an edit in Simple, the regenerated PRD's run says it read the workin
 
 test("with no edits, the regenerated PRD's run says it read the published version", async ({ page }) => {
   await open(page);
+  await regenerate(page);
+  await expect(page.getByTestId("run-roadmap-read")).toHaveText(/^Roadmap read: Company roadmap v\d+ \(published [A-Z][a-z]{2} \d{1,2}\)$/);
+});
+
+// Round 1 review: the run follows the draft only when the person who starts it may see it. An
+// approver who took no part in the owner's draft regenerates the PRD from the published version.
+test("an approver outside the owner's draft regenerates the PRD from the published version", async ({ page }) => {
+  await open(page);
+  await rename(page);
+  await signOut(page);
+  await login(page, "approver@example.com");
   await regenerate(page);
   await expect(page.getByTestId("run-roadmap-read")).toHaveText(/^Roadmap read: Company roadmap v\d+ \(published [A-Z][a-z]{2} \d{1,2}\)$/);
 });
