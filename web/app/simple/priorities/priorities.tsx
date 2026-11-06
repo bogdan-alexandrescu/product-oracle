@@ -2564,7 +2564,10 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
                     <span key={r.code} className="inline-flex items-center gap-1.5">
                       {k > 0 && ", "}
                       <CodeChip r={r} />
-                      {r.title}
+                      {/* The feature's name opens the one feature panel. */}
+                      <button type="button" className="text-left hover:underline" onClick={() => setOpened({ code: r.code, name: r.title })}>
+                        {r.title}
+                      </button>
                     </span>
                   ))}
                   <span className="whitespace-nowrap text-text2"> · {fmt(rows.reduce((n, r) => n + (r.effort ?? 0), 0))}{"\u00a0"}wk</span>
