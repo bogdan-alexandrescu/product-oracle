@@ -27,7 +27,7 @@
             },
             {
               "file": "frames/ld1-a-rest-1512.html",
-              "caption": "Hard case at 1512: all 65 features under their 12 milestones; the column of the goal with the most work sets the page's length, two features with no goal sit in their own row at the end"
+              "caption": "Hard case at 1512, the end of the page: all 65 features under their 12 milestones; the goal with the most work sets the page's length, and the two features with no goal sit in their own row at the end"
             },
             {
               "file": "frames/ld1-a-viewer.html",
@@ -43,9 +43,9 @@
           "letter": "b",
           "name": "Ladder on the Roadmap",
           "recommended": false,
-          "what": "A new Ladder format on the Roadmap beside Timeline, Gantt, Now / Next / Later and Waterfall. Columns are grouped by period like the board: each period has its week chips, and a goal gets a column in every period it has a milestone due, its milestones and their features under it. Milestones with no date sit in a last column. One labelled arrow joins two milestone columns of the same goal where a baseline sets the next target.",
+          "what": "A new Ladder format on the Roadmap beside Timeline, Gantt, Now / Next / Later and Waterfall. Columns are grouped by period like the board: each period has its week chips, and a goal gets a column in every period it has a milestone due, its milestones and their features under it. A goal's later periods show its name as one line, not its card again. Milestones with no date sit in a last column.",
           "plus": "Closest to the board's period columns; time reads left to right; it sits with the other roadmap formats, so the roadmap filters apply.",
-          "cost": "About 2,400 wide at full volume: it scrolls sideways at every width and a goal's card shows once per period. The Goal map stays a separate scoreboard, so the same features show on two pages. Web: a fifth roadmap format. API: no new change ops (the same set_milestone, set_goal, set_depends, add_item, delete_item, reorder); the roadmap read gains milestones with their periods.",
+          "cost": "About 2,200 wide at full volume: it scrolls sideways at every width and a goal's work splits across periods. The Goal map stays a separate scoreboard, so the same features show on two pages. Web: a fifth roadmap format. API: no new change ops (the same set_milestone, set_goal, set_depends, add_item, delete_item, reorder); the roadmap read gains milestones with their periods.",
           "frames": [
             {
               "file": "frames/ld1-b-rest.html",
@@ -53,11 +53,11 @@
             },
             {
               "file": "frames/ld1-b-scrolled.html",
-              "caption": "Scrolled right into Q1 2027: Goal 1 again with M2 and M3; the one labelled arrow says its M1 baseline sets the M2 target"
+              "caption": "Scrolled right into Q1 2027: Goal 1 again as a name line, with M2 and M3 and their work under it"
             },
             {
               "file": "frames/ld1-b-rest-1512.html",
-              "caption": "Hard case at 1512: nine goal columns and a No dates yet column make the page about 2,400 wide; it scrolls sideways at every width"
+              "caption": "Hard case at 1512: the two periods side by side make the page about 2,200 wide; it scrolls sideways at every width"
             },
             {
               "file": "frames/ld1-b-viewer.html",
@@ -65,7 +65,7 @@
             },
             {
               "file": "frames/ld1-b-commenter.html",
-              "caption": "A commenter: the button reads Suggest changes; a move becomes a suggestion for an approver"
+              "caption": "A commenter suggesting (the button reads Done suggesting): F-15 dragged to M6 stays where it is, marked Suggested: move to M6, and goes to an approver"
             }
           ]
         },
@@ -75,11 +75,11 @@
           "recommended": false,
           "what": "The Goal map's grid stays as built (areas as rows, milestones as columns), with the goal cards and the period strip on top and the dependencies drawn as arrows between the cards.",
           "plus": "Smallest change; the earlier pick stays; areas stay rows.",
-          "cost": "Twelve milestone columns scroll sideways; most cells are empty; arrows cross area rows and run off screen. It does not read like the board. Web: an arrow layer on the grid. API: none new.",
+          "cost": "Twelve milestone columns scroll sideways; most cells are empty; arrows cross area rows and run off screen. It does not read like the board. Web: an arrow layer on the grid. API: no new change op (set_depends, set_milestone and set_goal as built).",
           "frames": [
             {
               "file": "frames/ld1-c-rest.html",
-              "caption": "The Goal map's grid as built, areas by milestones, with the goal cards and period strip on top and every dependency drawn as an arrow"
+              "caption": "The Goal map's grid as built, areas by milestones, with each goal card over its own milestone columns, the period strip on top and every dependency drawn as an arrow"
             },
             {
               "file": "frames/ld1-c-rest-1512.html",
@@ -105,19 +105,19 @@
           "frames": [
             {
               "file": "frames/ld1-d-rest.html",
-              "caption": "A canvas like the board: the same ladder at 72%, zoom, Fit, Tidy up and a small overview; cards can be dragged anywhere"
+              "caption": "A canvas like the board: the same ladder at 72%, with zoom, Fit, Tidy up and a small overview; cards can be dragged anywhere"
             },
             {
               "file": "frames/ld1-d-rest-1512.html",
-              "caption": "Hard case at 1512: at a zoom that fits the four goals, feature names are 10 pt and the work behind them is below the canvas edge"
+              "caption": "Hard case at 1512: at 72% the four goals fit, but feature names are small and most of the work is below the canvas edge"
             },
             {
               "file": "frames/ld1-d-placed.html",
-              "caption": "F-15 dragged by hand onto Goal 4's column: the canvas now shows it where its goal and milestone do not put it, for everyone, until Tidy up puts it back"
+              "caption": "F-15 dragged by hand into the free space right of Goal 4, with Undo: the canvas now shows it where its goal and milestone do not put it, for everyone, until Tidy up puts it back"
             },
             {
               "file": "frames/ld1-d-viewer.html",
-              "caption": "A viewer can pan and zoom but not move cards"
+              "caption": "A viewer can pan and zoom but not move cards: no Tidy up"
             }
           ]
         }
@@ -127,7 +127,7 @@
       "code": "LD2",
       "name": "Dependencies on the ladder",
       "question": "How do dependencies show on the ladder, and how is one added or removed?",
-      "common": "Shown on proposal LD1 a. A dependency reads the same everywhere: F-24 waits on F-34. Adding one that would make a loop is refused, with the reason behind (i). A commenter's same gesture makes a suggestion that goes to an approver; a viewer reads. The feature panel's Depends on stays as built, so every proposal can also add and remove there. Every add or remove has Undo.",
+      "common": "Shown on proposal LD1 a. A dependency reads the same everywhere: F-24 waits on F-34. Adding one that would make a loop is refused, and the message names the link that would close the loop. A commenter's same gesture makes a suggestion that goes to an approver; a viewer reads. The feature panel's Depends on stays as built, so every proposal can also add and remove there. Every add or remove has Undo.",
       "proposals": [
         {
           "letter": "a",
@@ -156,11 +156,15 @@
             },
             {
               "file": "frames/ld2-a-arrow.html",
-              "caption": "An arrow picked: it says which card waits on which, with Remove"
+              "caption": "An arrow picked: F-02 to F-03 drawn thick; its pop-up says F-03 waits on F-02, with Remove"
+            },
+            {
+              "file": "frames/ld2-a-unlinked.html",
+              "caption": "Removed: F-03 no longer waits on F-02, with Undo; F-03 no longer shows ←1"
             },
             {
               "file": "frames/ld2-a-loop.html",
-              "caption": "A loop refused: F-02 cannot wait on F-04; the reason is behind (i)"
+              "caption": "A loop refused: the arrow drawn from F-04 onto F-02 stays red and dashed, and the message says why: F-04 already waits on F-02"
             },
             {
               "file": "frames/ld2-a-commenter.html",
@@ -178,7 +182,7 @@
           "recommended": false,
           "what": "Every dependency drawn as a thin arrow all the time; picking a card lights its own.",
           "plus": "Every link is on the page with no click; reads like the board's arrows.",
-          "cost": "40 arrows over 65 cards: links inside one column bow over the next column's cards and the page reads as a net at 1440 and 1512. Web: the same arrow layer as a. API: none new (set_depends).",
+          "cost": "40 arrows over 65 cards: the gaps between cards fill with lines that pass under the cards, and one link is hard to follow at 1440 and 1512. Web: the same arrow layer as a. API: none new (set_depends).",
           "frames": [
             {
               "file": "frames/ld2-b-rest.html",
@@ -190,7 +194,7 @@
             },
             {
               "file": "frames/ld2-b-rest-1512.html",
-              "caption": "Hard case at 1512: 40 arrows over 65 cards; arrows inside one column bow out over the next column's cards"
+              "caption": "Hard case at 1512: 40 arrows over 65 cards; they fill the gaps between cards and pass under them, so one link is hard to follow"
             },
             {
               "file": "frames/ld2-b-viewer.html",
@@ -243,7 +247,7 @@
           "what": "At rest the ladder is clean. Edit ladder in the header shows grips, ⋯ menus on goals, milestones and features, + Add at each level and each milestone's work as a drop zone; the button reads Done. Drag a feature to another milestone or goal or to a new place in its list; the ⋯ menu has Open, Move to…, Move up, Move down, Waits on… and Delete (to Trash). A phone has no drag: Move to… opens a sheet.",
           "why": "The owner keeps this page as the scoreboard: at rest it reads like the board, and one click turns on every add, move and delete without leaving it.",
           "plus": "Clean board for reading and meetings; every change in one mode; the same toggle reads Suggest changes for a commenter.",
-          "cost": "One more click before a change. Web: the toggle, grips, drop zones, + slots and menus. API: reuses set_milestone, set_goal, reorder, add_item, delete_item and edit_goal_milestone; adds add_goal_milestone and delete_goal_milestone (to Trash) so a milestone can be added and deleted here.",
+          "cost": "One more click before a change. Web: the toggle, grips, drop zones, + slots and menus. API: no new change op; features use set_milestone, set_goal, reorder, add_item and delete_item (to Trash), and milestones use the add, edit, delete and restore routes as built, which only owners and approvers may call, so a commenter gets no + Add milestone.",
           "frames": [
             {
               "file": "frames/ld3-b-rest.html",
@@ -255,7 +259,7 @@
             },
             {
               "file": "frames/ld3-b-drag.html",
-              "caption": "Dragging F-15 Invite the whole team from M4 to M6: its old place dashed, the drop place in M6 outlined"
+              "caption": "Dragging F-15 Invite the whole team from M4 to M6: its old place in M4 dashed, the drop place at the top of M6 outlined"
             },
             {
               "file": "frames/ld3-b-moved.html",
@@ -263,11 +267,11 @@
             },
             {
               "file": "frames/ld3-b-menu.html",
-              "caption": "F-15's ⋯ menu: Open, Move to…, Move up, Move down, Waits on…, Delete (to Trash)"
+              "caption": "F-15's ⋯ menu, under the card: Open, Move to…, Move up, Move down, Waits on…, and Delete (to Trash), which is picked"
             },
             {
               "file": "frames/ld3-b-deleted.html",
-              "caption": "Deleted: F-15 goes to Trash and can be restored; Undo brings it back here"
+              "caption": "Deleted: F-15 goes to Trash, with Open Trash and Undo"
             },
             {
               "file": "frames/ld3-b-add.html",
@@ -275,11 +279,11 @@
             },
             {
               "file": "frames/ld3-b-added.html",
-              "caption": "Added: F-66 under M5, marked new, with Undo"
+              "caption": "Added: F-66 under M5, marked New, with Undo"
             },
             {
               "file": "frames/ld3-b-commenter.html",
-              "caption": "A commenter: the button reads Suggest changes; the same drag leaves F-15 where it is, marked Suggested: move to M6, and goes to an approver"
+              "caption": "A commenter suggesting (the button reads Done suggesting): the same drag leaves F-15 where it is, marked Suggested: move to M6, and goes to an approver"
             },
             {
               "file": "frames/ld3-b-viewer.html",
@@ -291,7 +295,7 @@
             },
             {
               "file": "frames/ld3-b-phone.html",
-              "caption": "Phone while editing: no drag; Move to… opens a sheet of goals and milestones"
+              "caption": "Phone while editing: no drag and no grips; Move to… opens a sheet of every goal's milestones"
             }
           ]
         },
@@ -301,7 +305,7 @@
           "recommended": false,
           "what": "For those who may, the grips, ⋯ menus and + Add show on every card all the time; drag at any moment.",
           "plus": "No mode; the fastest change.",
-          "cost": "Handles on all 65 cards and twelve + slots sit on the scoreboard for every reading, and a stray drag moves a feature (Undo fixes it). Web and API as in b.",
+          "cost": "Handles on all 65 cards and twelve + slots sit on the scoreboard for every reading, and a stray drag moves a feature (Undo fixes it). Web: grips, menus and + slots always drawn. API as in b: no new change op (set_milestone, set_goal, reorder, add_item, delete_item and the milestone routes).",
           "frames": [
             {
               "file": "frames/ld3-a-rest.html",
@@ -335,7 +339,7 @@
           "recommended": false,
           "what": "No drag. Each card's ⋯ menu has Move to… (M), Move up and down (Alt ↑ ↓) and Delete (Del); Move to… lists every goal's milestones.",
           "plus": "Works the same on a phone and with a keyboard; no stray drags.",
-          "cost": "Moving is three clicks instead of one drag; reordering a long list is many key presses. Web: menus, a Move to dialog, keys. API as in b.",
+          "cost": "Moving is three clicks instead of one drag; reordering a long list is many key presses. Web: menus, a Move to dialog, keys. API as in b: no new change op (set_milestone, set_goal, reorder, add_item, delete_item and the milestone routes).",
           "frames": [
             {
               "file": "frames/ld3-c-menu.html",

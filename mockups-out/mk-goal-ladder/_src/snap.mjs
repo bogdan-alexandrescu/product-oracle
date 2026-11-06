@@ -24,7 +24,9 @@ for (const fr of FRAMES) {
   await page.goto(BASE + "/simple/roadmap", { waitUntil: "networkidle" });
   if (await page.locator("input[type=password]").count()) {
     // the mock app's demo sign-in, then the frame's URL again
-    await page.fill("input[type=email]", "admin@example.com");
+    // signed in as the frame's role, so the menu's name and role match it (?as=viewer|commenter)
+    const as = new URLSearchParams(fr.url.split("?")[1]).get("as");
+    await page.fill("input[type=email]", as ? `${as}@example.com` : "admin@example.com");
     await page.fill("input[type=password]", "demo");
     await page.keyboard.press("Enter");
     await page.waitForTimeout(1500);
@@ -35,6 +37,8 @@ for (const fr of FRAMES) {
   await page.waitForTimeout(700);
   if (fr.scroll) await page.evaluate((y) => window.scrollTo(0, y), fr.scroll);
   if (fr.scrollSel) await page.evaluate((s) => document.querySelector(s)?.scrollIntoView({ block: "center" }), fr.scrollSel);
+  // two places in one shot (a drag's old place and its drop place): scroll to their middle
+  if (fr.scrollMid) await page.evaluate(([a, b]) => { const ra = document.querySelector(a).getBoundingClientRect(); const rb = document.querySelector(b).getBoundingClientRect(); window.scrollBy(0, (Math.min(ra.top, rb.top) + Math.max(ra.bottom, rb.bottom)) / 2 - innerHeight / 2 - 40); }, fr.scrollMid);
   if (fr.hscroll) await page.evaluate((x) => document.querySelectorAll('.overflow-x-auto').forEach((e) => (e.scrollLeft = x)), fr.hscroll);
   await page.waitForTimeout(300);
   const name = fr.file;
@@ -47,6 +51,9 @@ for (const fr of FRAMES) {
     }
     const urls = [...css.matchAll(/url\(["']?([^"')]+\.(?:woff2?|ttf|otf))["']?\)/g)].map((m) => m[1]);
     const doc = document.documentElement.cloneNode(true);
+    // sideways scroll positions kept so the static file opens where the shot was taken
+    const live = [...document.querySelectorAll(".overflow-x-auto")];
+    [...doc.querySelectorAll(".overflow-x-auto")].forEach((e, i) => live[i]?.scrollLeft && e.setAttribute("data-scroll-left", String(Math.round(live[i].scrollLeft))));
     doc.querySelectorAll("script, link[rel=stylesheet], link[rel=preload], link[as=script], noscript, style").forEach((n) => n.remove());
     // keep scroll positions as offsets the static file opens at
     const head = doc.querySelector("head");
@@ -68,7 +75,7 @@ for (const fr of FRAMES) {
   }
   const scrollY = await page.evaluate(() => window.scrollY);
   // ?theme=light|dark sets data-theme on <html>; the frame opens where the shot was taken.
-  const hook = `<script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t)document.documentElement.setAttribute("data-theme",t);addEventListener("load",function(){scrollTo(0,${scrollY})})})()</script>`;
+  const hook = `<script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t)document.documentElement.setAttribute("data-theme",t);addEventListener("load",function(){scrollTo(0,${scrollY});document.querySelectorAll("[data-scroll-left]").forEach(function(e){e.scrollLeft=+e.getAttribute("data-scroll-left")})})})()</script>`;
   out = out.replace("</head>", hook + "</head>");
   fs.writeFileSync(path.join(OUT, "frames", `${name}.html`), out);
   await ctx.close();

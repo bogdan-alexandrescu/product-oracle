@@ -116,11 +116,11 @@ export function mockLadder(role: LdRole): Ladder { // MOCK-HOOK
     prd: goal ? PRD[goal] : null, depends: deps.map((d) => `f${d}`), can_change: role === "owner", can_propose: role === "commenter", // MOCK-HOOK
   })); // MOCK-HOOK
   const marks: Record<string, string> = {}; // MOCK-HOOK
-  for (const m of MS) if (m.due) marks[m.due] = marks[m.due] ? `${marks[m.due]} · ${m.code}` : `${m.code} ${short(m.name)}`; // MOCK-HOOK
+  for (const m of MS) if (m.due) marks[m.due] = marks[m.due] ? `${marks[m.due]}\n${m.code} ${short(m.name)}` : `${m.code} ${short(m.name)}`; // MOCK-HOOK
   const weeks = (from: string, n: number) => Array.from({ length: n }, (_, i) => { // MOCK-HOOK
     const d0 = Date.parse(`${from}T00:00:00Z`) + i * 7 * 86_400_000; // MOCK-HOOK
     const days = Array.from({ length: 7 }, (_, k) => new Date(d0 + k * 86_400_000).toISOString().slice(0, 10)); // MOCK-HOOK
-    const hit = days.map((d) => marks[d]).filter(Boolean).join(" · "); // MOCK-HOOK
+    const hit = days.map((d) => marks[d]).filter(Boolean).join("\n"); // MOCK-HOOK
     return { n: i + 1, from: days[0], mark: hit || undefined, today: days.includes("2026-11-06") }; // MOCK-HOOK
   }); // MOCK-HOOK
   return { // MOCK-HOOK
@@ -132,5 +132,9 @@ export function mockLadder(role: LdRole): Ladder { // MOCK-HOOK
 } // MOCK-HOOK
 
 function short(name: string): string { // MOCK-HOOK
-  return name.split(" ").slice(0, 3).join(" "); // MOCK-HOOK
+  // the first few words, never ending on a small word ("by", "at", "without"...) MOCK-HOOK
+  const w: string[] = []; // MOCK-HOOK
+  for (const x of name.split(" ")) if ([...w, x].join(" ").length <= 26) w.push(x); else break; // MOCK-HOOK
+  while (w.length > 2 && /^(by|at|for|to|of|in|inside|without|under|one|a|the|and|every|down|weekly|baseline|new)$/i.test(w[w.length - 1])) w.pop(); // MOCK-HOOK
+  return w.join(" "); // MOCK-HOOK
 } // MOCK-HOOK
