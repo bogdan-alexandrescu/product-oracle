@@ -59,12 +59,15 @@ _DATE = re.compile(
     r"|\bas of [A-Z][a-z]{2,8}\b"
 )
 # An issue by its number: a repository's short name and a number ("be#1357", "web#12"),
-# or the word issue, PR or ticket and a number ("issue #88").
+# or the word issue, PR or ticket and a number ("issue #88"). A name needs two letters
+# ("C#7" and "v2#3" are not issues) and is not a file ("notes.md#2" is a place in one).
 _ISSUE = re.compile(
-    r"(?<![\w#/.-])[A-Za-z][\w.-]{0,40}#\d{1,7}\b"
+    r"(?<![\w#/.-])(?![\w.-]*\.(?:md|mdx|txt|html?)#)[A-Za-z]{2}[\w.-]{0,39}#\d{1,7}\b"
     r"|\b(?:issue|issues|PR|PRs|pull request|ticket|tickets|bug)[ \t]+#\d{1,7}\b",
     re.IGNORECASE,
 )
+# Inline code and a link's target: an issue number is not read in either.
+_CODE_OR_TARGET = re.compile(r"`[^`\n]*`|\]\([^)\s]*\)")
 
 
 def _plain(heading: str) -> str:
@@ -195,7 +198,7 @@ def check(sections: Iterable[ParsedSection], markdown: str | None = None) -> lis
         lines = [
             (n, m.group(0).strip())
             for n, text in _lines(s, file_lines)
-            for m in _ISSUE.finditer(text)
+            for m in _ISSUE.finditer(_CODE_OR_TARGET.sub(" ", text))
         ]
         if lines:
             issues[s.section_key] = lines

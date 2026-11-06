@@ -252,7 +252,8 @@ def test_a_prd_draft_runs_the_source_check_and_sends_it_back():
     assert "source_not_named" in codes
     assert set(source_words.CODES) <= set(draft_checks.SENT_BACK)
     lead = workflow.code_name_trouble(["source_not_named", "issue_number"])
-    assert "lists sources by key, path or tag" in lead
+    assert "lists sources by key, path, file name or tag" in lead
+    assert "writes a code with no name in Sources" in lead
     assert "names an issue by its number" in lead
 
 
