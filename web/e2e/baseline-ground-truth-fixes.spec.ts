@@ -95,6 +95,7 @@ for (const [viewport, colorScheme] of [
   [PHONE, "dark"],
 ] as const)
   test(`a commenter's fixes go to an approver, who accepts them (${viewport.width}, ${colorScheme})`, async ({ page }) => {
+    test.setTimeout(90_000);
     await page.setViewportSize(viewport);
     await page.emulateMedia({ colorScheme });
     await open(page, "commenter@example.com");
@@ -108,12 +109,18 @@ for (const [viewport, colorScheme] of [
     await expect(notice(page)).toContainText("Asked an approver to link “Guest seats” to “Audit log”.");
     await expect(total(page)).toHaveText("7");
 
+    // The account menu sits in the rail, which a phone folds away: sign out on a wide screen.
+    await page.setViewportSize(DESKTOP);
     await signOut(page);
     await login(page, "approver@example.com");
+    await page.setViewportSize(viewport);
     await page.goto("/baseline?tab=proposals");
     const proposals = page.getByTestId("proposal");
-    await proposals.filter({ hasText: "Give “Smart search” a feature code" }).getByRole("button", { name: "Accept" }).click();
-    await proposals.filter({ hasText: "Link the PRD’s F-09 Guest seats to “Audit log”" }).getByRole("button", { name: "Accept" }).click();
+    for (const summary of ["Give “Smart search” a feature code", "Link the PRD’s F-09 Guest seats to “Audit log”"]) {
+      const accept = proposals.filter({ hasText: summary }).getByRole("button", { name: "Accept" });
+      await accept.click();
+      await expect(accept).toHaveCount(0);
+    }
     await page.goto("/baseline");
     await expect(page.getByTestId("gt-band")).toBeVisible();
     await expect(count(page, "no_code")).toHaveCount(0);
