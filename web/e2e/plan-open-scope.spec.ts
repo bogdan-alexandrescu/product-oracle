@@ -1,3 +1,4 @@
+import { stableUuid } from "../lib/api/mock/ids";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 import { expect, test, type Page } from "./test";
@@ -22,8 +23,9 @@ async function setup(page: Page, scope: "Approved + drafts" | "Approved only") {
   const bar = page.getByRole("group", { name: "Plan scope" });
   await bar.getByRole("button", { name: scope }).click();
   await expect(bar.getByRole("button", { name: scope })).toHaveAttribute("aria-pressed", "true");
-  // Simple's card link (its &roadmap= is the Simple lane's part): the Plan opened by it.
-  await page.goto("/plan?item=threshold-alerts&roadmap=checkout-redesign-roadmap");
+  // Simple's card link (its &roadmap= is the Simple lane's part): the Plan opened by it, with the
+  // card's own PRD id (the mock's item.prd for the Checkout redesign roadmap).
+  await page.goto(`/plan?item=threshold-alerts&prd=${stableUuid("simple-prd/checkout-redesign-roadmap")}&roadmap=checkout-redesign-roadmap`);
 }
 
 const picked = (page: Page) => page.locator('[data-testid="plan-row"][aria-selected="true"]').filter({ visible: true });
