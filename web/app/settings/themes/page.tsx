@@ -173,8 +173,8 @@ export default function ThemesPage() {
         title="Themes"
         info={
           <InfoTip label="themes" align="start" side="bottom">
-            How exported PRDs and roadmaps look: fonts, colours, spacing, page and layout features. Text colours must be
-            readable on the background (WCAG AA).
+            How exported PRDs and roadmaps look: fonts, colours, spacing, page and layout features. Text must be easy to
+            read on its background.
           </InfoTip>
         }
         status={capsReady && !canCreate && <ViewOnly />}

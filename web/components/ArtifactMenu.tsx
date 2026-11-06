@@ -42,15 +42,22 @@ export function itemKind(i: TrashItem): string {
   return KIND_LABEL[i.kind] ?? i.kind;
 }
 
-/** "Usage alerts PRD and 2 more": a Trash entry in a line. */
-export function entryText(root: TrashItem, items: TrashItem[]): string {
-  return items.length ? `${root.title} and ${items.length} more` : root.title;
-}
-
 /** qa4-docs-26: "The run of Oct 17 that wrote Early shipping cost: engineering spec". */
 function runText(r: TrashItem, root: string): string {
   const day = r.created_at ? ` of ${formatDay(r.created_at)}` : "";
   return `The run${day} that wrote ${r.wrote ?? root}`;
+}
+
+/** F-69: an item's one title, in the delete dialog and in Trash alike (a run by its day and what it wrote). */
+export function itemTitle(i: TrashItem, root: string): string {
+  return i.type === "run" ? runText(i, root) : i.title;
+}
+
+/** F-68: "Usage alerts PRD, Its spec and The run of Oct 17 that wrote Usage alerts PRD": a Trash entry
+ * in a line, every item named. */
+export function entryText(root: TrashItem, items: TrashItem[]): string {
+  const names = [root.type === "run" ? itemTitle(root, root.title) : root.title, ...items.map((i) => itemTitle(i, root.title))];
+  return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
 }
 
 /** Undo (= Restore) right after a delete, from the toast. */
