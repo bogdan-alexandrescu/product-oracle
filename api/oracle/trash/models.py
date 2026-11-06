@@ -22,8 +22,8 @@ from oracle.db import Base, TenantScoped
 
 # What can be deleted on its own: a document (PRD, roadmap, spec, update, ...), an intake
 # (a brief), a run, or (trash-features-goals, oracle.simple.trash_items) a roadmap feature
-# or a goal.
-ROOT_TYPES = ("document", "intake", "run", "feature", "goal")
+# or a goal, or (removed-tracks) a product track.
+ROOT_TYPES = ("document", "intake", "run", "feature", "goal", "track")
 # Days a deleted artifact waits in Trash before the ticker purges it.
 RETENTION_DAYS = 30
 
@@ -48,7 +48,8 @@ class TrashEntry(TenantScoped, Base):
     __tablename__ = "trash_entries"
     __table_args__ = (
         CheckConstraint(
-            "root_type IN ('document', 'intake', 'run', 'feature', 'goal')", name="root_type"
+            "root_type IN ('document', 'intake', 'run', 'feature', 'goal', 'track')",
+            name="root_type",
         ),
         Index("ix_trash_entries_purge_after", "purge_after"),
     )

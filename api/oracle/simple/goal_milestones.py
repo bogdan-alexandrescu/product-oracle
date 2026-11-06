@@ -379,7 +379,7 @@ async def delete(db: AsyncSession, principal: Any, milestone_id: uuid.UUID) -> N
         raise _error(status.HTTP_403_FORBIDDEN,
                      "Only an owner or the roadmap's decider (with none, its owner) "
                      "changes its milestones")  # fmt: skip
-    row.deleted_at = company_time.now()
+    row.deleted_at, row.deleted_by = company_time.now(), _me(principal)
     await db.flush()
     await audit.record(db, principal, "goal_milestone.delete", "track_milestone", row.id, data={})
     await db.commit()
@@ -394,12 +394,31 @@ async def restore(db: AsyncSession, principal: Any, milestone_id: uuid.UUID) -> 
         raise _error(status.HTTP_403_FORBIDDEN,
                      "Only an owner or the roadmap's decider (with none, its owner) "
                      "changes its milestones")  # fmt: skip
-    row.deleted_at = None
+    await put_back(db, row)
     await db.flush()
     await audit.record(db, principal, "goal_milestone.restore", "track_milestone", row.id, data={})
     await db.commit()
     roadmap = await db.get(Document, row.roadmap_id)
     return await _out(db, principal, row, roadmap, None, w)
+
+
+async def put_back(db: AsyncSession, row: TrackMilestone) -> None:
+    """Restore a removed milestone, any time after it was removed (removed-tracks): its
+    code again unless another milestone of its goal took it meanwhile (then the next)."""
+    if row.roadmap_id is not None and row.code:
+        taken = await db.scalar(
+            select(TrackMilestone.id).where(
+                TrackMilestone.roadmap_id == row.roadmap_id,
+                TrackMilestone.goal_id.is_(None) if row.goal_id is None
+                else TrackMilestone.goal_id == row.goal_id,
+                TrackMilestone.code == row.code,
+                TrackMilestone.deleted_at.is_(None),
+                TrackMilestone.id != row.id,
+            )
+        )  # fmt: skip
+        if taken is not None:
+            row.code = await _next_code(db, row.roadmap_id, row.goal_id)
+    row.deleted_at = row.deleted_by = None
 
 
 # --------------------------------------------------------------------------- the change engine

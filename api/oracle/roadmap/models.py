@@ -73,13 +73,15 @@ RECORD_FIELDS = ("state", "target_date", "estimate", "raw_status")
 DATE_SOURCES = ("typed", "accepted", "engineering", "tracker")
 
 
-class ProductTrack(TenantScoped, Base):
-    """A product track: started by an accepted PRD, followed through its roadmap (V2b)."""
+class ProductTrack(Trashable, TenantScoped, Base):
+    """A product track: started by an accepted PRD, followed through its roadmap (V2b).
+    removed-tracks: a track deleted in Simple goes to Settings > Trash (``deleted_at``)."""
 
     __tablename__ = "product_tracks"
     __table_args__ = (
         UniqueConstraint("tenant_id", "prd_document_id"),
         CheckConstraint(_in("status", TRACK_STATUSES), name="status"),
+        trashed_index("product_tracks"),
     )
 
     prd_document_id: Mapped[uuid.UUID] = _fk("documents", nullable=False)
@@ -233,6 +235,8 @@ class TrackMilestone(TenantScoped, Base):
     plan_date: Mapped[date | None] = mapped_column(Date)
     item_ids: Mapped[list[uuid.UUID]] = _uuids()
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # removed-tracks: who removed it (``deleted_at`` is when).
+    deleted_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     # old-milestones (owner, Nov 4): an older per-PRD roadmap's goal milestone carried onto
     # the company roadmap links to its copy there (oracle.simple.old_milestones); one none
     # of whose items were left and that an owner dropped is not carried.

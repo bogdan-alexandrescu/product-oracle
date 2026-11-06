@@ -167,6 +167,7 @@ import { bucketGoalsInOrder, placeBucketGoal, placeBucketGoals, routeGoalBuckets
 import { proposeGoalDelete, routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { routeCurrentState, seedCurrentState, type CurrentStateDb } from "./currentstate";
 import { featureKeyOf, prioritiesOut } from "./simple-priorities";
+import { restoreTrack, routeRemoved } from "./simple-removed";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
 import { runGroupsOut } from "./simple-runs";
@@ -962,6 +963,22 @@ function seedTrashReviewerScenario(): Db {
   const db = seedSimpleDecidersScenario();
   const avery = db.members.find((m) => m.email === "avery.lane@example.com")!;
   db.simple_roadmap!.reviewers = { "alerts-roadmap": [avery.id] };
+  return db;
+}
+
+/**
+ * removed-tracks review (the Move to Trash confirm), "tracks-closed": Guided setup track holds 2
+ * live features and 1 cut, Welcome media track only a cut one (Welcome video), and Usage alerts
+ * track 5 live and 1 merged draft (Alert inbox, merged into Alert rules engine). Invented data.
+ */
+export const TRACKS_CLOSED_SCENARIO = "tracks-closed";
+
+function seedTracksClosedScenario(): Db {
+  const db = seed();
+  const rm = (db.simple_roadmap = seedSimpleRoadmap());
+  Object.assign(rm.items.find((s) => s.key === "setup-video")!, { track: "welcome", status: "cut", depends: [] });
+  rm.items.push({ key: "alert-inbox", title: "Alert inbox", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", draft: true, merged_into: "alert-rules" });
+  rm.ids["alert-inbox"] = stableUuid("simple-item/alert-inbox");
   return db;
 }
 
@@ -3701,6 +3718,8 @@ function load(): Db {
                     db.simple_roadmap!.goal_milestones = seedOldMilestones(OLD_ROADMAP[0]);
                     return db;
                   }
+              : scenario === TRACKS_CLOSED_SCENARIO
+                ? seedTracksClosedScenario
               : scenario === "simple-500"
                 ? () => ({ ...seed(), simple_roadmap: seedSimpleMany() })
                 : scenario === "strategy" || scenario === "strategy-no-vision"
@@ -5929,7 +5948,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       // TRASH_KEPT_LINKS_SCENARIO: a PRD trashed before this release kept its request links.
       onTrash: (ids) => (localStorage.getItem(MOCK_SCENARIO_KEY) === TRASH_KEPT_LINKS_SCENARIO ? undefined : releaseDocuments(ensureRequests(db), ids)),
       simple: () => db.simple_roadmap,
-      onRestore: (released) => relinkDocuments(ensureRequests(db), released as ReleasedRequest[], (id) => ensureV2(db).intakes.some((i) => i.id === id)),
+      onRestore: (released) => (db.simple_roadmap && restoreTrack(db.simple_roadmap, released)) || relinkDocuments(ensureRequests(db), released as ReleasedRequest[], (id) => ensureV2(db).intakes.some((i) => i.id === id)),
       uuid,
       now,
     },
@@ -6797,6 +6816,11 @@ async function route(db: Db, req: Request): Promise<Response> {
       const out = appliedVersionOf(db.simple_roadmap!, doc.slug, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames });
       return out ? json(200, out) : json(404, { detail: "No such roadmap" });
     }
+    // removed-tracks: Simple's removed list, its tracks and their change ops (./simple-removed.ts).
+    const removedRes = await routeRemoved(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames }, r, p, () => (db.trash ??= emptyTrash()).entries, (id) =>
+      !!db.roadmap?.milestones.some((m) => m.track_id === id) || !!db.roadmap?.records.some((x) => x.track_id === id) || !!db.roadmap?.alerts?.some((x) => x.track_id === id) || !!db.launches?.launches.some((l) => l.track_id === id) || !!db.quality?.outcomes.some((o) => o.track_id === id),
+    );
+    if (removedRes) return removedRes;
     // trash-features-goals: a goal deleted to Settings › Trash (./trash.ts).
     // edit-goals-prds EG1: a goal's owner is one of the members; an ask goes to the company's owners.
     const people = db.members.map((x) => ({ id: x.id, name: displayName(x.email, x.name), email: x.email, role: x.role, disabled: x.status === "disabled" }));

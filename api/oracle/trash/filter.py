@@ -159,7 +159,12 @@ def _children() -> dict[type, list[tuple[str, Table]]]:
         SimplePrdPlan: [("document_id", docs)],
         # Goal milestones: a trashed roadmap's leave with it, and a PRD's own (origin_prd_id)
         # leave the roadmap with their PRD, as its plan does.
-        TrackMilestone: [("roadmap_id", docs), ("origin_prd_id", docs)],
+        # removed-tracks: a trashed track's own milestones leave with it.
+        TrackMilestone: [
+            ("roadmap_id", docs),
+            ("origin_prd_id", docs),
+            ("track_id", ProductTrack.__table__),
+        ],
     }
 
 
@@ -234,6 +239,11 @@ def criteria() -> dict[type, Callable[[Any], ColumnElement[bool]]]:
             asked(cls), _question_checkpoint_live(cls)
         )
         _CRITERIA[Decision] = _prd_question_live
+        # removed-tracks: a track is a Trash root of its own too (a track deleted in Simple).
+        from oracle.roadmap.models import ProductTrack
+
+        track = _CRITERIA[ProductTrack]
+        _CRITERIA[ProductTrack] = lambda cls: and_(track(cls), cls.deleted_at.is_(None))
     return _CRITERIA
 
 
