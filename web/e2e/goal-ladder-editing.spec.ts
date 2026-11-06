@@ -197,6 +197,7 @@ for (const [label, size] of [["1440", DESKTOP], ["390", PHONE]] as const) {
         await expect(page.getByRole("menuitem", { name, exact: true })).toHaveCount(0);
       }
       await page.keyboard.press("Escape");
+      if (phone(page)) await goalTab(page, 4);
       await expect(goalCard(page, "Half the support tickets per team").getByTestId("ld-more").first()).toBeVisible();
     });
 
