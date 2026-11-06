@@ -19,7 +19,9 @@ import {
 } from "react";
 
 import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
+import { InfoTip } from "@/components/ds/InfoTip";
 import { addMonths, calendarDay } from "@/lib/dates";
+import { LINK_KINDS } from "@/lib/roadmap-links";
 
 import { FixButtons, fixCount, type Act } from "./_card";
 import {
@@ -369,13 +371,26 @@ export function ConflictPanel({
                 data-item={i.key}
                 className={`flex px-3 py-2 ${stacked ? "flex-col gap-1" : "flex-wrap items-center gap-3"}`}
               >
-                <button
-                  type="button"
-                  onClick={() => onShow(i.key)}
-                  className={`text-left text-sm text-text hover:underline ${stacked ? "" : "min-w-[16rem] flex-1"}`}
-                >
-                  {f.reason}
-                </button>
+                {LINK_KINDS.includes(f.kind) ? (
+                  <button
+                    type="button"
+                    onClick={() => onShow(i.key)}
+                    className={`text-left text-sm text-text hover:underline ${stacked ? "" : "min-w-[16rem] flex-1"}`}
+                  >
+                    {f.reason}
+                  </button>
+                ) : (
+                  // Pre-demo QA S-5: an end past its milestone counts here too; its feature's name
+                  // shows, its sentence behind the (i) (no visible prose).
+                  <span className={`flex items-center gap-1 text-sm text-text ${stacked ? "" : "min-w-[16rem] flex-1"}`}>
+                    <button type="button" onClick={() => onShow(i.key)} className="text-left hover:underline">
+                      {i.title}
+                    </button>
+                    <InfoTip label={i.title} align="start" testId="conflict-why">
+                      {f.reason}
+                    </InfoTip>
+                  </span>
+                )}
                 <div className="max-w-full min-w-0">
                   <FixButtons
                     item={i}

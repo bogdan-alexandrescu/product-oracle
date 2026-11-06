@@ -436,9 +436,13 @@ test("the side menu's Roadmap count holds the dates to confirm: it equals Needs 
   const waiting = Number(/· (\d+)/.exec(await page.getByTestId("needs-decision").innerText())![1]);
   await page.getByTestId("needs-decision").click();
   const dates = Number(await tray(page).getByTestId("tray-counter").filter({ hasText: "Dates to confirm" }).locator("b").innerText());
+  // Pre-demo QA S-6: Needs a decision counts the goals' suggested features it lists too; the
+  // side menu's Roadmap count is its tiles (it leaves those to the Inbox).
+  const tiles = (await tray(page).getByTestId("tray-counter").locator("b").allInnerTexts()).reduce((n, t) => n + Number(t), 0);
   await tray(page).getByRole("button", { name: "Close" }).click();
   expect(dates).toBeGreaterThan(0);
-  await expect.poll(async () => Number(await badge(page).innerText())).toBe(waiting);
+  expect(tiles).toBeLessThanOrEqual(waiting);
+  await expect.poll(async () => Number(await badge(page).innerText())).toBe(tiles);
   await expect(badge(page)).toHaveAttribute("aria-label", new RegExp(`${dates} dates? to confirm`));
 });
 
