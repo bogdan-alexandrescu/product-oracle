@@ -222,15 +222,20 @@ OUTWARD_OR_SECRET: dict[str, str] = {op: why for why, ops in _WHY.items() for op
 NOT_OFFERED: frozenset[str] = frozenset(
     {
         # Train AR's routes (old milestones carried over, removed tracks, the Goal map's metric
-        # pick, a reopened waiver, the Ground Truth check): not offered until allowed by name.
+        # pick, a reopened waiver, the Ground Truth check, a feature's code given or taken back, a
+        # PRD feature linked to a Ground Truth feature): not offered until allowed by name.
         "carry_over_old_milestones",
         "drop_old_milestone",
         "get_check",
+        "give_code",
         "keep_old_milestone",
+        "link_prd_feature",
         "list_simple_removed",
         "list_simple_tracks",
         "pick_goal_metric",
         "reopen_strategy_finding",
+        "take_code_back",
+        "unlink_prd_feature",
         # This line's routes AN did not have (the Goal map, Current state, Fit a date, Trash,
         # goal archive, a replaced PRD's carried parts; train AQ's request and decision Trash
         # and the meeting agenda sheet): not offered until allowed by name.
