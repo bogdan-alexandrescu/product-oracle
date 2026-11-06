@@ -89,7 +89,11 @@ button's words.
 - One missing feature is one flag of its own: a PRD feature over two milestones is one
   `prd_feature_missing`, never also a `slice_parent_missing` per milestone. A roadmap slice
   item of a feature the PRD flags already is an `unlinked_item`, with its slice code (F-15a).
-- A PRD's feature code is read as an F-code: "f-15" and the number 15 are F-15.
+- A code is read one way, as an F-code with two digits at least: "f-1", "F-001" and the
+  number 1 are F-01, in a PRD's plan and an item's section alike; a negative or malformed
+  number (-3, 3.5) is no code.
+- An item of a feature that runs today is flagged `runs_today_on_roadmap` whether it is
+  linked to that feature or matches it by code (F-03, or the slice F-03a).
 - A PRD's feature with the name of a Ground Truth feature but another code is still flagged,
   with the hint "Same name as F-05 Bulk import." and that feature to link to.
 - An item can carry two flags: `unlinked_item` and `runs_today_on_roadmap` both flag an item

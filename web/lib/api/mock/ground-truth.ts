@@ -7,9 +7,10 @@
  * Product roadmap and its PRD Scale (two of unlinked_item: one linked to no feature, one to a
  * feature a run only proposed, fixed by Confirm it; two of prd_feature_missing: F-09, and F-20
  * Bulk import, matched by code only, with the hint of the confirmed F-01 Bulk import). The slice
- * is a roadmap item (F-15a) whose F-15 is in no PRD flag. An item linked to no feature whose own
- * code or slice's feature is a confirmed feature's code (F-01b of F-01) is in the Ground Truth by
- * code, so the scenario flags none. Every other scenario reads no flags.
+ * is a roadmap item (F-15a) whose F-15 is in no PRD flag. The scenario has no item matched by
+ * code: as the API, an item linked to no feature whose own code or slice's feature is a confirmed
+ * feature's code is in the Ground Truth by code and not flagged unlinked, though it is flagged if
+ * that feature runs today. Every other scenario reads no flags.
  * Invented data only.
  */
 import type { Schemas } from "@/lib/api/client";
