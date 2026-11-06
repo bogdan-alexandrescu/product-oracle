@@ -636,7 +636,12 @@ CheckKind = Literal[
 ]
 CHECK_KINDS: tuple[str, ...] = CheckKind.__args__  # type: ignore[attr-defined]
 CheckAction = Literal[
-    "add_to_ground_truth", "link_to_feature", "give_code", "pick_goal", "take_off_roadmap"
+    "add_to_ground_truth",
+    "link_to_feature",
+    "confirm_feature",
+    "give_code",
+    "pick_goal",
+    "take_off_roadmap",
 ]
 
 
@@ -663,10 +668,12 @@ class GroundTruthWhere(BaseModel):
 
 class GroundTruthFix(BaseModel):
     """A fix a person makes in the UI. ``target``: the item's or feature's id, or for a PRD's
-    feature or slice the PRD feature's code (with ``where.prd``)."""
+    feature or slice the PRD feature's code (with ``where.prd``); for ``confirm_feature`` the
+    proposed feature's id. ``words``: the button's plain words ("Confirm it")."""
 
     action: CheckAction
     target: str
+    words: str
 
 
 class GroundTruthFlag(BaseModel):

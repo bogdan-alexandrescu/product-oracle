@@ -26141,16 +26141,19 @@ export interface components {
         /**
          * GroundTruthFix
          * @description A fix a person makes in the UI. ``target``: the item's or feature's id, or for a PRD's
-         *     feature or slice the PRD feature's code (with ``where.prd``).
+         *     feature or slice the PRD feature's code (with ``where.prd``); for ``confirm_feature`` the
+         *     proposed feature's id. ``words``: the button's plain words ("Confirm it").
          */
         GroundTruthFix: {
             /**
              * Action
              * @enum {string}
              */
-            action: "add_to_ground_truth" | "link_to_feature" | "give_code" | "pick_goal" | "take_off_roadmap";
+            action: "add_to_ground_truth" | "link_to_feature" | "confirm_feature" | "give_code" | "pick_goal" | "take_off_roadmap";
             /** Target */
             target: string;
+            /** Words */
+            words: string;
         };
         /**
          * GroundTruthFlag

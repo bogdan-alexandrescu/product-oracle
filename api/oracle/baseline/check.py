@@ -7,12 +7,13 @@ Truth entries by code. Anything that breaks this is allowed (no save is refused)
 here, each flag with one plain sentence and the fixes a person can make in the UI:
 
 - ``unlinked_item``: a roadmap item linked to no Ground Truth feature (none, or one a run
-  only proposed);
+  only proposed: then "Confirm it" confirms that feature, beside "Link to a feature");
 - ``slice_parent_missing``: a slice (F-15a) of a PRD feature not in the Ground Truth;
 - ``prd_feature_missing``: a feature of a PRD's approved version not in the Ground Truth;
 - ``no_code``: a Ground Truth feature with no F-code;
 - ``no_goal``: a Ground Truth feature serving no goal;
-- ``runs_today_on_roadmap``: a feature running today (Current state) still on the roadmap.
+- ``runs_today_on_roadmap``: a feature running today (Current state) still on the roadmap,
+  fixed by taking it off the roadmap.
 
 "The roadmap" is what every reader is shown: the shown version of each company-visible
 roadmap that feeds Simple (the company roadmap alone while there is one), less cut, shipped,
@@ -58,6 +59,15 @@ WORDS = {
     "no_code": "This feature has no feature code yet.",
     "no_goal": "This feature serves no goal.",
     "runs_today_on_roadmap": "This feature runs today but is still on the roadmap.",
+}
+# Each fix's button.
+FIX_WORDS = {
+    "add_to_ground_truth": "Add to Ground Truth",
+    "link_to_feature": "Link to a feature",
+    "confirm_feature": "Confirm it",
+    "give_code": "Give it a code",
+    "pick_goal": "Pick a goal",
+    "take_off_roadmap": "Take it off the roadmap",
 }
 
 
@@ -160,7 +170,10 @@ async def run(db: AsyncSession) -> GroundTruthOut:
             GroundTruthFlag(
                 kind=kind,  # type: ignore[arg-type]
                 words=WORDS[kind],
-                fixes=[GroundTruthFix(action=a, target=t) for a, t in fixes],  # type: ignore[arg-type]
+                fixes=[
+                    GroundTruthFix(action=a, target=t, words=FIX_WORDS[a])  # type: ignore[arg-type]
+                    for a, t in fixes
+                ],
                 **kw,
             )
         )
@@ -178,9 +191,15 @@ async def run(db: AsyncSession) -> GroundTruthOut:
             continue
         linked = by_id.get(i.feature_id) if i.feature_id is not None else None
         target = str(i.id)
+        # Linked to a feature a run proposed: an approver confirms it (the owner, Nov 5).
+        first = (
+            ("confirm_feature", str(linked.id))
+            if linked is not None and linked.status == "proposed"
+            else ("add_to_ground_truth", target)
+        )
         flag(
             "unlinked_item",
-            [("add_to_ground_truth", target), ("link_to_feature", target)],
+            [first, ("link_to_feature", target)],
             item=GroundTruthRef(id=i.id, code=prd_code(i.prd_section_key), name=i.title),
             feature=ref(linked) if linked is not None else None,
             where=GroundTruthWhere(

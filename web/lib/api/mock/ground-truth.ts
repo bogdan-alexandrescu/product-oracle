@@ -4,7 +4,9 @@
  * anyone who reads the roadmap; it only lists flags and never refuses a save.
  *
  * The "ground-truth-flags" scenario (MOCK_SCENARIO_KEY): one flag of each kind on the one
- * Product roadmap and its PRD Scale. Every other scenario reads no flags. Invented data only.
+ * Product roadmap and its PRD Scale (two of unlinked_item: one linked to no feature, one to a
+ * feature a run only proposed, fixed by Confirm it). Every other scenario reads no flags.
+ * Invented data only.
  */
 import type { Schemas } from "@/lib/api/client";
 import { stableUuid } from "./ids";
@@ -26,6 +28,16 @@ const WORDS: Record<Kind, string> = {
   runs_today_on_roadmap: "This feature runs today but is still on the roadmap.",
 };
 
+/** Each fix's button, as the API's FIX_WORDS. */
+const FIX_WORDS: Record<Action, string> = {
+  add_to_ground_truth: "Add to Ground Truth",
+  link_to_feature: "Link to a feature",
+  confirm_feature: "Confirm it",
+  give_code: "Give it a code",
+  pick_goal: "Pick a goal",
+  take_off_roadmap: "Take it off the roadmap",
+};
+
 const ROADMAP = { id: stableUuid("ground-truth/roadmap"), title: "Product roadmap" };
 const PRD = { id: stableUuid("ground-truth/prd/scale"), title: "Scale" };
 const id = (key: string) => stableUuid(`ground-truth/${key}`);
@@ -36,7 +48,7 @@ const flag = (kind: Kind, fixes: [Action, string][], rest: Partial<Schemas["Grou
   feature: null,
   where: { roadmap: null, prd: null },
   words: WORDS[kind],
-  fixes: fixes.map(([action, target]) => ({ action, target })),
+  fixes: fixes.map(([action, target]) => ({ action, target, words: FIX_WORDS[action] })),
   ...rest,
 });
 
@@ -45,6 +57,12 @@ function seedFlags(): Schemas["GroundTruthFlag"][] {
   return [
     flag("unlinked_item", [["add_to_ground_truth", id("item/export")], ["link_to_feature", id("item/export")]], {
       item: { id: id("item/export"), code: null, name: "Export to sheets" },
+      where: both,
+    }),
+    // Linked to a feature a run proposed and no approver confirmed: only confirmed features count.
+    flag("unlinked_item", [["confirm_feature", id("feature/import-history")], ["link_to_feature", id("item/import-history")]], {
+      item: { id: id("item/import-history"), code: null, name: "Import history" },
+      feature: { id: id("feature/import-history"), code: null, name: "Import history" },
       where: both,
     }),
     flag("slice_parent_missing", [["add_to_ground_truth", "F-15"], ["link_to_feature", "F-15"]], {
