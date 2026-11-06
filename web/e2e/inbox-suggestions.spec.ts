@@ -378,7 +378,7 @@ for (const phone of [false, true]) {
       await expect(mine).toContainText(/Alerts roadmap version \d+/);
       expect(await waiting(page)).toBe(ownerCount);
       await tap(mine.getByRole("link", { name: /^Open Alerts roadmap version \d+ to approve it$/ }));
-      await expect(page).toHaveURL(/\/simple\/roadmap\?roadmap=.*approve=/);
+      await expect(page).toHaveURL(/\/simple\/roadmap\?roadmap=.*&draft=/);
       const decide = page.getByTestId("draft-approval");
       await expect(decide).toContainText(/Alerts roadmap version \d+ is waiting for your approval/);
       await expect.poll(() => shownCount(page, phone)).toBeGreaterThan(0);
