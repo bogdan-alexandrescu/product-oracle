@@ -610,6 +610,37 @@ def _seen_milestone(m: Any) -> tuple | None:
     return (m.get("name") or None, _iso(_day(m.get("date"), "milestone.date")))
 
 
+def _no_loop(entry: service.Entry, added: list[str], by_id: dict) -> None:
+    """build-feature-panel (AN's add_link check): 422 when a new dependency of the item
+    already waits on it, directly or through others (it would make a loop)."""
+    version = entry.row.roadmap_version_id
+    for key in added:
+        dep = next(
+            (
+                e
+                for e in by_id.values()
+                if e.row.roadmap_version_id == version
+                and (
+                    e.row.item_key == key or (e.code is not None and e.code.lower() == key.lower())
+                )
+            ),
+            None,
+        )
+        if dep is None or dep is entry:
+            continue
+        seen, queue = {dep.row.id}, deque([dep.row.id])
+        while queue:
+            cur = by_id.get(queue.popleft())
+            for nid in cur.depends_on if cur is not None else []:
+                if nid == entry.row.id:
+                    raise ChangeError(
+                        422, f"{dep.row.title} needs {entry.row.title}: it would make a loop"
+                    )
+                if nid not in seen:
+                    seen.add(nid)
+                    queue.append(nid)
+
+
 async def _plan(
     db: AsyncSession, principal: Any, body: SimpleChangeIn, read_: service.Read
 ) -> tuple[service.Entry, dict[str, Any], dict[str, Any], dict[str, Any]]:
@@ -866,6 +897,7 @@ async def _plan(
         unknown = await _unknown_keys(db, added, read_)
         if unknown:
             raise ChangeError(422, f"after.depends_on: no item or feature has the key {unknown[0]}")
+        _no_loop(entry, added, by_id)
         after = {"depends_on": clean}
     else:  # accept_risk
         if target.get("flag") not in FLAG_KINDS:

@@ -630,6 +630,7 @@ export function PanelFields({
         {canChange && (
           <AddDependency
             item={item}
+            loops={needsMe(item, items)}
             options={others.filter((o) => !item.depends_on.includes(o.id) && !loose.some((l) => l.found?.id === o.id))}
             add={(key) =>
               change(
@@ -804,14 +805,33 @@ function DatesEdit({
   );
 }
 
+/** build-feature-panel (AN PR 1204): the features that wait on the item, directly or through others. */
+function needsMe(item: Item, items: Map<string, Item>): Set<string> {
+  const out = new Set<string>();
+  const queue = [item.id];
+  while (queue.length) {
+    const id = queue.shift()!;
+    for (const n of items.get(id)?.needed_by ?? []) {
+      if (n !== item.id && !out.has(n)) {
+        out.add(n);
+        queue.push(n);
+      }
+    }
+  }
+  return out;
+}
+
 /** Add a dependency: a feature of the roadmap by code and name, or another PRD's feature by its key. */
 function AddDependency({
   item,
   options,
+  loops,
   add,
 }: {
   item: Item;
   options: Item[];
+  /** The features that already wait on this one (directly or through others): picked, they would make a loop. */
+  loops: Set<string>;
   add: (key: string) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
@@ -855,8 +875,9 @@ function AddDependency({
       >
         <option value="">Pick a feature</option>
         {options.map((o) => (
-          <option key={o.id} value={o.id}>
+          <option key={o.id} value={o.id} disabled={loops.has(o.id)}>
             {o.code ? `${o.code} ${o.title}` : o.title}
+            {loops.has(o.id) ? " · Needs this one: it would make a loop" : ""}
           </option>
         ))}
       </select>

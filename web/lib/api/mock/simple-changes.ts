@@ -1038,6 +1038,22 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       const names = new Set(seen.items.flatMap((x) => [x.key, prdCode(x.section)]).filter((k): k is string => !!k).map((k) => k.toLowerCase()));
       const unknown = clean.find((k) => !(seen.items.find((x) => x.key === key)?.depends ?? []).includes(k) && !names.has(k.toLowerCase()));
       if (unknown) return json(422, { detail: `after.depends_on: no item or feature has the key ${unknown}` });
+      // build-feature-panel (changes._no_loop): a new dependency that already waits on the item makes a loop.
+      const me = seen.items.find((x) => x.key === key)!;
+      const find = (k: string) => seen.items.find((x) => x.roadmap === me.roadmap && (x.key === k || (prdCode(x.section) ?? "").toLowerCase() === k.toLowerCase()));
+      for (const k of clean.filter((k) => !(me.depends ?? []).includes(k))) {
+        const dep = find(k);
+        if (!dep || dep.key === key) continue;
+        const queue = [dep.key];
+        const met = new Set(queue);
+        while (queue.length) {
+          for (const d of find(queue.shift()!)?.depends ?? []) {
+            const n = find(d)?.key;
+            if (n === key) return json(422, { detail: `${dep.title} needs ${me.title}: it would make a loop` });
+            if (n && !met.has(n)) (met.add(n), queue.push(n));
+          }
+        }
+      }
       after = { depends_on: clean };
     } else if (body.op === "set_status") {
       if (!["planned", "done", "cut"].includes(String(a.status))) return json(422, { detail: "after.status: planned, done or cut" });
