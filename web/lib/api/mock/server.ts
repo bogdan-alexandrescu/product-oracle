@@ -2756,8 +2756,8 @@ function seedSharingRoadmap(db: Db, audience: "team" | "public") {
     // G-3: the issues the roadmap's words name by key (Falcon alerts rework's and Partner API beta's dependency), on
     // no item's card, so a link holder reads each by its title.
     ...[["ENG-512", "Alert rules engine"], ["ENG-530", "Partner sign-in tokens"]].map(([ref, title]) => ({
-      id: uuid(), tracker: "linear", external_ref: ref, title, url: `https://tracker.example.com/${ref}`,
-      track_id: null, item_key: null, state: "todo", raw_status: null, estimate: null, estimate_unit: null,
+      id: uuid(), tracker: "linear" as const, external_ref: ref, title, url: `https://tracker.example.com/${ref}`,
+      track_id: null, item_key: null, state: "todo" as const, raw_status: null, estimate: null, estimate_unit: null,
       target_date: null, observed_at: created, recorded_by: null, created_at: created, updated_at: created,
     }))],
   };
