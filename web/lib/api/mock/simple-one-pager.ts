@@ -49,6 +49,8 @@ export interface OnePagerCtx {
   /** The PRD's decider (Dana Decider in "simple-deciders", as the meetings mock), and its track owners. */
   decider?: string | null;
   trackOwners?: string[];
+  /** A submitted draft's next version, its sections as the draft has them (drafts.submit imports it). */
+  imported?: (sections: { key: string; heading: string; body: string }[], version: number) => void;
   /** Writes one Inbox notification, as oracle.review.collab.notify. */
   notify: (userId: string, kind: "review_reminder", title: string, data: Record<string, unknown>, version: number) => void;
   /** prd-timeline: the PRD's dated plan's milestones ("M1 Prove it"): the PDF prints the timeline, then one page each. */
@@ -90,6 +92,8 @@ export interface OnePagerDb {
   blocks: { key: string; title: string; rules: string; kind: Schemas["OnePagerBlock"]["kind"]; lines: SeedLine[]; missing?: boolean }[];
   draft: null | {
     id: string; base: number; participants: string[]; lines: Record<string, string>; sections: Record<string, string>;
+    /** A heading's count fixed (owner, Nov 5, 'Fix the heading too'): the API's overlay["headings"]. */
+    headings?: Record<string, string>;
     status?: "working" | "submitted"; waiting_on?: string[]; reminders?: Record<string, string>;
   };
   changes: (Change & { session_open: boolean; in_meeting: boolean; meeting_title?: string | null })[];
@@ -257,6 +261,19 @@ export function seedNeedsLookOnePager(): OnePagerDb {
   bets.lines = bets.lines.slice(0, 2);
   blocks.find((b) => b.key === "risks")!.lines = [{ id: "risks-1", text: "Pricing for teams is TBD", keys: ["risks"] }];
   db.held = { blocks, checks: ["2 bets; a one-pager has 3 to 5", "A line in “Risks and open decisions” says “TBD”"] };
+  return db;
+}
+
+/**
+ * The "one-pager-heading-count" scenario (owner, Nov 5, 'Fix the heading too'): the count is
+ * in the section's heading, "Later · 8 items" over six listed, and the PRD's full version
+ * page reads the same sections (./server.ts). Invented data.
+ */
+export function seedHeadingCountOnePager(): OnePagerDb {
+  const db = seedOnePager();
+  const later = db.sections.find((x) => x.key === "later")!;
+  later.heading = "Later · 8 items";
+  later.body = later.body.replace(/^Eight features wait for next quarter\.\n\n/, "");
   return db;
 }
 
@@ -755,6 +772,11 @@ function sectionNow(db: OnePagerDb, key: string, sees = true): string {
   return (sees ? db.draft?.sections[key] : undefined) ?? db.sections.find((s) => s.key === key)!.body;
 }
 
+/** As one_pager._section_body's heading: the draft's, else the published one. */
+function headingNow(db: OnePagerDb, key: string, sees = true): string {
+  return (sees ? db.draft?.headings?.[key] : undefined) ?? db.sections.find((s) => s.key === key)!.heading;
+}
+
 /** As the API's one_pager.patch_all: the facts (bullets, else sentences) the old line says
  * are replaced by the new line in its first section and dropped from the others; null when
  * a section holds none of them (the edit is refused, never appended). */
@@ -787,7 +809,7 @@ const NUMBER_OP = "set_section_number" as const;
 
 /** As one_pager._number_values: the section and the lines resting on it, as the reader has them. */
 function numberValues(db: OnePagerDb, key: string, sees: boolean) {
-  const heading = db.sections.find((s) => s.key === key)!.heading;
+  const heading = headingNow(db, key, sees);
   const lines = Object.fromEntries(db.blocks.flatMap((b) => b.lines).filter((l) => l.keys.includes(key)).map((l) => [l.id, (sees ? db.draft?.lines[l.id] : undefined) ?? l.text]));
   return { sections: { [key]: { heading, body: sectionNow(db, key, sees) } }, lines };
 }
@@ -797,7 +819,7 @@ const held = (v: Record<string, unknown>) => JSON.stringify({ sections: v.sectio
 function numberConflict(db: OnePagerDb, ctx: OnePagerCtx, key: string, sees: boolean, message: string): Response {
   const last = sees ? [...liveChanges(db)].reverse().find((c) => key in ((c.after.sections ?? {}) as Record<string, unknown>)) : undefined;
   const by = last ? { id: last.by, name: ctx.names[last.by] ?? last.by_name } : null;
-  return json(409, { detail: { message: by ? `Changed by ${by.name}` : message, current: { section: key, body: sectionNow(db, key, sees) }, changed_by: by, changed_at: last?.at ?? null } });
+  return json(409, { detail: { message: by ? `Changed by ${by.name}` : message, current: { section: key, heading: headingNow(db, key, sees), body: sectionNow(db, key, sees) }, changed_by: by, changed_at: last?.at ?? null } });
 }
 
 function writeNumber(db: OnePagerDb, ctx: OnePagerCtx, values: Record<string, unknown>) {
@@ -807,9 +829,13 @@ function writeNumber(db: OnePagerDb, ctx: OnePagerCtx, values: Record<string, un
     if (text === seedLine(db, id)?.text) delete db.draft.lines[id];
     else db.draft.lines[id] = text;
   }
-  for (const [k, v] of Object.entries((values.sections ?? {}) as Record<string, { body: string }>)) {
-    if (v.body === db.sections.find((s) => s.key === k)?.body) delete db.draft.sections[k];
+  for (const [k, v] of Object.entries((values.sections ?? {}) as Record<string, { heading?: string; body: string }>)) {
+    const sec = db.sections.find((s) => s.key === k);
+    if (v.body === sec?.body) delete db.draft.sections[k];
     else db.draft.sections[k] = v.body;
+    const heads = (db.draft.headings ??= {});
+    if (v.heading === undefined || v.heading === sec?.heading) delete heads[k];
+    else heads[k] = v.heading;
   }
 }
 
@@ -835,6 +861,7 @@ export function publishOnePager(db: OnePagerDb) {
   if (!d) return;
   for (const b of db.blocks) for (const l of b.lines) if (d.lines[l.id] !== undefined) l.text = d.lines[l.id];
   for (const sec of db.sections) if (d.sections[sec.key] !== undefined) sec.body = d.sections[sec.key];
+  for (const sec of db.sections) if (d.headings?.[sec.key] !== undefined) sec.heading = d.headings[sec.key];
   db.version += 1;
   // qa4-simple-decide-25: as the API (the new version's approved_at), the header's day moves on.
   db.published_at = new Date(mockNowMs()).toISOString();
@@ -918,10 +945,10 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     }));
   // Reads clearly (2026-10-30): as one_pager_checks.annotate on the PRD's sections.
   // The numbers as the reader's working draft has them, so a fixed number clears.
-  const looks = annotate(blocks, db.sections, db.cites, db.sections.map((x) => ({ ...x, body: sectionNow(db, x.key, sees) }))).map((x): Schemas["OnePagerLook"] => {
+  const looks = annotate(blocks, db.sections, db.cites, db.sections.map((x) => ({ ...x, heading: headingNow(db, x.key, sees), body: sectionNow(db, x.key, sees) }))).map((x): Schemas["OnePagerLook"] => {
     if (!x.fix) return { ...x, fix: null };
     const f = x.fix;
-    const c = fixes.find((y) => y.target.section === f.target.section && y.target.said === f.target.said);
+    const c = fixes.find((y) => y.target.section === f.target.section && y.target.said === f.target.said && (y.target.part ?? "body") === (f.target.part ?? "body"));
     return {
       ...x,
       fix: {
@@ -961,7 +988,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
       companyDayIso(new Date(mockNowMs())),
     ),
     // As the API: the sections the page's lines rest on.
-    sections: db.sections.filter((s) => db.blocks.some((b) => b.lines.some((l) => l.keys.includes(s.key)))).map((s) => ({ key: s.key, heading: s.heading, body: sectionNow(db, s.key, sees) })),
+    sections: db.sections.filter((s) => db.blocks.some((b) => b.lines.some((l) => l.keys.includes(s.key)))).map((s) => ({ key: s.key, heading: headingNow(db, s.key, sees), body: sectionNow(db, s.key, sees) })),
     // decisions-reversed-or-trashed: the lines' decisions left out as no longer standing.
     left_out: leftOut(),
     notes,
@@ -1046,6 +1073,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     db.draft.waiting_on = [...new Set([...ctx.reviewers, ...added])];
     db.draft.reminders = {};
     db.changes.forEach((c) => (c.session_open = false));
+    ctx.imported?.(db.sections.map((x) => ({ key: x.key, heading: headingNow(db, x.key), body: sectionNow(db, x.key) })), db.version + 1);
     return json(200, { id: db.draft.id, status: "submitted", version: db.version + 1, waiting_on: db.draft.waiting_on });
   }
   if (p[2] === "one-pagers" && p[4] === "remind" && m === "POST") {
@@ -1192,9 +1220,11 @@ function createNumber(db: OnePagerDb, ctx: OnePagerCtx, b: Record<string, unknow
   const t = (b.target ?? {}) as Record<string, string>;
   if (t.document_id !== db.doc.id) return json(404, { detail: "No such PRD" });
   const key = String(t.section ?? ""), said = plain(String(t.said ?? ""));
+  const part = (t.part ?? "body") as "body" | "heading";
   const old = String(((b.before ?? {}) as Record<string, unknown>).number ?? "").trim();
   const next = String(((b.after ?? {}) as Record<string, unknown>).number ?? "").trim();
   if (!key || !said) return json(422, { detail: "target: the section and the words the number is in" });
+  if (part !== "body" && part !== "heading") return json(422, { detail: "target.part: body or heading" });
   if (!/^\d[\d,]*(?:\.\d+)?$/.test(next)) return json(422, { detail: "after.number: a number" });
   if (!db.sections.some((s) => s.key === key)) return json(404, { detail: "No such section in this PRD" });
   const applies = decides(ctx);
@@ -1202,18 +1232,19 @@ function createNumber(db: OnePagerDb, ctx: OnePagerCtx, b: Record<string, unknow
   const sees = seesDraft(db, ctx);
   const before: Record<string, unknown> = numberValues(db, key, sees);
   const sec = (before.sections as Record<string, { heading: string; body: string }>)[key];
-  const patched = said.split(" ")[0].toLowerCase() === old.toLowerCase() ? setNumber(sec.body, said, next) : null;
+  const patched = said.split(" ")[0].toLowerCase() === old.toLowerCase() ? setNumber(sec[part], said, next) : null;
   if (patched === null) return numberConflict(db, ctx, key, sees, "This number changed since you read it");
   const after: Record<string, unknown> = {
-    sections: { [key]: { heading: sec.heading, body: patched } },
-    lines: Object.fromEntries(Object.entries(before.lines as Record<string, string>).map(([i, x]) => [i, setNumber(x, said, next) ?? x])),
+    sections: { [key]: { ...sec, [part]: patched } },
+    // A heading's count is no line's words: the lines stay as they are.
+    lines: Object.fromEntries(Object.entries(before.lines as Record<string, string>).map(([i, x]) => [i, part === "heading" ? x : (setNumber(x, said, next) ?? x)])),
     number: next,
   };
   before.number = old;
   const c = {
     id: stableUuid(`op-change-${db.doc.id}-${db.changes.length}-${mockNowMs()}`), session_id: applies ? stableUuid(`op-session-${ctx.id}`) : null,
     document_id: db.doc.id, draft_ids: [] as string[], op: NUMBER_OP,
-    target: { document_id: db.doc.id, section: key, said, version: db.version }, before, after,
+    target: { document_id: db.doc.id, section: key, said, ...(part === "heading" ? { part } : {}), version: db.version }, before, after,
     status: (applies ? "applied" : "proposed") as Change["status"], by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone",
     at: new Date(mockNowMs()).toISOString(), decided_by: null, decided_at: null, reason: null, decision_reason: null,
     // As one_pager.route: the PRD's decider, else the company's owners.

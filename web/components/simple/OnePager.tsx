@@ -384,7 +384,9 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
       const r = await unwrap(api.POST("/v1/simple/changes", {
         body: { session_id: sessionId ?? null, op: f.action, target: f.target, before: { number: f.before }, after: { number: f.value } },
       }));
-      setFixed(r.change.status === "applied" ? { change_id: r.change.id, words: `Set to ${f.value}` } : null);
+      // A heading's count (owner, Nov 5, 'Fix the heading too'): the status names the new heading.
+      const heading = f.target.part === "heading" ? (r.change.after as { sections?: Record<string, { heading?: string }> }).sections?.[f.target.section]?.heading : undefined;
+      setFixed(r.change.status === "applied" ? { change_id: r.change.id, words: heading ? `Set to ${f.value}: “${heading}”` : `Set to ${f.value}` } : null);
     });
   const lookChange = (changeId: string, action: "accept" | "decline" | "undo") =>
     act(async () => {
