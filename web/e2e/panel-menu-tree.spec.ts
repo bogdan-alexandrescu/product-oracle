@@ -321,9 +321,12 @@ for (const size of SIZES)
       await expect(ranked("alert-rules").getByTestId("prio-part-of")).toHaveCount(0);
       await tap(ranked("alert-export").getByTestId("prio-title"));
       await expect(panel(page).getByTestId("card-part-of")).toHaveText("Part of Alert rules engine > Alert routing by team");
-      await page.keyboard.press("Escape");
+      // Made a part from its panel there: its row and its goal's bucket say so at once.
+      await tap(page.getByTestId("prio-title").filter({ hasText: "Mobile alert push" }));
+      await partOf(page, "Alert rules engine");
+      await expect(ranked("alert-mobile").getByTestId("prio-part-of")).toHaveText("part of Alert rules engine");
       await page.goto("/simple/priorities?tab=buckets");
-      const listed = page.getByTestId("bucket-features").locator("li").filter({ hasText: "Alert routing by team" });
-      await expect(listed.first().getByTestId("prio-part-of")).toHaveText("part of Alert rules engine");
+      const listed = page.getByTestId("bucket-features").locator("li").filter({ hasText: "Mobile alert push" });
+      await expect(listed.getByTestId("prio-part-of")).toHaveText("part of Alert rules engine");
     });
   });

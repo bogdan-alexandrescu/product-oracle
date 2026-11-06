@@ -174,7 +174,7 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(toastWith(page, `Merged '${TWIN}' into Weekly alert digest in your working draft`)).toBeVisible();
       await tray.getByRole("button", { name: "Close" }).click();
       await expect(column(page, "later").getByTestId("board-below").locator(`[data-item="${TWIN_KEY}"]`)).toBeVisible();
-      await expect(c.getByTestId("item-merged")).toHaveText("Merged into alert-digest");
+      await expect(c.getByTestId("item-merged")).toHaveText("Merged into F-06 Weekly alert digest");
       await boardCard(page, "alert-digest").click();
       await expect(page.getByTestId("floating-card").getByTestId("card-reasons")).toContainText(`Merged ${TWIN} (${TWIN_KEY}) into it.`);
       await page.getByTestId("floating-card").getByRole("button", { name: "Close" }).click();
