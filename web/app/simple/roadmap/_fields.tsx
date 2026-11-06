@@ -21,9 +21,11 @@ import {
   type Item,
 } from "./_lib";
 
-const LINK = "text-sm font-semibold text-accent-ink hover:underline";
+/** pre-demo QA P-8: on a phone (the sheet), a 44 px hit area; the desktop look is unchanged. */
+const TAP = "max-sm:min-h-11 max-sm:min-w-11 max-sm:inline-flex max-sm:items-center max-sm:justify-center";
+const LINK = `text-sm font-semibold text-accent-ink hover:underline ${TAP}`;
 /** roadmap-edit-fixes round 1: a dependency's x, a 24 px target of its own (a bare 16 px icon on the line's baseline was missed). */
-const REMOVE = "relative inline-flex h-6 w-6 flex-none items-center justify-center self-center rounded text-accent-ink hover:bg-surface2";
+const REMOVE = "relative inline-flex h-6 w-6 flex-none items-center justify-center self-center rounded text-accent-ink hover:bg-surface2 max-sm:h-11 max-sm:w-11";
 const INPUT =
   "w-full rounded-md border border-line bg-surface px-2 py-1 text-[15px]";
 
@@ -218,16 +220,7 @@ export function PanelFields({
   // neither its key nor its code), else the one matching its key or code.
   // roadmap-edit-fixes round 1: every stored key that names it (the read's, and its key or code
   // in any case), so a removal drops them all and none shows again as a loose chip.
-  const keysOf = (dep: Item) =>
-    new Set(
-      item.depends_keys.filter(
-        (k) =>
-          k === item.depends_key_of?.[dep.id] ||
-          (item.depends_keys_of?.[dep.id] ?? []).includes(k) ||
-          k.toLowerCase() === dep.key.toLowerCase() ||
-          (!!dep.code && k.toLowerCase() === dep.code.toLowerCase()),
-      ),
-    );
+  const keysOf = (dep: Item) => keysIn(item, dep);
   const shown = (id: string) => items.get(id);
   const featureButton = (i: Item) =>
     onOpen ? (
@@ -317,7 +310,7 @@ export function PanelFields({
               type="button"
               aria-label="Why these dates"
               aria-expanded={why}
-              className="text-text2 hover:text-text"
+              className={`text-text2 hover:text-text ${TAP}`}
               onClick={() => setWhy(!why)}
             >
               (i)
@@ -688,7 +681,8 @@ export function PanelFields({
         )}
       </dd>
       <dt className="text-text2">Needed by</dt>
-      <dd data-testid="card-needed" className="min-w-0">
+      <dd className="min-w-0">
+        <div data-testid="card-needed">
         {item.needed_by.length === 0 ? (
           "None"
         ) : (
@@ -697,9 +691,51 @@ export function PanelFields({
               .map(shown)
               .filter((i): i is Item => !!i)
               .map((i) => (
-                <li key={i.id}>{featureButton(i)}</li>
+                <li
+                  key={i.id}
+                  className="flex flex-wrap items-baseline gap-x-2"
+                  data-testid="card-needed-row"
+                >
+                  {featureButton(i)}
+                  {/* pre-demo QA S-4: the same dependency edit, from the other side (its set_depends). */}
+                  {canChange && (
+                    <button
+                      type="button"
+                      className={REMOVE}
+                      aria-label={`Remove ${i.title} from what needs it`}
+                      onClick={() =>
+                        void change(
+                          "Dependency removed",
+                          "set_depends",
+                          { depends_on: i.depends_keys },
+                          { depends_on: i.depends_keys.filter((k) => !keysIn(i, item).has(k)) },
+                          { item_id: i.id },
+                        )
+                      }
+                    >
+                      <Icon name="x" size={16} />
+                    </button>
+                  )}
+                </li>
               ))}
           </ul>
+        )}
+        </div>
+        {canChange && (
+          <AddDependent
+            loops={iNeed(item, items)}
+            options={others.filter((o) => !item.needed_by.includes(o.id))}
+            add={(o) =>
+              change(
+                "Dependency added",
+                "set_depends",
+                { depends_on: o.depends_keys },
+                // The same roadmap: this item's key; another roadmap's feature: its code.
+                { depends_on: [...o.depends_keys, o.roadmap.id === item.roadmap.id ? item.key : (item.code ?? item.key)] },
+                { item_id: o.id },
+              )
+            }
+          />
         )}
       </dd>
     </dl>
@@ -849,6 +885,35 @@ function DatesEdit({
   );
 }
 
+/** The stored keys of `owner`'s dependencies that name `dep` (the read's, and its key or code in any case). */
+function keysIn(owner: Item, dep: Item): Set<string> {
+  return new Set(
+    owner.depends_keys.filter(
+      (k) =>
+        k === owner.depends_key_of?.[dep.id] ||
+        (owner.depends_keys_of?.[dep.id] ?? []).includes(k) ||
+        k.toLowerCase() === dep.key.toLowerCase() ||
+        (!!dep.code && k.toLowerCase() === dep.code.toLowerCase()),
+    ),
+  );
+}
+
+/** pre-demo QA S-4: the features the item waits on, directly or through others (picked as one that needs it, they would make a loop). */
+function iNeed(item: Item, items: Map<string, Item>): Set<string> {
+  const out = new Set<string>();
+  const queue = [item.id];
+  while (queue.length) {
+    const id = queue.shift()!;
+    for (const n of items.get(id)?.depends_on ?? []) {
+      if (n !== item.id && !out.has(n)) {
+        out.add(n);
+        queue.push(n);
+      }
+    }
+  }
+  return out;
+}
+
 /** build-feature-panel (AN PR 1204): the features that wait on the item, directly or through others. */
 function needsMe(item: Item, items: Map<string, Item>): Set<string> {
   const out = new Set<string>();
@@ -885,7 +950,7 @@ function AddDependency({
     return (
       <button
         type="button"
-        className={`${LINK} mt-0.5 block`}
+        className={`${LINK} mt-0.5 block max-sm:flex max-sm:w-fit`}
         onClick={() => setOpen(true)}
       >
         Add a dependency
@@ -935,6 +1000,61 @@ function AddDependency({
         />
       )}
       <SaveCancel onCancel={() => setOpen(false)} disabled={!key} />
+    </form>
+  );
+}
+
+/** pre-demo QA S-4: add a feature that needs this one (its own dependency, set from here). */
+function AddDependent({
+  options,
+  loops,
+  add,
+}: {
+  options: Item[];
+  /** The features this one already waits on (directly or through others): picked, they would make a loop. */
+  loops: Set<string>;
+  add: (o: Item) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pick, setPick] = useState("");
+  if (!open)
+    return (
+      <button
+        type="button"
+        className={`${LINK} mt-0.5 block max-sm:flex max-sm:w-fit`}
+        onClick={() => setOpen(true)}
+      >
+        Add a feature that needs it
+      </button>
+    );
+  const chosen = options.find((o) => o.id === pick);
+  return (
+    <form
+      className="mt-1"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!chosen) return;
+        setOpen(false);
+        setPick("");
+        void add(chosen);
+      }}
+    >
+      <select
+        aria-label="Feature that needs it"
+        className={INPUT}
+        value={pick}
+        onChange={(e) => setPick(e.target.value)}
+        autoFocus
+      >
+        <option value="">Pick a feature</option>
+        {options.map((o) => (
+          <option key={o.id} value={o.id} disabled={loops.has(o.id)}>
+            {o.code ? `${o.code} ${o.title}` : o.title}
+            {loops.has(o.id) ? " · This one needs it: it would make a loop" : ""}
+          </option>
+        ))}
+      </select>
+      <SaveCancel onCancel={() => setOpen(false)} disabled={!chosen} />
     </form>
   );
 }
