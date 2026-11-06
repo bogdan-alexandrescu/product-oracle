@@ -246,7 +246,9 @@ export function GroundTruthFlags({
                 ? "Sent for approval"
                 : f.item && f.feature && f.fixes.some((x) => x.action === "confirm_feature")
                   ? `Waiting to be confirmed: ${shown(f.feature)}`
-                  : (f.where.roadmap?.title ?? (f.where.prd ? `PRD ${f.where.prd.title}` : null));
+                  : f.where.prd && !f.item?.id
+                    ? `PRD ${f.where.prd.title}`
+                    : (f.where.roadmap?.title ?? null);
               return (
                 <li key={`${s.id ?? s.code ?? s.name}-${n}`} data-testid="gt-row" className="flex flex-wrap items-center justify-between gap-2 py-2">
                   <span className="min-w-0">
