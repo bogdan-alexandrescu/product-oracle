@@ -191,6 +191,8 @@ def for_reader(html: str) -> str:
 # G-3: a goal code ("G1") or a tracker key ("ENG-512") as the roadmap's words write it.
 _CODE = re.compile(r"(?<![\w(-])(G-?\d+|[A-Z][A-Z0-9]{1,9}-\d+)(?![\w)-])")
 
+_GOAL_LINE = re.compile(r"^\s*[-*]\s*(G-?\d+)\b[\s.:]+(\S.*?)\s*$", re.M)
+
 
 def with_names(text: str, names: dict[str, str]) -> str:
     """G-3: each code ``names`` knows read by its name with the code beside it ("Activation
@@ -214,7 +216,13 @@ async def code_names(db, texts: Sequence[str]) -> dict[str, str]:
     codes = {m.group(1) for t in texts for m in _CODE.finditer(t or "")}
     if not codes:
         return {}
-    out: dict[str, str] = {}
+    # The roadmap's own Goals list ("- G1 Activation: 40% to 55% by Q4"): its words for
+    # each goal, up to the measure.
+    out: dict[str, str] = {
+        m.group(1): re.split(r":|\s[–—-]\s", m.group(2))[0].strip()
+        for t in texts
+        for m in _GOAL_LINE.finditer(t or "")
+    }
     refs = [c for c in codes if not re.fullmatch(r"G-?\d+", c)]
     if refs:
         rows = await db.execute(

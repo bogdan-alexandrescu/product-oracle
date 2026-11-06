@@ -25,7 +25,7 @@ test("settings › sources: a source needing attention shows why, refuses to syn
   await expect(badge).toBeVisible();
 
   // Edit opens the picker; over 100 channels it says how many to untick, and the API refuses.
-  await row.getByRole("button", { name: `Edit ${LEGACY}` }).click();
+  await row.getByRole("button", { name: `Pick fewer channels in ${LEGACY}` }).click();
   const picker = row.getByRole("group", { name: "Slack channels" });
   await expect(picker.getByTestId("picked-count")).toHaveText("120 selected");
   await expect(picker.getByTestId("too-many-channels")).toHaveText("A source takes at most 100 channels: untick 20 to save it.");
@@ -49,11 +49,11 @@ test("inbox: my sources that need attention, with Edit opening the source", asyn
   await page.goto("/inbox");
   const group = page.getByTestId("inbox-sources");
   await expect(group).toContainText(LEGACY);
-  await expect(group).toContainText(MESSAGE);
+  await expect(group.getByTestId("source-need-text").filter({ hasText: "Too many channels" })).toHaveAttribute("title", MESSAGE);
   // Only the source needing attention, not the one in error.
   await expect(group).not.toContainText("Example repo");
 
-  await group.getByRole("link", { name: `Edit ${LEGACY}` }).click();
+  await group.getByRole("link", { name: `Pick fewer channels in ${LEGACY}` }).click();
   await expect(page).toHaveURL(/\/settings\/sources#source-/);
   const row = page.getByRole("listitem", { name: LEGACY });
   // Arrives with the editor open.

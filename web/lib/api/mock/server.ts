@@ -204,6 +204,7 @@ import {
   draftPublicTexts,
   emptyShares,
   readerSections,
+  codeNames,
   routePublicShares,
   routeShares,
   seedShares,
@@ -2751,7 +2752,14 @@ function seedSharingRoadmap(db: Db, audience: "team" | "public") {
       id: uuid(), tracker: "linear", external_ref: "ENG-541", title: "Ledger entries", url: "https://tracker.example.com/ENG-541",
       track_id: null, item_key: "item-ledger", state: "in_progress", raw_status: null, estimate: null, estimate_unit: null,
       target_date: "2027-01-20", observed_at: created, recorded_by: null, created_at: created, updated_at: created,
-    }],
+    },
+    // G-3: the issues the roadmap's words name by key (Falcon alerts rework's and Partner API beta's dependency), on
+    // no item's card, so a link holder reads each by its title.
+    ...[["ENG-512", "Alert rules engine"], ["ENG-530", "Partner sign-in tokens"]].map(([ref, title]) => ({
+      id: uuid(), tracker: "linear", external_ref: ref, title, url: `https://tracker.example.com/${ref}`,
+      track_id: null, item_key: null, state: "todo", raw_status: null, estimate: null, estimate_unit: null,
+      target_date: null, observed_at: created, recorded_by: null, created_at: created, updated_at: created,
+    }))],
   };
 }
 
@@ -2847,7 +2855,11 @@ function sharesContext(db: Db, me: { id: string; role: Role } | null): SharesCon
       const row = db.documents.find((d) => d.id === doc.id)!;
       const version = db.versions.find((x) => x.id === v.id)!;
       const sections = audienceSections(version.sections, audience, boardItems(db, version));
-      return exportHtml(row, { ...version, sections: linkHolder ? readerSections(sections, boardItems(db, version)) : sections }, db.branding, audienceLabel(audience), linkHolder);
+      // G-3: each goal and tracker code reads beside its name (as the API's render.code_names).
+      const names = linkHolder
+        ? codeNames(version.sections.map((s) => s.body_md), db.baseline.entities.filter((e) => e.type === "goal"), [...(db.sharing_records?.[version.id] ?? []), ...(db.roadmap?.records ?? [])])
+        : {};
+      return exportHtml(row, { ...version, sections: linkHolder ? readerSections(sections, boardItems(db, version), names) : sections }, db.branding, audienceLabel(audience), linkHolder);
     },
   };
 }

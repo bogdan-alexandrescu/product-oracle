@@ -765,7 +765,40 @@ const joinRow = (cells: string[]) => `| ${cells.join(" | ")} |`;
  * column (it repeats the heading). The first column always stays. A goal group's rows are Board's items of that group
  * (`boardGroup`, by key), each card with its dates and delivery state (E-14).
  */
-export function readerBody(md: string, sectionKey: string, items: BoardItem[] = []): string {
+/** G-3: a goal code ("G1") or a tracker key ("ENG-512") as the roadmap's words write it (as the API's render._CODE). */
+const CODE = /(?<![\w(-])(G-?\d+|[A-Z][A-Z0-9]{1,9}-\d+)(?![\w)-])/g;
+const GOAL_LINE = /^\s*[-*]\s*(G-?\d+)\b[\s.:]+(\S.*?)\s*$/gm;
+
+/**
+ * G-3 (as the API's render.code_names): the name of each goal code and tracker key `texts` write: the roadmap's own
+ * Goals list's words up to the measure ("- G1 Activation: 40% to 55% by Q4"), a goal entity's title by its key (any
+ * case, with or without the dash) and a tracker issue's title.
+ */
+export function codeNames(texts: string[], goals: { key: string; title: string | null }[], records: { external_ref: string; title?: string | null }[]): Record<string, string> {
+  const codes = new Set(texts.flatMap((t) => [...(t ?? "").matchAll(CODE)].map((m) => m[1])));
+  if (!codes.size) return {};
+  const out: Record<string, string> = {};
+  for (const t of texts) for (const m of (t ?? "").matchAll(GOAL_LINE)) out[m[1]] = m[2].split(/:|\s[–—-]\s/)[0].trim();
+  for (const r of records) if (codes.has(r.external_ref) && r.title) out[r.external_ref] = r.title;
+  const goalCodes = new Map([...codes].filter((c) => /^G-?\d+$/.test(c)).map((c) => [c.replace("-", "").toLowerCase(), c]));
+  for (const g of goals) {
+    const code = goalCodes.get((g.key ?? "").replace(/-/g, "").toLowerCase());
+    if (code && g.title) out[code] = g.title;
+  }
+  return out;
+}
+
+/** G-3 (as the API's render.with_names): each code `names` knows read by its name with the code beside it ("Activation (G1)"). */
+export function withNames(text: string, names: Record<string, string>): string {
+  if (!Object.keys(names).length) return text;
+  return text.replace(CODE, (whole, code: string, at: number) => {
+    const name = names[code];
+    if (!name || name === code || text.slice(at + whole.length).trimStart().startsWith(name)) return whole;
+    return name.includes(code) ? name : `${name} (${code})`;
+  });
+}
+
+export function readerBody(md: string, sectionKey: string, items: BoardItem[] = [], names: Record<string, string> = {}): string {
   const group = GROUP_KEY.test(sectionKey);
   const lines = (md ?? "").split("\n").filter((l) => !LEFT_OUT.test(l.trim()) && l.trim() !== NO_GOAL_FLAG);
   const out: string[] = [];
@@ -789,7 +822,7 @@ export function readerBody(md: string, sectionKey: string, items: BoardItem[] = 
     out.push(joinRow(keep.map((n) => head[n])), "|" + "---|".repeat(keep.length), ...rows.map((r) => joinRow(keep.map((n) => r[n]))));
     i = end;
   }
-  return out.join("\n").replace(/\n{3,}/g, "\n\n").replace(/^\n+|\n+$/g, "");
+  return withNames(out.join("\n").replace(/\n{3,}/g, "\n\n").replace(/^\n+|\n+$/g, ""), names);
 }
 
 /** E-14: an item's delivery state as its card says it (as the API's render.STATE_WORDS). */
@@ -834,9 +867,9 @@ function itemDates(start: string | null, end: string | null): string | null {
 }
 
 /** An audience rendering's sections as a link holder reads them (`readerBody`). */
-export function readerSections<S extends { section_key: string; body_md: string; body_text: string }>(sections: S[], items: BoardItem[] = []): S[] {
+export function readerSections<S extends { section_key: string; body_md: string; body_text: string }>(sections: S[], items: BoardItem[] = [], names: Record<string, string> = {}): S[] {
   return sections.map((s) => {
-    const body = readerBody(s.body_md, s.section_key, items);
+    const body = readerBody(s.body_md, s.section_key, items, names);
     return body === s.body_md ? s : { ...s, body_md: body, body_text: body };
   });
 }

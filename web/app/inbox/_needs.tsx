@@ -100,6 +100,8 @@ function ageOf(at: string | null | undefined): string {
 /** A cost in dollars ("$53.00"), or that there is none yet. */
 const money = (v: number | null | undefined) => (v == null ? "no estimate" : formatMoney(v));
 
+const WRAP_TWO = "[&_.truncate]:line-clamp-2 [&_.truncate]:whitespace-normal [&_.truncate]:break-words max-[600px]:[&_.truncate]:overflow-hidden!";
+
 export const NEED_COLUMNS: Column<Need>[] = [
   {
     key: "kind",
@@ -122,6 +124,9 @@ export const NEED_COLUMNS: Column<Need>[] = [
     key: "item",
     header: "Item",
     phone: "title",
+    // G-5: a long title wraps to two lines rather than being cut.
+    wrap: true,
+    className: WRAP_TWO,
     // The item's text keeps its room: a chip or a note goes to a second line rather than cut it.
     cell: (n) => (
       <span
@@ -176,7 +181,6 @@ export const NEED_COLUMNS: Column<Need>[] = [
  * qa-company-27: on Home's narrow lines a long item or "For" wraps to a second line, then ends in an ellipsis (its title holds the rest).
  * QA pass D-8: clipped at two lines on a phone too, where DataTable lets `.truncate` overflow (else line 3 draws over the next line).
  */
-const WRAP_TWO = "[&_.truncate]:line-clamp-2 [&_.truncate]:whitespace-normal [&_.truncate]:break-words max-[600px]:[&_.truncate]:overflow-hidden!";
 
 /** Home's narrower lines: one action each. */
 export const NEED_COLUMNS_COMPACT: Column<Need>[] = NEED_COLUMNS.map((c) =>
@@ -769,7 +773,7 @@ export function reportNeeds(reports: InboxReport[], seenBefore: string | null | 
       ),
       at: r.created_at,
       action: (
-        <LinkButton variant={r.read ? "ghost" : undefined} href={`/plan/reports/${r.id}`} aria-label="Open">
+        <LinkButton href={`/plan/reports/${r.id}`} aria-label="Open">
           Open
         </LinkButton>
       ),
@@ -851,7 +855,7 @@ export function discussionNeeds(inbox: InboxOut, seenBefore: string | null | und
           </span>
         ),
         action: (
-          <LinkButton variant={done ? "ghost" : undefined} href={r.subject_url} aria-label={`Open ${r.title}`}>
+          <LinkButton href={r.subject_url} aria-label={`Open ${r.title}`}>
             Open
           </LinkButton>
         ),
@@ -1288,7 +1292,7 @@ function ChildActions({
           </Button>
         )
       )}
-      <LinkButton variant="ghost" href={itemHref(c, child.item)} aria-label={`Open ${title}`}>
+      <LinkButton href={itemHref(c, child.item)} aria-label={`Open ${title}`}>
         Open
       </LinkButton>
       {error && (
@@ -1824,15 +1828,20 @@ export function inboxNeeds(
  */
 export function sourceNeeds(sources: Schemas["SourceOut"][], mayEdit = true): Need[] {
   return needingAttention(sources).map((s) => {
-    const why = sourceNeedReason(s, mayEdit);
+    const fix = sourceFix(s, mayEdit);
     return {
       key: s.id,
       icon: "sources",
       kind: "Source",
       item: (
-        // qa-company-20: the reason wraps to a second line rather than cut mid-sentence.
-        <span className="line-clamp-2 min-w-0 break-words whitespace-normal" title={why} data-testid="source-need-text">
-          {why}
+        // qa-company-20, G-6: the problem in short (it wraps), what to do behind its (i).
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="line-clamp-2 min-w-0 break-words whitespace-normal" title={fix.why} data-testid="source-need-text">
+            {fix.problem}
+          </span>
+          <InfoTip label={fix.problem} align="start">
+            {fix.why}
+          </InfoTip>
         </span>
       ),
       context: (
@@ -1841,10 +1850,11 @@ export function sourceNeeds(sources: Schemas["SourceOut"][], mayEdit = true): Ne
         </span>
       ),
       at: s.updated_at,
-      // qa-company-44: a role that cannot edit sources reads the row, with no Edit.
+      // qa-company-44: a role that cannot edit sources reads the row, with no action.
+      // G-6: the action is the problem's: Reconnect opens the account on Settings › Connections, the rest the source.
       action: mayEdit ? (
-        <LinkButton href={`/settings/sources#source-${s.id}`} aria-label={`Edit ${s.name}`}>
-          Edit
+        <LinkButton href={fix.href} aria-label={fix.action === "Reconnect" ? `Reconnect ${s.name}` : `${fix.action} in ${s.name}`}>
+          {fix.action}
         </LinkButton>
       ) : (
         <ByRole who="View only" title="Your role cannot edit sources: commenters and above can" />
@@ -1853,14 +1863,23 @@ export function sourceNeeds(sources: Schemas["SourceOut"][], mayEdit = true): Ne
   });
 }
 
-/** Why a source needs a person: the API's message, else what it lost or must reconnect for. */
-function sourceNeedReason(s: Schemas["SourceOut"], mayEdit: boolean): string {
+/** Why a source needs a person, in short and in full (the API's message, else what it lost or must reconnect
+ * for), and the action that fixes it (G-6). */
+function sourceFix(s: Schemas["SourceOut"], mayEdit: boolean): { problem: string; why: string; action: string; href: string } {
+  const source = `/settings/sources#source-${s.id}`;
   if (s.status === "needs_attention" || !needsPerson(s)) {
-    return s.last_error ?? (mayEdit ? "Needs attention: edit this source to sync it again" : "Needs attention: it syncs again once it is edited");
+    const why = s.last_error ?? (mayEdit ? "Edit this source to sync it again" : "It syncs again once it is edited");
+    // A Slack source saved before the channel limit: picking fewer is the fix.
+    const channels = s.kind === "slack" && /channel/i.test(s.last_error ?? "");
+    return { problem: channels ? "Too many channels" : "Not syncing", why, action: channels ? "Pick fewer channels" : "Edit", href: source };
   }
-  if (s.reconnect_reason) return `${s.reconnect_reason}: reconnect its account in Settings › Connections`;
+  if (s.reconnect_reason) {
+    const href = s.connection_id ? `/settings/connections?connection=${s.connection_id}` : "/settings/connections";
+    return { problem: s.reconnect_reason, why: "Reconnect its account in Settings › Connections", action: "Reconnect", href };
+  }
   const lost = lostItems(s);
-  return `Lost access to ${plural(lost, "item")}: share ${lost === 1 ? "it" : "them"} again or remove ${lost === 1 ? "it" : "them"} from this source`;
+  const them = lost === 1 ? "it" : "them";
+  return { problem: `Lost access to ${plural(lost, "item")}`, why: `Share ${them} again or remove ${them} from this source`, action: "Share again", href: source };
 }
 
 /** H6 launch rows: Ready to launch and Notes to send (the launch's owner), Set tier (approvers),
@@ -2408,7 +2427,7 @@ export function trackNeeds(
                 Reopen
               </Button>
             )}
-            <LinkButton variant={a.actions.includes("reopen") ? "ghost" : "secondary"} href={planHref(a)} aria-label={`Open ${alertTitle(a)}`}>
+            <LinkButton href={planHref(a)} aria-label={`Open ${alertTitle(a)}`}>
               Open
             </LinkButton>
           </span>
@@ -2496,7 +2515,7 @@ function TrackAlertActions({ a, busy, act }: { a: TrackAlertOut; busy: string | 
           Keep watching
         </Button>
       )}
-      <LinkButton variant="ghost" href={planHref(a)} aria-label={`Open ${title}`}>
+      <LinkButton href={planHref(a)} aria-label={`Open ${title}`}>
         Open
       </LinkButton>
       {errorLine}

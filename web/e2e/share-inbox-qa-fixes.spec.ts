@@ -64,7 +64,7 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(opens.first()).toBeVisible();
       for (const variant of await opens.evaluateAll((els) => els.map((e) => e.getAttribute("data-variant")))) expect(variant).toBe("secondary");
       // A title cut with "…" on one line would read nowrap: each wraps to (at most) two lines.
-      const titles = needs.locator("tr[data-row] td .truncate");
+      const titles = needs.locator(`tr[data-row] td[data-phone="title"] .truncate`);
       await expect(titles.first()).toBeVisible();
       const styles = await titles.evaluateAll((els) => els.map((e) => [getComputedStyle(e).whiteSpace, getComputedStyle(e).webkitLineClamp]));
       for (const [space, clamp] of styles) {

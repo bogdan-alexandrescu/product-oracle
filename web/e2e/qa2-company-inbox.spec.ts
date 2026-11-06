@@ -10,7 +10,7 @@ import { login } from "./helpers";
  * - qa-company-7: a declined access request leaves Needs you at once for Declined, the banner
  *   says so with Undo, and the count drops.
  * - qa-company-28: money in the app's own font, not a code font.
- * - qa-company-29: one rule on every row: the first action bordered, the rest text.
+ * - qa-company-29: one rule on every row: the first action bordered, the rest text (but Open, G-5).
  * - qa-company-30: an "Oracle did" row has no chevron that only repeats its line.
  * - qa-company-36: "Show the text" is a target of at least 24 px on a phone.
  * - qa-company-42: each action replaces the banner with its own message.
@@ -112,9 +112,10 @@ test("qa-company-29: the first action is the bordered one on every feedback row,
   const row = (text: string) => page.getByTestId("inbox-tab-new").getByTestId("inbox-feedback").locator("tr[data-row]").filter({ hasText: text });
   await expect(row(METRIC).getByRole("button", { name: "Accept", exact: true })).toBeVisible();
   const variants = (r: Locator) => r.locator("td").last().locator("button, a").evaluateAll((els) => els.map((e) => `${e.textContent?.trim()}:${e.getAttribute("data-variant")}`));
-  // A comment with nothing to accept: Stage for agents leads, bordered; Decline and Open are text.
-  expect(await variants(row(ADDRESS))).toEqual(["Stage for agents:secondary", "Decline:ghost", "Open:ghost"]);
-  expect(await variants(row(METRIC))).toEqual(["Accept:secondary", "Decline:ghost", "Open:ghost"]);
+  // A comment with nothing to accept: Stage for agents leads, bordered; Decline is text; Open is
+  // bordered on every row (G-5).
+  expect(await variants(row(ADDRESS))).toEqual(["Stage for agents:secondary", "Decline:ghost", "Open:secondary"]);
+  expect(await variants(row(METRIC))).toEqual(["Accept:secondary", "Decline:ghost", "Open:secondary"]);
 });
 
 test("qa-company-30: an Oracle did row with no codes has no chevron repeating its line", async ({ page }) => {
