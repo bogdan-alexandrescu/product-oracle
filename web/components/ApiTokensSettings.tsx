@@ -350,8 +350,9 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
         status={
           <>
             {active != null && badge("active", active, "pass", "active-count")}
-            {!!revoked && badge("revoked", revoked, "na", "revoked-count")}
-            {!!expired && badge("expired", expired, "na", "expired-count")}
+            {/* A pressed one stays at 0 (a member or kind with none), so its filter can be turned off. */}
+            {(!!revoked || status === "revoked") && badge("revoked", revoked ?? 0, "na", "revoked-count")}
+            {(!!expired || status === "expired") && badge("expired", expired ?? 0, "na", "expired-count")}
           </>
         }
       />
