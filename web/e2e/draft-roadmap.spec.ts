@@ -274,3 +274,42 @@ test("Start after the draft items changed since the estimate asks to estimate ag
   await dialog.getByRole("button", { name: "Estimate cost again" }).click();
   await expect(dialog.getByTestId("estimate-total")).toHaveText("$14.50");
 });
+
+// Card retry-reopens: protects = Retry on a failed items run re-opens its draft roadmap
+// (review r1 blocker); fails_when = the Roadmap tab still shows the failure, or offers Build
+// again, while the retried run runs; no_claim = the real API's store (pytest).
+test("Retry on a failed items run shows the Roadmap tab building again, with no Build again meanwhile", async ({ page }) => {
+  await login(page);
+  await page.goto(`${PRD}/v/1/roadmap`);
+  await status(page).getByRole("button", { name: "Build again" }).click();
+  await tick(page);
+  await expect(status(page)).toHaveAttribute("data-status", "running", { timeout: 15_000 });
+  const href = (await status(page).getByRole("link", { name: "Open run" }).getAttribute("href"))!;
+  const runId = href.split("/").pop()!;
+
+  // Its writer's session ran out of room: the run and its draft roadmap failed.
+  await page.goto("/icon.svg");
+  await page.evaluate((id) => {
+    const key = "po-mock-db-v2";
+    const db = JSON.parse(localStorage.getItem(key)!);
+    const run = db.runs.runs.find((r: { id: string }) => r.id === id);
+    const at = "2026-10-17T09:00:00Z";
+    const cause = "The writer stopped: its session ran out of room.";
+    Object.assign(run.segments[0], { status: "failed", error: cause, finished_at: at, cost_usd: 0.1 });
+    Object.assign(run, { status: "failed", error: `Roadmap items: ${cause}`, finished_at: at, spent_usd: 0.1 });
+    const draft = db.draft_roadmaps.rows.find((r: { run_id: string }) => r.run_id === id);
+    Object.assign(draft, { status: "failed", error: cause });
+    localStorage.setItem(key, JSON.stringify(db));
+  }, runId);
+  await page.goto(`${PRD}/v/1/roadmap`);
+  await expect(status(page)).toHaveAttribute("data-status", "failed");
+
+  await page.goto(href);
+  await page.getByTestId("segment-roadmap_items").getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(page.getByTestId("run-status").filter({ visible: true })).toHaveText("Running");
+
+  await page.goto(`${PRD}/v/1/roadmap`);
+  await expect(status(page)).toHaveAttribute("data-status", "running");
+  await expect(status(page)).toContainText("Building roadmap items from v1");
+  await expect(status(page).getByRole("button", { name: "Build again" })).toHaveCount(0);
+});
