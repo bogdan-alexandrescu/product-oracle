@@ -39,8 +39,11 @@ for (const fr of FRAMES) {
   if (fr.scrollSel) await page.evaluate((s) => document.querySelector(s)?.scrollIntoView({ block: "center" }), fr.scrollSel);
   // two places in one shot (a drag's old place and its drop place): scroll to their middle
   if (fr.scrollMid) await page.evaluate(([a, b]) => { const ra = document.querySelector(a).getBoundingClientRect(); const rb = document.querySelector(b).getBoundingClientRect(); window.scrollBy(0, (Math.min(ra.top, rb.top) + Math.max(ra.bottom, rb.bottom)) / 2 - innerHeight / 2 - 40); }, fr.scrollMid);
+  if (fr.nudge) await page.evaluate((y) => window.scrollBy(0, y), fr.nudge);
   if (fr.hscroll) await page.evaluate((x) => document.querySelectorAll('.overflow-x-auto').forEach((e) => (e.scrollLeft = x)), fr.hscroll);
   await page.waitForTimeout(300);
+  // the dev server's own badge is not part of the product
+  await page.evaluate(() => document.querySelectorAll("nextjs-portal").forEach((n) => n.remove()));
   const name = fr.file;
   await page.screenshot({ path: path.join(OUT, "frames", `${name}.png`) });
   const { html, urls } = await page.evaluate(([vp]) => {

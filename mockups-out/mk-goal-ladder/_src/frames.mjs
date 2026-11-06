@@ -54,8 +54,8 @@ export const FRAMES = [
   { file: "ld2-c-commenter", url: M + "ld1=a&ld2=c&edit=1&st=linked&as=commenter", scrollSel: F24, caption: "A commenter picks F-34 the same way: F-24 shows Suggested: wait on F-34, sent to an approver" },
   // LD3 b: an Edit toggle
   { file: "ld3-b-rest", url: M + "ld1=a&ld3=b", scrollSel: F15, caption: "At rest the ladder is clean: no handles, no + slots; Edit ladder in the header" },
-  { file: "ld3-b-edit", url: M + "ld1=a&ld3=b&edit=1", scrollMid: ['[data-ld-goal="g2"]', F15], caption: "Edit ladder on: grips, ⋯ menus on goals, milestones and features, + Add at each level, each milestone's work a drop zone; the button reads Done" },
-  { file: "ld3-b-drag", url: M + "ld1=a&ld3=b&edit=1&st=drag", scrollMid: [F15, '[data-ld-group="m6"]'], caption: "Dragging F-15 Invite the whole team from M4 to M6: its old place in M4 dashed, the drop place at the top of M6 outlined" },
+  { file: "ld3-b-edit", url: M + "ld1=a&ld3=b&edit=1", scrollMid: ['[data-ld-goal="g2"]', F15], nudge: -90, caption: "Edit ladder on: grips, ⋯ menus on goals, milestones and features, + Add at each level, each milestone's work a drop zone; the button reads Done" },
+  { file: "ld3-b-drag", url: M + "ld1=a&ld3=b&edit=1&st=drag", scrollSel: '[data-ld-group="m6"] > span', caption: "Dragging F-15 Invite the whole team from M4 to M6: the card under the pointer, the drop place at the top of M6 outlined (its old place in M4, above, stays dashed)" },
   { file: "ld3-b-moved", url: M + "ld1=a&ld3=b&edit=1&st=moved", scrollSel: '[data-ld-group="m6"]', caption: "Dropped: F-15 now serves M6, with Undo" },
   { file: "ld3-b-menu", url: M + "ld1=a&ld3=b&edit=1&st=menu", scrollSel: F15, caption: "F-15's ⋯ menu, under the card: Open, Move to…, Move up, Move down, Waits on…, and Delete (to Trash), which is picked" },
   { file: "ld3-b-deleted", url: M + "ld1=a&ld3=b&edit=1&st=deleted", scrollSel: '[data-ld-group="m4"]', caption: "Deleted: F-15 goes to Trash, with Open Trash and Undo" },
@@ -67,7 +67,7 @@ export const FRAMES = [
   { file: "ld3-b-phone", url: M + "ld1=a&ld3=b&edit=1&st=menu", size: P, caption: "Phone while editing: no drag and no grips; Move to… opens a sheet of every goal's milestones" },
   // LD3 a: always editable
   { file: "ld3-a-rest", url: M + "ld1=a&ld3=a", scrollSel: F15, caption: "Always editable for an owner: grips, ⋯ and + Add show on every card all the time" },
-  { file: "ld3-a-drag", url: M + "ld1=a&ld3=a&st=drag", scrollMid: [F15, '[data-ld-group="m6"]'], caption: "The same drag of F-15 to M6, with no mode to turn on first" },
+  { file: "ld3-a-drag", url: M + "ld1=a&ld3=a&st=drag", scrollSel: '[data-ld-group="m6"] > span', caption: "The same drag of F-15 to M6, with no mode to turn on first" },
   { file: "ld3-a-moved", url: M + "ld1=a&ld3=a&st=moved", scrollSel: '[data-ld-group="m6"]', caption: "Dropped, with Undo" },
   { file: "ld3-a-rest-1512", url: M + "ld1=a&ld3=a", size: W, scrollSel: '[data-ld-card="f22"]', caption: "Hard case at 1512: the handles on all 65 cards and 12 + slots stay on the scoreboard for every reading" },
   { file: "ld3-a-commenter", url: M + "ld1=a&ld3=a&st=moved&as=commenter", scrollSel: F15, caption: "A commenter's drag: F-15 stays, marked Suggested: move to M6" },

@@ -211,9 +211,9 @@ function WeekLabels({ weeks }: { weeks: Ladder["periods"][number]["weeks"] }) {
   });
   const n = weeks.length;
   return (
-    <span className="relative block" style={{ height: last.length * 13 }}>
+    <span className="relative block" style={{ height: last.length * 13 + 6 }}>
       {placed.map(({ i, text, r, today }) => (
-        <span key={i} className={`absolute w-max max-w-[140px] text-[11px] leading-[13px] whitespace-pre-line ${today ? "font-semibold text-accent-ink" : "text-text2"} ${i === 0 ? "text-left" : i === n - 1 ? "text-right" : "-translate-x-1/2 text-center"}`} style={{ top: r * 13, ...(i === n - 1 ? { right: 0 } : { left: i === 0 ? 0 : `${((i + 0.5) / n) * 100}%` }) }}>{text}</span>
+        <span key={i} className={`absolute w-max max-w-[160px] text-[11px] leading-[13px] whitespace-pre-line ${today ? "font-semibold text-accent-ink" : "text-text2"} ${i === 0 ? "text-left" : i === n - 1 ? "text-right" : "-translate-x-1/2 text-center"}`} style={{ top: r * 13, ...(i === n - 1 ? { right: 0 } : { left: i === 0 ? 0 : `${((i + 0.5) / n) * 100}%` }) }}>{text}</span>
       ))}
     </span>
   );
@@ -380,7 +380,7 @@ function AddSlot({ what, open }: { what: string; open?: boolean }) {
         <span className="flex gap-1.5"><Btn small primary>Add</Btn><Btn small>Cancel</Btn></span>
       </div>
     );
-  return <span className="rounded-xl border border-dashed border-line-strong px-2.5 py-1 text-[13px] font-semibold text-text2 hover:bg-surface">+ Add {what}</span>;
+  return <span className="relative rounded-xl border border-dashed border-line-strong bg-surface2 px-2.5 py-1 text-[13px] font-semibold text-text2 hover:bg-surface">+ Add {what}</span>;
 }
 
 function Placeholder() {
@@ -449,7 +449,7 @@ function Group({ m, v, compact }: { m: LdMilestone; v: V; compact?: boolean }) {
   const drop = v.st === "drag" && m.id === "m6";
   return (
     <div data-ld-group={m.id} className={`flex flex-col gap-1.5 ${drop ? "rounded-xl outline-2 outline-offset-2 outline-accent" : ""} ${v.handles && v.ld3 === "b" ? "rounded-xl border border-dashed border-line p-1" : ""}`}>
-      <span className="text-[12px] leading-4 font-semibold text-text2"><span className="simple-code">{m.code}</span> {m.name}</span>
+      <span className="relative w-fit rounded bg-surface2 text-[12px] leading-4 font-semibold text-text2"><span className="simple-code">{m.code}</span> {m.name}</span>
       {drop && <Placeholder />}
       {fs.map((f) =>
         f.milestones[0] === m.id ? (
@@ -500,8 +500,8 @@ function Arrows({ root, v }: { root: RefObject<HTMLDivElement | null>; v: V }) {
       if (st === "drag") {
         const g = el.querySelector('[data-ld-group="m6"]')?.getBoundingClientRect();
         if (g) {
-          el.style.setProperty("--gx", `${(g.left - box.left) / s + 30}px`);
-          el.style.setProperty("--gy", `${(g.top - box.top) / s + 30}px`);
+          el.style.setProperty("--gx", `${(g.left - box.left) / s + 245}px`);
+          el.style.setProperty("--gy", `${(g.top - box.top) / s - 6}px`);
         }
       }
     };
@@ -512,7 +512,7 @@ function Arrows({ root, v }: { root: RefObject<HTMLDivElement | null>; v: V }) {
   }, [root, ld2, sel, l, st]);
   if (ld2 === "c") return null;
   const picked = paths.find((p) => p.key === "f2-f3");
-  const word = (id: string) => { const f = v.byId.get(id)!; return <><b>{f.code}</b> {f.name}</>; };
+  const word = (id: string) => { const f = v.byId.get(id)!; return <><b className="whitespace-nowrap">{f.code}</b> {f.name}</>; };
   return (
     <>
     <svg ref={me} className="pointer-events-none absolute inset-0 z-0 h-full w-full overflow-visible" aria-hidden>
@@ -525,7 +525,7 @@ function Arrows({ root, v }: { root: RefObject<HTMLDivElement | null>; v: V }) {
         </marker>
       </defs>
       {paths.map((p) => (
-        <path key={p.key} d={p.d} fill="none" markerEnd={p.lit ? "url(#ld-head)" : "url(#ld-head-dim)"} className={p.lit ? "text-accent" : "text-text-faint"} stroke="currentColor" strokeWidth={st === "arrow" && p.key === "f2-f3" ? 4 : p.lit ? 2 : 1.4} strokeOpacity={st === "arrow" && p.key !== "f2-f3" ? 0.35 : p.lit ? 0.95 : sel ? 0.25 : 0.7} />
+        <path key={p.key} d={p.d} fill="none" markerEnd={p.lit ? "url(#ld-head)" : "url(#ld-head-dim)"} className={p.lit ? "text-accent" : "text-text-faint"} stroke="currentColor" strokeWidth={st === "arrow" && p.key === "f2-f3" ? 4 : p.lit ? 2 : 1.4} strokeOpacity={st === "arrow" && p.key !== "f2-f3" ? 0.35 : p.lit ? 0.95 : sel ? 0.12 : 0.7} />
       ))}
     </svg>
     <svg ref={over} className="pointer-events-none absolute inset-0 z-20 h-full w-full overflow-visible" aria-hidden>
@@ -656,35 +656,40 @@ function Row({ a, v }: { a: string; v: V }) {
 function Canvas({ v }: { v: V }) {
   const me = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
-    // a card dragged off its place by hand: F-15 put under Goal 4's last feature (it no longer sits where the ladder puts it)
-    if (me.current) me.current.style.height = `${Math.max(420, innerHeight - me.current.getBoundingClientRect().top - window.scrollY - 16)}px`;
+    // the canvas as tall as the window leaves; a card dragged off its place by hand: F-15 put right of Goal 4 (not where the ladder puts it)
+    if (me.current) me.current.style.height = `${Math.max(420, innerHeight - me.current.getBoundingClientRect().top - 16)}px`;
     const c = me.current?.querySelector<HTMLElement>('[data-ld-card="f15"]');
     const cards = [...(me.current?.querySelectorAll<HTMLElement>("[data-ld-card]") ?? [])];
     const col4 = me.current?.querySelector('[data-ld-goal="g4"]')?.getBoundingClientRect();
     if (!c || !col4 || v.st !== "placed") return;
+    c.style.transform = ""; // measured from its own place (effects may run twice)
     const ms4 = me.current?.querySelector('[data-ld-ms="m10"]')?.getBoundingClientRect();
     const r = c.getBoundingClientRect();
     const z = r.width / c.offsetWidth;
     if (!ms4 || !cards.length) return;
-    Object.assign(c.style, { transform: `translate(${(col4.right + 40 - r.left) / z}px, ${(ms4.top - r.top) / z}px)`, boxShadow: "0 8px 24px rgb(0 0 0 / .18)", borderColor: "var(--accent)", zIndex: "20" });
+    Object.assign(c.style, { transform: `translate(${(col4.right + 60 - r.left) / z}px, ${(ms4.top - r.top) / z}px)`, boxShadow: "0 8px 24px rgb(0 0 0 / .18)", borderColor: "var(--accent)", zIndex: "20" });
   }, [v.st]);
   return (
-    <div ref={me} className="relative h-[560px] overflow-hidden rounded-2xl border border-line" style={{ backgroundImage: "radial-gradient(var(--color-line) 1px, transparent 1px)", backgroundSize: "18px 18px" }}>
-      <div data-ld-canvas className="absolute top-3 left-4 right-4" style={{ transform: "translate(8px, 4px)" }}>
-        <GoalColumns v={v} scale={0.72} />
-      </div>
-      <div className="absolute right-3 bottom-3 z-20 flex items-center gap-1 rounded-full border border-line bg-surface px-1.5 py-1 text-[14px] font-semibold shadow">
+    <>
+    <div className="flex items-center justify-end gap-2">
+      <div className="flex items-center gap-1 rounded-full border border-line bg-surface px-1.5 py-1 text-[14px] font-semibold shadow">
         <span className="grid h-7 w-7 place-items-center rounded-full hover:bg-surface2">−</span>
         <span className="px-1">72%</span>
         <span className="grid h-7 w-7 place-items-center rounded-full hover:bg-surface2">+</span>
         <span className="rounded-full px-2 hover:bg-surface2">Fit</span>
         {v.may && <span className="rounded-full px-2 hover:bg-surface2" title="Put every card back where the ladder places it">Tidy up</span>}
       </div>
-      <div className="absolute bottom-3 left-3 z-20 flex h-24 w-40 gap-1 rounded-lg border border-line bg-surface/95 p-2 shadow" aria-label="Overview">
+      <div className="relative flex h-10 w-28 gap-0.5 rounded-lg border border-line bg-surface p-1" aria-label="Overview">
         {[0.9, 0.75, 0.6, 0.5].map((h, i) => <span key={i} className="flex-1 rounded-sm bg-surface2" style={{ height: `${h * 100}%` }} />)}
-        <span className="absolute top-1.5 left-1.5 h-14 w-24 rounded border-2 border-accent" />
+        <span className="absolute top-0.5 left-0.5 h-6 w-16 rounded border-2 border-accent" />
       </div>
     </div>
+    <div ref={me} className="relative h-[560px] overflow-hidden rounded-2xl border border-line" style={{ backgroundImage: "radial-gradient(var(--color-line) 1px, transparent 1px)", backgroundSize: "18px 18px" }}>
+      <div data-ld-canvas className="absolute top-3 left-4" style={{ width: "calc(100% - 330px)" }}>
+        <GoalColumns v={v} scale={0.72} />
+      </div>
+    </div>
+    </>
   );
 }
 
@@ -728,7 +733,7 @@ function MoveSheet({ v, dialog }: { v: V; dialog?: boolean }) {
           <div key={g.id} className="flex flex-col gap-0.5">
             <span className="text-[12px] font-bold tracking-wide text-text2 uppercase">Goal {i + 1} · {g.name}</span>
             {v.l.milestones.filter((m) => m.goal === g.id).map((m) => (
-              <label key={m.id} className={`flex items-center gap-2 rounded-lg px-2 py-1 text-[14px] ${m.id === "m6" ? "bg-accent-soft font-semibold text-accent-ink" : ""}`}>
+              <label key={m.id} className={`flex items-center gap-2 rounded-lg px-2 py-0.5 text-[14px] leading-[18px] ${m.id === "m6" ? "bg-accent-soft font-semibold text-accent-ink" : ""}`}>
                 <input type="radio" name="ld-move" readOnly checked={m.id === "m6"} />
                 <span className="simple-code">{m.code}</span> {m.name}{m.id === "m4" ? " (now)" : ""}
               </label>
