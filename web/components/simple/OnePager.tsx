@@ -188,7 +188,6 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   const [whole, setWhole] = useState<Set<string>>(new Set());
   // 2026-10-30: the bets whose flow was asked for here ("Draw the flow"): their flow row shows while Oracle draws.
   const [asked, setAsked] = useState<Set<string>>(new Set());
-  // set_section_number (owner, Nov 5): the number a "Needs a look" fix just set, with its Undo.
   const [presenting, setPresenting] = useState(false);
   // build-review (QV3 a): with a working draft, what Present shows: the published version or the draft.
   const [showing, setShowing] = useState<"draft" | "published" | null>(null);
@@ -378,12 +377,22 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
     act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/undo", { params: { path: { change_id: n.change_id } } })), true);
   // A numbers item's one-click fix: who changes the PRD applies it (Undo), approvers and commenters propose it.
   // The draft's fixes are listed from the read (v.fixed), so a reload keeps each with its Undo.
+  // A number changed since the page was read (409) is said in words with who changed it; the
+  // page reads the PRD again, and nothing is applied.
   const fixLook = (x: Schemas["OnePagerLook"]) =>
-    act(() => {
+    act(async () => {
       const f = x.fix!;
-      return unwrap(api.POST("/v1/simple/changes", {
+      const call = api.POST("/v1/simple/changes", {
         body: { session_id: sessionId ?? null, op: f.action, target: f.target, before: { number: f.before }, after: { number: f.value } },
-      }));
+      });
+      const { response, error } = await call;
+      if (response.status === 409) {
+        const detail = (error as { detail?: Schemas["SimpleChangeConflict"] } | undefined)?.detail;
+        const by = typeof detail === "object" ? detail?.changed_by?.name : null;
+        await q.reload();
+        throw new ApiError(409, `This number changed since you read it.${by ? ` Changed by ${by}.` : ""}`);
+      }
+      return unwrap(call);
     });
   const lookChange = (changeId: string, action: "accept" | "decline" | "undo") =>
     act(() => unwrap(api.POST(`/v1/simple/changes/{change_id}/${action}`, { params: { path: { change_id: changeId } }, body: action !== "undo" && sessionId ? { session_id: sessionId } : {} })));
@@ -454,6 +463,8 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   // in the note above the page; the PRD's numbers and codes to look at (ad-onepager) in NeedsALook.
   const heldChecks = v.needs_look.filter((x) => x.kind === "check");
   const prdLooks = v.needs_look.filter((x) => x.kind !== "check");
+  // The draft's fixes are listed for who may act on them (can_edit or can_propose), as the box's fixes are.
+  const lookFixed = v.can_edit || v.can_propose ? v.fixed : [];
   const startWhy = v.decider ? `Ask ${v.decider.name} or an owner to start a review` : "Ask an owner to start a review";
   // qa4-simple-prd-26: a reader who can take no part in a review (no edit, no proposal) sees no Start review.
   const startShown = !sessionId && (v.can_start || v.can_edit || v.can_propose);
@@ -661,10 +672,11 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
       {(!planShown || linesShown || sessionId || !!v.draft || v.changes_in_review > 0 || v.notes.length > 0) && (
       <div className={`mx-auto grid gap-6 py-6 ${!sessionId ? "simple-calm-cols" : ""} ${sessionId ? "px-0" : "px-4"} max-w-[1180px] md:grid-cols-[minmax(0,820px)_var(--simple-margin)]`} data-testid="one-pager-columns">
         <article aria-label="One-pager" className={`rounded-md border border-[var(--simple-rule)] bg-[var(--simple-paper)] ${sessionId ? "px-4" : "px-6"} py-8 shadow-sm md:col-start-1 md:px-12`}>
-          {(prdLooks.length > 0 || v.fixed.length > 0) && (
+          {/* set_section_number (owner, Nov 5): the draft's number fixes, each with its Undo, for who may change or propose the PRD. */}
+          {(prdLooks.length > 0 || lookFixed.length > 0) && (
             <NeedsALook
               items={prdLooks} blocks={v.blocks} sections={v.sections} doc={v.document.slug} version={v.version} codeNames={codeNames}
-              fixes={{ can: v.can_edit || v.can_propose, busy, fixed: v.fixed, fix: fixLook, change: lookChange }}
+              fixes={{ can: v.can_edit || v.can_propose, busy, fixed: lookFixed, fix: fixLook, change: lookChange }}
             />
           )}
           {v.blocks.filter((b) => !(planShown && b.kind === "timeline")).map((b) => (
