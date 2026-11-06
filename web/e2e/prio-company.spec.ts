@@ -85,6 +85,19 @@ for (const scheme of ["light", "dark"] as const) {
         await expect(page.getByRole("dialog")).toBeVisible();
       });
 
+      test("on Value / effort, each feature Show them lists opens the one feature panel", async ({ page }) => {
+        await setUp(page, scheme, phone, "");
+        await page.getByRole("tab", { name: "Value / effort" }).click();
+        const caption = page.getByTestId("line-caption").first();
+        await caption.getByRole("button", { name: "Show them" }).click();
+        const first = caption.getByTestId("line-miss").first();
+        const name = (await first.textContent())!.replace(/ \([A-Z]{1,3}-\d+\)$/, "");
+        await first.click();
+        const panel = page.getByRole("dialog");
+        await expect(panel).toBeVisible();
+        await expect(panel).toContainText(name);
+      });
+
       test("a PM-owned row gets its effort in place, then its score", async ({ page }) => {
         await setUp(page, scheme, phone);
         const pricing = rowByTitle(page, "Pricing page words");
