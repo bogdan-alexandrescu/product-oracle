@@ -59,7 +59,7 @@ function seed(db: Db, ctx: RemovedCtx): Log {
   db.items.filter((s) => s.status === "cut").forEach((s, n) => (log[`feature:${s.key}`] = { at: daysAgo(15 + 7 * n), by: n % 2 ? other : owner }));
   const gb = (db.goal_buckets ??= seedGoalBuckets());
   const gid = stableUuid(`goal-bucket/${ARCHIVED_GOAL}`);
-  if (!gb.goals.some((g) => g.id === gid)) gb.goals.push({ id: gid, title: ARCHIVED_GOAL, order: gb.goals.length + 1, measure: "Billing tickets a month", target: "Under 40", due: "2027-06-30", archived: true });
+  if (!gb.goals.some((g) => g.id === gid)) gb.goals.push({ id: gid, key: "fewer-billing-tickets", title: ARCHIVED_GOAL, order: gb.goals.length + 1, measure: "Billing tickets a month", target: "Under 40", due: "2027-06-30", archived: true });
   log[`goal:${gid}`] = { at: daysAgo(17), by: other };
   const ms = (db.goal_milestones ??= []) as MockMilestone[];
   const mid = stableUuid(`simple-milestone/removed-beta`);
@@ -112,7 +112,9 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
   const m = req.method;
   const owner = ctx.role === "owner";
   const deciderName = ctx.names[ctx.owners[0] ?? ""] ?? null;
-  const log = seed(db, ctx);
+  // The removed list's own seed (an archived goal, a removed milestone) once it is read, so
+  // no other Simple read changes.
+  const log = p[2] === "removed" ? seed(db, ctx) : (db.removed_log ?? {});
   const name = (id: string | undefined) => (id ? (ctx.names[id] ?? null) : null);
   const states = trackStates(db);
   if (p[2] === "removed" && m === "GET" && !p[3]) {
