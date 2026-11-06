@@ -76,12 +76,16 @@ test.describe("at 1512 px", () => {
   test("qa4-settings-14: with no engineering lead, the Roles panel says so in words", async ({ page }) => {
     await openMembers(page);
     const lead = page.getByTestId("roles-lead");
-    await expect(lead).toContainText("Nobody named yet. Pick who carries engineering checks.");
+    // pass-f F-15: "None yet"; what to do is in the (i).
+    await expect(lead.getByTestId("engineering-lead-none")).toHaveText("None yet");
+    await lead.getByRole("button", { name: "About the engineering lead" }).click();
+    await expect(lead.getByRole("tooltip")).toContainText("Pick who carries engineering checks.");
+    await page.keyboard.press("Escape");
     await expect(lead).not.toContainText("People named");
     // Naming one shows the count.
     await page.getByRole("checkbox", { name: "Engineering lead: commenter@example.com" }).check();
     await expect(lead.getByTestId("engineering-lead-count")).toHaveText("1");
-    await expect(lead).not.toContainText("Nobody named yet");
+    await expect(lead.getByTestId("engineering-lead-none")).toHaveCount(0);
   });
 
   test("qa4-settings-36: a viewer sees the View only chip on Members, as on Company", async ({ page }) => {
@@ -95,26 +99,35 @@ test.describe("at 1512 px", () => {
 test.describe("at 1440 px", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test("qa4-settings-10: member emails stay on one line, the full address on hover", async ({ page }) => {
+  // pass-f F-52 replaces qa4-settings-10's one-line rule: the whole address shows, wrapping
+  // only after its @, and its title still holds it.
+  test("qa4-settings-10 / pass-f F-52: member emails read whole, wrapping only at the @", async ({ page }) => {
     await openMembers(page);
     const emails = page.getByTestId("member-email");
     await expect(emails.first()).toBeVisible();
-    const oneLine = (el: Locator) =>
+    const readsWhole = (el: Locator) =>
       el.evaluate((e) => {
-        const range = document.createRange();
-        range.selectNodeContents(e);
-        const tops = [...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top));
-        return tops.every((t) => Math.abs(t - tops[0]) <= 1);
+        // Nothing cut: the box is as wide as its words.
+        if (e.scrollWidth > e.clientWidth + 1 || e.getAttribute("title") !== e.textContent) return false;
+        // Each part between breaks (before and after the @) stays on one line.
+        const walker = document.createTreeWalker(e, NodeFilter.SHOW_TEXT);
+        for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+          const range = document.createRange();
+          range.selectNodeContents(n);
+          const tops = [...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top));
+          if (!tops.every((t) => Math.abs(t - tops[0]) <= 1)) return false;
+        }
+        return true;
       });
     const check = async () => {
       for (const el of await emails.all()) {
         const text = await el.innerText();
-        expect(await oneLine(el), text).toBe(true);
+        expect(await readsWhole(el), text).toBe(true);
         await expect(el).toHaveAttribute("title", text);
       }
     };
     await check();
-    // With a member's panel open the table is narrower: still one line.
+    // With a member's panel open the table is narrower: still whole.
     await memberRow(page, "viewer@example.com").getByTestId("member-open").click();
     await expect(page.getByTestId("member-inspector")).toBeVisible();
     await check();

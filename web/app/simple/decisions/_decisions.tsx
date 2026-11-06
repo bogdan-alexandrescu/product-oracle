@@ -8,15 +8,17 @@ import { Icon } from "@/components/ds/Icon";
 import { toast } from "@/components/ds/Toast";
 import { FeatureFoundContext, OpenFeatureContext, type OpenFeature } from "@/components/simple/OpenFeature";
 import { usePhone } from "@/components/simple/PrdTimeline";
-import { useMe } from "@/lib/me";
-import { FeaturePanel, itemFor } from "../roadmap/_panel";
+import { DecisionSheetHost, editedWords, useDecisionSheet } from "@/components/simple/questions/DecisionSheet";
+import { FeaturePanel, itemFor, useItemChanged } from "../roadmap/_panel";
 import { QuestionRow, useQuestionActions, useSourceLine, type Question } from "@/components/simple/questions/Questions";
 import { SimpleEmpty, SimplePage } from "@/components/simple/SimplePage";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { calendarDay, useCompanyZone } from "@/lib/dates";
 import { zoneName } from "@/lib/format";
+import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
+import { useWaitingList, WaitingRow } from "@/components/simple/WaitingItems";
 
 import { DeliveryLine, emailWords, slackWords } from "../meetings/_delivery";
 import { DecidedItem, LINK, momentWords } from "../meetings/_flow";
@@ -68,6 +70,13 @@ export function SimpleDecisions() {
     if (!loaded || !window.location.hash) return;
     document.getElementById(window.location.hash.slice(1))?.scrollIntoView({ block: "center" });
   }, [loaded]);
+  // inbox-meeting-proposals fix: ?question= (the Inbox's Open on a proposal) lands on that
+  // question, marked, wherever the view lists it.
+  const linked = params.get("question") ?? "";
+  useEffect(() => {
+    if (!loaded || !linked) return;
+    document.querySelector(`[data-question-id="${CSS.escape(linked)}"]`)?.scrollIntoView({ block: "center" });
+  }, [loaded, linked]);
   const set = (key: string, value: string) => {
     // The address as it is now, written at once (Next keeps useSearchParams in step): a
     // second filter changed right after the first keeps the first's change.
@@ -95,6 +104,8 @@ export function SimpleDecisions() {
   };
   const actions = useQuestionActions(() => q.reload());
   const questions = d?.questions ?? [];
+  // inbox-meeting-proposals fix 4: the Inbox's Open on a question decided since says so here.
+  const linkedDecided = questions.find((x) => x.id === linked && x.column === "decided");
   const filtered = !!(prd || goal || meeting);
   const clear = () => {
     window.history.replaceState(null, "", inUrl ? `${pathname}?view=${inUrl}` : pathname);
@@ -107,11 +118,13 @@ export function SimpleDecisions() {
   const phone = usePhone();
   const { can } = useMe();
   const roadmap = useQuery("simple-roadmap:decisions", () => unwrap(api.GET("/v1/simple/roadmap", {})));
+  useItemChanged(() => Promise.all([q.reload(), roadmap.reload()]));
   const found = useCallback((f: Parameters<OpenFeature>[0]) => !!itemFor(roadmap.data?.items ?? [], f), [roadmap.data]);
   return (
     <SimplePage title="Decisions" lead={`${LEADS[view]} Dates are in ${zoneName(zone)}.`}>
       <OpenFeatureContext.Provider value={setFeature}>
       <FeatureFoundContext.Provider value={found}>
+      <DecisionSheetHost onChanged={() => q.reload()}>
       {feature && (
         <FeaturePanel key={`${feature.code}|${feature.name}`} feature={feature} phone={phone} canChange={can("create_simple_change")} onClose={() => setFeature(null)} />
       )}
@@ -124,10 +137,16 @@ export function SimpleDecisions() {
         </div>
         <ViewSwitch value={view} onChange={pick} />
       </div>
+      {d && <NewDecision />}
       {q.loading && !d && <Loading />}
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
-      {d && view === "list" && <QuestionList d={d} actions={actions} filtered={filtered} onClear={clear} />}
-      {d && view === "board" && <Board questions={questions} actions={actions} />}
+      {linkedDecided && (
+        <p className="simple-meta" role="status" data-testid="linked-decided">
+          {linkedDecided.code} {linkedDecided.title} is decided already{linkedDecided.decided_label ? `. ${linkedDecided.decided_label}` : ""}.
+        </p>
+      )}
+      {d && view === "list" && <QuestionList d={d} actions={actions} filtered={filtered} onClear={clear} linked={linked} />}
+      {d && view === "board" && <Board questions={questions} actions={actions} linked={linked} />}
       {d && view !== "board" && (
         <>
           {d.meetings.length === 0 && other.length === 0 && !d.runs?.length && (
@@ -172,9 +191,41 @@ export function SimpleDecisions() {
           </span>
         </p>
       )}
+      </DecisionSheetHost>
       </FeatureFoundContext.Provider>
       </OpenFeatureContext.Provider>
     </SimplePage>
+  );
+}
+
+/** ec1 b: + New decision opens the decision sheet, empty, with Pick for who decides. */
+function NewDecision() {
+  const { can } = useMe();
+  const sheet = useDecisionSheet();
+  if (!sheet || !can("create_decision")) return null;
+  return (
+    <div>
+      <button type="button" className="simple-button simple-button-primary" data-testid="decisions-new" onClick={() => sheet.open({ kind: "new-decision" })}>
+        + New decision
+      </button>
+    </div>
+  );
+}
+
+/** eq2 b: + Ask a question, at the top of Waiting for you: the sheet, with its PRD to pick (every PRD the person reads, as the PRD filter lists them). */
+function AskQuestion({ prds: all, questions }: { prds: { id: string; title: string }[]; questions: Question[] }) {
+  const { can } = useMe();
+  const sheet = useDecisionSheet();
+  // The PRDs that already have questions first (the sheet starts on the first), then the others.
+  const asked = new Set(questions.map((x) => x.prd.slug));
+  const prds = [...all.filter((p) => asked.has(p.id)), ...all.filter((p) => !asked.has(p.id))];
+  if (!sheet || !prds.length || !can("create_simple_change")) return null;
+  return (
+    <div>
+      <button type="button" className="simple-button" data-testid="questions-ask" onClick={() => sheet.open({ kind: "new-question", prds })}>
+        + Ask a question
+      </button>
+    </div>
   );
 }
 
@@ -236,23 +287,40 @@ function QuestionCard({ label, testId, questions, count, source, children }: { l
 }
 
 /** List: waiting for you (first five, then Show N more), then waiting for others; decided ones sit with the meeting that took them, or outside meetings. */
-function QuestionList({ d, actions, filtered, onClear }: { d: Schemas["SimpleDecisionsOut"]; actions: Actions; filtered: boolean; onClear: () => void }) {
-  const [all, setAll] = useState(false);
+function QuestionList({ d, actions, filtered, onClear, linked }: { d: Schemas["SimpleDecisionsOut"]; actions: Actions; filtered: boolean; onClear: () => void; linked: string }) {
   const open = d.questions.filter((x) => x.column !== "decided");
+  // eq2 b: one withdrawn here just now keeps its place, struck through, with Undo.
+  const gone = useDecisionSheet()?.withdrawn ?? {};
   // qa-simple-decide-15: only what the person can act on waits for them (a viewer: nothing).
-  const mine = open.filter((x) => x.waiting_for_me && x.status === "proposed" && (x.can.decide || x.can.propose));
-  const others = open.filter((x) => !mine.includes(x));
+  const mine = open.filter((x) => (x.waiting_for_me && x.status === "proposed" && (x.can.decide || x.can.propose)) || (x.status === "withdrawn" && !!gone[x.id]));
+  // A linked question past the first five shows them all.
+  const [all, setAll] = useState(() => mine.findIndex((x) => x.id === linked) >= FIRST);
+  const others = open.filter((x) => !mine.includes(x) && x.status !== "withdrawn");
   const shown = all ? mine : mine.slice(0, FIRST);
+  // home-waiting-one-list: and everything else that waits on me, from the one list Home reads
+  // (run stops, broken links, dates, drafts, proposals, goal suggestions), each with its action;
+  // the filters narrow the PRDs' questions only, so these show unfiltered.
+  const waiting = useWaitingList();
+  const extra = filtered ? [] : (waiting.data?.items ?? []).filter((i) => i.kind !== "question");
+  const count = Math.min(d.waiting_count, mine.filter((x) => x.status === "proposed").length) + extra.length;
   return (
     <>
-      <QuestionCard label="Waiting for you" testId="questions-mine" questions={mine.length ? mine : open} count={Math.min(d.waiting_count, mine.length)} source>
-        {mine.length === 0 ? (
-          <p className="simple-meta">
-            Nothing waits on you. {filtered && <ClearFilters onClear={onClear} />}
-          </p>
+      <QuestionCard label="Waiting for you" testId="questions-mine" questions={mine.length ? mine : open} count={count} source>
+        <AskQuestion prds={d.prds} questions={d.questions} />
+        {mine.length === 0 && extra.length === 0 ? (
+          !filtered && !waiting.data && !waiting.error ? (
+            <p className="simple-meta" role="status">
+              Loading what waits on you…
+            </p>
+          ) : (
+            <p className="simple-meta">
+              Nothing waits on you. {filtered && <ClearFilters onClear={onClear} />}
+            </p>
+          )
         ) : (
           <ul>
-            {shown.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} />)}
+            {shown.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} linked={x.id === linked} />)}
+            {extra.map((i) => <WaitingRow key={i.key} item={i} />)}
           </ul>
         )}
         {mine.length > FIRST && (
@@ -263,7 +331,7 @@ function QuestionList({ d, actions, filtered, onClear }: { d: Schemas["SimpleDec
       </QuestionCard>
       {others.length > 0 && (
         <QuestionCard label="Waiting for others" testId="questions-others" questions={others} count={others.length}>
-          <ul>{others.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} forOthers />)}</ul>
+          <ul>{others.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} forOthers linked={x.id === linked} />)}</ul>
         </QuestionCard>
       )}
     </>
@@ -288,8 +356,9 @@ const TWO_COLUMN_PLACE: Record<Question["column"], string> = {
 };
 
 /** Board: three columns by `column`, soonest first (the API's order); on a phone, one column at a time behind tabs. */
-function Board({ questions, actions }: { questions: Question[]; actions: Actions }) {
-  const [tab, setTab] = useState<Question["column"]>("needs_input");
+function Board({ questions, actions, linked }: { questions: Question[]; actions: Actions; linked: string }) {
+  // On a phone, the tab of a linked question.
+  const [tab, setTab] = useState<Question["column"]>(() => questions.find((x) => x.id === linked)?.column ?? "needs_input");
   const of = (k: Question["column"]) => questions.filter((x) => x.column === k);
   return (
     <div data-testid="questions-board" className="flex flex-col gap-3">
@@ -319,7 +388,7 @@ function Board({ questions, actions }: { questions: Question[]; actions: Actions
               ) : (
                 <ul>
                   {/* qa4-simple-decide-6: someone else's question says for whom here too, as on the List. */}
-                  {of(c.key).map((x) => <QuestionRow key={x.id} q={x} mode={c.key} actions={actions} forOthers />)}
+                  {of(c.key).map((x) => <QuestionRow key={x.id} q={x} mode={c.key} actions={actions} forOthers linked={x.id === linked} />)}
                 </ul>
               )}
             </section>
@@ -392,7 +461,7 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
               const n = /^D-(\d+):/.exec(x)?.[1];
               const anchor = n && !rowNumbers.has(Number(n)) ? `d-${n}` : undefined;
               return (
-                <li key={x} id={anchor} className={anchor ? "target:bg-[var(--simple-edited)]" : undefined}>
+                <li key={x} id={anchor} className={anchor ? "target:bg-[var(--simple-edited)]" : undefined} data-user-content>
                   {x}
                 </li>
               );
@@ -404,7 +473,7 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
         <div>
           <h3 className="text-[18px] leading-[26px] font-[650]">Action items</h3>
           <ul className="list-disc pl-5">
-            {minutes.action_items.map((a, i) => <li key={i}>{a.title} · {a.owner_name ?? "no owner"}{a.due_date ? ` · by ${calendarDay(a.due_date, { weekday: "short" })} ${calendarDay(a.due_date)}` : ""}</li>)}
+            {minutes.action_items.map((a, i) => <li key={i}><span data-user-content>{a.title}</span> · {a.owner_name ?? "no owner"}{a.due_date ? ` · by ${calendarDay(a.due_date, { weekday: "short" })} ${calendarDay(a.due_date)}` : ""}</li>)}
           </ul>
         </div>
       )}
@@ -421,7 +490,7 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
           <div key={kind}>
             <h3 className="text-[18px] leading-[26px] font-[650]">{kind === "note" ? "Notes" : "Comments"}</h3>
             <ul className="list-disc pl-5 [overflow-wrap:anywhere]" data-testid={`meeting-group-${kind}s`}>
-              {notes.map((n) => <li key={n.id}>{n.text} · {n.by_name}</li>)}
+              {notes.map((n) => <li key={n.id}><span data-user-content>{n.text}</span> · {n.by_name}</li>)}
             </ul>
           </div>
         );
@@ -430,6 +499,12 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
       {g.decisions.length ? <Rows rows={g.decisions} /> : <p className="simple-meta">None.</p>}
     </section>
   );
+}
+
+/** ec1 b: an open row names who decides ("Avery Stone decides · <when>"), as its sheet does; "waiting for a decider" only when no one is named. */
+function rowMeta(r: Row, when: string, edited: string | null): string {
+  if (r.status === "proposed") return [r.approver ? `${r.approver.name} decides` : "No approver", when, r.approver ? null : STATUS_WORDS.proposed, edited].filter(Boolean).join(" · ");
+  return [r.chosen, r.approver?.name ?? "No approver", when, r.status === "decided" ? null : STATUS_WORDS[r.status] ?? "open", edited].filter(Boolean).join(" · ");
 }
 
 /** qa-simple-decide-19: a decision's state in plain words. */
@@ -521,6 +596,8 @@ function StopRow({ run, s }: { run: RunGroup; s: RunGroup["stops"][number] }) {
 /** Decisions taken: the round check (an open one, the flag), "<code> <title>" (a PRD's question keeps its code), then its answer, who decides and the day and time. */
 function Rows({ rows }: { rows: Row[] }) {
   const zone = useCompanyZone();
+  const { me } = useMe();
+  const sheet = useDecisionSheet();
   return (
     <ul>
       {rows.map((r) => {
@@ -528,7 +605,11 @@ function Rows({ rows }: { rows: Row[] }) {
         // qa-simple-decide-19: a question decided in a meeting shows as one decided outside it:
         // its code, its title, then the answer, as the API sends them (never read out of the title).
         const code = r.code ?? `D-${r.number}`;
-        const { title, chosen } = r;
+        const { title } = r;
+        // ec1 b: an open decision's title opens its sheet; one withdrawn here just now stays, struck through, with Undo.
+        const opens = !!sheet && r.status === "proposed" && !!r.can;
+        const gone = r.status === "withdrawn" ? sheet?.withdrawn[r.id] : undefined;
+        const edited = editedWords(r.edited_at, r.edited_by, me?.user_id ?? undefined, zone);
         return (
           <DecidedItem
             key={r.id}
@@ -538,18 +619,36 @@ function Rows({ rows }: { rows: Row[] }) {
             className="!items-start !gap-[14px] border-t border-line py-[14px] first:border-t-0 first:pt-0 last:pb-0 target:bg-[var(--simple-edited)]"
           >
             <span aria-hidden className={`simple-ico ${done ? "simple-ico-done" : ""}`}>
-              <Icon name={done ? "check" : "flag"} size={20} stroke={1.7} />
+              <Icon name={done ? "check" : gone ? "x" : "flag"} size={20} stroke={1.7} />
             </span>
             <span className="simple-rb flex-1">
               <span className="break-words">
-                <span className="simple-code">{code}</span> <b className="font-[650]">{title}</b>
+                <span className="simple-code">{code}</span>{" "}
+                {gone ? (
+                  <s className="font-[650] text-text2" data-testid="decision-withdrawn" data-user-content>
+                    {title}
+                  </s>
+                ) : opens ? (
+                  <button type="button" data-testid="decision-open" className="text-left font-[650] underline decoration-1 underline-offset-4 hover:text-accent-ink" onClick={() => sheet!.open({ kind: "decision", row: r })} data-user-content>
+                    {title}
+                  </button>
+                ) : (
+                  <b className="font-[650]" data-user-content>{title}</b>
+                )}
               </span>
               <span className="simple-meta">
-                {[chosen, r.approver?.name ?? "No approver", momentWords(r.decided_at ?? r.created_at, zone), done ? null : STATUS_WORDS[r.status] ?? "open"]
-                  .filter(Boolean)
-                  .join(" · ")}
+                {gone
+                  ? "Withdrawn by you just now · kept in the history"
+                  : rowMeta(r, momentWords(r.decided_at ?? r.created_at, zone), edited)}
               </span>
             </span>
+            {gone && (
+              <span className="simple-actions min-[601px]:w-[232px]">
+                <button type="button" className="simple-button" disabled={gone.undoing} onClick={() => sheet!.undoWithdraw(r.id)}>
+                  Undo
+                </button>
+              </span>
+            )}
           </DecidedItem>
         );
       })}

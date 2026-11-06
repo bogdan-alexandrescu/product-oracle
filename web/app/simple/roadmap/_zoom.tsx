@@ -21,13 +21,14 @@ import {
 import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
 import { addMonths, calendarDay } from "@/lib/dates";
 
-import { FixButtons, type Act } from "./_card";
+import { FixButtons, fixCount, type Act } from "./_card";
 import {
   addDays,
   barSpan,
   broken,
   closedItem,
   daysBetween,
+  brokenLinks,
   liveBreaks,
   ms,
   planGoal,
@@ -212,6 +213,9 @@ interface Common {
   act: Act;
   canChange: boolean;
   byId: Map<string, Item>;
+  /** Review: under a filter, the whole roadmap's broken links (the side menu's count), and how to see them all. */
+  all?: number;
+  onAll?: () => void;
 }
 
 export interface TimelineProps extends Common {
@@ -302,66 +306,89 @@ export function ConflictPanel({
   byId,
   onShow,
   phone,
+  all,
+  onAll,
 }: Common & { onShow: (key: string) => void }) {
-  const list = data.items.flatMap((i) =>
-    closedItem(i)
-      ? []
-      : broken(i)
-          .filter((f) => f.kind === "dependency_order")
-          .map((f) => ({ i, f })),
-  );
+  // roadmap-decide: every broken link of the working draft, a cut item others depend on
+  // included: the same ones Needs a decision, Home and the side menu count.
+  const list = data.items.flatMap((i) => brokenLinks(i).map((f) => ({ i, f })));
   const [shut, setShut] = useState(false);
+  // Review: a filter hides some: "1 broken link here, 3 in all", with Clear filters; only
+  // when the whole roadmap holds more than these filters show.
+  const elsewhere = all !== undefined && all !== list.length && !!onAll;
+  const showAll = elsewhere ? (
+    <span className="flex flex-none items-center gap-2 text-sm font-normal text-text2" data-testid="conflicts-all">
+      {all} in all
+      <button type="button" onClick={onAll} className="font-semibold text-accent-ink hover:underline">
+        Clear filters
+      </button>
+    </span>
+  ) : null;
   if (!list.length)
     return (
-      <p
+      <div
         data-testid="conflicts"
-        className="mb-2 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-text2"
+        className="mb-2 flex flex-wrap items-center gap-x-2 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-text2"
       >
-        No broken links
-      </p>
+        {elsewhere ? "No broken links here," : "No broken links"}
+        {showAll}
+      </div>
     );
   return (
     <section
       data-testid="conflicts"
       className="mb-2 rounded-xl border border-crit bg-surface"
     >
-      <button
-        type="button"
-        aria-expanded={!shut}
-        onClick={() => setShut(!shut)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold text-crit"
-      >
-        ⚠ {list.length} broken {list.length === 1 ? "link" : "links"}{" "}
-        <span className="ml-auto text-text2">{shut ? "Show" : "Hide"}</span>
-      </button>
+      <div className="flex w-full flex-wrap items-center gap-x-2 px-3 py-2 text-sm">
+        <button
+          type="button"
+          aria-expanded={!shut}
+          onClick={() => setShut(!shut)}
+          className={`flex min-w-0 items-center gap-2 text-left font-semibold text-crit ${elsewhere ? "" : "flex-1"}`}
+        >
+          ⚠ {list.length} broken {list.length === 1 ? "link" : "links"}
+          {elsewhere ? " here," : <span className="ml-auto font-normal text-text2">{shut ? "Show" : "Hide"}</span>}
+        </button>
+        {showAll}
+        {elsewhere && (
+          <button type="button" aria-expanded={!shut} onClick={() => setShut(!shut)} className="ml-auto text-text2">
+            {shut ? "Show" : "Hide"}
+          </button>
+        )}
+      </div>
       {!shut && (
         <ul className="divide-y divide-line border-t border-line">
-          {list.map(({ i, f }) => (
-            <li
-              key={i.id}
-              data-testid="conflict"
-              data-item={i.key}
-              className={`flex gap-3 px-3 py-2 ${phone ? "flex-col" : "flex-wrap items-center"}`}
-            >
-              <button
-                type="button"
-                onClick={() => onShow(i.key)}
-                className="min-w-0 flex-1 text-left text-sm text-text hover:underline"
+          {list.map(({ i, f }) => {
+            // Review: with more than the three fixes (a cut item's Remove the dependency per dependent),
+            // the fixes take their own line under the sentence, as the tray has them.
+            const stacked = phone || fixCount(f) > 3;
+            return (
+              <li
+                key={`${i.id}-${f.kind}-${f.subject}`}
+                data-testid="conflict"
+                data-item={i.key}
+                className={`flex px-3 py-2 ${stacked ? "flex-col gap-1" : "flex-wrap items-center gap-3"}`}
               >
-                {f.reason}
-              </button>
-              <div className="max-w-full min-w-0">
-                <FixButtons
-                  item={i}
-                  flag={f}
-                  items={byId}
-                  act={act}
-                  canChange={canChange}
-                  inline={!phone}
-                />
-              </div>
-            </li>
-          ))}
+                <button
+                  type="button"
+                  onClick={() => onShow(i.key)}
+                  className={`text-left text-sm text-text hover:underline ${stacked ? "" : "min-w-[16rem] flex-1"}`}
+                >
+                  {f.reason}
+                </button>
+                <div className="max-w-full min-w-0">
+                  <FixButtons
+                    item={i}
+                    flag={f}
+                    items={byId}
+                    act={act}
+                    canChange={canChange}
+                    inline={!stacked}
+                  />
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>
@@ -1268,6 +1295,17 @@ const TimelineRow = memo(function TimelineRow({
               </span>
             </span>
           )}
+          {/* roadmap-decide: an item with no dates of its own (Oracle's estimate on both ends) whose
+           * bar has no room for its dates says so beside it, never a bare unlabeled pill. */}
+          {!live && i.start.estimated && i.end.estimated && (fit || bx + bw - Math.max(bx, sl) <= 120) && (
+            <span
+              data-testid="bar-no-dates"
+              className="pointer-events-none absolute top-[9px] z-[11] rounded bg-surface px-1 text-xs leading-4 whitespace-nowrap text-text2"
+              style={bx + bw + 96 <= trackW ? { left: bx + bw + 4 } : bx >= 96 ? { left: bx - 92 } : { left: Math.max(bx, 0) + 4 }}
+            >
+              No dates yet
+            </span>
+          )}
           {live && (
             // The Gantt's live words while a bar is dragged: its dates, and a link it would break.
             <span
@@ -1316,7 +1354,7 @@ function QuarterList(props: TimelineProps) {
             <h3 className="flex items-center gap-2 border-b border-line px-3 py-2 text-sm font-semibold">
               {q.label}{" "}
               <span className="font-normal text-text2">
-                {quarterWords(q)} · {items.length} items
+                {quarterWords(q)} · {items.length} {items.length === 1 ? "item" : "items"}
               </span>
               {q === tq && (
                 <span

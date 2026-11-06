@@ -125,7 +125,7 @@ async def test_an_oracle_citation_naming_no_baseline_item_is_refused(client):
     (problem,) = resp.json()["errors"]
     assert problem["code"] == "invalid_citation" and problem["cite_key"] == "o-g1"
     assert problem["message"] == (
-        "citation #1 (o-g1) is invalid: ref names no baseline item of this company"
+        "citation #1 (o-g1) is invalid: ref names no Ground Truth item of this company"
     )
     # Not a baseline ref at all, and another company's item: refused alike.
     other = await make_tenant("Other Co")

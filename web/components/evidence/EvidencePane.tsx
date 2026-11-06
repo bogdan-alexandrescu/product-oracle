@@ -52,7 +52,7 @@ import {
   type SectionLinkTarget,
   type SectionLinkView,
 } from "@/lib/evidence";
-import { formatDate, formatDateTime, plural } from "@/lib/format";
+import { citationRefText, formatDate, formatDateTime, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -230,7 +230,7 @@ export function EvidencePane({ doc, n, title, latest }: { doc: string; n: number
   ) : capsReady && !canAdd ? (
     can("create_comment") ? (
       <Notice testId="evidence-commenter">
-        Section links are added by approvers. You can add an evidence link to a section&rsquo;s baseline item from the{" "}
+        Section links are added by approvers. You can add an evidence link to a section&rsquo;s Ground Truth item from the{" "}
         <Link href={`/documents/${doc}/v/${n}`} className="underline">
           Document tab
         </Link>
@@ -681,8 +681,8 @@ function TargetInspector(props: Shared & { row: MatrixRow }) {
 function TargetOpen({ target: t }: { target: SectionLinkTarget }) {
   if (t.type === "entity") {
     return (
-      <LinkButton variant="hero" href={`/baseline?entity=${t.id}`}>
-        Open in Baseline
+      <LinkButton variant="hero" href={`/ground-truth?entity=${t.id}`}>
+        Open in Ground Truth
       </LinkButton>
     );
   }
@@ -882,7 +882,7 @@ function CitationInspector({ citation: c, sections, result }: { citation: Eviden
   return (
     <Inspector
       eyebrow={`Draft citation · ${sourceLabel(c.source)}`}
-      title={c.title || c.ref}
+      title={c.title || citationRefText(c.ref)}
       testId="evidence-citation-inspector"
       chips={<Chip hero>{sourceLabel(c.source)}</Chip>}
       action={
@@ -920,8 +920,8 @@ function CitationBody({ c }: { c: EvidenceCitation }) {
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[13px] font-semibold text-text2">{sourceLabel(c.source)}</span>
       </div>
-      <span className="font-semibold">{c.title || c.ref}</span>
-      {c.title && c.ref !== c.title && <span className="text-[13px] break-all text-text2">{c.ref}</span>}
+      <span className="font-semibold">{c.title || citationRefText(c.ref)}</span>
+      {c.title && c.ref !== c.title && <span className="text-[13px] break-all text-text2">{citationRefText(c.ref)}</span>}
       {c.excerpt && <blockquote className="border-l-2 border-line-strong pl-2.5">{c.excerpt}</blockquote>}
       {(!c.excerpt || !c.retrieved_at) && (
         <span className="text-[13px] text-text2">
@@ -1187,9 +1187,9 @@ function AddSectionLinkForm({ section, rows, add }: { section: SectionEvidence; 
         <KindPrecision {...{ kind, setKind, precision, setPrecision, claim, setClaim }} />
         <Field label="Links to">
           <select aria-label="Links to" className={INPUT} value={to} onChange={(e) => setTo(e.target.value)} aria-busy={entitiesQ.loading}>
-            <option value="">Pick a baseline item, evidence or source item</option>
+            <option value="">Pick a Ground Truth item, evidence or source item</option>
             {entities.length > 0 && (
-              <optgroup label="Baseline items">
+              <optgroup label="Ground Truth items">
                 {entities.map((e) => (
                   <option key={e.id} value={`entity:${e.id}`}>
                     {e.title} · {cap(e.type)}

@@ -78,7 +78,7 @@ async def _entity(db, entity_id: uuid.UUID) -> Entity:
 @router.get("/documents/{doc}/versions/{n}/trace", response_model=VersionTrace)
 async def get_version_trace(doc: str, n: int, principal: Reader, db: TenantDB) -> VersionTrace:
     """A version's trace: its anchors (template, composition revision, snapshots), each
-    section's links to the baseline and the goals they serve, and the outputs that
+    section's links to the Ground Truth and the goals they serve, and the outputs that
     depend on each section (artifacts, roadmap items) with their freshness."""
     document, version = await _version(db, doc, n)
     return await views.version_trace(db, principal, document, version)
@@ -109,7 +109,7 @@ async def get_version_impact(doc: str, n: int, principal: Reader, db: TenantDB) 
 
 async def _check_target(db, principal: Principal, link) -> None:
     if link.entity_id is not None and await db.get(Entity, link.entity_id) is None:
-        raise HTTPException(422, f"unknown baseline entity {link.entity_id}")
+        raise HTTPException(422, f"unknown Ground Truth entity {link.entity_id}")
     if link.evidence_id is not None and await db.get(Evidence, link.evidence_id) is None:
         raise HTTPException(422, f"unknown evidence {link.evidence_id}")
     if link.source_item_id is not None:
@@ -143,7 +143,7 @@ async def _check_target(db, principal: Principal, link) -> None:
 async def create_section_links(
     doc: str, n: int, body: SectionLinksCreate, principal: Approver, db: TenantDB
 ) -> list[DocumentSectionLinkOut]:
-    """Link sections of a version to baseline items, evidence or source items (the
+    """Link sections of a version to Ground Truth items, evidence or source items (the
     internal per-claim links behind O1c). Pinned to the section's current hash. An
     approved version's links are pinned with it (409)."""
     document, version = await _version(db, doc, n)
@@ -227,7 +227,7 @@ async def delete_section_link(item_id: uuid.UUID, principal: Approver, db: Tenan
 
 @router.get("/baseline/entities/{entity_id}/trace", response_model=EntityTrace)
 async def get_entity_trace(entity_id: uuid.UUID, principal: Reader, db: TenantDB) -> EntityTrace:
-    """A baseline node's trace: up to the goals it serves, down to requirements and
+    """A Ground Truth node's trace: up to the goals it serves, down to requirements and
     acceptance criteria, the sections linking it and the outputs built on it; for a
     requirement, its assumptions, blockers, alternatives, experiments, decisions, owners
     and risks. A feature serving no confirmed goal is flagged, with its priority."""
@@ -365,7 +365,7 @@ async def create_artifact_dependencies(
     body: DependenciesCreate, principal: Approver, db: TenantDB
 ) -> list[ArtifactDependencyOut]:
     """Record what an artifact version (or a derived document version) was made from:
-    document sections, whole document versions or baseline items, anchored at their
+    document sections, whole document versions or Ground Truth items, anchored at their
     current hash. Idempotent per anchor."""
     try:
         rows = await staleness.add_dependencies(

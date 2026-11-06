@@ -90,6 +90,20 @@ async def test_owners_see_counts_per_member_and_kind(client, ctx):
     assert docs["last_synced_at"] is None
 
 
+async def test_a_member_reads_by_their_name(client, ctx):
+    """protects=pass F F-55: a member who has a display name is listed by it (the email
+    beside it), one without stays null; fails_when=the name is dropped (always null);
+    no_claim=how the row shows it (Playwright)."""
+    async with tenant_session(ctx.tenant_id) as s:
+        (await s.get(User, ctx.users["approver"].id)).name = "Avery Example"
+        await s.commit()
+
+    body = await _company(client, ctx)
+    by = {m["member"]["email"]: m["member"] for m in body["members"]}
+    assert by["approver@example.com"]["name"] == "Avery Example"
+    assert by["owner@example.com"]["name"] is None
+
+
 @pytest.mark.parametrize("role", ["approver", "commenter", "viewer"])
 async def test_only_owners_see_company_coverage(client, ctx, role):
     """protects=the Company tab is the owners' alone;

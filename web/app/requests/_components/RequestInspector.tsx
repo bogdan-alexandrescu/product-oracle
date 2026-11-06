@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent, type ReactNode } from "react";
 
+import { DeleteMenu } from "@/components/ArtifactMenu";
 import { Button, Chip, Inspector, InspectorSection, LinkButton } from "@/components/ds";
 import { free, startPrdHref } from "@/components/RequestsBehind";
 import { ErrorNote, INPUT } from "@/components/ui";
@@ -72,6 +73,7 @@ export function RequestInspector({
   goalTitles,
   onChange,
   onTheme,
+  onDeleted,
 }: {
   request: Request;
   /** The queue, for Merge into. */
@@ -81,6 +83,8 @@ export function RequestInspector({
   onChange: (request: Request) => void;
   /** A theme's problem confirmed, dismissed or edited from the inspector (H10). */
   onTheme?: (theme: Theme) => void;
+  /** port-an-decisions: an owner deleted it to Settings › Trash (Restore there). */
+  onDeleted?: () => void;
 }) {
   const { me, can } = useMe();
   // #370: links and decisions are an approver's (the decision routes' role), the suggestion's buttons its routes'.
@@ -124,6 +128,21 @@ export function RequestInspector({
       label="Request"
       testId="request-inspector"
       title={request.title}
+      // port-an-decisions: Delete… (owners only, its operation's role) sends it to Settings › Trash.
+      action={
+        <DeleteMenu
+          title={request.title}
+          op="delete_request"
+          dependents={async () => ({
+            root: { type: "request", id: request.id, title: request.title, kind: "request" },
+            items: [],
+            published: false,
+            working_runs: [],
+          })}
+          remove={(query) => unwrap(api.DELETE("/v1/requests/{request_id}", { params: { path: { request_id: request.id }, query: { reason: query.reason } } }))}
+          onDeleted={onDeleted}
+        />
+      }
       chips={
         <>
           <Chip kind={STATE[request.state].kind}>{STATE[request.state].label}</Chip>
@@ -627,15 +646,15 @@ function Decision({
                     <>
                       <p>
                         A request is qualified under a confirmed goal, and there are no goals yet. Oracle proposes your goals when it
-                        builds the baseline from your sources; confirm one, then link it here. Or disqualify this request as No goal.
+                        builds the Ground Truth from your sources; confirm one, then link it here. Or disqualify this request as No goal.
                       </p>
                       {can("confirm_entity") ? (
-                        <LinkButton href="/baseline?build=1" className="self-start">
-                          Build the baseline
+                        <LinkButton href="/ground-truth?build=1" className="self-start">
+                          Build the Ground Truth
                         </LinkButton>
                       ) : (
-                        <Link href="/baseline" className="self-start font-semibold text-accent-ink underline-offset-2 hover:underline">
-                          See the baseline
+                        <Link href="/ground-truth" className="self-start font-semibold text-accent-ink underline-offset-2 hover:underline">
+                          See the Ground Truth
                         </Link>
                       )}
                     </>

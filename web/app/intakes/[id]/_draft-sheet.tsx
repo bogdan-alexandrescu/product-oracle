@@ -40,7 +40,7 @@ const lineUsd = (n: number) => (Number.isInteger(n) ? `$${n}` : usd(n));
  */
 export function draftEstimateLine(e: Schemas["EstimateOut"]): string {
   const base = e.segments.filter((s) => s.name === "baseline" && !s.reused).reduce((n, s) => n + s.estimate_usd, 0);
-  const parts = base > 0 ? ` (${usd(base)} to build the baseline, ${usd(Math.max(0, Math.round((e.total_usd - base) * 100) / 100))} to draft the PRD)` : "";
+  const parts = base > 0 ? ` (${usd(base)} to build the Ground Truth, ${usd(Math.max(0, Math.round((e.total_usd - base) * 100) / 100))} to draft the PRD)` : "";
   const gate = e.needs_approval
     ? `above the ${lineUsd(e.approval_threshold_usd)} approval line · an owner approves it before it starts`
     : `below the ${lineUsd(e.approval_threshold_usd)} approval line · starts at once`;
@@ -49,10 +49,10 @@ export function draftEstimateLine(e: Schemas["EstimateOut"]): string {
 
 /** Why the baseline is rebuilt first, as its tooltip says it. */
 function reasonText(status: ReviewStatus): string {
-  if (status.reason === "build_under_way" || status.build_under_way) return "A baseline build is under way";
-  if (status.reason === "never_reviewed" || !status.last_approved_at) return "No baseline review has been approved yet";
+  if (status.reason === "build_under_way" || status.build_under_way) return "A Ground Truth build is under way";
+  if (status.reason === "never_reviewed" || !status.last_approved_at) return "No Ground Truth review has been approved yet";
   const days = status.age_days ?? 0;
-  return `The last baseline review was approved ${plural(days, "day")} ago`;
+  return `The last Ground Truth review was approved ${plural(days, "day")} ago`;
 }
 
 const getReviewStatus = () => unwrap(api.GET("/v1/baseline/review-status"));
@@ -174,7 +174,7 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
       setReuse(false);
       const fresh = await getReviewStatus().catch(() => null);
       if (fresh) review.setData(() => fresh);
-      setNotice(`${fresh ? reasonText(fresh) : "The current baseline can no longer be used"}: Oracle rebuilds it first.`);
+      setNotice(`${fresh ? reasonText(fresh) : "The current Ground Truth can no longer be used"}: Oracle rebuilds it first.`);
       return;
     }
     setError(errorMessage(e));
@@ -264,7 +264,7 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
 
         <section aria-labelledby={`${id}-baseline`} className="min-w-0">
           <h3 id={`${id}-baseline`} className="mb-1.5 font-semibold text-text">
-            Baseline
+            Ground Truth
           </h3>
           {review.error && <ErrorNote>{review.error}</ErrorNote>}
           {!status && review.loading && <Loading />}
@@ -278,7 +278,7 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
                   checked={reusing}
                   onChange={() => setReuse(true)}
                 />
-                Use the current baseline (approved {status.last_approved_at ? formatDay(status.last_approved_at) : "recently"})
+                Use the current Ground Truth (approved {status.last_approved_at ? formatDay(status.last_approved_at) : "recently"})
               </label>
               <label className="flex cursor-pointer items-center gap-2 text-text">
                 <input
@@ -295,14 +295,14 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
           {status && !reusable && none && (
             // qa-onboarding-5: a new company has no baseline to reuse: Oracle builds one first.
             <div data-testid="draft-baseline-none" className="flex flex-col gap-1">
-              <p className="text-text">Build the baseline{rebuildUsd != null ? ` (${usd(rebuildUsd)})` : ""}</p>
-              <p className="text-sm text-text2">No baseline exists yet: Oracle builds it first, then drafts the PRD.</p>
+              <p className="text-text">Build the Ground Truth{rebuildUsd != null ? ` (${usd(rebuildUsd)})` : ""}</p>
+              <p className="text-sm text-text2">No Ground Truth exists yet: Oracle builds it first, then drafts the PRD.</p>
             </div>
           )}
           {status && !reusable && !none && (
             <p className="flex items-center gap-2 text-text">
-              Oracle rebuilds the baseline first
-              <InfoTip label="the baseline" align="start">
+              Oracle rebuilds the Ground Truth first
+              <InfoTip label="the Ground Truth" align="start">
                 {reasonText(status)}
               </InfoTip>
             </p>

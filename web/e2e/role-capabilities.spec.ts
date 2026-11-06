@@ -84,9 +84,12 @@ for (const role of ["approver", "commenter", "viewer"] as const) {
     await expect(page.getByTestId("account-detail").getByTestId("fact-claude-account")).toHaveCount(0);
     await expect(page.locator("body")).not.toContainText("ada@example.com");
 
-    // Autonomy: the levels read as text; no picker, no owner-only note.
+    // Autonomy: the levels read as text behind the row's (i); no picker, no owner-only note.
     await settingsNav(page).getByTestId("nav-autonomy").click();
-    await expect(page.getByTestId("autonomy-row-priorities").getByTestId("autonomy-sentence")).toBeVisible();
+    const priorities = page.getByTestId("autonomy-row-priorities");
+    await priorities.getByRole("button", { name: "About Order priorities" }).click();
+    await expect(priorities.getByTestId("autonomy-sentence")).toBeVisible();
+    await priorities.getByRole("button", { name: "About Order priorities" }).click();
     await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveText("View only");
     await expect(page.getByTestId(/^autonomy-row-/).getByRole("group").getByRole("button")).toHaveCount(0);
     await expect(page.getByTestId("autonomy-owner-only")).toHaveCount(0);

@@ -97,12 +97,12 @@ test.describe("desktop", () => {
     expect(off.style).toBe("dashed");
   });
 
-  test("qa4-plan-23: Edit plan's add form says a new item is not in the baseline", async ({ page }) => {
+  test("qa4-plan-23: Edit plan's add form says a new item is not in the Ground Truth", async ({ page }) => {
     await openEditPlan(page);
     const form = page.getByRole("form", { name: "Add an item" });
-    const pick = form.getByRole("combobox", { name: "Baseline feature" });
-    await expect(pick.locator("option:checked")).toHaveText("New: not in the baseline");
-    await expect(form).toContainText("Baseline feature");
+    const pick = form.getByRole("combobox", { name: "Ground Truth feature" });
+    await expect(pick.locator("option:checked")).toHaveText("New: not in the Ground Truth");
+    await expect(form).toContainText("Ground Truth feature");
     await expect(form).not.toContainText("From Baseline");
     await expect(form).not.toContainText("A new item");
   });
@@ -148,7 +148,7 @@ test.describe("desktop: one approval state", () => {
     await expect(page.getByTestId("plan-live-version")).toHaveCount(0);
     await expect(page.getByTestId("plan-edit")).toHaveCount(0);
     await expect(row(page, "Threshold alerts on spend").getByTestId("plan-state")).toHaveText("Proposed · new");
-    await expect(row(page, "Daily alert digest email").getByTestId("plan-state")).toHaveText("Proposed · new");
+    await expect(row(page, "Weekly alert digest").getByTestId("plan-state")).toHaveText("Proposed · new");
     await row(page, "Threshold alerts on spend").getByTestId("plan-title").click();
     await expect(inspector(page).getByTestId("plan-history").getByTestId("plan-history-version")).toHaveText(["Added to Now in draft 1 from PRD v1"]);
 

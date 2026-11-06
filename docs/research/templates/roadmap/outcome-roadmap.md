@@ -67,7 +67,7 @@ brief: [summary, goals, problems, brief-items, brief-roadmap, not-doing, top-ris
 layout:
   type: matrix
   rows:
-    source: confirmed_goals           # baseline Goal entities, status confirmed
+    source: confirmed_goals           # Ground Truth goals, status confirmed
     order_by: weight                  # goal weight, highest first
     header_fields: [code, title, metric, current, target, horizon, owner]
     extra_rows:

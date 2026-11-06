@@ -91,6 +91,18 @@ def describe(row: Any) -> dict[str, Any]:
         from oracle.simple import trash_items
 
         return trash_items.describe(row)
+    from oracle.decisions.models import Decision
+
+    if isinstance(row, Decision):
+        from oracle.simple import decision_sheet
+
+        return decision_sheet.describe(row)
+    from oracle.requests.models import ProductRequest
+
+    if isinstance(row, ProductRequest):
+        from oracle.requests import service as requests_service
+
+        return requests_service.describe_for_trash(row)
     if isinstance(row, Document):
         return {
             "type": "document",
@@ -99,6 +111,11 @@ def describe(row: Any) -> dict[str, Any]:
             "title": row.title,
             "kind": row.kind,
         }
+    from oracle.roadmap.models import ProductTrack
+
+    if isinstance(row, ProductTrack):
+        return {"type": "track", "id": str(row.id), "slug": None, "title": row.title,
+                "kind": "Track"}  # fmt: skip
     if isinstance(row, ProductIntake):
         return {"type": "intake", "id": str(row.id), "slug": None, "title": row.title,
                 "kind": "intake"}  # fmt: skip
@@ -197,6 +214,13 @@ async def find_root(db: AsyncSession, root_type: str, ref: str, *, trashed: bool
         stmt = select(kind).where(kind.id == uuid.UUID(ref))  # type: ignore[attr-defined]
         if root_type == "goal":
             stmt = stmt.where(kind.type == "goal")  # type: ignore[attr-defined]
+    elif root_type in ("decision", "question"):
+        # edit-decisions (oracle.simple.decision_sheet): a decision or a PRD question.
+        from oracle.decisions.models import Decision
+
+        stmt = select(Decision).where(Decision.id == uuid.UUID(ref))
+        prd = Decision.origin == "prd"
+        stmt = stmt.where(prd if root_type == "question" else ~prd)
     elif root_type == "intake":
         stmt = select(ProductIntake).where(ProductIntake.id == uuid.UUID(ref))
     else:
@@ -238,21 +262,22 @@ async def resolve(db: AsyncSession, root_type: str, root: Any) -> Resolved:
     return out
 
 
+def _said(resolved: Resolved, row: Any) -> dict[str, Any]:
+    """An item as the delete dialog and Trash name it. qa4-docs-26, F-69: a run says when it
+    ran and which document it wrote, in both."""
+    if isinstance(row, Run):
+        titles = {d.id: d.title for d in resolved.documents}
+        return {**describe(row), "created_at": row.created_at.isoformat(),
+                "wrote": titles.get(row.document_id)}  # fmt: skip
+    return describe(row)
+
+
 def preview(resolved: Resolved) -> dict[str, Any]:
     """What the delete dialog lists."""
     rows = [r for r in resolved.rows() if r is not resolved.root]
-    titles = {d.id: d.title for d in resolved.documents}
-
-    def item(row: Any) -> dict[str, Any]:
-        # qa4-docs-26: a run says when it ran and which document it wrote.
-        if isinstance(row, Run):
-            return {**describe(row), "created_at": row.created_at,
-                    "wrote": titles.get(row.document_id)}  # fmt: skip
-        return describe(row)
-
     return {
         "root": describe(resolved.root),
-        "items": [item(r) for r in rows],
+        "items": [_said(resolved, r) for r in rows],
         "published": resolved.published,
         "working_runs": [str(r.id) for r in resolved.runs if r.status in WORKING],
     }
@@ -317,7 +342,7 @@ async def delete_root(
             # Requests it released: a restore links back the ones still free.
             "released_requests": released,
         },
-        items=[describe(r) for r in rows if r is not root],
+        items=[_said(resolved, r) for r in rows if r is not root],
         deleted_by=principal.id,
         deleted_by_name=await _actor_name(db, principal),
         reason=reason,
@@ -369,8 +394,89 @@ def _feature_goal_models() -> dict[str, type]:
     return {"feature": RoadmapItem, "goal": Entity}
 
 
+def _decision_model() -> type:
+    from oracle.decisions.models import Decision
+
+    return Decision
+
+
+def _request_model() -> type:
+    from oracle.requests.models import ProductRequest
+
+    return ProductRequest
+
+
 def _models() -> tuple[type, ...]:
-    return (Document, ProductIntake, Run, *_feature_goal_models().values())
+    from oracle.roadmap.models import ProductTrack
+
+    return (
+        Document,
+        ProductIntake,
+        Run,
+        *_feature_goal_models().values(),
+        _decision_model(),
+        _request_model(),
+        ProductTrack,
+    )
+
+
+async def delete_track(
+    db: AsyncSession, principal: Principal, track: Any, reason: str | None = None
+) -> TrashEntry:
+    """removed-tracks: a track deleted in Simple goes to Trash on its own. Its features go to
+    no track (their PRD stays); the entry keeps which they were, and a restore puts back
+    the ones still on no track."""
+    from oracle.roadmap.models import RoadmapItem
+
+    at = now()
+    held = list(
+        await db.scalars(
+            select(RoadmapItem.id).where(RoadmapItem.track_id == track.id).execution_options(**ALL)
+        )
+    )
+    entry = TrashEntry(
+        root_type="track",
+        root_id=track.id,
+        root={**describe(track), "item_ids": [str(i) for i in held]},
+        items=[],
+        deleted_by=principal.id,
+        deleted_by_name=await _actor_name(db, principal),
+        reason=reason,
+        published=False,
+        purge_after=at + timedelta(days=RETENTION_DAYS),
+    )
+    entry.created_at = at
+    db.add(entry)
+    await db.flush()
+    if held:
+        await db.execute(
+            update(RoadmapItem)
+            .where(RoadmapItem.id.in_(held))
+            .values(track_id=None)
+            .execution_options(synchronize_session=False)
+        )
+    track.deleted_at, track.deleted_by = at, principal.id
+    track.deleted_reason, track.trash_entry_id = reason, entry.id
+    await audit.record(db, principal, "trash.delete", "track", track.id,
+                       {"entry_id": str(entry.id), "root": entry.root, "items": [],
+                        "reason": reason})  # fmt: skip
+    await db.flush()
+    return entry
+
+
+async def _track_items_back(db: AsyncSession, entry: TrashEntry) -> None:
+    """A restored track takes back its features that are still on no track."""
+    from oracle.roadmap.models import RoadmapItem
+
+    ids = [uuid.UUID(i) for i in entry.root.get("item_ids") or []]
+    if entry.root_type != "track" or not ids:
+        return
+    await db.execute(
+        update(RoadmapItem)
+        .where(RoadmapItem.id.in_(ids), RoadmapItem.track_id.is_(None))
+        .values(track_id=entry.root_id)
+        .execution_options(synchronize_session=False)
+    )
 
 
 async def get_entry(db: AsyncSession, entry_id: uuid.UUID) -> TrashEntry:
@@ -442,8 +548,10 @@ async def _not_restored(db: AsyncSession, entry: TrashEntry) -> list[dict[str, A
 
 
 # trash-features-goals (owner's answer, Nov 5): whoever deleted a feature or a goal restores
-# it too; everything else in Trash is the owners' alone.
-OWN_RESTORE = frozenset({"feature", "goal"})
+# it too (edit-decisions: and a decision or a PRD question); everything else in Trash is the
+# owners' alone. port-an-decisions: and a meeting's agenda item (a request is an owner's
+# delete).
+OWN_RESTORE = frozenset({"feature", "goal", "decision", "question", "agenda_item"})
 
 
 def may_restore(principal: Any, entry: TrashEntry) -> bool:
@@ -465,6 +573,11 @@ async def restore_entry(
     from oracle.simple import trash_items
 
     await trash_items.before_restore(db, entry)
+    if entry.root_type == "agenda_item":
+        # port-an-decisions: the row goes back onto its meeting's agenda.
+        from oracle.simple import meetings
+
+        await meetings.restore_agenda_item(db, entry)
     for model in _models():
         await db.execute(
             update(model)
@@ -473,6 +586,8 @@ async def restore_entry(
             .execution_options(synchronize_session=False)
         )
     from oracle.roadmap import alerts
+
+    await _track_items_back(db, entry)
 
     dropped = await trash_items.after_restore(db, entry, principal)
     await alerts.reopen_after_trash(db, entry.root.get("closed_alerts") or [])
@@ -515,10 +630,19 @@ async def purge_entry(
 ) -> None:
     """Delete the entry's rows for good (what hangs off them goes by cascade; a feature's
     milestones and dependents drop it first)."""
+    from oracle.roadmap.models import ProductTrack
     from oracle.simple import trash_items
 
     await trash_items.before_purge(db, entry)
-    for model in (Run, Document, ProductIntake, *_feature_goal_models().values()):
+    for model in (
+        Run,
+        Document,
+        ProductIntake,
+        *_feature_goal_models().values(),
+        _decision_model(),
+        _request_model(),
+        ProductTrack,
+    ):
         await db.execute(
             delete(model)
             .where(model.trash_entry_id == entry.id, model.deleted_at.is_not(None))
@@ -598,23 +722,23 @@ async def only_in_trash(db: AsyncSession, kind: str) -> bool:
     return bool(at) and all(d is not None for d in at)
 
 
-async def deleted_for_good(db: AsyncSession, kind: str) -> bool:
-    """No document of this kind is left, live or in Trash, and one was purged: a review of
-    them reviews what was deleted for good (Home's "Next review meeting")."""
+async def deleted_for_good(db: AsyncSession, kind: str) -> datetime | None:
+    """When the last document of this kind was purged, when none is left, live or in
+    Trash: a review of them reviews what was deleted for good (Home's "Next review
+    meeting" says so, with the day). None while one is left or none was ever purged."""
+    from sqlalchemy import func
+
     from oracle.models import AuditEvent
 
     left = await db.scalar(
         select(Document.id).where(Document.kind == kind).limit(1).execution_options(**ALL)
     )
     if left is not None:
-        return False
-    purged = await db.scalar(
-        select(AuditEvent.id)
-        .where(
+        return None
+    return await db.scalar(
+        select(func.max(AuditEvent.created_at)).where(
             AuditEvent.action == "trash.purge",
             (AuditEvent.data["root"]["kind"].astext == kind)
             | AuditEvent.data["items"].contains([{"kind": kind}]),
         )
-        .limit(1)
     )
-    return purged is not None

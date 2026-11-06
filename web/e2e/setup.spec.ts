@@ -7,7 +7,7 @@ import { login, pickZone } from "./helpers";
 /**
  * A1 First-run path: a new company's owner sets Oracle up from the Set up checklist on Home,
  * through the UI only. An owner has seven steps, A3's Engineering lead and B1's Build
- * baseline among them (the default company's baseline was built before).
+ * Ground Truth among them (the default company's Ground Truth was built before).
  *
  * no_claim for every test here: the in-browser mock's /v1/setup stands in for the API's
  * (api/tests/test_setup.py covers the API's step rules); the mock's connections and sources
@@ -248,8 +248,8 @@ test("setup: with every step done the checklist is not drawn", async ({ page }) 
   // protects=a finished setup leaves Home alone; fails_when=the panel or the chip still
   // draws; no_claim=a step going back to open later (covered by the Reset test).
   await login(page);
-  // The default company's baseline was built before and its tools are connected: invite,
-  // domains, Build baseline and Connect tools done.
+  // The default company's Ground Truth was built before and its tools are connected: invite,
+  // domains, Build Ground Truth and Connect tools done.
   await expect(panel(page).getByTestId("panel-count")).toHaveText("5 of 8");
   await nameLeadFromSetup(page);
   await confirmHorizonsFromSetup(page);

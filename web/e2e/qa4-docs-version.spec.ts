@@ -1,15 +1,14 @@
 import { expect, test, type Page } from "./test";
 
-import { login, openSection, section, sectionStrip } from "./helpers";
+import { login, openSection, section } from "./helpers";
 
 // QA pass 4, docs lane: the version page /documents/<doc>/v/<n> (Checkout redesign v2 with a
 // held rewrite, Team workspaces v2 with a changed approved section, Saved carts v2 with a
-// brief, Clinic outreach v5), driven as a person on the mock.
+// brief), driven as a person on the mock.
 
 const CHECKOUT = "/documents/checkout-redesign/v/2";
 const WORKSPACES = "/documents/team-workspaces/v/2";
 const CARTS = "/documents/saved-carts/v/2";
-const OUTREACH = "/documents/clinic-outreach/v/5";
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 
@@ -66,10 +65,16 @@ test.describe("desktop", () => {
 
   test("qa4-docs-21: the changed-sections banner names the section by its heading, not its key", async ({ page }) => {
     await openVersion(page, WORKSPACES);
-    const banner = page.locator('[data-warning="locked_section_changed"]').filter({ visible: true });
-    await expect(banner).toContainText("Sections approved in v1 changed in this version:");
-    await expect(banner.getByRole("link", { name: "3. Scope" })).toBeVisible();
-    await expect(banner).not.toContainText(": scope");
+    // B-09: the warning is in the header chip's tip; the body names the section in one line.
+    await expect(page.locator('[data-warning]:not([data-state="done"])').filter({ visible: true })).toHaveCount(0);
+    await page.getByTestId("version-warnings-chip").filter({ visible: true }).click();
+    const tip = page.getByRole("tooltip").filter({ visible: true });
+    await expect(tip).toContainText("Sections approved in v1 changed in this version:");
+    await expect(tip).not.toContainText(": scope");
+    const line = page.getByTestId("warned-sections").filter({ visible: true });
+    await expect(line).toContainText("Still open in");
+    await expect(line.getByRole("link", { name: "3. Scope" })).toBeVisible();
+    await expect(line).not.toContainText("scope");
   });
 
   test("qa4-docs-31: the Export menu says Markdown, not a bare MD", async ({ page }) => {
@@ -97,9 +102,9 @@ test.describe("desktop", () => {
 
   test("qa4-docs-35: review progress reads the same in Brief, Full and without a brief, on one card row", async ({ page }) => {
     await openVersion(page, CARTS);
-    const progress = sectionStrip(page).getByTestId("review-progress");
+    // PT1 a: a PRD has no outline rail; the panel is the one count there.
     const stat = panel(page).getByTestId("stat-reviewed");
-    await expect(progress).toHaveText(/^\d+ of 8 sections reviewed$/);
+    await expect(stat).toContainText(/\d+\/8/);
     await expect(stat.locator("dt")).toHaveText("Reviewed");
     const sameRow = async () => {
       const a = (await stat.boundingBox())!;
@@ -109,21 +114,12 @@ test.describe("desktop", () => {
     await expect.poll(sameRow).toBe(true);
 
     await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Full" }).click();
-    await expect(progress).toHaveText(/^\d+ of 20 sections reviewed$/);
+    await expect(stat).toContainText(/\d+\/20/);
     await expect(stat.locator("dt")).toHaveText("Reviewed");
     await expect.poll(sameRow).toBe(true);
 
     await page.goto(CHECKOUT);
-    await expect(sectionStrip(page).getByTestId("review-progress")).toHaveText(/^\d+ of 11 sections reviewed$/);
-  });
-
-  test("qa4-docs-36: with the outline hidden, the progress says N of M reviewed in words", async ({ page }) => {
-    await openVersion(page, OUTREACH);
-    await page.getByTestId("outline-collapse").click();
-    const progress = page.getByTestId("section-switcher").getByTestId("review-progress");
-    await expect(progress).toBeVisible();
-    await expect(progress).toHaveText(/^\d+ of \d+ reviewed$/);
-    await expect(progress).not.toContainText("/");
+    await expect(panel(page).getByTestId("stat-reviewed")).toContainText(/\d+\/11/);
   });
 
   test("qa4-docs-58: the brief Summary names the goal in words, with no goal code", async ({ page }) => {
@@ -140,7 +136,11 @@ test.describe("phone", () => {
   test("qa4-docs-37: the bottom bar names the open section's place in words, apart from the reviewed count", async ({ page }) => {
     await openVersion(page, CHECKOUT);
     const sections = page.getByTestId("phone-sections");
-    await expect(sections).toHaveText(/^Section \d+ of 11$/);
+    // At arrival the lead section is current and has no number, so it names itself (PT1 a).
+    await expect(sections).toHaveText("Introduction");
+    // A numbered section counts against the chapters, not every subsection (7, not 11).
+    await openSection(page, "goal-trace");
+    await expect(sections).toHaveText(/^Section \d+ of 7$/);
     await expect(sections).not.toContainText("/");
     await sections.click();
     const sheet = page.getByRole("dialog", { name: "Sections" });

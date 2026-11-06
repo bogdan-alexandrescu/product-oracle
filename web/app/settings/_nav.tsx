@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { SELECT_FIELD } from "@/app/settings/_components/fields";
 import { LinkButton, ScrollStrip } from "@/components/ds";
 import { DETAILED_HOME, SIMPLE_HOME } from "@/lib/experience-paths";
-import { useSettingsTabs } from "@/lib/settings-tabs";
+import { settingsTabOf, useSettingsTabs } from "@/lib/settings-tabs";
 
 /**
  * Where a setup step's "Back to Home" goes (qa-onboarding-34), by the page's ?from: Detailed
@@ -40,6 +40,8 @@ export function SettingsNav() {
     pathname.startsWith(`${href}/`) ||
     (href === "/settings/sources" && (pathname === "/sources" || pathname.startsWith("/sources/")));
   const current = tabs.find((it) => isOn(it.href));
+  // Visual QA ST-6: a page the role has no tab for (Analytics for a viewer) still names itself.
+  const outside = current ? undefined : settingsTabOf(pathname);
   return (
     <nav
       aria-label="Settings"
@@ -55,11 +57,12 @@ export function SettingsNav() {
           <select
             id="settings-nav-select"
             data-testid="settings-nav-select"
-            value={current?.href ?? ""}
+            value={current?.href ?? outside?.href ?? ""}
             onChange={(e) => e.target.value && router.push(e.target.value)}
             className={SELECT_FIELD}
           >
-            {!current && <option value="">Choose a page</option>}
+            {!current && !outside && <option value="">Choose a page</option>}
+            {outside && <option value={outside.href}>{outside.label}</option>}
             {tabs.map((it) => (
               <option key={it.href} value={it.href}>
                 {it.label}

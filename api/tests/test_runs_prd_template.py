@@ -147,7 +147,40 @@ async def test_the_prd_draft_prompt_names_the_template_and_pastes_the_skeleton(c
 # (oracle.runs.plan_tables.prompt_lines) in a draft with a source PRD;
 # ROADMAP_PINS_BEFORE_PLAN_TABLES proves nothing else moved. Refreshed again when the block
 # named a left-out item and the Dates from words (roadmap-plan-tables review).
+# Refreshed for the Ground Truth name (PR 1248), whose only change is REF_SHOWN in the
+# citation contract; ROADMAP_PINS_BEFORE_REF_SHOWN proves nothing else moved. Refreshed
+# again when every run task prompt and tool description said Ground Truth (PR 1248 fix 3),
+# whose only changes are GROUND_TRUTH_WORDS; ROADMAP_PINS_BEFORE_RUN_WORDS proves it.
 ROADMAP_PINS = {
+    (True, "roadmap-board", False): ["9613d52aa0c16cf8", "5732c38f1cf0cfd5"],
+    (True, "roadmap-board", True): ["a4a95206047fdf96", "084e8b87302298e9"],
+    (True, None, False): ["1b96f2dc239f62c6", "10ce24fb41aaee47"],
+    (True, None, True): ["bd594b501cd4b679", "56ea655243fd668a"],
+    (False, "roadmap-board", False): ["3e5ce5501519b40f", "d091317512690468"],
+    (False, "roadmap-board", True): ["3e5ce5501519b40f", "d091317512690468"],
+    (False, None, False): ["c70934903283b379", "f74fc8430acd4095"],
+    (False, None, True): ["c70934903283b379", "f74fc8430acd4095"],
+}
+# (now, before) for each change PR 1248 fix 3 made to the roadmap draft's prompt.
+GROUND_TRUTH_WORDS = (
+    (" " + flows.GROUND_TRUTH_LINE, ""),
+    ("the Ground Truth graph: goals", "the baseline graph: goals"),
+    ("propose a Ground Truth change", "propose a baseline change"),
+    ("the Ground Truth item's kind and key", "the baseline item's kind and key"),
+    ("names no Ground Truth item of the company", "names no baseline item of the company"),
+    ("No features in the Ground Truth yet", "No features in the baseline yet"),
+)
+ROADMAP_PINS_BEFORE_RUN_WORDS = {
+    (True, "roadmap-board", False): ["a426a949491c3ead", "3ca0471e079e6999"],
+    (True, "roadmap-board", True): ["c9f9835f6afe3949", "e7f6e2f8c76b75a4"],
+    (True, None, False): ["8a52a8c76d0fa2d6", "ed2654b566fca59c"],
+    (True, None, True): ["4c82b60c6e473d05", "42df8c4ec976d7d7"],
+    (False, "roadmap-board", False): ["589a9cf63322a53e", "5c3e6ef12aa60857"],
+    (False, "roadmap-board", True): ["589a9cf63322a53e", "5c3e6ef12aa60857"],
+    (False, None, False): ["5457921931101e93", "7c500982af7d831b"],
+    (False, None, True): ["5457921931101e93", "7c500982af7d831b"],
+}
+ROADMAP_PINS_BEFORE_REF_SHOWN = {
     (True, "roadmap-board", False): ["9dfc859b14298eed", "b22b851d6c2385d7"],
     (True, "roadmap-board", True): ["facb642d1bbb759c", "353fa2fc5e4b7127"],
     (True, None, False): ["e78152dee48bdddc", "8dbff203db77111d"],
@@ -157,6 +190,11 @@ ROADMAP_PINS = {
     (False, None, False): ["2e25bae37d8aa957", "36b2abd791eb6c40"],
     (False, None, True): ["2e25bae37d8aa957", "36b2abd791eb6c40"],
 }
+# What PR 1248 added to the contract's ref: the ref is an identifier, never shown to people.
+REF_SHOWN = (
+    ": an identifier Oracle reads, never shown to people, who read it as the Ground Truth's "
+    "decision <key>"
+)
 ROADMAP_PINS_BEFORE_PLAN_TABLES = {
     (True, "roadmap-board", False): ["c1822234fcbf6ed6", "d629969c71f442c7"],
     (True, "roadmap-board", True): ["fad4e7a40af88bf5", "362224006ca4045c"],
@@ -259,6 +297,16 @@ def test_the_roadmap_draft_prompt_is_byte_for_byte_unchanged(case):
     digests = [hashlib.sha256(s[2].encode()).hexdigest()[:16] for s in steps]
     assert digests == ROADMAP_PINS[case]
     prompts = [s[2] for s in steps]
+    for now, before in GROUND_TRUTH_WORDS:
+        prompts = [p.replace(now, before) for p in prompts]
+    assert [hashlib.sha256(p.encode()).hexdigest()[:16] for p in prompts] == (
+        ROADMAP_PINS_BEFORE_RUN_WORDS[case]
+    )
+    assert all(p.count(REF_SHOWN) == 1 for p in prompts)
+    prompts = [p.replace(REF_SHOWN, "") for p in prompts]
+    assert [hashlib.sha256(p.encode()).hexdigest()[:16] for p in prompts] == (
+        ROADMAP_PINS_BEFORE_REF_SHOWN[case]
+    )
     if with_source:
         plan = plan_tables.engineering_plan(None, [])
         blocks = [

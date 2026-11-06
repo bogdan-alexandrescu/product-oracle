@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 
 import { Button, Chip, Icon, InfoTip, LinkButton, Notice } from "@/components/ds";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { chooseFromDrive, drivePickerReady, preloadDrivePicker, type PickerConfig } from "@/lib/google-picker";
 import { errorMessage } from "@/lib/use-query";
 
@@ -84,6 +84,17 @@ export function ReconnectToChoose({ className = "" }: { className?: string }) {
   );
 }
 
+/**
+ * Pass F F-63: why Drive's picker did not open, as one short line; the server's own words
+ * (which may name settings) go behind an (i). A failed script load has no words of its own.
+ */
+export function driveLoadFailure(e: unknown): { line: string; why: string } {
+  if (!(e instanceof ApiError)) return { line: "Could not open Google Drive.", why: "" };
+  if (e.status === 404) return { line: "Could not open Google Drive: it is not set up yet.", why: e.message };
+  if (e.status === 403) return { line: "Could not open Google Drive: you do not have access.", why: e.message };
+  return { line: "Could not open Google Drive.", why: e.message };
+}
+
 let configPromise: Promise<PickerConfig> | null = null;
 
 function pickerConfig(): Promise<PickerConfig> {
@@ -124,6 +135,10 @@ export function DriveFiles({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [config, setConfig] = useState<PickerConfig | null>(null);
+  // Pass F F-63: Drive's picker could not load: say so in plain words, the server's words
+  // behind an (i), with Try again.
+  const [loadFailed, setLoadFailed] = useState<{ line: string; why: string } | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const latest = useRef(files);
   useEffect(() => {
     latest.current = files;
@@ -137,11 +152,11 @@ export function DriveFiles({
         await preloadDrivePicker();
         if (live) setConfig(c);
       })
-      .catch((e) => live && setError(errorMessage(e)));
+      .catch((e) => live && setLoadFailed(driveLoadFailure(e)));
     return () => {
       live = false;
     };
-  }, [reconnect]);
+  }, [reconnect, attempt]);
 
   function choose() {
     if (!config || !drivePickerReady()) return;
@@ -175,6 +190,23 @@ export function DriveFiles({
     <div className="flex min-w-0 flex-col gap-2">
       {reconnect ? (
         <ReconnectToChoose />
+      ) : loadFailed ? (
+        <div className="flex flex-wrap items-center gap-1" role="alert">
+          <span className="text-sm text-crit">{loadFailed.line}</span>
+          {loadFailed.why && (
+            <InfoTip label="why Drive did not open" align="start">
+              {loadFailed.why}
+            </InfoTip>
+          )}
+          <Button
+            onClick={() => {
+              setLoadFailed(null);
+              setAttempt((n) => n + 1);
+            }}
+          >
+            Try again
+          </Button>
+        </div>
       ) : (
         <div className="flex flex-wrap items-center gap-1">
           <Button variant="solid" icon="doc" onClick={choose} disabled={busy || !config}>
@@ -229,9 +261,9 @@ export function DriveFiles({
       {pasting ? (
         <div className="flex flex-col gap-1.5">
           <label htmlFor={pasteId} className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
-            Drive file ids
+            Drive links
           </label>
-          <span className="text-[13px] leading-4 text-text2">Ids or links copied from Drive, one per line.</span>
+          <span className="text-[13px] leading-4 text-text2">One per line.</span>
           <textarea
             id={pasteId}
             value={pasted}
@@ -242,7 +274,7 @@ export function DriveFiles({
           />
           <div className="flex items-center gap-1">
             <Button onClick={addPasted} disabled={!pasted.trim()}>
-              Add ids
+              Add
             </Button>
             <Button variant="ghost" onClick={() => setPasting(false)}>
               Cancel
@@ -252,7 +284,7 @@ export function DriveFiles({
       ) : (
         <div>
           <Button variant="ghost" className="-ml-2.5" onClick={() => setPasting(true)}>
-            Paste ids
+            Paste links
           </Button>
         </div>
       )}
@@ -306,10 +338,13 @@ export function DriveNotes({
   notes,
   picked,
   sourceName,
+  onChoose,
 }: {
   notes: SourceNote[];
   picked: DriveFile[];
   sourceName: string;
+  /** Pass F F-18: opens the source's file picker, to pick another doc or folder in place of one Oracle cannot read. */
+  onChoose?: () => void;
 }) {
   const byId = new Map(picked.map((f) => [f.id, f]));
   const nameOf = (n: SourceNote) => byId.get(n.external_id)?.name ?? n.name ?? n.external_id;
@@ -345,7 +380,13 @@ export function DriveNotes({
                 {nameOf(n)}
               </span>
             </span>
-            {folder && <span className="text-text2">— its docs are hidden until Oracle can read it again</span>}
+            {/* Pass F F-36: why behind an (i), not a sentence on the card. */}
+            {folder && <InfoTip label={`why ${nameOf(n)} is hidden`}>Its docs are hidden until Oracle can read it again.</InfoTip>}
+            {onChoose && (
+              <Button onClick={onChoose} aria-label={`Choose another in place of ${nameOf(n)}`}>
+                Choose another
+              </Button>
+            )}
           </li>
         );
       })}
@@ -355,9 +396,12 @@ export function DriveNotes({
           <Chip kind="line" title={skippedTitle(reason)}>
             Skipped
           </Chip>
-          <span className="min-w-0 text-text2">{reason.replace(/^Skipped:\s*/, "")}</span>
           <span className="tnum flex-none font-medium">{names.length === 1 ? "1 doc" : `${names.length} docs`}</span>
           <NameList names={names} />
+          {/* D-10: why behind the (i), not a sentence on the row. */}
+          <InfoTip label="why these docs are skipped" align="start">
+            {reason.replace(/^Skipped:\s*/, "")}. {skippedTitle(reason)}.
+          </InfoTip>
         </li>
       ))}
       {flagged.map(([reason, names]) => (
@@ -372,9 +416,10 @@ export function DriveNotes({
       {limited.map((n) => (
         <li key={`limit-${n.external_id}`} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
           <Chip kind="warn">Capped</Chip>
-          <span className="min-w-0 text-text2">
-            <span className="font-medium text-text">{nameOf(n)}</span>: {n.reason}
-          </span>
+          <span className="min-w-0 font-medium">{nameOf(n)}</span>
+          <InfoTip label={`why ${nameOf(n)} is capped`} align="start">
+            {n.reason}
+          </InfoTip>
         </li>
       ))}
     </ul>

@@ -42,6 +42,7 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
     }
     case "edit_title": return title ? `renamed ${x} to ${title}` : `renamed ${x}`;
     case "edit_outcome": return `changed the outcome of ${x}`;
+    case "edit_note": return `changed the notes of ${x}`;
     case "accept_risk": return `accepted a risk on ${x}`;
     case "shift_dependents": return `moved ${x} and its dependents after what it depends on`;
     case "move_dependency": return `moved what ${x} depends on`;
@@ -85,25 +86,53 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
       const name = m && typeof m === "object" ? quoted(m.name) : null;
       return name ? `set the milestone of ${x} to ${name}` : `set the milestone of ${x}`;
     }
+    case "set_goals": return `moved ${x} to another goal`;
     case "add_feature_ask": return title ? `filed the feature ask ${title}` : "filed a feature ask";
     case "set_owner": return `changed the owner of ${x}`;
     case "set_confidence": return `changed the confidence of ${x}`;
     case "set_track": return `changed the track of ${x}`;
     case "set_prd": return `changed the PRD of ${x}`;
     case "set_goal": return `changed the goal of ${x}`;
-    case "set_depends": return `changed what ${x} depends on`;
     case "set_goal_measure": return `changed how the goal of ${x} is measured`;
     case "set_status": return `marked ${x} ${after.status ?? "planned"}`;
     case "set_decider": return `changed the decider of ${x}`;
+    // ask-oracle-actions: a dependency added or removed in the feature talk names it (change_words.py).
+    case "set_depends": {
+      const dep = target.dependency ? String(target.dependency) : null;
+      const gone = ((after.depends_on as unknown[] | undefined) ?? []).length < ((before.depends_on as unknown[] | undefined) ?? []).length;
+      return !dep ? `changed what ${x} depends on` : gone ? `${x} no longer depends on ${dep}` : `${x} now depends on ${dep}`;
+    }
     // prd-questions: a PRD question (a decision) answered, or its decider named.
     case "decide_question": return `decided ${x}`;
+    // Goal milestones (goal_milestones): a roadmap's own milestone changed, or removed.
+    case "edit_goal_milestone": {
+      const name = quoted(target.name) ?? item;
+      if ("milestone" in before && after.milestone === null) return name ? `removed the milestone ${name}` : "removed a milestone";
+      return name ? `changed the milestone ${name}` : "changed a milestone";
+    }
     case "name_decider": return `named who decides ${x}`;
+    // edit-decisions (decision_sheet, change_words.py): the sheet's changes.
+    case "edit_decision":
+    case "edit_question": {
+      const name = quoted(target.name);
+      return name ? `changed ${name}` : `changed a ${op === "edit_decision" ? "decision" : "question"} on ${x}`;
+    }
+    case "add_question": {
+      const asked = quoted(after.title) ?? "a question";
+      return target.name ? `asked ${asked} in ${target.name}` : `asked ${asked}${on}`;
+    }
+    case "withdraw_decision": return `withdrew ${quoted(target.name) ?? x}`;
     // trash-features-goals: a feature moved to Trash (its name reads "(deleted)" once it is gone).
     case "delete_item": return `moved ${x} to Trash`;
     // edit-goals-prds: a goal archived or moved to Trash (goal_asks).
     case "archive_goal": return `archived the goal ${quoted(target.title) ?? "a goal"}`;
     case "delete_goal": return `moved the goal ${quoted(target.title) ?? "a goal"} to Trash`;
     case "unarchive_goal": return `restored the goal ${quoted(target.title) ?? "a goal"}`;
+    // roadmap-decide: a cut item's fix, the dependency dropped (change_words.py).
+    case "remove_dependency": {
+      const dep = quoted((target.titles as unknown[] | undefined)?.[1]);
+      return dep ? `removed ${x}'s dependency on ${dep}` : `removed a dependency of ${x}`;
+    }
   }
   return `changed ${x}`;
 }

@@ -107,7 +107,8 @@ async def test_invites_outside_the_company_domains_are_refused_with_google_sign_
         "/v1/invites", json={"email": "x@elsewhere.test", "role": "viewer"}, headers=owner.headers
     )
     assert out.status_code == 422
-    assert "outside the company's email domains (example.com)" in out.json()["detail"]
+    # pass-f F-50: one short line; the page offers Add domain beside it.
+    assert out.json()["detail"] == "x@elsewhere.test is not in the company domains"
     async with tenant_session(r.tenant_id) as s:
         assert (await s.scalars(select(Invite))).all() == []
     # Google sign-in off: made as before.

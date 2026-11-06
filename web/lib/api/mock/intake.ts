@@ -344,7 +344,7 @@ function summary(db: V2Db, intake: Intake, userId: string, ctx?: IntakeContext):
       category: key,
       state: !g || DECIDED.has(g.status) ? "covered" : g.knowledge_state === "unknown" ? "missing" : "partial",
       knowledge_state: g?.knowledge_state ?? "user_decision",
-      reason: g ? (DECIDED.has(g.status) ? `Decided (${g.status}).` : "Nothing in the pinned sources or the baseline answers it.") : "The baseline answers it.",
+      reason: g ? (DECIDED.has(g.status) ? `Decided (${g.status}).` : "Nothing in the pinned sources or the Ground Truth answers it.") : "The Ground Truth answers it.",
       entity_ids: g?.entity_ids ?? [],
       gap_id: g?.id ?? null,
     } as Schemas["Coverage"];
@@ -1185,7 +1185,7 @@ function privateGap(db: V2Db, gap: Gap | null | undefined): boolean {
   return !!gap && (db.private_gap_ids ?? []).includes(gap.id);
 }
 const CHECKPOINT_LABEL: Record<string, string> = {
-  baseline_confirm: "Confirm the baseline", feature_set: "Feature set and dependencies", priority_order: "Priority order",
+  baseline_confirm: "Confirm the Ground Truth", feature_set: "Feature set and dependencies", priority_order: "Priority order",
   prd_review: "PRD review", eng_review: "Engineering review", eng_dates: "Engineering dates", roadmap_items: "Roadmap items", roadmap_review: "Roadmap review",
 };
 
@@ -1220,7 +1220,7 @@ function subjectOf(db: V2Db, ctx: IntakeContext, q: Question): Schemas["InboxSub
     const cp = ctx.subjects?.checkpoint(q.checkpoint_id);
     return { kind: "checkpoint_item", title: `${CHECKPOINT_LABEL[cp?.kind ?? ""] ?? "Checkpoint"} · ${q.item_ref}`, href: cp ? `/runs/${cp.run_id}#decide` : null };
   }
-  if (q.entity_id) return { kind: "entity", title: `Baseline · ${ctx.subjects?.entity(q.entity_id) ?? "an entity"}`, href: `/baseline?entity=${q.entity_id}` };
+  if (q.entity_id) return { kind: "entity", title: `Ground Truth · ${ctx.subjects?.entity(q.entity_id) ?? "an entity"}`, href: `/ground-truth?entity=${q.entity_id}` };
   const doc = q.document_id ? ctx.subjects?.document(q.document_id) : null;
   if (q.item_ref && doc) {
     const title = ctx.subjects?.roadmapItem?.(q.document_id!, q.item_ref) ?? q.item_ref;

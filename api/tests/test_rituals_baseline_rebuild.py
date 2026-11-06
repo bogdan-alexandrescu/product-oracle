@@ -92,7 +92,7 @@ def test_the_kind_is_a_monthly_rebuild_off_by_default():
     off-by-default changes, or it needs a feature that is not there; no_claim=seeding
     (next test)."""
     kind = KINDS[KIND]
-    assert kind.title == "Baseline rebuild"
+    assert kind.title == "Ground Truth rebuild"
     assert kind.default_schedule == {
         "freq": "monthly", "week_of_month": 1, "weekday": 0, "time": "09:00"
     }  # fmt: skip
@@ -150,7 +150,7 @@ async def test_from_draft_up_the_occurrence_starts_one_build(client, ctx, at, ru
     assert action.undo == {"method": "POST", "path": f"/v1/runs/{run.id}/cancel", "body": None}
     inbox = (await client.get("/v1/inbox", headers=ctx.as_("owner"))).json()
     (row,) = [r for r in inbox["oracle_actions"] if r["responsibility"] == "baseline"]
-    assert row["summary"] == "Started the baseline rebuild · Estimate $7.00"
+    assert row["summary"] == "Started the Ground Truth rebuild · Estimate $7.00"
     assert row["counts"] is True
 
 
@@ -189,14 +189,15 @@ async def test_at_observe_oracle_only_reminds(client, ctx, at, runtime):
     assert await baseline_actions(ctx.tenant_id) == []
     assert occ["summary_state"] == "not_started"
     assert occ["summary_note"] == (
-        "Not started: Oracle is set to observe the baseline. Build it from the Baseline page."
+        "Not started: Oracle is set to observe the Ground Truth. Build it from the Ground "
+        "Truth page."
     )
     (block,) = occ["pre_read"]["blocks"]
-    assert block["key"] == "baseline_rebuild" and block["title"] == "Baseline rebuild"
+    assert block["key"] == "baseline_rebuild" and block["title"] == "Ground Truth rebuild"
     texts = [r["text"] for r in block["rows"]]
     assert "Estimate $7.00 at standard depth" in texts
-    build = [r for r in block["rows"] if r.get("href") == "/baseline?build=1"]
-    assert build and build[0]["label"] == "Build the baseline"
+    build = [r for r in block["rows"] if r.get("href") == "/ground-truth?build=1"]
+    assert build and build[0]["label"] == "Build the Ground Truth"
     inbox = (await client.get("/v1/inbox", headers=ctx.as_("approver"))).json()
     assert [r["reason"] for r in inbox["rituals"] if r["occurrence_id"] == occ["id"]] == [
         "pre_read"
@@ -217,7 +218,7 @@ async def test_run_rituals_cost_limit_does_not_apply(client, ctx, at, runtime):
     texts = [r["text"] for b in occ["pre_read"]["blocks"] for r in b["rows"]]
     assert not any("limit" in t for t in texts), texts
     (action,) = await baseline_actions(ctx.tenant_id)
-    assert action.summary == "Started the baseline rebuild · Estimate $7.00"
+    assert action.summary == "Started the Ground Truth rebuild · Estimate $7.00"
 
 
 async def test_an_estimate_above_10_dollars_starts(client, ctx, at, runtime, monkeypatch):
@@ -232,7 +233,7 @@ async def test_an_estimate_above_10_dollars_starts(client, ctx, at, runtime, mon
     assert run.status == "running"
     assert occ["summary_state"] == "running"
     (action,) = await baseline_actions(ctx.tenant_id)
-    assert action.summary == "Started the baseline rebuild · Estimate $14.00"
+    assert action.summary == "Started the Ground Truth rebuild · Estimate $14.00"
 
 
 async def test_over_50_dollars_it_waits_for_an_owners_approval(
@@ -255,7 +256,7 @@ async def test_over_50_dollars_it_waits_for_an_owners_approval(
     assert "Oracle starts the build; over $50 it waits for an owner's approval" in texts
     (action,) = await baseline_actions(ctx.tenant_id)
     assert action.summary == (
-        "Started the baseline rebuild · Estimate $70.00 · Waits for an owner's approval"
+        "Started the Ground Truth rebuild · Estimate $70.00 · Waits for an owner's approval"
     )
     resp = await client.post(f"/v1/runs/{run.id}/approve", headers=ctx.as_("owner"))
     assert resp.status_code == 200, resp.text
@@ -309,7 +310,8 @@ async def test_a_build_under_way_is_not_doubled(client, ctx, at, runtime):
     assert [str(r.id) for r in await baseline_runs(ctx.tenant_id)] == [first]
     assert occ["summary_state"] == "not_started"
     assert (
-        occ["summary_note"] == f"Not started: a baseline build is already under way (run {first})"
+        occ["summary_note"]
+        == f"Not started: a Ground Truth build is already under way (run {first})"
     )
     assert await baseline_actions(ctx.tenant_id) == []
 
@@ -325,8 +327,8 @@ async def test_undo_cancels_and_the_occurrence_says_it_failed(client, ctx, at, r
     assert resp.status_code == 200, resp.text
     got = (await client.get(f"/v1/ritual-occurrences/{occ['id']}", headers=ctx.as_("owner"))).json()
     assert got["summary_state"] == "failed"
-    assert (
-        got["summary_note"] == "The baseline build did not finish · Build it from the Baseline page"
+    assert got["summary_note"] == (
+        "The Ground Truth build did not finish · Build it from the Ground Truth page"
     )
 
 
@@ -342,7 +344,7 @@ async def test_summarize_is_not_offered_and_the_estimate_leaves_it_out(client, c
         f"/v1/ritual-occurrences/{occ['id']}/summary", headers=ctx.as_("owner")
     )
     assert resp.status_code == 409, resp.text
-    assert resp.json()["detail"] == "Start the baseline rebuild from the Baseline page"
+    assert resp.json()["detail"] == "Start the Ground Truth rebuild from the Ground Truth page"
     est = (await client.get("/v1/rituals/summaries", headers=ctx.as_("owner"))).json()
     assert [r["title"] for r in est["estimate"]["rituals"]] == []
 
@@ -366,7 +368,7 @@ async def test_summarize_answers_a_build_under_way_before_the_rebuild_refusal(
     assert resp.status_code == 200, resp.text
     resp = await client.post(path, headers=ctx.as_("owner"))
     assert resp.status_code == 409, resp.text
-    assert resp.json()["detail"] == "Start the baseline rebuild from the Baseline page"
+    assert resp.json()["detail"] == "Start the Ground Truth rebuild from the Ground Truth page"
 
 
 async def test_an_owner_who_cannot_start_runs_gets_a_note(client, ctx, at, runtime):

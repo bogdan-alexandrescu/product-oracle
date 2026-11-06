@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "./test";
 
 import { MOCK_DENY_KEY } from "../lib/api/mock/server";
-import { login, openTab, sectionStrip } from "./helpers";
+import { login, openTab } from "./helpers";
 
 // QA pass 1, docs lane: the version page /documents/<doc>/v/<n> (Saved carts v2, a PRD with a
 // brief; the early shipping cost technical brief, v1 earlier and v2 latest), driven as a person.
@@ -94,15 +94,13 @@ test.describe("desktop", () => {
 
   test("qa-docs-13: each review count says what it counts", async ({ page }) => {
     await openVersion(page, CARTS);
-    // qa-docs-5: the panel counts what the outline counts, in Brief and in Full; qa4-docs-35:
-    // in one wording in both.
+    // qa4-docs-35: the panel's Reviewed stat uses one wording in Brief and in Full (PT1 a: a
+    // PRD has no outline rail to cross-check against; the panel is the one count).
     await expect(panel(page).getByTestId("stat-reviewed")).toContainText("Reviewed");
     await expect(panel(page).getByTestId("stat-reviewed")).toContainText(/\d+\/8/);
-    await expect(sectionStrip(page).getByTestId("review-progress")).toHaveText(/\d+ of 8 sections reviewed/);
     await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Full" }).click();
     await expect(panel(page).getByTestId("stat-reviewed")).toContainText("Reviewed");
     await expect(panel(page).getByTestId("stat-reviewed")).toContainText(/\d+\/20/);
-    await expect(sectionStrip(page).getByTestId("review-progress")).toHaveText(/\d+ of 20 sections reviewed/);
   });
 
   test("qa-docs-47/33: each action once: whole-draft feedback through the header's Discuss, Brief / Full in the switch", async ({ page }) => {
@@ -117,18 +115,23 @@ test.describe("desktop", () => {
   test("qa-docs-50: the full document starts at its Introduction, not the title again", async ({ page }) => {
     await openVersion(page, CARTS);
     await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Full" }).click();
-    const first = sectionStrip(page).locator("a[data-outline-key]").first();
-    await expect(first.getByTestId("outline-name")).toHaveText("Introduction");
+    // PT1 a: the outline rail is gone on a PRD; its contents rail names rows the same way.
+    const first = page.getByTestId("prd-contents").locator("a[data-outline-key]").first();
+    await expect(first).toContainText("Introduction");
     await expect(first).not.toContainText("Saved carts PRD");
   });
 
-  test("qa-docs-49: a filter with no match says so and clears; feedback filters wait for feedback", async ({ page }) => {
+  test("qa-docs-49: the contents filter narrows and clears; feedback filters wait for feedback", async ({ page }) => {
     await openVersion(page, CARTS);
-    await sectionStrip(page).getByTestId("outline-filter").fill("no section is called this");
-    await expect(sectionStrip(page).getByTestId("outline-empty")).toContainText("No sections match");
-    await sectionStrip(page).getByTestId("outline-clear-filter").click();
-    await expect(sectionStrip(page).getByTestId("outline-filter")).toHaveValue("");
-    await expect(sectionStrip(page).locator("a[data-outline-key]").first()).toBeVisible();
+    // PT1 a: the outline rail's filter (with its "no match" message and Clear) is gone on a
+    // PRD; the contents rail's own "Find a section" box narrows the same rows.
+    const nav = page.getByTestId("prd-contents");
+    await nav.getByRole("button", { name: "Contents: find a section" }).click();
+    const find = nav.getByLabel("Find a section");
+    await find.fill("no section is called this");
+    await expect(nav.locator("a[data-outline-key]")).toHaveCount(0);
+    await find.fill("");
+    await expect(nav.locator("a[data-outline-key]").first()).toBeVisible();
 
     // Saved carts has no feedback yet: its panel shows no filter chips, only the empty state.
     await expect(panel(page).getByTestId("feedback-state")).toHaveCount(0);

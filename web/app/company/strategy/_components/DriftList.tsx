@@ -4,13 +4,13 @@ import Link from "next/link";
 import { useId, useState } from "react";
 
 import { Button, Chip, FilterChips, InfoTip, Panel } from "@/components/ds";
-import { ErrorNote, INPUT, Loading } from "@/components/ui";
+import { ErrorNote, INPUT, LoadError, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
 import { CompanyEmpty } from "../../_empty";
-import { FINDING_LABEL, FINDING_STATES, canWaive, shortDate, subjectHref, subjectName, type Finding, type FindingState, type Stack } from "./lib";
+import { FINDING_LABEL, FINDING_STATES, canReopen, canWaive, shortDate, subjectHref, subjectLinkLabel, subjectName, type Finding, type FindingState, type Stack } from "./lib";
 
 /** Waive a finding with a reason (the reason is required, as the API); Plan items use it too. */
 export function WaiveForm({ finding, onWaived, onCancel }: { finding: Pick<Finding, "id">; onWaived: (f: Finding) => void; onCancel: () => void }) {
@@ -62,7 +62,11 @@ export function WaiveForm({ finding, onWaived, onCancel }: { finding: Pick<Findi
   );
 }
 
-/** One finding: what it is, about what, since when; Waive and Open. */
+/**
+ * One finding: what it is; about what, on its own full line (pass F F-12, F-43); since when,
+ * with the link that opens its subject and Waive. Until the stack answers the subject is a
+ * placeholder, never its raw reference (F-13).
+ */
 export function FindingRow({
   finding: f,
   stack,
@@ -76,6 +80,18 @@ export function FindingRow({
 }) {
   const { can } = useMe();
   const [waiving, setWaiving] = useState(false);
+  const [reopening, setReopening] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function reopen() {
+    setReopening(true);
+    setError(null);
+    try {
+      onWaived(await unwrap(api.POST("/v1/strategy/findings/{finding_id}/reopen", { params: { path: { finding_id: f.id } } })));
+    } catch (e) {
+      setError(errorMessage(e));
+      setReopening(false);
+    }
+  }
   const href = subjectHref(f, stack);
   const draft = f.detail?.draft === true;
   return (
@@ -83,19 +99,35 @@ export function FindingRow({
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
         <span className="font-semibold text-text">{FINDING_LABEL[f.kind]}</span>
         {f.severity === "high" && <Chip kind="crit">High</Chip>}
-        <span className="min-w-0 flex-1 text-text2 [overflow-wrap:anywhere]">
-          {subjectName(f, stack)}
-          {draft && <span className="ml-1.5 text-sm">(draft)</span>}
-        </span>
+      </div>
+      <p className="mt-0.5 min-w-0 text-text2 [overflow-wrap:break-word]">
+        {stack ? (
+          <>
+            <span data-testid="finding-subject" className="block">
+              {subjectName(f, stack)}
+              {draft && <span className="ml-1.5 text-sm">(draft)</span>}
+            </span>
+          </>
+        ) : (
+          <span aria-hidden="true" className="inline-block h-3.5 w-32 animate-pulse rounded bg-surface2 align-middle" />
+        )}
+      </p>
+      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
         <span className="tnum text-sm text-text2">Since {shortDate(f.first_seen_at)}</span>
-        {href && (
+        {href && stack && (
           <Link href={href} className="text-sm font-medium text-accent-ink hover:underline">
-            Open
+            {subjectLinkLabel(f, stack)}
           </Link>
         )}
         {canWaive(f, can) && !waiving && (
           <Button variant="ghost" onClick={() => setWaiving(true)}>
             Waive
+          </Button>
+        )}
+        {/* pass F F-41: a waiver can be taken back. */}
+        {canReopen(f, can) && (
+          <Button variant="ghost" disabled={reopening} onClick={reopen}>
+            {reopening ? "Reopening…" : "Reopen"}
           </Button>
         )}
       </div>
@@ -105,6 +137,7 @@ export function FindingRow({
         </p>
       )}
       {f.status === "resolved" && <p className="mt-1 text-sm text-text2">Resolved {shortDate(f.resolved_at)}</p>}
+      {error && <ErrorNote>{error}</ErrorNote>}
       {waiving && <WaiveForm finding={f} onCancel={() => setWaiving(false)} onWaived={onWaived} />}
     </li>
   );
@@ -117,6 +150,7 @@ export function DriftList({
   rows,
   loading,
   error,
+  onRetry,
   counts,
   stack,
   onWaived,
@@ -126,6 +160,7 @@ export function DriftList({
   rows: Finding[] | undefined;
   loading: boolean;
   error: string | null;
+  onRetry: () => void;
   /** How many findings each state's list holds, so a chip counts what its list shows. */
   counts: Partial<Record<FindingState, number>>;
   stack: Stack | undefined;
@@ -153,8 +188,12 @@ export function DriftList({
           onChange={onState}
         />
       </div>
-      {error && <ErrorNote>{error}</ErrorNote>}
-      {!rows && loading ? (
+      {/* F-1: a list that did not load says so, with Try again, and nothing under it. */}
+      {error ? (
+        <div className="px-4 pt-3 max-[600px]:px-3">
+          <LoadError what="the drift findings" error={error} onRetry={onRetry} />
+        </div>
+      ) : !rows && loading ? (
         <div className="px-4 py-3">
           <Loading />
         </div>
@@ -164,16 +203,29 @@ export function DriftList({
           testId="drift-empty"
           title={state === "open" ? "No open findings" : state === "waived" ? "Nothing waived" : "Nothing resolved"}
         >
-          {/* qa-company-13: an empty list still says what Drift looks for. */}
+          {/* qa-company-13: an empty list still says what Drift looks for; pass F F-45: in one line, the rest behind the (i). */}
           {state === "open" ? (
             <span data-testid="drift-what">
-              Oracle checks every day that each goal follows from the product strategy and each roadmap item from a goal, and that the
-              vision and strategy are reviewed on time. Anything that does not shows up here.
+              Goals and items that do not follow the strategy show here.{" "}
+              <InfoTip label="drift" align="end">
+                Oracle checks every day that each goal follows from the product strategy and each roadmap item from a goal, and that the
+                vision and strategy are reviewed on time.
+              </InfoTip>
             </span>
           ) : state === "waived" ? (
-            "Findings someone waived with a reason show here until their subject changes again."
+            <>
+              Waived findings show here.{" "}
+              <InfoTip label="waived findings" align="end">
+                A finding someone waived with a reason stays here until its subject changes again.
+              </InfoTip>
+            </>
           ) : (
-            "Findings that cleared, because the goal or item now lines up, show here."
+            <>
+              Cleared findings show here.{" "}
+              <InfoTip label="resolved findings" align="end">
+                A finding clears once its goal or item lines up with the strategy again.
+              </InfoTip>
+            </>
           )}
         </CompanyEmpty>
       ) : (

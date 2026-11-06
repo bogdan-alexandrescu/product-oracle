@@ -7,12 +7,13 @@ one-pager's number fixes, GET /v1/simple/changes, the Inbox, proposals) breaks a
 The column is added nullable with no default (no table rewrite), the changes already
 stored are numbered by (at, id) (the order lists showed them in before), and only then does
 it take its default from a sequence that starts after the highest number, and NOT NULL.
-The backfill is a plain UPDATE (reads go on, writes of the same rows wait); NOT NULL scans
-the table under a short ACCESS EXCLUSIVE lock. The wait for each lock is capped
-(LOCK_TIMEOUT). The downgrade drops the column and its sequence.
+It all runs in one transaction: ADD COLUMN takes the table's ACCESS EXCLUSIVE lock and it is
+held to the commit, so reads and writes of simple_changes wait through the backfill (one
+UPDATE) and the NOT NULL scan. The wait for the lock is capped (LOCK_TIMEOUT). The
+downgrade drops the column and its sequence.
 
-Revision ID: 0113_simple_changes_seq
-Revises: 0112_trash_features_goals
+Revision ID: 0119_simple_changes_seq
+Revises: 0118_document_position
 """
 
 from collections.abc import Sequence
@@ -20,8 +21,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0113_simple_changes_seq"
-down_revision: str | None = "0112_trash_features_goals"
+revision: str = "0119_simple_changes_seq"
+down_revision: str | None = "0118_document_position"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

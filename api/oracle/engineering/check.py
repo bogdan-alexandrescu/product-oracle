@@ -465,9 +465,14 @@ def decisions(cp: Checkpoint, actions: Iterable[Action]) -> dict[str, Any]:
         sizes[key] = size.value if size is not None else f.get("size")
         for q in f.get("questions") or []:
             if (a := staged.get((key, ANSWER + q["id"]))) is not None:
+                # Who answered and when: the run page's Decisions and the PRD writer name
+                # them (oracle.runs.stop_answers).
+                by = getattr(a, "updated_by", None) or getattr(a, "created_by", None)
+                at = getattr(a, "updated_at", None) or getattr(a, "created_at", None)
                 answers.setdefault(key, []).append(
-                    {"question_id": q["id"], "question": q.get("question"), "answer": a.value}
-                )
+                    {"question_id": q["id"], "question": q.get("question"), "answer": a.value,
+                     "by": str(by) if by else None, "at": at.isoformat() if at else None}
+                )  # fmt: skip
     return {"verdicts": verdicts, "answers": answers, "sizes": sizes}
 
 
@@ -507,7 +512,7 @@ async def on_approved(
 READERS = ("priority", "prd_draft", "eng_dates")
 
 
-async def _recorded(db: AsyncSession, cp: Checkpoint) -> dict[str, Any]:
+async def recorded_of(db: AsyncSession, cp: Checkpoint) -> dict[str, Any]:
     """What the approved check recorded (``payload["briefs"]``), else (a check approved
     before it was recorded on every path) the same read from its staged actions."""
     from oracle.runs.models import CheckpointAction
@@ -562,7 +567,7 @@ async def prompt_lines(db: AsyncSession, run_id: uuid.UUID, segment: str) -> lis
     )  # fmt: skip
     if cp is None:
         return []
-    recorded = await _recorded(db, cp)
+    recorded = await recorded_of(db, cp)
     verdicts = recorded.get("verdicts") or {}
     lines = ["Engineering check (decided by the engineering lead):"]
     for key, size in (recorded.get("sizes") or {}).items():
@@ -570,7 +575,10 @@ async def prompt_lines(db: AsyncSession, run_id: uuid.UUID, segment: str) -> lis
         word = VERDICT_WORDS.get(v.get("value"), "No verdict")
         note = f": {v['note']}" if v.get("note") else ""
         lines.append(f"- {key}: {word}{note}; size {str(size).upper()}")
-    lines += answer_lines(cp, recorded)
+    if segment != "prd_draft":
+        # The PRD writer reads the answers with who gave them and the stop's decision
+        # record to cite (oracle.runs.stop_answers.prompt_lines).
+        lines += answer_lines(cp, recorded)
     blocked = [k for k, v in verdicts.items() if v.get("value") == "not_feasible"]
     if segment == "priority" and blocked:
         lines.append(

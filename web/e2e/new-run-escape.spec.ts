@@ -4,7 +4,7 @@ import { login } from "./helpers";
 
 /**
  * #257: Escape in the PRD document field closes its suggestions, not the New run dialog.
- * Since C4 a PRD starts at New PRD, so the dialog offers Baseline to PRD only in the mock's
+ * Since C4 a PRD starts at New PRD, so the dialog offers Ground Truth to PRD only in the mock's
  * "new-run-prd" scenario (a catalog that still lists it there).
  */
 test.beforeEach(async ({ page }) => {

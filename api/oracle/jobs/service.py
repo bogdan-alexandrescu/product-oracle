@@ -1192,7 +1192,7 @@ def reports_markdown(document: Document, reports: VersionReports, zone: str) -> 
         if c.sections:
             lines.append("")
         if c.new_sources:
-            lines += ["### New sources in the baseline", ""]
+            lines += ["### New sources in the Ground Truth", ""]
             for src in c.new_sources:
                 about = f" (on {src.about})" if src.about else ""
                 added = company_time.day(src.added_at, zone)

@@ -6,6 +6,7 @@ import { Button } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { docLabel, runLabel } from "@/lib/labels";
+import { prdsFirst, usePrds } from "@/lib/prd-order";
 import { useQuery } from "@/lib/use-query";
 
 import { SUBJECT_LABEL, entityTypeLabel, type Decision } from "./lib";
@@ -27,7 +28,7 @@ const MATCHES = 8;
 /** The kinds a person picks here; others (a section, a version, a run's stop) are set by the page that opens the form. */
 const KINDS = [
   { value: "document", label: "Document" },
-  { value: "entity", label: "Baseline item" },
+  { value: "entity", label: "Ground Truth item" },
   { value: "run", label: "Run" },
 ] as const;
 type PickKind = (typeof KINDS)[number]["value"];
@@ -111,7 +112,7 @@ export function LinksPicker({ value, onChange, known }: { value: Links; onChange
           <ul className="flex flex-wrap gap-1.5">
             {value.entity_ids.map((id) => {
               const e = byId.get(id);
-              const title = e?.title ?? "A baseline item";
+              const title = e?.title ?? "A Ground Truth item";
               return (
                 <li key={id} className="flex items-center gap-1 rounded-lg border border-line px-2 py-0.5 text-sm">
                   <span>{title}</span>
@@ -128,7 +129,7 @@ export function LinksPicker({ value, onChange, known }: { value: Links; onChange
         {needle && (
           <ul className="flex flex-col gap-0.5">
             {matches.length === 0 ? (
-              <li className="text-sm text-text2">{entitiesQ.loading ? "Loading…" : "No baseline item matches"}</li>
+              <li className="text-sm text-text2">{entitiesQ.loading ? "Loading…" : "No Ground Truth item matches"}</li>
             ) : (
               matches.map((e) => (
                 <li key={e.id}>
@@ -147,9 +148,9 @@ export function LinksPicker({ value, onChange, known }: { value: Links; onChange
       </fieldset>
       <fieldset className="flex flex-col gap-1">
         <legend className="mb-1 text-sm font-semibold text-text2">Evidence</legend>
-        {value.entity_ids.length === 0 && other.length === 0 && <p className="text-sm text-text2">Link a baseline item to pick from its evidence</p>}
+        {value.entity_ids.length === 0 && other.length === 0 && <p className="text-sm text-text2">Link a Ground Truth item to pick from its evidence</p>}
         {value.entity_ids.map((id) => (
-          <ItemEvidence key={id} entity={id} title={byId.get(id)?.title ?? "A baseline item"} chosen={value.evidence_ids} onTick={tick} />
+          <ItemEvidence key={id} entity={id} title={byId.get(id)?.title ?? "A Ground Truth item"} chosen={value.evidence_ids} onTick={tick} />
         ))}
         {other.map((e) => (
           <EvidenceBox key={e.id} evidence={e} checked={value.evidence_ids.includes(e.id)} onTick={() => tick(e.id, e.entity_id)} />
@@ -195,12 +196,14 @@ function SubjectsPicker({ subjects, entities, onChange }: { subjects: Subject[];
   const [kind, setKind] = useState<PickKind>("document");
   const [picked, setPicked] = useState("");
   const docsQ = useQuery("decisions|documents", () => unwrap(api.GET("/v1/documents")));
+  const prdsQ = usePrds();
   const runsQ = useQuery("decisions|runs", () => unwrap(api.GET("/v1/runs")));
   const nameOf = useSubjectLabel();
   const taken = new Set(subjects.map((s) => `${s.kind}:${s.id}`));
   const choices: (Subject & { label: string })[] =
     kind === "document"
-      ? (docsQ.data ?? []).map((d) => ({ kind: "document", id: d.id, ref: d.slug, label: docLabel(d) }))
+      ? // prd-order: the PRDs in the company PRD order, then the roadmaps and other documents.
+        prdsFirst(prdsQ.data, docsQ.data).map((d) => ({ kind: "document", id: d.id, ref: d.slug, label: docLabel(d) }))
       : kind === "entity"
         ? entities.map((e) => ({ kind: "entity", id: e.id, ref: e.title, label: e.title }))
         : (runsQ.data ?? []).map((r) => ({ kind: "run", id: r.id, ref: r.flow_title, label: runLabel(r, (docsQ.data ?? []).find((d) => d.slug === r.document_slug)?.title) }));

@@ -81,6 +81,19 @@ def test_every_op_has_a_plain_sentence():
     )
 
 
+def test_a_goal_sentence_names_the_goal():
+    """fails_when=a goal moved to Trash, archived or restored reads "the goal a goal": the
+    sentence names the goal, by its title or else the item's name, as a feature's does."""
+    for op, verb in (("delete_goal", "moved"), ("archive_goal", "archived"),
+                     ("unarchive_goal", "restored")):  # fmt: skip
+        tail = " to Trash" if op == "delete_goal" else ""
+        said = change_words.phrase(op, {"title": "Faster checkout"}, {}, {}, None)
+        assert said == f"{verb} the goal “Faster checkout”{tail}", said
+        said = change_words.phrase(op, {}, {}, {}, "Faster checkout")
+        assert said == f"{verb} the goal Faster checkout{tail}", said
+        assert change_words.phrase(op, {}, {}, {}, None) == f"{verb} a goal{tail}", op
+
+
 async def test_change_list_says_an_undone_estimate_in_words(client):
     ctx = await make_people()
     w = await PriorityWorld(ctx).build()
@@ -118,15 +131,17 @@ async def test_simple_reads_product_decisions_never_run_approvals(client):
     async with tenant_session(w.ctx.tenant_id) as s:
         prd = await s.scalar(select(Document).where(Document.slug == PRD))
         owner = w.ctx.users["owner"].id
-        for title, origin in (("Should refunds wait for the ledger?", "oracle"),
-                              ("Approve the plan · Build the baseline", "checkpoint")):  # fmt: skip
+        for title, origin in (
+            ("Should refunds wait for the ledger?", "oracle"),
+            ("Approve the plan · Build the Ground Truth", "checkpoint"),
+        ):
             await _decision(s, title, origin, str(prd.id), owner)
         await s.commit()
     r = await client.get("/v1/simple/decisions", headers=w.ctx.as_("viewer"))
     assert r.status_code == 200, r.text
     titles = [d["title"] for d in r.json()["other"]]
     assert "Should refunds wait for the ledger?" in titles
-    assert "Approve the plan · Build the baseline" not in titles
+    assert "Approve the plan · Build the Ground Truth" not in titles
     m = await start(client, w)
     r = await client.get(f"/v1/simple/meetings/{m['id']}", headers=w.ctx.as_("decider"))
     assert r.status_code == 200, r.text

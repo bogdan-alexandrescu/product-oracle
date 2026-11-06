@@ -21,12 +21,15 @@ const SEEDED = "/simple/prds/guided-setup";
 const OTHER = "/simple/one-pagers/checkout-redesign";
 const LINE_2 = "A setup checklist that shows the next step";
 
+// vqa B-13, C-13: each PRD's one-pager is built from its own sections, so its first bet is its own.
+const OTHER_BET = "In scope: the cart summary, the shipping step and the order review page on web.";
+
 async function editLine2(page: Page, text: string) {
-  // C-13: each PRD's first bet is its own line; its Edit names it.
+  // The first bet's Edit names the line.
   await page.locator('[data-line="bets-1"]').hover();
   await page.locator('[data-line="bets-1"]').getByRole("button", { name: /^Edit “/ }).click();
   await page.getByLabel("New wording for").fill(text);
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.locator('[data-line="bets-1"]')).toHaveAttribute("data-state", "edited");
 }
 
@@ -44,6 +47,7 @@ for (const phone of [false, true]) {
           const db = JSON.parse(localStorage.getItem("po-mock-db-v2")!) as { documents: { id: string; slug: string }[] };
           return db.documents.find((d) => d.slug === "checkout-redesign")!.id;
         });
+        await expect(page.locator('[data-line="bets-1"]')).toContainText(OTHER_BET);
         await editLine2(page, "A checkout checklist with saved cards");
 
         await page.goto(SEEDED);

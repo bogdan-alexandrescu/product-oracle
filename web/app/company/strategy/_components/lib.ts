@@ -48,6 +48,11 @@ export function canWaive(f: Finding, can: ReturnType<typeof useMe>["can"]): bool
   return can("waive_strategy_finding", f.kind === "outside_strategy");
 }
 
+/** Whether the signed-in member may reopen a waived finding: whoever may waive it (pass F F-41). */
+export function canReopen(f: Finding, can: ReturnType<typeof useMe>["can"]): boolean {
+  return f.status === "waived" && can("waive_strategy_finding", f.kind === "outside_strategy");
+}
+
 /** "Oct 1, 2027" from an ISO date or time: the shared format (qa-company-22), never "1 Sept 2027". */
 export function shortDate(value: string | null | undefined): string {
   if (!value) return "—";
@@ -56,23 +61,45 @@ export function shortDate(value: string | null | undefined): string {
 
 export { plural } from "@/lib/format";
 
-/** What a finding is about, in words: the goal, choice or item by name, else its reference. */
+/** What a finding's subject is, in a word, when its name is not known. */
+const SUBJECT_WORD: Record<Finding["subject_kind"], string> = { entity: "A goal", roadmap_item: "A roadmap item", document: "A document" };
+
+/**
+ * What a finding is about, in words: the goal, choice or item by name. pass F F-41: never its
+ * reference (a slug such as "product-strategy-team-plans"); a choice is also found by its whole key.
+ */
 export function subjectName(f: Finding, stack: Stack | undefined): string {
   const title = typeof f.detail?.title === "string" ? f.detail.title : null;
   if (title) return title;
   const choices = stack?.strategy?.choices ?? [];
   const goals = [...choices.flatMap((c) => c.goals), ...(stack?.unaligned.goals ?? [])];
-  const named = goals.find((g) => g.id === f.subject_id) ?? choices.find((c) => c.entity_id === f.subject_id);
+  // A choice's key is the strategy document's slug and its id ("product-strategy-team-plans"),
+  // matched whole: "plans" is not "team-plans".
+  const key = f.subject_ref.replace(/^[a-z_]+:/, "");
+  const slug = stack?.strategy?.document.slug;
+  const named =
+    goals.find((g) => g.id === f.subject_id) ??
+    choices.find((c) => c.entity_id === f.subject_id) ??
+    choices.find((c) => key === c.id || (slug != null && key === `${slug}-${c.id}`));
   if (named) return named.title;
   if (f.subject_kind === "document") return f.kind === "vision_review_due" ? "Vision" : "Product strategy";
-  return f.subject_ref.replace(/^[a-z_]+:/, "");
+  if (f.subject_ref.startsWith("strategy_choice:")) return "A focus choice";
+  return SUBJECT_WORD[f.subject_kind] ?? "Something";
+}
+
+/** pass F F-46: the subject's link says what it opens ("Open goal"), never "Open" alone. */
+export function subjectLinkLabel(f: Finding, stack: Stack | undefined): string {
+  if (stack?.strategy?.choices.some((c) => c.entity_id === f.subject_id)) return "Open focus choice";
+  if (f.subject_kind === "roadmap_item") return "Open item";
+  if (f.subject_kind === "document") return f.kind === "vision_review_due" ? "Open vision" : "Open strategy";
+  return "Open goal";
 }
 
 /** Where a finding's subject is opened: the goal in the baseline, the item on the Plan, the document. */
 export function subjectHref(f: Finding, stack: Stack | undefined): string | null {
   const choice = stack?.strategy?.choices.find((c) => c.entity_id === f.subject_id);
   if (choice && stack?.strategy) return `/documents/${stack.strategy.document.slug}/v/${stack.strategy.document.version}#choice-${choice.id}`;
-  if (f.subject_kind === "entity" && f.subject_id) return `/baseline?entity=${f.subject_id}`;
+  if (f.subject_kind === "entity" && f.subject_id) return `/ground-truth?entity=${f.subject_id}`;
   if (f.subject_kind === "roadmap_item") return "/plan";
   if (f.subject_kind === "document") return `/documents/${f.subject_ref}`;
   return null;

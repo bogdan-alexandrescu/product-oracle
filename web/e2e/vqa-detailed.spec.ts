@@ -34,7 +34,7 @@ test.describe("phone", () => {
     await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "track-alerts"));
     await login(page);
     await page.goto("/plan");
-    await page.getByTestId("plan-row").filter({ visible: true }).filter({ hasText: "Daily alert digest" }).getByTestId("plan-title").click();
+    await page.getByTestId("plan-row").filter({ visible: true }).filter({ hasText: "Weekly alert digest" }).getByTestId("plan-title").click();
     await page.getByTestId("plan-inspector").filter({ visible: true }).getByTestId("plan-alert").getByRole("button", { name: "Re-plan…" }).click();
     const dialog = page.getByRole("dialog", { name: "Re-plan this track" });
     await expect(dialog.getByRole("button", { name: /^Start for \$/ })).toBeVisible();

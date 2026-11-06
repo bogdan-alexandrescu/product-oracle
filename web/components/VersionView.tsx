@@ -3,7 +3,7 @@
 import { RoleBadge } from "@/components/RoleBadge";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
 
 import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
 import { CommentPopover, SelectionButton, type PageRect } from "@/components/CommentPopover";
@@ -33,6 +33,7 @@ import { DateMarkContext, type DateMarkCtx } from "@/components/DateMarker";
 import { DateMarker, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
 import { DraftNewItems } from "@/components/DraftNewItems";
 import { DraftWithOracleButton, isTemplateOnly } from "@/components/DraftWithOracle";
+import { numbersOf, PrdLook } from "@/components/PrdLook";
 import { SectionView } from "@/components/SectionView";
 import { SpecDesignLinks } from "@/components/DesignReview";
 import { SpecStaleness } from "@/components/SpecStaleness";
@@ -367,8 +368,12 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   // Brief / Full says which sections exist; the strip and the arrows step through these.
   const shownSections = view === "brief" ? briefSections : sections;
   const hashKey = keyFromHash(hash, allKeys);
+  // PT1 a: a PRD reads as one document; the section open is the one being read, the first at arrival.
+  const calm = document_?.kind === "prd";
   const openSection =
-    shownSections.find((s) => s.section_key === hashKey) ?? shownSections.find((s) => !s.verdict) ?? shownSections[0];
+    shownSections.find((s) => s.section_key === hashKey) ??
+    (calm ? undefined : shownSections.find((s) => !s.verdict)) ??
+    shownSections[0];
   const openKey = openSection?.section_key ?? null;
   // e2e-review-live: other reviewers' work shows without a reload. On window focus, and every
   // LIVE_POLL_MS while a run review waits on this version, the review state is read again in
@@ -402,6 +407,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     document_ ? (openSection ? `${document_.title} · ${openSection.heading}` : document_.title) : null,
   );
   const openIdx = openSection ? shownSections.indexOf(openSection) : -1;
+  const calmNums = useMemo(() => numbersOf(shownSections), [shownSections]);
   const prevSection = openIdx > 0 ? shownSections[openIdx - 1] : null;
   const nextSection = openIdx >= 0 ? shownSections[openIdx + 1] ?? null : null;
   // The next section without a verdict after the open one, wrapping round.
@@ -431,6 +437,9 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     setHash(`#${key}`);
     if (decodeURIComponent(window.location.hash.slice(1)) !== key) window.history.pushState(null, "", `#${key}`);
   }, []);
+
+  /** The reader scrolled to a section: it is the open one, with no new history entry. */
+  const read = useCallback((key: string) => setHash(`#${key}`), []);
 
   const switchView = useCallback(
     (v: DocumentView) => {
@@ -572,6 +581,12 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
       const root = rootRef.current;
       const key = c.section_key;
       const mark = root?.querySelector(`[data-comment-ids~="${c.id}"]`);
+      // PT1 a: every section is on the page; the comment's section becomes the one being read.
+      if (mark && calm && key !== openKey) {
+        select(key);
+        setScrollTarget({ id: c.id, key });
+        return;
+      }
       if (mark) {
         mark.scrollIntoView({ block: "center", behavior: "smooth" });
         return;
@@ -595,7 +610,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
       }
       setScrollTarget({ id: c.id, key });
     },
-    [scopeKeys, shownSections, select, view, expandable, sections, briefSections],
+    [scopeKeys, shownSections, select, view, expandable, sections, briefSections, calm, openKey],
   );
 
   const onHighlightClick = useCallback((id: string) => {
@@ -925,7 +940,10 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   // date-warnings-honest: one date warning per date and item that lacks a basis (the API
   // counts them so); the header names how many dates and opens Plan › Dates filtered to them.
   const dateWarnings = warnings.filter((w) => w.code === "unverified_date");
-  const otherWarnings = warnings.length - dateWarnings.length;
+  const otherWarnings = warnings.filter((w) => w.code !== "unverified_date");
+  // B-09: the sections the header's warnings point to, once each, in document order.
+  const warnedKeys = new Set(otherWarnings.flatMap((w) => w.section_keys));
+  const warnedSections = (version?.sections ?? []).map((s) => s.section_key).filter((k) => warnedKeys.has(k));
   const lackingDays = [...new Set(dateWarnings.map(warningDay).filter((d): d is string => !!d))];
   // The header counts dates, not date-and-item pairs: one date written for two items is one.
   const lackingCount = new Set(dateWarnings.map((w) => warningDay(w) ?? w.message)).size;
@@ -1206,15 +1224,31 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                 </span>
               )}
               {latest != null && n !== latest && <Chip kind="na">Earlier version</Chip>}
-              {otherWarnings > 0 && (
-                <Chip kind="warn">
-                  {otherWarnings} warning{otherWarnings === 1 ? "" : "s"}
-                </Chip>
+              {otherWarnings.length > 0 && (
+                // B-09: a button that opens its warnings on hover, a tap or the keyboard (a title opens nothing on a phone).
+                <InfoTip
+                  label="warnings"
+                  align="start"
+                  side="bottom"
+                  testId="version-warnings-chip"
+                  trigger={
+                    <Chip kind="warn">
+                      {otherWarnings.length} warning{otherWarnings.length === 1 ? "" : "s"}
+                    </Chip>
+                  }
+                >
+                  {/* Spans: the header's status sits in a <p>. */}
+                  <span className="flex flex-col gap-1.5">
+                    {otherWarnings.map((w, i) => (
+                      <span key={i}>{w.message.charAt(0).toUpperCase() + w.message.slice(1)}</span>
+                    ))}
+                  </span>
+                </InfoTip>
               )}
               {dateWarnings.length > 0 && (
                 <Link href={datesHref(lackingDays)} data-testid="dates-lacking" className="inline-flex">
                   <Chip kind="warn">
-                    {lackingCount} date{lackingCount === 1 ? " lacks" : "s lack"} a basis
+                    {lackingCount} date{lackingCount === 1 ? " lacks" : "s lack"} a date source
                   </Chip>
                 </Link>
               )}
@@ -1238,8 +1272,9 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                   Discuss
                 </Button>
               )}
-              {/* C1e: accepted changes staged for the next draft, built in one job. */}
-              {document_?.kind === "prd" && <BuildDraftButton doc={doc} />}
+              {/* C1e: accepted changes staged for the next draft, built in one job; a roadmap's
+                  staged changes build its next draft the same way (next to Approve version). */}
+              {(document_?.kind === "prd" || document_?.kind === "roadmap") && <BuildDraftButton doc={doc} />}
               {/* H9: an approved pricing memo's Decide (the pricing owner), or who it waits for. */}
               {document_?.kind === "pricing" && n === latest && <PricingDecide slug={document_.slug} />}
               {templateOnly && !replaced && document_ && <DraftWithOracleButton slug={document_.slug} />}
@@ -1388,35 +1423,35 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                 </Link>
               </p>
             )}
-            {warnings.map((w, i) => (
-              <div key={i} role="status" data-warning={w.code} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn">
-                <Icon name="alert" size={16} />
-                <p className="min-w-0 flex-1 font-medium">{w.message}</p>
-                {/* #396: a date warning says to record a date basis on Plan › Dates (F3). */}
-                {w.code === "unverified_date" && (
-                  <Link href={datesHref([warningDay(w)].filter((d): d is string => !!d))} className="font-medium underline underline-offset-2">
-                    Open Plan › Dates
-                  </Link>
-                )}
-                {w.section_keys.map((k) => (
-                  <a
-                    key={k}
-                    href={sectionHref(doc, n, k)}
-                    data-own-nav
-                    onClick={(e) => {
-                      // On the Items tab the link opens the section on the Document tab.
-                      if (!plainClick(e) || !onDocument) return;
-                      e.preventDefault();
-                      if (!shownSections.some((s) => s.section_key === k)) setViewOverride("full");
-                      select(k);
-                    }}
-                    className="font-medium underline underline-offset-2"
-                  >
-                    {headings.get(k) ?? k}
-                  </a>
-                ))}
-              </div>
-            ))}
+            {/* B-09: the warnings themselves are in the header chip's tip (dates: its own chip);
+                the body names, in one short line, the sections they point to. */}
+            {warnedSections.length > 0 && (
+              <p role="status" data-testid="warned-sections" className="flex items-start gap-x-2 text-sm text-text2">
+                <Icon name="alert" size={16} className="text-warn" />
+                <span>
+                  Still open in{" "}
+                  {warnedSections.map((k, i) => (
+                    <Fragment key={k}>
+                      {i > 0 && ", "}
+                      <a
+                        href={sectionHref(doc, n, k)}
+                        data-own-nav
+                        onClick={(e) => {
+                          // On the Items tab the link opens the section on the Document tab.
+                          if (!plainClick(e) || !onDocument) return;
+                          e.preventDefault();
+                          if (!shownSections.some((s) => s.section_key === k)) setViewOverride("full");
+                          select(k);
+                        }}
+                        className="font-medium text-accent-ink underline underline-offset-2"
+                      >
+                        {headings.get(k) ?? k}
+                      </a>
+                    </Fragment>
+                  ))}
+                </span>
+              </p>
+            )}
             {readOnly && (
               <p role="status" className="rounded-button bg-pass-bg px-3 py-2 text-sm font-medium text-pass">
                 Approved {formatDate(version.approved_at!)} · review is closed
@@ -1439,6 +1474,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
             liveTick={liveTick}
             onDecided={() => void Promise.all([verQ.reload(), docQ.reload()])}
             onOpen={setRunReviewOpen}
+            approvedAs={version.approved_at ? (document_?.kind === "prd" ? "PRD" : (document_?.kind ?? "document")) : null}
           />
         )}
         {pane === "items" && isRoadmap && (
@@ -1464,7 +1500,48 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
 
         {/* The outline rail (>= 1280 px), the section with the switcher above it below that,
             and the review panel; each column sticks and scrolls inside itself. */}
-        {onDocument && (
+        {onDocument && calm && version && (
+          <PrdLook
+            doc={doc}
+            n={n}
+            view={view}
+            sections={shownSections}
+            current={openKey}
+            onRead={read}
+            onPick={select}
+            nodes={shownSections.map((s) => (
+              <SectionView
+                key={s.id}
+                {...sectionProps(s)}
+                // PT1 a: the contents rail's groups say which sections are in the brief, not a chip per heading.
+                showLayer={false}
+                look={{ num: calmNums.get(s.section_key), hideReview: s.section_key !== openKey }}
+                expand={view === "brief" ? expandFor(s.section_key) : undefined}
+                headTools={
+                  <Button
+                    icon="comment"
+                    className="min-[1101px]:hidden max-[639px]:hidden"
+                    onClick={() => {
+                      select(s.section_key);
+                      showFeedback();
+                    }}
+                    aria-label={`Open feedback on this section: ${openCounts.get(s.section_key) ?? 0}`}
+                  >
+                    Feedback <b className="tnum text-accent-ink">{openCounts.get(s.section_key) ?? 0}</b>
+                  </Button>
+                }
+              />
+            ))}
+          >
+            {panel("side")}
+          </PrdLook>
+        )}
+        {onDocument && calm && !version && (
+          <div className="rounded-panel border border-line bg-surface px-4 py-6">
+            {error ? <ErrorNote>{error}</ErrorNote> : <Loading label="Loading version…" />}
+          </div>
+        )}
+        {onDocument && !calm && (
         <div
           data-testid="prd-layout"
           className={`grid items-start gap-4 max-[1100px]:grid-cols-1 max-[600px]:gap-3 ${
@@ -1585,7 +1662,20 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
           >
             {/* qa4-docs-37: the open section's place, in words: "N/M" elsewhere counts reviews. */}
             <span className="tnum truncate">
-              Section {openIdx + 1} <span className="text-text2">of {shownSections.length}</span>
+              {calm && openSection ? (
+                calmNums.get(openSection.section_key) ? (
+                  <>
+                    Section {calmNums.get(openSection.section_key)}{" "}
+                    <span className="text-text2">of {shownSections.filter((s) => s.level === 2).length}</span>
+                  </>
+                ) : (
+                  openSection.heading
+                )
+              ) : (
+                <>
+                  Section {openIdx + 1} <span className="text-text2">of {shownSections.length}</span>
+                </>
+              )}
             </span>
           </button>
           <button

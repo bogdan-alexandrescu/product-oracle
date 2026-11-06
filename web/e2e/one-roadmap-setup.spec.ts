@@ -23,13 +23,13 @@ test("an owner creates the product roadmap in Settings", async ({ page }) => {
   await open(page, null);
   await page.goto("/settings/company");
   const panel = page.getByTestId("product-roadmap-panel");
-  await expect(panel.getByTestId("product-roadmap-state")).toContainText("No product roadmap yet");
+  await expect(panel.getByTestId("product-roadmap-state")).toHaveText("No product roadmap yet.");
   await panel.getByRole("button", { name: "Create the product roadmap" }).click();
-  await expect(panel.getByTestId("product-roadmap-state")).toHaveText("Created: Product roadmap. Every PRD's items go on it.");
+  await expect(panel.getByTestId("product-roadmap-state")).toHaveText("Created: Product roadmap");
   await expect(panel.getByRole("button", { name: "Create the product roadmap" })).toHaveCount(0);
 
   await page.reload();
-  await expect(panel.getByTestId("product-roadmap-state")).toHaveText("Created: Product roadmap. Every PRD's items go on it.");
+  await expect(panel.getByTestId("product-roadmap-state")).toHaveText("Created: Product roadmap");
   await panel.getByRole("link", { name: "Product roadmap" }).click();
   await expect(page).toHaveURL(/\/documents\/product-roadmap$/);
 });
@@ -99,7 +99,7 @@ test("a viewer sees no setup controls", async ({ page }) => {
   await open(page, "one-roadmap", "viewer@example.com");
   await page.goto("/settings/company");
   const panel = page.getByTestId("product-roadmap-panel");
-  await expect(panel.getByTestId("product-roadmap-state")).toHaveText("Created: Product roadmap. Every PRD's items go on it.");
+  await expect(panel.getByTestId("product-roadmap-state")).toHaveText("Created: Product roadmap");
   await expect(page.getByTestId("team-capacity-panel")).toHaveCount(0);
 
   await page.goto("/documents/user-safety");

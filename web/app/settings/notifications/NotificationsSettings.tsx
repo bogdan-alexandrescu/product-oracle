@@ -11,7 +11,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { Button, confirmInPage, Notice, PageHeader, Panel } from "@/components/ds";
-import { ErrorNote, Loading } from "@/components/ui";
+import { LoadError, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
 import { zoneName } from "@/lib/format";
@@ -66,7 +66,13 @@ function OwnerSettings() {
     <div className="flex min-w-0 flex-col gap-4">
       {connected && slack && <Notice tone="pass">Slack is connected for notifications.</Notice>}
       {returned && <Notice tone="error">{returned}</Notice>}
-      {(integrations.error || setting.error) && <ErrorNote>{integrations.error ?? setting.error}</ErrorNote>}
+      {(integrations.error || setting.error) && (
+        <LoadError
+          what="your notification settings"
+          error={integrations.error ?? setting.error ?? ""}
+          onRetry={() => void Promise.all([integrations.reload(), setting.reload(), status.reload()])}
+        />
+      )}
       {(integrations.loading || setting.loading) && !(integrations.data && setting.data) && <Loading />}
       {integrations.data && setting.data && (
         <>
@@ -187,7 +193,7 @@ function SlackPanel({
             ) : (
               status?.mirroring && <p className="text-sm text-text2">People can mirror discussions to a Slack thread.</p>
             )}
-            {channels.error && <ErrorNote>{channels.error}</ErrorNote>}
+            {channels.error && <LoadError what="the Slack channels" error={channels.error} onRetry={() => void channels.reload()} />}
             <div className="flex flex-wrap items-end gap-2">
               <Field label="Channel" className="w-72 max-w-full">
                 <select className={SELECT_FIELD} value={channel} onChange={(e) => setChannel(e.target.value)} disabled={!channels.data}>

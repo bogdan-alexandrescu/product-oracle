@@ -12,6 +12,19 @@ export type ActionIn = Schemas["ActionIn"];
 export type Patch = Partial<Omit<Schemas["ScopeItemPatch"], "lock_version">>;
 export type LlmJob = Schemas["LlmJobOut"];
 
+/** A reason's own name among its feature's (the gate's ref): rows, the waive box and a waiver go by it. */
+export const refOf = (r: Pick<Reason, "ref" | "code">) => r.ref || r.code;
+
+/** A staged call answers a reason when it names none (the whole feature), its code (all of the code) or its own ref. */
+export const answers = (a: Pick<Action, "answers">, r: Pick<Reason, "ref" | "code">) => !a.answers.length || a.answers.includes(r.code) || a.answers.includes(refOf(r));
+
+/** The left-out feature a "depends on" problem names (two such problems name two). */
+export function depOf(r: Pick<Reason, "label">, f: Feature, scope: Scope): Feature | undefined {
+  const byKey = new Map(scope.features.map((x) => [x.key, x]));
+  const named = / depends on ([a-z0-9]+(?:[-_][a-z0-9]+)*),/.exec(r.label)?.[1];
+  return (named ? byKey.get(named) : undefined) ?? f.depends_on.map((d) => byKey.get(d)).find((d) => d && d.decision !== "include");
+}
+
 /** approver: decides and edits rows; commenter: suggests (D8 "suggested"); viewer: reads. */
 export type Mode = "approver" | "commenter" | "viewer";
 
@@ -116,12 +129,12 @@ export function fixesFor(reason: Reason, f: Feature, scope: Scope, mode: Mode, o
   const leaveOut: Fix = { label: "Leave out", decision: true, run: () => ui.leaveOut(f) };
   // qa4-work-41: the row's decisions read as the inspector's Decision control (Include, Leave out, Defer to a later PRD).
   const defer: Fix = { label: "Defer to a later PRD", decision: true, run: () => setDecision(mode, ops, f, "defer") };
-  const waive: Fix | null = approver && reason.waivable ? { label: "Waive", run: () => ui.waive(f, reason.code) } : null;
+  const waive: Fix | null = approver && reason.waivable ? { label: "Waive", run: () => ui.waive(f, refOf(reason)) } : null;
   const removeDeps = (keys: string[]): Fix => ({ label: "Remove dependency", run: () => setField(mode, ops, f, "depends_on", f.depends_on.filter((d) => !keys.includes(d))) });
   let fixes: (Fix | null)[];
   switch (reason.code) {
     case "depends_on_excluded": {
-      const dep = f.depends_on.map((d) => byKey.get(d)).find((d) => d && d.decision !== "include");
+      const dep = depOf(reason, f, scope);
       fixes = dep
         ? // qa-work-12: a short label on one line; the dependency is named in the reason chip and the tooltip.
           [{ label: "Include dependency", title: `Include ${dep.title}`, run: () => setDecision(mode, ops, dep, "include") }, removeDeps([dep.key]), leaveOut, waive]
@@ -202,7 +215,7 @@ export function plainText(text: string): string {
 export const goalsOf = (f: Feature) => (f.goals.length ? f.goals : f.decision !== "include" ? (f.baseline_goals ?? []) : []);
 
 export function goalName(scope: Scope, key: string): string {
-  return scope.goals_available.find((g) => g.key === key)?.title ?? "A goal not in the baseline";
+  return scope.goals_available.find((g) => g.key === key)?.title ?? "A goal not in the Ground Truth";
 }
 
 /**

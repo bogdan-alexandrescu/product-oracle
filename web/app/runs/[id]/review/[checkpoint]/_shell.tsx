@@ -9,6 +9,7 @@ import { Icon, LinkButton, NotFoundPanel, Page } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { CHECKPOINT_LABEL } from "@/app/runs/_lib";
+import { RoadmapRead } from "@/app/runs/_roadmap-read";
 import { useScreenSubject } from "@/lib/screen-subject";
 import { useQuery } from "@/lib/use-query";
 
@@ -83,5 +84,15 @@ export function ReviewShell({ runId, checkpointId, item }: { runId: string; chec
   }
   if (q.error) return <Page className="py-6"><ErrorNote>{q.error}</ErrorNote></Page>;
   if (!q.data || !cp || !View) return <div className="px-6 py-8"><Loading /></div>;
-  return <View run={q.data} cp={cp} item={item} reloadRun={q.reload} />;
+  // prd-reads-working-draft: a stop that shows roadmap data says which roadmap the run read.
+  return (
+    <>
+      {q.data.roadmap_read && (
+        <div className="px-6 pt-4">
+          <RoadmapRead text={q.data.roadmap_read} />
+        </div>
+      )}
+      <View run={q.data} cp={cp} item={item} reloadRun={q.reload} />
+    </>
+  );
 }

@@ -211,7 +211,7 @@ async def test_run_approvals_not_counted(client):
     async with tenant_session(ctx.tenant_id) as s:
         from oracle.decisions.service import next_number
 
-        s.add(Decision(number=await next_number(s), title="Approve Baseline confirm",
+        s.add(Decision(number=await next_number(s), title="Approve Ground Truth confirm",
                        status="proposed", approver_id=ctx.users["decider"].id, driver="oracle",
                        origin="checkpoint",
                        options=[{"key": "approve", "label": "Approve"}]))  # fmt: skip
@@ -220,7 +220,7 @@ async def test_run_approvals_not_counted(client):
     w = (await client.get("/v1/simple/decisions/waiting", headers=ctx.as_("decider"))).json()
     assert w["approvals_waiting"] == 1
     assert w["count"] == 15  # Q2..Q16, none of them a run approval
-    assert all(q["title"] != "Approve Baseline confirm" for q in w["questions"])
+    assert all(q["title"] != "Approve Ground Truth confirm" for q in w["questions"])
 
 
 async def test_job_reads_a_prd_without_a_table(client, monkeypatch):
@@ -418,7 +418,7 @@ async def test_page_source_outside_meetings_and_approvals(client):
     async with tenant_session(ctx.tenant_id) as s:
         from oracle.decisions.service import next_number
 
-        s.add(Decision(number=await next_number(s), title="Approve Baseline confirm",
+        s.add(Decision(number=await next_number(s), title="Approve Ground Truth confirm",
                        status="proposed", approver_id=ctx.users["decider"].id, driver="oracle",
                        origin="checkpoint",
                        options=[{"key": "approve", "label": "Approve"}]))  # fmt: skip
@@ -432,7 +432,7 @@ async def test_page_source_outside_meetings_and_approvals(client):
     assert body["approvals_waiting"] == 1
     assert body["approvals_example"] is not None
     assert body["approvals_example"].startswith("D-")
-    assert body["approvals_example"].endswith(" Approve Baseline confirm")
+    assert body["approvals_example"].endswith(" Approve Ground Truth confirm")
 
 
 async def test_meeting_agenda_keeps_what_it_decided(client):

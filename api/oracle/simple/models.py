@@ -531,7 +531,9 @@ class SimpleChatCard(TenantScoped, Base):
     applies it (``change_id``: the change it became, applied or proposed); a discarded
     card wrote nothing. ``discussion_id``/``message_id``: the thread line (Oracle's
     discussions) it belongs to; ``meeting_id``: S8's meeting, when asked in one;
-    ``owner_id``: the person whose Ask panel or walk it is (outside meetings)."""
+    ``owner_id``: the person whose Ask panel or walk it is (outside meetings); ``redo_of``:
+    the earlier open draft it offers again because the person asked to change it (it
+    replaces that draft; oracle.simple.card_order)."""
 
     __tablename__ = "simple_chat_cards"
     __table_args__ = (
@@ -561,6 +563,9 @@ class SimpleChatCard(TenantScoped, Base):
     decision_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     decided_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    redo_of: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("simple_chat_cards.id", ondelete="SET NULL")
+    )
 
 
 class SimpleChatRead(TenantScoped, Base):

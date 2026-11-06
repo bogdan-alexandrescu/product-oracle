@@ -1,6 +1,6 @@
 import { expect, test } from "./test";
 
-import { ADMIN, feedbackState, login, openSection, openTab, outlineRow, section, sectionStrip, selectText } from "./helpers";
+import { ADMIN, feedbackState, login, openSection, openTab, outlineRow, section, selectText } from "./helpers";
 
 test("login: rejects a wrong password, then signs in", async ({ page }) => {
   await page.goto("/documents");
@@ -31,23 +31,36 @@ test("open a version: sections in order with citation chips", async ({ page }) =
   await page.getByRole("link", { name: "Version 2" }).click();
   await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2$/);
 
-  // One section at a time: the outline lists them in order, the first unreviewed one is open.
-  const headings = page.locator("section[data-section-key] :is(h1,h2,h3)").filter({ visible: true });
+  // A PRD reads as one document: every section shows at once, numbered from its heading level.
   // The opening section, titled with the document's own title, reads as the Introduction (qa-docs-50).
-  await expect(headings).toHaveText(["Introduction"]);
-  await sectionStrip(page).getByRole("button", { name: "Unfold 5. Proposed flow" }).click();
-  await expect(sectionStrip(page).getByTestId("outline-name")).toHaveText([
+  const headings = page.locator("section[data-section-key] :is(h1,h2,h3)").filter({ visible: true });
+  await expect(headings).toHaveText([
     "Introduction",
-    "1. Goal trace",
-    "2. Problem",
-    "3. Users and jobs",
-    "4. Scope",
-    "5. Proposed flow",
+    "1 Goal trace",
+    "2 Problem",
+    "3 Users and jobs",
+    "4 Scope",
+    "5 Proposed flow",
     "5.1 Cart review",
     "5.2 Shipping step",
     "5.3 Saved addresses",
-    "6. Risks and open questions",
-    "7. Success metrics",
+    "6 Risks and open questions",
+    "7 Success metrics",
+  ]);
+  // The contents rail lists the same sections, in the same order.
+  await page.getByRole("button", { name: "Contents: find a section" }).click();
+  await expect(page.getByTestId("prd-contents").locator(".prd-toc-h")).toHaveText([
+    "Introduction",
+    "Goal trace",
+    "Problem",
+    "Users and jobs",
+    "Scope",
+    "Proposed flow",
+    "Cart review",
+    "Shipping step",
+    "Saved addresses",
+    "Risks and open questions",
+    "Success metrics",
   ]);
 
   // Hovering a chip previews source, title and excerpt.
@@ -94,9 +107,9 @@ test("add an anchored comment that survives reload", async ({ page }) => {
   await expect(comment).toContainText("raised on v2");
 });
 
-test("a citation of Oracle's baseline reads 'Oracle baseline', its ref as text, not a link", async ({ page }) => {
+test("a citation of Oracle's Ground Truth reads 'Oracle Ground Truth', its ref as text, not a link", async ({ page }) => {
   await login(page);
-  // Version 2 of checkout-redesign cites a baseline goal in its Problem section.
+  // Version 2 of checkout-redesign cites a Ground Truth goal in its Problem section.
   await page.evaluate(() => {
     const key = "po-mock-db-v2";
     const db = JSON.parse(localStorage.getItem(key)!);
@@ -119,15 +132,15 @@ test("a citation of Oracle's baseline reads 'Oracle baseline', its ref as text, 
   await page.goto("/documents/checkout-redesign/v/2");
 
   const chip = (await openSection(page, "problem")).getByTestId("cite-o-g1");
-  await expect(chip).toHaveText(/Oracle baseline/);
+  await expect(chip).toHaveText(/Oracle Ground Truth/);
   await chip.hover();
   const card = page.getByRole("tooltip");
   await expect(card).toContainText("Goal G1: raise first-order completion");
-  await expect(card.getByTestId("cite-ref")).toHaveText("baseline goal g1 (activation), locked");
+  await expect(card.getByTestId("cite-ref")).toHaveText("Ground Truth goal g1 (activation), locked");
   await expect(card.getByRole("link")).toHaveCount(0);
 
   await openTab(page, "Sources");
-  const row = page.getByTestId("sources-list").filter({ visible: true }).getByRole("listitem").filter({ hasText: "Oracle baseline" });
+  const row = page.getByTestId("sources-list").filter({ visible: true }).getByRole("listitem").filter({ hasText: "Oracle Ground Truth" });
   await expect(row).toContainText("Goal G1: raise first-order completion");
   await expect(row.getByRole("link")).toHaveCount(0);
 });

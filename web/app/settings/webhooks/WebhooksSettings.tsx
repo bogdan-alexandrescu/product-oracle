@@ -3,7 +3,8 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
-import { Button, type Column, DataTable, Icon, InfoTip, Notice, PageHeader, Panel, Split } from "@/components/ds";
+import { Button, type Column, DataTable, Icon, InfoTip, PageHeader, Panel, Split } from "@/components/ds";
+import { LoadError } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -47,9 +48,9 @@ export function WebhooksSettings() {
             {h.name}
           </span>
           {h.include_approvers_content && (
-            <span title="Owners-and-approvers content on" className="inline-flex flex-none text-text2" data-testid="approvers-content-lock">
+            <span title="Sends private details: what only owners and approvers can see" className="inline-flex flex-none text-text2" data-testid="approvers-content-lock">
               <Icon name="lock" size={16} />
-              <span className="sr-only">Owners-and-approvers content on</span>
+              <span className="sr-only">Sends private details: what only owners and approvers can see</span>
             </span>
           )}
         </span>
@@ -63,9 +64,11 @@ export function WebhooksSettings() {
       header: "Last delivery",
       width: "150px",
       phone: "hide",
+      // F-65: the outcome and its time wrap rather than cut.
+      wrap: true,
       cell: (h) =>
         h.last_delivery ? (
-          <span className="tnum truncate" title={h.last_delivery.at ? formatDateTime(h.last_delivery.at) : undefined}>
+          <span className="tnum" title={h.last_delivery.at ? formatDateTime(h.last_delivery.at) : undefined}>
             {outcomeText(h.last_delivery)}
             {h.last_delivery.at && <span className="text-text2"> · {ago(h.last_delivery.at)}</span>}
           </span>
@@ -86,14 +89,15 @@ export function WebhooksSettings() {
           <InfoTip label="Webhooks" align="start" side="bottom">
             {/* qa-settings-11: the page's intro in its tip, as on every Settings tab. */}
             <span className="block">Tell your other tools when runs, drafts and approvals change.</span>
-            Oracle posts each event as signed JSON (Standard Webhooks: webhook-id, webhook-timestamp, webhook-signature). Check the
-            signature with the secret and refuse a timestamp more than 5 minutes off; the runbook (docs/ops-webhooks.md) has a verify
-            example. Payloads carry ids, states, titles, names and links, never document text.
+            {/* Pass F, F-20: no header names or file names here. */}
+            Oracle signs each event with the webhook&apos;s secret, so your tool can check it came from Oracle and is recent.
+            Events carry states, titles, names and links, never document text.
           </InfoTip>
         }
         action={
           can("create_webhook") && (
-            <Button variant="primary" icon="plus" onClick={() => setCreating(true)}>
+            // F-1: no new webhook while the list or its event types did not load.
+            <Button variant="primary" icon="plus" disabled={!!hooksQ.error || !!typesQ.error} onClick={() => setCreating(true)}>
               New webhook
             </Button>
           )
@@ -119,10 +123,13 @@ export function WebhooksSettings() {
           )
         }
       >
-        <Panel title="Webhooks" count={hooks?.length}>
+        {typesQ.error && !hooksQ.error && (
+          <LoadError what="the kinds of event" error={typesQ.error} onRetry={() => void typesQ.reload()} />
+        )}
+        <Panel title="Webhooks" count={hooksQ.error ? undefined : hooks?.length}>
           {hooksQ.error ? (
             <div className="p-4">
-              <Notice tone="error">{hooksQ.error}</Notice>
+              <LoadError what="your webhooks" error={hooksQ.error} onRetry={() => void hooksQ.reload()} />
             </div>
           ) : (
             <DataTable

@@ -1,16 +1,16 @@
 "use client";
 
 /**
- * Current state beside Desired state (api/oracle/currentstate): the word pill every feature
+ * Running today beside the Ground Truth (api/oracle/currentstate): the word pill every feature
  * carries (NEW, IN PROGRESS, EXISTS, EXISTS · PROOF OLD), its explainer, Priorities' Show filter,
- * Detailed's Desired state / Current state tabs, the proof table with Check again, and the
+ * Detailed's Ground Truth / Running today tabs, the proof table with Check again, and the
  * Ready to move band whose moves the owner confirms.
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { Button, PageHeader } from "@/components/ds";
+import { Button, InfoTip, PageHeader } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -29,7 +29,7 @@ const MEANS: Record<Mark, string> = {
   new: "Asked for or planned. Nothing built yet.",
   in_progress: "Being built: some pull requests merged, tasks still open.",
   exists: "Runs today, with proof: code, merged pull requests, done tasks and a measured value.",
-  exists_old: "Runs today, but its proof is more than 30 days old. Check it again in Current state.",
+  exists_old: "Runs today, but its proof is more than 30 days old. Check it again in Running today.",
 };
 
 const TONE: Record<Mark, string> = {
@@ -112,7 +112,7 @@ function MarkCard({ f }: { f: FeatureState }) {
           <li>{measured?.value ?? "No measured value yet"}</li>
         </ul>
       )}
-      {!exists && <p className="mt-3 text-[13px] text-text2">It moves to Current state once it ships and its proof is in.</p>}
+      {!exists && <p className="mt-3 text-[13px] text-text2">It moves to Running today once it ships and its proof is in.</p>}
     </div>
   );
 }
@@ -136,14 +136,14 @@ export function ShowFilter({ counts, pick, onPick }: { counts: Record<"new" | "i
   );
 }
 
-/** Detailed's two tabs: Desired state (the baseline page, same URL) and Current state. */
-export function StateTabs({ view, desired, running }: { view: "desired" | "current"; desired: number | null; running: number | null }) {
+/** Detailed's two tabs: Ground Truth (every feature, every mark; the page's own URL) and Running today. */
+export function StateTabs({ view, all, running }: { view: "desired" | "current"; all: number | null; running: number | null }) {
   const tabs = [
-    { k: "desired", label: "Desired state", n: desired, tip: "What the product should become", href: "/baseline" },
-    { k: "current", label: "Current state", n: running, tip: "What runs today", href: "/baseline?view=current" },
+    { k: "desired", label: "Ground Truth", n: all, tip: "Every feature and its mark", href: "/ground-truth" },
+    { k: "current", label: "Running today", n: running, tip: "What runs today, with its proof", href: "/ground-truth?view=current" },
   ];
   return (
-    <div role="tablist" aria-label="Desired state or Current state" className="mb-4 flex gap-1 border-b border-line" data-testid="cs-tabs">
+    <div role="tablist" aria-label="Ground Truth or Running today" className="mb-4 flex gap-1 border-b border-line" data-testid="cs-tabs">
       {tabs.map((t) => (
         <Link key={t.k} href={t.href} role="tab" aria-selected={view === t.k} title={t.tip} className={`-mb-px border-b-2 px-3 py-2 text-[14px] ${view === t.k ? "border-accent font-semibold text-text" : "border-transparent text-text2"}`}>
           {t.label} {t.n !== null && <span className="tabular-nums text-text2">{t.n}</span>}
@@ -208,7 +208,7 @@ const ANSWERS: { k: Schemas["FeatureAnswerIn"]["answer"]; label: string; variant
   { k: "no_longer_runs", label: "No longer runs", variant: "ghost" },
 ];
 
-/** Current state: one table of what runs today, old proof first, with Check again in place. */
+/** Running today: one table of what runs today, old proof first, with Check again in place. */
 export function ProofTable({ data, phone, onChanged }: { data: FeatureStates; phone: boolean; onChanged: (f: FeatureState) => void }) {
   const day = useDay();
   const zone = useCompanyZone();
@@ -329,7 +329,7 @@ export function ProofTable({ data, phone, onChanged }: { data: FeatureStates; ph
 }
 
 
-/** Moved into Current state today: its note says when and how. */
+/** Moved into Running today: its note says when and how. */
 const movedNow = (f: FeatureState) => !!f.moved_at && f.proof_days === 0;
 
 /** The owner's Yes, still runs is the latest check (a later read by Oracle replaces it). */
@@ -348,17 +348,23 @@ function MarkGlyph({ mark, size = 14 }: { mark: Mark; size?: number }) {
   );
 }
 
-/** What is still to build, in the order Desired state lists it: ready first, then in progress, then new. */
+/** What is still to build: ready first, then in progress, then new. */
 function stillDesired(data: FeatureStates): FeatureState[] {
   const order = (f: FeatureState) => (f.ready ? 0 : f.mark === "in_progress" ? 1 : 2);
   return data.features.filter((f) => f.mark === "in_progress" || f.mark === "new").sort((a, b) => order(a) - order(b));
 }
 
-/** Desired state's list: every planned feature with its mark, area, release and how its proof stands. */
+/** The Ground Truth tab's order: every feature, what is still to build first, then what runs (old proof first). */
+function everyFeature(data: FeatureStates): FeatureState[] {
+  const running = data.features.filter((f) => f.mark === "exists" || f.mark === "exists_old");
+  return [...stillDesired(data), ...running.sort((a, b) => (a.mark === "exists_old" ? 0 : 1) - (b.mark === "exists_old" ? 0 : 1))];
+}
+
+/** The Ground Truth tab's list: every feature with its mark, area, release and how its proof stands. */
 export function DesiredList({ data }: { data: FeatureStates }) {
   const phone = usePhoneWidth();
   const [all, setAll] = useState(false);
-  const rows = stillDesired(data);
+  const rows = everyFeature(data);
   const limit = phone ? 9 : 14;
   const shown = all ? rows : rows.slice(0, limit);
   if (rows.length === 0) return null;
@@ -368,20 +374,17 @@ export function DesiredList({ data }: { data: FeatureStates }) {
         const tasks = proof(f, "tasks");
         return (
           <div key={f.feature_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-2 last:border-b-0" data-testid="cs-desired-row">
-            <span data-testid="cs-mark" data-mark={f.mark} title={MARK_WORD[f.mark]} className={`inline-flex flex-none items-center gap-1 whitespace-nowrap text-[12px] font-semibold ${f.mark === "new" ? "text-accent-ink" : "text-warn"}`}>
+            <span data-testid="cs-mark" data-mark={f.mark} title={MARK_WORD[f.mark]} className={`inline-flex flex-none items-center gap-1 whitespace-nowrap text-[12px] font-semibold ${f.mark === "new" ? "text-accent-ink" : f.mark === "exists" ? "text-pass" : "text-warn"}`}>
               <MarkGlyph mark={f.mark} />
               <span className={phone ? "sr-only" : ""}>{MARK_WORD[f.mark]}</span>
             </span>
             <span className="min-w-[10rem] flex-1 font-medium">{f.title}</span>
-            {!phone && <span className="w-[200px] text-[13px] text-text2">{f.area ?? ""}</span>}
-            {!phone && <span className="w-[140px] text-[13px] text-text2">{f.milestone ?? ""}</span>}
-            {f.ready ? (
-              <span className="text-[13px] font-semibold text-pass">Proof is in</span>
-            ) : f.mark === "in_progress" && tasks?.total ? (
-              <span className="text-[13px] text-text2">
-                {tasks.count ?? 0} of {tasks.total} tasks done
-              </span>
-            ) : null}
+            {!phone && <span className="w-[200px] flex-none text-[13px] text-text2" data-testid="cs-desired-area">{f.area ?? ""}</span>}
+            {!phone && <span className="w-[140px] flex-none text-[13px] text-text2">{f.milestone ?? ""}</span>}
+            {/* A fixed width off a phone, so every row's columns line up (D-5). */}
+            <span className={`text-[13px] ${phone ? "" : "w-[130px] flex-none"} ${f.ready ? "font-semibold text-pass" : "text-text2"}`} data-testid="cs-desired-progress">
+              {f.ready ? "Proof is in" : f.mark === "in_progress" && tasks?.total ? `${tasks.count ?? 0} of ${tasks.total} tasks done` : ""}
+            </span>
           </div>
         );
       })}
@@ -394,14 +397,14 @@ export function DesiredList({ data }: { data: FeatureStates }) {
   );
 }
 
-/** Under Current state's table: what is still in Desired state, each feature a chip with its mark. */
+/** Under Running today's table: what is still to build, each feature a chip with its mark. */
 export function StillDesired({ data }: { data: FeatureStates }) {
   const rows = stillDesired(data);
   if (rows.length === 0) return null;
   return (
     <div className="mt-4 rounded-xl border border-line bg-surface p-3" data-testid="cs-still-desired">
       <p className="mb-2 text-[13px] font-semibold text-text2">
-        Still in Desired state: {data.in_progress} in progress, {data.new} new
+        Still to build: {data.in_progress} in progress, {data.new} new
       </p>
       <div className="flex flex-wrap gap-1.5">
         {rows.map((f) => (
@@ -416,7 +419,7 @@ export function StillDesired({ data }: { data: FeatureStates }) {
   );
 }
 
-/** The top of Current state: how many run, how many have old proof, how many are being built. */
+/** The top of Running today: how many run, how many have old proof, how many are being built. */
 export function CurrentSummary({ data }: { data: FeatureStates }) {
   return (
     <div className="mb-3 flex flex-wrap items-center gap-3 text-[14px]" data-testid="cs-summary">
@@ -432,13 +435,15 @@ export function CurrentSummary({ data }: { data: FeatureStates }) {
           <b>0</b> with old proof
         </span>
       )}
-      <span className="text-text2">{data.in_progress} in progress in Desired state</span>
-      <span className="text-text2">· Oracle reads code maps, merged pull requests and done tasks each night; you confirm.</span>
+      <span className="text-text2">{data.in_progress} still being built</span>
+      <InfoTip label="Running today" align="start">
+        Oracle reads code maps, merged pull requests and done tasks each night; you confirm.
+      </InfoTip>
     </div>
   );
 }
 
-/** Desired state's Ready to move band: features whose proof is in, each waiting for the owner's yes. */
+/** The Ground Truth tab's Ready to move band: features whose proof is in, each waiting for the owner's yes. */
 export function ReadyBand({ data, onChanged }: { data: FeatureStates; onChanged: (f: FeatureState) => void }) {
   const router = useRouter();
   const [open, setOpen] = useState<FeatureState | null>(null);
@@ -453,8 +458,8 @@ export function ReadyBand({ data, onChanged }: { data: FeatureStates; onChanged:
       const out = await unwrap(api.POST("/v1/feature-states/{feature_id}/move", { params: { path: { feature_id: f.feature_id } }, body: { decision } }));
       setOpen(null);
       onChanged(out);
-      // A move ends on Current state, the moved feature on top with when and how it moved.
-      if (decision === "move") router.push("/baseline?view=current");
+      // A move ends on Running today, the moved feature on top with when and how it moved.
+      if (decision === "move") router.push("/ground-truth?view=current");
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -464,10 +469,17 @@ export function ReadyBand({ data, onChanged }: { data: FeatureStates; onChanged:
   return (
     <>
       <div data-testid="cs3-ready" className="mb-3 flex flex-wrap items-center gap-2 rounded-xl bg-pass-bg px-4 py-2.5 text-[14px]">
-        <b>{ready.length} ready to move</b>: shipped, with proof. Each one needs your yes.
+        {/* One inline run, so it never breaks between the count and its words (P-2). */}
+        <span className="inline-flex items-center gap-1 whitespace-nowrap" data-testid="cs3-ready-words">
+          <b>{ready.length} ready to move</b>
+          {/* Who may say yes reads the ask; anyone else, who does (D-2). */}
+          <InfoTip label="Ready to move" align="start" testId="cs3-ready-tip">
+            {data.can_move ? "Shipped, with proof. Each one needs your yes." : "Shipped, with proof. An approver or owner says yes to each move."}
+          </InfoTip>
+        </span>
         <span className="ml-2 inline-flex flex-wrap gap-1.5">
           {ready.map((f) => (
-            <button key={f.feature_id} type="button" onClick={() => setOpen(f)} className={`rounded-full border border-line bg-surface px-2.5 py-0.5 text-[13px] ${open?.feature_id === f.feature_id ? "ring-2 ring-accent" : ""}`}>
+            <button key={f.feature_id} type="button" data-testid="cs3-ready-chip" onClick={() => setOpen(f)} className={`rounded-full border border-line bg-surface px-2.5 py-0.5 text-[13px] ${open?.feature_id === f.feature_id ? "ring-2 ring-accent" : ""}`}>
               {f.title}
             </button>
           ))}
@@ -475,8 +487,8 @@ export function ReadyBand({ data, onChanged }: { data: FeatureStates; onChanged:
       </div>
       {open && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-3" data-testid="cs3-dialog" onClick={() => !moving && setOpen(null)}>
-          <div role="dialog" aria-modal="true" aria-label={`Move ${open.title} to Current state`} onClick={(e) => e.stopPropagation()} className="w-[520px] max-w-full rounded-2xl border border-line bg-surface p-5 shadow-2xl">
-            <h2 className="mb-1 text-[18px] font-semibold">Move {open.title} to Current state?</h2>
+          <div role="dialog" aria-modal="true" aria-label={`Move ${open.title} to Running today`} onClick={(e) => e.stopPropagation()} className="w-[520px] max-w-full rounded-2xl border border-line bg-surface p-5 shadow-2xl">
+            <h2 className="mb-1 text-[18px] font-semibold">Move {open.title} to Running today?</h2>
             <p className="mb-3 text-[14px] text-text2">Oracle found proof that it runs today:</p>
             <ul className="mb-4 space-y-1.5 text-[14px]">
               <Line ok>Code map: {proof(open, "code_map")?.count ?? 0} files</Line>
@@ -493,7 +505,7 @@ export function ReadyBand({ data, onChanged }: { data: FeatureStates; onChanged:
                   Not yet
                 </Button>
                 <Button variant="primary" disabled={moving} onClick={() => void decide(open, "move")}>
-                  {moving ? "Moving…" : "Move to Current state"}
+                  {moving ? "Moving…" : "Move to Running today"}
                 </Button>
               </div>
             ) : (
@@ -506,7 +518,7 @@ export function ReadyBand({ data, onChanged }: { data: FeatureStates; onChanged:
   );
 }
 
-/** The note a moved feature carries in Current state: when and how it moved. */
+/** The note a moved feature carries in Running today: when and how it moved. */
 export function movedNote(f: FeatureState, day: (iso: string) => string): string | null {
   if (!f.moved_at) return null;
   return `Moved ${day(f.moved_at)} · ${f.move_how === "marked_shipped" ? "marked as shipped" : "you confirmed"}`;
@@ -514,14 +526,13 @@ export function movedNote(f: FeatureState, day: (iso: string) => string): string
 
 export { useDay };
 
-/** Detailed › Current state: what runs today, each feature with its proof and how fresh it is. */
+/** Detailed › Ground Truth › Running today: what runs today, each feature with its proof and how fresh it is. */
 export function CurrentStateView({ q, onChanged }: { q: ReturnType<typeof useFeatureStates>; onChanged: () => void }) {
   const phone = usePhoneWidth();
   return (
     <>
-      <PageHeader title="Current state" />
-      <p className="-mt-2 mb-3 max-w-[760px] text-[14px] text-text2">What runs today: each built feature with its proof, and how fresh that proof is.</p>
-      <StateTabs view="current" desired={q.data?.desired ?? null} running={q.data?.running ?? null} />
+      <PageHeader title="Ground Truth" info={<InfoTip label="Running today">What runs today: each built feature with its proof, and how fresh that proof is.</InfoTip>} />
+      <StateTabs view="current" all={q.data?.features.length ?? null} running={q.data?.running ?? null} />
       {q.error && <p className="text-[14px] text-fail">{q.error}</p>}
       {q.data && (
         <>

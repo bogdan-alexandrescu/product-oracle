@@ -550,6 +550,11 @@ async def create(
         run_id=principal.run_id if by_oracle else None,
         supersedes_id=supersedes.id if supersedes else None,
         created_by=_who(principal),
+        review_at=(
+            None
+            if body.review_at is None
+            else check_review_at(body.review_at, await company_today(db))
+        ),
     )
     db.add(d)
     await db.flush()
@@ -663,7 +668,7 @@ async def update(
 async def _check_goal(db: AsyncSession, prediction: PredictionIn) -> None:
     goal = await db.get(Entity, prediction.goal_id)
     if goal is None or goal.type != "goal":
-        raise DecisionError(422, "prediction.goal_id is not a goal of the baseline")
+        raise DecisionError(422, "prediction.goal_id is not a goal of the Ground Truth")
 
 
 async def _set_prediction(

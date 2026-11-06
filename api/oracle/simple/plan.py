@@ -940,6 +940,10 @@ def _read(row: SimplePrdPlan, v: DocumentVersion) -> None:
     ref = (v.approved_at or company_time.now()).date()
     data = parse(v.markdown or "", ref)
     row.version_id, row.read_at, row.error, row.job_id = v.id, company_time.now(), None, None
+    # Links to Ground Truth features (oracle.baseline.fixes) outlive a new reading.
+    links = (row.data or {}).get("links")
+    if data is not None and links:
+        data = {**data, "links": links}
     if data is not None:
         row.status, row.source, row.data = "ready", "prd", data
     else:
@@ -1047,12 +1051,28 @@ async def plan_out(
         return SimplePlanOut(status=row.status, message=msg, **base)  # type: ignore[arg-type]
     data = with_accepted({**row.data, "source": row.source}, await accepted_dates(db, document.id))
     view = await enrich(db, document.id, compute(data))
+    from oracle.baseline import fixes
+
+    _read_linked(view, await fixes.linked_codes(db, row.data.get("links")))
     return SimplePlanOut(
         status="ready", source=row.source, dated=view.dated, message=view.message,  # type: ignore[arg-type]
         milestones=view.milestones, slices=view.slices, goals=view.goals,
         goal_weeks=view.goal_weeks, span=view.span, holidays=view.holidays,
         summary=view.summary, **base,
     )  # fmt: skip
+
+
+def _read_linked(view: View, codes: dict[str, str]) -> None:
+    """A PRD feature linked to a Ground Truth feature reads that feature's code (its slices
+    too: F-15a reads F-03a)."""
+    if not codes:
+        return
+    for m in view.milestones:
+        m.feature_codes = [codes.get(c, c) for c in m.feature_codes]
+    for s in view.slices:
+        if s.feature_code in codes:
+            s.code = codes[s.feature_code] + s.code[len(s.feature_code) :]
+            s.feature_code = codes[s.feature_code]
 
 
 # --------------------------------------------------------------------------- the job

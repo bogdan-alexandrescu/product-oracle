@@ -3,7 +3,11 @@
 - ``GET /v1/simple/goal-map``: viewer and up; ``can_edit`` says whether they may edit.
 - ``POST /areas``, ``PUT /areas/order``, ``PATCH /goals/{id}``, ``POST /milestones``
   (propose one), ``PATCH /milestones/{id}`` (set its threshold, confirm it), ``POST /links``
-  (attach a feature to a cell): approver and up; each answers the map as it now reads.
+  (attach a feature to a cell), ``POST /goals/{id}/metric`` (pick the metric that gives
+  the goal its readings), ``POST /links/move`` (goal-ladder: a feature to another
+  milestone): approver and up; each answers the map as it now reads.
+- ``POST /place-card`` and ``DELETE /places`` (goal-ladder place_card and Tidy up): viewer
+  and up, each person's own places of cards.
 """
 
 import uuid
@@ -11,6 +15,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.auth.models import User
 from oracle.authz import has_role, require_role
@@ -22,6 +27,9 @@ from oracle.simple.goal_map import (
     GateIn,
     GoalMapOut,
     GoalTargetIn,
+    MetricPickIn,
+    MoveLinkIn,
+    PlaceIn,
     ProposeIn,
 )
 
@@ -47,7 +55,7 @@ def _can_edit(principal: Principal) -> bool:
 
 async def _done(db: TenantDB, principal: Principal) -> GoalMapOut:
     await db.commit()
-    return await goal_map.build(db, _can_edit(principal))
+    return await goal_map.build(db, principal, _can_edit(principal))
 
 
 async def _run(db: TenantDB, principal: Principal, step) -> GoalMapOut:
@@ -66,7 +74,7 @@ async def _who(db: TenantDB, principal: Principal) -> str:
 
 @router.get("", response_model=GoalMapOut)
 async def get_goal_map(principal: Reader, db: TenantDB) -> GoalMapOut:
-    return await goal_map.build(db, _can_edit(principal))
+    return await goal_map.build(db, principal, _can_edit(principal))
 
 
 @router.post("/areas", response_model=GoalMapOut)
@@ -104,3 +112,38 @@ async def set_gate(
 @router.post("/links", response_model=GoalMapOut)
 async def attach_feature(body: AttachIn, principal: Approver, db: TenantDB) -> GoalMapOut:
     return await _run(db, principal, goal_map.attach(db, body))
+
+
+@router.post("/links/move", response_model=GoalMapOut)
+async def move_feature_link(body: MoveLinkIn, principal: Approver, db: TenantDB) -> GoalMapOut:
+    """goal-ladder: a feature moved to another milestone's work (Edit ladder)."""
+    return await _run(db, principal, goal_map.move_link(db, body))
+
+
+@router.post("/place-card", response_model=GoalMapOut)
+async def place_card(body: PlaceIn, principal: Reader, db: TenantDB) -> GoalMapOut:
+    """goal-ladder place_card: where this person put a card on the canvas (viewers too: a
+    place is their own view and never changes data)."""
+    return await _run(db, principal, goal_map.place_card(db, principal.id, body))
+
+
+@router.delete("/places", response_model=GoalMapOut)
+async def tidy_up(principal: Reader, db: TenantDB) -> GoalMapOut:
+    """goal-ladder Tidy up: this person's cards back where the ladder places them."""
+    return await _run(db, principal, goal_map.tidy_up(db, principal.id))
+
+
+@router.post("/goals/{goal_id}/metric", response_model=GoalMapOut)
+async def pick_goal_metric(
+    goal_id: uuid.UUID, body: MetricPickIn, principal: Approver, db: TenantDB
+) -> GoalMapOut:
+    """Pick the metric that gives the goal its readings: its weekly values become the
+    goal's readings at once; the goal's old metric lets go."""
+    try:
+        metric = await goal_map.pick_metric(db, goal_id, body.metric)
+    except goal_map.GoalMapError as e:
+        await db.rollback()
+        raise HTTPException(e.status, e.detail) from e
+    await audit.record(db, principal, "metric.updated", "metric", metric.id,
+                       {"fields": ["goal_id"], "goal_id": str(goal_id)})  # fmt: skip
+    return await _done(db, principal)

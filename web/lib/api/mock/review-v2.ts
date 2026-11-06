@@ -174,6 +174,7 @@ export async function routeReviewV2(ctx: ReviewV2Context, req: Request, p: strin
   const conflict = (current: number | null) => json(409, { detail: "Someone else changed this since you loaded it; reload and try again", code: "stale_lock_version", current_lock_version: current, sections: [] });
 
   if (p[1] === "me" && p[2] === "notifications") {
+    // As the API: all of mine, whatever my role (F-25: the Inbox leaves out the webhook ones a role cannot open).
     const mine = ctx.db.notifications.filter((n) => n.user_id === ctx.me.id);
     if (p[3] === "read-all" && m === "POST") {
       const unread = mine.filter((n) => !n.read_at);

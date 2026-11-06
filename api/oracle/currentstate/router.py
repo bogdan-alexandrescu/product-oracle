@@ -1,4 +1,4 @@
-"""Current state beside Desired state (``/v1/feature-states``): every confirmed feature's
+"""Running today beside the Ground Truth (``/v1/feature-states``): every confirmed feature's
 mark and proof, Check again, the owner's "does it still run?" answer, Move / Not yet and
 the item chat's "Mark as already shipped" (oracle.currentstate.service).
 
@@ -75,7 +75,7 @@ async def answer_feature_state(
     feature_id: uuid.UUID, body: FeatureAnswerIn, principal: Confirmer, db: TenantDB
 ) -> FeatureStateOut:
     """The owner's answer to "does it still run?": still_runs counts as fresh proof,
-    changed keeps it in Current state, no_longer_runs puts it back in Desired state."""
+    changed keeps it in Running today, no_longer_runs puts it back on the Ground Truth tab."""
     f = await _feature(db, feature_id)
     now = company_time.now()
     await service.answer(db, f, body.answer, principal.user_id, now)
@@ -91,7 +91,7 @@ async def answer_feature_state(
 async def move_feature_state(
     feature_id: uuid.UUID, body: FeatureMoveIn, principal: Confirmer, db: TenantDB
 ) -> FeatureStateOut:
-    """Move a ready feature to Current state, or Not yet (off the ready band until its
+    """Move a ready feature to Running today, or Not yet (off the ready band until its
     proof is read again)."""
     f = await _feature(db, feature_id)
     now = company_time.now()

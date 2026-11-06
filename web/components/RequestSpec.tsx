@@ -165,7 +165,7 @@ export function RequestSpecDialog({
         <fieldset>
           <legend className="mb-1.5 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">Requirements</legend>
           {requirements.length === 0 ? (
-            <Notice tone="warn">This item traces no requirement. Link its requirements in the Baseline first.</Notice>
+            <Notice tone="warn">This item traces no requirement. Link its requirements in the Ground Truth first.</Notice>
           ) : (
             <ul className="flex flex-col gap-1.5">
               {requirements.map((r) => (

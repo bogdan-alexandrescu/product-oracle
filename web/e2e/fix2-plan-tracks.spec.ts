@@ -112,7 +112,7 @@ for (const phone of [false, true]) {
       await expect(e.getByText("New milestone", { exact: true })).toHaveCount(1);
       const items = e.getByRole("group", { name: "Items" });
       await expect(items.getByRole("checkbox", { name: /Threshold alerts on spend/ })).toBeVisible();
-      await expect(items.getByRole("checkbox", { name: /Daily alert digest email/ })).toBeVisible();
+      await expect(items.getByRole("checkbox", { name: /Weekly alert digest/ })).toBeVisible();
       await expect(items.getByRole("checkbox", { name: /Budgets per team/ })).toBeVisible();
       await expect(items).not.toContainText("Behaviour");
       await expect(items).not.toContainText("Success metrics");
@@ -121,11 +121,11 @@ for (const phone of [false, true]) {
       expect(cancel!.x + cancel!.width).toBeLessThanOrEqual(add!.x);
       // The new milestone keeps the items picked by name.
       await e.getByLabel("Name").fill("Digest beta");
-      await items.getByRole("checkbox", { name: /Daily alert digest email/ }).check();
+      await items.getByRole("checkbox", { name: /Weekly alert digest/ }).check();
       await e.getByRole("button", { name: "Add milestone" }).click();
       const m2 = track(page).getByTestId("track-milestone").filter({ hasText: "Digest beta" });
       await expect(m2).toContainText("Now · 1 item");
-      await expect(editor(page).getByRole("group", { name: "Items" }).getByRole("checkbox", { name: /Daily alert digest email/ })).toBeChecked();
+      await expect(editor(page).getByRole("group", { name: "Items" }).getByRole("checkbox", { name: /Weekly alert digest/ })).toBeChecked();
     });
   });
 }

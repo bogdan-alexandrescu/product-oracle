@@ -20,13 +20,27 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.util import Emu, Inches, Pt
 
 from oracle.docs.parser import strip_citations
-from oracle.export.deck import Deck, Slide
-from oracle.export.render import image_label, stored_image
+from oracle.export.deck import Deck, Slide, column_widths
+from oracle.export.render import _cap, days_in_words, image_label, stored_image
 
 WIDTH, HEIGHT = Inches(13.333), Inches(7.5)
 MARGIN = Inches(0.8)
 BODY_TOP = Inches(1.55)
 FOOTER_TOP = Inches(6.95)
+# The footer is one 10 pt line across the slide: about this many characters (half an em
+# each) fit; past it the title in the banner is cut with an ellipsis, as the HTML deck's
+# footer is (slides.css .slide-banner), so it never runs off the slide (visual QA E-8).
+FOOTER_CHARS = 150
+# The title slide's title: the largest of these sizes whose wrapped lines fit TITLE_MAX_HEIGHT
+# (a 120-character title no longer runs over the subtitle, E-8).
+TITLE_SIZES = (44, 36, 30, 26, 22)
+TITLE_TOP = Inches(2.75)
+TITLE_MAX_HEIGHT = Inches(2.9)
+# A section slide's heading ("Top risks (2 of 3)") is fitted the same way, in its band above
+# the body: the largest size whose wrapped lines end above BODY_TOP.
+HEADING_SIZES = (32, 28, 24, 20, 18, 16)
+HEADING_TOP = Inches(0.55)
+HEADING_MAX_HEIGHT = BODY_TOP - HEADING_TOP - Inches(0.05)
 _md = MarkdownIt("commonmark", {"html": False}).enable(["table", "strikethrough"])
 _HEX = re.compile(r"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 
@@ -78,7 +92,8 @@ def _runs(children) -> list[Run]:
     bold = italic = False
     for t in children or []:
         if t.type == "text":
-            runs.append(Run(t.content, bold, italic))
+            # A date in the brief's text reads month first, as on the HTML slides (E-11).
+            runs.append(Run(days_in_words(t.content), bold, italic))
         elif t.type == "code_inline":
             runs.append(Run(t.content, bold, italic, mono=True))
         elif t.type in ("softbreak", "hardbreak"):
@@ -171,6 +186,41 @@ def _write_runs(paragraph, runs: list[Run], size: int, font: str, mono: str, col
         run.font.color.rgb = colour
 
 
+def _wrapped_lines(text: str, size: int, width) -> int:
+    """Lines ``text`` wraps to in bold heading type (about 0.55 em a character)."""
+    per_line = max(1, int(width / Pt(size * 0.55)))
+    return max(1, -(-len(text) // per_line))
+
+
+def title_fit(
+    text: str, width, sizes: tuple[int, ...] = TITLE_SIZES, max_height=TITLE_MAX_HEIGHT
+) -> tuple[int, int]:
+    """The title slide's title size and its box's height for ``text`` (E-8)."""
+    for size in sizes:
+        height = int(_wrapped_lines(text, size, width) * Pt(size * 1.2)) + int(Pt(size * 0.3))
+        if height <= max_height or size == sizes[-1]:
+            return size, height
+    raise AssertionError("unreachable")
+
+
+def heading_fit(text: str, width, dense: bool = False) -> tuple[int, int]:
+    """A section slide's heading size and its box's height, as :func:`title_fit` fits the
+    title slide's (a long heading with "(2 of 3)" no longer runs into the body)."""
+    return title_fit(text, width, HEADING_SIZES[1:] if dense else HEADING_SIZES, HEADING_MAX_HEIGHT)
+
+
+def footer_text(deck: Deck, index: int, total: int) -> str:
+    """The footer line: the version banner and the slide number, the title in the banner
+    cut short when the line would not fit the slide (E-8)."""
+    number = f"    {index} / {total}"
+    banner = deck.banner
+    if len(banner) + len(number) > FOOTER_CHARS and banner.startswith(deck.title):
+        rest = banner[len(deck.title) :]
+        room = max(FOOTER_CHARS - len(rest) - len(number), 24)
+        banner = _cap(deck.title, room) + rest
+    return _cap(banner, FOOTER_CHARS - len(number)) + number
+
+
 def _textbox(slide, left, top, width, height, *, wrap=True):
     box = slide.shapes.add_textbox(left, top, width, height)
     frame = box.text_frame
@@ -233,6 +283,12 @@ def _add_body(slide, s: Slide, deck: Deck, style: dict) -> None:
         height = row_h * len(item.rows)
         shape = slide.shapes.add_table(len(item.rows), cols, MARGIN, top, width, height)
         tbl = shape.table
+        # Columns as wide as the slide's text budget reckons them (deck.column_widths): a
+        # long cell gets most of the slide, as in the HTML, so it fits the slides it fills.
+        widths = column_widths(item.rows)
+        widths += [1] * (cols - len(widths))
+        for ci, w in enumerate(widths[:cols]):
+            tbl.columns[ci].width = int(width * w / sum(widths[:cols]))
         for ri, cells in enumerate(item.rows):
             for ci in range(cols):
                 cell = tbl.cell(ri, ci)
@@ -317,25 +373,28 @@ def deck_to_pptx(deck: Deck) -> bytes:
                 style["mono"],
                 style["accent"],
             )
-            title = _textbox(slide, MARGIN, Inches(2.75), width, Inches(1.6))
+            size, height = title_fit(deck.title, width)
+            title = _textbox(slide, MARGIN, TITLE_TOP, width, height)
+            title.vertical_anchor = MSO_ANCHOR.TOP
             _write_runs(
                 title.paragraphs[0],
                 [Run(deck.title, bold=True)],
-                44,
+                size,
                 heading_font,
                 style["mono"],
                 style["heading"],
             )
-            sub = _textbox(slide, MARGIN, Inches(4.4), width, Inches(0.8))
+            sub_top = max(Inches(4.4), TITLE_TOP + height + Inches(0.1))
+            sub = _textbox(slide, MARGIN, sub_top, width, Inches(0.8))
             status = deck.status.replace("_", " ").capitalize()
             line = f"Version {deck.number} · {status} · as of {deck.as_of}"
             _write_runs(
                 sub.paragraphs[0], [Run(line)], 20, style["body"], style["mono"], style["muted"]
             )
         else:
-            title = _textbox(slide, MARGIN, Inches(0.55), width, Inches(0.9))
+            size, height = heading_fit(s.heading, width, s.dense)
+            title = _textbox(slide, MARGIN, HEADING_TOP, width, height)
             title.vertical_anchor = MSO_ANCHOR.TOP
-            size = 28 if s.dense else 32
             _write_runs(
                 title.paragraphs[0],
                 [Run(s.heading, bold=True)],
@@ -368,7 +427,7 @@ def deck_to_pptx(deck: Deck) -> bytes:
         para = footer.paragraphs[0]
         _write_runs(
             para,
-            [Run(f"{deck.banner}    {s.index} / {total}")],
+            [Run(footer_text(deck, s.index, total))],
             10,
             style["body"],
             style["mono"],

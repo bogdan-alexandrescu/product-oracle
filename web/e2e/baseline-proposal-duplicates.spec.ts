@@ -3,15 +3,15 @@ import { expect, test, type Page } from "./test";
 import { login } from "./helpers";
 
 // The "proposal-duplicates" scenario (lib/api/mock/baseline.ts addDuplicateProposals): the
-// Baseline to PRD run's writer and critic propose the same changes twice, and four
+// Ground Truth to PRD run's writer and critic propose the same changes twice, and four
 // proposals on Raise activation that one accept settles.
 const PHONE = { width: 390, height: 844 };
 
 async function openProposals(page: Page) {
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "proposal-duplicates"));
   await login(page);
-  await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
+  await page.goto("/ground-truth");
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
   await page.getByRole("tab", { name: /Proposals/ }).click();
   await expect(page.getByTestId("proposal").first()).toBeVisible();
 }
@@ -19,7 +19,7 @@ async function openProposals(page: Page) {
 const card = (page: Page, reason: string) => page.getByTestId("proposal").filter({ hasText: reason });
 
 for (const [where, size] of [["desktop", null], ["phone", PHONE]] as const) {
-  test.describe(`baseline proposals: duplicates (${where})`, () => {
+  test.describe(`Ground Truth proposals: duplicates (${where})`, () => {
     if (size) test.use({ viewport: size });
 
     /**

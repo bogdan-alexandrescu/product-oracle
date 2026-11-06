@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
-import { Button, Chip, type ChipKind } from "@/components/ds";
+import { Button, Chip, InfoTip, type ChipKind } from "@/components/ds";
 import { FIELD_LABEL, InlineError, SELECT, TEXTAREA } from "@/components/review/parts";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import {
@@ -191,6 +191,9 @@ function ChangeRow({ c, d, onDone }: { c: ChangeOut; d: Discussion; onDone: () =
   // (Record: F3's date rights, which the change's action carries).
   const op = action ? VERB_OP[action.verb] : undefined;
   const allowed = !!action?.allowed && (!op || can(op, action.allowed));
+  // QA pass D-4: why the action is off, in an (i) beside it that opens on tap, so a phone can read it.
+  const whyNot = action && !allowed ? action.why_not : null;
+  const whyId = useId();
 
   const run = async (call: () => Promise<unknown>) => {
     setBusy(true);
@@ -259,9 +262,16 @@ function ChangeRow({ c, d, onDone }: { c: ChangeOut; d: Discussion; onDone: () =
       {buttons && mode === null && (
         <span className="flex flex-wrap gap-1" data-testid="change-actions">
           {action && (
-            <Button variant="solid" disabled={busy || !allowed} title={allowed ? undefined : (action.why_not ?? undefined)} onClick={act}>
-              {action.verb}
-            </Button>
+            <span className="inline-flex items-center gap-1">
+              <Button variant="solid" disabled={busy || !allowed} aria-describedby={whyNot ? whyId : undefined} onClick={act}>
+                {action.verb}
+              </Button>
+              {whyNot && (
+                <InfoTip id={whyId} label="why it is off" align="start">
+                  {whyNot}
+                </InfoTip>
+              )}
+            </span>
           )}
           {c.can.suggest && (
             <Button disabled={busy} onClick={() => void run(() => actOnChange(c, "suggest"))}>

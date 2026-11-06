@@ -534,14 +534,44 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
     return stats
 
 
-def _needs_attention(connector: base.Connector, config: dict[str, Any]) -> str | None:
-    """Why a saved config can no longer be synced as it is, or ``None``."""
+def config_refusal(
+    connector: base.Connector | None, config: dict[str, Any]
+) -> base.ConnectorConfigError | None:
+    """The rule a saved config breaks now, or ``None``."""
     check = getattr(connector, "check_config", None)
     if check is None:
         return None
     try:
         check(config)
     except base.ConnectorConfigError as e:
-        message = str(e)
-        return f"{message[:1].upper()}{message[1:]}: edit this source to sync it again"
+        return e
     return None
+
+
+def _needs_attention(connector: base.Connector, config: dict[str, Any]) -> str | None:
+    """Why a saved config can no longer be synced as it is, or ``None``."""
+    e = config_refusal(connector, config)
+    if e is None:
+        return None
+    message = _upper(str(e))
+    # Review of PR 1286: only a message that is itself the fix reads "then it syncs again";
+    # any other cause names the edit to make, as a sentence of its own (r2).
+    if e.is_action:
+        return f"{message}, then it syncs again"
+    return f"{message}. Edit this source to sync it again."
+
+
+def _upper(text: str) -> str:
+    return f"{text[:1].upper()}{text[1:]}"
+
+
+def attention_of(source: Any) -> dict[str, Any] | None:
+    """A source stopped by a rule its saved config breaks: the cause and whether its
+    ``last_error`` is itself the fix (``is_action``), so a role that cannot edit the source
+    reads the cause without the fix. ``None`` for any other source."""
+    if source.status != "needs_attention":
+        return None
+    e = config_refusal(service.connector_for(source.kind), dict(source.config or {}))
+    if e is None:
+        return None
+    return {"cause": _upper(e.cause or str(e)), "is_action": e.is_action}

@@ -69,7 +69,7 @@
       importance: critical
       fills: [goals, contribution]
   instructions: >-
-    Link each confirmed company goal from the baseline and say in one line how this work
+    Link each confirmed company goal from the Ground Truth and say in one line how this work
     moves it. Work that serves no confirmed goal is flagged, with the prioritization
     rationale shown; never invent a goal.
   evidence_expectations: {min_sources: 1, fields: [contribution]}
@@ -157,7 +157,7 @@
       fills: [segments, jobs]
   instructions: >-
     Name target segments and their jobs to be done as job stories. Say who it is not for.
-    Use the company's own segment names from the baseline; never invent fictional users.
+    Use the company's own segment names from the Ground Truth; never invent fictional users.
 
 - id: goals.outcomes
   version: 1.0.0
@@ -280,7 +280,7 @@
   agent_instructions:
     - role: drafter
       instructions: >-
-        Derive requirements from confirmed outcomes and the baseline; never add a feature
+        Derive requirements from confirmed outcomes and the Ground Truth; never add a feature
         that serves no confirmed goal without flagging it.
   outputs: [prd, engineering_spec, acceptance_tests, tech_brief]
   output_mappings:

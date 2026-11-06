@@ -45,7 +45,7 @@ test.describe("desktop", () => {
   // no_claim=the API's scoring (pytest).
   test("a flagged feature with no evidence shows no confidence score", async ({ page }) => {
     await login(page);
-    await page.goto("/baseline");
+    await page.goto("/ground-truth");
     await page.getByRole("tab", { name: /Flagged/ }).click();
     const usage = page.getByTestId("flagged-f.usage-export");
     await expect(usage.getByTestId("flag")).toHaveText(["No evidence"]);

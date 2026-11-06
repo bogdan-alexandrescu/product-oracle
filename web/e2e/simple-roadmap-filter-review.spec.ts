@@ -96,7 +96,11 @@ for (const [where, use] of [
       await openBoard(page);
       await filter(page, "PRD").selectOption({ label: "Guided setup" });
       await filter(page, "Goal").selectOption({ label: "Faster activation" });
+      // Team invite nudges has no track: it leaves only once the Track pick is read, which is saved
+      // before it (one queue), so the reload never races the pick's save (it showed All once).
+      await expect(boardCard(page, "setup-ideas")).toHaveCount(1);
       await filter(page, "Track").selectOption({ label: "Guided setup track" });
+      await expect(boardCard(page, "setup-ideas")).toHaveCount(0);
       await expect(boardCard(page, "alert-rules")).toHaveCount(0);
       await expect(boardCard(page, "setup-checklist")).toHaveCount(1);
       await openBoard(page);

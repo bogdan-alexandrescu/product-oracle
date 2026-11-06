@@ -53,7 +53,19 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
-from sqlalchemy import String, cast, delete, func, or_, select, update
+from sqlalchemy import (
+    Integer,
+    String,
+    and_,
+    cast,
+    column,
+    delete,
+    func,
+    or_,
+    select,
+    update,
+    values,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -68,6 +80,7 @@ from oracle.simple.models import (
     RoadmapDateSuggestion,
     SimpleChange,
     SimpleDraft,
+    SimpleGoalSuggestion,
     SimpleSession,
     SimpleSessionDraft,
 )
@@ -79,6 +92,7 @@ from oracle.simple.schemas import (
     SimpleDraftOut,
     SimpleMeetingApproval,
     SimpleNotApproved,
+    SimplePersonRef,
 )
 
 OPEN = ("working", "submitted")
@@ -450,6 +464,16 @@ def _approver_of(principal: Any, d: SimpleDraft, w: Who) -> bool:
     decider = w.deciders.get(d.document_id)
     return me is not None and (
         me == decider if decider is not None else can_edit(principal, d.document_id, w)
+    )
+
+
+def can_publish(principal: Any, d: SimpleDraft, w: Who) -> bool:
+    """Approve and publish on a working draft (its button and POST .../approve alike): the
+    draft's final approver, who may also send it."""
+    return (
+        d.status == "working"
+        and _approver_of(principal, d, w)
+        and can_edit(principal, d.document_id, w)
     )
 
 
@@ -842,6 +866,26 @@ async def _logs(db: AsyncSession, ds: list[SimpleDraft]) -> dict[uuid.UUID, list
         else {}
     )
     people = {c.by for c in rows}
+    # roadmap-decide: each line names its item, however the op stored it.
+    item_ids: set[uuid.UUID] = set()
+    for c in rows:
+        try:
+            item_ids |= (
+                {uuid.UUID(str(c.target.get("item_id")))} if c.target.get("item_id") else set()
+            )
+        except ValueError:
+            pass
+    item_titles = (
+        dict(
+            (
+                await db.execute(
+                    select(RoadmapItem.id, RoadmapItem.title).where(RoadmapItem.id.in_(item_ids))
+                )
+            ).all()
+        )
+        if item_ids
+        else {}
+    )
     names = {
         u.id: u.name or u.email for u in await db.scalars(select(User).where(User.id.in_(people)))
     }
@@ -855,7 +899,8 @@ async def _logs(db: AsyncSession, ds: list[SimpleDraft]) -> dict[uuid.UUID, list
             id=c.id, op=c.op, item_id=item_id, by=c.by, by_name=names.get(c.by, "someone"),
             at=c.at, session_kind=kind, in_meeting=kind == "meeting",  # type: ignore[arg-type]
             titles=[str(t) for t in c.target.get("titles") or []]
-            if c.op == "cut_with_dependents" else [],
+            or ([item_titles[item_id]] if item_id in item_titles else [])
+            or ([str(c.target["name"])] if c.target.get("name") else []),
         )  # fmt: skip
         for i in c.draft_ids:
             if i in out:
@@ -886,9 +931,17 @@ async def outs(
         else set()
     )
     me = _me(principal)
+    # roadmap-decide review: the author's and the decider's names, read with the draft.
+    ids = {d.created_by for d in ds} | {x for d in ds if (x := w.deciders.get(d.document_id))}
+    names = (
+        {u.id: u.name or u.email for u in await db.scalars(select(User).where(User.id.in_(ids)))}
+        if ids
+        else {}
+    )
     out = []
     for d in ds:
         doc = docs[d.document_id]
+        decider = w.deciders.get(d.document_id)
         out.append(
             SimpleDraftOut(
                 id=d.id,
@@ -897,8 +950,12 @@ async def outs(
                 base_version=numbers.get(d.base_version_id),  # type: ignore[arg-type]
                 version=numbers.get(d.version_id),
                 created_by=d.created_by,
+                created_by_name=names.get(d.created_by),
                 created_at=d.created_at,
                 participant_ids=list(d.participant_ids or []),
+                decider=SimplePersonRef(id=decider, name=names[decider])
+                if decider in names
+                else None,
                 changes=n.get(d.id, 0),
                 submitted_at=d.submitted_at,
                 submitted_by=d.submitted_by,
@@ -910,8 +967,16 @@ async def outs(
                 can_resume=d.status == "working"
                 and me is not None
                 and me in (d.created_by, w.deciders.get(d.document_id)),
+                # Review: a decider who approved already waits on the reviewers, not on themself.
                 can_approve=d.status == "submitted"
-                and (_approver_of(principal, d, w) or me in (d.waiting_on or [])),
+                and (
+                    (_approver_of(principal, d, w) and d.decider_approval is None)
+                    or me in (d.waiting_on or [])
+                ),
+                can_publish=can_publish(principal, d, w),
+                required_reviewers=[r for r in w.reviewers.get(d.document_id, []) if r != me]
+                if d.status == "working"
+                else [],
                 change_log=logs.get(d.id, []),
                 published=d.document_id in approved,
                 can_withdraw=d.status == "submitted"
@@ -929,7 +994,11 @@ async def listing(
 ) -> list[SimpleDraftOut]:
     """The open drafts the caller may see, oldest first; with ``roadmap`` (its id or slug)
     only that roadmap's (a working draft belongs to one roadmap)."""
-    ds = await open_drafts(db)
+    from oracle.roadmap import company
+
+    # simple-replaced-prds: a replaced PRD's open draft is history, never listed in Simple.
+    replaced = await company.replaced_prd_ids(db)
+    ds = [d for d in await open_drafts(db) if d.document_id not in replaced]
     if roadmap:
         doc = await db.scalar(
             select(Document).where(
@@ -969,6 +1038,7 @@ OP_WORDS = {
     "restore": "Restored",
     "edit_title": "Renamed",
     "edit_outcome": "New outcome for",
+    "edit_note": "New notes for",
     "accept_risk": "Accepted a risk on",
     "shift_dependents": "Moved the dependents of",
     "move_dependency": "Moved the dependency of",
@@ -988,6 +1058,8 @@ OP_WORDS = {
     "set_goal": "New goal for",
     "set_depends": "New dependencies for",
     "set_status": "New status for",
+    "set_feature": "New feature for",
+    "set_goals": "Moved to another goal:",
 }
 
 
@@ -1493,8 +1565,22 @@ async def _approve(
 
 async def approve(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) -> SimpleDraftOut:
     """The caller's approval: the decider's (held until the required reviewers have
-    approved) or a required reviewer's (the caller commits)."""
+    approved) or a required reviewer's (the caller commits). roadmap-decide (owner, Nov 4):
+    the decider's approval of a working draft sends it first (Approve and publish), as a
+    meeting's approval does."""
     d, w = await _get(db, principal, draft_id)
+    if d.status == "working":
+        if not can_publish(principal, d, w):
+            raise DraftError(403, "Only the roadmap's decider approves and publishes this draft")
+        await submit(db, principal, d.id)
+        # Review minor 5: the draft as submitting left it, not as read before.
+        d, w = await _get(db, principal, draft_id)
+    # A second press in a stale tab, after this approver's approval published it: the
+    # published draft, not a 409 (inbox-mock-matches-api).
+    if d.status == "approved" and (
+        _approver_of(principal, d, w) or principal.user_id in w.reviewers.get(d.document_id, [])
+    ):
+        return (await outs(db, principal, [d], []))[0]
     other = await _approve(db, principal.tenant_id, d, w, principal, [], None)
     return (await outs(db, principal, [d], other))[0]
 
@@ -1673,21 +1759,78 @@ async def resume(db: AsyncSession, principal: Principal, draft_id: uuid.UUID):
 # --------------------------------------------------------------------------- inbox
 
 
-async def inbox_rows(db: AsyncSession, principal: Any, seen: Any) -> list[InboxSimpleApproval]:
-    """Versions from Simple drafts waiting for my approval as a required reviewer."""
+@dataclass
+class Waiting:
+    """What waits in Simple for someone to decide, read together for the Inbox."""
+
+    drafts: list[SimpleDraft] = field(default_factory=list)
+    dates: list[RoadmapDateSuggestion] = field(default_factory=list)
+    goals: list[SimpleGoalSuggestion] = field(default_factory=list)
+
+
+async def waiting(db: AsyncSession) -> Waiting:
+    """In one read: the submitted drafts (oldest first), Oracle's open date suggestions
+    (newest first) and the goals' open suggestions (oldest first). Each kind is outer-joined
+    on its own row of a three-row list, so none multiplies another and an empty kind leaves
+    one row of nulls; the tenant's and the trash's criteria land in each join's ON."""
+    kind = values(column("kind", Integer), name="kind").data([(1,), (2,), (3,)])
+    rows = await db.execute(
+        select(SimpleDraft, RoadmapDateSuggestion, SimpleGoalSuggestion)
+        .select_from(kind)
+        .outerjoin(SimpleDraft, and_(kind.c.kind == 1, SimpleDraft.status == "submitted"))
+        .outerjoin(
+            RoadmapDateSuggestion,
+            and_(kind.c.kind == 2, RoadmapDateSuggestion.status == "open"),
+        )
+        .outerjoin(
+            SimpleGoalSuggestion,
+            and_(kind.c.kind == 3, SimpleGoalSuggestion.status == "open"),
+        )
+    )
+    out = Waiting()
+    for d, s, g in rows:
+        if d is not None:
+            out.drafts.append(d)
+        if s is not None:
+            out.dates.append(s)
+        if g is not None:
+            out.goals.append(g)
+    out.drafts.sort(key=lambda d: (d.submitted_at is None, d.submitted_at or 0))
+    out.dates.sort(key=lambda s: s.created_at, reverse=True)
+    out.goals.sort(key=lambda g: (g.created_at, g.id))
+    return out
+
+
+async def inbox_rows(
+    db: AsyncSession, principal: Any, seen: Any, submitted: list[SimpleDraft] | None = None
+) -> list[InboxSimpleApproval]:
+    """Versions from Simple drafts waiting for my approval: as a required reviewer, or as
+    the decider (_approver_of) whose approval is not in yet. ``submitted``: the submitted
+    drafts, when :func:`waiting` read them already."""
     me = _me(principal)
     if me is None or getattr(principal, "run_token_id", None) is not None:
         return []
-    ds = list(
-        await db.scalars(
-            select(SimpleDraft)
-            .where(SimpleDraft.status == "submitted", SimpleDraft.waiting_on.contains([me]))
-            .order_by(SimpleDraft.submitted_at)
+    if submitted is None:
+        submitted = list(
+            await db.scalars(
+                select(SimpleDraft)
+                .where(SimpleDraft.status == "submitted")
+                .order_by(SimpleDraft.submitted_at)
+            )
         )
-    )
+    w = await who(db, {d.document_id for d in submitted})
+    ds = [
+        d
+        for d in submitted
+        if me in (d.waiting_on or [])
+        or (d.decider_approval is None and _approver_of(principal, d, w))
+    ]
     if not ds:
         return []
     docs, numbers = await _refs(db, ds)
+    from oracle.simple import changes
+
+    names = await changes._names(db, {d.submitted_by for d in ds if d.submitted_by})
     return [
         InboxSimpleApproval(
             draft_id=d.id,
@@ -1698,6 +1841,7 @@ async def inbox_rows(db: AsyncSession, principal: Any, seen: Any) -> list[InboxS
             ),
             version=numbers.get(d.version_id),
             submitted_by=d.submitted_by,
+            submitted_by_name=names.get(d.submitted_by) if d.submitted_by else None,
             submitted_at=d.submitted_at,
             decider_approved=d.decider_approval is not None,
             state="new" if seen is None or (d.submitted_at and d.submitted_at > seen) else "open",

@@ -163,32 +163,25 @@ function LogoUpload({
 
 /**
  * Which logo exports and decks use (owner decision, 2026-10-26): the dark one on a dark theme
- * background, the logo otherwise; with no dark logo, the logo everywhere. Lists the API's choice
- * for each built-in theme.
+ * background, the logo otherwise; with no dark logo, the logo everywhere. F-70: said in the
+ * card's (i), naming only the themes that take the dark logo (the API's choice for each).
  */
 function ThemeLogos({ brand }: { brand: BrandingOut }) {
   if (!brand.logo && !brand.logo_dark) return null;
   if (!brand.logo_dark) {
     return (
-      <p data-testid="brand-theme-note" className="text-[13px] text-text2">
+      <span data-testid="brand-theme-note" className="mt-1 block">
         With no dark logo, every export and deck uses the logo.
-      </p>
+      </span>
     );
   }
+  const dark = brand.theme_logos.filter((t) => t.variant === "dark").map((t) => t.name);
   return (
-    <div className="flex flex-col gap-1">
-      <p data-testid="brand-theme-note" className="text-[13px] text-text2">
-        Exports and decks use the dark logo on a dark background and the logo on a light one.
-      </p>
-      <ul data-testid="brand-theme-logos" className="flex flex-col gap-0.5 text-[13px] text-text2">
-        {brand.theme_logos.map((t) => (
-          <li key={t.key}>
-            <span className="font-semibold text-text">{t.name}</span>
-            {`: ${t.variant === "dark" ? "dark" : "light"} background, uses the ${t.variant === "dark" ? "dark logo" : "logo"}`}
-          </li>
-        ))}
-      </ul>
-    </div>
+    <span data-testid="brand-theme-note" className="mt-1 block">
+      {dark.length
+        ? `The dark logo goes on dark themes (${dark.join(", ")}); the logo on every other.`
+        : "Every theme has a light background, so exports and decks use the logo."}
+    </span>
   );
 }
 
@@ -270,6 +263,7 @@ export function BrandingPanel() {
         tools={
           <InfoTip label="branding" side="bottom">
             Every export and shared page carries the company&apos;s name and logo, in its accent colour.
+            {brand && <ThemeLogos brand={brand} />}
           </InfoTip>
         }
       >
@@ -286,7 +280,6 @@ export function BrandingPanel() {
                 Logo <span data-testid="brand-logo-size">{`${brand.logo.width} × ${brand.logo.height} px`}</span>
               </p>
             )}
-            <ThemeLogos brand={brand} />
             {brand.can_edit ? (
               <form
                 className="flex flex-col gap-4"
@@ -322,10 +315,27 @@ export function BrandingPanel() {
                       Remove dark logo
                     </Button>
                   )}
+                  {/* F-70: the file rules behind the (i). */}
+                  <span className="self-center">
+                    <InfoTip label="logo files" align="start" testId="brand-logo-rules">
+                      PNG, JPEG or WebP, at most 512 KB and 2,000 × 2,000 px. Shown at most 40 px high.
+                    </InfoTip>
+                  </span>
                 </div>
-                <p className="text-[13px] text-text2">PNG, JPEG or WebP, at most 512 KB and 2,000 × 2,000 px. Shown at most 40 px high.</p>
-                <Field label="Display name">
+                <Field
+                  label="Display name"
+                  htmlFor="brand-name"
+                  tip={
+                    // F-70: why to add one, behind the (i), while there is none.
+                    !brand.display_name ? (
+                      <InfoTip label="the company's name" align="start" testId="brand-name-hint">
+                        Exports print no company name until you add one.
+                      </InfoTip>
+                    ) : undefined
+                  }
+                >
                   <input
+                    id="brand-name"
                     className={`${INPUT} max-w-96`}
                     maxLength={BRANDING_LIMITS.name}
                     placeholder="Your company's name"
@@ -333,11 +343,6 @@ export function BrandingPanel() {
                     onChange={(e) => set({ name: e.target.value })}
                   />
                 </Field>
-                {!brand.display_name && (
-                  <p data-testid="brand-name-hint" className="-mt-2 text-[13px] text-text2">
-                    Exports print no company name until you add one.
-                  </p>
-                )}
                 <div className="flex flex-col gap-1.5">
                   <Field label="Accent">
                     <span className="flex items-center gap-2">

@@ -41,6 +41,12 @@ export interface BaselineState {
   measurements?: Schemas["MeasurementOut"][];
   /** Which metric wrote each measurement (goal_measurements.metric_id), by measurement id; not served. */
   measurementMetric?: Record<string, string>;
+  /** Link to a feature (./ground-truth.ts): a PRD plan's feature code -> the Ground Truth feature it is, by PRD id. */
+  prdLinks?: Record<string, Record<string, string>>;
+  /** Give it a code (./ground-truth.ts): the key each feature had before its code was given, for Undo. */
+  codeFrom?: Record<string, string>;
+  /** Every code Give it a code gave (an undone one stays an alias of its feature: never given again). */
+  codesGiven?: string[];
 }
 
 type FieldChange = { entity_id: string; field: string; before: unknown; after: unknown; at: string };
@@ -818,11 +824,27 @@ export function setEntityEffort(s: BaselineState, key: string, size: string, use
 }
 
 const KEY_RE = /^[a-z0-9][a-z0-9._-]*$/;
+/** A feature's key may be its F-code (F-09, a slice F-15a), as the API's EntityCreate allows (a feature's only). */
+const CODE_KEY_RE = /^[A-Z]{1,3}-\d+[a-j]?$/;
+/** A code read one way, as oracle.baseline.fixes.canonical_code: F-9 and F-009 read F-09, a slice keeps its letter (F-9a reads F-09a). */
+function canonicalCode(key: string): string | null {
+  const m = /^([A-Z]{1,3})-(\d+)((?:\.\d+)?)([a-j]?)$/.exec(key.trim());
+  return m ? `${m[1]}-${String(Number(m[2])).padStart(2, "0")}${m[3]}${m[4]}` : null;
+}
 
 /** A person's new entity, as service.create_entity: confirmed and locked, a goal proposed (B2). */
 function createEntity(s: BaselineState, input: Schemas["EntityCreate"], userId: string): EntityRow {
   if (!input.title?.trim()) throw new MockError(422, "title must not be empty");
-  if (!input.key || input.key.length > 120 || !KEY_RE.test(input.key)) throw new MockError(422, "key: lowercase letters, digits, . _ -");
+  if (!input.key || input.key.length > 120 || !(KEY_RE.test(input.key) || CODE_KEY_RE.test(input.key))) throw new MockError(422, "key: lowercase letters, digits, . _ -");
+  if (CODE_KEY_RE.test(input.key) && input.type !== "feature") throw new MockError(422, "Only a feature's key can be a feature code.");
+  // A code key is stored as the check reads it (F-9 is F-09) and is one feature's: refused when a feature's key, or a
+  // code once given and taken back (an alias never given again), reads it, as service.create_entity.
+  const code = input.type === "feature" ? canonicalCode(input.key) : null;
+  if (code) {
+    input = { ...input, key: code };
+    const had = [...s.entities.filter((e) => e.type === "feature").map((e) => e.key), ...(s.codesGiven ?? [])];
+    if (had.some((k) => (canonicalCode(k) ?? k) === code)) throw new MockError(409, `Another feature already has the code ${code}.`);
+  }
   if (s.entities.some((e) => e.type === input.type && e.key === input.key)) throw new MockError(409, `${input.type}:${input.key} already exists`);
   if (input.type === "goal" && input.status === "confirmed") {
     throw new MockError(422, "goals start proposed; confirm them with POST .../confirm");
@@ -867,6 +889,141 @@ function createEntity(s: BaselineState, input: Schemas["EntityCreate"], userId: 
 export function addDecisionEntity(s: BaselineState, d: { number: number; title: string; rationale?: string | null }, userId: string): string {
   const e = createEntity(s, { type: "decision", key: `d-${d.number}`, title: d.title, body: d.rationale ?? null, status: "confirmed" } as Schemas["EntityCreate"], userId);
   return e.id;
+}
+
+/** The fields a C8 priority order's new-feature ranking row needs for accept_new below (RankedFeature's `explanation.inputs` is a generic record, read with effortOf). */
+export type NewOrderRow = {
+  key: string;
+  title: string;
+  new: boolean;
+  depends_on: string[];
+  explanation: {
+    inputs: Record<string, unknown>;
+    confidence: { value: number; source?: string };
+    goals: { goal: string; weight: number; contribution: number; contribution_assumed?: boolean }[];
+  };
+};
+
+/** A new-feature row's effort input (explanation.inputs.effort), as newFeature (./runs.ts) sets it. */
+export const effortOf = (row: NewOrderRow): number | null => (row.explanation.inputs.effort as { value: number | null } | undefined)?.value ?? null;
+
+/** Why an approved order rejects a second open create of a feature it already added (api run_order.SAME_FEATURE). */
+export const SAME_FEATURE_NOTE = "The same feature as one the approved order added";
+/** The accepted note an approved order's own create proposal gets (api run_order.accept_new). */
+export const ADDED_BY_ORDER_NOTE = "Added by the approved order";
+
+/** A supports link's contribution as the API takes it (run_order._contribution): an integer 0-3, else none. */
+const contributionOf = (c: unknown): number | null => (typeof c === "number" && Number.isInteger(c) && c >= 0 && c <= 3 ? c : null);
+
+/** A supports link proposed for a goal named with no contribution (api run_order.ASSUMED_LINK): the default, marked assumed for a person to set. */
+export const ASSUMED_LINK: Attrs = { contribution: 1, contribution_assumed: true };
+
+/**
+ * C8 RP1 (api run_order.accept_new): an approved order adds the features new in its PRD
+ * (`new: true` ranking rows) to the baseline as proposed. The run's open create proposals
+ * for the same keys are accepted, one per key; another open create of a key already added,
+ * or of a key that is already a feature, is rejected (SAME_FEATURE_NOTE). A key with no
+ * open create is made from its ranking row, never skipped. Each carries the row's effort
+ * and confidence (attrs), and, as proposed links Oracle made for a person to confirm, the
+ * goals it serves (supports: the row's, then the approved feature set's `scope` entry's)
+ * and what it depends on. A goal named with no contribution still gets its link, the
+ * contribution assumed (ASSUMED_LINK) unless the other names one; a 0 from either source (does not serve)
+ * gets none. Returns how many features were added.
+ */
+export function acceptNewFeatures(
+  s: BaselineState,
+  runId: string | null | undefined,
+  rows: NewOrderRow[],
+  by: string | null,
+  scope: { key: string; goals: { key: string; contribution?: number | null }[] }[] = [],
+): number {
+  const keys = new Set(rows.filter((r) => r.new).map((r) => r.key));
+  if (!keys.size || !runId) return 0;
+  const at = now();
+  const open = s.proposals.filter((p) => p.run_id === runId && p.status === "open").sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const creates = new Map<string, ProposalRow[]>();
+  for (const p of open) {
+    const payload = p.payload as { op?: string; fields?: { key?: string; type?: string } };
+    const key = payload.fields?.key;
+    if (payload.op !== "create" || (payload.fields?.type ?? "feature") !== "feature" || !key || !keys.has(key)) continue;
+    creates.set(key, [...(creates.get(key) ?? []), p]);
+  }
+  const reject = (p: ProposalRow) => Object.assign(p, { status: "rejected", decided_by: by, decided_at: at, payload: { ...p.payload, note: SAME_FEATURE_NOTE } });
+  const added: EntityRow[] = [];
+  for (const key of keys) {
+    const mine = creates.get(key) ?? [];
+    const exists = s.entities.some((e) => e.type === "feature" && e.key === key);
+    // Rejected before the first is accepted (as the API: it would otherwise close it as already done).
+    for (const p of mine.slice(exists ? 0 : 1)) reject(p);
+    if (exists) continue;
+    const row = rows.find((r) => r.key === key)!;
+    const proposal = mine[0];
+    const fields = proposal?.payload.fields as { title?: string; body?: string | null; attrs?: Attrs } | undefined;
+    const effort = effortOf(row);
+    const confidence = row.explanation.confidence.source === "attrs" ? row.explanation.confidence.value : null;
+    const entity: EntityRow = {
+      id: newId(),
+      type: "feature",
+      key,
+      title: fields?.title ?? row.title,
+      body: fields?.body ?? null,
+      attrs: { ...(fields?.attrs ?? {}), ...(effort != null ? { effort } : {}), ...(confidence != null ? { confidence } : {}) },
+      status: "proposed",
+      // Accepted for the person who approved the order, as a person's write: theirs, locked.
+      origin: "user",
+      locked: true,
+      locked_by: by,
+      locked_at: at,
+      confidence: null,
+      run_id: runId,
+      created_at: at,
+      updated_at: at,
+    };
+    s.entities.push(entity);
+    if (proposal) Object.assign(proposal, { status: "accepted", decided_by: by, decided_at: at, payload: { ...proposal.payload, note: ADDED_BY_ORDER_NOTE } });
+    added.push(entity);
+  }
+  for (const entity of added) {
+    const row = rows.find((r) => r.key === entity.key)!;
+    const goals = new Map<string, Attrs>();
+    const entry = scope.find((f) => f.key === entity.key);
+    const named = [...row.explanation.goals, ...(entry?.goals ?? []).map((x) => ({ ...x, goal: x.key }))];
+    // A 0 from either source wins: the feature does not serve that goal.
+    const zero = new Set(named.filter((g) => g.goal && g.contribution === 0).map((g) => g.goal));
+    for (const g of named) {
+      const c = contributionOf(g.contribution);
+      if (!g.goal || zero.has(g.goal)) continue;
+      if (c == null || ("contribution_assumed" in g && g.contribution_assumed)) {
+        if (!goals.has(g.goal)) goals.set(g.goal, ASSUMED_LINK);
+      } else if ((goals.get(g.goal) ?? ASSUMED_LINK) === ASSUMED_LINK) goals.set(g.goal, { contribution: c });
+    }
+    const links = [
+      ...[...goals].map(([goal, attrs]) => ({ target: s.entities.find((e) => e.type === "goal" && e.key === goal), type: "supports" as const, attrs: { ...attrs } })),
+      ...[...new Set(row.depends_on)].filter((d) => d !== entity.key).sort().map((dep) => ({ target: s.entities.find((e) => e.type === "feature" && e.key === dep), type: "depends_on" as const, attrs: {} })),
+    ];
+    for (const { target, type, attrs } of links) {
+      if (!target || target.status === "rejected") continue;
+      if (s.edges.some((e) => e.src_id === entity.id && e.dst_id === target.id && e.type === type)) continue;
+      // Proposed by the run (Oracle), unlocked: a person confirms or declines it on the baseline.
+      s.edges.push({
+        id: newId(),
+        src_id: entity.id,
+        dst_id: target.id,
+        type,
+        attrs,
+        status: "proposed",
+        origin: "agent",
+        locked: false,
+        locked_by: null,
+        locked_at: null,
+        confidence: null,
+        run_id: runId,
+        created_at: at,
+        updated_at: at,
+      });
+    }
+  }
+  return added.length;
 }
 
 /** A person's new link, as service.create_edge: both ends exist, a supports link carries its contribution 0-3. */
@@ -1234,6 +1391,40 @@ export async function routeBaseline(
   const link = await routeEvidenceLinks(s, caller, req, rest);
   if (link) return link;
 
+  // POST /v1/baseline/proposals (router.py create_proposal): a commenter or above suggests a
+  // change; an approver accepts or rejects it. A person's new entity is checked as a create is.
+  if (rest[0] === "proposals" && !rest[1] && m === "POST") {
+    if (ROLE_ORDER.indexOf(caller.role) < ROLE_ORDER.indexOf("commenter")) return fail(403, "Requires the commenter role");
+    const input = await body<Schemas["ProposalCreate"]>();
+    const fields = (input.fields ?? {}) as Attrs;
+    if (input.op === "create" && input.kind === "entity") {
+      const key = String(fields.key ?? "");
+      if (!String(fields.title ?? "").trim()) return fail(422, "title must not be empty");
+      if (!key || key.length > 120 || !(KEY_RE.test(key) || CODE_KEY_RE.test(key))) return fail(422, "key: lowercase letters, digits, . _ -, or a feature code");
+      if (CODE_KEY_RE.test(key) && fields.type !== "feature") return fail(422, "Only a feature's key can be a feature code.");
+      if ((fields.serves || fields.roadmap_item_id) && fields.type !== "feature") return fail(422, "Only a feature serves a goal or is a roadmap item.");
+      if (s.entities.some((e) => e.type === fields.type && e.key === key)) return fail(409, `${String(fields.type)}:${key} already exists`);
+    }
+    const payload = { op: input.op, kind: input.kind, fields, reason: input.reason ?? null, origin: "user" };
+    // service.propose: the same change still open is that proposal, never a second one.
+    const open = s.proposals.find((x) => x.status === "open" && JSON.stringify(x.payload) === JSON.stringify(payload) && (x.entity_id ?? null) === (input.entity_id ?? null));
+    if (open) return json(201, proposalOut(open));
+    const p: ProposalRow = {
+      id: newId(),
+      entity_id: input.entity_id ?? null,
+      edge_id: input.edge_id ?? null,
+      payload,
+      run_id: null,
+      actor: `user:${caller.userId}`,
+      status: "open",
+      decided_by: null,
+      decided_at: null,
+      created_at: now(),
+    };
+    s.proposals.push(p);
+    return json(201, proposalOut(p));
+  }
+
   // Removing evidence: approvers remove any; a commenter only link evidence they added (C2c).
   if (rest[0] === "evidence" && rest[1] && !rest[2] && m === "DELETE") {
     const ev = s.evidence.find((x) => x.id === rest[1]);
@@ -1543,7 +1734,7 @@ export async function routeBaseline(
     if (e instanceof MockError) return fail(e.status, e.message);
     throw e;
   }
-  return json(501, { detail: "This baseline route is not available in mock mode" });
+  return json(501, { detail: "This Ground Truth route is not available in mock mode" });
 }
 
 /**

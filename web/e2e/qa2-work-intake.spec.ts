@@ -50,7 +50,7 @@ async function contrast(el: Locator): Promise<number> {
   });
 }
 
-test("qa-onboarding-5: a new company with no approved baseline is offered only Build the baseline", async ({ page }) => {
+test("qa-onboarding-5: a new company with no approved Ground Truth is offered only Build the Ground Truth", async ({ page }) => {
   await scenario(page, "empty");
   await login(page);
   await page.goto("/documents/new?kind=prd");
@@ -62,10 +62,10 @@ test("qa-onboarding-5: a new company with no approved baseline is offered only B
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
   const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });
   const none = sheet.getByTestId("draft-baseline-none");
-  await expect(none).toContainText("Build the baseline ($7.00)");
-  await expect(none).toContainText("No baseline exists yet");
+  await expect(none).toContainText("Build the Ground Truth ($7.00)");
+  await expect(none).toContainText("No Ground Truth exists yet");
   await expect(sheet.getByRole("radio")).toHaveCount(0);
-  await expect(sheet).not.toContainText("Use the current baseline");
+  await expect(sheet).not.toContainText("Use the current Ground Truth");
 });
 
 test("qa-onboarding-28: the day's read cap shows before the first read", async ({ page }) => {
@@ -143,7 +143,9 @@ test("rirs-30: a brief that is gone says what may have happened and leads back t
   await login(page);
   await page.goto("/intakes/c5000000-0000-4000-8000-0000000000ff");
   const gone = page.getByTestId("intake-gone");
-  await expect(gone).toContainText("drafted into a PRD, archived, or deleted");
+  // F-30: why is in the title's (i).
+  await page.getByRole("button", { name: "About a brief that is not here" }).click();
+  await expect(page.getByRole("tooltip").filter({ hasText: "drafted into a PRD, archived, or deleted" })).toBeVisible();
   await expect(page.getByText("Intake not found")).toHaveCount(0);
   await gone.getByRole("link", { name: "Back to PRDs" }).click();
   await expect(page).toHaveURL(/\/documents$/);

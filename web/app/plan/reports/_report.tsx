@@ -160,11 +160,14 @@ function Figures({ report }: { report: Report }) {
           </div>
         ))}
       </dl>
-      {/* qa-plan-56: where the items behind the totals are listed. */}
-      <p data-testid="report-figures-note" className="text-sm text-text2">
-        Dates slipping are listed under each track&apos;s Needs attention. Now items with no engineering ticket are among the
-        items with no ticket in each track&apos;s Alignment.
-      </p>
+      {/* qa-plan-56: where the items behind the totals are listed, behind the figures' (i) (no visible
+          explanation prose). */}
+      <div className="flex justify-end">
+        <InfoTip label="these figures" align="end" side="bottom" testId="report-figures-note">
+          Dates slipping are listed under each track&apos;s Needs attention. Now items with no engineering ticket are among
+          the items with no ticket in each track&apos;s Alignment.
+        </InfoTip>
+      </div>
     </div>
   );
 }

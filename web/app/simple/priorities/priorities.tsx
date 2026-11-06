@@ -16,10 +16,11 @@ import { FeatureMarks, MarkFor, ShowFilter, showsAs, useFeatureMarks, type ShowK
 import { useSetParams } from "@/lib/use-set-params";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { FeaturePanel } from "../roadmap/_panel";
+import { FeaturePanel, useItemChanged } from "../roadmap/_panel";
 import { FeatureMenu, useFeatureDelete } from "@/components/simple/FeatureDelete";
 import { ArchiveDialog, ArchivedGoals, BTN, count, dayOf, DeleteArchivedDialog, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type GoalFeatures, type Note } from "./goal-buckets";
 import { useBucketDrag } from "./goal-drag";
+import { knownCode, TaskRow, useBucketTasks, type Task } from "./task-edit";
 import { CodeTag, featureCount, goalLabel, PlanBucketsHead, planFeatures, planGoals, planSpan } from "./plan-buckets";
 
 type Out = Schemas["SimplePrioritiesOut"];
@@ -27,6 +28,7 @@ type Row = Schemas["SimplePriorityRow"];
 type Proposal = Schemas["SimplePriorityProposal"];
 type Draft = Schemas["SimplePriorityDraft"];
 type Bucket = Schemas["SimpleGoalBucket"];
+type Line = Schemas["SimpleLine"];
 type ChangeIn = Schemas["SimpleChangeIn"];
 type Tab = "ranked" | "value-effort" | "buckets";
 
@@ -55,8 +57,20 @@ export function usePhone(): boolean {
 const fmt = (n: number | null | undefined, digits = 1): string => (n == null ? "–" : Number(n.toFixed(digits)).toString());
 /** A score, always to two places (1.60 · 1.25 · 1.00), so a list of them reads one way (qa-plan-53). */
 
-/** A feature as people read it: its title and its short code ("Sample data import (F-12)"), never its key. */
-const nameOf = (r: { title: string; short_code?: string | null }): string => (r.short_code ? `${r.title} (${r.short_code})` : r.title);
+/** A feature as people read it: its title and its own key when it has one ("Sample data import (F-12)"), never a made-up code. */
+const nameOf = (r: { title: string; own_key?: string | null }): string => (r.own_key ? `${r.title} (${r.own_key})` : r.title);
+
+/** prio-company: a move or an estimate names the item, or the feature itself when it is on no roadmap (a move then adds it to the company roadmap). */
+const targetOf = (r: { item_id?: string | null; feature_id: string }) => (r.item_id ? { item_id: r.item_id } : { feature_id: r.feature_id });
+
+/** prio-company: the feature's own key beside its name, only when it has one. */
+function OwnKey({ r }: { r: { own_key?: string | null } }) {
+  return r.own_key ? (
+    <span data-testid="prio-own-key" className="ml-1.5 whitespace-nowrap text-[length:var(--simple-small)] font-normal tabular-nums text-text2">
+      {r.own_key}
+    </span>
+  ) : null;
+}
 
 /** qa-simple-plan-3: what the score is, in words (the API's formula: Σ goal weight × contribution × confidence ÷ effort). */
 const SCORE_WORDS = "Score = goal value × Oracle's confidence in it (0 to 1) ÷ effort in engineer-weeks.";
@@ -148,7 +162,7 @@ export function Priorities() {
     void api.PATCH("/v1/me/preferences", { body: { priorities_line: key } });
   };
   const data = q.data;
-  // Current state: each feature's word pill, and the Show filter that counts each kind.
+  // Running today: each feature's word pill, and the Show filter that counts each kind.
   const marks = useFeatureMarks();
   const [show, setShow] = useState<ShowKind | null>(null);
   const showCounts = useMemo(() => {
@@ -164,6 +178,7 @@ export function Priorities() {
   const mayChange = capsReady && can("create_simple_change") && !!data?.can_change;
   // S7: Oracle's suggested features under each goal bucket (an accept adds a draft here).
   const suggestions = useGoalSuggestions(() => q.reload());
+  useItemChanged(q.reload);
   // The item just moved (dragged, re-estimated or moved with the keys) and its rank before, kept
   // until the next move or leaving the page: highlighted with "moved #a → #b".
   const [moved, setMoved] = useState<Moved | null>(null);
@@ -287,8 +302,8 @@ export function Priorities() {
           ) : (
             <>
               No features yet: confirm your company&rsquo;s goals in{" "}
-              <Link href="/baseline" className="font-medium text-accent-ink underline">
-                Detailed › Baseline
+              <Link href="/ground-truth" className="font-medium text-accent-ink underline">
+                Detailed › Ground Truth
               </Link>{" "}
               and the features Oracle suggests for them rank here.
             </>
@@ -324,7 +339,11 @@ export function Priorities() {
           }}
         />
       )}
-      {data && !blank && tab === "value-effort" && <ValueEffort data={data} shapes={shapes} mayChange={mayChange} changed={changed} moved={moved} />}
+      {data && !blank && tab === "value-effort" && (
+        <OpenRow.Provider value={setRowOpen}>
+          <ValueEffort data={data} shapes={shapes} mayChange={mayChange} changed={changed} moved={moved} />
+        </OpenRow.Provider>
+      )}
       {data && !blank && tab === "buckets" && <Buckets data={data} suggestions={suggestions} reload={q.reload} />}
       </div>
     </div>
@@ -526,7 +545,7 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
   const goalOf = goalOfRow(data);
   // qa-simple-plan-4: the override ends (after.clear) and the feature takes Oracle's rank again; Undo puts it back.
   async function backToOracle(r: Row) {
-    const sent = await send({ op: "override_priority", target: { item_id: r.item_id }, before: { override: r.before_override ?? null }, after: { clear: true }, reason: "Back to Oracle's rank" });
+    const sent = await send({ op: "override_priority", target: targetOf(r), before: { override: r.before_override ?? null }, after: { clear: true }, reason: "Back to Oracle's rank" });
     await changed(sent, r.applies ? `Moved ${nameOf(r)} back to Oracle's rank` : `Proposed putting ${nameOf(r)} back at Oracle's rank`, r);
   }
   return (
@@ -604,7 +623,6 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
                 className={`inline-block h-3 w-3 flex-none rounded-full border-2 border-accent ${r.above_line ? "bg-accent" : "bg-transparent"}`}
                 data-testid="prio-line-mark"
               />
-              <CodeChip r={r} />
               {/* The Current-state pill sits right after the title (cs2-b, the owner's later pick), never pushed
                   to the far right; the title and its pill wrap as one group, so every title starts at one x. */}
               <span className="flex min-w-[12rem] flex-1 flex-wrap items-center gap-x-2 gap-y-1" data-testid="prio-name">
@@ -615,6 +633,7 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
                 ) : (
                   <span className="min-w-0 font-medium" data-testid="prio-title">{r.title}</span>
                 )}
+                <OwnKey r={r} />
                 <MarkFor featureId={r.feature_id} />
               </span>
               {/* walkb-priorities: no ml-auto, so details that wrap under the title start at the left on every row. */}
@@ -638,7 +657,7 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
                 )}
                 {r.milestone && <span data-testid="prio-milestone" className="min-w-0 max-w-full [overflow-wrap:anywhere]">Milestone {r.milestone}</span>}
                 {/* qa-simple-plan-3: value · confidence · weeks · score, in the order of the score's formula; no bar. */}
-                <Numbers r={r} />
+                <Numbers r={r} mayChange={mayChange} changed={changed} />
               </span>
               {/* trash-features-goals: Delete feature (to Trash, Undo) for who decides on it. */}
               {mayChange && r.applies && r.item_id && <FeatureMenu title={nameOf(r)} onDelete={() => onDelete({ id: r.item_id!, title: r.title })} />}
@@ -658,9 +677,16 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
                 {words && <MovedTag words={words} />}
               </p>
             )}
+            {mayChange && r.can_reorder && !r.on_roadmap && data.company_roadmap && (
+              <p className="mt-1 text-[length:var(--simple-small)] text-text2 sm:pl-12" data-testid="prio-adds">
+                Not on {data.company_roadmap.title} yet: moving it adds it there, under Later.
+              </p>
+            )}
             {mayChange && !r.can_reorder && (
               <p className="mt-1 text-[length:var(--simple-small)] text-text2 sm:pl-12" data-testid="prio-locked">
-                Only people with access to this feature&apos;s roadmap can move it. Ask the owner for access.
+                {/* prio-company: never the owner's (an owner moves every row); someone who truly lacks the right. A feature not
+                    on the company roadmap waits for the owner to add it, which no access changes. */}
+                {!r.on_roadmap && data.company_roadmap ? "Only the owner can add this to the roadmap." : "Only people with access to this feature's roadmap can move it. Ask the owner for access."}
               </p>
             )}
             {r.after && (
@@ -724,6 +750,7 @@ function pushedBy(rows: Row[], r: Row): string {
 function OracleOrder({ data }: { data: Out }) {
   const sorted = [...data.rows].sort((a, b) => (a.oracle_rank ?? 1e9) - (b.oracle_rank ?? 1e9));
   const goalOf = goalOfRow(data);
+  const open = useContext(OpenRow);
   return (
     <section aria-label="Oracle's order">
       <h2 className="mb-2 text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Oracle&apos;s order</h2>
@@ -737,8 +764,17 @@ function OracleOrder({ data }: { data: Out }) {
                 title={r.above_line ? "Above the line" : "Below the line"}
                 className={`inline-block h-3 w-3 flex-none rounded-full border-2 border-accent ${r.above_line ? "bg-accent" : "bg-transparent"}`}
               />
-              <CodeChip r={r} />
-              <span className="min-w-[8rem] flex-1 font-medium">{r.title}</span>
+              {/* The feature's name opens the one feature panel. */}
+              <span className="min-w-[8rem] flex-1 font-medium">
+                {open ? (
+                  <button type="button" className="text-left hover:underline" onClick={() => open(r)}>
+                    {r.title}
+                  </button>
+                ) : (
+                  r.title
+                )}
+                <OwnKey r={r} />
+              </span>
               <span className="flex flex-wrap items-center gap-x-3 text-[length:var(--simple-small)] text-text2">
                 {goalOf(r) ? (
                   <span data-testid="oracle-goal">{goalOf(r)}</span>
@@ -809,7 +845,7 @@ function MoveDialog({ move, rows, dated, onClose, changed }: { move: { row: Row;
     setError(null);
     const r = await send({
       op: "override_priority",
-      target: { item_id: row.item_id },
+      target: targetOf(row),
       before: { override: row.before_override ?? null },
       after: { position, reason: reason.trim(), ...(confirm ? { confirm: true } : {}) },
       reason: reason.trim(),
@@ -994,6 +1030,10 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
   const [merging, setMerging] = useState<string | null>(null);
   const [into, setInto] = useState("");
   const show = useSearchParams().get("show");
+  // A draft's name opens the one feature panel (the roadmap's), as a ranked row's does.
+  const [opened, setOpened] = useState<Draft | null>(null);
+  const phone = usePhone();
+  const { can } = useMe();
   return (
     <section aria-label="Not ranked yet" className="mt-6">
       <h2 className="mb-2 text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Not ranked yet</h2>
@@ -1005,7 +1045,12 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
           <li key={d.item_id} data-testid="prio-draft" data-code={d.code} data-shown={show === d.item_id ? "true" : undefined} className={`rounded-[var(--simple-card-radius)] border border-dashed bg-surface p-3 ${show === d.item_id ? "border-accent ring-2 ring-accent" : "border-line-strong"}`}>
             <div className="flex flex-wrap items-center gap-3">
               <span className="rounded-full bg-na-bg px-2 text-[length:var(--simple-small)] text-na">Draft</span>
-              <span className="flex-1 font-medium">{d.title}</span>
+              {/* build-feature-panel review 7: a draft's name opens the one feature panel too. */}
+              <span className="flex-1 font-medium">
+                <button type="button" data-feature={d.item_id} title={`Open ${d.title}`} className="text-left hover:underline" onClick={() => setOpened(d)}>
+                  {d.title}
+                </button>
+              </span>
               <span className="text-[length:var(--simple-small)] text-text2">{d.goal?.title ?? "No goal"}</span>
               {mayChange && (
                 <span className="flex gap-2">
@@ -1075,6 +1120,15 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
           );
         })}
       </ul>
+      {opened && (
+        <FeaturePanel
+          key={opened.item_id}
+          feature={{ id: opened.item_id, code: opened.code, name: opened.title }}
+          phone={phone}
+          canChange={can("create_simple_change")}
+          onClose={() => setOpened(null)}
+        />
+      )}
     </section>
   );
 }
@@ -1269,7 +1323,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
     await changed(
       await send({
         op: "estimate_feature",
-        target: { item_id: r.item_id },
+        target: targetOf(r),
         before: { goal_value: r.value_estimated ? (r.goal_value ?? null) : null, effort: r.effort ?? null },
         after,
       }),
@@ -1556,6 +1610,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                   <span className="w-5 flex-none text-right font-[650] tabular-nums" data-testid="side-rank">
                     {r.rank}
                   </span>
+                  {/* The mark's code, so a mark and its row read alike (Value / effort only; the ranked rows name the feature). */}
                   <span className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-[13px] font-semibold tabular-nums text-text" data-testid="side-code" title={r.title}>
                     {r.short_code || r.title}
                   </span>
@@ -1682,13 +1737,23 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
             else if (e.target.value !== "picked") onPick(e.target.value);
           }}
         >
-          {offered.map((l) => (
+          {lineGroups(offered).map(([prd, ls]) => {
             // priorities-keydates: a PRD's milestone is a key date marked as the roadmap marks it ("From the PRD", in
             // place of "Key date", so the chosen line fits a phone's box); it changes in the PRD, never here.
-            <option key={l.key} value={l.key} title={l.prd ? `A key date from the PRD; change it in the PRD, ${l.prd.title}` : undefined}>
-              {l.kind === "key_date" ? `${l.prd ? "From the PRD" : "Key date"}: ${l.label}` : l.kind === "milestone" ? `Milestone: ${l.label}` : l.label}
-            </option>
-          ))}
+            const options = ls.map((l) => (
+              <option key={l.key} value={l.key} title={l.prd ? `A key date from the PRD; change it in the PRD, ${l.prd.title}` : undefined}>
+                {l.kind === "key_date" ? `${l.prd ? "From the PRD" : "Key date"}: ${l.label}` : l.kind === "milestone" ? `Milestone: ${l.label}` : l.label}
+              </option>
+            ));
+            // prio-company: each PRD's milestones listed under its name.
+            return prd ? (
+              <optgroup key={prd.id} label={prd.title} data-testid="line-prd">
+                {options}
+              </optgroup>
+            ) : (
+              options
+            );
+          })}
           {current.kind === "date" && <option value="picked">{`Date: ${current.label.replace(/^By /, "")}`}</option>}
           <option value="pick">{current.kind === "date" ? "Pick another date…" : "Pick a date…"}</option>
         </select>
@@ -1696,6 +1761,18 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
       </span>
     </div>
   );
+}
+
+/** prio-company: the lines in their order, each run of one PRD's lines under that PRD (null: lines of no PRD). */
+function lineGroups(lines: Line[]): [Line["prd"], Line[]][] {
+  const out: [Line["prd"], Line[]][] = [];
+  for (const l of lines) {
+    // Each PRD is one group, at its first line, even when another's line falls between by date.
+    const mine = l.prd ? out.find(([p]) => p?.id === l.prd!.id) : out.at(-1)?.[0] ? undefined : out.at(-1);
+    if (mine) mine[1].push(l);
+    else out.push([l.prd ?? null, [l]]);
+  }
+  return out;
 }
 
 /** A day as a date field writes it (2026-10-31), in the reader's own time zone. */
@@ -1751,26 +1828,38 @@ function lineSplit(rows: Row[]): number {
 }
 
 /**
- * Above the list: "N of M miss <line>" and the names of those that miss it. Compact (Value/effort's
- * 320 px side list): three names and "and N more", every name in its title.
+ * Above the list: "N of M miss <line>" and, under "Show them", each feature that misses it on a line
+ * of its own, each opening the feature's panel (prio-company: never one run-on sentence of names).
  */
 function LineCaption({ data, compact = false }: { data: Out; compact?: boolean }) {
-  const misses = data.rows.filter((r) => !r.above_line).map((r) => r.title);
-  // qa-simple-plan-19: "and N more" opens the rest.
-  const [all, setAll] = useState(false);
-  const cut = compact && misses.length > 3 && !all;
+  const misses = data.rows.filter((r) => !r.above_line);
+  const [open, setOpen] = useState(false);
+  const openRow = useContext(OpenRow);
   return (
-    <p data-testid="line-caption" className={`mb-2 text-[length:var(--simple-small)] text-text2 ${compact ? "leading-[21px]" : ""}`}>
-      <span className="font-medium text-accent-ink">
-        {misses.length} of {data.rows.length} miss {lineLabel(data)}
-      </span>
-      {misses.length > 0 && `: ${cut ? `${misses.slice(0, 3).join(", ")} ` : misses.join(", ")}`}
-      {cut && (
-        <button type="button" data-testid="line-caption-more" aria-expanded={false} onClick={() => setAll(true)} className="font-semibold text-accent-ink underline">
-          and {misses.length - 3} more
-        </button>
+    <div data-testid="line-caption" className={`mb-2 text-[length:var(--simple-small)] text-text2 ${compact ? "leading-[21px]" : ""}`}>
+      <p className="flex flex-wrap items-center gap-x-2">
+        <span className="font-medium text-accent-ink">
+          {misses.length} of {data.rows.length} miss {lineLabel(data)}
+        </span>
+        {misses.length > 0 && (
+          <button type="button" data-testid="line-caption-more" aria-expanded={open} aria-controls="line-misses" onClick={() => setOpen(!open)} className="font-semibold text-accent-ink underline">
+            {open ? "Hide them" : "Show them"}
+          </button>
+        )}
+      </p>
+      {open && (
+        <ul id="line-misses" data-testid="line-misses" className="mt-1 flex flex-col">
+          {misses.map((r) => (
+            <li key={r.feature_id}>
+              {/* Each name opens the one feature panel. */}
+              <button type="button" data-testid="line-miss" onClick={openRow ? () => openRow(r) : undefined} className="py-0.5 text-left text-text underline decoration-line-strong underline-offset-2 hover:decoration-accent">
+                {nameOf(r)}
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
-    </p>
+    </div>
   );
 }
 
@@ -1811,12 +1900,15 @@ function PartHead({ data, makes, n }: { data: Out; makes: boolean; n: number }) 
 }
 
 /** A row's numbers, each keeping its "·" with it so a wrapped line never starts or ends with a stray dot. */
-function Numbers({ r }: { r: Row }) {
+function Numbers({ r, mayChange = false, changed }: { r: Row; mayChange?: boolean; changed?: Changed }) {
   const parts = [
     <span key="value">value {fmt(r.goal_value)}</span>,
     ...(r.effort == null
       ? // qa-simple-plan-8: PM-owned work has no engineer-weeks, so no score.
-        [<span key="pm" data-testid="prio-pm-owned">PM-owned, no engineer-weeks, no score</span>]
+        [
+          <span key="pm" data-testid="prio-pm-owned">PM-owned, no engineer-weeks, no score</span>,
+          ...(mayChange && changed ? [<EffortEdit key="effort" r={r} changed={changed} />] : []),
+        ]
       : [
           <span key="confidence" data-testid="prio-confidence" title={SCORE_WORDS}>confidence {fmt(r.confidence, 2)}</span>,
           <span key="weeks">{fmt(r.effort)} wk</span>,
@@ -1843,6 +1935,74 @@ function Numbers({ r }: { r: Row }) {
   );
 }
 
+/** prio-company: a PM-owned row's effort, set in place; its score then appears. */
+function EffortEdit({ r, changed }: { r: Row; changed: Changed }) {
+  const [editing, setEditing] = useState(false);
+  const [weeks, setWeeks] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const n = Number(weeks);
+  const ok = weeks.trim() !== "" && Number.isFinite(n) && n > 0;
+  async function save() {
+    if (!ok) return;
+    setBusy(true);
+    setError(null);
+    const effort = Math.round(n * 10) / 10;
+    const sent = await send({
+      op: "estimate_feature",
+      target: targetOf(r),
+      before: { goal_value: r.value_estimated ? (r.goal_value ?? null) : null, effort: null },
+      after: { effort },
+    });
+    setBusy(false);
+    if (!sent.ok) return setError(sent.message);
+    setEditing(false);
+    await changed(sent, `Estimated ${nameOf(r)}: effort ${effort} wk`, r, true, `effort ${effort} wk`);
+  }
+  if (!editing)
+    return (
+      <button type="button" data-testid="prio-add-effort" className="font-semibold text-accent-ink underline" onClick={() => setEditing(true)}>
+        Add effort
+      </button>
+    );
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5" data-testid="prio-effort-edit">
+      <label className="inline-flex items-center gap-2">
+        <span>Effort</span>
+        <input
+          type="number"
+          min="0.5"
+          step="0.5"
+          autoFocus
+          inputMode="decimal"
+          aria-label={`Effort for ${r.title}, in engineer-weeks`}
+          className="h-7 w-16 rounded-md border border-line-strong bg-surface px-1.5 text-text"
+          value={weeks}
+          onChange={(e) => setWeeks(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void save();
+            } else if (e.key === "Escape") setEditing(false);
+          }}
+        />
+        <span>wk</span>
+      </label>
+      <Button type="button" onClick={() => void save()} disabled={!ok || busy}>
+        Save
+      </Button>
+      <Button type="button" variant="ghost" onClick={() => setEditing(false)}>
+        Cancel
+      </Button>
+      {error && (
+        <span role="alert" className="text-crit">
+          {error}
+        </span>
+      )}
+    </span>
+  );
+}
+
 /** The divider row, drawn only when every row after it misses the line. */
 function LineDivider({ data, compact = false }: { data: Out; compact?: boolean }) {
   return (
@@ -1863,93 +2023,168 @@ function LineDivider({ data, compact = false }: { data: Out; compact?: boolean }
 
 function Buckets({ data, suggestions, reload }: { data: Out; suggestions: GoalSuggestionsApi; reload: () => Promise<unknown> }) {
   // plan-charts: with a dated plan, where each goal's work lands milestone by milestone.
-  if (data.plan?.milestones.length && data.plan.span) return <PlanBuckets data={data} plan={data.plan} suggestions={suggestions} />;
+  if (data.plan?.milestones.length && data.plan.span) return <PlanBuckets data={data} plan={data.plan} suggestions={suggestions} reload={reload} />;
   return <UndatedBuckets data={data} suggestions={suggestions} reload={reload} />;
 }
 
-const sameGoal = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+const sameGoal = (a: string, b: string) => goalLabel(a).name.toLowerCase() === goalLabel(b).name.toLowerCase();
 
+/**
+ * No dated plan: a card per goal with its share of the quarter's engineer-weeks, and its tasks
+ * you can change as in the dated view: drag one to another goal by its grip (pointer, touch or
+ * keys), add one in place, edit or cut one, each with Undo.
+ */
 function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions: GoalSuggestionsApi; reload: () => Promise<unknown> }) {
   const { can } = useMe();
   const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
-  // EG1 a without a dated plan: each goal's ⋯ (Edit goal, Move up and down, Archive, Delete, or
-  // the asks), its owner, its form in place, the note with Undo and the Archived goals fold.
   const bucketsQ = useGoalBuckets();
   const gb = bucketsQ.data;
   const [note, setNote] = useState<Note | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const writes = useBucketWrites(async () => void (await Promise.all([bucketsQ.reload(), reload()])), setNote, setError);
+  const reloadAll = async () => {
+    await Promise.all([bucketsQ.reload(), reload()]);
+  };
+  const writes = useBucketWrites(reloadAll, setNote, setError);
   const rights = useBucketRights(gb);
+  const drag = useBucketDrag({ gb, writes });
+  const tasks = useBucketTasks({ rows: data.rows, plan: null, may: rights.task, reload: reloadAll, setNote, setError });
+  // EG1 a without a dated plan: each goal's ⋯ (Edit goal, Move up and down, Archive, Delete, or
+  // the asks), its owner, its form in place, the note with Undo and the Archived goals fold.
   const [editingGoal, setEditingGoal] = useState<string | null>(null);
   const year = data.today.slice(0, 4);
-  const goalOf = (b: Bucket) => (b.no_goal ? undefined : gb?.goals.find((g) => sameGoal(g.title, b.title)));
-  // An empty "No goal" bucket warns about nothing: it is left out.
-  const buckets: Bucket[] = data.buckets.filter((b) => !(b.no_goal && b.weeks === 0 && b.codes.length === 0));
-  const percent = sharePercents(buckets.map((b) => b.weeks));
+  // A task just added (a draft, which the goal buckets do not list yet) moves by the change engine;
+  // its preview shows a code only once it has one people know.
+  const draftGrip = (t: Task, from: string | null) => {
+    if (!rights.task || !gb) return undefined;
+    const f = { code: t.code, name: t.name, slices: [], weeks: null };
+    const own = { from, move: (to: { id: string; title: string }) => tasks.move(t, to), code: knownCode(t.code) ? t.code : null, draft: true };
+    return { onPointerDown: (e: React.PointerEvent) => drag.grip(f, e, own), onKeyDown: (e: React.KeyboardEvent) => drag.grip(f, e, own) };
+  };
+  // A feature's grip: moved at once by who may move it, else proposed by the change engine (commenters).
+  const featureGrip = (f: Parameters<typeof drag.grip>[0], e: React.PointerEvent | React.KeyboardEvent) => {
+    if (rights.move) return drag.grip(f, e);
+    const t = tasks.taskOf(f.code, f.name);
+    if (!t || !rights.task) return;
+    drag.grip(f, e, { from: featureOf(gb, f.code, f.name)?.goal_ids[0] ?? null, move: (to) => tasks.move(t, to), code: f.code });
+  };
+  const phone = usePhone();
+  const [opened, setOpened] = useState<{ code: string; name: string } | null>(null);
   // Each feature by its code and its name, as the Ranked list shows them.
   const rowOf = new Map(data.rows.map((r) => [r.code, r]));
+  // Each bucket's goal in the goal buckets (by its name): a drop target, and where a task is added.
+  const goalOf = (b: Bucket) => (b.no_goal ? undefined : gb?.goals.find((g) => sameGoal(g.title, b.title)));
+  // A feature's goal links place it (moved by its grip): under the first goal it serves, when that goal has a bucket here.
+  const home = new Map<string, string>();
+  for (const b of data.buckets) for (const c of b.codes) home.set(c, b.key);
+  const placedIn = (r: Row): string | undefined => {
+    const first = featureOf(gb, r.code, r.title)?.goal_ids[0];
+    const to = first ? data.buckets.find((b) => goalOf(b)?.id === first) : undefined;
+    return to?.key ?? home.get(r.code);
+  };
+  const moved = data.rows.filter((r) => home.has(r.code) && placedIn(r) !== home.get(r.code));
+  const nowWeeks = (r: Row) => (r.horizon === "now" ? (r.effort ?? 0) : 0);
+  const all: Bucket[] = data.buckets.map((b) => {
+    const weeks = b.weeks - moved.filter((r) => home.get(r.code) === b.key).reduce((n, r) => n + nowWeeks(r), 0) + moved.filter((r) => placedIn(r) === b.key).reduce((n, r) => n + nowWeeks(r), 0);
+    const codes = [...b.codes.filter((c) => !moved.some((r) => r.code === c)), ...moved.filter((r) => placedIn(r) === b.key).map((r) => r.code)];
+    return { ...b, weeks, codes };
+  });
+  const total = all.reduce((n, b) => n + b.weeks, 0);
+  // An empty "No goal" bucket warns about nothing: it is left out.
+  const buckets: Bucket[] = all.filter((b) => !(b.no_goal && b.weeks === 0 && b.codes.length === 0)).map((b) => (moved.length ? { ...b, share: total ? b.weeks / total : 0 } : b));
+  const percent = sharePercents(buckets.map((b) => b.weeks));
   // qa4-simple-plan-2: milestones or key dates on the roadmap (the Line's) are not a dated plan; never say there are no dates.
   const dated = (data.lines ?? []).some((l) => l.kind === "milestone" || l.kind === "key_date");
+  const weeksOf = (r: Row) => (r.effort == null ? "" : `${fmt(r.effort)} wk`);
   // A goal's features as Archive counts them: its bucket's.
   const featuresOf: GoalFeatures = (title) => (buckets.find((b) => !b.no_goal && sameGoal(b.title, title))?.codes ?? []).map((c) => ({ code: c, name: rowOf.get(c)?.title ?? c, slices: [] }));
   const acts = useGoalActs({ gb, plan: null, featuresOf, writes, rights });
+  // Round 6: no work this quarter is said in words, not as "0 wk" over an empty chart.
+  const planned = data.weeks_total > 0;
   return (
     <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
       <p className="mb-3 text-text2" data-testid="buckets-intro">
         {dated
           ? "Grouped by goal for this quarter; the milestones and key dates are on the Ranked list's Line."
-          : "No dated plan yet, so the work is not placed by milestone."}{" "}
-        Engineer-weeks per confirmed goal this quarter: {fmt(data.weeks_total)} wk in all.
+          : "No dated plan yet, so the work is not placed by milestone."}
+        {planned ? ` Engineer-weeks per confirmed goal this quarter: ${fmt(moved.length ? total : data.weeks_total)} wk in all.` : null}
       </p>
-      <figure className="hidden sm:block" data-testid="bucket-bar">
-        <figcaption className="mb-1 text-[length:var(--simple-small)] text-text2">Share of engineer-weeks by goal</figcaption>
-        <div className="flex overflow-hidden rounded-[var(--simple-card-radius)] border border-line">
-          {buckets.map((b, k) =>
-            b.weeks > 0 ? (
-              <div
-                key={b.key}
-                data-testid="bucket-segment"
-                title={`${b.title}: ${fmt(b.weeks)} wk · ${percent[k]}%`}
-                style={{ width: `${b.share * 100}%` }}
-                className={`min-h-12 min-w-0 border-r border-surface p-2 text-[length:var(--simple-small)] ${b.no_goal ? "bg-warn-bg text-warn" : "bg-accent-soft text-accent-ink"}`}
-              >
-                {/* qa-simple-plan-40: the numbers are said once, on the cards below. */}
-                <span className="block truncate font-medium">{b.title}</span>
-              </div>
-            ) : null,
-          )}
-        </div>
-      </figure>
-      {note && <UndoNote id={note.id} clear='[data-testid="goal-bucket"] h3' onUndo={undoOf(note, writes)}>{note.text}</UndoNote>}
+      {!planned && (
+        <p className="mb-3 text-text2" data-testid="buckets-empty">
+          Nothing planned this quarter.
+        </p>
+      )}
+      {planned && (
+        <figure className="hidden sm:block" data-testid="bucket-bar">
+          <figcaption className="mb-1 text-[length:var(--simple-small)] text-text2">Share of engineer-weeks by goal</figcaption>
+          <div className="flex overflow-hidden rounded-[var(--simple-card-radius)] border border-line">
+            {buckets.map((b, k) =>
+              b.weeks > 0 ? (
+                <div
+                  key={b.key}
+                  data-testid="bucket-segment"
+                  title={`${b.title}: ${fmt(b.weeks)} wk · ${percent[k]}%`}
+                  style={{ width: `${b.share * 100}%` }}
+                  className={`min-h-12 min-w-0 border-r border-surface p-2 text-[length:var(--simple-small)] ${b.no_goal ? "bg-warn-bg text-warn" : "bg-accent-soft text-accent-ink"}`}
+                >
+                  {/* qa-simple-plan-40: the numbers are said once, on the cards below. */}
+                  <span className="block truncate font-medium">{b.title}</span>
+                </div>
+              ) : null,
+            )}
+          </div>
+        </figure>
+      )}
+      {note && <UndoNote id={note.id} clear='[data-testid="goal-bucket"] h3' onUndo={undoOf(note, writes, tasks)}>{note.text}</UndoNote>}
       {error && (
         <p role="alert" className="mt-3 text-[15px] text-warn">
           {error}
         </p>
       )}
-      <ul className="mt-3 grid gap-[var(--simple-gap)] sm:grid-cols-2">
+      <p id="bucket-move-help" className="sr-only">
+        Press Enter or Space to pick the feature up, the arrow keys to choose a goal, Enter to drop it there and Escape to cancel.
+      </p>
+      <p aria-live="assertive" className="sr-only" data-testid="bucket-live">
+        {drag.said}
+      </p>
+      <ul className="mt-3 grid items-start gap-[var(--simple-gap)] sm:grid-cols-2">
         {buckets.map((b, k) => {
           const rec = goalOf(b);
+          const over = !!rec && drag.over === rec.id;
+          const drafts = data.drafts.filter((d) => (b.no_goal ? !d.goal : !!d.goal && sameGoal(d.goal.title, b.title)));
+          const add = b.no_goal ? null : tasks.add(rec && { id: rec.id, title: b.title }, !gb);
           return (
-          <li key={b.key} data-testid="goal-bucket" data-key={b.key} data-goal-id={rec?.id} className={`rounded-[var(--simple-card-radius)] border bg-surface p-3 ${b.no_goal ? "border-warn" : "border-line"}`}>
-            {rec && editingGoal === rec.id ? (
-              <GoalForm
-                start={{ title: rec.title, measure: rec.measure ?? "", target: rec.target ?? "", due: dayOf(rec.due, year), owner: rec.owner_id ?? null }}
-                goal={rec}
-                order={rec.order}
-                title="Edit goal"
-                year={year}
-                onCancel={() => setEditingGoal(null)}
-                onSave={async (f, seen) => {
-                  if (await writes.edit(rec, f, year, seen)) setEditingGoal(null);
-                }}
-              />
-            ) : (
-              <>
+            <li
+              key={b.key}
+              data-testid="goal-bucket"
+              data-key={b.key}
+              data-goal-id={rec?.id}
+              data-drop={over ? "" : undefined}
+              className={`relative rounded-[var(--simple-card-radius)] border bg-surface p-3 ${over ? "border-2 border-accent bg-accent-soft" : b.no_goal ? "border-warn" : "border-line"}`}
+            >
+              {rec && editingGoal === rec.id ? (
+                <GoalForm
+                  start={{ title: rec.title, measure: rec.measure ?? "", target: rec.target ?? "", due: dayOf(rec.due, year), owner: rec.owner_id ?? null }}
+                  goal={rec}
+                  order={rec.order}
+                  title="Edit goal"
+                  year={year}
+                  onCancel={() => setEditingGoal(null)}
+                  onSave={async (f, seen, refused) => {
+                    if (await writes.edit(rec, f, year, seen, refused)) setEditingGoal(null);
+                  }}
+                />
+              ) : (
+                <>
                 <div className="flex items-baseline justify-between gap-2">
                   <h3 className="min-w-0 flex-1 font-semibold">{b.title}</h3>
                   <span className="tabular-nums">
                     {fmt(b.weeks)} wk · <span data-testid="bucket-share">{percent[k]}%</span>
                   </span>
+                  {rights.edit(rec) && (
+                    <button type="button" aria-label={`Edit ${b.title}`} title="Edit goal" className={`${ICON_BTN} self-center`} onClick={() => setEditingGoal(rec!.id)} disabled={!!editingGoal}>
+                      ✎
+                    </button>
+                  )}
                   {rec && <span className="self-center">{acts.menu(rec, b.title, rights.edit(rec) ? () => setEditingGoal(rec.id) : undefined)}</span>}
                 </div>
                 {/* eg1-a-rest: each goal names its owner under its heading. */}
@@ -1960,37 +2195,88 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
                     </span>
                   </p>
                 )}
-              </>
-            )}
-            <div className="mt-2 h-3 overflow-hidden rounded-full bg-surface2">
-              <div className={`h-full ${b.no_goal ? "bg-warn" : "bg-accent"}`} style={{ width: `${b.share * 100}%` }} />
-            </div>
-            {b.no_goal && <p className="mt-1 text-[length:var(--simple-small)] text-warn">⚠ Serves no confirmed goal</p>}
-            {b.codes.length ? (
-              <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[length:var(--simple-small)] text-text2" data-testid="bucket-features">
-                {b.codes.map((c) => {
-                  const r = rowOf.get(c);
-                  return (
-                    <li key={c} data-code={r?.short_code || c} className="flex items-center gap-1.5">
-                      {r && <CodeChip r={r} />}
-                      <span>{r?.title ?? c}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <p className="mt-1 text-[length:var(--simple-small)] text-text2">Nothing this quarter</p>
-            )}
-            {!b.no_goal && (
-              <div className="mt-3 border-t border-line pt-3">
-                <SuggestionsButton goal={{ id: "", key: b.key, title: b.title }} api={suggestions} onOpen={setGoalPanel} label={can("create_goal_suggestion") ? "See or make suggestions" : "See suggestions"} />
+                </>
+              )}
+              <div className="mt-2 h-3 overflow-hidden rounded-full bg-surface2">
+                <div className={`h-full ${b.no_goal ? "bg-warn" : "bg-accent"}`} style={{ width: `${b.share * 100}%` }} />
               </div>
-            )}
-          </li>
+              {b.no_goal && <p className="mt-1 text-[length:var(--simple-small)] text-warn">⚠ Serves no confirmed goal</p>}
+              {b.codes.length || drafts.length || add ? (
+                <ul className="mt-1" data-testid="bucket-features">
+                  {b.codes.length === 0 && drafts.length === 0 && <li className="py-[5px] text-[length:var(--simple-small)] text-text2">Nothing this quarter</li>}
+                  {b.codes.map((c) => {
+                    const r = rowOf.get(c);
+                    const name = r?.title ?? c;
+                    const t = r ? tasks.taskOf(r.code, r.title) : undefined;
+                    const form = t ? tasks.form(t, b.title) : null;
+                    if (form)
+                      return (
+                        <li key={c} data-testid="plan-feature" data-code={r?.short_code || c} className="border-b border-line">
+                          {form}
+                        </li>
+                      );
+                    const f = { code: c, name, slices: [], weeks: r?.effort ?? null };
+                    const movable = (rights.move || (rights.task && !!t)) && !!r && !!featureOf(gb, r.code, r.title);
+                    return (
+                      <TaskRow
+                        key={c}
+                        code={r?.short_code || c}
+                        name={name}
+                        milestone={(t && tasks.milestoneName(t)) ?? r?.milestone ?? null}
+                        weeks={r ? weeksOf(r) : ""}
+                        grip={movable ? { onPointerDown: (e) => featureGrip(f, e), onKeyDown: (e) => featureGrip(f, e) } : undefined}
+                        lifted={drag.lifted === c}
+                        onOpen={r ? () => setOpened({ code: r.code, name: r.title }) : undefined}
+                        actions={tasks.actions(t)}
+                      />
+                    );
+                  })}
+                  {drafts.map((d) => {
+                    const t = { itemId: d.item_id, code: d.code, name: d.title };
+                    const form = tasks.form(t, b.title);
+                    return form ? (
+                      <li key={d.item_id} data-testid="plan-feature" data-code={d.code} className="border-b border-line">
+                        {form}
+                      </li>
+                    ) : (
+                      <TaskRow
+                        key={d.item_id}
+                        code={d.code}
+                        name={d.title}
+                        milestone={tasks.milestoneName(t)}
+                        weeks=""
+                        draft
+                        grip={draftGrip(t, rec?.id ?? null)}
+                        lifted={drag.lifted === d.code}
+                        onOpen={() => setOpened({ code: d.code, name: d.title })}
+                        actions={tasks.actions(t)}
+                      />
+                    );
+                  })}
+                  {add}
+                </ul>
+              ) : (
+                <p className="mt-1 text-[length:var(--simple-small)] text-text2">Nothing this quarter</p>
+              )}
+              {over && (
+                <p data-testid="drop-note" className="mt-2 rounded-lg border border-dashed border-accent px-3 py-2 text-[15px] text-accent-ink">
+                  Drop here: {b.title} becomes the goal it moves most
+                </p>
+              )}
+              {!b.no_goal && (
+                <div className="mt-3 border-t border-line pt-3">
+                  <SuggestionsButton goal={{ id: "", key: b.key, title: b.title }} api={suggestions} onOpen={setGoalPanel} label={can("create_goal_suggestion") ? "See or make suggestions" : "See suggestions"} />
+                </div>
+              )}
+            </li>
           );
         })}
         {acts.fold(year)}
       </ul>
+      {drag.edge}
+      {drag.ghost}
+      {tasks.dialog}
+      {opened && <FeaturePanel key={opened.code} feature={opened} phone={phone} canChange={can("create_simple_change")} onClose={() => setOpened(null)} />}
       {acts.dialogs}
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
     </section>
@@ -2023,7 +2309,7 @@ function suggestionGoal(api: GoalSuggestionsApi, goal: string): Schemas["SimpleG
 }
 
 /** plan-charts (the owner's pick B): the plan's header, then a card per goal listing each feature with its milestone chips. */
-function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schemas["SimplePlanOut"]; suggestions: GoalSuggestionsApi }) {
+function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; plan: Schemas["SimplePlanOut"]; suggestions: GoalSuggestionsApi; reload: () => Promise<unknown> }) {
   const { can } = useMe();
   const bucketsQ = useGoalBuckets();
   const gb = bucketsQ.data;
@@ -2038,11 +2324,78 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
   const [error, setError] = useState<string | null>(null);
   const writes = useBucketWrites(bucketsQ.reload, setNote, setError);
   const rights = useBucketRights(gb);
+  // Tasks in place: add, edit and cut a goal's features on the roadmap, each with Undo.
+  const tasks = useBucketTasks({
+    rows: data.rows,
+    plan: read,
+    may: rights.task,
+    reload: async () => {
+      await Promise.all([bucketsQ.reload(), reload()]);
+    },
+    setNote,
+    setError,
+  });
+  const taskRows = (goal: string | null, rec: Schemas["GoalBucketGoal"] | undefined) => ({
+    task: {
+      name: (f: { code: string; name: string }) => tasks.taskOf(f.code, f.name)?.name ?? f.name,
+      cut: (f: { code: string; name: string }) => tasks.isCut(f.code, f.name),
+      actions: (f: { code: string; name: string }) => tasks.actions(tasks.taskOf(f.code, f.name)),
+      form: (f: { code: string; name: string }) => {
+        const t = tasks.taskOf(f.code, f.name);
+        return t ? tasks.form(t, goal ?? "No goal") : null;
+      },
+      milestone: (f: { code: string; name: string }) => tasks.ownMilestone(tasks.taskOf(f.code, f.name)),
+    },
+    tail: (
+      <>
+        {data.drafts
+          .filter((d) => (goal == null ? !d.goal : !!d.goal && sameGoal(d.goal.title, goal)))
+          .map((d) => {
+            const t = { itemId: d.item_id, code: d.code, name: d.title };
+            const form = tasks.form(t, goal ?? "No goal");
+            return form ? (
+              <li key={d.item_id} data-testid="plan-feature" data-code={d.code} className="border-b border-line">
+                {form}
+              </li>
+            ) : (
+              <TaskRow
+                key={d.item_id}
+                code={d.code}
+                name={d.title}
+                milestone={tasks.milestoneName(t)}
+                weeks=""
+                draft
+                grip={draftGrip(t, rec?.id ?? null)}
+                lifted={drag.lifted === d.code}
+                onOpen={() => setOpened({ code: d.code, name: d.title })}
+                actions={tasks.actions(t)}
+              />
+            );
+          })}
+        {goal != null && tasks.add(rec && { id: rec.id, title: rec.title }, !gb)}
+      </>
+    ),
+  });
   const year = data.today.slice(0, 4);
   const goalOf = (title: string) => gb?.goals.find((g) => g.title === title);
   const nextOrder = Math.max(0, ...(gb?.goals ?? []).map((g) => g.order)) + 1;
   // GB3 a: a feature carried by its grip, by pointer or by keyboard.
   const drag = useBucketDrag({ gb, writes });
+  // A task just added (a draft, which the goal buckets do not list yet) moves by the change engine;
+  // its preview shows a code only once it has one people know.
+  const draftGrip = (t: Task, from: string | null) => {
+    if (!rights.task || !gb) return undefined;
+    const f = { code: t.code, name: t.name, slices: [], weeks: null };
+    const own = { from, move: (to: { id: string; title: string }) => tasks.move(t, to), code: knownCode(t.code) ? t.code : null, draft: true };
+    return { onPointerDown: (e: React.PointerEvent) => drag.grip(f, e, own), onKeyDown: (e: React.KeyboardEvent) => drag.grip(f, e, own) };
+  };
+  // A feature's grip: moved at once by who may move it, else proposed by the change engine (commenters).
+  const featureGrip = (f: Parameters<typeof drag.grip>[0], e: React.PointerEvent | React.KeyboardEvent) => {
+    if (rights.move) return drag.grip(f, e);
+    const t = tasks.taskOf(f.code, f.name);
+    if (!t || !rights.task) return;
+    drag.grip(f, e, { from: featureOf(gb, f.code, f.name)?.goal_ids[0] ?? null, move: (to) => tasks.move(t, to), code: f.code });
+  };
   // Who may suggest (commenters and up) gets B's two buttons; anyone else, the suggestions to read.
   const suggests = can("create_goal_suggestion");
   // A goal's code: its own ("G-A1 Account Safety"), else the code of the goal it names.
@@ -2077,7 +2430,7 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
     <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
       <PlanBucketsHead plan={plan} codeOf={codeOf} />
       <div ref={noteSlot} className="scroll-mt-4" />
-      {note && <UndoNote id={note.id} clear='[data-testid="plan-goal"] h3' onUndo={undoOf(note, writes)}>{note.text}</UndoNote>}
+      {note && <UndoNote id={note.id} clear='[data-testid="plan-goal"] h3' onUndo={undoOf(note, writes, tasks)}>{note.text}</UndoNote>}
       {error && (
         <p role="alert" className="mt-3 text-[15px] text-warn">
           {error}
@@ -2114,17 +2467,18 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
                   title="Edit goal"
                   year={year}
                   onCancel={() => setEditing(null)}
-                  onSave={async (f, seen) => {
-                    if (await writes.edit(rec, f, year, seen)) setEditing(null);
+                  onSave={async (f, seen, refused) => {
+                    if (await writes.edit(rec, f, year, seen, refused)) setEditing(null);
                   }}
                 />
               ) : (
                 <>
-                  <div className="flex items-start gap-2">
+                  {/* On a phone the count takes its own line under the heading, so the name keeps its room. */}
+                  <div className="flex items-start gap-2 max-sm:flex-wrap">
                     {rec && <OrderBadge n={rec.order} />}
                     <h3 className="min-w-0 flex-1 text-[21px] font-[650] leading-7">{goalLabel(g).name}</h3>
                     {code && <CodeTag code={code} />}
-                    <span data-testid="plan-goal-count" className="mt-1 flex-none text-[15px] text-text2">
+                    <span data-testid="plan-goal-count" className={`mt-1 flex-none text-[15px] text-text2 max-sm:order-last max-sm:mt-0 max-sm:basis-full ${rec ? "max-sm:pl-8" : ""}`}>
                       {count(n)}
                     </span>
                     {rights.edit(rec) && (
@@ -2154,7 +2508,7 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
                   )}
                 </>
               )}
-              <FeatureRows plan={plan} goal={g} gb={gb} grips={rights.move} lifted={drag.lifted} onGrip={drag.grip} onOpen={setOpened} />
+              <FeatureRows plan={plan} goal={g} gb={gb} grips={rights.move || rights.task} lifted={drag.lifted} onGrip={featureGrip} onOpen={setOpened} {...taskRows(g, rec)} />
               {over && (
                 <p data-testid="drop-note" className="mt-2 rounded-lg border border-dashed border-accent px-3 py-2 text-[15px] text-accent-ink">
                   Drop here: {g} becomes the goal it moves most
@@ -2223,7 +2577,7 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
               </span>
             </div>
             <p className="mt-1 text-[15px] text-warn">⚠ Serves no goal in the plan</p>
-            <FeatureRows plan={plan} goal={null} gb={gb} grips={rights.move} lifted={drag.lifted} onGrip={drag.grip} onOpen={setOpened} />
+            <FeatureRows plan={plan} goal={null} gb={gb} grips={rights.move || rights.task} lifted={drag.lifted} onGrip={featureGrip} onOpen={setOpened} {...taskRows(null, undefined)} />
           </li>
         )}
         {outside.length > 0 && (
@@ -2238,7 +2592,10 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
                     <span key={r.code} className="inline-flex items-center gap-1.5">
                       {k > 0 && ", "}
                       <CodeChip r={r} />
-                      {r.title}
+                      {/* The feature's name opens the one feature panel. */}
+                      <button type="button" className="text-left hover:underline" onClick={() => setOpened({ code: r.code, name: r.title })}>
+                        {r.title}
+                      </button>
                     </span>
                   ))}
                   <span className="whitespace-nowrap text-text2"> · {fmt(rows.reduce((n, r) => n + (r.effort ?? 0), 0))}{"\u00a0"}wk</span>
@@ -2250,6 +2607,7 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
       </ul>
       {drag.edge}
       {drag.ghost}
+      {tasks.dialog}
       {opened && <FeaturePanel key={opened.code} feature={{ ...opened, prd: plan.prd }} phone={phone} canChange={can("create_simple_change")} onClose={() => setOpened(null)} />}
       {acts.dialogs}
       {panel && <GoalPanel key={`${panel.goal.key}:${panel.start ?? ""}`} goal={panel.goal} start={panel.start} api={suggestions} onClose={() => setPanel(null)} />}
@@ -2258,10 +2616,12 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
 }
 
 /** What the note's Undo does: a goal back from Trash with its links, a goal's move, or a bucket write's Undo. */
-function undoOf(note: Note, writes: ReturnType<typeof useBucketWrites>): (() => void) | undefined {
+function undoOf(note: Note, writes: ReturnType<typeof useBucketWrites>, tasks?: { undo: (changes: string[]) => unknown }): (() => void) | undefined {
   if (note.restore) return () => void writes.restore(note.restore!);
   if (note.order) return () => void writes.unorder(note.order!);
   if (note.undo) return () => void writes.undo(note.undo!);
+  // A task change: Undo takes its changes back, in the order they were made.
+  if (note.changes?.length && tasks) return () => void tasks.undo(note.changes!);
   return undefined;
 }
 

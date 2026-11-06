@@ -354,7 +354,7 @@ export async function routeTrace(ctx: TraceContext, req: Request, p: string[], q
       for (const l of links) {
         const section = v.sections.find((s) => s.section_key === l.section_key);
         if (!section) return json(422, { detail: `version ${v.number} has no section '${l.section_key}'` });
-        if (l.entity_id && !ctx.entities.some((e) => e.id === l.entity_id)) return json(422, { detail: `unknown baseline entity ${l.entity_id}` });
+        if (l.entity_id && !ctx.entities.some((e) => e.id === l.entity_id)) return json(422, { detail: `unknown Ground Truth entity ${l.entity_id}` });
         if (l.evidence_id && !ctx.evidence?.some((e) => e.id === l.evidence_id)) return json(422, { detail: `unknown evidence ${l.evidence_id}` });
         if (l.precision === "claim" && !(l.claim ?? "").trim()) return json(422, { detail: "a claim link needs the claim" });
         created.push({

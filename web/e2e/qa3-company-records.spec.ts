@@ -19,11 +19,11 @@ const scenario = (page: Page, name: string) => page.addInitScript(([key, value])
 test.describe("desktop", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test("qa-company-21: Drift's empty state reads 'Anything that does not shows up here.'", async ({ page }) => {
+  test("qa-company-21, pass F F-45: Drift's empty state says what shows here in one line", async ({ page }) => {
     await login(page);
     await page.goto("/company/strategy");
     const what = strategyPage(page).getByTestId("drift-list").getByTestId("drift-what");
-    await expect(what).toContainText("vision and strategy are reviewed on time. Anything that does not shows up here.");
+    await expect(what).toContainText("Goals and items that do not follow the strategy show here.");
     await expect(what).not.toContainText("What does not shows here");
   });
 

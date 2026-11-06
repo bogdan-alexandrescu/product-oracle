@@ -26,15 +26,15 @@ test.beforeEach(async ({ page }) => {
   await login(page);
 });
 
-test("a failed run and its segment say when they failed, the refusal in the past", async ({ page }) => {
+test("a failed run says when it failed once, the refusal in the past", async ({ page }) => {
   await page.goto("/runs");
   await page.locator('[data-testid="run-row"][data-document="checkout-redesign"]').filter({ hasText: "Failed" }).getByRole("link").first().click();
 
   const notes = page.getByTestId("failed-at");
-  await expect(notes).toHaveCount(2);
-  await expect(notes).toHaveText([`${FAILED}.`, `${FAILED}.`]);
-  // The run's note, then the segment's: when, then what was so.
-  await expect(page.getByText(THEN)).toHaveCount(2);
+  // The run's banner says when, then what was so; the segment row does not repeat it.
+  await expect(notes).toHaveCount(1);
+  await expect(notes).toHaveText(`${FAILED}.`);
+  await expect(page.getByText(THEN)).toHaveCount(1);
   await noCurrentRefusal(page);
 });
 
@@ -112,7 +112,9 @@ test("a code map the pool refused says when it failed, the refusal in the past",
   const line = page.getByRole("listitem", { name: "Example repo" }).getByTestId("code-map-example-org/example-app");
   await line.getByRole("button", { name: "Map the code" }).click();
   await expect(line.getByTestId("failed-at")).toHaveText(/^Failed Oct \d+, \d+:\d{2} [AP]M PDT\.\s*$/, { timeout: 15_000 });
-  await expect(line).toContainText(`The code map run failed: index: ${THEN}`);
+  // Pass F F-37: plain words, no step name and no reset time.
+  await expect(line).toContainText("Every Claude account is out of quota. Try again later.");
+  await expect(line).not.toContainText("index:");
   await expect(line.getByRole("button", { name: "Map the code" })).toBeVisible();
   await noCurrentRefusal(page);
 });

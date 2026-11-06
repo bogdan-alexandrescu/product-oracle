@@ -5,10 +5,10 @@ import { expect, test, type Page } from "./test";
 /*
  * qa-shell-8 (desktop and phone, mock-backed, through the UI only): a new company's first run.
  * The owner signs in, switches to Simple and opens Priorities and Roadmap: each says in one line
- * what will show there and the next step (confirm the goals in Detailed › Baseline, a working
- * link), with no line picker or comparison over nothing on Priorities and no empty chart, filters,
+ * what will show there and the next step (confirm the goals in Detailed › Ground Truth, a
+ * working link), with no line picker or comparison over nothing on Priorities and no empty chart, filters,
  * review or export on Roadmap.
- * no_claim: what the Baseline page then does (onboarding specs cover it).
+ * no_claim: what the Ground Truth page then does (onboarding specs cover it).
  */
 
 /** The 'empty' scenario, with the mock's company store reset once at the start. */
@@ -25,7 +25,7 @@ async function newCompany(page: Page) {
   );
 }
 
-const NO_GOALS = /^No features yet: confirm your company’s goals in Detailed › Baseline and /;
+const NO_GOALS = /^No features yet: confirm your company’s goals in Detailed › Ground Truth and /;
 
 for (const [where, use] of [
   ["desktop", { viewport: { width: 1440, height: 900 } }],
@@ -54,6 +54,7 @@ for (const [where, use] of [
       await expect(page).toHaveURL(/\/simple\/priorities/);
       const prio = page.getByTestId("simple-priorities");
       await expect(prio.getByTestId("priorities-empty")).toHaveText(NO_GOALS);
+      await expect(prio.getByTestId("priorities-empty").getByRole("link", { name: "Detailed › Ground Truth" })).toHaveAttribute("href", "/ground-truth");
       await expect(prio.getByTestId("line-caption")).toHaveCount(0);
       await expect(prio.getByRole("switch", { name: "Compare with Oracle" })).toHaveCount(0);
       await prio.getByRole("tab", { name: "Value / effort" }).click();
@@ -72,10 +73,10 @@ for (const [where, use] of [
       for (const name of ["Export PNG", "Export PDF", "Start review"]) await expect(roadmap.getByRole("button", { name })).toHaveCount(0);
       await expect(roadmap.getByTestId("quick-add")).toHaveCount(0);
 
-      // The link works: it opens Detailed's Baseline.
-      await empty.getByRole("link", { name: "Detailed › Baseline" }).click();
-      await expect(page).toHaveURL(/\/baseline$/);
-      await expect(page.getByRole("heading", { name: "Desired state" }).first()).toBeVisible();
+      // The link works: it opens Detailed's Ground Truth.
+      await empty.getByRole("link", { name: "Detailed › Ground Truth" }).click();
+      await expect(page).toHaveURL(/\/ground-truth$/);
+      await expect(page.getByRole("heading", { name: "Ground Truth" }).first()).toBeVisible();
     });
   });
 }

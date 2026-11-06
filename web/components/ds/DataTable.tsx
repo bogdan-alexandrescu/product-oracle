@@ -99,7 +99,7 @@ export function DataTable<T>({
   onSelect?: (key: string, row: T) => void;
   onActivate?: (key: string, row: T) => void;
   loading?: boolean;
-  /** Empty state: a short title, no explanation (rule 1). */
+  /** Empty state: a short title, no explanation (rule 1); null draws no empty row (a list that failed). */
   empty?: ReactNode;
   /** Group header rows: a header is drawn whenever this value changes. */
   group?: (row: T) => string;
@@ -202,7 +202,7 @@ export function DataTable<T>({
                 </td>
               </tr>
             ))}
-          {!loading && list.length === 0 && (
+          {!loading && list.length === 0 && empty !== null && (
             <tr role="row" className="border-t border-line max-[600px]:block">
               <td role="cell" colSpan={visibleCols} className="px-4 py-8 max-[600px]:block text-center text-text2" data-testid="table-empty">
                 {empty}

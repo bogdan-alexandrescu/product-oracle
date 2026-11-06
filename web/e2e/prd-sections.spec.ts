@@ -1,61 +1,41 @@
 import { expect, test, type Page } from "./test";
 
-import { login, openSection, outlineRow, section, sectionStrip, showAll } from "./helpers";
+import { login, openSection, outlineRow, section, showAll } from "./helpers";
 
-// I3 (2026-10-19): the PRD page shows ONE SECTION AT A TIME. The outline rail picks the open
-// section (2026-10-20), the URL hash keeps it, arrows at the panel's foot and [ ] step through.
+// PT1 a "Calm document" (2026-10-2x): a PRD shows every section at once in one column, with a
+// contents rail that picks the current one. The URL hash keeps it; a contents row's own
+// aria-current is "location" (I3's old outline rows used "true").
 
-/** The section panels on screen (Next keeps recently visited routes mounted but hidden). */
-const shown = (page: Page) => page.locator("section[data-section-key]").filter({ visible: true });
 const stripItem = (page: Page, key: string) => outlineRow(page, key);
 
-test("sections: the outline, the hash, the arrows, back / forward and [ ] switch the one open section", async ({ page }) => {
+test("sections: the contents and the hash pick the current section; back / forward walk it", async ({ page }) => {
   await login(page);
   await page.goto("/documents/checkout-redesign/v/2");
-  // The first unreviewed section opens by default, alone.
-  await expect(shown(page)).toHaveCount(1);
-  await expect(stripItem(page, "title")).toHaveAttribute("aria-current", "true");
+  // A PRD shows every section at once (PT1 a): the first one is current on arrival.
+  await expect(stripItem(page, "title")).toHaveAttribute("aria-current", "location");
 
   await stripItem(page, "problem").click();
   await expect(page).toHaveURL(/\/v\/2#problem$/);
-  await expect(shown(page)).toHaveCount(1);
   await expect(section(page, "problem")).toBeVisible();
-  await expect(stripItem(page, "problem")).toHaveAttribute("aria-current", "true");
-  await expect(stripItem(page, "title")).not.toHaveAttribute("aria-current", "true");
+  await expect(stripItem(page, "problem")).toHaveAttribute("aria-current", "location");
+  await expect(stripItem(page, "title")).not.toHaveAttribute("aria-current", "location");
 
-  // The arrows name the neighbours.
-  const pager = page.getByRole("navigation", { name: "Previous and next section" }).filter({ visible: true });
-  await expect(pager.getByRole("link", { name: "Previous section: 1. Goal trace" })).toBeVisible();
-  await pager.getByRole("link", { name: "Next section: 3. Users and jobs" }).click();
+  await stripItem(page, "users").click();
   await expect(page).toHaveURL(/#users$/);
   await expect(section(page, "users")).toBeVisible();
-  await expect(shown(page)).toHaveCount(1);
 
   // Back and forward walk the sections.
   await page.goBack();
   await expect(page).toHaveURL(/#problem$/);
-  await expect(section(page, "problem")).toBeVisible();
+  await expect(stripItem(page, "problem")).toHaveAttribute("aria-current", "location");
   await page.goForward();
-  await expect(section(page, "users")).toBeVisible();
-
-  // Keyboard: ] next, [ previous, Shift + arrows too.
-  await page.keyboard.press("]");
-  await expect(section(page, "scope")).toBeVisible();
-  await expect(page).toHaveURL(/#scope$/);
-  await page.keyboard.press("[");
-  await expect(section(page, "users")).toBeVisible();
-  await page.keyboard.press("Shift+ArrowRight");
-  await expect(section(page, "scope")).toBeVisible();
-  await page.keyboard.press("Shift+ArrowLeft");
-  await expect(section(page, "users")).toBeVisible();
-  // The shortcuts are in the (i) tip, not in prose.
-  await expect(page.getByTestId("info-tip").filter({ visible: true }).first()).toBeAttached();
+  await expect(page).toHaveURL(/#users$/);
+  await expect(stripItem(page, "users")).toHaveAttribute("aria-current", "location");
 
   // A link opens its section: #key, and the older #s-key.
   await page.goto("/documents/checkout-redesign/v/2#metrics");
   await expect(section(page, "metrics")).toBeVisible();
-  await expect(shown(page)).toHaveCount(1);
-  await expect(page.getByRole("link", { name: /^Next section/ }).filter({ visible: true })).toHaveCount(0);
+  await expect(stripItem(page, "metrics")).toHaveAttribute("aria-current", "location");
   await page.goto("about:blank");
   await page.goto("/documents/checkout-redesign/v/2#s-scope");
   await expect(section(page, "scope")).toBeVisible();
@@ -63,6 +43,32 @@ test("sections: the outline, the hash, the arrows, back / forward and [ ] switch
   await page.goto("about:blank");
   await page.goto("/documents/checkout-redesign/v/2#s-5-3");
   await expect(section(page, "s-5-3")).toBeVisible();
+});
+
+test("sections: ] [ j k and Shift+Arrow step to the next and previous section", async ({ page }) => {
+  await login(page);
+  await page.goto("/documents/checkout-redesign/v/2#users");
+  await expect(stripItem(page, "users")).toHaveAttribute("aria-current", "location");
+  // Keys act on the page, not in a field.
+  await page.locator("body").click({ position: { x: 700, y: 30 } });
+
+  await page.keyboard.press("]");
+  await expect(page).toHaveURL(/#scope$/);
+  await expect(stripItem(page, "scope")).toHaveAttribute("aria-current", "location");
+  await page.keyboard.press("[");
+  await expect(page).toHaveURL(/#users$/);
+  await expect(stripItem(page, "users")).toHaveAttribute("aria-current", "location");
+  await page.keyboard.press("j");
+  await expect(page).toHaveURL(/#scope$/);
+  await expect(stripItem(page, "scope")).toHaveAttribute("aria-current", "location");
+  await page.keyboard.press("k");
+  await expect(page).toHaveURL(/#users$/);
+  await page.keyboard.press("Shift+ArrowRight");
+  await expect(page).toHaveURL(/#scope$/);
+  await expect(section(page, "scope")).toBeVisible();
+  await page.keyboard.press("Shift+ArrowLeft");
+  await expect(page).toHaveURL(/#users$/);
+  await expect(stripItem(page, "users")).toHaveAttribute("aria-current", "location");
 });
 
 test("sections: one review bar on screen; evidence and refine sit in the ⋯ menu", async ({ page }) => {
@@ -89,21 +95,23 @@ test("sections: one review bar on screen; evidence and refine sit in the ⋯ men
 test("sections: reviewing the open section marks it in the outline and counts it", async ({ page }) => {
   await login(page);
   await page.goto("/documents/checkout-redesign/v/2");
-  const count = sectionStrip(page).getByTestId("review-progress");
-  await expect(count).toHaveText(/\d+ of 11 sections reviewed/);
-  const before = Number((await count.innerText()).match(/(\d+) of/)![1]);
+  // The review panel's own count, not the old rail's "review-progress" (PT1 a: contents rows
+  // carry a status dot, not a count).
+  const count = page.getByTestId("review-panel").filter({ visible: true }).getByTestId("stat-reviewed");
+  await expect(count).toHaveText(/\d+\/11/);
+  const before = Number((await count.innerText()).match(/(\d+)\/11/)![1]);
   const users = await openSection(page, "users");
-  await expect(stripItem(page, "users")).toHaveAttribute("data-state", "none");
+  await expect(stripItem(page, "users").getByRole("img")).toHaveAttribute("aria-label", "Not reviewed");
 
   const bar = users.getByTestId("review-bar");
   await bar.getByRole("button", { name: "Approve" }).click();
   await bar.getByTestId("verdict-submit").click();
   await expect(bar.getByTestId("verdict-state")).toContainText("Approved");
-  await expect(stripItem(page, "users")).toHaveAttribute("data-state", "approved");
-  await expect(count).toHaveText(`${before + 1} of 11 sections reviewed`);
+  await expect(stripItem(page, "users").getByRole("img")).toHaveAttribute("aria-label", "Approved");
+  await expect(count).toHaveText(new RegExp(`${before + 1}/11`));
   // The reviewed section stays open.
   await expect(section(page, "users")).toBeVisible();
-  await expect(stripItem(page, "users")).toHaveAttribute("aria-current", "true");
+  await expect(stripItem(page, "users")).toHaveAttribute("aria-current", "location");
 });
 
 test("sections: the inspector shows the open section's comments first; All shows the rest; a quote opens its section", async ({

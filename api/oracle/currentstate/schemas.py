@@ -1,4 +1,4 @@
-"""Current state's REST shapes (``/v1/feature-states``)."""
+"""Running today's REST shapes (``/v1/feature-states``)."""
 
 import uuid
 from datetime import datetime

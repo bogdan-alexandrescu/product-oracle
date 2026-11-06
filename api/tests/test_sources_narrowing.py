@@ -521,8 +521,15 @@ async def test_a_source_over_the_channel_cap_needs_attention(a, tenant_id, alice
     result = (await a.post(f"/v1/sources/{source['id']}/sync")).json()
     assert result["outcome"] == "needs_attention"
     assert result["source"]["status"] == "needs_attention"
-    assert "at most 100 channels" in result["error"]
-    assert "edit this source" in result["source"]["last_error"]
+    # visual QA ST-7: plain words, what to do and what then happens.
+    assert result["error"] == "Pick 100 channels or fewer, then it syncs again"
+    assert result["source"]["last_error"] == "Pick 100 channels or fewer, then it syncs again"
+    # Review r2 of PR 1286: the API says the message is the fix, and names its cause for a
+    # role that cannot edit it ("Over 100 channels: your role cannot edit sources ...").
+    attention = {"cause": "Over 100 channels", "is_action": True}
+    assert result["source"]["attention"] == attention
+    listed = (await a.get("/v1/sources")).json()
+    assert next(s for s in listed if s["id"] == source["id"])["attention"] == attention
     assert slack.calls == []
 
     # Editing it back within the rules clears it.
@@ -542,7 +549,58 @@ async def test_a_source_with_a_now_refused_date_needs_attention(a, tenant_id, al
         await s.commit()
     result = (await a.post(f"/v1/sources/{source['id']}/sync")).json()
     assert result["outcome"] == "needs_attention"
-    assert "Since must be a date" in result["error"]
+    # Review r2 of PR 1286: plain words, no key or ISO dates; the message is the fix.
+    assert (
+        result["error"] == "Pick a start date from Jan 1, 2000 to Dec 31, 2100, then it syncs again"
+    )
+    assert result["source"]["attention"] == {
+        "cause": "The start date is out of range",
+        "is_action": True,
+    }
+
+
+async def test_a_source_with_a_now_refused_order_names_the_edit(a, tenant_id, alice, slack):
+    source = await add(a, tenant_id, alice, "slack", {"channels": BOTH})
+    async with tenant_session(tenant_id) as s:
+        await s.execute(
+            update(Source)
+            .where(Source.id == uuid.UUID(source["id"]))
+            .values(config={"channels": BOTH, "since": "2026-03-01", "until": "2026-02-01"})
+        )
+        await s.commit()
+    result = (await a.post(f"/v1/sources/{source['id']}/sync")).json()
+    assert result["outcome"] == "needs_attention"
+    # Review r2 of PR 1286: plain words, and the edit joined as its own sentence.
+    assert (
+        result["error"]
+        == "The end date must be on or after the start date. Edit this source to sync it again."
+    )
+    assert result["source"]["last_error"] == result["error"]
+    assert result["source"]["attention"] == {
+        "cause": "The end date must be on or after the start date",
+        "is_action": False,
+    }
+
+
+async def test_a_message_with_a_colon_reads_as_one_sentence(a, tenant_id, alice, slack):
+    source = await add(a, tenant_id, alice, "slack", {"channels": BOTH})
+    async with tenant_session(tenant_id) as s:
+        await s.execute(
+            update(Source)
+            .where(Source.id == uuid.UUID(source["id"]))
+            .values(config={"channels": [*BOTH, "D0EXAMPLE1"]})
+        )
+        await s.commit()
+    result = (await a.post(f"/v1/sources/{source['id']}/sync")).json()
+    assert result["error"] == (
+        "D0EXAMPLE1 is a direct message: DMs are never ingested. Edit this source to sync it again."
+    )
+    assert result["error"].count(":") == 1
+
+
+async def test_an_active_source_has_no_attention(a, tenant_id, alice, slack):
+    source = await add(a, tenant_id, alice, "slack", {"channels": BOTH})
+    assert source["attention"] is None
 
 
 # --- Roles ----------------------------------------------------------------------------

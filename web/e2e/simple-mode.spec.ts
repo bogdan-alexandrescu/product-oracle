@@ -260,16 +260,16 @@ test("a /simple link opens in Simple for an owner whose saved mode is Detailed",
   await expectDetailed(page, "/home");
 });
 
-test("Simple's rail has its six destinations and none of Detailed's", async ({ page }) => {
+test("Simple's rail has its seven destinations, the one Inbox among them, and none of Detailed's others", async ({ page }) => {
   await signIn(page, EMAILS.viewer);
   await expectSimple(page, "/simple");
   const rail = simpleRail(page);
-  const links = rail.getByRole("link", { name: /^(Home|One-pagers|Roadmap|Priorities|Meetings|Decisions)$/ });
+  const links = rail.getByRole("link", { name: /^(Home|One-pagers|Roadmap|Priorities|Meetings|Decisions|Inbox)$/ });
   // Names, not text: a destination may carry a count ("Meetings" described as "1 review live or coming up").
-  const names = ["Home", "One-pagers", "Roadmap", "Priorities", "Meetings", "Decisions"];
+  const names = ["Home", "One-pagers", "Roadmap", "Priorities", "Meetings", "Decisions", "Inbox"];
   await expect(links).toHaveCount(names.length);
   for (const [i, name] of names.entries()) await expect(links.nth(i)).toHaveAccessibleName(name);
-  for (const detailed of ["Requests", "Desired state", "PRDs", "Plan", "Runs", "Inbox", "Company", "Settings"]) {
+  for (const detailed of ["Requests", "Ground Truth", "PRDs", "Plan", "Runs", "Company", "Settings"]) {
     await expect(rail.getByRole("link", { name: detailed, exact: true })).toHaveCount(0);
   }
   // qa-shell-16: one Ask control, the rail's Ask Oracle; no Ask strip beside it.
@@ -330,7 +330,11 @@ test("Simple's Home: each part says when it has nothing", async ({ page }) => {
   await page.goto("/simple");
   await expectSimple(page, "/simple");
   // fix4 (qa-simple-home-16): nothing waiting is one line, not two empty cards.
-  await expect(page.getByTestId("home-nothing-waits")).toContainText("Nothing waits on you. Decisions and proposals on your items show here when they come.");
+  // F-30: the one line is "Nothing waiting"; what comes here is in its (i).
+  const waits = page.getByTestId("home-nothing-waits");
+  await expect(waits).toContainText("Nothing waiting");
+  await waits.getByRole("button", { name: "About what waits for you" }).click();
+  await expect(waits.getByRole("tooltip")).toHaveText("Decisions and proposals on your items show here when they come.");
   await expect(page.getByTestId("home-meeting-empty")).toContainText("No review meeting scheduled");
 });
 

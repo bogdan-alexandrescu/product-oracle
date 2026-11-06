@@ -52,8 +52,11 @@ test.describe("desktop", () => {
     await expect(inspector.getByRole("listitem").filter({ hasText: "Sections approved in v1" })).toHaveText(
       "Sections approved in v1 changed in this version: 3. Scope",
     );
-    const chip = page.getByTestId("versions-table").getByText("1 warning");
-    await expect(chip).toHaveAttribute("title", "Sections approved in v1 changed in this version: 3. Scope");
+    // B-20: the chip is a button whose tip names the warning (a title opens nothing on a phone).
+    const chip = page.getByTestId("versions-table").getByTestId("overview-warnings-chip");
+    await expect(chip).toHaveText("1 warning");
+    await chip.click();
+    await expect(page.getByRole("tooltip").filter({ visible: true })).toHaveText("Sections approved in v1 changed in this version: 3. Scope");
   });
 
   test("qa4-docs-8: the engineering spec the PRD has is listed under Engineering specs", async ({ page }) => {

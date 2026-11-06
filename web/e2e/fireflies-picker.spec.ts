@@ -21,7 +21,7 @@ test("fireflies picker: all meetings in a date range", async ({ page }) => {
   const summary = picker.getByTestId("fireflies-summary");
   await expect(summary).toHaveText("All meetings");
   // #401: days are whole days in the Company time zone (Los Angeles by default), and say so.
-  await expect(picker.getByTestId("fireflies-timezone")).toContainText("America/Los_Angeles");
+  await expect(picker.getByTestId("fireflies-timezone")).toContainText("Pacific Time");
   await expect(picker.getByTestId("fireflies-timezone")).not.toContainText("UTC");
   await picker.getByLabel("From").fill("2026-09-01");
   await expect(summary).toHaveText("All meetings since Sep 1");

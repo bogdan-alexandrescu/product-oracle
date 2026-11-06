@@ -572,7 +572,7 @@ async def import_analysis(
     if out.get("dropped_described"):
         notes.append(
             f"{out['dropped_described']} gaps dropped: they called missing what a source or "
-            "a baseline feature describes"
+            "a Ground Truth feature describes"
         )
     return {"imported": out, "notes": notes}
 

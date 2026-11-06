@@ -183,7 +183,7 @@ test("the run page's Decisions in this run opens the log on Checkpoints with tha
   await expect(chip(page, "Kind", "Checkpoints")).toHaveAttribute("aria-pressed", "true");
   await expect(rows(page)).toHaveCount(5);
   for (const title of [
-    "Approve Baseline confirm",
+    "Approve Ground Truth confirm",
     "Send back Feature set",
     "Approve Feature set",
     "Approve Priority order",

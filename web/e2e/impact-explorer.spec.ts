@@ -94,7 +94,7 @@ test("impact: the table view lists outputs by category with the inspector's depe
   await expect(page.getByRole("region", { name: "Regeneration plan" }).getByRole("listitem")).toHaveCount(7);
   await expect(inspector.getByText("1 · Settle staleness")).toBeVisible();
 
-  // The deleted baseline item behind it stands out in its recorded change's lineage.
+  // The deleted Ground Truth item behind it stands out in its recorded change's lineage.
   await inspector.getByRole("link", { name: "Recorded change" }).first().click();
   await expect(page).toHaveURL(/\/impact\/changes\/[^/]+$/);
   const graph = page.getByRole("region", { name: "Lineage" });
@@ -115,10 +115,10 @@ test("impact: the table view lists outputs by category with the inspector's depe
   await expect(page.getByTestId("lineage-subject").filter({ visible: true })).toContainText("Checkout redesign PRD v2 › Success metrics section edited");
 });
 
-test("impact: a what-if from a baseline item's drawer", async ({ page }) => {
+test("impact: a what-if from a Ground Truth item's drawer", async ({ page }) => {
   await scenario(page, "impact");
   await login(page);
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
   await page.getByRole("dialog", { name: "Guided setup" }).getByRole("link", { name: "What if it changed?" }).click();
   await expect(page).toHaveURL(/\/impact\/entities\/[^/]+$/);

@@ -560,3 +560,36 @@ async def test_an_overrun_in_the_dates_segment_pauses_before_its_stop(client, ow
     assert run["status"] == "awaiting_checkpoint" and run["waiting_on"] == "eng_dates"
     assert run["overrun_ceiling_usd"] == pytest.approx(28.35 + 30 + 36.5 * 0.5)
     assert pending(run)["payload"]["dates_check"]["problems"] == []
+
+
+async def test_a_retried_items_run_is_waited_for_not_skipped(client, owner, runtime):
+    # protects=review r1 blocker (eng_dates); fails_when=the PRD run's Engineering dates
+    # skips as "items failed" while the items run it waits for is being retried;
+    # no_claim=the retry route's own checks (test_run_segment_retry).
+    from tests.test_run_segment_retry import OUT_OF_ROOM
+
+    tenant_id, auth = owner
+    # It fails early, so its retry stays within the items run's spend ceiling.
+    early = Outcome(state="failed", error=OUT_OF_ROOM, cost_usd=Decimal("0.10"))
+    runtime.script["roadmap_items"] = [early, Outcome(polls=3)]
+    run = await _at_prd_review(client, auth)
+    for _ in range(4):
+        if (await _draft(tenant_id)).status == "failed":
+            break
+        await tick(client, auth)
+    row = await _draft(tenant_id)
+    assert row.status == "failed", row.status
+    items = await get(client, auth, row.run_id)
+    seg = next(s for s in items["segments"] if s["can_retry"])
+    resp = await client.post(f"/v1/runs/{items['id']}/segments/{seg['seq']}/retry", headers=auth)
+    assert resp.status_code == 200, resp.text
+    run = await decide(client, auth, run)
+    assert run["status"] == "running", run["status"]
+    assert run["waiting_for"] == {"kind": "draft_items", "version": 1}
+    for _ in range(10):
+        if run["waiting_on"] == "eng_dates":
+            break
+        await tick(client, auth)
+        run = await get(client, auth, run["id"])
+    assert (await _draft(tenant_id)).status == "ready"
+    assert pending(run)["kind"] == "eng_dates"

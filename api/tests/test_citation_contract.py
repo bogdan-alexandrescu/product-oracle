@@ -105,6 +105,16 @@ def test_the_contract_says_confidence_is_a_number_from_0_to_1():
     assert "a confidence outside 0 to 1" in text
 
 
+def test_the_contract_says_an_oracle_ref_is_an_identifier_never_shown():
+    """PR 1248: the ref "baseline <kind> <key>" stays the contract's syntax, while the prompts
+    say never to write "baseline": the contract says the ref is an identifier Oracle reads,
+    never shown to people (they read "Ground Truth decision <key>"), so the two agree."""
+    text = citation_contract()
+    assert '"baseline decision <key>"' in text
+    assert "an identifier Oracle reads, never shown to people" in text
+    assert "Ground Truth" in text
+
+
 def test_the_bounds_are_the_ones_stored():
     """The contract, the import's validation, the API's output and the database's check
     (0019_citation_confidence) keep the same 0 to 1."""

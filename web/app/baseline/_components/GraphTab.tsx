@@ -559,7 +559,8 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
         tools={
           <>
             <InfoTip label="Feature × goal">
-              Each bar group is a feature&apos;s contribution to a goal, 0 (none) to 3 (strong). Rings show confidence, out of 100.
+              Each bar group is a feature&apos;s contribution to a goal. Bars: how much a feature moves a goal, none to strong (0 to 3).
+              Rings: confidence, 0 to 100%, from the item&apos;s evidence. A dot: no link.
             </InfoTip>
             {add("feature")}
           </>
@@ -568,14 +569,10 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
         {groups.length === 0 ? (
           // qa-shell-9: the next step, only for a role that can take it.
           <p className="px-4 py-8 text-center text-text2" data-testid="features-empty">
-            {canWrite ? "No features yet. Add one, or draft them from your sources with Build baseline." : "No features yet. They appear here once someone adds one."}
+            {canWrite ? "No features yet. Add one, or draft them from your sources with Build the Ground Truth." : "No features yet. They appear here once someone adds one."}
           </p>
         ) : (
           <>
-          {/* What the marks mean, in words beside them (prod-7). */}
-          <p className="border-b border-line px-4 py-2 text-sm text-text2 max-[600px]:px-3" data-testid="ledger-legend">
-            Rings: confidence, 0 to 100%, from the item&apos;s evidence. Bars: how much a feature moves a goal, none to strong. A dot: no link.
-          </p>
           <Ledger
             goals={goals}
             groups={groups}
@@ -638,7 +635,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
         {goals.length === 0 ? (
           // No table to draw yet: a header band over nothing would stop short of the panel (qa-onboarding-26).
           <p className="px-4 py-8 text-center text-text2" data-testid="table-empty">
-            {canWrite ? "No goals yet. Add one, or draft them from your sources with Build baseline." : "No goals yet. They appear here once someone adds one."}
+            {canWrite ? "No goals yet. Add one, or draft them from your sources with Build the Ground Truth." : "No goals yet. They appear here once someone adds one."}
           </p>
         ) : (
         <DataTable

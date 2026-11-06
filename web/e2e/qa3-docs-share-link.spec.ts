@@ -122,14 +122,14 @@ test.describe("desktop", () => {
     await expect(frame.getByRole("row").filter({ hasText: "Falcon alerts rework" })).toHaveCount(1);
   });
 
-  test("qa-docs-14: the header and the footer give one end day, in the app's date format", async ({ page }) => {
+  test("qa-docs-14, E-14: the header gives the end day once, the footer the shared day, in the app's date format", async ({ page }) => {
     const frame = await openShared(page);
     const about = (await page.getByTestId("shared-about").innerText()).trim();
     const ends = about.match(/Link ends ([A-Z][a-z]{2} \d{1,2}, \d{4})$/)?.[1];
     expect(ends).toBeTruthy();
     const footer = (await frame.locator(".share-footer").innerText()).trim();
-    expect(footer).toMatch(new RegExp(`link expires ${ends}$`));
-    expect(footer).toMatch(/ on [A-Z][a-z]{2} \d{1,2}, \d{4} · /);
+    expect(footer).not.toMatch(/expires/);
+    expect(footer).toMatch(/ on [A-Z][a-z]{2} \d{1,2}, \d{4}$/);
     expect(footer).not.toMatch(/\d{1,2} [A-Z][a-z]{2} \d{4}/);
   });
 

@@ -276,6 +276,10 @@ def describe(
     if awaiting:
         category = (fields.get("attrs") or {}).get("category") or "a question"
         return f"Waiting for the author to share an answer ({_words(str(category))})"
+    if isinstance(p.get("fix"), dict):
+        from oracle.baseline.fixes import sentence
+
+        return sentence(p["fix"], entities.get(proposal.entity_id) if proposal.entity_id else None)
     op = str(p.get("op") or "update")
     if p.get("kind") == "edge":
         target_id = proposal.edge_id or _uuid(fields.get("id"))

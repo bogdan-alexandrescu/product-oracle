@@ -57,7 +57,7 @@ async def test_noted_milestones_one_row_each(client):
         pv = await s.scalar(select(DocumentVersion).where(DocumentVersion.document_id == doc.id))
         rv = await seed.version(await seed.doc("setup-roadmap", "roadmap"))
         notes = [
-            f"{M1} (baseline needs the export); Alert digest in M2 · Ship to beta",
+            f"{M1} (the usage report needs the export); Alert digest in M2 · Ship to beta",
             f"{M1} (owner asks for a dry run)",
             f"{M1}; follow-up in M3",
         ]

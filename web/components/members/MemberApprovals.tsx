@@ -29,7 +29,7 @@ export function MemberApprovals({ memberId, kind }: { memberId: string; kind?: A
       alive = false;
     };
   }, [memberId]);
-  if (error) return <Notice tone="error">{error}</Notice>;
+  if (error) return <Notice tone="error">Could not load the approvals.</Notice>;
   if (!rows) return <span className="block h-3 w-2/3 animate-pulse rounded bg-surface2" />;
   const shown = kind ? rows.filter((a) => a.kind === kind) : rows;
   return (
@@ -38,10 +38,11 @@ export function MemberApprovals({ memberId, kind }: { memberId: string; kind?: A
         <li key={`${a.kind}:${a.document}:${a.version}:${a.section_key ?? ""}`} className="flex flex-wrap items-baseline gap-x-1.5 border-t border-line py-1.5 first:border-t-0">
           <span>{a.kind === "section" ? "Section approval" : "Version approval"}</span>
           <span className="text-text2">·</span>
-          <Link href={`/documents/${a.document}`} className="font-mono text-[13px] font-semibold text-accent-ink hover:underline">
-            {a.document} v{a.version}
+          {/* pass-f F-16: the document's and the section's names, never the slug or the key. */}
+          <Link href={`/documents/${a.document}`} className="font-semibold text-accent-ink hover:underline">
+            {a.document_title ?? a.document} v{a.version}
           </Link>
-          {a.section_key && <span className="font-mono text-[13px] text-text2">#{a.section_key}</span>}
+          {a.section_key && <span className="text-text2">{a.section_title ?? "A section"}</span>}
           {a.approved_at && <span className="text-[13px] text-text2">{formatDay(a.approved_at)}</span>}
         </li>
       ))}

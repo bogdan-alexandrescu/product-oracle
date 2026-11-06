@@ -1,7 +1,7 @@
-"""The Baseline rebuild ritual: B1's Build the baseline run on the ritual clock (the
+"""The Ground Truth rebuild ritual: B1's Build the Ground Truth run on the ritual clock (the
 ``baseline_rebuild`` kind, seeded paused).
 
-H11's "Keep the baseline current" (``baseline``) decides what Oracle does when an
+H11's "Keep the Ground Truth current" (``baseline``) decides what Oracle does when an
 occurrence falls due:
 
 - **Observe**: it only reminds. No run; the pre-read's Inbox row reaches the attendees
@@ -43,14 +43,14 @@ KIND = "baseline_rebuild"
 FLOW = "baseline"
 DEPTH = "standard"
 BLOCK = "baseline_rebuild"
-TITLES = {BLOCK: "Baseline rebuild"}
-BUILD_HREF = "/baseline?build=1"
-BUILD_HERE = "Build it from the Baseline page."
-OBSERVE = f"Not started: Oracle is set to observe the baseline. {BUILD_HERE}"
+TITLES = {BLOCK: "Ground Truth rebuild"}
+BUILD_HREF = "/ground-truth?build=1"
+BUILD_HERE = "Build it from the Ground Truth page."
+OBSERVE = f"Not started: Oracle is set to observe the Ground Truth. {BUILD_HERE}"
 OWNER_CANNOT = "Not started: the ritual's owner can no longer start runs"
-FAILED = "The baseline build did not finish · Build it from the Baseline page"
-ON_DEMAND = "Start the baseline rebuild from the Baseline page"
-NOT_STARTED = "Not started: Oracle could not start the build. Build it from the Baseline page."
+FAILED = "The Ground Truth build did not finish · Build it from the Ground Truth page"
+ON_DEMAND = "Start the Ground Truth rebuild from the Ground Truth page"
+NOT_STARTED = "Not started: Oracle could not start the build. Build it from the Ground Truth page."
 WAITS = " · Waits for an owner's approval"
 UNDER_WAY = ("draft", "awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun")
 
@@ -97,7 +97,7 @@ async def block(db: AsyncSession, ctx: Any) -> list[dict[str, Any]]:
     )
     rows: list[dict[str, Any]] = []
     if last is None:
-        rows.append({"text": "No baseline build yet", "href": None})
+        rows.append({"text": "No Ground Truth build yet", "href": None})
     else:
         zone = await company_time.company_time_zone(db)
         when = company_time.stamp(last.created_at, zone)
@@ -107,13 +107,13 @@ async def block(db: AsyncSession, ctx: Any) -> list[dict[str, Any]]:
     if why is None and _over_approval(estimate_usd()):
         rows.append({"text": "Oracle starts the build; over "
                      f"${flows.APPROVAL_THRESHOLD_USD:g} it waits for an owner's approval",
-                     "href": "/baseline"})  # fmt: skip
+                     "href": "/ground-truth"})  # fmt: skip
     elif why is None:
         rows.append({"text": "Oracle starts the build; its proposals wait for review",
-                     "href": "/baseline"})  # fmt: skip
+                     "href": "/ground-truth"})  # fmt: skip
     else:
         rows.append({"text": why, "href": None})
-        rows.append({"text": "Build the baseline", "label": "Build the baseline",
+        rows.append({"text": "Build the Ground Truth", "label": "Build the Ground Truth",
                      "href": BUILD_HREF})  # fmt: skip
     return rows
 
@@ -172,7 +172,7 @@ async def after_ready(db: AsyncSession, occ_id: uuid.UUID, ritual: Ritual) -> No
         except Exception as exc:
             # The run stays a draft (B1 counts no draft as a build under way): the
             # occurrence says it did not start, rather than "running" forever.
-            log.exception("rituals: the baseline rebuild run %s did not start", run_id)
+            log.exception("rituals: the Ground Truth rebuild run %s did not start", run_id)
             await db.rollback()
             occ = await db.get(RitualOccurrence, occ_id, with_for_update=True)
             run = await db.get(Run, run_id)
@@ -192,14 +192,16 @@ async def after_ready(db: AsyncSession, occ_id: uuid.UUID, ritual: Ritual) -> No
         await autonomy.acted(
             db,
             "baseline",
-            summary=f"Started the baseline rebuild · Estimate {_usd(usd)}{WAITS if waits else ''}",
+            summary=(
+                f"Started the Ground Truth rebuild · Estimate {_usd(usd)}{WAITS if waits else ''}"
+            ),
             subject={"kind": "ritual", "key": str(ritual_id), "href": f"/company/rituals/{occ_id}"},
             undo={"method": "POST", "path": f"/v1/runs/{run_id}/cancel", "body": None},
             notify=[owner_id],
         )
         await db.commit()
     except Exception:
-        log.exception("rituals: the baseline rebuild of %s did not start", occ_id)
+        log.exception("rituals: the Ground Truth rebuild of %s did not start", occ_id)
         await db.rollback()
 
 

@@ -281,6 +281,7 @@ export function SuggestionPeek({ href, summary, text }: { href: string; summary:
         ref={ref}
         href={href}
         className="min-w-0 truncate hover:underline"
+        data-user-content
         title={text ? undefined : summary}
         aria-describedby={text ? id : undefined}
         onMouseEnter={text ? show : undefined}

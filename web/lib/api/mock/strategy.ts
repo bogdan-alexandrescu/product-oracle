@@ -125,6 +125,7 @@ export function seedStrategy(uuid: () => string, entities: GoalRow[] = [], { vis
   const retention = node("retention", "Retention");
   const reports = node("custom-reports", "Custom report builder");
   const items = [uuid(), uuid(), uuid()];
+  const reportsChoice = uuid();
   const findings = [
     finding(uuid(), { subject_id: retention.id, subject_ref: "goal:retention" }),
     finding(uuid(), {
@@ -141,7 +142,7 @@ export function seedStrategy(uuid: () => string, entities: GoalRow[] = [], { vis
         subject_kind: "roadmap_item",
         subject_id: id,
         subject_ref: i === 0 ? "report-export" : "report-scheduling",
-        detail: { horizon: i === 0 ? "now" : "next", title: i === 0 ? "Report export" : "Report scheduling", draft: false },
+        detail: { horizon: i === 0 ? "now" : "next", title: i === 0 ? "Report export" : "Report scheduling", draft: false, choice_ids: [reportsChoice] },
       }),
     ),
     finding(uuid(), {
@@ -153,7 +154,7 @@ export function seedStrategy(uuid: () => string, entities: GoalRow[] = [], { vis
     }),
   ];
   const doc = (slug: string, title: string, version: number) => ({ slug, title, version, approved_at: APPROVED });
-  return {
+  const db: StrategyDb = {
     findings,
     stack: {
       vision: !vision ? null : {
@@ -174,7 +175,7 @@ export function seedStrategy(uuid: () => string, entities: GoalRow[] = [], { vis
         choices: [
           { entity_id: uuid(), id: "self-serve", title: "Self-serve onboarding", stance: "focus", goals: [{ ...activation, items: 3 }, { ...conversion, items: 2 }], features: [], items: 4, open_findings: 0 },
           { entity_id: uuid(), id: "team-plans", title: "Team plans", stance: "focus", goals: [], features: [], items: 1, open_findings: 0 },
-          { entity_id: uuid(), id: "custom-reports", title: "Custom report builder", stance: "stop", goals: [], features: [reports], items: 2, open_findings: 2 },
+          { entity_id: reportsChoice, id: "custom-reports", title: "Custom report builder", stance: "stop", goals: [], features: [reports], items: 2, open_findings: 2 },
         ],
       },
       unaligned: {
@@ -184,6 +185,10 @@ export function seedStrategy(uuid: () => string, entities: GoalRow[] = [], { vis
       counts: { open: 4, high: 2, waived: 1 },
     },
   };
+  // As the API: a focus choice's finding is about the choice's entity (pass F F-41).
+  const team = db.stack.strategy!.choices.find((c) => c.id === "team-plans")!;
+  Object.assign(findings[findings.length - 1], { subject_id: team.entity_id });
+  return db;
 }
 
 /**
@@ -215,7 +220,7 @@ export function inboxStrategy(db: StrategyDb | undefined, role: Role): Schemas["
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
-/** /v1/strategy/*: the stack, findings, waive (owners; approvers for outside_strategy) and check. */
+/** /v1/strategy/*: the stack, findings, waive and reopen (owners; approvers for outside_strategy) and check. */
 export async function routeStrategy(db: StrategyDb | undefined, req: Request, p: string[], q: URLSearchParams, role: Role) {
   if (p[1] !== "strategy") return null;
   const empty: StrategyDb = db ?? {
@@ -248,6 +253,15 @@ export async function routeStrategy(db: StrategyDb | undefined, req: Request, p:
     if (!reason) return json(422, { detail: "a waiver needs a reason" });
     if (f.status !== "open") return json(409, { detail: `The finding is ${f.status}` });
     Object.assign(f, { status: "waived", waived_at: new Date().toISOString(), waive_reason: reason });
+    return json(200, f);
+  }
+  if (p[2] === "findings" && p[4] === "reopen" && req.method === "POST") {
+    const f = empty.findings.find((x) => x.id === p[3]);
+    if (!f) return json(404, { detail: "Finding not found" });
+    const needed = f.kind === "outside_strategy" ? ["approver", "owner"] : ["owner"];
+    if (!needed.includes(role)) return json(403, { detail: `Requires the ${needed[0]} role` });
+    if (f.status !== "waived") return json(409, { detail: `The finding is ${f.status}` });
+    Object.assign(f, { status: "open", waived_by: null, waived_at: null, waive_reason: null });
     return json(200, f);
   }
   if (p[2] === "check" && req.method === "POST") {

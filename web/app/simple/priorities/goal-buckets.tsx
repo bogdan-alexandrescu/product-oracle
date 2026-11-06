@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { storeGoalOrder } from "@/components/simple/GoalOrder";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { GOAL_CHANGED_EVENT, sendCardChanged } from "@/lib/api/simple-chat";
 import { calendarDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
@@ -15,7 +15,7 @@ import { CodeTag, goalLabel, milestoneColour, planFeatures, wk } from "./plan-bu
  * Goal buckets you can change (the owner's picks of mk-goalbuckets: GB1 a "Pencil, form in place",
  * GB2 a "Pick where they go", GB3 a "Drag to a goal"). The goals, their measure, target and date,
  * and each feature's goal links come from /v1/simple/goal-buckets: the goal entities and the
- * "supports" links Baseline edits. Every write answers with what Undo puts back.
+ * "supports" links the Ground Truth edits. Every write answers with what Undo puts back.
  */
 
 type Plan = Schemas["SimplePlanOut"];
@@ -73,9 +73,9 @@ export function placedPlan(plan: Plan, gb: Buckets | undefined): Plan {
   };
 }
 
-function featureOf(gb: Buckets | undefined, code: string, name: string): { id: string; goal_ids: string[] } | undefined {
+function featureOf(gb: Buckets | undefined, code: string, name: string): { id: string; goal_ids: string[]; assumed_goal_ids: string[] } | undefined {
   const f = gb?.features.find((x) => x.key.toLowerCase() === code.toLowerCase() || x.title === name);
-  return f ? { id: f.id, goal_ids: f.goal_ids ?? [] } : undefined;
+  return f ? { id: f.id, goal_ids: f.goal_ids ?? [], assumed_goal_ids: f.assumed_goal_ids ?? [] } : undefined;
 }
 
 /** "Dec 31" this year, "Feb 12, 2027" past it. */
@@ -107,12 +107,17 @@ export function OrderBadge({ n }: { n: number }) {
   );
 }
 
-function Field({ label, children, error }: { label: string; children: ReactNode; error?: string }) {
+function Field({ label, children, error, now }: { label: string; children: ReactNode; error?: string; now?: string }) {
   return (
     <label className="block min-w-0">
       <span className="text-[13px] font-[650] text-text2">{label}</span>
       {children}
       {error && <span className="mt-0.5 block text-[13px] text-warn">{error}</span>}
+      {now && (
+        <span data-testid="goal-form-now" className="mt-0.5 block text-[13px] text-text2">
+          Saved now: {now}
+        </span>
+      )}
     </label>
   );
 }
@@ -124,12 +129,34 @@ function usePeople() {
   return useQuery("simple-goal-owners", () => unwrap(api.GET("/v1/people", { params: { query: { limit: 200 } } })));
 }
 
+/** A goal's fields as its form shows them. */
+const fieldsOf = (g: Goal, year: string): Fields => ({ title: g.title, measure: g.measure ?? "", target: g.target ?? "", due: dayOf(g.due, year), owner: g.owner_id ?? null });
+
 /** GB1 a: the goal's header turned into a small form, right where it sits. */
-export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: { start: Fields; goal?: Goal; order: number; title: string; year: string; onSave: (f: Fields & { day: string }, seen?: Goal) => Promise<void>; onCancel: () => void }) {
+export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: { start: Fields; goal?: Goal; order: number; title: string; year: string; onSave: (f: Fields & { day: string }, seen?: Goal, refused?: (line: string) => void) => Promise<void>; onCancel: () => void }) {
   const [f, setF] = useState<Fields>(start);
   // The goal as it read when the form opened: its save is refused if it changed since.
-  const [seen] = useState(goal);
+  const [seen, setSeen] = useState(goal);
   const [busy, setBusy] = useState(false);
+  // A refused save: its line, shown here, and the goal read again into the form.
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
+  const [now, setNow] = useState<Partial<Record<keyof Fields, string>>>({});
+  if (stale && goal && seen) {
+    setStale(false);
+    // The fields the person changed are kept, with the saved value beside them; the rest take it.
+    const was = fieldsOf(seen, year);
+    const is = fieldsOf(goal, year);
+    const next = { ...f };
+    const beside: Partial<Record<keyof Fields, string>> = {};
+    for (const k of Object.keys(is) as (keyof Fields)[]) {
+      if (f[k] === was[k]) (next as Record<keyof Fields, unknown>)[k] = is[k];
+      else if (is[k] !== was[k] && is[k] !== f[k] && k !== "owner") beside[k] = is[k] ?? "";
+    }
+    setF(next);
+    setNow(beside);
+    setSeen(goal);
+  }
   const day = parseDay(f.due, year);
   const done = !!(f.title.trim() && f.measure.trim() && f.target.trim() && day);
   const set = (k: keyof Fields) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
@@ -141,8 +168,12 @@ export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: 
         e.preventDefault();
         if (!done || busy) return;
         setBusy(true);
+        setRefusal(null);
         try {
-          await onSave({ ...f, day: day! }, seen);
+          await onSave({ ...f, day: day! }, seen, (line) => {
+            setRefusal(line);
+            setStale(true);
+          });
         } finally {
           setBusy(false);
         }
@@ -157,19 +188,19 @@ export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: 
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
         <OrderBadge n={order} />
         <h3 className="whitespace-nowrap text-[17px] font-[650]">{title}</h3>
-        <span className="text-[13px] text-text2 max-sm:basis-full sm:ml-auto">Goal {order} in the order; change it in Baseline</span>
+        <span className="text-[13px] text-text2 max-sm:basis-full sm:ml-auto">Goal {order} in the order; change it in the Ground Truth</span>
       </div>
-      <Field label="Goal" error={!f.title.trim() ? "Name the goal." : undefined}>
+      <Field label="Goal" error={!f.title.trim() ? "Name the goal." : undefined} now={now.title}>
         <textarea autoFocus rows={f.title.length > 60 ? 2 : 1} value={f.title} onChange={set("title")} className={`${INPUT} h-auto py-1.5`} />
       </Field>
-      <Field label="Measure: the number that shows it" error={!f.measure.trim() ? "Add a measure." : undefined}>
+      <Field label="Measure: the number that shows it" error={!f.measure.trim() ? "Add a measure." : undefined} now={now.measure}>
         <input value={f.measure} onChange={set("measure")} placeholder="For example: repeat orders a month" className={f.measure.trim() ? INPUT : BAD} />
       </Field>
       <div className="grid grid-cols-2 gap-2">
-        <Field label="Target" error={!f.target.trim() ? "Add a target." : undefined}>
+        <Field label="Target" error={!f.target.trim() ? "Add a target." : undefined} now={now.target}>
           <input value={f.target} onChange={set("target")} className={f.target.trim() ? INPUT : BAD} />
         </Field>
-        <Field label="By" error={!day ? "Pick a date." : undefined}>
+        <Field label="By" error={!day ? "Pick a date." : undefined} now={now.due}>
           <input type="text" value={f.due} onChange={set("due")} placeholder="Pick a day" className={day ? INPUT : BAD} />
         </Field>
       </div>
@@ -183,6 +214,11 @@ export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: 
         </button>
         {!done && <span className="min-w-0 text-[13px] text-text2">A goal needs a measure, a target and a date.</span>}
       </div>
+      {refusal && (
+        <p role="alert" className="text-[14px] text-warn">
+          {refusal}
+        </p>
+      )}
     </form>
   );
 }
@@ -244,11 +280,11 @@ export function UndoNote({ id, clear, children, onUndo }: { id: number; clear?: 
 }
 
 /** The dragged feature's card. */
-export function DragGhost({ code, name, weeks, style, className = "" }: { code: string; name: string; weeks: string; style?: React.CSSProperties; className?: string }) {
+export function DragGhost({ code, name, weeks, style, className = "" }: { code: string | null; name: string; weeks: string; style?: React.CSSProperties; className?: string }) {
   return (
     <div aria-hidden data-testid="drag-ghost" className={`pointer-events-none fixed z-40 flex w-[420px] max-w-[80vw] rotate-[-1.5deg] items-center gap-2 rounded-md border-2 border-accent bg-surface px-2 py-[5px] text-[16px] shadow-2xl ${className}`} style={style}>
       <span className="text-[15px]">⠿</span>
-      <CodeTag code={code} />
+      {code && <CodeTag code={code} />}
       <span className="flex-1">{name}</span>
       <span className="text-[15px] text-text2">{weeks}</span>
     </div>
@@ -266,6 +302,8 @@ export function FeatureRows({
   lifted,
   onGrip,
   onOpen,
+  task,
+  tail,
 }: {
   plan: Plan;
   goal: string | null;
@@ -275,18 +313,38 @@ export function FeatureRows({
   onGrip: (f: Feature, e: React.PointerEvent | React.KeyboardEvent) => void;
   /** The feature's name opens its item panel (the grip only moves it). */
   onOpen?: (f: Feature) => void;
+  /** Tasks in place: a feature's shown name (renamed on the roadmap), whether it is cut, its pencil and ⋯, and its form while edited. */
+  task?: { name: (f: Feature) => string; cut: (f: Feature) => boolean; actions: (f: Feature) => ReactNode; form: (f: Feature) => ReactNode | null; milestone: (f: Feature) => string | null };
+  /** Rows after the plan's: tasks added since, and "+ Add a task". */
+  tail?: ReactNode;
 }) {
-  const features = planFeatures(plan, goal);
-  if (!features.length) return <p className="mt-2 text-[15px] text-text2">Nothing in the plan yet</p>;
+  const features = planFeatures(plan, goal)
+    .filter((f) => !task?.cut(f))
+    .map((f) => (task ? { ...f, name: task.name(f) } : f));
+  if (!features.length && !tail) return <p className="mt-2 text-[15px] text-text2">Nothing in the plan yet</p>;
   const titleOf = (id: string) => gb?.goals.find((g) => g.id === id)?.title;
   return (
     <ul className="mt-2">
+      {!features.length && <li className="py-[5px] text-[15px] text-text2">Nothing in the plan yet</li>}
       {features.map((f) => {
+        const form = task?.form(f);
+        if (form)
+          return (
+            <li key={f.code} data-testid="plan-feature" data-code={f.code} className="border-b border-line">
+              {form}
+            </li>
+          );
         const links = featureOf(gb, f.code, f.name)?.goal_ids ?? [];
+        // Its link to this bucket's goal has an assumed contribution: marked as the Ground Truth marks it.
+        const here = goal ? gb?.goals.find((g) => same(g.title, goal))?.id : undefined;
+        const assumed = !!here && !!featureOf(gb, f.code, f.name)?.assumed_goal_ids.includes(here);
         const others = links.slice(1).map(titleOf).filter((x): x is string => !!x);
         const milestones = [...new Set(f.slices.map((s) => s.milestone))];
         const movable = grips && !!featureOf(gb, f.code, f.name);
         const up = lifted === f.code;
+        // Its own milestone, unless a plan chip already names it.
+        const mine = task?.milestone(f) ?? null;
+        const own = mine && !milestones.some((code) => plan.milestones.find((m) => m.code === code)?.name === mine) ? mine : null;
         return (
           <li
             key={f.code}
@@ -328,6 +386,15 @@ export function FeatureRows({
                   +{others.length} {others.length === 1 ? "goal" : "goals"}
                 </span>
               )}
+              {assumed && (
+                <span
+                  data-testid="contribution-assumed"
+                  title={`How much it moves ${goal} is assumed until someone sets it`}
+                  className="ml-1.5 inline-flex h-5 items-center whitespace-nowrap rounded-full bg-warn-bg px-1.5 align-[1px] text-[12px] font-[650] text-warn"
+                >
+                  Contribution assumed
+                </span>
+              )}
             </span>
             <span className="flex flex-none gap-1 max-sm:order-last max-sm:basis-full max-sm:pl-[60px]">
               {milestones.map((code) => {
@@ -341,19 +408,26 @@ export function FeatureRows({
                   </span>
                 );
               })}
+              {own && (
+                <span data-testid="task-milestone" title={`Its own milestone: ${own}`} className="inline-flex h-5 items-center whitespace-nowrap rounded-full bg-surface2 px-2 text-[12px] font-[650] text-text2">
+                  {own}
+                </span>
+              )}
             </span>
             <span data-testid="plan-feature-total" className="min-w-[56px] flex-none text-right text-[15px] tabular-nums text-text2">
               {f.weeks == null ? "PM-owned" : `${wk(f.weeks)} wk`}
             </span>
+            {task?.actions(f)}
           </li>
         );
       })}
+      {tail}
     </ul>
   );
 }
 
 /** GB2 a: Archive goal asks first, and says where the goal's features go. */
-/** A goal's features as ArchiveDialog counts them: the plan's. */
+/** A goal's features as ArchiveDialog counts them: the plan's, or with no dated plan the bucket's. */
 export type GoalFeatures = (goal: string) => { code: string; name: string; slices: Plan["slices"] }[];
 
 /**
@@ -610,15 +684,18 @@ export function DeleteArchivedDialog({ goal, onClose, onDelete }: { goal: Archiv
 const NOTE_GAP = 8;
 
 /** A note after a change; each has its own `id`, the same words or not. */
-export type Note = { id: number; text: ReactNode; undo?: Undo; restore?: Restore; order?: { before: string[]; after: string[] } };
+/** A task change (./task-edit) names the changes Undo takes back, in the order they were made. */
+export type Note = { id: number; text: ReactNode; undo?: Undo; restore?: Restore; order?: { before: string[]; after: string[] }; changes?: string[] };
 /** A goal's delete: its Trash entry, which Undo restores (its links come back with it). */
 type Restore = { entry: string; title: string };
 
 let noteId = 0;
+/** A new note's own id (./task-edit's notes too). */
+export const nextNoteId = () => ++noteId;
 
 /** The writes, each answering with the note to show and what Undo puts back. */
 export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note | null) => void, setError: (e: string | null) => void) {
-  async function run(go: () => Promise<{ undo: Undo }>, text: ReactNode): Promise<boolean> {
+  async function run(go: () => Promise<{ undo: Undo }>, text: ReactNode, refused?: (line: string) => void): Promise<boolean> {
     try {
       const out = await go();
       setError(null);
@@ -629,6 +706,13 @@ export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note |
       setNote({ id: ++noteId, text, undo: out.undo });
       return true;
     } catch (e) {
+      // A goal changed since its form opened: the goals read again, the form says so and refreshes.
+      if (refused && e instanceof ApiError && e.status === 409) {
+        setError(null);
+        await reload();
+        refused(e.message);
+        return false;
+      }
       setError(errorMessage(e));
       return false;
     }
@@ -636,7 +720,7 @@ export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note |
   return {
     add: (f: Fields & { day: string }, order: number) =>
       run(() => unwrap(api.POST("/v1/simple/goal-buckets/goals", { body: { title: f.title, measure: f.measure, target: f.target, due: f.day, ...(f.owner !== undefined ? { owner_id: f.owner } : {}) } })), <>Added {f.title.trim()} as goal {order}.</>),
-    edit: (g: Goal, f: Fields & { day: string }, year: string, seen: Goal = g) =>
+    edit: (g: Goal, f: Fields & { day: string }, year: string, seen: Goal = g, refused?: (line: string) => void) =>
       run(
         () =>
           unwrap(
@@ -648,6 +732,7 @@ export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note |
         <>
           Saved {f.title.trim()}: {lower(f.target.trim())} by {dayOf(f.day, year)}.
         </>,
+        refused,
       ),
     archive: (g: Goal, to: string | null, text: ReactNode) => run(() => unwrap(api.POST("/v1/simple/goal-buckets/goals/{goal_id}/archive", { params: { path: { goal_id: g.id } }, body: { to_goal_id: to } })), text),
     // EG1 a: Restore an archived goal (with Undo), Delete a goal to Settings > Trash, and an ask for who may not.
@@ -746,5 +831,7 @@ export function useBucketRights(gb: Buckets | undefined) {
     // eg1-a-propose: Restore for who may, Ask to restore for who may not.
     unarchiveAct: (!gb ? null : can("unarchive_bucket_goal") ? "do" : can("create_simple_change") ? "ask" : null) as Act,
     move: !!gb && can("move_bucket_feature"),
+    // Tasks: the change engine applies or proposes, by the roadmap's own rule.
+    task: can("create_simple_change"),
   };
 }

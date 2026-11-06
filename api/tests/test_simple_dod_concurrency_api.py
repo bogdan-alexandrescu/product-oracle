@@ -148,13 +148,14 @@ async def test_stale_relative_chat_card_moves_from_the_new_dates(client):
     ctx = await chat_people()
     w = await ChatWorld(ctx).build()
     ledger = w.ids["Ledger v2"]
+    # chat-latest-card: the newest card on an item is the one that acts, so the day comes first.
+    await post(client, ctx, "owner", "move Ledger v2 to March 3")
+    await read(ctx, actions(act("move_dates", item=ledger, when="March 3")))
+    [day] = (await last(client, ctx, "owner"))["cards"]
     await post(client, ctx, "owner", "push Ledger v2 out a quarter")
     await read(ctx, actions(act("move_dates", item=ledger, shift="1 quarter")))
     [card] = (await last(client, ctx, "owner"))["cards"]
     assert card["after"] == {"start_date": "2027-01-01", "end_date": "2027-02-15"}
-    await post(client, ctx, "owner", "move Ledger v2 to March 3")
-    await read(ctx, actions(act("move_dates", item=ledger, when="March 3")))
-    [day] = (await last(client, ctx, "owner"))["cards"]
     moved = {"start_date": "2026-10-10", "end_date": "2026-11-20"}
     r = await client.post(CHANGES, json={"op": "move_dates", "target": {"item_id": ledger},
                           "before": card["before"], "after": moved},
@@ -169,8 +170,8 @@ async def test_stale_relative_chat_card_moves_from_the_new_dates(client):
     assert again["after"] == {"start_date": "2027-01-10", "end_date": "2027-02-20"}
     assert again["preview"]["start_date"] == "2027-01-10"
     assert "Jan 10" in again["summary"] and "Jan 1 " not in again["summary"]
-    # A named day stays that day.
-    assert kept["before"] == moved and kept["after"] == day["after"]
+    # The older named day is replaced by the newer card: it stays as it was.
+    assert kept["replaced_by"] == card["id"] and kept["after"] == day["after"]
     r = await client.post(f"{CARDS}/{card['id']}/apply", headers=ctx.as_("owner"))
     assert r.status_code == 200, r.text
     item = await w.item("Ledger v2")

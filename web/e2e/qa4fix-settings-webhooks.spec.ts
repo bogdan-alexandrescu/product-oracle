@@ -58,7 +58,7 @@ test("qa4-settings-26: the Delivery log names events as the form does", async ({
   await openSettings(page, "nav-webhooks");
   const made = await createWebhook(page, "Plain log", "https://hooks.example.com/plain");
   await made.getByRole("button", { name: "Send test event" }).click();
-  await expect(made.getByTestId("test-result")).toContainText("✓ 200");
+  await expect(made.getByTestId("test-result")).toContainText("✓ Delivered");
   await made.getByRole("button", { name: "Done" }).click();
   await page.getByTestId("webhook-row").filter({ hasText: "Plain log" }).click();
   const log = page.getByTestId("webhook-inspector").getByTestId("delivery-log");
@@ -80,8 +80,8 @@ test("qa4-settings-27: a test sent from the inspector updates the list's Last de
   await expect(row).toContainText("None yet");
   await row.click();
   await page.getByTestId("webhook-inspector").getByRole("button", { name: "Send test event" }).click();
-  await expect(page.getByTestId("webhook-inspector").getByTestId("test-result")).toContainText("✓ 200");
-  await expect(row).toContainText("✓ 200");
+  await expect(page.getByTestId("webhook-inspector").getByTestId("test-result")).toContainText("✓ Delivered");
+  await expect(row).toContainText("✓ Delivered");
   await expect(row).not.toContainText("None yet");
 });
 
@@ -90,7 +90,7 @@ test("qa4-settings-28: the inspector shows the payload format as a day, not an I
   await openSettings(page, "nav-webhooks");
   await page.getByTestId("webhook-row").filter({ hasText: "Deploy notifier" }).click();
   const inspector = page.getByTestId("webhook-inspector");
-  await expect(inspector).toContainText("Payload format");
+  await expect(inspector).toContainText("Format version");
   await expect(inspector.getByTestId("payload-format")).toHaveText("Oct 25, 2026");
   await expect(inspector).not.toContainText("API version");
   await expect(inspector).not.toContainText("2026-10-25");

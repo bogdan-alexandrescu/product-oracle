@@ -561,7 +561,7 @@ async def test_checkpoint_roles(client, owner, runtime):
 
     inbox = (await client.get("/v1/inbox", headers=approver)).json()
     assert [c["id"] for c in inbox["checkpoints"]] == [cp["id"]]
-    assert inbox["checkpoints"][0]["segment_title"] == "Baseline proposal"
+    assert inbox["checkpoints"][0]["segment_title"] == "Ground Truth proposal"
     run = await decide(client, approver, await get(client, approver, run["id"]))
     assert run["checkpoints"][0]["status"] == "approved"
 
@@ -834,7 +834,8 @@ async def test_a_failed_segment_fails_the_run(client, owner, runtime):
     run = await get(client, auth, run["id"])
     assert run["status"] == "failed"
     assert run["segments"][0]["status"] == "failed"
-    assert "agent crashed" in run["error"]
+    # The runtime's own words stay in the logs; the run page says it in plain words.
+    assert run["error"] == "Ground Truth proposal: The researcher stopped."
     async with tenant_session(tenant_id) as s:
         assert all(t.revoked_at for t in await s.scalars(select(RunToken)))
 

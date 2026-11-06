@@ -16,6 +16,7 @@ import {
   Button,
   Chip,
   DataTable,
+  InfoTip,
   Inspector,
   InspectorRow,
   InspectorSection,
@@ -40,6 +41,7 @@ import { useScreenSubject } from "@/lib/screen-subject";
 import { NAMES_FAILED, useTemplateNames } from "@/lib/template-names";
 import { useQuery, type Query } from "@/lib/use-query";
 import { versionHref } from "@/lib/version-href";
+import { RebuildSign } from "@/components/RebuildSign";
 
 /** A template or theme beside the title, by its name: a small hairline pill. */
 const META = "inline-flex min-h-[26px] max-w-full items-center rounded-full border border-line-strong px-2.5 text-[13px] text-text2";
@@ -112,9 +114,20 @@ function versionColumns(
           )}
           {v.number === latest && <Chip kind="now">Latest</Chip>}
           {v.warnings.length > 0 && (
-            <Chip kind="warn" title={v.warnings.map((w) => warningText(w, headings)).join("\n")}>
-              {plural(v.warnings.length, "warning")}
-            </Chip>
+            // B-20: a button that opens its warnings on hover, a tap or the keyboard (a title opens nothing on a phone).
+            <InfoTip
+              label="warnings"
+              align="start"
+              side="bottom"
+              testId="overview-warnings-chip"
+              trigger={<Chip kind="warn">{plural(v.warnings.length, "warning")}</Chip>}
+            >
+              <span className="flex flex-col gap-1.5">
+                {v.warnings.map((w, i) => (
+                  <span key={i}>{warningText(w, headings)}</span>
+                ))}
+              </span>
+            </InfoTip>
           )}
         </span>
       ),
@@ -439,6 +452,7 @@ export function DocumentOverview({ doc }: { doc: string }) {
               status={
                 <>
                   <DocStatusChip status={d.status} />
+                  <RebuildSign slug={d.slug} own />
                   <RoleBadge />
                   {d.template && (
                     <span className={META} data-testid="doc-template" title={d.template_version ? `Template, its version ${d.template_version}` : "Template"}>

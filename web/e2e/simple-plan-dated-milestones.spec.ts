@@ -1,7 +1,7 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { THEME_KEY } from "../lib/theme";
 import { ADMIN, login } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { expect, test, type Page } from "./test";
 
 /*
  * The plan-model lane: a PRD's plan is data (milestones with start and end dates, each
@@ -11,13 +11,11 @@ import { expect, test, type Locator, type Page } from "./test";
  * 28 Dec - 12 Feb with a year-end break).
  *
  * Card plan-dated-home: protects = Home's "The plan this quarter" names the plan's span
- * ("2 Nov - 12 Feb") and draws one row per dated milestone ("M1 · Prove it", "M2 · Scale
- * volume", "M3 · Open to all"), each bar spanning its milestone's start to its end date
- * whatever its slices' own dates, with its end date written; fails_when = the span is
- * missing, a sliced feature is drawn as one item in no milestone, or a row starts at its
- * earliest slice instead of the milestone's start (M3 then starts 4 Jan, after the break);
- * no_claim = how the API reads the plan from the PRD (api pytest), the plan endpoints' other
- * fields (no UI shows them yet).
+ * ("Nov 2 - Feb 12") and, since home-waiting-one-list (PR 1235), draws the company roadmap's
+ * plan: rows by the roadmap's own milestones, each opening the whole roadmap, never one PRD's
+ * plan milestones ("M1 · Prove it"); fails_when = the span is missing, or Home draws Guided
+ * setup's plan milestones in place of the company roadmap's; no_claim = how the API reads the
+ * plan from the PRD (api pytest), the plan endpoints' other fields (no UI shows them yet).
  *
  * Card plan-dated-one-pager: protects = the PRD's one-pager, reached from Simple's
  * One-pagers, leads with the plan's timeline whose milestone chips carry the same dated M1-M3
@@ -27,15 +25,8 @@ import { expect, test, type Locator, type Page } from "./test";
 
 const EMAILS = { owner: ADMIN.email, viewer: "viewer@example.com" } as const;
 
-// The strip's span for this plan: 1 Nov 2026 to 28 Feb 2027 (120 days).
-const FROM = Date.parse("2026-11-01T00:00:00Z");
-const SPAN = 120 * 86_400_000;
-const pct = (day: string) => ((Date.parse(`${day}T00:00:00Z`) - FROM) / SPAN) * 100;
-const ROWS = [
-  { name: "M1 · Prove it", start: "2026-11-02", end: "2026-11-27", when: /Nov 27|27 Nov/ },
-  { name: "M2 · Scale volume", start: "2026-11-30", end: "2026-12-25", when: /Dec 25|25 Dec/ },
-  { name: "M3 · Open to all", start: "2026-12-28", end: "2027-02-12", when: /Feb 12|12 Feb/ },
-];
+// Guided setup's plan milestones, as its one-pager's timeline names them.
+const ROWS = ["M1 · Prove it", "M2 · Scale volume", "M3 · Open to all"];
 
 async function setUp(page: Page, scheme: "light" | "dark") {
   await page.context().addInitScript(
@@ -46,28 +37,6 @@ async function setUp(page: Page, scheme: "light" | "dark") {
     [MOCK_SCENARIO_KEY, "simple-plan", THEME_KEY, scheme] as const,
   );
   await page.emulateMedia({ colorScheme: scheme });
-}
-
-/** Each dated row: its label, its end date written, its bar from the milestone's start to its end. */
-async function expectDatedRows(strip: Locator, testId: string) {
-  await expect(strip.getByTestId(`${testId}-month`)).toHaveText(["Nov", "Dec", "Jan", "Feb"]);
-  const labels = strip.getByTestId(`${testId}-label`);
-  for (const [k, r] of ROWS.entries()) {
-    // fix4 (qa-simple-home-17): Home's row names its document first; the one-pager's does not.
-    await expect(labels.nth(k)).toHaveText(new RegExp(`^(Guided setup · )?${r.name} · \\d+ items?$`));
-    const row = strip.getByTestId(`${testId}-row`).nth(k);
-    await expect(row).toContainText(r.when);
-    const bar = row.locator("span.top-2");
-    await expect(bar).toBeVisible();
-    // A person sees the bar begin at the milestone's start and end on its date.
-    const track = (await bar.locator("xpath=..").boundingBox())!;
-    const box = (await bar.boundingBox())!;
-    const left = ((box.x - track.x) / track.width) * 100;
-    const right = ((box.x + box.width - track.x) / track.width) * 100;
-    expect(Math.abs(left - pct(r.start)), `${r.name} starts on ${r.start}`).toBeLessThan(1);
-    expect(Math.abs(right - pct(r.end)), `${r.name} ends on ${r.end}`).toBeLessThan(1);
-    await expect(bar).not.toHaveAttribute("data-estimated", "true");
-  }
 }
 
 for (const phone of [false, true]) {
@@ -84,7 +53,14 @@ for (const phone of [false, true]) {
           const card = page.getByTestId("home-plan");
           await expect(page.getByRole("heading", { name: "The plan this quarter" })).toBeVisible();
           await expect(card.getByTestId("home-plan-span")).toHaveText("Nov 2 - Feb 12");
-          await expectDatedRows(card, "home-strip");
+          // The company roadmap's plan (PR 1235): its own milestones, each row opening the whole roadmap.
+          const rows = card.getByTestId("home-strip-row");
+          await expect(rows.first()).toBeVisible();
+          for (const href of await rows.evaluateAll((els) => els.map((e) => e.getAttribute("href")))) expect(href).toBe("/simple/roadmap");
+          for (const label of await card.getByTestId("home-strip-label").allTextContents()) {
+            expect(label).toMatch(/ · \d+ items?$/);
+            for (const name of ROWS) expect(label).not.toContain(name);
+          }
           if (!phone) expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1366);
           else expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 

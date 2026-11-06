@@ -119,7 +119,7 @@ test("qa-work-22: the actions stay on the title's line on every run, the cost ap
 test("qa-work-27: a viewer at a checkpoint is told who decides and that they can only read it", async ({ page }) => {
   await openRun(page, "team-onboarding", "viewer@example.com");
   const shared = page.getByTestId("shared-draft");
-  await expect(shared).toContainText("Confirm the baseline: waiting for a decision");
+  await expect(shared).toContainText("Confirm the Ground Truth: waiting for a decision");
   await expect(shared.getByTestId("checkpoint-who")).toHaveText("Approvers and owners can decide");
   await expect(shared).toContainText("You can read it; you can't decide it.");
   await expect(shared).not.toContainText("shared decision");
@@ -134,7 +134,7 @@ test.describe("phone", () => {
     await expect(page.getByTestId("run-header-sep").filter({ visible: true })).toHaveCount(0);
   });
 
-  test("qa-work-45: the baseline link stays inside the checkpoint card; the attempt chip sits under the name", async ({ page }) => {
+  test("qa-work-45: the Ground Truth link stays inside the checkpoint card; the attempt chip sits under the name", async ({ page }) => {
     await openRun(page, "team-onboarding");
     const card = page.locator("#decide");
     const link = card.getByTestId("from-run-link");

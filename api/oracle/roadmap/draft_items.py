@@ -305,6 +305,16 @@ async def run_ended(db: AsyncSession, run: Any, error: str) -> None:
     row.error = error
 
 
+async def run_retried(db: AsyncSession, run: Any) -> None:
+    """A failed prd_draft_items run retried from its failed step: its own draft roadmap
+    (not one derived again since) is running again. The caller commits."""
+    row = await _of_run(db, run)
+    if row is None or row.run_id != run.id or row.status != "failed":
+        return
+    row.status = "running"
+    row.error = None
+
+
 # --- reading ---------------------------------------------------------------------------------
 
 _DAY = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")

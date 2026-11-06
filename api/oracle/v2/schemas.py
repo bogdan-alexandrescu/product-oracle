@@ -194,7 +194,7 @@ class IntakeAnalysis(BaseModel):
 
 
 class BlockerAttrs(BaseModel):
-    """``attrs["blocker"]`` of a baseline ``constraint`` entity: the blocker itself (§6)."""
+    """``attrs["blocker"]`` of a Ground Truth ``constraint`` entity: the blocker itself (§6)."""
 
     type: Literal["hard", "soft", "unknown", "temporary"]
     # §6: capacity versus eligibility versus permission versus third-party policy.

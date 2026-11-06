@@ -23,16 +23,17 @@ async function openHome(page: Page) {
 test.describe("at 1440", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test("Needs you's counts are plain counts, not links that seem to filter", async ({ page }) => {
-    // protects=qa-company-5; fails_when=a count chip is a link (all went to the same unfiltered
-    // Inbox); no_claim=the Inbox's own tabs.
+  test("Needs you's counts each open the Inbox on their own kind", async ({ page }) => {
+    // protects=qa-company-5, QA pass D-2; fails_when=a count chip goes to the same unfiltered
+    // Inbox; no_claim=the Inbox's own tabs.
     await openHome(page);
     const needs = page.getByTestId("home-needs");
     await expect(needs.getByTestId("home-count-approvals")).toBeVisible();
     for (const id of ["home-count-approvals", "home-count-reviews", "home-count-questions", "home-count-access", "home-count-runs"]) {
       const chip = needs.getByTestId(id);
       if ((await chip.count()) === 0) continue;
-      expect(await chip.evaluate((el) => el.closest("a") === null)).toBe(true);
+      // QA pass D-2: each now opens the Inbox on its own kind.
+      expect(await chip.getAttribute("href")).toMatch(/^\/inbox\?kind=[a-z]+$/);
     }
     // The Inbox link beside them is the one way to the Inbox.
     await needs.getByTestId("home-inbox-link").click();
@@ -105,7 +106,7 @@ test.describe("at 1440", () => {
 
   test("Set up: Invite team counts open invites, done rows say Change or Review", async ({ page }) => {
     // protects=qa-onboarding-18, -37; fails_when=Invite team leaves out the open invites, or a
-    // done row still says Open (Build baseline would start a second build); no_claim=the API
+    // done row still says Open (Build Ground Truth would start a second build); no_claim=the API
     // (api/tests/test_setup.py covers invited).
     await openHome(page);
     const invite = page.getByTestId("setup-row-invite");
@@ -115,7 +116,7 @@ test.describe("at 1440", () => {
     const build = page.getByTestId("setup-row-build_baseline");
     await expect(build).toHaveAttribute("data-done", "true");
     await expect(build.getByTestId("setup-action")).toHaveText("Review");
-    await expect(build.getByTestId("setup-action")).toHaveAttribute("href", "/baseline?from=setup");
+    await expect(build.getByTestId("setup-action")).toHaveAttribute("href", "/ground-truth?from=setup");
     // A step still to do keeps Open (the default company's tools are connected; its horizons are not confirmed).
     await expect(page.getByTestId("setup-row-horizons")).toHaveAttribute("data-done", "false");
     await expect(page.getByTestId("setup-row-horizons").getByTestId("setup-action")).toHaveText("Open");

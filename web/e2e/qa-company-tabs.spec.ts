@@ -29,8 +29,8 @@ test.describe("desktop", () => {
     await openTab(page, "metrics");
     const empty = page.getByTestId("metrics-empty").filter({ visible: true });
     await expect(empty).toContainText("No metrics yet");
-    await expect(empty).toContainText("The goal values on Home come from each goal.");
-    await expect(empty).toContainText("Add a metric here to track a number every week");
+    await expect(empty).toContainText("Track a number every week.");
+    await expect(empty.getByRole("button", { name: "About metrics" })).toBeVisible();
     await empty.getByRole("button", { name: "Add your first metric" }).click();
     await expect(page.getByRole("dialog", { name: "Add metric" })).toBeVisible();
   });
@@ -42,9 +42,9 @@ test.describe("desktop", () => {
     await page.getByTestId("metrics-empty").filter({ visible: true }).getByRole("button", { name: "Add your first metric" }).click();
     const dialog = page.getByRole("dialog", { name: "Add metric" });
     const kindHelp = dialog.getByTestId("metric-kind-help");
-    await expect(kindHelp).toContainText("An output is a result the company wants");
+    await expect(kindHelp).toContainText("A result is what the company wants");
     await dialog.getByLabel("Kind").selectOption("input");
-    await expect(kindHelp).toContainText("An input is a number the team can move directly");
+    await expect(kindHelp).toContainText("A driver is a number the team can move directly");
     await dialog.getByLabel("Kind").selectOption("output");
     await expect(dialog.getByText("HogQL")).toHaveCount(0);
     await expect(dialog.locator("#metric-query-help")).toContainText("A PostHog query that returns one number for a week");

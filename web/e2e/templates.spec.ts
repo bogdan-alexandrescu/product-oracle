@@ -25,6 +25,11 @@ test("templates: view a version, live validation, save a new version, archive an
   await expect(page.getByTestId("version-body")).toContainText("## Problem {#problem}");
   await expect(page.getByTestId("validation-ok")).toBeVisible();
 
+  // qa-F-75: sections are rows by default; the raw body sits behind Edit as Markdown.
+  await expect(page.getByTestId("template-sections")).toBeVisible();
+  await expect(page.getByTestId("template-sections")).not.toContainText("{#");
+  await page.getByRole("button", { name: "Edit as Markdown" }).click();
+
   // A bad body: a heading without an id and no sources section.
   const editor = page.getByLabel("Template body");
   await editor.fill("# Idea {#title}\n\n## Problem\n\nText [c:c1]\n");

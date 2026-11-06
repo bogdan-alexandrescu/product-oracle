@@ -44,7 +44,8 @@ test.describe("at 1440", () => {
           kind: el.getAttribute("data-kind"),
         };
       });
-      expect(look).toEqual({ border: 0, clickable: false, kind: null });
+      // QA pass D-2: a link to the Inbox on its kind, still flat text, not a pill.
+      expect(look).toEqual({ border: 0, clickable: true, kind: null });
     }
   });
 
@@ -63,7 +64,7 @@ test.describe("at 1440", () => {
     await expect(prd.locator("td").nth(next)).toHaveText("Publish");
     await expect(flight(page, "team-workspaces").getByTestId("row-paused")).toHaveText(/^Paused at segment \d+ of \d+$/);
     // A run waiting on a person: Next is that person's step.
-    await expect(flight(page, "team-onboarding").locator("td").nth(next)).toHaveText("Confirm the baseline");
+    await expect(flight(page, "team-onboarding").locator("td").nth(next)).toHaveText("Confirm the Ground Truth");
     await expect(flight(page, "team-onboarding").getByTestId("row-segments")).toHaveText(/^Segment \d+ of \d+$/);
 
     // No bare "n/m" anywhere in Progress.
@@ -81,10 +82,10 @@ test.describe("at 1440", () => {
     const g1 = page.getByTestId("home-goal-G1");
     await expect(g1).toBeVisible();
     const name = g1.getByRole("link").first();
-    await expect(name).toHaveAttribute("href", /^\/baseline\?entity=/);
+    await expect(name).toHaveAttribute("href", /^\/ground-truth\?entity=/);
     await expect(g1.getByTestId("code-chip")).toHaveCount(0);
     await name.click();
-    await expect(page).toHaveURL(/\/baseline\?entity=/);
+    await expect(page).toHaveURL(/\/ground-truth\?entity=/);
   });
 
   test("Set up's count reads the same open and hidden", async ({ page }) => {
@@ -109,7 +110,9 @@ test.describe("at 1440", () => {
     await openHome(page, "viewer@example.com");
     const empty = page.getByTestId("home-needs-empty");
     await expect(empty).toContainText("Nothing waiting");
-    await expect(empty.getByTestId("home-needs-empty-what")).toHaveText("Questions someone asks you show here.");
+    // F-30: what shows here is in the line's (i).
+    await empty.getByTestId("home-needs-empty-what").click();
+    await expect(empty.getByRole("tooltip")).toHaveText("Questions someone asks you show here.");
     await empty.getByRole("link", { name: "Read the plan" }).click();
     await expect(page).toHaveURL(/\/plan$/);
   });

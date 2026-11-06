@@ -31,7 +31,7 @@ test("qa-plan-9, qa-plan-57: report sentences name days as 'Nov 30', horizons as
   const first = page.getByTestId("report-track").filter({ visible: true }).first();
   await expect(first).toContainText("Next milestone: First release, Nov 30.");
   const attention = first.getByTestId("needs-attention");
-  await expect(attention).toContainText("Daily alert digest email · Now: ENG-405 targets Dec 9, after the milestone date Nov 30.");
+  await expect(attention).toContainText("Weekly alert digest · Now: ENG-405 targets Dec 9, after the milestone date Nov 30.");
   await expect(attention).not.toContainText("(now)");
   await expect(first).toContainText("Verified: ENG-412 supports Nov 30");
   await expect(first).toContainText("Withdrawn: ENG-413 (Dec 15): The team re-estimated");
@@ -62,7 +62,9 @@ test("qa-plan-56: the report's totals match the items it lists, and say where th
   // only), so the figure is at most what the tracks list, never more (fix4).
   expect(await figure("Now items with no engineering ticket")).toBeLessThanOrEqual(untracked);
   expect(await figure("Now items with no engineering ticket")).toBeGreaterThan(0);
-  await expect(page.getByTestId("report-figures-note").filter({ visible: true })).toContainText("listed under each track's Needs attention");
+  // Where the items behind the figures are listed sits behind the figures' (i) (no visible explanation prose).
+  await page.getByTestId("report-figures-note").filter({ visible: true }).click();
+  await expect(page.getByRole("tooltip").filter({ visible: true })).toContainText("listed under each track's Needs attention");
 });
 
 test("qa-plan-23: the alignment reports have their own Plan tab, selected on the list and on a report", async ({ page }) => {
@@ -133,7 +135,7 @@ test("qa-plan-26, qa-plan-27: a withdrawn basis says who withdrew it, its reason
   await row("ENG-412").getByRole("button", { name: "Withdraw" }).click();
   const dialog = page.getByTestId("withdraw-basis-dialog");
   await dialog.getByLabel("Reason").fill("The team re-estimated after the vendor moved its own delivery by a month and a half");
-  await dialog.getByRole("button", { name: "Withdraw date basis" }).click();
+  await dialog.getByRole("button", { name: "Withdraw date source" }).click();
   await expect(dialog).toBeHidden();
   await filter.getByRole("button", { name: /^Withdrawn/ }).click();
   await expect(filter.getByRole("button", { name: /^Withdrawn/ })).toHaveText(/^Withdrawn\s*1$/);
@@ -157,7 +159,7 @@ test("qa-plan-26: on a phone the withdrawal reason has its own line too", async 
   await row.getByRole("button", { name: "Withdraw" }).click();
   const dialog = page.getByTestId("withdraw-basis-dialog");
   await dialog.getByLabel("Reason").fill("The team re-estimated");
-  await dialog.getByRole("button", { name: "Withdraw date basis" }).click();
+  await dialog.getByRole("button", { name: "Withdraw date source" }).click();
   await page.getByTestId("dates-filter").getByRole("button", { name: /^Withdrawn/ }).click();
   await expect(row).toContainText("Withdrawn by Avery Stone");
   const reason = page.getByTestId("dates-table").locator('[data-reason-for="ENG-412"]').filter({ visible: true });

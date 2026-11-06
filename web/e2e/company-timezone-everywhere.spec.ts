@@ -44,7 +44,7 @@ test("runs list and a run page: run times in the Company time zone", async ({ pa
   await expect(inspector).not.toContainText(/EDT|EST/);
 
   await row.getByRole("link").first().click();
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
   const details = page.getByTestId("run-details");
   await expect(details).toContainText("Oct 17, 9:00 PM GMT+13");
   await expect(details).not.toContainText(/EDT|EST/);

@@ -56,7 +56,7 @@ const SUMMARIES: Record<string, (l: any) => string> = {
 const REGISTRY: RegistryRow[] = [
   {
     "key": "baseline",
-    "title": "Keep the baseline current",
+    "title": "Keep the Ground Truth current",
     "group": "knowledge",
     "group_title": "Knowledge",
     "default": "act",
@@ -68,7 +68,7 @@ const REGISTRY: RegistryRow[] = [
       "act"
     ],
     "levels": {
-      "observe": "Oracle reads what runs find and writes nothing to the baseline.",
+      "observe": "Oracle reads what runs find and writes nothing to the Ground Truth.",
       "draft": "Agents write every change as a proposal for a person to edit and accept.",
       "recommend": "Agents propose every change; a person accepts each one.",
       "act": "Agents write unlocked entries directly; locked ones become proposals."
