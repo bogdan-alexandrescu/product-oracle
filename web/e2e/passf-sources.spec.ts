@@ -50,7 +50,9 @@ test.describe("desktop (1440)", () => {
     await expect(bubble).not.toContainText("(");
   });
 
-  test("F-55: the chips filter the member table; the first column names the member, not a code", async ({ page }) => {
+  test("F-55: each chip leads to the members it counts; the first column names the member, not a code", async ({ page }) => {
+    // fails_when=the "have a source" chip shows the member without one, or no chip leads to
+    // the member without a source.
     await openCompany(page);
     const ct = companyTable(page);
     await expect(ct.getByRole("columnheader", { name: "Member" })).toBeVisible();
@@ -58,22 +60,35 @@ test.describe("desktop (1440)", () => {
 
     await expect(ct.locator("tr[data-row]").first()).toBeVisible();
     const total = await ct.locator("tr[data-row]").count();
+    const groups = ct.locator("tr[data-group]");
+    await expect(groups).toHaveCount(4);
     const membersChip = page.getByTestId("company-members-chip");
+    const withoutChip = page.getByTestId("company-without-chip");
     const staleChip = page.getByTestId("company-stale-chip");
     await expect(membersChip).toHaveText("3 of 4 members have a source");
+    await expect(withoutChip).toHaveText("1 without a source");
     await expect(staleChip).toHaveText("1 with stale sources");
 
-    // Without a source: only the commenter's group remains, as a header with no data row.
+    // "3 of 4 have a source": the three members it counts, each with their sources; not the one without.
     await membersChip.click();
-    await expect(ct.locator("tr[data-row]")).toHaveCount(0);
-    await expect(ct.locator("tr[data-group]")).toHaveCount(1);
-    const onlyGroup = ct.locator("tr[data-group]");
-    // The member by name, the email beside it (the API sends the member's display name).
-    await expect(onlyGroup).toContainText("Theo Brandt");
-    await expect(onlyGroup).toContainText("commenter@example.com");
+    await expect(groups).toHaveCount(3);
+    await expect(ct.locator("tr[data-row]")).toHaveCount(total);
+    await expect(ct).not.toContainText("commenter@example.com");
+    await expect(ct).not.toContainText("No sources");
 
     // Pressing the same chip again clears the filter.
     await membersChip.click();
+    await expect(groups).toHaveCount(4);
+
+    // "1 without a source": only the commenter's group remains, as a header with no data row.
+    await withoutChip.click();
+    await expect(ct.locator("tr[data-row]")).toHaveCount(0);
+    await expect(groups).toHaveCount(1);
+    // The member by name, the email beside it (the API sends the member's display name).
+    await expect(groups).toContainText("Theo Brandt");
+    await expect(groups).toContainText("commenter@example.com");
+    await expect(groups).toContainText("No sources");
+    await withoutChip.click();
     await expect(ct.locator("tr[data-row]")).toHaveCount(total);
 
     // Stale: only the approver's row remains.
@@ -81,9 +96,10 @@ test.describe("desktop (1440)", () => {
     const staleCount = await ct.locator("tr[data-row]").count();
     expect(staleCount).toBeGreaterThan(0);
     expect(staleCount).toBeLessThan(total);
-    await expect(ct.locator("tr[data-group]")).toContainText("approver@example.com");
+    await expect(groups).toHaveCount(1);
+    await expect(groups).toContainText("approver@example.com");
 
-    // "All" clears a filter picked from either chip.
+    // "All" clears a filter picked from any chip.
     await page.getByTestId("company-filter-all").click();
     await expect(ct.locator("tr[data-row]")).toHaveCount(total);
     await expect(page.getByTestId("company-filter-all")).toHaveCount(0);
@@ -117,9 +133,14 @@ test.describe("desktop (1440)", () => {
 test("F-62 (phone 390): picking a source scrolls its coverage panel into view", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openCoverage(page);
-  // The last seeded source: far enough down the list that its panel, drawn below the
-  // whole table, starts off screen until the pick scrolls it into view.
-  await row(page, "Drive folders").click();
+  // fails_when=the page jumps down to the panel on its first load, or a pick leaves the panel,
+  // drawn below the whole table, off screen. The pick is a row near the top, so the click
+  // itself does not scroll the page down to the panel.
+  await expect(row(page, "Example repo")).toBeVisible();
+  await expect(inspector(page)).toBeAttached();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  await expect(inspector(page)).not.toBeInViewport();
+  await row(page, "Example repo").click();
   await expect(page).toHaveURL(/\?source=/);
   await expect(inspector(page)).toBeInViewport();
 });

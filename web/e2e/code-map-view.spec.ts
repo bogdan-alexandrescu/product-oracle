@@ -71,3 +71,31 @@ test("F-38: a map that will not load says so in its view", async ({ page }) => {
   await expect(view.getByRole("alert")).toContainText("The code map could not be read");
   await expect(view).not.toContainText("Loading");
 });
+
+test("F-38: Try again reads a map that would not load", async ({ page }) => {
+  // fails_when=the failed view has no Try again, or Try again does not read the map again.
+  // The "code-map-unreadable" scenario refuses the first read only.
+  await setKey(page, MOCK_SCENARIO_KEY, "code-map-unreadable");
+  await login(page);
+  await page.goto("/settings/sources");
+  await page.getByTestId(`code-map-${REPO}`).getByRole("button", { name: "See the map" }).click();
+  const view = page.getByRole("dialog", { name: `Code map of ${REPO}` });
+  await expect(view.getByRole("alert")).toContainText("The code map could not be read");
+  await view.getByRole("button", { name: "Try again" }).click();
+  await expect(view.getByRole("heading", { name: "Parts (2)" })).toBeVisible();
+  await expect(view.getByRole("alert")).toHaveCount(0);
+});
+
+test("F-38: a map with nothing in it says so once it has loaded", async ({ page }) => {
+  // fails_when=the view shows no Loading line while the map is read, or shows empty lists
+  // (or nothing) for a map with nothing mapped. The "code-map-empty" scenario reads slowly.
+  await setKey(page, MOCK_SCENARIO_KEY, "code-map-empty");
+  await login(page);
+  await page.goto("/settings/sources");
+  await page.getByTestId(`code-map-${REPO}`).getByRole("button", { name: "See the map" }).click();
+  const view = page.getByRole("dialog", { name: `Code map of ${REPO}` });
+  await expect(view).toContainText("Loading the map…");
+  await expect(view).toContainText("Nothing mapped yet");
+  await expect(view).not.toContainText("Loading");
+  await expect(view.getByRole("heading", { name: /\(\d+\)/ })).toHaveCount(0);
+});

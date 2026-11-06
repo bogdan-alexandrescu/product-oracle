@@ -21,7 +21,8 @@ import { sourceRepos } from "./sources";
 type TechBrief = Schemas["TechBriefOut"];
 type CodeMap = Schemas["CodeMapDetail"];
 /** A stored map: who owns its source, and how many reads it has been building. */
-export type CodeMapRow = CodeMap & { owner_email: string; reads?: number };
+/** read_refused: the "code-map-unreadable" scenario refused one read of it already (a retry reads it). */
+export type CodeMapRow = CodeMap & { owner_email: string; reads?: number; read_refused?: boolean };
 
 export interface EngineeringContext {
   documents: { id: string; slug: string }[];
@@ -33,8 +34,10 @@ export interface EngineeringContext {
   uuid: () => string;
   /** #633 re-review, the "stored-refusals" scenario: the Claude pool refuses every code map run. */
   refuse?: boolean;
-  /** Pass F F-38, the "code-map-unreadable" scenario: reading one map's content fails. */
+  /** Pass F F-38, the "code-map-unreadable" scenario: the first read of a map's content fails. */
   unreadable?: boolean;
+  /** Pass F F-38, the "code-map-empty" scenario: a map's content takes a moment to read. */
+  slowRead?: boolean;
 }
 
 const PRD = "checkout-redesign";
@@ -161,8 +164,9 @@ function docsOnlyMap(repo: string, at: string): Record<string, unknown> {
 }
 
 function mapOut(m: CodeMapRow, me: EngineeringContext["me"], detail: boolean): Schemas["CodeMapOut"] | CodeMap {
-  const { owner_email, reads, content, ...out } = m;
+  const { owner_email, reads, read_refused, content, ...out } = m;
   void reads;
+  void read_refused;
   // As the API: how its run ended read through the refusal rewrite, in the past once it failed.
   const view = { ...out, error: readableRefusal(out.error, out.status === "failed"), mine: owner_email === me.email };
   return detail ? { ...view, content } : view;
@@ -178,13 +182,15 @@ export const CODE_MAP_OVERRUN_SCENARIO = "code-map-overrun";
 /**
  * Pass F F-38: "code-map-shared" seeds the Example repo's map ready and shared with the
  * company, its content as an indexer writes it (parts, API routes, data models);
- * "code-map-unreadable" seeds the same map but reading its content fails.
+ * "code-map-unreadable" seeds the same map but the first read of its content fails;
+ * "code-map-empty" seeds it with nothing mapped, read after a moment.
  */
 export const CODE_MAP_SHARED_SCENARIO = "code-map-shared";
 export const CODE_MAP_UNREADABLE_SCENARIO = "code-map-unreadable";
+export const CODE_MAP_EMPTY_SCENARIO = "code-map-empty";
 
-function sharedMap(ownerEmail: string): CodeMapRow {
-  const content = {
+function sharedMap(ownerEmail: string, empty = false): CodeMapRow {
+  const mapped = {
     version: 1,
     repo: "example-org/example-app",
     commit: "9b1d4e7",
@@ -202,6 +208,7 @@ function sharedMap(ownerEmail: string): CodeMapRow {
     flags: [],
     jobs: [],
   };
+  const content = empty ? { ...mapped, modules: [], apis: [], data_models: [] } : mapped;
   return {
     id: stableUuid("code-map/shared"),
     source_id: "50000000-0000-4000-8000-000000000002",
@@ -214,7 +221,7 @@ function sharedMap(ownerEmail: string): CodeMapRow {
     partial: false,
     as_of: "2026-10-28T09:00:00Z",
     size_bytes: JSON.stringify(content).length,
-    counts: { modules: 2, apis: 2, data_models: 1, flags: 0, jobs: 0 },
+    counts: empty ? { modules: 0, apis: 0, data_models: 0, flags: 0, jobs: 0 } : { modules: 2, apis: 2, data_models: 1, flags: 0, jobs: 0 },
     run_id: stableUuid("code-map/shared/run"),
     run_status: "succeeded",
     error: null,
@@ -230,6 +237,7 @@ function sharedMap(ownerEmail: string): CodeMapRow {
 
 export function seedCodeMaps(scenario: string | null, runId: (status: string) => string | null, ownerEmail: string): CodeMapRow[] {
   if (scenario === CODE_MAP_SHARED_SCENARIO || scenario === CODE_MAP_UNREADABLE_SCENARIO) return [sharedMap(ownerEmail)];
+  if (scenario === CODE_MAP_EMPTY_SCENARIO) return [sharedMap(ownerEmail, true)];
   const runStatus = scenario === CODE_MAP_APPROVAL_SCENARIO ? "awaiting_approval" : scenario === CODE_MAP_OVERRUN_SCENARIO ? "paused_overrun" : null;
   if (!runStatus) return [];
   return [
@@ -339,7 +347,11 @@ async function routeCodeMaps(req: Request, p: string[], q: URLSearchParams, ctx:
   const row = maps.find((m) => m.id === p[2] && visible(m));
   if (!row) return json(404, { detail: "Code map not found" });
   if (!p[3] && req.method === "GET") {
-    if (ctx.unreadable) return json(500, { detail: "The code map could not be read. Try again later." });
+    if (ctx.unreadable && !row.read_refused) {
+      row.read_refused = true;
+      return json(500, { detail: "The code map could not be read. Try again later." });
+    }
+    if (ctx.slowRead) await new Promise((done) => setTimeout(done, 1000));
     advance(row, ctx);
     return json(200, mapOut(row, ctx.me, true));
   }

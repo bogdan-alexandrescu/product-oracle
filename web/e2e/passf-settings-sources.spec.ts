@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "./test";
 
 import { CODE_MAP_APPROVAL_SCENARIO, CODE_MAP_OVERRUN_SCENARIO } from "../lib/api/mock/engineering";
-import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { DRIVE_PICKER_UNSET_SCENARIO, MOCK_ROLE_KEY, MOCK_SCENARIO_KEY, SOURCES_UNREADABLE_SCENARIO } from "../lib/api/mock/server";
+import { fakeGoogle } from "./google-fake";
 import { login } from "./helpers";
 
 /*
@@ -186,5 +187,38 @@ test.describe("desktop", () => {
     await expect(github.getByTestId("disconnect-stops")).toHaveText("Stops syncing: Example repo");
     await github.getByRole("button", { name: "Cancel" }).click();
     await expect(github.getByTestId("disconnect-stops")).toHaveCount(0);
+  });
+
+  test("F-61: when the sources cannot be read, Disconnect says it could not check them", async ({ page }) => {
+    // fails_when=the confirm row says "No source uses it." though the sources were never read.
+    await withScenario(page, SOURCES_UNREADABLE_SCENARIO);
+    await login(page);
+    await page.goto("/settings/connections");
+    const github = page.getByTestId("connection-c0000000-0000-4000-8000-000000000002");
+    await github.getByRole("button", { name: "Disconnect" }).click();
+    await expect(github.getByTestId("disconnect-stops")).toHaveText("Could not check which sources use it.");
+  });
+
+  test("F-63: Drive that will not open says why, and Try again opens it", async ({ page }) => {
+    // fails_when=the failed picker shows no message, no reason behind its (i), no Try again,
+    // or Try again does not bring back Choose from Drive. The "drive-picker-unset" scenario
+    // refuses the picker config once, as the API does when it is not set up.
+    await fakeGoogle(page, [{ id: "1DocRoadmapExample", name: "Roadmap notes" }]);
+    await withScenario(page, DRIVE_PICKER_UNSET_SCENARIO);
+    await login(page);
+    await page.goto("/settings/sources");
+    const form = page.getByRole("form", { name: "Add a source" });
+    await form.getByLabel("Kind").selectOption("google_docs");
+    const failed = form.getByRole("alert");
+    await expect(failed).toContainText("Could not open Google Drive: it is not set up yet.");
+    // The server's words sit behind the (i), not on the line.
+    await expect(failed).not.toContainText("ORACLE_GOOGLE_PICKER_APP_ID");
+    await failed.getByRole("button", { name: "About why Drive did not open" }).click();
+    await expect(page.getByText("Choosing files from Drive is not configured", { exact: false }).filter({ visible: true })).toBeVisible();
+
+    await failed.getByRole("button", { name: "Try again" }).click();
+    await expect(form.getByRole("alert")).toHaveCount(0);
+    await form.getByRole("button", { name: "Choose from Drive" }).click();
+    await expect(form.getByRole("list", { name: "Picked files and folders" }).getByRole("listitem")).toHaveText([/Roadmap notes\s*Google Doc/]);
   });
 });
