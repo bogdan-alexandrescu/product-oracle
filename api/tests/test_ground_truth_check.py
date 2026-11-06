@@ -12,6 +12,9 @@ Test cards (protects / fails_when / no_claim):
   the roadmap), the right fixes, counts per kind, and none on the item and feature that
   keep the rules; fails_when=a kind is missed, miscounted or a clean entry is flagged;
   no_claim=the web, which a later lane draws.
+- test_an_item_on_a_proposed_feature_is_confirmed: protects=a roadmap item linked to a
+  feature a run only proposed offers Confirm it (that feature) and Link to a feature, not
+  Add to Ground Truth; fails_when=it offers to add a feature that already exists.
 - test_words_carry_no_ids: protects=each flag's words are one short plain sentence with no
   id or key; fails_when=a uuid, slug or code shows in the words.
 - test_anyone_who_reads_the_roadmap_reads_it: protects=a viewer reads the check; no
@@ -189,6 +192,14 @@ async def test_each_kind_is_flagged(client):
                              "prd_feature_missing": 2, "no_code": 1, "no_goal": 1,
                              "runs_today_on_roadmap": 1}  # fmt: skip
     assert out["total"] == 9 == len(out["flags"])
+
+
+async def test_an_item_on_a_proposed_feature_is_confirmed(client):
+    w = await world()
+    out = await _check(client, w["ctx"])
+    d = next(f for f in _of(out, "unlinked_item") if f["item"]["id"] == w["items"]["d"])
+    assert _fixes(d) == [("confirm_feature", w["features"]["proposed"]),
+                         ("link_to_feature", w["items"]["d"])]  # fmt: skip
 
 
 async def test_words_carry_no_ids(client):
