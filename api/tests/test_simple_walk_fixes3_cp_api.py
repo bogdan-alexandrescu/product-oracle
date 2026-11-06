@@ -61,7 +61,8 @@ def test_every_op_has_a_plain_sentence():
     assert set(goal_ops) <= set(ops)
     for op in goal_ops:
         assert GOAL in change_words.phrase(op, {"title": GOAL}, {}, {}, ITEM), op
-    item_ops = [op for op in ops if op not in ("edit_line", "add_feature_ask", *goal_ops)
+    item_ops = [op for op in ops if op not in ("edit_line", "set_section_number",
+                                                "add_feature_ask", *goal_ops)
                 and "key_date" not in op]  # fmt: skip
     for op in item_ops:
         assert ITEM in change_words.phrase(op, {}, {}, {}, ITEM), op
