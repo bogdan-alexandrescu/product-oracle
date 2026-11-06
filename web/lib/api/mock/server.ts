@@ -7568,7 +7568,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       if (engineRes?.ok) {
         const rows = (await engineRes.json()) as Schemas["SimpleChangeOut"][];
         const sheet = (await sheetProposals(meetingsDb, meetingsCtx, q.get("status"))).filter((c) => q.get("mine") !== "true" || c.by === me.id);
-        return json(200, [...rows, ...sheet].sort((a, b) => (a.at < b.at ? 1 : -1)));
+        // Newest first; a tie keeps each list's own order (the changes' is the order made, qaC-numfix).
+        return json(200, [...rows, ...sheet].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)));
       }
       if (engineRes) return engineRes;
     }
