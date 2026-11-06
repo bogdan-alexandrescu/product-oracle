@@ -202,13 +202,13 @@ function gate(b: BlockerRow): Gate {
   const unresolved = b.status === "open" || b.status === "mitigating";
   if (b.type === "hard" && b.severity === "critical") {
     return unresolved
-      ? { status: "critical", rationale: `Critical hard blocker '${b.statement}' (${b.key}) is unresolved (${b.status}); resolve it, approve a scoped feasibility experiment or accept the risk` }
-      : { status: "pass", rationale: `'${b.statement}' (${b.key}) is ${b.status.replace("_", " ")}` };
+      ? { status: "critical", rationale: `Critical hard blocker '${b.statement}' is unresolved (${b.status}); resolve it, approve a scoped feasibility experiment or accept the risk` }
+      : { status: "pass", rationale: `'${b.statement}' is ${b.status.replace("_", " ")}` };
   }
   if (unresolved && (b.type === "hard" || b.type === "unknown" || b.severity === "critical")) {
-    return { status: "warning", rationale: `'${b.statement}' (${b.key}) is ${b.status}; research it or decide a path` };
+    return { status: "warning", rationale: `'${b.statement}' is ${b.status}; research it or decide a path` };
   }
-  return { status: "pass", rationale: `'${b.statement}' (${b.key}) does not stop a publish` };
+  return { status: "pass", rationale: `'${b.statement}' does not stop a publish` };
 }
 
 function recommended(options: Option[]): string | null {

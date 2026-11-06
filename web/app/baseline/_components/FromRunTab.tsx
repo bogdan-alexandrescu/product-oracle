@@ -375,7 +375,7 @@ export function FromRunTab({ view, entities, busy, selectedId, act, onOpen }: Pr
   const parentOf = (r: Row) =>
     r.entity.parent_id ? (view.rows.find((x) => x.entity.id === r.entity.parent_id)?.entity ?? entities.find((x) => x.id === r.entity.parent_id)) : undefined;
   return (
-    <div className="flex min-w-0 flex-col gap-3 pb-40">
+    <div className="flex min-w-0 flex-col gap-3">
       <FilterChips<Filter>
         label="Show"
         value={filter}
@@ -411,7 +411,6 @@ export function FromRunTab({ view, entities, busy, selectedId, act, onOpen }: Pr
                       Subgoal of {parentOf(r)!.title}
                     </span>
                   )}
-                  <span className="block font-mono text-sm text-text2">{r.key}</span>
                 </div>
                 <div className="flex min-w-0 flex-1 flex-wrap gap-1" aria-label="Needs you because">
                   {r.reasons.map((x) => (
@@ -438,13 +437,16 @@ export function FromRunTab({ view, entities, busy, selectedId, act, onOpen }: Pr
           </ul>
         </details>
       )}
-      <BottomBar view={view} busy={busy} act={act} />
     </div>
   );
 }
 
-/** Approvers, while the stop waits: the tally, staged look agains, the note, Approve and Send back. */
-function BottomBar({ view, busy, act }: { view: FromRunOut; busy: boolean; act: Act }) {
+/**
+ * Approvers, while the stop waits: the tally, staged look agains, the note, Approve and Send back.
+ * The page puts it last in its column, sticky at the window's foot: it keeps clear of the Ask
+ * dock and leaves its place below the last row (visual QA B-02).
+ */
+export function BottomBar({ view, busy, act }: { view: FromRunOut; busy: boolean; act: Act }) {
   const cp = view.checkpoint;
   const [note, setNote] = useState(cp?.note ?? "");
   const [sheet, setSheet] = useState(false);
@@ -471,7 +473,7 @@ function BottomBar({ view, busy, act }: { view: FromRunOut; busy: boolean; act: 
       role="region"
       aria-label="Decide: Confirm the baseline"
       data-testid="from-run-bar"
-      className="fixed inset-x-0 bottom-0 z-20 flex flex-wrap items-center gap-2 border-t border-line bg-surface px-4 py-3 shadow-lg md:left-auto md:w-[min(100%,56rem)]"
+      className="sticky bottom-0 z-20 flex flex-wrap items-center gap-2 rounded-panel border border-line bg-surface px-4 py-3 shadow-lg max-[600px]:bottom-[var(--phone-tab-bar)]"
     >
       <span className="font-medium" data-testid="bar-tally">
         {s.items - s.need_you} of {s.items} handled · {s.not_decided} not decided
