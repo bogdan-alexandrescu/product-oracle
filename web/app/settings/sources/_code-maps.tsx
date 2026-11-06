@@ -78,7 +78,10 @@ function CodeMapView({ id, repo, onClose }: { id: string; repo: string; onClose:
   return (
     <Dialog title={`Code map of ${repo}`} onClose={onClose} phoneSheet scrollBody testId="code-map-view">
       {q.error ? (
-        <Notice tone="error">{q.error}</Notice>
+        <div className="flex flex-col items-start gap-2">
+          <Notice tone="error">{q.error}</Notice>
+          <Button onClick={() => void q.reload()}>Try again</Button>
+        </div>
       ) : !q.data ? (
         <p className="text-sm text-text2">Loading the map…</p>
       ) : empty ? (
@@ -174,7 +177,7 @@ function CodeMapLine({ repo, map, onChange, sourceId }: { repo: string; map?: Co
           </Chip>
         )}
         {waiting && <InfoTip label={waiting.label}>{waiting.tip}</InfoTip>}
-        {waiting && map?.run_id && (can("approve_run") || can("resume_run")) && (
+        {waiting && map?.run_id && can(map.run_status === "awaiting_approval" ? "approve_run" : "resume_run") && (
           <Link href={`/runs/${map.run_id}`} className="text-sm font-semibold text-accent-ink hover:underline">
             {map.run_status === "awaiting_approval" ? "Open the run to approve" : "Open the run to resume"}
           </Link>

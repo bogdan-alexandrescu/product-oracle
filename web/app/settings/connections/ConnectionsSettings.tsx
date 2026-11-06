@@ -325,7 +325,13 @@ function ConnectionRow({ connection: c, reload }: { connection: Connection; relo
       </div>
       {confirming && (
         <p className="mt-1 break-words text-sm text-warn" data-testid="disconnect-stops">
-          {using.length === 0 ? "No source uses it." : `Stops syncing: ${using.join(", ")}`}
+          {sources.error
+            ? "Could not check which sources use it."
+            : !sources.data
+              ? "Checking which sources use it…"
+              : using.length === 0
+                ? "No source uses it."
+                : `Stops syncing: ${using.join(", ")}`}
         </p>
       )}
       {c.endpoint_url && (

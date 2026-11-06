@@ -59,7 +59,7 @@ export function CountsOnlyTip() {
 }
 
 /** Which members a filter chip keeps; pressing the same one again, or All, clears it. */
-type MemberFilter = "without-source" | "stale" | null;
+type MemberFilter = "with-source" | "without-source" | "stale" | null;
 
 /** Company: per member and source kind, grouped by member. */
 export function CompanyTable({
@@ -77,14 +77,17 @@ export function CompanyTable({
   if (data && data.members_with_sources === 0) return <NoSources>No member has connected a source yet</NoSources>;
   const staleIds = new Set((data?.members ?? []).filter(staleMember).map((m) => m.member.id));
   const stale = staleIds.size;
+  const without = data ? data.members_total - data.members_with_sources : 0;
   const allRows = data ? companyRows(data) : undefined;
   const rows =
     allRows &&
-    (filter === "without-source"
-      ? allRows.filter((r) => r.kind === null)
-      : filter === "stale"
-        ? allRows.filter((r) => staleIds.has(r.member.id))
-        : allRows);
+    (filter === "with-source"
+      ? allRows.filter((r) => r.kind !== null)
+      : filter === "without-source"
+        ? allRows.filter((r) => r.kind === null)
+        : filter === "stale"
+          ? allRows.filter((r) => staleIds.has(r.member.id))
+          : allRows);
   const columns: Column<CompanyRow>[] = [
     {
       key: "kind",
@@ -142,9 +145,16 @@ export function CompanyTable({
     <>
       <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5 max-[600px]:px-3">
         {data && (
-          <button type="button" aria-pressed={filter === "without-source"} onClick={() => toggle("without-source")}>
+          <button type="button" aria-pressed={filter === "with-source"} onClick={() => toggle("with-source")}>
             <Chip kind="acc" data-testid="company-members-chip">
               {data.members_with_sources} of {plural(data.members_total, "member")} have a source
+            </Chip>
+          </button>
+        )}
+        {without > 0 && (
+          <button type="button" aria-pressed={filter === "without-source"} onClick={() => toggle("without-source")}>
+            <Chip kind="na" data-testid="company-without-chip">
+              {without} without a source
             </Chip>
           </button>
         )}

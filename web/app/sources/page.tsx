@@ -234,14 +234,14 @@ function SourcesSearchPage() {
   const endpoint = currentConnection ? kinds.data?.flatMap((k) => k.connections).find((c) => c.id === currentConnection)?.endpoint_url : null;
 
   // F-62: at phone width the inspector sits below the whole list; picking a source scrolls
-  // it into view instead of leaving it off screen. Never on the page's first paint.
+  // it into view instead of leaving it off screen. Never on the page's first load: the first
+  // source shown (none before it) is not a pick.
   const inspectorRef = useRef<HTMLDivElement>(null);
-  const mountedInspector = useRef(false);
+  const shownSource = useRef<string | null>(null);
   useEffect(() => {
-    if (!mountedInspector.current) {
-      mountedInspector.current = true;
-      return;
-    }
+    const before = shownSource.current;
+    shownSource.current = currentId;
+    if (!before || !currentId) return;
     if (isPhone && !results && tab === "mine") inspectorRef.current?.scrollIntoView({ block: "nearest" });
     // Only the picked source moves the panel; a resize or tab change must not.
     // eslint-disable-next-line react-hooks/exhaustive-deps

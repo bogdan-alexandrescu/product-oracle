@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 
 import { Button, Chip, Icon, InfoTip, LinkButton, Notice } from "@/components/ds";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { chooseFromDrive, drivePickerReady, preloadDrivePicker, type PickerConfig } from "@/lib/google-picker";
 import { errorMessage } from "@/lib/use-query";
 
@@ -84,6 +84,17 @@ export function ReconnectToChoose({ className = "" }: { className?: string }) {
   );
 }
 
+/**
+ * Pass F F-63: why Drive's picker did not open, as one short line; the server's own words
+ * (which may name settings) go behind an (i). A failed script load has no words of its own.
+ */
+export function driveLoadFailure(e: unknown): { line: string; why: string } {
+  if (!(e instanceof ApiError)) return { line: "Could not open Google Drive.", why: "" };
+  if (e.status === 404) return { line: "Could not open Google Drive: it is not set up yet.", why: e.message };
+  if (e.status === 403) return { line: "Could not open Google Drive: you do not have access.", why: e.message };
+  return { line: "Could not open Google Drive.", why: e.message };
+}
+
 let configPromise: Promise<PickerConfig> | null = null;
 
 function pickerConfig(): Promise<PickerConfig> {
@@ -124,8 +135,9 @@ export function DriveFiles({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [config, setConfig] = useState<PickerConfig | null>(null);
-  // Pass F F-63: Drive's picker could not load: say so in plain words, with Try again.
-  const [loadFailed, setLoadFailed] = useState(false);
+  // Pass F F-63: Drive's picker could not load: say so in plain words, the server's words
+  // behind an (i), with Try again.
+  const [loadFailed, setLoadFailed] = useState<{ line: string; why: string } | null>(null);
   const [attempt, setAttempt] = useState(0);
   const latest = useRef(files);
   useEffect(() => {
@@ -140,7 +152,7 @@ export function DriveFiles({
         await preloadDrivePicker();
         if (live) setConfig(c);
       })
-      .catch(() => live && setLoadFailed(true));
+      .catch((e) => live && setLoadFailed(driveLoadFailure(e)));
     return () => {
       live = false;
     };
@@ -179,11 +191,16 @@ export function DriveFiles({
       {reconnect ? (
         <ReconnectToChoose />
       ) : loadFailed ? (
-        <div className="flex flex-wrap items-center gap-2" role="alert">
-          <span className="text-sm text-crit">Could not open Google Drive. Try again.</span>
+        <div className="flex flex-wrap items-center gap-1" role="alert">
+          <span className="text-sm text-crit">{loadFailed.line}</span>
+          {loadFailed.why && (
+            <InfoTip label="why Drive did not open" align="start">
+              {loadFailed.why}
+            </InfoTip>
+          )}
           <Button
             onClick={() => {
-              setLoadFailed(false);
+              setLoadFailed(null);
               setAttempt((n) => n + 1);
             }}
           >
