@@ -15,6 +15,7 @@ import { leftOut } from "./decision-notes";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { newCompany, seeded, stableUuid } from "./ids";
+import { mkGoal, mkRoadmapItems, mkSections } from "./mk-prd-look"; // MOCK-HOOK
 import { milestoneOut, routeMilestones, type MockMilestone } from "./simple-milestones";
 import { betSubject, flowFor, type VisualsDb } from "./simple-visuals";
 import type { OnePagerDb } from "./simple-one-pager";
@@ -482,9 +483,15 @@ export function seedSimpleRoadmap(): SimpleDb {
   // A new company: no items yet, so no plan, broken links, priorities or key dates (Detailed says no goals).
   // Nor Oracle's goal suggestions (no goal is confirmed yet: none are made on its own).
   if (newCompany()) return { items: [], ids: {}, own: {}, suggestions: [], decisions: {}, key_dates: {}, goal_suggestions: [], goal_jobs: {}, auto_done: Object.keys(GOALS) };
+  // MOCK-HOOK (mk-prd-look PS1): the invented PRD's features on their own roadmap, under its goal.
+  const mk = mkRoadmapItems(); // MOCK-HOOK
+  const mkG = mkGoal(mkSections().sections); // MOCK-HOOK
+  if (mk.length) ROADMAPS["crew-notes-roadmap"] = { title: `${mk[0].prd_doc.title.replace(/ PRD$/, "")} roadmap`, visibility: "company", prd: mk[0].prd_doc.title, draft: 1 }; // MOCK-HOOK
+  if (mkG) GOALS[mkG.key] = mkG.title; // MOCK-HOOK
   return seeded("simple-roadmap", () => ({
-    items: SEED.map((s) => ({ ...s })),
-    ids: Object.fromEntries(SEED.map((s) => [s.key, stableUuid(`simple-item/${s.key}`)])),
+    items: [...SEED.map((s) => ({ ...s })), ...mk], // MOCK-HOOK (PS1): ...mk
+    ids: Object.fromEntries([...SEED, ...mk].map((s) => [s.key, stableUuid(`simple-item/${s.key}`)])), // MOCK-HOOK (PS1): ...mk
+    ...(mkG ? { goal_edits: { [mkG.key]: { title: mkG.title, metric: mkG.metric, target: mkG.target, due: mkG.due } } } : {}), // MOCK-HOOK
     own: {},
     suggestions: [],
     decisions: { "alert-digest": [{ number: 7, title: "Send the digest weekly or daily?" }] },

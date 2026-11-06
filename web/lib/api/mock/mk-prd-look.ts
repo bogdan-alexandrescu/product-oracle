@@ -286,3 +286,120 @@ export function realStatus(real: RealPrd | undefined, fallback: string): string 
   const s = real?.status?.toLowerCase().replace(/\s+/g, "_");
   return s && ["draft", "in_review", "approved"].includes(s) ? s : fallback;
 }
+
+/* ---- MOCK-HOOK (mk-prd-look PS1, "PRD on the Simple side"): the PRD's one-pager and its features, read from its own sections. ---- */
+type MkSec = { key: string; heading: string; body: string }; // MOCK-HOOK
+type MkBlock = { key: string; title: string; rules: string; kind: "text" | "lines" | "metrics" | "timeline"; who?: string; lines: { id: string; text: string; keys: string[]; metric?: { name: string; from: string; to: string } }[] }; // MOCK-HOOK
+type MkSlice = { key?: string; title: string; horizon: "now" | "next" | "later"; start: string; end: string; estimated: boolean; milestone: [string, string] | null }; // MOCK-HOOK
+
+/** MOCK-HOOK: the mock's first PRD as built (MOCK_PRD_FILE's first PRD when given): its sections, last version. */
+export function mkSections(): { version: number; sections: MkSec[] } {
+  const d = withRealPrd(MK_PRD, realPrds()[0]); // MOCK-HOOK
+  const last = d.versions[d.versions.length - 1]; // MOCK-HOOK
+  return { version: last.number, sections: last.sections.map((s) => ({ key: s.key, heading: s.heading, body: s.body })) }; // MOCK-HOOK
+}
+
+const mdPlain = (t: string) => t.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/`([^`]+)`/g, "$1").replace(/\s+/g, " ").trim(); // MOCK-HOOK
+const bulletsOf = (body: string) => body.split("\n").map((l) => /^\s*(?:[-*+]|\d+[.)])\s+(.*\S)\s*$/.exec(l)?.[1]).filter((x): x is string => !!x); // MOCK-HOOK
+const sentencesOf = (body: string) => body.split(/\n\s*\n/)[0].trim().split(/(?<=[.!?])\s+/).filter(Boolean); // MOCK-HOOK
+function tableOf(body: string): { head: string[]; rows: string[][] } | null {
+  const rows = body.split("\n").filter((l) => /^\s*\|.*\|\s*$/.test(l)).map((l) => l.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim())); // MOCK-HOOK
+  if (rows.length < 3) return null; // MOCK-HOOK
+  return { head: rows[0], rows: rows.slice(2) }; // MOCK-HOOK
+}
+/** MOCK-HOOK: a section by its key, else the first whose heading matches, never an empty one. */
+function findSec(secs: MkSec[], keys: string[], re: RegExp): MkSec | undefined {
+  const full = (s: MkSec) => /[\p{L}\p{N}]/u.test(s.body); // MOCK-HOOK
+  return keys.map((k) => secs.find((s) => s.key === k && full(s))).find(Boolean) ?? secs.find((s) => re.test(s.heading) && full(s)); // MOCK-HOOK
+}
+const CODE = /\b([A-Z]{1,3}-\d+)\b/; // MOCK-HOOK
+/** MOCK-HOOK: the PRD's features: "F-7 Parts used on the job…" from its features list, else its feature sections. */
+export function mkFeatures(secs: MkSec[]): { code: string; name: string; key: string }[] {
+  const list = findSec(secs, ["features"], /prioriti[sz]ed features|^features$/i); // MOCK-HOOK
+  const from = list ? bulletsOf(list.body).map(mdPlain) : secs.filter((s) => /^feature-/.test(s.key)).map((s) => s.heading); // MOCK-HOOK
+  return from.map((t) => /^([A-Z]{1,3}-\d+)[\s:—-]+(.+)$/.exec(t)).filter((m): m is RegExpExecArray => !!m).map((m) => ({ code: m[1], name: m[2].trim(), key: `crew-${m[1].toLowerCase()}` })); // MOCK-HOOK
+}
+const asDay = (t: string) => { const ms = Date.parse(`${t.replace(/,/g, "")} UTC`); return Number.isFinite(ms) ? new Date(ms).toISOString().slice(0, 10) : null; }; // MOCK-HOOK
+const DAY_IN = /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2}, \d{4}\b/; // MOCK-HOOK
+/** MOCK-HOOK: the PRD's milestones: each row of its milestones table with a date and the feature codes it names. */
+export function mkMilestones(secs: MkSec[]): { name: string; day: string; codes: string[] }[] {
+  const s = findSec(secs, ["milestones"], /milestone/i); // MOCK-HOOK
+  const t = s && tableOf(s.body); // MOCK-HOOK
+  if (!t) return []; // MOCK-HOOK
+  return t.rows.map((r) => ({ name: mdPlain(r[0]), day: asDay(r.map((c) => DAY_IN.exec(c)?.[0]).find(Boolean) ?? "") ?? "", codes: r.flatMap((c) => c.match(/\b[A-Z]{1,3}-\d+\b/g) ?? []) })).filter((m) => m.day); // MOCK-HOOK
+}
+const horizonOf = (day: string): "now" | "next" | "later" => (day < "2027-01-01" ? "now" : day < "2027-07-01" ? "next" : "later"); // MOCK-HOOK
+
+/** MOCK-HOOK: the one-pager's blocks, read from the PRD's sections as Oracle's quick read takes them (no regeneration). */
+export function mkOnePagerBlocks(secs: MkSec[]): { blocks: MkBlock[]; slice: MkSlice[] } {
+  const lines = (key: string, texts: string[], keys: string[]) => texts.map((text, i) => ({ id: `${key}-${i + 1}`, text, keys })); // MOCK-HOOK
+  const problem = findSec(secs, ["problem"], /problem/i); // MOCK-HOOK
+  const who = findSec(secs, ["audience"], /who has it|users|personas|audience/i); // MOCK-HOOK
+  const whoNames = who ? bulletsOf(who.body).map((b) => /^\*\*([^*]+)\*\*/.exec(b)?.[1]).filter(Boolean) : []; // MOCK-HOOK
+  const feats = mkFeatures(secs); // MOCK-HOOK
+  const featSec = findSec(secs, ["features"], /prioriti[sz]ed features|^features$/i); // MOCK-HOOK
+  const success = findSec(secs, ["success"], /success|outcome|measure/i); // MOCK-HOOK
+  const st = success && tableOf(success.body); // MOCK-HOOK
+  const toCol = st ? st.head.map((h, i) => [h, i] as const).filter(([h, i]) => i > 1 && !/source|owner/i.test(h)).at(-1)?.[1] ?? 2 : 2; // MOCK-HOOK
+  const metrics = st ? st.rows.slice(0, 4).map((r, i) => ({ id: `outcomes-${i + 1}`, text: `${mdPlain(r[0])} from ${r[1]} to ${r[toCol]}`, keys: [success!.key], metric: { name: mdPlain(r[0]), from: r[1], to: r[toCol] } })) : []; // MOCK-HOOK
+  const non = findSec(secs, ["non-goals"], /non-goals|not doing|out of scope/i); // MOCK-HOOK
+  const risks = findSec(secs, ["top-risks"], /risk/i); // MOCK-HOOK
+  const riskTexts = risks ? (bulletsOf(risks.body).length ? bulletsOf(risks.body) : (tableOf(risks.body)?.rows ?? []).map((r) => r[1] ?? r[0])) : []; // MOCK-HOOK
+  const blocks: MkBlock[] = [
+    { key: "problem", title: "Problem and who has it", rules: "At most 60 words", kind: "text", who: whoNames.length ? whoNames.join(", ") : undefined, lines: problem ? lines("problem", sentencesOf(problem.body).slice(0, 2), [problem.key, ...(who ? [who.key] : [])]) : [] }, // MOCK-HOOK
+    { key: "bets", title: "What we will build", rules: "3-5 bets", kind: "lines", lines: featSec ? lines("bets", bulletsOf(featSec.body).slice(0, 5), [featSec.key]) : [] }, // MOCK-HOOK
+    { key: "outcomes", title: "Outcomes and how we measure them", rules: "2-4 metrics, from → to", kind: "metrics", lines: metrics }, // MOCK-HOOK
+    { key: "not_doing", title: "Not doing", rules: "At most 5 lines", kind: "lines", lines: non ? lines("not_doing", bulletsOf(non.body).slice(0, 5), [non.key]) : [] }, // MOCK-HOOK
+    { key: "risks", title: "Risks and open decisions", rules: "At most 5", kind: "lines", lines: risks ? lines("risks", riskTexts.slice(0, 5).map(mdPlain), [risks.key]) : [] }, // MOCK-HOOK
+    { key: "timeline", title: "Timeline", rules: "The PRD's roadmap slice", kind: "timeline", lines: [] }, // MOCK-HOOK
+  ];
+  void feats; // MOCK-HOOK
+  return { blocks, slice: mkSlice(secs) }; // MOCK-HOOK
+}
+
+/** MOCK-HOOK: the PRD's roadmap slice: each feature a milestone names, from the milestone before it to its date. */
+function mkSlice(secs: MkSec[]): MkSlice[] {
+  const feats = mkFeatures(secs); // MOCK-HOOK
+  const ms = mkMilestones(secs); // MOCK-HOOK
+  return ms.flatMap((m, i) => m.codes.map((code) => { const f = feats.find((x) => x.code === code); return f ? { key: f.key, title: f.name, horizon: horizonOf(m.day), start: i ? ms[i - 1].day : "2026-11-02", end: m.day, estimated: false, milestone: [m.name, m.day] as [string, string] } : null; })).filter((x): x is NonNullable<typeof x> => !!x); // MOCK-HOOK
+}
+
+/** MOCK-HOOK: the PRD's goal (its goal trace's first line): key, name, measure, target, due. */
+export function mkGoal(secs: MkSec[]): { key: string; title: string; metric: string | null; target: string | null; due: string | null } | null {
+  const g = findSec(secs, ["goal-trace"], /goal/i); // MOCK-HOOK
+  const first = g ? mdPlain(bulletsOf(g.body)[0] ?? "") : ""; // MOCK-HOOK
+  const m = /^(?:[A-Z]-\d+\s+)?([^(:;]+)/.exec(first); // MOCK-HOOK
+  if (!m) return null; // MOCK-HOOK
+  const title = m[1].trim(); // MOCK-HOOK
+  const t = /from (\S+) to (\S+)(?: by ([A-Z][a-z]{2} \d{1,2}, \d{4}))?/.exec(first); // MOCK-HOOK
+  return { key: slug(title), title, metric: /measure,\s*([^;]+)/.exec(first)?.[1]?.trim() ?? null, target: t ? `${t[1]} → ${t[2]}` : null, due: t?.[3] ? asDay(t[3]) : null }; // MOCK-HOOK
+}
+
+/** MOCK-HOOK: the PRD's features as roadmap items (its milestones date them; "Depends on F-x" links them). */
+export function mkRoadmapItems(): { key: string; title: string; horizon: "now" | "next" | "later"; roadmap: string; goal?: string; confidence: "medium"; start?: number; end?: number; source?: "accepted"; depends?: string[]; milestone?: { name: string; day: number }; section: string; prd_doc: { id: string; slug: string; title: string } }[] {
+  const { sections } = mkSections(); // MOCK-HOOK
+  const d = withRealPrd(MK_PRD, realPrds()[0]); // MOCK-HOOK
+  const feats = mkFeatures(sections); // MOCK-HOOK
+  const ms = mkMilestones(sections); // MOCK-HOOK
+  const goal = mkGoal(sections); // MOCK-HOOK
+  const win = { now: "2026-10-01", next: "2027-01-01", later: "2027-07-01" }; // MOCK-HOOK
+  const days = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / 86400000); // MOCK-HOOK
+  return feats.map((f) => {
+    const mi = ms.findIndex((m) => m.codes.includes(f.code)); // MOCK-HOOK
+    const m = ms[mi]; // MOCK-HOOK
+    const body = sections.find((s) => s.key === `feature-${f.code.toLowerCase()}`)?.body ?? ""; // MOCK-HOOK
+    const deps = (/Depends on ([^.]+)\./.exec(body)?.[1].match(/\b[A-Z]{1,3}-\d+\b/g) ?? []).map((c) => `crew-${c.toLowerCase()}`).filter((k) => feats.some((x) => x.key === k)); // MOCK-HOOK
+    const h = m ? horizonOf(m.day) : "later"; // MOCK-HOOK
+    const start = m ? (mi ? ms[mi - 1].day : "2026-11-02") : undefined; // MOCK-HOOK
+    return {
+      key: f.key, title: f.name, horizon: h, roadmap: "crew-notes-roadmap", goal: goal?.key, confidence: "medium" as const, // MOCK-HOOK
+      ...(m && start ? { start: Math.max(0, days(win[h], start < win[h] ? win[h] : start)), end: days(win[h], m.day), source: "accepted" as const, milestone: { name: m.name, day: days(win[h], m.day) } } : {}), // MOCK-HOOK
+      ...(deps.length ? { depends: deps } : {}), // MOCK-HOOK
+      section: f.code.toLowerCase(), prd_doc: { id: mkDocId(), slug: d.slug, title: d.title }, // MOCK-HOOK
+    };
+  });
+}
+let mkId = ""; // MOCK-HOOK
+/** MOCK-HOOK: the PRD's document id once the mock has built it (server.ts sets it). */
+export const mkDocId = () => mkId; // MOCK-HOOK
+export const setMkDocId = (id: string) => void (mkId = id); // MOCK-HOOK

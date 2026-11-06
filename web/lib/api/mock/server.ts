@@ -14,7 +14,7 @@ import { MOCK_SCENARIO_KEY, mockUuid, seeded, stableUuid } from "./ids";
 import { addDecisionEntity, addDuplicateProposals, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, addStatusOverlapProposals, addThreeWayConflict, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, readMetricIntoGoal, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
 import { BLOCKER_NARROWED_SCENARIO, documentGate, narrowResolvedBlocker, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
-import { MK_PRD, realPrds, realStatus, withRealPrd } from "./mk-prd-look"; // MOCK-HOOK
+import { MK_PRD, mkOnePagerBlocks, mkSections, realPrds, realStatus, setMkDocId, withRealPrd } from "./mk-prd-look"; // MOCK-HOOK
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
 import { applied, handOver, membersDetailRoute, type MembersContext, type MembersDb } from "./members";
 import type { HandOver } from "@/lib/api/members-types";
@@ -2318,6 +2318,7 @@ function seed(): Db {
     };
     db.documents.push(row);
     docs.set(d.slug, row);
+    if (d0 === MK_PRD) setMkDocId(row.id); // MOCK-HOOK
     for (const v of d.versions) db.versions.push(buildVersion(row, v));
   }
 
@@ -5737,6 +5738,12 @@ async function onePagerOf(db: Db, req: Request, p: string[]): Promise<OnePagerDb
     // one, else its latest, dated by its approval (none: never published).
     const vs = docVersions(db, d);
     const read = [...vs].reverse().find((x) => x.approved_at) ?? vs.at(-1);
+    // MOCK-HOOK (mk-prd-look PS1): the invented PRD's one-pager is read from its own sections (MOCK_PRD_FILE's too).
+    if (d.slug === MK_PRD.slug) { // MOCK-HOOK
+      const mk = mkSections(); // MOCK-HOOK
+      const built = mkOnePagerBlocks(mk.sections); // MOCK-HOOK
+      return (others[d.id] = { ...seedOnePager(), doc: { id: d.id, slug: d.slug, title: d.title }, visuals: db.simple_visuals, flowKey: d.slug, version: vs.at(-1)?.number ?? mk.version, published_at: null, sections: mk.sections, blocks: built.blocks, slice: built.slice }); // MOCK-HOOK
+    } // MOCK-HOOK
     return (others[d.id] = { ...seedOnePager(), doc: { id: d.id, slug: d.slug, title: d.title }, visuals: db.simple_visuals, flowKey: d.slug, ...(read ? { version: read.number, published_at: read.approved_at ?? null } : {}) });
   };
   if (p[1] !== "simple") return seeded;

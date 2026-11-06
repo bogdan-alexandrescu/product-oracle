@@ -25,6 +25,7 @@ import { downloadedNote } from "@/lib/export-note";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { stripRawTokens } from "@/lib/raw-tokens";
+import { Ps1FromPrd, Ps1Lead, Ps1Nav, Ps1Reader, ps1Rest, Ps1Summary, ps1Title, usePs1 } from "@/components/simple/SimpleLook"; // MOCK-HOOK (mk-prd-look PS1)
 
 type View = Schemas["OnePagerOut"];
 type Line = Schemas["OnePagerLine"];
@@ -268,6 +269,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   }, []);
   useLayoutEffect(() => placeNotes(margin.current));
   const phone = usePhone();
+  const look = usePs1(); // MOCK-HOOK (mk-prd-look PS1)
   const { me, can } = useMe();
   const meId = me?.user_id ?? null;
   // one-feature-panel: a feature named on the page (its plan rows, a milestone's parts) opens
@@ -483,6 +485,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
       className={`min-h-screen ${presenting ? "bg-[var(--simple-desk)]" : ""} text-[length:var(--simple-body)] text-text ${presenting ? "fixed inset-0 z-50 overflow-auto" : ""}`}
       data-testid="one-pager"
       data-presenting={presenting ? "true" : undefined}
+      data-ps1={look ?? undefined} // MOCK-HOOK (mk-prd-look PS1)
     >
       {draftShown && v.draft && !presenting && (
         <div role="status" aria-label="Working draft" className="simple-noprint flex flex-wrap items-center gap-3 border-b border-[var(--simple-rule)] bg-[var(--simple-edited)] px-4 py-2 text-base">
@@ -600,14 +603,15 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
           (a working draft, changes in review or margin notes; BGD 2026-10-28), so the people
           Remind sends here can read and decide them. */}
       {/* qa4-simple-decide-26/27: in a meeting the stage pads the page once; the card, its title and actions share one left edge. */}
+      {look === "c" && !presenting && <div className="mx-auto max-w-[1180px] px-4"><Ps1Summary v={v} /></div> /* MOCK-HOOK (mk-prd-look PS1) */}
       {(!planShown || linesShown || sessionId || !!v.draft || v.changes_in_review > 0 || v.notes.length > 0) && (
       <div className={`mx-auto grid gap-6 py-6 ${sessionId && !presenting ? "px-0" : "px-4"} ${presenting ? "max-w-[852px]" : "max-w-[1180px] md:grid-cols-[minmax(0,820px)_var(--simple-margin)]"}`} data-testid="one-pager-columns">
         <article aria-label="One-pager" className={`rounded-md border border-[var(--simple-rule)] bg-[var(--simple-paper)] ${sessionId && !presenting ? "px-4" : "px-6"} py-8 shadow-sm md:col-start-1 md:px-12`}>
           {prdLooks.length > 0 && !presenting && <NeedsALook items={prdLooks} blocks={v.blocks} sections={v.sections} />}
           {v.blocks.filter((b) => !(planShown && b.kind === "timeline")).map((b) => (
             // qa4-simple-prd-21: the first section starts at the card's own top padding.
-            <section key={b.key} aria-label={b.title} className="mt-5 first:mt-0">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-text-faint">{b.title}</h2>
+            <section key={b.key} aria-label={b.title} className="mt-5 first:mt-0" id={look ? `ps1-b-${b.key}` : undefined} data-ps1-block={look ? b.key : undefined /* MOCK-HOOK (mk-prd-look PS1) */}>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-text-faint">{ps1Title(look, b) /* MOCK-HOOK (mk-prd-look PS1) */}</h2>
               {b.kind === "timeline" ? (
                 <div className="mt-2" aria-label="Timeline strip">
                   {v.plan ? <WithFeatureMarks><PlanByMonth plan={v.plan} prd={v.document} legend items={v.timeline.map((t) => ({ ...t, code: codes.get(t.id) }))} /></WithFeatureMarks> : <p className="text-base text-text-faint">No roadmap items yet</p>}
@@ -662,9 +666,10 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
                           <div className="relative flex items-start gap-2">
                             {/* qa-simple-prd-p3-25: on a desktop the Edit's room is kept, so pointing at a line never rewraps it. */}
                             <span className={`min-w-0 flex-1 ${(v.can_edit || v.can_propose) && !presenting ? (v.can_edit ? "md:pr-10" : "md:pr-36") : ""}`}>
+                              {!l.metric && !(presenting && showing === "published" && publishedWords.has(l.id)) && <Ps1Lead look={look} text={l.full ?? l.text} prd={v.document} /> /* MOCK-HOOK (mk-prd-look PS1) */}
                               <button type="button" className="text-left" aria-expanded={open === l.id} onClick={() => { if (!firstTap.current) setOpen(open === l.id ? null : l.id); }} data-testid="one-pager-line-text">
-                                {b.kind === "lines" || b.kind === "metrics" ? "• " : ""}
-                                {l.metric ? (<><span>{l.metric.name}: </span><strong className="tabular-nums">{l.metric.from || "—"} → {l.metric.to}</strong></>) : presenting && showing === "published" && publishedWords.has(l.id) ? publishedWords.get(l.id) : l.full ? (whole.has(l.id) ? l.full : foldAtSentence(l.full, l.text)) : l.text}
+                                {(b.kind === "lines" || b.kind === "metrics") && !(look && !l.metric && /^[A-Z]{1,3}-\d+\s/.test(l.full ?? l.text)) ? "• " : "" /* MOCK-HOOK (mk-prd-look PS1): a feature code leads instead */}
+                                {l.metric ? (<><span>{l.metric.name}: </span><strong className="tabular-nums">{l.metric.from || "—"} → {l.metric.to}</strong></>) : presenting && showing === "published" && publishedWords.has(l.id) ? publishedWords.get(l.id) : ps1Rest(look, l.full ? (whole.has(l.id) ? l.full : foldAtSentence(l.full, l.text)) : l.text) /* MOCK-HOOK (mk-prd-look PS1): ps1Rest */}
                               </button>
                               {l.full && !l.metric && foldAtSentence(l.full, l.text) !== l.full && (
                                 <button
@@ -805,6 +810,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
                   )}
                 </ul>
               )}
+              {look === "d" && !presenting && <Ps1FromPrd v={v} block={b} /> /* MOCK-HOOK (mk-prd-look PS1) */}
             </section>
           ))}
         </article>
@@ -827,6 +833,8 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
               <p className="mt-1 text-base text-text2">No changes yet. An edit or a proposed wording shows here beside its line.</p>
             ))}
         </aside>
+        {look && !presenting && !sessionId && <Ps1Reader v={v} look={look} /> /* MOCK-HOOK (mk-prd-look PS1) */}
+        {(look === "a" || look === "d") && !presenting && !sessionId && <Ps1Nav v={v} look={look} /> /* MOCK-HOOK (mk-prd-look PS1) */}
       </div>
       )}
     </div>

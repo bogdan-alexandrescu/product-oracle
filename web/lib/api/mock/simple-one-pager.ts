@@ -78,7 +78,7 @@ export interface OnePagerDb {
   published_at?: string | null;
   sections: Sec[];
   /** `missing`: Oracle marked the block "Not in the PRD yet" (nothing of the PRD maps to it). */
-  blocks: { key: string; title: string; rules: string; kind: Schemas["OnePagerBlock"]["kind"]; lines: SeedLine[]; missing?: boolean }[];
+  blocks: { key: string; title: string; rules: string; kind: Schemas["OnePagerBlock"]["kind"]; lines: SeedLine[]; missing?: boolean; who?: string }[]; // MOCK-HOOK (PS1): who
   draft: null | {
     id: string; base: number; participants: string[]; lines: Record<string, string>; sections: Record<string, string>;
     status?: "working" | "submitted"; waiting_on?: string[]; reminders?: Record<string, string>;
@@ -560,7 +560,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
   const held = ctx.role === "owner" ? db.held ?? null : null;
   // A build held for owners (oracle.simple.quality) is what owners read; others the last good.
   const blocks: Schemas["OnePagerBlock"][] = (held?.blocks ?? db.blocks).map((b) => ({
-      key: b.key, title: b.title, rules: b.rules, kind: b.kind, who: null, missing: !!b.missing && b.lines.length === 0,
+      key: b.key, title: b.title, rules: b.rules, kind: b.kind, who: b.who ?? null /* MOCK-HOOK (PS1): b.who */, missing: !!b.missing && b.lines.length === 0,
       lines: b.lines.filter((l) => (sees && db.draft?.lines[l.id] !== undefined) || !templateOnly(l.text)).map((l): Line => {
         const edited = sees && db.draft?.lines[l.id] !== undefined;
         // As one_pager._tidy: a stored line's citations resolved, as the PRD's PDF resolves them.
