@@ -1427,6 +1427,19 @@ function seedSimplePlanTwoScenario(): Db {
 }
 
 /**
+ * simple-one-pagers-qa ("one-pager-plan-slices"): "simple-plan" with Usage alerts' own plan
+ * (the plan's features and milestones; only M1 dated) that this reader cannot open, so its
+ * one-pager draws the Timeline strip: Guided setup's items of those features (Public signup,
+ * F-13) under Usage alerts' milestones, the undated M2 a row of its own. Invented data.
+ */
+function seedOnePagerPlanSlicesScenario(): Db {
+  const db = seedSimplePlanScenario();
+  const rm = db.simple_roadmap!;
+  rm.plan = { ...rm.plan!, prds: ["usage-alerts"], hidden: ["usage-alerts"], partly_dated: true };
+  return db;
+}
+
+/**
  * GB2 "goal-buckets-hard" (mk-goalbuckets gb2-a-hard): "simple-plan" (dated) plus its scenario's
  * extra feature (F-22, plan.big_goal) and the goal buckets' Grow partner network goal, which
  * holds all 15 features the plan places only in M2 and M3, four of which also serve Growth.
@@ -3855,6 +3868,8 @@ function load(): Db {
                 ? seedSimplePlanLanesScenario
               : scenario === "simple-plan-two"
                 ? seedSimplePlanTwoScenario
+              : scenario === "one-pager-plan-slices"
+                ? seedOnePagerPlanSlicesScenario
               : scenario === "simple-plan-undated"
                 ? () => {
                     // prd-timeline: Guided setup's plan whose milestones have no dates.

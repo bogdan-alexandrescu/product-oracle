@@ -16,6 +16,11 @@ import { expect, test, type Page } from "./test";
  * fails_when = the Timeline counts only the PRD's own slice, the mark repeats, a code shows
  * bare or bracketed, a failed export says nothing clear, or a viewer is told to change words;
  * no_claim = the API's reads (api/tests/test_simple_one_pager_qa.py).
+ *
+ * Card one-pager-plan-slices: protects = the Timeline strip places the items of the PRD's plan
+ * features, whatever PRD they name, under THIS PRD's milestones (an undated one a row of its
+ * own); fails_when = the strip reads only the PRD's coded sections, ignores its plan's slices
+ * or drops an undated milestone; no_claim = the plan page's own timeline.
  */
 
 async function scenario(page: Page, name: string) {
@@ -94,3 +99,15 @@ for (const phone of [false, true]) {
     });
   }
 }
+
+test("the Usage alerts Timeline strip places its plan's features under its own milestones", async ({ page }) => {
+  await scenario(page, "one-pager-plan-slices");
+  await login(page);
+  await page.goto("/simple/one-pagers/usage-alerts");
+  const strip = page.getByTestId("one-pager").getByLabel("Timeline strip");
+  await expect(strip).toBeVisible();
+  // Guided setup's item of the plan's F-13, under Usage alerts' milestones.
+  await expect(strip.getByText("Public signup").first()).toBeAttached();
+  await expect(strip).toContainText("M1 · Prove it");
+  await expect(strip).toContainText("M2 · Scale volume");
+});
