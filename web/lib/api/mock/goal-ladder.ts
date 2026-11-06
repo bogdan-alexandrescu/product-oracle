@@ -25,7 +25,7 @@ const goal = (id: string, name: string, math: string, current: number | null, ta
 const GOALS = [
   goal("lg1", "Teams stay past their first year", "Teams that renew see the value every week, not once a quarter.", 81, 88, "%", "on_track", 1),
   goal("lg2", "New teams set up in one day", "A new team runs its first real project on the day it signs up.", 2.6, 1, "days", "at_risk", 2),
-  goal("lg3", "Larger teams add paid seats", "Teams over 50 people grow seats without a sales call.", 4, 12, "%", "not_measured", 3),
+  goal("lg3", "Larger teams add paid seats", "Teams over 50 people grow seat revenue without a sales call.", 11200, 20000, "$", "not_measured", 3),
   goal("lg4", "Half the support tickets per team", "People answer their own questions inside the product.", 3.1, 1.5, "", "no_gate", 4),
 ];
 
@@ -51,9 +51,9 @@ const MILESTONES: GmMilestone[] = [
   ms("lm4", "lg2", "Setup time under two days", 2, 2.6, "2026-11-13", "at_risk", "Onboarding"),
   ms("lm5", "lg2", "Imports finish without help", 90, 68, "2026-12-18", "on_track", "Platform"),
   ms("lm6", "lg2", "Setup time one day for new teams", 1, null, "2027-01-29", "not_measured", "Onboarding"),
-  ms("lm7", "lg3", "Seat growth baseline for large teams", 4, 4, "2026-12-04", "met", "Billing"),
+  ms("lm7", "lg3", "Seat revenue baseline for large teams", 10000, 10000, "2026-12-04", "met", "Billing"),
   ms("lm8", "lg3", "Self-serve seat changes for every plan", null, null, null, "no_gate", "Billing"),
-  ms("lm9", "lg3", "Seat growth at 12% a quarter", 12, null, "2027-03-19", "not_measured", "Reports"),
+  ms("lm9", "lg3", "Seat revenue of $20,000 per month", 20000, null, "2027-03-19", "not_measured", "Reports"),
   ms("lm10", "lg4", "Ticket baseline by topic", 3.1, 3.1, "2026-11-27", "missed", "Support"),
   ms("lm11", "lg4", "Help answers inside every screen", 100, 40, "2027-01-15", "on_track", "Support"),
   ms("lm12", "lg4", "Tickets per team down to 1.5", null, null, "2027-03-12", "no_gate", "Onboarding"),
