@@ -198,7 +198,7 @@ export function BuildBaselineSheet({
             Build the Ground Truth
           </h2>
           {/* F-30: what a build does, in the title's (i). */}
-          <InfoTip label="building the baseline" align="start" side="bottom">
+          <InfoTip label="building the Ground Truth" align="start" side="bottom">
             Oracle reads your connected sources and proposes goals, products, features, constraints and evidence. Nothing is confirmed until you
             review it.
           </InfoTip>

@@ -673,7 +673,7 @@ export default function BaselinePage() {
           )}
           {tab === "graph" && (
             <>
-              {graph.error && <LoadError what="the baseline" error={graph.error} onRetry={() => void graph.reload()} />}
+              {graph.error && <LoadError what="the Ground Truth" error={graph.error} onRetry={() => void graph.reload()} />}
               {graph.loading && !graph.data && <Loading />}
               {graph.data && (
                 <GraphTab
@@ -699,7 +699,7 @@ export default function BaselinePage() {
           )}
           {tab === "items" && (
             <>
-              {graph.error && <LoadError what="the baseline" error={graph.error} onRetry={() => void graph.reload()} />}
+              {graph.error && <LoadError what="the Ground Truth" error={graph.error} onRetry={() => void graph.reload()} />}
               {graph.loading && !graph.data && <Loading />}
               {graph.data && (
                 <ItemsTab

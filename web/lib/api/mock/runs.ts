@@ -1532,7 +1532,7 @@ function recheckOrderGoals(ctx: Pick<RunsContext, "db" | "goalKeys" | "goalTitle
       if (goals.has(String(g.goal)) || g.contribution === 0) continue;
       const title = ctx.goalTitle?.(String(g.goal));
       const message = title
-          ? `${row.title} serves the goal ${title}, which was rejected after the order was checked: the run must name a goal of the baseline`
+          ? `${row.title} serves the goal ${title}, which was rejected after the order was checked: the run must name a goal of the Ground Truth`
           : `${row.title} names the goal ${g.goal}, which is not a goal in the baseline: the run must name one that is`;
       if (said.has(message)) continue;
       said.add(message);

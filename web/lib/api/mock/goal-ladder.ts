@@ -45,7 +45,7 @@ function ms(id: string, g: string, name: string, threshold: number | null, curre
 }
 
 const MILESTONES: GmMilestone[] = [
-  ms("lm1", "lg1", "Weekly active teams baseline set", 74, 74, "2026-11-13", "on_track", "Reports"),
+  ms("lm1", "lg1", "Weekly active teams first measured", 74, 74, "2026-11-13", "on_track", "Reports"),
   ms("lm2", "lg1", "Renewal rate at 85% for spring renewals", 85, 81, "2027-02-26", "at_risk", "Support"),
   ms("lm3", "lg1", "Mobile check-ins weekly for half of teams", 50, null, "2027-03-26", "not_measured", "Mobile"),
   ms("lm4", "lg2", "Setup time under two days", 2, 2.6, "2026-11-13", "at_risk", "Onboarding"),
@@ -54,7 +54,7 @@ const MILESTONES: GmMilestone[] = [
   ms("lm7", "lg3", "Seat growth baseline for large teams", 4, 4, "2026-12-04", "met", "Billing"),
   ms("lm8", "lg3", "Self-serve seat changes for every plan", null, null, null, "no_gate", "Billing"),
   ms("lm9", "lg3", "Seat growth at 12% a quarter", 12, null, "2027-03-19", "not_measured", "Reports"),
-  ms("lm10", "lg4", "Ticket baseline by topic", 3.1, 3.1, "2026-11-27", "missed", "Support"),
+  ms("lm10", "lg4", "Ticket volume measured by topic", 3.1, 3.1, "2026-11-27", "missed", "Support"),
   ms("lm11", "lg4", "Help answers inside every screen", 100, 40, "2027-01-15", "on_track", "Support"),
   ms("lm12", "lg4", "Tickets per team down to 1.5", null, null, "2027-03-12", "no_gate", "Onboarding"),
 ];
@@ -99,7 +99,7 @@ const ROWS: Row[] = [
   ["Admin audit trail for seat and role changes", "g3", "m9", "Platform", "planned", null, null, []],
   ["Volume pricing shown in the product for teams over 50", "g3", "m9", "Billing", "planned", null, null, []],
   ["Ticket topics tagged by the help desk each day", "g4", "m10", "Support", "done", "2026-09-14", "2026-10-30", []],
-  ["Ticket baseline report by topic and team size", "g4", "m10", "Reports", "in_progress", "2026-11-02", "2026-11-27", [37, 2]],
+  ["Ticket volume report by topic and team size", "g4", "m10", "Reports", "in_progress", "2026-11-02", "2026-11-27", [37, 2]],
   ["Help panel that opens beside the screen you are on", "g4", "m11", "Support", "in_progress", "2026-10-26", "2026-12-18", [37]],
   ["Answers written for the twenty most asked questions", "g4", "m11", "Support", "planned", "2026-11-16", "2027-01-08", [37]],
   ["Search across help answers, projects and comments", "g4", "m11", "Support", "planned", "2026-12-07", "2027-01-15", [39]],
