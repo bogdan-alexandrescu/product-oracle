@@ -342,7 +342,9 @@ export function SectionRows({ secs, onChange }: { secs: Sec[]; onChange: (secs: 
       ))}
       <div className="grid grid-cols-[minmax(0,14rem)_minmax(0,1fr)] items-center gap-2 rounded-lg border border-dashed border-line p-2 text-[15px] text-text2 max-[700px]:grid-cols-1">
         <span className="px-3 font-semibold text-text">Sources and data points</span>
-        <span className="px-3">Always last: the only place for sources, numbers and evidence.</span>
+        <span className="px-3">
+          <InfoTip label="sources and data points">Always last: the only place for sources, numbers and evidence.</InfoTip>
+        </span>
       </div>
       <span>
         <Button icon="plus" onClick={() => onChange([...secs, { ...BLANK_SEC }])}>

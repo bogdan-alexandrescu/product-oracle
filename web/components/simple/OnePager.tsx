@@ -759,7 +759,20 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
                         {b.kind === "metrics" && editing !== l.id && (
                           // 2026-10-30: how the outcome is measured, from the PRD (what is counted and where).
                           <p className="pl-3 text-sm text-text2" data-testid="outcome-measure">
-                            {l.measure ? `counted as: ${l.measure}${l.measure_source ? ` · from ${l.measure_source}` : ""}` : "How it is measured is not in the PRD yet"}
+                            {/* The measure and its source are the PRD's own words (data-user-content: the prose guard does not count them). */}
+                            {l.measure ? (
+                              <>
+                                counted as: <span data-user-content>{l.measure}</span>
+                                {l.measure_source && (
+                                  <>
+                                    {" · from "}
+                                    <span data-user-content>{l.measure_source}</span>
+                                  </>
+                                )}
+                              </>
+                            ) : (
+                              "How it is measured is not in the PRD yet"
+                            )}
                           </p>
                         )}
                         {l.footnotes.length > 0 && editing !== l.id && (
