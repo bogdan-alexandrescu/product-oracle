@@ -427,3 +427,18 @@ async def test_a_part_of_a_feature_in_trash(client):
     assert p["part_path"] == [w.ref("a", in_trash=True)]
     assert p["start"] == shown["start"] and p["end"] == shown["end"]
     assert p["estimated"] is False
+
+
+async def test_priorities_rows_name_the_parent(client):
+    """Priorities' ranked list and Goal buckets read a part's parent off its row (part_of, by
+    its display code and name); a feature of its own reads none."""
+    from tests.test_simple_priorities_api import World, rows_by_code
+
+    w = await World(await make_people()).build()
+    r = await w.change(client, "decider", "set_parent", "pay-2", {"parent_key": None},
+                       {"parent_key": "pay-1"})  # fmt: skip
+    assert r.status_code == 201 and r.json()["change"]["status"] == "applied", r.text
+    rows = rows_by_code(await w.read(client))
+    assert rows["pay-2"]["part_of"] == {"id": w.ids["pay-1"], "code": "", "title": "Pay-1",
+                                        "cut": False, "in_trash": False}  # fmt: skip
+    assert rows["pay-1"]["part_of"] is None
