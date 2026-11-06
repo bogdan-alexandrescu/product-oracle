@@ -28,7 +28,7 @@ async def seed_entities(tenant_id: uuid.UUID) -> list[str]:
                 body=BODY,
                 attrs={"note": "x" * 200},
                 status="confirmed",
-                origin="human",
+                origin="user",
             )
             s.add(e)
             await s.flush()

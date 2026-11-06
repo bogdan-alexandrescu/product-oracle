@@ -21605,6 +21605,68 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/runs/{run_id}/segments/{seq}/retry": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Retry Segment",
+        "description": "Retry a failed run from the segment it stopped at (``segments[].can_retry``; why it\nstopped is ``segments[].error``): that segment is submitted again with the run's\napproved inputs; the segments and approved stops before it are kept, not run again.\nAn owner or the approver who created the run. 409 when the run is not failed at that\nsegment. Audited.",
+        "operationId": "retry_segment",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "seq",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Seq"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
     "/v1/runs/{run_id}/segments/{seq}/retry-draft-import": {
       "post": {
         "tags": [
@@ -118495,6 +118557,11 @@
           "can_retry_draft_import": {
             "type": "boolean",
             "title": "Can Retry Draft Import",
+            "default": false
+          },
+          "can_retry": {
+            "type": "boolean",
+            "title": "Can Retry",
             "default": false
           },
           "draft_retry_refused": {

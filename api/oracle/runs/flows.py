@@ -43,6 +43,8 @@ MCP_TOOLS = {
     "search": "full-text search over the sources you may read, ranked by relevance x "
     "confidence, each hit with its confidence and low_confidence flag",
     "get_source_item": "one source item at the run's pinned snapshot, with its confidence",
+    "list_entities": "baseline entities a page at a time, without bodies unless asked; filter "
+    "by ids (this PRD's features), keys, type, status or q, choose fields",
     "get_baseline": "the baseline graph: goals, products, features, edges, evidence",
     "trace_feature": "features traced to goals; those serving no confirmed goal flagged",
     "get_document": "a document (PRD or roadmap) and its versions, with their provenance",
@@ -736,6 +738,7 @@ FLOWS: dict[str, FlowDef] = {
                     + UNKNOWN_IS_WORK_DRAFT,
                     tools=(
                         "get_prd_scope",
+                        "list_entities",
                         "get_baseline",
                         "get_strategy_stack",
                         "get_document",
@@ -1782,6 +1785,24 @@ def discussion_lines(ctx: PromptContext) -> list[str]:
     return lines if len(lines) > 1 else []
 
 
+# Nov 6: a PRD writer that read every entity, whole intake summaries and whole earlier
+# files went past SwarmCloud's 200,000-token session and its step failed. The roles that
+# read and write at length are told to keep their session small.
+LONG_ROLES = frozenset({"writer", "analyst", "researcher", "critic", "architect"})
+CONTEXT_ROOM = (
+    "Keep your session small: it has a hard limit of 200,000 tokens, and past it your "
+    "step fails. Fetch only this PRD's entities: read the scope first (get_prd_scope), then "
+    "list_entities with ids=[the scope's feature and requirement ids] and only the fields "
+    "you need (body only when you need it; page with offset). Never read the whole "
+    "baseline or every entity. Read get_intake_summary as its outline, then one section at "
+    "a time. Search returns snippets; read a whole item only when you cite it. Write any "
+    "large read (a previous PRD version, a long earlier file, many search hits) to a file "
+    "in your working folder and grep it instead of keeping it in your context; read long "
+    "files a page at a time (offset). Write prd.md section by section: append each section "
+    "to the file as you finish it, never the whole draft in one go."
+)
+
+
 def step_prompt(
     flow: FlowDef,
     segment: SegmentDef,
@@ -1869,6 +1890,8 @@ def step_prompt(
         )
     lines += [f"- {t}: {MCP_TOOLS[t]}" for t in segment.tools]
     lines += [f"- {t}: {MCP_TOOLS[t]}" for t in segment.role_tools.get(role, ())]
+    if role in LONG_ROLES and ctx.mcp_reachable:
+        lines += ["", CONTEXT_ROOM]
     if "get_autonomy" in segment.tools:
         # H11: the server enforces the levels; the agent is told so it does not waste work.
         lines.append(AUTONOMY_SENTENCE)

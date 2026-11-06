@@ -777,6 +777,9 @@ class SegmentOut(BaseModel):
     # kept, and either its review is still open and I have the review's approver role or
     # above, or the run finished with no version imported and I am an owner.
     can_retry_draft_import: bool = False
+    # A failed run's failed segment, for an owner or the approver who created the run:
+    # Retry queues it again from its stop, the approvals before it kept (Nov 6).
+    can_retry: bool = False
     # Why a refused draft stays refused on a finished run that imported a version from
     # another segment or attempt, in plain words, offering a new run (owner, 2026-10-25).
     draft_retry_refused: str | None = None
