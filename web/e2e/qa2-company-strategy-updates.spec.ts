@@ -55,7 +55,7 @@ test.describe("desktop", () => {
     await openTab(page, "strategy");
     const empty = strategyPage(page).getByTestId("stack-empty");
     await expect(empty).toContainText("confirmed goal");
-    await expect(empty).toContainText("once a product strategy is approved");
+    await expect(empty).toContainText("once an owner approves a product strategy");
     await expect(page.getByText("Nothing in the stack yet")).toHaveCount(0);
     const drift = strategyPage(page).getByTestId("drift-list");
     await expect(drift.getByTestId("drift-empty")).toContainText("No open findings");

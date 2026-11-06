@@ -90,6 +90,9 @@ test("pass F: the strategy card's counts open the stack line, and a goalless foc
   await expect(root.getByTestId("stack-inspector").getByRole("heading").first()).toContainText("Grow paid conversion");
   await expect(team.getByRole("link", { name: "Add a goal" })).toBeVisible();
   await expect(card.getByTestId("stop-row").getByRole("link", { name: "2 items still planned" })).toHaveAttribute("href", "/plan");
+  await team.getByRole("link", { name: "Add a goal" }).click();
+  await expect(page).toHaveURL(/\/baseline\?add=goal$/);
+  await expect(page.getByRole("dialog", { name: "Add an item" })).toBeVisible();
 });
 
 // protects=F-43 and F-46: the stack details let the vision line wrap and give a finding's
