@@ -62,7 +62,9 @@ test("qa-plan-56: the report's totals match the items it lists, and say where th
   // only), so the figure is at most what the tracks list, never more (fix4).
   expect(await figure("Now items with no engineering ticket")).toBeLessThanOrEqual(untracked);
   expect(await figure("Now items with no engineering ticket")).toBeGreaterThan(0);
-  await expect(page.getByTestId("report-figures-note").filter({ visible: true })).toContainText("listed under each track's Needs attention");
+  // Where the items behind the figures are listed sits behind the figures' (i) (no visible explanation prose).
+  await page.getByTestId("report-figures-note").filter({ visible: true }).click();
+  await expect(page.getByRole("tooltip").filter({ visible: true })).toContainText("listed under each track's Needs attention");
 });
 
 test("qa-plan-23: the alignment reports have their own Plan tab, selected on the list and on a report", async ({ page }) => {
