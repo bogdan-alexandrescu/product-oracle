@@ -40,10 +40,11 @@ A count in a section's HEADING (owner, Nov 5, 'Fix the heading too'), on the inv
   fails_when=the import drops the heading or changes the key.
 """
 
+import uuid
 from types import SimpleNamespace
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from oracle.docs.models import DocumentVersion, Section
 from oracle.simple import change_words, one_pager, one_pager_checks
@@ -349,6 +350,27 @@ async def test_fixes_in_the_draft_are_listed_with_undo(client):
     after = await get(client, ctx, "owner", DOC)
     assert [x["change_id"] for x in after["fixed"]] == [two.json()["change"]["id"]]
     assert look(after, COUNT) is not None
+
+
+async def test_fixes_are_listed_in_the_order_they_were_made(client):
+    # Two fixes made in the same instant (a frozen clock, or one second for a person) list
+    # in the order they were made, not by their random ids: the later one is given the
+    # smaller id here, so an order that falls back to the id lists them the wrong way.
+    ctx = await clear_world(client)
+    view = await get(client, ctx, "owner", DOC)
+    one = (await fix(client, ctx, "owner", look(view, COUNT)["fix"])).json()["change"]
+    two = (await fix(client, ctx, "owner", look(view, PER)["fix"])).json()["change"]
+    first, second = uuid.UUID(int=2**128 - 1), uuid.UUID(int=1)
+    async with tenant_session(ctx.tenant_id) as s:
+        at = await s.scalar(select(SimpleChange.at).where(SimpleChange.id == one["id"]))
+        for old, new in ((one["id"], first), (two["id"], second)):
+            await s.execute(
+                update(SimpleChange).where(SimpleChange.id == old).values(id=new, at=at)
+            )
+        await s.commit()
+    mine = await get(client, ctx, "owner", DOC)
+    assert [x["change_id"] for x in mine["fixed"]] == [str(first), str(second)]
+    assert mine["fixed"][0]["words"] == "Fixed: set to 6 in “Not this quarter”"
 
 
 async def test_a_heading_fix_is_listed(client):
