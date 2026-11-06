@@ -2546,7 +2546,7 @@ function ensureReviewV2(db: Db): ReviewV2Db {
   // MOCK-HOOK (mk-prd-look): every section of the invented PRD has an owner.
   const mkDoc = db.documents.find((d) => d.slug === MK_PRD.slug); // MOCK-HOOK
   const mkV = mkDoc ? docVersions(db, mkDoc).pop() : undefined; // MOCK-HOOK
-  const mkPeople = db.members.filter((m) => m.role !== "viewer"); // MOCK-HOOK
+  const mkPeople = db.members.filter((m) => m.role !== "viewer" && m.status === "active"); // MOCK-HOOK
   if (mkDoc && mkV && mkPeople.length) // MOCK-HOOK
     mkV.sections.forEach((x, i) => { // MOCK-HOOK
       if (db.review_v2!.assignments.some((a) => a.document_id === mkDoc.id && a.section_key === x.section_key)) return; // MOCK-HOOK

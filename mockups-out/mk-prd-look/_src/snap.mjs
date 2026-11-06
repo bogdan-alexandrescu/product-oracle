@@ -52,7 +52,7 @@ function frames(o) {
 const COST = {
   a: { query: `&sec=feature-f-4` }, // a section's review bar shows only once it is the current one
   b: { query: `&sec=feature-f-9` }, // cards take more height: fewer sections on a screen
-  c: { query: `&sec=summary` , opts: { scrollTo: HARD } }, // a folded section: one more click to read it
+  c: { query: `&sec=summary`, opts: { scrollTo: "feature-f-3" } }, // folded sections: one more click to read each
   d: { query: `&sec=${HARD}` }, // the margin takes width: the wide table scrolls at 1440
   e: { query: `&sec=${HARD}`, opts: { scrollBy: 700 } }, // the sheet is narrow: the wide table wraps tall
 };

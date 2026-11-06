@@ -211,7 +211,7 @@ export function PrdLook({
   const one = (s: SectionOut) => {
     const isCurrent = s.section_key === current;
     const long = (s.body_text?.length ?? 0) > 900;
-    const folded = look === "c" && long && !isCurrent && !unfolded.has(s.section_key);
+    const folded = look === "c" && long && !unfolded.has(s.section_key);
     if (s.level <= 1 && look !== "c" && s !== lead)
       return (
         <div key={s.id} data-pt1-sec={s.section_key} className="pt1-divider" id={`s-${s.section_key}`}>

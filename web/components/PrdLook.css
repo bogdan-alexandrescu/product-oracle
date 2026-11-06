@@ -5,6 +5,7 @@
 .pt1-main { min-width: 0; } /* MOCK-HOOK */
 .pt1-side { min-width: 0; position: sticky; top: 16px; max-height: calc(100dvh - 32px); display: flex; flex-direction: column; } /* MOCK-HOOK */
 .pt1-sec { position: relative; } /* MOCK-HOOK */
+:is([data-pt1="b"], [data-pt1="c"], [data-pt1="e"]) [data-pt1-sec] { scroll-margin-top: 60px; } /* MOCK-HOOK */
 .pt1-num { font-variant-numeric: tabular-nums; color: var(--text2); margin-right: 0.5em; font-weight: 600; } /* MOCK-HOOK */
 .pt1-dot { width: 8px; height: 8px; border-radius: 99px; flex: none; background: var(--line-strong); opacity: 0.45; } /* MOCK-HOOK */
 .pt1-dot-pass { background: var(--pass, #15803d); opacity: 1; } /* MOCK-HOOK */
@@ -74,7 +75,7 @@
 [data-pt1="b"] .pt1-bar { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 13px; color: var(--text2); } /* MOCK-HOOK */
 [data-pt1="b"] .pt1-sec > section > .doc-body, [data-pt1="b"] .pt1-sec > section > :not([data-pt1-head]):not(.pt1-meta) { margin-left: 16px; margin-right: 16px; } /* MOCK-HOOK */
 [data-pt1="b"] .pt1-sec[data-current] > section { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-mid); } /* MOCK-HOOK */
-[data-pt1="b"] .named-code { text-decoration: none; background: var(--surface2); border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; font-weight: 500; } /* MOCK-HOOK */
+[data-pt1="b"] .named-code { text-decoration: none; background: var(--accent-soft); color: var(--accent-ink); border-radius: 5px; padding: 1px 5px; font-weight: 600; font-size: 0.92em; } /* MOCK-HOOK */
 [data-pt1="b"] .pt1-sec > section:is([data-section-key="requirements"], [data-section-key^="feature-"]) .doc-body ul:has(.named-code) { list-style: none; padding-left: 0; border: 1px solid var(--line); border-radius: 8px; } /* MOCK-HOOK */
 [data-pt1="b"] .pt1-sec > section:is([data-section-key="requirements"], [data-section-key^="feature-"]) .doc-body ul:has(.named-code) > li { position: relative; padding: 8px 12px 8px 40px; margin: 0; border-top: 1px solid var(--line); } /* MOCK-HOOK */
 [data-pt1="b"] .pt1-sec > section:is([data-section-key="requirements"], [data-section-key^="feature-"]) .doc-body ul:has(.named-code) > li:first-child { border-top: 0; } /* MOCK-HOOK */
