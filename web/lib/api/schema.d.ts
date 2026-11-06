@@ -12391,6 +12391,73 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/roadmap/milestones/carry-over": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Carry Over Old Milestones
+         * @description Bring old milestones over: copy every goal milestone of the older per-PRD roadmaps
+         *     (history while the company roadmap exists) onto the company roadmap, same name, date
+         *     and goal, its items re-pointed to the company roadmap's (same feature, else same item
+         *     key), each old one linked to its copy. One none of whose items are left is not copied:
+         *     it stays in ``old_milestones.needs_call`` for Keep or Drop. Run once by an owner (a
+         *     second run copies nothing), never on a read or a deploy.
+         */
+        post: operations["carry_over_old_milestones"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/milestones/{milestone_id}/keep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Keep Old Milestone
+         * @description Keep an old milestone with no items left: copied onto the company roadmap with no
+         *     items, linked. One not waiting on a call is 409.
+         */
+        post: operations["keep_old_milestone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/milestones/{milestone_id}/drop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Drop Old Milestone
+         * @description Drop an old milestone with no items left: it stays behind on its old roadmap and
+         *     leaves the list. One not waiting on a call is 409.
+         */
+        post: operations["drop_old_milestone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/roadmap/milestones/{milestone_id}": {
         parameters: {
             query?: never;
@@ -40699,6 +40766,7 @@ export interface components {
              * @default false
              */
             can_change: boolean;
+            carried_from?: components["schemas"]["SimpleDocRef"] | null;
         };
         /** SimpleGoalMilestoneIn */
         SimpleGoalMilestoneIn: {
@@ -41490,6 +41558,70 @@ export interface components {
             document: components["schemas"]["SimpleDocRef"];
             /** Reason */
             reason: string;
+        };
+        /**
+         * SimpleOldMilestone
+         * @description old-milestones (owner, Nov 4): a goal milestone still on an older per-PRD roadmap
+         *     (history) that is not on the company roadmap yet. ``items``: the titles of the items
+         *     it gates that are on the company roadmap (it would gate those there); none left: it
+         *     waits on an owner's Keep or Drop.
+         */
+        SimpleOldMilestone: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Date */
+            date?: string | null;
+            /** Goal Id */
+            goal_id?: string | null;
+            /** Goal Title */
+            goal_title?: string | null;
+            from_roadmap: components["schemas"]["SimpleDocRef"];
+            /**
+             * Items
+             * @default []
+             */
+            items: string[];
+        };
+        /**
+         * SimpleOldMilestones
+         * @description What "Bring old milestones over" would do: ``moves`` are copied (items re-pointed),
+         *     ``needs_call`` have no items left and wait on Keep or Drop. An owner's alone: anyone
+         *     else reads both empty and ``can_act`` false.
+         */
+        SimpleOldMilestones: {
+            /**
+             * Can Act
+             * @default false
+             */
+            can_act: boolean;
+            /**
+             * Moves
+             * @default []
+             */
+            moves: components["schemas"]["SimpleOldMilestone"][];
+            /**
+             * Needs Call
+             * @default []
+             */
+            needs_call: components["schemas"]["SimpleOldMilestone"][];
+        };
+        /**
+         * SimpleOldMilestonesResult
+         * @description After a carry-over, Keep or Drop: the ids of the company roadmap's new milestones
+         *     and what is left.
+         */
+        SimpleOldMilestonesResult: {
+            /**
+             * Carried
+             * @default []
+             */
+            carried: string[];
+            old_milestones: components["schemas"]["SimpleOldMilestones"];
         };
         /**
          * SimpleOpenDecision
@@ -42355,6 +42487,14 @@ export interface components {
              * @default []
              */
             goal_milestones: components["schemas"]["SimpleGoalMilestone"][];
+            /**
+             * @default {
+             *       "can_act": false,
+             *       "moves": [],
+             *       "needs_call": []
+             *     }
+             */
+            old_milestones: components["schemas"]["SimpleOldMilestones"];
             /**
              * Changes In Review
              * @default 0
@@ -72285,6 +72425,88 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimpleGoalMilestone"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    carry_over_old_milestones: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleOldMilestonesResult"];
+                };
+            };
+        };
+    };
+    keep_old_milestone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                milestone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleOldMilestonesResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    drop_old_milestone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                milestone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleOldMilestonesResult"];
                 };
             };
             /** @description Validation Error */
