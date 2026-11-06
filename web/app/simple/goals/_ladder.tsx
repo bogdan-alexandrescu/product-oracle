@@ -687,7 +687,8 @@ function FeatureCard({ x, v, ms, compact }: { x: LdFeature; v: V; ms?: string; c
       </span>
       <span className={`flex flex-wrap items-center gap-x-1.5 ${compact ? "text-[12px]" : "text-[13px]"} leading-5`}>
         {status && <b className={WORK[status]}>{statusWord(status)}</b>}
-        <span className="text-text2">· {span(x.item?.start.date, x.item?.end.date)}</span>
+        {/* Dates only Oracle's window gives (no one set them) read as the frames: No dates yet. */}
+        <span className="text-text2">· {x.item?.estimated ? "No dates yet" : span(x.item?.start.date, x.item?.end.date)}</span>
         {(x.waits.length > 0 || x.wanted.length > 0) && (
           <span data-testid="ld-counts" className="ml-auto flex gap-1.5 text-text2" title={`Waits on ${x.waits.length} · ${x.wanted.length} wait on it`}>
             {x.waits.length > 0 && <span>←{x.waits.length}</span>}
