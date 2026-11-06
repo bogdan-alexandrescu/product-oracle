@@ -497,7 +497,7 @@ export function feedbackNeeds(
         <Chip kind="now">Draft {f.staged_for_version}</Chip>
       ) : state === "declined" ? (
         <span className="truncate text-text2" title={f.resolution_note ?? undefined} data-testid="decline-note">
-          {f.resolution_note ?? "Declined"}
+          {f.resolution_note ? <span data-user-content>{f.resolution_note}</span> : "Declined"}
         </span>
       ) : state === "done" ? (
         <Chip kind="pass">{f.addressed_in_version ? `v${f.addressed_in_version}` : "Closed"}</Chip>
@@ -839,7 +839,7 @@ export function discussionNeeds(inbox: InboxOut, seenBefore: string | null | und
       return {
         ...base,
         item: (
-          <span className="min-w-0 truncate" title={r.excerpt ?? ""}>
+          <span className="min-w-0 truncate" title={r.excerpt ?? ""} data-user-content>
             “{r.excerpt ?? ""}”
           </span>
         ),

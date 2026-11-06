@@ -446,7 +446,7 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
               const n = /^D-(\d+):/.exec(x)?.[1];
               const anchor = n && !rowNumbers.has(Number(n)) ? `d-${n}` : undefined;
               return (
-                <li key={x} id={anchor} className={anchor ? "target:bg-[var(--simple-edited)]" : undefined}>
+                <li key={x} id={anchor} className={anchor ? "target:bg-[var(--simple-edited)]" : undefined} data-user-content>
                   {x}
                 </li>
               );
@@ -458,7 +458,7 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
         <div>
           <h3 className="text-[18px] leading-[26px] font-[650]">Action items</h3>
           <ul className="list-disc pl-5">
-            {minutes.action_items.map((a, i) => <li key={i}>{a.title} · {a.owner_name ?? "no owner"}{a.due_date ? ` · by ${calendarDay(a.due_date, { weekday: "short" })} ${calendarDay(a.due_date)}` : ""}</li>)}
+            {minutes.action_items.map((a, i) => <li key={i}><span data-user-content>{a.title}</span> · {a.owner_name ?? "no owner"}{a.due_date ? ` · by ${calendarDay(a.due_date, { weekday: "short" })} ${calendarDay(a.due_date)}` : ""}</li>)}
           </ul>
         </div>
       )}
@@ -475,7 +475,7 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
           <div key={kind}>
             <h3 className="text-[18px] leading-[26px] font-[650]">{kind === "note" ? "Notes" : "Comments"}</h3>
             <ul className="list-disc pl-5 [overflow-wrap:anywhere]" data-testid={`meeting-group-${kind}s`}>
-              {notes.map((n) => <li key={n.id}>{n.text} · {n.by_name}</li>)}
+              {notes.map((n) => <li key={n.id}><span data-user-content>{n.text}</span> · {n.by_name}</li>)}
             </ul>
           </div>
         );
@@ -610,15 +610,15 @@ function Rows({ rows }: { rows: Row[] }) {
               <span className="break-words">
                 <span className="simple-code">{code}</span>{" "}
                 {gone ? (
-                  <s className="font-[650] text-text2" data-testid="decision-withdrawn">
+                  <s className="font-[650] text-text2" data-testid="decision-withdrawn" data-user-content>
                     {title}
                   </s>
                 ) : opens ? (
-                  <button type="button" data-testid="decision-open" className="text-left font-[650] underline decoration-1 underline-offset-4 hover:text-accent-ink" onClick={() => sheet!.open({ kind: "decision", row: r })}>
+                  <button type="button" data-testid="decision-open" className="text-left font-[650] underline decoration-1 underline-offset-4 hover:text-accent-ink" onClick={() => sheet!.open({ kind: "decision", row: r })} data-user-content>
                     {title}
                   </button>
                 ) : (
-                  <b className="font-[650]">{title}</b>
+                  <b className="font-[650]" data-user-content>{title}</b>
                 )}
               </span>
               <span className="simple-meta">

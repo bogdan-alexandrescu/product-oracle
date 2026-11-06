@@ -459,10 +459,11 @@ function RebuildCard({ occ, blocks, canBuild }: { occ: Occurrence; blocks: Block
 }
 
 function Recorded({ occ }: { occ: Occurrence }) {
+  const text = occ.status === "held" ? occ.notes : occ.skip_reason;
   return (
     <section data-testid="occurrence-notes" className="rounded-panel border border-line bg-surface px-4 py-3 shadow-panel">
       <h2 className="mb-1 font-display text-[17px] font-bold">{occ.status === "held" ? "Notes" : "Skipped"}</h2>
-      <p className="text-[15px] whitespace-pre-wrap">{(occ.status === "held" ? occ.notes : occ.skip_reason) || "No notes"}</p>
+      <p className="text-[15px] whitespace-pre-wrap">{text ? <span data-user-content>{text}</span> : "No notes"}</p>
       {occ.status === "held" && occ.decisions.length > 0 && (
         <div data-testid="occurrence-decisions" className="mt-3">
           <h3 className="mb-1 text-sm font-semibold text-text2">Decisions</h3>
