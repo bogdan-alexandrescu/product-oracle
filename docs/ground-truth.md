@@ -80,6 +80,13 @@ check's `action`, with the button's words):
 Each flag says what is wrong in one short plain sentence, with no ids; each fix carries its
 button's words.
 
+**Add to Ground Truth** makes the feature with its link in one change: for a roadmap item
+the feature lists the item's key (`attrs.roadmap_items`, which stays across versions, so a
+published item is linked too); for a PRD's feature or slice it keeps the PRD's code (F-09)
+and serves the goal the PRD gives it. Approvers and owners add at once; a commenter's add is
+a proposal carrying the same link, and the flag clears once an approver accepts it (the
+owner, Nov 5). **Link to a feature** adds the item's key to the chosen feature the same way.
+
 "The roadmap" here is what every reader is shown: the shown version of the company roadmap
 (each company-visible roadmap while there is no company roadmap), without cut, shipped,
 merged or taken-off items, or the items of a replaced PRD. A PRD's features are those of

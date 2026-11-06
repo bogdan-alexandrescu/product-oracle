@@ -26165,13 +26165,30 @@ export interface components {
              * @enum {string}
              */
             kind: "unlinked_item" | "slice_parent_missing" | "prd_feature_missing" | "no_code" | "no_goal" | "runs_today_on_roadmap";
-            item?: components["schemas"]["GroundTruthRef"] | null;
+            item?: components["schemas"]["GroundTruthItemRef"] | null;
             feature?: components["schemas"]["GroundTruthRef"] | null;
+            goal?: components["schemas"]["GroundTruthRef"] | null;
             where: components["schemas"]["GroundTruthWhere"];
             /** Words */
             words: string;
             /** Fixes */
             fixes: components["schemas"]["GroundTruthFix"][];
+        };
+        /**
+         * GroundTruthItemRef
+         * @description A flag's roadmap item or slice. ``key``: a roadmap item's own key, which stays across
+         *     versions (a feature lists it in ``attrs.roadmap_items`` to link the item); none for a
+         *     PRD's slice.
+         */
+        GroundTruthItemRef: {
+            /** Id */
+            id: string | null;
+            /** Code */
+            code: string | null;
+            /** Name */
+            name: string;
+            /** Key */
+            key?: string | null;
         };
         /** GroundTruthOut */
         GroundTruthOut: {

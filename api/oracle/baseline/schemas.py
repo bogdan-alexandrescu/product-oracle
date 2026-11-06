@@ -42,7 +42,8 @@ ConflictStatus = Literal["open", "resolved", "logged"]
 # Public-link evidence is scored like a source of this kind.
 LinkKind = Literal["notion", "google_docs", "web"]
 
-KEY_PATTERN = r"^[a-z0-9][a-z0-9._-]*$"
+# A slug, or a feature code as a PRD names it (F-09: Add to Ground Truth keeps it).
+KEY_PATTERN = r"^(?:[a-z0-9][a-z0-9._-]*|[A-Z]{1,3}-\d+)$"
 
 
 class ORM(BaseModel):
@@ -654,6 +655,14 @@ class GroundTruthRef(BaseModel):
     name: str
 
 
+class GroundTruthItemRef(GroundTruthRef):
+    """A flag's roadmap item or slice. ``key``: a roadmap item's own key, which stays across
+    versions (a feature lists it in ``attrs.roadmap_items`` to link the item); none for a
+    PRD's slice."""
+
+    key: str | None = None
+
+
 class GroundTruthDoc(BaseModel):
     id: uuid.UUID
     title: str
@@ -680,8 +689,11 @@ class GroundTruthFlag(BaseModel):
     """One place that breaks the Ground Truth: allowed, flagged "Not in the Ground Truth"."""
 
     kind: CheckKind
-    item: GroundTruthRef | None = None
+    item: GroundTruthItemRef | None = None
     feature: GroundTruthRef | None = None
+    # A PRD's feature or slice: the goal its PRD gives it (the feature's own, else the
+    # plan's one goal), for Add to Ground Truth to serve; none when it gives none.
+    goal: GroundTruthRef | None = None
     where: GroundTruthWhere
     # One short plain sentence, no ids.
     words: str

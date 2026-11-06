@@ -215,8 +215,7 @@ async def test_only_confirmed_features_count(client):
     flag = next(f for f in _of(await _check(client, w["ctx"]), "unlinked_item")
                 if f["item"]["id"] == d)  # fmt: skip
     assert flag["words"] == "This roadmap item is not a feature in the Ground Truth."
-    assert flag["feature"] == {"id": proposed, "code": None, "name": "Import history 2",
-                               "key": None}  # fmt: skip
+    assert flag["feature"] == {"id": proposed, "code": None, "name": "Import history 2"}
     assert [x["action"] for x in flag["fixes"]] == ["confirm_feature", "link_to_feature"]
     # An approver confirms it: the item now keeps the rules.
     async with tenant_session(w["ctx"].tenant_id) as s:

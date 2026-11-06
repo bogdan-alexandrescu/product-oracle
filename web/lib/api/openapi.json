@@ -74287,7 +74287,7 @@
             "type": "string",
             "maxLength": 120,
             "minLength": 1,
-            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "pattern": "^(?:[a-z0-9][a-z0-9._-]*|[A-Z]{1,3}-\\d+)$",
             "title": "Key"
           },
           "title": {
@@ -82134,8 +82134,7 @@
               "confirm_feature",
               "give_code",
               "pick_goal",
-              "take_off_roadmap",
-              "confirm_feature"
+              "take_off_roadmap"
             ],
             "title": "Action"
           },
@@ -82174,7 +82173,7 @@
           "item": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/GroundTruthRef"
+                "$ref": "#/components/schemas/GroundTruthItemRef"
               },
               {
                 "type": "null"
@@ -82182,6 +82181,16 @@
             ]
           },
           "feature": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroundTruthRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "goal": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/GroundTruthRef"
@@ -82215,6 +82224,56 @@
         ],
         "title": "GroundTruthFlag",
         "description": "One place that breaks the Ground Truth: allowed, flagged \"Not in the Ground Truth\"."
+      },
+      "GroundTruthItemRef": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "name"
+        ],
+        "title": "GroundTruthItemRef",
+        "description": "A flag's roadmap item or slice. ``key``: a roadmap item's own key, which stays across\nversions (a feature lists it in ``attrs.roadmap_items`` to link the item); none for a\nPRD's slice."
       },
       "GroundTruthOut": {
         "properties": {
