@@ -76,7 +76,7 @@ test.describe("desktop", () => {
    */
   test("an owner drags a row with a reason, sees the ghost and the override, compares and undoes", async ({ page }) => {
     const admin = await as(page, "admin@example.com");
-    await expect(admin.getByTestId("prio-subtitle")).toContainText("a feature never ranks above one it depends on");
+    await expect(admin.locator("#prio-about-text")).toContainText("a feature never ranks above one it depends on");
     expect(await codes(admin)).toEqual(ORACLE);
     await expect(row(admin, "alert-digest").getByTestId("prio-after")).toHaveText("After Alert rules engine, which it needs.");
     await expect(row(admin, "alert-sso").getByTestId("prio-after")).toHaveText("After Alert history export, which it needs.");

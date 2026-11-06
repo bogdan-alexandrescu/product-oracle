@@ -181,7 +181,7 @@ test.describe("QA pass 2: simple-plan, Value / effort", () => {
     await expect(am).toHaveAttribute("aria-label", /^#\d+ Mobile alert push: goal value/);
     await expect(page.getByRole("list", { name: "Legend" })).not.toContainText("PRD");
     // QA pass 3 (qa-simple-plan-13): marks sit at their real effort, even on a median line; the legend says how they count.
-    await expect(page.getByRole("list", { name: "Legend" })).toContainText("A mark on a middle line counts on the side its rank puts it.");
+    await expect(page.locator("#prio-about-text")).toContainText("A mark on a middle line counts on the side its rank puts it.");
     const box = (await am.boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();

@@ -1241,7 +1241,7 @@ function markSpots(
 ): Map<string, [number, number]> {
   const R = 18;
   // V-4: marks keep GAP px apart, never touching (a hollow mark's ring reads as one with its neighbour's).
-  const GAP = 6;
+  const GAP = 4;
   if (!w || !h) return new Map(rows.map((r) => [r.feature_id, o.at(r)]));
   const placed: [number, number][] = [];
   const inside = (x: number, y: number) => x >= R && x <= w - R && y >= R && y <= h - R;

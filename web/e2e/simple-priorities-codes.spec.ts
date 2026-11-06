@@ -144,10 +144,12 @@ test.describe("desktop", () => {
     await expect(
       side(admin, "setup-import").getByTestId("side-code"),
     ).toHaveText("F-12");
-    await expect(point(admin, "setup-import")).toHaveAttribute(
-      "title",
-      /^#5 F-12 · /,
-    );
+    // P-3: the mark's code with its name shows on hover.
+    await point(admin, "setup-import").hover();
+    await expect(
+      point(admin, "setup-import").getByTestId("vxe-name"),
+    ).toHaveText(/^#5 F-12 · Sample data import$/);
+    await admin.mouse.move(0, 0);
 
     await dragLeft(admin, "setup-import", 2);
     await expect(
@@ -171,10 +173,9 @@ test.describe("desktop", () => {
       "data-moved",
       "true",
     );
-    await expect(point(admin, "setup-import")).toHaveAttribute(
-      "title",
-      /^#2 F-12 · /,
-    );
+    await expect(
+      point(admin, "setup-import").getByTestId("vxe-name"),
+    ).toHaveText(/^#2 F-12 · /, { useInnerText: false });
     await expect(admin.locator('[data-moved="true"]')).toHaveCount(2);
   });
 

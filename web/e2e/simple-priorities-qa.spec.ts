@@ -109,10 +109,12 @@ for (const [size, viewport] of [["1440", DESKTOP], ["390", PHONE]] as const) {
         await open(page, OWNER, theme);
         const sw = page.getByRole("switch", { name: "Compare with Oracle" });
         await expect(sw).toHaveAttribute("aria-checked", "false");
-        expect(contrast(await bg(sw), await bg(page.getByTestId("compare-knob")))).toBeGreaterThanOrEqual(3);
+        // The knob slides and recolours: read it once it settles.
+        await expect.poll(async () => contrast(await bg(sw), await bg(page.getByTestId("compare-knob")))).toBeGreaterThanOrEqual(3);
         await sw.click();
         await expect(sw).toHaveAttribute("aria-checked", "true");
-        expect(contrast(await bg(sw), await bg(page.getByTestId("compare-knob")))).toBeGreaterThanOrEqual(3);
+        // The knob slides and recolours: read it once it settles.
+        await expect.poll(async () => contrast(await bg(sw), await bg(page.getByTestId("compare-knob")))).toBeGreaterThanOrEqual(3);
       });
 
       if (size === "1440")
