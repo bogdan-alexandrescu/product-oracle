@@ -5,7 +5,8 @@ its transaction), done when the person reads past them or dismisses them, and de
 once when they are removed. "Changes proposed" rows are derived on read: participants
 who are approvers and up get one for Oracle's ``proposed`` and people's ``suggested``
 changes; approvers not in an open discussion get one for ``suggested`` changes only
-(c6: commenters suggest, approvers stage). Every row is shown with G1's access check at
+(c6: commenters suggest, approvers stage); a closed discussion's changes count for no one
+until it is reopened. Every row is shown with G1's access check at
 read time, so none shows a title its reader may not see.
 """
 
@@ -194,7 +195,13 @@ async def rows(
                 func.count(),
                 func.max(func.coalesce(DiscussionChange.suggested_at, DiscussionChange.created_at)),
             )
-            .where(DiscussionChange.status.in_(("proposed", "suggested")))
+            .join(Discussion, Discussion.id == DiscussionChange.discussion_id)
+            # A closed discussion's changes card offers no action (reopening it does): its
+            # leftovers, such as a goals interview's unused versions, wait on no one.
+            .where(
+                DiscussionChange.status.in_(("proposed", "suggested")),
+                Discussion.status == "open",
+            )
             .group_by(DiscussionChange.discussion_id, DiscussionChange.status)
         ):
             pending.setdefault(did, {})[status] = n
