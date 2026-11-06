@@ -193,6 +193,28 @@ def test_an_issue_named_by_its_number_in_the_body_is_flagged_with_its_line():
     assert "by what it is" in warning.message
 
 
+def test_a_hash_and_number_that_is_not_an_issue_is_left_alone():
+    for text in (
+        "The `cache#2` layer is reused.",
+        "It is written in C#7 by the team.",
+        "The v2#3 build is older.",
+        "See [the notes](notes.md#2) for more.",
+        "See (notes.md#2) for more.",
+    ):
+        md = replace(DRAFT, "Teams miss shared deadlines.", f"Teams miss shared deadlines. {text}")
+        assert source_words.check(parse_draft(md).sections, md) == [], text
+
+
+def test_a_bare_issue_reference_is_still_flagged_beside_code_and_links():
+    for token in ("issue #12", "PR #40", "web#12"):
+        text = f"Teams miss shared deadlines (`cache#2`, [notes](notes.md#2), {token})."
+        md = replace(DRAFT, "Teams miss shared deadlines.", text)
+        [warning] = source_words.check(parse_draft(md).sections, md)
+        assert warning.code == "issue_number"
+        assert f"'{token}'" in warning.message
+        assert "cache#2" not in warning.message
+
+
 def test_letter_suffixed_and_key_result_codes_need_names_in_the_body():
     assert named_codes.findings("F-25b ships first.", prd=True).unnamed == ["F-25b"]
     assert named_codes.findings("KR 1.1 moves.", prd=True).unnamed == ["KR 1.1"]
@@ -230,7 +252,8 @@ def test_a_prd_draft_runs_the_source_check_and_sends_it_back():
     assert "source_not_named" in codes
     assert set(source_words.CODES) <= set(draft_checks.SENT_BACK)
     lead = workflow.code_name_trouble(["source_not_named", "issue_number"])
-    assert "lists sources by key, path or tag" in lead
+    assert "lists sources by key, path, file name or tag" in lead
+    assert "writes a code with no name in Sources" in lead
     assert "names an issue by its number" in lead
 
 

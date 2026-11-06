@@ -41,7 +41,7 @@ _KEY_WORD = re.compile(r"([^\s,:()\[\]]{1,60})([ \t]*[:,])?")
 # A URL or a link's target: read neither for paths nor for file names; a bare domain
 # with a path ("example.com/pricing/plan.html") is a place, not a file.
 _URL = re.compile(
-    r"\]\([^)\s]*\)|\bhttps?://\S+|(?<![\w./-])(?:[\w-]{1,63}\.){1,6}[A-Za-z]{2,24}/\S*"
+    r"\]\([^)\s]{0,300}\)|\bhttps?://\S{1,500}|(?<![\w./-])(?:[\w-]{1,63}\.){1,6}[A-Za-z]{2,24}/\S{0,500}"
 )
 # A path ("docs/alerting.md", "src/app/page.tsx") or a file name ("pricing-notes.md").
 _PATH = re.compile(r"(?<![\w./-])(?:[\w.-]{1,80}/){1,12}[\w.-]{0,80}\.[A-Za-z0-9]{1,5}\b")
@@ -59,17 +59,15 @@ _DATE = re.compile(
     r"|\bas of [A-Z][a-z]{2,8}\b"
 )
 # An issue by its number: a repository's short name and a number ("be#1357", "web#12"),
-# or the word issue, PR or ticket and a number ("issue #88").
+# or the word issue, PR or ticket and a number ("issue #88"). A name needs two letters
+# ("C#7" and "v2#3" are not issues) and is not a file ("notes.md#2" is a place in one).
 _ISSUE = re.compile(
-    r"(?<![\w#/.-])[A-Za-z][\w.-]{0,40}#\d{1,7}\b"
+    r"(?<![\w#/.-])(?![\w.-]*\.(?:md|mdx|txt|html?)#)[A-Za-z]{2}[\w.-]{0,39}#\d{1,7}\b"
     r"|\b(?:issue|issues|PR|PRs|pull request|ticket|tickets|bug)[ \t]+#\d{1,7}\b",
     re.IGNORECASE,
 )
-
-
-def _plain(heading: str) -> str:
-    """A heading without its {#id}."""
-    return re.sub(r"\s*\{#[^}]*\}\s*$", "", heading).strip()
+# Inline code and a link's target: an issue number is not read in either.
+_CODE_OR_TARGET = re.compile(r"`[^`\n]{0,300}`|\]\([^)\s]{0,300}\)")
 
 
 def _start(s: ParsedSection, file_lines: list[str] | None) -> int:
@@ -190,16 +188,16 @@ def check(sections: Iterable[ParsedSection], markdown: str | None = None) -> lis
             ]
             if rows:
                 found[s.section_key] = sorted(rows, key=lambda r: r[0])
-                headings[s.section_key] = _plain(s.heading) or s.section_key
+                headings[s.section_key] = named_codes.plain_heading(s.heading) or s.section_key
             continue
         lines = [
             (n, m.group(0).strip())
             for n, text in _lines(s, file_lines)
-            for m in _ISSUE.finditer(text)
+            for m in _ISSUE.finditer(_CODE_OR_TARGET.sub(" ", text))
         ]
         if lines:
             issues[s.section_key] = lines
-            headings[s.section_key] = _plain(s.heading) or s.section_key
+            headings[s.section_key] = named_codes.plain_heading(s.heading) or s.section_key
     warnings: list[VersionWarning] = []
     if found:
         warnings.append(

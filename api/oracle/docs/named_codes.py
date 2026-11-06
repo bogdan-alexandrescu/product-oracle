@@ -147,9 +147,15 @@ def findings(body: str, heading: str = "", prd: bool = False) -> Findings:
     return out
 
 
-def _plain(heading: str) -> str:
-    """A heading without its {#id}."""
-    return re.sub(r"\s*\{#[^}]*\}\s*$", "", heading).strip()
+def plain_heading(heading: str) -> str:
+    """A heading without its trailing {#id}, found with two string scans (a regex that
+    allows space before the id is quadratic on a long run of spaces or of "{#")."""
+    text = heading.strip()
+    if text.endswith("}"):
+        opener = text.find("{#", text.rfind("}", 0, len(text) - 1) + 1)
+        if opener >= 0:
+            text = text[:opener]
+    return text.strip()
 
 
 def check(sections: Iterable[ParsedSection], prd: bool = False) -> list[VersionWarning]:
@@ -164,7 +170,7 @@ def check(sections: Iterable[ParsedSection], prd: bool = False) -> list[VersionW
         found = findings(s.body_md, s.heading, prd)
         if found.unnamed:
             unnamed[s.section_key] = found.unnamed
-            headings[s.section_key] = _plain(s.heading) or s.section_key
+            headings[s.section_key] = plain_heading(s.heading) or s.section_key
         if found.runs:
             runs[s.section_key] = found.runs
     warnings: list[VersionWarning] = []

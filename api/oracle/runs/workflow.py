@@ -178,7 +178,8 @@ def code_name_trouble(warnings: list[str]) -> str:
         parts.append("writes three or more codes in a row instead of a list")
     # PRD source words (oracle.docs.source_words).
     if "source_not_named" in warnings:
-        parts.append("lists sources by key, path or tag instead of their titles")
+        parts.append("lists sources by key, path, file name or tag, or writes a code with no "
+                     "name in Sources")  # fmt: skip
     if "issue_number" in warnings:
         parts.append("names an issue by its number")
     # roadmap-draft-wording (oracle.roadmap.draft_words).
