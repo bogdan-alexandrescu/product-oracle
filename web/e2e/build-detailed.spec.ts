@@ -182,7 +182,7 @@ for (const size of SIZES) {
 
     test("QD4 cards: the delivery log is two-line cards in the side panel", async ({ page }) => {
       // protects=each delivery is a card: what happened in words with its status, then the time,
-      // HTTP code and time taken; a card opens the delivery, headed by its name; the Status and
+      // what the server answered in words (F-64: no HTTP numbers) and time taken; a card opens the delivery, headed by its name; the Status and
       // Event filters and Company time stay; fails_when=the log is a table that cuts its
       // columns; no_claim=redeliver (webhooks.spec).
       await scenario(page, WEBHOOKS_SCENARIO);
@@ -197,9 +197,9 @@ for (const size of SIZES) {
       const cards = log.getByTestId("delivery-cards").getByTestId("delivery-row");
       await expect(cards.first()).toBeVisible();
       const first = cards.first();
-      await expect(first.getByTestId("delivery-facts")).toHaveText(/^[A-Z][a-z]{2} \d{1,2}, .+ · HTTP \d{3} · \d+ ms$/);
+      await expect(first.getByTestId("delivery-facts")).toHaveText(/^[A-Z][a-z]{2} \d{1,2}, .+ · (Answered OK|Server answered with an error) · \d+ ms$/);
       await expect(first).not.toContainText(/\b[a-z]+\.[a-z_]+\b/);
-      const failed = cards.filter({ hasText: "500" }).first();
+      const failed = cards.filter({ hasText: "Server answered with an error" }).first();
       await expect(failed).toBeVisible();
       const name = (await failed.locator("span").first().locator("span").first().innerText()).trim();
       await failed.click();

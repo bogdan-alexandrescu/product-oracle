@@ -149,6 +149,11 @@ test.describe("desktop", () => {
 
   test("qa-simple-home-30: Home's toast sits over the rail, clear of the decisions' buttons", async ({ page }) => {
     await signIn(page, ADMIN.email, "simple-home");
+    // Wait for Home to finish loading, as a person would: the cards above the plan (decisions,
+    // proposals, meeting) and the plan's strip fill in after the broken links show, and push them
+    // down by hundreds of pixels under load, so an early click lands where the button was.
+    await expect(home(page).getByTestId("home-sentence")).not.toHaveText("Checking what waits on you…");
+    await expect(home(page).getByTestId("home-strip")).toBeVisible();
     const row = home(page).getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).first(); // walkb-roadmap: Mobile alert push no longer breaks
     await row.getByRole("button", { name: "Accept as risk" }).click();
     await row.getByLabel("Why the risk is acceptable").fill("Push ships behind a flag");
