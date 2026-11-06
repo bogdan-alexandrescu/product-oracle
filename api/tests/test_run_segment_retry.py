@@ -18,8 +18,9 @@ def test_plain_failure_words():
     assert workflow.plain_failure("claude-code exited 1:", "writer") == (
         "The writer stopped: its session ended with an error and gave no reason."
     )
-    assert workflow.plain_failure("agent crashed", "analyst") == (
-        "The analyst stopped: agent crashed"
+    # Any other runtime text stays in the logs, never on the run page.
+    assert workflow.plain_failure("agent crashed at /srv/example/run.py", "analyst") == (
+        "The analyst stopped. Retry this step."
     )
     assert workflow.plain_failure(None, None) == "The agents stopped and gave no reason."
 
@@ -107,3 +108,31 @@ async def test_retry_needs_a_failed_segment(client, owner, runtime):  # noqa: F8
     first = run["segments"][0]["seq"]
     resp = await client.post(f"/v1/runs/{run['id']}/segments/{first}/retry", headers=auth)
     assert resp.status_code == 409, resp.text
+
+
+async def test_a_second_retry_while_queued_or_running_is_refused(client, owner, runtime):  # noqa: F811
+    _, auth = owner
+    run = await failed_at_draft(client, auth, runtime)
+    seq = draft_of(run)["seq"]
+    url = f"/v1/runs/{run['id']}/segments/{seq}/retry"
+    assert (await client.post(url, headers=auth)).status_code == 200
+    submitted = len(runtime.submitted)
+    again = await client.post(url, headers=auth)
+    assert again.status_code == 409, again.text
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert draft_of(run)["status"] in ("pending", "running", "succeeded")
+    if draft_of(run)["status"] != "succeeded":
+        assert (await client.post(url, headers=auth)).status_code == 409
+    assert len(runtime.submitted) == submitted
+
+
+async def test_retry_is_refused_to_an_approver_who_did_not_create_the_run(client, owner, runtime):  # noqa: F811
+    tenant_id, auth = owner
+    run = await failed_at_draft(client, auth, runtime)
+    seq = draft_of(run)["seq"]
+    them = await as_user(tenant_id, "approver")
+    assert draft_of(await get(client, them, run["id"]))["can_retry"] is False
+    resp = await client.post(f"/v1/runs/{run['id']}/segments/{seq}/retry", headers=them)
+    assert resp.status_code == 403, resp.text
+    assert (await get(client, auth, run["id"]))["status"] == "failed"

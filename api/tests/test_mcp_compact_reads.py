@@ -157,22 +157,164 @@ async def test_the_writers_reads_stay_under_budget(tenant_id):
     assert sum(sizes.values()) < BUDGET, sizes
 
 
-def test_writer_prompt_keeps_its_context_small():
-    flow = flows.FLOWS["baseline_to_prd"]
-    seg = flow.segment("prd_draft")
-    ctx = flows.PromptContext(
+def prompt_ctx() -> "flows.PromptContext":
+    return flows.PromptContext(
         run_id=str(uuid.uuid4()),
         document="example-prd",
         snapshot_as_of=None,
         low_confidence=0.4,
         mcp_reachable=True,
     )
+
+
+def test_writer_prompt_keeps_its_context_small():
+    flow = flows.FLOWS["baseline_to_prd"]
+    seg = flow.segment("prd_draft")
+    ctx = prompt_ctx()
     prompt = flows.step_prompt(flow, seg, "writer", last=False, ctx=ctx)
     assert "list_entities" in seg.tools
+    # The whole baseline is not offered to the writer.
+    assert "get_baseline" not in seg.tools
     assert "only this PRD's" in prompt
-    assert "ids=" in prompt
+    assert "ids=" in prompt and "entity_id" in prompt
+    assert "section=work" in prompt
     assert "grep" in prompt
     assert "section by section" in prompt
     # The other long roles get the same rule.
     for role in ("analyst", "researcher", "critic"):
         assert "grep" in flows.step_prompt(flow, seg, role, last=False, ctx=ctx)
+    assert "section=work" in flows.UNKNOWN_IS_WORK_DRAFT
+
+
+def test_other_flows_are_not_told_to_write_a_prd():
+    for key in ("prd_to_roadmap", "feedback_loop", "strategy_draft"):
+        flow = flows.FLOWS[key]
+        for seg in flow.segments:
+            for role in seg.roles:
+                prompt = flows.step_prompt(flow, seg, role, last=False, ctx=prompt_ctx())
+                assert flows.CONTEXT_ROOM not in prompt, (key, seg.name, role)
+                if "roadmap" in key:
+                    assert "prd.md" not in prompt, (key, seg.name, role)
+
+
+def summary_with_work(n_work: int, pad: int) -> dict:
+    """An intake summary with ``n_work`` work items, ``pad`` filler claims (~1.2 KB each)."""
+    return {
+        "id": str(uuid.uuid4()),
+        "title": "Example intake",
+        "work": [
+            {"requirement": f"Find out example unknown {i}", "cite_ref": f"a{i}"}
+            for i in range(n_work)
+        ],
+        "features": [{"key": f"feature-{i:03d}", "title": f"Example {i}"} for i in range(8)],
+        "goals": [{"key": f"goal-{i}", "title": f"Example goal {i}"} for i in range(5)],
+        "items": [{"id": i, "text": "z" * 1200} for i in range(pad)],
+    }
+
+
+def test_a_small_or_medium_intake_summary_comes_back_whole():
+    for pad in (0, 25):
+        data = summary_with_work(6, pad)
+        assert compact.summary_view(data, None, 0, None) == data
+
+
+def test_a_large_intake_summary_outline_keeps_work_features_and_goals_whole():
+    data = summary_with_work(12, 60)
+    assert len(json.dumps(data)) > compact.SUMMARY_WHOLE
+    outline = compact.summary_view(data, None, 0, None)
+    assert outline["work"] == data["work"]
+    assert outline["features"] == data["features"]
+    assert outline["goals"] == data["goals"]
+    assert len(outline["items"]) == compact.OUTLINE_ITEMS
+    assert "section=work" in outline["how_to_read"] or "whole" in outline["how_to_read"]
+
+
+async def test_list_entities_ids_take_keys_too(tenant_id):
+    await seed_entities(tenant_id)
+    token = await api_token(tenant_id, "owner")
+    async with mcp_client(token) as c:
+        got = await c.call_tool("list_entities", {"ids": ["feature-001", "feature-002"]})
+    assert not got.is_error, text_of(got)
+    assert sorted(e["key"] for e in got.structured_content["entities"]) == [
+        "feature-001",
+        "feature-002",
+    ]
+
+
+async def test_a_realistic_writer_session_stays_under_budget(tenant_id):
+    """60 features in a baseline of 200 entities: the scope read, this PRD's entities, a
+    previous PRD read in pages, the intake summary (whole) and its work section, a search:
+    under 150,000 bytes."""
+    async with tenant_session(tenant_id) as s:
+        ids: list[str] = []
+        for i in range(200):
+            kind = "feature" if i < 60 else ("requirement" if i < 160 else "constraint")
+            e = Entity(
+                type=kind,
+                key=f"{kind}-{i:03d}",
+                title=f"Example {kind} {i}",
+                body=BODY,
+                attrs={"note": "x" * 200},
+                status="confirmed",
+                origin="user",
+            )
+            s.add(e)
+            await s.flush()
+            ids.append(str(e.id))
+        await s.commit()
+    scope = {
+        "id": str(uuid.uuid4()),
+        "status": "approved",
+        "features": [
+            {
+                "id": str(uuid.uuid4()),
+                "key": f"feature-{i:03d}",
+                "title": f"Example feature {i}",
+                "decision": "include",
+                "origin": "agent",
+                "goals": [{"key": "goal-1", "title": "Example goal"}],
+                "depends_on": [],
+                "entity_id": ids[i] if i % 10 else None,
+                "proposal_id": None if i % 10 else str(uuid.uuid4()),
+                "requirements": [
+                    {
+                        "id": str(uuid.uuid4()),
+                        "key": f"requirement-{60 + i}",
+                        "title": f"Example requirement {i}",
+                        "text": "Shoppers see an example total before they pay.",
+                        "decision": "keep",
+                        "origin": "agent",
+                        "entity_id": ids[60 + i],
+                    }
+                ],
+            }
+            for i in range(60)
+        ],
+    }
+    wanted = [f["entity_id"] for f in scope["features"] if f["entity_id"]] + [
+        r["entity_id"] for f in scope["features"] for r in f["requirements"]
+    ]
+    token = await api_token(tenant_id, "owner")
+    async with mcp_client(token) as c:
+        mine = await c.call_tool("list_entities", {"ids": wanted, "limit": 200})
+    assert mine.structured_content["total"] == len(wanted)
+    previous = "".join(f"Line {i} of an example earlier PRD.\n" for i in range(6_000))
+    pages = [compact.text_page(previous, 0, None)]
+    pages.append(compact.text_page(previous, compact.TEXT_PAGE, None))
+    summary = summary_with_work(10, 20)
+    sizes = {
+        "get_prd_scope": len(json.dumps(scope)),
+        "list_entities": size(mine),
+        "get_run_output": sum(len(p) for p in pages),
+        "get_intake_summary": len(json.dumps(compact.summary_view(summary, None, 0, None))),
+        "get_intake_summary(work)": len(json.dumps(compact.summary_view(summary, "work", 0, 100))),
+        "search": len(
+            json.dumps(
+                compact.search_view(
+                    {"hits": [{"item": {"id": "1", "body": "b" * 8000}, "snippet": "s"}] * 10},
+                    full=False,
+                )
+            )
+        ),
+    }
+    assert sum(sizes.values()) < 150_000, sizes
