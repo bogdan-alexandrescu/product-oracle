@@ -188,10 +188,10 @@ test.describe("QA pass 4: simple-plan, desktop", () => {
     await setUp(page, { scheme: "dark" });
     await open(page, "?tab=value-effort");
     const legend = page.getByLabel("Legend");
-    const help = legend.locator("xpath=following-sibling::p[1]");
-    await expect(help).toContainText("Drag a mark sideways");
+    // Demo 9: the help is behind the (i); the legend's keys read in one colour.
+    await expect(page.locator("#prio-about-text")).toContainText("Drag a mark sideways");
     const colour = (l: Locator) => l.evaluate((e) => getComputedStyle(e).color);
-    expect(await colour(help)).toBe(await colour(legend.locator("li").last()));
+    expect(await colour(legend.locator("li").first())).toBe(await colour(legend.locator("li").last()));
   });
 
   /* qa4-simple-plan-33: a day already gone is refused, in words. */

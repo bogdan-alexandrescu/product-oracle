@@ -105,11 +105,11 @@ test.describe("QA pass 2: simple-plan, the Ranked list", () => {
       await expect(page.getByTestId("prio-code")).toHaveCount(0);
       // build-plan QP1: no row carries a Misses pill.
       await expect(page.getByLabel("Ranked list").getByTestId("prio-misses")).toHaveCount(0);
-      await expect(page.getByTestId("prio-subtitle")).toContainText("depends on");
+      await expect(page.locator("#prio-about-text")).toContainText("depends on");
       await page.getByRole("tab", { name: "Goal buckets" }).click();
-      await expect(page.getByTestId("prio-subtitle")).not.toContainText("depends on");
+      await expect(page.locator("#prio-about-text")).not.toContainText("depends on");
       await page.getByRole("tab", { name: "Value / effort" }).click();
-      await expect(page.getByTestId("prio-subtitle")).not.toContainText("depends on");
+      await expect(page.locator("#prio-about-text")).not.toContainText("depends on");
     });
 
   test("picking a date is one control, and the caption reads the day", async ({ page }) => {
@@ -160,9 +160,9 @@ test.describe("QA pass 2: simple-plan, the Ranked list", () => {
     expect(first).toBeGreaterThan(0);
     expect(above.slice(0, first).every((a) => a === "true")).toBe(true);
     expect(above.slice(first).every((a) => a === "false")).toBe(true);
-    await expect(page.getByTestId("prio-subtitle")).toContainText("what makes it is listed first");
+    await expect(page.locator("#prio-about-text")).toContainText("what makes it is listed first");
     await page.getByRole("tab", { name: "Value / effort" }).click();
-    await expect(page.getByTestId("prio-subtitle")).not.toContainText("listed first");
+    await expect(page.locator("#prio-about-text")).not.toContainText("listed first");
     await expect(page.getByTestId("line-divider")).toHaveCount(1);
     const side = await page.getByTestId("side-row").evaluateAll((els) => els.map((e) => e.getAttribute("data-above")));
     expect(side).toEqual(above);
@@ -287,7 +287,9 @@ test.describe("QA pass 2: simple-plan, Goal buckets", () => {
     await expect(head).not.toContainText(/\d\.0\b/);
     await expect(page.getByTestId("buckets-footnote")).not.toContainText("PRD");
     // mk-goalbuckets (train AL's picked frame): Goal buckets' line names the plan's quarter; its summary gives the dates.
-    await expect(page.getByTestId("prio-subtitle")).toHaveText("Where the engineer-weeks go, goal by goal. Q4 2026.");
+    await expect(page.getByTestId("prio-subtitle")).toHaveText("Q4 2026");
+    // Demo 9: the intro is behind the (i).
+    await expect(page.locator("#prio-about-text")).toHaveText("Where the engineer-weeks go, goal by goal.");
     await expect(page.getByTestId("plan-goal-count").first()).toContainText("in the plan");
     for (const card of await page.locator('[data-testid="plan-goal"][data-goal]:not([data-goal=""])').all()) {
       await expect(card.getByTestId("goal-suggest-feature")).toHaveCount(1);

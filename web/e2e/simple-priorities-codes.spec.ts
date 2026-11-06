@@ -132,8 +132,8 @@ test.describe("desktop", () => {
   }) => {
     const admin = await open(page, "admin@example.com");
     expect(await markCodes(admin)).toEqual(CODES);
-    await expect(admin.getByLabel("Legend")).toContainText(
-      "Each mark shows the feature's code; its rank is in the list.",
+    await expect(admin.locator("#prio-about-text")).toContainText(
+      "Each mark shows the feature's code; point at it for its name, its rank is in the list.",
     );
     await expect(admin.getByLabel("Legend")).not.toContainText(
       "Numbers are ranks",
@@ -269,8 +269,8 @@ test.describe("desktop", () => {
     await expect(side(viewer, "alert-sso").getByTestId("side-rank")).toHaveText(
       "7",
     );
-    await expect(viewer.getByLabel("Legend")).toContainText(
-      "Each mark shows the feature's code; its rank is in the list.",
+    await expect(viewer.locator("#prio-about-text")).toContainText(
+      "Each mark shows the feature's code; point at it for its name, its rank is in the list.",
     );
   });
 
