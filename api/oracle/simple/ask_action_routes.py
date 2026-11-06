@@ -222,13 +222,17 @@ OUTWARD_OR_SECRET: dict[str, str] = {op: why for why, ops in _WHY.items() for op
 NOT_OFFERED: frozenset[str] = frozenset(
     {
         # This line's routes AN did not have (the Goal map, Current state, Fit a date, Trash,
-        # goal archive, a replaced PRD's carried parts): not offered until allowed by name.
+        # goal archive, a replaced PRD's carried parts; train AQ's request and decision Trash
+        # and the meeting agenda sheet): not offered until allowed by name.
         "add_area",
         "answer_feature_state",
         "attach_feature",
         "check_feature_state",
         "delete_bucket_goal",
+        "delete_request",
+        "delete_simple_decision",
         "delete_simple_item",
+        "edit_simple_meeting_agenda",
         "edit_goal",
         "fit_date_approve",
         "fit_date_draft",
@@ -236,6 +240,7 @@ NOT_OFFERED: frozenset[str] = frozenset(
         "get_fit_date",
         "get_goal_map",
         "get_replaced_prd_carried",
+        "get_simple_decision",
         "list_feature_states",
         "list_fit_dates",
         "mark_feature_shipped",
@@ -243,6 +248,7 @@ NOT_OFFERED: frozenset[str] = frozenset(
         "order_areas",
         "propose_milestone",
         "restore_bucket_goal",
+        "restore_simple_decision",
         "restore_simple_item",
         "set_gate",
         "unarchive_bucket_goal",
