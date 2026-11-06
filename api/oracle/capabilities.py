@@ -288,6 +288,9 @@ PER_ITEM: dict[str, Role | None] = {
     "remind_simple_one_pager_reviewers": "owner",
     "remove_evidence": "approver",
     "reopen_goal_suggestion": "owner",
+    # A waived strategy finding is reopened by whoever may waive it (an approver for some
+    # kinds, else an owner; oracle.strategy.router).
+    "reopen_strategy_finding": "owner",
     "reopen_track_alert": None,
     "request_simple_visual": "owner",
     "research_discussion_message": "approver",
@@ -304,6 +307,8 @@ PER_ITEM: dict[str, Role | None] = {
     "retry_import_run": "owner",
     "retry_lookup_run": "owner",
     "retry_run": "owner",
+    # An owner, or the approver who created the run (oracle.runs.service.retry_segment).
+    "retry_segment": "owner",
     "retry_simple_chat_read": None,
     "retry_simple_meeting_delivery": "owner",
     "review_decision": None,

@@ -22047,7 +22047,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/segments/{seq}/retry-draft-import": {
@@ -49963,7 +49964,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/strategy/check": {
