@@ -56,12 +56,12 @@ export const SHARING_SECTIONS: SectionSeed[] = [
   { key: "item-ledger", level: 3, heading: "Billing ledger v2", body: "Owner: Avery Stone. Serves G1. ENG-541 tracks it. Depends on Falcon alerts rework." },
   { key: "item-partner", level: 3, heading: "Partner API beta", body: "Owner: Priya Raman. Serves G2." },
   { key: "later", level: 2, heading: "Later", body: "Ideas we keep." },
-  { key: "item-ops", level: 3, heading: "Ops console cleanup", body: "Owner: Avery Stone. Kept for the support team." },
+  { key: "item-ops", level: 3, heading: "Ops console cleanup", body: "Owner: Avery Stone. Kept for the support team.\n\n- ENG-541: tracks it too.\n\nENG-541 tracks it as well." },
   {
     key: "dependencies",
     level: 2,
     heading: "Dependencies and owners",
-    body: "| Item | Owner | Depends on |\n|---|---|---|\n| Billing ledger v2 | Avery Stone | Falcon alerts rework |\n| Partner API beta | Priya Raman | ENG-530 |",
+    body: "| Item | Owner | Depends on |\n|---|---|---|\n| Billing ledger v2 | Avery Stone | Falcon alerts rework |\n| Partner API beta | Priya Raman | ENG-530 |\n| Ops console cleanup | Avery Stone | ENG-541 |",
   },
   { key: "sources", level: 2, heading: "Sources and data points", body: "- Platform PRDs, October" },
 ];

@@ -65,11 +65,19 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(frame.getByText(/^Shared with you/)).toBeVisible();
       const body = frame.locator("body");
       // A line break and "~~" in the title read on one line as written: no heading, no strikethrough.
-      await expect(body).toContainText("Ledger entries | v2 [notes](https://example.com/notes) *draft* # Rework ~~old~~ path (ENG-541) tracks it.");
+      await expect(body).toContainText("# Ledger entries | v2 [notes](https://example.com/notes) *draft* # Rework ~~old~~ path AT&amp;T &#35; x (ENG-541) tracks it.");
       await expect(frame.locator('a[href="https://example.com/notes"]')).toHaveCount(0);
       await expect(frame.locator("em")).toHaveCount(0);
       await expect(frame.locator("s, del")).toHaveCount(0);
-      await expect(frame.getByRole("heading", { name: /Rework/ })).toHaveCount(0);
+      await expect(frame.getByRole("heading", { name: /Rework|Ledger entries/ })).toHaveCount(0);
+      // Where a line, a list item or a table cell begins, the name opens no heading, list or table of its own.
+      const list = frame.locator("li").filter({ hasText: "(ENG-541): tracks it too." });
+      await expect(list).toHaveText(/^# Ledger entries .* \(ENG-541\): tracks it too\.$/);
+      await expect(list.locator("h1, h2, h3, h4, ul, ol")).toHaveCount(0);
+      await expect(frame.locator("p").filter({ hasText: "(ENG-541) tracks it as well." })).toHaveText(/^# Ledger entries/);
+      const cell = frame.locator("tr").filter({ hasText: "Ops console cleanup" }).locator("td").nth(2);
+      await expect(cell).toHaveText(/^# Ledger entries .* \(ENG-541\)$/);
+      await expect(cell.locator("h1, h2, h3, h4, ul, ol")).toHaveCount(0);
     });
 
     test("G-5: every Inbox row's Open is one bordered button, and a long title wraps", async ({ page }) => {

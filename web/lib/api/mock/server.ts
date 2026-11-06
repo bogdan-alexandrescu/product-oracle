@@ -2761,7 +2761,7 @@ function seedSharingRoadmap(db: Db, audience: "team" | "public") {
   // holder's card read it "In progress"; Falcon alerts rework, in Now, has none, so it reads "Planned".
   db.sharing_records = {
     [v.id]: [{
-      id: uuid(), tracker: "linear", external_ref: "ENG-541", title: "Ledger entries | v2 [notes](https://example.com/notes) *draft*\n\n# Rework ~~old~~ path", url: "https://tracker.example.com/ENG-541",
+      id: uuid(), tracker: "linear", external_ref: "ENG-541", title: "# Ledger entries | v2 [notes](https://example.com/notes) *draft*\n\u0085# Rework ~~old~~ path\u200b \ufeffAT&amp;T &#35; x", url: "https://tracker.example.com/ENG-541",
       track_id: null, item_key: "item-ledger", state: "in_progress", raw_status: null, estimate: null, estimate_unit: null,
       target_date: "2027-01-20", observed_at: created, recorded_by: null, created_at: created, updated_at: created,
     },
