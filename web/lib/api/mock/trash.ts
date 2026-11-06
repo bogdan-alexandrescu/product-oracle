@@ -75,7 +75,7 @@ export interface TrashContext<D extends TrashDocument, V extends TrashVersion> {
   /** trash-features-goals: Restore of a roadmap feature or a goal (kept in place, marked `trashed`). */
   simple?: () => TrashedSimple | undefined;
   /** prd-reads-working-draft: which company roadmap a PRD's run reads (./roadmap-read.ts). */
-  roadmapRead?: () => string | null;
+  roadmapRead?: (me: { id: string; role: Role }) => string | null;
   uuid: () => string;
   now: () => string;
 }
@@ -298,7 +298,7 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
       ...structuredClone(template),
       id: body.run_id!, flow, status: "succeeded", document_slug: doc.slug, created_at: now, created_by: ctx.me.id,
       // prd-reads-working-draft: a PRD's run follows the company roadmap of record.
-      roadmap_read: doc.kind === "prd" ? (ctx.roadmapRead?.() ?? null) : null,
+      roadmap_read: doc.kind === "prd" ? (ctx.roadmapRead?.(ctx.me) ?? null) : null,
     } as RunOut;
     ctx.runs().push(run);
     return json(200, run);
