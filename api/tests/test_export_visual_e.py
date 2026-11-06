@@ -89,7 +89,10 @@ async def test_e6_no_export_shows_an_iso_date(client, long_doc):
         [deck["as_of"], deck["banner"]] + [_visible(s["html"]) for s in deck["slides"]]
     )
     pptx = await client.get(f"{BASE}/export?layer=deck&format=pptx", headers=h)
-    seen["pptx"] = " ".join(t for ts in _pptx_texts(pptx.content) for t in ts)
+    # A date's parts are joined by no-break spaces (E-11); read as a person does.
+    seen["pptx"] = " ".join(t for ts in _pptx_texts(pptx.content) for t in ts).replace(
+        "\u00a0", " "
+    )
     for where, text in seen.items():
         assert not ISO.search(text), (where, ISO.findall(text)[:3])
     # The snapshot reads month first, as the dates beside it do.

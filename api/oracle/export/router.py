@@ -95,13 +95,15 @@ async def with_audience(db, ev: ExportVersion, audience: str | None) -> ExportVe
     return apply_audience(ev, audience)
 
 
-async def _load(db, doc: str, n: int, layer: str, audience: str | None = None):
+async def _load(
+    db, doc: str, n: int, layer: str, audience: str | None = None, present: bool = False
+):
     try:
         ev = await load_export_version(db, doc, n)
     except NotFound as e:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from None
     try:
-        ev = apply_layer(ev, layer)
+        ev = apply_layer(ev, layer, present)
     except NoBrief as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from None
     return await with_audience(db, ev, audience)
@@ -218,7 +220,7 @@ async def get_deck(
     # Present mode: kept, else built on the export pool in a Present place (owner decision
     # 2026-10-20).
     check_audience_role(principal, audience)
-    ev = detached(await _load(db, doc, n, "deck", audience))
+    ev = detached(await _load(db, doc, n, "deck", audience, present=True))
     await db.commit()  # no connection held while it waits for the pool
     try:
         deck = await present.deck_for(principal, ev, build_deck)

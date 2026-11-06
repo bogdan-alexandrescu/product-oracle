@@ -245,16 +245,20 @@ def detached(ev: ExportVersion) -> ExportVersion:
     )
 
 
-def apply_layer(ev: ExportVersion, layer: str) -> ExportVersion:
-    """Restrict the export to a layer. Raises NoBrief for a version without a brief."""
+def apply_layer(ev: ExportVersion, layer: str, present: bool = False) -> ExportVersion:
+    """Restrict the export to a layer. Raises NoBrief for a version without a brief (for
+    Present mode, ``present``, in words that do not speak of exporting)."""
     ev.layer = layer
     if layer == "full":
         return ev
     brief = [s for s in ev.all_sections if s.layer == layers.BRIEF]
     if not brief:
+        kind = KIND_LABEL.get(ev.document.kind, "document")
+        title = f"Version {ev.version.number} of {ev.document.title}"
         raise NoBrief(
-            f"Version {ev.version.number} of {ev.document.title} has no brief: export the "
-            f"full {KIND_LABEL.get(ev.document.kind, 'document')} instead."
+            f"{title} has no brief to present: open the full {kind} instead."
+            if present
+            else f"{title} has no brief: export the full {kind} instead."
         )
     appendix = sources_keys(ev.all_sections)
     ev.sections = [
@@ -768,12 +772,22 @@ def _day_in_words(m: re.Match[str]) -> str:
         d = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
     except ValueError:
         return m.group(0)
-    return f"{company_time.calendar_day(d)}, {d.year}"
+    return held_together(f"{company_time.calendar_day(d)}, {d.year}")
+
+
+# A date's parts are joined by no-break spaces where people read it, so "Nov 15, 2026" never
+# wraps between "Nov 15," and "2026" (visual QA E-11, PR 1300 review).
+NBSP = "\u00a0"
+
+
+def held_together(words: str) -> str:
+    """``words`` (a date in words) with no-break spaces between its parts."""
+    return words.replace(" ", NBSP)
 
 
 def days_in_words(text: str) -> str:
     """Prose with its calendar days month first, as people read dates ("to Jan 29, 2027";
-    walk-docs-priorities 9). The stored text is not changed."""
+    walk-docs-priorities 9), each held on one line. The stored text is not changed."""
     return _PROSE_DAY.sub(_day_in_words, text)
 
 
@@ -809,10 +823,11 @@ def snapshot_in_words(snapshot: str | None, zone: str, when=None) -> str:
     2026"; text that is neither keeps its words, its days month first."""
     if not snapshot:
         return ""
-    text = snapshot.strip()
+    # Shown after "Sources as of": a snapshot that says so itself is not doubled.
+    text = re.sub(r"^(?:sources\s+)?as\s+of\s+", "", snapshot.strip(), flags=re.I)
     try:
         if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
-            return company_time.calendar_day_with_year(date.fromisoformat(text))
+            return held_together(company_time.calendar_day_with_year(date.fromisoformat(text)))
         moment = datetime.fromisoformat(text)
     except ValueError:
         return days_in_words(text)

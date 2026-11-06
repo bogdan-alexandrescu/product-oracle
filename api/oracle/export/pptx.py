@@ -36,6 +36,11 @@ FOOTER_CHARS = 150
 TITLE_SIZES = (44, 36, 30, 26, 22)
 TITLE_TOP = Inches(2.75)
 TITLE_MAX_HEIGHT = Inches(2.9)
+# A section slide's heading ("Top risks (2 of 3)") is fitted the same way, in its band above
+# the body: the largest size whose wrapped lines end above BODY_TOP.
+HEADING_SIZES = (32, 28, 24, 20, 18, 16)
+HEADING_TOP = Inches(0.55)
+HEADING_MAX_HEIGHT = BODY_TOP - HEADING_TOP - Inches(0.05)
 _md = MarkdownIt("commonmark", {"html": False}).enable(["table", "strikethrough"])
 _HEX = re.compile(r"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 
@@ -187,13 +192,21 @@ def _wrapped_lines(text: str, size: int, width) -> int:
     return max(1, -(-len(text) // per_line))
 
 
-def title_fit(text: str, width) -> tuple[int, int]:
+def title_fit(
+    text: str, width, sizes: tuple[int, ...] = TITLE_SIZES, max_height=TITLE_MAX_HEIGHT
+) -> tuple[int, int]:
     """The title slide's title size and its box's height for ``text`` (E-8)."""
-    for size in TITLE_SIZES:
+    for size in sizes:
         height = int(_wrapped_lines(text, size, width) * Pt(size * 1.2)) + int(Pt(size * 0.3))
-        if height <= TITLE_MAX_HEIGHT or size == TITLE_SIZES[-1]:
+        if height <= max_height or size == sizes[-1]:
             return size, height
     raise AssertionError("unreachable")
+
+
+def heading_fit(text: str, width, dense: bool = False) -> tuple[int, int]:
+    """A section slide's heading size and its box's height, as :func:`title_fit` fits the
+    title slide's (a long heading with "(2 of 3)" no longer runs into the body)."""
+    return title_fit(text, width, HEADING_SIZES[1:] if dense else HEADING_SIZES, HEADING_MAX_HEIGHT)
 
 
 def footer_text(deck: Deck, index: int, total: int) -> str:
@@ -373,9 +386,9 @@ def deck_to_pptx(deck: Deck) -> bytes:
                 sub.paragraphs[0], [Run(line)], 20, style["body"], style["mono"], style["muted"]
             )
         else:
-            title = _textbox(slide, MARGIN, Inches(0.55), width, Inches(0.9))
+            size, height = heading_fit(s.heading, width, s.dense)
+            title = _textbox(slide, MARGIN, HEADING_TOP, width, height)
             title.vertical_anchor = MSO_ANCHOR.TOP
-            size = 28 if s.dense else 32
             _write_runs(
                 title.paragraphs[0],
                 [Run(s.heading, bold=True)],

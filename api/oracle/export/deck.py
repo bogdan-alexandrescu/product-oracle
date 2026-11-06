@@ -37,6 +37,7 @@ from oracle.export.render import (
     absolute_doc_links,
     brand_dark,
     days_in_words,
+    held_together,
     section_body_html,
     snapshot_in_words,
     sources_keys,
@@ -179,7 +180,8 @@ def _moment(value, zone: str) -> str:
     # day, with its year.
     day, time = words.split(" ", 1)[1].split(", ", 1)
     year = company_time.day(value, zone).year
-    return f"{day}, {year}, {time}"
+    # Each part held on one line (E-11): "Oct 18, 2026," then "1:30 AM PDT".
+    return f"{held_together(f'{day}, {year}')}, {held_together(time)}"
 
 
 def _banner(ev: ExportVersion) -> str:
@@ -203,14 +205,18 @@ _TABLE_SEP = re.compile(r"^\s*\|?\s*:?-{2,}")
 
 @dataclass
 class _Unit:
-    """A piece of a slide body that is never split: a paragraph, a top-level list item
-    (with its sub-items), a table row, a code block; a heading goes with what follows."""
+    """A piece of a slide body kept on one slide: a paragraph, a top-level list item (with
+    its sub-items), a table row, a code block; a heading goes with what follows. One longer
+    than a slide is cut into pieces that each fit (:func:`_fit`)."""
 
     text: str
     cost: float
     group: int
     kind: str  # block | item | row
     header: str = ""  # a row's table header and separator, repeated on a continuation
+    # A piece of a unit too long for one slide, after the piece before it: what joins them
+    # when both land on one slide (" " within a line, "\n" between lines); "" otherwise.
+    glue: str = ""
 
 
 def _lines(text: str, chars: int = LINE_CHARS) -> float:
@@ -218,7 +224,7 @@ def _lines(text: str, chars: int = LINE_CHARS) -> float:
     return sum(max(1, -(-len(line.strip()) // chars)) for line in text.splitlines() if line.strip())
 
 
-def _units(body: str) -> list[_Unit]:
+def _units(body: str, budget: float = SLIDE_LINES) -> list[_Unit]:
     units: list[_Unit] = []
     group = 0
     lines = body.splitlines()
@@ -234,8 +240,7 @@ def _units(body: str) -> list[_Unit]:
             j = i + 1
             while j < len(lines) and not _FENCE.match(lines[j]):
                 j += 1
-            text = "\n".join(lines[i : j + 1])
-            units.append(_Unit(heading + text, len(text.splitlines()) + 0.4, group, "block"))
+            units += _code_pieces(heading, lines[i : j + 1], group, budget)
             heading = ""
             i = j + 1
             group += 1
@@ -257,11 +262,14 @@ def _units(body: str) -> list[_Unit]:
                 longest = max(
                     (len(c.strip()) for c in row.strip().strip("|").split("|")), default=0
                 )
-                cost = 1.2 * max(1, -(-longest // max(1, LINE_CHARS // cols)))
-                text = (heading + header + "\n" if k == 0 and header else "") + row
-                units.append(
-                    _Unit(text, cost + (1.2 if k == 0 and header else 0), group, "row", header)
-                )
+                width = max(1, LINE_CHARS // cols)
+                cost = 1.2 * max(1, -(-longest // width))
+                lead = heading + header + "\n" if k == 0 and header else ""
+                extra = 1.2 if k == 0 and header else 0
+                if cost + extra <= budget:
+                    units.append(_Unit(lead + row, cost + extra, group, "row", header))
+                else:
+                    units += _row_pieces(lead, row, extra, width, group, header, budget)
                 heading = ""
             i = j
             group += 1
@@ -282,13 +290,119 @@ def _units(body: str) -> list[_Unit]:
                 j += 1
             kind = "block"
         text = "\n".join(lines[i:j])
-        units.append(
-            _Unit(heading + text, _lines(text) + 0.4 + (1.5 if heading else 0), group, kind)
-        )
+        units += _prose_pieces(heading, text, group, kind, budget)
         heading = ""
         i = j
     if heading:
         units.append(_Unit(heading.strip(), 1.5, group + 1, "block"))
+    return units
+
+
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=\S)")
+
+
+def _fill(atoms: list[tuple[str, str]], room, cost) -> list[tuple[str, str]]:
+    """``atoms`` ((glue, text): each joined to the one before by its glue) packed into
+    pieces each within ``room(i)`` (the i-th piece's room) by ``cost``; each piece comes
+    with the glue before its first atom."""
+    pieces: list[tuple[str, str]] = []
+    glue, text = "", ""
+    for g, atom in atoms:
+        if not text:
+            glue, text = g, atom
+        elif cost(text + g + atom) > room(len(pieces)):
+            pieces.append((glue, text))
+            glue, text = g, atom
+        else:
+            text += g + atom
+    if text:
+        pieces.append((glue, text))
+    return pieces
+
+
+def _prose_pieces(heading: str, text: str, group: int, kind: str, budget: float) -> list[_Unit]:
+    """A paragraph or list item as units: itself when it fits a slide, else cut between
+    sentences (a sentence longer than a slide between words), each piece within the slide."""
+    lead = 1.5 if heading else 0
+    cost = _lines(text) + 0.4 + lead
+    if cost <= budget:
+        return [_Unit(heading + text, cost, group, kind)]
+    atoms: list[tuple[str, str]] = []
+    for n, line in enumerate(text.splitlines()):
+        for m, sentence in enumerate(_SENTENCE_END.split(line)):
+            glue = "" if n == m == 0 else (" " if m else "\n")
+            if _lines(sentence) + 0.4 + lead > budget:
+                words = sentence.split(" ")
+                atoms += [(glue if k == 0 else " ", w) for k, w in enumerate(words)]
+            else:
+                atoms.append((glue, sentence))
+    pieces = _fill(atoms, lambda i: budget - 0.4 - (lead if i == 0 else 0), _lines)
+    return [
+        _Unit(
+            (heading if i == 0 else "") + piece,
+            _lines(piece) + 0.4 + (lead if i == 0 else 0),
+            group,
+            kind if i == 0 or glue == "\n" else "block",
+            glue=glue,
+        )
+        for i, (glue, piece) in enumerate(pieces)
+    ]
+
+
+def _code_pieces(heading: str, lines: list[str], group: int, budget: float) -> list[_Unit]:
+    """A fenced code block as units: itself when it fits a slide, else cut between lines,
+    each piece fenced again."""
+    lead = 1.5 if heading else 0
+    if len(lines) + 0.4 + lead <= budget:
+        return [_Unit(heading + "\n".join(lines), len(lines) + 0.4, group, "block")]
+    opener = lines[0]
+    fence = _FENCE.match(opener).group(1)  # type: ignore[union-attr]
+    closed = len(lines) > 1 and _FENCE.match(lines[-1])
+    inner = lines[1:-1] if closed else lines[1:]
+    closer = lines[-1] if closed else fence
+    units = []
+    i = 0
+    while i < len(inner) or not units:
+        room = max(1, int(budget - 2.4 - (lead if not units else 0)))
+        part = [opener, *inner[i : i + room], closer]
+        units.append(
+            _Unit(
+                (heading if not units else "") + "\n".join(part),
+                len(part) + 0.4 + (lead if not units else 0),
+                group,
+                "block",
+            )
+        )
+        i += room
+    return units
+
+
+def _row_pieces(
+    lead: str, row: str, extra: float, width: int, group: int, header: str, budget: float
+) -> list[_Unit]:
+    """A table row longer than a slide as rows that each fit: each cell's text cut between
+    sentences (else words), its pieces in the rows in turn, the other cells left empty."""
+    cells = [c.strip() for c in row.strip().strip("|").split("|")]
+
+    def cut(cell: str, room: int) -> list[str]:
+        atoms = [(" " if k else "", a) for k, a in enumerate(_SENTENCE_END.split(cell))]
+        if any(len(a) > room for _, a in atoms):
+            atoms = [(" " if k else "", w) for k, w in enumerate(cell.split(" "))]
+        return [p for _, p in _fill(atoms, lambda i: room, len)] or [""]
+
+    lines_first = max(1, int((budget - extra) / 1.2))
+    lines_rest = max(1, int(budget / 1.2))
+    # Cut for the tighter (first) row, so every piece fits wherever it lands.
+    room = min(lines_first, lines_rest) * width
+    parts = [cut(c, room) for c in cells]
+    count = max(len(p) for p in parts)
+    units = []
+    for r in range(count):
+        texts = [p[r] if r < len(p) else "" for p in parts]
+        line = "| " + " | ".join(texts) + " |"
+        longest = max((len(t) for t in texts), default=0)
+        cost = 1.2 * max(1, -(-longest // width)) + (extra if r == 0 else 0)
+        units.append(_Unit((lead if r == 0 else "") + line, cost, group, "row", header))
     return units
 
 
@@ -311,7 +425,9 @@ def _join(page: list[_Unit]) -> str:
         text = u.text
         if prev is None and u.kind == "row" and u.header and u.header not in text:
             text = u.header + "\n" + text
-        if prev is not None:
+        if prev is not None and u.glue:
+            out += u.glue
+        elif prev is not None:
             close = prev.group == u.group and u.kind == prev.kind and u.kind in ("item", "row")
             out += "\n" if close else "\n\n"
         out += text
@@ -322,8 +438,8 @@ def _join(page: list[_Unit]) -> str:
 def slide_pages(body: str, budget: float = SLIDE_LINES) -> list[str]:
     """``body`` as the slides it needs (E-9): itself when it fits one slide, else split
     between paragraphs, list items or table rows (a table's header on each), as evenly as
-    the pieces allow."""
-    units = _units(body)
+    the pieces allow; a paragraph, item, row or code block longer than a slide is cut too."""
+    units = _units(body, budget)
     total = sum(u.cost for u in units)
     if total <= budget or len(units) < 2:
         return [body]
@@ -331,7 +447,7 @@ def slide_pages(body: str, budget: float = SLIDE_LINES) -> list[str]:
     # The same number of slides, filled evenly: never one full slide and a last line.
     even = max(total / count, max(u.cost for u in units))
     while len(pages := _pack(units, even)) > count:
-        even += 0.5
+        even = min(even + 0.5, budget)
     return [_join(p) for p in pages if p]
 
 
