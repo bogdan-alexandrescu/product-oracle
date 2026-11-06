@@ -218,7 +218,7 @@ test.describe("desktop", () => {
     const ranked = admin.locator(
       '[data-testid="prio-row"][data-code="setup-import"]',
     );
-    await expect(ranked.getByTestId("prio-code")).toHaveText("F-12");
+    await expect(ranked.getByTestId("prio-own-key")).toHaveText("F-12");
     await expect(ranked.getByTestId("prio-rank")).toHaveText("2");
     await admin.getByRole("tab", { name: "Goal buckets" }).click();
     await expect(

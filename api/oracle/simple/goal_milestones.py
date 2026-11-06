@@ -29,6 +29,7 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.docs.models import Document
 from oracle.members.names import display_name
+from oracle.roadmap import company
 from oracle.roadmap.models import TrackMilestone
 from oracle.simple import drafts
 from oracle.simple.models import SimpleChange
@@ -103,6 +104,10 @@ async def _out(
             counts_when=pc.get("counts_when"),
             asked_of=pc.get("asked_of_name"),
             change_id=uuid.UUID(pc["change_id"]) if pc.get("change_id") else None,
+            can_decide=prd is not None
+            and (
+                has_role(principal.role, "owner") or _me(principal) in w.owners.get(prd.id, set())
+            ),
         )
     prd_owner = None
     can_change: bool
@@ -117,12 +122,13 @@ async def _out(
         can_change = _may_propose(principal)
     else:
         can_change = drafts.can_edit(principal, row.roadmap_id, w)
+    can_propose = prd is None and not can_change and _may_propose(principal)
     return SimpleGoalMilestone(
         id=row.id, roadmap_id=row.roadmap_id, code=row.code or "", name=row.name,
         date=row.target_date, goal_id=row.goal_id, item_ids=list(row.item_ids or []),
         counts_when=row.counts_when, progress=row.progress,  # type: ignore[arg-type]
         prd=SimpleDocRef(id=prd.id, slug=prd.slug, title=prd.title) if prd is not None else None,
-        prd_owner=prd_owner, pending=pending, can_change=can_change,
+        prd_owner=prd_owner, pending=pending, can_change=can_change, can_propose=can_propose,
     )  # fmt: skip
 
 
@@ -260,10 +266,18 @@ async def _roadmap_or_404(db: AsyncSession, roadmap_id: uuid.UUID) -> Document:
     return doc
 
 
+async def _not_history(db: AsyncSession, roadmap_id: uuid.UUID) -> None:
+    """While the company roadmap exists an older per-PRD roadmap is history
+    (oracle.roadmap.company.feeding_ids): its milestones are not added to or changed."""
+    if not await company.feeding_ids(db, [roadmap_id]):
+        raise _error(status.HTTP_409_CONFLICT, "That roadmap is history")
+
+
 async def create(
     db: AsyncSession, principal: Any, body: SimpleGoalMilestoneIn
 ) -> SimpleGoalMilestone:
     roadmap = await _roadmap_or_404(db, body.roadmap_id)
+    await _not_history(db, body.roadmap_id)
     w = await drafts.who(db, {body.roadmap_id})
     if not drafts.can_edit(principal, body.roadmap_id, w):
         raise _error(status.HTTP_403_FORBIDDEN,
@@ -298,6 +312,7 @@ async def patch(
         raise _error(status.HTTP_404_NOT_FOUND, "No such milestone")
     fields = body.model_fields_set
     roadmap = await db.get(Document, row.roadmap_id)
+    await _not_history(db, row.roadmap_id)
     if row.origin_prd_id is not None:
         return await _propose_prd_change(db, principal, row, roadmap, body, fields)
     w = await drafts.who(db, {row.roadmap_id})
@@ -329,7 +344,7 @@ async def _propose_prd_change(
     body: SimpleGoalMilestonePatch,
     fields: set[str],
 ) -> SimpleGoalMilestone:
-    if not (fields & {"date", "counts_when"}):
+    if fields & {"name", "goal_id", "item_ids"} or not (fields & {"date", "counts_when"}):
         raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY,
                      "A PRD's milestone: only date and counts_when may be proposed "
                      "(name, goal and items are the roadmap's own)")  # fmt: skip
@@ -423,6 +438,131 @@ async def put_back(db: AsyncSession, row: TrackMilestone) -> None:
 
 # --------------------------------------------------------------------------- the change engine
 
+FIELDS = ("name", "date", "goal_id", "item_ids", "counts_when")
+
+
+def _value(row: TrackMilestone) -> dict[str, Any]:
+    """A roadmap's own milestone as a proposal's ``before``/``after.milestone`` holds it."""
+    return {
+        "name": row.name,
+        "date": row.target_date.isoformat() if row.target_date else None,
+        "goal_id": str(row.goal_id) if row.goal_id else None,
+        "item_ids": [str(i) for i in row.item_ids or []],
+        "counts_when": row.counts_when or "",
+    }
+
+
+def _checked(given: Any) -> dict[str, Any]:
+    if not isinstance(given, dict):
+        raise _error(422, "after.milestone: the milestone as it should be (or null to remove it)")
+    try:
+        v = SimpleGoalMilestonePatch.model_validate({k: given[k] for k in FIELDS if k in given})
+    except ValueError as e:
+        raise _error(422, f"after.milestone: {e}") from None
+    return {k: getattr(v, k) for k in v.model_fields_set}
+
+
+async def create_change(db: AsyncSession, principal: Any, body: Any) -> Any:
+    """milestone-rights: ``POST /v1/simple/changes`` op ``edit_goal_milestone`` on a roadmap's
+    own milestone (``target.milestone_id``; ``before.milestone`` as the caller saw it,
+    ``after.milestone`` as it should be, null: removed). Who may propose but not change it
+    (an approver who is not its owner, a commenter) proposes it, routed as a key date's
+    proposal is (``key_dates.route``); who changes it directly changes it on its card."""
+    from oracle.simple import changes, key_dates
+    from oracle.simple.schemas import SimpleChangeResult
+
+    if not _may_propose(principal):
+        raise _error(status.HTTP_403_FORBIDDEN, "Viewers may not propose a change")
+    milestone_id = changes._uuid(body.target.get("milestone_id"), "milestone_id")
+    row = await db.get(TrackMilestone, milestone_id, with_for_update=True)
+    if row is None or row.roadmap_id is None or row.deleted_at is not None:
+        raise _error(status.HTTP_404_NOT_FOUND, "No such milestone")
+    if row.origin_prd_id is not None:
+        raise _error(422, "A PRD's milestone: change it on its card (it asks the PRD's owner)")
+    w = await drafts.who(db, {row.roadmap_id})
+    if drafts.can_edit(principal, row.roadmap_id, w):
+        raise _error(status.HTTP_409_CONFLICT, "You change this milestone directly")
+    if "milestone" not in body.before or "milestone" not in body.after:
+        raise _error(422, "before.milestone and after.milestone (null: remove it)")
+    current = _value(row)
+    if body.before["milestone"] != current:
+        raise _error(status.HTTP_409_CONFLICT,
+                     {"message": "Changed since you saw it", "current": {"milestone": current},
+                      "changed_by": None, "changed_at": None})  # fmt: skip
+    wanted = body.after["milestone"]
+    after = None
+    if wanted is not None:
+        given = _checked(wanted)
+        after = {**current, **{k: v for k, v in given.items() if v is not None or k == "goal_id"}}
+        after = {**after, "date": str(after["date"]) if after["date"] else None,
+                 "goal_id": str(after["goal_id"]) if after["goal_id"] else None,
+                 "item_ids": [str(i) for i in after["item_ids"]]}  # fmt: skip
+        if after == current:
+            raise _error(422, "after.milestone: nothing changes")
+    c = SimpleChange(
+        document_id=row.roadmap_id, op="edit_goal_milestone",
+        target={"milestone_id": str(row.id), "roadmap_id": str(row.roadmap_id),
+                "name": row.name},
+        before={"milestone": current}, after={"milestone": after}, status="proposed",
+        by=_me(principal), at=company_time.now(), reason=body.reason,
+        routed_to=await key_dates.route(db, row.roadmap_id, w),
+    )  # fmt: skip
+    db.add(c)
+    await db.flush()
+    await audit.record(db, principal, "simple_change.proposed", "simple_change", c.id,
+                       data={"op": c.op, "target": c.target})  # fmt: skip
+    await db.commit()
+    return SimpleChangeResult(change=await changes.one_out(db, principal, c), flags=[])
+
+
+def may_decide(principal: Any, c: SimpleChange, view: Any) -> bool:
+    """A PRD's milestone: an owner or the PRD's owner; a roadmap's own: as a key date's."""
+    from oracle.simple import key_dates
+
+    if "milestone" in (c.before or {}):
+        return key_dates.may_decide(principal, c, view)
+    me = _me(principal)
+    owners = view.owners.get(c.document_id, set()) if c.document_id else set()
+    return has_role(principal.role, "owner") or (me is not None and me in owners)
+
+
+async def _decide_own(db: AsyncSession, principal: Any, c: SimpleChange, action: str,
+                      reason: str | None) -> Any:  # fmt: skip
+    from oracle.simple.changes import ChangeError, one_out
+    from oracle.simple.schemas import SimpleChangeResult
+
+    me, now = _me(principal), company_time.now()
+    w = await drafts.who(db, {c.document_id} if c.document_id else set())
+    view = type("V", (), {"deciders": w.deciders, "owners": w.owners})
+    if not may_decide(principal, c, view):
+        raise ChangeError(403, "Only an owner or the roadmap's decider (with none, its owner) "
+                               "decides this proposal")  # fmt: skip
+    if action == "accept":
+        row = await db.get(TrackMilestone, uuid.UUID(c.target["milestone_id"]),
+                           with_for_update=True)  # fmt: skip
+        if row is None or row.deleted_at is not None:
+            raise ChangeError(404, "The milestone is gone")
+        if _value(row) != c.before.get("milestone"):
+            raise ChangeError(409, {"message": "outdated: the milestone changed since the proposal",
+                                    "current": {"milestone": _value(row)}, "changed_by": None,
+                                    "changed_at": None})  # fmt: skip
+        after = c.after.get("milestone")
+        if after is None:
+            row.deleted_at = now
+        else:
+            row.name = after["name"]
+            row.target_date = date.fromisoformat(after["date"]) if after["date"] else None
+            row.goal_id = uuid.UUID(after["goal_id"]) if after["goal_id"] else None
+            row.item_ids = [uuid.UUID(i) for i in after["item_ids"]]
+            row.counts_when = after["counts_when"]
+    c.status = "accepted" if action == "accept" else "declined"
+    c.decided_by, c.decided_at, c.decision_reason = me, now, reason
+    await db.flush()
+    await audit.record(db, principal, f"simple_change.{c.status}", "simple_change", c.id,
+                       data={"op": c.op, "target": c.target, "reason": reason})  # fmt: skip
+    await db.commit()
+    return SimpleChangeResult(change=await one_out(db, principal, c), flags=[])
+
 
 async def decide(db: AsyncSession, principal: Any, c: SimpleChange, action: str,
                  reason: str | None) -> Any:  # fmt: skip
@@ -433,6 +573,8 @@ async def decide(db: AsyncSession, principal: Any, c: SimpleChange, action: str,
 
     if c.status != "proposed":
         raise ChangeError(409, f"This change is {c.status} already")
+    if "milestone" in (c.before or {}):
+        return await _decide_own(db, principal, c, action, reason)
     me, now = _me(principal), company_time.now()
     w = await drafts.who(db, {c.document_id} if c.document_id else set())
     owners = w.owners.get(c.document_id, set()) if c.document_id else set()

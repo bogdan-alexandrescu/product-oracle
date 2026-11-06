@@ -38,6 +38,11 @@ Ops and the fields they write (``before`` must name the key fields):
 - ``edit_title``: title. ``edit_outcome``: outcome.
 - ``set_milestone`` (S9): the item's own milestone, ``{"milestone": {name, date,
   date_source: "typed"}}`` (date optional), or null to clear it.
+  Its ``before`` is compared by name and date only: the read shows no date_source.
+- ``set_goals``: the goals an item serves, ``{"goal_ids": [...]}`` (the one it moves most
+  first), each a live goal; the goal buckets carry a task added there to another goal.
+  An item with a baseline feature takes the feature along (applied, accepted or undone):
+  the first goal becomes its first "supports" link, as a goal-bucket move.
 - ``set_owner`` / ``set_decider`` (chat-actions): the item's own owner_id / decider_id, a
   member of the company (null: back to its track's owner / its roadmap's decider).
 - ``set_confidence`` / ``set_track`` / ``set_prd`` (one-feature-panel): the item's
@@ -92,6 +97,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.baseline.models import Entity
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap import company as roadmap_company
 from oracle.roadmap.models import HORIZONS, RoadmapItem
@@ -134,10 +140,13 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "restore": ("cut",),
     "edit_title": ("title",),
     "edit_outcome": ("outcome",),
+    # build-feature-panel (AN PR 1204): the panel's Notes row, at most 500 characters.
+    "edit_note": ("note",),
     "accept_risk": ("risk",),
     "confirm_item": ("draft",),
     "keep_both": ("kept_both",),
     "set_milestone": ("milestone",),
+    "set_goals": ("goal_ids",),
     "set_owner": ("owner_id",),
     "set_decider": ("decider_id",),
     # one-feature-panel: every field of an item, edited in its panel.
@@ -148,6 +157,7 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "set_depends": ("depends_on",),
     "set_status": ("status",),
     "set_feature": ("feature_id",),
+    "remove_dependency": ("depends_on",),
 }
 CONFIDENCES = ("low", "medium", "high")
 # set_status: the statuses a person sets (the others come from the tracker or a merge).
@@ -382,6 +392,13 @@ def write(row: RoadmapItem, values: dict[str, Any], target: dict[str, Any]) -> N
             setattr(row, f, drafts._typed(f, v))
 
 
+def _seen_milestone(m: Any) -> tuple | None:
+    """A milestone as the item reads it: its name and day, None when it has neither."""
+    if not isinstance(m, dict) or not (m.get("name") or m.get("date")):
+        return None
+    return (m.get("name") or None, _iso(_day(m.get("date"), "milestone.date")))
+
+
 def _normal(fields: tuple[str, ...], values: dict[str, Any]) -> dict[str, Any]:
     out = {}
     for f in fields:
@@ -499,7 +516,7 @@ def current_route(
         return list(c.routed_to or [])
     if (
         c.status != "proposed"
-        or c.op in ("edit_line", *QUESTION_OPS)
+        or c.op in ("edit_line", "edit_goal_milestone", *QUESTION_OPS)
         or c.op in KEY_DATE_OPS
         or c.op in PLAN_OPS
     ):
@@ -530,6 +547,10 @@ async def _names(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
 def _touched(c: SimpleChange) -> set[str]:
     if c.op in KEYED:
         return set(c.after) | set(c.before)
+    # Review: a removed dependency touches the item it depended on too (its flags, the
+    # "changed since you saw it" check's last writer, the locks).
+    if c.op == "remove_dependency" and c.target.get("subject"):
+        return {str(c.target.get("item_id")), str(c.target["subject"])}
     return {str(c.target.get("item_id"))}
 
 
@@ -635,6 +656,37 @@ def dependents(entry: service.Entry, by_id: dict[uuid.UUID, service.Entry]) -> l
     return out
 
 
+def _no_loop(entry: service.Entry, added: list[str], by_id: dict) -> None:
+    """build-feature-panel (AN's add_link check): 422 when a new dependency of the item
+    already waits on it, directly or through others (it would make a loop)."""
+    version = entry.row.roadmap_version_id
+    for key in added:
+        dep = next(
+            (
+                e
+                for e in by_id.values()
+                if e.row.roadmap_version_id == version
+                and (
+                    e.row.item_key == key or (e.code is not None and e.code.lower() == key.lower())
+                )
+            ),
+            None,
+        )
+        if dep is None or dep is entry:
+            continue
+        seen, queue = {dep.row.id}, deque([dep.row.id])
+        while queue:
+            cur = by_id.get(queue.popleft())
+            for nid in cur.depends_on if cur is not None else []:
+                if nid == entry.row.id:
+                    raise ChangeError(
+                        422, f"{dep.row.title} needs {entry.row.title}: it would make a loop"
+                    )
+                if nid not in seen:
+                    seen.add(nid)
+                    queue.append(nid)
+
+
 async def _plan(
     db: AsyncSession, principal: Any, body: SimpleChangeIn, read_: service.Read
 ) -> tuple[service.Entry, dict[str, Any], dict[str, Any], dict[str, Any]]:
@@ -666,6 +718,10 @@ async def _plan(
             raise await _conflict(db, seen, set(seen), "Changed since you saw it")
         moves = _fix_plan(op, entry, dep, by_id)
         await _lock(db, list(moves))
+        # roadmap-decide: the draft's change list names the item, then what else moved.
+        target["titles"] = [entry.row.title] + [
+            by_id[i].row.title for i in moves if i != entry.row.id and i in by_id
+        ]
         before = {str(i): read(by_id[i].row, (*DATES, "date_source"), target) for i in moves}
         after = {
             str(i): {"start_date": s.isoformat(), "end_date": e.isoformat(), "date_source": "typed"}
@@ -697,6 +753,11 @@ async def _plan(
         after = {str(e.row.id): {"cut": True} for e in cut}
         return entry, target, before, after
     fields = FIELDS[op]
+    if op == "remove_dependency":
+        # roadmap-decide review: the page may not see every stored key (a filter, a key that
+        # matches no item): only target.subject still being a dependency is checked, below,
+        # and ``before`` is the stored list.
+        body.before = read(row, fields, target)
     missing = [f for f in fields if f not in body.before]
     if missing:
         raise ChangeError(422, f"before: {', '.join(missing)} as you saw them")
@@ -742,6 +803,11 @@ async def _plan(
         # roadmap-edit-fixes: the read shows a title's code apart from its name.
         shown = {"title": service.coded_title(row.title, _code_of(entry))[1]}
         if seen_ != shown:
+            raise await _conflict(db, current, {str(row.id)}, lead)
+    elif op == "set_milestone":
+        # goal-buckets-tasks, build-feature-panel: the milestone as the item reads it (name,
+        # date): the date engine's own fields (date_source, basis_ids...) are not seen.
+        if _seen_milestone(seen_["milestone"]) != _seen_milestone(current["milestone"]):
             raise await _conflict(db, current, {str(row.id)}, lead)
     elif seen_ != current:
         raise await _conflict(db, current, {str(row.id)}, lead)
@@ -805,6 +871,14 @@ async def _plan(
         after = {"position": pos}
     elif op in ("cut", "restore"):
         after = {"cut": op == "cut"}
+    elif op == "remove_dependency":
+        # roadmap-decide: the item no longer depends on ``target.subject`` (a cut item's fix).
+        dep = by_id.get(_uuid(target.get("subject"), "subject"))
+        if dep is None or dep.row.id not in entry.depends_on:
+            raise ChangeError(422, "target.subject: an item the target depends on")
+        target["subject"] = str(dep.row.id)
+        target["titles"] = [row.title, dep.row.title]
+        after = {"depends_on": [k for k in row.depends_on or [] if k != dep.row.item_key]}
     elif op == "confirm_item":
         after = {"draft": False}
     elif op == "keep_both":
@@ -829,6 +903,21 @@ async def _plan(
             day = _day(m.get("date"), "after.milestone.date")
             after = {"milestone": {"name": name, "date": _iso(day),
                                    "date_source": "typed" if day else None}}  # fmt: skip
+    elif op == "set_goals":
+        raw = a.get("goal_ids")
+        if not isinstance(raw, list) or not raw:
+            raise ChangeError(422, "after.goal_ids: one goal or more")
+        ids = list(dict.fromkeys(_uuid(g, "after.goal_ids") for g in raw))
+        live = set(
+            await db.scalars(
+                select(Entity.id).where(
+                    Entity.id.in_(ids), Entity.type == "goal", Entity.status != "rejected"
+                )
+            )
+        )
+        if len(live) != len(ids):
+            raise ChangeError(422, "after.goal_ids: goals of this company")
+        after = {"goal_ids": [str(g) for g in ids]}
     elif op in ("set_owner", "set_decider"):
         field = FIELDS[op][0]
         raw = a.get(field)
@@ -843,6 +932,15 @@ async def _plan(
             ):
                 raise ChangeError(422, f"after.{field}: a member of this company")
         after = {field: str(person) if person else None}
+        if after == current:
+            # build-feature-panel: e.g. its track's owner picked when it is so already.
+            raise ChangeError(422, "No change: it is so already")
+    elif op == "edit_note":
+        note = a.get("note")
+        note = str(note).strip() if note is not None else None
+        if note is not None and len(note) > NOTE_MAX:
+            raise ChangeError(422, f"after.note: at most {NOTE_MAX} characters")
+        after = {"note": note or None}
     elif op == "edit_outcome":
         outcome = a.get("outcome")
         outcome = str(outcome).strip() if outcome is not None else None
@@ -869,8 +967,6 @@ async def _plan(
             after["track_id"] = str(track)
             stored = ("prd_document_id", "track_id")
     elif op == "set_goal":
-        from oracle.baseline.models import Entity
-
         goal = _uuid(a["goal_id"], "after.goal_id") if a.get("goal_id") is not None else None
         if (
             goal is not None
@@ -881,8 +977,6 @@ async def _plan(
         after = {"goal_ids": [str(goal)] if goal else []}
         stored = STORED[op]
     elif op == "set_feature":
-        from oracle.baseline.models import Entity
-
         fid = _uuid(a["feature_id"], "after.feature_id") if a.get("feature_id") else None
         q = select(Entity.id).where(
             Entity.id == fid, Entity.type == "feature", Entity.status != "rejected"
@@ -995,7 +1089,6 @@ async def _track_of_prd(
 
 async def _unknown_keys(db: AsyncSession, keys: list[str], read_: service.Read) -> list[str]:
     """set_depends: the keys that name no roadmap item (its key or code) and no feature."""
-    from oracle.baseline.models import Entity
 
     if not keys:
         return []
@@ -1024,7 +1117,6 @@ async def _merge_plan(
     db: AsyncSession, entry: service.Entry, target: dict[str, Any], by_id: dict
 ) -> tuple[service.Entry, dict[str, Any], dict[str, Any], dict[str, Any]]:
     """S7: merge_item's writes, keyed by item id (see the module's docstring)."""
-    from oracle.baseline.models import Entity
 
     row = entry.row
     if not row.draft or entry.status in ("merged", "cut"):
@@ -1083,6 +1175,8 @@ async def _apply(
     """Write ``values`` (a change's after, or its before for an undo) into the working
     drafts of the items' roadmaps (S3b), and the change's own side effects."""
     c.draft_ids = await drafts.write_items(db, c, values, session, KEYED, write, undo=undo)
+    if c.op == "set_goals":
+        await _move_feature(db, c, values)
     if c.op == "accept_date_suggestion":
         s = await db.get(RoadmapDateSuggestion, uuid.UUID(c.target["suggestion_id"]))
         if s is not None and not undo and s.status == "open":
@@ -1118,6 +1212,25 @@ async def _apply(
                         o.status, o.decided_by, o.decided_at = "open", None, None
                 s.status, s.decided_by, s.decided_at = "open", None, None
     await db.flush()
+
+
+async def _move_feature(db: AsyncSession, c: SimpleChange, values: dict[str, Any]) -> None:
+    """``set_goals`` on an item with a baseline feature moves the feature too, as a goal
+    bucket move does: the goal it now moves most becomes the feature's first goal link
+    (what the dated goal buckets place it by), and the link to the goal it showed under
+    is dropped unless the item still serves it. Applied, accepted or undone alike."""
+    from oracle.simple import goal_buckets
+
+    row = await db.get(RoadmapItem, uuid.UUID(c.target["item_id"]))
+    ids = [uuid.UUID(str(g)) for g in values.get("goal_ids") or []]
+    if row is None or row.feature_id is None or not ids:
+        return
+    goal = await db.get(Entity, ids[0])
+    if goal is None or goal.type != "goal" or goal.status == "rejected":
+        return
+    (before,) = await goal_buckets._snap(db, [row.feature_id])
+    shown = before.links[0].goal_id if before.links else None
+    await goal_buckets.move_links(db, before, ids[0], None if shown in ids else shown)
 
 
 async def _current(db: AsyncSession, c: SimpleChange, like: dict[str, Any]) -> dict[str, Any]:
@@ -1162,9 +1275,16 @@ async def _lock_change_items(db: AsyncSession, c: SimpleChange) -> None:
 
 
 async def _flags(
-    db: AsyncSession, c: SimpleChange, overlays: dict[uuid.UUID, dict[str, Any]]
+    db: AsyncSession,
+    c: SimpleChange,
+    overlays: dict[uuid.UUID, dict[str, Any]],
+    principal: Any = None,
 ) -> list[SimpleItemFlags]:
     read_ = await service.load(db, overlays)
+
+    def may(d: service.Entry) -> bool:
+        return service.can_decide(principal, d, read_.deciders)
+
     by_id = read_.by_id()
     ids: list[uuid.UUID] = []
     for k in sorted(_touched(c)):
@@ -1177,7 +1297,7 @@ async def _flags(
     return [
         SimpleItemFlags(
             item_id=i,
-            flags=service.flags_out(by_id[i]),
+            flags=service.flags_out(by_id[i], may),
         )
         for i in ids
     ]
@@ -1201,6 +1321,7 @@ async def create(
         agenda,
         decision_sheet,
         goal_asks,
+        goal_milestones,
         key_dates,
         one_pager,
         plan_changes,
@@ -1224,6 +1345,8 @@ async def create(
         return await trash_items.create_change(db, principal, body)
     if body.op in goal_asks.OPS:
         return await goal_asks.create_change(db, principal, body)
+    if body.op in goal_milestones.OPS:
+        return await goal_milestones.create_change(db, principal, body)
     if body.op in plan_changes.OPS:
         return await plan_changes.create_change(db, principal, body)
     if body.op in decision_sheet.OPS:
@@ -1301,13 +1424,14 @@ async def create(
     )
     if applies:
         await _apply(db, c, after, principal, session)  # type: ignore[arg-type]
-        flags = await _flags(db, c, await drafts.overlays_for(db, principal))
+        flags = await _flags(db, c, await drafts.overlays_for(db, principal), principal)
         session.last_change_at = now  # type: ignore[union-attr]
     else:
         # As if applied, on what the proposer reads; nothing is written.
         rows = {str(e.row.id): e.row for e in read_.entries}
         copies = await drafts.copies_of(db, list(rows.values()), seen)
-        flags = await _flags(db, c, drafts.simulate(c, after, rows, seen, KEYED, write, copies))
+        overlay = drafts.simulate(c, after, rows, seen, KEYED, write, copies)
+        flags = await _flags(db, c, overlay, principal)
     db.add(c)
     await db.flush()
     await audit.record(db, principal, f"simple_change.{c.status}", "simple_change", c.id,
@@ -1399,7 +1523,7 @@ async def decide(
     c.status = "accepted" if action == "accept" else "declined"
     c.decided_by, c.decided_at, c.decision_reason = me, now, reason
     await db.flush()
-    flags = await _flags(db, c, await drafts.overlays_for(db, principal))
+    flags = await _flags(db, c, await drafts.overlays_for(db, principal), principal)
     await audit.record(db, principal, f"simple_change.{c.status}", "simple_change", c.id,
                        data={"op": c.op, "target": c.target, "reason": reason})  # fmt: skip
     await db.commit()
@@ -1511,7 +1635,7 @@ async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> Simple
     db.add(u)
     session.last_change_at = now
     await db.flush()
-    flags = await _flags(db, c, await drafts.overlays_for(db, principal))
+    flags = await _flags(db, c, await drafts.overlays_for(db, principal), principal)
     await audit.record(db, principal, "simple_change.undone", "simple_change", u.id,
                        data={"op": c.op, "target": c.target, "undoes_id": str(c.id)})  # fmt: skip
     await db.commit()
@@ -1610,9 +1734,7 @@ class _View:
         if c.op in one_pager.OPS:
             return one_pager.may_decide(self.principal, c)
         if c.op in goal_milestones.OPS:
-            return has_role(self.principal.role, "owner") or self.me in self.owners.get(
-                c.document_id, set()
-            )
+            return goal_milestones.may_decide(self.principal, c, self)
         if c.op == "delete_goal":
             from oracle.simple import trash_items
 
@@ -1631,7 +1753,7 @@ class _View:
         owners, decider and reviewers (#723 owner answer)."""
         # S5: a one-pager line's change is on a PRD, not a roadmap of this read.
         if (c.document_id is not None and c.document_id not in self.docs
-                and c.op not in ("edit_line", *QUESTION_OPS)):  # fmt: skip
+                and c.op not in ("edit_line", "edit_goal_milestone", *QUESTION_OPS)):  # fmt: skip
             return False
         if self.me is None:
             return False
@@ -1811,6 +1933,27 @@ async def listing(
     shown = [c for c in rows if v.sees(c) and c.id not in gone]
     names = await _names(db, {c.by for c in shown})
     return [_out(c, v, names) for c in shown]
+
+
+async def _on_replaced_prds(db: AsyncSession, changes: list[SimpleChange]) -> set[uuid.UUID]:
+    """simple-replaced-prds: the proposals waiting on an item of a replaced PRD, which leave
+    Simple with the item (service.load); decided ones stay as history."""
+    by_item: dict[uuid.UUID, list[uuid.UUID]] = {}
+    for c in changes:
+        if c.status != "proposed" or not c.target.get("item_id"):
+            continue
+        try:
+            by_item.setdefault(uuid.UUID(str(c.target["item_id"])), []).append(c.id)
+        except ValueError:
+            pass
+    if not by_item or not (replaced := await roadmap_company.replaced_prd_ids(db)):
+        return set()
+    items = await db.scalars(
+        select(RoadmapItem.id).where(
+            RoadmapItem.id.in_(list(by_item)), RoadmapItem.prd_document_id.in_(replaced)
+        )
+    )
+    return {cid for iid in items for cid in by_item[iid]}
 
 
 def _subject(c: SimpleChange, questions: dict[str, Any]) -> dict[str, Any]:

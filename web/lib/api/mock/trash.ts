@@ -59,6 +59,8 @@ export interface TrashDb {
   estimates: Record<string, { slug: string; flow: string; note: string | null }>;
   /** home-deleted-roadmap: the document kinds purged from Trash (the API reads its audit log). */
   purged?: string[];
+  /** home-deleted-roadmap: when each kind was last purged (the audit event's time). */
+  purged_at?: Record<string, string>;
 }
 
 export interface TrashContext<D extends TrashDocument, V extends TrashVersion> {
@@ -92,7 +94,7 @@ export const emptyTrash = (): TrashDb => ({ entries: [], estimates: {} });
 /** Deletes an entry for good, noting the kinds of documents it held (as trash.purge's audit event).
  * trash-features-goals: a feature's or a goal's rows go too (trash_items.before_purge): the items
  * that depended on the feature drop its key, and the features drop the goal. */
-function purge(db: TrashDb, entry: TrashEntryRow, simple?: TrashedSimple) {
+function purge(db: TrashDb, entry: TrashEntryRow, now: string, simple?: TrashedSimple) {
   db.entries = db.entries.filter((e) => e !== entry);
   const root = entry.out.root;
   if (simple && root.type === "feature") {
@@ -111,7 +113,10 @@ function purge(db: TrashDb, entry: TrashEntryRow, simple?: TrashedSimple) {
     gb.goals.splice(0, gb.goals.length, ...gb.goals.filter((g) => !(g.id === root.id && g.trashed)));
     for (const f of gb.features ?? []) f.goal_ids = f.goal_ids.filter((g) => g !== root.id);
   }
-  db.purged = [...new Set([...(db.purged ?? []), ...(entry.documents as { kind?: string }[]).flatMap((d) => (d.kind ? [d.kind] : []))])];
+  const kinds = (entry.documents as { kind?: string }[]).flatMap((d) => (d.kind ? [d.kind] : []));
+  db.purged = [...new Set([...(db.purged ?? []), ...kinds])];
+  // home-deleted-roadmap: when each kind was last purged (the audit event's time).
+  db.purged_at = { ...db.purged_at, ...Object.fromEntries(kinds.map((k) => [k, now])) };
 }
 
 const RETENTION_DAYS = 30;
@@ -244,7 +249,7 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
   const now = ctx.now();
   // The purge the ticker does, on every request routed here (Home's included), not only Trash's:
   // entries past their 30 days are gone.
-  for (const e of ctx.db.entries) if (daysLeft(e, now) <= 0) purge(ctx.db, e, ctx.simple?.());
+  for (const e of ctx.db.entries) if (daysLeft(e, now) <= 0) purge(ctx.db, e, now, ctx.simple?.());
 
   if (p[1] === "trash") {
     // Trash's list and Restore: commenters and up, each entry checked (mayRestore); purge: owners.
@@ -263,7 +268,7 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
     }
     if (!owner) return ownerOnly;
     if (m === "DELETE" && !p[3]) {
-      purge(ctx.db, entry, ctx.simple?.());
+      purge(ctx.db, entry, now, ctx.simple?.());
       return json(204, undefined);
     }
     return null;

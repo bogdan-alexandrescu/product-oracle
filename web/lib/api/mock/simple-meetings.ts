@@ -101,8 +101,8 @@ export interface MeetingsCtx {
   othersWaiting?: () => number;
   /** home-honest-loading: every document of this kind is in Trash (and there is one). */
   onlyInTrash?: (kind: string) => boolean;
-  /** home-deleted-roadmap: no document of this kind is left, live or in Trash, and one was purged. */
-  deletedForGood?: (kind: string) => boolean;
+  /** home-deleted-roadmap: when the last of this kind was purged, when none is left, live or in Trash; else null. */
+  deletedForGood?: (kind: string) => string | null;
   /** qa4-simple-prd-1: every PRD document (as the API's start options list each readable PRD by its own title). */
   /** simple-replaced-prds: `replaced_by`, the PRDs that replaced one marked replaced (never offered or filtered by in Simple). */
   documents?: () => { id: string; slug: string; title: string; replaced_by?: Schemas["PrdRef"][] }[];
@@ -552,7 +552,7 @@ function meetingDrafts(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting, p: Prd): Sc
     participant_ids: [...new Set(made.map((d) => d.approver_id).filter((x): x is string => !!x))], changes: made.length,
     submitted_at: m.approved?.at ?? null, submitted_by: m.approved ? m.presenter_id : null, decider_approved: !!m.approved,
     waiting_on: m.approved?.waiting_on ?? [], approved_at: m.approved && !held(m) ? m.approved.at : null, blocked_by: m.approved?.blocked_by ?? [],
-    can_submit: false, can_resume: false, can_approve: false, change_log: [], can_withdraw: false, published: true,
+    can_submit: false, can_resume: false, can_approve: false, can_publish: false, required_reviewers: [], change_log: [], can_withdraw: false, published: true,
   }];
 }
 
@@ -766,11 +766,12 @@ function upcoming(ctx: MeetingsCtx, db: MeetingsDb, only?: string): Schemas["Sim
   // home-honest-loading: a ritual whose roadmaps are all in Trash says so (meetings.REVIEWS).
   const kindOf = new Map(rituals.map((r) => [r.id, r.kind]));
   const inTrash = ctx.onlyInTrash?.("roadmap") ?? false;
-  const deleted = ctx.deletedForGood?.("roadmap") ?? false;
+  const deleted = ctx.deletedForGood?.("roadmap") ?? null;
   for (const row of rows) {
     const reviewsRoadmap = kindOf.get(row.ritual_id) === "roadmap_refresh";
     row.reviews_in_trash = inTrash && reviewsRoadmap ? "roadmap" : null;
     row.reviews_deleted = deleted && reviewsRoadmap ? "roadmap" : null;
+    row.reviews_deleted_at = reviewsRoadmap ? deleted : null;
   }
   return rows.sort((a, b) => a.due_at.localeCompare(b.due_at)).slice(0, 20);
 }
@@ -871,7 +872,7 @@ const PROPOSAL_WORDS: Record<string, string> = {
   restore: "restore", edit_title: "rename", edit_outcome: "new outcome for", accept_risk: "accept a risk on", shift_dependents: "move the dependents of",
   move_dependency: "move the dependency of", confirm_item: "confirm", edit_line: "new wording for", add_key_date: "add the key date",
   edit_key_date: "change the key date", remove_key_date: "remove the key date", add_item: "add", merge_item: "merge",
-  keep_both: "keep beside its look-alikes:", cut_with_dependents: "cut with its dependents:",
+  keep_both: "keep beside its look-alikes:", cut_with_dependents: "cut with its dependents:", set_goals: "move to another goal:",
 };
 
 function describe(ctx: MeetingsCtx, c: Change, proposal = false): [string, Decision["subjects"]] {

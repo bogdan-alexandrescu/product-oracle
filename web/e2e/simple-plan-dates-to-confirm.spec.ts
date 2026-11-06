@@ -81,6 +81,8 @@ for (const [where, use] of [
         await expect(bar(page, ITEM)).toHaveAttribute("data-kind", "dated");
         await expect(bar(page, ITEM)).toHaveAttribute("data-start", SPAN.start);
         await expect(bar(page, ITEM)).toHaveAttribute("data-end", SPAN.end);
+        // The bar says where its dates came from.
+        await expect(bar(page, ITEM)).toHaveAttribute("aria-label", new RegExp(`^${TITLE}: ${shown.replace(" – ", " to ")}, Dates accepted from Oracle,`));
         await bar(page, ITEM).click();
         const card = page.getByTestId("floating-card");
         await expect(card.getByRole("heading", { name: TITLE })).toBeVisible();

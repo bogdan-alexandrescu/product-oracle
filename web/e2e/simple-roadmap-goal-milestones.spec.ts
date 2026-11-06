@@ -13,13 +13,14 @@ import { expect, test, type Page } from "./test";
  * (invented goals, items and people; the mock's today is Nov 3, 2026).
  */
 
+const COMMENTER = "commenter@example.com";
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
 const SHOTS = process.env.MS_COMPARE_DIR;
 // The built states beside the picked frames, light and dark: MS_COMPARE_DIR=<dir> MS_SCHEME=dark.
 const SCHEME: "light" | "dark" = process.env.MS_SCHEME === "dark" ? "dark" : "light";
 
-async function open(page: Page, scenario = "simple-milestones", scheme: "light" | "dark" = SCHEME) {
+async function open(page: Page, scenario = "simple-milestones", scheme: "light" | "dark" = SCHEME, email?: string) {
   await page.context().addInitScript(
     ([key, value, themeKey, theme]) => {
       localStorage.setItem(key, value);
@@ -28,7 +29,7 @@ async function open(page: Page, scenario = "simple-milestones", scheme: "light" 
     [MOCK_SCENARIO_KEY, scenario, THEME_KEY, scheme] as const,
   );
   await page.emulateMedia({ colorScheme: scheme });
-  await login(page);
+  await login(page, email);
   await page.goto("/simple/roadmap");
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
 }
@@ -205,6 +206,20 @@ test.describe("milestones on the Gantt and Now / Next / Later", () => {
   });
 });
 
+test.describe("for a commenter, who does not change the roadmap", () => {
+  test.use(DESKTOP);
+
+  test("its milestones show, but no + Milestone on the time axis or on Now / Next / Later", async ({ page }) => {
+    await open(page, "simple-milestones", SCHEME, COMMENTER);
+    await expect(label(page, "M1 Alerts live for 50 teams · Nov 20")).toBeVisible();
+    await expect(page.getByTestId("ms-add-hint")).toHaveCount(0);
+    await expect(page.getByTestId("ms-axis")).toHaveCount(0);
+    await page.getByTestId("format-board").click();
+    await expect(page.getByTestId("ms-board-chip").filter({ hasText: "M1 Alerts live for 50 teams · Nov 20" })).toBeVisible();
+    await expect(page.getByTestId("ms-board-add")).toHaveCount(0);
+  });
+});
+
 test.describe("a PRD's own milestones", () => {
   test.use(DESKTOP);
 
@@ -226,6 +241,17 @@ test.describe("a PRD's own milestones", () => {
     await expect(page.locator('[data-testid="ms-prd-diamond"][title^="M2 Digest for all teams"]')).toBeVisible();
     await expect(page.getByTestId("ms-proposed")).toHaveCount(1);
     await shot(page, "ms3-a-done");
+  });
+
+  test("a commenter cannot change the roadmap but still asks the PRD's owner to move its milestone", async ({ page }) => {
+    await open(page, "simple-prd-milestones", SCHEME, COMMENTER);
+    const m2 = page.getByTestId("ms-prd-label").filter({ hasText: "M2 Digest for all teams" });
+    await m2.click();
+    const prd = page.getByTestId("ms-prd-card");
+    await prd.getByLabel("Date").fill("2027-01-05");
+    await prd.getByRole("button", { name: "Ask to change it" }).click();
+    await expect(toast(page)).toContainText("Asked Nora Vance to move M2 Digest for all teams to Jan 5 in the PRD");
+    await expect(page.getByTestId("ms-add-hint")).toHaveCount(0);
   });
 
   test("ms3-a-mid: dragging a PRD milestone fades its old place and draws the dashed amber 'Moving' one", async ({ page }) => {

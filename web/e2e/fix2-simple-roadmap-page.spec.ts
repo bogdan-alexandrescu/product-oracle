@@ -167,14 +167,16 @@ test.describe("desktop", () => {
     const btn = page.getByTestId("needs-decision");
     await expect(btn).toContainText("Needs a decision");
     const title = await btn.getAttribute("title");
-    expect(title).toMatch(/this roadmap/i);
+    // roadmap-decide review: no roadmap chosen, it counts every roadmap's draft and says so.
+    expect(title).toMatch(/your roadmaps' working drafts/i);
     // fix2 review: the same is said on screen (not only a hover title), with the button's count.
     const n = (await btn.textContent())!.match(/(\d+)/)![1];
     await btn.click();
     const scope = page.getByTestId("tray-scope");
     await expect(scope).toBeVisible();
-    await expect(scope).toContainText(`${n} on this roadmap view`);
-    await expect(scope).toContainText("side menu");
+    await expect(scope).toContainText(`${n} to decide in your roadmaps' working drafts`);
+    // roadmap-decide: one broken-link count everywhere, so the tray names what it counts, with no apology for a differing side menu.
+    await expect(scope).toContainText("broken links, dates to confirm, proposals");
   });
 
   /**

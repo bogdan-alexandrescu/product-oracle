@@ -255,7 +255,7 @@ export function agendaOut(ctx: QuestionsCtx, db: QuestionsDb, meeting: { id: str
 /** GET /v1/simple/decisions/waiting: `others` is the decision log's judgement calls waiting for me. */
 export function waitingOut(ctx: QuestionsCtx, db: QuestionsDb, others: number): Schemas["SimpleDecisionsWaitingOut"] {
   const c = questionsCounts(ctx, db);
-  return { count: c.waiting_count + others, late: c.late_count, questions: c.mine, others, approvals_waiting: c.approvals_waiting, tasks: [] };
+  return { count: c.waiting_count + others, late: c.late_count, questions: c.mine, others, approvals_waiting: c.approvals_waiting, tasks: [], items: [] };
 }
 
 async function readBody(req: Request): Promise<Record<string, unknown>> {
