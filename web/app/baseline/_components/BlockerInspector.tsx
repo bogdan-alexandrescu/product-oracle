@@ -193,11 +193,8 @@ export function BlockerInspector({
       <Inspector
         testId="blocker-inspector"
         label={b?.statement ?? "Blocker"}
-        eyebrow={
-          <>
-            Blocker{b && <> · <span className="font-mono">{b.key}</span></>}
-          </>
-        }
+        // The statement is the name; the key stays out of sight (visual QA GT-2).
+        eyebrow="Blocker"
         title={b?.statement}
         chips={
           b && (

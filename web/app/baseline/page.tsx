@@ -6,6 +6,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { setupReturn } from "@/app/settings/_nav";
 import { Button, InfoTip, KpiStrip, LinkButton, Notice, Page, PageHeader, Split, ViewOnly, type Kpi } from "@/components/ds";
 import { VagueGoalsLine } from "@/components/discuss/VagueGoalsLine";
+import { usePhone } from "@/components/ds/page-info";
 import { LoadError, Loading } from "@/components/ui";
 import { startInterview, startInterviews, vagueGoals } from "@/lib/api/goal-interview";
 import { GOALS_OBSERVE, useGoalsLevel } from "@/lib/goals-autonomy";
@@ -161,6 +162,7 @@ export default function BaselinePage() {
   const canInterview = can("start_goal_interview") && goalsLevel !== undefined && goalsLevel !== "observe";
   const goalsNote = can("start_goal_interview") && goalsLevel === "observe" ? GOALS_OBSERVE : null;
   const onAuth = useAuthRedirect();
+  const phone = usePhone();
 
   const graph = useQuery("baseline-graph", () => unwrap(api.GET("/v1/baseline/graph")));
   const trace = useQuery("baseline-trace", () => unwrap(api.GET("/v1/baseline/trace")));
@@ -417,6 +419,8 @@ export default function BaselinePage() {
   // review kept from before (an earlier run, or this one before a failed reload) stays under the
   // notice, dimmed and inert, without its decision bar: it is not the run asked for.
   const fromRunFailed = !!runId && !!fromRun.error;
+  // Approvers decide in the bar, last in the page column and sticky at the window's foot (B-02).
+  const decisionBar = tab === "from-run" && view && !fromRunFailed ? <BottomBar view={view} busy={busy} act={act} /> : null;
   const tabs: TabItem<Tab>[] = [
     // A kept review that is not current shows no count: the notice says why (visual QA B-03).
     ...(view ? [{ id: "from-run" as const, label: "From this run", count: fromRunFailed ? undefined : view.summary.need_you, kind: "crit" as const }] : []),
@@ -730,8 +734,11 @@ export default function BaselinePage() {
             </>
           )}
         </div>
-        {tab === "from-run" && view && !fromRunFailed && <BottomBar view={view} busy={busy} act={act} />}
+        {!phone && decisionBar}
       </Split>
+      {/* On a phone the list above the views is long: the bar is the page's last child, so it
+          can stick at the window's foot from the top of the page, above the tab bar. */}
+      {phone && decisionBar}
     </Page>
   );
 }
