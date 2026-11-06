@@ -519,6 +519,29 @@ function FeatureLink({ f, onOpen }: { f: FeatureRef; onOpen?: (id: string) => vo
   );
 }
 
+/** feature-parts: a feature's parts, each with its own parts nested under it (any depth); a cut
+ * part says so. Each opens its own panel. */
+function PartsList({ parts, items, onOpen, seen }: { parts: Item["parts"]; items: Map<string, Item>; onOpen?: (id: string) => void; seen: Set<string> }) {
+  return (
+    <ul className="mt-0.5 space-y-0.5">
+      {parts.map((x) => {
+        const sub = seen.has(x.id) ? [] : (items.get(x.id)?.parts ?? []);
+        return (
+          <li key={x.id} data-testid="card-part">
+            <FeatureLink f={x} onOpen={onOpen} />
+            {x.cut && <span className="ml-1 text-text2">(cut)</span>}
+            {sub.length > 0 && (
+              <div className="ml-2 border-l border-line pl-3">
+                <PartsList parts={sub} items={items} onOpen={onOpen} seen={new Set([...seen, x.id])} />
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 /**
  * panel-menu: Merge into… (merge_item: this feature closes into the one picked, which takes its
  * dependencies and dependents) or Part of… (set_parent: it sits under the one picked). Another
@@ -526,8 +549,10 @@ function FeatureLink({ f, onOpen }: { f: FeatureRef; onOpen?: (id: string) => vo
  */
 function PickFeature({ kind, item, items, act, done }: { kind: "merge" | "parent"; item: Item; items: Map<string, Item>; act: Act; done: () => void }) {
   const merge = kind === "merge";
+  // Any open feature of the roadmap; for Part of, never one of its own parts at any depth (a
+  // feature is never its own ancestor).
   const options = [...items.values()].filter(
-    (i) => i.id !== item.id && i.roadmap.id === item.roadmap.id && !closedItem(i) && (merge || (!i.part_of && !item.parts.length)),
+    (i) => i.id !== item.id && i.roadmap.id === item.roadmap.id && !closedItem(i) && (merge || !i.part_path.some((p) => p.id === item.id)),
   );
   const [to, setTo] = useState(merge ? "" : (item.part_of?.id ?? ""));
   const name = (i: Item) => [i.code, i.title].filter(Boolean).join(" ");
@@ -950,9 +975,11 @@ export function FloatingCard({
           {menu && (
             <div role="menu" className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-line bg-surface p-1 shadow-tip">
               {menuItem("Rename", () => setRenaming(true))}
-              {!closedItem(item) && menuItem("Part of…", () => setPick("parent"))}
+              {/* A cut feature stays a part, and can still be taken out (or put under another). */}
+              {item.status !== "merged" && menuItem("Part of…", () => setPick("parent"))}
               {!closedItem(item) && menuItem("Merge into…", () => setPick("merge"))}
-              {menuItem("Delete feature", () => void remove({ id: item.id, title: item.title }), true)}
+              {/* As a row's Delete: who decides on it deletes; others propose it (the same DELETE). */}
+              {menuItem(item.can_decide ? "Delete feature" : "Propose: delete", () => void remove({ id: item.id, title: item.title }), true)}
             </div>
           )}
         </div>
@@ -1053,21 +1080,22 @@ export function FloatingCard({
           Merged into <FeatureLink f={{ ...item.merged_into, code: items.get(item.merged_into.id)?.code ?? "" }} onOpen={onOpen} />
         </p>
       )}
-      {item.part_of && (
+      {item.part_path.length > 0 && (
         <p className="mt-1 text-sm text-text2" data-testid="card-part-of">
-          Part of <FeatureLink f={item.part_of} onOpen={onOpen} />
+          {/* feature-parts: the whole path from the top ("Part of F-01 Alerts > F-02 Rules"). */}
+          Part of{" "}
+          {item.part_path.map((x, n) => (
+            <span key={x.id}>
+              {n > 0 && " > "}
+              {x.in_trash ? <b className="font-semibold text-text">{x.title} (in Trash)</b> : <FeatureLink f={x} onOpen={onOpen} />}
+            </span>
+          ))}
         </p>
       )}
       {item.parts.length > 0 && (
         <div className="mt-1 text-sm" data-testid="card-parts">
           <span className="text-text2">Parts</span>
-          <ul className="mt-0.5 space-y-0.5">
-            {item.parts.map((x) => (
-              <li key={x.id} data-testid="card-part">
-                <FeatureLink f={x} onOpen={onOpen} />
-              </li>
-            ))}
-          </ul>
+          <PartsList parts={item.parts} items={items} onOpen={onOpen} seen={new Set([item.id])} />
         </div>
       )}
       <LooksLike item={item} act={act} canChange={canChange} />

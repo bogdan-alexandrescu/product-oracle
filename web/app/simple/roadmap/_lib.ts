@@ -409,6 +409,48 @@ export function nearWords(item: Item, keyDates: KeyDate[]): string | null {
 /** S7: an item closed for the plan (cut, or a draft merged into another): drawn below the line. */
 export const closedItem = (i: Item): boolean => i.status === "cut" || i.status === "merged";
 
+/**
+ * feature-parts (any depth, owner's answer Nov 5): lists of item ids (a view's groups, lanes or
+ * columns) put in tree order: each live item followed by its live parts, theirs under them, in
+ * the order given, each with its depth (0: top). A part sits in its top parent's list; a part
+ * whose parent is not among the ids (filtered out, closed, in Trash) stays where it was, at the
+ * top level, so no row is ever lost.
+ */
+export function partsTree(lists: string[][], byId: Map<string, Item>): { id: string; depth: number }[][] {
+  const all = new Set(lists.flat());
+  const parentOf = (id: string): string | null => {
+    const i = byId.get(id);
+    const p = i?.part_of?.id ? byId.get(i.part_of.id) : undefined;
+    return i && p && p.id !== id && all.has(p.id) && !closedItem(i) && !closedItem(p) ? p.id : null;
+  };
+  const kids = new Map<string, string[]>();
+  for (const id of all) {
+    const p = parentOf(id);
+    if (p) kids.set(p, [...(kids.get(p) ?? []), id]);
+  }
+  const placed = new Set<string>();
+  const walk = (id: string, depth: number, out: { id: string; depth: number }[]) => {
+    if (placed.has(id)) return;
+    placed.add(id);
+    out.push({ id, depth });
+    for (const k of kids.get(id) ?? []) walk(k, depth + 1, out);
+  };
+  const out = lists.map((ids) => {
+    const own: { id: string; depth: number }[] = [];
+    for (const id of ids) if (!parentOf(id)) walk(id, 0, own);
+    return own;
+  });
+  // A loop the read cut (never stored): its items at the top level of their own list.
+  lists.forEach((ids, n) => ids.forEach((id) => walk(id, 0, out[n])));
+  return out;
+}
+
+/** panel-menu: "<code> <name>" of the feature a merged one went into, by the kept feature's
+ * display code (never its key), as its panel reads it. */
+export function mergedName(i: Item, find: (id: string) => Item | undefined): string {
+  return i.merged_into ? `${find(i.merged_into.id)?.code ?? ""} ${i.merged_into.title}`.trim() : "";
+}
+
 /** S7: a quarter as the change engine names it ("2026-Q4"). */
 export function quarterValue(start: string): string {
   const d = new Date(ms(start));

@@ -573,7 +573,7 @@ export async function routeGoalMap(
   req: Request,
   p: string[],
   /** A Simple roadmap item by id (any item can be attached, not only those on the map). */
-  item: (id: string) => { title: string; trashed?: boolean } | null = () => null,
+  item: (id: string) => { title: string; trashed?: boolean; merged_into?: string } | null = () => null,
   /** The Simple roadmap's items as the reader sees them (the unplaced features). */
   items: () => Promise<{ id: string; title: string; status: string }[]> = async () => [],
   /** The Baseline goals (the goals left off the map; the map's own goal names). */
@@ -596,7 +596,8 @@ export async function routeGoalMap(
         return { ...rest, can_change: mayChangeMilestone(me, db.goal_map_decider) };
       });
     const on = new Set(milestones.map((m) => m.id));
-    const features = map.features.filter((f) => !item(f.id)?.trashed).flatMap((f) => {
+    // panel-menu (goal_map.build): a feature merged into another is no longer one of the map's.
+    const features = map.features.filter((f) => !item(f.id)?.trashed && !item(f.id)?.merged_into).flatMap((f) => {
       const links = f.links.filter((l) => on.has(l.milestone));
       return links.length ? [{ ...f, milestones: f.milestones.filter((m) => on.has(m)), links }] : [];
     });

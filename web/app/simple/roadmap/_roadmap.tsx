@@ -38,6 +38,7 @@ import {
   ChangeFailed,
   changedWords,
   closedItem,
+  partsTree,
   decide,
   decisionCounts,
   deciderWords,
@@ -156,15 +157,10 @@ function oneLane(data: Roadmap, group: Lane): Roadmap {
     return own.length ? [{ ...g, item_ids: own }] : [];
   });
   if (pm.length) groups.push({ key: PM_LANE, title: "PM-owned", item_ids: pm });
-  // feature-parts: a live part sits right under its live parent, in its parent's group.
-  const parentOf = (id: string) => {
-    const i = byId.get(id)!;
-    const p = i.part_of?.id ? byId.get(i.part_of.id) : undefined;
-    return p && !closedItem(p) && !closedItem(i) && seen.has(p.id) ? p.id : null;
-  };
-  const placed = groups
-    .map((g) => ({ ...g, item_ids: g.item_ids.filter((id) => !parentOf(id)).flatMap((id) => [id, ...[...seen].filter((x) => parentOf(x) === id)]) }))
-    .filter((g) => g.item_ids.length);
+  // feature-parts: every live part, at any depth, sits under its live parent in its top
+  // parent's group (partsTree); one whose parent is not shown keeps its own place.
+  const tree = partsTree(groups.map((g) => g.item_ids), byId);
+  const placed = groups.map((g, n) => ({ ...g, item_ids: tree[n].map((x) => x.id) })).filter((g) => g.item_ids.length);
   return { ...data, groups: placed };
 }
 
@@ -1271,13 +1267,15 @@ export function SimpleRoadmap() {
     [run],
   );
   // trash-features-goals: a Gantt or Timeline row's context menu (a right-click, or the menu
-  // key on a focused bar) offers Delete feature to who decides on it (its own can_decide).
+  // key on a focused bar) offers Delete feature to who decides on it (its own can_decide), and
+  // Propose: delete to others who may change (panel-menu: as the feature panel's menu).
   const [rowMenu, setRowMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const removeFeature = useFeatureDelete(reload, toast, (id) => setCard((c) => (c?.id === id ? null : c)));
   const onRowMenu = (e: ReactMouseEvent) => {
     const el = (e.target as Element).closest("[data-bar-id],[data-item-id]");
     const it = el ? byId.get(el.getAttribute("data-bar-id") ?? el.getAttribute("data-item-id") ?? "") : undefined;
-    if (!el || !it?.can_decide) return;
+    // panel-menu: who decides deletes; who may change proposes it, as in the feature panel.
+    if (!el || !it || !(it.can_decide || canChange)) return;
     e.preventDefault();
     const r = el.getBoundingClientRect();
     // The menu key fires it with no pointer: the menu opens under the row.
@@ -1863,6 +1861,7 @@ export function SimpleRoadmap() {
           <FeatureContextMenu
             at={rowMenu}
             title={rowMenuItem.title}
+            propose={!rowMenuItem.can_decide}
             onClose={() => setRowMenu(null)}
             onDelete={() => {
               void removeFeature(rowMenuItem);

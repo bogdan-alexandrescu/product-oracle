@@ -50,7 +50,7 @@ export function useFeatureDelete(reload: () => Promise<unknown>, toast: (ask: To
 const ITEM = "flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-warn hover:bg-surface2";
 
 /** The menu itself: at a point (a context menu) or under its ⋯ button. Escape or a click away closes it. */
-function Menu({ title, onDelete, onClose, style, className }: { title: string; onDelete: () => void; onClose: () => void; style?: CSSProperties; className: string }) {
+function Menu({ title, onDelete, onClose, style, className, propose }: { title: string; onDelete: () => void; onClose: () => void; style?: CSSProperties; className: string; propose?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   useEffect(() => {
@@ -78,19 +78,20 @@ function Menu({ title, onDelete, onClose, style, className }: { title: string; o
           onDelete();
         }}
       >
-        Delete feature
+        {/* panel-menu: who may not decide proposes it (the same DELETE; its decider decides). */}
+        {propose ? "Propose: delete" : "Delete feature"}
       </button>
     </div>
   );
 }
 
 /** A row's context menu, opened where the person right-clicked (or pressed the menu key). */
-export function FeatureContextMenu({ at, title, onDelete, onClose }: { at: { x: number; y: number }; title: string; onDelete: () => void; onClose: () => void }) {
-  return <Menu title={title} onDelete={onDelete} onClose={onClose} className="fixed" style={{ left: Math.min(at.x, window.innerWidth - 232), top: Math.min(at.y, window.innerHeight - 56) }} />;
+export function FeatureContextMenu({ at, title, onDelete, onClose, propose }: { at: { x: number; y: number }; title: string; onDelete: () => void; onClose: () => void; propose?: boolean }) {
+  return <Menu title={title} onDelete={onDelete} onClose={onClose} propose={propose} className="fixed" style={{ left: Math.min(at.x, window.innerWidth - 232), top: Math.min(at.y, window.innerHeight - 56) }} />;
 }
 
 /** A row's ⋯ button and its menu. */
-export function FeatureMenu({ title, onDelete }: { title: string; onDelete: () => void }) {
+export function FeatureMenu({ title, onDelete, propose }: { title: string; onDelete: () => void; propose?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <span className="relative flex-none">
@@ -104,7 +105,7 @@ export function FeatureMenu({ title, onDelete }: { title: string; onDelete: () =
       >
         ⋯
       </button>
-      {open && <Menu title={title} onDelete={onDelete} onClose={() => setOpen(false)} className="absolute right-0 top-9" />}
+      {open && <Menu title={title} onDelete={onDelete} propose={propose} onClose={() => setOpen(false)} className="absolute right-0 top-9" />}
     </span>
   );
 }

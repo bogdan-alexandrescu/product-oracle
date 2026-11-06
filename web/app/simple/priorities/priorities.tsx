@@ -684,7 +684,7 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
                 <Numbers r={r} mayChange={mayChange} changed={changed} />
               </span>
               {/* trash-features-goals: Delete feature (to Trash, Undo) for who decides on it. */}
-              {mayChange && r.applies && r.item_id && <FeatureMenu title={nameOf(r)} onDelete={() => onDelete({ id: r.item_id!, title: r.title })} />}
+              {mayChange && r.item_id && <FeatureMenu title={nameOf(r)} propose={!r.applies} onDelete={() => onDelete({ id: r.item_id!, title: r.title })} />}
             </div>
             {/* qa4-simple-plan-25: Oracle's rank and the move sit in a slot of their own under the row, so the row keeps its layout. */}
             {((r.oracle_rank != null && r.oracle_rank !== r.rank) || words) && (
