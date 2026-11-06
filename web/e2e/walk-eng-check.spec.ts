@@ -132,7 +132,7 @@ test("inbox names the PRD: a stop's row says which PRD it is for", async ({ page
   // The runs at this stop read as one row ("Feature set and dependencies · 3 runs"); Show runs
   // lists each run under it.
   const box = page.getByTestId("inbox-checkpoints");
-  const group = page.getByTestId("checkpoint-group").filter({ hasText: /^Feature set and dependencies · \d+ runs$/ });
+  const group = page.getByTestId("checkpoint-group").filter({ hasText: /^Feature set and dependencies · 3 runs$/ });
   const row = box.getByRole("row").filter({ has: group });
   await expect(row).toHaveCount(1);
   await row.getByRole("button", { name: "Show runs" }).click();
