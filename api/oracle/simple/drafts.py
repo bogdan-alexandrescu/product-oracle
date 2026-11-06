@@ -1120,13 +1120,9 @@ async def submit(
     latest = await db.scalar(
         select(func.max(DocumentVersion.number)).where(DocumentVersion.document_id == document.id)
     )
-    # Versions withdrawn from review are not the roadmap's: the draft's base is still its own.
-    newest = await db.scalar(
-        select(func.max(DocumentVersion.number)).where(
-            DocumentVersion.document_id == document.id, ~_withdrawn()
-        )
-    )
-    if base is None or (approved.id != base.id if approved else newest != base.number):
+    # A roadmap never approved has nothing published to change under the draft: a newer
+    # version a run left in review does not block it (hotfix, Nov 6).
+    if base is None or (approved is not None and approved.id != base.id):
         raise DraftError(
             409,
             "The published roadmap changed since this draft was opened: its changes were made "
