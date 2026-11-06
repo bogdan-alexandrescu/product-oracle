@@ -9,20 +9,26 @@
  * the cell of its area under the milestone it serves (drawn once; its other places point to
  * it). A phone shows the milestones one by one. Every feature opens Simple's item panel.
  */
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { Icon } from "@/components/ds/Icon";
+import { InfoTip } from "@/components/ds/InfoTip";
 import { NewPrdSheet, useCanStartPrd } from "@/components/simple/NewPrd";
 import { api, unwrap } from "@/lib/api/client";
-import type { GmArea, GmFeature, GmGoal, GmLift, GmMilestone, GmStatus, GoalMap } from "@/lib/api/mock/goal-map";
+import type { GmArea, GmFeature, GmGoal, GmLift, GmLink, GmMilestone, GmStatus, GoalMap } from "@/lib/api/mock/goal-map";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { FeaturePanel } from "./_panel";
 
 /** one-feature-panel: each feature's code (its roadmap item's), shown before its name. */
 const Codes = createContext<Map<string, string>>(new Map());
+/** Each milestone's unit, for a feature's readings before and after it shipped. */
+const Units = createContext<Map<string, string>>(new Map());
 
-type Edit = "propose" | "goal" | "attach" | "prd" | "area" | "gate" | null;
+type Edit = "propose" | "goal" | "attach" | "prd" | "area" | "gate" | "metric" | "gaps" | "unplaced" | null;
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -66,6 +72,25 @@ function Pill({ cls, children, testId }: { cls: string; children: ReactNode; tes
 const StatusPill = ({ s }: { s: GmStatus }) => <Pill cls={STATUS[s].cls}>{STATUS[s].label}</Pill>;
 const LiftPill = ({ l }: { l: GmLift }) => <Pill cls={LIFT[l].cls}>{LIFT[l].label}</Pill>;
 
+/** goal-map-scoreboard: why a feature is helping or not: its goal's reading before it shipped and since. */
+function liftWhy(l: Pick<GmLink, "lift" | "shipped_on" | "before" | "after" | "measured">, unit: string): string {
+  if (l.lift === "not_measured") return "Not measured yet";
+  if (l.before !== null && l.after !== null) return `Before ${l.shipped_on ? `it shipped on ${l.shipped_on}` : "it shipped"}: ${num(l.before, unit)} · since: ${num(l.after, unit)}`;
+  return l.measured ? `Measured ${l.measured}` : "Not measured yet";
+}
+
+/** The lift pill with its reason behind an (i); the card under it opens on a click, the (i) does not. */
+function LiftWhy({ l, unit, name }: { l: GmLink; unit: string; name: string }) {
+  return (
+    <span className="inline-flex items-center gap-0.5" data-testid="gm-lift" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+      <LiftPill l={l.lift} />
+      <InfoTip label={`${LIFT[l.lift].label}: ${name}`}>
+        <span data-testid="gm-lift-why">{liftWhy(l, unit)}</span>
+      </InfoTip>
+    </span>
+  );
+}
+
 function Btn({ children, onClick, primary, testId, small, disabled }: { children: ReactNode; onClick?: () => void; primary?: boolean; testId?: string; small?: boolean; disabled?: boolean }) {
   return (
     <button
@@ -94,7 +119,7 @@ function Bar({ current, target, status }: { current: number | null; target: numb
 }
 
 /** The 7 daily readings a milestone's 'met' rule counts, and who confirmed it. */
-function Proof({ m, compact, week }: { m: GmMilestone; compact?: boolean; week: string[] }) {
+function Proof({ m, compact, week, goal }: { m: GmMilestone; compact?: boolean; week: string[]; goal?: GmGoal }) {
   const ok = (v: number | null) => v !== null && m.threshold !== null && (m.measure.startsWith("days") ? v === 0 : v >= m.threshold);
   return (
     <span className="flex min-w-0 max-w-full flex-col gap-1">
@@ -117,11 +142,42 @@ function Proof({ m, compact, week }: { m: GmMilestone; compact?: boolean; week: 
           : m.status === "no_gate"
             ? "No gate yet: set the reading it must hold"
             : m.status === "not_measured"
-            ? "No daily reading yet"
+            ? readingLine(goal)
             : m.status === "missed"
               ? `${m.due ? `Due ${m.due} · ` : ""}held ${m.days.filter(ok).length} of 7 days`
               : `Held ${m.days.filter(ok).length} of 7 days · ${week[0]} – ${week[6]}`}
       </span>
+    </span>
+  );
+}
+
+/** goal-map-scoreboard: what keeps a goal from being measured, in a few words. */
+function readingLine(goal?: GmGoal): string {
+  if (goal?.missing === "metric") return "No metric picked";
+  if (goal?.missing === "values" && goal.metric) return `No values yet from ${goal.metric.title}`;
+  return "No daily reading yet";
+}
+
+/** Where a goal's reading comes from, or the action that gives it one. */
+function Reading({ g, canEdit, onPick, gate }: { g: GmGoal; canEdit: boolean; onPick: (goal: string) => void; gate?: boolean }) {
+  const link = "simple-small text-[14px]! font-semibold leading-5 text-accent-ink! hover:underline";
+  if (g.missing === "metric")
+    return canEdit ? (
+      <span className="flex">
+        <Btn small testId="gm-pick-metric" onClick={() => onPick(g.id)}>Pick its metric</Btn>
+      </span>
+    ) : (
+      <Link href="/company/metrics" data-testid="gm-see-metrics" className={link}>See metrics</Link>
+    );
+  if (g.missing === "values" && g.metric)
+    return (
+      <Link href={`/company/metrics?metric=${encodeURIComponent(g.metric.id)}`} data-testid="gm-add-value" className={link}>
+        Add a value
+      </Link>
+    );
+  return (
+    <span data-testid={gate ? "gm-gate-source" : "gm-goal-source"} className="simple-small text-[14px]! leading-5">
+      {g.metric ? `From ${g.metric.title}` : "Typed in by hand"}
     </span>
   );
 }
@@ -144,9 +200,10 @@ function Guardrail({ map }: { map: GoalMap }) {
 /** Feature line: expected lift and, once released, what it measured. */
 function FeatureCard({ f: all, milestone, area, tight, also, fresh, serves = "Also serves", onOpen }: { f: GmFeature; milestone?: string; area?: string; tight?: boolean; also?: string[]; fresh?: string; serves?: string; onOpen: (f: GmFeature) => void }) {
   // In a milestone's cell: what it is expected to do for that milestone, and what it did.
-  const link = all.links.find((l) => l.milestone === milestone);
+  const link = all.links.find((l) => l.milestone === milestone) ?? all.links[0];
   const f = link ? { ...all, expected: link.expected, confidence: link.confidence, measured: link.measured, lift: link.lift } : all;
   const code = useContext(Codes).get(all.id);
+  const unit = useContext(Units).get(link?.milestone ?? "") ?? "";
   return (
     <div
       role="button"
@@ -168,7 +225,7 @@ function FeatureCard({ f: all, milestone, area, tight, also, fresh, serves = "Al
         {f.name}
       </span>
       <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <LiftPill l={f.lift} />
+        {link ? <LiftWhy l={link} unit={unit} name={f.name} /> : <LiftPill l={f.lift} />}
         <span className="simple-small text-[14px]! leading-5">
           {area ? `${area} · ` : ""}{f.expected ? `Expects ${lower(f.expected)}` : "No expected lift yet"} ({f.confidence.toLowerCase()} confidence)
           {f.measured ? ` · measured ${f.measured}` : f.released ? " · out, no reading yet" : " · not out yet"}
@@ -205,6 +262,7 @@ function homes(order: string[], features: GmFeature[]): Record<string, string> {
   return out;
 }
 const msName = (map: GoalMap, id: string) => map.milestones.find((m) => m.id === id)?.name ?? "";
+const goalOf = (map: GoalMap, m: GmMilestone) => map.goals.find((g) => g.id === m.goal);
 
 /** After an edit, brings what changed into view. */
 function reveal(sel: string, block: ScrollLogicalPosition = "center") {
@@ -282,11 +340,13 @@ interface Draft {
   area: string;
   expected: string;
   confirm: boolean;
+  /** The metric picked for a goal. */
+  metric: string;
 }
 
 /** A proposed milestone starts with nothing before it (gm1-a-open): "Nothing: it can start now". */
 function emptyDraft(map: GoalMap): Draft {
-  return { name: "", goal: map.goals[0]?.id ?? "", threshold: "", areas: [], after: "", target: "", feature: "", search: "", milestone: "", areaName: "", area: "", expected: "", confirm: false };
+  return { name: "", goal: map.goals[0]?.id ?? "", threshold: "", areas: [], after: "", target: "", feature: "", search: "", milestone: "", areaName: "", area: "", expected: "", confirm: false, metric: "" };
 }
 
 /* ---------- The page ---------- */
@@ -305,16 +365,27 @@ export function GoalMapPage() {
   // Read after the map: its features are roadmap items once the map is read.
   const roadmap = useQuery(`simple-roadmap:goal-map-codes:${map ? 1 : 0}`, () => (map ? unwrap(api.GET("/v1/simple/roadmap", { params: { query: {} } })) : Promise.resolve(null)));
   const codes = useMemo(() => new Map((roadmap.data?.items ?? []).flatMap((i) => (i.code ? [[i.id, i.code] as [string, string]] : []))), [roadmap.data]);
+  const units = useMemo(() => new Map((map?.milestones ?? []).map((m) => [m.id, m.unit])), [map]);
+  // goal-map-scoreboard: a Home goal card opens the map on its goal (by id; else by its name).
+  const params = useSearchParams();
+  const asked = params.get("goal");
+  const askedName = params.get("name");
+  const picked = map?.goals.find((g) => g.id === asked)?.id ?? map?.goals.find((g) => !!askedName && g.name.toLowerCase() === askedName.toLowerCase())?.id ?? null;
+  useEffect(() => {
+    if (picked) reveal(`[data-goal="${picked}"]`, "start");
+  }, [picked]);
 
   if (!map) return <div className="simple-page" role="status">{q.error ? errorMessage(q.error) : "Loading the goal map…"}</div>;
 
-  const open = (e: Edit, goal?: string, milestone?: string, area?: string) => {
+  const open = (e: Edit, goal?: string, milestone?: string, area?: string, feature?: string) => {
     if (goal) setGoalId(goal);
     setFlash(null);
     setEdit(e);
     const m = map.milestones.find((x) => x.id === milestone);
     const gate = e === "gate" && m ? { threshold: m.threshold === null ? "" : String(m.threshold), after: m.depends[0] ?? "" } : {};
-    setDraft({ ...emptyDraft(map), milestone: milestone ?? "", area: area ?? "", ...gate });
+    // An unplaced feature: picked already, found by its name.
+    const placing = feature ? { feature, search: map.unplaced.find((f) => f.id === feature)?.name ?? "" } : {};
+    setDraft({ ...emptyDraft(map), milestone: milestone ?? "", area: area ?? "", ...gate, ...placing });
   };
   const close = () => {
     setEdit(null);
@@ -394,6 +465,15 @@ export function GoalMapPage() {
         problem: `Reach ${m.name} (${goal?.name.toLowerCase() ?? m.measure}, ${m.threshold === null ? "no gate yet" : `at least ${num(m.threshold, m.unit)}, held 7 days in a row`}; now ${num(m.current, m.unit)}). Areas: ${areas.join(", ")}.${g ? ` Guardrail: ${g.name.toLowerCase()} ${g.rule}.` : ""}`,
       });
     }
+    if (edit === "metric") {
+      const g = map.goals.find((x) => x.id === goalId)!;
+      const c = g.choices.find((x) => x.id === draft.metric);
+      const ok = await send(api.POST("/v1/simple/goal-map/goals/{goal_id}/metric", { params: { path: { goal_id: g.id } }, body: { metric: draft.metric } }), (next) =>
+        next.goals.find((x) => x.id === g.id)?.missing ? `${g.name} now reads ${c?.title}; it has no value yet.` : `${g.name} now reads ${c?.title}.`,
+      );
+      if (!ok) return;
+      reveal(`[data-goal="${g.id}"]`, "start");
+    }
     if (edit === "area") {
       const ok = await send(api.POST("/v1/simple/goal-map/areas", { body: { name: draft.areaName, lever: "" } }), () => `Area added: ${draft.areaName}. It shows last; move it to change the order.`);
       if (!ok) return;
@@ -401,15 +481,17 @@ export function GoalMapPage() {
     close();
   };
 
-  const ctx: Ctx = { map, open, moveArea, onOpen: setPanel, week: weekOf(map.today) };
+  const ctx: Ctx = { map, open, moveArea, onOpen: setPanel, week: weekOf(map.today), picked };
 
   return (
     <Codes.Provider value={codes}>
+    <Units.Provider value={units}>
     <div className="simple-page" data-testid="gm-page" style={{ maxWidth: "none" }}>
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h1 className="simple-h1 max-[600px]:sr-only">Goal map</h1>
           <p className="simple-small">Goals, areas, milestones and features. Updated daily · {map.today}.</p>
+          <Flags map={map} open={open} />
         </div>
         <div className="flex flex-wrap gap-2">
           {map.can_edit && (
@@ -432,7 +514,7 @@ export function GoalMapPage() {
       <Ladder {...ctx} />
 
       {edit && draft && (
-        <Editor map={map} edit={edit} draft={draft} setDraft={setDraft} goal={map.goals.find((g) => g.id === goalId) ?? map.goals[0]} onClose={close} onSave={() => void save()} />
+        <Editor map={map} edit={edit} draft={draft} setDraft={setDraft} goal={map.goals.find((g) => g.id === goalId) ?? map.goals[0]} onClose={close} onSave={() => void save()} open={open} onOpen={(f) => setPanel(f)} />
       )}
       {panel && <FeaturePanel id={panel.id} code={codes.get(panel.id)} name={panel.name} onClose={() => setPanel(null)} />}
       {prd && (
@@ -446,16 +528,19 @@ export function GoalMapPage() {
         />
       )}
     </div>
+    </Units.Provider>
     </Codes.Provider>
   );
 }
 
 interface Ctx {
   map: GoalMap;
-  open: (e: Edit, goal?: string, milestone?: string, area?: string) => void;
+  open: (e: Edit, goal?: string, milestone?: string, area?: string, feature?: string) => void;
   moveArea: (id: string, dir: -1 | 1) => void;
   onOpen: (f: GmFeature) => void;
   week: string[];
+  /** The goal a link opened the map on (Home's goal cards). */
+  picked: string | null;
 }
 
 /** Attach any roadmap item you can see to a milestone, filed under the cell's area. */
@@ -530,8 +615,10 @@ function AttachDrawer({ map, draft, set, onClose, onSave }: { map: GoalMap; draf
   );
 }
 
-function Editor({ map, edit, draft, setDraft, goal, onClose, onSave }: { map: GoalMap; edit: Edit; draft: Draft; setDraft: (d: Draft) => void; goal: GmGoal; onClose: () => void; onSave: () => void }) {
+function Editor({ map, edit, draft, setDraft, goal, onClose, onSave, open, onOpen }: { map: GoalMap; edit: Edit; draft: Draft; setDraft: (d: Draft) => void; goal: GmGoal; onClose: () => void; onSave: () => void; open: Ctx["open"]; onOpen: Ctx["onOpen"] }) {
   const set = (k: Partial<Draft>) => setDraft({ ...draft, ...k });
+  if (edit === "metric") return <MetricDrawer goal={goal} draft={draft} set={set} onClose={onClose} onSave={onSave} />;
+  if (edit === "gaps" || edit === "unplaced") return <FlagDrawer map={map} kind={edit} onClose={onClose} open={open} onOpen={onOpen} />;
   const toggle = (id: string) => set({ areas: draft.areas.includes(id) ? draft.areas.filter((a) => a !== id) : [...draft.areas, id] });
   const label = "flex flex-col gap-1.5 font-semibold";
   if (edit === "propose")
@@ -682,11 +769,124 @@ function Editor({ map, edit, draft, setDraft, goal, onClose, onSave }: { map: Go
   );
 }
 
+/* ---------- The scoreboard's flags (goal-map-scoreboard) ---------- */
+
+/** The counts that open their items: gate areas with no feature, features serving no gate. */
+function Flags({ map, open }: { map: GoalMap; open: Ctx["open"] }) {
+  const gaps = map.gaps.length;
+  const unplaced = map.unplaced.length;
+  if (!gaps && !unplaced) return null;
+  const chip = "inline-flex items-center gap-1.5 rounded-full border border-warn/50 bg-warn-bg px-3 py-0.5 text-[14px] font-semibold text-warn hover:underline";
+  return (
+    <span className="flex flex-wrap gap-2" data-testid="gm-flags">
+      {gaps > 0 && (
+        <button type="button" data-testid="gm-flag-gaps" className={chip} onClick={() => open("gaps")}>
+          {gaps} {gaps === 1 ? "gate area" : "gate areas"} with no feature
+        </button>
+      )}
+      {unplaced > 0 && (
+        <button type="button" data-testid="gm-flag-unplaced" className={chip} onClick={() => open("unplaced")}>
+          {unplaced} {unplaced === 1 ? "feature serves" : "features serve"} no gate
+        </button>
+      )}
+    </span>
+  );
+}
+
+function FlagDrawer({ map, kind, onClose, open, onOpen }: { map: GoalMap; kind: "gaps" | "unplaced"; onClose: () => void; open: Ctx["open"]; onOpen: Ctx["onOpen"] }) {
+  const { can } = useMe();
+  const adds = can("create_simple_change");
+  const addItem = adds && (
+    <Link href="/simple/roadmap" data-testid="gm-add-item" className="text-[14px] font-semibold text-accent-ink hover:underline">
+      Add an item
+    </Link>
+  );
+  const row = "flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line px-3 py-2";
+  if (kind === "gaps")
+    return (
+      <Drawer title="Gate areas with no feature" onClose={onClose} testId="gm-flag-list">
+        <ul className="flex flex-col gap-1.5">
+          {map.gaps.map((g) => {
+            const m = map.milestones.find((x) => x.id === g.milestone);
+            const area = map.areas.find((a) => a.id === g.area);
+            return (
+              <li key={`${g.milestone}:${g.area}`} data-testid="gm-gap" className={row}>
+                <span className="flex flex-col">
+                  <b className="font-semibold">{m?.name}</b>
+                  <span className="simple-small text-[14px]!">{area ? area.name : "No area yet"}</span>
+                </span>
+                <span className="flex items-center gap-2">
+                  {map.can_edit && (
+                    <Btn small testId="gm-place" onClick={() => open("attach", undefined, g.milestone, g.area ?? "")}>
+                      Place a feature
+                    </Btn>
+                  )}
+                  {addItem}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </Drawer>
+    );
+  return (
+    <Drawer title="Features serving no gate" onClose={onClose} testId="gm-flag-list">
+      <ul className="flex flex-col gap-1.5">
+        {map.unplaced.map((f) => (
+          <li key={f.id} data-testid="gm-unplaced" className={row}>
+            <button type="button" className="text-left font-semibold hover:underline" onClick={() => onOpen({ id: f.id, name: f.name } as GmFeature)}>
+              {f.name}
+            </button>
+            {map.can_edit && (
+              <Btn small testId="gm-place" onClick={() => open("attach", undefined, undefined, undefined, f.id)}>
+                Place it
+              </Btn>
+            )}
+          </li>
+        ))}
+      </ul>
+      {addItem && <span className="flex justify-end">{addItem}</span>}
+    </Drawer>
+  );
+}
+
+/** Pick the metric whose weekly values give the goal its readings, or add one. */
+function MetricDrawer({ goal, draft, set, onClose, onSave }: { goal: GmGoal; draft: Draft; set: (k: Partial<Draft>) => void; onClose: () => void; onSave: () => void }) {
+  const { can } = useMe();
+  return (
+    <Drawer title={`Pick the metric for ${goal.name}`} onClose={onClose} testId="gm-editor">
+      {goal.choices.length ? (
+        <ul className="flex flex-col gap-1.5" data-testid="gm-metric-list">
+          {goal.choices.map((c) => (
+            <li key={c.id}>
+              <button type="button" aria-pressed={draft.metric === c.id} onClick={() => set({ metric: c.id })} className={`w-full rounded-xl border px-3 py-2 text-left ${draft.metric === c.id ? "border-accent bg-accent-soft" : "border-line"}`}>
+                <span className="font-semibold">{c.title}</span>
+                <span className="simple-small block text-[14px]! leading-5">{c.last === null ? "No value yet" : `Last week: ${num(c.last, goal.unit)}`}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="simple-small" data-testid="gm-metric-none">No metric in this unit yet</p>
+      )}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {can("create_metric") && (
+          <Link href="/company/metrics" data-testid="gm-add-metric" className="mr-auto text-[15px] font-semibold text-accent-ink hover:underline">
+            Add a metric
+          </Link>
+        )}
+        <Btn onClick={onClose}>Cancel</Btn>
+        <Btn primary testId="gm-save" disabled={!draft.metric} onClick={onSave}>Use this metric</Btn>
+      </div>
+    </Drawer>
+  );
+}
+
 /* ---------- Shared pieces of the proposals ---------- */
 
-function GoalCard({ g, onEdit, canEdit }: { g: GmGoal; onEdit: () => void; canEdit: boolean }) {
+function GoalCard({ g, onEdit, canEdit, onPick, picked }: { g: GmGoal; onEdit: () => void; canEdit: boolean; onPick: (goal: string) => void; picked: boolean }) {
   return (
-    <div data-testid="gm-goal" data-goal={g.id} className="simple-card flex-1 gap-1.5! px-4! py-3!">
+    <div data-testid="gm-goal" data-goal={g.id} data-picked={picked ? "1" : undefined} className={`simple-card flex-1 gap-1.5! px-4! py-3! ${picked ? "ring-2 ring-accent" : ""}`}>
       <span className="flex items-start justify-between gap-2">
         <span className="font-semibold leading-6">{g.name}</span>
         <StatusPill s={g.status} />
@@ -701,6 +901,8 @@ function GoalCard({ g, onEdit, canEdit }: { g: GmGoal; onEdit: () => void; canEd
       <Bar current={g.current} target={g.target} status={g.status} />
       {/* Only the goal's own math: no goal is said to build on another. */}
       <span className="simple-small text-[14px]! leading-5">{g.math}</span>
+      {g.missing && <span data-testid="gm-goal-missing" className="simple-small text-[14px]! leading-5">{readingLine(g)}</span>}
+      <Reading g={g} canEdit={canEdit} onPick={onPick} />
     </div>
   );
 }
@@ -708,12 +910,12 @@ function GoalCard({ g, onEdit, canEdit }: { g: GmGoal; onEdit: () => void; canEd
 /** The goal cards' widths as the picked frame draws them: the last (the top goal) widest. */
 const GOAL_GROW = [1.04, 1, 1.3];
 
-function Goals({ map, open }: Ctx) {
+function Goals({ map, open, picked }: Ctx) {
   return (
     <div className="flex items-stretch gap-2 max-[600px]:flex-col" data-testid="gm-goals">
       {map.goals.map((g, i) => (
         <div key={g.id} className="flex flex-1 items-stretch gap-2 max-[600px]:flex-col" style={{ flexGrow: GOAL_GROW[i] ?? 1 }}>
-          <GoalCard g={g} canEdit={map.can_edit} onEdit={() => open("goal", g.id)} />
+          <GoalCard g={g} canEdit={map.can_edit} onEdit={() => open("goal", g.id)} onPick={(id) => open("metric", id)} picked={picked === g.id} />
         </div>
       ))}
     </div>
@@ -783,7 +985,8 @@ function Ladder(ctx: Ctx) {
                     <span className="text-[16px] leading-6 text-text2">
                       {m.threshold === null ? `${num(m.current, m.unit)} now · no gate yet` : `${num(m.current, m.unit)} of ${num(m.threshold, m.unit)}`} · {afterWords(m, map)}
                     </span>
-                    <Proof m={m} compact week={ctx.week} />
+                    <Proof m={m} compact week={ctx.week} goal={goalOf(map, m)} />
+                    {goalOf(map, m) && <Reading g={goalOf(map, m)!} canEdit={map.can_edit} onPick={(id) => open("metric", id)} gate />}
                   </div>
                 ))}
                 {map.areas.map((a, ai) => (
@@ -839,7 +1042,7 @@ function LadderRow({ a, ai, n, ms, map, open, moveArea, onOpen, home, proposed }
   );
 }
 
-function LadderPhone({ map, ms, home, onOpen, week }: Ctx & { ms: GmMilestone[]; home: Record<string, string> }) {
+function LadderPhone({ map, ms, home, onOpen, week, open }: Ctx & { ms: GmMilestone[]; home: Record<string, string> }) {
   return (
     <section className="hidden flex-col gap-3 pb-24 max-[600px]:flex" data-testid="gm-ladder-phone">
       <h2 className="simple-h2">Milestones, in steps</h2>
@@ -852,7 +1055,8 @@ function LadderPhone({ map, ms, home, onOpen, week }: Ctx & { ms: GmMilestone[];
           <span className="simple-small">
             {m.threshold === null ? `${num(m.current, m.unit)} now · no gate yet` : `${num(m.current, m.unit)} of ${num(m.threshold, m.unit)}`} · {afterWords(m, map)}
           </span>
-          <Proof m={m} compact week={week} />
+          <Proof m={m} compact week={week} goal={goalOf(map, m)} />
+          {goalOf(map, m) && <Reading g={goalOf(map, m)!} canEdit={map.can_edit} onPick={(id) => open("metric", id)} gate />}
           {map.areas
             .filter((a) => m.areas.includes(a.id))
             .map((a) => (

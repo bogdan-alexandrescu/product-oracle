@@ -6727,6 +6727,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     const goalMapRes = await routeGoalMap(db, localStorage.getItem(MOCK_SCENARIO_KEY), { role: me.role, name: simpleNames[me.id] ?? "You" }, r, p, (itemId) => {
       const key = db.simple_roadmap && Object.keys(db.simple_roadmap.ids).find((k) => db.simple_roadmap!.ids[k] === itemId);
       return db.simple_roadmap?.items.find((i) => i.key === key) ?? null;
+    }, async () => {
+      // goal-map-scoreboard: the Simple roadmap as this reader reads it (goal_map._unplaced reads service.load).
+      const read = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, new Request("http://mock/v1/simple/roadmap"), ["v1", "simple", "roadmap"], new URLSearchParams());
+      const body = read && read.ok ? ((await read.json()) as { items: { id: string; title: string; status: string }[] }) : { items: [] };
+      return body.items;
     });
     // one-feature-panel: the map's features are roadmap items (their panel opens on their own item).
     if (db.goal_map) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));

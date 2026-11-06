@@ -705,6 +705,15 @@ export default function SimpleHome() {
                           {g.needYou} {g.needYou === 1 ? "item needs" : "items need"} you
                         </span>
                       )}
+                      {/* goal-map-scoreboard: the goal on the Goal map, the scoreboard of its gates. */}
+                      <Link
+                        href={`/simple/goals?goal=${encodeURIComponent(g.id)}&name=${encodeURIComponent(g.name)}`}
+                        data-testid="home-goal-map"
+                        aria-label={`${g.name} on the Goal map`}
+                        className="simple-small font-semibold text-accent-ink hover:underline"
+                      >
+                        Goal map
+                      </Link>
                     </div>
                     <SuggestionsButton goal={{ id: g.id, key: g.id, title: g.name }} api={suggestions} onOpen={setGoalPanel} className="self-start" />
                   </li>
