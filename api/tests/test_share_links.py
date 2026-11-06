@@ -1161,3 +1161,69 @@ def test_a_code_with_no_name_known_is_left_as_written():
         == "Serves Activation (G1). Parse uploaded files (ENG-413) and ENG-999 track it. G12 too."
     )
     assert reader_body(got, "now-x", names=names) == got
+
+
+async def test_a_link_holder_reads_no_more_than_the_page_shows(client, ctx):
+    """protects=G-3: a tracker issue is named only when the version's own items carry its
+    record, and a goal only when it is confirmed; fails_when=an issue on no item or a
+    proposed goal reads by its title; no_claim=codes the page already names."""
+    from oracle.baseline.models import Entity
+    from oracle.roadmap.models import TrackerRecord
+
+    sections = [
+        (k, lv, h, "Parse every column. Serves G1 and G2. ENG-413 and ENG-999 track it.")
+        if k == "now-csv-parser"
+        else (k, lv, h, b)
+        for k, lv, h, b in SECTIONS
+    ]
+    await seed_roadmap(ctx, publish=True, sections=sections)
+    async with tenant_session(ctx.tenant_id) as s:
+        s.add(Entity(type="goal", key="g2", title="Retention", status="proposed", origin="user"))
+        s.add(
+            TrackerRecord(
+                tracker="linear",
+                external_ref="ENG-999",
+                title="Secret planning issue",
+                state="todo",
+                observed_at=datetime(2026, 10, 16, tzinfo=UTC),
+            )
+        )
+        await s.commit()
+    token = token_of((await create(client, ctx, "owner", audience="engineering")).json())
+    page = await client.get(f"{PUBLIC}/{token}", headers=await opened(client, token))
+    assert page.status_code == 200, page.text
+    shown = _text(page.text)
+    assert "Activation (G1) and G2." in shown, shown
+    assert "Issue ENG-413 and ENG-999 track it." in shown, shown
+    assert "Secret planning issue" not in shown
+    assert "Retention" not in shown
+
+
+async def test_a_name_with_markdown_in_it_adds_no_column_and_no_link(client, ctx):
+    """protects=G-3: a title with a pipe, a link and emphasis reads as written; fails_when=
+    it adds a table column or becomes a link; no_claim=names without markdown."""
+    from oracle.roadmap.models import TrackerRecord
+
+    title = "Fix a | b [x](https://example.com/x) *bold*"
+    await seed_roadmap(ctx, publish=True, sections=SECTIONS_WITH_CODES)
+    async with tenant_session(ctx.tenant_id) as s:
+        csv = await s.scalar(select(TrackerRecord).where(TrackerRecord.external_ref == "ENG-413"))
+        csv.title = title
+        await s.commit()
+    token = token_of((await create(client, ctx, "owner", audience="engineering")).json())
+    page = await client.get(f"{PUBLIC}/{token}", headers=await opened(client, token))
+    assert page.status_code == 200, page.text
+    assert title in _text(page.text), page.text
+    assert 'href="https://example.com/x"' not in page.text and "<em>" not in page.text
+    row = re.search(r"<tr>\s*<td>Bulk import</td>(.*?)</tr>", page.text, re.S)
+    assert row is not None, page.text
+    assert row.group(1).count("<td") == 1, row.group(1)
+
+
+def test_with_names_escapes_markdown_in_the_name():
+    """protects=G-3: the spliced name carries no markdown of its own; fails_when=a pipe,
+    bracket, star, underscore, backtick or angle bracket in a name goes through."""
+    from oracle.shares.render import with_names
+
+    got = with_names("Serves G1.", {"G1": "a | b [x](u) *s* _t_ `c` <d> \\e"})
+    assert got == "Serves a \\| b \\[x\\](u) \\*s\\* \\_t\\_ \\`c\\` \\<d\\> \\\\e (G1)."
