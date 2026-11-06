@@ -47,7 +47,7 @@ CURRENT = {
     "goal_suggestions": "goal_suggestions.v2",
     "simple_visual": "simple_visual.v2",
     "meeting_minutes": "meeting_minutes.v2",
-    "chat_reader": "chat_reader.v5",
+    "chat_reader": "chat_reader.v6",
     "prd_plan": "prd_plan.v3",
     "prd_questions": "prd_questions.v1",
     "discussion_reply": "discussion_reply.v2",

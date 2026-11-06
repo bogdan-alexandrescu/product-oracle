@@ -18968,6 +18968,8 @@ export interface components {
             asks_with_dependents_outside: boolean;
             /** Elsewhere */
             elsewhere?: string | null;
+            /** Replaced By */
+            replaced_by?: string | null;
         };
         /** ChatChoiceOut */
         ChatChoiceOut: {

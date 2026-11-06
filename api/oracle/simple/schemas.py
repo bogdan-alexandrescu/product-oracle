@@ -1649,6 +1649,9 @@ class ChatCardOut(BaseModel):
     # meeting-changes-only-its-agenda: in a meeting, the card's item is not on its agenda:
     # "Delivery integrity is on another roadmap: sent to its owner to decide".
     elsewhere: str | None = None
+    # chat-latest-card: a newer card in the chat replaced this one (its id): an open card
+    # is no longer actionable; an applied one keeps its Undo.
+    replaced_by: uuid.UUID | None = None
 
 
 class ChatChoiceOut(BaseModel):

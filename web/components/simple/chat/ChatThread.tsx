@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
 import {
   applyAll,
@@ -310,9 +310,11 @@ export function ChatMessages({
   ask?: boolean;
 }) {
   const corrected = useCorrections();
+  const shown = shownLines(messages);
+  const acted = useActedNow(messages, shown.map((m) => m.id));
   return (
     <ol className="flex flex-col gap-3" aria-label="Messages">
-      {shownLines(messages).map((m) => (
+      {shown.map((m, i) => (
         <ChatLine
           key={m.id}
           message={m}
@@ -320,10 +322,27 @@ export function ChatMessages({
           onThread={onThread}
           corrected={corrected}
           ask={ask}
+          replaced={acted.replacedFor(i)}
+          onActed={acted.onActed}
         />
       ))}
     </ol>
   );
+}
+
+/**
+ * chat-latest-card: acting on a card (Apply, Propose, Discard) replaces every card on an earlier
+ * line at once, before the chat reads again (the read then says the same, from the API).
+ * `source`: the chat's data as read (a new read drops the guess); `ids`: its lines in order.
+ */
+export function useActedNow(source: unknown, ids: string[]) {
+  const [acted, setActed] = useState<{ from: unknown; line: string; card: string } | null>(null);
+  const live = acted && acted.from === source ? acted : null;
+  const at = live ? ids.indexOf(live.line) : -1;
+  return {
+    replacedFor: (i: number) => (live && i < at ? live.card : null),
+    onActed: useCallback((line: string, card: string) => setActed({ from: source, line, card }), [source]),
+  };
 }
 
 /** The lines a chat shows: a line handed to Oracle's Ask (kind "ask") lives in Ask's chat, so neither it nor the person's line shows. */
@@ -365,10 +384,16 @@ export function ChatLine({
   onThread,
   corrected,
   ask = false,
+  replaced = null,
+  onActed,
 }: {
   message: ChatMessage;
   onCardChanged?: () => void;
   onThread?: (t: Thread) => void;
+  /** chat-latest-card (useActedNow): the card acted on just now on a later line, which replaces this line's open cards. */
+  replaced?: string | null;
+  /** chat-latest-card: a card on this line was acted on (Apply, Propose, Discard). */
+  onActed?: (line: string, card: string) => void;
   /** roadmap-talk: the chat's open Correct forms (Apply all applies them with their typed values). */
   corrected?: Corrections;
   /** Simple's Ask panel (the owner's pick C): author · time over the line, Oracle's answer with its sources under it. */
@@ -379,6 +404,11 @@ export function ChatLine({
   const mine = m.author_kind === "person";
   // qa-simple-home-16: the reader's own lines say "You".
   const you = mine && !!m.author_id && m.author_id === me?.user_id;
+  // chat-latest-card: replaced at once, until the chat reads again.
+  const cards = useMemo(
+    () => (replaced ? m.cards.map((c) => (c.status === "open" && !c.replaced_by ? { ...c, replaced_by: replaced, may: null } : c)) : m.cards),
+    [m.cards, replaced],
+  );
   return (
     <li
       data-testid="chat-message"
@@ -434,13 +464,16 @@ export function ChatLine({
         onThread={onThread}
         corrections={corrected?.corrections}
       />
-      {m.cards.length > 0 && (
+      {cards.length > 0 && (
         <div className="flex w-full flex-col gap-2">
-          {m.cards.map((c) => (
+          {cards.map((c) => (
             <ChatCard
               key={c.id}
               card={c}
-              onChanged={onCardChanged}
+              onChanged={(after) => {
+                if (after.status !== "open") onActed?.(m.id, after.id);
+                onCardChanged?.();
+              }}
               onCorrecting={corrected?.onCorrecting}
             />
           ))}
