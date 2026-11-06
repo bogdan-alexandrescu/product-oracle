@@ -446,4 +446,3 @@ async def test_undo_of_an_add_keeps_a_track_that_anything_references(client, kin
         row = await s.scalar(select(ProductTrack).where(ProductTrack.id == track_id)
                              .execution_options(**{INCLUDE_TRASHED: True}))  # fmt: skip
         assert row is not None and row.deleted_at is not None
-
