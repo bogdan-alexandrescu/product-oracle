@@ -928,7 +928,12 @@ async def decide_proposal(
         manages = INTAKE_ATTRS if proposal.id in await intake_made(db, [proposal]) else ()
         writer = Writer(principal, "user", run_id=proposal.run_id, reason=reason, manages=manages)
         fields = _without(dict(p.get("fields") or {}), skipped)
-        if p["kind"] == "entity":
+        if p.get("fix"):
+            # A commenter's Ground Truth fix (Give it a code, Link to a feature).
+            from oracle.baseline import fixes
+
+            await fixes.apply_proposal(db, writer, proposal)
+        elif p["kind"] == "entity":
             if p["op"] == "create":
                 await create_entity(db, writer, **_entity_create_args(fields))
             else:

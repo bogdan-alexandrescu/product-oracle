@@ -45,8 +45,8 @@ from oracle.roadmap import company
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple.models import SimplePrdPlan
 
-# A feature's F-code (F-12; a clash reads F-12.2).
-F_CODE = re.compile(r"[A-Z]{1,3}-\d+(?:\.\d+)?")
+# A feature's F-code (F-12; a clash reads F-12.2; a slice F-12a).
+F_CODE = re.compile(r"[A-Z]{1,3}-\d+(?:\.\d+)?[a-j]?")
 LETTERS = "abcdefghij"
 # Plan states that take an item off the plan (oracle.simple.approved_roadmap).
 OFF_PLAN = ("shipped", "next_prd")
@@ -208,6 +208,9 @@ async def run(db: AsyncSession) -> GroundTruthOut:
             code = str(f.get("code") or "").strip()
             name = str(f.get("name") or code).strip()
             if not code or code in truth_codes or name.casefold() in truth_names:
+                continue
+            # Linked to a Ground Truth feature (Link to a feature, oracle.baseline.fixes).
+            if str((data.get("links") or {}).get(code)) in {str(i) for i in truth_ids}:
                 continue
             fixes = [("add_to_ground_truth", code), ("link_to_feature", code)]
             where = GroundTruthWhere(roadmap=_doc(roadmap), prd=_doc(prd))

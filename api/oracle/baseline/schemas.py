@@ -636,8 +636,12 @@ CheckKind = Literal[
 ]
 CHECK_KINDS: tuple[str, ...] = CheckKind.__args__  # type: ignore[attr-defined]
 CheckAction = Literal[
-    "add_to_ground_truth", "link_to_feature", "give_code", "pick_goal", "take_off_roadmap",
-    "confirm_feature"
+    "add_to_ground_truth",
+    "link_to_feature",
+    "give_code",
+    "pick_goal",
+    "take_off_roadmap",
+    "confirm_feature",
 ]
 
 
@@ -687,3 +691,21 @@ class GroundTruthOut(BaseModel):
     # Every kind, zero included.
     counts: dict[str, int]
     total: int
+
+
+class GroundTruthFixOut(BaseModel):
+    """A fix made (``done``: approvers and owners), or sent for an approver (``proposed``:
+    a commenter's, with its proposal). ``code``: the code given, when one was."""
+
+    status: Literal["done", "proposed"]
+    feature: GroundTruthRef
+    code: str | None = None
+    proposal_id: uuid.UUID | None = None
+
+
+class PrdLinkCreate(BaseModel):
+    """Link a feature of a PRD's approved plan (by its code there) to a Ground Truth feature."""
+
+    prd_document_id: uuid.UUID
+    code: str = Field(min_length=1, max_length=20)
+    feature_id: uuid.UUID
