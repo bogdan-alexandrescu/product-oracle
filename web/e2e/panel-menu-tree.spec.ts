@@ -149,13 +149,13 @@ for (const size of SIZES)
       test.setTimeout(120_000);
       await login(page);
       await buildTree(page);
-      // A feature's own parts, at any depth, are never offered as its parent (never its own ancestor).
+      // A feature's own parts, at any depth, are shown but cannot be picked as its parent (never its own ancestor).
       await open(page, "alert-rules");
       await menu(page, "Part of…");
       const pick = panel(page).getByTestId("card-parent-edit").getByLabel("Part of");
-      await expect(pick.locator("option", { hasText: "Alert routing by team" })).toHaveCount(0);
-      await expect(pick.locator("option", { hasText: "Alert history export" })).toHaveCount(0);
-      await expect(pick.locator("option", { hasText: "Mobile alert push" })).toHaveCount(1);
+      await expect(pick.locator("option", { hasText: "Alert routing by team" })).toBeDisabled();
+      await expect(pick.locator("option", { hasText: "Alert history export" })).toBeDisabled();
+      await expect(pick.locator("option", { hasText: "Mobile alert push" })).toBeEnabled();
       await pathInPanels(page);
       await treeOnEveryView(page, size.phone);
     });
@@ -261,6 +261,7 @@ for (const size of SIZES)
       await partOf(page, "Alert rules engine");
       await open(page, "alert-rules");
       await menu(page, "Delete feature");
+      await tap(page.getByRole("alertdialog", { name: "Delete Alert rules engine?" }).getByRole("button", { name: "Delete" }));
       await expect(toasts(page)).toContainText("Moved Alert rules engine to Trash.");
       await open(page, "alert-sso");
       await expect(panel(page).getByTestId("card-part-of")).toHaveText("Part of Alert rules engine (in Trash)");
