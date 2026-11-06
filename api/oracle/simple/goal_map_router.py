@@ -4,7 +4,10 @@
 - ``POST /areas``, ``PUT /areas/order``, ``PATCH /goals/{id}``, ``POST /milestones``
   (propose one), ``PATCH /milestones/{id}`` (set its threshold, confirm it), ``POST /links``
   (attach a feature to a cell), ``POST /goals/{id}/metric`` (pick the metric that gives
-  the goal its readings): approver and up; each answers the map as it now reads.
+  the goal its readings), ``POST /links/move`` (goal-ladder: a feature to another
+  milestone): approver and up; each answers the map as it now reads.
+- ``POST /place-card`` and ``DELETE /places`` (goal-ladder place_card and Tidy up): viewer
+  and up, each person's own places of cards.
 """
 
 import uuid
@@ -25,6 +28,8 @@ from oracle.simple.goal_map import (
     GoalMapOut,
     GoalTargetIn,
     MetricPickIn,
+    MoveLinkIn,
+    PlaceIn,
     ProposeIn,
 )
 
@@ -107,6 +112,25 @@ async def set_gate(
 @router.post("/links", response_model=GoalMapOut)
 async def attach_feature(body: AttachIn, principal: Approver, db: TenantDB) -> GoalMapOut:
     return await _run(db, principal, goal_map.attach(db, body))
+
+
+@router.post("/links/move", response_model=GoalMapOut)
+async def move_feature_link(body: MoveLinkIn, principal: Approver, db: TenantDB) -> GoalMapOut:
+    """goal-ladder: a feature moved to another milestone's work (Edit ladder)."""
+    return await _run(db, principal, goal_map.move_link(db, body))
+
+
+@router.post("/place-card", response_model=GoalMapOut)
+async def place_card(body: PlaceIn, principal: Reader, db: TenantDB) -> GoalMapOut:
+    """goal-ladder place_card: where this person put a card on the canvas (viewers too: a
+    place is their own view and never changes data)."""
+    return await _run(db, principal, goal_map.place_card(db, principal.id, body))
+
+
+@router.delete("/places", response_model=GoalMapOut)
+async def tidy_up(principal: Reader, db: TenantDB) -> GoalMapOut:
+    """goal-ladder Tidy up: this person's cards back where the ladder places them."""
+    return await _run(db, principal, goal_map.tidy_up(db, principal.id))
 
 
 @router.post("/goals/{goal_id}/metric", response_model=GoalMapOut)

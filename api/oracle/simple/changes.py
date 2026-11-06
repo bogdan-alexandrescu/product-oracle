@@ -838,6 +838,9 @@ async def _plan(
         unknown = await _unknown_keys(db, added, read_)
         if unknown:
             raise ChangeError(422, f"after.depends_on: no item or feature has the key {unknown[0]}")
+        loop = await _loop(db, read_, row, added)
+        if loop:
+            raise ChangeError(422, loop)
         after = {"depends_on": clean}
     else:  # accept_risk
         if target.get("flag") not in FLAG_KINDS:
@@ -856,6 +859,41 @@ async def _plan(
             }
         }
     return entry, target, read(row, stored, target), after
+
+
+async def _loop(db: AsyncSession, read_: service.Read, row: Any, added: list[str]) -> str | None:
+    """set_depends (goal-ladder): the reason a new dependency is refused when the item it
+    names already waits on this one (directly or through others), naming both by code and
+    name as the read does; None when no loop is made."""
+    if not added:
+        return None
+    await service.item_codes(db, read_.entries)
+    by_id = read_.by_id()
+    by_key = {k.lower(): e for e in by_id.values() for k in (e.row.item_key, e.code) if k}
+    me = by_id.get(row.id)
+    mine = {k.lower() for k in (row.item_key, me.code if me else None) if k}
+    for key in added:
+        start = by_key.get(key.lower())
+        seen: set[uuid.UUID] = set()
+        todo = [start] if start is not None else []
+        while todo:
+            e = todo.pop()
+            if e.row.id in seen:
+                continue
+            seen.add(e.row.id)
+            for k in e.row.depends_on or []:
+                if k.lower() in mine:
+                    return (
+                        f"Not added, it would make a loop: {_named(start)} already waits on "
+                        f"{_named(me) if me is not None else row.title}"
+                    )
+                if (nxt := by_key.get(k.lower())) is not None:
+                    todo.append(nxt)
+    return None
+
+
+def _named(e: Any) -> str:
+    return f"{e.code or e.row.item_key} {e.row.title}"
 
 
 async def _unknown_keys(db: AsyncSession, keys: list[str], read_: service.Read) -> list[str]:

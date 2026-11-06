@@ -12744,6 +12744,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/goal-map/links/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move Feature Link
+         * @description goal-ladder: a feature moved to another milestone's work (Edit ladder).
+         */
+        post: operations["move_feature_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-map/place-card": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Place Card
+         * @description goal-ladder place_card: where this person put a card on the canvas (viewers too: a
+         *     place is their own view and never changes data).
+         */
+        post: operations["place_card"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-map/places": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Tidy Up
+         * @description goal-ladder Tidy up: this person's cards back where the ladder places them.
+         */
+        delete: operations["tidy_up"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/goal-map/goals/{goal_id}/metric": {
         parameters: {
             query?: never;
@@ -25896,6 +25957,22 @@ export interface components {
             name: string;
         };
         /**
+         * GmPlace
+         * @description goal-ladder: where this person put a feature's card on the canvas (place_card);
+         *     never data: the feature's milestones and goal stay as they are.
+         */
+        GmPlace: {
+            /**
+             * Feature
+             * Format: uuid
+             */
+            feature: string;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        };
+        /**
          * GmUnplaced
          * @description A feature of the Simple roadmap serving no milestone of the map.
          */
@@ -26120,6 +26197,11 @@ export interface components {
             approver: string | null;
             /** Can Edit */
             can_edit: boolean;
+            /**
+             * Places
+             * @default []
+             */
+            places: components["schemas"]["GmPlace"][];
         };
         /** GoalMeasurePushback */
         GoalMeasurePushback: {
@@ -31181,6 +31263,27 @@ export interface components {
             to_goal_id: string;
         };
         /**
+         * MoveLinkIn
+         * @description goal-ladder: a feature's link moved from one milestone to another (Edit ladder).
+         */
+        MoveLinkIn: {
+            /**
+             * Feature
+             * Format: uuid
+             */
+            feature: string;
+            /**
+             * From Milestone
+             * Format: uuid
+             */
+            from_milestone: string;
+            /**
+             * To Milestone
+             * Format: uuid
+             */
+            to_milestone: string;
+        };
+        /**
          * MyAccountOut
          * @description The signed-in member: who they are, their role and how they sign in.
          */
@@ -32831,6 +32934,22 @@ export interface components {
             snapshot_id: string;
             /** As Of */
             as_of?: string | null;
+        };
+        /**
+         * PlaceIn
+         * @description goal-ladder place_card: a card's place on this person's canvas; null x and y put it
+         *     back where the ladder places it.
+         */
+        PlaceIn: {
+            /**
+             * Feature
+             * Format: uuid
+             */
+            feature: string;
+            /** X */
+            x?: number | null;
+            /** Y */
+            y?: number | null;
         };
         /** PlanCounts */
         PlanCounts: {
@@ -73041,6 +73160,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_feature_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveLinkIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    place_card: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlaceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tidy_up: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMapOut"];
                 };
             };
         };

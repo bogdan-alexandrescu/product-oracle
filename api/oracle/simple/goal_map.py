@@ -52,6 +52,7 @@ from oracle.docs.models import Document
 from oracle.launches.models import Launch
 from oracle.metrics import pull
 from oracle.metrics.models import Metric, MetricValue
+from oracle.preferences.models import UserPreference
 from oracle.roadmap import company
 from oracle.roadmap.models import RoadmapItem, TrackMilestone
 from oracle.simple.goal_milestones import _next_code
@@ -162,6 +163,15 @@ class GmFeature(BaseModel):
     links: list[GmLink]
 
 
+class GmPlace(BaseModel):
+    """goal-ladder: where this person put a feature's card on the canvas (place_card);
+    never data: the feature's milestones and goal stay as they are."""
+
+    feature: uuid.UUID
+    x: float
+    y: float
+
+
 class GmGap(BaseModel):
     """A gated area of a milestone with no feature in its cell (area None: a milestone
     with no area and no feature)."""
@@ -199,6 +209,8 @@ class GoalMapOut(BaseModel):
     # Who a proposed milestone is sent to for approval (the first owner by name).
     approver: str | None
     can_edit: bool
+    # goal-ladder: this person's own places of cards (only features on the map).
+    places: list[GmPlace] = []
 
 
 class AreaIn(BaseModel):
@@ -230,6 +242,23 @@ class AttachIn(BaseModel):
     area: uuid.UUID
     expected: str = Field(default="", max_length=120)
     confidence: Literal["high", "medium", "low"] = "medium"
+
+
+class MoveLinkIn(BaseModel):
+    """goal-ladder: a feature's link moved from one milestone to another (Edit ladder)."""
+
+    feature: uuid.UUID
+    from_milestone: uuid.UUID
+    to_milestone: uuid.UUID
+
+
+class PlaceIn(BaseModel):
+    """goal-ladder place_card: a card's place on this person's canvas; null x and y put it
+    back where the ladder places it."""
+
+    feature: uuid.UUID
+    x: float | None = Field(default=None, ge=-100_000, le=100_000)
+    y: float | None = Field(default=None, ge=-100_000, le=100_000)
 
 
 class GateIn(BaseModel):
@@ -649,7 +678,86 @@ async def build(db: AsyncSession, principal: Any, can_edit: bool) -> GoalMapOut:
         reps=reps,
         approver=owner.name if owner else None,
         can_edit=can_edit,
+        places=[
+            GmPlace(feature=uuid.UUID(k), x=v[0], y=v[1])
+            for k, v in (await _places(db, principal.id)).items()
+            if uuid.UUID(k) in feats
+        ],
     )
+
+
+PLACES_KEY = "goal_map_places"
+
+
+async def _places_row(db: AsyncSession, principal_id: uuid.UUID) -> UserPreference | None:
+    return await db.scalar(
+        select(UserPreference).where(
+            UserPreference.principal_id == principal_id, UserPreference.key == PLACES_KEY
+        )
+    )
+
+
+async def _places(db: AsyncSession, principal_id: uuid.UUID) -> dict[str, list[float]]:
+    row = await _places_row(db, principal_id)
+    return dict(row.value) if row is not None and isinstance(row.value, dict) else {}
+
+
+async def place_card(db: AsyncSession, principal_id: uuid.UUID, body: PlaceIn) -> None:
+    """goal-ladder place_card: keep where this person put a card (a user preference, so a
+    place never changes data). A feature off the map (or in Trash) has no card."""
+    on_map = await db.scalar(
+        select(MilestoneFeature.id)
+        .join(RoadmapItem, RoadmapItem.id == MilestoneFeature.item_id)
+        .join(TrackMilestone, TrackMilestone.id == MilestoneFeature.milestone_id)
+        .where(MilestoneFeature.item_id == body.feature, TrackMilestone.deleted_at.is_(None))
+        .limit(1)
+    )
+    if on_map is None:
+        raise GoalMapError(404, "No such feature on the map")
+    row = await _places_row(db, principal_id)
+    value = dict(row.value) if row is not None and isinstance(row.value, dict) else {}
+    if body.x is None or body.y is None:
+        value.pop(str(body.feature), None)
+    else:
+        value[str(body.feature)] = [body.x, body.y]
+    if row is None:
+        db.add(UserPreference(principal_id=principal_id, key=PLACES_KEY, value=value))
+    else:
+        row.value = value
+        flag_modified(row, "value")
+
+
+async def tidy_up(db: AsyncSession, principal_id: uuid.UUID) -> None:
+    """goal-ladder Tidy up: every card back where the ladder places it, for this person."""
+    row = await _places_row(db, principal_id)
+    if row is not None:
+        await db.delete(row)
+
+
+async def move_link(db: AsyncSession, body: MoveLinkIn) -> None:
+    """goal-ladder: a feature dragged from one milestone's work to another's: its link moves,
+    keeping its area, expected lift and confidence (onto a milestone it already serves, the
+    old link just goes)."""
+    to = await db.get(TrackMilestone, body.to_milestone)
+    link = await db.scalar(
+        select(MilestoneFeature).where(
+            MilestoneFeature.item_id == body.feature,
+            MilestoneFeature.milestone_id == body.from_milestone,
+        )
+    )
+    if link is None or to is None or to.goal_id is None or to.deleted_at is not None:
+        raise GoalMapError(404, "No such feature or milestone")
+    if body.from_milestone == body.to_milestone:
+        return
+    there = await db.scalar(
+        select(MilestoneFeature).where(
+            MilestoneFeature.item_id == body.feature, MilestoneFeature.milestone_id == to.id
+        )
+    )
+    if there is not None:
+        await db.delete(link)
+    else:
+        link.milestone_id = to.id
 
 
 async def add_area(db: AsyncSession, body: AreaIn) -> None:
