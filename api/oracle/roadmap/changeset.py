@@ -420,9 +420,27 @@ def _without_rows(body: str, keys: set[str]) -> str:
     )
 
 
+def _items_table(body: str) -> bool:
+    """Whether the body holds a table approving would read as the plan (Item, Start, End)."""
+    from oracle.simple.approved_roadmap import _cells
+
+    return any(
+        {"item", "start", "end"} <= {c.lower() for c in _cells(line)}
+        for line in body.split("\n")
+        if line.lstrip().startswith("|")
+    )
+
+
 async def _markdown(
-    db: AsyncSession, base: DocumentVersion, body: str, cut: set[str] | frozenset = frozenset()
+    db: AsyncSession,
+    base: DocumentVersion,
+    body: str,
+    cut: set[str] | frozenset = frozenset(),
+    plan: str | None = None,
 ) -> str:
+    """The base version's text with the section of changes ``body`` added. ``plan``: the
+    plan table as the items now are (a Simple draft, hotfix 4), in place of the base's
+    own, so approving applies the items' own dates and Simple matches the version."""
     from oracle.jobs.service import compose_markdown
 
     sections = [
@@ -439,6 +457,19 @@ async def _markdown(
         for s in sections
         if s.section_key == "plan" and cut
     }
+    if plan is not None:
+        own = next((s for s in sections if s.section_key == "plan"), None)
+        if own is not None:
+            replace["plan"] = (own.heading, plan)
+        else:
+            # Before the first table approving would read, else before Sources.
+            at = next(
+                (n for n, s in enumerate(sections) if _items_table(s.body_md or "")),
+                next((n for n, s in enumerate(sections) if s.section_key == "sources"),
+                     len(sections)),
+            )  # fmt: skip
+            new = SimpleNamespace(section_key="plan", level=2, heading="Plan", body_md=plan)
+            sections = [*sections[:at], new, *sections[at:]]
     added = SimpleNamespace(section_key=SECTION_KEY, level=2, heading="Plan changes", body_md=body)
     at = next((n for n, s in enumerate(sections) if s.section_key == "sources"), len(sections))
     return compose_markdown(

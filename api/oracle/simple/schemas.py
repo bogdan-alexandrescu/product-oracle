@@ -955,6 +955,8 @@ class SimpleDraftOut(BaseModel):
     # The version it was opened on, and the one submitting it imported.
     base_version: int | None
     version: int | None
+    # The number it becomes (or became): the one after the roadmap's latest version (hotfix 4).
+    next_version: int | None = None
     created_by: uuid.UUID
     # roadmap-decide review: the author's name, so the banner names whose draft it is at once.
     created_by_name: str | None = None
