@@ -7011,6 +7011,14 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
 
   const doc = findDocument(db, p[2]);
+  // simple-prd-calm-page: the seeded one-pager's PRD, which the mock keeps only as its one-pager,
+  // reads as the API's version of it: the sections the page is built from (the whole PRD under it).
+  const op = db.simple_one_pager;
+  if (!doc && op && (op.doc.slug === p[2] || op.doc.id === p[2]) && p[3] === "versions" && Number(p[4]) === op.version && !p[5] && m === "GET") {
+    const row = { id: op.doc.id, slug: op.doc.slug, title: op.doc.title, kind: "prd" } as DocumentRow;
+    const sections = op.sections.map((x) => ({ key: x.key, level: 2, heading: x.heading, body: x.body }));
+    return json(200, versionOut(db, buildVersion(row, { number: op.version, created_at: "2026-10-20T09:00:00Z", sections, citations: [] })));
+  }
   if (!doc) return notFound("Document");
   if (p.length === 3) {
     return json(200, documentOut(db, doc));
