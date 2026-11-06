@@ -1779,3 +1779,11 @@ async def link_new_feature(
             await changes.create(db, writer.principal, body, commit=False)
         except changes.ChangeError as exc:
             raise InvalidError(str(exc)) from exc
+        except drafts.DraftError as exc:
+            # A submitted draft of the roadmap waits for approval: no change until it is decided.
+            raise ConflictError(
+                f"“{row.title}” can't be linked yet: its roadmap has a draft waiting for "
+                "approval. Add it once that draft is approved or withdrawn."
+                if exc.status == 409
+                else str(exc)
+            ) from exc
