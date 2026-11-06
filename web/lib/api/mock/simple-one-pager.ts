@@ -424,6 +424,12 @@ const FALLBACK_SPECS: FallbackSpec[] = [
 const MATCH_ORDER = ["not_doing", "risks", "outcomes", "problem", "bets"] as const;
 const FACT_BULLET = /^\s*(?:[-*+]|\d+[.)])\s+(.*\S)\s*$/;
 const SENTENCE = /(?<=[.!?])\s+/;
+/** As one_pager.metric_of on a quick read's fact: "name: from -> to", each side a number with its unit. */
+const METRIC = /^(.*?)[:\s,-]*\s(?:from\s+)?([~<>]?[$€£]?\d[\d.,]*\s?(?:%|ms|s|x|k|m|days?|hours?|minutes?)?)\s*(?:→|->|\bto\b)\s*([~<>]?[$€£]?\d[\d.,]*\s?(?:%|ms|s|x|k|m|days?|hours?|minutes?)?)/i;
+const factMetric = (fact: string): Line["metric"] | undefined => {
+  const m = METRIC.exec(fact);
+  return m ? { name: m[1].replace(/^[\s:,-]+|[\s:,-]+$/g, "") || fact, from: m[2].trim(), to: m[3].trim() } : undefined;
+};
 
 /** As one_pager.mapping: each section to the first block (MATCH order) whose words its
  * heading or key holds; an empty section maps nowhere. */
@@ -523,13 +529,13 @@ function buildLines(spec: FallbackSpec, secs: Sec[]): SeedLine[] {
   const raw = secs.flatMap((sec) => factsOf(sec).map((fact) => ({ fact, key: sec.key })));
   const ordered =
     spec.kind === "metrics"
-      ? raw.map((f, i) => ({ ...f, i, has: !!metricOf(f.fact) })).sort((a, b) => (a.has === b.has ? a.i - b.i : a.has ? -1 : 1))
+      ? raw.map((f, i) => ({ ...f, i, has: METRIC.test(f.fact) })).sort((a, b) => (a.has === b.has ? a.i - b.i : a.has ? -1 : 1))
       : raw;
   return ordered.slice(0, spec.maxLines).map(({ fact, key }, i) => {
     const [text, cut] = clip(fact, spec.maxWords);
     const line: SeedLine = { id: `${spec.key}-${i + 1}`, text, keys: [key], ...(cut ? { full: cut } : {}) };
     if (spec.kind === "metrics") {
-      const m = metricOf(fact);
+      const m = factMetric(fact);
       if (m) line.metric = m;
     }
     return line;

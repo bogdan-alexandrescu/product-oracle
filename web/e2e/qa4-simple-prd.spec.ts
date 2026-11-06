@@ -188,11 +188,12 @@ test.describe("desktop", () => {
     await page.goto("/simple/one-pagers");
     await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Saved carts PRD", exact: true }).click();
     await expect(page.getByRole("article", { name: "One-pager" })).toBeVisible();
-    const line = page.locator('[data-line="bets-2"]');
+    // vqa B-13: Saved carts' one-pager has its own lines; its first flow is its own Version 1.
+    const line = page.locator("li", { hasText: "Beta: Save cart" }).first();
     await line.getByRole("button", { name: "Draw the flow" }).click();
-    await page.getByRole("button", { name: /^Flow for “Cart on every device/ }).click();
+    await page.getByRole("button", { name: /^Flow for “Beta: Save cart/ }).click();
     const opened = page.getByTestId("flow-detail");
-    await expect(opened).toContainText("G2 · flow");
+    await expect(opened).toContainText("Save cart · flow");
     await expect(opened).not.toContainText("Invite suggestions");
     await expect(opened.getByTestId("flow-drawn")).toContainText("Version 1 · drawn");
     await expect(opened).not.toContainText("(revised)");
