@@ -42,7 +42,7 @@ test.describe("desktop", () => {
     const chat = page.getByRole("listitem", { name: "Product chat" });
     const note = chat.getByRole("listitem", { name: "Skipped: #partner-launch" });
     await expect(note).toContainText("shared from outside the company");
-    await expect(note).toContainText("Nothing to do: Oracle never reads it.");
+    await expect(note.getByText(/Nothing to do/)).toBeHidden();
     await expect(note.getByText("No access", { exact: true })).toHaveCount(0);
     await note.getByRole("button", { name: "About why #partner-launch is skipped" }).click();
     await expect(page.getByRole("tooltip")).toContainText("only the company's own channels are read");

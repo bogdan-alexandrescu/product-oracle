@@ -61,7 +61,7 @@ test.describe("desktop", () => {
     await expect(form.getByTestId("add-source-reason")).toHaveText("Pick a channel to add it");
 
     const picker = form.getByRole("group", { name: "Slack channels" });
-    await expect(picker).toContainText("whole days in the Company time zone (Pacific Time (Los Angeles))");
+    await expect(picker).toContainText("Optional · Pacific Time (Los Angeles)");
     await expect(picker).not.toContainText("America/Los_Angeles");
 
     await picker.getByRole("checkbox", { name: "#product" }).check();
@@ -85,7 +85,7 @@ test.describe("desktop", () => {
     // A Slack source's first sync reads its channel's messages (the mock as the connector,
     // fix4-company's qa-onboarding-3): the result and the card say the same count, and
     // each message read is a new version.
-    await expect(row.getByRole("status")).toContainText("Synced: 2 items seen, 2 new versions");
+    await expect(row.getByRole("status")).toContainText("Synced: 2 items, 2 changed");
     await expect(row.getByTestId("source-items")).toHaveText("2 items");
   });
 });

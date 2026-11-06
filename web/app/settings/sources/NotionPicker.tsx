@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
-import { Button, Icon } from "@/components/ds";
+import { Button, Icon, InfoTip } from "@/components/ds";
 import { api, type Schemas, unwrap } from "@/lib/api/client";
 import { errorMessage, useAuthRedirect } from "@/lib/use-query";
 
@@ -498,7 +498,7 @@ export function NotionPicker({
               e.preventDefault();
               addLink();
             }}
-            placeholder="Page link or id"
+            placeholder="Page link"
             className={`${INPUT} h-8 flex-1`}
           />
           <Button onClick={() => addLink()} disabled={!link.trim()}>
@@ -510,8 +510,11 @@ export function NotionPicker({
             {linkError}
           </p>
         )}
-        <p className="text-[13px] text-text2">
-          Only pages you shared with Product Oracle in Notion appear here ·{" "}
+        <p className="flex items-center gap-1 text-[13px] text-text2">
+          {/* Pass F F-56: which pages show, behind an (i). */}
+          <InfoTip label="which pages show" align="start">
+            Only pages you shared with Product Oracle in Notion appear here.
+          </InfoTip>
           <a href={SHARE_HELP} target="_blank" rel="noreferrer" className="font-semibold text-accent-ink underline-offset-2 hover:underline">
             Share more in Notion
           </a>

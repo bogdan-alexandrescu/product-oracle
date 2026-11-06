@@ -65,9 +65,9 @@ test("sources › Google Docs: choose files and a folder from Drive, remove one,
 
   await list.getByRole("button", { name: "Remove Research synthesis" }).click();
   await expect(list.getByRole("listitem")).toHaveCount(2);
-  await form.getByRole("button", { name: "Paste ids" }).click();
-  await form.getByLabel("Drive file ids").fill("1DocPastedExample");
-  await form.getByRole("button", { name: "Add ids" }).click();
+  await form.getByRole("button", { name: "Paste links" }).click();
+  await form.getByLabel("Drive links").fill("1DocPastedExample");
+  await form.getByRole("button", { name: "Add", exact: true }).click();
   await expect(list.getByRole("listitem")).toHaveText([/Planning/, /Roadmap notes/, /1DocPastedExample\s*Drive id/]);
 
   await form.getByRole("button", { name: "Add source" }).click();
@@ -118,7 +118,7 @@ test("sources › Google Docs: editing adds to the list from the picker; removin
   // count and names; the source needs attention (qa4-settings-6), not Active.
   const notes = row.getByRole("list", { name: "Sync notes for Product docs" });
   await expect(notes.getByRole("listitem")).toHaveText([
-    /Lost access\s*to\s*Vendor research\s*— its docs are hidden until Oracle can read it again/,
+    /Lost access\s*to\s*Vendor research/,
     /No access\s*Customer interviews Q3/,
     /Skipped\s*owned outside example.com\s*3 docs\s*Agency SOW 2026, Partner pricing sheet, Contractor onboarding notes/,
     /Skipped\s*in a shared drive outside the company\s*1 doc\s*Joint launch plan/,
@@ -194,7 +194,7 @@ test("sources › Google Docs: a folder Oracle lost access to says so on the sou
   const row = page.getByRole("listitem", { name: "Product docs" });
   const notes = row.getByRole("list", { name: "Sync notes for Product docs" });
   const lost = notes.getByRole("listitem", { name: "Lost access to Vendor research" });
-  await expect(lost).toHaveText(/Lost access\s*to\s*Vendor research\s*— its docs are hidden until Oracle can read it again/);
+  await expect(lost).toHaveText(/Lost access\s*to\s*Vendor research/);
   await expect(lost.getByText("Lost access", { exact: true })).toHaveAttribute("title", /removed, or no longer shared with you/);
   // Still said after a sync that cannot read it.
   await row.getByRole("button", { name: "Sync now" }).click();
@@ -311,9 +311,9 @@ test("sources › Google Docs: pasted ids must be Drive ids; links copied from D
   await page.goto("/settings/sources");
   const form = page.getByRole("form", { name: "Add a source" });
   await form.getByLabel("Kind").selectOption("google_docs");
-  await form.getByRole("button", { name: "Paste ids" }).click();
+  await form.getByRole("button", { name: "Paste links" }).click();
   await form
-    .getByLabel("Drive file ids")
+    .getByLabel("Drive links")
     .fill(
       [
         "https://docs.google.com/document/d/1DocLinkedExample/edit",
@@ -322,12 +322,12 @@ test("sources › Google Docs: pasted ids must be Drive ids; links copied from D
         "root?x='",
       ].join("\n"),
     );
-  await form.getByRole("button", { name: "Add ids" }).click();
+  await form.getByRole("button", { name: "Add", exact: true }).click();
   const list = form.getByRole("list", { name: "Picked files and folders" });
   await expect(list.getByRole("listitem")).toHaveText([/1DocLinkedExample\s*Drive id/, /1FolderLinkedExample\s*Folder/]);
   // What is not an id stays in the box, with a reason.
   await expect(form.getByText("Not a Drive file or folder id: root, root?x=")).toBeVisible();
-  await expect(form.getByLabel("Drive file ids")).toHaveValue("root\nroot?x='");
+  await expect(form.getByLabel("Drive links")).toHaveValue("root\nroot?x='");
 });
 
 test("sources › Google Docs: a stale save shows the message, saves nothing, and Reload shows the current picks", async ({ page }) => {

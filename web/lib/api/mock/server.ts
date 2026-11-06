@@ -51,7 +51,7 @@ import {
   type DocumentSection,
   type SubjectInfo,
 } from "./discussions";
-import { routeEngineering, techBriefOf, type CodeMapRow } from "./engineering";
+import { CODE_MAP_EMPTY_SCENARIO, CODE_MAP_UNREADABLE_SCENARIO, routeEngineering, seedCodeMaps, techBriefOf, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { addLiveFeature, laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, queueJob, queueQualityReview, seedLlm, seedStoredRefusals, SPENT, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
@@ -361,6 +361,8 @@ export interface Db {
   account?: AccountDb;
   /** Discussions (./discussions.ts, G1); seeded in the "discussions" scenario only. */
   discussions?: DiscussionsDb;
+  /** Pass F F-63, the "drive-picker-unset" scenario: the Drive picker config was refused once. */
+  picker_config_refused?: boolean;
 }
 
 type RevokeFailureRow = Schemas["InboxRevokeFailure"] & { dismissed?: boolean };
@@ -629,6 +631,10 @@ export const MOCK_SIMPLE_MODE_KEY = "po-mock-simple-mode";
 export const KEY_RENEWED_SCENARIO = "key-renewed";
 /** #561 review: things that failed on a stored Claude-pool refusal, one per surface. */
 export const STORED_REFUSALS_SCENARIO = "stored-refusals";
+/** Pass F F-63: the Drive picker config answers as the API does when it is not set up, once; Try again then opens it. */
+export const DRIVE_PICKER_UNSET_SCENARIO = "drive-picker-unset";
+/** Pass F F-61: GET /v1/sources fails, so Settings › Connections cannot tell which sources use a connection. */
+export const SOURCES_UNREADABLE_SCENARIO = "sources-unreadable";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
 export const MOCK_FAIL_KEY = "po-mock-fail";
 /** Tests set this localStorage key to "METHOD /path" to make that call's next request fail once with a 500. */
@@ -6024,6 +6030,16 @@ async function route(db: Db, req: Request): Promise<Response> {
   const member = db.members.find((x) => x.email === sessionOf(db));
   if (!member || member.status === "disabled") return json(401, { detail: "Not authenticated" });
   const me = withMockRole(member);
+  const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
+  if (scenario === DRIVE_PICKER_UNSET_SCENARIO && p[1] === "connections" && p[2] === "google" && p[3] === "picker-config" && !db.picker_config_refused) {
+    db.picker_config_refused = true;
+    // As oracle.connections.router.google_picker_config without its settings.
+    return json(404, {
+      detail:
+        "Choosing files from Drive is not configured: it needs Google sign-in (ORACLE_OAUTH_GOOGLE_CLIENT_ID and _SECRET), ORACLE_GOOGLE_PICKER_APP_ID and ORACLE_GOOGLE_PICKER_API_KEY",
+    });
+  }
+  if (scenario === SOURCES_UNREADABLE_SCENARIO && p[1] === "sources" && !p[2] && m === "GET") return json(500, { detail: "The sources could not be read." });
   // O5 lane 4: the company's branding and its logos (members read, owners change).
   if (p[0] === "uploads" || p[1] === "branding") {
     return (await routeBranding((db.branding ??= emptyBranding()), me.role, req, p, q)) ?? notFound("Route");
@@ -6327,11 +6343,14 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Tech briefs (./engineering.ts): every member reads.
   const briefs = await routeEngineering(req, p, q, {
     documents: db.documents,
-    maps: () => (db.code_maps ??= []),
+    maps: () =>
+      (db.code_maps ??= seedCodeMaps(localStorage.getItem(MOCK_SCENARIO_KEY), (status) => db.runs?.runs.find((r) => r.status === status)?.id ?? null, "admin@example.com")),
     me: { id: me.id, email: me.email, canWrite: atLeast(me.role, "commenter") },
     now,
     uuid,
     refuse: localStorage.getItem(MOCK_SCENARIO_KEY) === STORED_REFUSALS_SCENARIO,
+    unreadable: localStorage.getItem(MOCK_SCENARIO_KEY) === CODE_MAP_UNREADABLE_SCENARIO,
+    slowRead: localStorage.getItem(MOCK_SCENARIO_KEY) === CODE_MAP_EMPTY_SCENARIO,
   });
   if (briefs) return briefs;
   // #481: the staleness actions on a spec's version are the specs mock's (./specs.ts).
@@ -6389,12 +6408,12 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   // The baseline mock checks roles itself (commenters propose, approvers decide).
   if (p[1] === "baseline") return routeBaselineFor(db, me, req, p, q);
-  // Sources and connections belong to each user: every role manages their own.
+  // Sources and connections belong to each user: commenters and up manage their own sources (viewers read).
   if (["sources", "source-items", "snapshots", "search"].includes(p[1])) {
     return routeSources(req, p, q, {
       scenario: localStorage.getItem(MOCK_SCENARIO_KEY),
       me: { email: me.email, role: me.role },
-      members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role, disabled: x.status === "disabled" })),
+      members: db.members.map((x) => ({ id: x.id, email: x.email, name: x.name, role: x.role, disabled: x.status === "disabled" })),
       uses: () => itemUses(db),
     });
   }

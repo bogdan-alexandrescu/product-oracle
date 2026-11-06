@@ -18,7 +18,7 @@ import {
   type Column,
 } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
-import { formatAge, formatCount, formatDate, formatDateTime, formatPercent, plural } from "@/lib/format";
+import { formatAge, formatCount, formatDate, formatDateTime, formatDay, formatPercent, plural } from "@/lib/format";
 
 import { itemKinds, KIND_LABEL } from "./confidence";
 
@@ -46,12 +46,12 @@ const n = formatCount;
 /** No value: one dash style on the page. */
 export const NONE = "—";
 
-/** The last sync, relative, with the full date in the title; "Never" before the first. */
+/** The last sync as a date ("Oct 17"), its relative age in the title; "Never" before the first. */
 export function Synced({ at, testId }: { at: string | null | undefined; testId?: string }) {
   if (!at) return <span data-testid={testId}>Never</span>;
   return (
-    <span data-testid={testId} title={formatDateTime(at)}>
-      {formatAge(at)}
+    <span data-testid={testId} title={formatAge(at)}>
+      {formatDay(at)}
     </span>
   );
 }
@@ -208,11 +208,6 @@ export function CoverageTable({
     },
   ];
   return (
-    <>
-    {/* rirs-39: the three counts count different things; say what each is, so they need not add up. */}
-    <p data-testid="coverage-counts-note" className="border-b border-line px-4 py-2 text-[13px] text-text2 max-[600px]:px-3">
-      {COUNTS.items} {COUNTS.notRead} {COUNTS.used}
-    </p>
     <DataTable
       label="Coverage of my sources"
       testId="coverage-table"
@@ -223,7 +218,15 @@ export function CoverageTable({
       selected={selected}
       onSelect={(id) => onSelect(id)}
     />
-    </>
+  );
+}
+
+/** rirs-39: the three counts count different things, so they need not add up; one tip, not a sentence on the page. */
+export function CoverageCountsTip() {
+  return (
+    <InfoTip label="Coverage" align="end">
+      {COUNTS.items} {COUNTS.notRead} {COUNTS.used}
+    </InfoTip>
   );
 }
 

@@ -36,7 +36,7 @@ export type SourcesContext = {
   /** The mock scenario ("empty" starts with no sources). */
   scenario: string | null;
   me: { email: string; role: Role };
-  members: { id: string; email: string; role: Role; disabled: boolean }[];
+  members: { id: string; email: string; name?: string | null; role: Role; disabled: boolean }[];
   /** Baseline evidence, citations and section links pointing at source items. */
   uses: () => UsedIn[];
 };
@@ -669,8 +669,14 @@ export async function routeSources(req: Request, p: string[], q: URLSearchParams
   return res;
 }
 
+const ROLE_ORDER: readonly Role[] = ["viewer", "commenter", "approver", "owner"];
+
 async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParams, ctx: SourcesContext): Promise<Response> {
   const m = req.method;
+  // As the API's SourceWriter: a source's writes (add, edit, delete, pause, resume, sync, uploads) need a commenter.
+  if (p[1] === "sources" && m !== "GET" && ROLE_ORDER.indexOf(ctx.me.role) < ROLE_ORDER.indexOf("commenter")) {
+    return json(403, { detail: "Requires the commenter role" });
+  }
   if (p[1] === "search") return json(200, search(db, q));
   if (p[1] === "snapshots") {
     if (p.length === 2 && m === "POST") {
@@ -1102,7 +1108,7 @@ function companyCoverage(db: SourcesDb, ctx: SourcesContext): Schemas["CompanyCo
     });
     const items = kinds.reduce((n, k) => n + k.items, 0);
     const share = items ? kinds.reduce((n, k) => n + k.freshness.fresh, 0) / items : -1;
-    return { member: { id: m.id, email: m.email, name: null, role: m.role }, kinds, order: [kinds.length ? 1 : 0, share] as const };
+    return { member: { id: m.id, email: m.email, name: m.name ?? null, role: m.role }, kinds, order: [kinds.length ? 1 : 0, share] as const };
   });
   // Setup first (no source), then the lowest fresh share.
   rows.sort((a, b) => a.order[0] - b.order[0] || a.order[1] - b.order[1] || a.member.email.localeCompare(b.member.email));

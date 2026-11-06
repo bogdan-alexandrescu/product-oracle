@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { Button, Chip, confirmInPage, InfoTip, Notice, type ChipKind } from "@/components/ds";
+import { Button, Chip, confirmInPage, Dialog, InfoTip, Notice, type ChipKind } from "@/components/ds";
 import { DOCS_ONLY } from "@/components/tech-brief";
 import { LoadError } from "@/components/ui";
 import { api, type Schemas, unwrap } from "@/lib/api/client";
@@ -28,11 +29,98 @@ function reposOf(source: Source): string[] {
   return Array.isArray(repos) ? repos.map(String) : [];
 }
 
+/** Pass F F-5: a run that waits for an owner holds the map building; the line says so and leads to the run. */
+const WAITING: Record<string, { label: string; tip: string }> = {
+  awaiting_approval: { label: "Waiting for an owner to approve its cost", tip: "Its cost is over the limit. An owner approves it on the run's page." },
+  paused_overrun: { label: "Paused: over budget", tip: "It spent past its limit. An owner resumes it on the run's page." },
+};
+const waitsForOwner = (m: CodeMap) => m.status === "building" && !!m.run_status && m.run_status in WAITING;
+
+/**
+ * Pass F F-37: why a map failed, in plain words: no "The code map run failed: index:" lead-in
+ * (an internal step), and a spent Claude pool as one short line with no reset time (it may be past).
+ */
+export function codeMapFailure(error: string): string {
+  if (/Claude account (could|can) take this call/.test(error)) {
+    return /spent/.test(error) ? "Every Claude account is out of quota. Try again later." : "No Claude account could take it. Try again later.";
+  }
+  return error.replace(/^The code map run failed:\s*/, "").replace(/^[a-z_]+:\s+/, "");
+}
+
+type Entry = Record<string, unknown>;
+const text = (v: unknown) => (typeof v === "string" ? v : "");
+
+/** Pass F F-38: the map's lists as people read them, each entry by its name. */
+const GROUPS: { key: string; label: string; name: (x: Entry) => string; about: (x: Entry) => string }[] = [
+  { key: "modules", label: "Parts", name: (x) => text(x.path) || text(x.id), about: (x) => text(x.summary) },
+  { key: "apis", label: "API routes", name: (x) => [text(x.method), text(x.path)].filter(Boolean).join(" ") || text(x.id), about: () => "" },
+  {
+    key: "data_models",
+    label: "Data models",
+    name: (x) => text(x.name) || text(x.id),
+    about: (x) => (Array.isArray(x.fields) ? x.fields.map(String).join(", ") : ""),
+  },
+];
+
+/**
+ * Pass F F-38 (owner's decision, Nov 5): what a map holds, read-only, in a small dialog (a
+ * sheet on a phone): its parts, API routes and data models with their counts. Whoever
+ * reads the map opens it; nothing in it changes the map.
+ */
+function CodeMapView({ id, repo, onClose }: { id: string; repo: string; onClose: () => void }) {
+  const q = useQuery(`code-map|${id}`, () => unwrap(api.GET("/v1/code-maps/{code_map_id}", { params: { path: { code_map_id: id } } })));
+  const content = q.data?.content ?? null;
+  const list = (key: string): Entry[] => {
+    const v = content?.[key];
+    return Array.isArray(v) ? v.filter((x): x is Entry => !!x && typeof x === "object") : [];
+  };
+  const groups = GROUPS.map((g) => ({ ...g, items: list(g.key) }));
+  const empty = groups.every((g) => g.items.length === 0);
+  return (
+    <Dialog title={`Code map of ${repo}`} onClose={onClose} phoneSheet scrollBody testId="code-map-view">
+      {q.error ? (
+        <div className="flex flex-col items-start gap-2">
+          <Notice tone="error">{q.error}</Notice>
+          <Button onClick={() => void q.reload()}>Try again</Button>
+        </div>
+      ) : !q.data ? (
+        <p className="text-sm text-text2">Loading the map…</p>
+      ) : empty ? (
+        <p className="text-sm text-text2">Nothing mapped yet</p>
+      ) : (
+        groups.map((g) => (
+          <section key={g.key} className="min-w-0">
+            <h3 className="font-semibold text-text">
+              {g.label} ({g.items.length})
+            </h3>
+            {g.items.length === 0 ? (
+              <p className="text-sm text-text2">None found</p>
+            ) : (
+              <ul aria-label={g.label} className="mt-1 flex flex-col gap-0.5 text-sm">
+                {g.items.map((it, i) => {
+                  const about = g.about(it);
+                  return (
+                    <li key={text(it.id) || i} className="min-w-0 break-words text-text2">
+                      <span className="font-mono text-[13px] text-text">{g.name(it)}</span>
+                      {about && ` · ${about}`}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        ))
+      )}
+    </Dialog>
+  );
+}
+
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 function CodeMapLine({ repo, map, onChange, sourceId }: { repo: string; map?: CodeMap; sourceId: string; onChange: (m: CodeMap) => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
   const { can } = useMe();
 
   async function act(fn: () => Promise<CodeMap>) {
@@ -62,7 +150,8 @@ function CodeMapLine({ repo, map, onChange, sourceId }: { repo: string; map?: Co
     await act(() => unwrap(api.POST("/v1/code-maps/{code_map_id}/sharing", { params: { path: { code_map_id: map.id } }, body: { sharing } })));
   }
 
-  const state = map ? STATE[map.status] : null;
+  const waiting = map && waitsForOwner(map) ? WAITING[map.run_status!] : null;
+  const state = map ? (waiting ? { label: waiting.label, kind: "warn" as const } : STATE[map.status]) : null;
   const usable = map && (map.status === "ready" || map.status === "stale");
   return (
     <li className="flex min-w-0 flex-col gap-1" data-testid={`code-map-${repo}`}>
@@ -79,7 +168,7 @@ function CodeMapLine({ repo, map, onChange, sourceId }: { repo: string; map?: Co
         {!map && <span className="text-text2">No code map yet</span>}
         {map && state && (
           <Chip kind={state.kind} dot>
-            {`Code map: ${state.label}`}
+            {waiting ? state.label : `Code map: ${state.label}`}
             {usable && ` · ${map.sharing === "full" ? "Shared with the company" : "Private"}`}
           </Chip>
         )}
@@ -88,13 +177,23 @@ function CodeMapLine({ repo, map, onChange, sourceId }: { repo: string; map?: Co
             {DOCS_ONLY}
           </Chip>
         )}
-        {map?.status === "building" && map.run_status === "awaiting_approval" && <span className="text-text2">waits for an owner to approve its cost</span>}
+        {waiting && <InfoTip label={waiting.label}>{waiting.tip}</InfoTip>}
+        {waiting && map?.run_id && can(map.run_status === "awaiting_approval" ? "approve_run" : "resume_run") && (
+          <Link href={`/runs/${map.run_id}`} className="text-sm font-semibold text-accent-ink hover:underline">
+            {map.run_status === "awaiting_approval" ? "Open the run to approve" : "Open the run to resume"}
+          </Link>
+        )}
         {usable && map.as_of && <span className="text-text2">as of {formatDateTime(map.as_of)}</span>}
         <span className="ml-auto flex flex-none flex-wrap items-center gap-1">
           {/* A stale map refreshes at once on Map the code, whatever the refresh setting. */}
           {(!map || map.status === "failed" || map.status === "stale") && can("start_code_map") && (
             <Button disabled={busy} onClick={start}>
               Map the code
+            </Button>
+          )}
+          {usable && (
+            <Button aria-haspopup="dialog" onClick={() => setOpen(true)}>
+              See the map
             </Button>
           )}
           {usable && map.mine && map.sharing === "private" && can("share_code_map") && (
@@ -112,9 +211,10 @@ function CodeMapLine({ repo, map, onChange, sourceId }: { repo: string; map?: Co
       {map?.status === "failed" && map.error && (
         <p className="break-words text-sm text-crit">
           {map.failed_at && <span data-testid="failed-at">{failedAt(map.failed_at)}. </span>}
-          {map.error}
+          {codeMapFailure(map.error)}
         </p>
       )}
+      {usable && open && <CodeMapView id={map.id} repo={repo} onClose={() => setOpen(false)} />}
       {error && <Notice tone="error">{error}</Notice>}
     </li>
   );
@@ -131,7 +231,8 @@ export function CodeMaps({ source }: { source: Source }) {
     unwrap(api.GET("/v1/code-maps")).then((all) => all.filter((m) => m.source_id === source.id)),
   );
   const maps = q.data;
-  const building = maps?.some((m) => m.status === "building") ?? false;
+  // A map whose run waits for an owner changes only when they act: no polling meanwhile (F-5).
+  const building = maps?.some((m) => m.status === "building" && !waitsForOwner(m)) ?? false;
   const { reload } = q;
   useEffect(() => {
     if (!building) return;

@@ -307,7 +307,7 @@ class SourceCoverageDetail(SourceCoverage):
 class CompanyMember(BaseModel):
     id: uuid.UUID
     email: str
-    # The member's display name once people have one; null until then.
+    # The member's display name; null when they have none (pass F F-55: the row reads it).
     name: str | None
     role: str
 
