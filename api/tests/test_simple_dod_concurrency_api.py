@@ -79,6 +79,29 @@ async def test_two_sessions_on_one_item(client):
     assert r.status_code == 201, r.text
 
 
+async def test_same_instant_conflicts_name_each_fields_writer(client):
+    w = await world(ops=["edit_title"])
+    a = w.ids["edit_title-a"]
+    seen = {"start_date": "2026-10-01", "end_date": "2026-11-15"}
+    moved = {"start_date": "2026-10-05", "end_date": "2026-11-20"}
+    # The clock is pinned: the owner moves the dates, then the decider retitles, one instant.
+    r = await client.post(CHANGES, json={"op": "move_dates", "target": {"item_id": a},
+                          "before": seen, "after": moved}, headers=w.ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 201, r.text
+    r = await w.post(client, "decider", "edit_title")
+    assert r.status_code == 201, r.text
+    # The decider moves the dates they saw: the owner wrote the dates.
+    r = await client.post(CHANGES, json={"op": "move_dates", "target": {"item_id": a},
+                          "before": seen, "after": {"start_date": "2026-10-09",
+                          "end_date": "2026-11-25"}}, headers=w.ctx.as_("decider"))  # fmt: skip
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"]["changed_by"]["id"] == str(w.ctx.users["owner"].id)
+    # The owner retitles on the title they saw: the decider wrote the title.
+    r = await w.post(client, "owner", "edit_title", after={"title": "Ledger v3"})
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"]["changed_by"]["id"] == str(w.ctx.users["decider"].id)
+
+
 async def test_two_sessions_at_once(client):
     w = await world(ops=["edit_title"])
     one, two = await asyncio.gather(

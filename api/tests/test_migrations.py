@@ -5,6 +5,7 @@ Sync tests on purpose: Alembic's env.py runs its own event loop.
 
 import asyncio
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from alembic import command
@@ -250,3 +251,60 @@ def test_revision_run_up_down_up(scratch_db):
     assert "run_id" not in _columns("entity_revisions")
     command.upgrade(cfg, REVISION_RUN)
     assert "run_id" in _columns("entity_revisions")
+
+
+SIMPLE_CHANGES_SEQ = "0113_simple_changes_seq"
+
+
+def test_simple_changes_seq_backfills_in_the_order_made(scratch_db):
+    # protects=0113 numbers the changes already stored by (at, id): older ones first, and
+    # rows sharing one ``at`` by id, so a tie lists the same as it did before the column;
+    # a change made after the upgrade numbers after them all and NOT NULL holds;
+    # fails_when=seq follows storage (heap) order, or a new change takes a used number;
+    # no_claim=the order lists use (tests/test_simple_changes_api.py).
+    from alembic.script import ScriptDirectory
+
+    cfg = _cfg()
+    previous = ScriptDirectory.from_config(cfg).get_revision(SIMPLE_CHANGES_SEQ).down_revision
+    command.upgrade(cfg, previous)
+    tenant = uuid.uuid4()
+    _run("INSERT INTO tenants (id, name) VALUES (:id, 'Example Co')", id=tenant)
+    ids = [uuid.UUID(int=n) for n in (9, 3, 7, 1, 5)]
+    # Stored newest first and ids out of order: heap order is neither (at) nor (at, id).
+    rows = [
+        (ids[0], datetime(2026, 10, 2, 9, tzinfo=UTC)),
+        (ids[1], datetime(2026, 10, 2, 9, tzinfo=UTC)),
+        (ids[2], datetime(2026, 10, 2, 9, tzinfo=UTC)),
+        (ids[3], datetime(2026, 10, 1, 9, tzinfo=UTC)),
+        (ids[4], datetime(2026, 9, 30, 9, tzinfo=UTC)),
+    ]
+    for i, at in rows:
+        _run(
+            "INSERT INTO simple_changes (id, tenant_id, op, target, before, after, status, by, at)"
+            " VALUES (:id, :t, 'edit_title', '{}', '{}', '{}', 'applied', :by, "
+            ":at)",
+            id=i,
+            t=tenant,
+            by=uuid.uuid4(),
+            at=at,
+        )
+
+    command.upgrade(cfg, SIMPLE_CHANGES_SEQ)
+    got = [r[0] for r in _run("SELECT id FROM simple_changes ORDER BY seq")]
+    assert got == [ids[4], ids[3], ids[1], ids[2], ids[0]]
+    assert [r[0] for r in _run("SELECT seq FROM simple_changes ORDER BY seq")] == [1, 2, 3, 4, 5]
+    _run(
+        "INSERT INTO simple_changes (id, tenant_id, op, target, before, after, status, by, at)"
+        " VALUES (gen_random_uuid(), :t, 'edit_title', '{}', '{}', '{}', 'applied', "
+        "gen_random_uuid(), now())",
+        t=tenant,
+    )
+    assert _run("SELECT max(seq), count(DISTINCT seq) FROM simple_changes") == [(6, 6)]
+    assert _run(
+        "SELECT is_nullable FROM information_schema.columns "
+        "WHERE table_name = 'simple_changes' AND column_name = 'seq'"
+    ) == [("NO",)]
+    command.downgrade(cfg, previous)
+    assert "seq" not in _columns("simple_changes")
+    command.upgrade(cfg, SIMPLE_CHANGES_SEQ)
+    assert "seq" in _columns("simple_changes")
