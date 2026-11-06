@@ -43,7 +43,7 @@ function num(v: number | null, unit: string): string {
   const n = Number.isInteger(v) ? String(v) : String(Math.round(v * 10) / 10);
   if (unit === "%") return `${n}%`;
   if (unit === "$") return `$${n}`;
-  return unit ? `${n} ${unit}` : n;
+  return unit ? `${n} ${v === 1 && unit.endsWith("s") ? unit.slice(0, -1) : unit}` : n;
 }
 
 export function usePhone(): boolean {
@@ -146,7 +146,7 @@ export function GoalLadder(props: LadderProps) {
   const [fresh, setFresh] = useState<string | null>(null);
 
   const goals = map.goals;
-  const ms = useMemo(() => goals.flatMap((g) => map.milestones.filter((m) => m.goal === g.id).sort((a, b) => (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999"))), [goals, map.milestones]);
+  const ms = useMemo(() => goals.flatMap((g) => map.milestones.filter((m) => m.goal === g.id)), [goals, map.milestones]);
   const msCode = useMemo(() => new Map(ms.map((m, i) => [m.id, `M${i + 1}`])), [ms]);
   const feats = useMemo(() => {
     const on = new Set(map.features.map((f) => f.id));
@@ -378,7 +378,7 @@ function periods(map: GoalMap, ms: GmMilestone[], code: Map<string, string>): { 
     for (let w = from, n = 1; w < to; w = addDays(w, 7), n++) {
       const end = addDays(w, 7);
       const due = ms.filter((m) => m.due_on && m.due_on >= w && m.due_on < end);
-      out.push({ n, from: w, today: today >= w && today < end, mark: due.map((m) => `${code.get(m.id)} ${m.name.split(" ").slice(0, 3).join(" ")}`).join("\n") });
+      out.push({ n, from: w, today: today >= w && today < end, mark: due.map((m) => `${code.get(m.id)} ${m.name.split(" ").slice(0, 4).join(" ")}`).join("\n") });
     }
     return out;
   };
@@ -920,7 +920,6 @@ function Canvas({ v, drag }: { v: V; drag: { setLive: (l: V["live"]) => void; se
     else if (card && canPlace) gesture.current = { kind: "card", id: card.dataset.ldCard, sx: e.clientX, sy: e.clientY, vx: 0, vy: 0, moved: false };
     else if (!card) gesture.current = { kind: "pan", sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y, moved: false };
     else return;
-    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
   };
   const move = (e: RPointerEvent<HTMLDivElement>) => {
     const g = gesture.current;
@@ -928,6 +927,8 @@ function Canvas({ v, drag }: { v: V; drag: { setLive: (l: V["live"]) => void; se
     const dx = e.clientX - g.sx;
     const dy = e.clientY - g.sy;
     if (!g.moved && Math.hypot(dx, dy) < 5) return;
+    // Captured once it is a drag, so a plain click still reaches the card.
+    if (!g.moved) (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
     g.moved = true;
     if (g.kind === "pan") setView((o) => ({ ...o, x: g.vx + dx, y: g.vy + dy }));
     if (g.kind === "card") {
@@ -993,11 +994,12 @@ function Canvas({ v, drag }: { v: V; drag: { setLive: (l: V["live"]) => void; se
   // The overview: the ladder's columns, and the part of it in view.
   const OW = 112;
   const OH = 40;
-  const os = Math.min(OW / (size.cw + 32), OH / (size.ch + 24));
-  const vw = Math.min(OW, (size.w / view.z) * os);
-  const vh = Math.min(OH, (size.h / view.z) * os);
-  const vx = Math.max(0, Math.min(OW - vw, ((16 - view.x) / view.z) * os));
-  const vy = Math.max(0, Math.min(OH - vh, ((12 - view.y) / view.z) * os));
+  const ox = OW / (size.cw + 32);
+  const oy = OH / (size.ch + 24);
+  const vw = Math.min(OW, (size.w / view.z) * ox);
+  const vh = Math.min(OH, (size.h / view.z) * oy);
+  const vx = Math.max(0, Math.min(OW - vw, ((16 - view.x) / view.z) * ox));
+  const vy = Math.max(0, Math.min(OH - vh, ((12 - view.y) / view.z) * oy));
 
   return (
     <>
@@ -1020,8 +1022,8 @@ function Canvas({ v, drag }: { v: V; drag: { setLive: (l: V["live"]) => void; se
           className="relative flex h-10 w-28 gap-0.5 overflow-hidden rounded-lg border border-line bg-surface p-1"
           onClick={(e) => {
             const r = e.currentTarget.getBoundingClientRect();
-            const cx = (e.clientX - r.left) / os;
-            const cy = (e.clientY - r.top) / os;
+            const cx = (e.clientX - r.left) / ox;
+            const cy = (e.clientY - r.top) / oy;
             setView((o) => ({ ...o, x: size.w / 2 - cx * o.z + 16, y: size.h / 2 - cy * o.z + 12 }));
           }}
         >
