@@ -274,6 +274,13 @@ for (const scheme of ["light", "dark"] as const) {
   test.describe(`phone ${scheme}`, () => {
     test.use(PHONE);
 
+    test("Goal 3's measure row is whole on a phone", async ({ page }) => {
+      // protects=ld1-a-phone's goal card; fails_when=the numbers or the pill wrap; no_claim=layout beside them.
+      await open(page, scheme);
+      await page.getByRole("tab", { name: "Goal 3" }).click();
+      await expectMeasureRowWhole(page.getByTestId("ld-goal"));
+    });
+
     test("one goal at a time; Edit ladder's Move to… opens a sheet", async ({ page }) => {
       // protects=ld1-a-phone, ld3-b-phone: no canvas on a phone, the goal picked from Goal 1 to
       // Goal 4 with its milestones and their features; while editing, no grips, and Move to…
@@ -299,6 +306,20 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(m6.getByTestId("ld-feature").filter({ hasText: "F-15" })).toHaveCount(1);
     });
   });
+}
+
+/** The goal card's measure row: its numbers and its status pill are each one line tall. */
+async function expectMeasureRowWhole(goal: ReturnType<Page["locator"]>) {
+  const row = goal.getByTestId("ld-goal-measure");
+  const numbers = row.getByTestId("ld-goal-numbers");
+  const pill = row.getByTestId("ld-goal-status");
+  await expect(pill).toHaveText("Too early");
+  const line = await numbers.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight));
+  expect((await numbers.boundingBox())!.height).toBeLessThanOrEqual(line + 1);
+  expect((await pill.boundingBox())!.height).toBeLessThanOrEqual(line + 1);
+  const card = (await goal.boundingBox())!;
+  const right = (await pill.boundingBox())!;
+  expect(right.x + right.width).toBeLessThanOrEqual(card.x + card.width);
 }
 
 /** The opacity a person sees on an element: its own times every ancestor's. */
@@ -453,6 +474,16 @@ test.describe("Goal ladder findings: numbers, first view, week captions, 1440", 
     await expect(page.getByTestId("ld-milestone").filter({ hasText: "M9" })).toContainText("— of $20,000");
     await expect(page.getByTestId("ld-goal").first()).toContainText("81% of 88%");
   });
+
+  for (const scheme of ["light", "dark"] as const) {
+    test(`Goal 3's measure row keeps its numbers on one line and its pill whole, ${scheme}`, async ({ page }) => {
+      // protects=ld1-d-rest: "$11,200 of $20,000" and the status pill read whole on the 184 px
+      // goal card; fails_when=the numbers wrap onto two lines or "Too early" breaks into two;
+      // no_claim=whether the pill sits beside the numbers or under them.
+      await open(page, scheme);
+      await expectMeasureRowWhole(page.getByTestId("ld-goal").filter({ hasText: "Larger teams add paid seats" }));
+    });
+  }
 
   test("a short screen opens with the whole ladder in view, the strip above it still showing", async ({ page }) => {
     // protects=ld1-d-rest at 1440: the canvas is on screen when the page opens, not below the
