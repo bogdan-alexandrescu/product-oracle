@@ -224,7 +224,7 @@ export function PrdLook({
           num: nums.get(s.section_key),
           meta: s.level > 1 ? meta(s) : undefined,
           hideReview: look === "b" ? false : !isCurrent,
-          tool: edit && isCurrent && s.section_key === sec ? "edit" : undefined,
+          tool: edit && s.section_key === sec ? "edit" : undefined, // from the first draw: SectionView reads it once
         })}
         {folded && (
           <button type="button" className="pt1-unfold" onClick={() => setUnfolded((u) => new Set(u).add(s.section_key))}>

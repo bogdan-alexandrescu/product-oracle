@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { memo, useMemo, useState, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useState, type ReactNode } from "react"; // MOCK-HOOK: useEffect
 
 import { AddEvidenceLink } from "@/components/AddEvidenceLink";
 import { AskTeammate } from "@/components/AskTeammate";
@@ -123,6 +123,7 @@ export const SectionView = memo(function SectionView({
   const locked = section.verdict?.verdict === "approved" && !section.verdict.lapsed_at;
   // The tool picked from the ⋯ menu, shown under the review bar; a new pick remounts it.
   const [tool, setTool] = useState<{ kind: Tool; n: number } | null>(look?.tool ? { kind: look.tool, n: 1 } : null); // MOCK-HOOK
+  useEffect(() => { if (look?.tool) setTool({ kind: look.tool, n: 1 }); }, [look?.tool]); // MOCK-HOOK
   // Preselect the baseline item the section names (heading first, then its text).
   const suggested = useMemo(() => {
     if (!evidenceTargets) return null;

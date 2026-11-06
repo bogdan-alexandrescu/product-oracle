@@ -53,7 +53,7 @@ const COST = {
   a: { query: `&sec=feature-f-4` }, // a section's review bar shows only once it is the current one
   b: { query: `&sec=feature-f-9` }, // cards take more height: fewer sections on a screen
   c: { query: `&sec=summary`, opts: { scrollTo: "feature-f-3" } }, // folded sections: one more click to read each
-  d: { query: `&sec=${HARD}` }, // the margin takes width: the wide table scrolls at 1440
+  d: { query: `&sec=${HARD}`, opts: { scrollAcross: HARD } }, // the margin takes width: the wide table is read by scrolling across
   e: { query: `&sec=${HARD}`, opts: { scrollBy: 700 } }, // the sheet is narrow: the wide table wraps tall
 };
 
@@ -159,6 +159,13 @@ async function main() {
       }
       if (opts.scrollTo) {
         await page.evaluate((k) => document.querySelector(`[data-pt1-sec="${k}"]`)?.scrollIntoView({ block: "start" }), opts.scrollTo);
+        await page.waitForTimeout(500);
+      }
+      if (opts.scrollAcross) {
+        await page.evaluate((k) => {
+          const box = [...document.querySelectorAll(`[data-pt1-sec="${k}"] *`)].find((el) => el.scrollWidth > el.clientWidth + 8 && getComputedStyle(el).overflowX !== "visible");
+          if (box) box.scrollLeft = box.scrollWidth;
+        }, opts.scrollAcross);
         await page.waitForTimeout(500);
       }
       if (opts.scrollBy) {
