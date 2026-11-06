@@ -20,10 +20,14 @@ while any is open, call c3): ``unreadable_yaml``, ``wrong_version`` and ``unknow
 1..N, each once), ``unknown_feature`` (not a non-rejected feature, nor one of the approved
 scope), ``not_in_scope`` and ``missing_feature`` (an approved PRD scope exists and the
 feature is not included in it, or is included and not ranked) and ``before_prerequisite``
-(ranked above a feature it depends on: decision O3, ordered by dependencies). Advisory:
-``differs_from_live`` (its rank differs by more than ``LIVE_SLACK`` from the live ranking
-of the same method, restricted to the same features) and ``no_goal`` (the live ranking
-flags it ``no_confirmed_goal``).
+(ranked above a feature it depends on: decision O3, ordered by dependencies) and
+``new_feature_no_goal`` (a feature new in this PRD whose row and feature-set entry name no
+known goal it serves: none joins the baseline without its goal) and ``unknown_goal`` (a
+new feature's row or entry names a goal the baseline does not have, or rejected; a
+contribution of 0 from either source means it does not serve). Advisory:
+``differs_from_live`` (its place among the ranked live features differs by more than
+``LIVE_SLACK`` from the live ranking of the same method, restricted to the same features)
+and ``no_goal`` (the live ranking flags it ``no_confirmed_goal``).
 
 The file is agent output, read the way ``roadmap_items.yaml`` is (oracle.runs.roadmap):
 through the one safe loader (:func:`oracle.safe_yaml.load`), at most ``MAX_STORED_BYTES``
@@ -107,6 +111,11 @@ class Known:
     depends_on: dict[str, set[str]] = field(default_factory=dict)
     # Method -> the live ranking (RankedFeature as JSON), in rank order.
     live: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    # A scope feature not in the baseline (new in this PRD) -> the goals its feature-set
+    # entry names: key and contribution (None: named by key alone).
+    new_goals: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    # The baseline's non-rejected goals: key -> title. Only these count as served.
+    goals: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -244,7 +253,8 @@ def check_order(text: str, *, known: Known) -> OrderCheck:
         rows.append(row)
     for key, times in seen.items():
         if times > 1:
-            out.add("duplicate_key", f"feature {key} is ranked {times} times", key)
+            title = known.features.get(key) or key
+            out.add("duplicate_key", f"{title} is ranked {times} times", key)
     rows.sort(key=lambda r: r["rank"])
     ranks: dict[int, str] = {}
     for r in rows:
@@ -263,12 +273,20 @@ def check_order(text: str, *, known: Known) -> OrderCheck:
             f"ranks run 1..{len(ranks)} once each; missing: {', '.join(map(str, gaps[:10]))}",
         )
     _check_features(out, rows, known)
+    for r in rows:
+        if r["key"] in known.new_goals:
+            _check_new_goals(out, r, known)
     live = known.live.get(out.method or "", [])
     live_rank = live_ranks([r["key"] for r in rows], live)
     by_key = {f["key"]: f for f in live}
     for r in rows:
         r["live_rank"] = live_rank.get(r["key"])
-        if r["live_rank"] is not None and abs(r["live_rank"] - r["rank"]) > LIVE_SLACK:
+    # Where each sits among the live features the run ranks, as outside_limits reads it: new
+    # features ranked above a feature do not move it (review of PR 1244, RP1 a).
+    in_live = sorted((r for r in rows if r["live_rank"] is not None), key=lambda r: r["rank"])
+    position = {r["key"]: i for i, r in enumerate(in_live, start=1)}
+    for r in rows:
+        if r["live_rank"] is not None and abs(r["live_rank"] - position[r["key"]]) > LIVE_SLACK:
             out.add(
                 "differs_from_live",
                 f"{r['key']} is ranked {r['rank']} here and {r['live_rank']} in the live ranking",
@@ -297,7 +315,8 @@ def _check_features(out: OrderCheck, rows: list[dict[str, Any]], known: Known) -
             out.add("not_in_scope", f"{key} is not included in the approved PRD scope", key)
     for key in known.scope or []:
         if key not in ranked:
-            out.add("missing_feature", f"{key} is in the approved PRD scope and not ranked", key)
+            title = known.features.get(key) or key
+            out.add("missing_feature", f"{title} is in the approved PRD scope and not ranked", key)
     for r in rows:
         for dep in sorted(known.depends_on.get(r["key"], ())):
             if dep in ranked and ranked[dep] > r["rank"]:
@@ -307,6 +326,35 @@ def _check_features(out: OrderCheck, rows: list[dict[str, Any]], known: Known) -
                     "which it depends on",
                     r["key"],
                 )
+
+
+def _check_new_goals(out: OrderCheck, row: dict[str, Any], known: Known) -> None:
+    """A new feature names a goal it serves: its row's goal or its feature-set entry's, a
+    goal of the baseline (not rejected), with no contribution or one above 0. A 0 from
+    either source wins (does not serve). A goal the baseline does not have is blocking
+    on its own: its link would be dropped (review of PR 1244, round 3)."""
+    key = row["key"]
+    title = known.features.get(key) or key
+    named = [
+        {"key": row.get("goal"), "contribution": row.get("contribution")},
+        *known.new_goals[key],
+    ]
+    keys = [str(g["key"]) for g in named if g.get("key")]
+    zero = {str(g["key"]) for g in named if g.get("key") and g.get("contribution") == 0}
+    unknown = [k for k in dict.fromkeys(keys) if k not in known.goals]
+    for goal in unknown:
+        out.add(
+            "unknown_goal",
+            f"{title} names the goal {goal}, which is not a goal in the baseline: "
+            "the run must name one that is",
+            key,
+        )
+    if not unknown and not any(k in known.goals and k not in zero for k in keys):
+        out.add(
+            "new_feature_no_goal",
+            f"{title} is new and names no goal it serves: the run must name one",
+            key,
+        )
 
 
 async def check_order_async(text: str, **kwargs: Any) -> OrderCheck:
@@ -337,15 +385,20 @@ async def check_order_async(text: str, **kwargs: Any) -> OrderCheck:
 async def known_for_run(db: AsyncSession, run: Any) -> tuple[Known, uuid.UUID | None]:
     """The baseline's features, the run's approved PRD scope (C6) and the live ranking of
     every method, read once; with the scope's id (None without one)."""
+    from oracle.baseline.models import Entity
     from oracle.priorities import service
     from oracle.priorities.scoring import rank
     from oracle.runs import feature_set
 
     features = await service.load_features(db)
+    goals = await db.scalars(
+        select(Entity).where(Entity.type == "goal", Entity.status != "rejected")
+    )
     known = Known(
         features={f.key: f.title for f in features},
         depends_on={f.key: set(f.depends_on) for f in features},
         live={m: list(rank(features, m)["features"]) for m in PRIORITY_METHODS},
+        goals={g.key: g.title for g in goals},
     )
     scope = await feature_set.approved_scope(db, run_id=run.id, document_id=run.document_id)
     if scope is None:
@@ -357,6 +410,8 @@ async def known_for_run(db: AsyncSession, run: Any) -> tuple[Known, uuid.UUID | 
     ]
     known.scope = [i.key for i in included]
     for i in included:
+        if i.key not in known.features:
+            known.new_goals[i.key] = list(i.goals or [])
         known.features.setdefault(i.key, i.title or i.key)
         known.depends_on.setdefault(i.key, set()).update(i.depends_on or [])
     return known, scope.id
@@ -397,6 +452,15 @@ def _goal_title(key: str | None, live_rows: list[dict[str, Any]]) -> str | None:
     return key
 
 
+def _goal_weight(key: str | None, live_rows: list[dict[str, Any]]) -> float | None:
+    """The goal's weight as the live ranking reads it (not assumed), or None."""
+    for f in live_rows:
+        for g in (f.get("explanation") or {}).get("goals") or []:
+            if g.get("goal") == key and not g.get("weight_assumed"):
+                return g.get("weight")
+    return None
+
+
 def _num(v: float) -> str:
     return f"{v:g}"
 
@@ -410,15 +474,21 @@ def new_feature(
 ) -> dict[str, Any]:
     """A feature new in this PRD as a ``RankedFeature``: goal weight × contribution ×
     confidence ÷ effort from the inputs the run set; the file's score when one is missing.
-    Its confidence is the run's, with no evidence yet. What it depends on, and what waits
-    on it, are the edges the baseline and the run's feature set give (``known``)."""
-    from oracle.priorities.scoring import FORMULAS
+    A goal named with no weight takes the goal's weight in the live ranking, with no
+    contribution the scorer's default: either then marked assumed, as the scorer marks a
+    link's. Its confidence is the run's, with no evidence yet. What it depends on, and what
+    waits on it, are the edges the baseline and the run's feature set give (``known``)."""
+    from oracle.priorities.scoring import DEFAULT_CONTRIBUTION, DEFAULT_WEIGHT, FORMULAS
 
-    goal, weight, contribution = r.get("goal"), r.get("weight"), r.get("contribution")
+    goal, given_weight, given = r.get("goal"), r.get("weight"), r.get("contribution")
     confidence, effort = r.get("confidence"), r.get("effort")
     goals, steps, missing = [], [], []
     score = r.get("score")
-    if goal is not None and weight is not None and contribution is not None:
+    if goal is not None:
+        # A goal named with no weight or contribution: the scorer's default, marked assumed.
+        live_weight = _goal_weight(goal, live_rows)
+        weight = next(w for w in (given_weight, live_weight, DEFAULT_WEIGHT) if w is not None)
+        contribution = given if given is not None else DEFAULT_CONTRIBUTION
         value = weight * contribution
         goal_title = _goal_title(goal, live_rows)
         goals.append(
@@ -426,9 +496,9 @@ def new_feature(
                 "goal": goal,
                 "title": goal_title,
                 "weight": weight,
-                "weight_assumed": False,
+                "weight_assumed": given_weight is None and live_weight is None,
                 "contribution": int(contribution),
-                "contribution_assumed": False,
+                "contribution_assumed": given is None,
                 "link_status": "proposed",
                 "term": value,
             }
@@ -589,39 +659,200 @@ def approve(snapshot: PrioritySnapshot, by: uuid.UUID | None, document_id: uuid.
         snapshot.document_id = document_id
 
 
+async def stale_goals(db: AsyncSession, snapshot: PrioritySnapshot) -> list[dict[str, Any]]:
+    """The goals the order's new features serve that the baseline rejected (or lost)
+    since the order was checked, as blocking ``unknown_goal`` problems its check does not
+    have yet: approving would add the feature with no supports link (review of PR 1244,
+    round 4). The goals read as :func:`_propose_links` reads them."""
+    from oracle.baseline.models import Entity
+
+    rows = [r for r in snapshot.ranking or [] if r.get("new")]
+    if not rows:
+        return []
+    items = await _scope_features(db, snapshot.scope_id)
+    goals = {g.key: g for g in await db.scalars(select(Entity).where(Entity.type == "goal"))}
+    known = {p.get("message") for p in (snapshot.check_result or {}).get("problems") or []}
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        key = row["key"]
+        item = items.get(key)
+        terms = (row.get("explanation") or {}).get("goals") or []
+        named = [*terms, *[{**g, "goal": g.get("key")} for g in (item.goals if item else [])]]
+        # A 0 from either source: the feature does not serve that goal, so it needs no link.
+        zero = {str(g["goal"]) for g in named if g.get("goal") and g.get("contribution") == 0}
+        for goal in dict.fromkeys(str(g["goal"]) for g in named if g.get("goal")):
+            if goal in zero:
+                continue
+            found = goals.get(goal)
+            if found is not None and found.status != "rejected":
+                continue
+            if found is None:
+                message = (
+                    f"{row.get('title') or key} names the goal {goal}, which is not a goal in "
+                    "the baseline: the run must name one that is"
+                )
+            else:
+                message = (
+                    f"{row.get('title') or key} serves the goal {found.title}, which was "
+                    "rejected after the order was checked: the run must name a goal of the "
+                    "baseline"
+                )
+            if message not in known:
+                known.add(message)
+                out.append(
+                    {"code": "unknown_goal", "blocking": True, "feature": key, "message": message}
+                )
+    return out
+
+
 async def accept_new(db: AsyncSession, snapshot: PrioritySnapshot, principal: Any) -> int:
     """An approved order adds the features new in its PRD to the baseline as proposed: the
     run's open proposals that create them are accepted (RP1), one per feature; another open
-    create of a feature already added is rejected as the same feature. Returns how many
-    were added."""
+    create of a feature already added is rejected as the same feature. A new feature the
+    run left no open create for is made from its ranking row and the approved feature set's
+    entry, never skipped. Each carries the run's effort and confidence, and, as proposed
+    links a person confirms, the goals it serves and what it depends on (review of PR 1244:
+    every feature traces to its goal). Returns how many were added."""
     from oracle.baseline.models import Proposal
-    from oracle.baseline.service import decide_proposal
+    from oracle.baseline.service import Writer, create_entity, decide_proposal, find_entity
 
-    keys = {r["key"] for r in snapshot.ranking or [] if r.get("new")}
-    if not keys or snapshot.run_id is None:
+    rows = {r["key"]: r for r in snapshot.ranking or [] if r.get("new")}
+    if not rows or snapshot.run_id is None:
         return 0
+    items = await _scope_features(db, snapshot.scope_id)
     open_ = await db.scalars(
         select(Proposal)
         .where(Proposal.run_id == snapshot.run_id, Proposal.status == "open")
         .order_by(Proposal.created_at, Proposal.id)
     )
-    first: dict[str, Proposal] = {}
+    creates: dict[str, list[Proposal]] = {}
     for p in list(open_):
         fields = (p.payload or {}).get("fields") or {}
         key = fields.get("key")
-        if (p.payload or {}).get("op") != "create" or key not in keys:
-            continue
-        if key in first:
-            # Rejected before the first is accepted, which would close it as already done.
+        if (p.payload or {}).get("op") == "create" and fields.get("type", "feature") == "feature":
+            if key in rows:
+                creates.setdefault(key, []).append(p)
+    added: list[str] = []
+    for key, row in rows.items():
+        mine = creates.get(key, [])
+        exists = await find_entity(db, "feature", key) is not None
+        # Rejected before the first is accepted, which would close it as already done.
+        for p in mine[0 if exists else 1 :]:
             await decide_proposal(db, p.id, principal, False, SAME_FEATURE)
+        if exists:
             continue
-        first[key] = p
-    for p in first.values():
-        # As proposed: an accepted create is confirmed unless its fields say otherwise.
-        fields = (p.payload or {}).get("fields") or {}
-        p.payload = {**p.payload, "fields": {**fields, "status": "proposed"}}
-        await decide_proposal(db, p.id, principal, True, "Added by the approved order")
-    return len(first)
+        attrs = _new_attrs(row)
+        if mine:
+            # As proposed: an accepted create is confirmed unless its fields say otherwise.
+            p = mine[0]
+            fields = (p.payload or {}).get("fields") or {}
+            fields = {**fields, "attrs": {**(fields.get("attrs") or {}), **attrs}}
+            p.payload = {**p.payload, "fields": {**fields, "status": "proposed"}}
+            await decide_proposal(db, p.id, principal, True, "Added by the approved order")
+        else:
+            item = items.get(key)
+            writer = Writer(
+                principal, "user", run_id=snapshot.run_id, reason="Added by the approved order"
+            )
+            await create_entity(
+                db,
+                writer,
+                type_="feature",
+                key=key,
+                title=row.get("title") or (item.title if item else None) or key,
+                body=item.text if item else None,
+                attrs=attrs,
+                status="proposed",
+            )
+        added.append(key)
+    for key in added:
+        await _propose_links(db, snapshot.run_id, key, rows[key], items.get(key))
+    return len(added)
+
+
+async def _scope_features(db: AsyncSession, scope_id: uuid.UUID | None) -> dict[str, Any]:
+    """The approved feature set's included features by key ({} without one)."""
+    if scope_id is None:
+        return {}
+    from oracle.runs import feature_set
+
+    return {
+        i.key: i
+        for i in await feature_set.scope_items(db, scope_id)
+        if i.kind == "feature" and i.decision == "include"
+    }
+
+
+def _new_attrs(row: dict[str, Any]) -> dict[str, Any]:
+    """The effort and confidence the run set for a new feature (its ranking row)."""
+    e = row.get("explanation") or {}
+    out: dict[str, Any] = {}
+    effort = ((e.get("inputs") or {}).get("effort") or {}).get("value")
+    if effort is not None:
+        out["effort"] = effort
+    confidence = e.get("confidence") or {}
+    if confidence.get("source") == "attrs" and confidence.get("value") is not None:
+        out["confidence"] = confidence["value"]
+    return out
+
+
+def _contribution(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int | float) or value != int(value):
+        return None
+    return int(value) if 0 <= value <= 3 else None
+
+
+# A supports link proposed for a goal named with no contribution: the scorer's default,
+# marked assumed on the link so a person sees it and sets the real one.
+ASSUMED_LINK = {"contribution": 1, "contribution_assumed": True}
+
+
+async def _propose_links(
+    db: AsyncSession, run_id: uuid.UUID, key: str, row: dict[str, Any], item: Any
+) -> None:
+    """A new feature's supports links to the goals it serves (its ranking row's, then the
+    feature set's) and depends_on links to the features it needs, proposed by the run. A
+    goal named with no usable contribution still gets its link, the contribution assumed
+    (``ASSUMED_LINK``) unless the other names one; a 0 from either source (does not serve)
+    gets none."""
+    from oracle.baseline.service import Writer, create_edge, find_edge, find_entity
+
+    feature = await find_entity(db, "feature", key)
+    if feature is None:
+        return
+    writer = Writer(None, "agent", run_id=run_id, reason="Proposed by the approved order")
+    goals: dict[str, dict[str, Any]] = {}
+    terms = (row.get("explanation") or {}).get("goals") or []
+    named = [*terms, *[{**g, "goal": g.get("key")} for g in (item.goals if item else [])]]
+    # A 0 from either source wins: the feature does not serve that goal.
+    zero = {str(g["goal"]) for g in named if g.get("goal") and g.get("contribution") == 0}
+    for g in named:
+        contribution = _contribution(g.get("contribution"))
+        if not g.get("goal") or str(g["goal"]) in zero:
+            continue
+        if contribution is None or g.get("contribution_assumed"):
+            goals.setdefault(str(g["goal"]), ASSUMED_LINK)
+        elif goals.get(str(g["goal"]), ASSUMED_LINK) is ASSUMED_LINK:
+            goals[str(g["goal"])] = {"contribution": contribution}
+    links: list[tuple[str, str, str, dict[str, Any]]] = [
+        ("goal", goal, "supports", dict(attrs)) for goal, attrs in goals.items()
+    ]
+    depends = {*(row.get("depends_on") or []), *(item.depends_on if item else [])}
+    links += [("feature", d, "depends_on", {}) for d in sorted(depends) if d != key]
+    for type_, other_key, edge_type, attrs in links:
+        other = await find_entity(db, type_, other_key)
+        if other is None or other.status == "rejected":
+            continue
+        if await find_edge(db, feature.id, other.id, edge_type) is None:
+            await create_edge(
+                db,
+                writer,
+                src_id=feature.id,
+                dst_id=other.id,
+                type_=edge_type,
+                attrs=attrs,
+                status="proposed",
+            )
 
 
 # Why an approved order rejects a second open create of a feature it already added.

@@ -25837,6 +25837,8 @@ export interface components {
             title: string;
             /** Goal Ids */
             goal_ids?: string[];
+            /** Assumed Goal Ids */
+            assumed_goal_ids?: string[];
         };
         /** GoalBucketGoal */
         GoalBucketGoal: {

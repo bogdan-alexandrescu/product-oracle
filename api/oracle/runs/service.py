@@ -7775,6 +7775,9 @@ async def _take_answer(
     if counted and approved and not ours and cp.kind == "feature_set":
         # The gate below reads the scope as stored, re-checked now (C6).
         await _recheck_scope(db, cp)
+    if counted and approved and not ours and cp.kind == "priority_order":
+        # And the goals the order's new features serve, as of now (C8).
+        await _recheck_order_goals(db, cp)
     if counted and approved and not ours:
         # D3 "Console gate": held while a blocking reason is not fixed or waived.
         shut = await approve_gate_of(db, cp)
@@ -8501,6 +8504,20 @@ async def decide_checkpoint(
         if (shut := await approve_gate_of(db, cp)) and not shut.open:
             await db.commit()
             raise blocking_open(shut)
+    if (
+        decision == "approved"
+        and cp.kind == "priority_order"
+        and (stale := await _recheck_order_goals(db, cp))
+    ):
+        # A goal a new feature serves was rejected since the order was checked: the order
+        # keeps the problem for the band and the Inbox, and nothing is decided.
+        if (shut := await approve_gate_of(db, cp)) and not shut.open:
+            await db.commit()
+            error = blocking_open(shut)
+            message = "; ".join(p["message"] for p in stale)
+            error.args = (message,)
+            error.detail["message"] = message  # type: ignore[attr-defined]
+            raise error
     if decision == "approved" and (blocked := _cannot_approve(cp)):
         # Approve, a confirmed console approval and Continue alike: nothing is decided.
         raise RunError(blocked)
@@ -10211,6 +10228,22 @@ async def _recheck_scope(db: AsyncSession, cp: Checkpoint) -> int:
     check = (await feature_set.check_scope(db, scope)).as_json()
     cp.payload = {**(cp.payload or {}), "feature_set_check": check}
     return feature_set.blocking_of(check)
+
+
+async def _recheck_order_goals(db: AsyncSession, cp: Checkpoint) -> list[dict[str, Any]]:
+    """Re-check, at approval, the goals a priority order's new features serve (C8): one
+    rejected since the order was checked is a blocking problem added to the order's check
+    and the checkpoint's, so every approval path refuses on it. Returns the new problems."""
+    snapshot = await run_order.snapshot_for(db, cp)
+    if snapshot is None or snapshot.status != "proposed":
+        return []
+    stale = await run_order.stale_goals(db, snapshot)
+    if stale:
+        check = dict(snapshot.check_result or {})
+        check["problems"] = [*(check.get("problems") or []), *stale]
+        snapshot.check_result = check
+        cp.payload = {**(cp.payload or {}), "priority_check": check}
+    return stale
 
 
 async def _scope_decided(

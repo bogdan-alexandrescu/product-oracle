@@ -73,6 +73,8 @@ class GoalBucketFeature(BaseModel):
     title: str
     # The goals it serves, the one it moves most first.
     goal_ids: list[uuid.UUID] = Field(default_factory=list)
+    # Those whose contribution is assumed (an approved order's ASSUMED_LINK), for a person to set.
+    assumed_goal_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 class GoalBucketsOut(BaseModel):
@@ -261,7 +263,10 @@ async def _set_links(db: AsyncSession, feature_id: uuid.UUID, links: list[GoalLi
     for goal_id, lk in want.items():
         attrs = {} if lk.contribution is None else {"contribution": lk.contribution}
         if goal_id in have:
-            have[goal_id].attrs = {**(have[goal_id].attrs or {}), **attrs}
+            old = dict(have[goal_id].attrs or {})
+            if attrs and attrs["contribution"] != old.get("contribution"):
+                old.pop("contribution_assumed", None)  # set here: no longer assumed
+            have[goal_id].attrs = {**old, **attrs}
         else:
             db.add(Edge(src_id=feature_id, dst_id=goal_id, type="supports",
                         status="confirmed", origin="user", attrs=attrs))  # fmt: skip
@@ -395,6 +400,13 @@ async def list_goal_buckets(principal: Reader, db: TenantDB) -> GoalBucketsOut:
                 key=f.key,
                 title=f.title,
                 goal_ids=[e.dst_id for e in edges if e.src_id == f.id and e.dst_id in live],
+                assumed_goal_ids=[
+                    e.dst_id
+                    for e in edges
+                    if e.src_id == f.id
+                    and e.dst_id in live
+                    and (e.attrs or {}).get("contribution_assumed") is True
+                ],
             )
             for f in sorted(features, key=lambda f: f.key)
         ],
