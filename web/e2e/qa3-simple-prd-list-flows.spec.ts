@@ -11,8 +11,8 @@ import { expect, test, type Locator, type Page } from "./test";
  *
  * - p3-29: protects = the whole one-pagers row opens its one-pager (the status, the empty
  *   middle, "Updated ..."), with one link a row; fails_when = only the title is a link.
- * - p3-30: protects = the list is newest first and says so; fails_when = no visible order
- *   (Guided setup, the newest in "simple-plan", not first).
+ * - p3-30 (prd-order, the owner's Nov 5 order): protects = the list is in the company PRD order;
+ *   fails_when = newest first or by title.
  * - p3-31: protects = a member with no name reads their email once in the rail's person
  *   block; fails_when = the email twice (as the name and the avatar's line).
  * - p3-14: protects = a flow's time reads month first with its day and the zone's friendly name
@@ -169,18 +169,17 @@ for (const [where, viewport] of [
 test.describe("desktop", () => {
   test.use({ viewport: DESKTOP });
 
-  test("qa-simple-prd-p3-30: one-pagers are newest first, and the list says so", async ({ page }) => {
+  // prd-order (the owner, Nov 5) replaces p3-30's newest first: the one company PRD order, the
+  // goal each PRD mainly serves first (e2e/simple-one-pager-prd-order.spec.ts moves one).
+  test("qa-simple-prd-p3-30: one-pagers follow the company PRD order, with no order line", async ({ page }) => {
     await setUp(page);
     await openOnePagers(page);
     const list = page.getByTestId("simple-one-pagers");
-    await expect(list.getByTestId("one-pagers-order")).toHaveText("Newest first");
-    const days = (await list.getByTestId("one-pager-row").getByText(/^Updated /).allTextContents()).map((t) => Date.parse(t.replace(/^Updated /, "")));
-    expect(days.length).toBeGreaterThan(1);
-    for (const d of days) expect(Number.isNaN(d)).toBe(false);
-    for (let i = 1; i < days.length; i++) expect(days[i]).toBeLessThanOrEqual(days[i - 1]);
+    await expect(list.getByTestId("one-pagers-order")).toHaveCount(0);
+    await expect(list.getByTestId("one-pager-row").first().getByRole("link")).toHaveText("Usage alerts PRD");
   });
 
-  test("qa-simple-prd-p3-30: in the planned company, Guided setup (changed last) comes first", async ({ page }) => {
+  test("qa-simple-prd-p3-30: in the planned company, Guided setup (its plan's goals) comes first", async ({ page }) => {
     await setUp(page, { scenario: "simple-plan" });
     await openOnePagers(page);
     await expect(page.getByTestId("one-pager-row").first().getByRole("link")).toHaveText("Guided setup");
