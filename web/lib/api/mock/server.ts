@@ -3767,7 +3767,7 @@ function load(): Db {
         "Steps to try:\n\n" + Array.from({ length: 40 }, (_, i) => `    step ${i + 1} of the rollout`).join("\n") +
         "\n\nThe check, fenced with four backticks:\n\n````\n```\nrun the check\n````\n\n" +
         "One command:\n~~~\nmake carts\n~~~\nNothing to run:\n\n```\n```\n\n" +
-        "To ship:\n\n- ```\n  ship the carts\n  ```\n- then check\n\nAfter the steps.";
+        "- ```\n  ship the carts\n  ```\n- then check\n\nAfter the steps.";
       problem.body_text = problem.body_md;
     }
   }
