@@ -47,6 +47,10 @@ export interface TrashEntryRow {
   /** trash-features-goals: a goal deleted with features moved to another goal: their goal_ids
    * as they were (trash_items' `links`), put back on Restore. */
   goal_links?: { id: string; goal_ids: string[]; left?: string[] }[];
+  /** port-an-decisions: a removed agenda item's meeting, row and place, put back on Restore. */
+  agenda?: { meeting_id: string; row: unknown; at: number };
+  /** port-an-decisions: a deleted request's row, put back on Restore. */
+  request?: unknown;
 }
 
 export interface TrashDb {
@@ -67,7 +71,10 @@ export interface TrashContext<D extends TrashDocument, V extends TrashVersion> {
   intakes: () => Intake[];
   /** The spec requests: a tech brief's link to its PRD (its versions name no source). */
   specRequests: () => { source_document_id: string; document_slug?: string | null }[];
-  me: { id: string; email: string; role: Role };
+  me: { id: string; email: string; name?: string | null; role: Role };
+  /** port-an-decisions: Restore of a meeting's agenda item or a request puts it back; the refusal's
+   * words when it cannot (409: its meeting has ended), else null. */
+  restoreRoot?: (entry: TrashEntryRow) => string | null;
   /** The document's designated decider (its review policy), who regenerates it whatever their role. */
   deciderOf?: (documentId: string) => string | null;
   /** New PRD (4): moving these documents to Trash releases what links to them; the result is kept for Restore. */
@@ -163,6 +170,9 @@ function daysLeft(entry: TrashEntryRow, now: string): number {
   return Math.max(0, Math.ceil(ms / DAY_MS));
 }
 
+/** As oracle.trash.service._actor_name: the person's name, else their email. */
+export const trashName = (me: { email: string; name?: string | null }): string => me.name || me.email;
+
 export const entryOut = (e: TrashEntryRow, now: string, canRestore = false): Schemas["TrashEntryOut"] => ({
   ...e.out,
   days_left: daysLeft(e, now),
@@ -171,10 +181,10 @@ export const entryOut = (e: TrashEntryRow, now: string, canRestore = false): Sch
 });
 
 /** As oracle.trash.service.may_restore (owner's answer, Nov 5): an owner restores anything;
- * whoever deleted a feature or a goal restores it too. */
+ * whoever deleted a feature, a goal, a decision, a question or a meeting's agenda item restores it too. */
 export function mayRestore(entry: TrashEntryRow, me: { id: string; role: string }): boolean {
   if (me.role === "owner") return true;
-  return entry.out.deleted_by === me.id && (entry.out.root.type === "feature" || entry.out.root.type === "goal");
+  return entry.out.deleted_by === me.id && ["feature", "goal", "decision", "question", "agenda_item"].includes(entry.out.root.type);
 }
 
 /** trash-features-goals: the Simple rows a feature's or a goal's entry marks `trashed`; the mock
@@ -186,6 +196,8 @@ export type TrashedSimple = {
   goal_milestones?: { roadmap: string; gates: string[] }[];
   /** trash-features-goals review 4: the roadmaps' versions, each with the features it was made without. */
   versions?: { roadmap: string; without: string[] }[];
+  /** edit-decisions: Simple's decisions and the PRD's questions (a question's `id` is set when it is trashed). */
+  sheet?: { id?: string; trashed?: boolean }[];
 };
 
 /** trash-features-goals: takes `entry` out of Trash, putting back the feature or the goal it
@@ -211,6 +223,7 @@ export function restoreFromTrash(db: TrashDb, entry: TrashEntryRow, now: string,
     const left = new Set(l.left ?? f?.goal_ids ?? []);
     if (f && f.goal_ids.length === left.size && f.goal_ids.every((g) => left.has(g))) f.goal_ids = [...l.goal_ids];
   }
+  if (root.type === "decision" || root.type === "question") simple?.sheet?.filter((r) => r.id === root.id).forEach((r) => (r.trashed = false));
   db.entries = db.entries.filter((e) => e !== entry);
   return entryOut(entry, now);
 }
@@ -247,6 +260,8 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
     if (!entry) return json(404, { detail: "Not in Trash" });
     if (m === "POST" && p[3] === "restore") {
       if (!mayRestore(entry, ctx.me)) return json(403, { detail: "Only an owner, or whoever deleted it, restores this" });
+      const refused = entry.agenda || entry.request !== undefined ? (ctx.restoreRoot?.(entry) ?? null) : null;
+      if (refused) return json(409, { detail: refused });
       return json(200, restore(ctx, entry, now));
     }
     if (!owner) return ownerOnly;
@@ -361,7 +376,7 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
   const intakeIds = new Set(intakes.map((i) => i.id));
   const entry: TrashEntryRow = {
     out: {
-      id: ctx.uuid(), root, items, deleted_by: ctx.me.id, deleted_by_name: ctx.me.email, deleted_at: now,
+      id: ctx.uuid(), root, items, deleted_by: ctx.me.id, deleted_by_name: trashName(ctx.me), deleted_at: now,
       reason: q.get("reason"), published,
       purge_after: new Date(new Date(now).getTime() + RETENTION_DAYS * DAY_MS).toISOString(),
     },

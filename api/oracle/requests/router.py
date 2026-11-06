@@ -54,6 +54,7 @@ from oracle.requests.schemas import (
 )
 from oracle.runs import service as runs_service
 from oracle.runs.schemas import RunOut
+from oracle.trash.schemas import TrashEntryOut
 
 router = APIRouter(prefix="/v1", tags=["requests"])
 # H6's request lookup (H10): launch notes reach the people who filed requests too.
@@ -62,6 +63,7 @@ launch_requesters.register()
 Viewer = Annotated[Principal, Depends(require_role("viewer"))]
 Commenter = Annotated[Principal, Depends(require_role("commenter"))]
 Approver = Annotated[Principal, Depends(require_role_now("approver"))]
+Owner = Annotated[Principal, Depends(require_role("owner"))]
 
 
 def _http(exc: service.RequestError | triage.TriageError) -> HTTPException:
@@ -202,6 +204,30 @@ async def update_request(
         raise _http(e) from e
     await db.commit()
     return await service.out_one(db, row)
+
+
+@router.delete(
+    "/requests/{request_id}",
+    response_model=TrashEntryOut,
+    dependencies=[Depends(same_origin)],
+)
+async def delete_request(
+    request_id: uuid.UUID,
+    db: TenantDB,
+    principal: Owner,
+    reason: Annotated[str | None, Query(max_length=2000)] = None,
+) -> TrashEntryOut:
+    """port-an-decisions: an owner deletes the request to Settings › Trash (30 days, then
+    gone for good); Restore there brings it back. A request others are merged into stays."""
+    from oracle.trash.router import _entry_out
+
+    try:
+        entry = await service.trash_request(db, principal, request_id, reason)
+    except service.RequestError as e:
+        raise _http(e) from e
+    out = _entry_out(entry, can_restore=True)
+    await db.commit()
+    return out
 
 
 @router.post("/requests/{request_id}/qualify", response_model=RequestOut)

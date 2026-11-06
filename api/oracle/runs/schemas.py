@@ -11,7 +11,13 @@ from oracle.priorities.schemas import PriorityCheck
 from oracle.reports.schemas import InboxReport, InboxReportFailure
 from oracle.review.schemas import FeedbackKind
 from oracle.roadmap.schemas import InboxDateBasis
-from oracle.simple.schemas import InboxSimpleApproval, InboxSimpleChange, InboxSimpleMinutes
+from oracle.simple.schemas import (
+    InboxSimpleApproval,
+    InboxSimpleChange,
+    InboxSimpleDateSuggestion,
+    InboxSimpleGoalSuggestion,
+    InboxSimpleMinutes,
+)
 
 Flow = Literal[
     "baseline_to_prd",
@@ -492,6 +498,8 @@ class FeatureSetCheck(BaseModel):
     excluded: int
     problems: list[FeatureSetProblem]
     flags: dict[str, list[str]] = {}
+    # Each feature's title by its key (included and left out).
+    titles: dict[str, str] = {}
 
 
 class ScopeGoal(BaseModel):
@@ -561,6 +569,9 @@ class ScopeReason(BaseModel):
     answers it."""
 
     code: str
+    # This reason's own name among its feature's (a problem's gate.problem_ref, a flag's
+    # code): Waive on it names it, so it is waived alone, with its own reason.
+    ref: str = ""
     severity: Literal["blocking", "to_confirm"]
     label: str
     requirement: str | None = None
@@ -860,6 +871,9 @@ class GateLeft(BaseModel):
     item: str
     item_title: str | None = None
     code: str
+    # This reason's own name among its item's (a C6 or C8 problem's gate.problem_ref, else
+    # its code): Waive… on it names it, so it is waived alone, with its own reason.
+    ref: str = ""
     label: str
     waivable: bool
     # F4's blocking_question: the question left unanswered.
@@ -927,6 +941,21 @@ class CheckpointOut(BaseModel):
     vague_goals: int | None = None
 
 
+class RunDecisionAnswer(BaseModel):
+    """A question answered at a decided stop: the architect's at an approved Engineering
+    check, or the agents' on the Questions from the agents cards of a stop approved or sent
+    back (``oracle.runs.stop_answers``)."""
+
+    question: str
+    answer: str
+    # The feature it is about, when the question names one: its key, and its name from the
+    # briefs or the run's feature set (None when neither names it). A person reads the name.
+    feature_key: str | None = None
+    feature_title: str | None = None
+    answered_by_name: str | None = None
+    answered_at: datetime | None = None
+
+
 class RunDecision(BaseModel):
     """A decided checkpoint of a run, as its agents read it (``get_checkpoint_review``):
     who decided (the person's name beside their role), when, and what. A console
@@ -957,6 +986,8 @@ class RunDecision(BaseModel):
     # The decision in one line, as the run page shows it:
     # "Feature set · approved by Ana Example, an approver · note: Keep bulk import out of v1".
     summary: str
+    # The questions answered at the stop, so a person sees what was decided there.
+    answers: list[RunDecisionAnswer] = []
 
 
 class RunProgress(BaseModel):
@@ -1600,6 +1631,10 @@ class InboxOut(BaseModel):
     # Simple S3b: versions from Simple drafts waiting for my approval as a required
     # reviewer (in ``total``).
     simple_approvals: list[InboxSimpleApproval] = []
+    # inbox-meeting-proposals fix: Oracle's open date suggestions and the goals' open
+    # suggestions I may decide (each in ``total``).
+    simple_date_suggestions: list[InboxSimpleDateSuggestion] = []
+    simple_goal_suggestions: list[InboxSimpleGoalSuggestion] = []
     # Simple S8: meeting minutes sent to me as an attendee (not counted in ``total``).
     simple_minutes: list[InboxSimpleMinutes] = []
 

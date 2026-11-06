@@ -6,8 +6,8 @@ import { expect, test, type Page } from "./test";
  * (./lib/api/mock/server.ts), driven through the UI as an owner on desktop and phone, light
  * and dark.
  *
- * Card one-pager-per-prd: protects = a line edited on one PRD's one-pager (the invented
- * page every mock PRD is served) shows on that PRD's page only: the seeded PRD's line stays
+ * Card one-pager-per-prd: protects = a line edited on one PRD's one-pager (each mock PRD's
+ * own page, C-13) shows on that PRD's page only: the seeded PRD's line stays
  * published while another PRD's is edited, and each keeps its own wording and working-draft
  * count after both are edited, and the other PRD's one-pager opened by its document id (a
  * link that carries the id) is that PRD's, with its edit;
@@ -22,7 +22,9 @@ const OTHER = "/simple/one-pagers/checkout-redesign";
 const LINE_2 = "A setup checklist that shows the next step";
 
 async function editLine2(page: Page, text: string) {
-  await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
+  // C-13: each PRD's first bet is its own line; its Edit names it.
+  await page.locator('[data-line="bets-1"]').hover();
+  await page.locator('[data-line="bets-1"]').getByRole("button", { name: /^Edit “/ }).click();
   await page.getByLabel("New wording for").fill(text);
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.locator('[data-line="bets-1"]')).toHaveAttribute("data-state", "edited");

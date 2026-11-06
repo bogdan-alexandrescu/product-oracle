@@ -17221,6 +17221,37 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/baseline/check": {
+      "get": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Get Check",
+        "description": "The Ground Truth check (docs/ground-truth.md): every roadmap item, slice and PRD\nfeature not in the Ground Truth, and every feature with no F-code, no goal, or running\ntoday while still on the roadmap; each with plain words and its fixes, counted per kind.\nFlags only: nothing is refused on save.",
+        "operationId": "get_check",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroundTruthOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/baseline/yaml": {
       "get": {
         "tags": [
@@ -39350,6 +39381,74 @@
           }
         },
         "x-min-role": "commenter"
+      },
+      "delete": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Delete Request",
+        "description": "port-an-decisions: an owner deletes the request to Settings \u203a Trash (30 days, then\ngone for good); Restore there brings it back. A request others are merged into stays.",
+        "operationId": "delete_request",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reason"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/requests/{request_id}/qualify": {
@@ -43926,6 +44025,69 @@
         "x-min-role": "approver"
       }
     },
+    "/v1/simple/goal-map/goals/{goal_id}/metric": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Pick Goal Metric",
+        "description": "Pick the metric that gives the goal its readings: its weekly values become the\ngoal's readings at once; the goal's old metric lets go.",
+        "operationId": "pick_goal_metric",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetricPickIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalMapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
     "/v1/simple/fit-date": {
       "get": {
         "tags": [
@@ -44384,6 +44546,181 @@
         },
         "x-min-role": "commenter",
         "x-per-item": "owner"
+      }
+    },
+    "/v1/simple/decisions/{decision_id}": {
+      "delete": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Delete Simple Decision",
+        "description": "Move an open decision or PRD question to Trash (30 days, then deleted for good): who\nmay withdraw it (its decider, whoever made it, an owner); others are refused.",
+        "operationId": "delete_simple_decision",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Decision Id"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reason"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashedOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
+      },
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Simple Decision",
+        "description": "edit-decisions (ec1 b): one decision as the Decisions page lists it, with every field\nthe sheet shows and what this reader may do there (Home's and Waiting for you's\ndecision-log calls open the sheet by id). After /decisions/waiting, which it would hide.",
+        "operationId": "get_simple_decision",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Decision Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleDecisionRow"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/decisions/{decision_id}/restore": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Restore Simple Decision",
+        "description": "Put the decision or question back from Trash with every link: an owner, or whoever\ndeleted it.",
+        "operationId": "restore_simple_decision",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Decision Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/simple/sessions": {
@@ -47134,6 +47471,70 @@
         "x-per-item": null
       }
     },
+    "/v1/simple/meetings/{meeting_id}/agenda": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Edit Simple Meeting Agenda",
+        "description": "agenda-sheet: one op of the Agenda sheet (oracle.simple.meetings.edit_agenda).",
+        "operationId": "edit_simple_meeting_agenda",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meeting Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimpleAgendaEditIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleMeetingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
+      }
+    },
     "/v1/simple/meetings/{meeting_id}/approve": {
       "post": {
         "tags": [
@@ -48732,6 +49133,59 @@
         },
         "x-min-role": "approver",
         "x-per-item": "owner"
+      }
+    },
+    "/v1/strategy/findings/{finding_id}/reopen": {
+      "post": {
+        "tags": [
+          "strategy"
+        ],
+        "summary": "Reopen Strategy Finding",
+        "description": "Reopen a waived finding (whoever may waive it): it is open again and its waiver is\ncleared, so the next check keeps it open until its subject lines up.",
+        "operationId": "reopen_strategy_finding",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "finding_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Finding Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StrategyFindingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
       }
     },
     "/v1/strategy/check": {
@@ -62134,7 +62588,11 @@
                   "delete_goal",
                   "archive_goal",
                   "unarchive_goal",
-                  "remove_dependency"
+                  "remove_dependency",
+                  "edit_decision",
+                  "edit_question",
+                  "withdraw_decision",
+                  "add_question"
                 ]
               },
               {
@@ -62146,7 +62604,8 @@
                   "agenda_next",
                   "agenda_skip",
                   "suggest_feature",
-                  "mark_shipped"
+                  "mark_shipped",
+                  "api_action"
                 ]
               }
             ],
@@ -62421,6 +62880,18 @@
               }
             ],
             "title": "Elsewhere"
+          },
+          "replaced_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaced By"
           }
         },
         "type": "object",
@@ -62540,7 +63011,11 @@
               "delete_goal",
               "archive_goal",
               "unarchive_goal",
-              "remove_dependency"
+              "remove_dependency",
+              "edit_decision",
+              "edit_question",
+              "withdraw_decision",
+              "add_question"
             ],
             "title": "Op"
           },
@@ -68479,6 +68954,18 @@
             "maxItems": 10,
             "title": "Subjects",
             "default": []
+          },
+          "review_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review At"
           }
         },
         "type": "object",
@@ -77217,6 +77704,14 @@
             "type": "object",
             "title": "Flags",
             "default": {}
+          },
+          "titles": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Titles",
+            "default": {}
           }
         },
         "type": "object",
@@ -80649,6 +81144,11 @@
             "type": "string",
             "title": "Code"
           },
+          "ref": {
+            "type": "string",
+            "title": "Ref",
+            "default": ""
+          },
           "label": {
             "type": "string",
             "title": "Label"
@@ -80969,6 +81469,34 @@
         ],
         "title": "GmFeature"
       },
+      "GmGap": {
+        "properties": {
+          "milestone": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Milestone"
+          },
+          "area": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area"
+          }
+        },
+        "type": "object",
+        "required": [
+          "milestone",
+          "area"
+        ],
+        "title": "GmGap",
+        "description": "A gated area of a milestone with no feature in its cell (area None: a milestone\nwith no area and no feature)."
+      },
       "GmGoal": {
         "properties": {
           "id": {
@@ -81033,6 +81561,49 @@
             },
             "type": "array",
             "title": "History"
+          },
+          "metric": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GmMetricRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "missing": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "metric",
+                  "values"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Missing"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/GmMetricChoice"
+            },
+            "type": "array",
+            "title": "Choices"
+          },
+          "read_on": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read On"
           }
         },
         "type": "object",
@@ -81046,7 +81617,10 @@
           "status",
           "math",
           "builds_on",
-          "history"
+          "history",
+          "metric",
+          "missing",
+          "choices"
         ],
         "title": "GmGoal"
       },
@@ -81162,6 +81736,39 @@
               "not_measured"
             ],
             "title": "Lift"
+          },
+          "shipped_on": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shipped On"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "after": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
           }
         },
         "type": "object",
@@ -81170,10 +81777,63 @@
           "expected",
           "confidence",
           "measured",
-          "lift"
+          "lift",
+          "shipped_on",
+          "before",
+          "after"
         ],
         "title": "GmLink",
         "description": "What a feature is expected to do for one milestone, and what it did."
+      },
+      "GmMetricChoice": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "last": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "last"
+        ],
+        "title": "GmMetricChoice"
+      },
+      "GmMetricRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "GmMetricRef"
       },
       "GmMilestone": {
         "properties": {
@@ -81325,6 +81985,51 @@
           "proposed"
         ],
         "title": "GmMilestone"
+      },
+      "GmOffMap": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "name"
+        ],
+        "title": "GmOffMap",
+        "description": "A confirmed goal left off the map: it has no number to aim at yet."
+      },
+      "GmUnplaced": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "GmUnplaced",
+        "description": "A feature of the Simple roadmap serving no milestone of the map."
       },
       "GoalBucketFeature": {
         "properties": {
@@ -81911,6 +82616,27 @@
             "type": "array",
             "title": "Features"
           },
+          "gaps": {
+            "items": {
+              "$ref": "#/components/schemas/GmGap"
+            },
+            "type": "array",
+            "title": "Gaps"
+          },
+          "unplaced": {
+            "items": {
+              "$ref": "#/components/schemas/GmUnplaced"
+            },
+            "type": "array",
+            "title": "Unplaced"
+          },
+          "off_map": {
+            "items": {
+              "$ref": "#/components/schemas/GmOffMap"
+            },
+            "type": "array",
+            "title": "Off Map"
+          },
           "today": {
             "type": "string",
             "title": "Today"
@@ -81949,6 +82675,9 @@
           "guardrail",
           "milestones",
           "features",
+          "gaps",
+          "unplaced",
+          "off_map",
           "today",
           "reps",
           "approver",
@@ -82243,6 +82972,232 @@
           "edges"
         ],
         "title": "GraphOut"
+      },
+      "GroundTruthDoc": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "GroundTruthDoc"
+      },
+      "GroundTruthFix": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "add_to_ground_truth",
+              "link_to_feature",
+              "confirm_feature",
+              "give_code",
+              "pick_goal",
+              "take_off_roadmap"
+            ],
+            "title": "Action"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "words": {
+            "type": "string",
+            "title": "Words"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "target",
+          "words"
+        ],
+        "title": "GroundTruthFix",
+        "description": "A fix a person makes in the UI. ``target``: the item's or feature's id; for a PRD's\nfeature its code, or its name when it has none (with ``where.prd``); for a slice's Add to\nGround Truth its feature's code (F-15); for ``confirm_feature`` the proposed feature's id.\n``words``: the button's plain words (\"Confirm it\")."
+      },
+      "GroundTruthFlag": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "unlinked_item",
+              "slice_parent_missing",
+              "prd_feature_missing",
+              "no_code",
+              "no_goal",
+              "runs_today_on_roadmap"
+            ],
+            "title": "Kind"
+          },
+          "item": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroundTruthRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "feature": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroundTruthRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "where": {
+            "$ref": "#/components/schemas/GroundTruthWhere"
+          },
+          "words": {
+            "type": "string",
+            "title": "Words"
+          },
+          "fixes": {
+            "items": {
+              "$ref": "#/components/schemas/GroundTruthFix"
+            },
+            "type": "array",
+            "title": "Fixes"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          },
+          "like": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroundTruthRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "where",
+          "words",
+          "fixes"
+        ],
+        "title": "GroundTruthFlag",
+        "description": "One place that breaks the Ground Truth: allowed, flagged \"Not in the Ground Truth\"."
+      },
+      "GroundTruthOut": {
+        "properties": {
+          "flags": {
+            "items": {
+              "$ref": "#/components/schemas/GroundTruthFlag"
+            },
+            "type": "array",
+            "title": "Flags"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "flags",
+          "counts",
+          "total"
+        ],
+        "title": "GroundTruthOut"
+      },
+      "GroundTruthRef": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "name"
+        ],
+        "title": "GroundTruthRef",
+        "description": "A roadmap item, slice or feature: its id (none for a PRD's feature or slice that is no\nrow of its own), its code (F-15, F-15a; none when it has no F-code) and its name."
+      },
+      "GroundTruthWhere": {
+        "properties": {
+          "roadmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroundTruthDoc"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroundTruthDoc"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "GroundTruthWhere",
+        "description": "Where the flag shows: the roadmap and the PRD (with its title), when it has them."
       },
       "HTTPValidationError": {
         "properties": {
@@ -85381,6 +86336,22 @@
             "title": "Simple Approvals",
             "default": []
           },
+          "simple_date_suggestions": {
+            "items": {
+              "$ref": "#/components/schemas/InboxSimpleDateSuggestion"
+            },
+            "type": "array",
+            "title": "Simple Date Suggestions",
+            "default": []
+          },
+          "simple_goal_suggestions": {
+            "items": {
+              "$ref": "#/components/schemas/InboxSimpleGoalSuggestion"
+            },
+            "type": "array",
+            "title": "Simple Goal Suggestions",
+            "default": []
+          },
           "simple_minutes": {
             "items": {
               "$ref": "#/components/schemas/InboxSimpleMinutes"
@@ -86085,6 +87056,17 @@
             ],
             "title": "Submitted By"
           },
+          "submitted_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted By Name"
+          },
           "submitted_at": {
             "anyOf": [
               {
@@ -86183,7 +87165,11 @@
               "delete_goal",
               "archive_goal",
               "unarchive_goal",
-              "remove_dependency"
+              "remove_dependency",
+              "edit_decision",
+              "edit_question",
+              "withdraw_decision",
+              "add_question"
             ],
             "title": "Op"
           },
@@ -86311,6 +87297,61 @@
                 "type": "null"
               }
             ]
+          },
+          "asked": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asked"
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
+          },
+          "from_ask": {
+            "type": "boolean",
+            "title": "From Ask",
+            "default": false
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "question_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question Id"
+          },
+          "line_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line Id"
           }
         },
         "type": "object",
@@ -86332,6 +87373,142 @@
         ],
         "title": "InboxSimpleChange",
         "description": "A proposal waiting for me (``simple_proposals``) or a decision on my proposal\n(``simple_decisions``)."
+      },
+      "InboxSimpleDateSuggestion": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Item Id"
+          },
+          "item_title": {
+            "type": "string",
+            "title": "Item Title"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "title": "End Date"
+          },
+          "basis": {
+            "type": "string",
+            "title": "Basis"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "new",
+              "open"
+            ],
+            "title": "State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "item_id",
+          "item_title",
+          "document_id",
+          "start_date",
+          "end_date",
+          "basis",
+          "at",
+          "state"
+        ],
+        "title": "InboxSimpleDateSuggestion",
+        "description": "inbox-meeting-proposals fix: Oracle's open date suggestion on an item I may decide\n(``simple_date_suggestions``, counted in ``total``): one row per item, its slices'\nspan; decided on the item's roadmap."
+      },
+      "InboxSimpleGoalSuggestion": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "goal": {
+            "$ref": "#/components/schemas/SimpleGoalBrief"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "outcome": {
+            "type": "string",
+            "title": "Outcome"
+          },
+          "from_oracle": {
+            "type": "boolean",
+            "title": "From Oracle"
+          },
+          "proposed_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By Name"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "new",
+              "open"
+            ],
+            "title": "State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "goal",
+          "title",
+          "outcome",
+          "from_oracle",
+          "at",
+          "state"
+        ],
+        "title": "InboxSimpleGoalSuggestion",
+        "description": "inbox-meeting-proposals fix: an open feature suggested for a goal whose suggestions\nI decide (``simple_goal_suggestions``, counted in ``total``)."
       },
       "InboxSimpleMinutes": {
         "properties": {
@@ -94572,6 +95749,20 @@
           "lock_version"
         ],
         "title": "MetricPatch"
+      },
+      "MetricPickIn": {
+        "properties": {
+          "metric": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Metric"
+          }
+        },
+        "type": "object",
+        "required": [
+          "metric"
+        ],
+        "title": "MetricPickIn"
       },
       "MetricTestOut": {
         "properties": {
@@ -113059,6 +114250,14 @@
           "summary": {
             "type": "string",
             "title": "Summary"
+          },
+          "answers": {
+            "items": {
+              "$ref": "#/components/schemas/RunDecisionAnswer"
+            },
+            "type": "array",
+            "title": "Answers",
+            "default": []
           }
         },
         "type": "object",
@@ -113070,6 +114269,70 @@
         ],
         "title": "RunDecision",
         "description": "A decided checkpoint of a run, as its agents read it (``get_checkpoint_review``):\nwho decided (the person's name beside their role), when, and what. A console\nanswer is a decision once it is followed: one held for an approver is still pending\nand not listed."
+      },
+      "RunDecisionAnswer": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "feature_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Key"
+          },
+          "feature_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Title"
+          },
+          "answered_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answered By Name"
+          },
+          "answered_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answered At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question",
+          "answer"
+        ],
+        "title": "RunDecisionAnswer",
+        "description": "A question answered at a decided stop: the architect's at an approved Engineering\ncheck, or the agents' on the Questions from the agents cards of a stop approved or sent\nback (``oracle.runs.stop_answers``)."
       },
       "RunDiscussion": {
         "properties": {
@@ -115704,6 +116967,11 @@
           "code": {
             "type": "string",
             "title": "Code"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref",
+            "default": ""
           },
           "severity": {
             "type": "string",
@@ -119795,11 +121063,164 @@
             "type": "array",
             "title": "Skipped",
             "default": []
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleAgendaRow"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "addable": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleAgendaItem"
+            },
+            "type": "array",
+            "title": "Addable",
+            "default": []
+          },
+          "batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch"
+          },
+          "words": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Words",
+            "default": []
+          },
+          "left_out": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Left Out",
+            "default": []
+          },
+          "in_trash": {
+            "type": "boolean",
+            "title": "In Trash",
+            "default": false
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleAgendaProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
         "title": "SimpleAgenda",
-        "description": "chat-actions: the item the meeting takes next and the items it skips."
+        "description": "chat-actions: the item the meeting takes next and the items it skips.\nagenda-sheet: the rows in order, the PRD's features not on it yet, what the last batch\nof the sheet did (for its Undo line) and an approver's waiting proposal."
+      },
+      "SimpleAgendaEditIn": {
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "add",
+              "rename",
+              "move",
+              "remove",
+              "undo",
+              "accept",
+              "withdraw"
+            ],
+            "title": "Op"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "feature_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 200.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To"
+          },
+          "batch": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch"
+          }
+        },
+        "type": "object",
+        "required": [
+          "op"
+        ],
+        "title": "SimpleAgendaEditIn",
+        "description": "agenda-sheet: one op of the Agenda sheet. ``batch`` names the sheet's opening, so\nUndo puts back the agenda as it was when that batch began."
       },
       "SimpleAgendaItem": {
         "properties": {
@@ -119819,6 +121240,112 @@
           "title"
         ],
         "title": "SimpleAgendaItem"
+      },
+      "SimpleAgendaProposal": {
+        "properties": {
+          "by": {
+            "$ref": "#/components/schemas/SimplePersonRef"
+          },
+          "decider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "words": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Words",
+            "default": []
+          },
+          "dropped": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dropped",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "by"
+        ],
+        "title": "SimpleAgendaProposal",
+        "description": "agenda-sheet: an approver's agenda changes waiting for the meeting's decider."
+      },
+      "SimpleAgendaRow": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "feature",
+              "topic"
+            ],
+            "title": "Kind"
+          },
+          "feature_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "mins": {
+            "type": "integer",
+            "title": "Mins"
+          },
+          "by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By Name"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "done",
+              "now",
+              "next",
+              "skipped"
+            ],
+            "title": "State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "mins",
+          "state"
+        ],
+        "title": "SimpleAgendaRow",
+        "description": "agenda-sheet: one row of the meeting's agenda: a feature of its PRD or a topic a\nperson typed, with its minutes; ``state`` reads the chat's next and skip."
       },
       "SimpleAppliedVersion": {
         "properties": {
@@ -120037,7 +121564,11 @@
               "delete_goal",
               "archive_goal",
               "unarchive_goal",
-              "remove_dependency"
+              "remove_dependency",
+              "edit_decision",
+              "edit_question",
+              "withdraw_decision",
+              "add_question"
             ],
             "title": "Op"
           },
@@ -120190,7 +121721,11 @@
               "delete_goal",
               "archive_goal",
               "unarchive_goal",
-              "remove_dependency"
+              "remove_dependency",
+              "edit_decision",
+              "edit_question",
+              "withdraw_decision",
+              "add_question"
             ],
             "title": "Op"
           },
@@ -120524,6 +122059,38 @@
         "title": "SimpleDecidedRef",
         "description": "A decided decision naming the item: who decided, when, and (decided in a meeting)\nthe meeting and its minutes' page."
       },
+      "SimpleDecisionCan": {
+        "properties": {
+          "edit": {
+            "type": "boolean",
+            "title": "Edit",
+            "default": false
+          },
+          "propose": {
+            "type": "boolean",
+            "title": "Propose",
+            "default": false
+          },
+          "withdraw": {
+            "type": "boolean",
+            "title": "Withdraw",
+            "default": false
+          },
+          "delete": {
+            "type": "boolean",
+            "title": "Delete",
+            "default": false
+          },
+          "reassign": {
+            "type": "boolean",
+            "title": "Reassign",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "SimpleDecisionCan",
+        "description": "edit-decisions (ec1 b): what the reader may do on an open decision's sheet, from\nthe decision's own rights (its creator, its decider or an owner edits, withdraws and\ndeletes; owners reassign; another commenter or approver proposes an edit)."
+      },
       "SimpleDecisionIn": {
         "properties": {
           "reason": {
@@ -120644,6 +122211,80 @@
               }
             ],
             "title": "Chosen"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleQuestionOption"
+            },
+            "type": "array",
+            "title": "Options",
+            "default": []
+          },
+          "review_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review At"
+          },
+          "can": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDecisionCan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "edited_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edited At"
+          },
+          "edited_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -123133,6 +124774,16 @@
             "type": "boolean",
             "title": "Retry Delivery",
             "default": false
+          },
+          "edit_agenda": {
+            "type": "boolean",
+            "title": "Edit Agenda",
+            "default": false
+          },
+          "propose_agenda": {
+            "type": "boolean",
+            "title": "Propose Agenda",
+            "default": false
           }
         },
         "type": "object",
@@ -123712,7 +125363,12 @@
           "agenda": {
             "$ref": "#/components/schemas/SimpleAgenda",
             "default": {
-              "skipped": []
+              "skipped": [],
+              "items": [],
+              "addable": [],
+              "words": [],
+              "left_out": [],
+              "in_trash": false
             }
           },
           "draft_roadmap": {
@@ -125653,7 +127309,10 @@
             "default": {
               "decide": false,
               "propose": false,
-              "name_decider": false
+              "name_decider": false,
+              "edit": false,
+              "withdraw": false,
+              "delete": false
             }
           },
           "source": {
@@ -125677,6 +127336,28 @@
               }
             ],
             "title": "Undo Id"
+          },
+          "edited_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edited At"
+          },
+          "edited_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -125751,6 +127432,21 @@
           "name_decider": {
             "type": "boolean",
             "title": "Name Decider",
+            "default": false
+          },
+          "edit": {
+            "type": "boolean",
+            "title": "Edit",
+            "default": false
+          },
+          "withdraw": {
+            "type": "boolean",
+            "title": "Withdraw",
+            "default": false
+          },
+          "delete": {
+            "type": "boolean",
+            "title": "Delete",
             "default": false
           }
         },
@@ -137945,7 +139641,11 @@
               "intake",
               "run",
               "feature",
-              "goal"
+              "goal",
+              "decision",
+              "question",
+              "agenda_item",
+              "request"
             ],
             "title": "Type"
           },

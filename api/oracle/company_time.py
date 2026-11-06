@@ -91,8 +91,11 @@ def calendar_day(d: date | str, today: date | None = None) -> str:
     return f"{d:%b} {d.day}"
 
 
-def calendar_day_with_year(d: date | str) -> str:
-    """A calendar day (no zone) with its year as "Nov 30, 2026"."""
+def calendar_day_with_year(d: date | str | None) -> str:
+    """A calendar day (no zone) with its year as "Nov 30, 2026" (the plan tables, the
+    company queue, a draft's dates); empty for no day."""
+    if not d:
+        return ""
     if isinstance(d, str):
         d = date.fromisoformat(d[:10])
     return f"{calendar_day(d)}, {d.year}"

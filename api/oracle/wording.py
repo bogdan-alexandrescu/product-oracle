@@ -1,7 +1,7 @@
 """#396 Warnings speak the app's words: the one helper for the warnings and gate messages a
 person reads (a version's warnings, an import's problems, the publish gate's blocks).
 
-A person can act on "record a date basis on Plan › Dates", not on an API route, and a raw
+A person can act on "add a date source on Plan › Dates", not on an API route, and a raw
 id tells them nothing. So a message names the document by its title and the section by
 its heading, says where in the app to act, and never carries an HTTP method, a ``/v1/``
 route or a UUID; the ids stay in the machine fields (``code``, ``refs``,
@@ -19,8 +19,9 @@ from collections.abc import Mapping, Sequence
 from fastapi import HTTPException
 
 # Where a person records the estimate, capacity or commitment a date rests on (F3,
-# Plan › Dates). A viewer cannot record one: the engineering lead can.
-RECORD_DATE_BASIS = "record a date basis on Plan › Dates (or ask the engineering lead to)"
+# Plan › Dates). A viewer cannot record one: the engineering lead can. People read "date
+# source", as the web says it ("Add a date source"); "basis" is the machine's name only.
+RECORD_DATE_BASIS = "add a date source on Plan › Dates (or ask the engineering lead to)"
 MISSING_SOURCE_ITEM = "a source item Oracle no longer has"
 # A spec version (or its flow or wireframe) whose PRD changed since it was written (C2):
 # the tech brief's page shows the reasons beside its Potentially stale label, and (#481)
@@ -61,9 +62,24 @@ _LEGACY_ROUTES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\(record one with POST /v1/schedule-bases\)"), f"({RECORD_DATE_BASIS})"),
     (
         re.compile(r"Record a basis \(POST /v1/schedule-bases\)"),
-        "Record a date basis on Plan › Dates (or ask the engineering lead to),",
+        "Add a date source on Plan › Dates (or ask the engineering lead to),",
     ),
 ]
+# port-an-decisions: the words stored before "date source" (a version's warnings, an import's
+# problems), read in the new ones.
+_OLD_DATE_WORDS = [
+    (re.compile(r"\brecord a date basis\b"), "add a date source"),
+    (re.compile(r"\bRecord a date basis\b"), "Add a date source"),
+]
+
+
+def date_words(text: str) -> str:
+    """``text`` with the stored "record a date basis" said as people read it now."""
+    for pattern, repl in _OLD_DATE_WORDS:
+        text = pattern.sub(repl, text)
+    return text
+
+
 _LEGACY_CITATION = re.compile(
     r"citation '(?P<cite_key>[^']*)' names source item '(?P<source_item>[^']*)', which this "
     r"company does not have"
@@ -80,6 +96,7 @@ def api_words(text: str) -> list[str]:
 def legacy(text: str) -> tuple[str, Refs]:
     """``text`` as stored before #396, in the app's words, and the ids it named (for
     ``refs``). Any other text is returned as it is."""
+    text = date_words(text)
     if not _API_WORDS.search(text):
         return text, {}
     for pattern, repl in _LEGACY_ROUTES:

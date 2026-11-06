@@ -83,10 +83,15 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
     case "set_track": return `changed the track of ${x}`;
     case "set_prd": return `changed the PRD of ${x}`;
     case "set_goal": return `changed the goal of ${x}`;
-    case "set_depends": return `changed what ${x} depends on`;
     case "set_goal_measure": return `changed how the goal of ${x} is measured`;
     case "set_status": return `marked ${x} ${after.status ?? "planned"}`;
     case "set_decider": return `changed the decider of ${x}`;
+    // ask-oracle-actions: a dependency added or removed in the feature talk names it (change_words.py).
+    case "set_depends": {
+      const dep = target.dependency ? String(target.dependency) : null;
+      const gone = ((after.depends_on as unknown[] | undefined) ?? []).length < ((before.depends_on as unknown[] | undefined) ?? []).length;
+      return !dep ? `changed what ${x} depends on` : gone ? `${x} no longer depends on ${dep}` : `${x} now depends on ${dep}`;
+    }
     // prd-questions: a PRD question (a decision) answered, or its decider named.
     case "decide_question": return `decided ${x}`;
     // Goal milestones (goal_milestones): a roadmap's own milestone changed, or removed.
@@ -96,6 +101,10 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
       return name ? `changed the milestone ${name}` : "changed a milestone";
     }
     case "name_decider": return `named who decides ${x}`;
+    // edit-decisions (decision_sheet, change_words.py): the sheet's changes.
+    case "edit_decision":
+    case "edit_question": return `changed ${quoted(target.name) ?? x}`;
+    case "withdraw_decision": return `withdrew ${quoted(target.name) ?? x}`;
     // trash-features-goals: a feature moved to Trash (its name reads "(deleted)" once it is gone).
     case "delete_item": return `moved ${x} to Trash`;
     // edit-goals-prds: a goal archived or moved to Trash (goal_asks).

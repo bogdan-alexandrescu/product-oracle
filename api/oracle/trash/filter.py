@@ -50,6 +50,7 @@ def _children() -> dict[type, list[tuple[str, Table]]]:
     from oracle.jobs.models import LlmJob, LlmSuggestion
     from oracle.priorities.models import PrioritySnapshot
     from oracle.quality.models import OutcomeRecord
+    from oracle.requests.models import ProductRequest, RequestReply
     from oracle.review.models import (
         DocumentPublication,
         DocumentReviewPolicy,
@@ -160,6 +161,8 @@ def _children() -> dict[type, list[tuple[str, Table]]]:
         # Goal milestones: a trashed roadmap's leave with it, and a PRD's own (origin_prd_id)
         # leave the roadmap with their PRD, as its plan does.
         TrackMilestone: [("roadmap_id", docs), ("origin_prd_id", docs)],
+        # port-an-decisions: a request in Trash takes its replies out of the Inbox with it.
+        RequestReply: [("request_id", ProductRequest.__table__)],
     }
 
 
@@ -216,6 +219,7 @@ def criteria() -> dict[type, Callable[[Any], ColumnElement[bool]]]:
         from oracle.baseline.models import Entity
         from oracle.decisions.models import Decision
         from oracle.docs.models import Document
+        from oracle.requests.models import ProductRequest
         from oracle.roadmap.models import RoadmapItem
         from oracle.runs.models import Run
         from oracle.v2.models import ArtifactRequest, ProductIntake, StakeholderQuestion
@@ -233,14 +237,23 @@ def criteria() -> dict[type, Callable[[Any], ColumnElement[bool]]]:
         _CRITERIA[StakeholderQuestion] = lambda cls: and_(
             asked(cls), _question_checkpoint_live(cls)
         )
-        _CRITERIA[Decision] = _prd_question_live
+        # edit-decisions: a decision or PRD question in Trash is left out too.
+        _CRITERIA[Decision] = lambda cls: and_(_prd_question_live(cls), cls.deleted_at.is_(None))
+        # port-an-decisions: a request an owner deleted to Trash.
+        _CRITERIA[ProductRequest] = lambda cls: cls.deleted_at.is_(None)
     return _CRITERIA
+
+
+_BY_TABLE: dict[Any, Callable[[Any], ColumnElement[bool]]] = {}
 
 
 def _live(cls: Any) -> ColumnElement[bool]:
     """The live-rows clause for ``cls``: a mapped class, or the alias a join used, so the
-    clause names the alias's own columns."""
-    return next(fn for entity, fn in criteria().items() if entity.__table__ is cls.__table__)(cls)
+    clause names the alias's own columns. Found by its table in one lookup (every SELECT
+    asks once per filtered class)."""
+    if not _BY_TABLE:
+        _BY_TABLE.update({entity.__table__: fn for entity, fn in criteria().items()})
+    return _BY_TABLE[cls.__table__](cls)
 
 
 @event.listens_for(TenantSession, "do_orm_execute")

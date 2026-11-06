@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { storeGoalOrder } from "@/components/simple/GoalOrder";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { GOAL_CHANGED_EVENT, sendCardChanged } from "@/lib/api/simple-chat";
 import { calendarDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
@@ -107,12 +107,17 @@ export function OrderBadge({ n }: { n: number }) {
   );
 }
 
-function Field({ label, children, error }: { label: string; children: ReactNode; error?: string }) {
+function Field({ label, children, error, now }: { label: string; children: ReactNode; error?: string; now?: string }) {
   return (
     <label className="block min-w-0">
       <span className="text-[13px] font-[650] text-text2">{label}</span>
       {children}
       {error && <span className="mt-0.5 block text-[13px] text-warn">{error}</span>}
+      {now && (
+        <span data-testid="goal-form-now" className="mt-0.5 block text-[13px] text-text2">
+          Saved now: {now}
+        </span>
+      )}
     </label>
   );
 }
@@ -124,12 +129,34 @@ function usePeople() {
   return useQuery("simple-goal-owners", () => unwrap(api.GET("/v1/people", { params: { query: { limit: 200 } } })));
 }
 
+/** A goal's fields as its form shows them. */
+const fieldsOf = (g: Goal, year: string): Fields => ({ title: g.title, measure: g.measure ?? "", target: g.target ?? "", due: dayOf(g.due, year), owner: g.owner_id ?? null });
+
 /** GB1 a: the goal's header turned into a small form, right where it sits. */
-export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: { start: Fields; goal?: Goal; order: number; title: string; year: string; onSave: (f: Fields & { day: string }, seen?: Goal) => Promise<void>; onCancel: () => void }) {
+export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: { start: Fields; goal?: Goal; order: number; title: string; year: string; onSave: (f: Fields & { day: string }, seen?: Goal, refused?: (line: string) => void) => Promise<void>; onCancel: () => void }) {
   const [f, setF] = useState<Fields>(start);
   // The goal as it read when the form opened: its save is refused if it changed since.
-  const [seen] = useState(goal);
+  const [seen, setSeen] = useState(goal);
   const [busy, setBusy] = useState(false);
+  // A refused save: its line, shown here, and the goal read again into the form.
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
+  const [now, setNow] = useState<Partial<Record<keyof Fields, string>>>({});
+  if (stale && goal && seen) {
+    setStale(false);
+    // The fields the person changed are kept, with the saved value beside them; the rest take it.
+    const was = fieldsOf(seen, year);
+    const is = fieldsOf(goal, year);
+    const next = { ...f };
+    const beside: Partial<Record<keyof Fields, string>> = {};
+    for (const k of Object.keys(is) as (keyof Fields)[]) {
+      if (f[k] === was[k]) (next as Record<keyof Fields, unknown>)[k] = is[k];
+      else if (is[k] !== was[k] && is[k] !== f[k] && k !== "owner") beside[k] = is[k] ?? "";
+    }
+    setF(next);
+    setNow(beside);
+    setSeen(goal);
+  }
   const day = parseDay(f.due, year);
   const done = !!(f.title.trim() && f.measure.trim() && f.target.trim() && day);
   const set = (k: keyof Fields) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
@@ -141,8 +168,12 @@ export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: 
         e.preventDefault();
         if (!done || busy) return;
         setBusy(true);
+        setRefusal(null);
         try {
-          await onSave({ ...f, day: day! }, seen);
+          await onSave({ ...f, day: day! }, seen, (line) => {
+            setRefusal(line);
+            setStale(true);
+          });
         } finally {
           setBusy(false);
         }
@@ -159,17 +190,17 @@ export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: 
         <h3 className="whitespace-nowrap text-[17px] font-[650]">{title}</h3>
         <span className="text-[13px] text-text2 max-sm:basis-full sm:ml-auto">Goal {order} in the order; change it in Baseline</span>
       </div>
-      <Field label="Goal" error={!f.title.trim() ? "Name the goal." : undefined}>
+      <Field label="Goal" error={!f.title.trim() ? "Name the goal." : undefined} now={now.title}>
         <textarea autoFocus rows={f.title.length > 60 ? 2 : 1} value={f.title} onChange={set("title")} className={`${INPUT} h-auto py-1.5`} />
       </Field>
-      <Field label="Measure: the number that shows it" error={!f.measure.trim() ? "Add a measure." : undefined}>
+      <Field label="Measure: the number that shows it" error={!f.measure.trim() ? "Add a measure." : undefined} now={now.measure}>
         <input value={f.measure} onChange={set("measure")} placeholder="For example: repeat orders a month" className={f.measure.trim() ? INPUT : BAD} />
       </Field>
       <div className="grid grid-cols-2 gap-2">
-        <Field label="Target" error={!f.target.trim() ? "Add a target." : undefined}>
+        <Field label="Target" error={!f.target.trim() ? "Add a target." : undefined} now={now.target}>
           <input value={f.target} onChange={set("target")} className={f.target.trim() ? INPUT : BAD} />
         </Field>
-        <Field label="By" error={!day ? "Pick a date." : undefined}>
+        <Field label="By" error={!day ? "Pick a date." : undefined} now={now.due}>
           <input type="text" value={f.due} onChange={set("due")} placeholder="Pick a day" className={day ? INPUT : BAD} />
         </Field>
       </div>
@@ -183,6 +214,11 @@ export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: 
         </button>
         {!done && <span className="min-w-0 text-[13px] text-text2">A goal needs a measure, a target and a date.</span>}
       </div>
+      {refusal && (
+        <p role="alert" className="text-[14px] text-warn">
+          {refusal}
+        </p>
+      )}
     </form>
   );
 }
@@ -659,7 +695,7 @@ export const nextNoteId = () => ++noteId;
 
 /** The writes, each answering with the note to show and what Undo puts back. */
 export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note | null) => void, setError: (e: string | null) => void) {
-  async function run(go: () => Promise<{ undo: Undo }>, text: ReactNode): Promise<boolean> {
+  async function run(go: () => Promise<{ undo: Undo }>, text: ReactNode, refused?: (line: string) => void): Promise<boolean> {
     try {
       const out = await go();
       setError(null);
@@ -670,6 +706,13 @@ export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note |
       setNote({ id: ++noteId, text, undo: out.undo });
       return true;
     } catch (e) {
+      // A goal changed since its form opened: the goals read again, the form says so and refreshes.
+      if (refused && e instanceof ApiError && e.status === 409) {
+        setError(null);
+        await reload();
+        refused(e.message);
+        return false;
+      }
       setError(errorMessage(e));
       return false;
     }
@@ -677,7 +720,7 @@ export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note |
   return {
     add: (f: Fields & { day: string }, order: number) =>
       run(() => unwrap(api.POST("/v1/simple/goal-buckets/goals", { body: { title: f.title, measure: f.measure, target: f.target, due: f.day, ...(f.owner !== undefined ? { owner_id: f.owner } : {}) } })), <>Added {f.title.trim()} as goal {order}.</>),
-    edit: (g: Goal, f: Fields & { day: string }, year: string, seen: Goal = g) =>
+    edit: (g: Goal, f: Fields & { day: string }, year: string, seen: Goal = g, refused?: (line: string) => void) =>
       run(
         () =>
           unwrap(
@@ -689,6 +732,7 @@ export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note |
         <>
           Saved {f.title.trim()}: {lower(f.target.trim())} by {dayOf(f.day, year)}.
         </>,
+        refused,
       ),
     archive: (g: Goal, to: string | null, text: ReactNode) => run(() => unwrap(api.POST("/v1/simple/goal-buckets/goals/{goal_id}/archive", { params: { path: { goal_id: g.id } }, body: { to_goal_id: to } })), text),
     // EG1 a: Restore an archived goal (with Undo), Delete a goal to Settings > Trash, and an ask for who may not.

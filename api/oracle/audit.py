@@ -1,4 +1,5 @@
 import uuid
+from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +13,9 @@ if TYPE_CHECKING:
 # The actor of what Oracle does on its own account, never a person's (e.g. sending a
 # refused draft back to the run's writer).
 ORACLE = "oracle"
+# ask-oracle-actions: how the change came, while Ask Oracle runs a card's route as the
+# person ("Ask Oracle"): every audit row the route writes carries it as ``via``.
+VIA: ContextVar[str | None] = ContextVar("audit_via", default=None)
 
 
 async def record(
@@ -39,7 +43,7 @@ async def record(
         action=action,
         entity=entity,
         entity_id=entity_id,
-        data=data or {},
+        data={**(data or {}), "via": VIA.get()} if VIA.get() else (data or {}),
     )
     session.add(event)
     return event

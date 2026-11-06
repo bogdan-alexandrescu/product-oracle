@@ -1,5 +1,5 @@
 """#396 Warnings speak the app's words: every version warning and publish-gate message a
-person sees says what to do in the app (record a date basis on Plan › Dates), names the
+person sees says what to do in the app (add a date source on Plan › Dates), names the
 document by its title and the section by its heading, and never carries an HTTP method,
 an API route or a raw id. The ids stay in the machine fields (``code``, ``refs``,
 ``section_keys``) for agents and the API. One helper (:mod:`oracle.wording`) builds and
@@ -154,7 +154,9 @@ def test_the_old_stored_wording_is_rewritten_and_its_ids_move_to_refs():
     assert wording.api_words(LEGACY_CITATION) == [ID]
     date_warning = VersionWarning(code="unverified_date", message=LEGACY_DATE)
     _plain(date_warning.message)
-    assert "record a date basis on Plan › Dates" in date_warning.message
+    # port-an-decisions: people read "date source", never "date basis".
+    assert "add a date source on Plan › Dates" in date_warning.message
+    assert "basis" not in date_warning.message
     citation = VersionWarning(code="unknown_citation_item", message=LEGACY_CITATION)
     _plain(citation.message)
     assert "a source item Oracle no longer has" in citation.message

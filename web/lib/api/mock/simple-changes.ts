@@ -26,7 +26,7 @@ import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
 import { draftDecisionNotes } from "./decision-notes";
 import { stableUuid } from "./ids";
-import { changeSentence } from "./simple-change-words";
+import { changePhrase, changeSentence } from "./simple-change-words";
 import { decidesAsk, milestoneValue, writeMilestone } from "./simple-milestones";
 import { addToCompany, featureItem, featureKeyOf, priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
 import { archiveGoal, goalBucketsDb, trashGoal, unarchiveGoal, type GoalBucketsTrash } from "./goal-buckets";
@@ -97,6 +97,9 @@ export interface SimpleChangesCtx {
   goalBin?: GoalBucketsTrash;
   /** simple-replaced-prds: the slugs and ids of the PRDs marked replaced (their open drafts are never listed in Simple). */
   replaced?: string[];
+  /** S9 (targets.py add_feature_ask): files a feature ask in Requests, and drops it on undo. */
+  fileAsk?: (input: { id: string; title: string; channel: string; requester_name: string | null; requester_kind: string; filed_by: string }) => void;
+  dropAsk?: (id: string) => void;
 }
 
 /** edit-goals-prds (oracle.simple.goal_asks): a goal archived or restored, asked by who may not
@@ -213,7 +216,7 @@ const TARGETS: Record<string, { id: string; adds?: boolean }> = {
   estimate_feature: { id: "item_id" },
   // S9: a milestone typed in chat, and a new feature ask (targets.py set_milestone, add_feature_ask).
   set_milestone: { id: "item_id" },
-  add_feature_ask: { id: "ask_id", adds: true },
+  add_feature_ask: { id: "request_id", adds: true },
   // Chat actions: an item's owner or decider (stored by item id; simple-roadmap's itemOwnerId / itemDeciderId read them).
   set_owner: { id: "item_id" },
   set_decider: { id: "item_id" },
@@ -594,8 +597,9 @@ function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]
     if (!canEditRoadmap(db, d.roadmap, ctx)) return json(403, { detail: "Only an owner or the roadmap's decider (with none, its owner) submits" });
     if (d.out.status !== "working") return json(409, { detail: `This draft is ${d.out.status} already` });
     if (!draftChanges(db, d.out.id) && !draftPrds(d).length) return json(422, { detail: "Nothing to submit: the draft has no changes" });
-    // drafts._submit_roadmap: it waits on the roadmap's required reviewers.
-    Object.assign(d.out, { status: "submitted", version: (d.out.base_version ?? 1) + 1, submitted_at: now, submitted_by: ctx.id, waiting_on: [...(db.reviewers?.[d.roadmap] ?? [])] });
+    // inbox-meeting-proposals fix: it waits on the roadmap's required reviewers (not the one who sent it).
+    const waiting = (db.reviewers?.[d.roadmap] ?? []).filter((r) => r !== ctx.id);
+    Object.assign(d.out, { status: "submitted", version: (d.out.base_version ?? 1) + 1, submitted_at: now, submitted_by: ctx.id, waiting_on: waiting });
     return json(200, draftOut(db, ctx, d));
   }
   if (p[4] === "approve") {
@@ -667,6 +671,11 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   const stored = (db.targets ??= {})[id] ?? {};
   const after = ranking ? priorityAfter(body.op, body.after ?? {}) : { ...body.after };
   if (typeof after === "string") return json(422, { detail: after });
+  // S9: a feature ask's requester and channel as targets.py stores them.
+  if (body.op === "add_feature_ask") {
+    const name = typeof after.requester_name === "string" ? after.requester_name.split(/\s+/).filter(Boolean).join(" ") || null : null;
+    Object.assign(after, { requester_name: name, requester_kind: after.requester_kind || (name ? "customer" : "unknown"), channel: after.channel || "other" });
+  }
   // walkc-roadmap-tasks: a task's owner is a person (targets.py stores owner_id); the chat's
   // "for <name>" names them.
   if (body.op === "add_item_task" && !after.owner_id && typeof after.owner_name === "string") {
@@ -712,7 +721,7 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   };
   if (!applies) change.routed_to = route(db, ctx, change);
   if (applies) {
-    writeTarget(db, change, change.after);
+    writeTarget(db, change, change.after, false, ctx);
     session!.last_change_at = now;
   }
   (db.changes ??= []).push(change);
@@ -725,8 +734,29 @@ function seenMilestone(m: unknown): string {
   return v.name || v.date ? JSON.stringify([v.name || null, v.date || null]) : "none";
 }
 
-function writeTarget(db: SimpleDb, c: Change, values: Values, undo = false): void {
+/** The item's depends_on with only the change's own keys turned back (changes._depends_back); null: one changed since. */
+function dependsBack(current: Values, before: Values, after: Values): Values | null {
+  const now = (current.depends_on as string[] | null) ?? [];
+  const was = (before.depends_on as string[] | null) ?? [];
+  const made = (after.depends_on as string[] | null) ?? [];
+  const added = made.filter((k) => !was.includes(k));
+  const removed = was.filter((k) => !made.includes(k));
+  if (added.some((k) => !now.includes(k)) || removed.some((k) => now.includes(k))) return null;
+  return { depends_on: [...now.filter((k) => !added.includes(k)), ...removed] };
+}
+
+function writeTarget(db: SimpleDb, c: Change, values: Values, undo = false, ctx?: SimpleChangesCtx): void {
   const spec = TARGETS[c.op];
+  // S9: a feature ask is a request in Requests (targets.py: a ProductRequest under target.request_id).
+  if (c.op === "add_feature_ask" && ctx) {
+    const id = String(c.target[spec.id]);
+    if (undo) ctx.dropAsk?.(id);
+    else
+      ctx.fileAsk?.({
+        id, title: String(values.title ?? ""), channel: String(values.channel ?? "other"), requester_name: (values.requester_name as string | null) ?? null,
+        requester_kind: String(values.requester_kind ?? (values.requester_name ? "customer" : "unknown")), filed_by: c.by,
+      });
+  }
   const id = String(c.target[spec.id]);
   const targets = (db.targets ??= {});
   if (c.op === "set_goal_measure") {
@@ -1328,7 +1358,8 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     const s = (db.sessions ?? []).find((x) => x.id === c.session_id);
     if (!s || s.closed_at || idle(s)) return json(409, { detail: "Its session is closed: undo works only in the change's session" });
     if (c.op === "set_goal_measure" && !same(goalMeasure(db, c.target.goal_id), c.after)) return conflict(db, ctx, goalMeasure(db, c.target.goal_id)!, [String(c.target.goal_id)], "Changed since");
-    if (TARGETS[c.op]) writeTarget(db, c, c.before, true);
+    let undone: { before: Values; after: Values } | undefined;
+    if (TARGETS[c.op]) writeTarget(db, c, c.before, true, ctx);
     else if (KEY_DATE_OPS.includes(c.op)) {
       const rm = roadmapOfDoc(db, c.target.document_id)!;
       if (!same(kdValue(keyDateNow(db, ctx, rm, String(c.target.key_date_id))), c.after.key_date ?? null)) return json(409, { detail: "Changed since" });
@@ -1341,6 +1372,16 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
       const drafts = intoDrafts(db, anchored(db, c), s, true);
       if (drafts instanceof Response) return drafts;
       applyS7(db, c, true);
+    } else if (c.op === "set_depends") {
+      // ask-oracle-actions (changes._depends_back): only the keys the change added or removed
+      // go back; the item's other dependencies stay as they are now.
+      const now_ = current(db, c, c.after);
+      const back = dependsBack(now_, c.before, c.after);
+      if (!back) return conflict(db, ctx, now_, touched(c), "Changed since");
+      const drafts = intoDrafts(db, c, s, true);
+      if (drafts instanceof Response) return drafts;
+      apply(db, c, back, true);
+      undone = { before: now_, after: back };
     } else {
       const now_ = current(db, c, c.after);
       if (!same(now_, c.after)) return conflict(db, ctx, now_, touched(c), "Changed since");
@@ -1348,7 +1389,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
       if (drafts instanceof Response) return drafts;
       apply(db, c, c.before, true);
     }
-    const u: Change = { ...c, id: crypto.randomUUID(), before: c.after, after: c.before, status: "undone", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: now, undoes_id: c.id, routed_to: [], decided_by: null, decided_at: null };
+    const u: Change = { ...c, id: crypto.randomUUID(), before: undone?.before ?? c.after, after: undone?.after ?? c.before, status: "undone", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: now, undoes_id: c.id, routed_to: [], decided_by: null, decided_at: null };
     db.changes!.push(u);
     s.last_change_at = now;
     return json(201, { change: view(db, ctx, u), flags: TARGETS[c.op] || KEY_DATE_OPS.includes(c.op) ? [] : flagsFor(db, touched(c)) });
@@ -1357,7 +1398,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   if (c.status !== "proposed") return json(409, { detail: `This change is ${c.status} already` });
   const body = (await req.json().catch(() => ({}))) as { reason?: string | null };
   if (p[4] === "accept" && c.op === "set_goal_measure" && !same(goalMeasure(db, c.target.goal_id), c.before)) return conflict(db, ctx, goalMeasure(db, c.target.goal_id)!, [String(c.target.goal_id)], "outdated");
-  if (p[4] === "accept" && TARGETS[c.op]) writeTarget(db, c, c.after);
+  if (p[4] === "accept" && TARGETS[c.op]) writeTarget(db, c, c.after, false, ctx);
   // goal_milestones.decide: a milestone card's change (before.milestone); a change asked of a
   // PRD's milestone (before.date) is decided below.
   else if (p[4] === "accept" && c.op === MILESTONE_OP && "milestone" in (c.before ?? {})) {
@@ -1450,6 +1491,18 @@ export function seedSimpleProposal(
 }
 
 /**
+ * inbox-meeting-proposals fix: a feature ask proposed by a teammate, on no roadmap (its
+ * document_id null), waiting on the company's owners; decided in its Inbox row and, accepted, filed in Requests.
+ */
+export function seedFeatureAskProposal(db: SimpleDb, who: Pick<SimpleChangesCtx, "owners"> & { id: string; name: string }, title: string, at: string): void {
+  (db.changes ??= []).push({
+    id: stableUuid(`simple-proposal/ask/${title}`), session_id: null, document_id: null, draft_ids: [],
+    op: "add_feature_ask", target: { request_id: stableUuid(`simple-ask/${title}`) }, before: {}, after: { title, requester_name: null, requester_kind: "unknown", channel: "other" }, status: "proposed", by: who.id, by_name: who.name, at,
+    decided_by: null, decided_at: null, reason: null, decision_reason: null, routed_to: [...who.owners], undoes_id: null, undone: false, can_decide: false, can_undo: false,
+  });
+}
+
+/**
  * meeting-changes-only-its-agenda (changes.create): a change a meeting makes to an item it does
  * not review is never applied: a proposal for the item's own decider (never the meeting's),
  * naming the meeting that asked for it.
@@ -1470,21 +1523,37 @@ export function proposeOffAgenda(db: SimpleDb, ctx: SimpleChangesCtx, body: Sche
   return { change: view(db, ctx, c), flags: [] };
 }
 
+/** A title in curly quotes, as change_words._quoted; null when blank. */
+function quotedTitle(value: unknown, limit = 80): string | null {
+  const text = String(value ?? "").split(/\s+/).filter(Boolean).join(" ");
+  return text ? `“${text.slice(0, limit)}${text.length > limit ? "…" : ""}”` : null;
+}
+
 /** Inbox rows (changes.inbox_rows): proposals waiting for me, decisions on mine. */
 export function simpleInboxRows(
   db: SimpleDb | undefined,
   me: string,
   seen: string | null,
-  who: Pick<SimpleChangesCtx, "owners" | "roles"> = { owners: [] },
+  who: Pick<SimpleChangesCtx, "owners" | "roles"> & { role?: Role; names?: Record<string, string> } = { owners: [] },
 ): { simple_proposals: Schemas["InboxSimpleChange"][]; simple_decisions: Schemas["InboxSimpleChange"][]; simple_approvals: Schemas["InboxSimpleApproval"][] } {
   const changes = db?.changes ?? [];
   const row = (c: Change, at: string | null, state?: Schemas["InboxSimpleChange"]["state"]): Schemas["InboxSimpleChange"] => {
     const key = db ? keyOf(db, c.target.item_id) : undefined;
+    const title = key ? seed(db!, key).title : null;
     return {
-      id: c.id, op: c.op, status: c.status, item_id: (c.target.item_id as string) ?? null, item_title: key ? seed(db!, key).title : typeof c.after.title === "string" ? c.after.title : null,
+      id: c.id, op: c.op, status: c.status, item_id: (c.target.item_id as string) ?? null, item_title: title ?? (typeof c.after.title === "string" ? c.after.title : null),
       document_id: c.document_id, by: c.by, by_name: c.by_name, at: c.at, decided_by: c.decided_by, decided_at: c.decided_at,
       reason: c.reason, decision_reason: c.decision_reason, state: state ?? (!seen || (at && at > seen) ? "new" : "open"),
       from_meeting: c.from_meeting ?? null,
+      // inbox-meeting-proposals: what was asked, the item by its name, and whether I may decide it now.
+      // A feature ask is not filed in Requests until it is accepted (changes.inbox_rows).
+      asked:
+        c.op === "add_feature_ask" && (c.status === "proposed" || c.status === "declined")
+          ? `proposed ${quotedTitle(c.after.title) ? `the feature ask ${quotedTitle(c.after.title)}` : "a feature ask"}`
+          : changePhrase(c.op, c.target, c.before, c.after, title),
+      can_decide: !!db && !!who.role && c.status === "proposed" && decidesChange(db, { ...who, id: me, role: who.role, names: {} }, c),
+      // inbox-meeting-proposals owner: asked through Ask Oracle, not on the page nor in a meeting.
+      from_ask: !c.from_meeting && c.status === "proposed" && !!db?.ask_proposals?.includes(c.id),
     };
   };
   return {
@@ -1492,10 +1561,16 @@ export function simpleInboxRows(
     simple_decisions: changes
       .filter((c) => c.by === me && (c.status === "accepted" || c.status === "declined"))
       .map((c) => row(c, c.decided_at, !seen || (c.decided_at ?? "") > seen ? undefined : "done")),
-    // S3b (drafts.inbox_rows): the drafts in review waiting on me.
+    // S3b (drafts.inbox_rows): drafts submitted with me among the required reviewers they wait
+    // on, or with me their decider (drafts._approver_of) whose approval is not in yet.
     simple_approvals: (db?.drafts ?? [])
-      .filter((d) => d.out.status === "submitted" && d.out.waiting_on.includes(me))
-      .map((d) => ({ draft_id: d.out.id, document: { id: d.out.document.id, slug: d.out.document.slug, title: d.out.document.title }, version: d.out.version ?? null, submitted_by: d.out.submitted_by ?? null, submitted_at: d.out.submitted_at ?? null, decider_approved: !!d.out.decider_approved, state: !seen || (d.out.submitted_at ?? "") > seen ? ("new" as const) : ("open" as const) })),
+      .filter((d) => d.out.status === "submitted" && (d.out.waiting_on.includes(me) || (!d.out.decider_approved && !!who.role && approverOf(db!, { id: me, role: who.role }, d))))
+      .sort((a, b) => ((a.out.submitted_at ?? "") < (b.out.submitted_at ?? "") ? -1 : 1))
+      .map((d) => ({
+        draft_id: d.out.id, document: { id: d.out.document.id, slug: d.out.document.slug, title: d.out.document.title }, version: d.out.version ?? null, submitted_by: d.out.submitted_by ?? null,
+        submitted_by_name: d.out.submitted_by ? (who.names?.[d.out.submitted_by] ?? null) : null, submitted_at: d.out.submitted_at ?? null,
+        decider_approved: !!d.out.decider_approved, state: !seen || (d.out.submitted_at ?? "") > seen ? ("new" as const) : ("open" as const),
+      })),
   };
 }
 

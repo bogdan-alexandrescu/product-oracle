@@ -4,11 +4,12 @@ import Link from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
-import { Button, LinkButton } from "@/components/ds";
+import { Button, InfoTip, LinkButton } from "@/components/ds";
 import { clock, FlowPanel, meetingMoment } from "@/components/simple/FlowVisual";
 import { WithFeatureMarks } from "@/components/current-state/CurrentState";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { OpenFeatureContext, type OpenFeature } from "@/components/simple/OpenFeature";
+import { OnePagerSlides } from "@/components/simple/OnePagerSlides";
 import { FeaturePanel } from "@/app/simple/roadmap/_panel";
 import { dmy, ew, PrdPlan, TAP44, usePhone } from "@/components/simple/PrdTimeline";
 import { PrdStatus } from "@/components/simple/PrdStatus";
@@ -23,6 +24,8 @@ import { DownloadNote, useDownloadNote } from "@/components/DownloadNote";
 import { DecisionNotes, LeftOutLine } from "@/components/simple/DecisionNotes";
 import { downloadedNote } from "@/lib/export-note";
 import { useMe } from "@/lib/me";
+import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
+import { sectionHref } from "@/lib/section-link";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { stripRawTokens } from "@/lib/raw-tokens";
 
@@ -218,7 +221,8 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
         return;
       }
       // A dialog over the page (the editor's "Discard your changes?" too) takes its own Escape.
-      if (e.key === "Escape" && !document.querySelector('[role="dialog"], [role="alertdialog"], dialog[open]')) {
+      // C-8: the feature panel over the slides takes its own Escape too.
+      if (e.key === "Escape" && !document.querySelector('[role="dialog"], [role="alertdialog"], dialog[open], [data-testid="item-panel"]')) {
         setPresenting(false);
         if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
       }
@@ -275,6 +279,19 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   const [feature, setFeature] = useState<Parameters<OpenFeature>[0] | null>(null);
   const codesQ = useQuery("simple-roadmap-codes", () => unwrap(api.GET("/v1/simple/roadmap", {})).catch(() => null));
   const codes = new Map((codesQ.data?.items ?? []).map((i) => [i.id, i.code ?? null]));
+  // inbox-meeting-proposals fix: ?line= (the Inbox's Open on a proposed wording) shows the
+  // lines and lands on that one, once the page is read.
+  const pageRead = !!q.data;
+  const landed = useRef(false);
+  useEffect(() => {
+    const line = new URLSearchParams(window.location.search).get("line");
+    if (!pageRead || landed.current || !line || sessionId) return;
+    landed.current = true;
+    setLinesShown(true);
+    requestAnimationFrame(() => document.querySelector(`[data-line="${CSS.escape(line)}"]`)?.scrollIntoView({ block: "center" }));
+  }, [pageRead, sessionId]);
+  // C-15: a code in Needs a look reads with the roadmap's name for it, when the roadmap has one.
+  const codeNames = new Map((codesQ.data?.items ?? []).flatMap((i) => (i.code ? [[i.code, i.title] as const] : [])));
 
   if (q.loading && !q.data) return <div className="px-6 py-8"><Loading /></div>;
   if (q.error || !q.data) {
@@ -314,12 +331,16 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   const sectionNames: Record<string, string> = Object.fromEntries(v.sections.map((s) => [s.key, s.heading]));
   v.blocks.forEach((b) => b.lines.forEach((l) => l.source_keys.forEach((k) => (sectionNames[k] = b.title))));
 
-  async function act(run: () => Promise<unknown>) {
+  /** `waits`: the action changes what waits on someone (a proposal decided or undone), so the rail's counts are read again at once. */
+  async function act(run: () => Promise<unknown>, waits = false) {
     setBusy(true);
     setError(null);
     try {
       await run();
-      await q.reload();
+      if (waits) invalidateWaiting();
+      const reload = q.reload();
+      if (waits) waitingChanged();
+      await reload;
       onChanged?.();
     } catch (e) {
       setError(errorMessage(e));
@@ -342,14 +363,14 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
       setEditing(null);
     });
   const decide = (n: Note, action: "accept" | "decline") =>
-    act(() => unwrap(api.POST(`/v1/simple/changes/{change_id}/${action}`, { params: { path: { change_id: n.change_id } }, body: sessionId ? { session_id: sessionId } : {} })));
+    act(() => unwrap(api.POST(`/v1/simple/changes/{change_id}/${action}`, { params: { path: { change_id: n.change_id } }, body: sessionId ? { session_id: sessionId } : {} })), true);
   const submit = (reviewerIds: string[]) =>
     act(() => unwrap(api.POST("/v1/simple/drafts/{draft_id}/submit", { params: { path: { draft_id: v.draft!.id } }, body: { reviewer_ids: reviewerIds } })));
   // Remind (owner, 2026-10-26): each waiting reviewer gets an Inbox nudge, once a day at most.
   const remind = () =>
     act(() => unwrap(api.POST("/v1/simple/one-pagers/{doc}/remind", { params: { path: { doc } } })));
   const undo = (n: Note) =>
-    act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/undo", { params: { path: { change_id: n.change_id } } })));
+    act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/undo", { params: { path: { change_id: n.change_id } } })), true);
 
   async function exportPdf() {
     setError(null);
@@ -464,19 +485,6 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
 
   return (
     <OpenFeatureContext.Provider value={setFeature}>
-    {feature && (
-      <FeaturePanel
-        key={`${feature.id ?? ""}|${feature.code}|${feature.name}`}
-        feature={feature}
-        phone={phone}
-        canChange={can("create_simple_change")}
-        onClose={() => {
-          setFeature(null);
-          void reloadPage();
-          void reloadPlan();
-        }}
-      />
-    )}
     <div
       ref={root}
       data-backdrop={presenting ? "" : undefined}
@@ -484,7 +492,30 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
       data-testid="one-pager"
       data-presenting={presenting ? "true" : undefined}
     >
-      {draftShown && v.draft && !presenting && (
+      {presenting && (
+        // C-8: presenting is a run of full-screen slides, not the page without its menu.
+        <OnePagerSlides
+          v={v}
+          plan={planShown ? plan : null}
+          top={showing && (
+            // build-review (QV3 a): a line over the presented slides says which it is.
+            <p data-testid="presenting-what" className="rounded-full border border-line-strong bg-surface px-3 py-1 text-[15px] font-semibold text-text2">
+              {showing === "published" ? `Showing published v${v.draft?.base_version ?? v.version}` : `Showing the working draft · ${v.draft?.changes ?? 0} ${v.draft?.changes === 1 ? "change" : "changes"} not yet approved`}
+            </p>
+          )}
+          stop={() => void stopPresenting()}
+          lineWords={(l) => (showing === "published" && publishedWords.has(l.id) ? publishedWords.get(l.id)! : l.full ? foldAtSentence(l.full, l.text) : l.text)}
+          quotes={words}
+          codes={codes}
+          sectionNames={sectionNames}
+          onPlan={(p) => {
+            if (p.status === "reading") setUpdating(true);
+            else setPlanNow(p);
+          }}
+        />
+      )}
+      {!presenting && (<>
+      {draftShown && v.draft && (
         <div role="status" aria-label="Working draft" className="simple-noprint flex flex-wrap items-center gap-3 border-b border-[var(--simple-rule)] bg-[var(--simple-edited)] px-4 py-2 text-base">
           <strong>Working draft</strong>
           <span>· {v.draft.changes} {v.draft.changes === 1 ? "change" : "changes"}</span>
@@ -514,27 +545,36 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
         </div>
       )}
       {/* The lines' decisions left out as no longer standing, one quiet line under the banner. */}
-      {!presenting && <LeftOutLine leftOut={v.left_out} className="simple-noprint border-b border-[var(--simple-rule)] px-4 py-2 text-[15px] text-text-faint" />}
+      {<LeftOutLine leftOut={v.left_out} className="simple-noprint border-b border-[var(--simple-rule)] px-4 py-2 text-[15px] text-text-faint" />}
       {sending && v.draft?.can_submit && (
         <SendForApproval v={v} busy={busy} onClose={() => setSending(false)} onSend={(ids) => { setSending(false); void submit(ids); }} />
       )}
-      {!draftShown && v.changes_in_review > 0 && !presenting && <InReviewBar v={v} />}
+      {!draftShown && v.changes_in_review > 0 && <InReviewBar v={v} />}
       {/* oracle.simple.quality: Oracle's build failed its checks twice; the API names them to owners only. */}
-      {heldChecks.length > 0 && !presenting && (
+      {heldChecks.length > 0 && (
         <div role="note" aria-label="Needs a look" data-testid="needs-look" className="simple-noprint border-b border-[var(--simple-rule)] px-4 py-2 text-base text-text-faint">
           <span className="font-semibold text-text2">Needs a look</span> · Oracle&apos;s page missed these checks; others read the last good version.
           <ul className="mt-1 list-disc pl-5">
-            {heldChecks.map((c) => <li key={c.text}>{c.text}</li>)}
+            {heldChecks.map((c) => (
+              <li key={c.text}>
+                <span className="inline-flex flex-wrap items-center gap-x-2">
+                  <span data-testid="needs-look-line">{c.text}</span>
+                  <InfoTip label={c.text} align="start">
+                    Oracle&apos;s page missed this check, so others read the last good version until it is fixed in the PRD.
+                  </InfoTip>
+                </span>
+              </li>
+            ))}
           </ul>
         </div>
       )}
-      {v.writing && !presenting && (
+      {v.writing && (
         // The one_pager job is still writing the page: until then it is Oracle's quick read.
         <p role="status" data-testid="one-pager-writing" className="simple-noprint border-b border-[var(--simple-rule)] px-4 py-2 text-base text-text-faint">
           Oracle is still writing this one-pager. Until then you see the PRD&apos;s own lines.
         </p>
       )}
-      {!v.writing && v.built_by === "extract" && !presenting && (
+      {!v.writing && v.built_by === "extract" && (
         // The one_pager job failed or was never queued: the quick read is all there is.
         <p role="status" data-testid="one-pager-quick-read" className="simple-noprint border-b border-[var(--simple-rule)] px-4 py-2 text-base text-text-faint">
           Oracle has not written this one-pager yet. You see the PRD&apos;s own lines.
@@ -542,21 +582,13 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
       )}
       <StartSheet open={starting} onClose={() => setStarting(false)} prd={v.document.slug} origin="one_pager" />
       {/* qa-simple-prd-14/44, p3-16: the same header (title, status, version, owner, span) on both kinds. */}
-      {/* qa4-simple-prd-5: presenting, the header sits over the page's own centred column. */}
-      <div className={`mx-auto flex ${presenting && !planShown ? "max-w-[852px] px-4 max-[767px]:px-4" : sessionId ? "max-w-[1180px] px-0" : "max-w-[1180px] px-12 max-[767px]:px-4"} flex-col gap-5 pt-[26px] max-[767px]:gap-3.5 max-[767px]:pt-3.5 ${planShown ? "pb-12" : ""}`}>
-        {presenting && showing && (
-          // build-review (QV3 a): a line over the presented page says which it is.
-          <p data-testid="presenting-what" className="self-start rounded-full border border-line-strong bg-surface px-3 py-1 text-[15px] font-semibold text-text2">
-            {showing === "published" ? `Showing published v${v.draft?.base_version ?? v.version}` : `Showing the working draft · ${v.draft?.changes ?? 0} ${v.draft?.changes === 1 ? "change" : "changes"} not yet approved`}
-          </p>
-        )}
+      <div className={`mx-auto flex ${sessionId ? "max-w-[1180px] px-0" : "max-w-[1180px] px-12 max-[767px]:px-4"} flex-col gap-5 pt-[26px] max-[767px]:gap-3.5 max-[767px]:pt-3.5 ${planShown ? "pb-12" : ""}`}>
         <PrdHeader
           inMeeting={!!sessionId}
           v={v}
           plan={planShown ? plan : null}
           summary={summary}
           phone={phone}
-          presenting={presenting}
           draft={draftShown || v.changes_in_review > 0}
           actions={actions}
           onRunApproved={() => {
@@ -585,7 +617,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
             }} />
           </div>
         )}
-        {planShown && (v.can_edit || v.can_propose) && !presenting && !sessionId && (
+        {planShown && (v.can_edit || v.can_propose) && !sessionId && (
           // qa-simple-prd-p3-4: the plan's words come from the PRD's lines; they are changed there.
           <p data-testid="plan-lines-door" className="simple-noprint flex flex-wrap items-center gap-x-3 gap-y-1 text-[15px] text-text2">
             The words above come from the PRD&apos;s lines.
@@ -601,9 +633,9 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
           Remind sends here can read and decide them. */}
       {/* qa4-simple-decide-26/27: in a meeting the stage pads the page once; the card, its title and actions share one left edge. */}
       {(!planShown || linesShown || sessionId || !!v.draft || v.changes_in_review > 0 || v.notes.length > 0) && (
-      <div className={`mx-auto grid gap-6 py-6 ${sessionId && !presenting ? "px-0" : "px-4"} ${presenting ? "max-w-[852px]" : "max-w-[1180px] md:grid-cols-[minmax(0,820px)_var(--simple-margin)]"}`} data-testid="one-pager-columns">
-        <article aria-label="One-pager" className={`rounded-md border border-[var(--simple-rule)] bg-[var(--simple-paper)] ${sessionId && !presenting ? "px-4" : "px-6"} py-8 shadow-sm md:col-start-1 md:px-12`}>
-          {prdLooks.length > 0 && !presenting && <NeedsALook items={prdLooks} blocks={v.blocks} sections={v.sections} />}
+      <div className={`mx-auto grid gap-6 py-6 ${sessionId ? "px-0" : "px-4"} max-w-[1180px] md:grid-cols-[minmax(0,820px)_var(--simple-margin)]`} data-testid="one-pager-columns">
+        <article aria-label="One-pager" className={`rounded-md border border-[var(--simple-rule)] bg-[var(--simple-paper)] ${sessionId ? "px-4" : "px-6"} py-8 shadow-sm md:col-start-1 md:px-12`}>
+          {prdLooks.length > 0 && <NeedsALook items={prdLooks} blocks={v.blocks} sections={v.sections} doc={v.document.slug} version={v.version} codeNames={codeNames} />}
           {v.blocks.filter((b) => !(planShown && b.kind === "timeline")).map((b) => (
             // qa4-simple-prd-21: the first section starts at the card's own top padding.
             <section key={b.key} aria-label={b.title} className="mt-5 first:mt-0">
@@ -616,7 +648,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
                 <ul className="mt-1 space-y-1">
                   {b.lines.map((l) => (
                     <li key={l.id} data-line={l.id} data-state={l.state} className="group list-none" onPointerDown={(e) => { const touch = e.pointerType !== "mouse"; firstTap.current = touch && tapped !== l.id; if (touch) setTapped(l.id); }} onClick={() => { firstTap.current = false; }}>
-                      <div className={`rounded px-2 py-1 ${presenting && showing ? "" : TINT[l.state]}`}>
+                      <div className={`rounded px-2 py-1 ${TINT[l.state]}`}>
                         {editing === l.id ? (
                           <form onSubmit={(e) => { e.preventDefault(); void save(l); }} className="space-y-2">
                             <label className="sr-only" htmlFor={`edit-${l.id}`}>New wording for {words.get(l.id)}</label>
@@ -661,10 +693,10 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
                         ) : (
                           <div className="relative flex items-start gap-2">
                             {/* qa-simple-prd-p3-25: on a desktop the Edit's room is kept, so pointing at a line never rewraps it. */}
-                            <span className={`min-w-0 flex-1 ${(v.can_edit || v.can_propose) && !presenting ? (v.can_edit ? "md:pr-10" : "md:pr-36") : ""}`}>
+                            <span className={`min-w-0 flex-1 ${v.can_edit || v.can_propose ? (v.can_edit ? "md:pr-10" : "md:pr-36") : ""}`}>
                               <button type="button" className="text-left" aria-expanded={open === l.id} onClick={() => { if (!firstTap.current) setOpen(open === l.id ? null : l.id); }} data-testid="one-pager-line-text">
                                 {b.kind === "lines" || b.kind === "metrics" ? "• " : ""}
-                                {l.metric ? (<><span>{l.metric.name}: </span><strong className="tabular-nums">{l.metric.from || "—"} → {l.metric.to}</strong></>) : presenting && showing === "published" && publishedWords.has(l.id) ? publishedWords.get(l.id) : l.full ? (whole.has(l.id) ? l.full : foldAtSentence(l.full, l.text)) : l.text}
+                                {l.metric ? (<><span>{l.metric.name}: </span><strong className="tabular-nums">{l.metric.from || "—"} → {l.metric.to}</strong></>) : l.full ? (whole.has(l.id) ? l.full : foldAtSentence(l.full, l.text)) : l.text}
                               </button>
                               {l.full && !l.metric && foldAtSentence(l.full, l.text) !== l.full && (
                                 <button
@@ -677,7 +709,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
                                   {whole.has(l.id) ? "Show less" : "Show all"}
                                 </button>
                               )}
-                              {l.can_draw_flow && l.flow_subject && !asked.has(l.id) && !presenting && (
+                              {l.can_draw_flow && l.flow_subject && !asked.has(l.id) && (
                                 // 2026-10-30: a small link at the end of a bet's line, for those who may ask Oracle to draw its flow.
                                 <button
                                   type="button"
@@ -690,7 +722,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
                                 </button>
                               )}
                             </span>
-                            {(v.can_edit || v.can_propose) && !presenting && (
+                            {(v.can_edit || v.can_propose) && (
                               // The owner's P6: "Edit" shows when the line is pointed at or tapped, not on every line.
                               <button
                                 type="button"
@@ -772,7 +804,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
                               );
                             })}
                             {l.decisions.length > 0 && <p className="mb-2 text-sm text-text2">Decided in {l.decisions.map((d) => `D-${d.number} ${d.title}`).join(", ")}</p>}
-                            {(v.can_edit || v.can_propose) && !presenting && (
+                            {(v.can_edit || v.can_propose) && (
                               <button
                                 type="button"
                                 className="mr-3 text-sm underline"
@@ -792,7 +824,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
                         )}
                       </div>
                       {/* Phone: the margin notes move under their line. */}
-                      <div className="md:hidden">{!presenting && notesFor(l.id).map((n) => <MarginNote key={n.change_id} {...{ n, quote: words.get(l.id) ?? "", busy, diff, setDiff, wide, setWide, undo, decide, meId, inMeeting: !!sessionId }} />)}</div>
+                      <div className="md:hidden">{notesFor(l.id).map((n) => <MarginNote key={n.change_id} {...{ n, quote: words.get(l.id) ?? "", busy, diff, setDiff, wide, setWide, undo, decide, meId, inMeeting: !!sessionId }} />)}</div>
                     </li>
                   ))}
                   {b.lines.length === 0 && <li className="list-none text-base text-text-faint" data-testid="one-pager-empty-block">{b.missing ? "Not in the PRD yet" : "Not written yet"}</li>}
@@ -808,7 +840,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
             </section>
           ))}
         </article>
-        <aside ref={margin} aria-label="Changes and proposals" className={`simple-noprint relative hidden min-w-0 ${presenting || (!v.notes.length && !v.can_edit && !v.can_propose) ? "" : "md:block"}`}>
+        <aside ref={margin} aria-label="Changes and proposals" className={`simple-noprint relative hidden min-w-0 ${(!v.notes.length && !v.can_edit && !v.can_propose) ? "" : "md:block"}`}>
           {/* qa-simple-prd-34: the margin says what it is for; readers who change nothing see none when empty. */}
           {v.notes.length === 0 && <p className="text-sm font-semibold uppercase tracking-wide text-text-faint">Changes and proposals</p>}
           {[...v.notes].sort((a, b) => (numbers.get(a.line_id) ?? 0) - (numbers.get(b.line_id) ?? 0)).map((n) => (
@@ -828,6 +860,21 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
             ))}
         </aside>
       </div>
+      )}
+      </>)}
+      {/* C-8: inside the page, so it opens over the slides too (the page's siblings are inert while presenting). */}
+      {feature && (
+        <FeaturePanel
+          key={`${feature.id ?? ""}|${feature.code}|${feature.name}`}
+          feature={feature}
+          phone={phone}
+          canChange={can("create_simple_change")}
+          onClose={() => {
+            setFeature(null);
+            void reloadPage();
+            void reloadPlan();
+          }}
+        />
       )}
     </div>
     </OpenFeatureContext.Provider>
@@ -863,7 +910,7 @@ function Glyph({ d }: { d: string }) {
  * A phone (D2) keeps the title, the facts and the actions, smaller; its header bar names
  * the page (One-pagers), so the title there is a level-1 heading that is not an H1.
  */
-function PrdHeader({ v, plan, summary, phone, presenting, draft, actions, inMeeting = false, onRunApproved }: { v: View; plan: Schemas["SimplePlanOut"] | null; summary: Schemas["DocumentSummary"] | null; phone: boolean; presenting: boolean; draft: boolean; actions: ReactNode; inMeeting?: boolean; onRunApproved?: () => void }) {
+function PrdHeader({ v, plan, summary, phone, draft, actions, inMeeting = false, onRunApproved }: { v: View; plan: Schemas["SimplePlanOut"] | null; summary: Schemas["DocumentSummary"] | null; phone: boolean; draft: boolean; actions: ReactNode; inMeeting?: boolean; onRunApproved?: () => void }) {
   // qa-simple-prd-3: the plan's own span only; with no dated milestone the header says so.
   // qa-simple-prd-p3-16: a PRD without a plan heads its one-pager the same way, with its own span.
   const span = plan ? (plan.span ? { start: plan.span.start, end: plan.span.end } : null) : v.span_start && v.span_end ? { start: v.span_start, end: v.span_end } : null;
@@ -883,7 +930,7 @@ function PrdHeader({ v, plan, summary, phone, presenting, draft, actions, inMeet
     <div className="flex flex-col gap-2.5">
       {!phone && (
         <div className="flex items-center gap-2.5">
-          {!presenting && !inMeeting && <BackLink />}
+          {!inMeeting && <BackLink />}
           {/* qa4-simple-decide-26: in a meeting the actions start at the card's left edge, not over the margin. */}
           {!inMeeting && <span className="flex-1" />}
           {actions}
@@ -904,7 +951,7 @@ function PrdHeader({ v, plan, summary, phone, presenting, draft, actions, inMeet
           </span>
         )}
         {/* qa-simple-prd-9: the same state the One-pagers list names. */}
-        {approved && draft && !presenting && <span data-testid="one-pager-draft-chip" className="text-[14px] font-semibold text-text">draft in progress</span>}
+        {approved && draft && <span data-testid="one-pager-draft-chip" className="text-[14px] font-semibold text-text">draft in progress</span>}
         {/* qa-simple-prd-p3-16: never approved, it shows the status the list shows ("In review", "Draft"). */}
         {!approved && run === "waiting" && <span data-testid="one-pager-status"><DocStatusChip status="in_review" dot /></span>}
         {!approved && run !== "waiting" && summary && <span data-testid="one-pager-status"><PrdStatus d={summary} /></span>}
@@ -929,7 +976,7 @@ function PrdHeader({ v, plan, summary, phone, presenting, draft, actions, inMeet
         )}
       </div>
       {phone && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
-      {!inMeeting && !presenting && summary?.latest_version != null && (
+      {!inMeeting && summary?.latest_version != null && (
         <RunReviewStep doc={v.document.slug} title={v.document.title} n={summary.latest_version} approved={latestApproved} onState={setRun} onApproved={() => onRunApproved?.()} />
       )}
     </div>
@@ -1062,7 +1109,7 @@ function MarginNote({
  * "Needs a look" (2026-10-30): a quiet note for the PRD's owners (the API sends the items to
  * them only) naming what to look at and where. One list any of the one-pager's checks can add to.
  */
-export function NeedsALook({ items, blocks = [], sections = [] }: { items: Schemas["OnePagerLook"][]; blocks?: View["blocks"]; sections?: View["sections"] }) {
+export function NeedsALook({ items, blocks = [], sections = [], doc, version, codeNames }: { items: Schemas["OnePagerLook"][]; blocks?: View["blocks"]; sections?: View["sections"]; doc?: string; version?: number; codeNames?: ReadonlyMap<string, string> }) {
   // qa4-simple-prd-11: each item names the page's own section (not the PRD's heading) and takes
   // the reader to the first line it concerns.
   const at = (x: Schemas["OnePagerLook"]) => {
@@ -1076,24 +1123,47 @@ export function NeedsALook({ items, blocks = [], sections = [] }: { items: Schem
     el?.scrollIntoView({ block: "center" });
     el?.querySelector<HTMLElement>('[data-testid="one-pager-line-text"]')?.focus({ preventScroll: true });
   };
+  // C-15: one short line each, the detail behind an (i), and the way to fix it: the PRD at that section.
+  // A code reads with the roadmap's name for it, when the roadmap has one ("F-26 Keys out of checkpoints").
+  const codeOf = (x: Schemas["OnePagerLook"]) => (x.kind === "code" ? (/^(\S+) has no name/.exec(x.text)?.[1] ?? null) : null);
+  const short = (x: Schemas["OnePagerLook"], where: string[]) => {
+    const at = where.length ? ` in ${where.map((w) => `“${w}”`).join(", ")}` : " in the PRD";
+    if (x.kind === "numbers") return `Numbers disagree${at}`;
+    const code = codeOf(x);
+    if (code) {
+      const name = codeNames?.get(code);
+      return `${code}${name ? ` (“${name}” on the roadmap)` : ""} has no name${at}`;
+    }
+    return x.text;
+  };
   return (
     <section aria-label="Needs a look" className="simple-noprint mb-4 rounded border border-dashed border-[var(--simple-rule)] px-3 py-2 text-sm text-text2">
       <h2 className="font-semibold">Needs a look</h2>
       <ul className="mt-1 space-y-1">
         {items.map((x, i) => {
           const w = at(x);
+          const key = x.source_keys[0];
+          const line = short(x, w.names.length && w.line ? w.names : w.prd);
+          const code = codeOf(x);
+          const name = code ? codeNames?.get(code) : undefined;
           return (
-            <li key={i} data-kind={x.kind}>
-              {x.text}
-              {w.names.length > 0 && w.line ? (
-                <>
-                  {" "}
-                  <button type="button" className="text-text-faint underline" data-testid="needs-look-go" onClick={() => go(w.line!)}>
-                    In: {w.names.join(", ")}
-                  </button>
-                </>
-              ) : (
-                w.prd.length > 0 && <span className="text-text-faint"> In the PRD, not on this page: {w.prd.join(", ")}</span>
+            <li key={i} data-kind={x.kind} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span data-testid="needs-look-line">{line}</span>
+              {line !== x.text && (
+                <InfoTip label={line} align="start">
+                  {x.text}
+                  {name ? ` On the roadmap it is ${code} ${name}.` : ""}
+                </InfoTip>
+              )}
+              {w.names.length > 0 && w.line && (
+                <button type="button" className="text-text-faint underline max-md:min-h-11" data-testid="needs-look-go" onClick={() => go(w.line!)}>
+                  In: {w.names.join(", ")}
+                </button>
+              )}
+              {doc && version != null && key && (
+                <Link className="font-semibold text-accent-ink underline max-md:inline-flex max-md:min-h-11 max-md:items-center" data-testid="needs-look-open" href={sectionHref(doc, version, key)}>
+                  Open the section
+                </Link>
               )}
             </li>
           );

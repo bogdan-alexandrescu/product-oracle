@@ -136,7 +136,12 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
         case "set_goal":
             return f"changed the goal of {x}"
         case "set_depends":
-            return f"changed what {x} depends on"
+            # ask-oracle-actions: a dependency added or removed in the feature talk names it.
+            dep = target.get("dependency")
+            gone = len(after.get("depends_on") or []) < len(before.get("depends_on") or [])
+            if not dep:
+                return f"changed what {x} depends on"
+            return f"{x} no longer depends on {dep}" if gone else f"{x} now depends on {dep}"
         case "set_goal_measure":
             return f"changed how the goal of {x} is measured"
         case "set_status":
@@ -147,6 +152,15 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             return f"decided {x}"
         case "name_decider":
             return f"named who decides {x}"
+        # edit-decisions (oracle.simple.decision_sheet): the sheet's changes.
+        case "edit_decision" | "edit_question":
+            return f"changed {_quoted(target.get('name')) or x}"
+        case "withdraw_decision":
+            return f"withdrew {_quoted(target.get('name')) or x}"
+        case "add_question":
+            asked = _quoted(after.get("title")) or "a question"
+            prd = target.get("name")
+            return f"asked {asked} in {prd}" if prd else f"asked {asked}"
         # Goal milestones: a PRD's own milestone's date or counts-when rule, asked of its owner.
         case "edit_goal_milestone":
             name = _quoted(target.get("name")) or item

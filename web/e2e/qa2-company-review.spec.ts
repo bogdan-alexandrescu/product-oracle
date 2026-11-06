@@ -24,9 +24,9 @@ test("strategy: no product strategy yet offers one New product strategy, on its 
   await login(page);
   await page.goto("/company/strategy");
   const empty = page.getByTestId("stack-empty");
-  await expect(empty).toContainText("once a product strategy is approved");
+  await expect(empty).toContainText("once an owner approves a product strategy");
   await expect(page.getByRole("button", { name: "New product strategy" })).toHaveCount(1);
-  await expect(empty.getByRole("button")).toHaveCount(0);
+  await expect(empty.getByRole("button", { name: "New product strategy" })).toHaveCount(0);
   await page.getByTestId("strategy-card").getByRole("button", { name: "New product strategy" }).click();
   await expect(page.getByRole("dialog", { name: "New product strategy" })).toBeVisible();
 });
@@ -65,12 +65,12 @@ test("metrics: a wrong threshold is described by its own note", async ({ page })
   await page.goto("/company/metrics");
   await page.getByTestId("metrics-empty").filter({ visible: true }).getByRole("button", { name: "Add your first metric" }).click();
   const dialog = page.getByRole("dialog", { name: "Add metric" });
-  const threshold = dialog.getByLabel("Threshold (%)");
+  const threshold = dialog.getByLabel("Alert size (%)");
   await threshold.fill("900");
   await dialog.getByRole("button", { name: "Add metric" }).click();
   await expect(dialog.getByTestId("metric-error-threshold")).toHaveText("Write a number from 1 to 500, or leave it empty.");
   await expect(threshold).toHaveAccessibleDescription(/Write a number from 1 to 500, or leave it empty\./);
-  await expect(threshold).toHaveAccessibleDescription(/is a variance too/);
+  await expect(threshold).toHaveAccessibleDescription(/is flagged as an unusual week too/);
 });
 
 // protects=Clear filters clears every filter, the kind too; fails_when=the list stays empty

@@ -132,6 +132,8 @@ for (const phone of [false, true]) {
       await expect(page.getByTestId("one-pager")).toHaveAttribute("data-presenting", "true");
       await expect(page.getByTestId("presenting-what")).toHaveText("Showing the working draft · 1 change not yet approved");
       await expect(page.getByTestId("one-pager-draft-chip")).toHaveCount(0);
+      // C-8: the bets are the second slide.
+      await page.keyboard.press("ArrowRight");
       const line = page.locator('[data-line="bets-1"] > div').first();
       await expect(line).toContainText("A setup checklist with the next two steps");
       await expect(line).not.toHaveClass(/simple-edited/);
@@ -140,6 +142,7 @@ for (const phone of [false, true]) {
       await page.getByRole("button", { name: "Present" }).click();
       await page.getByRole("menuitem", { name: /Published v3/ }).click();
       await expect(page.getByTestId("presenting-what")).toHaveText("Showing published v3");
+      await page.keyboard.press("ArrowRight");
       await expect(page.locator('[data-line="bets-1"]')).toContainText("A setup checklist that shows the next step");
     });
 

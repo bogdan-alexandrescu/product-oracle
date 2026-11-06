@@ -637,6 +637,12 @@ ChangeOp = Literal[
     "unarchive_goal",
     # roadmap-decide: a dependent no longer depends on a cut item (its fix).
     "remove_dependency",
+    # edit-decisions (oracle.simple.decision_sheet): an open decision's or a PRD question's
+    # fields, its withdrawal (the "not now"), and a question added to a PRD.
+    "edit_decision",
+    "edit_question",
+    "withdraw_decision",
+    "add_question",
 ]
 # chat-actions: chat cards applied through the meetings module or Oracle's decisions, not
 # the change engine (oracle.simple.chat_actions).
@@ -649,6 +655,8 @@ ChatActionOp = Literal[
     "suggest_feature",
     # item-chat-understands: an item already shipped (oracle.simple.shipped).
     "mark_shipped",
+    # ask-oracle-actions: any action of the API's catalogue (oracle.simple.ask_actions).
+    "api_action",
 ]
 ChangeStatus = Literal["applied", "proposed", "accepted", "declined", "undone"]
 SessionKind = Literal["editing", "meeting"]
@@ -825,6 +833,19 @@ class InboxSimpleChange(BaseModel):
     state: Literal["new", "open", "done"]
     # meeting-changes-only-its-agenda: the meeting that asked for it.
     from_meeting: SimpleChangeMeeting | None = None
+    # inbox-meeting-proposals: what was asked, in plain words, the item by its name
+    # ("cut Delivery integrity"), and whether I may accept or decline it now.
+    asked: str | None = None
+    can_decide: bool = False
+    # inbox-meeting-proposals owner: asked through Ask Oracle (by ``by_name``), not on the
+    # page nor in a meeting.
+    from_ask: bool = False
+    # inbox-meeting-proposals fix: what a proposal on no item is on, so its row is named and
+    # opens where it is decided: a PRD question ("Q3 Offline mode scope", ``question_id``) or
+    # a one-pager line (as it reads, ``line_id``).
+    subject: str | None = None
+    question_id: uuid.UUID | None = None
+    line_id: str | None = None
 
 
 DraftStatus = Literal["working", "submitted", "approved", "discarded"]
@@ -952,6 +973,8 @@ class InboxSimpleApproval(BaseModel):
     document: SimpleDocRef
     version: int | None
     submitted_by: uuid.UUID | None
+    # inbox-meeting-proposals fix: who submitted it, by name (or e-mail).
+    submitted_by_name: str | None = None
     submitted_at: dt.datetime | None
     decider_approved: bool
     state: Literal["new", "open"]
@@ -1690,6 +1713,9 @@ class ChatCardOut(BaseModel):
     # meeting-changes-only-its-agenda: in a meeting, the card's item is not on its agenda:
     # "Delivery integrity is on another roadmap: sent to its owner to decide".
     elsewhere: str | None = None
+    # chat-latest-card: a newer card in the chat replaced this one (its id): an open card
+    # is no longer actionable; an applied one keeps its Undo.
+    replaced_by: uuid.UUID | None = None
 
 
 class ChatChoiceOut(BaseModel):
@@ -1982,6 +2008,10 @@ class SimpleMeetingCan(BaseModel):
     redraft: bool = False
     # Whoever ended the meeting or an owner retries a failed email or Slack post.
     retry_delivery: bool = False
+    # agenda-sheet: an owner or the PRD's decider changes the agenda; an approver who is
+    # not the decider proposes; others read.
+    edit_agenda: bool = False
+    propose_agenda: bool = False
 
 
 class SimpleMeetingNote(BaseModel):
@@ -2002,11 +2032,59 @@ class SimpleAgendaItem(BaseModel):
     title: str
 
 
+class SimpleAgendaRow(BaseModel):
+    """agenda-sheet: one row of the meeting's agenda: a feature of its PRD or a topic a
+    person typed, with its minutes; ``state`` reads the chat's next and skip."""
+
+    id: str
+    kind: Literal["feature", "topic"]
+    feature_id: uuid.UUID | None = None
+    title: str
+    mins: int
+    by_name: str | None = None
+    state: Literal["done", "now", "next", "skipped"]
+
+
+class SimpleAgendaProposal(BaseModel):
+    """agenda-sheet: an approver's agenda changes waiting for the meeting's decider."""
+
+    by: SimplePersonRef
+    decider: SimplePersonRef | None = None
+    words: list[str] = []
+    # The proposer's earlier ops whose item is gone since, as words: dropped, not proposed.
+    dropped: list[str] = []
+
+
 class SimpleAgenda(BaseModel):
-    """chat-actions: the item the meeting takes next and the items it skips."""
+    """chat-actions: the item the meeting takes next and the items it skips.
+    agenda-sheet: the rows in order, the PRD's features not on it yet, what the last batch
+    of the sheet did (for its Undo line) and an approver's waiting proposal."""
 
     next: SimpleAgendaItem | None = None
     skipped: list[SimpleAgendaItem] = []
+    items: list[SimpleAgendaRow] = []
+    addable: list[SimpleAgendaItem] = []
+    batch: str | None = None
+    words: list[str] = []
+    # The accepted proposal's ops whose item was gone, as words: left out of the batch.
+    left_out: list[str] = []
+    # port-an-decisions: the batch removed items that wait in Settings › Trash (Open Trash).
+    in_trash: bool = False
+    proposal: SimpleAgendaProposal | None = None
+    # Who decides what an approver proposes: the PRD's decider (none: an owner).
+    decider: SimplePersonRef | None = None
+
+
+class SimpleAgendaEditIn(BaseModel):
+    """agenda-sheet: one op of the Agenda sheet. ``batch`` names the sheet's opening, so
+    Undo puts back the agenda as it was when that batch began."""
+
+    op: Literal["add", "rename", "move", "remove", "undo", "accept", "withdraw"]
+    item_id: str | None = Field(default=None, max_length=64)
+    feature_id: uuid.UUID | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    to: int | None = Field(default=None, ge=0, le=200)
+    batch: str | None = Field(default=None, max_length=64)
 
 
 class SimpleDraftRoadmapItem(BaseModel):
@@ -2182,6 +2260,15 @@ class SimpleDecisionRow(BaseModel):
     # prd-questions: a PRD's question keeps its code ("Q10"); a decided one, its answer.
     code: str | None = None
     chosen: str | None = None
+    # edit-decisions (ec1 b): every field the sheet shows and changes, what the reader may
+    # do there, and the last change made from it.
+    question: str | None = None
+    context: str | None = None
+    options: list["SimpleQuestionOption"] = []
+    review_at: dt.date | None = None
+    can: "SimpleDecisionCan | None" = None
+    edited_at: dt.datetime | None = None
+    edited_by: SimplePersonRef | None = None
 
 
 class SimpleMeetingGroup(BaseModel):
@@ -2239,6 +2326,24 @@ class SimpleQuestionCan(BaseModel):
     propose: bool = False
     # Names the decider (owners and the decider; others propose).
     name_decider: bool = False
+    # edit-decisions (eq2 b): changes its text, recommendation and other answers at once
+    # (owners and the decider; ``propose`` suggests the change instead); withdraws it (the
+    # "not now", with Undo); deletes it to Trash.
+    edit: bool = False
+    withdraw: bool = False
+    delete: bool = False
+
+
+class SimpleDecisionCan(BaseModel):
+    """edit-decisions (ec1 b): what the reader may do on an open decision's sheet, from
+    the decision's own rights (its creator, its decider or an owner edits, withdraws and
+    deletes; owners reassign; another commenter or approver proposes an edit)."""
+
+    edit: bool = False
+    propose: bool = False
+    withdraw: bool = False
+    delete: bool = False
+    reassign: bool = False
 
 
 class SimpleQuestionSource(BaseModel):
@@ -2283,6 +2388,10 @@ class SimpleQuestion(BaseModel):
     # A live review meeting's agenda: the change that decided it in this meeting, for its
     # Undo (only who made it, while the meeting runs).
     undo_id: uuid.UUID | None = None
+    # edit-decisions: the last change made from the sheet, who and when ("Edited by you
+    # just now").
+    edited_at: dt.datetime | None = None
+    edited_by: SimplePersonRef | None = None
 
 
 class SimpleRunStepOut(BaseModel):
@@ -2413,3 +2522,38 @@ OnePagerOut.model_rebuild()
 
 
 SimpleMeetingOut.model_rebuild()
+SimpleDecisionRow.model_rebuild()
+
+
+class InboxSimpleDateSuggestion(BaseModel):
+    """inbox-meeting-proposals fix: Oracle's open date suggestion on an item I may decide
+    (``simple_date_suggestions``, counted in ``total``): one row per item, its slices'
+    span; decided on the item's roadmap."""
+
+    id: uuid.UUID
+    item_id: uuid.UUID
+    item_title: str
+    # The item's roadmap (where it is decided).
+    document_id: uuid.UUID
+    start_date: dt.date
+    end_date: dt.date
+    basis: str
+    at: dt.datetime
+    state: Literal["new", "open"]
+
+
+class InboxSimpleGoalSuggestion(BaseModel):
+    """inbox-meeting-proposals fix: an open feature suggested for a goal whose suggestions
+    I decide (``simple_goal_suggestions``, counted in ``total``)."""
+
+    id: uuid.UUID
+    goal: SimpleGoalBrief
+    title: str
+    outcome: str
+    # Oracle suggested it; else a person did (``proposed_by_name``).
+    from_oracle: bool
+    proposed_by_name: str | None = None
+    # The goal's roadmap, where its suggestions are decided (none: no roadmap yet).
+    document_id: uuid.UUID | None = None
+    at: dt.datetime
+    state: Literal["new", "open"]

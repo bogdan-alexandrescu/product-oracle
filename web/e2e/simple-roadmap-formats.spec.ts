@@ -138,7 +138,7 @@ for (const [where, use] of [
 
       /**
        * Card simple-roadmap-export-formats: protects = D20: every format (timeline, Gantt,
-       * board, waterfall) exports as a PNG and a one-page PDF of the view on screen, framed
+       * board, waterfall) exports as a PNG and a paged Letter PDF of the view on screen, framed
        * with the company's branding and a line naming its filters (a goal filter reads in
        * it); fails_when = a format cannot export, the file is not a PNG / PDF, or the
        * header lacks the company or the filters; no_claim = the picture's pixels.
@@ -172,7 +172,10 @@ for (const [where, use] of [
           expect(pdf.suggestedFilename()).toBe(`roadmap-${f}.pdf`);
           const bytes = Buffer.concat(await (await pdf.createReadStream()).toArray());
           expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
-          expect(bytes.toString("latin1")).toContain("/Count 1");
+          // E-2: Letter landscape pages (as many as the view needs), each numbered.
+          expect(bytes.toString("latin1")).toMatch(/\/Count [1-9]\d* >>/);
+          expect(bytes.toString("latin1")).toContain("/MediaBox [0 0 792 612]");
+          expect(bytes.toString("latin1")).toContain("(Page 1 of ");
         }
         const drawn = await page.evaluate(() => window.__poExports ?? []);
         expect(drawn.map((d) => `${d.kind}:${d.title}`)).toEqual([

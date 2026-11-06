@@ -15,7 +15,8 @@ import { SIMPLE_HOME, switchTarget } from "@/lib/experience";
 import { useMe } from "@/lib/me";
 import { LINK_KINDS } from "@/lib/roadmap-links";
 import { api, unwrap } from "@/lib/api/client";
-import { loadWaiting, onWaitingChanged } from "@/lib/simple-waiting";
+import { loadWaiting } from "@/lib/simple-waiting";
+import { loadInbox, loadMyQuestions, onWaitingChanged, waitingCount } from "@/lib/waiting";
 
 type Dest = { label: string; href: string; icon: IconName; testId: string };
 
@@ -34,6 +35,8 @@ export const SIMPLE_DESTINATIONS: Dest[] = [
   { label: "Priorities", href: "/simple/priorities", icon: "priorities", testId: "simple-nav-priorities" },
   { label: "Meetings", href: "/simple/meetings", icon: "clock", testId: "simple-nav-meetings" },
   { label: "Decisions", href: "/simple/decisions", icon: "flag", testId: "simple-nav-decisions" },
+  // inbox-meeting-proposals owner: the one Inbox (Detailed's too), with every proposal waiting on me.
+  { label: "Inbox", href: "/inbox", icon: "inbox", testId: "simple-nav-inbox" },
 ];
 
 /** Phone tab bar: Home, One-pagers, Roadmap, Decisions, More (Detailed's pattern). */
@@ -50,8 +53,11 @@ function isActive(pathname: string, d: Dest): boolean {
  * /v1/simple/decisions/waiting `items`), so a count always matches its page: Decisions counts
  * everything in it (its "Waiting for you"); Roadmap the roadmap's part (its broken links,
  * as the roadmap counts them, dates to confirm, proposals and drafts sent to me); Meetings only a
- * meeting live now (an upcoming one waits on nobody). Read when the rail mounts, on a route
- * change and whenever something waiting changes.
+ * meeting live now (an upcoming one waits on nobody).
+ * Inbox counts what waits on me as /inbox's "N waiting" does (lib/waiting,
+ * inbox-meeting-proposals); what of it the Roadmap tab does not count already (Oracle's dates,
+ * goal suggestions, one-pager wordings, question proposals) is "Inbox beyond the tabs", which
+ * More sums. Read when the rail mounts, on a route change and whenever something waiting changes.
  */
 function useSimpleCounts(enabled: boolean): Record<string, number> | null {
   const pathname = usePathname();
@@ -67,8 +73,13 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
     // whole working draft as I see it (GET /v1/simple/roadmap/waiting, a light count), the same
     // ones the roadmap's strip, its Needs a decision and Home count, with the dates I may confirm
     // and the proposals and drafts waiting on me.
-    Promise.all([loadWaiting(), unwrap(api.GET("/v1/simple/roadmap/waiting")).catch(() => undefined)])
-      .then(([waiting, roadmap]) => {
+    Promise.all([
+      loadWaiting(),
+      unwrap(api.GET("/v1/simple/roadmap/waiting")).catch(() => undefined),
+      loadInbox(),
+      loadMyQuestions().catch(() => []),
+    ])
+      .then(([waiting, roadmap, inbox, questions]) => {
         if (!alive) return;
         const items = waiting.items;
         // Without the light count, the strip's own rule over the list: each link between items
@@ -76,12 +87,21 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
         const links = roadmap?.broken_links ?? items.filter((i) => i.kind === "broken_link" && LINK_KINDS.some((k) => i.key.split(":")[2] === k)).length;
         const dates = roadmap?.dates_to_confirm ?? items.filter((i) => i.kind === "date" && !i.key.startsWith("proposal:")).length;
         const asks = items.filter((i) => i.kind === "proposal" || i.kind === "draft" || (i.kind === "date" && i.key.startsWith("proposal:"))).length;
+        // inbox-meeting-proposals fix: the Inbox's part the Roadmap tab counts too (a proposal on a
+        // PRD question or a one-pager line is not the roadmap's).
+        const inboxRoadmap =
+          inbox.simple_proposals.filter((x) => !["decide_question", "name_decider", "edit_line"].includes(x.op)).length +
+          inbox.simple_approvals.length;
+        const all = waitingCount(inbox, questions);
         setCounts({
           Decisions: items.length,
           Roadmap: links + dates + asks,
           "Roadmap links": links,
           "Roadmap dates": dates,
           "Roadmap asks": asks,
+          Inbox: all,
+          // What waits in the Inbox beyond what the tabs count (More sums it).
+          "Inbox beyond the tabs": Math.max(0, all - inboxRoadmap),
         });
       })
       .catch(() => undefined);
@@ -207,7 +227,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
         aria-label="Simple"
         aria-busy="true"
         data-testid="simple-nav-skeleton"
-        className="sticky top-0 z-40 col-start-1 row-start-1 flex h-dvh w-[var(--simple-rail-width)] flex-col gap-1 bg-rail px-4 py-5 [border-right:var(--simple-rail-border)] max-[600px]:hidden"
+        className="sticky top-0 z-40 col-start-1 row-start-1 flex h-dvh w-[var(--simple-rail-width)] flex-col gap-1 bg-rail px-4 py-5 [border-right:var(--simple-rail-border)] max-[600px]:hidden simple-noprint"
       >
         <span className="mb-4 flex flex-none items-center gap-2.5 rounded-xl px-2">
           <Mark size={32} tone="current" className="block text-accent-ink" />
@@ -233,11 +253,15 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
   const moreActive = moreDests.some((d) => isActive(pathname, d));
   // qa-simple-home-29: the phone shows the rail's counts too; More sums the counts in its sheet.
   const countOf = (d: Dest) => counts?.[d.label] ?? 0;
-  const moreCount = moreDests.reduce((sum, d) => sum + countOf(d), 0);
+  // inbox-meeting-proposals owner: the Inbox's count repeats what the tabs count (Roadmap's proposals), so More's sum takes
+  // only the rest of it (fix: Oracle's dates, a goal's suggestions, a one-pager wording, a question's proposal light More).
+  const summed = moreDests.filter((d) => d.label !== "Inbox");
+  const inboxRest = moreDests.some((d) => d.label === "Inbox") ? (counts?.["Inbox beyond the tabs"] ?? 0) : 0;
+  const moreCount = summed.reduce((sum, d) => sum + countOf(d), 0) + inboxRest;
   // qa4-simple-home-22: a count that needs nothing from you (Meetings with none live) is grey on the phone as on the rail; More is
   // yellow only when something in it waits on you.
   const quietOf = (d: Dest) => d.label === "Meetings" && !counts?.["Meetings live"];
-  const moreQuiet = moreDests.every((d) => countOf(d) === 0 || quietOf(d));
+  const moreQuiet = inboxRest === 0 && summed.every((d) => countOf(d) === 0 || quietOf(d));
   const tabBadge = (id: string, n: number, words: string, quiet = false) =>
     n > 0 && (
       <span id={id} data-testid={id} aria-label={words} title={words} className={`simple-count simple-count-tab tnum${quiet ? " simple-count-quiet" : ""}`}>
@@ -248,14 +272,14 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
   return (
     <>
       {/* qa-simple-home-6: from 1200 px the open Ask panel sits beside the page (it keeps the shell's third column), not over it. */}
-      {askOpen && me && !/\/present\/?$/.test(pathname) && <span aria-hidden data-testid="simple-ask-room" className="col-start-3 row-start-1 hidden w-[400px] min-[1200px]:block" />}
+      {askOpen && me && !/\/present\/?$/.test(pathname) && <span aria-hidden data-testid="simple-ask-room" className="simple-noprint col-start-3 row-start-1 hidden w-[400px] min-[1200px]:block" />}
       {/* fix4 qa-simple-roadmap-46: the rail's colour runs the page's full height (the sticky rail is one
        * screen tall), and the rail sits under a page's dimmed backdrop (z-35) like the page. */}
-      <span aria-hidden data-testid="simple-nav-underlay" className="col-start-1 row-start-1 self-stretch bg-rail [border-right:var(--simple-rail-border)] max-[600px]:hidden" />
+      <span aria-hidden data-testid="simple-nav-underlay" className="col-start-1 row-start-1 self-stretch bg-rail [border-right:var(--simple-rail-border)] max-[600px]:hidden simple-noprint" />
       <nav
         aria-label="Simple"
         data-testid="simple-nav"
-        className="sticky top-0 z-30 col-start-1 row-start-1 flex h-dvh w-[var(--simple-rail-width)] flex-col gap-1 bg-rail px-4 py-5 [--focus-ring:var(--accent)] [border-right:var(--simple-rail-border)] max-[600px]:hidden"
+        className="sticky top-0 z-30 col-start-1 row-start-1 flex h-dvh w-[var(--simple-rail-width)] flex-col gap-1 bg-rail px-4 py-5 [--focus-ring:var(--accent)] [border-right:var(--simple-rail-border)] max-[600px]:hidden simple-noprint"
       >
         <Link href={SIMPLE_HOME} aria-label="Product Oracle" data-testid="simple-nav-brand" className="mb-4 flex flex-none items-center gap-2.5 rounded-xl px-2">
           <Mark size={32} tone="current" className="block text-accent-ink" />
@@ -327,7 +351,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
             <nav
               aria-label="Simple"
               data-testid="simple-tab-bar"
-              className="fixed inset-x-0 bottom-0 z-[39] hidden h-[var(--phone-tab-bar)] grid-cols-5 bg-rail-foot px-1.5 [--focus-ring:var(--rail-bar)] [border-top:var(--simple-rail-border)] pt-1.5 pb-2 max-[600px]:grid"
+              className="simple-noprint fixed inset-x-0 bottom-0 z-[39] hidden h-[var(--phone-tab-bar)] grid-cols-5 bg-rail-foot px-1.5 [--focus-ring:var(--rail-bar)] [border-top:var(--simple-rail-border)] pt-1.5 pb-2 max-[600px]:grid"
             >
               {tabDests.map((d) => {
                 const active = isActive(pathname, d) && !more;
