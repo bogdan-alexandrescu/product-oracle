@@ -129780,6 +129780,35 @@
               }
             ]
           },
+          "parent_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Key"
+          },
+          "part_of": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleMergedInto"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "parts": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleMergedInto"
+            },
+            "type": "array",
+            "title": "Parts",
+            "default": []
+          },
           "drafting": {
             "type": "boolean",
             "title": "Drafting",

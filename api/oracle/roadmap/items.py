@@ -651,6 +651,8 @@ COPIED = (
     "date_basis",
     "plan_state",
     "applied",
+    # feature-parts: a part stays part of its parent on the next version.
+    "parent_key",
 )
 
 

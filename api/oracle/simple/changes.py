@@ -56,6 +56,10 @@ Ops and the fields they write (``before`` must name the key fields):
 - ``set_depends``: the keys the item depends on (``depends_on``: item keys of its roadmap,
   or feature keys, as the dependency checks read them; a new key that names no item or
   feature is 422).
+- ``set_parent`` (feature-parts): the item made part of another, ``{"parent_key"}``: the key
+  of an open item (not merged, not cut, not in Trash) of its roadmap, or null to take it
+  out; ``before`` is the stored key as the read shows it (``parent_key``). One level: 422
+  when the parent is itself a part or the item has parts; never the item itself.
 - ``set_status``: planned, done or cut; ``before`` ``{"status"}`` as the read showed it;
   writes cut and shipped (done: marked shipped; planned: neither, the tracker's again; a
   shipped mark not made in the panel stays).
@@ -70,11 +74,13 @@ Ops and the fields they write (``before`` must name the key fields):
   key dates, into its working draft (oracle.simple.key_dates).
 - ``add_item`` (S7): a new draft item; oracle.simple.additions makes it (its own rules for
   who applies, its undo removes the item).
-- ``merge_item`` (S7): a draft (``target.item_id``) merged into another item of its
-  roadmap (``target.into_id``): the kept item takes the draft's goal links, dependencies
-  and note, the draft's dependents depend on the kept item, the draft closes
-  (``merged_into``: the kept item's key); or linked to a baseline feature
-  (``target.feature_id``). Keyed by item id like the fixes; ``before`` is read, not given.
+- ``merge_item`` (S7): an open item (``target.item_id``; feature-parts: any, not only a
+  draft) merged into another open item of its roadmap (``target.into_id``): the kept item
+  takes its goal links, dependencies and note, its dependents depend on the kept item, its
+  parts become the kept item's (the kept item, if one of them, is a part no more), its own
+  ``parent_key`` clears and it closes (``merged_into``: the kept item's key); or a draft
+  linked to a baseline feature (``target.feature_id``, drafts only). Keyed by item id like
+  the fixes; ``before`` is read, not given.
 - ``keep_both`` (S7): kept_both; the draft's look-alikes are no longer offered.
 - ``cut_with_dependents`` (fix5-cut-dependents): the item and every item that waits on it,
   transitively (``dependents``), cut as one change, undone as one; ``before`` is the
@@ -158,6 +164,8 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "set_status": ("status",),
     "set_feature": ("feature_id",),
     "remove_dependency": ("depends_on",),
+    # feature-parts: the item this one is part of.
+    "set_parent": ("parent_key",),
 }
 CONFIDENCES = ("low", "medium", "high")
 # set_status: the statuses a person sets (the others come from the tracker or a merge).
@@ -1003,6 +1011,8 @@ async def _plan(
         if loop := await loop_of(db, read_.by_id(), entry, added):
             raise ChangeError(422, loop)
         after = {"depends_on": clean}
+    elif op == "set_parent":
+        after = {"parent_key": await _parent(db, entry, a.get("parent_key"), target, read_)}
     else:  # accept_risk
         if target.get("flag") not in FLAG_KINDS:
             raise ChangeError(422, "target.flag: a constraint flag's kind")
@@ -1088,6 +1098,30 @@ async def _track_of_prd(
         .order_by((ProductTrack.roadmap_document_id == roadmap).desc(), ProductTrack.created_at)
         .limit(1)
     )
+async def _parent(
+    db: AsyncSession, entry: service.Entry, key: Any, target: dict[str, Any], read_: service.Read
+) -> str | None:
+    """set_parent: the parent's key, checked (one level, an open item of the roadmap);
+    ``target`` names the parent the words name (the new one, else the one left)."""
+    row = entry.row
+    key = " ".join(str(key).split()) if key is not None else None
+    named = key or row.parent_key
+    same = [e for e in read_.entries if e.roadmap.id == entry.roadmap.id]
+    parent = next((e for e in same if named and e.row.item_key == named), None)
+    if parent is not None:
+        await service.item_codes(db, [parent])
+        target["code"], target["title"] = parent.code or parent.row.item_key, parent.row.title
+    if not key:
+        return None
+    if key == row.item_key:
+        raise ChangeError(422, "after.parent_key: another item, never the item itself")
+    if parent is None or parent.status in ("merged", "cut"):
+        raise ChangeError(422, f"after.parent_key: no open item of this roadmap has the key {key}")
+    if parent.row.parent_key:
+        raise ChangeError(422, "after.parent_key: that item is a part itself (one level only)")
+    if any(e.row.parent_key == row.item_key and e.status != "merged" for e in same):
+        raise ChangeError(422, "This item has parts of its own, so it is never a part")
+    return key
 
 
 async def _unknown_keys(db: AsyncSession, keys: list[str], read_: service.Read) -> list[str]:
@@ -1122,10 +1156,12 @@ async def _merge_plan(
     """S7: merge_item's writes, keyed by item id (see the module's docstring)."""
 
     row = entry.row
-    if not row.draft or entry.status in ("merged", "cut"):
-        raise ChangeError(422, "Only an open draft item is merged")
+    if entry.status in ("merged", "cut"):
+        raise ChangeError(422, "Only an open item is merged")
     after: dict[str, dict[str, Any]] = {}
     if target.get("feature_id"):
+        if not row.draft:
+            raise ChangeError(422, "Only a draft item is linked to a feature")
         fid = _uuid(target["feature_id"], "feature_id")
         feature = await db.get(Entity, fid)
         if feature is None or feature.type != "feature":
@@ -1155,13 +1191,18 @@ async def _merge_plan(
             "depends_on": deps,
             "note": f"{kept.row.note}\n{note}" if kept.row.note else note,
         }
-        after[str(row.id)] = {"merged_into": kk}
+        after[str(row.id)] = {"merged_into": kk, "parent_key": None}
         for nid in entry.needed_by:
             n = by_id.get(nid)
             if n is None or n is kept or n is entry:
                 continue
             ks = [k for k in n.row.depends_on or [] if k != dk]
             after[str(nid)] = {"depends_on": ks + ([kk] if kk not in ks else [])}
+        # feature-parts: its parts become the kept item's; the kept item, if one, its own.
+        for e in by_id.values():
+            if e.roadmap.id != entry.roadmap.id or e is entry or e.row.parent_key != dk:
+                continue
+            after.setdefault(str(e.row.id), {})["parent_key"] = None if e is kept else kk
     rows = {str(e.row.id): e.row for e in by_id.values()}
     before = {k: read(rows[k], tuple(v), target) for k, v in after.items()}
     return entry, target, before, after

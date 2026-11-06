@@ -721,6 +721,7 @@ PROPOSAL_WORDS = {
     "set_status": "new status for",
     "set_feature": "new feature for",
     "set_goals": "move to another goal:",
+    "set_parent": "change what it is part of:",
 }
 
 

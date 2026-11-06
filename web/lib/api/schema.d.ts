@@ -43821,6 +43821,14 @@ export interface components {
              */
             looks_like: components["schemas"]["SimpleMatch"][];
             merged_into?: components["schemas"]["SimpleMergedInto"] | null;
+            /** Parent Key */
+            parent_key?: string | null;
+            part_of?: components["schemas"]["SimpleMergedInto"] | null;
+            /**
+             * Parts
+             * @default []
+             */
+            parts: components["schemas"]["SimpleMergedInto"][];
             /**
              * Drafting
              * @description S7: Oracle's drafting job for this draft is queued or running.
