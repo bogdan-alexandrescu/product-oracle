@@ -37,7 +37,9 @@ test("brief: a document opens on its brief; Full switches, and the choice is rem
   await expect(stripItems(page)).toHaveText(headingsAre(BRIEF));
   await expect(page.getByTestId("view-note")).toContainText("Brief: 8 of 20 sections");
   await openSection(page, "summary");
-  await expect(section(page, "summary").getByTestId("layer-badge").first()).toHaveText("Brief");
+  // PT1 a: a PRD heading carries no Brief or Detail chip; Brief and Full say which part is shown.
+  await expect(section(page, "summary").first()).toHaveAttribute("data-layer", "brief");
+  await expect(section(page, "summary").getByTestId("layer-badge")).toHaveCount(0);
   // Presenter notes belong to Present mode: the document does not show the notes block.
   await expect(section(page, "summary").first()).toContainText("approve the beta scope");
   await expect(section(page, "summary").first()).not.toContainText("Open with how many carts");
@@ -53,7 +55,8 @@ test("brief: a document opens on its brief; Full switches, and the choice is rem
   // qa-docs-50: the opening section reads as the Introduction, not the title again.
   await expect(stripItems(page).first()).toHaveText(/Introduction$/);
   await openSection(page, "feature-detail");
-  await expect(section(page, "feature-detail").getByTestId("layer-badge").first()).toHaveText("Detail");
+  await expect(section(page, "feature-detail").first()).toHaveAttribute("data-layer", "detail");
+  await expect(section(page, "feature-detail").getByTestId("layer-badge")).toHaveCount(0);
 
   // Remembered for this user: after a reload and on another version. The mock saves the
   // choice inside the page, so wait for it before reloading.

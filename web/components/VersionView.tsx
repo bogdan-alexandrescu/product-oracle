@@ -1492,6 +1492,8 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
               <SectionView
                 key={s.id}
                 {...sectionProps(s)}
+                // PT1 a: the contents rail's groups say which sections are in the brief, not a chip per heading.
+                showLayer={false}
                 look={{ num: calmNums.get(s.section_key), hideReview: s.section_key !== openKey }}
                 expand={view === "brief" ? expandFor(s.section_key) : undefined}
                 headTools={
