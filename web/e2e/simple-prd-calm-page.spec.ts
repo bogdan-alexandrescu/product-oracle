@@ -29,7 +29,7 @@ async function openPage(page: Page, email?: string) {
   await expect(page.getByRole("heading", { level: 1, name: "Guided setup" })).toBeVisible();
 }
 
-const whole = (page: Page) => page.getByRole("region", { name: "The whole PRD" });
+const whole = (page: Page) => page.getByTestId("prd-whole");
 /** A section of the whole PRD, found by its numbered heading. */
 const prdSection = (page: Page, heading: string) => whole(page).locator("section").filter({ has: page.getByRole("heading", { name: heading, exact: true }) });
 

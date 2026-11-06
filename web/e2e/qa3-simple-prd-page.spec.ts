@@ -237,6 +237,8 @@ test.describe("phone, no plan", () => {
   test("a touch on a line's hidden Edit opens nothing; it shows the Edit (p3-1)", async ({ page }) => {
     await paper(page);
     const row = line(page, "bets-1");
+    // PS1 a: the calmer spacing between blocks puts the line below a phone's first screen.
+    await row.scrollIntoViewIfNeeded();
     const b = (await row.getByTestId("one-pager-line-text").boundingBox())!;
     const e = (await row.locator("[data-edit-for]").boundingBox())!;
     expect(e.x).toBeLessThan(b.x + b.width);

@@ -155,7 +155,7 @@ export function PrdWhole({ prd, doc }: { prd: PrdSections; doc: Doc }) {
   const read = sections.filter((s) => s.level >= 2);
   if (!read.length) return null;
   return (
-    <div className="simple-prd-whole simple-noprint" aria-label="The whole PRD" role="region">
+    <div className="simple-prd-whole simple-noprint" data-testid="prd-whole">
       <h2 className="simple-prd-whole-title">The whole PRD</h2>
       {read.map((s) => {
         const H = s.level <= 2 ? "h3" : "h4";
