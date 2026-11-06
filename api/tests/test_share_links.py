@@ -954,10 +954,9 @@ def test_a_link_holder_reads_no_left_out_line_no_empty_or_repeated_column():
         "| Bulk import | Faster setup |  | Grow activation |",
     ])  # fmt: skip
     got = reader_body(table, "now-group-1")
-    assert got.split("\n")[0] == "| Item | When | Status | Outcome |"
-    # Without the items nothing is known of a card's dates or state: its cells stay empty.
-    assert "| CSV parser |  |  |  |" in got
-    assert "| Bulk import |  |  | Faster setup |" in got
+    # Without the items nothing is known of a card's dates or state: no column for them.
+    assert got.split("\n")[0] == "| Item | Outcome |"
+    assert "| CSV parser |  |" in got and "| Bulk import | Faster setup |" in got
     assert "Confidence" not in got and "Grow activation" not in got
     # Outside a goal group the Goal column says something the page does not.
     assert "| Goal |" in reader_body(table, "brief-items")
@@ -1012,7 +1011,13 @@ def test_a_link_holder_reads_each_item_with_when_and_status():
     ]
     # Without the items (an older caller) nothing is made up: no horizon word, no state.
     bare = reader_body(table, "next-group-1").split("\n")
-    assert bare[2] == "| CSV parser |  |  | High confidence |"
+    assert bare[0] == "| Item | Confidence |"
+    assert bare[2] == "| CSV parser | High confidence |"
+    # A group none of whose items is dated has no When column, not a horizon word.
+    one = "\n".join(table.split("\n")[:2] + ["| Audit log |  |  | Grow activation |"])
+    alone = reader_body(one, "now-group-1", [ItemView("undated", "Audit log", None, "now", 0)])
+    assert alone.split("\n")[0] == "| Item | Status |"
+    assert alone.split("\n")[2] == "| Audit log | Planned |"
 
 
 async def test_a_cards_state_and_date_come_from_its_tracker_records(ctx):

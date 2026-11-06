@@ -76,10 +76,9 @@ for (const width of [1440, 390]) {
         await expect(cards.first()).toBeVisible();
         await expect(cards).toHaveCount(Object.keys(CARDS).length);
         for (const [name, [when, status]] of Object.entries(CARDS)) {
-          const cells = cards.filter({ hasText: name }).locator("td");
-          await expect(cells.nth(0)).toHaveText(name);
-          await expect(cells.nth(1)).toHaveText(when);
-          await expect(cells.nth(2)).toHaveText(status);
+          // What the card says, line by line (an empty cell shows nothing).
+          const said = (await cards.filter({ hasText: name }).locator("td").allInnerTexts()).map((t) => t.trim()).filter(Boolean);
+          expect(said.slice(0, when ? 3 : 2)).toEqual([name, ...(when ? [when] : []), status]);
         }
         const card = cards.filter({ hasText: "Falcon alerts rework" });
         await expect(card).toContainText("High confidence");
