@@ -140,8 +140,8 @@ test("a number changed since the page was read is refused in words", async ({ pa
   await page.goto(URL);
   const stale = item(page, COUNT).getByRole("button", { name: "Use 6" });
   await expect(stale).toBeVisible();
+  // A second tab of the same browser is signed in already.
   const other = await page.context().newPage();
-  await login(other);
   await other.goto(URL);
   await item(other, COUNT).getByRole("button", { name: "Use 6" }).click();
   await expect(fixed(other)).toHaveText([FIXED_COUNT]);
