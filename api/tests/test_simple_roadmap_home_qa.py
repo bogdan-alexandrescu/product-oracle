@@ -33,7 +33,9 @@ async def test_waiting_counts_every_red_flag_with_a_fix(monkeypatch):
             suggestion=None,
             flags=[Flag(kind="blocker_date", reason="", fixes=["accept_risk"], state="amber")],
         ),
-        SimpleNamespace(status="done", suggestion=None, flags=[_red("outside_milestone", ["accept_risk"])]),
+        SimpleNamespace(
+            status="done", suggestion=None, flags=[_red("outside_milestone", ["accept_risk"])]
+        ),
     ]
 
     async def reader(db, principal):

@@ -15,7 +15,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { draftNext } from "@/lib/simple-home";
 import { invalidateWaiting, reloadWaiting, waitingChanged } from "@/lib/simple-waiting";
 import { CARD_CHANGED_EVENT } from "@/lib/api/simple-chat";
-import { displayZone, plainClock } from "@/lib/dates";
+import { displayZone, formatInZone } from "@/lib/dates";
 import { formatDate } from "@/lib/format";
 import { goalNumbers } from "@/lib/goal-tree";
 import { useMe } from "@/lib/me";
@@ -122,8 +122,9 @@ type Dates = ReturnType<typeof storedDates>;
 const sameDates = (a: Dates, b: Dates) => a.start_date === b.start_date && a.end_date === b.end_date;
 const sameHorizon = (a: Horizon, b: Horizon) => a === b;
 
-// fix4 qa-simple-roadmap-29: "since 7:02 PM" (its day when not today), no zone name.
-const time = (at: string) => plainClock(at, displayZone());
+// pre-demo QA Demo 8: a draft's time with its day, month first, in the company zone, as the rest of
+// the app writes one ("Nov 6, 2026, 4:43 AM PST"), never a bare "4:43 AM".
+const time = (at: string) => formatInZone(at, displayZone(), { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).replace(/ at /, ", ");
 
 /** fix4 qa-simple-roadmap-35: a key date's two marks: filled, and hollow while it is only in the draft. */
 function keyDateEntries(data: Roadmap): LegendEntry[] {
@@ -217,6 +218,8 @@ function ganttLegend(data: Roadmap, noWork: { start: string; end: string; label?
  * work in its own lane as the chart draws it. */
 function GoalCounters({ data, byGoal, suggestions, onGoal, only }: { data: Roadmap; byGoal: boolean; suggestions: GoalSuggestionsApi; onGoal: (g: GoalBrief) => void; only: { key: string; title: string } | null }) {
   const numbers = useContext(GoalNumbers);
+  // pre-demo QA G-8: asking for suggestions is a commenter's and up (the API refuses a viewer); reading them is anyone's.
+  const suggests = useMe().can("create_goal_suggestion");
   const count = (id: string) => (suggestions.data?.suggestions ?? []).filter((s) => s.goal.id === id).length;
   // qa4-simple-roadmap-10: a goal its plan names (no id of its own here) is found by its title.
   const known = (id: string, title?: string) => suggestions.data?.goals.find((g) => g.goal.id === id || (!!title && g.goal.title === title))?.goal;
@@ -255,7 +258,7 @@ function GoalCounters({ data, byGoal, suggestions, onGoal, only }: { data: Roadm
   if (!cards.length && !empty.length && !filteredOut) return null;
   const open = (id: string, title: string) => {
     const g = known(id, title);
-    return g ? (
+    return g && (count(id) > 0 || suggests) ? (
       <button type="button" data-testid="goal-counter-suggestions" onClick={() => onGoal(g)} className="text-sm font-semibold text-accent-ink hover:underline">
         {/* QA2 24: no "0 suggested features": with none yet, the button says what it opens. */}
         ✦ {count(id) ? `${count(id)} suggested ${count(id) === 1 ? "feature" : "features"}` : "Suggest a feature"}
@@ -663,6 +666,17 @@ function DecisionTray({
   onAll?: () => void;
 }) {
   const twins = items.filter((i) => i.can_decide && i.looks_like.length > 0);
+  // pre-demo QA S-6: every item the tray names opens its feature panel (the tray closes for it).
+  const openItem = useContext(OpenItem);
+  const open1 = (id: string) => {
+    onClose();
+    openItem?.(id);
+  };
+  const named = (i: Item, className = "") => (
+    <button type="button" data-testid="tray-item" data-item={i.key} className={`text-left hover:underline ${className}`} onClick={() => open1(i.id)}>
+      {i.title}
+    </button>
+  );
   // qa4-simple-roadmap-14: Escape closes the drawer, focus back on its button.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -705,8 +719,9 @@ function DecisionTray({
   });
   const pulled = counts.pulled;
   const others = counts.proposals;
-  const here = counts.total;
-  const whole = counts.total - counts.links - counts.dates.length + (allLinks ?? counts.links) + (allDates ?? counts.dates.length);
+  // pre-demo QA S-6: the suggested features it lists count too, as on its button.
+  const here = counts.total + suggested.length;
+  const whole = here - counts.links - counts.dates.length + (allLinks ?? counts.links) + (allDates ?? counts.dates.length);
   const counters: [string, number][] = [
     ["Broken links", allLinks ?? counts.links],
     ["Dates to confirm", allDates ?? dateRows.length],
@@ -723,7 +738,7 @@ function DecisionTray({
   const row = (c: Change) => (
     <li key={c.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-proposal">
       <span className="min-w-0 flex-1 text-[15px]">
-        {title(c)}: {asks(c)} · <span className="text-text2">{c.by_name}</span>
+        {!asked(c) && !ms(c) && !kd(c)?.name && byId.get(String(c.target.item_id)) ? named(byId.get(String(c.target.item_id))!) : title(c)}: {asks(c)} · <span className="text-text2">{c.by_name}</span>
         {c.op === "remove_dependency" && waitsFor && waitsFor(c) && <span className="text-text2"> · waits for {waitsFor(c)}</span>}
         {c.from_meeting && <span className="block text-sm text-text2" data-testid="proposal-from-meeting">Asked for by the meeting {c.from_meeting.title}</span>}
       </span>
@@ -754,7 +769,7 @@ function DecisionTray({
       <p className="mt-1 text-sm text-text2" data-testid="tray-scope">
         {/* Review: under a filter, every kind on one basis: what these filters show, and the whole roadmap's. */}
         {/* Review: "this roadmap's" only when one roadmap is chosen; else every roadmap's draft is counted. */}
-        {whole !== here ? `${here} here, ${whole} in all` : whole} to decide {oneRoadmap ? "in this roadmap's working draft" : "in your roadmaps' working drafts"}: broken links, dates to confirm, proposals and items pulled in.
+        {whole !== here ? `${here} here, ${whole} in all` : whole} to decide {oneRoadmap ? "in this roadmap's working draft" : "in your roadmaps' working drafts"}: broken links, dates to confirm, proposals, items pulled in and suggested features.
         {allLinks !== undefined && allLinks !== counts.links && (
           <span data-testid="tray-links-here">
             {" "}
@@ -784,7 +799,7 @@ function DecisionTray({
           <ul>
             {brokenItems.map((i) => (
               <li key={i.id} className="border-b border-line py-2" data-testid="tray-broken">
-                <p className="text-[15px] font-medium">{i.title}</p>
+                <p className="text-[15px] font-medium">{named(i)}</p>
                 {/* qa4-simple-roadmap-38: its broken links only; its other flags are listed once, under Other flags. */}
                 {brokenLinks(i).map((f) => (
                   <div key={`${f.kind}-${f.subject}`}>
@@ -805,13 +820,21 @@ function DecisionTray({
           <ul>
             {flagged.map((i) => (
               <li key={i.id} className="border-b border-line py-2" data-testid="tray-flag">
-                <p className="text-[15px] font-medium">{i.title}</p>
+                <p className="text-[15px] font-medium">{named(i)}</p>
                 {broken(i)
                   .filter((f) => !brokenLinks(i).includes(f))
                   .map((f) => (
                     <div key={`${f.kind}-${f.subject}`}>
                       <FlagLine flag={f} />
                       <FixButtons item={i} flag={f} items={byId} act={act} canChange={canChange} />
+                      {/* pre-demo QA S-6: a draft with no owner is resolved in its panel, where its owner is picked. */}
+                      {f.kind === "draft_without_owner" && canChange && (
+                        <div className="mt-1 flex flex-wrap gap-1.5" data-testid="fixes">
+                          <Button data-testid="pick-owner" onClick={() => open1(i.id)}>
+                            Pick an owner
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   ))}
               </li>
@@ -827,7 +850,7 @@ function DecisionTray({
               <li key={s.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-date" data-item={i.id}>
                 <div className="min-w-0 flex-1 text-[15px]">
                   <span>
-                    {i.title}: {yearSpan(s.start_date, s.end_date)}
+                    {named(i)}: {yearSpan(s.start_date, s.end_date)}
                   </span>
                   {parts.length > 0 && (
                     <span className="block" data-testid="tray-date-slices">
@@ -864,7 +887,7 @@ function DecisionTray({
           <ul>
             {twins.map((i) => (
               <li key={i.id} className="border-b border-line py-2" data-testid="tray-twin">
-                <p className="text-[15px] font-medium">{i.title}</p>
+                <p className="text-[15px] font-medium">{named(i)}</p>
                 <LooksLike item={i} act={act} canChange={canChange} />
               </li>
             ))}
@@ -1414,7 +1437,9 @@ export function SimpleRoadmap() {
   const anyFilter = !!(f.prd || f.goal || f.track || f.from || f.to || f.roadmap);
   const allLinks = anyFilter ? wholeLinks.data?.broken_links : undefined;
   const allDates = anyFilter ? wholeLinks.data?.dates_to_confirm : undefined;
-  const waiting = counted.total - counted.links - counted.dates.length + (allLinks ?? counted.links) + (allDates ?? counted.dates.length);
+  // pre-demo QA S-6: the suggested features the tray lists for a decision count on its button too.
+  const suggestedWaiting = (suggestions.data?.suggestions ?? []).filter((s) => s.can_accept || s.can_reject).length;
+  const waiting = counted.total + suggestedWaiting - counted.links - counted.dates.length + (allLinks ?? counted.links) + (allDates ?? counted.dates.length);
   const qList = quarters(data.windows.now.start, data.windows.later.end);
   // qa-shell-8: a new company's roadmap has nothing on it (no item, milestone or key date, and
   // no filter narrowing it): one line on what shows here and the next step, no empty chart and
@@ -1507,7 +1532,7 @@ export function SimpleRoadmap() {
         // confirm, proposals and items pulled in, in the chosen roadmap's working draft (else every roadmap's).
         <Button
           data-testid="needs-decision"
-          title={`Broken links, dates to confirm, proposals and items pulled in, ${f.roadmap ? "in this roadmap's working draft" : "in your roadmaps' working drafts"}`}
+          title={`Broken links, dates to confirm, proposals, items pulled in and suggested features, ${f.roadmap ? "in this roadmap's working draft" : "in your roadmaps' working drafts"}`}
           onClick={() => setTray(true)}
           data-zero={waiting ? undefined : "true"}
           // fix4 qa-simple-roadmap-38: at 0 the button is muted (nothing waits), still opens the tray.
@@ -1939,7 +1964,7 @@ export function SimpleRoadmap() {
               setCard(null);
               setPop({ id: item.id, ...anchorOf(item.id) });
             }}
-            overlay={(l, sc) => <GanttMilestones l={l} sc={sc} data={laned ?? data} phone={phone} />}
+            overlay={(l, sc, keepOff) => <GanttMilestones l={l} sc={sc} data={laned ?? data} phone={phone} keepOff={keepOff} />}
           />
           </>
         )}
@@ -2087,7 +2112,7 @@ export function SimpleRoadmap() {
 }
 
 /** build-milestones-on-roadmap: the milestone layer over the Gantt, in the chart's pixels. */
-function GanttMilestones({ l, sc, data, phone }: { l: Layout; sc: ChartScale; data: Roadmap; phone: boolean }) {
+function GanttMilestones({ l, sc, data, phone, keepOff }: { l: Layout; sc: ChartScale; data: Roadmap; phone: boolean; keepOff?: [number, number][] }) {
   const byId = new Map(data.items.map((i) => [i.id, i]));
   const rows: MsRow[] = [];
   const lanes: MsLane[] = [];
@@ -2100,5 +2125,6 @@ function GanttMilestones({ l, sc, data, phone }: { l: Layout; sc: ChartScale; da
       if (i && y != null) rows.push({ id: i.id, title: i.title, lane: g.key, y, h: l.rowH, start: i.start.date, end: i.end.date });
     }
   }
-  return <MsLayer view="gantt" x={(d) => sc.x(d) + sc.px / 2} top={l.top} axisY={l.top - 2} height={l.height} width={sc.width} rows={rows} lanes={lanes} phone={phone} />;
+  // pre-demo QA S-12: "+ Milestone" steps past the key dates' and milestones' names over the axis.
+  return <MsLayer view="gantt" x={(d) => sc.x(d) + sc.px / 2} top={l.top} axisY={l.top - 2} height={l.height} width={sc.width} rows={rows} lanes={lanes} phone={phone} keepOff={keepOff} />;
 }

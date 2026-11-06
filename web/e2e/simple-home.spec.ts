@@ -94,7 +94,7 @@ for (const phone of [false, true]) {
         await expect(goals).toHaveCount(3);
         const retention = goals.filter({ hasText: "Grow retention" });
         await expect(retention.getByTestId("home-goal-link")).toHaveAttribute("title", /^G-R · /);
-        await expect(retention.getByTestId("home-goal-weight")).toHaveText(/^Counts for \d+% of each feature's score$/);
+        await expect(retention.getByTestId("home-goal-weight")).toHaveText(/^\d+% of the score$/);
         await expect(retention.getByTestId("home-goal-path")).toHaveText("From 50 teams · now 100 teams · target 200 teams with weekly alerts on");
         await expect(retention.getByTestId("home-goal-status")).toHaveText("At risk");
         await expect(retention.getByTestId("home-goal-need")).toContainText(/needs? you/);
