@@ -128,11 +128,16 @@ function offCompany(db: SimpleDb, on: Item[]): Item[] {
   const slug = db.company_roadmap;
   if (!slug) return [];
   const held = new Set(on.filter((i) => !i.draft).map((i) => featureOf(db, i.key)));
+  // priorities.compute ranks every feature, a replaced PRD's too (service.load leaves out only its
+  // items): read every roadmap's items, a replaced PRD's included.
+  const replaced = db.replaced_prds;
   db.company_roadmap = undefined;
+  db.replaced_prds = undefined;
   try {
     return roadmapOut(db, "owner", new URLSearchParams())!.items.filter((i) => db.items.find((s) => s.key === i.key)?.roadmap !== slug && !i.draft && !held.has(featureOf(db, i.key)));
   } finally {
     db.company_roadmap = slug;
+    db.replaced_prds = replaced;
   }
 }
 

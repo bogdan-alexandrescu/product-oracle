@@ -1107,8 +1107,9 @@ function seedSimplePlanScenario(datedAll = false): Db {
   const existing: Record<string, string> = { "F-01": "setup-checklist", "F-02": "setup-import" };
   // The plan's own item carries each other plan feature's code: the default roadmap's item of the
   // same PRD section (F-03 Health log) keeps its name but not the code, so one code names one item.
+  // A code is the PRD's own: another PRD's item (Usage alerts' F-06 Weekly alert digest) keeps it.
   for (const x of rm.items) {
-    if (x.section && byFeature.has(x.section.toUpperCase()) && !Object.values(existing).includes(x.key)) Object.assign(x, { section: undefined, heading: undefined });
+    if (x.roadmap === "onboarding-roadmap" && x.section && byFeature.has(x.section.toUpperCase()) && !Object.values(existing).includes(x.key)) Object.assign(x, { section: undefined, heading: undefined });
   }
   for (const [code, of] of byFeature) {
     const section = code.toLowerCase();

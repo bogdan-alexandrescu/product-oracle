@@ -1358,7 +1358,9 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   const body = (await req.json().catch(() => ({}))) as { reason?: string | null };
   if (p[4] === "accept" && c.op === "set_goal_measure" && !same(goalMeasure(db, c.target.goal_id), c.before)) return conflict(db, ctx, goalMeasure(db, c.target.goal_id)!, [String(c.target.goal_id)], "outdated");
   if (p[4] === "accept" && TARGETS[c.op]) writeTarget(db, c, c.after);
-  else if (p[4] === "accept" && c.op === MILESTONE_OP) {
+  // goal_milestones.decide: a milestone card's change (before.milestone); a change asked of a
+  // PRD's milestone (before.date) is decided below.
+  else if (p[4] === "accept" && c.op === MILESTONE_OP && "milestone" in (c.before ?? {})) {
     const ms = (db.goal_milestones ?? []).find((x) => x.id === c.target.milestone_id && !x.deleted);
     if (!ms) return json(404, { detail: "The milestone is gone" });
     if (!same(milestoneValue(ms, db.ids), c.before.milestone)) return json(409, { detail: { message: "outdated: the milestone changed since the proposal", current: { milestone: milestoneValue(ms, db.ids) }, changed_by: null, changed_at: null } });
