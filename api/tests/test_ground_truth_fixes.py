@@ -27,6 +27,15 @@ Test cards (protects / fails_when / no_claim):
   a viewer are refused; fails_when=any is linked.
 - test_a_commenter_proposes_a_link: protects=a commenter's link is a proposal an approver's
   accept applies; fails_when=it links at once or never.
+- test_add_a_slices_feature_by_its_code: protects=Add to Ground Truth on a slice item's flag
+  (F-16a) adds its feature with key F-16, so every slice of it (F-16a, F-16b) is in the Ground
+  Truth by code at once, and the new feature has its code (no no_code); fails_when=a slice
+  stays flagged, a second add is needed, or the new feature has no code. A feature with a name
+  key linked to F-16a alone leaves F-16b flagged (why the key is the code).
+- test_add_a_prd_feature_by_its_code: protects=Add to Ground Truth on the PRD's F-09 adds it
+  with key F-09 (then the PRD's feature is linked to it): no prd_feature_missing, no no_code,
+  and Give it a code is not needed; a code key is a feature's only, and once; fails_when=the
+  key F-09 is refused, the new feature reads no code or the PRD's feature stays flagged.
 - test_scoped_to_the_company: protects=another company cannot give our feature a code or link
   our PRD; fails_when=a route reaches across tenants.
 """
@@ -39,9 +48,10 @@ from sqlalchemy import select
 from oracle import company_time
 from oracle.baseline.models import Entity
 from oracle.docs.models import DocumentVersion
+from oracle.roadmap.models import RoadmapItem
 from oracle.simple.models import SimplePrdPlan
 from oracle.tenancy import tenant_session
-from tests.baseline_helpers import make_ctx
+from tests.baseline_helpers import entity, make_ctx
 from tests.test_ground_truth_check import PLAN, _check, _of, world
 from tests.test_simple_roadmap_api import NOW, Seed
 
@@ -287,3 +297,76 @@ async def test_scoped_to_the_company(client):
     assert r.status_code == 404
     assert await _key(ctx, feats["smart-search"]) == "smart-search"
     assert len(_of(await _check(client, ctx), "prd_feature_missing")) == 2
+
+
+async def test_add_a_slices_feature_by_its_code(client):
+    w = await world()
+    ctx = w["ctx"]
+    prd_id, pv_id, rv_id = w["seed"]
+    async with tenant_session(ctx.tenant_id) as s:
+        rv = await s.get(DocumentVersion, rv_id)
+        pv = await s.get(DocumentVersion, pv_id)
+        b = await Seed(s).item(rv, pv, "report-b", title="Usage chart", position=5,
+                               prd_section_key="f-16b")  # fmt: skip
+        await s.commit()
+        slices = {w["items"]["report"], str(b.id)}
+    check = await _check(client, ctx)
+    flagged = {f["item"]["id"]: f for f in _of(check, "slice_parent_missing")}
+    assert set(flagged) == slices
+    # Both flags name the same feature to add, F-16.
+    assert {x["target"] for f in flagged.values() for x in f["fixes"]
+            if x["action"] == "add_to_ground_truth"} == {"F-16"}  # fmt: skip
+    # A feature with a name key linked to F-16a alone: F-16b is still flagged.
+    async with tenant_session(ctx.tenant_id) as s:
+        other = Entity(type="feature", key="usage-report", title="Usage report",
+                       status="confirmed", origin="user")  # fmt: skip
+        s.add(other)
+        await s.flush()
+        item = await s.get(RoadmapItem, uuid.UUID(w["items"]["report"]))
+        item.feature_id = other.id
+        await s.commit()
+    check = await _check(client, ctx)
+    assert [f["item"]["id"] for f in _of(check, "slice_parent_missing")] == [str(b.id)]
+    async with tenant_session(ctx.tenant_id) as s:
+        item = await s.get(RoadmapItem, uuid.UUID(w["items"]["report"]))
+        item.feature_id = None
+        await s.delete(await s.get(Entity, other.id))
+        await s.commit()
+    # Add to Ground Truth: the feature keyed by its code, F-16. One add clears both slices.
+    added = await entity(client, ctx, "approver", type="feature", key="F-16",
+                         title="Usage report", origin="user")  # fmt: skip
+    assert added["status"] == "confirmed"
+    check = await _check(client, ctx)
+    assert check["counts"]["slice_parent_missing"] == 0
+    for kind in ("unlinked_item", "slice_parent_missing", "no_code"):
+        flagged = _of(check, kind)
+        assert slices.isdisjoint((f.get("item") or {}).get("id") for f in flagged)
+        assert added["id"] not in {(f.get("feature") or {}).get("id") for f in flagged}
+
+
+async def test_add_a_prd_feature_by_its_code(client):
+    w = await world()
+    ctx, prd = w["ctx"], w["prd"][0]
+    check = await _check(client, ctx)
+    assert "F-09" in {f["feature"]["code"] for f in _of(check, "prd_feature_missing")}
+    no_code = check["counts"]["no_code"]
+    added = await entity(client, ctx, "approver", type="feature", key="F-09",
+                         title="Team invites", origin="user")  # fmt: skip
+    body = {"prd_document_id": prd, "code": "F-09", "feature_id": added["id"]}
+    r = await client.post(LINKS, json=body, headers=ctx.as_("approver"))
+    assert r.status_code == 200, r.text
+    check = await _check(client, ctx)
+    assert [f["feature"]["code"] for f in _of(check, "prd_feature_missing")] == ["F-15"]
+    assert check["counts"]["no_code"] == no_code
+    assert added["id"] not in {f["feature"]["id"] for f in _of(check, "no_code")}
+    # It reads F-09, on the check and in the PRD's plan.
+    assert {"id": added["id"], "code": "F-09", "name": "Team invites"} in [
+        f["feature"] for f in _of(check, "no_goal")
+    ]
+    assert await _plan_codes(client, ctx, prd) == ["F-01", "F-09", "F-15a", "F-15b"]
+    # A code key is a feature's, and taken once.
+    for body in ({"type": "goal", "key": "F-30", "title": "Grow more"},
+                 {"type": "feature", "key": "F-09", "title": "Team invites 2"},
+                 {"type": "feature", "key": "F-31X", "title": "Odd"}):  # fmt: skip
+        r = await client.post("/v1/baseline/entities", json=body, headers=ctx.as_("owner"))
+        assert r.status_code in (409, 422), (body, r.text)
