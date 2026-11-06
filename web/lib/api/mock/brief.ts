@@ -66,9 +66,11 @@ export function daysInWords(text: string): string {
     const month = Number(m);
     const day = Number(d);
     const valid = month >= 1 && month <= 12 && day >= 1 && day <= new Date(Date.UTC(Number(y), month, 0)).getUTCDate();
-    return valid ? `${MONTHS[month - 1]} ${day}, ${Number(y)}` : all;
+    return valid ? heldTogether(`${MONTHS[month - 1]} ${day}, ${Number(y)}`) : all;
   });
 }
+/** A date's parts joined by no-break spaces, so it never wraps mid-date (export/render.py held_together, E-11). */
+export const heldTogether = (words: string) => words.replace(/ /g, "\u00a0");
 
 /** A goal's code and its name where the PRD names it, "**G2 (retention)**" (export/deck.py goal_names). */
 const GOAL_NAMED = /\b(G\d{1,3})\b\**\s*\(([A-Za-z][^()\n]{0,40})\)/g;
@@ -90,7 +92,9 @@ export function withGoalNames(body: string, names: Map<string, string>): string 
 // A section past what a slide holds goes on continuation slides, "Top risks (2 of 2)" (export/deck.py slide_pages).
 const SLIDE_LINES = 15;
 const LINE_CHARS = 95;
-type Unit = { text: string; cost: number; group: number; kind: "block" | "item" | "row"; header: string };
+// A piece of a unit longer than a slide carries the glue that joins it to the piece before it
+// when both land on one slide (" " within a line, "\n" between lines); "" otherwise.
+type Unit = { text: string; cost: number; group: number; kind: "block" | "item" | "row"; header: string; glue?: string };
 const lineCost = (text: string) =>
   text
     .replace(/\]\([^)]*\)/g, "]")
@@ -98,7 +102,82 @@ const lineCost = (text: string) =>
     .split("\n")
     .filter((l) => l.trim())
     .reduce((n, l) => n + Math.max(1, Math.ceil(l.trim().length / LINE_CHARS)), 0);
-function units(body: string): Unit[] {
+const SENTENCE_END = /(?<=[.!?])\s+(?=\S)/;
+/** Atoms ([glue, text]) packed into pieces each within room(i) by cost (export/deck.py _fill). */
+function fill(atoms: [string, string][], room: (i: number) => number, cost: (t: string) => number): [string, string][] {
+  const pieces: [string, string][] = [];
+  let glue = "";
+  let text = "";
+  for (const [g, atom] of atoms) {
+    if (!text) [glue, text] = [g, atom];
+    else if (cost(text + g + atom) > room(pieces.length)) {
+      pieces.push([glue, text]);
+      [glue, text] = [g, atom];
+    } else text += g + atom;
+  }
+  if (text) pieces.push([glue, text]);
+  return pieces;
+}
+/** A paragraph or list item longer than a slide, cut between sentences, else words (export/deck.py _prose_pieces). */
+function prosePieces(heading: string, text: string, group: number, kind: Unit["kind"], budget: number): Unit[] {
+  const lead = heading ? 1.5 : 0;
+  const cost = lineCost(text) + 0.4 + lead;
+  if (cost <= budget) return [{ text: heading + text, cost, group, kind, header: "" }];
+  const atoms: [string, string][] = [];
+  text.split("\n").forEach((line, n) =>
+    line.split(SENTENCE_END).forEach((sentence, m) => {
+      const glue = n === 0 && m === 0 ? "" : m ? " " : "\n";
+      if (lineCost(sentence) + 0.4 + lead > budget) sentence.split(" ").forEach((w, k) => atoms.push([k === 0 ? glue : " ", w]));
+      else atoms.push([glue, sentence]);
+    }),
+  );
+  return fill(atoms, (i) => budget - 0.4 - (i === 0 ? lead : 0), lineCost).map(([glue, piece], i) => ({
+    text: (i === 0 ? heading : "") + piece,
+    cost: lineCost(piece) + 0.4 + (i === 0 ? lead : 0),
+    group,
+    kind: i === 0 || glue === "\n" ? kind : "block",
+    header: "",
+    glue,
+  }));
+}
+/** A code block longer than a slide, cut between lines, each piece fenced again (export/deck.py _code_pieces). */
+function codePieces(heading: string, lines: string[], group: number, budget: number): Unit[] {
+  const lead = heading ? 1.5 : 0;
+  if (lines.length + 0.4 + lead <= budget) return [{ text: heading + lines.join("\n"), cost: lines.length + 0.4, group, kind: "block", header: "" }];
+  const opener = lines[0];
+  const fenceChars = /^\s*(```|~~~)/.exec(opener)![1];
+  const closed = lines.length > 1 && /^\s*(```|~~~)/.test(lines[lines.length - 1]);
+  const inner = closed ? lines.slice(1, -1) : lines.slice(1);
+  const closer = closed ? lines[lines.length - 1] : fenceChars;
+  const out: Unit[] = [];
+  for (let i = 0; i < inner.length || !out.length; ) {
+    const room = Math.max(1, Math.floor(budget - 2.4 - (out.length ? 0 : lead)));
+    const part = [opener, ...inner.slice(i, i + room), closer];
+    out.push({ text: (out.length ? "" : heading) + part.join("\n"), cost: part.length + 0.4 + (out.length ? 0 : lead), group, kind: "block", header: "" });
+    i += room;
+  }
+  return out;
+}
+/** A table row longer than a slide as rows that each fit, each cell's text cut in turn (export/deck.py _row_pieces). */
+function rowPieces(lead: string, row: string, extra: number, width: number, group: number, header: string, budget: number): Unit[] {
+  const cells = row.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+  const room = Math.min(Math.max(1, Math.floor((budget - extra) / 1.2)), Math.max(1, Math.floor(budget / 1.2))) * width;
+  const cut = (cell: string): string[] => {
+    let atoms: [string, string][] = cell.split(SENTENCE_END).map((a, k) => [k ? " " : "", a]);
+    if (atoms.some(([, a]) => a.length > room)) atoms = cell.split(" ").map((w, k) => [k ? " " : "", w]);
+    const pieces = fill(atoms, () => room, (t) => t.length).map(([, p]) => p);
+    return pieces.length ? pieces : [""];
+  };
+  const parts = cells.map(cut);
+  const count = Math.max(...parts.map((p) => p.length));
+  return Array.from({ length: count }, (_, r) => {
+    const texts = parts.map((p) => p[r] ?? "");
+    const longest = Math.max(0, ...texts.map((t) => t.length));
+    const cost = 1.2 * Math.max(1, Math.ceil(longest / width)) + (r === 0 ? extra : 0);
+    return { text: (r === 0 ? lead : "") + `| ${texts.join(" | ")} |`, cost, group, kind: "row" as const, header };
+  });
+}
+function units(body: string, budget = SLIDE_LINES): Unit[] {
   const out: Unit[] = [];
   const lines = body.split("\n");
   let group = 0;
@@ -114,8 +193,7 @@ function units(body: string): Unit[] {
     } else if (fence(line)) {
       let j = i + 1;
       while (j < lines.length && !fence(lines[j])) j++;
-      const text = lines.slice(i, j + 1).join("\n");
-      out.push({ text: heading + text, cost: j + 1 - i + 0.4, group, kind: "block", header: "" });
+      out.push(...codePieces(heading, lines.slice(i, j + 1), group, budget));
       heading = "";
       i = j + 1;
       group++;
@@ -132,8 +210,12 @@ function units(body: string): Unit[] {
       const cols = Math.max(1, rows[0].trim().replace(/^\||\|$/g, "").split("|").length);
       rows.slice(head.length).forEach((row, k) => {
         const longest = Math.max(0, ...row.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim().length));
-        const cost = 1.2 * Math.max(1, Math.ceil(longest / Math.max(1, Math.floor(LINE_CHARS / cols)))) + (k === 0 && header ? 1.2 : 0);
-        out.push({ text: (k === 0 && header ? heading + header + "\n" : "") + row, cost, group, kind: "row", header });
+        const width = Math.max(1, Math.floor(LINE_CHARS / cols));
+        const extra = k === 0 && header ? 1.2 : 0;
+        const cost = 1.2 * Math.max(1, Math.ceil(longest / width)) + extra;
+        const lead = k === 0 && header ? heading + header + "\n" : "";
+        if (cost <= budget) out.push({ text: lead + row, cost, group, kind: "row", header });
+        else out.push(...rowPieces(lead, row, extra, width, group, header, budget));
         heading = "";
       });
       i = j;
@@ -143,8 +225,7 @@ function units(body: string): Unit[] {
       const kind = item(line) ? "item" : "block";
       if (kind === "item") while (j < lines.length && lines[j].trim() && /^\s/.test(lines[j])) j++;
       else while (j < lines.length && lines[j].trim() && !/^\s*[|#]/.test(lines[j]) && !item(lines[j]) && !fence(lines[j])) j++;
-      const text = lines.slice(i, j).join("\n");
-      out.push({ text: heading + text, cost: lineCost(text) + 0.4 + (heading ? 1.5 : 0), group, kind, header: "" });
+      out.push(...prosePieces(heading, lines.slice(i, j).join("\n"), group, kind, budget));
       heading = "";
       i = j;
     }
@@ -171,20 +252,21 @@ function join(page: Unit[]): string {
   for (const u of page) {
     let text = u.text;
     if (!prev && u.kind === "row" && u.header && !text.includes(u.header)) text = `${u.header}\n${text}`;
-    if (prev) out += prev.group === u.group && u.kind === prev.kind && u.kind !== "block" ? "\n" : "\n\n";
+    if (prev && u.glue) out += u.glue;
+    else if (prev) out += prev.group === u.group && u.kind === prev.kind && u.kind !== "block" ? "\n" : "\n\n";
     out += text;
     prev = u;
   }
   return out;
 }
 export function slidePages(body: string, budget = SLIDE_LINES): string[] {
-  const us = units(body);
+  const us = units(body, budget);
   const total = us.reduce((n, u) => n + u.cost, 0);
   if (total <= budget || us.length < 2) return [body];
   const count = pack(us, budget).length;
   let even = Math.max(total / count, ...us.map((u) => u.cost));
   let pages = pack(us, even);
-  while (pages.length > count) pages = pack(us, (even += 0.5));
+  while (pages.length > count) pages = pack(us, (even = Math.min(even + 0.5, budget)));
   return pages.filter((p) => p.length).map(join);
 }
 
@@ -314,7 +396,8 @@ function momentInWords(at: string): string {
       .formatToParts(new Date(at))
       .map((x) => [x.type, x.value]),
   );
-  return `${p.month} ${p.day}, ${p.year}, ${p.hour}:${p.minute} ${p.dayPeriod} ${p.timeZoneName}`;
+  // Each part held on one line (E-11): "Oct 18, 2026," then "1:30 AM PDT".
+  return `${heldTogether(`${p.month} ${p.day}, ${p.year}`)}, ${heldTogether(`${p.hour}:${p.minute} ${p.dayPeriod} ${p.timeZoneName}`)}`;
 }
 
 export function deckOut(d: DeckInput): Schemas["DeckOut"] {
@@ -366,7 +449,9 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
       [slideBody(s.body_md), ...rest.map((x) => `### ${x.heading}\n\n${slideBody(x.body_md)}`)].join("\n\n"),
       goals,
     );
-    const pages = slidePages(whole);
+    // As the API: a spec part's state label takes two lines of the slide (export/deck.py build_deck).
+    const states = (s as { spec_states?: { label: string }[] }).spec_states ?? [];
+    const pages = slidePages(whole, SLIDE_LINES - (states.length ? 2 : 0));
     pages.forEach((body, p) => {
     const heading = daysInWords(s.heading) + (pages.length > 1 ? ` (${p + 1} of ${pages.length})` : "");
     raw.push({
@@ -374,6 +459,7 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
       kind: "section",
       heading,
       section_key: s.section_key,
+      ...(states.length ? { state: states[0].label } : {}),
       notes: p === 0 && notes.length ? daysInWords(notes.join("\n\n")) : null,
       expand: [...new Set(linked(body))]
         .filter((k) => detail.has(k))

@@ -3738,6 +3738,15 @@ function load(): Db {
     const carts = db.documents.find((d) => d.slug === "saved-carts");
     if (carts) carts.title = "Saved carts for returning buyers PRD";
   }
+  // PR 1300 review: saved-carts v2's Problem is one paragraph longer than a slide (E-9).
+  if (scenario === "long-paragraph") {
+    const carts = db.documents.find((d) => d.slug === "saved-carts");
+    const problem = carts && docVersions(db, carts).find((v) => v.number === 2)?.sections.find((s) => s.section_key === "problem");
+    if (problem) {
+      problem.body_md = Array.from({ length: 30 }, (_, i) => `Sentence ${i + 1} says the saved cart for returning buyers keeps its items for thirty days.`).join(" ");
+      problem.body_text = problem.body_md;
+    }
+  }
   if (scenario === BLOCKER_NARROWED_SCENARIO) narrowResolvedBlocker(ensureBlockers(db), ensureV2(db));
   // #347 "held-section-gone": a second held rewrite, of a section the latest version no longer has.
   if (scenario === "held-section-gone") {
@@ -7322,7 +7331,13 @@ function exportRoute(db: Db, doc: DocumentRow, v: VersionRow, sub: string | unde
   if (sub === "deck" || (sub === "export" && (q.get("layer") ?? "full") !== "full")) {
     if (!v.sections.some((s) => s.layer === "brief")) {
       const kind = ({ prd: "PRD", pricing: "pricing memo" } as Record<string, string>)[doc.kind ?? "prd"] ?? doc.kind ?? "document";
-      return json(422, { detail: `Version ${v.number} of ${doc.title} has no brief: export the full ${kind} instead.` });
+      // Present mode (the deck route) does not speak of exporting (export/render.py apply_layer).
+      return json(422, {
+        detail:
+          sub === "deck"
+            ? `Version ${v.number} of ${doc.title} has no brief to present: open the full ${kind} instead.`
+            : `Version ${v.number} of ${doc.title} has no brief: export the full ${kind} instead.`,
+      });
     }
   }
   if (sub === "deck") {

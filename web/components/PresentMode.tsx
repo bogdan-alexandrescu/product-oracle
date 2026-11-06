@@ -162,7 +162,8 @@ const PRESENT_CSS = `.deck .slide-number{display:none}`;
 
 /**
  * qa-docs-10: a phone's slide fills the screen's width and height (portrait) at reading size;
- * long content scrolls inside the slide. After the theme's CSS, so it wins.
+ * long content scrolls inside the slide. After the theme's CSS, so it wins. A table's cells
+ * wrap their words so its last column stays on the slide (PR 1300 review).
  */
 const PHONE_CSS = `:host{height:100%}
 .deck{height:100%}
@@ -175,6 +176,7 @@ const PHONE_CSS = `:host{height:100%}
 .deck .slide-source,.deck .slide-sources{font-size:15px !important}
 .deck .slide-body table{font-size:14px !important}
 .deck .slide-body th{font-size:13px !important}
+.deck .slide-body th,.deck .slide-body td{padding:6px 5px !important;overflow-wrap:anywhere}
 .deck .expand{font-size:13px !important}
 .deck .slide-footer{left:18px !important;right:18px !important;bottom:14px !important;font-size:13px !important;line-height:1.35}`;
 
