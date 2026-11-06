@@ -202,7 +202,8 @@ for (const size of SIZES) {
       const log = page.getByTestId("delivery-log").filter({ visible: true });
       await expect(log.getByLabel("Status")).toBeVisible();
       await expect(log.getByLabel("Event")).toBeVisible();
-      await expect(log).toContainText("Times are in Company time.");
+      await expect(log).not.toContainText("Times are in Company time");
+      await expect(page.getByRole("button", { name: "About the delivery log" }).filter({ visible: true })).toBeVisible();
       await expect(log.getByRole("table")).toHaveCount(0);
       const cards = log.getByTestId("delivery-cards").getByTestId("delivery-row");
       await expect(cards.first()).toBeVisible();

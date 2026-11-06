@@ -187,7 +187,7 @@ test("webhooks: an owner sees who made each, turns on owners-and-approvers conte
   await expect(log.getByRole("columnheader")).toHaveCount(0);
   await expect(log.getByRole("list", { name: "Delivery log" })).toBeVisible();
   await expect(log.getByTestId("delivery-row").first().getByTestId("delivery-http")).toHaveText("Server answered with an error");
-  await expect(log).toContainText("Times are in Company time");
+  await expect(inspector.getByRole("button", { name: "About the delivery log" })).toBeVisible();
   await inspector.getByLabel("Status").selectOption("failed");
   await expect(inspector.getByTestId("delivery-row")).toHaveCount(2);
   await inspector.getByRole("button", { name: "Take over" }).click();

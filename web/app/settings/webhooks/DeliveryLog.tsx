@@ -63,7 +63,6 @@ export function DeliveryLog({ hook, eventTypes, version, onChanged }: { hook: We
           </select>
         </Field>
       </div>
-      <p className="text-[13px] leading-[18px] text-text2">Times are in Company time.</p>
       {q.error ? (
         <LoadError what="the deliveries" error={q.error} onRetry={() => void q.reload()} />
       ) : (
