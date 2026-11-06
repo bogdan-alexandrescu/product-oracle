@@ -120,6 +120,8 @@ test.describe("desktop", () => {
 
   test("a commenter's card starts at its own padding (qa4-simple-prd-21)", async ({ page }) => {
     await openFromList(page, "Saved carts PRD", COMMENTER);
+    // The contents row grows when the whole PRD's tabs arrive: measure once the page is whole.
+    await expect(page.getByTestId("prd-whole")).toBeVisible();
     const card = (await page.getByRole("article", { name: "One-pager" }).boundingBox())!;
     const first = (await page.getByRole("region", { name: "Problem and who has it" }).boundingBox())!;
     expect(first.y - card.y).toBeLessThan(36);
