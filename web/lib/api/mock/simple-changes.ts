@@ -57,6 +57,8 @@ import {
   readDates,
   roadmapGoal,
   roadmapGoalKey,
+  goalInTrash,
+  writeRoadmapGoal,
   seesDraft,
   settleDrafting,
   simpleWindows,
@@ -209,8 +211,8 @@ const TARGETS: Record<string, { id: string; adds?: boolean }> = {
 
 /** targets.py goal_measure: the goal's measure, target and date as the roadmap read shows them. */
 function goalMeasure(db: SimpleDb, goalId: unknown): Values | null {
-  const k = roadmapGoalKey(String(goalId ?? ""));
-  if (!k) return null;
+  const k = roadmapGoalKey(String(goalId ?? ""), db);
+  if (!k || goalInTrash(db, k)) return null;
   const g = roadmapGoal(db, k);
   return { measure: g.metric, target: g.target, due: g.due };
 }
@@ -349,7 +351,7 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
     else if (f === "draft") out[f] = !!s.draft;
     else if (f === "confidence") out[f] = s.confidence ?? null;
     else if (f === "track_id") out[f] = s.track ? stableUuid(`simple-track/${s.track}`) : null;
-    else if (f === "goal_id") out[f] = s.goal ? stableUuid(`simple-goal/${s.goal}`) : null;
+    else if (f === "goal_id") out[f] = s.goal && !goalInTrash(db, s.goal) ? stableUuid(`simple-goal/${s.goal}`) : null;
     else if (f === "prd_document_id") out[f] = ownPrd(s).id;
     else if (f === "depends_on") out[f] = [...(s.depends ?? [])];
     else if (f === "status") out[f] = s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned");
@@ -635,8 +637,8 @@ function writeTarget(db: SimpleDb, c: Change, values: Values, undo = false): voi
   const id = String(c.target[spec.id]);
   const targets = (db.targets ??= {});
   if (c.op === "set_goal_measure") {
-    const k = roadmapGoalKey(id)!;
-    (db.goal_edits ??= {})[k] = { title: roadmapGoal(db, k).title, metric: (values.measure as string | null) ?? null, target: (values.target as string | null) ?? null, due: (values.due as string | null) ?? null };
+    const k = roadmapGoalKey(id, db)!;
+    writeRoadmapGoal(db, k, { title: roadmapGoal(db, k).title, metric: (values.measure as string | null) ?? null, target: (values.target as string | null) ?? null, due: (values.due as string | null) ?? null });
     return;
   }
   if (spec.adds && undo) delete targets[id];
@@ -983,7 +985,7 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       const f = fields[0];
       const v = a[f] ?? null;
       const known = (x: (typeof seen.items)[number]) => read(seen, x.key, [f], target)[f];
-      if (v !== null && !seen.items.some((x) => known(x) === v) && !(f === "goal_id" && Object.keys(GOALS).some((k) => goalId(k) === v))) return json(422, { detail: `after.${f}: ${{ track_id: "a product track", prd_document_id: "a PRD", goal_id: "a goal" }[f]}` });
+      if (v !== null && !seen.items.some((x) => known(x) === v) && !(f === "goal_id" && Object.keys(GOALS).some((k) => goalId(k) === v && !goalInTrash(seen, k)))) return json(422, { detail: `after.${f}: ${{ track_id: "a product track", prd_document_id: "a PRD", goal_id: "a goal" }[f]}` });
       after = { [f]: v };
     } else if (body.op === "set_depends") {
       const keys = a.depends_on;

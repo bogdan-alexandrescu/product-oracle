@@ -268,6 +268,15 @@ export function sendCardChanged(): void {
   if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(CARD_CHANGED_EVENT));
 }
 
+/** one-feature-panel: a feature panel changed a goal (its measure, target or date, or the item's goal): the goal buckets read again. */
+export const GOAL_CHANGED_EVENT = "simple:goal-changed";
+/** The changes that move a goal: the item's goal, and how its goal is measured. */
+export const GOAL_OPS: readonly string[] = ["set_goal", "set_goal_measure"];
+
+export function sendGoalChanged(): void {
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(GOAL_CHANGED_EVENT));
+}
+
 export function sendApplied(itemId: string): void {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent<AppliedDetail>(APPLIED_EVENT, { detail: { item_id: itemId } }));

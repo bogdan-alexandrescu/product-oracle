@@ -10,12 +10,15 @@ import { errorMessage } from "@/lib/use-query";
  * trash-features-goals: a roadmap feature's Delete from its row (the Gantt or Timeline row's
  * context menu, the Priorities row's ⋯). It goes to Settings › Trash, never deleted for good
  * here; the note's Undo restores it with its links, goal and milestone. Shown to who decides
- * on the feature (its own `can_decide`, or a Priorities row's `applies`).
+ * on the feature (its own `can_decide`, or a Priorities row's `applies`). `onGone`: the feature
+ * went to Trash (the page closes its panel).
  */
-export function useFeatureDelete(reload: () => Promise<unknown>, toast: (ask: ToastAsk) => void = dsToast) {
+export function useFeatureDelete(reload: () => Promise<unknown>, toast: (ask: ToastAsk) => void = dsToast, onGone?: (id: string) => void) {
   return async (f: { id: string; title: string }): Promise<void> => {
     try {
       const out = await unwrap(api.DELETE("/v1/simple/roadmap/items/{item_id}", { params: { path: { item_id: f.id } } }));
+      // In Trash: its panel, if open, closes with it.
+      if (out.entry) onGone?.(f.id);
       await reload();
       if (!out.entry) {
         toast({ message: `Sent: delete ${f.title}. Its decider decides.` });

@@ -753,7 +753,6 @@ export function FloatingCard({
               >
                 Rename
               </button>
-              {/* The next round's Delete (to Trash) goes here. */}
             </div>
           )}
         </div>

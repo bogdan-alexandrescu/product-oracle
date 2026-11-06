@@ -164,7 +164,6 @@ export function Priorities() {
   const mayChange = capsReady && can("create_simple_change") && !!data?.can_change;
   // S7: Oracle's suggested features under each goal bucket (an accept adds a draft here).
   const suggestions = useGoalSuggestions(() => q.reload());
-  const removeFeature = useFeatureDelete(q.reload);
   // The item just moved (dragged, re-estimated or moved with the keys) and its rank before, kept
   // until the next move or leaving the page: highlighted with "moved #a → #b".
   const [moved, setMoved] = useState<Moved | null>(null);
@@ -213,6 +212,8 @@ export function Priorities() {
   const blank = !!data && !data.rows.length && !data.drafts.length && !data.proposals.length;
   const hasGoals = (suggestions.data?.goals.length ?? 0) > 0;
   const [rowOpen, setRowOpen] = useState<Row | null>(null);
+  // A feature deleted from its row closes its panel, if open.
+  const removeFeature = useFeatureDelete(q.reload, undefined, (id) => setRowOpen((r) => (r?.item_id === id ? null : r)));
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 text-[length:var(--simple-text)] leading-[var(--simple-leading)] text-text" data-testid="simple-priorities">
@@ -1933,12 +1934,13 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
             {rec && editingGoal === rec.id ? (
               <GoalForm
                 start={{ title: rec.title, measure: rec.measure ?? "", target: rec.target ?? "", due: dayOf(rec.due, year), owner: rec.owner_id ?? null }}
+                goal={rec}
                 order={rec.order}
                 title="Edit goal"
                 year={year}
                 onCancel={() => setEditingGoal(null)}
-                onSave={async (f) => {
-                  if (await writes.edit(rec, f, year)) setEditingGoal(null);
+                onSave={async (f, seen) => {
+                  if (await writes.edit(rec, f, year, seen)) setEditingGoal(null);
                 }}
               />
             ) : (
@@ -2107,12 +2109,13 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
               {rec && editing === rec.id ? (
                 <GoalForm
                   start={{ title: rec.title, measure: rec.measure ?? "", target: rec.target ?? "", due: dayOf(rec.due, year), owner: rec.owner_id ?? null }}
+                  goal={rec}
                   order={rec.order}
                   title="Edit goal"
                   year={year}
                   onCancel={() => setEditing(null)}
-                  onSave={async (f) => {
-                    if (await writes.edit(rec, f, year)) setEditing(null);
+                  onSave={async (f, seen) => {
+                    if (await writes.edit(rec, f, year, seen)) setEditing(null);
                   }}
                 />
               ) : (

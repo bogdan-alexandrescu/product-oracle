@@ -6,6 +6,8 @@ links, the same records Baseline edits.
   measure, target and date) and each feature's goal links, the one it moves most first.
 - ``POST /v1/simple/goal-buckets/goals``: approver and up; a new goal (measure, target
   and date all needed). ``PATCH .../goals/{id}``: the same people; edit one.
+  With ``seen`` (the name, measure, target and date as the form read them), a goal
+  changed since is refused with 409.
 - ``POST .../goals/{id}/archive``: archive a goal; features that serve another goal too
   keep it (now first), the rest go to ``to_goal_id`` or are left with no goal.
 - ``POST .../features/{id}/move``: the feature's first goal link becomes ``to_goal_id``;
@@ -83,6 +85,15 @@ class GoalBucketsOut(BaseModel):
     asks_to: list[str] = Field(default_factory=list)
 
 
+class GoalSeen(BaseModel):
+    """The goal's fields as the edit form read them when it opened."""
+
+    title: str | None = None
+    measure: str | None = None
+    target: str | None = None
+    due: date | None = None
+
+
 class GoalIn(BaseModel):
     title: Line
     measure: Line
@@ -90,6 +101,11 @@ class GoalIn(BaseModel):
     due: date
     # A member; left out, the owner stays as it was; null clears it.
     owner_id: uuid.UUID | None = None
+    # The goal as the form read it (edit only): a goal changed since is refused with 409.
+    seen: GoalSeen | None = None
+
+
+GOAL_CHANGED = "This goal changed since you opened it. Look again and save."
 
 
 class GoalLinkSnap(BaseModel):
@@ -327,6 +343,17 @@ def _fields(g: Entity, body: GoalIn) -> None:
     g.attrs = attrs
 
 
+def _changed_since(g: Entity, seen: GoalSeen) -> bool:
+    """Whether the goal's name, measure, target or date differ from what the form read."""
+
+    def norm(v: Any) -> Any:
+        return (" ".join(v.split()) or None) if isinstance(v, str) else v
+
+    now = _goal_out(g, 1, True)
+    fields = ("title", "measure", "target", "due")
+    return any(norm(getattr(now, f)) != norm(getattr(seen, f)) for f in fields)
+
+
 def _goal_snap(g: Entity) -> GoalSnap:
     return GoalSnap(id=g.id, title=g.title, status=g.status, attrs=dict(g.attrs or {}))
 
@@ -404,6 +431,8 @@ async def update_bucket_goal(
 ) -> GoalBucketWrite:
     """Edit a goal's name, measure, target and date (its order stays Baseline's)."""
     g = await _entity(db, goal_id, "goal")
+    if body.seen is not None and _changed_since(g, body.seen):
+        raise HTTPException(status.HTTP_409_CONFLICT, GOAL_CHANGED)
     undo = GoalBucketsUndo(goals=[_goal_snap(g)])
     await _check_owner(db, body)
     _fields(g, body)
@@ -421,14 +450,21 @@ async def move_off(db: AsyncSession, g: Entity, to_goal_id: uuid.UUID | None) ->
     held = sorted({e.src_id for e in await _links(db) if e.dst_id == g.id})
     before = await _snap(db, held)
     for snap in before:
-        first_here = bool(snap.links) and snap.links[0].goal_id == g.id
-        rest = [lk for lk in snap.links if lk.goal_id != g.id]
-        if first_here and rest:
-            rest = [GoalLinkSnap(goal_id=rest[0].goal_id, contribution=TOP), *rest[1:]]
-        elif first_here and to_goal_id is not None:
-            rest = [GoalLinkSnap(goal_id=to_goal_id, contribution=TOP)]
-        await _set_links(db, snap.feature_id, rest)
+        await _set_links(db, snap.feature_id, moved_off_links(snap, g.id, to_goal_id))
     return before
+
+
+def moved_off_links(
+    snap: FeatureSnap, goal_id: uuid.UUID, to_goal_id: uuid.UUID | None
+) -> list[GoalLinkSnap]:
+    """The feature's links once :func:`move_off` took them off ``goal_id``."""
+    first_here = bool(snap.links) and snap.links[0].goal_id == goal_id
+    rest = [lk for lk in snap.links if lk.goal_id != goal_id]
+    if first_here and rest:
+        return [GoalLinkSnap(goal_id=rest[0].goal_id, contribution=TOP), *rest[1:]]
+    if first_here and to_goal_id is not None:
+        return [GoalLinkSnap(goal_id=to_goal_id, contribution=TOP)]
+    return rest
 
 
 @router.post("/goals/{goal_id}/archive", response_model=GoalBucketWrite, name="archive_bucket_goal")

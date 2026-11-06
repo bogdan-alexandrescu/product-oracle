@@ -379,19 +379,26 @@ async def after_restore(
     db: AsyncSession, entry: TrashEntry, principal: Any = None
 ) -> list[dict[str, Any]]:
     """A feature back on its roadmap's current version (:func:`_onto_current`); a goal's
-    features' links as before its delete moved them, and each item's goal back where it
-    was, less the goal the delete added (``links``, ``goal_ids`` and ``to_goal_id`` on the
-    entry; none when nothing was moved): a goal given to the item since stays. Returns what
-    did not come back with it (a dependency no longer on the roadmap)."""
+    features' links as before its delete moved them (a feature whose goals changed since
+    keeps them), and each item's goal back where it was, less the goal the delete added
+    (``links``, ``goal_ids`` and ``to_goal_id`` on the entry; none when nothing was
+    moved): a goal given to the item since stays. Returns what did not come back with it
+    (a dependency no longer on the roadmap)."""
     from oracle.simple import goal_buckets
 
     if entry.root_type == "feature":
         return await _onto_current(db, entry, principal)
     if entry.root_type != "goal":
         return []
-    for snap in entry.root.get("links") or []:
-        await goal_buckets._restore_links(db, goal_buckets.FeatureSnap.model_validate(snap))
     to = uuid.UUID(entry.root["to_goal_id"]) if entry.root.get("to_goal_id") else None
+    for raw in entry.root.get("links") or []:
+        snap = goal_buckets.FeatureSnap.model_validate(raw)
+        # A feature whose goals changed since the delete (moved to another goal in the goal
+        # buckets) keeps them: only links still as the delete left them go back.
+        left = {lk.goal_id for lk in goal_buckets.moved_off_links(snap, entry.root_id, to)}
+        now = {e.dst_id for e in await goal_buckets._links(db, [snap.feature_id])}
+        if now == left:
+            await goal_buckets._restore_links(db, snap)
     for item_id, ids in (entry.root.get("goal_ids") or {}).items():
         row = await db.scalar(
             select(RoadmapItem).where(RoadmapItem.id == uuid.UUID(item_id))

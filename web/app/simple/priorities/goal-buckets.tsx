@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { storeGoalOrder } from "@/components/simple/GoalOrder";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { GOAL_CHANGED_EVENT, sendCardChanged } from "@/lib/api/simple-chat";
 import { calendarDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -36,7 +37,15 @@ export const bucketsKey = "simple-goal-buckets";
 
 /** The goals and links, for the buckets. */
 export function useGoalBuckets() {
-  return useQuery(bucketsKey, () => unwrap(api.GET("/v1/simple/goal-buckets")));
+  const q = useQuery(bucketsKey, () => unwrap(api.GET("/v1/simple/goal-buckets")));
+  // one-feature-panel: a goal changed in a feature panel reads again here, so Edit goal opens with it.
+  const { reload } = q;
+  useEffect(() => {
+    const on = () => void reload();
+    window.addEventListener(GOAL_CHANGED_EVENT, on);
+    return () => window.removeEventListener(GOAL_CHANGED_EVENT, on);
+  }, [reload]);
+  return q;
 }
 
 const same = (a: string, b: string) => goalLabel(a).name.toLowerCase() === goalLabel(b).name.toLowerCase();
@@ -116,8 +125,10 @@ function usePeople() {
 }
 
 /** GB1 a: the goal's header turned into a small form, right where it sits. */
-export function GoalForm({ start, order, title, year, onSave, onCancel }: { start: Fields; order: number; title: string; year: string; onSave: (f: Fields & { day: string }) => Promise<void>; onCancel: () => void }) {
+export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: { start: Fields; goal?: Goal; order: number; title: string; year: string; onSave: (f: Fields & { day: string }, seen?: Goal) => Promise<void>; onCancel: () => void }) {
   const [f, setF] = useState<Fields>(start);
+  // The goal as it read when the form opened: its save is refused if it changed since.
+  const [seen] = useState(goal);
   const [busy, setBusy] = useState(false);
   const day = parseDay(f.due, year);
   const done = !!(f.title.trim() && f.measure.trim() && f.target.trim() && day);
@@ -131,7 +142,7 @@ export function GoalForm({ start, order, title, year, onSave, onCancel }: { star
         if (!done || busy) return;
         setBusy(true);
         try {
-          await onSave({ ...f, day: day! });
+          await onSave({ ...f, day: day! }, seen);
         } finally {
           setBusy(false);
         }
@@ -613,6 +624,8 @@ export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note |
       setError(null);
       // The note shows with the page as the change left it, so its place is checked against that.
       await reload();
+      // An open feature panel reads its goal again.
+      sendCardChanged();
       setNote({ id: ++noteId, text, undo: out.undo });
       return true;
     } catch (e) {
@@ -623,9 +636,15 @@ export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note |
   return {
     add: (f: Fields & { day: string }, order: number) =>
       run(() => unwrap(api.POST("/v1/simple/goal-buckets/goals", { body: { title: f.title, measure: f.measure, target: f.target, due: f.day, ...(f.owner !== undefined ? { owner_id: f.owner } : {}) } })), <>Added {f.title.trim()} as goal {order}.</>),
-    edit: (g: Goal, f: Fields & { day: string }, year: string) =>
+    edit: (g: Goal, f: Fields & { day: string }, year: string, seen: Goal = g) =>
       run(
-        () => unwrap(api.PATCH("/v1/simple/goal-buckets/goals/{goal_id}", { params: { path: { goal_id: g.id } }, body: { title: f.title, measure: f.measure, target: f.target, due: f.day, ...(f.owner !== undefined ? { owner_id: f.owner } : {}) } })),
+        () =>
+          unwrap(
+            api.PATCH("/v1/simple/goal-buckets/goals/{goal_id}", {
+              params: { path: { goal_id: g.id } },
+              body: { title: f.title, measure: f.measure, target: f.target, due: f.day, ...(f.owner !== undefined ? { owner_id: f.owner } : {}), seen: { title: seen.title, measure: seen.measure ?? null, target: seen.target ?? null, due: seen.due ?? null } },
+            }),
+          ),
         <>
           Saved {f.title.trim()}: {lower(f.target.trim())} by {dayOf(f.day, year)}.
         </>,
@@ -700,6 +719,7 @@ export function useBucketWrites(reload: () => Promise<void>, setNote: (n: Note |
       try {
         await unwrap(api.POST("/v1/simple/goal-buckets/undo", { body: u }));
         await reload();
+        sendCardChanged();
         setNote({ id: ++noteId, text: <>Undone: every goal and link is back as it was.</> });
       } catch (e) {
         setError(errorMessage(e));

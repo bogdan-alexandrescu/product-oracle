@@ -9,7 +9,7 @@ import type { Schemas } from "@/lib/api/client";
 import { stableUuid } from "./ids";
 import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
 import { planGoalNames, planSlices } from "./simple-plan";
-import { GOALS, goalPositionOf, goalRank, roadmapGoal, roadmapGoalKey, type RoadmapGoalFields } from "./simple-roadmap";
+import { GOALS, goalPositionOf, goalRank, goalInTrash, roadmapGoal, roadmapGoalKey, roadmapGoalSeed, writeRoadmapGoal, type RoadmapGoalFields } from "./simple-roadmap";
 
 // trash-features-goals: `trashed` while in Settings › Trash (left out of every read, kept for Restore).
 // `key`: the Entity.key the API gives a goal at creation (goal_buckets._slug), named in its Trash entry.
@@ -102,7 +102,9 @@ export function seedGoalBucketsWith(
   const goalOf = (name: string): string => {
     let g = goals.find((x) => x.title.toLowerCase() === name.toLowerCase());
     if (!g) {
-      g = { id: stableUuid(`goal-bucket/${name}`), key: keyOf(name), title: name, order: goals.filter((x) => !x.archived).length + 1, measure: null, target: null, due: null, archived: false };
+      // One goal store: a roadmap goal's bucket starts from its measure, target and date.
+      const seed = roadmapGoalSeed(keyOf(name));
+      g = { id: stableUuid(`goal-bucket/${name}`), key: keyOf(name), title: name, order: goals.filter((x) => !x.archived).length + 1, measure: seed.metric, target: seed.target, due: seed.due, archived: false };
       goals.push(g);
     }
     return g.id;
@@ -278,7 +280,7 @@ export function trashGoal(db: GoalBucketsDb, bin: GoalBucketsTrash, id: string, 
       published: false, purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString(),
     },
     documents: [], versions: [], runs: [], intakes: [],
-    goal_links: before.map((f) => ({ id: f.id, goal_ids: f.goal_ids })),
+    goal_links: before.map((f) => ({ id: f.id, goal_ids: f.goal_ids, left: [...(db.features.find((x) => x.id === f.id)?.goal_ids ?? [])] })),
   };
   bin.trash.entries.push(row);
   return row;
@@ -343,27 +345,31 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
     return json(201, { goal: goalOut(g, people), undo: signed({ goals: [], features: [], added_goal_id: g.id }) });
   }
   if (p[3] === "goals" && p[4] && !p[5] && m === "PATCH") {
-    const g = db.goals.find((x) => x.id === p[4] && !x.archived);
-    // one-feature-panel: a roadmap item's goal is edited here too (the API's one goal entity).
-    const key = g ? null : roadmapGoalKey(p[4]);
-    if (key) {
-      const b = body as GoalIn;
-      if (!complete(b)) return json(422, { detail: "A goal needs a measure, a target and a date" });
-      const was = roadmapGoal(simple, key);
+    // one-feature-panel: a roadmap item's goal is edited here too, as its goal bucket when it has one (the API's one goal entity).
+    const key = roadmapGoalKey(p[4], simple);
+    // An archived goal, or one in Trash, is not edited (as the API).
+    const g = db.goals.find((x) => x.id === p[4] || (!!key && x.key === key));
+    const b = body as GoalIn & { seen?: { title?: string | null; measure?: string | null; target?: string | null; due?: string | null } | null };
+    if (g ? g.archived || g.trashed : !key || goalInTrash(simple, key)) return json(404, { detail: "No such goal" });
+    if (!complete(b)) return json(422, { detail: "A goal needs a measure, a target and a date" });
+    // goal_buckets._changed_since: the values the form read, when sent, must still be the goal's.
+    const was = g ? { title: g.title, metric: g.measure, target: g.target, due: g.due } : roadmapGoal(simple, key!);
+    const norm = (v: string | null | undefined) => (v ?? "").trim().replace(/\s+/g, " ") || null;
+    if (b.seen && (norm(b.seen.title) !== norm(was.title) || norm(b.seen.measure) !== norm(was.metric) || norm(b.seen.target) !== norm(was.target) || norm(b.seen.due) !== norm(was.due))) {
+      return json(409, { detail: "This goal changed since you opened it. Look again and save." });
+    }
+    if (!g) {
       const undo = signed({ goals: [{ id: p[4], title: was.title, status: "confirmed", attrs: { metric: was.metric, target_text: was.target, due: was.due } }], features: [], added_goal_id: null });
       const now = { title: b.title!.trim(), metric: b.measure!.trim(), target: b.target!.trim(), due: b.due! };
-      (simple.goal_edits ??= {})[key] = now;
+      writeRoadmapGoal(simple, key!, now);
       return json(200, { goal: { id: p[4], title: now.title, order: 1, measure: now.metric, target: now.target, due: now.due, can_edit: true }, undo });
     }
-    if (!g) return json(404, { detail: "No such goal" });
-    const b = body as GoalIn;
-    if (!complete(b)) return json(422, { detail: "A goal needs a measure, a target and a date" });
     const owner = ownerIn(b, people);
     if (!owner.ok) return json(422, { detail: "Pick a member as its owner" });
     const undo = signed({ goals: [goalSnap(g)], features: [], added_goal_id: null });
     Object.assign(g, { title: b.title!.trim(), measure: b.measure!.trim(), target: b.target!.trim(), due: b.due! });
     if (owner.set) g.owner_id = owner.id;
-    return json(200, { goal: goalOut(g, people), undo });
+    return json(200, { goal: { ...goalOut(g, people), id: p[4] }, undo });
   }
   if (p[3] === "goals" && p[5] === "archive" && m === "POST") {
     const undo = archiveGoal(db, p[4], (body.to_goal_id as string | null | undefined) ?? null, bin?.now() ?? new Date().toISOString());
@@ -391,8 +397,8 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
     for (const s of u.goals ?? []) {
       const g = db.goals.find((x) => x.id === s.id);
       const a = s.attrs as Record<string, string | number | null>;
-      const key = g ? null : roadmapGoalKey(s.id);
-      if (key) (simple.goal_edits ??= {})[key] = { title: s.title, metric: (a.metric as string | null) ?? null, target: (a.target_text as string | null) ?? null, due: (a.due as string | null) ?? null };
+      const key = g ? null : roadmapGoalKey(s.id, simple);
+      if (key) writeRoadmapGoal(simple, key, { title: s.title, metric: (a.metric as string | null) ?? null, target: (a.target_text as string | null) ?? null, due: (a.due as string | null) ?? null });
       if (!g) continue;
       Object.assign(g, { title: s.title, archived: s.status === "rejected", measure: a.metric ?? null, target: a.target_text ?? null, due: a.due ?? null, owner_id: a.owner ?? null, archived_at: a.archived_at ?? null });
     }

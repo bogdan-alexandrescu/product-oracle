@@ -343,11 +343,29 @@ const PLAN_GOALS: Record<string, string> = { growth: "Growth" };
 /** one-feature-panel: each goal's target and date (invented), as the goal edit reads them. */
 const TARGETS: Record<string, [string, string]> = { "grow-retention": ["70% of teams", "2027-03-31"], "faster-activation": ["2 days", "2027-02-26"], "quiet-alerts": ["Under 10% of teams", "2027-03-31"] };
 export type RoadmapGoalFields = { title: string; metric: string | null; target: string | null; due: string | null };
-/** A roadmap goal's key from its id (the goal edit takes either kind of goal, as the API's one goal entity). */
-export const roadmapGoalKey = (id: string): string | null => [...Object.keys(GOALS), ...Object.keys(PLAN_GOALS)].find((k) => stableUuid(`simple-goal/${k}`) === id) ?? null;
-/** The roadmap goal's fields as read: an edit, else its seed. */
-export const roadmapGoal = (db: Pick<SimpleDb, "goal_edits">, key: string): RoadmapGoalFields =>
-  db.goal_edits?.[key] ?? { title: GOALS[key] ?? PLAN_GOALS[key], metric: METRICS[key] ?? null, target: TARGETS[key]?.[0] ?? null, due: TARGETS[key]?.[1] ?? null };
+/** A goal's key from its id (the goal edit takes either kind of goal, as the API's one goal entity):
+ * a roadmap goal's, or a goal bucket's of that key. */
+export const roadmapGoalKey = (id: string, db?: Pick<SimpleDb, "goal_buckets">): string | null =>
+  [...Object.keys(GOALS), ...Object.keys(PLAN_GOALS), ...(db?.goal_buckets?.goals.filter((g) => !g.trashed).map((g) => g.key) ?? [])].find((k) => stableUuid(`simple-goal/${k}`) === id) ?? null;
+/** The goal bucket of a roadmap goal's key, not in Trash: the one goal both read and write. */
+const bucketGoalOf = (db: Pick<SimpleDb, "goal_buckets">, key: string) => db.goal_buckets?.goals.find((g) => g.key === key && !g.trashed);
+/** trash-features-goals: whether the goal of this key is in Trash (left out of every item's goal). */
+export const goalInTrash = (db: Pick<SimpleDb, "goal_buckets">, key: string): boolean =>
+  (db.goal_buckets?.goals ?? []).some((g) => g.trashed && (g.key === key || g.title.toLowerCase() === (GOALS[key] ?? PLAN_GOALS[key] ?? "").toLowerCase()));
+/** The seeded fields of a roadmap goal (a goal bucket of its key starts from them). */
+export const roadmapGoalSeed = (key: string): RoadmapGoalFields => ({ title: GOALS[key] ?? PLAN_GOALS[key], metric: METRICS[key] ?? null, target: TARGETS[key]?.[0] ?? null, due: TARGETS[key]?.[1] ?? null });
+/** The goal's fields as read: its goal bucket's (one goal store, as the API's one goal entity), else an edit, else its seed. */
+export const roadmapGoal = (db: Pick<SimpleDb, "goal_edits" | "goal_buckets">, key: string): RoadmapGoalFields => {
+  const b = bucketGoalOf(db, key);
+  if (b) return { title: b.title, metric: b.measure, target: b.target, due: b.due };
+  return db.goal_edits?.[key] ?? roadmapGoalSeed(key);
+};
+/** A goal's name, measure, target and date written where every page reads them: its goal bucket, else the roadmap goal's edit. */
+export function writeRoadmapGoal(db: Pick<SimpleDb, "goal_edits" | "goal_buckets">, key: string, fields: RoadmapGoalFields): void {
+  const b = bucketGoalOf(db, key);
+  if (b) Object.assign(b, { title: fields.title, measure: fields.metric, target: fields.target, due: fields.due });
+  else (db.goal_edits ??= {})[key] = fields;
+}
 export const goalId = (key: string): string => stableUuid(`simple-goal/${key}`);
 export const roadmapId = (slug: string): string => stableUuid(`simple-doc/${slug}`);
 // A new company has no roadmap yet (qa-shell-8: oracle.simple.service reads none).
@@ -1195,8 +1213,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     return code && (prdSlug === PLAN_PRD_SLUG || db.plan?.prds?.includes(prdSlug)) ? slices.filter((x) => x.feature_code === code) : [];
   };
   // trash-features-goals: a goal in Trash is left out of every item's goal (service.load's goal_ids).
-  const trashedGoals = (reader.full.goal_buckets?.goals ?? []).filter((g) => g.trashed);
-  const inTrash = (k: string) => trashedGoals.some((g) => g.key === k || g.title.toLowerCase() === (GOALS[k] ?? PLAN_GOALS[k] ?? "").toLowerCase());
+  const inTrash = (k: string) => goalInTrash(reader.full, k);
   const items: Item[] = seeds.map((s) => {
     const r = all.get(s.key)!.r;
     const rm = ROADMAPS[s.roadmap];
@@ -1208,7 +1225,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       code: prdCode(s.section),
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: s.roadmap, title: rm.title },
       prd: ownPrd(s),
-      goal: s.goal && !inTrash(s.goal) ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, ...roadmapGoal(db, s.goal), position: goalPositionOf(s.goal) } : null,
+      goal: s.goal && !inTrash(s.goal) ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, ...roadmapGoal(reader.full, s.goal), position: goalPositionOf(s.goal) } : null,
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
       confidence: s.confidence ?? null,
       status: s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned"),
