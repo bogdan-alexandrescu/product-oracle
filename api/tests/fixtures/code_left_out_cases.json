@@ -338,5 +338,7 @@
  "lead text\n-\n\t- lead text\n\t  \tmake carts\n- 1. lead text\n     - item text\n",
  "- \t- Some text\n  \t  more text\n\t- ```\n\t  make carts\n\t  ```\n",
  "- a\n-   \n\n    Title",
- "- a\n-   \n\n\t- Title\n\t  -----"
+ "- a\n-   \n\n\t- Title\n\t  -----",
+ "Steps to try:\n\n- Build the carts\n\t- Run:\n\t  ```\n\t  make carts\n\t  ```\n\t  Then wait a minute.\n-\n  ```\n  ship the carts\n  ```\n- then check\n\nAfter the steps.",
+ "Steps to try:\n\n-\t```\n\tmake carts\n\t```\n\tThen wait a minute.\n- then check\n\nThen ship:\n\n-\n  ```\n  ship the carts\n  ```\n- then tell support\n\nAfter the steps."
 ]

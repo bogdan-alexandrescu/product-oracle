@@ -4,7 +4,7 @@ const LIST_ITEM = /^( {0,3}(?:[-*+]|\d{1,9}[.)]))( +|\t|$)/;
 const BREAK = /^ {0,3}(?:(?:\* *){3,}|(?:- *){3,}|(?:_ *){3,})$/;
 const SETEXT = /^ {0,3}(?:=+|-+) *$/;
 const HEADING = /^ {0,3}#{1,6}(?:\s|$)/;
-// A list marker alone on its line: the code under it is that item's, so no line sets it apart.
+// A list marker alone on its line: code indented past it is that item's, on the marker's line.
 const BARE_ITEM = /^[ \t>]*(?:[-*+]|\d{1,9}[.)])[ \t]*$/;
 /**
  * A deck shows no code (owner, Nov 5): each code block, fenced or indented, found as CommonMark finds it (export/deck.py
@@ -30,13 +30,23 @@ export function codeLeftOut(body: string, href: string): string {
   const blank = (l: string) => !l.replace(/[ \t>]/g, "");
   const indentOf = (l: string) => /^ */.exec(l.replace(/^\t+/, (t) => "    ".repeat(t.length)))![0].length;
   const out: string[] = [];
+  const columns = (l: string) => {
+    let n = 0;
+    for (const c of l) n = c === "\t" ? n + 4 - (n % 4) : n + 1;
+    return n;
+  };
   const leaveOut = (n: number, prefix: string, end: number) => {
     // The line setting it apart continues the container: quote markers only, a list marker as spaces.
     const gap = prefix.replace(/[^>]/g, " ").trimEnd();
     const after = end < lines.length && !blank(lines[end]);
     if (n) {
-      if (out.length && !blank(out[out.length - 1]) && !BARE_ITEM.test(out[out.length - 1])) out.push(gap);
-      out.push(`${prefix}[Code: ${n} ${n === 1 ? "line" : "lines"}, in the full PRD](${href})`);
+      const text = `[Code: ${n} ${n === 1 ? "line" : "lines"}, in the full PRD](${href})`;
+      const last = out.length ? out[out.length - 1] : "";
+      if (BARE_ITEM.test(last) && columns(prefix) > columns(last.trimEnd())) out[out.length - 1] = `${last.trimEnd()} ${text}`;
+      else {
+        if (out.length && !blank(last)) out.push(gap);
+        out.push(prefix + text);
+      }
       if (after) out.push(gap);
     } else if (out.length && !blank(out[out.length - 1]) && after) out.push(gap);
   };

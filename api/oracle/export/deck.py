@@ -475,7 +475,7 @@ _CODE_LINK = re.compile(r'<a href="[^"]*">(Code: \d+ lines?, in the full PRD)</a
 # The parser the exports render with: code blocks are found as they are rendered.
 _CODE_MD = MarkdownIt("commonmark", {"html": False}).enable(["table", "strikethrough"])
 _NEWLINE = re.compile(r"\r\n?|\n")
-# A list marker alone on its line: the code under it is that item's, so no line sets it apart.
+# A list marker alone on its line: code indented past it is that item's, on the marker's line.
 _BARE_ITEM = re.compile(r"[ \t>]*(?:[-*+]|\d{1,9}[.)])[ \t]*")
 
 
@@ -511,10 +511,14 @@ def code_left_out(body: str, href: str) -> str:
         n = len(t.content.splitlines())
         after = end < len(lines) and not _blank(lines[end])
         if n:
-            if out and not _blank(out[-1]) and not _BARE_ITEM.fullmatch(out[-1]):
-                out.append(gap)
             text = CODE_LINE.format(n=n, lines="line" if n == 1 else "lines")
-            out.append(f"{prefix}[{text}]({href})")
+            bare = out and _BARE_ITEM.fullmatch(out[-1])
+            if bare and len(prefix.expandtabs(4)) > len(out[-1].rstrip().expandtabs(4)):
+                out[-1] = f"{out[-1].rstrip()} [{text}]({href})"
+            else:
+                if out and not _blank(out[-1]):
+                    out.append(gap)
+                out.append(f"{prefix}[{text}]({href})")
             if after:
                 out.append(gap)
         elif out and not _blank(out[-1]) and after:

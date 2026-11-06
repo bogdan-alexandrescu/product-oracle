@@ -3771,6 +3771,17 @@ function load(): Db {
       problem.body_text = problem.body_md;
     }
   }
+  // Round 5 ("code-in-lists"): a fence in a tab-indented list, and one under a list marker alone on its line.
+  if (scenario === "code-in-lists") {
+    const carts = db.documents.find((d) => d.slug === "saved-carts");
+    const problem = carts && docVersions(db, carts).find((v) => v.number === 2)?.sections.find((s) => s.section_key === "problem");
+    if (problem) {
+      problem.body_md =
+        "Steps to try:\n\n-\t```\n\tmake carts\n\t```\n\tThen wait a minute.\n- then check\n\n" +
+        "Then ship:\n\n-\n  ```\n  ship the carts\n  ```\n- then tell support\n\nAfter the steps.";
+      problem.body_text = problem.body_md;
+    }
+  }
   if (scenario === BLOCKER_NARROWED_SCENARIO) narrowResolvedBlocker(ensureBlockers(db), ensureV2(db));
   // #347 "held-section-gone": a second held rewrite, of a section the latest version no longer has.
   if (scenario === "held-section-gone") {

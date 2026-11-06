@@ -88,3 +88,31 @@ test("every kind of code block is one line, an empty one none", async ({ page })
   // Round 4: a fence opening on a list item's line is that item's one line; the next item stays, no bullet is blank.
   await expect(body.getByRole("listitem")).toHaveText(["Code: 1 line, in the full PRD", "then check"]);
 });
+
+// Round 5 (the mock's "code-in-lists" scenario): a fence in a tab-indented list item ends at its closing fence, the text
+// after it kept; a fence under a list marker alone on its line is that item's one line, never a blank bullet.
+test("code in a tab-indented list or under a bare marker is one line in its item", async ({ page }) => {
+  await page.addInitScript(([key]) => localStorage.setItem(key, "code-in-lists"), [MOCK_SCENARIO_KEY] as const);
+  await login(page);
+  await page.goto(SLIDE);
+  const counter = page.getByTestId("slide-counter");
+  await expect(counter).toHaveText(/^1 \/ \d+$/);
+  const total = Number((await counter.innerText()).split("/")[1]);
+  let problem = 0;
+  for (let n = 2; n <= total && !problem; n++) {
+    await page.getByRole("button", { name: "Next slide" }).click();
+    await expect(counter).toHaveText(`${n} / ${total}`);
+    if ((await current(page).locator(".slide-title").innerText()) === "Problem") problem = n;
+  }
+  expect(problem).toBeGreaterThan(0);
+  const body = current(page).locator(".slide-body");
+  await expect(body.getByRole("link", { name: /^Code: \d+ lines?, in the full PRD$/ })).toHaveText([
+    "Code: 1 line, in the full PRD",
+    "Code: 1 line, in the full PRD",
+  ]);
+  await expect(body).toContainText("Then wait a minute.");
+  await expect(body).toContainText("After the steps.");
+  for (const code of ["make carts", "ship the carts", "```"]) await expect(body).not.toContainText(code);
+  for (const item of await body.getByRole("listitem").all()) expect((await item.innerText()).trim()).not.toBe("");
+  await expect(body.getByRole("listitem")).toHaveText(["Code: 1 line, in the full PRD", "then check", "Code: 1 line, in the full PRD", "then tell support"]);
+});
