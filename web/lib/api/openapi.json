@@ -81056,6 +81056,17 @@
             },
             "type": "array",
             "title": "Choices"
+          },
+          "read_on": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read On"
           }
         },
         "type": "object",
@@ -81437,6 +81448,31 @@
           "proposed"
         ],
         "title": "GmMilestone"
+      },
+      "GmOffMap": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "name"
+        ],
+        "title": "GmOffMap",
+        "description": "A confirmed goal left off the map: it has no number to aim at yet."
       },
       "GmUnplaced": {
         "properties": {
@@ -82049,6 +82085,13 @@
             "type": "array",
             "title": "Unplaced"
           },
+          "off_map": {
+            "items": {
+              "$ref": "#/components/schemas/GmOffMap"
+            },
+            "type": "array",
+            "title": "Off Map"
+          },
           "today": {
             "type": "string",
             "title": "Today"
@@ -82089,6 +82132,7 @@
           "features",
           "gaps",
           "unplaced",
+          "off_map",
           "today",
           "reps",
           "approver",

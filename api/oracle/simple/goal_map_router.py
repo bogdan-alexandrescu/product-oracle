@@ -50,7 +50,7 @@ def _can_edit(principal: Principal) -> bool:
 
 async def _done(db: TenantDB, principal: Principal) -> GoalMapOut:
     await db.commit()
-    return await goal_map.build(db, _can_edit(principal))
+    return await goal_map.build(db, principal, _can_edit(principal))
 
 
 async def _run(db: TenantDB, principal: Principal, step) -> GoalMapOut:
@@ -69,7 +69,7 @@ async def _who(db: TenantDB, principal: Principal) -> str:
 
 @router.get("", response_model=GoalMapOut)
 async def get_goal_map(principal: Reader, db: TenantDB) -> GoalMapOut:
-    return await goal_map.build(db, _can_edit(principal))
+    return await goal_map.build(db, principal, _can_edit(principal))
 
 
 @router.post("/areas", response_model=GoalMapOut)

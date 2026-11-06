@@ -22,7 +22,10 @@ and the features serving them.
   with no value yet), with the output metrics in its unit a person may pick (``choices``).
   ``gaps``: each gated area of a milestone with no feature in its cell (a milestone with no
   area and no feature: area None). ``unplaced``: the Simple roadmap's features (not a draft,
-  cut or merged) serving no milestone of the map.
+  cut or merged) serving no milestone of the map, as the signed-in person reads it (the
+  working drafts they may see; never an item they cannot open). ``read_on``: the day of a
+  goal's latest reading, in words ("Nov 1"). ``off_map``: the confirmed goals with no number
+  to aim at (no numeric ``target``, not a guardrail), so a goal Home links to is never lost.
 - Why a feature helps: once it shipped (its ``shipped`` mark, else the day a launch with it
   launched), a link reads its goal before that day and since; helping when the reading
   rose. Without both readings it keeps its stored lift, and reads not measured while its
@@ -32,7 +35,7 @@ and the features serving them.
 import uuid
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -91,6 +94,8 @@ class GmGoal(BaseModel):
     missing: Literal["metric", "values"] | None
     # The live output metrics in its unit that give no other goal its value.
     choices: list[GmMetricChoice]
+    # The day of its latest reading, in words ("Nov 1"); None: no reading.
+    read_on: str | None = None
 
 
 class GmArea(BaseModel):
@@ -172,6 +177,14 @@ class GmUnplaced(BaseModel):
     name: str
 
 
+class GmOffMap(BaseModel):
+    """A confirmed goal left off the map: it has no number to aim at yet."""
+
+    id: uuid.UUID
+    key: str
+    name: str
+
+
 class GoalMapOut(BaseModel):
     goals: list[GmGoal]
     areas: list[GmArea]
@@ -180,6 +193,7 @@ class GoalMapOut(BaseModel):
     features: list[GmFeature]
     gaps: list[GmGap]
     unplaced: list[GmUnplaced]
+    off_map: list[GmOffMap]
     today: str
     reps: int | None
     # Who a proposed milestone is sent to for approval (the first owner by name).
@@ -278,7 +292,8 @@ def gate_status(
 
 
 async def _readings(db: AsyncSession, ids: list[uuid.UUID], today: date) -> dict:
-    """Per entity: its last 7 days (oldest first, None when not measured) and its latest.
+    """Per entity: its last 7 days (oldest first, None when not measured), its latest and the
+    latest's day.
     Loads only those: the 7 days' rows and each entity's latest row on or before today."""
     start = today - timedelta(days=6)
     gm = GoalMeasurement
@@ -294,14 +309,14 @@ async def _readings(db: AsyncSession, ids: list[uuid.UUID], today: date) -> dict
         .order_by(gm.entity_id, gm.measured_on.desc())
         .ext(distinct_on(gm.entity_id))
     )).all() if rest else []  # fmt: skip
-    out: dict[uuid.UUID, tuple[list[float | None], float | None]] = {
-        eid: ([None] * 7, None) for eid in ids
+    out: dict[uuid.UUID, tuple[list[float | None], float | None, date | None]] = {
+        eid: ([None] * 7, None, None) for eid in ids
     }
     for e, on, v in sorted([*older, *week], key=lambda r: r[1]):
-        days, _ = out[e]
+        days = out[e][0]
         if on >= start:
             days[(on - start).days] = float(v)
-        out[e] = (days, float(v))
+        out[e] = (days, float(v), on)
     return out
 
 
@@ -313,13 +328,24 @@ def _is_guardrail(e: Entity) -> bool:
     return bool((e.attrs or {}).get("guardrail"))
 
 
+def _measurable(g: Entity) -> bool:
+    return isinstance((g.attrs or {}).get("target"), int | float)
+
+
+async def _confirmed_goals(db: AsyncSession) -> list[Entity]:
+    return list(
+        (
+            await db.scalars(
+                select(Entity).where(Entity.type == "goal", Entity.status == "confirmed")
+            )
+        ).all()
+    )
+
+
 async def _goals(db: AsyncSession) -> list[Entity]:
     """The measurable goals in the one goal order, guardrail goals too (build() leaves them
     out of the goal cards)."""
-    rows = (
-        await db.scalars(select(Entity).where(Entity.type == "goal", Entity.status == "confirmed"))
-    ).all()
-    return sort_goals(g for g in rows if isinstance((g.attrs or {}).get("target"), int | float))
+    return sort_goals(g for g in await _confirmed_goals(db) if _measurable(g))
 
 
 async def _on_map(db: AsyncSession) -> list[TrackMilestone]:
@@ -420,10 +446,11 @@ async def _around(
     return _f(before), _f(after)
 
 
-async def _unplaced(db: AsyncSession, placed: set[uuid.UUID]) -> list[GmUnplaced]:
-    from oracle.simple import service
+async def _unplaced(db: AsyncSession, principal: Any, placed: set[uuid.UUID]) -> list[GmUnplaced]:
+    """As the signed-in person reads the Simple roadmap: the working drafts they may see."""
+    from oracle.simple import drafts, service
 
-    read = await service.load(db)
+    read = await service.load(db, await drafts.overlays_for(db, principal))
     out: dict[uuid.UUID, GmUnplaced] = {}
     for e in read.entries:
         if e.status in ("draft", "cut", "merged") or e.row.id in placed or e.row.id in out:
@@ -432,9 +459,10 @@ async def _unplaced(db: AsyncSession, placed: set[uuid.UUID]) -> list[GmUnplaced
     return list(out.values())
 
 
-async def build(db: AsyncSession, can_edit: bool) -> GoalMapOut:
+async def build(db: AsyncSession, principal: Any, can_edit: bool) -> GoalMapOut:
     today = company_time.today(await company_time.company_time_zone(db))
-    every = await _goals(db)
+    confirmed = await _confirmed_goals(db)
+    every = sort_goals(g for g in confirmed if _measurable(g))
     goals = [g for g in every if not _is_guardrail(g)]
     guard = next(
         (
@@ -451,13 +479,13 @@ async def build(db: AsyncSession, can_edit: bool) -> GoalMapOut:
         None,
     ) or next((g for g in every if _is_guardrail(g)), None)
     reads = await _readings(db, [g.id for g in goals] + ([guard.id] if guard else []), today)
-    goal_reads = {g.id: reads[g.id] for g in goals}
+    goal_reads = {g.id: reads[g.id][:2] for g in goals}
     metrics, last = await _metrics(db)
     tied = {m.goal_id: m for m in metrics if m.goal_id is not None}
     goal_out = []
     for g in goals:
         a = g.attrs or {}
-        days, current = reads[g.id]
+        days, current, read_on = reads[g.id]
         target = float(a["target"])
         source = tied.get(g.id)
         goal_out.append(
@@ -479,11 +507,12 @@ async def build(db: AsyncSession, can_edit: bool) -> GoalMapOut:
                     for m in metrics
                     if m.goal_id is None and _fits(m, g)
                 ],
+                read_on=_short(read_on),
             )
         )
     guardrail = None
     if guard is not None:
-        days, current = reads[guard.id]
+        days, current, _ = reads[guard.id]
         a = guard.attrs or {}
         if guard.type == "goal":
             # A guardrail goal holds while each day meets its own target.
@@ -610,7 +639,12 @@ async def build(db: AsyncSession, can_edit: bool) -> GoalMapOut:
         milestones=ms_out,
         features=list(feats.values()),
         gaps=gaps,
-        unplaced=await _unplaced(db, set(feats)),
+        unplaced=await _unplaced(db, principal, set(feats)),
+        off_map=[
+            GmOffMap(id=g.id, key=g.key, name=g.title)
+            for g in sort_goals(g for g in confirmed if not _measurable(g))
+            if not _is_guardrail(g)
+        ],
         today=company_time.calendar_day(today),
         reps=reps,
         approver=owner.name if owner else None,

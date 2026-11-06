@@ -189,7 +189,8 @@ async def test_goals_left_off_the_map(client):
     ctx, ids = await world()
     async with tenant_session(ctx.tenant_id) as s:
         loose = Entity(type="goal", key="raise-activation", title="Raise activation",
-                       status="confirmed", origin="user", attrs={"target_text": "up 10%"})  # fmt: skip
+                       status="confirmed", origin="user",
+                       attrs={"target_text": "up 10%"})  # fmt: skip
         s.add(loose)
         s.add(Entity(type="goal", key="maybe", title="Maybe later", status="proposed",
                      origin="user", attrs={"target_text": "some"}))  # fmt: skip

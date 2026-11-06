@@ -25758,6 +25758,8 @@ export interface components {
             missing: ("metric" | "values") | null;
             /** Choices */
             choices: components["schemas"]["GmMetricChoice"][];
+            /** Read On */
+            read_on?: string | null;
         };
         /** GmGuardrail */
         GmGuardrail: {
@@ -25877,6 +25879,21 @@ export interface components {
             confirmed_on: string | null;
             /** Proposed */
             proposed: boolean;
+        };
+        /**
+         * GmOffMap
+         * @description A confirmed goal left off the map: it has no number to aim at yet.
+         */
+        GmOffMap: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
         };
         /**
          * GmUnplaced
@@ -26093,6 +26110,8 @@ export interface components {
             gaps: components["schemas"]["GmGap"][];
             /** Unplaced */
             unplaced: components["schemas"]["GmUnplaced"][];
+            /** Off Map */
+            off_map: components["schemas"]["GmOffMap"][];
             /** Today */
             today: string;
             /** Reps */
