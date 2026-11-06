@@ -110,13 +110,13 @@ test("D-2: the Approvals chip opens the Inbox on approvals only", async ({ page 
   await expect(page.getByTestId("inbox-feedback")).toHaveCount(0);
   await expect(page.getByTestId("inbox-decisions")).toHaveCount(0);
   // The header counts that kind only, and what is not that kind (sources to fix) is hidden.
-  await expect(page.getByText(/^\d+ waiting$/)).toHaveText("3 waiting");
+  await expect(page.getByText(/^\d+ waiting$/).filter({ visible: true })).toHaveText("3 waiting");
   await expect(page.getByTestId("inbox-sources")).toHaveCount(0);
   // Show all brings the full count and the sources back.
   await page.getByTestId("inbox-kind").getByRole("link", { name: "Show all" }).click();
   await expect(page).toHaveURL(/\/inbox$/);
   await expect(page.getByTestId("inbox-sources")).toBeVisible();
-  await expect(page.getByText(/^\d+ waiting$/)).not.toHaveText("3 waiting");
+  await expect(page.getByText(/^\d+ waiting$/).filter({ visible: true })).not.toHaveText("3 waiting");
 });
 
 test.describe("at 1440", () => {

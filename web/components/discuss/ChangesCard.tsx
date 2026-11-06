@@ -267,7 +267,7 @@ function ChangeRow({ c, d, onDone }: { c: ChangeOut; d: Discussion; onDone: () =
                 {action.verb}
               </Button>
               {whyNot && (
-                <InfoTip id={whyId} label={`why you cannot ${action.verb.toLowerCase()}`} align="start">
+                <InfoTip id={whyId} label="why it is off" align="start">
                   {whyNot}
                 </InfoTip>
               )}

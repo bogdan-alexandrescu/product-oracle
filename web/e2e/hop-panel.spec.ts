@@ -19,13 +19,12 @@ import { login, openSection } from "./helpers";
  */
 
 
-/** D-4: at phone width, Stage is off with no reason line in the row; a tap on the (i) beside it
- * shows the reason, and Stage names that text in its aria-describedby. */
-async function expectWhyNot(page: Page, row: Locator, reason: string) {
-  await page.setViewportSize({ width: 390, height: 844 });
+/** D-4: Stage is off with no reason line in the row; a tap on the (i) beside it shows the
+ * reason, and Stage names that text in its aria-describedby. */
+async function expectWhyNot(row: Locator, reason: string) {
   await expect(row.getByTestId("change-why-not")).toHaveCount(0);
   await expect(row.getByText(reason)).toBeHidden();
-  await row.getByRole("button", { name: "About why you cannot stage" }).click();
+  await row.getByRole("button", { name: "About why it is off" }).tap();
   const tip = row.getByRole("tooltip");
   await expect(tip).toBeVisible();
   await expect(tip).toHaveText(reason);
@@ -123,46 +122,51 @@ test("the diff and publish pages are about their document, and a chat started th
   await expect(panel(page).getByTestId("discussion-thread")).toContainText("Checkout redesign PRD");
 });
 
-// Criterion 6: a section_edit Oracle proposes on a locked section cannot be staged, in G3's
-// card (the panel draws no card of its own).
-test("a change Oracle proposes on a locked section shows Stage disabled with the locked reason", async ({ page }) => {
-  await login(page, APPROVER);
-  await page.goto(LOCKED_DOC);
-  await openSection(page, "behaviour");
-  await strip(page).click();
-  await panel(page).getByRole("textbox", { name: "Ask Oracle" }).fill("Rewrite this section to name the alert threshold.");
-  await panel(page).getByRole("button", { name: "Send" }).click();
-  await expect(panel(page).getByTestId("oracle-reply").last()).toContainText(ANSWER_START);
-  await expect(panel(page).getByTestId("changes-card")).toHaveCount(1);
-  await expect(panel(page).getByTestId("hop-changes")).toHaveCount(0);
-  const change = changeRow(page);
-  await expect(change).toHaveCount(1);
-  await expect(change.getByTestId("change-label")).toContainText("Change behaviour");
-  await expect(change.getByTestId("change-by")).toHaveText("Proposed by Oracle");
-  const stage = change.getByRole("button", { name: "Stage" });
-  await expect(stage).toBeDisabled();
-  // D-4: the reason is behind an (i) beside Stage that opens on a tap at phone width, not a line in the row.
-  await expectWhyNot(page, change, "Section 1. Behaviour is approved and locked");
-});
+// D-4: on a phone (390, touch), through the header's Ask sheet.
+test.describe("on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 
-// c6 through G3's card: a commenter cannot stage, sees why, and suggests the change instead.
-test("a commenter cannot stage in the panel, sees why, and suggests the change", async ({ page }) => {
-  await login(page, COMMENTER);
-  await page.goto(DOC);
-  await openSection(page, "problem");
-  await strip(page).click();
-  await panel(page).getByRole("textbox", { name: "Ask Oracle" }).fill("Rewrite this section to name the drop-off measure.");
-  await panel(page).getByRole("button", { name: "Send" }).click();
-  await expect(panel(page).getByTestId("oracle-reply").last()).toHaveAttribute("data-status", "complete");
-  const change = changeRow(page);
-  await expect(change.getByTestId("change-label")).toContainText("Change problem");
-  const stage = change.getByRole("button", { name: "Stage" });
-  await expect(stage).toBeDisabled();
-  // D-4: the reason is behind an (i) beside Stage that opens on a tap at phone width; Stage names it for a screen reader.
-  await expectWhyNot(page, change, "Approvers stage changes. You can suggest it.");
-  await change.getByRole("button", { name: "Suggest" }).click();
-  await expect(change.getByTestId("change-by")).toHaveText("Suggested by Theo Brandt");
-  await expect(change.getByRole("button", { name: "Suggest" })).toHaveCount(0);
+  // Criterion 6: a section_edit Oracle proposes on a locked section cannot be staged, in G3's
+  // card (the panel draws no card of its own).
+  test("a change Oracle proposes on a locked section shows Stage disabled with the locked reason", async ({ page }) => {
+    await login(page, APPROVER);
+    await page.goto(LOCKED_DOC);
+    await openSection(page, "behaviour");
+    await page.getByTestId("phone-ask").tap();
+    await panel(page).getByRole("textbox", { name: "Ask Oracle" }).fill("Rewrite this section to name the alert threshold.");
+    await panel(page).getByRole("button", { name: "Send" }).click();
+    await expect(panel(page).getByTestId("oracle-reply").last()).toContainText(ANSWER_START);
+    await expect(panel(page).getByTestId("changes-card")).toHaveCount(1);
+    await expect(panel(page).getByTestId("hop-changes")).toHaveCount(0);
+    const change = changeRow(page);
+    await expect(change).toHaveCount(1);
+    await expect(change.getByTestId("change-label")).toContainText("Change behaviour");
+    await expect(change.getByTestId("change-by")).toHaveText("Proposed by Oracle");
+    const stage = change.getByRole("button", { name: "Stage" });
+    await expect(stage).toBeDisabled();
+    // D-4: the reason is behind an (i) beside Stage that opens on a tap at phone width, not a line in the row.
+    await expectWhyNot(change, "Section 1. Behaviour is approved and locked");
+  });
+
+  // c6 through G3's card: a commenter cannot stage, sees why, and suggests the change instead.
+  test("a commenter cannot stage in the panel, sees why, and suggests the change", async ({ page }) => {
+    await login(page, COMMENTER);
+    await page.goto(DOC);
+    await openSection(page, "problem");
+    await page.getByTestId("phone-ask").tap();
+    await panel(page).getByRole("textbox", { name: "Ask Oracle" }).fill("Rewrite this section to name the drop-off measure.");
+    await panel(page).getByRole("button", { name: "Send" }).click();
+    await expect(panel(page).getByTestId("oracle-reply").last()).toHaveAttribute("data-status", "complete");
+    const change = changeRow(page);
+    await expect(change.getByTestId("change-label")).toContainText("Change problem");
+    const stage = change.getByRole("button", { name: "Stage" });
+    await expect(stage).toBeDisabled();
+    // D-4: the reason is behind an (i) beside Stage that opens on a tap at phone width; Stage names it for a screen reader.
+    await expectWhyNot(change, "Approvers stage changes. You can suggest it.");
+    await change.getByRole("button", { name: "Suggest" }).click();
+    await expect(change.getByTestId("change-by")).toHaveText("Suggested by Theo Brandt");
+    await expect(change.getByRole("button", { name: "Suggest" })).toHaveCount(0);
+  });
 });
 
 // G3's Stage from the panel: a panel chat is private, so an approver's Stage asks for the reason
