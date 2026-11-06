@@ -1162,7 +1162,7 @@ def test_check_missing_and_duplicate_name_the_feature():
 # A goal a new feature serves, rejected between the order's check and Approve.
 STALE_GOAL = (
     "Bulk edit serves the goal Activation, which was rejected after the order was checked: "
-    "the run must name a goal of the baseline"
+    "the run must name a goal of the Ground Truth"
 )
 
 

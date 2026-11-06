@@ -35,7 +35,7 @@ from oracle.runs.service import CHECKPOINT_TITLES
 FAILED_DAYS = 7
 # What the person at a stop does there, in plain words.
 STOP_ACTIONS = {
-    "baseline_confirm": "confirm the baseline",
+    "baseline_confirm": "confirm the Ground Truth",
     "feature_set": "approve the feature set",
     "eng_review": "check the engineering review",
     "eng_dates": "set the engineering dates",

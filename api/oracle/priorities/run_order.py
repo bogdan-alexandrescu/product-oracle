@@ -697,7 +697,7 @@ async def stale_goals(db: AsyncSession, snapshot: PrioritySnapshot) -> list[dict
                 message = (
                     f"{row.get('title') or key} serves the goal {found.title}, which was "
                     "rejected after the order was checked: the run must name a goal of the "
-                    "baseline"
+                    "Ground Truth"
                 )
             if message not in known:
                 known.add(message)

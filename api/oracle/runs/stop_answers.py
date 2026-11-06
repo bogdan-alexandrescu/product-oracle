@@ -43,7 +43,7 @@ DECIDED = ("approved", "changes_requested")
 # feedback loop's next draft (both PRD imports run :func:`open_problems`).
 WRITERS = ("prd_draft", "next_draft")
 STOPS = {
-    "baseline_confirm": "Baseline",
+    "baseline_confirm": "Ground Truth",
     "eng_review": "Engineering review",
     "eng_dates": "Engineering dates",
     "feature_set": "Feature set",
