@@ -405,3 +405,20 @@ async def test_reopen_a_waived_finding(client, ctx):
     await check(client, ctx)
     assert goal in [r["id"] for r in await findings(client, ctx)]
     assert await findings(client, ctx, status="waived") == []
+
+
+async def test_an_approver_reopens_an_outside_strategy_finding(client, ctx):
+    """protects=pass F F-41: an approver, who may waive an outside_strategy finding, may reopen
+    it too; a viewer may not; fails_when=the reopen asks for the owner role on a kind an
+    approver waives; no_claim=the other kinds (test_reopen_a_waived_finding)."""
+    await _world(client, ctx)
+    outside = _by_kind(await findings(client, ctx))["outside_strategy"][0]["id"]
+    resp = await client.post(f"/v1/strategy/findings/{outside}/waive", json={"reason": "Known"},
+                             headers=ctx.as_("approver"))  # fmt: skip
+    assert resp.status_code == 200, resp.text
+    resp = await client.post(f"/v1/strategy/findings/{outside}/reopen", headers=ctx.as_("viewer"))
+    assert resp.status_code == 403
+    resp = await client.post(f"/v1/strategy/findings/{outside}/reopen", headers=ctx.as_("approver"))
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "open"
+    assert outside in [r["id"] for r in await findings(client, ctx)]

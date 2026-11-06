@@ -94,10 +94,21 @@ test("pass F: the strategy card's counts open the stack line, and a goalless foc
   await self.getByRole("button", { name: /Grow paid conversion/ }).click();
   await expect(root.getByTestId("stack-inspector").getByRole("heading").first()).toContainText("Grow paid conversion");
   await expect(team.getByRole("link", { name: "Add a goal" })).toBeVisible();
-  await expect(card.getByTestId("stop-row").getByRole("link", { name: "2 items still planned" })).toHaveAttribute("href", "/plan");
+  // The count leads to the two items it counts, each opened on the Plan.
+  const stop = card.getByTestId("stop-row");
+  await stop.getByRole("button", { name: "2 items still planned" }).click();
+  await expect(stop.getByRole("link", { name: "Report export" })).toHaveAttribute("href", "/plan?item=report-export");
+  await expect(stop.getByRole("link", { name: "Report scheduling" })).toHaveAttribute("href", "/plan?item=report-scheduling");
   await team.getByRole("link", { name: "Add a goal" }).click();
-  await expect(page).toHaveURL(/\/baseline\?add=goal$/);
-  await expect(page.getByRole("dialog", { name: "Add an item" })).toBeVisible();
+  const add = page.getByRole("dialog", { name: "Add an item" });
+  await expect(add).toBeVisible();
+  // Closed, Add goal leaves the address: a reload does not open it again.
+  await add.getByRole("button", { name: "Close" }).click();
+  await expect(add).toHaveCount(0);
+  await expect(page).not.toHaveURL(/add=goal/);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Add item" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Add an item" })).toHaveCount(0);
 });
 
 // protects=F-43 and F-46: the stack details let the vision line wrap and give a finding's
@@ -133,8 +144,17 @@ test("pass F: phone, a tapped stack row opens its details in a sheet", async ({ 
   await page.goto("/company/strategy");
   const root = strategyPage(page);
   const retention = root.getByTestId("strategy-stack").getByTestId("stack-row").filter({ hasText: "Retention" });
-  await expect(retention).toContainText("Goal");
-  expect(await retention.innerText()).not.toContain("—");
+  // The row is titled with its goal's name, and no label shows without a value after it.
+  await expect(retention.locator('td[data-phone="title"]')).toHaveText("Retention");
+  const dark = root.getByTestId("strategy-stack").getByTestId("stack-row").filter({ hasText: "Dark mode" });
+  await expect(dark.locator('td[data-phone="title"]')).toHaveText("Dark mode");
+  for (const row of [retention, dark]) {
+    expect(await row.innerText()).not.toContain("—");
+    const cells = await row.locator("td").evaluateAll((tds) =>
+      tds.filter((td) => (td as HTMLElement).offsetParent !== null).map((td) => (td as HTMLElement).innerText.trim()),
+    );
+    expect(cells.filter((t) => t === "" || t === "Goal" || t === "Roadmap items")).toEqual([]);
+  }
   await retention.click();
   const sheet = page.getByTestId("stack-sheet");
   await expect(sheet).toBeVisible();

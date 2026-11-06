@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_FAIL_ONCE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 
 import { login } from "./helpers";
 
@@ -31,6 +31,22 @@ test("pass F: phone, Edit from the metric sheet opens the form above it", async 
   const sheet = page.getByTestId("metric-sheet");
   await sheet.getByRole("button", { name: "Edit" }).click();
   const form = page.getByRole("dialog", { name: "Edit metric" });
+  // The form is on top: the sheet is gone, and a field low in the form is the thing under its own centre.
+  await expect(form).toBeVisible();
+  await expect(sheet).toBeHidden();
+  const low = form.getByLabel("Alert size (%)");
+  await low.scrollIntoViewIfNeeded();
+  const box = (await low.boundingBox())!;
+  expect(
+    await page.evaluate(
+      ([x, y]) => {
+        const hit = document.elementFromPoint(x, y);
+        const field = document.getElementById("metric-threshold");
+        return !!hit && !!field && (hit === field || field.contains(hit));
+      },
+      [box.x + box.width / 2, box.y + box.height / 2] as const,
+    ),
+  ).toBe(true);
   await form.getByLabel("Title").fill("Weekly active teams (all)", { timeout: 3000 });
   await form.getByRole("button", { name: "Save" }).click({ timeout: 3000 });
   await expect(form).toHaveCount(0);
@@ -47,7 +63,17 @@ test("pass F: the metric chart reads its weeks, values and target, and lists eac
   await expect(chart.getByTestId("chart-x")).toHaveText(["Jul 20", "Aug 31", "Oct 12"]);
   await expect(chart.getByTestId("chart-y")).toHaveText(["12%", "8.9%"]);
   await expect(chart.getByTestId("chart-target")).toBeVisible();
-  await chart.getByRole("button", { name: "Week of Oct 12: 9.5%" }).focus();
+  // One tab stop: the chart itself, moved week by week with the arrow keys.
+  await expect(chart.locator('[tabindex="0"]')).toHaveCount(1);
+  const weeksChart = chart.getByRole("slider", { name: /weekly values/ });
+  await weeksChart.focus();
+  await expect(chart.getByTestId("chart-point-label")).toHaveText("Oct 12: 9.5%");
+  await expect(weeksChart).toHaveAttribute("aria-valuetext", "Week of Oct 12: 9.5%");
+  await page.keyboard.press("ArrowLeft");
+  await expect(chart.getByTestId("chart-point-label")).toHaveText("Oct 5: 9.4%");
+  await page.keyboard.press("Home");
+  await expect(chart.getByTestId("chart-point-label")).toHaveText(/^Jul 20: /);
+  await page.keyboard.press("End");
   await expect(chart.getByTestId("chart-point-label")).toHaveText("Oct 12: 9.5%");
   const weeks = inspector.getByTestId("metric-weeks").getByRole("listitem");
   await expect(weeks).toHaveCount(13);
@@ -73,7 +99,13 @@ test("pass F: recording says Enter a number, confirms the save, and Archive can 
   await inspector.getByRole("button", { name: "Archive" }).click();
   const toast = page.getByRole("status").filter({ hasText: "Archived Trial to paid rate" });
   await expect(toast).toBeVisible();
+  // A restore that fails says so and offers Undo again.
+  const id = new URL(page.url()).searchParams.get("metric");
+  await page.evaluate(([k, call]) => localStorage.setItem(k, call), [MOCK_FAIL_ONCE_KEY, `POST /v1/metrics/${id}/restore`] as const);
   await toast.getByRole("button", { name: "Undo" }).click();
+  const failed = page.getByRole("status").filter({ hasText: "Could not restore Trial to paid rate" });
+  await expect(failed).toBeVisible();
+  await failed.getByRole("button", { name: "Undo" }).click();
   await expect(page.getByTestId("metric-row").filter({ hasText: "Trial to paid rate" })).toContainText("Active");
 });
 
