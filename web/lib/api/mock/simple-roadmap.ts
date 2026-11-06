@@ -1210,11 +1210,41 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   const seeds = visibleItems(db, role);
   const all = new Map(seeds.map((s) => [s.key, { s, r: resolve(db, s, w[s.horizon]) }]));
   afterDependencies(all);
-  // feature-parts (service.load): a part with no dates of its own reads its parent's.
+  // feature-parts (service._ancestors): each part's ancestors, its parent first, any depth (a loop
+  // stops where it would close), and its parent's row when that parent is in Trash.
+  const ancestorsOf = (s: SeedItem): SeedItem[] => {
+    const out: SeedItem[] = [];
+    const seen = new Set([s.key]);
+    for (let cur = s; cur.parent && !seen.has(cur.parent); ) {
+      seen.add(cur.parent);
+      const next = all.get(cur.parent)?.s;
+      if (!next) break;
+      out.push(next);
+      cur = next;
+    }
+    return out;
+  };
+  const trashedParent = (s: SeedItem): SeedItem | undefined => {
+    const top = ancestorsOf(s).at(-1) ?? s;
+    return top.parent && !all.has(top.parent) ? reader.full.items.find((y) => y.key === top.parent && y.trashed && y.roadmap === s.roadmap) : undefined;
+  };
+  // service.load: a part with no dates of its own reads its nearest dated ancestor's (a parent in
+  // Trash still lends its own).
+  const undated = (r: { start: Dated; end: Dated }) => r.start.estimated && r.end.estimated;
+  const own = new Map([...all].map(([k, x]) => [k, x.r]));
   for (const x of all.values()) {
-    const parent = x.s.parent ? all.get(x.s.parent) : undefined;
-    if (parent && x.r.start.estimated && x.r.end.estimated) x.r = parent.r;
+    if (!undated(x.r)) continue;
+    const lent = ancestorsOf(x.s).map((a) => own.get(a.key)!);
+    const gone = trashedParent(x.s);
+    if (gone) lent.push(resolve(db, gone, w[gone.horizon]));
+    x.r = lent.find((r) => !undated(r)) ?? x.r;
   }
+  // additions._parts: a parent or a part by its display code ("" when none) and name.
+  const partRef = (x: SeedItem, inTrash = false) => ({ id: db.ids[x.key] ?? reader.full.ids[x.key], code: prdCode(x.section) ?? "", title: x.title, cut: !x.merged_into && x.status === "cut", in_trash: inTrash });
+  const pathOf = (s: SeedItem) => {
+    const gone = trashedParent(s);
+    return [...(gone ? [partRef(gone, true)] : []), ...ancestorsOf(s).reverse().map((a) => partRef(a))];
+  };
   // additions.item_extras: merged_into's code falls back to the key; a part's is its display code or "".
   const ref = (k: string, key = true) => {
     const x = db.items.find((y) => y.key === k);
@@ -1276,8 +1306,10 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       merged_into: s.merged_into ? ref(s.merged_into) : null,
       // feature-parts: the feature it is a part of (set_parent's before is its key) and its open parts.
       parent_key: s.parent ?? null,
-      part_of: s.parent && all.has(s.parent) ? ref(s.parent, false) : null,
-      parts: seeds.filter((x) => x.parent === s.key && !closed(x)).map((x) => ref(x.key, false)),
+      part_of: pathOf(s).at(-1) ?? null,
+      part_path: pathOf(s),
+      // Open parts, then cut ones (below the line); never a merged one.
+      parts: [...seeds.filter((x) => x.parent === s.key && !closed(x)), ...seeds.filter((x) => x.parent === s.key && !x.merged_into && x.status === "cut")].map((x) => partRef(x)),
       drafting: !!s.drafting_until,
       flow: s.draft ? (s.flow ?? null) : (flowFor(db.visuals, "feature", db.ids[s.key]) ?? betFlow(db, s)),
       goal_ids: [...new Set([...(s.goal ? [s.goal] : []), ...(s.goals ?? [])])].map(goalId),

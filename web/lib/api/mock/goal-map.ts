@@ -374,12 +374,13 @@ export async function routeGoalMap(
   req: Request,
   p: string[],
   /** A Simple roadmap item by id (any item can be attached, not only those on the map). */
-  item: (id: string) => { title: string } | null = () => null,
+  item: (id: string) => { title: string; merged_into?: string } | null = () => null,
 ): Promise<Response | null> {
   if (p[1] !== "simple" || p[2] !== "goal-map") return null;
   const map = (db.goal_map ??= seedGoalMap(scenario));
   const canEdit = me.role === "owner" || me.role === "approver";
-  const out = () => json(200, { ...map, can_edit: canEdit });
+  // panel-menu (goal_map.build): a feature merged into another is no longer one of the map's.
+  const out = () => json(200, { ...map, features: map.features.filter((f) => !item(f.id)?.merged_into), can_edit: canEdit });
   if (req.method === "GET" && !p[3]) return out();
   if (!canEdit) return json(403, { detail: "Only owners and approvers can change the goal map" });
   const body = JSON.parse((await req.text()) || "null");

@@ -196,6 +196,21 @@ export function restoreFromTrash(db: TrashDb, entry: TrashEntryRow, now: string,
   }
   if (root.type === "feature") simple?.items.filter((s) => s.key === root.slug && (!entry.roadmap || s.roadmap === entry.roadmap)).forEach((s) => (s.trashed = false));
   if (root.type === "goal") simple?.goal_buckets?.goals.filter((g) => g.id === root.id).forEach((g) => (g.trashed = false));
+  // trash_items._parent_back: a restored part stays under its parent while that parent is on the
+  // roadmap and open; else (in Trash, merged) or when going back under it would close a loop, it
+  // is a feature of its own.
+  if (root.type === "feature" && simple && "ids" in simple)
+    for (const me of (simple as SimpleDb).items.filter((s) => s.key === root.slug && !s.trashed && s.parent)) {
+      const live = (k: string) => (simple as SimpleDb).items.find((y) => y.key === k && !y.trashed && y.roadmap === me.roadmap);
+      const parent = live(me.parent!);
+      const seen = new Set([me.parent!]);
+      let up = parent?.parent;
+      while (up && !seen.has(up) && up !== me.key) {
+        seen.add(up);
+        up = live(up)?.parent;
+      }
+      if (!parent || parent.merged_into || up === me.key) me.parent = undefined;
+    }
   // trash_items._onto_current: back on every version published while it was in Trash.
   if (root.type === "feature")
     for (const v of simple?.versions ?? []) if (!entry.roadmap || v.roadmap === entry.roadmap) v.without = v.without.filter((k) => k !== root.slug);

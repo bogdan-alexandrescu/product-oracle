@@ -29,7 +29,9 @@ import {
   closedItem,
   daysBetween,
   liveBreaks,
+  mergedName,
   ms,
+  partsTree,
   planGoal,
   quarterValue,
   quarters,
@@ -70,7 +72,7 @@ const TODAY = "var(--today)";
 
 type Row =
   | { kind: "lane"; key: string; title: string; count: number }
-  | { kind: "item"; item: Item };
+  | { kind: "item"; item: Item; depth?: number };
 
 /** Items by goal (a lane per goal, then No goal, then Below the line), each item its own row.
  * The lanes are the data's goal groups (oneLane(lanes(data, "goal"))), as the goal cards, the
@@ -98,11 +100,9 @@ function rowsOf(data: Roadmap): Row[] {
   for (const [k, l] of order) {
     out.push({ kind: "lane", key: k, title: l.title, count: l.items.length });
     const sorted = [...l.items].sort((a, b) => (a.start.date < b.start.date ? -1 : 1));
-    // feature-parts: a part sits right under its parent (in the parent's lane, oneLane).
-    const ids = new Set(sorted.map((i) => i.id));
-    const under = (i: Item) => !!i.part_of && ids.has(i.part_of.id);
-    for (const i of sorted.filter((x) => !under(x)))
-      for (const x of [i, ...sorted.filter((p) => under(p) && p.part_of!.id === i.id)]) out.push({ kind: "item", item: x });
+    // feature-parts: every part, at any depth, right under its parent (in its top parent's
+    // lane, oneLane), drawn as a tree; one whose parent is not shown keeps its own place.
+    for (const x of partsTree([sorted.map((i) => i.id)], byId)[0]) out.push({ kind: "item", item: byId.get(x.id)!, depth: x.depth });
   }
   if (below.length) {
     out.push({
@@ -1035,6 +1035,7 @@ function DayChart(props: TimelineProps) {
                 live={live}
                 byId={props.byId}
                 on={on}
+                depth={r.depth ?? 0}
               />
             );
           })}
@@ -1134,6 +1135,7 @@ const TimelineRow = memo(function TimelineRow({
   live: store,
   byId,
   on,
+  depth,
 }: {
   item: Item;
   ds: string;
@@ -1151,6 +1153,8 @@ const TimelineRow = memo(function TimelineRow({
   live: LiveStore;
   byId: Map<string, Item>;
   on: RowMoves;
+  /** feature-parts: how deep a part it is (0: a feature of its own). */
+  depth: number;
 }) {
   const lk = lookOf(i);
   const live = useSyncExternalStore(
@@ -1172,6 +1176,7 @@ const TimelineRow = memo(function TimelineRow({
     <div
       data-testid="timeline-row"
       data-item={i.key}
+      data-depth={depth || undefined}
       data-open={sel || undefined}
       // A row out of sight is not painted (content-visibility), so a drag's frame repaints the
       // rows in sight and not the chart's 500. Its containment stacks the row on its own, so
@@ -1195,13 +1200,19 @@ const TimelineRow = memo(function TimelineRow({
           type="button"
           onClick={() => on.name(i, sel, bx, bw)}
           className={`pointer-events-auto sticky left-0 z-[12] flex flex-none items-center gap-1.5 border-r border-line px-3 text-left text-sm ${sel ? "bg-accent-soft" : "bg-surface"} hover:underline`}
-          style={{ width: labelW }}
+          style={{ width: labelW, paddingLeft: 12 + depth * 14 }}
           title={i.title}
         >
+          {/* feature-parts: a part drawn as a branch of its parent's tree. */}
+          {depth > 0 && (
+            <span aria-hidden className="flex-none text-text2">
+              └
+            </span>
+          )}
           <span className="min-w-0 truncate" style={lk.name}>
             {i.title}
-            {/* panel-menu: a merged feature says where it went, where it was shown. */}
-            {i.merged_into && <span data-testid="row-merged" className="ml-1 text-text2">· Merged into {`${i.merged_into.code} ${i.merged_into.title}`.trim()}</span>}
+            {/* panel-menu: a merged feature says where it went, by code and name as its panel does. */}
+            {i.merged_into && <span data-testid="row-merged" className="ml-1 text-text2">· Merged into {mergedName(i, (id) => byId.get(id))}</span>}
           </span>
           {lk.chip && (
             <span
@@ -1300,17 +1311,22 @@ function QuarterList(props: TimelineProps) {
     .sort();
   const qs = quarters(days[0], days[days.length - 1]);
   const tq = qs.find((q) => q.start <= data.today && data.today <= q.end);
+  const byId = new Map(data.items.map((i) => [i.id, i]));
   return (
     <div data-testid="timeline-list" className="space-y-3">
       {qs.map((q) => {
-        const items = data.items
+        const inQ = data.items
           .filter(
             (i) =>
               (q.start <= i.start.date && i.start.date <= q.end) ||
               (q === tq && i.start.date < q.start && i.end.date >= q.start),
           )
           .sort((a, b) => (a.start.date < b.start.date ? -1 : 1));
-        if (!items.length) return null;
+        if (!inQ.length) return null;
+        // feature-parts: the quarter's parts under their parents, as a tree.
+        const tree = partsTree([inQ.map((i) => i.id)], byId)[0];
+        const depth = new Map(tree.map((x) => [x.id, x.depth]));
+        const items = tree.map((x) => byId.get(x.id)!);
         return (
           <section
             key={q.start}
@@ -1355,7 +1371,9 @@ function QuarterList(props: TimelineProps) {
                     key={i.id}
                     data-testid="timeline-row"
                     data-item={i.key}
+                    data-depth={depth.get(i.id) || undefined}
                     data-open={sel || undefined}
+                    style={{ paddingLeft: (depth.get(i.id) ?? 0) * 16 }}
                   >
                     <button
                       type="button"
@@ -1374,6 +1392,11 @@ function QuarterList(props: TimelineProps) {
                           className="block text-sm font-semibold"
                           style={lk.name}
                         >
+                          {(depth.get(i.id) ?? 0) > 0 && (
+                            <span aria-hidden className="mr-1 font-normal text-text2">
+                              └
+                            </span>
+                          )}
                           {i.title}
                           {lk.chip ? (
                             <span

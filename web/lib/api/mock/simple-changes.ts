@@ -1005,14 +1005,17 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       if (!["planned", "done", "cut"].includes(String(a.status))) return json(422, { detail: "after.status: planned, done or cut" });
       after = { status: a.status };
     } else if (body.op === "set_parent") {
-      // changes.py set_parent: an open item of the same roadmap, one level only.
+      // changes.py set_parent: an open item of the same roadmap, any depth, never the item itself or
+      // one of its own parts (a feature is never its own ancestor).
       const v = a.parent_key == null ? null : String(a.parent_key);
       const me = seed(seen, key);
-      const parent = v === null ? undefined : seen.items.find((x) => x.key === v);
+      const live = (k: string) => seen.items.find((x) => x.key === k && !x.trashed);
+      const parent = v === null ? undefined : live(v);
       if (v === key) return json(422, { detail: "after.parent_key: another item, never the item itself" });
       if (v !== null && (!parent || parent.roadmap !== me.roadmap || closed(parent))) return json(422, { detail: `after.parent_key: no open item of this roadmap has the key ${v}` });
-      if (parent?.parent) return json(422, { detail: "after.parent_key: that item is a part itself (one level only)" });
-      if (v !== null && seen.items.some((x) => x.parent === key && !closed(x))) return json(422, { detail: "This item has parts of its own, so it is never a part" });
+      const up = new Set<string>();
+      for (let k = parent?.parent; k && !up.has(k) && live(k); k = live(k)!.parent) up.add(k);
+      if (parent && up.has(key)) return json(422, { detail: `${me.title} cannot be part of ${parent.title}: ${parent.title} is already one of its parts` });
       const named = parent ?? (me.parent ? seen.items.find((x) => x.key === me.parent) : undefined);
       if (named) Object.assign(target, { code: prdCode(named.section) ?? "", title: named.title });
       after = { parent_key: v };
@@ -1477,7 +1480,8 @@ function applyS7(db: SimpleDb, c: Change, undo = false): void {
   }
   const intoKey = c.target.into_id ? keyOf(db, c.target.into_id) : undefined;
   const dependents = db.items.filter((x) => x.depends?.includes(s.key));
-  // feature-parts: its parts move to the kept item (the kept item, if one, is a part no more).
+  // feature-parts: its parts move to the kept item; the kept item, when one of its parts at any
+  // depth, takes its place under its parent (changes._merge_plan: no part under a closed item, no loop).
   const parts = db.items.filter((x) => x.parent === s.key && !dependents.includes(x));
   snaps[c.id] = structuredClone([s, ...(intoKey ? [seed(db, intoKey)] : []), ...[...dependents, ...parts].filter((x) => x.key !== intoKey)]);
   if (!intoKey) {
@@ -1492,7 +1496,10 @@ function applyS7(db: SimpleDb, c: Change, undo = false): void {
   if (deps.length) kept.depends = [...(kept.depends ?? []), ...deps];
   for (const d of dependents) d.depends = [...new Set(d.depends!.map((k) => (k === s.key ? kept.key : k)))].filter((k) => k !== d.key);
   kept.notes = [...(kept.notes ?? []), `Merged ${s.title} (${s.key}) into it.`];
-  for (const x of db.items) if (x.parent === s.key) x.parent = x.key === kept.key ? undefined : kept.key;
+  const under = new Set<string>();
+  for (let k = kept.parent; k && !under.has(k); k = db.items.find((y) => y.key === k && !y.trashed)?.parent) under.add(k);
+  if (under.has(s.key)) kept.parent = s.parent;
+  for (const x of db.items) if (x.parent === s.key && x !== kept && !x.trashed) x.parent = kept.key;
   s.parent = undefined;
   s.merged_into = kept.key;
 }
