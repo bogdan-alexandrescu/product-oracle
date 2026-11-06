@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { entryText, itemKind, itemTitle } from "@/components/ArtifactMenu";
+import { entrySummary, entryText, itemKind, itemTitle } from "@/components/ArtifactMenu";
 import { Button, Chip, confirmInPage, Empty, InfoTip, Notice, PageHeader, Panel, toast } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { artifactsChanged } from "@/lib/artifacts";
@@ -25,7 +25,7 @@ function Row({ e, mayPurge, onGone }: { e: Entry; mayPurge: boolean; onGone: () 
     try {
       await unwrap(api.POST("/v1/trash/{entry_id}/restore", { params: { path: { entry_id: e.id } } }));
       artifactsChanged();
-      toast({ message: `Restored ${entryText(e.root, e.items)}` });
+      toast({ message: `Restored ${entrySummary(e.root, e.items)}` });
       onGone();
     } catch (err) {
       setError(errorMessage(err));
@@ -45,7 +45,7 @@ function Row({ e, mayPurge, onGone }: { e: Entry; mayPurge: boolean; onGone: () 
     try {
       await purge(e);
       artifactsChanged();
-      toast({ message: `Deleted for good: ${entryText(e.root, e.items)}` });
+      toast({ message: `Deleted for good: ${entrySummary(e.root, e.items)}` });
       onGone();
     } catch (err) {
       setError(errorMessage(err));
@@ -54,7 +54,8 @@ function Row({ e, mayPurge, onGone }: { e: Entry; mayPurge: boolean; onGone: () 
   }
   return (
     <li data-testid="trash-entry" className="flex flex-wrap items-start gap-x-4 gap-y-2 px-4 py-3 max-[600px]:px-3">
-      <div className="min-w-0 flex-1">
+      {/* Below 600px the buttons take their own line under the text, so a name never squeezes. */}
+      <div className="min-w-0 flex-1 max-[600px]:basis-full">
         <p className="flex flex-wrap items-baseline gap-x-2">
           <span className="text-[13px] font-semibold text-text2">{itemKind(e.root)}</span>
           {/* A feature's code before its name ("F-26 Alert rules engine"), as the roadmap reads it. */}
@@ -111,9 +112,12 @@ export default function TrashPage() {
   // F-68: every entry for good, at once (owners).
   async function emptyTrash() {
     const rows = q.data ?? [];
+    const names = rows.map((e) => (e.root.code ? `${e.root.code} ${e.root.title}` : itemTitle(e.root, e.root.title)));
+    const what = names.length > 3 ? `${names.length} deleted items` : names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
+    const along = rows.reduce((n, e) => n + e.items.length, 0);
     const ok = await confirmInPage({
       title: "Empty Trash?",
-      message: `${rows.length} ${rows.length === 1 ? "item goes" : "items go"} for good. This cannot be undone.`,
+      message: `Everything here goes for good: ${what}${along ? `, and the ${along} ${along === 1 ? "item" : "items"} that went with ${rows.length === 1 ? "it" : "them"}` : ""}. This cannot be undone.`,
       action: "Empty Trash",
       destructive: true,
     });
@@ -125,11 +129,12 @@ export default function TrashPage() {
         await purge(e);
         q.setData((all) => all?.filter((r) => r.id !== e.id));
       }
-      artifactsChanged();
       toast({ message: "Trash is empty" });
     } catch (err) {
       setEmptyError(errorMessage(err));
     } finally {
+      // Even when one fails partway, what did go is gone: other pages refresh their counts.
+      artifactsChanged();
       setEmptying(false);
     }
   }

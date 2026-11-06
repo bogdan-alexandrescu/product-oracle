@@ -60,12 +60,19 @@ export function entryText(root: TrashItem, items: TrashItem[]): string {
   return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
 }
 
+/** A toast's few words for a Trash entry: "Usage alerts PRD and 3 items that went with it". */
+export function entrySummary(root: TrashItem, items: TrashItem[]): string {
+  const name = root.type === "run" ? itemTitle(root, root.title) : root.title;
+  const n = items.length;
+  return n ? `${name} and ${n} ${n === 1 ? "item" : "items"} that went with it` : name;
+}
+
 /** Undo (= Restore) right after a delete, from the toast. */
 async function undo(entry: Schemas["TrashEntryOut"]) {
   try {
     await unwrap(api.POST("/v1/trash/{entry_id}/restore", { params: { path: { entry_id: entry.id } } }));
     artifactsChanged();
-    toast({ message: `Restored ${entryText(entry.root, entry.items)}` });
+    toast({ message: `Restored ${entrySummary(entry.root, entry.items)}` });
   } catch (e) {
     toast({ message: errorMessage(e) });
   }
@@ -243,7 +250,7 @@ export function DeleteDialog({
       const entry = await remove({ reason: reason.trim() || null, confirm_published: deps?.published || undefined });
       artifactsChanged();
       onClose();
-      toast({ message: `Moved to Trash: ${entryText(entry.root, entry.items)}`, action: { label: "Undo", onClick: () => void undo(entry) } });
+      toast({ message: `Moved to Trash: ${entrySummary(entry.root, entry.items)}`, action: { label: "Undo", onClick: () => void undo(entry) } });
       onDeleted?.();
     } catch (e) {
       setError(errorMessage(e));

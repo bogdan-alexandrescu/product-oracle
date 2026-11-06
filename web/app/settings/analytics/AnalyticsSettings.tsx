@@ -38,12 +38,18 @@ export function AnalyticsSettings() {
   if (q.error) return <ErrorNote>{q.error}</ErrorNote>;
   if (!a) return <Loading />;
   const connected = a.status !== "disconnected";
-  const storedHost = a.host ?? "eu";
-  const hostChoice = host ?? (storedHost in CLOUD ? storedHost : "own");
-  const ownValue = ownHost ?? (storedHost in CLOUD ? "" : storedHost);
+  // Owner's decision (Nov 5): with nothing saved no host is picked for them ("Pick a host").
+  const storedHost = a.host ?? "";
+  const hostChoice = host ?? (!storedHost || storedHost in CLOUD ? storedHost : "own");
+  const ownValue = ownHost ?? (!storedHost || storedHost in CLOUD ? "" : storedHost);
   const projectValue = project ?? a.project_id ?? "";
-  // Why Save waits, in a few words, until both are there.
-  const missing = !projectValue.trim()
+  const hostValue = hostChoice === "own" ? ownValue.trim() : hostChoice;
+  // Why Save waits, in a few words, until a host, the project and a key are there.
+  const missing = !hostChoice
+    ? "Pick a host to save."
+    : !hostValue
+      ? "Add the server address to save."
+      : !projectValue.trim()
     ? key.trim()
       ? "Add the project ID to save."
       : "Add the project ID and a key to save."
@@ -74,7 +80,7 @@ export function AnalyticsSettings() {
     run(() =>
       unwrap(
         api.PUT("/v1/company-integrations/analytics", {
-          body: { provider: "posthog", host: hostChoice === "own" ? ownValue.trim() : hostChoice, project_id: projectValue.trim(), api_key: key.trim() },
+          body: { provider: "posthog", host: hostValue, project_id: projectValue.trim(), api_key: key.trim() },
         }),
       ),
     );
@@ -123,6 +129,9 @@ export function AnalyticsSettings() {
           <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
             Host
             <select aria-label="Host" className={INPUT} value={hostChoice} onChange={(e) => setHost(e.target.value)}>
+              <option value="" disabled>
+                Pick a host
+              </option>
               <option value="us">US</option>
               <option value="eu">EU</option>
               <option value="own">Your own server</option>
@@ -162,7 +171,7 @@ export function AnalyticsSettings() {
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="primary"
-              disabled={busy || !key.trim() || !projectValue.trim()}
+              disabled={busy || !!missing}
               aria-describedby={missing ? "posthog-save-why" : undefined}
               onClick={save}
             >
