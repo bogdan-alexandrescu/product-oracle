@@ -78,7 +78,7 @@ for (const phone of [false, true]) {
         await expect(slide.getByText("Setup checklist", { exact: true })).toHaveCount(0);
         const show = slide.getByRole("button", { name: /^Show the names in / });
         await expect(show.first()).toHaveAttribute("title", /\S/);
-        for (const b of await show.all()) await b.click();
+        while (await show.count()) await show.first().click();
         // A feature named on the timeline slide opens the one feature panel, over the slide.
         await slide.getByText("Setup checklist", { exact: true }).first().click();
         await expect(page.getByTestId("item-panel")).toBeVisible();
