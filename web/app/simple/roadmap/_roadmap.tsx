@@ -18,6 +18,7 @@ import { displayZone, plainClock } from "@/lib/dates";
 import { formatDate } from "@/lib/format";
 import { goalNumbers } from "@/lib/goal-tree";
 import { useMe } from "@/lib/me";
+import { byPrdOrderOf, usePrdOrder } from "@/lib/prd-order";
 import { useQuery } from "@/lib/use-query";
 
 import { QuickAdd } from "./_add";
@@ -351,6 +352,7 @@ function barAnchor(wrap: HTMLElement | null, id: string): { left: number; top: n
 /** The working-draft banner (D18 as amended: one shared draft per roadmap). */
 function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onReview, titleOf }: { drafts: Draft[]; inReview: number; meId: string | null; onUndo: (id: string) => void; onSubmit: (d: Draft[]) => void; onApprove: (d: Draft) => void; onReview: (prdSlug: string) => void; titleOf: (id: string | null) => string | undefined }) {
   const [open, setOpen] = useState(false);
+  const byPrd = byPrdOrderOf(usePrdOrder());
   const working = drafts.filter((d) => d.status === "working" || d.status === "submitted");
   if (!working.length) {
     if (!inReview) return null;
@@ -365,8 +367,8 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onRe
   const log = working.flatMap((d) => d.change_log).sort((a, b) => (a.at < b.at ? -1 : 1));
   const last = [...log].reverse().find((c) => c.by === meId);
   const submittable = working.filter((d) => d.status === "working" && d.can_submit && (d.changes > 0 || !!d.from_prds?.length));
-  // approved-prd-roadmap: what each approved PRD put in the draft.
-  const fromPrds = working.flatMap((d) => d.from_prds ?? []);
+  // approved-prd-roadmap: what each approved PRD put in the draft, in the company PRD order (prd-order).
+  const fromPrds = working.flatMap((d) => d.from_prds ?? []).sort((a, b) => byPrd(a.prd, b.prd));
   // walkb-roadmap review 5a: a roadmap built from a PRD and not approved yet has no approved roadmap to keep published.
   const published = working.every((d) => d.published);
   return (
@@ -930,6 +932,7 @@ export function SimpleRoadmap() {
     (await Promise.allSettled(planPrds.map((prd) => unwrap(api.GET("/v1/simple/prds/{prd}/plan", { params: { path: { prd } } }))))).flatMap((r) => (r.status === "fulfilled" ? [r.value] : [])),
   );
   const noWork = useMemo(() => [...new Map((plans.data ?? []).flatMap((p) => p.holidays).map((h) => [h.start, h])).values()], [plans.data]);
+  const byPrd = byPrdOrderOf(usePrdOrder());
   const [seen, setSeen] = useState<{ of: Roadmap | null; prd: [string, string][]; goal: [string, string][]; track: [string, string][] }>({ of: null, prd: [], goal: [], track: [] });
   if (data && seen.of !== data) {
     const add = (list: [string, string][], pairs: [string, string][]) => [...new Map([...list, ...pairs])];
@@ -1360,7 +1363,7 @@ export function SimpleRoadmap() {
       {readable.length > 1 && (
         <Select label="Roadmap" all="All roadmaps" testId="filter-roadmap" value={data.roadmap?.id ?? ""} options={readable.map((r) => [r.roadmap.id, r.roadmap.title])} onChange={pickRoadmap} />
       )}
-      <Select label="PRD" value={f.prd} options={seen.prd} onChange={(prd) => pickFilter("prd", prd)} />
+      <Select label="PRD" value={f.prd} options={[...seen.prd].sort(([a, at], [b, bt]) => byPrd({ slug: a, title: at }, { slug: b, title: bt }))} onChange={(prd) => pickFilter("prd", prd)} />
       <Select label="Goal" value={f.goal} options={seen.goal} onChange={(goal) => pickFilter("goal", goal)} />
       <Select label="Track" value={f.track} options={seen.track} onChange={(track) => pickFilter("track", track)} />
       <Select label="From" value={f.from} options={qList.map((q) => [q.start, q.label])} onChange={(from) => setRange(from, f.to)} testId="filter-from" />

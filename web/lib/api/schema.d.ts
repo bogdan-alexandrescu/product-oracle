@@ -435,11 +435,34 @@ export interface paths {
         };
         /**
          * List Documents
-         * @description Documents, newest first; ``kind`` lists only PRDs or only roadmaps. Each carries
+         * @description Documents, newest first; ``kind`` lists only PRDs (in the company PRD order,
+         *     prd-order) or only roadmaps. Each carries
          *     its latest and latest approved version and the latest version's provenance.
          */
         get: operations["list_documents"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/prd-order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Restore Prd Order
+         * @description prd-order: put back PRDs' stored places in the company PRD order (null: none), as
+         *     the One-pagers' Undo after a Move up / Move down. Owners only; audited as
+         *     ``document.reorder``. Returns the PRDs in their new order.
+         */
+        put: operations["restore_prd_order"];
         post?: never;
         delete?: never;
         options?: never;
@@ -467,6 +490,28 @@ export interface paths {
          *     reason; audited as ``document.visibility`` with the values before and after.
          */
         patch: operations["set_document_visibility"];
+        trace?: never;
+    };
+    "/v1/documents/{doc}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move Document
+         * @description prd-order: move a PRD one place ``up`` or ``down`` in the company PRD order, the
+         *     order every page lists PRDs in. Owners only; audited as ``document.move``. Returns the
+         *     PRDs in their new order; at either end nothing moves.
+         */
+        post: operations["move_document"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/documents/{doc}/versions": {
@@ -23108,6 +23153,10 @@ export interface components {
              * @default false
              */
             company_roadmap: boolean;
+            /** Position */
+            position?: number | null;
+            /** Order */
+            order?: number | null;
             /**
              * Created At
              * Format: date-time
@@ -23270,6 +23319,10 @@ export interface components {
              * @default false
              */
             company_roadmap: boolean;
+            /** Position */
+            position?: number | null;
+            /** Order */
+            order?: number | null;
             /**
              * Created At
              * Format: date-time
@@ -33992,6 +34045,38 @@ export interface components {
              * @default []
              */
             unresolved: string[];
+        };
+        /**
+         * PrdMoveIn
+         * @description prd-order: one place up or down in the company PRD order.
+         */
+        PrdMoveIn: {
+            /**
+             * To
+             * @enum {string}
+             */
+            to: "up" | "down";
+        };
+        /**
+         * PrdOrderIn
+         * @description prd-order: PRDs' stored places to put back (the One-pagers' Undo after a move).
+         */
+        PrdOrderIn: {
+            /** Positions */
+            positions: components["schemas"]["PrdPlaceIn"][];
+        };
+        /**
+         * PrdPlaceIn
+         * @description prd-order: a PRD's stored place (1 = first; null: none).
+         */
+        PrdPlaceIn: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Position */
+            position?: number | null;
         };
         /** PrdRef */
         PrdRef: {
@@ -50211,6 +50296,53 @@ export interface operations {
             };
         };
     };
+    restore_prd_order: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrdOrderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSummary"][];
+                };
+            };
+            /** @description Not an owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such PRD */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     set_document_visibility: {
         parameters: {
             query?: never;
@@ -50243,6 +50375,55 @@ export interface operations {
                 content?: never;
             };
             /** @description No such document */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_document: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrdMoveIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSummary"][];
+                };
+            };
+            /** @description Not an owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such PRD */
             404: {
                 headers: {
                     [name: string]: unknown;

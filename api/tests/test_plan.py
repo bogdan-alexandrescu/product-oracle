@@ -583,7 +583,9 @@ def test_engineering_stop_lines():
     )
 
 
-async def test_cards_put_the_viewers_decisions_first(client):
+async def test_cards_follow_the_prd_order_and_keep_their_marks(client):
+    """prd-order: the cards in the company PRD order (no goals here: by title), the card
+    waiting for the viewer and the at-risk card keeping their marks."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -592,9 +594,10 @@ async def test_cards_put_the_viewers_decisions_first(client):
         late = await seed.doc("prd-late")
         await seed.version(late, 1)
         await s.commit()
-    order = [p["document"]["slug"] for p in (await plan(client, ctx))["prds"]]
-    assert order[:2] == ["prd-x", "prd-risky"], order
-    assert card(await plan(client, ctx), "prd-risky")["figure"] == "At risk"
+    out = await plan(client, ctx)
+    assert [p["document"]["slug"] for p in out["prds"]] == ["prd-late", "prd-risky", "prd-x"]
+    assert card(out, "prd-x")["waiting_for_viewer"] is True
+    assert card(out, "prd-risky")["figure"] == "At risk"
 
 
 # --- next decision (§7) ----------------------------------------------------------------------

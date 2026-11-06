@@ -20,6 +20,8 @@ from oracle.docs.schemas import (
     DraftNewItems,
     ImportErrorResponse,
     ImportProblem,
+    PrdMoveIn,
+    PrdOrderIn,
     VersionOut,
     VersionSummary,
     VisibilityIn,
@@ -50,9 +52,30 @@ def _draft_rejected(exc: DraftError) -> JSONResponse:
 
 @router.get("", response_model=list[DocumentSummary])
 async def list_documents(db: TenantDB, kind: DocumentKind | None = None) -> list[DocumentSummary]:
-    """Documents, newest first; ``kind`` lists only PRDs or only roadmaps. Each carries
+    """Documents, newest first; ``kind`` lists only PRDs (in the company PRD order,
+    prd-order) or only roadmaps. Each carries
     its latest and latest approved version and the latest version's provenance."""
     return await service.list_documents(db, kind)
+
+
+@router.put(
+    "/prd-order",
+    response_model=list[DocumentSummary],
+    responses={403: {"description": "Not an owner"}, 404: {"description": "No such PRD"}},
+)
+async def restore_prd_order(
+    data: PrdOrderIn,
+    principal: Annotated[Principal, Depends(require_role_now("owner"))],
+    db: TenantDB,
+) -> list[DocumentSummary]:
+    """prd-order: put back PRDs' stored places in the company PRD order (null: none), as
+    the One-pagers' Undo after a Move up / Move down. Owners only; audited as
+    ``document.reorder``. Returns the PRDs in their new order."""
+    try:
+        places = {p.document_id: p.position for p in data.positions}
+        return await service.restore_prd_order(db, places, principal)
+    except service.NotFoundError as exc:
+        raise _not_found(exc) from exc
 
 
 @router.get("/{doc}", response_model=DocumentOut)
@@ -83,6 +106,26 @@ async def set_document_visibility(
         raise _not_found(exc) from exc
     except service.VisibilityKindError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+
+
+@router.post(
+    "/{doc}/move",
+    response_model=list[DocumentSummary],
+    responses={403: {"description": "Not an owner"}, 404: {"description": "No such PRD"}},
+)
+async def move_document(
+    doc: str,
+    data: PrdMoveIn,
+    principal: Annotated[Principal, Depends(require_role_now("owner"))],
+    db: TenantDB,
+) -> list[DocumentSummary]:
+    """prd-order: move a PRD one place ``up`` or ``down`` in the company PRD order, the
+    order every page lists PRDs in. Owners only; audited as ``document.move``. Returns the
+    PRDs in their new order; at either end nothing moves."""
+    try:
+        return await service.move_prd(db, doc, data.to, principal)
+    except service.NotFoundError as exc:
+        raise _not_found(exc) from exc
 
 
 @router.post(

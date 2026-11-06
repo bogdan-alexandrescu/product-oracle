@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { ClaudeOffNotice } from "@/components/ClaudeOffNotice";
 import { Chip, Empty, Icon, InfoTip, LinkButton, Notice, Page, PageHeader, Panel, Split } from "@/components/ds";
 import { LoadError } from "@/components/ui";
+import { sortPrds } from "@/lib/prd-order";
 import { api, unwrap } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -135,7 +136,8 @@ export default function HomePage() {
   );
 
   const docs = useMemo(() => docsQ.data ?? [], [docsQ.data]);
-  const inReview = docs.filter((d) => d.status === "in_review").sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  // prd-order: the PRDs in review in the company PRD order (the runs after them).
+  const inReview = sortPrds(docs.filter((d) => d.status === "in_review"));
   const activeRuns = (runsQ.data ?? []).filter((r) => IN_FLIGHT.has(r.status)).sort((a, b) => b.created_at.localeCompare(a.created_at));
 
   const flights: Flight[] | undefined =

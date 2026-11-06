@@ -6,6 +6,7 @@ import { Button } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { docLabel, runLabel } from "@/lib/labels";
+import { prdsFirst, usePrds } from "@/lib/prd-order";
 import { useQuery } from "@/lib/use-query";
 
 import { SUBJECT_LABEL, entityTypeLabel, type Decision } from "./lib";
@@ -195,12 +196,14 @@ function SubjectsPicker({ subjects, entities, onChange }: { subjects: Subject[];
   const [kind, setKind] = useState<PickKind>("document");
   const [picked, setPicked] = useState("");
   const docsQ = useQuery("decisions|documents", () => unwrap(api.GET("/v1/documents")));
+  const prdsQ = usePrds();
   const runsQ = useQuery("decisions|runs", () => unwrap(api.GET("/v1/runs")));
   const nameOf = useSubjectLabel();
   const taken = new Set(subjects.map((s) => `${s.kind}:${s.id}`));
   const choices: (Subject & { label: string })[] =
     kind === "document"
-      ? (docsQ.data ?? []).map((d) => ({ kind: "document", id: d.id, ref: d.slug, label: docLabel(d) }))
+      ? // prd-order: the PRDs in the company PRD order, then the roadmaps and other documents.
+        prdsFirst(prdsQ.data, docsQ.data).map((d) => ({ kind: "document", id: d.id, ref: d.slug, label: docLabel(d) }))
       : kind === "entity"
         ? entities.map((e) => ({ kind: "entity", id: e.id, ref: e.title, label: e.title }))
         : (runsQ.data ?? []).map((r) => ({ kind: "run", id: r.id, ref: r.flow_title, label: runLabel(r, (docsQ.data ?? []).find((d) => d.slug === r.document_slug)?.title) }));

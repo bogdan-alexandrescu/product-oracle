@@ -444,7 +444,11 @@ async def sources_out(db: AsyncSession, d: SimpleDraft) -> list[SimpleDraftPrd]:
                 key_dates=0,
             )
         )
-    return sorted(out, key=lambda s: s.prd.title.casefold())
+    # prd-order: the draft's PRDs in the company PRD order.
+    from oracle.docs.prd_order import prd_ranks
+
+    ranks = await prd_ranks(db)
+    return sorted(out, key=lambda s: (ranks.get(s.prd.id, len(ranks) + 1), s.prd.title.casefold()))
 
 
 def has_sources(d: SimpleDraft) -> bool:

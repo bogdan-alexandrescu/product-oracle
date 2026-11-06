@@ -65,6 +65,7 @@ def simple_page(d: Any) -> bool:
 
 async def _prds(db: AsyncSession, ctx: Any, start: int) -> None:
     from oracle.docs.models import Document, DocumentVersion, Section
+    from oracle.docs.prd_order import prd_ranks
 
     approved = (
         select(DocumentVersion.document_id, func.max(DocumentVersion.number).label("n"))
@@ -82,9 +83,11 @@ async def _prds(db: AsyncSession, ctx: Any, start: int) -> None:
                 & (DocumentVersion.number == approved.c.n),
             )
             .where(Document.kind == "prd")
-            .order_by(Document.title)
         )
     ).all()
+    # prd-order: the company PRD order, as every page lists PRDs.
+    ranks = await prd_ranks(db)
+    rows = sorted(rows, key=lambda r: (ranks.get(r[0].id, len(ranks) + 1), r[0].title))
     for doc, version in rows:
         sections = list(
             await db.scalars(

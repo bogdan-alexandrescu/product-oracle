@@ -9,6 +9,7 @@
  * on purpose: health, drift and staleness follow the API's rules, not its every message.
  * Synthetic placeholders only. Reads need a viewer; writes an approver, as in the API.
  */
+import { prdRanker } from "./prd-rank";
 import { APPROVED_ROADMAP_SCENARIO, TRAILS_BASES, TRAILS_PRD_SLUG } from "./approved-roadmap";
 import type { Schemas } from "@/lib/api/client";
 import { calendarDay } from "@/lib/dates";
@@ -1787,7 +1788,6 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
   // As oracle.plan.service: the card's word and health are the track's own health (qa-plan-1).
   const health = track ? overview(ctx, db, track).health : null;
   const prds: PlanPrd[] = [];
-  const order = new Map<string, number>();
   for (const d of ctx.documents) {
     if ((d.kind ?? "prd") !== "prd") continue;
     const versions = ctx.versions.filter((v) => v.document_id === d.id).sort((a, b) => a.number - b.number);
@@ -1821,11 +1821,11 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
       card = { ...base, stage: review ? "in_review" : "draft", stage_label: review ? `${label} in review${draft}` : label, journey_step: 8 };
       if (d.slug === "checkout-redesign" && scope === "all" && draft) card.figure = `${checkoutDraft(db).length} items`;
     }
-    order.set(d.id, (card.waiting_for_viewer ? 0 : 2) + (card.track?.health === "at_risk" || card.track?.health === "off_track" ? 0 : 1));
     prds.push(card);
   }
-  const rank = (c: PlanPrd) => order.get(c.document.id) ?? 3;
-  prds.sort((a, b) => rank(a) - rank(b) || b.updated_at.localeCompare(a.updated_at));
+  // prd-order (as oracle.plan.service): the cards, and Group by PRD's lanes, in the company PRD order.
+  const rank = prdRanker();
+  prds.sort((a, b) => rank(a.document) - rank(b.document) || a.document.slug.localeCompare(b.document.slug));
   return {
     scope: scope as Schemas["PlanOut"]["scope"],
     generated_at: now(),

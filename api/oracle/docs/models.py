@@ -111,6 +111,9 @@ class Document(Trashable, TenantScoped, Base):
     replaced_by: Mapped[list[uuid.UUID]] = mapped_column(
         ARRAY(Uuid), nullable=False, server_default="{}"
     )
+    # prd-order: a PRD's place in the company PRD order (1 = first), an owner's Move up /
+    # Move down; none falls back to the default order (oracle.docs.prd_order).
+    position: Mapped[int | None] = mapped_column(Integer)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )

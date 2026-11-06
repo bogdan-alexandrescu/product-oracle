@@ -155,6 +155,11 @@ class DocumentSummary(ORM):
     source: VersionSource | None = None
     # one-roadmap-many-prds: the company's one roadmap, which every PRD feeds.
     company_roadmap: bool = False
+    # prd-order: a PRD's stored place (1 = first; an owner's Move up / Move down), and its
+    # place in the one company PRD order every page lists PRDs in (oracle.docs.prd_order).
+    # Null for every other kind.
+    position: int | None = None
+    order: int | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -165,6 +170,25 @@ class DocumentSummary(ORM):
         elif self.audience is None:
             self.audience = "team"
         return self
+
+
+class PrdMoveIn(BaseModel):
+    """prd-order: one place up or down in the company PRD order."""
+
+    to: Literal["up", "down"]
+
+
+class PrdPlaceIn(BaseModel):
+    """prd-order: a PRD's stored place (1 = first; null: none)."""
+
+    document_id: uuid.UUID
+    position: int | None = Field(default=None, ge=1)
+
+
+class PrdOrderIn(BaseModel):
+    """prd-order: PRDs' stored places to put back (the One-pagers' Undo after a move)."""
+
+    positions: list[PrdPlaceIn] = Field(min_length=1, max_length=1000)
 
 
 class VersionSummary(ORM):

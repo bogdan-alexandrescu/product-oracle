@@ -8,6 +8,7 @@
  * constraints), simplified: the company's day is the mock clock's UTC day and the planning
  * horizons are the defaults (short 1 quarter, medium 2, long 12-24 months).
  */
+import { byPrdRank, prdRanker } from "./prd-rank";
 import type { Schemas } from "@/lib/api/client";
 import { goalPosition, sortGoals, type OrderedGoal } from "@/lib/goal-order";
 import { plainFlow } from "./simple-visuals";
@@ -1405,12 +1406,19 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       (!to || i.start.date <= to),
   );
   const groups = new Map<string, { title: string; sort: string; item_ids: string[] }>();
+  const prdRank = prdRanker();
   for (const i of shown) {
     const ref = group === "goal" ? i.goal : group === "track" ? i.track : i.prd;
     const none = { goal: "No goal", track: "No track", prd: "No PRD" }[group];
     const key = ref?.id ?? "none";
-    // goal-order: goal groups in the one goal order (then by key); No goal last.
-    const sort = !ref ? "1" : "key" in ref ? `0${String(goalRank(String(ref.key))).padStart(16, "0")}${ref.key}` : `0${ref.title}`;
+    // goal-order: goal groups in the one goal order (then by key); prd-order: PRD groups in the company PRD order; No goal last.
+    const sort = !ref
+      ? "1"
+      : "key" in ref
+        ? `0${String(goalRank(String(ref.key))).padStart(16, "0")}${ref.key}`
+        : group === "prd"
+          ? `0${String(prdRank(ref)).padStart(16, "0")}${ref.title}`
+          : `0${ref.title}`;
     const g = groups.get(key) ?? { title: ref?.title ?? none, sort, item_ids: [] };
     g.item_ids.push(i.id);
     groups.set(key, g);
@@ -1568,7 +1576,8 @@ function prdKeyDates(db: SimpleDb, slug: string, roadmap: Schemas["SimpleDocRef"
   const prds = [...new Map(db.items.filter((s) => s.roadmap === slug && !s.draft_roadmap && !ofReplacedPrd(db, s)).map((s) => [ownPrd(s).id, ownPrd(s)])).values()];
   return prds
     .filter((p) => !hidden.has(p.slug))
-    .sort((a, b) => a.title.localeCompare(b.title))
+    // prd-order (as key_date_prds): the roadmap's PRDs in the company PRD order.
+    .sort(byPrdRank(prdRanker()))
     .flatMap((prd) =>
       (db.prd_milestones?.[prd.slug] ?? []).map((m) => ({
         id: stableUuid(`simple-prd-key-date/${slug}/${prd.slug}/${m.code}`),
@@ -1922,6 +1931,7 @@ export function approvedPrdToDraft(
 /** approved-prd-roadmap: how many items each approved PRD put in the draft; key_dates is always 0
  * (ah-prd-milestones-once: its milestones are read-only from the PRD), as the API's sources_out. */
 export function draftPrds(d: MockDraft): Schemas["SimpleDraftPrd"][] {
+  const byRank = byPrdRank(prdRanker());
   return Object.values(d.prds ?? {})
     .map((x) => ({
       prd: x.prd,
@@ -1929,5 +1939,5 @@ export function draftPrds(d: MockDraft): Schemas["SimpleDraftPrd"][] {
       items: x.keys.length,
       key_dates: 0,
     }))
-    .sort((a, b) => a.prd.title.localeCompare(b.prd.title));
+    .sort((a, b) => byRank(a.prd, b.prd));
 }

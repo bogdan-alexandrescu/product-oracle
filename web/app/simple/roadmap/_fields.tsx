@@ -9,6 +9,7 @@ import { Icon } from "@/components/ds/Icon";
 
 import { api, unwrap } from "@/lib/api/client";
 import { calendarDay } from "@/lib/dates";
+import { byPrdOrderOf, usePrdOrder } from "@/lib/prd-order";
 import { useQuery } from "@/lib/use-query";
 
 import type { Act } from "./_card";
@@ -188,6 +189,7 @@ export function PanelFields({
   onOpen?: (id: string) => void;
 }) {
   const [why, setWhy] = useState(false);
+  const prdOrderOf = usePrdOrder();
   const goal = item.goal;
   const people = useQuery(`people:panel:${canChange}`, () =>
     canChange
@@ -206,7 +208,8 @@ export function PanelFields({
     (i) => i.id !== item.id && i.status !== "merged",
   );
   const tracks = refs(items, (i) => i.track);
-  const prds = refs(items, (i) => i.prd);
+  // prd-order: the PRD picker in the company PRD order.
+  const prds = refs(items, (i) => i.prd).sort(byPrdOrderOf(prdOrderOf));
   const goals = refs(items, (i) => i.goal);
   // roadmap-edit-fixes: the stored key the read says names it (another PRD's feature key is
   // neither its key nor its code), else the one matching its key or code.
