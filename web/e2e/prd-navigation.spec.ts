@@ -17,15 +17,13 @@ async function bigPrd(page: Page, size?: { width: number; height: number }) {
 }
 
 const rail = (page: Page) => page.getByTestId("outline-rail").filter({ visible: true });
-const railRows = (page: Page) => rail(page).locator("a[data-outline-key]");
 const switcher = (page: Page) => page.getByTestId("section-switcher").filter({ visible: true });
-const popover = (page: Page) => page.getByTestId("switcher-popover");
-const trigger = (page: Page) => page.getByTestId("switcher-trigger").filter({ visible: true });
 
 /** Fails when any element makes the page scroll sideways. */
 async function noSidewaysScroll(page: Page) {
+  // The page itself scrolls now (PT1 a): its scrollbar takes its width off the page, not more.
   const { sw, iw } = await page.evaluate(() => ({ sw: document.scrollingElement!.scrollWidth, iw: window.innerWidth }));
-  expect(sw, "page scroll width").toBe(iw);
+  expect(sw, "page scroll width").toBeLessThanOrEqual(iw);
 }
 
 /** No visible text under 13 px inside `el`. */
@@ -49,132 +47,14 @@ async function insideViewport(page: Page, el: Locator) {
   expect(box.y + box.height).toBeLessThanOrEqual(vp.height + 0.5);
 }
 
-test("outline rail: every section, grouped by chapter and folded; the current chapter open; status marks by shape", async ({ page }) => {
-  await bigPrd(page, { width: 1440, height: 900 });
-  await page.goto(BIG);
-  await expect(rail(page)).toBeVisible();
-  await expect(rail(page)).toHaveCSS("width", "280px");
-  await expect(rail(page).getByTestId("review-progress")).toHaveText(/13 of 104 sections reviewed/);
-  await expect(rail(page).getByTestId("chip-all")).toHaveText(/All\s*104/);
-
-  // The first unreviewed section opens: 2.2, inside chapter 2, which is open; the others fold.
-  await expect(section(page, "2-2-evidence-from-support")).toBeVisible();
-  const current = outlineRow(page, "2-2-evidence-from-support");
-  await expect(current).toHaveAttribute("aria-current", "true");
-  await expect(current).toBeInViewport();
-  await expect(outlineRow(page, "ch-2")).not.toHaveAttribute("data-folded", "true");
-  const billing = outlineRow(page, "ch-7");
-  await expect(billing).toHaveAttribute("data-folded", "true");
-  await expect(billing.getByTestId("outline-folded-count")).toHaveText("1/9");
-  await expect(outlineRow(page, "7-1-plans")).toHaveCount(0);
-  // 1 title + 12 chapters + the appendix, plus chapter 2's five parts.
-  await expect(railRows(page)).toHaveCount(14 + 5);
-
-  // A chevron unfolds a chapter; its parts are indented under it.
-  await rail(page).getByRole("button", { name: "Unfold 7. Billing" }).click();
-  await expect(outlineRow(page, "7-1-plans")).toBeVisible();
-  await expect(outlineRow(page, "7-3-invoices")).toHaveAttribute("data-folded", "true");
-  await rail(page).getByRole("button", { name: "Fold 7. Billing" }).click();
-  await expect(outlineRow(page, "7-1-plans")).toHaveCount(0);
-
-  // Status marks differ in shape, and only an approved section shows a check.
-  const mark = (key: string) => outlineRow(page, key).getByTestId("status-mark");
-  await rail(page).getByRole("button", { name: "Unfold 1. Goals and outcomes" }).click();
-  await expect(mark("1-2-north-star-metric")).toHaveAttribute("data-state", "approved");
-  await expect(mark("1-3-guardrail-metrics")).toHaveAttribute("data-state", "changes_requested");
-  await expect(mark("1-5-assumptions")).toHaveAttribute("data-state", "rejected");
-  await expect(mark("2-3-evidence-from-sales-calls")).toHaveAttribute("data-state", "none");
-  const CHECK = 'path[d^="M4.8 8.2"]';
-  await expect(mark("1-2-north-star-metric").locator(CHECK)).toHaveCount(1);
-  await expect(mark("1-3-guardrail-metrics").locator(CHECK)).toHaveCount(0);
-  await expect(mark("1-5-assumptions").locator(CHECK)).toHaveCount(0);
-  await expect(mark("1-3-guardrail-metrics").locator("path").first()).toHaveAttribute("d", /^M8 0\.9/);
-  await expect(mark("1-5-assumptions").locator("rect")).toHaveCount(1);
-  // Each row: its name (a tooltip when cut off) and its open-feedback count.
-  await expect(outlineRow(page, "1-3-guardrail-metrics").getByTestId("outline-count")).toHaveText("2");
-  await expect(outlineRow(page, "1-3-guardrail-metrics")).toHaveAttribute("title", "1.3 Guardrail metrics");
-
-  // A deep link opens its chapters and keeps the row in view inside the rail's own scroll.
-  await page.goto(`${BIG}#11-3-retention-2`);
-  await expect(section(page, "11-3-retention-2")).toBeVisible();
-  await expect(outlineRow(page, "11-3-retention-2")).toHaveAttribute("aria-current", "true");
-  await expect(outlineRow(page, "11-3-retention-2")).toBeInViewport();
-  await noSmallText(rail(page));
-  await noSmallText(page.getByTestId("review-panel"));
-  await noSidewaysScroll(page);
-});
+// The outline rail (folded chapters, status-mark shapes) and the switcher below 1280 px are gone
+// on a PRD (PT1 a): the contents rail and its review dots are covered by prd-look.spec.ts.
 
 // '/' filter + arrow-key list focus + global j/k stepping were the outline rail's own keys
 // (PT1 a): the PRD contents rail has no keyboard shortcuts of its own, so that test is gone.
 
 // The rail's collapse/expand and the switcher standing in for it are gone on a PRD (PT1 a):
 // the contents rail has no collapse button and there is no switcher to stand in for it.
-
-test("switcher at 1200 px: arrows, i of M, Next to review, and a popover that closes every way and stays on screen", async ({ page }) => {
-  await bigPrd(page, { width: 1200, height: 800 });
-  await page.goto(BIG);
-  await expect(rail(page)).toHaveCount(0);
-  await expect(switcher(page)).toBeVisible();
-  await expect(trigger(page)).toContainText("2.2 Evidence from support");
-  await expect(page.getByTestId("switcher-index").filter({ visible: true })).toHaveText("10 of 104");
-  await expect(trigger(page).getByTestId("status-mark")).toHaveAttribute("data-state", "none");
-
-  await switcher(page).getByRole("link", { name: "Next section: 2.3 Evidence from sales calls" }).click();
-  await expect(page).toHaveURL(/#2-3-evidence-from-sales-calls$/);
-  await switcher(page).getByRole("link", { name: /^Previous section/ }).click();
-  await expect(page).toHaveURL(/#2-2-evidence-from-support$/);
-  await page.getByTestId("next-to-review").filter({ visible: true }).click();
-  await expect(page).toHaveURL(/#2-3-evidence-from-sales-calls$/);
-
-  // A changes-requested section never shows a check in the switcher either.
-  await page.goto(`${BIG}#1-3-guardrail-metrics`);
-  await expect(trigger(page).getByTestId("status-mark")).toHaveAttribute("data-state", "changes_requested");
-  await expect(trigger(page).locator('path[d^="M4.8 8.2"]')).toHaveCount(0);
-
-  // Escape closes and returns focus to the trigger.
-  await trigger(page).click();
-  await expect(popover(page)).toBeVisible();
-  await expect(popover(page).getByTestId("outline-filter")).toBeFocused();
-  await expect(popover(page).getByTestId("switcher-hints")).toHaveText(/↑↓ move · ↵ open · j k next\/previous/);
-  await insideViewport(page, popover(page));
-  await noSmallText(switcher(page));
-  await page.keyboard.press("Escape");
-  await expect(popover(page)).toHaveCount(0);
-  await expect(trigger(page)).toBeFocused();
-
-  // The trigger toggles it.
-  await trigger(page).click();
-  await expect(popover(page)).toBeVisible();
-  await trigger(page).click();
-  await expect(popover(page)).toHaveCount(0);
-
-  // A click outside closes it.
-  await trigger(page).click();
-  await page.mouse.click(700, 760);
-  await expect(popover(page)).toHaveCount(0);
-
-  // Chapters are bold rows with their parts indented under them, nothing folds; filter and pick.
-  await trigger(page).click();
-  await expect(popover(page).locator('a[data-outline-key="ch-7"]')).toHaveClass(/font-bold/);
-  await expect(popover(page).locator('a[data-outline-key="7-3-invoices-2"]')).toBeAttached();
-  await expect(popover(page).getByTestId("outline-fold")).toHaveCount(0);
-  await page.keyboard.type("quiet");
-  await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("ArrowDown");
-  await expect(popover(page).locator('a[data-outline-key="8-4-quiet-hours"]')).toBeFocused();
-  await page.keyboard.press("Enter");
-  await expect(popover(page)).toHaveCount(0);
-  await expect(page).toHaveURL(/#8-4-quiet-hours$/);
-  await expect(section(page, "8-4-quiet-hours")).toBeVisible();
-  await expect(trigger(page)).toBeFocused();
-
-  // Near the foot of the page it opens upward, still fully on screen.
-  await page.setViewportSize({ width: 1200, height: 420 });
-  await trigger(page).click();
-  await insideViewport(page, popover(page));
-  await page.keyboard.press("Escape");
-  await noSidewaysScroll(page);
-});
 
 test("phone: a Sections / Review bar opens sheets that close on Escape, the scrim and a swipe, with focus kept inside", async ({ page }) => {
   await bigPrd(page, { width: 390, height: 844 });
