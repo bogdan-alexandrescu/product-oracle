@@ -7,9 +7,11 @@ import { login } from "./helpers";
 /**
  * The Ground Truth check on Detailed's Ground Truth page (docs/ground-truth.md; the owner,
  * Nov 5: allowed but flagged). The "ground-truth-flags" scenario: Export to sheets (a roadmap
- * item on no feature), Weekly digest (on a feature a run only proposed), the slice F-15a Usage
- * report, the PRD's F-09 Guest seats, Smart search (no code), F-02 Audit log (no goal) and
- * F-03 Night alerts (runs today, still on the roadmap). Each fix is made as a person makes it.
+ * item on no feature), Weekly digest (on a feature a run only proposed), F-09a Guest invites (an
+ * item of the PRD's F-09, over two milestones), the slices F-15a Usage report and F-15b Usage
+ * chart, the PRD's F-09 Guest seats, Smart search (no code), F-02 Audit log (no goal) and F-03
+ * Night alerts (runs today, still on the roadmap). Each fix is made as a person makes it. A
+ * feature Add to Ground Truth makes serves no goal yet, so it is flagged for one.
  */
 
 const DESKTOP = { width: 1440, height: 900 };
@@ -38,14 +40,16 @@ for (const viewport of [DESKTOP, PHONE])
       await page.setViewportSize(viewport);
       await page.emulateMedia({ colorScheme });
       await open(page);
-      await expect(total(page)).toHaveText("7");
+      await expect(total(page)).toHaveText("9");
       await expect(count(page, "unlinked_item")).toContainText("Not in the Ground Truth");
-      await expect(count(page, "unlinked_item")).toContainText("2");
-      for (const kind of ["slice_parent_missing", "prd_feature_missing", "no_code", "no_goal", "runs_today_on_roadmap"]) await expect(count(page, kind)).toContainText("1");
+      await expect(count(page, "unlinked_item")).toContainText("3");
+      await expect(count(page, "slice_parent_missing")).toContainText("2");
+      for (const kind of ["prd_feature_missing", "no_code", "no_goal", "runs_today_on_roadmap"]) await expect(count(page, kind)).toContainText("1");
       await openKind(page, "unlinked_item");
       await expect(row(page, "Export to sheets")).toContainText("This roadmap item is not a feature in the Ground Truth.");
       await expect(row(page, "Export to sheets").getByRole("button", { name: /Add to Ground Truth/ })).toBeVisible();
       await expect(row(page, "Weekly digest").getByRole("button", { name: /Confirm it/ })).toBeVisible();
+      await expect(row(page, "Guest invites")).toContainText("F-09a");
       await openKind(page, "prd_feature_missing");
       await expect(row(page, "Guest seats")).toContainText("F-09");
       // Nothing runs past the screen's edge.
@@ -61,19 +65,35 @@ test.describe("as the owner", () => {
     await row(page, "Export to sheets").getByRole("button", { name: /Add to Ground Truth/ }).click();
     await expect(page.getByTestId("gt-notice")).toContainText("Added “Export to sheets” to the Ground Truth.");
     await expect(row(page, "Export to sheets")).toHaveCount(0);
-    await expect(count(page, "unlinked_item")).toContainText("1");
-    await expect(total(page)).toHaveText("6");
+    await expect(count(page, "unlinked_item")).toContainText("2");
+    // The new feature serves no goal yet: it is flagged for one instead.
+    await expect(count(page, "no_goal")).toContainText("2");
+    await expect(total(page)).toHaveText("9");
   });
 
-  test("Add to Ground Truth adds a PRD's feature, and its slice's", async ({ page }) => {
+  test("Add to Ground Truth adds a PRD's feature with its code, and one slice's feature for both slices", async ({ page }) => {
     await open(page);
     await openKind(page, "prd_feature_missing");
     await row(page, "Guest seats").getByRole("button", { name: /Add to Ground Truth/ }).click();
+    await expect(page.getByTestId("gt-notice")).toContainText("Added “Guest seats” to the Ground Truth.");
     await expect(count(page, "prd_feature_missing")).toHaveCount(0);
+    // It is F-09: no Give it a code, and its roadmap item F-09a is in the Ground Truth by that code.
+    await expect(count(page, "no_code")).toContainText("1");
+    await expect(count(page, "unlinked_item")).toContainText("2");
+    await expect(total(page)).toHaveText("8");
+    // One add on the slice F-15a adds F-15: both its slices (F-15a, F-15b) go.
     await openKind(page, "slice_parent_missing");
+    await expect(row(page, "Usage chart")).toContainText("F-15b");
     await row(page, "Usage report").getByRole("button", { name: /Add to Ground Truth/ }).click();
+    await expect(page.getByTestId("gt-notice")).toContainText("Added “Usage report” to the Ground Truth.");
     await expect(count(page, "slice_parent_missing")).toHaveCount(0);
-    await expect(total(page)).toHaveText("5");
+    await expect(count(page, "no_code")).toContainText("1");
+    // Each is a feature with its code, which serves no goal yet.
+    await openKind(page, "no_goal");
+    await expect(page.getByRole("button", { name: "Pick a goal: F-09 Guest seats" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Pick a goal: F-15 Usage report" })).toBeVisible();
+    await expect(count(page, "no_goal")).toContainText("3");
+    await expect(total(page)).toHaveText("7");
   });
 
   test("Link to a feature picks a Ground Truth feature by code and name", async ({ page }) => {
@@ -86,7 +106,7 @@ test.describe("as the owner", () => {
     await expect(picker).toHaveCount(0);
     await expect(page.getByTestId("gt-notice")).toContainText("Linked “Export to sheets” to “Sheets export”.");
     await expect(row(page, "Export to sheets")).toHaveCount(0);
-    await expect(total(page)).toHaveText("6");
+    await expect(total(page)).toHaveText("8");
   });
 
   test("Confirm it confirms the feature a run proposed", async ({ page }) => {
@@ -95,8 +115,8 @@ test.describe("as the owner", () => {
     await row(page, "Weekly digest").getByRole("button", { name: /Confirm it/ }).click();
     await expect(page.getByTestId("gt-notice")).toContainText("Confirmed “Weekly digest”.");
     await expect(row(page, "Weekly digest")).toHaveCount(0);
-    await expect(count(page, "unlinked_item")).toContainText("1");
-    await expect(total(page)).toHaveText("6");
+    await expect(count(page, "unlinked_item")).toContainText("2");
+    await expect(total(page)).toHaveText("8");
   });
 
   test("Pick a goal links the feature to a goal", async ({ page }) => {
@@ -107,7 +127,7 @@ test.describe("as the owner", () => {
     await picker.getByRole("button").filter({ hasText: "Raise activation" }).click();
     await expect(page.getByTestId("gt-notice")).toContainText("“Audit log” now serves “Raise activation”.");
     await expect(count(page, "no_goal")).toHaveCount(0);
-    await expect(total(page)).toHaveText("6");
+    await expect(total(page)).toHaveText("8");
   });
 });
 
@@ -120,10 +140,10 @@ for (const colorScheme of ["light", "dark"] as const)
     await row(page, "Night alerts").getByRole("button", { name: /Take it off the roadmap/ }).click();
     await expect(page.getByTestId("gt-notice")).toContainText("Took “Night alerts” off the roadmap.");
     await expect(count(page, "runs_today_on_roadmap")).toHaveCount(0);
-    await expect(total(page)).toHaveText("6");
+    await expect(total(page)).toHaveText("8");
     await page.getByTestId("gt-notice").getByRole("button", { name: "Undo" }).click();
     await expect(count(page, "runs_today_on_roadmap")).toContainText("1");
-    await expect(total(page)).toHaveText("7");
+    await expect(total(page)).toHaveText("9");
   });
 
 test.describe("as an approver", () => {
@@ -139,7 +159,7 @@ test.describe("as an approver", () => {
     await row(page, "Audit log").getByRole("button", { name: /Pick a goal/ }).click();
     await page.getByTestId("gt-picker").getByRole("button").filter({ hasText: "Raise activation" }).click();
     await expect(count(page, "no_goal")).toHaveCount(0);
-    await expect(total(page)).toHaveText("5");
+    await expect(total(page)).toHaveText("7");
   });
 });
 
@@ -147,7 +167,7 @@ for (const viewport of [DESKTOP, PHONE])
   test(`a viewer reads the flags with no fixes (${viewport.width})`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await open(page, "viewer@example.com");
-    await expect(total(page)).toHaveText("7");
+    await expect(total(page)).toHaveText("9");
     for (const kind of ["unlinked_item", "prd_feature_missing", "no_goal", "runs_today_on_roadmap"]) {
       await openKind(page, kind);
       await expect(page.getByTestId(`gt-list-${kind}`).getByTestId("gt-row").first()).toBeVisible();

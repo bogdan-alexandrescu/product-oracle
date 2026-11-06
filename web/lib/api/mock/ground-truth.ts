@@ -7,11 +7,15 @@
  * roadmap and its PRD Scale, plus a roadmap item on a feature a run only proposed. The flags are
  * read from the mock's own state, as the API reads them, so each fix made in the UI (a feature
  * added or confirmed, a goal picked, an item linked or taken off, a code given, a PRD's feature
- * linked) removes its flag. The slice is a roadmap item (F-15a Usage report) whose F-15 is in no
- * PRD flag. As the API: a PRD's feature matches by code only (a same-name feature is a hint), and
- * an item linked to no feature whose own code or slice's feature is a confirmed feature's code is
+ * linked) removes its flag. The slices are two roadmap items (F-15a Usage report, F-15b Usage
+ * chart) of an F-15 in no PRD flag nor the Ground Truth: one Add to Ground Truth (F-15) clears
+ * both. The PRD's F-09 Guest seats spans two milestones; its roadmap item (section f-09) reads
+ * F-09a. As the API: a PRD's feature matches by code only (a same-name feature is a hint), an
+ * item linked to no feature whose own code or slice's feature is a confirmed feature's code is
  * in the Ground Truth by code and not flagged unlinked, though it is flagged if that feature runs
- * today. Every other scenario reads no flags. Invented data only.
+ * today; no_code and no_goal read every confirmed feature (the base mock's have a code and a goal
+ * here), a goal served by a confirmed link to a confirmed goal. Every other scenario reads no
+ * flags. Invented data only.
  */
 import type { Schemas } from "@/lib/api/client";
 import type { BaselineState } from "./baseline";
@@ -72,11 +76,16 @@ const ITEMS: [string, string, string | null, boolean, string?][] = [
   ["gt-night-alerts", "Night alerts", featureId("F-03"), false],
   // Digest emails came from a PRD's F-20 section: the next code counts it (F-21).
   ["gt-digest-emails", "Digest emails", featureId("F-12"), false, "f-20"],
-  // A slice item (PRD section f-15a) whose feature, F-15, is in no PRD flag nor the Ground Truth.
+  // Two slice items (PRD sections f-15a, f-15b) whose feature, F-15, is in no PRD flag nor the Ground Truth.
   ["gt-usage-report", "Usage report", null, true, "f-15a"],
+  ["gt-usage-chart", "Usage chart", null, true, "f-15b"],
+  // An item of the PRD's F-09, over two milestones: it reads F-09a, and is an unlinked item (F-09 is the PRD's flag).
+  ["gt-guest-invites", "Guest invites", null, true, "f-09"],
 ];
-/** The PRD Scale's approved plan: its feature not in the Ground Truth. */
-const PRD_FEATURES = [{ code: "F-09", name: "Guest seats" }];
+/** The PRD Scale's approved plan: its feature not in the Ground Truth, over two milestones. */
+const PRD_FEATURES = [{ code: "F-09", name: "Guest seats", milestones: ["Beta", "Launch"] }];
+/** The codes the base mock's confirmed features take here, so each of the scenario's kinds has its one flag. */
+const BASE_CODES = ["F-04", "F-05", "F-06", "F-07", "F-08"];
 
 /** Adds the scenario's features (to the baseline) and items (to the Alerts roadmap). */
 export function seedGroundTruth(baseline: BaselineState, simple: SimpleDb): void {
@@ -89,6 +98,14 @@ export function seedGroundTruth(baseline: BaselineState, simple: SimpleDb): void
     baseline.entities.push({ ...template, id, key, title, body: null, attrs: {}, status, parent_id: null, locked: false, locked_by: null, locked_at: null });
     if (serves) baseline.edges.push({ ...edge, id: stableUuid(`ground-truth/serves/${key}`), src_id: id, dst_id: goal.id, status: "confirmed", locked: false, locked_by: null, locked_at: null });
   }
+  // The base mock's confirmed features: each with a code and serving a confirmed goal (the check reads every one).
+  const ours = new Set(FEATURES.map(([key]) => featureId(key)));
+  const others = baseline.entities.filter((e) => e.type === "feature" && e.status === "confirmed" && !ours.has(e.id) && !F_CODE.test(e.key));
+  others.forEach((e, n) => {
+    if (n < BASE_CODES.length) e.key = BASE_CODES[n];
+    if (!baseline.edges.some((x) => x.type === "supports" && x.src_id === e.id && x.dst_id === goal.id && x.status === "confirmed"))
+      baseline.edges.push({ ...edge, id: stableUuid(`ground-truth/serves/base/${e.id}`), src_id: e.id, dst_id: goal.id, status: "confirmed", locked: false, locked_by: null, locked_at: null });
+  });
   for (const [key, title, feature, draft, section] of ITEMS) {
     if (simple.items.some((x) => x.key === key)) continue;
     simple.items.push({ key, title, horizon: "next", roadmap: ROADMAP_SLUG, track: "alerts", confidence: "medium", start: 30, end: 70, source: "typed", draft, feature_id: feature, ...(section ? { section } : {}) });
@@ -111,7 +128,6 @@ const flag = (kind: Kind, fixes: [Action, string][], rest: Partial<Flag>): Flag 
 function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
   const byId = new Map(baseline.entities.filter((e) => e.type === "feature").map((e) => [e.id, e]));
   const truth = [...byId.values()].filter((e) => e.status === "confirmed");
-  const ours = FEATURES.map(([key]) => byId.get(featureId(key))).filter((e): e is Entity => !!e && e.status === "confirmed");
   const ref = (e: Entity) => ({ id: e.id, code: F_CODE.test(e.key) ? e.key : null, name: e.title });
   const both = { roadmap: ROADMAP, prd: PRD };
   const out: Flag[] = [];
@@ -125,13 +141,29 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
     return e?.status === "confirmed" ? e : undefined;
   };
   const missing = PRD_FEATURES.filter((f) => !truthOf.has(f.code) && !linkedTo(f.code));
-  // Each item's code (F-15a for a slice section f-15a) and its slice's feature's (F-15).
-  const codeOf = (s: (typeof items)[number]): [string | null, string | null] => {
+  // Each item's code (F-15a for a slice section f-15a) and its slice's feature's (F-15). An item of a PRD
+  // feature over several milestones takes the next letter no slice item of it has (F-09a), as check.py's slice_of.
+  const sectionOf = (s: (typeof items)[number]) => {
     const m = /^([a-z]{1,3})-(\d+)([a-j])?$/i.exec((s.section ?? "").trim());
-    if (!m) return [null, null];
-    const base = `${m[1].toUpperCase()}-${m[2].padStart(2, "0")}`;
-    return m[3] ? [`${base}${m[3].toLowerCase()}`, base] : [base, null];
+    return m ? { base: `${m[1].toUpperCase()}-${m[2].padStart(2, "0")}`, letter: m[3]?.toLowerCase() } : null;
   };
+  const taken = new Map<string, Set<string>>();
+  for (const s of items) {
+    const sec = sectionOf(s);
+    if (sec?.letter) taken.set(sec.base, (taken.get(sec.base) ?? new Set()).add(sec.letter));
+  }
+  const slices = new Map<string, [string, string]>();
+  for (const s of items) {
+    const sec = sectionOf(s);
+    if (sec?.letter) slices.set(s.key, [`${sec.base}${sec.letter}`, sec.base]);
+    else if (sec && (PRD_FEATURES.find((f) => f.code === sec.base)?.milestones.length ?? 0) > 1) {
+      const used = taken.get(sec.base) ?? new Set<string>();
+      const letter = [..."abcdefghij"].find((x) => !used.has(x)) ?? "j";
+      taken.set(sec.base, used.add(letter));
+      slices.set(s.key, [`${sec.base}${letter}`, sec.base]);
+    }
+  }
+  const codeOf = (s: (typeof items)[number]): [string | null, string | null] => slices.get(s.key) ?? [sectionOf(s)?.base ?? null, null];
   const byCode = (s: (typeof items)[number]) => {
     for (const c of codeOf(s)) if (c && (truthOf.get(c) ?? linkedTo(c))) return truthOf.get(c) ?? linkedTo(c);
     return undefined;
@@ -160,9 +192,11 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
     const hint = like ? `${["Same name as", F_CODE.test(like.key) ? like.key : null, like.title].filter(Boolean).join(" ")}.` : null;
     out.push(flag("prd_feature_missing", [["add_to_ground_truth", f.code], ["link_to_feature", f.code]], { feature: { id: null, code: f.code, name: f.name }, where: both, hint, like: like ? ref(like) : null }));
   }
-  for (const e of ours) if (!F_CODE.test(e.key)) out.push(flag("no_code", [["give_code", e.id]], { feature: ref(e) }));
-  const serving = new Set(baseline.edges.filter((e) => e.type === "supports" && e.status !== "rejected").map((e) => e.src_id));
-  for (const e of ours) if (!serving.has(e.id)) out.push(flag("no_goal", [["pick_goal", e.id]], { feature: ref(e) }));
+  // Every confirmed feature, as the API: a goal is served by a confirmed link to a confirmed goal.
+  for (const e of truth) if (!F_CODE.test(e.key)) out.push(flag("no_code", [["give_code", e.id]], { feature: ref(e) }));
+  const goals = new Set(baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => e.id));
+  const serving = new Set(baseline.edges.filter((e) => e.type === "supports" && e.status === "confirmed" && goals.has(e.dst_id)).map((e) => e.src_id));
+  for (const e of truth) if (!serving.has(e.id)) out.push(flag("no_goal", [["pick_goal", e.id]], { feature: ref(e) }));
   for (const s of items) {
     // Its own feature, or the one it matches by code (F-03, F-03a).
     const f = byId.get(s.linked_feature ?? s.feature_id ?? "") ?? byCode(s);
