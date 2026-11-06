@@ -17,6 +17,9 @@ import { expect, test, type Locator, type Page } from "./test";
  * grandparent included); fails_when = only the direct parent is excused.
  * Card pm-merge-tree: protects = merging a feature with parts into a feature that is itself a part
  * keeps every part on the roadmap, under the kept feature; fails_when = a part's row disappears.
+ * Card pm-restore-part: protects = a part restored from Trash goes back under its parent while
+ * that parent is live (at its new place in the tree), else to the top level; fails_when = it
+ * comes back under a merged parent, loses its parent, or the restore fails.
  * Card pm-trash-parent: protects = a part whose parent is in Trash reads "Part of <name> (in Trash)"
  * and keeps the dates it took from it; fails_when = it loses its bar or the path.
  * Card pm-cut-part: protects = a cut feature can be made a part and taken out again from its
@@ -211,6 +214,39 @@ for (const size of SIZES)
         expect(at("alert-export")).toBe(at("alert-mobile") + 1);
         expect(rows[at("alert-export")][1]).toBe("2");
       }
+    });
+
+    test("a part restored from Trash goes back under its parent while that is live, else to the top level", async ({ page }) => {
+      test.setTimeout(90_000);
+      await login(page);
+      await open(page, "alert-export");
+      await partOf(page, "Alert routing by team");
+      await menu(page, "Delete feature");
+      await expect(toasts(page)).toContainText("Moved Alert history export to Trash.");
+      // Meanwhile its parent moves: it becomes a part of Alert rules engine.
+      await open(page, "alert-sso");
+      await partOf(page, "Alert rules engine");
+      await page.goto("/settings/trash");
+      await tap(page.getByRole("button", { name: "Restore Alert history export" }));
+      await expect(page.getByTestId("trash-entry").filter({ hasText: "Alert history export" })).toHaveCount(0);
+      await open(page, "alert-export");
+      await expect(panel(page).getByTestId("card-part-of")).toHaveText("Part of Alert rules engine > Alert routing by team");
+
+      // Deleted again, and its parent merged away meanwhile: it comes back at the top level.
+      await menu(page, "Delete feature");
+      await expect(toasts(page)).toContainText("Moved Alert history export to Trash.");
+      await open(page, "alert-sso");
+      await menu(page, "Merge into…");
+      const form = panel(page).getByTestId("card-merge-edit");
+      await form.getByLabel("Merge into").selectOption({ label: "Mobile alert push" });
+      await tap(form.getByRole("button", { name: "Merge", exact: true }));
+      await expect(toasts(page)).toContainText("Merged 'Alert routing by team' into Mobile alert push in your working draft");
+      await page.goto("/settings/trash");
+      await tap(page.getByRole("button", { name: "Restore Alert history export" }));
+      await expect(page.getByTestId("trash-entry").filter({ hasText: "Alert history export" })).toHaveCount(0);
+      await open(page, "alert-export");
+      await expect(panel(page).getByTestId("card-name")).toContainText("Alert history export");
+      await expect(panel(page).getByTestId("card-part-of")).toHaveCount(0);
     });
 
     test("a part whose parent is in Trash reads 'Part of <name> (in Trash)' and keeps its dates", async ({ page }) => {
