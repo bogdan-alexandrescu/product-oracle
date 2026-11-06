@@ -813,7 +813,7 @@ export function discussionNeeds(inbox: InboxOut, seenBefore: string | null | und
       return {
         ...base,
         item: (
-          <span className="min-w-0 truncate" title={r.excerpt ?? ""}>
+          <span className="min-w-0 truncate" title={r.excerpt ?? ""} data-user-content>
             “{r.excerpt ?? ""}”
           </span>
         ),

@@ -41,6 +41,9 @@ docs/agents/lane-rules.md"; the product rules are in .claude/rules/oracle-produc
 - A lane that adds prose must hide it (an InfoTip, a tick whose tooltip says why, a link) or
   the prose guard fails: `web/e2e/prose-guard.spec.ts` counts each page's visible prose
   against `web/e2e/prose-ceilings.json`; ceilings only go down (`npm run prose:ratchet`).
+  Ceilings are never edited by hand: the spec fails when one is above the merge base's
+  (`origin/main`), and a new page starts at its measured count. Text a person wrote
+  (comments, notes, answers, quotes) is marked `data-user-content` and not counted.
 - Roles in the web go through `can()` or an item's own `can_*` field only.
 - No company or customer data in code, tests or the PR.
 - Never use pkill, killall or kill on a pattern; kill by PID.

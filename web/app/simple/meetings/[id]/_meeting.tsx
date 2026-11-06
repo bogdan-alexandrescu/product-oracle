@@ -460,7 +460,7 @@ function NotesSoFar({ notes, mayChange }: { notes: MeetingNote[]; mayChange: boo
         <ul className="mt-2 space-y-2">
           {notes.map((n) => (
             <li key={n.card_id} data-testid="meeting-note" data-kind={n.kind} className="[overflow-wrap:anywhere]">
-              <span className="font-semibold">{n.kind === "question" ? "Open question:" : "Note:"}</span> {n.text}
+              <span className="font-semibold">{n.kind === "question" ? "Open question:" : "Note:"}</span> <span data-user-content>{n.text}</span>
               <span className="block text-sm text-text-faint">{n.by_name}</span>
             </li>
           ))}
@@ -705,7 +705,7 @@ function Comments({ m, reload }: { m: Meeting; reload: () => Promise<unknown> })
           <ul className="mt-2 space-y-2" aria-label="Comments">
             {comments.map((c) => (
               <li key={c.id} data-testid="meeting-comment" className="[overflow-wrap:anywhere]">
-                {c.text}
+                <span data-user-content>{c.text}</span>
                 <span className="block text-sm text-text-faint">
                   {c.by_name}
                   {c.at ? ` · ${momentWords(c.at, zone)}` : ""}
@@ -863,7 +863,7 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
             </>
           ) : (
             <>
-              <p data-testid="minutes-summary">{minutes?.summary || "No summary."}</p>
+              <p data-testid="minutes-summary" data-user-content>{minutes?.summary || "No summary."}</p>
               <h3 className="font-semibold">Open questions</h3>
               {/* qa-simple-decide-52: each open question leads to where it is decided. */}
               {minutes?.open_questions.length ? (
@@ -880,7 +880,7 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
               <h3 className="font-semibold">Action items</h3>
               {minutes?.action_items.length ? (
                 <ul className="list-disc pl-5">
-                  {minutes.action_items.map((a, i) => <li key={i}>{a.title} · {a.owner_name ?? owner(a.owner_id) ?? "no owner"}{a.due_date ? ` · by ${dayWords(a.due_date, zone)}` : ""}</li>)}
+                  {minutes.action_items.map((a, i) => <li key={i}><span data-user-content>{a.title}</span> · {a.owner_name ?? owner(a.owner_id) ?? "no owner"}{a.due_date ? ` · by ${dayWords(a.due_date, zone)}` : ""}</li>)}
                 </ul>
               ) : (
                 <p className="simple-small">None.</p>
@@ -892,7 +892,7 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
             <>
               <h3 className="font-semibold">Notes</h3>
               <ul className="list-disc pl-5" data-testid="minutes-notes">
-                {(m.notes ?? []).filter((n) => n.kind === "note").map((n) => <li key={n.id}>{n.text} · {n.by_name}</li>)}
+                {(m.notes ?? []).filter((n) => n.kind === "note").map((n) => <li key={n.id}><span data-user-content>{n.text}</span> · {n.by_name}</li>)}
               </ul>
             </>
           )}
@@ -901,7 +901,7 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
             <>
               <h3 className="font-semibold">Comments</h3>
               <ul className="list-disc pl-5 [overflow-wrap:anywhere]" data-testid="minutes-comments">
-                {(m.notes ?? []).filter((n) => n.kind === "comment").map((n) => <li key={n.id}>{n.text} · {n.by_name}</li>)}
+                {(m.notes ?? []).filter((n) => n.kind === "comment").map((n) => <li key={n.id}><span data-user-content>{n.text}</span> · {n.by_name}</li>)}
               </ul>
             </>
           )}

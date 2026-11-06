@@ -3,8 +3,10 @@
  * hidden in nice way behind a tooltip or tick"). Visits every page of Simple and Detailed in
  * the mock production build, as the owner and as a viewer, at 1440 wide, counts the visible
  * prose on each, writes the counts to test-results/prose/ and fails when a page's count is
- * above its ceiling in e2e/prose-ceilings.json. Ceilings only go down:
- * `npm run prose:ratchet` reruns this spec and lowers every ceiling to today's count.
+ * above its ceiling in e2e/prose-ceilings.json. Ceilings only go down, and never by hand:
+ * `npm run prose:ratchet` reruns this spec and lowers every ceiling to today's count, and the
+ * spec fails when a ceiling is above the merge base's (origin/main; PROSE_BASE names another
+ * ref) or, for a page the merge base has no ceiling for, above the page's count.
  *
  * The rule, as counted here:
  * - Text is what the page renders and a person can see: text nodes whose element passes
@@ -17,17 +19,20 @@
  *   chat and meeting messages, and anything else a person wrote, marked in the app with
  *   [data-user-content] (see USER_CONTENT below for the other selectors that mean the same).
  * - The text left is joined per block (a run of inline text up to its nearest non-inline
- *   ancestor), whitespace squeezed, and split into sentences after ". ", "! " or "? ".
+ *   ancestor) with a space between text nodes, so "9" and "decisions" in two spans read as
+ *   two words, whitespace squeezed, and split into sentences after ". ", "! " or "? ".
  * - A sentence is prose when it has 8 or more words; a word is a run of non-space characters
  *   with at least one letter (so dates and numbers do not count: "Oct 30, 2026, 2:49 PM"
- *   is three words).
+ *   is two words, "Oct" and "PM").
  * - A page's count is the number of words in its prose sentences. The guard fails when that
  *   is above the page's ceiling for the role; a page with no ceiling yet fails until
- *   `npm run prose:ratchet` records it.
+ *   `npm run prose:ratchet` records it. A page that opened "not found" fails, and its count is
+ *   written as missing, which the ratchet ignores.
  *
  * A lane that adds prose hides it (an InfoTip, a tick whose tooltip says why, a link) or this
  * spec fails (docs/agents/lane-rules.md).
  */
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -182,6 +187,31 @@ const DETAILED: Visit[] = [
 type Ceilings = Record<Role, Record<string, number>>;
 const ceilings: Ceilings = fs.existsSync(CEILINGS_FILE) ? JSON.parse(fs.readFileSync(CEILINGS_FILE, "utf8")) : { owner: {}, viewer: {} };
 
+/**
+ * The ceilings on the merge base (with origin/main, or PROSE_BASE), or an error saying why
+ * they could not be read. A merge base without the file has no ceilings yet.
+ */
+function baseCeilings(): Ceilings | string {
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: __dirname, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  const ref = process.env.PROSE_BASE || "origin/main";
+  let base: string;
+  try {
+    base = git("merge-base", "HEAD", ref);
+  } catch {
+    return `no merge base with ${ref}: run git fetch origin main (or set PROSE_BASE to the branch the PR goes into)`;
+  }
+  try {
+    return JSON.parse(git("show", `${base}:web/e2e/prose-ceilings.json`));
+  } catch {
+    return { owner: {}, viewer: {} };
+  }
+}
+const base = baseCeilings();
+
+/** Every route the guard visits, for the ratchet to drop the ceilings of routes gone since. */
+fs.mkdirSync(OUT, { recursive: true });
+fs.writeFileSync(path.join(OUT, "routes.json"), JSON.stringify([...SIMPLE, ...DETAILED].map((v) => v.route)));
+
 /** Waits until the page's text stops changing (the mock answers in the browser). */
 async function settle(page: Page) {
   await page.waitForLoadState("networkidle").catch(() => undefined);
@@ -230,13 +260,13 @@ function countProse(page: Page): Promise<Count> {
         let block: Element = el;
         while (block.parentElement && /^(inline|contents)$/.test(getComputedStyle(block).display)) block = block.parentElement;
         const parts = blocks.get(block) ?? [];
-        parts.push(text);
+        parts.push(text.trim());
         blocks.set(block, parts);
       }
       const sentences: string[] = [];
       let words = 0;
       for (const parts of blocks.values()) {
-        const text = parts.join("").replace(/\s+/g, " ").trim();
+        const text = parts.join(" ").replace(/\s+/g, " ").trim();
         for (const s of text.split(/(?<=[.!?])\s+/)) {
           const n = s.split(" ").filter((w) => /\p{L}/u.test(w)).length;
           if (n >= minWords) {
@@ -270,14 +300,20 @@ async function check(page: Page, role: Role, mode: string, v: Visit) {
   const opened = await open(page, v.go);
   expect.soft(opened, `no link to ${v.route} on the way there (${JSON.stringify(v.go)})`).not.toBeNull();
   if (!opened) return;
-  // A stale id would count a "not found" page instead of the real one.
-  expect.soft(await page.locator("body").innerText(), `${v.route} opened a missing page (${opened})`).not.toMatch(MISSING);
+  // A stale id would count a "not found" page instead of the real one; the ratchet skips it.
+  const body = await page.locator("body").innerText();
+  const missing = MISSING.test(body);
+  expect.soft(body, `${v.route} opened a missing page (${opened})`).not.toMatch(MISSING);
   const { words, sentences } = await countProse(page);
-  fs.mkdirSync(OUT, { recursive: true });
-  fs.writeFileSync(path.join(OUT, fileName(role, v.route)), JSON.stringify({ role, mode, route: v.route, url: opened, words, sentences }, null, 2));
+  fs.writeFileSync(path.join(OUT, fileName(role, v.route)), JSON.stringify({ role, mode, route: v.route, url: opened, missing, words, sentences }, null, 2));
   const ceiling = ceilings[role]?.[v.route];
   expect.soft(ceiling, `${v.route} as ${role} has no ceiling in e2e/prose-ceilings.json: run npm run prose:ratchet`).toBeDefined();
   if (ceiling === undefined) return;
+  // A page new since the merge base starts at its count, never above it.
+  if (typeof base !== "string" && base[role]?.[v.route] === undefined && !missing)
+    expect
+      .soft(ceiling, `${v.route} as ${role} is new since the merge base: its ceiling starts at its count, ${words} (npm run prose:ratchet), never above it`)
+      .toBeLessThanOrEqual(words);
   expect
     .soft(
       words,
@@ -288,6 +324,17 @@ async function check(page: Page, role: Role, mode: string, v: Visit) {
 
 test.describe("prose guard", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
+
+  test("no ceiling is above the merge base's (ceilings are never raised by hand)", () => {
+    expect(typeof base === "string" ? base : null, "the merge base's ceilings").toBeNull();
+    if (typeof base === "string") return;
+    const raised = (Object.keys(ROLES) as Role[]).flatMap((role) =>
+      Object.entries(ceilings[role] ?? {})
+        .filter(([route, n]) => base[role]?.[route] !== undefined && n > base[role][route])
+        .map(([route, n]) => `${role} ${route}: ${n}, was ${base[role][route]}`),
+    );
+    expect(raised, "Ceilings in e2e/prose-ceilings.json only go down (npm run prose:ratchet); hide the new prose instead").toEqual([]);
+  });
 
   for (const [mode, pages] of [["Simple", SIMPLE], ["Detailed", DETAILED]] as const) {
     for (const role of Object.keys(ROLES) as Role[]) {
