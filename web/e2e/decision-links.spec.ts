@@ -5,10 +5,10 @@ import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login, signOut } from "./helpers";
 
 /*
- * H1 follow-ups (#193): pickers for the evidence, linked baseline items and subjects of a
+ * H1 follow-ups (#193): pickers for the evidence, linked Ground Truth items and subjects of a
  * decision when proposing or editing it, and the outcome status in the inspector's
  * Expected. The mock seeds D-5 "Ship usage caps before anomaly detection", proposed by the
- * commenter for the approver, and the baseline's "Guided setup" feature with its evidence.
+ * commenter for the approver, and the Ground Truth's "Guided setup" feature with its evidence.
  * Each test states its card: protects / fails_when / no_claim.
  */
 
@@ -28,7 +28,7 @@ async function openCaps(page: Page) {
   await expect(inspector(page)).toContainText("Do caps wait for detection?");
 }
 
-test("a proposal names the baseline items, evidence and document it is about; the inspector reads them back", async ({ page }) => {
+test("a proposal names the Ground Truth items, evidence and document it is about; the inspector reads them back", async ({ page }) => {
   // protects=Propose decision offers a linked-item search, the linked items' evidence to
   // tick and an About picker; the new decision's inspector shows each by name, with links,
   // after a reload too; fails_when=the pickers send nothing (evidence_ids and entity_ids
@@ -160,11 +160,11 @@ async function editTitle(page: Page, title: string) {
   await expect(inspector(page)).toContainText(title);
 }
 
-test("a title-only edit saves after evidence the decision rests on is removed from the baseline", async ({ page }) => {
-  // protects=once an approver removes, in the baseline drawer, evidence a proposal rests on,
+test("a title-only edit saves after evidence the decision rests on is removed from the Ground Truth", async ({ page }) => {
+  // protects=once an approver removes, in the Ground Truth drawer, evidence a proposal rests on,
   // Edit still saves and neither the inspector nor the form shows the gone evidence or an
   // id; fails_when=Save is refused with "unknown evidence_ids: <id>" (the form cannot show,
-  // so cannot untick, the gone row); no_claim=a deleted baseline item (the web has no
+  // so cannot untick, the gone row); no_claim=a deleted Ground Truth item (the web has no
   // Delete for items; pytest covers it), the mock stands in for the API.
   await login(page, APPROVER);
   await openCaps(page);
@@ -197,11 +197,11 @@ test("a title-only edit saves after evidence the decision rests on is removed fr
 });
 
 test("a commenter's edit keeps a linked item only approvers may see, and never shows it to them", async ({ page }) => {
-  // protects=an approver links D-5 to a pricing decision's baseline item (owners and
+  // protects=an approver links D-5 to a pricing decision's Ground Truth item (owners and
   // approvers only); the commenter who proposed D-5 sees no chip, title or id for it in the
   // inspector or the Edit pickers, saves a title-only edit, and the approver still reads the
   // link afterwards; fails_when=the commenter's save is refused ("unknown entity_ids"),
-  // drops the link, or shows "A baseline item"/the item to the commenter; no_claim=the
+  // drops the link, or shows "A Ground Truth item"/the item to the commenter; no_claim=the
   // mock stands in for the API's visibility rule (pytest covers the API's).
   await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "pricing"]);
   await login(page, APPROVER);

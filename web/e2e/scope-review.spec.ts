@@ -102,12 +102,12 @@ test("enhance a requirement, then edit and accept the suggestion", async ({ page
   await expect(req.getByTestId("requirement-text")).toHaveText(text);
 });
 
-// Card c14 (criterion 14): protects = call c2 "Approve with edits" and decision B1 Baseline
+// Card c14 (criterion 14): protects = call c2 "Approve with edits" and decision B1 Ground Truth
 // shape: a requirement a person adds is approved without an agent round and lands in the
-// baseline as theirs, locked, under its feature; fails_when = the added row is not marked as
-// yours, the checkpoint is not approved, or the Baseline graph does not list the requirement
+// Ground Truth as theirs, locked, under its feature; fails_when = the added row is not marked as
+// yours, the checkpoint is not approved, or the Ground Truth graph does not list the requirement
 // under its feature, locked; no_claim = the agents' own proposals (unchanged).
-test("add a requirement, approve with edits, and the baseline lists it under its feature, locked", async ({ page }) => {
+test("add a requirement, approve with edits, and the Ground Truth lists it under its feature, locked", async ({ page }) => {
   await seeded(page);
   await openReview(page, "saved-addresses");
   // The blocking dependency first, so Approve is open.

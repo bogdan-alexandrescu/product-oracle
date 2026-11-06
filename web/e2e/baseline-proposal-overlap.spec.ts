@@ -47,7 +47,7 @@ async function savedCarts(page: Page) {
  * "Skip milestone, apply the rest" overwrites the milestone or leaves the other field unapplied.
  * no_claim: edges; the entity drawer (it has no Accept).
  */
-test("baseline: skip the overlapping field and apply the rest", async ({ page }) => {
+test("Ground Truth: skip the overlapping field and apply the rest", async ({ page }) => {
   await openProposals(page);
   const warning = await acceptFirstThenOpenWarning(page);
   await warning.getByRole("button", { name: "Skip milestone, apply the rest" }).click();
@@ -58,7 +58,7 @@ test("baseline: skip the overlapping field and apply the rest", async ({ page })
   await expect(d.locator('[data-attr="effort"]')).toHaveText("XL");
 });
 
-test("baseline: apply anyway overwrites the field", async ({ page }) => {
+test("Ground Truth: apply anyway overwrites the field", async ({ page }) => {
   await openProposals(page);
   const warning = await acceptFirstThenOpenWarning(page);
   await warning.getByRole("button", { name: "Apply anyway" }).click();
@@ -72,7 +72,7 @@ test("baseline: apply anyway overwrites the field", async ({ page }) => {
  * protects: the warning on a phone.
  * fails_when: at 390 px the page scrolls sideways or a warning button is out of view.
  */
-test("baseline: the overlap warning wraps on a phone", async ({ page }) => {
+test("Ground Truth: the overlap warning wraps on a phone", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openProposals(page);
   const warning = await acceptFirstThenOpenWarning(page);
@@ -89,7 +89,7 @@ test("baseline: the overlap warning wraps on a phone", async ({ page }) => {
  * fails_when: the link is missing or miscounted, clicking it does not scroll to and highlight the
  * sibling card, or the link stays once the sibling is decided.
  */
-test("baseline: a card links to the other open proposal on its entry", async ({ page }) => {
+test("Ground Truth: a card links to the other open proposal on its entry", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 400 });
   await openProposals(page);
   const rows = page.getByTestId("proposal");

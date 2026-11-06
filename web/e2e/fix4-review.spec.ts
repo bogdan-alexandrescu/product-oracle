@@ -7,7 +7,7 @@ import { login } from "./helpers";
  * QA pass 4 on the run review page, /runs/<id>/review/<checkpoint> (qa-work-1, 6, 9, 11 to 17),
  * driven through the UI on the mock's "feature-set" scenario: the Saved addresses PRD run
  * waiting at its feature set (Bulk address edit depends on the left-out Shared address book
- * export and serves no goal; Saved addresses is new and serves a goal not in the baseline).
+ * export and serves no goal; Saved addresses is new and serves a goal not in the Ground Truth).
  */
 
 const DESKTOP = { width: 1440, height: 900 };

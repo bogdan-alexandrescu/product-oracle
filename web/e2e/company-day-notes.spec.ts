@@ -4,7 +4,7 @@ import { login, pickZone } from "./helpers";
 
 /**
  * #463: days the API writes into text a person reads are the Company time zone's day. The
- * mock's Baseline to PRD run started at 07:30 UTC on Oct 16, which is 21:30 on Oct 15 in
+ * mock's Ground Truth to PRD run started at 07:30 UTC on Oct 16, which is 21:30 on Oct 15 in
  * Honolulu. Driven through the UI on the mock layer.
  */
 
@@ -45,7 +45,7 @@ test("proposals: the run that made them is named with the Company day", async ({
 
 const PROBLEM = "Returning buyers retype their address at every checkout. Saved addresses would make repeat checkout faster.";
 
-/** The mock's last baseline review, 16:40 UTC nine days ago, is the next day in Auckland (UTC+13). */
+/** The mock's last Ground Truth review, 16:40 UTC nine days ago, is the next day in Auckland (UTC+13). */
 function aucklandApprovalDay(): string {
   const at = new Date(mockNow().getTime() - 9 * 86_400_000);
   at.setUTCHours(16, 40, 0, 0);
@@ -54,11 +54,11 @@ function aucklandApprovalDay(): string {
   return `${months[next.getUTCMonth()]} ${next.getUTCDate()}`;
 }
 
-// protects: the reused baseline's approval day, in the Draft with Oracle sheet and on the
+// protects: the reused Ground Truth's approval day, in the Draft with Oracle sheet and on the
 // run page, is the Company day the API's notes name.
 // fails_when: either still shows the UTC day of the approval.
 // no_claim: the API's note text (pytest test_company_day_text.py).
-test("reuse: the baseline's approval day is the Company day in the sheet and on the run", async ({ page }) => {
+test("reuse: the Ground Truth's approval day is the Company day in the sheet and on the run", async ({ page }) => {
   await login(page);
   await setZone(page, "Pacific/Auckland");
   const day = aucklandApprovalDay();

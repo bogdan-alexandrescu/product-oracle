@@ -7,7 +7,7 @@ import { login, openSection, signOut } from "./helpers";
 /**
  * D10 One review place: a run's PRD review is decided in the version its draft made. Decide
  * (Inbox, runs list) opens the version with the run review bar; the run page only links to
- * it. On the mock layer ("run-review" scenario: a Baseline to PRD run waiting at its PRD
+ * it. On the mock layer ("run-review" scenario: a Ground Truth to PRD run waiting at its PRD
  * review of usage-alerts v2, three sections), driven as a person would. Each test states its
  * card: protects / fails_when / no_claim.
  */

@@ -6,7 +6,7 @@ import { login } from "./helpers";
 /**
  * #340: the blocker inspector. A person edits a blocker's status, owner and description,
  * handles its solution options, sets its feasibility scope and runs its experiments, all
- * in the UI; it opens from the Blockers tab, the Baseline drawer and Publish's blocks.
+ * in the UI; it opens from the Blockers tab, the Ground Truth drawer and Publish's blocks.
  */
 const DEPOSITS = "Same-day refund rule unanswered";
 const LOOKUP = "The address lookup service allows 100 requests a minute per company";
@@ -197,7 +197,7 @@ test("an approver sees the edit controls; the gating blocker's feasibility scope
   await expect(insp.getByRole("form", { name: "Edit blocker" })).toBeVisible();
 });
 
-test("opens from the Baseline drawer", async ({ page }) => {
+test("opens from the Ground Truth drawer", async ({ page }) => {
   await login(page);
   await page.goto(`/ground-truth?entity=${DEPOSITS_IDS.blocker}`);
   const drawer = page.getByTestId("entity-drawer");

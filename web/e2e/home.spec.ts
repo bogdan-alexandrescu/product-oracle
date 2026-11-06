@@ -19,7 +19,7 @@ test("Home: goals show current over target, distance to go, confidence and trend
   await expect(activation.getByTestId("goal-figure")).toHaveText("38%/ 45%");
   // I3: distance to go in the goal's own unit, never a percentage of target.
   await expect(activation.getByTestId("goal-to-go")).toHaveText("7 pts to go");
-  // qa-plan-4: no evidence yet, so no score, as on the Baseline page.
+  // qa-plan-4: no evidence yet, so no score, as on the Ground Truth page.
   await expect(activation.getByTestId("goal-confidence")).toHaveText("No confidence yet: add evidence");
   // The trend comes from the goal's recorded revisions, with the target dashed.
   await expect(activation.getByTestId("goal-trend").locator("line[data-target='45']")).toHaveCount(1);
@@ -40,7 +40,7 @@ test("Home: needs you lists the inbox and the questions asked of me, one action 
   // '+5 more in Inbox' under them (qa-company-12: a footer, not a line).
   await expect(rows).toHaveCount(6);
   await expect(needs.getByTestId("home-needs-more")).toHaveText("+5 more in Inbox");
-  // B2: a baseline checkpoint is reviewed in the Baseline, filtered to its run.
+  // B2: a Ground Truth checkpoint is reviewed in the Ground Truth, filtered to its run.
   await expect(rows.filter({ hasText: "Confirm the Ground Truth" }).getByRole("link", { name: "Review" })).toHaveAttribute("href", /^\/ground-truth\?run=/);
   await expect(rows.filter({ hasText: "$53.00 est." }).getByRole("button", { name: "Approve $53.00" })).toBeVisible();
   await expect(rows.filter({ hasText: "$14.20 / $9.00" }).getByRole("link", { name: "Open", exact: true })).toBeVisible();
@@ -143,7 +143,7 @@ test("Home for a new company: one line per block with what to do next", async ({
   await expect(setup.getByTestId("panel-count")).toHaveText("2 of 8");
   const goals = page.getByTestId("home-goals-empty");
   await expect(goals).toContainText("No goals yet");
-  // qa-onboarding-37: one baseline action on Home; the Set up row holds it, the card points there.
+  // qa-onboarding-37: one Ground Truth action on Home; the Set up row holds it, the card points there.
   await expect(goals.getByRole("link", { name: "Build the Ground Truth" })).toHaveCount(0);
   await expect(goals.getByTestId("goals-build-in-setup")).toHaveText("Build the Ground Truth from Set up, above");
   await expect(setup.getByTestId("setup-row-build_baseline").getByRole("link", { name: "Open" })).toHaveAttribute("href", "/ground-truth?build=1&from=setup");

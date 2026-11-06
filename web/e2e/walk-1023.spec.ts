@@ -106,8 +106,8 @@ test("the goal drawer shows a person's name and labelled attributes and history"
   await expect(history).not.toContainText("_");
 });
 
-// protects = "Why it needs you" says what changed once; fails_when = "42 baseline items changed;
-// 11 baseline items changed" (two counts of one thing) shows.
+// protects = "Why it needs you" says what changed once; fails_when = "42 Ground Truth items changed;
+// 11 Ground Truth items changed" (two counts of one thing) shows.
 test("Why it needs you names one count", async ({ page }) => {
   // qa4-plan-3: the item's reasons are an approved row's; "plan-decider" has the roadmap approved.
   await withScenario(page, "plan-decider");

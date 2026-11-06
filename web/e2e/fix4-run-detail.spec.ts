@@ -134,7 +134,7 @@ test.describe("phone", () => {
     await expect(page.getByTestId("run-header-sep").filter({ visible: true })).toHaveCount(0);
   });
 
-  test("qa-work-45: the baseline link stays inside the checkpoint card; the attempt chip sits under the name", async ({ page }) => {
+  test("qa-work-45: the Ground Truth link stays inside the checkpoint card; the attempt chip sits under the name", async ({ page }) => {
     await openRun(page, "team-onboarding");
     const card = page.locator("#decide");
     const link = card.getByTestId("from-run-link");

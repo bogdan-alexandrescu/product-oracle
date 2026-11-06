@@ -4,7 +4,7 @@ import { login } from "./helpers";
 
 /**
  * qa-onboarding-13, -14, -15, -30: a new company's owner on Home. Set up's buttons are named
- * for their step; the Goals card says "Build the baseline from Set up, above" while the step is
+ * for their step; the Goals card says "Build the Ground Truth from Set up, above" while the step is
  * on screen and starts a build itself once Set up is hidden; while the first build runs there
  * is one way to open it; the run's details say its segment under way once.
  *
@@ -46,7 +46,7 @@ test("Set up's buttons are named for their step", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Change", exact: true })).toHaveCount(0);
 });
 
-test("the Goals card says Build the baseline from Set up, and starts it itself once Set up is hidden", async ({ page }) => {
+test("the Goals card says Build the Ground Truth from Set up, and starts it itself once Set up is hidden", async ({ page }) => {
   // protects=qa-onboarding-15; fails_when=the card says "Build it from Set up, above", or the
   // hidden checklist leaves the card with no way to build; no_claim=the build sheet.
   await newCompanyOwner(page);
@@ -58,7 +58,7 @@ test("the Goals card says Build the baseline from Set up, and starts it itself o
   await expect(hint).toHaveCount(0);
   const build = goals(page).getByRole("link", { name: "Build the Ground Truth" });
   await expect(build).toHaveAttribute("href", "/ground-truth?build=1");
-  // Shown again, one baseline action again.
+  // Shown again, one Ground Truth action again.
   await page.getByRole("button", { name: "Set up 2 of 8" }).click();
   await expect(hint).toHaveText("Build the Ground Truth from Set up, above");
   await expect(build).toHaveCount(0);

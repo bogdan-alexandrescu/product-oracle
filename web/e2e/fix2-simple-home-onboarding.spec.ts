@@ -10,7 +10,7 @@ import { ADMIN, login, pickZone } from "./helpers";
  * card counts each step done and goes away once every step is. Who has no step (a viewer) gets
  * no card.
  * no_claim: the API's /v1/setup (api/tests/test_setup.py; the mock stands in), Build the
- * baseline and Pick sources on a new company (a run and a provider pick: setup.spec and
+ * Ground Truth and Pick sources on a new company (a run and a provider pick: setup.spec and
  * baseline-build.spec cover them on Detailed's checklist).
  */
 
@@ -130,7 +130,7 @@ test("qa-onboarding-48: a new company's owner switches to Simple, sees the setup
   await expect(progress(page)).toHaveText("5 of 8 done");
   await nameLead(page);
   await expect(progress(page)).toHaveText("6 of 8 done");
-  // Sources and the baseline are still to do: the card stays, each still one click away.
+  // Sources and the Ground Truth are still to do: the card stays, each still one click away.
   await expect(setupCard(page).getByRole("link", { name: "Pick sources", exact: true })).toHaveAttribute("href", "/settings/sources?from=simple-setup");
   await expect(setupCard(page).getByRole("link", { name: "Build the Ground Truth", exact: true })).toHaveAttribute("href", "/ground-truth?build=1");
   await openStep(page, "Build the Ground Truth", /\/ground-truth\?build=1$/);

@@ -168,7 +168,7 @@ test("qa-onboarding-22, 23, qa-work-3, 31: a new company's first brief, from New
   await expect(readLine(page)).not.toContainText("no gaps open");
   await expect(readLine(page).getByTestId("intake-read-count")).toHaveText("2 analyses left today");
 
-  // qa-onboarding-23: the estimate in the baseline dialog's words.
+  // qa-onboarding-23: the estimate in the Ground Truth dialog's words.
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
   const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });
   await expect(sheet.getByTestId("draft-baseline-none")).toContainText("Build the Ground Truth ($7.00)");

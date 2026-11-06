@@ -24,7 +24,7 @@ async function mainText(page: Page): Promise<string> {
 const planGoal = (page: Page, item: string) =>
   page.getByTestId("plan-row").filter({ hasText: item }).filter({ visible: true }).getByTestId("plan-goal");
 
-test("Plan, Baseline and Priorities draw names, never a place code or a slug", async ({ page }) => {
+test("Plan, Ground Truth and Priorities draw names, never a place code or a slug", async ({ page }) => {
   await withCodes(page);
   await login(page);
 
@@ -84,7 +84,7 @@ test("a goal chip's card opens on hover and Enter, shows name, target and Open, 
   await page.keyboard.press("Escape");
   await expect(card).toHaveCount(0);
 
-  // Open goes to the goal on the Baseline.
+  // Open goes to the goal on the Ground Truth.
   await chip.click();
   await card.getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/ground-truth\?entity=/);

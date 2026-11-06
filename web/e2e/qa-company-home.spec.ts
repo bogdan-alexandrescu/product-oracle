@@ -44,7 +44,7 @@ test("goal names: one Tab stop each, Enter opens the goal, no card covers the fi
   }
   expect(new Set(stops).size).toBe(stops.length);
 
-  // Hovering the name draws no card over the figure; Enter opens the goal on the Baseline.
+  // Hovering the name draws no card over the figure; Enter opens the goal on the Ground Truth.
   await link.hover();
   await page.waitForTimeout(400);
   await expect(page.getByTestId("code-card")).toHaveCount(0);
@@ -59,7 +59,7 @@ test("goals: the confidence ring is named and hidden without a current value; th
   const g1 = page.getByTestId("home-goal-G3");
   await expect(g1.getByTestId("goal-confidence")).toBeVisible();
   await expect(g1.getByTestId("goal-confidence")).toContainText("confidence");
-  // qa-plan-4: no evidence yet, so no score, as on the Baseline page.
+  // qa-plan-4: no evidence yet, so no score, as on the Ground Truth page.
   await expect(g1.getByTestId("goal-confidence")).toHaveText("No confidence yet: add evidence");
   await expect(g1.getByTestId("goal-change")).toHaveText("+7 pts in 6 months");
 

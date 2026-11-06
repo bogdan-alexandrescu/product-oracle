@@ -99,7 +99,7 @@ test("the New run dialog no longer offers the feedback loop and points at where 
   await page.goto("/runs");
   await page.getByRole("button", { name: "Start a run…" }).click();
   const dialog = page.getByRole("dialog", { name: "Where to start a run" });
-  // C4: Baseline to PRD starts at New PRD too, so the dialog offers no flow.
+  // C4: Ground Truth to PRD starts at New PRD too, so the dialog offers no flow.
   await expect(dialog.getByRole("radio")).toHaveCount(0);
   await expect(dialog.getByText("Feedback loop")).toHaveCount(0);
   const pointers = dialog.getByTestId("flow-pointer");

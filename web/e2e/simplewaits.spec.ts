@@ -69,7 +69,7 @@ for (const phone of [false, true]) {
     });
 
     test(`one stop: one card, the greeting says a run waits (${where})`, async ({ page }) => {
-      // The default company: one run waits on the owner to confirm its baseline.
+      // The default company: one run waits on the owner to confirm its Ground Truth.
       await signIn(page, ADMIN.email);
       await expect(stops(page)).toHaveCount(1);
       await expect(page.getByRole("region", { name: "Confirm the Ground Truth: Team onboarding PRD" }).getByRole("link")).toHaveText("Confirm the Ground Truth");

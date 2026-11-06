@@ -3,7 +3,7 @@ import { expect, test, type Page } from "./test";
 import { login } from "./helpers";
 
 /**
- * qa-onboarding-10, -37, -39, -51: a new company's owner starts the first baseline build from
+ * qa-onboarding-10, -37, -39, -51: a new company's owner starts the first Ground Truth build from
  * Home's Set up, then comes back to Home while it runs. The Set up row says Building… and opens
  * the run; the Goals card opens the same build (never a second start); on a phone In flight is
  * one compact row, the run's inspector only on a tap.
@@ -15,13 +15,13 @@ import { login } from "./helpers";
 const setupRow = (page: Page) => page.getByTestId("setup-row-build_baseline");
 const goals = (page: Page) => page.getByTestId("home-goals");
 
-/** Set up > Build baseline > Open > Start, then back to Home with the app's own Home link. */
+/** Set up > Build Ground Truth > Open > Start, then back to Home with the app's own Home link. */
 async function startFromSetup(page: Page) {
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "empty"));
   await login(page);
   const row = setupRow(page);
   await expect(row.getByTestId("setup-status")).toHaveText("Not built");
-  // One baseline action before the build: the row's Open; the Goals card points at it.
+  // One Ground Truth action before the build: the row's Open; the Goals card points at it.
   await expect(goals(page).getByTestId("goals-build-in-setup")).toHaveText("Build the Ground Truth from Set up, above");
   await expect(goals(page).getByRole("link", { name: "Build the Ground Truth" })).toHaveCount(0);
   // Start waits for a source with items (qa-onboarding-2): Pick sources first, a file in an upload source.
@@ -68,7 +68,7 @@ async function seeBuilding(page: Page): Promise<string> {
 
 test("while the first build runs, Set up says Building… and opens the build; the Goals card points there", async ({ page }) => {
   // protects=qa-onboarding-10/-51 on a desktop; fails_when=the row still says Not built, its
-  // button starts another build, or the Goals card offers Build the baseline (the sheet's
+  // button starts another build, or the Goals card offers Build the Ground Truth (the sheet's
   // already-under-way error); no_claim=the run's own page.
   await startFromSetup(page);
   const href = await seeBuilding(page);

@@ -4,10 +4,10 @@ import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /**
- * B2 Baseline review from this run: the Inbox's Review opens the Baseline filtered to the run
- * (the band, the From this run tab), each row with its reasons and actions; Approve baseline
+ * B2 Ground Truth review from this run: the Inbox's Review opens the Ground Truth filtered to the run
+ * (the band, the From this run tab), each row with its reasons and actions; Approve the Ground Truth
  * waits until every goal is decided (confirmed, rejected or left proposed with a reason).
- * Driven through the UI over the mock API ("baseline-review" scenario: a Build the baseline
+ * Driven through the UI over the mock API ("baseline-review" scenario: a Build the Ground Truth
  * run of Oct 20 that created two goals, a feature with low confidence serving no goal, a
  * duplicate of Saved carts, and proposed a change to the locked Guided setup). Made-up data.
  */
@@ -47,11 +47,11 @@ async function lookAgain(page: Page, title: string, note: string) {
   await expect(row(page, title).getByTestId("look-again-chip")).toBeVisible();
 }
 
-// Card gate-opens: protects = owner call c3 at Baseline confirm: Approve baseline is disabled,
+// Card gate-opens: protects = owner call c3 at Ground Truth confirm: Approve the Ground Truth is disabled,
 // listing what is left, while goals from the run are undecided, and opens once one is confirmed
 // and the other left proposed with a reason; fails_when = Approve is clickable while blocked,
 // the rows or chips are wrong, or the band does not say who approved; no_claim = mock layer.
-test("the Inbox's Review opens the run's rows, and Approve baseline waits until every goal is decided", async ({ page }) => {
+test("the Inbox's Review opens the run's rows, and Approve the Ground Truth waits until every goal is decided", async ({ page }) => {
   await seeded(page);
   await fromInbox(page);
   await expect(page.getByTestId("from-run-band")).toContainText("From run · Build the Ground Truth");
@@ -189,7 +189,7 @@ test("reload keeps every decision and staged action", async ({ page }) => {
   await expect(bar(page).getByRole("button", { name: "Approve the Ground Truth" })).toBeEnabled();
 });
 
-// Card console-held: protects = D3 "Console gate" at Baseline confirm: a console MERGE given
+// Card console-held: protects = D3 "Console gate" at Ground Truth confirm: a console MERGE given
 // while goals are undecided is held in the Inbox, and Confirm stays disabled until the last goal
 // is decided; fails_when = Confirm is enabled with a goal undecided; no_claim = the real console.
 test("a console approval is held while a goal is undecided, and deciding the last one enables Confirm", async ({ page }) => {
@@ -251,11 +251,11 @@ test("at 390 px rows are cards and the bottom bar shows the tally and Approve", 
   await expect(bar(page).getByRole("button", { name: "Send back to agents" })).toBeHidden();
 });
 
-// fix-company review: a run that wrote nothing to the baseline says so; never "All 0 items handled".
+// fix-company review: a run that wrote nothing to the Ground Truth says so; never "All 0 items handled".
 test("a run with no items says it has none, not that all of them are handled", async ({ page }) => {
   await page.clock.setSystemTime(new Date("2026-10-27T12:00:00Z"));
   await seeded(page, "no-document");
-  // guest-checkout's Baseline to PRD run (the "no-document" scenario) created no baseline items.
+  // guest-checkout's Ground Truth to PRD run (the "no-document" scenario) created no Ground Truth items.
   await page.goto("/ground-truth?run=7a11c0de-0000-4000-8000-0000000000e1");
   const band = page.getByTestId("from-run-band");
   await expect(band).toContainText("From run · Ground Truth to PRD");

@@ -74,7 +74,7 @@ test("run detail: approve each checkpoint through to the imported PRD", async ({
   await expect(page.locator("#decide")).toBeInViewport();
   await expect(page.locator("#decide")).toBeFocused();
 
-  // The baseline's artifacts can be read before deciding.
+  // The Ground Truth's artifacts can be read before deciding.
   const baseline = page.getByTestId("segment-baseline");
   await baseline.getByRole("button", { name: "Ground Truth", exact: true }).click();
   await expect(page.getByTestId("artifact-content")).toContainText("confidence");
@@ -114,8 +114,8 @@ test("run detail: approve each checkpoint through to the imported PRD", async ({
 });
 
 /**
- * C4: a Baseline to PRD run starts at New PRD (the brief, then Draft with Oracle on the
- * Before drafting page), no longer from Runs › New run. Rebuilding the baseline keeps the
+ * C4: a Ground Truth to PRD run starts at New PRD (the brief, then Draft with Oracle on the
+ * Before drafting page), no longer from Runs › New run. Rebuilding the Ground Truth keeps the
  * whole flow, so its figures are the dialog's were.
  */
 async function draftSheet(page: Page, title: string) {
@@ -161,7 +161,7 @@ test("new run: knobs, estimate before start, skipped checkpoints", async ({ page
   await expect(page.getByTestId("checkpoint-prd_review")).toContainText("Waiting");
 });
 
-/** Drafts a deep Baseline to PRD run that rebuilds the baseline: $73.00 with the Engineering check and dates, over the $50 approval line. */
+/** Drafts a deep Ground Truth to PRD run that rebuilds the Ground Truth: $73.00 with the Engineering check and dates, over the $50 approval line. */
 async function estimateOverFifty(page: Page) {
   const sheet = await draftSheet(page, "Platform PRD");
   await sheet.getByRole("group", { name: "Depth" }).getByRole("button", { name: "Deep" }).click();
@@ -638,7 +638,7 @@ test("fix-work review: a check that could not read some runs says so on a run th
   await expect(result.getByTestId("tick-unchecked").first()).toContainText(/could not be checked: SwarmCloud had a problem on its side; the next check tries again\.$/);
 });
 
-/** artifact-skip-refused: the baseline step runs again and SwarmCloud will not send its baseline.yaml. */
+/** artifact-skip-refused: the Ground Truth step runs again and SwarmCloud will not send its baseline.yaml. */
 async function refusedBaseline(page: Page) {
   await login(page);
   // A phone keeps the side nav folded away: the Runs page by its address.
@@ -646,7 +646,7 @@ async function refusedBaseline(page: Page) {
   await expect(page.getByRole("heading", { level: 1, name: "Runs" })).toBeVisible();
   await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
   await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
-  // The baseline step runs again.
+  // The Ground Truth step runs again.
   const cp = page.getByTestId("checkpoint-baseline_confirm");
   await cp.getByLabel("Note for the agents").fill("Add a target for G2");
   await cp.getByRole("button", { name: "Request changes" }).click();

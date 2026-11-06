@@ -62,10 +62,10 @@ async function openRecordedChange(page: Page, output: string, signIn = true) {
 test.describe("desktop", () => {
   test.use({ viewport: DESKTOP });
 
-  // protects=qa4-plan-42: Plan and the Baseline give a goal's progress by one method, the same
-  // figure; fails_when=Plan says "2.6 pts to go" and the Baseline "78% of the way to ≥ 12%";
+  // protects=qa4-plan-42: Plan and the Ground Truth give a goal's progress by one method, the same
+  // figure; fails_when=Plan says "2.6 pts to go" and the Ground Truth "78% of the way to ≥ 12%";
   // no_claim=the API's roll-up of a parent from its subgoals.
-  test("qa4-plan-42: a goal's progress reads the same on Plan and on the Baseline", async ({
+  test("qa4-plan-42: a goal's progress reads the same on Plan and on the Ground Truth", async ({
     page,
   }) => {
     await login(page);
@@ -220,7 +220,7 @@ test.describe("phone", () => {
   // protects=qa4-plan-43: a phone shows the facts a desktop does: Proposed on Usage export,
   // padded goal pills, and each goal's Metric, Horizon and Owner; fails_when=the pill is gone,
   // the code touches the pill's border, or the goal drops those fields; no_claim=tablets.
-  test("qa4-plan-43: on a phone the Baseline keeps Proposed, pads goal pills and keeps goal fields", async ({
+  test("qa4-plan-43: on a phone the Ground Truth keeps Proposed, pads goal pills and keeps goal fields", async ({
     page,
   }) => {
     await openBaseline(page);

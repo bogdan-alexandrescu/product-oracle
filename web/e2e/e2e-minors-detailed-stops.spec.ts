@@ -5,7 +5,7 @@ import { ENG_CHECK_RUN, ENG_DATES_RUN, PRIORITY_RUN } from "../lib/api/mock/runs
 import { login, openSection } from "./helpers";
 
 /**
- * Minor fixes on a Baseline to PRD run's stops (production, 2026-10-31), driven as a person on
+ * Minor fixes on a Ground Truth to PRD run's stops (production, 2026-10-31), driven as a person on
  * the mock layer, each on a desktop and on a phone. Test cards (protects / fails_when / no_claim):
  * - "unreadable briefs" (8): protects=the run page and the check say the briefs could not be read
  *   and that the way on is Send back; fails_when="0 features · Waiting for you", "0 of 0 decided",
@@ -203,7 +203,7 @@ for (const [name, viewport] of [
       await page.goto(`/runs/${PRIORITY_RUN}`);
       await page.getByTestId("checkpoint-priority_order").getByRole("link", { name: "Review the order" }).click();
       await expect(page).toHaveURL(/\/priorities\?snapshot=/);
-      // The run's own list (build-runplan RP1: its 5 baseline features and the 6 the PRD adds).
+      // The run's own list (build-runplan RP1: its 5 Ground Truth features and the 6 the PRD adds).
       const rows = page.locator('tr[data-testid^="priority-row-"]');
       await expect(rows).toHaveCount(11);
       await expect(page.getByText("11 in the run's order").filter({ visible: true })).toHaveCount(1);

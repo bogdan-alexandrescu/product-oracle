@@ -3,7 +3,7 @@ import { expect, test, type Page } from "./test";
 import { login } from "./helpers";
 
 /*
- * QA pass 4 fixes on Home's Set up checklist, Settings › Sources and the baseline's way back
+ * QA pass 4 fixes on Home's Set up checklist, Settings › Sources and the Ground Truth's way back
  * (qa4-settings-2 to -7), driven through the UI over the mock API as the owner.
  */
 
@@ -51,7 +51,7 @@ test.describe("at 1440", () => {
     await expect(domains).toBeInViewport();
   });
 
-  test("qa4-settings-5: Build baseline's Review opens the baseline with a way back to Home", async ({ page }) => {
+  test("qa4-settings-5: Build the Ground Truth's Review opens the Ground Truth with a way back to Home", async ({ page }) => {
     await openHome(page);
     const build = setupRow(page, "build_baseline").getByTestId("setup-action");
     await expect(build).toHaveText("Review");

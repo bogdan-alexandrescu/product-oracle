@@ -262,7 +262,7 @@ test("Home: Enter on an In flight row selects it; the inspector's Open opens it"
   await expect(page.getByTestId("home-inspector").getByTestId("row-goals")).toHaveText("Grow paid conversionRaise activation");
 });
 
-test("Home for a viewer: no New PRD, no Build the baseline", async ({ page }) => {
+test("Home for a viewer: no New PRD, no Build the Ground Truth", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("po-mock-role", "viewer"));
   await openHome(page);
   await expect(page.getByTestId("home-goal-G3")).toBeVisible();

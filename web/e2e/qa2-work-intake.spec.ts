@@ -50,7 +50,7 @@ async function contrast(el: Locator): Promise<number> {
   });
 }
 
-test("qa-onboarding-5: a new company with no approved baseline is offered only Build the baseline", async ({ page }) => {
+test("qa-onboarding-5: a new company with no approved Ground Truth is offered only Build the Ground Truth", async ({ page }) => {
   await scenario(page, "empty");
   await login(page);
   await page.goto("/documents/new?kind=prd");

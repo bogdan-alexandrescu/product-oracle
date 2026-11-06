@@ -76,7 +76,7 @@ export default function PlanPage() {
   // create_run's handler wants an owner only to update a draft run; any other run lets
   // approvers in.
   const canBuild = can("create_run", true);
-  // Import goes to /baseline?build=1, whose Build baseline shows with confirm_entity.
+  // Import goes to /baseline?build=1, whose Build the Ground Truth shows with confirm_entity.
   const canBaseline = can("confirm_entity");
   // F7: approvers, owners and engineering leads link and unlink tracker issues.
   const canLink = can("link_tracker_issue");

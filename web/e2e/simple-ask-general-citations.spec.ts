@@ -5,8 +5,8 @@ import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN } from "./helpers";
 
 /*
- * chat-citations: Simple > Ask Oracle, General. Asked for the focus areas with their baseline
- * features, General answers from the baseline (the API's context holds the features with
+ * chat-citations: Simple > Ask Oracle, General. Asked for the focus areas with their Ground Truth
+ * features, General answers from the Ground Truth (the API's context holds the features with
  * their status and goals; api/tests/test_hop_panel.py) and draws every citation as a footnote:
  * a context citation `[c:n]` as a raised link, a meeting-notes read `[l:n]` as a raised
  * number after them, each set apart from the word before it; any other token ("[c:c4]",
@@ -76,7 +76,7 @@ for (const phone of [false, true]) {
       await expect(body).toContainText("(confirmed)");
       for (const raw of ["[l:", "[c:", "[s:", "c4]"]) await expect(body).not.toContainText(raw);
 
-      // Context citations are raised links to the baseline; the read is a raised number after them.
+      // Context citations are raised links to the Ground Truth; the read is a raised number after them.
       const links = body.locator('sup a[data-testid="answer-cite"]');
       expect(await links.count()).toBeGreaterThan(2);
       await expect(links.first()).toHaveAttribute("href", /^\/ground-truth#/);

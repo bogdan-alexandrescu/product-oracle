@@ -103,7 +103,7 @@ test("evidence links: a commenter cites a Google Doc from a document section", a
   await form.getByRole("button", { name: "Save evidence" }).click();
   await expect(goalTrace.getByRole("status")).toContainText("Saved “Pricing page refresh” as evidence. Everyone can see it.");
 
-  // The baseline item now carries it, for everyone.
+  // The Ground Truth item now carries it, for everyone.
   await page.goto("/ground-truth");
   await page.getByTestId("goal-g.activation").getByRole("button", { name: "Raise activation" }).click();
   const d = page.getByRole("dialog", { name: "Raise activation" });

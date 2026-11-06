@@ -3,7 +3,7 @@ import { expect, test, type Page } from "./test";
 import { login, signOut } from "./helpers";
 
 /**
- * B1 Build the baseline: a person builds or refreshes the baseline from the Baseline page,
+ * B1 Build the Ground Truth: a person builds or refreshes the Ground Truth from the Ground Truth page,
  * without starting a PRD, through the UI only.
  *
  * no_claim for every test here: the in-browser mock stands in for the API and SwarmCloud
@@ -64,7 +64,7 @@ test("approver starts a build: depth, review toggle and estimate, then the banne
   await expect(page.getByTestId("baseline-build-chip")).toHaveText("Building");
 });
 
-test("the banner turns into Ready to review once the run waits at Confirm the baseline", async ({ page }) => {
+test("the banner turns into Ready to review once the run waits at Confirm the Ground Truth", async ({ page }) => {
   // protects=the banner follows the run; fails_when=it still says being built at the
   // checkpoint, or Review does not lead to the run's decision; no_claim=B2's review screen.
   await login(page);
@@ -83,7 +83,7 @@ test("the banner turns into Ready to review once the run waits at Confirm the ba
   await expect(page.getByTestId("checkpoint-baseline_confirm")).toBeVisible();
 });
 
-test("commenters and viewers see no Build baseline button", async ({ page }) => {
+test("commenters and viewers see no Build the Ground Truth button", async ({ page }) => {
   // protects=only approvers and owners start a build; fails_when=a commenter or a viewer is
   // offered the button or the sheet; no_claim=the API's 403 (test_baseline_flow covers it).
   for (const who of ["commenter@example.com", "viewer@example.com"]) {
@@ -117,8 +117,8 @@ test("a second Start while the first build is under way shows the 409 and links 
   await expect(refused.getByRole("link", { name: "Open the build under way" })).toHaveAttribute("href", firstRun!);
 });
 
-test("Home with no goals offers Build the baseline and opens the sheet", async ({ page }) => {
-  // protects=the empty Home's way to a first baseline; fails_when=the old Import your
+test("Home with no goals offers Build the Ground Truth and opens the sheet", async ({ page }) => {
+  // protects=the empty Home's way to a first Ground Truth; fails_when=the old Import your
   // baseline link or tip is back, or the button does not open the sheet; no_claim=viewers
   // (home-fixes.spec covers that they see no action).
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "empty"));
@@ -139,7 +139,7 @@ test("Home with no goals offers Build the baseline and opens the sheet", async (
   await expect(sheet(page).getByTestId("build-estimate")).toHaveText("$7.00 estimated · below the $50 approval line · starts at once");
 });
 
-test("the New run dialog does not offer Build the baseline and points at the Baseline page", async ({ page }) => {
+test("the New run dialog does not offer Build the Ground Truth and points at the Ground Truth page", async ({ page }) => {
   // protects=D12's one rule for this flow; fails_when=the dialog offers the flow, or the
   // pointer line is missing or goes elsewhere; no_claim=the other flows' pointers.
   await login(page);
@@ -154,7 +154,7 @@ test("the New run dialog does not offer Build the baseline and points at the Bas
   await expect(sheet(page)).toBeVisible();
 });
 
-test("the owner's Set up lists Build baseline last, and Open lands on the sheet", async ({ page }) => {
+test("the owner's Set up lists Build the Ground Truth last, and Open lands on the sheet", async ({ page }) => {
   // protects=A1's build_baseline step; fails_when=the step is missing, not last, or Open does
   // not open the sheet; no_claim=the API's step rule (test_setup covers it).
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "empty"));

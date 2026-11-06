@@ -7,7 +7,7 @@ import { login } from "./helpers";
 /**
  * A feature-set call keeps every reason it was asked for. The "scope-review" scenario's
  * saved-addresses run (web/lib/api/mock/runs.ts seedScopeReviewRuns): Pick address in one step
- * needs a call for two reasons, "Low confidence" and "New, not in the baseline"; five of the
+ * needs a call for two reasons, "Low confidence" and "New, not in the Ground Truth"; five of the
  * eight features are handled, so the bar starts at "5 of 8 handled". In the "scope-review-kept"
  * scenario's address-book run, Bulk edit is blocked by its left-out dependency and its two reasons to confirm are kept by one
  * older call that answers both.

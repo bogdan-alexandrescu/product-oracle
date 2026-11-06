@@ -8,7 +8,7 @@ import { login } from "./helpers";
  * The cards turn into a numbered row with a grip to drag and left / right arrows; Save order
  * keeps it on every page (a toast with Undo), Cancel leaves it. A small grey number, 1 to n,
  * sits before every goal's name on Home, the Roadmap's goal cards and lane headers, and
- * Baseline's goal table. The "simple-home" mock scenario's invented goals.
+ * Ground Truth's goal table. The "simple-home" mock scenario's invented goals.
  */
 
 async function start(page: Page, role?: "viewer") {
@@ -42,7 +42,7 @@ async function saveOrder(page: Page) {
   await expect(page.getByTestId("goal-order-edit")).toHaveCount(0);
 }
 
-/** Roadmap's goal cards and Baseline's goal rows carry the numbers in `want`'s order. */
+/** Roadmap's goal cards and Ground Truth's goal rows carry the numbers in `want`'s order. */
 async function everyPageShows(page: Page, want: string[], phone: boolean) {
   await page.goto("/simple/roadmap");
   const cards = page.getByTestId("goal-counters").getByTestId("goal-counter");

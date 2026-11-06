@@ -221,12 +221,12 @@ test("Interview vague goals (2) steps Goal 1 of 2 · Next, creating each discuss
   expect(await interviews(page)).toBe(2);
 });
 
-// protects=criterion 9a and 10.6: approving the seeded baseline review starts nothing: the run
-// page's Confirm the baseline row and the From this run band offer "2 goals are not measurable ·
+// protects=criterion 9a and 10.6: approving the seeded Ground Truth review starts nothing: the run
+// page's Confirm the Ground Truth row and the From this run band offer "2 goals are not measurable ·
 // Interview" with the help tip, and a discussion exists only once Interview is clicked;
 // fails_when=the line is missing or miscounted, or a discussion exists before the click;
 // no_claim=the model call log (pytest asserts the fake model was never called).
-test("after the baseline review: the run row and From this run band offer Interview; nothing starts before", async ({ page }) => {
+test("after the Ground Truth review: the run row and From this run band offer Interview; nothing starts before", async ({ page }) => {
   await login(page);
   await page.goto("/runs");
   await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();

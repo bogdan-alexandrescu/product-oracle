@@ -6,9 +6,9 @@ import { login } from "./helpers";
  * QA pass 4, shell lane: a new company's first run (the mock's "empty" scenario, its data
  * reset), walked through the UI from the rail as a person would.
  *
- * protects = qa-shell-9 (an empty PRDs, Runs, Baseline, Inbox or Simple Decisions says what
+ * protects = qa-shell-9 (an empty PRDs, Runs, Ground Truth, Inbox or Simple Decisions says what
  * comes next, and only offers what the role can do; Decisions says "No decisions yet" when no
- * filter is set), qa-shell-10 (one New request on an empty Requests), qa-shell-30 (Baseline's
+ * filter is set), qa-shell-10 (one New request on an empty Requests), qa-shell-30 (Ground Truth's
  * counts read "No goals yet" and "No features yet", never 0/0).
  * no_claim = the API's lists (the in-browser mock stands in).
  */
@@ -51,7 +51,7 @@ test("qa-shell-9, 10, 30: the owner of a new company walks every empty page and 
   await expect(page.getByTestId("runs-empty")).toContainText("No runs yet. Start one from Start a run… or from the page it works on.");
   await expect(page.getByRole("button", { name: "Start a run…" })).toBeVisible();
 
-  // Baseline: no 0/0 counts, and each empty table says how to fill it.
+  // Ground Truth: no 0/0 counts, and each empty table says how to fill it.
   await open(page, "nav-baseline", "Ground Truth");
   await expect(page.getByTestId("kpi-goals")).toContainText("No goals yet");
   await expect(page.getByTestId("kpi-traced")).toContainText("No features yet");
@@ -105,7 +105,7 @@ test("qa-shell-9: a viewer's empty pages offer nothing they cannot do", async ({
   await expect(page.getByRole("button", { name: "New request", exact: true })).toHaveCount(0);
 });
 
-test("qa-shell-30: on a phone the Baseline's counts say No goals yet in full", async ({ page }) => {
+test("qa-shell-30: on a phone the Ground Truth's counts say No goals yet in full", async ({ page }) => {
   await page.setViewportSize(PHONE);
   await emptyCompany(page);
   await login(page);

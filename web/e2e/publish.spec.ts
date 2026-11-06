@@ -309,7 +309,7 @@ test("PRD page: Publish replaces Approve version, for the latest version; roadma
   await expect(page.getByTestId("doc-header").getByRole("link", { name: "Publish", exact: true })).toHaveCount(0);
 });
 
-test("resolve a blocker: opens its baseline item", async ({ page }) => {
+test("resolve a blocker: opens its Ground Truth item", async ({ page }) => {
   await openPublish(page, "online-deposits");
   await page.getByTestId("block-row").nth(0).getByRole("link", { name: "Resolve" }).click();
   await expect(page).toHaveURL(/\/ground-truth\?tab=blockers&blocker=/);

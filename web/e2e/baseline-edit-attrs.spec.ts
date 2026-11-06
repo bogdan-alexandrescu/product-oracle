@@ -10,7 +10,7 @@ async function openFeature(page: Page, key: string, title: string) {
   return page.getByRole("dialog", { name: title });
 }
 
-test("baseline: editing a feature's milestone saves only it, and shows in its history", async ({ page, context }) => {
+test("Ground Truth: editing a feature's milestone saves only it, and shows in its history", async ({ page, context }) => {
   const d = await openFeature(page, "f.saved-carts", "Saved carts");
   await expect(d.locator('[data-attr="milestone"]')).toHaveText("Beta");
 
@@ -46,7 +46,7 @@ test("baseline: editing a feature's milestone saves only it, and shows in its hi
   await expect(history.getByRole("listitem").first()).toContainText("Milestone: Beta → General availability");
 });
 
-test("baseline: the edit form adds a known attribute the entry lacks", async ({ page }) => {
+test("Ground Truth: the edit form adds a known attribute the entry lacks", async ({ page }) => {
   const d = await openFeature(page, "f.sample-data", "Sample data");
   await expect(d.locator('[data-attr="size"]')).toHaveCount(0);
 

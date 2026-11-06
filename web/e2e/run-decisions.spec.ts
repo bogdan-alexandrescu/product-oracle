@@ -17,7 +17,7 @@ test("approvals with their notes are listed in the run's Decisions, as the agent
   await expect(section).toContainText("Decisions");
   await expect(section).toContainText("No decisions yet");
 
-  // Approve the baseline with a note: listed at once.
+  // Approve the Ground Truth with a note: listed at once.
   const baseline = page.getByTestId("checkpoint-baseline_confirm");
   await baseline.getByLabel("Note for the agents").fill("Name an owner for every goal");
   await baseline.getByRole("button", { name: "Approve and continue" }).click();

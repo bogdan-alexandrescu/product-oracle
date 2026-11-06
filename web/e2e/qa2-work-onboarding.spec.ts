@@ -7,8 +7,8 @@ import { login } from "./helpers";
  * A new company's first request (qa-onboarding-12, qa-onboarding-47), in the "empty" scenario
  * (members only: no goals, documents or runs), driven through the UI as a person would on the
  * mock API: file the first request, open it, try to qualify it, follow the page's way to a
- * goal (Build the baseline), then write a brief through PRDs > New PRD and Draft with Oracle,
- * which builds the baseline first and starts the run.
+ * goal (Build the Ground Truth), then write a brief through PRDs > New PRD and Draft with Oracle,
+ * which builds the Ground Truth first and starts the run.
  */
 
 const TITLE = "Export invoices as a spreadsheet";
@@ -53,7 +53,7 @@ test("qa-onboarding-47, qa-onboarding-12: a new company goes from its first requ
   await expect(panel.getByRole("button", { name: "Qualify request" })).toBeDisabled();
   await expect(panel).not.toContainText("Link a confirmed goal first");
 
-  // The way to a goal: Build the baseline.
+  // The way to a goal: Build the Ground Truth.
   await needs.getByRole("link", { name: "Build the Ground Truth" }).click();
   await expect(page).toHaveURL(/\/ground-truth\?build=1$/);
 
@@ -68,7 +68,7 @@ test("qa-onboarding-47, qa-onboarding-12: a new company goes from its first requ
   await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
 
-  // Draft with Oracle: a new company has no baseline, so Oracle builds it first.
+  // Draft with Oracle: a new company has no Ground Truth, so Oracle builds it first.
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
   const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });
   const none = sheet.getByTestId("draft-baseline-none");

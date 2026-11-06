@@ -116,9 +116,9 @@ test("Discuss on the slip card starts a discussion on the item; a commenter gets
   await expect(sheet.getByTestId("discussion-thread").getByTestId("discussion-message").filter({ hasText: "a week's slip" })).toHaveCount(1);
 });
 
-// protects = a blocked item's card opens its blocker in Baseline; fails_when = no Open blocker,
-// or it opens another page; no_claim = the Baseline blocker view itself.
-test("Open blocker on a blocked item's card opens the blocker in Baseline", async ({ page }) => {
+// protects = a blocked item's card opens its blocker in Ground Truth; fails_when = no Open blocker,
+// or it opens another page; no_claim = the Ground Truth blocker view itself.
+test("Open blocker on a blocked item's card opens the blocker in Ground Truth", async ({ page }) => {
   await scenario(page, TRACK_ALERTS_ACTIONS_SCENARIO, "viewer");
   await login(page);
   await openItem(page, "Alerts in the team chat");

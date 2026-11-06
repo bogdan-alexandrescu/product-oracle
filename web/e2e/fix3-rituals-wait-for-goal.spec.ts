@@ -8,7 +8,7 @@ import { login } from "./helpers";
  * Built-in rituals start paused until the first confirmed goal (owner decision 2026-10-29,
  * "Start paused until goals"), on the mock layer's "empty" scenario (a new company with no
  * goal): Company › Rituals says why the Weekly goals check-in is paused; a goal added and
- * confirmed on Baseline turns it on, while the Investor update (off by default) stays paused.
+ * confirmed on Ground Truth turns it on, while the Investor update (off by default) stays paused.
  */
 
 const PHONE = { width: 390, height: 844 };

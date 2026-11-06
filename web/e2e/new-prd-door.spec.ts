@@ -10,17 +10,17 @@ import { login, signOut } from "./helpers";
  * - "brief to draft" (criteria 7, 8): protects=one door from brief to a started run on the
  *   mock; fails_when=any step needs the Runs page, the brief's goal question is asked again,
  *   the sheet loses the template, or the run's details lack it; no_claim=the real cost estimate.
- * - "baseline choice" (criteria 8d, 6): protects=B1 "Reuse base" in the sheet (reuse preselected,
- *   Rebuild one click away and $7.00 dearer, the Confirm the baseline stop only when rebuilding)
+ * - "Ground Truth choice" (criteria 8d, 6): protects=B1 "Reuse base" in the sheet (reuse preselected,
+ *   Rebuild one click away and $7.00 dearer, the Confirm the Ground Truth stop only when rebuilding)
  *   and one draft run per intake however often it is re-estimated; fails_when=reuse is not the
- *   default, Rebuild does not raise the estimate by the baseline segment, the stop shows while
+ *   default, Rebuild does not raise the estimate by the Ground Truth segment, the stop shows while
  *   reusing, or re-estimating makes a second run; no_claim=the API's 30-day rule.
  * - "reopen after an estimate" (criterion 6): protects=an estimate starts nothing, so the brief
  *   keeps Draft with Oracle, stays in PRDs › Ideas and editable, and reopening the sheet takes
  *   up the same draft run with its choices; fails_when=the button is gone after a reload, the
  *   brief leaves Ideas, the sheet forgets the run's choices, or starting makes a second run;
  *   no_claim=the API's 409 on a converted brief (test_intake_brief_fields.py).
- * - "stale baseline" (criterion 8d): protects=a baseline that cannot be reused offers no reuse;
+ * - "stale Ground Truth" (criterion 8d): protects=a Ground Truth that cannot be reused offers no reuse;
  *   fails_when=the reuse choice shows, or the reason is missing from the tooltip;
  *   no_claim=the other two reasons.
  * - "empty skeleton" (criterion 9): protects=the old Create draft path, moved under a quiet link
@@ -29,7 +29,7 @@ import { login, signOut } from "./helpers";
  * - "commenter brief, approver finds it" (criterion 10): protects=commenters write briefs and
  *   approvers start drafts; fails_when=Continue is refused for a commenter, Draft with Oracle is
  *   enabled for them, or the brief is missing from PRDs › Ideas; no_claim=archived briefs.
- * - "New run points here" (criterion 11): protects=D12's one rule for Baseline to PRD;
+ * - "New run points here" (criterion 11): protects=D12's one rule for Ground Truth to PRD;
  *   fails_when=the New run dialog still offers it or the pointer is missing or goes elsewhere;
  *   no_claim=the other flows' pointers.
  * - "phone" (criterion 12): protects=the door on a 390 px screen; fails_when=the page scrolls
@@ -105,11 +105,11 @@ test("brief to draft: goals, out of scope and a template, then Draft with Oracle
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
   await expect(page.getByText(/^Template: /)).toBeVisible();
-  // The current baseline was reused: its segment ran no step.
+  // The current Ground Truth was reused: its segment ran no step.
   await expect(page.getByTestId("segment-baseline").getByTestId("segment-state")).toHaveText(/^Reused \(approved [A-Z][a-z]{2} \d{1,2}\)$/);
 });
 
-test("baseline choice: reuse is preselected; Rebuild costs the baseline segment and lists its stop", async ({ page }) => {
+test("Ground Truth choice: reuse is preselected; Rebuild costs the Ground Truth segment and lists its stop", async ({ page }) => {
   await login(page, "approver@example.com");
   await openDoor(page);
   await writeBrief(page, "Faster repeat checkout");
@@ -183,7 +183,7 @@ test("reopen after an estimate: the brief keeps Draft with Oracle and the sheet 
   await expect(page.getByRole("button", { name: "Draft with Oracle" })).toHaveCount(0);
 });
 
-test("stale baseline: only 'Oracle rebuilds the baseline first', with the reason in its tooltip", async ({ page }) => {
+test("stale Ground Truth: only 'Oracle rebuilds the Ground Truth first', with the reason in its tooltip", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "baseline-stale"));
   await login(page, "approver@example.com");
   await openDoor(page);
@@ -238,7 +238,7 @@ test("commenter brief, approver finds it: Continue works, the draft waits for an
   await expect(page.getByRole("button", { name: "Draft with Oracle" })).toBeEnabled();
 });
 
-test("New run no longer offers Baseline to PRD and points at New PRD", async ({ page }) => {
+test("New run no longer offers Ground Truth to PRD and points at New PRD", async ({ page }) => {
   await login(page);
   await page.goto("/runs");
   await page.getByRole("button", { name: "Start a run…" }).click();

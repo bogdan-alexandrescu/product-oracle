@@ -2,7 +2,7 @@ import { expect, test } from "./test";
 
 import { login } from "./helpers";
 
-// Owner, 2026-10-25: accepting a baseline proposal keeps locking the item, and the
+// Owner, 2026-10-25: accepting a Ground Truth proposal keeps locking the item, and the
 // product says so before and after the click: the item is then locked against Oracle's
 // changes until a person unlocks it.
 

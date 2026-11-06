@@ -169,7 +169,7 @@ test.describe("desktop", () => {
 test.describe("phone", () => {
   test.use({ viewport: PHONE });
 
-  // protects=qa-plan-25: every Baseline tab is whole on screen (they wrap); fails_when=a tab is
+  // protects=qa-plan-25: every Ground Truth tab is whole on screen (they wrap); fails_when=a tab is
   // cut or behind a scroll arrow; no_claim=Plan's tabs.
   test("the tabs wrap: every tab is whole on screen", async ({ page }) => {
     await openBaseline(page);

@@ -33,7 +33,7 @@ export function currentBuild(runs: RunSummary[] | undefined, now?: number): RunS
   return null;
 }
 
-/** The header's chip while a build is under way (it stands where Build baseline was). */
+/** The header's chip while a build is under way (it stands where Build the Ground Truth was). */
 export function BuildChip({ build }: { build: RunSummary }) {
   const ready = build.status === "awaiting_checkpoint";
   return (

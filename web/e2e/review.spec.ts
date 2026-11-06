@@ -94,9 +94,9 @@ test("add an anchored comment that survives reload", async ({ page }) => {
   await expect(comment).toContainText("raised on v2");
 });
 
-test("a citation of Oracle's baseline reads 'Oracle baseline', its ref as text, not a link", async ({ page }) => {
+test("a citation of Oracle's Ground Truth reads 'Oracle Ground Truth', its ref as text, not a link", async ({ page }) => {
   await login(page);
-  // Version 2 of checkout-redesign cites a baseline goal in its Problem section.
+  // Version 2 of checkout-redesign cites a Ground Truth goal in its Problem section.
   await page.evaluate(() => {
     const key = "po-mock-db-v2";
     const db = JSON.parse(localStorage.getItem(key)!);

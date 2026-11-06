@@ -13,7 +13,7 @@ async function openBaseline(page: Page) {
 
 const drawer = (page: Page, title: string) => page.getByRole("dialog", { name: title });
 
-test("baseline: goals with weight, metric, target and horizon", async ({ page }) => {
+test("Ground Truth: goals with weight, metric, target and horizon", async ({ page }) => {
   await openBaseline(page);
   await expect(page.getByRole("tab", { name: /Graph/ })).toHaveAttribute("aria-selected", "true");
 
@@ -41,7 +41,7 @@ test("baseline: goals with weight, metric, target and horizon", async ({ page })
   await expect(page.getByRole("grid", { name: "Goals" }).getByRole("button", { name: "Confirm" })).toHaveCount(1);
 });
 
-test("baseline: an approver confirms the proposed goal", async ({ page }) => {
+test("Ground Truth: an approver confirms the proposed goal", async ({ page }) => {
   await openBaseline(page);
   const churn = page.getByTestId("goal-g.early-churn");
   await churn.getByRole("button", { name: "Confirm" }).click();
@@ -56,7 +56,7 @@ test("baseline: an approver confirms the proposed goal", async ({ page }) => {
   await expect(page.getByLabel("Summary")).toContainText("Uncovered goals1");
 });
 
-test("baseline: products with their features, and an Unassigned group", async ({ page }) => {
+test("Ground Truth: products with their features, and an Unassigned group", async ({ page }) => {
   await openBaseline(page);
   const storefront = page.getByTestId("product-p.storefront");
   await expect(storefront).toHaveAccessibleName("Features of Storefront");
@@ -79,7 +79,7 @@ test("baseline: products with their features, and an Unassigned group", async ({
   await expect(page.getByTestId("feature-f.saved-carts").getByTestId("confidence")).toHaveAttribute("data-tone", "red");
 });
 
-test("baseline: the feature drawer shows links, evidence and the lock", async ({ page }) => {
+test("Ground Truth: the feature drawer shows links, evidence and the lock", async ({ page }) => {
   await openBaseline(page);
   await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
   const d = drawer(page, "Guided setup");
@@ -148,7 +148,7 @@ test("baseline: the feature drawer shows links, evidence and the lock", async ({
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
-test("baseline: evidence from a removed source item says 'source removed' and no longer links out", async ({ page }) => {
+test("Ground Truth: evidence from a removed source item says 'source removed' and no longer links out", async ({ page }) => {
   await openBaseline(page);
   await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
   const d = drawer(page, "Guided setup");
@@ -168,7 +168,7 @@ test("baseline: evidence from a removed source item says 'source removed' and no
   await expect(card.getByRole("link", { name: /Open source/ })).toHaveCount(0);
 });
 
-test("baseline: editing a feature saves and locks it; unlock releases it", async ({ page }) => {
+test("Ground Truth: editing a feature saves and locks it; unlock releases it", async ({ page }) => {
   await openBaseline(page);
   const row = page.getByTestId("feature-f.sample-data");
   await expect(row).not.toContainText("Locked");
@@ -204,7 +204,7 @@ test("baseline: editing a feature saves and locks it; unlock releases it", async
   await expect(row).not.toContainText("Locked");
 });
 
-test("baseline: flagged tab lists the feature that serves no goal, with goal coverage", async ({ page }) => {
+test("Ground Truth: flagged tab lists the feature that serves no goal, with goal coverage", async ({ page }) => {
   await openBaseline(page);
   const tab = page.getByRole("tab", { name: /Flagged/ });
   await expect(tab.getByTestId("tab-count-flagged")).toHaveText("3");
@@ -227,7 +227,7 @@ test("baseline: flagged tab lists the feature that serves no goal, with goal cov
   await expect(page.getByTestId("coverage-g.early-churn").locator('[data-col="features"]')).toHaveText("0");
 });
 
-test("baseline: an approver resolves an open material conflict by picking a claim", async ({ page }) => {
+test("Ground Truth: an approver resolves an open material conflict by picking a claim", async ({ page }) => {
   await openBaseline(page);
   const tab = page.getByRole("tab", { name: /Conflicts/ });
   await expect(tab.getByTestId("tab-count-conflicts")).toHaveText("1");
@@ -263,7 +263,7 @@ test("baseline: an approver resolves an open material conflict by picking a clai
   await expect(page.getByTestId("feature-f.saved-carts")).toContainText("Locked");
 });
 
-test("baseline: an approver accepts and rejects proposals", async ({ page }) => {
+test("Ground Truth: an approver accepts and rejects proposals", async ({ page }) => {
   await openBaseline(page);
   const tab = page.getByRole("tab", { name: /Proposals/ });
   await expect(tab.getByTestId("tab-count-proposals")).toHaveText("3");
@@ -299,7 +299,7 @@ test("baseline: an approver accepts and rejects proposals", async ({ page }) => 
   await expect(drawer(page, "Dark mode").locator('[data-attr="status"]')).toHaveText("Idea");
 });
 
-test("baseline: a viewer reads everything but sees no write buttons", async ({ page }) => {
+test("Ground Truth: a viewer reads everything but sees no write buttons", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("po-mock-role", "viewer"));
   await openBaseline(page);
 
@@ -325,7 +325,7 @@ test("baseline: a viewer reads everything but sees no write buttons", async ({ p
   await expect(main.getByRole("button", { name: "Reject" })).toHaveCount(0);
 });
 
-// B3 Proposals by run. The mock seeds two proposals from one Baseline to PRD run (started
+// B3 Proposals by run. The mock seeds two proposals from one Ground Truth to PRD run (started
 // Oct 16) and one from a commenter, with no run.
 const AGENT_RUN = "0b7e5d4c-3a29-4118-9f07-e6d5c4b3a291";
 const RUN_LABEL = "Ground Truth to PRD · Oct 16";
@@ -342,7 +342,7 @@ async function openProposals(page: Page) {
  * an entry, or choosing a run leaves the URL without run=.
  * no_claim: mock data only.
  */
-test("baseline: proposals filtered by the run that made them", async ({ page }) => {
+test("Ground Truth: proposals filtered by the run that made them", async ({ page }) => {
   await openProposals(page);
   const from = page.getByLabel("From");
   await expect(from).toHaveValue("");
@@ -375,7 +375,7 @@ test("baseline: proposals filtered by the run that made them", async ({ page }) 
  * fails_when: reloading /baseline?tab=proposals&run=<id> shows the Graph tab or every proposal.
  * no_claim: mock data only.
  */
-test("baseline: reloading a run's proposals link restores the filter", async ({ page }) => {
+test("Ground Truth: reloading a run's proposals link restores the filter", async ({ page }) => {
   await openBaseline(page);
   await page.goto(`/ground-truth?tab=proposals&run=${AGENT_RUN}`);
   await expect(page.getByRole("tab", { name: /Proposals/ })).toHaveAttribute("aria-selected", "true");
@@ -392,7 +392,7 @@ test("baseline: reloading a run's proposals link restores the filter", async ({ 
  * fails_when: a row shows a raw run id, the link is missing, or it does not open the run.
  * no_claim: the person's name on rows not from a run (pick B4 Proposal sentences).
  */
-test("baseline: each run's proposal links to its run", async ({ page }) => {
+test("Ground Truth: each run's proposal links to its run", async ({ page }) => {
   await openProposals(page);
   const rows = page.getByTestId("proposal");
   for (const title of ["Guided setup", "Dark mode"]) {
@@ -413,7 +413,7 @@ test("baseline: each run's proposal links to its run", async ({ page }) => {
  * land on the run's filtered proposals.
  * no_claim: mock data only.
  */
-test("baseline: the run page counts its open proposals and Review opens them", async ({ page }) => {
+test("Ground Truth: the run page counts its open proposals and Review opens them", async ({ page }) => {
   await login(page);
   await page.goto(`/runs/${AGENT_RUN}`);
   await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
@@ -439,7 +439,7 @@ test("baseline: the run page counts its open proposals and Review opens them", a
  * fails_when: the page scrolls sideways at 390 px.
  * no_claim: other widths.
  */
-test("baseline: proposals by run fit a phone", async ({ page }) => {
+test("Ground Truth: proposals by run fit a phone", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openProposals(page);
   await expect(page.getByLabel("From")).toBeVisible();
@@ -468,7 +468,7 @@ const SENTENCES = {
  * no_claim: mock data; the TypeScript port is checked against the same expected strings as
  * the Python tests, not against every rule.
  */
-test("baseline: proposals read as sentences", async ({ page }) => {
+test("Ground Truth: proposals read as sentences", async ({ page }) => {
   await openProposals(page);
   const rows = page.getByTestId("proposal");
   for (const [title, sentence] of Object.entries(SENTENCES)) {
@@ -493,7 +493,7 @@ test("baseline: proposals read as sentences", async ({ page }) => {
  * member's own proposal does not say You.
  * no_claim: API tokens and intake answers (the API tests cover their labels).
  */
-test("baseline: each proposal says who made it", async ({ page, browser }) => {
+test("Ground Truth: each proposal says who made it", async ({ page, browser }) => {
   await openProposals(page);
   const rows = page.getByTestId("proposal");
   const invites = rows.filter({ hasText: "Team invites" }).getByTestId("proposal-by");
@@ -518,7 +518,7 @@ test("baseline: each proposal says who made it", async ({ page, browser }) => {
  * fails_when: the title inside the sentence is not a button, or opens nothing.
  * no_claim: links in run rows (B3 covers them).
  */
-test("baseline: the title inside a proposal's sentence opens the item", async ({ page }) => {
+test("Ground Truth: the title inside a proposal's sentence opens the item", async ({ page }) => {
   await openProposals(page);
   const dark = page.getByTestId("proposal").filter({ hasText: "Dark mode" });
   await dark.getByTestId("proposal-summary").getByRole("button", { name: "Dark mode" }).click();
@@ -531,7 +531,7 @@ test("baseline: the title inside a proposal's sentence opens the item", async ({
  * out of view.
  * no_claim: other widths.
  */
-test("baseline: proposal sentences wrap on a phone", async ({ page }) => {
+test("Ground Truth: proposal sentences wrap on a phone", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openProposals(page);
   const overflow = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -553,7 +553,7 @@ test("baseline: proposal sentences wrap on a phone", async ({ page }) => {
  * Guided setup afterwards and push it down, out of view.
  * no_claim: other tabs (they wait for the same read); other slow reads.
  */
-test("baseline: proposals on a phone stay put when the role answers late", async ({ page }) => {
+test("Ground Truth: proposals on a phone stay put when the role answers late", async ({ page }) => {
   await page.addInitScript(([key, path]) => localStorage.setItem(key, path), [MOCK_SLOW_KEY, "/v1/me/capabilities"]);
   await page.setViewportSize({ width: 390, height: 844 });
   await openProposals(page);
@@ -585,7 +585,7 @@ const NOISY = {
  * no_claim: every rule of the port (the Python table pins them); edges (no seeded edge
  * proposals).
  */
-test("baseline: proposal sentences show only real changes, and a no-change one is dismissed", async ({ page }) => {
+test("Ground Truth: proposal sentences show only real changes, and a no-change one is dismissed", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "proposal-noise"));
   await openBaseline(page);
   const tab = page.getByRole("tab", { name: /Proposals/ });

@@ -6,7 +6,7 @@ import { login } from "./helpers";
 /*
  * qa-onboarding-44 and qa-onboarding-25 (desktop, mock 'empty' scenario, through the UI only):
  * a commenter, an approver and a viewer of a new company follow the Set up links: their own
- * steps from Home's checklist, and the owner's steps' links (Members, Company, Baseline) as a
+ * steps from Home's checklist, and the owner's steps' links (Members, Company, Ground Truth) as a
  * shared link opens them. What their role may not do there is hidden or refused with a reason.
  * no_claim: the API's refusals (api/tests: role checks on every route); the owner's walk
  * (qa2-onboarding-checklist, fix4-setup-onboarding).
@@ -45,7 +45,7 @@ async function emptyCompany(page: Page) {
 for (const r of ROLES) {
   // protects: qa-onboarding-44, -25: a role's own Set up steps open with the way back; the
   // owner's steps say who does them: Members says the role, Company that only owners set the
-  // horizons and the time zone, Baseline's ?build=1 who builds the baseline (or opens the
+  // horizons and the time zone, Ground Truth's ?build=1 who builds the Ground Truth (or opens the
   // build for an approver).
   // fails_when: a form the role cannot use is offered, a refusal gives no reason, or ?build=1
   // is silently ignored.
@@ -88,7 +88,7 @@ for (const r of ROLES) {
       await expect(page.getByTestId("branding-panel").getByRole("button", { name: "Save branding" })).toHaveCount(0);
     }
 
-    // Baseline's ?build=1: the build for an approver; for the others, who builds it.
+    // Ground Truth's ?build=1: the build for an approver; for the others, who builds it.
     await page.goto(OWNER_LINKS.build);
     await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
     const sheet = page.getByRole("dialog", { name: "Build the Ground Truth" });

@@ -186,7 +186,7 @@ test.describe("desktop", () => {
   test("qa-docs-43: the delete dialog names the draft run in words, not its flow", async ({
     page,
   }) => {
-    // run-review: a Baseline to PRD run writes Usage alerts (priority-order's blocked run is
+    // run-review: a Ground Truth to PRD run writes Usage alerts (priority-order's blocked run is
     // for a PRD not imported yet since walk-docs-priorities).
     await open(page, "owner", "run-review");
     await row(page, "Usage alerts PRD")

@@ -8,8 +8,8 @@ import { login } from "./helpers";
  * Second QA walk of Company › Rituals (qa-company-1..3, 6, 21..24, 34, 35), on the mock layer
  * (lib/api/mock/rituals.ts, "rituals" scenario), driven through the UI as a person would.
  * Today is Wed Oct 28 2026; the Company time zone is not set, so Los Angeles is used. The
- * Baseline rebuild and the Investor update are paused; both meet the first Monday of the
- * month at 9:00 AM, next on Mon Nov 2. The Baseline rebuild's build is estimated at $7.00.
+ * Ground Truth rebuild and the Investor update are paused; both meet the first Monday of the
+ * month at 9:00 AM, next on Mon Nov 2. The Ground Truth rebuild's build is estimated at $7.00.
  */
 
 const TODAY = new Date("2026-10-28T17:00:00Z");
@@ -35,7 +35,7 @@ async function pick(page: Page, title: string) {
   await expect(inspector(page)).toContainText(title);
 }
 
-test("qa-company-1: Prepare now on the paused Baseline rebuild asks first, naming the pause and the $7.00 cost", async ({ page }) => {
+test("qa-company-1: Prepare now on the paused Ground Truth rebuild asks first, naming the pause and the $7.00 cost", async ({ page }) => {
   // protects=qa-company-1; fails_when=Prepare now starts the paid build at once, or the
   // question does not say the ritual is paused or what it costs; no_claim=the build itself.
   await openRituals(page);
@@ -63,7 +63,7 @@ test("qa-company-1: Prepare now that spends nothing on an active ritual does not
 test("qa-company-2/3: after Prepare now the paused ritual's Last pre-read is Nov 2, and the occurrence says one thing about the build", async ({ page }) => {
   // protects=qa-company-2 (Last pre-read names and links the new pre-read) and qa-company-3
   // (the pre-read's card no longer says the build has not started); fails_when=Last stays
-  // empty, or the page says both "Oracle started the baseline build" and "Oracle starts the build".
+  // empty, or the page says both "Oracle started the Ground Truth build" and "Oracle starts the build".
   await openRituals(page);
   await pick(page, "Ground Truth rebuild");
   await inspector(page).getByRole("button", { name: "Prepare now" }).click();

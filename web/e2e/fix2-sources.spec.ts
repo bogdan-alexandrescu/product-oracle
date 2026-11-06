@@ -4,7 +4,7 @@ import { login } from "./helpers";
 
 /**
  * QA fixes on Settings › Sources, Settings › Connections, the Set up checklist's Pick sources
- * step and the Build the baseline sheet, walked through the UI as a person would.
+ * step and the Build the Ground Truth sheet, walked through the UI as a person would.
  *
  * no_claim for every test here: the in-browser mock stands in for the API (api/tests/test_setup.py
  * covers the API's Pick sources rule; api/tests/test_connection_providers.py the Slack label).

@@ -51,7 +51,7 @@ test("review and approve the run's order", async ({ page }) => {
   await expect(table.getByRole("columnheader", { name: "Live #" })).toBeVisible();
   await expect(table.getByRole("columnheader", { name: "Δ" })).toBeVisible();
   const rows = page.locator('tr[data-testid^="priority-row-"]');
-  // The PRD's 6 new features are ranked among the baseline's (RP1, build-runplan.spec.ts).
+  // The PRD's 6 new features are ranked among the Ground Truth's (RP1, build-runplan.spec.ts).
   await expect(rows).toHaveCount(11);
   expect(await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!.replace("priority-row-", "")))).toEqual([
     "F-5",

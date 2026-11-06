@@ -97,7 +97,7 @@ test.describe("desktop", () => {
     expect(off.style).toBe("dashed");
   });
 
-  test("qa4-plan-23: Edit plan's add form says a new item is not in the baseline", async ({ page }) => {
+  test("qa4-plan-23: Edit plan's add form says a new item is not in the Ground Truth", async ({ page }) => {
     await openEditPlan(page);
     const form = page.getByRole("form", { name: "Add an item" });
     const pick = form.getByRole("combobox", { name: "Ground Truth feature" });

@@ -5,11 +5,11 @@ import { login } from "./helpers";
 
 /**
  * goal-order: goals keep one order on every page, set by a Position field (1 = first) in the
- * goal's Edit form in Detailed > Baseline. The "simple-home" mock scenario's goals are made
+ * goal's Edit form in Detailed > Ground Truth. The "simple-home" mock scenario's goals are made
  * together and weigh Grow retention 3, Faster activation 2, Keep alerts quiet 1; the person
  * sets positions that follow neither the weights, the titles nor the keys, then Simple Home,
  * Simple Roadmap, Simple Priorities, the New PRD goal chips, Detailed Plan, Detailed
- * Priorities and Baseline's Goal coverage all show the goals in that one order. Invented data.
+ * Priorities and Ground Truth's Goal coverage all show the goals in that one order. Invented data.
  */
 
 const POSITIONS: [key: string, name: string, position: number][] = [
@@ -103,7 +103,7 @@ for (const [label, viewport] of [
       const byGoal = page.getByRole("table", { name: "By goal" }).getByRole("row");
       await inOrder(byGoal, expected("Grow paid conversion", "Raise activation"));
 
-      // Detailed > Baseline > Flagged: the Goal coverage grid.
+      // Detailed > Ground Truth > Flagged: the Goal coverage grid.
       await page.goto("/ground-truth");
       await page.getByRole("tab", { name: /Flagged/ }).click();
       await inOrder(page.getByRole("grid", { name: "Goal coverage" }).getByRole("row"), NAMES);

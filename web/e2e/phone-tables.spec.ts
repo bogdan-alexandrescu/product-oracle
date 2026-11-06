@@ -113,7 +113,7 @@ test("phone run detail: the status chips sit under the phone header, clear of th
   await expectNoSideScroll(page);
 });
 
-test("phone baseline: the feature × goal ledger is a list of whole feature names with their goal tags", async ({ page }) => {
+test("phone Ground Truth: the feature × goal ledger is a list of whole feature names with their goal tags", async ({ page }) => {
   await login(page);
   await page.goto("/ground-truth");
   const feature = page.getByTestId("feature-f.guided-setup");

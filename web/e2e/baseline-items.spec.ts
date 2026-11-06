@@ -8,7 +8,7 @@ async function openBaseline(page: Page, email?: string) {
   await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
 }
 
-test("baseline: Add item adds a risk, the Items tab lists it, and Archive takes it off with a reason", async ({ page }) => {
+test("Ground Truth: Add item adds a risk, the Items tab lists it, and Archive takes it off with a reason", async ({ page }) => {
   await openBaseline(page);
   await page.getByRole("button", { name: "Add item" }).click();
   const form = page.getByRole("dialog", { name: "Add an item" });
@@ -38,7 +38,7 @@ test("baseline: Add item adds a risk, the Items tab lists it, and Archive takes 
   await expect(list.getByRole("button", { name: "Card network fees rise next year" })).toHaveCount(0);
 });
 
-test("baseline: the Features table's Add makes a feature in its product, serving the goals picked", async ({ page }) => {
+test("Ground Truth: the Features table's Add makes a feature in its product, serving the goals picked", async ({ page }) => {
   await openBaseline(page);
   await page.getByRole("region", { name: "Feature × goal", exact: true }).getByRole("button", { name: "Add" }).click();
   const form = page.getByRole("dialog", { name: "Add an item" });
@@ -57,7 +57,7 @@ test("baseline: the Features table's Add makes a feature in its product, serving
   await expect(d.getByRole("list", { name: "Part of" })).toContainText("Storefront");
 });
 
-test("baseline: the Goals table's Add proposes a goal, and the drawer confirms it", async ({ page }) => {
+test("Ground Truth: the Goals table's Add proposes a goal, and the drawer confirms it", async ({ page }) => {
   await openBaseline(page);
   // #345: each top-level goal row has its own "Add subgoal"; the table's Add is the exact name.
   await page.getByRole("region", { name: "Goals", exact: true }).getByRole("button", { name: "Add", exact: true }).click();
@@ -77,7 +77,7 @@ test("baseline: the Goals table's Add proposes a goal, and the drawer confirms i
   await expect(d.getByRole("button", { name: "Archive" })).toBeVisible();
 });
 
-test("baseline: the drawer rejects a proposed feature, with a reason", async ({ page }) => {
+test("Ground Truth: the drawer rejects a proposed feature, with a reason", async ({ page }) => {
   await openBaseline(page);
   await page.getByTestId("feature-f.usage-export").getByRole("button", { name: "Usage export" }).click();
   const d = page.getByRole("dialog", { name: "Usage export" });
@@ -94,7 +94,7 @@ test("baseline: the drawer rejects a proposed feature, with a reason", async ({ 
   await expect(page.getByTestId("feature-f.usage-export")).toHaveCount(0);
 });
 
-test("baseline: a viewer sees no Add, Confirm, Reject or Archive (#370: a role that can never act sees no control)", async ({ page }) => {
+test("Ground Truth: a viewer sees no Add, Confirm, Reject or Archive (#370: a role that can never act sees no control)", async ({ page }) => {
   await openBaseline(page, "viewer@example.com");
   await expect(page.getByRole("button", { name: "Add item" })).toHaveCount(0);
   await expect(page.getByRole("region", { name: "Goals", exact: true }).getByRole("button", { name: "Add" })).toHaveCount(0);
@@ -114,7 +114,7 @@ test("baseline: a viewer sees no Add, Confirm, Reject or Archive (#370: a role t
 });
 
 for (const scheme of ["light", "dark"] as const) {
-  test(`baseline: a failed link keeps the new feature and Try again makes only the missing links (${scheme})`, async ({ page }) => {
+  test(`Ground Truth: a failed link keeps the new feature and Try again makes only the missing links (${scheme})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme });
     await openBaseline(page);
     await page.getByRole("region", { name: "Feature × goal", exact: true }).getByRole("button", { name: "Add" }).click();
@@ -146,7 +146,7 @@ for (const scheme of ["light", "dark"] as const) {
   });
 }
 
-test("baseline: on a phone the Add item form fits and adds an assumption", async ({ page }) => {
+test("Ground Truth: on a phone the Add item form fits and adds an assumption", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openBaseline(page);
   await page.getByRole("button", { name: "Add item" }).click();

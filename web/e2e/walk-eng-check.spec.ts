@@ -23,7 +23,7 @@ import { login, signOut } from "./helpers";
  *   fails_when=the row shows the PRD's slug.
  * - "note focus" (item 8): protects=focusing Note to the agents keeps the page's scroll and the
  *   selected feature; fails_when=the page jumps to the list's end.
- * - "left out" (item 5): protects=a row left out reads the baseline goal it serves and Left out,
+ * - "left out" (item 5): protects=a row left out reads the Ground Truth goal it serves and Left out,
  *   goal chips whole; fails_when=No goal or "0 of 0 kept" shows, or a goal chip is cut.
  * - "plain requirement" (item 6): protects=the agents' stage pointers go, the requirement's own
  *   words stay ("ships in stage 2 of rollout"); fails_when=a pointer shows or own words are cut.

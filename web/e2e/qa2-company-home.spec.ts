@@ -105,7 +105,7 @@ test.describe("at 1440", () => {
 
   test("Set up: Invite team counts open invites, done rows say Change or Review", async ({ page }) => {
     // protects=qa-onboarding-18, -37; fails_when=Invite team leaves out the open invites, or a
-    // done row still says Open (Build baseline would start a second build); no_claim=the API
+    // done row still says Open (Build Ground Truth would start a second build); no_claim=the API
     // (api/tests/test_setup.py covers invited).
     await openHome(page);
     const invite = page.getByTestId("setup-row-invite");

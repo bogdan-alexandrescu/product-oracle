@@ -41,7 +41,7 @@ async function answer(page: Page, prompt: string, text: string) {
 test.describe("at 1440", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test("qa4-company-45: a checkpoint line reads 'Baseline proposal · Team onboarding'", async ({ page }) => {
+  test("qa4-company-45: a checkpoint line reads 'Ground Truth proposal · Team onboarding'", async ({ page }) => {
     await openHome(page);
     const row = lines(page).filter({ hasText: "Ground Truth proposal" }).first();
     await expect(row).toBeVisible();

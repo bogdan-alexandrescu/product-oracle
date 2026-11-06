@@ -5,7 +5,7 @@ import { login, pickZone } from "./helpers";
 /**
  * qa-onboarding-44: a new company's owner walks Home's whole Set up checklist, from "2 of 8"
  * to done, through the UI only: each step from its row's Open, back with Settings' Back to
- * Home, and the baseline built, reviewed and approved from the run the row opens.
+ * Home, and the Ground Truth built, reviewed and approved from the run the row opens.
  *
  * no_claim for the test here: the in-browser mock's /v1/setup, sources and runs stand in for
  * the API and SwarmCloud (api/tests/test_setup.py covers the API's step rules); the mock's
@@ -40,7 +40,7 @@ async function seeDone(page: Page, key: string, status: string | RegExp, done: n
 test("qa2 onboarding: the owner of a new company walks Set up from 2 of 8 to done, and the panel goes", async ({ page }) => {
   // protects=qa-onboarding-44, the whole first-run checklist on Home as a person walks it;
   // fails_when=a step's Open lands elsewhere or loses the way back, a finished step stays open
-  // or reads the wrong status, the count is off, the Build baseline row does not follow its
+  // or reads the wrong status, the count is off, the Build Ground Truth row does not follow its
   // run (Building…, Open the build), or the panel or a Set up chip still draws once every
   // step is done; no_claim=the API's /v1/setup and a real SwarmCloud run (mock stands in).
   test.setTimeout(180_000);
@@ -113,7 +113,7 @@ test("qa2 onboarding: the owner of a new company walks Set up from 2 of 8 to don
   await backToHome(page);
   await seeDone(page, "timezone", /Pacific/, 7);
 
-  // 6. Build baseline: Open lands on the Baseline page's start sheet; Start.
+  // 6. Build Ground Truth: Open lands on the Ground Truth page's start sheet; Start.
   const build = row(page, "build_baseline");
   await expect(build).toHaveAttribute("data-done", "false");
   await expect(build.getByTestId("setup-action")).toHaveText("Open");
@@ -141,7 +141,7 @@ test("qa2 onboarding: the owner of a new company walks Set up from 2 of 8 to don
   await expect(goals.getByTestId("goals-build-in-setup")).toHaveText("The Ground Truth is building: open it from Set up, above");
   await expect(page.getByRole("link", { name: "Open the build" })).toHaveCount(1);
 
-  // The run: the agents finish, it stops at Confirm the baseline, and the owner approves it.
+  // The run: the agents finish, it stops at Confirm the Ground Truth, and the owner approves it.
   await openBuild.click();
   await expect(page).toHaveURL(new RegExp(`${runHref}$`));
   await expect(page.getByRole("heading", { name: "Build the Ground Truth" }).first()).toBeVisible();

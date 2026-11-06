@@ -6,7 +6,7 @@ import { login } from "./helpers";
  * Review of the fix-plan lane, the three majors, through the UI on the mock layer:
  * - Priorities at a laptop's width (1440, the owner's 1512) with the inspector docked keeps
  *   Confidence and Depends on, and the feature's name keeps its room.
- * - Baseline's Goals table keeps Metric at 1440; Weight and Features go first.
+ * - Ground Truth's Goals table keeps Metric at 1440; Weight and Features go first.
  * - qa-plan-20: a row below a feature a person moved says who moved it, never a dependency.
  */
 
@@ -40,7 +40,7 @@ for (const width of [1440, 1512]) {
   });
 }
 
-test("baseline at 1440: the Goals table keeps Metric; Weight and Features go first", async ({ page }) => {
+test("Ground Truth at 1440: the Goals table keeps Metric; Weight and Features go first", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await login(page);
   await page.goto("/ground-truth");

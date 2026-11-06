@@ -37,7 +37,7 @@ test("inbox lists checkpoints, cost approvals, overruns and feedback by state", 
   // D14: a feedback row's primary action is outline too.
   await expect(feedback.getByRole("button", { name: "Accept", exact: true }).first()).toHaveAttribute("data-variant", "secondary");
 
-  // B2: the baseline checkpoint is reviewed in the Baseline, filtered to its run (not the run page).
+  // B2: the Ground Truth checkpoint is reviewed in the Ground Truth, filtered to its run (not the run page).
   await expect(
     checkpoints.locator("tr[data-row]").filter({ hasText: "Confirm the Ground Truth" }).getByRole("link", { name: "Review" }),
   ).toHaveAttribute("href", /^\/ground-truth\?run=[0-9a-f-]+$/);

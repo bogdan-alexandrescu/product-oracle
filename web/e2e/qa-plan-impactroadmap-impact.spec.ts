@@ -78,7 +78,7 @@ test("qa-plan-59: a recorded change leads back to its version, with PRDs highlig
   await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/impact$/);
 });
 
-test("qa-plan-59/61: a baseline item's what-if reads 'Impact: Guided setup' and leads back to Baseline", async ({ page }) => {
+test("qa-plan-59/61: a Ground Truth item's what-if reads 'Impact: Guided setup' and leads back to Ground Truth", async ({ page }) => {
   await scenario(page, "impact");
   await login(page);
   await page.goto("/ground-truth");

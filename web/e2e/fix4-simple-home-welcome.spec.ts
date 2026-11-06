@@ -59,7 +59,7 @@ const modeSwitch = (page: Page) => page.getByRole("radiogroup", { name: "Mode" }
 
 test("qa-onboarding-6: an invited commenter lands in Simple and is welcomed as a commenter, not with the owner's setup", async ({ page }) => {
   // fails_when: the commenter lands in Simple with no welcome, the wrong role's words or steps,
-  // a step not opening Simple's page, or the owner's "set up Oracle ... build the baseline" card
+  // a step not opening Simple's page, or the owner's "set up Oracle ... build the Ground Truth" card
   await newCompany(page);
   await invite(page, "pat.example@example.com", "commenter");
   await signIn(page, "pat.example@example.com");

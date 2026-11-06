@@ -6,7 +6,7 @@ import { login } from "./helpers";
 
 /**
  * A Detailed run page reads true (production pass, 2026-10-30), on a desktop and on a phone:
- * - "reused baseline": protects=a reused (skipped) segment counts as done, and the run's title
+ * - "reused Ground Truth": protects=a reused (skipped) segment counts as done, and the run's title
  *   is "<document title> · <flow>" with the title as typed; fails_when=the count leaves the
  *   reused segment out, or the title is slug words or gets a kind word appended.
  * - "decisions": protects=the Decisions list names who decided, and a send-back without entries
@@ -30,7 +30,7 @@ for (const size of SIZES) {
   test.describe(size.name, () => {
     test.use({ viewport: size.viewport });
 
-    test("reused baseline: the reused segment counts as done, and the run's title is the PRD's own", async ({ page }) => {
+    test("reused Ground Truth: the reused segment counts as done, and the run's title is the PRD's own", async ({ page }) => {
       await login(page);
       await page.goto("/documents/new");
       await page.getByRole("textbox", { name: "Title" }).fill("Example test · Saved carts");

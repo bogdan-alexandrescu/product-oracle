@@ -105,7 +105,7 @@ test.describe("desktop", () => {
     await expect(page).toHaveURL(/\/plan$/);
   });
 
-  test("qa-plan-11: a baseline item's Impact leads back with ‹ Baseline on the title's row", async ({ page }) => {
+  test("qa-plan-11: a Ground Truth item's Impact leads back with ‹ Ground Truth on the title's row", async ({ page }) => {
     await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "impact"] as const);
     await login(page);
     await page.goto("/ground-truth");
