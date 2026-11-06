@@ -295,6 +295,20 @@ async def _restore_links(db: AsyncSession, snap: FeatureSnap) -> None:
     await db.flush()
 
 
+async def move_links(
+    db: AsyncSession, before: FeatureSnap, to_goal_id: uuid.UUID, from_goal_id: uuid.UUID | None
+) -> None:
+    """A move: ``to_goal_id`` becomes the feature's first goal link, its link to
+    ``from_goal_id`` is dropped, and its other links stay, after it. The change engine's
+    ``set_goals`` moves an item's feature this way too."""
+    links = [lk for lk in before.links if lk.goal_id not in (from_goal_id, to_goal_id)]
+    links = [GoalLinkSnap(goal_id=lk.goal_id, contribution=min(lk.contribution or 0, TOP - 1))
+             for lk in links]  # fmt: skip
+    await _set_links(
+        db, before.feature_id, [GoalLinkSnap(goal_id=to_goal_id, contribution=TOP), *links]
+    )
+
+
 def _sig(tenant_id: uuid.UUID, undo: GoalBucketsUndo) -> str:
     body = undo.model_dump_json(exclude={"sig"})
     key = get_settings().secret_key.encode()
@@ -531,12 +545,7 @@ async def move_bucket_feature(
     await _entity(db, feature_id, "feature")
     await _entity(db, body.to_goal_id, "goal")
     (before,) = await _snap(db, [feature_id])
-    links = [lk for lk in before.links if lk.goal_id not in (body.from_goal_id, body.to_goal_id)]
-    links = [GoalLinkSnap(goal_id=lk.goal_id, contribution=min(lk.contribution or 0, TOP - 1))
-             for lk in links]  # fmt: skip
-    await _set_links(
-        db, feature_id, [GoalLinkSnap(goal_id=body.to_goal_id, contribution=TOP), *links]
-    )
+    await move_links(db, before, body.to_goal_id, body.from_goal_id)
     await db.commit()
     undo = GoalBucketsUndo(features=[before])
     return GoalBucketWrite(undo=_signed(principal.tenant_id, undo))

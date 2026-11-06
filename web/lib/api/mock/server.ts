@@ -1038,7 +1038,7 @@ function seedSimpleHomeOnePrdScenario(): Db {
     // An undated item would be estimated into this quarter: dated after it instead.
     if (i.start == null || i.end == null) Object.assign(i, { start: 180, end: 220, source: "typed" });
     else Object.assign(i, { start: i.start + 180, end: i.end + 180 });
-    if (i.milestone) i.milestone.day += 180;
+    if (i.milestone?.day != null) i.milestone.day += 180;
   }
   return db;
 }

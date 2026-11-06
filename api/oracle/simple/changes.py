@@ -38,6 +38,11 @@ Ops and the fields they write (``before`` must name the key fields):
 - ``edit_title``: title. ``edit_outcome``: outcome.
 - ``set_milestone`` (S9): the item's own milestone, ``{"milestone": {name, date,
   date_source: "typed"}}`` (date optional), or null to clear it.
+  Its ``before`` is compared by name and date only: the read shows no date_source.
+- ``set_goals``: the goals an item serves, ``{"goal_ids": [...]}`` (the one it moves most
+  first), each a live goal; the goal buckets carry a task added there to another goal.
+  An item with a baseline feature takes the feature along (applied, accepted or undone):
+  the first goal becomes its first "supports" link, as a goal-bucket move.
 - ``set_owner`` / ``set_decider`` (chat-actions): the item's own owner_id / decider_id, a
   member of the company (null: back to its track's owner / its roadmap's decider).
 - ``set_confidence`` / ``set_track`` / ``set_prd`` (one-feature-panel): the item's
@@ -89,6 +94,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.baseline.models import Entity
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import HORIZONS, RoadmapItem
 from oracle.simple import drafts, service
@@ -126,6 +132,7 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "confirm_item": ("draft",),
     "keep_both": ("kept_both",),
     "set_milestone": ("milestone",),
+    "set_goals": ("goal_ids",),
     "set_owner": ("owner_id",),
     "set_decider": ("decider_id",),
     # one-feature-panel: every field of an item, edited in its panel.
@@ -782,6 +789,21 @@ async def _plan(
             day = _day(m.get("date"), "after.milestone.date")
             after = {"milestone": {"name": name, "date": _iso(day),
                                    "date_source": "typed" if day else None}}  # fmt: skip
+    elif op == "set_goals":
+        raw = a.get("goal_ids")
+        if not isinstance(raw, list) or not raw:
+            raise ChangeError(422, "after.goal_ids: one goal or more")
+        ids = list(dict.fromkeys(_uuid(g, "after.goal_ids") for g in raw))
+        live = set(
+            await db.scalars(
+                select(Entity.id).where(
+                    Entity.id.in_(ids), Entity.type == "goal", Entity.status != "rejected"
+                )
+            )
+        )
+        if len(live) != len(ids):
+            raise ChangeError(422, "after.goal_ids: goals of this company")
+        after = {"goal_ids": [str(g) for g in ids]}
     elif op in ("set_owner", "set_decider"):
         field = FIELDS[op][0]
         raw = a.get(field)
@@ -816,8 +838,6 @@ async def _plan(
         after = {field: str(ref) if ref else None}
         stored = STORED[op]
     elif op == "set_goal":
-        from oracle.baseline.models import Entity
-
         goal = _uuid(a["goal_id"], "after.goal_id") if a.get("goal_id") is not None else None
         if (
             goal is not None
@@ -860,7 +880,6 @@ async def _plan(
 
 async def _unknown_keys(db: AsyncSession, keys: list[str], read_: service.Read) -> list[str]:
     """set_depends: the keys that name no roadmap item (its key or code) and no feature."""
-    from oracle.baseline.models import Entity
 
     if not keys:
         return []
@@ -889,7 +908,6 @@ async def _merge_plan(
     db: AsyncSession, entry: service.Entry, target: dict[str, Any], by_id: dict
 ) -> tuple[service.Entry, dict[str, Any], dict[str, Any], dict[str, Any]]:
     """S7: merge_item's writes, keyed by item id (see the module's docstring)."""
-    from oracle.baseline.models import Entity
 
     row = entry.row
     if not row.draft or entry.status in ("merged", "cut"):
@@ -946,6 +964,8 @@ async def _apply(
     """Write ``values`` (a change's after, or its before for an undo) into the working
     drafts of the items' roadmaps (S3b), and the change's own side effects."""
     c.draft_ids = await drafts.write_items(db, c, values, session, KEYED, write, undo=undo)
+    if c.op == "set_goals":
+        await _move_feature(db, c, values)
     if c.op == "accept_date_suggestion":
         s = await db.get(RoadmapDateSuggestion, uuid.UUID(c.target["suggestion_id"]))
         if s is not None and not undo and s.status == "open":
@@ -981,6 +1001,25 @@ async def _apply(
                         o.status, o.decided_by, o.decided_at = "open", None, None
                 s.status, s.decided_by, s.decided_at = "open", None, None
     await db.flush()
+
+
+async def _move_feature(db: AsyncSession, c: SimpleChange, values: dict[str, Any]) -> None:
+    """``set_goals`` on an item with a baseline feature moves the feature too, as a goal
+    bucket move does: the goal it now moves most becomes the feature's first goal link
+    (what the dated goal buckets place it by), and the link to the goal it showed under
+    is dropped unless the item still serves it. Applied, accepted or undone alike."""
+    from oracle.simple import goal_buckets
+
+    row = await db.get(RoadmapItem, uuid.UUID(c.target["item_id"]))
+    ids = [uuid.UUID(str(g)) for g in values.get("goal_ids") or []]
+    if row is None or row.feature_id is None or not ids:
+        return
+    goal = await db.get(Entity, ids[0])
+    if goal is None or goal.type != "goal" or goal.status == "rejected":
+        return
+    (before,) = await goal_buckets._snap(db, [row.feature_id])
+    shown = before.links[0].goal_id if before.links else None
+    await goal_buckets.move_links(db, before, ids[0], None if shown in ids else shown)
 
 
 async def _current(db: AsyncSession, c: SimpleChange, like: dict[str, Any]) -> dict[str, Any]:
