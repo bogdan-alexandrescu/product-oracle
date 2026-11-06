@@ -51,7 +51,7 @@ const MILESTONES: GmMilestone[] = [
   ms("lm4", "lg2", "Setup time under two days", 2, 2.6, "2026-11-13", "at_risk", "Onboarding"),
   ms("lm5", "lg2", "Imports finish without help", 90, 68, "2026-12-18", "on_track", "Platform"),
   ms("lm6", "lg2", "Setup time one day for new teams", 1, null, "2027-01-29", "not_measured", "Onboarding"),
-  ms("lm7", "lg3", "Seat growth baseline for large teams", 4, 4, "2026-12-04", "met", "Billing"),
+  ms("lm7", "lg3", "Seat growth first measured for large teams", 4, 4, "2026-12-04", "met", "Billing"),
   ms("lm8", "lg3", "Self-serve seat changes for every plan", null, null, null, "no_gate", "Billing"),
   ms("lm9", "lg3", "Seat growth at 12% a quarter", 12, null, "2027-03-19", "not_measured", "Reports"),
   ms("lm10", "lg4", "Ticket volume measured by topic", 3.1, 3.1, "2026-11-27", "missed", "Support"),
