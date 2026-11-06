@@ -62049,7 +62049,8 @@
                   "agenda_next",
                   "agenda_skip",
                   "suggest_feature",
-                  "mark_shipped"
+                  "mark_shipped",
+                  "api_action"
                 ]
               }
             ],

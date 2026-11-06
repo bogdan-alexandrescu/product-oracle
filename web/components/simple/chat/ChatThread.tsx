@@ -480,7 +480,8 @@ function LineActions({
       setBusy(false);
     }
   };
-  const open = m.cards.filter((c) => c.status === "open" && c.may !== null);
+  // ask-oracle-actions: an API action's card is applied on its own (the API's Apply all leaves it).
+  const open = m.cards.filter((c) => c.status === "open" && c.may !== null && c.op !== "api_action");
   const retry = m.kind === "failed" && m.retry;
   const choices = m.choices.length > 0;
   if (!retry && !choices && open.length < 2 && !said && !error) return null;

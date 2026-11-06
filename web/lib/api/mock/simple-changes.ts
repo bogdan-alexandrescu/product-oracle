@@ -648,6 +648,17 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   return json(201, { change: view(db, ctx, change), flags: [] });
 }
 
+/** The item's depends_on with only the change's own keys turned back (changes._depends_back); null: one changed since. */
+function dependsBack(current: Values, before: Values, after: Values): Values | null {
+  const now = (current.depends_on as string[] | null) ?? [];
+  const was = (before.depends_on as string[] | null) ?? [];
+  const made = (after.depends_on as string[] | null) ?? [];
+  const added = made.filter((k) => !was.includes(k));
+  const removed = was.filter((k) => !made.includes(k));
+  if (added.some((k) => !now.includes(k)) || removed.some((k) => now.includes(k))) return null;
+  return { depends_on: [...now.filter((k) => !added.includes(k)), ...removed] };
+}
+
 function writeTarget(db: SimpleDb, c: Change, values: Values, undo = false, ctx?: SimpleChangesCtx): void {
   const spec = TARGETS[c.op];
   // S9: a feature ask is a request in Requests (targets.py: a ProductRequest under target.request_id).
@@ -1140,6 +1151,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     const s = (db.sessions ?? []).find((x) => x.id === c.session_id);
     if (!s || s.closed_at || idle(s)) return json(409, { detail: "Its session is closed: undo works only in the change's session" });
     if (c.op === "set_goal_measure" && !same(goalMeasure(db, c.target.goal_id), c.after)) return conflict(db, ctx, goalMeasure(db, c.target.goal_id)!, [String(c.target.goal_id)], "Changed since");
+    let undone: { before: Values; after: Values } | undefined;
     if (TARGETS[c.op]) writeTarget(db, c, c.before, true, ctx);
     else if (KEY_DATE_OPS.includes(c.op)) {
       const rm = roadmapOfDoc(db, c.target.document_id)!;
@@ -1153,6 +1165,16 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
       const drafts = intoDrafts(db, anchored(db, c), s, true);
       if (drafts instanceof Response) return drafts;
       applyS7(db, c, true);
+    } else if (c.op === "set_depends") {
+      // ask-oracle-actions (changes._depends_back): only the keys the change added or removed
+      // go back; the item's other dependencies stay as they are now.
+      const now_ = current(db, c, c.after);
+      const back = dependsBack(now_, c.before, c.after);
+      if (!back) return conflict(db, ctx, now_, touched(c), "Changed since");
+      const drafts = intoDrafts(db, c, s, true);
+      if (drafts instanceof Response) return drafts;
+      apply(db, c, back, true);
+      undone = { before: now_, after: back };
     } else {
       const now_ = current(db, c, c.after);
       if (!same(now_, c.after)) return conflict(db, ctx, now_, touched(c), "Changed since");
@@ -1160,7 +1182,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
       if (drafts instanceof Response) return drafts;
       apply(db, c, c.before, true);
     }
-    const u: Change = { ...c, id: crypto.randomUUID(), before: c.after, after: c.before, status: "undone", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: now, undoes_id: c.id, routed_to: [], decided_by: null, decided_at: null };
+    const u: Change = { ...c, id: crypto.randomUUID(), before: undone?.before ?? c.after, after: undone?.after ?? c.before, status: "undone", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: now, undoes_id: c.id, routed_to: [], decided_by: null, decided_at: null };
     db.changes!.push(u);
     s.last_change_at = now;
     return json(201, { change: view(db, ctx, u), flags: TARGETS[c.op] || KEY_DATE_OPS.includes(c.op) ? [] : flagsFor(db, touched(c)) });

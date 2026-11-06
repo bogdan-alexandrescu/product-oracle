@@ -610,6 +610,8 @@ ChatActionOp = Literal[
     "suggest_feature",
     # item-chat-understands: an item already shipped (oracle.simple.shipped).
     "mark_shipped",
+    # ask-oracle-actions: any action of the API's catalogue (oracle.simple.ask_actions).
+    "api_action",
 ]
 ChangeStatus = Literal["applied", "proposed", "accepted", "declined", "undone"]
 SessionKind = Literal["editing", "meeting"]
