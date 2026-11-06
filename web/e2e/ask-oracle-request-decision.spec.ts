@@ -74,7 +74,7 @@ test("the owner asks Oracle to request a decision, and it waits on the Decisions
   const row = page.getByRole("region", { name: "Outside meetings" }).getByTestId("decision-row").filter({ hasText: TITLE });
   await expect(row).toHaveCount(1);
   await expect(row).toContainText(APPROVER);
-  await expect(row).toContainText("waiting for a decider");
+  await expect(row).toContainText(`${APPROVER} decides`);
 });
 
 /**

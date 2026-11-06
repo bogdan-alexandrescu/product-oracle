@@ -191,7 +191,7 @@ test("A Simple proposal waiting on me: rail badge, Home and the Inbox count the 
   await expect(needs.getByTestId("panel-count")).toHaveText(waiting);
   // The (i) says what it counts, Simple's proposals, Oracle's dates and goal suggestions among them.
   await needs.getByRole("button", { name: "About Needs you" }).click();
-  await expect(page.getByText(/approvals, runs, access, reviews, questions, proposals, Oracle's dates and goal suggestions\./)).toBeVisible();
+  await expect(page.getByText(/approvals, runs, access, reviews, decisions, the questions asked of you, proposals, Oracle's dates and goal suggestions\./)).toBeVisible();
   await page.keyboard.press("Escape");
 
   await page.getByTestId("nav-inbox").click();
@@ -199,6 +199,21 @@ test("A Simple proposal waiting on me: rail badge, Home and the Inbox count the 
   await expect(page.getByRole("row").filter({ hasText: "Bulk export" }).filter({ hasText: "asked for by" })).toHaveCount(1);
   await expect(page.getByText(`${waiting} waiting`).filter({ visible: true })).toBeVisible();
   await expect(badge).toHaveText(waiting);
+});
+
+// protects=merge of train AQ: Home's chips come from the Inbox's kinds, and Simple's proposals
+// are a kind of their own: the Proposals chip opens the Inbox on proposals only, its header
+// counting them; fails_when=no Proposals chip, or its rows fall under Other.
+test("the Proposals chip opens the Inbox on proposals only", async ({ page }) => {
+  await openHome(page, "inbox-reviewer");
+  const proposals = page.getByTestId("home-needs").getByTestId("home-count-proposals");
+  await expect(proposals).toHaveText(/Proposals\s*2/);
+  await proposals.click();
+  await expect(page).toHaveURL(/\/inbox\?kind=proposals$/);
+  await expect(page.getByTestId("inbox-kind")).toContainText("Proposals");
+  await expect(page.getByRole("row").filter({ hasText: "Bulk export" }).filter({ hasText: "asked for by" })).toHaveCount(1);
+  await expect(page.getByTestId("inbox-checkpoints")).toHaveCount(0);
+  await expect(page.getByText(/^\d+ waiting$/).filter({ visible: true })).toHaveText("2 waiting");
 });
 
 test("Questions asked of me: Home shows one with 7 or more inbox items, and only mine", async ({ page }) => {
