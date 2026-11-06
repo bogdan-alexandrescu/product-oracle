@@ -250,8 +250,9 @@ export function GoalLadder(props: LadderProps) {
         setSel(waiter);
       } catch (e) {
         // A loop is refused (422); the drawn arrow stays red until the next pick, and the words
-        // name both cards: the one drawn from already waits on the one drawn onto.
-        if (e instanceof ChangeFailed && e.status === 422) {
+        // name both cards: the one drawn from already waits on the one drawn onto. Any other
+        // refusal says what the API says.
+        if (e instanceof ChangeFailed && e.status === 422 && e.message.includes("it would make a loop")) {
           setRefused([on, waiter]);
           toast({ message: `Not added, it would make a loop: ${named(on)} already waits on ${named(waiter)}` });
         } else failed(e);
