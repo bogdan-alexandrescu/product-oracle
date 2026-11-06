@@ -81,7 +81,8 @@ test.describe("pass-f members, round 1", () => {
   test("F-52: on a phone the People list shows whole emails, breaking only after their @", async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 800 });
     await login(page, "commenter@example.com");
-    await openMembers(page);
+    // On a phone the app's nav is behind its menu: Members by its address.
+    await page.goto("/settings/members");
     const emails = page.getByTestId("people-readonly").getByTestId("person-email");
     await expect(emails.first()).toBeVisible();
     for (const el of await emails.all()) {
