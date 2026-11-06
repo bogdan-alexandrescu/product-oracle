@@ -119,8 +119,9 @@ for (const scheme of ["light", "dark"] as const) {
       await dragAdd(page, "Quiet hours setting", page.locator('[data-testid="quarter-drop"][data-add-where="quarter:2027-Q1"]'), "top");
       await page.getByTestId("format-gantt").click();
       await expect(b).toHaveAttribute("data-kind", "draft");
-      await b.locator("rect[data-body]").click();
+      // roadmap-edit-fixes: a new item's panel opens on its own (a click on its bar would close it).
       const card = page.getByTestId("floating-card");
+      await expect(card.getByTestId("card-name")).toContainText("Quiet hours setting");
       await expect(card.getByTestId("draft-tag")).toHaveText("Draft");
       await expect(card.getByTestId("item-drafting")).toHaveText("Oracle is drafting…");
       await expect(card.getByTestId("item-flow-none")).toHaveText("No flow yet. Once the draft is confirmed, Oracle can draw one.");
@@ -150,6 +151,8 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(column(page, "later").locator(`[data-item="${TWIN_KEY}"]`)).toBeVisible();
       await expect(c.getByTestId("draft-tag")).toHaveText("Draft");
       await expect(c.getByTestId("board-looks-like")).toHaveText("Looks like Weekly alert digest");
+      // roadmap-edit-fixes: the new item's panel opened on its own; close it to reach the toolbar.
+      await page.getByTestId("floating-card").getByRole("button", { name: "Close" }).click();
 
       await page.getByTestId("needs-decision").click();
       const tray = page.getByTestId("decision-tray");
@@ -357,11 +360,11 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(page.getByTestId("quick-add")).toHaveCount(0);
       await sheetAdd(page, "Mute a rule for a week", "Next", "Add");
       await expect(toastWith(page, "Added Mute a rule for a week as a draft")).toBeVisible();
-      // mk-qa4-roadmap QR1 A: the draft is listed in its quarter with its Draft tag; its row opens the card.
+      // mk-qa4-roadmap QR1 A: the draft is listed in its quarter with its Draft tag; its card is open.
       const row = page.locator('[data-testid="timeline-list"] [data-testid="timeline-row"][data-item="mute-a-rule-for-a-week"]');
       await expect(row.getByTestId("draft-tag")).toHaveText("Draft");
       await noSidewaysScroll(page);
-      await row.click();
+      // roadmap-edit-fixes: a new item's panel opens on its own (a tap on its row would close it).
       const card = page.getByTestId("floating-card");
       await expect(card).toHaveAttribute("data-sheet", "bottom");
       await expect(card.getByTestId("draft-tag")).toHaveText("Draft");
