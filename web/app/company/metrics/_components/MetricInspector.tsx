@@ -199,7 +199,7 @@ export function MetricInspector({
         {metric.last_error && <ErrorNote>{metric.last_error}</ErrorNote>}
       </InspectorSection>
       {(goal || drives || inputs.length > 0) && (
-        <InspectorSection label={metric.kind === "input" ? "Drives" : goal ? "Goal and inputs" : "Inputs"}>
+        <InspectorSection label={metric.kind === "input" ? "Drives" : goal ? "Goal and drivers" : "Drivers"}>
           {goal && (
             <InspectorRow value={distanceText(goals, goal.id)}>
               <Link href={`/baseline?entity=${goal.id}`} className="hover:underline">
