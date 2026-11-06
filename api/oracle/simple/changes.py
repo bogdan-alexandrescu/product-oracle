@@ -370,6 +370,13 @@ def write(row: RoadmapItem, values: dict[str, Any], target: dict[str, Any]) -> N
             setattr(row, f, drafts._typed(f, v))
 
 
+def _seen_milestone(m: Any) -> tuple | None:
+    """A milestone as the item reads it: its name and day, None when it has neither."""
+    if not isinstance(m, dict) or not (m.get("name") or m.get("date")):
+        return None
+    return (m.get("name") or None, _iso(_day(m.get("date"), "milestone.date")))
+
+
 def _normal(fields: tuple[str, ...], values: dict[str, Any]) -> dict[str, Any]:
     out = {}
     for f in fields:
@@ -707,6 +714,11 @@ async def _plan(
         shown = {"start_date": _iso(r.start.date), "end_date": _iso(r.end.date)}
         if seen_ != shown:
             raise await _conflict(db, shown, {str(row.id)}, lead)
+    elif op == "set_milestone":
+        # goal-buckets-tasks: the milestone as the item reads it (name, date): the date
+        # engine's own fields (date_source, basis_ids...) are not seen.
+        if _seen_milestone(seen_["milestone"]) != _seen_milestone(current["milestone"]):
+            raise await _conflict(db, current, {str(row.id)}, lead)
     elif seen_ != current:
         raise await _conflict(db, current, {str(row.id)}, lead)
     a = body.after
