@@ -1115,7 +1115,7 @@ export function FloatingCard({
       </div>
       <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-3">
         <Link
-          href={`/plan?item=${encodeURIComponent(item.key)}${item.prd ? `&prd=${item.prd.id}` : ""}`}
+          href={`/plan?item=${encodeURIComponent(item.key)}${item.prd ? `&prd=${item.prd.id}` : ""}&roadmap=${encodeURIComponent(item.roadmap.slug)}`}
           className="inline-flex h-8 items-center rounded-lg border border-line-strong bg-surface px-3 text-[14px] leading-none font-semibold whitespace-nowrap hover:bg-surface2"
         >
           Open the detailed view
