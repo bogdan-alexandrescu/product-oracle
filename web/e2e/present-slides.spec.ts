@@ -9,9 +9,12 @@ import { expect, test } from "./test";
  * what we build, outcomes, not doing, risks), then the timeline on its own slide; the
  * arrow keys and Space page them, the count says where you are, the type is larger than
  * the page's, the Next and Previous buttons page them too, a feature named on the timeline
- * slide opens the feature panel over it, and Stop presenting ends it;
- * fails_when = Present is the same page without its menu, the keys do nothing, or the
- * timeline sits below the fold; no_claim = the browser's own full-screen frame.
+ * slide opens the feature panel over it, and Stop presenting ends it; Space on a focused
+ * button presses it rather than paging; the timeline slide fits the screen, its last
+ * milestone in view, each milestone's items a count with their names on asking;
+ * fails_when = Present is the same page without its menu, the keys do nothing, Space on
+ * Previous slide pages forward, or the timeline (or its last milestone) sits below the fold;
+ * no_claim = the browser's own full-screen frame.
  */
 
 const URL = "/simple/prds/guided-setup";
@@ -44,8 +47,13 @@ for (const phone of [false, true]) {
         await page.keyboard.press("Space");
         await expect(slide.getByRole("heading", { level: 2 })).toHaveText("Outcomes and how we measure them");
         await expect(slide).toContainText("48% → 65%");
-        await page.keyboard.press("ArrowLeft");
+        // Space on a focused button presses it; it does not page the slides.
+        await page.getByRole("button", { name: "Previous slide" }).focus();
+        await page.keyboard.press("Space");
         await expect(count).toHaveText("2 / 6");
+        await page.keyboard.press("ArrowLeft");
+        await expect(count).toHaveText("1 / 6");
+        await page.getByRole("button", { name: "Next slide" }).click();
         await page.getByRole("button", { name: "Next slide" }).click();
         await page.getByRole("button", { name: "Next slide" }).click();
         await expect(slide.getByRole("heading", { level: 2 })).toHaveText("Not doing");
@@ -60,6 +68,17 @@ for (const phone of [false, true]) {
         await expect(page.getByRole("button", { name: "Next slide" })).toBeDisabled();
         await page.keyboard.press("ArrowRight");
         await expect(count).toHaveText("6 / 6");
+        // The whole timeline fits the slide: every milestone, the last (M3) too, in view.
+        const rows = slide.getByTestId("plan-strip-row");
+        await expect(rows.filter({ hasText: "M3" })).toHaveCount(1);
+        await expect(rows.filter({ hasText: "M3" })).toBeInViewport({ ratio: 1 });
+        await expect(rows.last()).toBeInViewport({ ratio: 1 });
+        expect(await slide.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+        // Each milestone's items are a count; their names show on asking (and on hover).
+        await expect(slide.getByText("Setup checklist", { exact: true })).toHaveCount(0);
+        const show = slide.getByRole("button", { name: /^Show the names in / });
+        await expect(show.first()).toHaveAttribute("title", /\S/);
+        while (await show.count()) await show.first().click();
         // A feature named on the timeline slide opens the one feature panel, over the slide.
         await slide.getByText("Setup checklist", { exact: true }).first().click();
         await expect(page.getByTestId("item-panel")).toBeVisible();
@@ -70,7 +89,9 @@ for (const phone of [false, true]) {
         await expect(page.getByTestId("one-pager")).toHaveAttribute("data-presenting", "true");
         await expect(count).toHaveText("6 / 6");
 
-        await page.getByRole("button", { name: "Stop presenting" }).click();
+        // Space on a focused Stop presenting presses it.
+        await page.getByRole("button", { name: "Stop presenting" }).focus();
+        await page.keyboard.press("Space");
         await expect(page.getByTestId("one-pager")).not.toHaveAttribute("data-presenting", "true");
         await expect(page.getByRole("region", { name: "What we will build" })).toBeVisible();
       });

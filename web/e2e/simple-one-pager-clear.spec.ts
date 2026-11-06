@@ -65,8 +65,8 @@ for (const phone of [false, true]) {
       await expect(look.getByRole("button", { name: "About Numbers disagree in “Targets”" })).toHaveAccessibleDescription(LOOK_PER);
       const open = look.getByRole("link", { name: "Open the section" });
       await expect(open).toHaveCount(2);
-      await expect(open.first()).toHaveAttribute("href", "/documents/guided-setup#later");
-      await expect(open.nth(1)).toHaveAttribute("href", "/documents/guided-setup#targets");
+      await expect(open.first()).toHaveAttribute("href", /^\/documents\/guided-setup\/v\/\d+#later$/);
+      await expect(open.nth(1)).toHaveAttribute("href", /^\/documents\/guided-setup\/v\/\d+#targets$/);
       const bet = page.locator('[data-line="bets-2"]');
       await expect(page.getByRole("group", { name: /^User flow of “Invite suggestions/ })).toHaveCount(0);
       const draw = bet.getByRole("button", { name: /^Draw the flow for “Invite suggestions/ });
