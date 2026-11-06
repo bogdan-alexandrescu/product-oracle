@@ -571,7 +571,8 @@ async def test_a_public_link_needs_the_check_and_shows_only_the_public_page(clie
     assert "Import your accounts in one go" in page.text
     for marker in MARKERS:
         assert marker not in page.text, marker
-    assert "expires" in page.text
+    # E-14: the page's header says when the link ends; its footer says when it was shared.
+    assert "expires" not in page.text and "Shared " in page.text
     resp = await client.put(
         f"/v1/roadmaps/{SLUG}/public-texts/csv-parser",
         json={"title": "Every spreadsheet column, understood", "description": "Changed.",
@@ -952,8 +953,9 @@ def test_a_link_holder_reads_no_left_out_line_no_empty_or_repeated_column():
         "| Bulk import | Faster setup |  | Grow activation |",
     ])  # fmt: skip
     got = reader_body(table, "now-group-1")
-    assert got.split("\n")[0] == "| Item | When | Outcome |"
-    assert "| CSV parser | Now |  |" in got and "| Bulk import | Now | Faster setup |" in got
+    assert got.split("\n")[0] == "| Item | When | Status | Outcome |"
+    assert "| CSV parser | Now | In progress |  |" in got
+    assert "| Bulk import | Now | In progress | Faster setup |" in got
     assert "Confidence" not in got and "Grow activation" not in got
     # Outside a goal group the Goal column says something the page does not.
     assert "| Goal |" in reader_body(table, "brief-items")
@@ -964,10 +966,15 @@ def test_a_link_holder_reads_no_left_out_line_no_empty_or_repeated_column():
 
 
 def test_a_link_holder_reads_each_item_with_when_and_status():
-    """protects=E-14: a link holder's goal group lists each item with its name, when (the
-    horizon it sits in) and status (its confidence, in words), so the page draws them as
-    cards; fails_when=a goal group's table holds the item names alone, or the status reads
-    a bare "high"; no_claim=the company's own audience view and its PDF export."""
+    """protects=E-14 (fix round): a link holder's goal group lists each item with its name,
+    when (its own dates, month first: "Oct 5 – Nov 20" or "Nov 20"; the horizon only when it
+    has none), status (its delivery state, which every item has) and its confidence in words
+    as an extra line; fails_when=a card's when repeats the horizon heading although the item
+    has dates, a card has no status, or the confidence reads a bare "high"; no_claim=the
+    company's own audience view and its PDF export."""
+    from datetime import date
+
+    from oracle.roadmap.variants import ItemView
     from oracle.shares.render import reader_body
 
     table = "\n".join([
@@ -975,10 +982,28 @@ def test_a_link_holder_reads_each_item_with_when_and_status():
         "|---|---|---|---|",
         "| CSV parser |  | high | Grow activation |",
         "| Bulk import |  |  | Grow activation |",
+        "| Audit log |  |  | Grow activation |",
+        "| Year end close |  |  | Grow activation |",
     ])  # fmt: skip
-    got = reader_body(table, "later-group-2").split("\n")
-    assert got[0] == "| Item | When | Status |"
-    assert got[2:] == ["| CSV parser | Later | High confidence |", "| Bulk import | Later |  |"]
+    items = [
+        ItemView("csv", "CSV parser", None, "later", 0, "high",
+                 start=date(2026, 10, 5), end=date(2026, 11, 20)),
+        ItemView("bulk", "Bulk import", None, "later", 1, end=date(2026, 11, 20), shipped=True),
+        ItemView("audit", "Audit log", None, "later", 2),
+        ItemView("close", "Year end close", None, "later", 3,
+                 start=date(2026, 12, 1), end=date(2027, 2, 3)),
+    ]  # fmt: skip
+    got = reader_body(table, "later-group-2", items).split("\n")
+    assert got[0] == "| Item | When | Status | Confidence |"
+    assert got[2:] == [
+        "| CSV parser | Oct 5 – Nov 20 | Exploring | High confidence |",
+        "| Bulk import | Nov 20 | Shipped |  |",
+        "| Audit log | Later | Exploring |  |",
+        "| Year end close | Dec 1, 2026 – Feb 3, 2027 | Exploring |  |",
+    ]
+    # Without the items (an older caller) every card still has a when and a status.
+    bare = reader_body(table, "next-group-1").split("\n")
+    assert bare[2] == "| CSV parser | Next | Planned | High confidence |"
 
 
 def test_a_link_holder_reads_no_per_item_no_goal_flag():
