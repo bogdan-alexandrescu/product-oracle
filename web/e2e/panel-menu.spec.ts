@@ -84,12 +84,14 @@ for (const size of SIZES)
       });
 
       test("an approver merges a feature into another: it says where it went, the kept one takes its dependency, Undo restores it", async ({ page }) => {
-        await open(page, "approver@example.com", "alert-sso");
+        // The "simple-deciders" scenario: this approver owns the alerts track, so decides its features.
+        await page.context().addInitScript(([key]) => localStorage.setItem(key, "simple-deciders"), [MOCK_SCENARIO_KEY] as const);
+        await open(page, "avery.lane@example.com", "alert-sso");
         await expect(panel(page).getByTestId("card-depends")).toContainText("Alert history export");
         await menu(page, "Merge into…");
         const form = panel(page).getByTestId("card-merge-edit");
         await form.getByLabel("Merge into").selectOption({ label: "Mobile alert push" });
-        await tap(form.getByRole("button", { name: "Merge" }));
+        await tap(form.getByRole("button", { name: "Merge", exact: true }));
         await expect(toasts(page)).toContainText("Merged 'Alert routing by team' into Mobile alert push in your working draft");
         await expect(panel(page).getByTestId("item-merged")).toContainText("Merged into");
         await expect(panel(page).getByTestId("item-merged")).toContainText("Mobile alert push");
@@ -109,7 +111,7 @@ for (const size of SIZES)
         await menu(page, "Part of…");
         const form = panel(page).getByTestId("card-parent-edit");
         await form.getByLabel("Part of").selectOption({ label: "Alert rules engine" });
-        await tap(form.getByRole("button", { name: "Save" }));
+        await tap(form.getByRole("button", { name: "Save", exact: true }));
         await expect(toasts(page)).toContainText("Made 'Alert history export' part of Alert rules engine in your working draft");
         await expect(panel(page).getByTestId("card-part-of")).toContainText("Part of Alert rules engine");
         if (!size.phone) {

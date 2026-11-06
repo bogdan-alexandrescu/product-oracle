@@ -652,7 +652,8 @@ async def item_extras(
 
 
 def _ref(e: service.Entry) -> SimpleMergedInto:
-    return SimpleMergedInto(id=str(e.row.id), code=e.code or e.row.item_key, title=e.row.title)
+    # Its display code ("F-06"), "" when it has none: never its key.
+    return SimpleMergedInto(id=str(e.row.id), code=e.code or "", title=e.row.title)
 
 
 def _parts(

@@ -1215,9 +1215,10 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     const parent = x.s.parent ? all.get(x.s.parent) : undefined;
     if (parent && x.r.start.estimated && x.r.end.estimated) x.r = parent.r;
   }
-  const ref = (k: string) => {
+  // additions.item_extras: merged_into's code falls back to the key; a part's is its display code or "".
+  const ref = (k: string, key = true) => {
     const x = db.items.find((y) => y.key === k);
-    return { id: db.ids[k], code: (x && prdCode(x.section)) ?? k, title: x?.title ?? k };
+    return { id: db.ids[k], code: (x && prdCode(x.section)) ?? (key ? k : ""), title: x?.title ?? k };
   };
   // The plan-model lane: the plan PRD's items whose code is a plan feature carry its slices.
   const slices = db.plan ? planSlices() : [];
@@ -1275,8 +1276,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       merged_into: s.merged_into ? ref(s.merged_into) : null,
       // feature-parts: the feature it is a part of (set_parent's before is its key) and its open parts.
       parent_key: s.parent ?? null,
-      part_of: s.parent && all.has(s.parent) ? ref(s.parent) : null,
-      parts: seeds.filter((x) => x.parent === s.key && !closed(x)).map((x) => ref(x.key)),
+      part_of: s.parent && all.has(s.parent) ? ref(s.parent, false) : null,
+      parts: seeds.filter((x) => x.parent === s.key && !closed(x)).map((x) => ref(x.key, false)),
       drafting: !!s.drafting_until,
       flow: s.draft ? (s.flow ?? null) : (flowFor(db.visuals, "feature", db.ids[s.key]) ?? betFlow(db, s)),
       goal_ids: [...new Set([...(s.goal ? [s.goal] : []), ...(s.goals ?? [])])].map(goalId),
