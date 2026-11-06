@@ -91,5 +91,5 @@ test("invite: a failed email's reason is text on the row", async ({ page }) => {
 
   const row = inviteRow(page, "pat@example.com");
   await expect(row.getByTestId("invite-email")).toHaveText("Failed");
-  await expect(row.getByTestId("invite-email-detail")).toHaveText(/^Last tried .+ · the Gmail API answered 503$/);
+  await expect(row.getByTestId("invite-email-detail")).toHaveText(/^Last tried .+ · the mail service was down$/);
 });

@@ -153,7 +153,7 @@ limits, configurability and scaling (`categories.CATEGORIES`).
   with `untrusted: true`, to the item's owner (never through a run token), or to anyone
   when the author shared a finding citing it in full (S6, below).
 - The `intake_analysis` job's system prompt is the fixed file
-  `api/oracle/jobs/prompts/intake_analysis.v3.md`. Outside `untrusted_data` the user
+  `api/oracle/jobs/prompts/intake_analysis.v4.md`. Outside `untrusted_data` the user
   message carries only Oracle's own fixed values: the intake id, fields, category keys and
   labels, existing gaps as `ref`, category and status, the closed categories and the
   limits. Everything people or sources wrote travels inside `untrusted_data`: the title,
@@ -267,6 +267,14 @@ Three more follow-ups (owner, 2026-10-19):
 | `POST /gaps/{gap_id}/decisions` | `decide_knowledge_gap` | approver; owner to clear a critical gap without review (B4) | Opportunity and Gaps |
 | `POST /gaps/{gap_id}/research` | `propose_gap_research` | commenter | Question batch |
 | `POST /questions/{question_id}/answers` | `answer_question` | commenter (the person asked, or an approver) | Question batch |
+
+MCP clients (Nov 6, PRD writer under its session's limit): `get_intake_summary` returns the
+summary whole up to 64 KB; past that, an outline with work, features and goals whole and,
+for each other section, its count and first items with long texts cut; `section` with
+`offset` and `limit` reads a section a page at a time (work, features and goals items whole).
+`list_entities` returns pages of entities (50 by default, up to 200) without their bodies
+unless `include_body` is asked. `get_intake_summary_op` and `list_entities_op` return the
+full REST answer.
 
 The foundation's list and get routes (`list_intakes`, `get_knowledge_gap`, …) return
 the reader's view (S6) through `oracle.v2.router.register_view`. Every write is audited (`intake.*`), and another company's id is a 404.

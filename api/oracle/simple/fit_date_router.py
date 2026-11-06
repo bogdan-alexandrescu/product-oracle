@@ -149,7 +149,7 @@ class FitGoalOut(BaseModel):
 
 
 class FitBaselineGoalOut(BaseModel):
-    """The Baseline goal the milestone's gate counts toward (the milestone's first target's
+    """The Ground Truth goal the milestone's gate counts toward (the milestone's first target's
     goal, by name): what "Keep the date with a smaller goal" opens and saves through
     ``PATCH /v1/baseline/entities/{id}``. ``plan_target``: the number the PRD's milestone
     target names; ``smaller``: the goal's target is below it, so the answer counts the
@@ -176,7 +176,7 @@ class FitAnswerOut(FitGoalOut):
     locked: list[FitLockedOut]
     # When no set reaches the target: what one more engineer would do.
     hire: FitHireOut | None = None
-    # None: no Baseline goal by the milestone goal's name (the panel says so, no button).
+    # None: no Ground Truth goal by the milestone goal's name (the panel says so, no button).
     baseline_goal: FitBaselineGoalOut | None = None
 
 
@@ -343,7 +343,7 @@ async def _load(db, principal, prd: str, milestone: str):
 
 async def _load_goal(db, principal, prd: str, milestone: str):
     """The PRD, its approved version, its plan view, the fit-date plan (counted against the
-    Baseline goal's target) and that Baseline goal (None when none is found)."""
+    Ground Truth goal's target) and that Ground Truth goal (None when none is found)."""
     try:
         document = await one_pager._document(db, principal, prd)
     except ChangeError as e:
@@ -372,7 +372,7 @@ def _float(x) -> float | None:
 
 
 async def _baseline_goal(db, principal, view: plan.View, milestone: str):
-    """The Baseline goal the milestone's gate counts toward: the goal entity named as the
+    """The Ground Truth goal the milestone's gate counts toward: the goal entity named as the
     milestone's first target's goal (confirmed first, never a rejected one), as
     :func:`oracle.simple.plan.enrich` matches goals."""
     from oracle.authz import has_role

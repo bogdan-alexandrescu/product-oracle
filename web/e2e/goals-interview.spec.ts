@@ -27,8 +27,8 @@ const chips = (page: Page) => discuss(page).getByTestId("missing-chip");
 
 async function openBaseline(page: Page, email?: string) {
   await login(page, email);
-  await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
+  await page.goto("/ground-truth");
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
   await expect(churnRow(page)).toBeVisible();
 }
 
@@ -221,12 +221,12 @@ test("Interview vague goals (2) steps Goal 1 of 2 · Next, creating each discuss
   expect(await interviews(page)).toBe(2);
 });
 
-// protects=criterion 9a and 10.6: approving the seeded baseline review starts nothing: the run
-// page's Confirm the baseline row and the From this run band offer "2 goals are not measurable ·
+// protects=criterion 9a and 10.6: approving the seeded Ground Truth review starts nothing: the run
+// page's Confirm the Ground Truth row and the From this run band offer "2 goals are not measurable ·
 // Interview" with the help tip, and a discussion exists only once Interview is clicked;
 // fails_when=the line is missing or miscounted, or a discussion exists before the click;
 // no_claim=the model call log (pytest asserts the fake model was never called).
-test("after the baseline review: the run row and From this run band offer Interview; nothing starts before", async ({ page }) => {
+test("after the Ground Truth review: the run row and From this run band offer Interview; nothing starts before", async ({ page }) => {
   await login(page);
   await page.goto("/runs");
   await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
@@ -238,7 +238,7 @@ test("after the baseline review: the run row and From this run band offer Interv
   expect(await interviews(page)).toBe(0);
   const runId = page.url().split("/runs/")[1].split(/[?#]/)[0];
 
-  await page.goto(`/baseline?tab=proposals&run=${runId}`);
+  await page.goto(`/ground-truth?tab=proposals&run=${runId}`);
   const band = page.getByTestId("from-this-run").getByTestId("vague-goals-line");
   await expect(band).toContainText("2 goals are not measurable · Interview");
   expect(await interviews(page)).toBe(0);
@@ -313,7 +313,7 @@ test("Home: Make measurable on a No target goal card opens its interview", async
   // qa-plan-14: its target "below 8%" is shown, so it says what is missing: the current value.
   await expect(g3.getByTestId("goal-to-go")).toHaveText("No current value yet");
   await g3.getByTestId("goal-make-measurable").click();
-  await expect(page).toHaveURL(/\/baseline/);
+  await expect(page).toHaveURL(/\/ground-truth/);
   await expect(thread(page).getByRole("heading", { name: CHURN })).toBeVisible();
   await expect(cards(page)).toHaveCount(2);
 });

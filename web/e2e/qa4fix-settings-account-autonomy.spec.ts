@@ -86,12 +86,19 @@ test("qa4-settings-44: Lowest confidence is a percent and a value out of range c
   await expect(autonomyRow(page, "requests").getByTestId("autonomy-limits")).toHaveText("at 95% confidence or more");
 });
 
-test("qa4-settings-45: a locked step says why in text, and the change sheet marks Why as required", async ({ page }) => {
+// qa-f-71: a locked step's button is left out entirely; why is said in words behind the row's
+// (i), not a loose line on the page or a disabled button's tooltip.
+test("qa4-settings-45: a locked step says why behind the row's (i), and the change sheet marks Why as required", async ({ page }) => {
   await openAutonomy(page);
-  const locked = autonomyRow(page, "vision").getByTestId("autonomy-locked");
+  const vision = autonomyRow(page, "vision");
+  await expect(vision.getByTestId("autonomy-locked")).toBeHidden();
+  await vision.getByRole("button", { name: "About Draft the vision" }).click();
+  const locked = vision.getByTestId("autonomy-locked");
   await expect(locked).toBeVisible();
   await expect(locked).toHaveText("Recommend and Act stay with people: the vision itself.");
-  await expect(step(page, "vision", "Act")).toHaveAccessibleDescription("Recommend and Act stay with people: the vision itself.");
+  await vision.getByRole("button", { name: "About Draft the vision" }).click();
+  await expect(step(page, "vision", "Recommend")).toHaveCount(0);
+  await expect(step(page, "vision", "Act")).toHaveCount(0);
 
   await step(page, "priorities", "Act").click();
   const sheet = page.getByRole("dialog", { name: "Change Order priorities" });

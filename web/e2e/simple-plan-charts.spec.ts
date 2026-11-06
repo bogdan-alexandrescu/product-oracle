@@ -289,7 +289,7 @@ for (const v of VIEWS) {
       expect(Math.abs((await centreX(mark(page, "alert-sso"))) - xs[2])).toBeLessThan(4);
 
       // The quadrants at the medians, each with its name and count.
-      await expect(page.getByTestId("vxe-quadrant")).toHaveText(["Quick wins · 2", "Big bets · 3", "Fill-ins · 3", "Later · 1"]);
+      await expect(page.getByTestId("vxe-quadrant")).toHaveText(["Quick wins · 2", "Big bets · 3", "Fill-ins · 3", "Later · 2"]);
       const plot = (await page.getByTestId("vxe-plot").boundingBox())!;
       const split = (await page.getByTestId("vxe-median-effort").boundingBox())!;
       // The effort median is 2 weeks: the line runs through the 2 wk tick, not the plot's middle.
@@ -310,7 +310,7 @@ for (const v of VIEWS) {
         expect(under, id).toEqual([]);
       }
       // A feature with no goal is never a cross: a neutral dashed circle, named in the legend.
-      for (const code of ["alert-export", "setup-video", "price-tiers"]) await expect(mark(page, code)).toHaveAttribute("data-shape", "none");
+      for (const code of ["alert-export", "setup-video", "price-tiers", "setup-health-log"]) await expect(mark(page, code)).toHaveAttribute("data-shape", "none");
       await expect(mark(page, "alert-rules")).toHaveAttribute("data-shape", "square");
       const legend = page.getByLabel("Legend");
       await expect(legend.getByTestId("vxe-legend-no-goal")).toHaveText("No goal");

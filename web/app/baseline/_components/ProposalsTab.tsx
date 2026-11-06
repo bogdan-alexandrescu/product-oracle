@@ -27,8 +27,8 @@ function flatFields(fields: Record<string, unknown> = {}): [string, unknown][] {
 
 type ProposalRun = Schemas["ProposalRun"];
 
-/** A run in plain words: "Baseline to PRD · Oct 16". */
-/** "Baseline to PRD · Oct 16": the day the run started in the Company time zone, as the API names it (#463). */
+/** A run in plain words: "Ground Truth to PRD · Oct 16". */
+/** "Ground Truth to PRD · Oct 16": the day the run started in the Company time zone, as the API names it (#463). */
 export const runLabel = (run: ProposalRun, zone: string) => `${run.flow_title} · ${zoneDay(run.created_at, zone)}`;
 
 /** The From filter: "" (all), "none" (people and intake answers) or a run's id. */

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { usd, type EstimateOut } from "@/app/runs/_lib";
-import { Button, Chip, Icon, Notice, SegmentedControl } from "@/components/ds";
+import { Button, Chip, Icon, InfoTip, Notice, SegmentedControl } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -33,7 +33,7 @@ export function currentBuild(runs: RunSummary[] | undefined, now?: number): RunS
   return null;
 }
 
-/** The header's chip while a build is under way (it stands where Build baseline was). */
+/** The header's chip while a build is under way (it stands where Build the Ground Truth was). */
 export function BuildChip({ build }: { build: RunSummary }) {
   const ready = build.status === "awaiting_checkpoint";
   return (
@@ -61,14 +61,14 @@ export function BuildBanner({ build }: { build: RunSummary }) {
   if (build.status === "failed") {
     return (
       <Notice tone="error" testId="baseline-build-banner">
-        Baseline build failed · {link("Open run")}
+        Ground Truth build failed · {link("Open run")}
       </Notice>
     );
   }
   const started = build.started_at ?? build.created_at;
   return (
     <Notice testId="baseline-build-banner">
-      Baseline being built · started {formatDateTime(started)} · {link("Open run")}. You&apos;ll get an Inbox item when
+      Ground Truth being built · started {formatDateTime(started)} · {link("Open run")}. You&apos;ll get an Inbox item when
       it&apos;s ready to review.
     </Notice>
   );
@@ -194,16 +194,18 @@ export function BuildBaselineSheet({
         className="flex w-full max-w-lg min-w-0 flex-col rounded-inspector border border-line bg-surface text-text shadow-tip max-[600px]:min-h-dvh max-[600px]:rounded-none max-[600px]:border-0"
       >
         <div className="flex min-h-14 items-center gap-2 border-b border-line px-5 max-[600px]:px-4">
-          <h2 id={`${id}-title`} className="min-w-0 flex-1 font-display text-xl font-bold tracking-heading">
-            Build the baseline
+          <h2 id={`${id}-title`} className="min-w-0 font-display text-xl font-bold tracking-heading">
+            Build the Ground Truth
           </h2>
+          {/* F-30: what a build does, in the title's (i). */}
+          <InfoTip label="building the baseline" align="start" side="bottom">
+            Oracle reads your connected sources and proposes goals, products, features, constraints and evidence. Nothing is confirmed until you
+            review it.
+          </InfoTip>
+          <span className="flex-1" />
           <Button variant="ghost" icon="x" onClick={onClose} aria-label="Close" />
         </div>
         <div className="flex-1 space-y-5 px-5 py-4 text-[15px] max-[600px]:px-4">
-          <p className="text-text2">
-            Oracle reads your connected sources and proposes goals, products, features, constraints and evidence. Nothing
-            is confirmed until you review it.
-          </p>
           <div>
             <span id={`${id}-depth`} className={legendCls}>
               Depth
@@ -247,7 +249,7 @@ export function BuildBaselineSheet({
             (first ? (
               <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-button bg-crit-bg px-3 py-2 text-sm font-medium text-crit">
                 <Icon name="alert" size={16} />
-                <span className="min-w-0 flex-1">A baseline build is already under way.</span>
+                <span className="min-w-0 flex-1">A Ground Truth build is already under way.</span>
                 <Link href={`/runs/${first}`} className="font-semibold underline underline-offset-2">
                   Open the build under way
                 </Link>

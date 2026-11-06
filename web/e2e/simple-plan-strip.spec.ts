@@ -61,7 +61,7 @@ for (const phone of [false, true]) {
           await expect(strip.getByTestId("plan-strip-label")).toHaveText(["Milestone M1 · 12 roadmap items", "Milestone M2 · 5 roadmap items", "Milestone M3 · 3 roadmap items", "No milestone · 2 roadmap items"]);
           await expect(strip.getByTestId("plan-strip-row").first()).toContainText("Nov 20");
           await expect(strip.getByTestId("plan-strip-today")).toHaveCount(1);
-          await expect(strip.getByTestId("plan-strip-edge")).toHaveText("1 roadmap item with no milestone ends after Jan");
+          await expect(strip.getByTestId("plan-strip-edge")).toHaveText("1 of the 2 roadmap items with no milestone ends after Jan");
           // One page: no bar per roadmap item (each row lists its items by name, build-current-state review 2).
           await expect(strip.getByTestId("plan-strip-span")).toHaveCount(4);
           await expect(strip.getByTestId("plan-strip-more")).toHaveCount(0);
@@ -96,16 +96,18 @@ for (const phone of [false, true]) {
           await expect(rows.first()).toBeVisible();
           for (const label of await plan.getByTestId("home-strip-label").allTextContents()) expect(label).toMatch(/ · \d+ items?$/);
           await expect(plan.getByTestId("home-strip-bar")).toHaveCount(0);
-          const prd = (await rows.first().getAttribute("href"))!;
-          expect(prd).toMatch(/^\/simple\/roadmap\?prd=[a-z-]+$/);
+          // home-waiting-one-list (PR 1235): Home's plan is the company roadmap's, every PRD's
+          // items, so a row opens the whole roadmap, filtered to no one PRD.
+          await expect(rows.first()).toHaveAttribute("href", "/simple/roadmap");
+          await expect(rows.first()).toHaveAttribute("aria-label", /: open the roadmap$/);
           await rows.first().click();
-          await expect(page).toHaveURL(new RegExp(`${prd.replace("?", "\\?")}$`));
+          await expect(page).toHaveURL(/\/simple\/roadmap$/);
           // Home's run-stop cards (build-simplewaits) are named "<stop>: <name> PRD": the
           // filter's own label is matched exactly, once the roadmap has replaced Home.
           await expect(page.getByTestId("simple-roadmap")).toBeVisible();
           if (phone) await page.getByTestId("filters-toggle").click();
           // The PRD filter by its role: other things on the roadmap page are labelled with "PRD" too.
-          await expect(page.getByRole("combobox", { name: "PRD", exact: true })).toHaveValue(prd.split("=")[1]);
+          await expect(page.getByRole("combobox", { name: "PRD", exact: true })).toHaveValue("");
         });
       }
 
@@ -124,7 +126,8 @@ for (const phone of [false, true]) {
         await page.goto("/simple", { waitUntil: "commit" });
         const row = page.getByTestId("home-plan").getByTestId("home-strip-row").first();
         await expect(row).toBeVisible({ timeout: 5000 });
-        await expect(row).toHaveAttribute("href", "/simple/roadmap?prd=guided-setup");
+        // The company plan (PR 1235) reads no ranking at all: the row opens the whole roadmap.
+        await expect(row).toHaveAttribute("href", "/simple/roadmap");
       });
 
       test(`Home shows at most 8 milestone rows, then "+N more on the roadmap" (${where})`, async ({ page }) => {

@@ -9,6 +9,7 @@ import { GoalPicker } from "@/components/NewDraft";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
+import { prdsFirst, usePrds } from "@/lib/prd-order";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { EstimateSummary, RunsWhere, STOP_HELP, stopLabel, usd, type EstimateOut, type FlowCatalog } from "./_lib";
@@ -25,6 +26,7 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
   const { can } = useMe();
   const catalog = useQuery("flows", () => unwrap(api.GET("/v1/flows")));
   const documents = useQuery("documents", () => unwrap(api.GET("/v1/documents")));
+  const prds = usePrds();
 
   const [flowKey, setFlowKey] = useState<Flow["key"]>(startFrom?.flow ?? "baseline_to_prd");
   const [document, setDocument] = useState(startFrom?.document ?? "");
@@ -129,7 +131,8 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
   // qa-work-7: with no flow to start here, the dialog is a guide to where each run starts:
   // its lines and Close, no Estimate or Start run that could never be used.
   const guide = !!catalog.data && !flow;
-  const docOptions = documents.data ?? [];
+  // prd-order: the PRDs in the company PRD order, then the roadmaps and other documents.
+  const docOptions = prdsFirst(prds.data, documents.data);
   const inputCls = `${INPUT} h-10 placeholder:text-text2`;
   const legendCls = "mb-1.5 flex items-center gap-1.5 text-[13px] font-semibold tracking-[0.02em] text-text2";
 

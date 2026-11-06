@@ -17,7 +17,7 @@ brief: [summary, goals, problems, brief-items, brief-roadmap, not-doing, top-ris
 
 ## Goals served {#goals}
 
-<!-- Brief: fits one slide; plain language for an all-hands. List the confirmed goals (from the baseline) this roadmap serves, each with metric, current value, target, horizon and owner. Give each a short code (G1, G2...) used as chips on cards. -->
+<!-- Brief: fits one slide; plain language for an all-hands. List the confirmed goals (from the Ground Truth) this roadmap serves, each with metric, current value, target, horizon and owner. Give each a short code (G1, G2...) used as chips on cards. -->
 
 ## Problems we are solving {#problems}
 
@@ -93,7 +93,7 @@ layout:
     goal: {required: true, multiple: true, flag_if_missing: "serves no confirmed goal"}
     confidence: {enum: [high, medium, low]}
     owner: {required: false}
-    depends_on: {list: true}          # from baseline depends_on / blocks edges
+    depends_on: {list: true}          # from Ground Truth depends_on / blocks edges
     milestones: {list: true, only_in: [now], fields: [name, date, source]}
     effort: {required: false}         # from tracker estimates
     date_kind: {enum: [estimate, external, announced], only_in: [now]}

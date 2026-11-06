@@ -35,7 +35,7 @@ The `roadmap_items` prompt carries the PRD version (its markdown and section ids
 confirmed goals and B2 horizons, the priority order (this PRD's approved order, else the
 latest saved company-wide priority snapshot, else the live goal-weighted ranking, every
 score with its explanation; a run's order that is not approved never counts) and the
-baseline's `depends_on` / `blocks` edges. The `roadmap_draft` prompt adds the approved items file,
+Ground Truth's `depends_on` / `blocks` edges. The `roadmap_draft` prompt adds the approved items file,
 the template skeleton (front matter with the template's brief markers, O1f) and the link
 form below.
 
@@ -96,7 +96,7 @@ every export work as before. What it adds (code in `api/oracle/roadmap/`, migrat
   one `roadmap_items` row per item of that roadmap version, traced to the exact PRD
   version, section (at its hash), feature, requirements and blockers, with validation
   gates and economics. `GET /v1/roadmaps/{doc}/items` (`view=brief|full`).
-- **Optional item fields:** `feature`, `requirements`, `blockers` (baseline keys),
+- **Optional item fields:** `feature`, `requirements`, `blockers` (Ground Truth keys),
   `validation_gates` (`[{name, criterion}]`) and `economics` (a mapping).
 - **Dates need a verified basis (O4).** A milestone date is accepted only when its
   `date_source` names a verified schedule basis (`POST /v1/schedule-bases`: an estimate,

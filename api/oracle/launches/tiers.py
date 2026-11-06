@@ -79,9 +79,15 @@ async def _feature(db: AsyncSession, item: RoadmapItem) -> Entity | None:
         found = await db.get(Entity, item.feature_id)
         if found is not None:
             return found
-    return await db.scalar(
+    found = await db.scalar(
         select(Entity).where(Entity.type == "feature", Entity.key == item.item_key)
     )
+    if found is None and item.item_key:
+        # The feature's key before it was given a code (oracle.baseline.fixes).
+        from oracle.baseline import fixes
+
+        found = await fixes.by_former_key(db, item.item_key)
+    return found
 
 
 async def items_of(db: AsyncSession, launch: Launch) -> list[RoadmapItem]:

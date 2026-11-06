@@ -337,7 +337,7 @@ def test_cli_baseline_pull(tmp_path, _env):
     assert code == 0, err
     assert reqs[0].method == "GET" and reqs[0].url.path == "/v1/baseline/yaml"
     assert target.read_text(encoding="utf-8") == GRAPH
-    assert f"Pulled the baseline to {target}" in out
+    assert f"Pulled the Ground Truth to {target}" in out
 
     code, out, _, _ = run(
         ["baseline", "pull", "-o", "-"], lambda r: httpx.Response(200, text=GRAPH)

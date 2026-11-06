@@ -37,6 +37,7 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.baseline.goal_order import goal_position, goal_sort_key
 from oracle.baseline.models import Edge, Entity
+from oracle.docs import prd_order
 from oracle.docs.models import Document, DocumentVersion
 from oracle.members.names import display_name
 from oracle.priorities.scoring import _number
@@ -57,6 +58,7 @@ from oracle.simple.schemas import (
     SimpleDate,
     SimpleDocRef,
     SimpleFlag,
+    SimpleFlagDependent,
     SimpleGoalRef,
     SimpleGroup,
     SimpleItemMilestone,
@@ -94,6 +96,12 @@ class Entry:
     milestone: SimpleItemMilestone | None
     depends_on: list[uuid.UUID] = field(default_factory=list)
     needed_by: list[uuid.UUID] = field(default_factory=list)
+    # roadmap-edit-fixes: the stored key that names each dependency (another PRD's feature
+    # key is neither the item's key nor its code), so a removal sends that key.
+    depends_key_of: dict[uuid.UUID, str] = field(default_factory=dict)
+    # roadmap-edit-fixes round 1: every stored key that names each dependency (its key and
+    # its feature's key, as an old draft and the panel each wrote): a removal drops them all.
+    depends_keys_of: dict[uuid.UUID, list[str]] = field(default_factory=dict)
     blockers: list[constraints.Blocker] = field(default_factory=list)
     suggestion: RoadmapDateSuggestion | None = None
     # plan-model review: the span of all the item's open slice suggestions (what Accept
@@ -102,6 +110,8 @@ class Entry:
     flags: list[constraints.Flag] = field(default_factory=list)
     # The items each order flag's "Move the dependents" moves, by the flag's subject.
     shift_moves: dict[str, list[uuid.UUID]] = field(default_factory=dict)
+    # roadmap-decide review: a cut item's live dependents, read before any filter.
+    cut_dependents: list["Entry"] = field(default_factory=list)
     # The track owner's role now (None: no owner, or a disabled one): D-a.
     owner_role: str | None = None
     # S4: the track owner's name (or e-mail) when enabled.
@@ -178,8 +188,12 @@ def shift_plan(
     return moves
 
 
-def flags_out(e: Entry) -> list[SimpleFlag]:
-    """The item's flags as the API shows them."""
+def flags_out(e: Entry, may: Any = None) -> list[SimpleFlag]:
+    """The item's flags as the API shows them; ``may(entry)``: the reader decides it."""
+    dependents = [
+        SimpleFlagDependent(id=d.row.id, title=d.row.title, can_decide=bool(may and may(d)))
+        for d in e.cut_dependents
+    ]
     return [
         SimpleFlag(
             kind=f.kind,
@@ -189,9 +203,46 @@ def flags_out(e: Entry) -> list[SimpleFlag]:
             subject=f.subject,
             risk_note=f.risk_note,
             moves=e.shift_moves.get(f.subject or "", []) if f.kind == "dependency_order" else [],
+            dependents=dependents if f.kind == "cut_with_dependents" else [],
         )  # fmt: skip
         for f in e.flags
     ]
+
+
+LINK_KINDS = ("dependency_order", "cut_with_dependents")
+
+
+async def waiting(db: AsyncSession, principal: Any, roadmap: str | None = None) -> tuple[int, int]:
+    """The broken links and the dates to confirm of the whole roadmap as ``principal`` reads
+    it: a red dependency out of order or a cut item others depend on, with a fix; an open date
+    suggestion the reader may decide; done items left out (the read without the rest of
+    :func:`build`). ``roadmap`` (id or slug): that roadmap's alone, as :func:`build` narrows
+    it; 404 when the reader cannot read it."""
+    from oracle.simple import drafts
+
+    read = await load(db, (await drafts.reader(db, principal)).overlays)
+    chosen: uuid.UUID | None = None
+    if roadmap:
+        rows = await db.scalars(select(Document).where(Document.kind == "roadmap"))
+        readable = {d.id: d for d in rows}
+        feeding = set(await company.feeding_ids(db, list(readable)))
+        doc = next(
+            (d for i, d in readable.items() if i in feeding and roadmap in (str(d.id), d.slug)),
+            None,
+        )
+        if doc is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No such roadmap")
+        chosen = doc.id
+    live = [
+        e for e in read.entries if e.status != "done" and (chosen is None or e.roadmap.id == chosen)
+    ]
+    links = sum(
+        1 for e in live for f in e.flags if f.state == "red" and f.fixes and f.kind in LINK_KINDS
+    )
+    dates = sum(
+        1 for e in live if e.suggestion is not None and can_decide(principal, e, read.deciders)
+    )
+    return links, dates
 
 
 def owner_decides(entry: Entry) -> uuid.UUID | None:
@@ -463,17 +514,31 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
     feature_keys = await company.feature_keys_of(db, [e.row for e in entries])
     for version_rows in versions.values():
         at = company.resolve_dependencies(version_rows, feature_keys)
+        loose: dict[str, list[RoadmapItem]] | None = None
         for row in version_rows:
             e = entry_of[row.id]
             for k in row.depends_on or []:
-                for d in at.get(k, ()):
+                found = at.get(k)
+                if not found:
+                    # Read only when a key is no exact key (most are).
+                    if loose is None:
+                        loose = _loose_keys(version_rows, feature_keys)
+                    found = loose.get(k.lower(), [])
+                for d in found:
                     dep = entry_of[d.id]
-                    if dep is not e and d.id not in e.depends_on:
+                    if dep is e:
+                        continue
+                    e.depends_keys_of.setdefault(d.id, []).append(k)
+                    if d.id not in e.depends_on:
                         e.depends_on.append(d.id)
+                        e.depends_key_of[d.id] = k
                         dep.needed_by.append(e.row.id)
     # walkb-roadmap: an estimated start never comes before what the item depends on.
+    # roadmap-done: what is done holds nothing up.
+    done = {e.row.id for e in entries if e.status == "done"}
     moved = dates.after_dependencies(
-        {e.row.id: e.resolved for e in entries}, {e.row.id: e.depends_on for e in entries}
+        {e.row.id: e.resolved for e in entries},
+        {e.row.id: [d for d in e.depends_on if d not in done] for e in entries},
     )
     for e in entries:
         e.resolved = moved[e.row.id]
@@ -509,6 +574,12 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
             if dep is not None:
                 moved = list(shift_plan(e, dep, by_id))
                 e.shift_moves[f.subject] = sorted(moved, key=lambda i: i != e.row.id)
+        if any(f.kind == "cut_with_dependents" for f in e.flags):
+            e.cut_dependents = [
+                by_id[d]
+                for d in e.needed_by
+                if d in by_id and by_id[d].status not in ("cut", "done")
+            ]
     shown_tracks = {e.track.id for e in entries if e.track is not None} | {
         t.id for t in tracks.values() if t.roadmap_document_id in docs
     }
@@ -559,6 +630,69 @@ def _status(row: RoadmapItem, recs: list[TrackerRecord], cut: set[str]) -> str:
     if states & {"in_progress", "done"}:
         return "in_progress"
     return "planned"
+
+
+@dataclass(frozen=True)
+class Delivery:
+    """An item's delivery state and dated start and end, as Simple reads them."""
+
+    state: str
+    start: date | None
+    end: date | None
+
+
+async def delivery(db: AsyncSession, rows: list[RoadmapItem]) -> dict[uuid.UUID, Delivery]:
+    """E-14: item id -> its delivery state (planned, in_progress or done, as :func:`_status`
+    reads its shipped mark and tracker records) and its start and end as Simple dates it
+    (:func:`_candidates`: its own dates, engineering dates, its tracker records' dates),
+    each None when Simple only estimates it. Tracker records are the item's track's, else
+    its PRD's, as :func:`items` reads them; nothing here is cut, merged or a draft."""
+    keys = {r.item_key for r in rows}
+    if not keys:
+        return {}
+    prds = {r.prd_document_id for r in rows if r.prd_document_id is not None}
+    track_of_prd: dict[Any, ProductTrack] = {}
+    if prds:
+        tracked = await db.scalars(
+            select(ProductTrack).where(ProductTrack.prd_document_id.in_(prds))
+        )
+        track_of_prd = {t.prd_document_id: t for t in tracked}
+    records: dict[tuple[Any, str], list[TrackerRecord]] = defaultdict(list)
+    prd_records: dict[tuple[Any, str], list[TrackerRecord]] = defaultdict(list)
+    for rec in await db.scalars(select(TrackerRecord).where(TrackerRecord.item_key.in_(keys))):
+        if rec.track_id is not None:
+            records[(rec.track_id, rec.item_key)].append(rec)
+        else:
+            prd_records[(rec.prd_document_id, rec.item_key)].append(rec)
+    bases_by_key: dict[tuple[Any, str], list[ScheduleBasis]] = defaultdict(list)
+    bases_by_ref: dict[tuple[Any, str], list[ScheduleBasis]] = defaultdict(list)
+    if prds:
+        for b in await db.scalars(
+            select(ScheduleBasis).where(
+                ScheduleBasis.status == "verified", ScheduleBasis.prd_document_id.in_(prds)
+            )
+        ):
+            if b.item_key:
+                bases_by_key[(b.prd_document_id, b.item_key)].append(b)
+            elif b.tracker_key:
+                bases_by_ref[(b.prd_document_id, b.tracker_key)].append(b)
+    out: dict[uuid.UUID, Delivery] = {}
+    for row in rows:
+        track_id = row.track_id
+        if track_id is None and (t := track_of_prd.get(row.prd_document_id)) is not None:
+            track_id = t.id if t.roadmap_document_id == row.roadmap_document_id else None
+        recs = (records.get((track_id, row.item_key), []) if track_id is not None else []) or (
+            prd_records.get((row.prd_document_id, row.item_key), [])
+        )
+        cands = _candidates(row, recs, bases_by_key, bases_by_ref)
+        start, end = dates._best(cands, "start"), dates._best(cands, "end")
+        state = _status(row, recs, set())
+        out[row.id] = Delivery(
+            state if state in ("in_progress", "done") else "planned",
+            start.start if start is not None else None,
+            end.end if end is not None else None,
+        )
+    return out
 
 
 def _milestone(
@@ -835,6 +969,34 @@ def prd_section_label(section_key: str, heading: str | None, name: str = "") -> 
 _LEADING_CODE = re.compile(r"^[A-Z][A-Z0-9]*-\d+[a-z]?\s+")
 
 
+def _loose_keys(
+    rows: list[RoadmapItem], feature_keys: dict[uuid.UUID, str]
+) -> dict[str, list[RoadmapItem]]:
+    """roadmap-edit-fixes round 1: what a stored dependency key names when it is no item key
+    or feature key as stored (company.resolve_dependencies): the same in any case, or a code
+    (its PRD section's, "f-03", or the one its title carries, "F-19 Pipeline"), as
+    set_depends accepts them, so a dependency the panel lists is read (Needed by) and
+    removable."""
+    out: dict[str, list[RoadmapItem]] = {}
+    for r in rows:
+        names = (r.item_key, feature_keys.get(r.id), _prd_code(r.prd_section_key),
+                 coded_title(r.title, None)[0])  # fmt: skip
+        for n in dict.fromkeys(n.lower() for n in names if n):
+            out.setdefault(n, []).append(r)
+    return out
+
+
+def coded_title(title: str, code: str | None) -> tuple[str | None, str]:
+    """roadmap-edit-fixes: (code, name) of an item whose stored title carries its code
+    ("F-07 Alpha": F-07, Alpha), so the panel shows and renames the name alone; else
+    (``code``, the title)."""
+    m = _LEADING_CODE.match(title or "")
+    lead = m.group(0).strip() if m else None
+    if lead is None or (code and code != lead) or not title[m.end() :].strip():  # type: ignore[union-attr]
+        return code, title
+    return lead, title[m.end() :].strip()  # type: ignore[union-attr]
+
+
 def prd_provenance(e: Entry) -> str | None:
     """The card's "Why" line naming where the item came from: "From <PRD> (draft 5):
     Sign-up flow." (the PRD, its draft and the section's words). The card names an item by its
@@ -904,12 +1066,14 @@ def item_out(
     row, r = e.row, e.resolved
     names = names or {}
     may = can_decide(principal, e, deciders) if principal is not None else False
+    code, title = coded_title(row.title, e.code or _prd_code(row.prd_section_key))
     return SimpleRoadmapItem(
         id=row.id,
         key=row.item_key,
-        code=e.code or _prd_code(row.prd_section_key),
-        title=row.title,
+        code=code,
+        title=title,
         outcome=row.outcome,
+        note=row.note,
         horizon=row.horizon,  # type: ignore[arg-type]
         roadmap=_ref(e.roadmap),  # type: ignore[arg-type]
         prd=_ref(e.prd),
@@ -921,6 +1085,8 @@ def item_out(
             position=goal_position(e.goal.attrs),
             target=_goal_target(e.goal),
             due=_goal_due(e.goal),
+            current=_goal_current(e.goal),
+            unit=((e.goal.attrs or {}).get("unit") or None),
         )
         if e.goal
         else None,
@@ -944,12 +1110,14 @@ def item_out(
         ],
         depends_on=e.depends_on,
         needed_by=e.needed_by,
-        flags=flags_out(e),
+        flags=flags_out(e, lambda d: can_decide(principal, d, deciders)),
         owner=SimpleOwnerRef(id=e.owner_id, name=e.owner_name)
         if e.owner_id is not None and e.owner_name
         else None,
         own_owner_id=str(row.owner_id) if row.owner_id else None,
         depends_keys=list(row.depends_on or []),
+        depends_key_of={str(d): k for d, k in e.depends_key_of.items()},
+        depends_keys_of={str(d): ks for d, ks in e.depends_keys_of.items()},
         can_decide=may,
         deciders=[names[i] for i in decider_ids(e, deciders) or owners or [] if i in names],
         reasons=_reasons(e),
@@ -1077,6 +1245,12 @@ def _goal_target(goal: Entity) -> str | None:
     return _target(goal.attrs or {})
 
 
+def _goal_current(goal: Entity) -> float | None:
+    """build-feature-panel: the goal's latest reading (attrs.current) when it is a number."""
+    v = (goal.attrs or {}).get("current")
+    return v if isinstance(v, int | float) and not isinstance(v, bool) else None
+
+
 def _goal_due(goal: Entity) -> date | None:
     """one-feature-panel: the goal's date as the goal bucket edit reads it."""
     from oracle.simple.goal_buckets import _due
@@ -1097,8 +1271,9 @@ def _matches(e: Entry, value: str | None, *refs: Any) -> bool:
     return any(r is not None and value in (str(r), getattr(r, "slug", None)) for r in refs)
 
 
-def _group_of(e: Entry, group: str) -> tuple[str, str, tuple]:
-    """(key, title, sort key) of the item's group; goals in the one goal order."""
+def _group_of(e: Entry, group: str, prd_ranks: dict[uuid.UUID, int]) -> tuple[str, str, tuple]:
+    """(key, title, sort key) of the item's group; goals in the one goal order, PRDs in the
+    company PRD order (``prd_ranks``, oracle.docs.prd_order), each "No ..." group last."""
     if group == "goal":
         if e.goal is not None:
             return str(e.goal.id), e.goal.title, (0, goal_sort_key(e.goal))
@@ -1108,7 +1283,8 @@ def _group_of(e: Entry, group: str) -> tuple[str, str, tuple]:
             return str(e.track.id), e.track.title, (0, f"{e.track.title.casefold()}{e.track.id}")
         return NONE, "No track", (1,)
     if e.prd is not None:
-        return str(e.prd.id), e.prd.title, (0, f"{e.prd.title.casefold()}{e.prd.id}")
+        rank = prd_ranks.get(e.prd.id, len(prd_ranks) + 1)
+        return str(e.prd.id), e.prd.title, (0, rank, f"{e.prd.title.casefold()}{e.prd.id}")
     return NONE, "No PRD", (1,)
 
 
@@ -1154,8 +1330,9 @@ async def build(
         and (end is None or e.resolved.start.date <= end)
     ]
     groups: dict[str, tuple[tuple, str, list[uuid.UUID]]] = {}
+    ranks = await prd_order.prd_ranks(db) if group == "prd" else {}
     for e in shown:
-        key, title, sort = _group_of(e, group)
+        key, title, sort = _group_of(e, group, ranks)
         groups.setdefault(key, (sort, title, []))[2].append(e.row.id)
     ordered = sorted(groups.items(), key=lambda kv: kv[1][0])
     owners = list(
@@ -1204,15 +1381,17 @@ async def build(
 
     track_prd = {e.track.id: e.track.prd_document_id for e in read.entries if e.track}
     # roadmap-keydates: the key dates read with the PRDs' milestones, as priorities reads them.
-    kd_prds = key_dates.key_date_prds(principal, kd_docs, read.entries)
+    kd_prds = await key_dates.key_date_prds(db, principal, kd_docs, read.entries)
     views = await plans.views(
         db,
         {e.prd.id for e in shown if e.prd}
         | set(track_prd.values())
         | {p.id for of in kd_prds.values() for p in of},
     )
-    kds, kd_roadmaps = await key_dates.read_key_dates(db, principal, kd_docs, read.entries, views)
-    from oracle.simple import goal_milestones
+    kds, kd_roadmaps = await key_dates.read_key_dates(
+        db, principal, kd_docs, read.entries, views, kd_prds
+    )
+    from oracle.simple import goal_milestones, old_milestones
 
     shown_goal_milestones = await goal_milestones.list_for_roadmaps(
         db, principal, kd_docs, read.entries, views, kd_prds
@@ -1247,6 +1426,7 @@ async def build(
             for m in read.milestones
         ],
         goal_milestones=shown_goal_milestones,
+        old_milestones=await old_milestones.preview(db, principal),
         span=span,
         changes_in_review=seen.of(chosen.id if chosen else None)[1],
         drafts=seen.of(chosen.id if chosen else None)[0],

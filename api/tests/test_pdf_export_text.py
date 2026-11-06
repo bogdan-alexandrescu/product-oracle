@@ -168,7 +168,8 @@ async def test_shared_and_public_pages_never_name_the_placeholder(client):
 
 
 ISO_TIME = re.compile(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}")
-MONTH_FIRST = re.compile(r"[A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d{2} [AP]M [A-Z]{2,5}")
+# A stamp's parts are joined by no-break spaces (PR 1300 round 3): \s reads either.
+MONTH_FIRST = re.compile(r"[A-Z][a-z]{2}\s\d{1,2},\s\d{4},\s\d{1,2}:\d{2}\s[AP]M\s[A-Z]{2,5}")
 
 
 async def test_cover_times_read_month_first(client):

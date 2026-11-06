@@ -30,6 +30,7 @@ export function PageHeader({
   info,
   testId,
   phoneTitle = false,
+  phoneSuffix = true,
   phoneActionStart = false,
   statusBelow = false,
 }: {
@@ -51,6 +52,8 @@ export function PageHeader({
   testId?: string;
   /** The H1 shows on a phone too, wrapping (a long document title the phone header cuts, qa-docs-68). */
   phoneTitle?: boolean;
+  /** false: the phone header shows the title without its suffix ("Publish", B-23); the crumb names the rest. */
+  phoneSuffix?: boolean;
   /** On a phone the action lines up with the page's left edge when it drops to a line of its own (qa-docs-65). */
   phoneActionStart?: boolean;
   /**
@@ -78,6 +81,7 @@ export function PageHeader({
       )}
       <h1
         data-phone-title={phoneTitle ? "" : undefined}
+        data-phone-plain={phoneSuffix ? undefined : ""}
         className={`min-w-0 font-display text-[28px] leading-8 font-bold tracking-heading ${
           phoneTitle ? "break-words max-[600px]:text-[22px] max-[600px]:leading-7" : "max-[600px]:sr-only"
         }`}

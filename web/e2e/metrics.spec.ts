@@ -57,10 +57,10 @@ async function openCompanyOnPhone(page: Page) {
   await expect(page).toHaveURL(/\/company\/strategy$/);
 }
 
-/** Opens a goal's drawer in the Baseline (the rail's Baseline). */
+/** Opens a goal's drawer in the Ground Truth (the rail's Ground Truth). */
 async function openGoal(page: Page, key: string, title: string) {
   await page.getByTestId("app-nav").getByTestId("nav-baseline").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
   await page.getByTestId(`goal-${key}`).getByRole("button", { name: title }).click();
   return page.getByRole("dialog", { name: title });
 }
@@ -148,14 +148,14 @@ test("13b: an approver adds an output metric linked to a goal, tests its query a
   await sheet.getByRole("button", { name: "Add metric" }).click();
   await expect(sheet).toBeHidden();
   const row = metricRow(page, "Setup completion rate");
-  await expect(row).toContainText("Output");
+  await expect(row).toContainText("Result");
   await expect(row).toContainText("PostHog");
   await expect(row.locator('[data-col="last"]')).toHaveText(/\d/);
   await expect(row.getByRole("img", { name: /^Trend / })).toBeVisible();
 });
 
 test("13c: the metric's owner explains a variance from the Inbox and the badge drops by one", async ({ page }) => {
-  // protects=AC13c, the Inbox's "Explain a variance" row for the metric's owner (a
+  // protects=AC13c, the Inbox's "Explain an unusual week" row for the metric's owner (a
   // commenter), the occurrence's variance card (Better, two possible causes, Oracle's draft
   // marked "Drafted by Oracle") and Explain; fails_when=the row is missing or not worded "week
   // of Oct 12", Open does not reach the review, the card lacks its causes or draft, a
@@ -165,7 +165,7 @@ test("13c: the metric's owner explains a variance from the Inbox and the badge d
   await login(page, METRIC_OWNER);
   const before = await badgeCount(page);
   await page.getByTestId("app-nav").getByTestId("nav-inbox").click();
-  const row = metricNeed(page, "Explain a variance · Weekly active teams · week of Oct 12");
+  const row = metricNeed(page, "Explain an unusual week · Weekly active teams · week of Oct 12");
   await expect(row).toHaveCount(1);
   await row.getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
@@ -315,7 +315,7 @@ test("editing a metric whose goal is no longer confirmed saves, with No goal", a
   await inspector.getByRole("button", { name: "Edit" }).click();
   const sheet = page.getByRole("dialog", { name: "Edit metric" });
   await expect(sheet.getByLabel("Goal")).toHaveValue("");
-  await sheet.getByLabel("Threshold (%)").fill("15");
+  await sheet.getByLabel("Alert size (%)").fill("15");
   await sheet.getByRole("button", { name: "Save" }).click();
   await expect(sheet).toBeHidden();
   await expect(inspector).toContainText("15%");

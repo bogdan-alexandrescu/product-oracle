@@ -41,6 +41,7 @@ The plan of the live workflow is kept on the run (``knobs["workflow"]``): its id
 credential expiry, and per segment the steps that produce its files and its waits.
 """
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
@@ -359,7 +360,7 @@ def expires_at(submitted: datetime, seconds: int) -> datetime:
 # The note on a run that is one workflow per segment while caller MCP is on.
 SEGMENT_MODE_WITH_MCP = (
     "Caller MCP is on, so each segment's workflow carries the run token in its credential "
-    "map and its agents read Oracle's sources, baseline, documents and earlier outputs "
+    "map and its agents read Oracle's sources, Ground Truth, documents and earlier outputs "
     "through Oracle's MCP server (intended: agents read Oracle's data whenever MCP is on, "
     "whether or not checkpoints wait in SwarmCloud)."
 )
@@ -476,3 +477,29 @@ def noted(note: str) -> tuple[str, wording.Refs]:
     words, when stored before #481) with them; any other note as it is, with none."""
     code = _NOTE_CODES.get(note)
     return (ADVICE[code], dict(ADVICE_REFS[code])) if code else (note, {})
+
+
+# A step's last error that says its session ran past the agent's context ceiling (or
+# that the fresh session SwarmCloud starts from a handoff then refused it).
+_OUT_OF_ROOM = re.compile(
+    r"too long|context (window|length|limit)|max(imum)? context|tokens? > ?\d|handoff|"
+    r"out of (room|context)",
+    re.IGNORECASE,
+)
+# "claude-code exited 1:" and nothing after: the runtime gave no reason.
+_BARE_EXIT = re.compile(r"^\s*[\w-]+ exited \d+:?\s*$")
+
+
+def plain_failure(error: str | None, role: str | None) -> str:
+    """Why a run step stopped, in plain words for the run page: who stopped (its role,
+    e.g. the writer) and the cause read from the runtime's last error. Other runtime text
+    stays in the logs (:func:`oracle.runs.service._failed_why`), never on the page."""
+    who = f"The {role}" if role else "The agents"
+    text = (error or "").strip()
+    if not text:
+        return f"{who} stopped and gave no reason."
+    if _OUT_OF_ROOM.search(text):
+        return f"{who} stopped: its session ran out of room."
+    if _BARE_EXIT.match(text):
+        return f"{who} stopped: its session ended with an error and gave no reason."
+    return f"{who} stopped."

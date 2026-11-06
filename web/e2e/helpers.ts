@@ -90,6 +90,25 @@ export async function clearName(page: Page, email: string) {
 }
 
 /** Signs out from the user menu. */
+/**
+ * On Settings › Connections, disconnects every account of `provider` the person has, as a
+ * person would (Disconnect, then Confirm disconnect), until its card says "Not connected".
+ * The mock seeds the owner's Slack, Fireflies and Google accounts (one list with Sources,
+ * pass F F-60): a test that connects one from scratch starts here.
+ */
+export async function disconnectAll(page: Page, provider: string) {
+  const card = page.getByTestId(`connection-card-${provider}`).filter({ visible: true });
+  await expect(card.getByRole("button", { name: "Add another account" })).toBeVisible();
+  const rows = card.locator('li[data-testid^="connection-"]');
+  for (let left = await rows.count(); left > 0; left--) {
+    const row = rows.first();
+    await row.getByRole("button", { name: "Disconnect", exact: true }).click();
+    await row.getByRole("button", { name: "Confirm disconnect" }).click();
+    await expect(rows).toHaveCount(left - 1);
+  }
+  await expect(card).toContainText("Not connected");
+}
+
 export async function signOut(page: Page) {
   await page.getByTestId("user-menu").click();
   await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Sign out" }).click();
@@ -150,6 +169,11 @@ export async function openSection(page: Page, key: string): Promise<Locator> {
   else await page.evaluate((k) => (window.location.hash = k), key);
   const s = section(page, key);
   await expect(s).toBeVisible();
+  // A PRD reads as one document (PT1 a): wait until the page has scrolled to the section and lit it.
+  if (await page.getByTestId("prd-look").filter({ visible: true }).count()) {
+    await expect(page.locator(`[data-prd-sec="${key}"]`).filter({ visible: true })).toHaveAttribute("data-current", "");
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  }
   return s;
 }
 
@@ -387,8 +411,8 @@ export async function seedConsoleHeld(page: Page): Promise<string> {
 export const DECIDED_RUN = "7a11c0de-0000-4000-8000-0000000000d1";
 
 /**
- * Seeds the mock with a finished Baseline to PRD run for checkout-redesign whose stops were
- * decided in the Inbox: the baseline approved with a note, the feature set sent back once and
+ * Seeds the mock with a finished Ground Truth to PRD run for checkout-redesign whose stops were
+ * decided in the Inbox: the Ground Truth approved with a note, the feature set sent back once and
  * approved on its second attempt, the priority order and the PRD review approved. The decision
  * log records each decided stop (H1 checkpoint records). Returns the run's id.
  */

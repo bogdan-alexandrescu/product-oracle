@@ -18,7 +18,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       await page.goto("/plan/dates");
       const row = page.getByTestId("dates-table").locator('[data-basis="ENG-450"]');
       await expect(row).toBeVisible();
-      await expect(row).toContainText("Item: Alert rules engine");
+      await expect(row.getByTestId("basis-title")).toHaveText("Alert rules engine (ENG-450)");
       await expect(page.getByTestId("dates-table")).not.toContainText("alert-rules");
     });
   });

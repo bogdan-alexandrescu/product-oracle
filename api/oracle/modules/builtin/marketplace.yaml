@@ -38,7 +38,7 @@
       fills: [side_conflicts, priority_side]
   instructions: >-
     Describe each side of the marketplace as segments with jobs to be done, using the
-    company's own segment names from the baseline. State where the sides conflict and which
+    company's own segment names from the Ground Truth. State where the sides conflict and which
     side this work serves first, with the reason. No invented buyers or sellers.
   required_review_role: approver
 
@@ -114,7 +114,7 @@
   instructions: >-
     State the fee model and the contribution per order with the inputs behind it, the
     cost drivers per order and the risk of disintermediation. Use confirmed figures from
-    the baseline or mark a value as an assumption. No invented prices or volumes.
+    the Ground Truth or mark a value as an assumption. No invented prices or volumes.
   evidence_expectations: {min_sources: 1, fields: [contribution_margin]}
   required_review_role: approver
   outputs: [prd, roadmap]

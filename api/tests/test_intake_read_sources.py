@@ -242,7 +242,7 @@ def test_the_tasks_say_read_everything_before_calling_it_missing():
     critic = flows.step_prompt(flow, draft, "critic", last=True, ctx=ctx)
     for prompt in (writer, critic):
         assert "every source the brief was pinned to" in prompt
-        assert "baseline features" in prompt
+        assert "Ground Truth features" in prompt
     assert "not described" in critic and "Critic" in critic
 
 

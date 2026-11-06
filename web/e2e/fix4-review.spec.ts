@@ -7,7 +7,7 @@ import { login } from "./helpers";
  * QA pass 4 on the run review page, /runs/<id>/review/<checkpoint> (qa-work-1, 6, 9, 11 to 17),
  * driven through the UI on the mock's "feature-set" scenario: the Saved addresses PRD run
  * waiting at its feature set (Bulk address edit depends on the left-out Shared address book
- * export and serves no goal; Saved addresses is new and serves a goal not in the baseline).
+ * export and serves no goal; Saved addresses is new and serves a goal not in the Ground Truth).
  */
 
 const DESKTOP = { width: 1440, height: 900 };
@@ -93,8 +93,8 @@ test.describe("desktop", () => {
     await seeded(page);
     await openReview(page);
     const chip = row(page, "Saved addresses").getByTestId("goal-chip");
-    await expect(chip).toHaveAttribute("title", "A goal not in the baseline");
-    await expect(chip).toHaveText("A goal not in the baseline");
+    await expect(chip).toHaveAttribute("title", "A goal not in the Ground Truth");
+    await expect(chip).toHaveText("A goal not in the Ground Truth");
     const fits = await chip.evaluate((el) => {
       const cell = el.parentElement!.getBoundingClientRect();
       const box = el.getBoundingClientRect();
@@ -122,14 +122,14 @@ test.describe("desktop", () => {
   test("qa-work-13: a handled row stays under its heading, its ✓ on the row", async ({ page }) => {
     await seeded(page);
     await openReview(page);
-    const group = page.getByRole("rowgroup", { name: "A goal not in the baseline" });
+    const group = page.getByRole("rowgroup", { name: "A goal not in the Ground Truth" });
     await expect(group.getByTestId("feature-title").filter({ hasText: /^Saved addresses$/ })).toBeVisible();
     await row(page, "Saved addresses").getByRole("button", { name: "Include", exact: true }).click();
     await expect(group.getByTestId("row-done")).toContainText("✓ Included");
     await expect(page.getByRole("rowgroup", { name: /^Nothing/ })).toHaveCount(0);
 
     await page.getByRole("group", { name: "Group by" }).getByRole("button", { name: "Reason" }).click();
-    const byReason = page.getByRole("rowgroup", { name: "New, not in the baseline" });
+    const byReason = page.getByRole("rowgroup", { name: "New, not in the Ground Truth" });
     await expect(byReason.getByTestId("feature-title").filter({ hasText: /^Saved addresses$/ })).toBeVisible();
     await expect(byReason.getByTestId("row-done")).toContainText("✓ Included");
     await expect(page.getByRole("rowgroup", { name: /^Nothing/ })).toHaveCount(0);
@@ -168,7 +168,7 @@ test.describe("desktop", () => {
     await openReview(page);
     const runUrl = page.url().replace(/\/review\/.*$/, "");
     const back = page.getByTestId("review-back");
-    await expect(back).toHaveText("Saved addresses · Baseline to PRD");
+    await expect(back).toHaveText("Saved addresses · Ground Truth to PRD");
     await expect(back.locator("svg")).toHaveCount(1);
     await expect(page.locator("main")).not.toContainText("Runs /");
     await back.click();

@@ -57,7 +57,7 @@ TITLES = {
     "changelog_drafts": "Changelog drafts",
     "update_draft": "Update draft",
     "metrics_table": "Metrics",
-    "variances": "Variances",
+    "variances": "Unusual weeks",
 }
 # Features that moved this many ranks between the last two snapshots.
 PRIORITY_MOVE = 3
@@ -231,7 +231,7 @@ async def goals(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
             "goal_id": str(g.id), "title": g.title, "metric": _shown(a.get("metric")),
             "target": _shown(_first(a, "target")), "current": _shown(current),
             "distance": distance, "change_since_last": change,
-            "owner": _shown(_first(a, "owner")), "href": f"/baseline?entity={g.id}",
+            "owner": _shown(_first(a, "owner")), "href": f"/ground-truth?entity={g.id}",
             # qa-company-6: Home's words for the same goal ("9.4% of 12% · 2.6 pts to go").
             "text": f"{g.title}: {figure_text(a, 'current') or '-'} of "
                     f"{figure_text(a, 'target') or '-'}{' · ' + distance if distance else ''}",
@@ -285,9 +285,9 @@ async def since_last(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
         ("PRD versions approved", by_kind.get("prd", 0), "/documents?kind=prd"),
         ("Roadmap versions approved", by_kind.get("roadmap", 0), "/roadmap"),
         ("Runs finished", runs, "/runs"),
-        ("Proposals accepted", proposals, "/baseline"),
-        ("Blockers opened", opened, "/baseline?type=constraint"),
-        ("Blockers resolved", resolved, "/baseline?type=constraint"),
+        ("Proposals accepted", proposals, "/ground-truth"),
+        ("Blockers opened", opened, "/ground-truth?type=constraint"),
+        ("Blockers resolved", resolved, "/ground-truth?type=constraint"),
     ]
     return [{"label": label, "count": n, "href": href, "text": f"{label}: {n}"}
             for label, n, href in figures_]  # fmt: skip
@@ -485,7 +485,8 @@ async def horizon_ending(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]
             except ValueError:
                 pass
         if ends:
-            rows.append({"goal_id": str(g.id), "title": g.title, "href": f"/baseline?entity={g.id}",
+            rows.append({"goal_id": str(g.id), "title": g.title,
+                         "href": f"/ground-truth?entity={g.id}",
                          "text": g.title})  # fmt: skip
     return rows
 
@@ -497,7 +498,7 @@ async def goal_gaps(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
         missing = [k for k in ("metric", "target", "owner", "weight") if _first(a, k) in (None, "")]
         if missing:
             rows.append({"goal_id": str(g.id), "title": g.title, "missing": missing,
-                         "href": f"/baseline?entity={g.id}",
+                         "href": f"/ground-truth?entity={g.id}",
                          "text": f"{g.title}: no {', '.join(missing)}"})  # fmt: skip
     return rows
 
@@ -530,7 +531,7 @@ async def unserved_features(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, A
         )
     )  # fmt: skip
     return [
-        {"feature_id": str(f.id), "title": f.title, "href": f"/baseline?entity={f.id}",
+        {"feature_id": str(f.id), "title": f.title, "href": f"/ground-truth?entity={f.id}",
          "text": f.title}
         for f in await db.scalars(
             select(Entity).where(Entity.type == "feature", Entity.status == "confirmed")
@@ -546,7 +547,7 @@ async def suggested_next(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]
          "href": f"/v1/tracks/{t.id}/roadmap-run", "text": f"Start a roadmap run from {t.title}"}
         for t in await _active_tracks(db)
     ]  # fmt: skip
-    rows.append({"label": "Review goals", "href": "/baseline", "text": "Review goals"})
+    rows.append({"label": "Review goals", "href": "/ground-truth", "text": "Review goals"})
     rows.append({"label": "Open priorities", "href": "/priorities", "text": "Open priorities"})
     return rows
 

@@ -81,7 +81,7 @@ test("coverage: the first source is selected; its inspector shows freshness and 
   await expect(entry.getByText("Skipped", { exact: true })).toHaveAttribute("title", "Skipped: shared from outside the company");
 });
 
-test("coverage: Used in leads to the baseline item and to the document version", async ({ page }) => {
+test("coverage: Used in leads to the Ground Truth item and to the document version", async ({ page }) => {
   // protects=a person reaches the evidence and the documents a source backs
   // fails_when=a use is missing or links to the wrong place
   // no_claim=section links (none seeded)
@@ -89,7 +89,7 @@ test("coverage: Used in leads to the baseline item and to the document version",
   const used = inspector(page).getByRole("list", { name: "Used in" });
   await expect(used.getByRole("listitem")).toHaveCount(3);
   await used.getByRole("link", { name: /Dark mode/ }).click();
-  await expect(page).toHaveURL(/\/baseline\?entity=[0-9a-f-]+$/);
+  await expect(page).toHaveURL(/\/ground-truth\?entity=[0-9a-f-]+$/);
   await expect(page.getByRole("dialog", { name: "Dark mode" })).toBeVisible();
 
   await page.goBack();
@@ -122,9 +122,10 @@ test("coverage: Sync now syncs the source and its row reads synced now", async (
   // no_claim=the connector's sync (API tests)
   await openCoverage(page);
   const synced = row(page, "Product chat").getByTestId("coverage-synced");
-  await expect(synced).not.toHaveText("now");
+  // F-62: the row shows a month-first date; "now" is its relative-age title tooltip.
+  await expect(synced).not.toHaveAttribute("title", "now");
   await inspector(page).getByRole("button", { name: "Sync now" }).click();
-  await expect(synced).toHaveText("now");
+  await expect(synced).toHaveAttribute("title", "now");
   await expect(inspector(page).getByRole("link", { name: "Edit picks" })).toHaveAttribute(
     "href",
     "/settings/sources#source-50000000-0000-4000-8000-000000000001",

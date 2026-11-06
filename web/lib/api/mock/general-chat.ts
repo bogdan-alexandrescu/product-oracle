@@ -8,7 +8,7 @@
  */
 import type { BaselineState } from "./baseline";
 
-export const GENERAL_FOCUS = /focus areas?|baseline features?/i;
+export const GENERAL_FOCUS = /focus areas?|baseline features?|ground truth features?/i;
 
 type Reply = { pieces: string[]; citations: Record<string, unknown>[] };
 
@@ -23,7 +23,7 @@ export function generalReply(baseline: BaselineState, path: string, question: st
   if (!goals.length) return null;
   const citations: Record<string, unknown>[] = [];
   const cite = (kind: string, title: string, id: string) => {
-    citations.push({ n: citations.length + 1, kind, ref: id, title, url: `/baseline#${id}` });
+    citations.push({ n: citations.length + 1, kind, ref: id, title, url: `/ground-truth#${id}` });
     return `[c:${citations.length}]`;
   };
   const goalCite = new Map(goals.map((g) => [g.id, cite("entity", `Goal: ${g.title}`, g.id)]));

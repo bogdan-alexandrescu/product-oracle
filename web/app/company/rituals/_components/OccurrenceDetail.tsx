@@ -203,8 +203,8 @@ function rebuildShown(occ: Occurrence, blocks: Block[]): Block[] {
       : {
           ...b,
           rows: b.rows
-            .filter((r) => !(r.text ?? "").startsWith("Oracle starts the build") && !(r.text ?? "").startsWith("Not started") && r.href !== "/baseline?build=1")
-            .map((r) => (r.text === "No baseline build yet" ? { ...r, text: "No earlier baseline build" } : r)),
+            .filter((r) => !(r.text ?? "").startsWith("Oracle starts the build") && !(r.text ?? "").startsWith("Not started") && r.href !== "/ground-truth?build=1")
+            .map((r) => (r.text === "No Ground Truth build yet" ? { ...r, text: "No earlier Ground Truth build" } : r)),
         },
   );
 }
@@ -357,7 +357,7 @@ function SummaryCard({ occ, canAsk, onChanged }: { occ: Occurrence; canAsk: bool
   const makes = digest
     ? "Oracle writes this week's digest from the findings below"
     : metrics
-      ? "Oracle drafts an explanation for each open variance below"
+      ? "Oracle drafts an explanation for each open unusual week below"
       : "Oracle reads this pre-read and writes a short summary of it for the attendees";
   const words = digest
     ? { title: "Digest", ask: "Write the digest with Oracle", running: "Writing the digest…", failed: "Digest failed · Write the digest with Oracle to retry", none: "No digest" }
@@ -426,25 +426,25 @@ function SummaryCard({ occ, canAsk, onChanged }: { occ: Occurrence; canAsk: bool
 function RebuildCard({ occ, blocks, canBuild }: { occ: Occurrence; blocks: Block[]; canBuild: boolean }) {
   const estimate = blocks.flatMap((b) => b.rows.map((r) => r.text ?? "")).find((t) => t.startsWith("Estimate "));
   const run = occ.summary_run_id ? `/runs/${occ.summary_run_id}` : null;
-  const build = canBuild && <LinkButton href="/baseline?build=1">Build the baseline</LinkButton>;
+  const build = canBuild && <LinkButton href="/ground-truth?build=1">Build the Ground Truth</LinkButton>;
   return (
     <section data-testid="occurrence-rebuild" className="rounded-panel border border-line bg-surface px-4 py-3 shadow-panel">
-      <h2 className="mb-1 font-display text-[17px] font-bold">Baseline build</h2>
+      <h2 className="mb-1 font-display text-[17px] font-bold">Ground Truth build</h2>
       {occ.summary_state === "running" && run ? (
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm">
-            Oracle started the baseline build{estimate ? ` · ${estimate}` : ""}. {occ.summary_note ?? "Its proposals wait for your review."}
+            Oracle started the Ground Truth build{estimate ? ` · ${estimate}` : ""}. {occ.summary_note ?? "Its proposals wait for your review."}
           </p>
           <LinkButton href={run}>Open run</LinkButton>
         </div>
       ) : occ.summary_state === "ready" ? (
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm">The build finished. Its proposals are on the Baseline page.</p>
-          <LinkButton href="/baseline">Open baseline</LinkButton>
+          <p className="text-sm">The build finished. Its proposals are on the Ground Truth page.</p>
+          <LinkButton href="/ground-truth">Open the Ground Truth</LinkButton>
         </div>
       ) : occ.summary_state === "failed" ? (
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm text-crit">{occ.summary_note ?? "The baseline build did not finish"}</p>
+          <p className="text-sm text-crit">{occ.summary_note ?? "The Ground Truth build did not finish"}</p>
           {run && <LinkButton href={run}>Open run</LinkButton>}
           {build}
         </div>
@@ -459,10 +459,11 @@ function RebuildCard({ occ, blocks, canBuild }: { occ: Occurrence; blocks: Block
 }
 
 function Recorded({ occ }: { occ: Occurrence }) {
+  const text = occ.status === "held" ? occ.notes : occ.skip_reason;
   return (
     <section data-testid="occurrence-notes" className="rounded-panel border border-line bg-surface px-4 py-3 shadow-panel">
       <h2 className="mb-1 font-display text-[17px] font-bold">{occ.status === "held" ? "Notes" : "Skipped"}</h2>
-      <p className="text-[15px] whitespace-pre-wrap">{(occ.status === "held" ? occ.notes : occ.skip_reason) || "No notes"}</p>
+      <p className="text-[15px] whitespace-pre-wrap">{text ? <span data-user-content>{text}</span> : "No notes"}</p>
       {occ.status === "held" && occ.decisions.length > 0 && (
         <div data-testid="occurrence-decisions" className="mt-3">
           <h3 className="mb-1 text-sm font-semibold text-text2">Decisions</h3>

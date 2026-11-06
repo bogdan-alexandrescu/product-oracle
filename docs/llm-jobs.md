@@ -82,8 +82,8 @@ Per version, one call writes, from the stored facts:
 - a **resolution report**: every item raised on earlier versions, its outcome, and one
   plain sentence on how it was handled or why not;
 - **what changed since version N** (default the previous version): the sections added,
-  removed or changed, each with a sentence, and the evidence added to the baseline between
-  the two imports.
+  removed or changed, each with a sentence, and the evidence added to the Ground Truth
+  between the two imports.
 
 `GET /v1/documents/{doc}/versions/{n}/reports`, exportable with the version as markdown or
 HTML (`.../reports/export?format=md|html`).

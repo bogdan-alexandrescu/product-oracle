@@ -242,6 +242,7 @@ WRITE_ROUTES = {
     ("post", "/v1/runs/{run_id}/stop-cancelling"): "approver",
     ("post", "/v1/runs/{run_id}/retry-lookup"): "approver",
     ("post", "/v1/runs/{run_id}/retry-import"): "owner",
+    ("post", "/v1/runs/{run_id}/segments/{seq}/retry"): "approver",
     ("post", "/v1/runs/{run_id}/segments/{seq}/retry-draft-import"): "approver",
     ("post", "/v1/runs/{run_id}/cancel-again"): "approver",
     ("post", "/v1/runs/{run_id}/dismiss-overrun"): "approver",
@@ -396,6 +397,7 @@ AFTER_COMMIT = {
     ("post", "/v1/runs/{run_id}/start"),
     ("post", "/v1/runs/{run_id}/approve"),
     ("post", "/v1/runs/{run_id}/resume"),
+    ("post", "/v1/runs/{run_id}/segments/{seq}/retry"),
 }
 NO_CALL = {
     ("post", "/v1/runs"),

@@ -22,8 +22,8 @@ async function fleet(page: Page) {
 test("a milestone reads with its dates, and its codes as a named list", async ({ page }) => {
   await fleet(page);
 
-  // The outline names the milestone by its dated title.
-  await page.getByTestId("outline-rail").getByRole("button", { name: "Unfold Delivery plan" }).click();
+  // The contents names the milestone by its dated title: open the finder to see every row.
+  await page.getByRole("button", { name: "Contents: find a section" }).click();
   await expect(outlineRow(page, "m1")).toContainText(M1);
   const m1 = await openSection(page, "m1");
   await expect(m1.getByRole("heading", { name: M1 })).toBeVisible();
@@ -32,10 +32,9 @@ test("a milestone reads with its dates, and its codes as a named list", async ({
   const shipped = m1.getByRole("listitem");
   await expect(shipped).toHaveText(["F-31 Route planner", "F-32 Live arrival times", "F-33 Proof of delivery"]);
 
-  // Previous/Next carry the same titles.
-  const next = page.getByRole("link", { name: `Next section: ${M2}` }).filter({ visible: true });
-  await expect(next).toBeVisible();
-  await next.click();
-  await expect(outlineRow(page, "m2")).toHaveAttribute("aria-current", "true");
-  await expect(page.getByRole("link", { name: `Previous section: ${M1}` }).filter({ visible: true })).toBeVisible();
+  // The next milestone, in the same part of the contents, carries the same kind of title.
+  await expect(outlineRow(page, "m2")).toContainText(M2);
+  const m2 = await openSection(page, "m2");
+  await expect(m2.getByRole("heading", { name: M2 })).toBeVisible();
+  await expect(outlineRow(page, "m2")).toHaveAttribute("aria-current", "location");
 });

@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { ClaudeOffNotice } from "@/components/ClaudeOffNotice";
 import { Chip, Empty, Icon, InfoTip, LinkButton, Notice, Page, PageHeader, Panel, Split } from "@/components/ds";
 import { LoadError } from "@/components/ui";
+import { sortPrds } from "@/lib/prd-order";
 import { api, unwrap } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -14,6 +15,7 @@ import { invalidateWaiting, loadInbox, loadMyQuestions, NEED_KINDS, needKind, wa
 import { useAccessRequestRows } from "../inbox/_access";
 import { useActed } from "../inbox/_actions";
 import { allNeeds, NeedTable, usePerms, waitingNeeds, type Need, type StatedNeed } from "../inbox/_needs";
+import { approvalRows, dateSuggestionRows, goalSuggestionRows, proposalRows } from "../inbox/_proposals";
 import { useQuestionRows } from "../inbox/_questions";
 import { GoalsPanel } from "./_goals-panel";
 import { FlightInspector, FlightTable, type Flight, type GoalIndex } from "./_in-flight";
@@ -134,7 +136,8 @@ export default function HomePage() {
   );
 
   const docs = useMemo(() => docsQ.data ?? [], [docsQ.data]);
-  const inReview = docs.filter((d) => d.status === "in_review").sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  // prd-order: the PRDs in review in the company PRD order (the runs after them).
+  const inReview = sortPrds(docs.filter((d) => d.status === "in_review"));
   const activeRuns = (runsQ.data ?? []).filter((r) => IN_FLIGHT.has(r.status)).sort((a, b) => b.created_at.localeCompare(a.created_at));
 
   const flights: Flight[] | undefined =
@@ -189,11 +192,23 @@ export default function HomePage() {
   // answered here leaves with its count (qa4-company-47).
   // qa-company-3: a line draws only the actions the signed-in person's role can take.
   const perms = usePerms();
-  const all = inbox ? allNeeds(inbox, questionRows.rows, busy, act, inbox.last_seen_at ?? null, onActed, true, undefined, requestRows.rows, perms) : [];
+  // inbox-meeting-proposals fix: Simple's proposals, approvals and Oracle's date and goal
+  // suggestions waiting on me, as the Inbox lists and counts them (the API's total has them).
+  const seen = inbox?.last_seen_at ?? null;
+  const all = inbox
+    ? [
+        ...allNeeds(inbox, questionRows.rows, busy, act, seen, onActed, true, undefined, requestRows.rows, perms),
+        ...proposalRows(inbox.simple_proposals ?? [], busy, act, seen),
+        ...approvalRows(inbox.simple_approvals ?? [], seen),
+        ...dateSuggestionRows(inbox.simple_date_suggestions ?? [], seen),
+        ...goalSuggestionRows(inbox.simple_goal_suggestions ?? [], seen),
+      ]
+    : [];
   const needs = waitingNeeds(all);
   const visible = all.filter((r) => needs.includes(r) || (r.group === "access-requests" && !r.counted && r.state !== "done"));
   // QA pass D-2: one chip per kind, built from the rows the total counts, so they add up to it.
-  // Checkpoints, cost approvals and overruns are "Approvals" (qa-shell-6), apart from the decision log's Decisions.
+  // Checkpoints, cost approvals, overruns and a roadmap version waiting for my approval are
+  // "Approvals" (qa-shell-6), apart from the decision log's Decisions.
   const kinds = NEED_KINDS.map((k) => ({ ...k, n: needs.filter((r) => needKind(r.group) === k.id).length })).filter((k) => k.n > 0);
   const { rows: shownNeeds, more: moreNeeds } = pickNeeds(visible, MAX_NEEDS);
   // The rail badge's count: the Inbox's New + Open items.
@@ -292,7 +307,7 @@ export default function HomePage() {
             <>
               {/* qa-shell-16: what this count counts, and why Simple's Home says another number. */}
               <InfoTip label="Needs you" side="bottom">
-                Everything the Inbox has waiting on you: approvals, runs, access, reviews, decisions and the questions asked of you.
+                Everything the Inbox has waiting on you: approvals, runs, access, reviews, decisions, the questions asked of you, proposals, Oracle&apos;s dates and goal suggestions.
                 Simple&apos;s Home counts something else, the product decisions on PRDs that wait on you, so its number can differ.
               </InfoTip>
               {/* qa-company-5: plain counts; the Inbox link opens the Inbox, where the items are.
@@ -335,16 +350,19 @@ export default function HomePage() {
           {inbox && !questionsQ.loading && !questionsQ.error && shownNeeds.length === 0 && (
             // qa-company-14: what shows here for this person, and somewhere to go meanwhile.
             <Empty testId="home-needs-empty">
-              <span className="block font-semibold">Nothing waiting</span>
-              <span className="block" data-testid="home-needs-empty-what">
-                {can("approve_version", true)
-                  ? "Approvals, reviews and the questions asked of you show here."
-                  : can("create_comment")
-                    ? "Reviews of your PRDs and the questions asked of you show here."
-                    : "Questions someone asks you show here."}
+              {/* F-30: one short line; what shows here is in its (i). */}
+              <span className="inline-flex items-center gap-1.5 font-semibold">
+                Nothing waiting
+                <InfoTip label="what needs you" align="start" testId="home-needs-empty-what">
+                  {can("approve_version", true)
+                    ? "Approvals, reviews and the questions asked of you show here."
+                    : can("create_comment")
+                      ? "Reviews of your PRDs and the questions asked of you show here."
+                      : "Questions someone asks you show here."}
+                </InfoTip>
               </span>
               {!can("create_comment") && (
-                <Link href="/plan" className="mt-1 inline-block font-semibold text-accent-ink hover:underline" data-testid="home-needs-empty-link">
+                <Link href="/plan" className="mt-1 block font-semibold text-accent-ink hover:underline" data-testid="home-needs-empty-link">
                   Read the plan
                 </Link>
               )}

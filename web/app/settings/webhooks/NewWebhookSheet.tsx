@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { Button, Sheet } from "@/components/ds";
+import { Button, InfoTip, Sheet } from "@/components/ds";
 import { ErrorNote } from "@/components/ui";
 import { Field, INPUT, TEXTAREA } from "@/app/settings/_components/fields";
 import { api, unwrap } from "@/lib/api/client";
@@ -12,7 +12,7 @@ import { failureText, GROUPS, outcomeText, SecretOnce, type Delivery, type Event
 
 /**
  * New webhook (I1): Name, URL, the events grouped Runs · Drafts · Approvals with "All" per
- * group; for owners, Include owners-and-approvers content with a required Why (Q2). Create,
+ * group; for owners, the Private details switch with a required Why (Q2). Create,
  * then the secret once with Copy and Send test event. Fields stack in one column, so the
  * sheet reads the same on a phone.
  */
@@ -76,7 +76,7 @@ export function NewWebhookSheet({
       : types.length === 0
         ? "Pick at least one event"
         : approvers && !why.trim()
-          ? "Say why it sends owners-and-approvers content"
+          ? "Say why it sends private details"
           : null;
   const ready = !missing;
 
@@ -163,7 +163,8 @@ export function TestEvent({ hook, onSent }: { hook: Webhook; onSent?: (d: Delive
       {/* qa4-settings-25: a failure in words, never the raw error code. */}
       {result && (
         <span className="text-[15px] font-semibold" data-testid="test-result">
-          {result.status === "failed" || result.status === "retrying" ? `✕ ${failureText(result, hook.host)}` : outcomeText(result)}
+          {/* F-65: a retry still going carries no failure cross. */}
+          {result.status === "failed" ? `✕ ${failureText(result, hook.host)}` : result.status === "retrying" ? `Retrying: ${failureText(result, hook.host)}` : outcomeText(result)}
         </span>
       )}
       {error && <ErrorNote>{error}</ErrorNote>}
@@ -251,10 +252,14 @@ export function WebhookFields({
       </fieldset>
       {approvers !== null && (
         <div className="flex flex-col gap-2">
-          <label className="inline-flex items-center gap-2 text-[15px] font-semibold">
-            <input type="checkbox" role="switch" className="size-4 accent-[var(--accent)]" checked={approvers} onChange={(e) => setApprovers(e.target.checked)} />
-            Include owners-and-approvers content
-          </label>
+          {/* Owner's decision (Nov 5): the switch is "Private details", its (i) says what that is. */}
+          <span className="inline-flex items-center gap-2">
+            <label className="inline-flex items-center gap-2 text-[15px] font-semibold">
+              <input type="checkbox" role="switch" className="size-4 accent-[var(--accent)]" checked={approvers} onChange={(e) => setApprovers(e.target.checked)} />
+              Private details
+            </label>
+            <InfoTip label="private details">What only owners and approvers can see in Oracle.</InfoTip>
+          </span>
           {/* qa4-settings-31: what is sent and who sees it, in plain words. */}
           <p className="text-[13px] leading-[18px] text-text2" data-testid="approvers-content-help">
             Also sends events that only owners and approvers can see in Oracle: updates, pricing memos, and their runs, checkpoints and

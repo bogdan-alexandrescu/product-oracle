@@ -4,6 +4,7 @@ import { Button, LinkButton } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
+import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 import { isNew, type Act, type StatedNeed } from "./_needs";
 
@@ -17,12 +18,14 @@ const webhookOf = (n: Notification) => (typeof n.data?.webhook_id === "string" ?
  * days" (the creator and owners; Open, Resume), "Webhook <name> paused: its API token was
  * revoked" or a member change (owners; Open, Resume, Take over), "<Owner> paused your webhook <name>" and
  * "<Approver> changed where webhook <name> sends" (owners; Open). New until read, then Done.
- * Shown, not counted: the rail badge counts what the Inbox API counts.
+ * Counted while unread (F-7), as the Inbox API's total counts them for the rail badge; only
+ * for a role that can open Settings › Webhooks (F-25).
  */
 export function useWebhookRows(busy: string | null, act: Act, seenBefore: string | null | undefined): StatedNeed[] {
   const { can } = useMe();
   const q = useQuery("inbox|webhook-notifications", () => unwrap(api.GET("/v1/me/notifications")));
   const read = (n: Notification) => unwrap(api.POST("/v1/notifications/{notification_id}/read", { params: { path: { notification_id: n.id } } }));
+  if (!can("list_webhooks")) return [];
   return (q.data ?? [])
     .filter((n) => KINDS.has(n.kind))
     .map((n) => {
@@ -39,7 +42,8 @@ export function useWebhookRows(busy: string | null, act: Act, seenBefore: string
       return {
         key,
         icon: "alert",
-        kind: n.kind === "webhook_url_changed" ? "Webhook address" : "Webhook paused",
+        // F-21: one short word that fits the Kind column; the row's text says what happened.
+        kind: "Webhook",
         item: (
           <span className="min-w-0 truncate" title={n.title}>
             {n.title}
@@ -48,7 +52,7 @@ export function useWebhookRows(busy: string | null, act: Act, seenBefore: string
         context: <span className="text-text2">Settings › Webhooks</span>,
         at: n.created_at,
         state: done ? "done" : isNew(n.created_at, seenBefore) ? "new" : "open",
-        counted: false,
+        counted: true,
         group: "webhooks",
         action: (
           <span className="flex flex-wrap justify-end gap-2">
@@ -85,7 +89,16 @@ export function useWebhookRows(busy: string | null, act: Act, seenBefore: string
             <LinkButton
               variant={!done && id && ((resume && can("update_webhook")) || (takeOver && can("take_over_webhook"))) ? "ghost" : undefined}
               href={href}
-              onClick={() => void (done ? undefined : read(n).catch(() => undefined))}
+              onClick={() =>
+                void (done
+                  ? undefined
+                  : read(n)
+                      .then(() => {
+                        invalidateWaiting();
+                        waitingChanged();
+                      })
+                      .catch(() => undefined))
+              }
             >
               Open
             </LinkButton>

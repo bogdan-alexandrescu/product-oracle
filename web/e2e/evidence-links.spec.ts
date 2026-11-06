@@ -6,7 +6,7 @@ const NOTION = "https://examplecorp.notion.site/Onboarding-research-summary-8c8f
 
 async function openDrawer(page: Page, email: string) {
   await login(page, email);
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   await expect(page.getByTestId("goal-g.activation")).toBeVisible();
   await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
   const d = page.getByRole("dialog", { name: "Guided setup" });
@@ -94,7 +94,7 @@ test("evidence links: a commenter cites a Google Doc from a document section", a
   await sectionAction(goalTrace, "1. Goal trace", "Add evidence link to 1. Goal trace");
 
   const form = goalTrace.getByRole("form", { name: "Add evidence link" });
-  const target = form.getByLabel("Baseline item it supports");
+  const target = form.getByLabel("Ground Truth item it supports");
   await target.selectOption({ label: "goal: Raise activation" });
   await form.getByLabel("Public link").fill("https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012/edit?usp=sharing");
   await form.getByRole("button", { name: "Preview" }).click();
@@ -103,8 +103,8 @@ test("evidence links: a commenter cites a Google Doc from a document section", a
   await form.getByRole("button", { name: "Save evidence" }).click();
   await expect(goalTrace.getByRole("status")).toContainText("Saved “Pricing page refresh” as evidence. Everyone can see it.");
 
-  // The baseline item now carries it, for everyone.
-  await page.goto("/baseline");
+  // The Ground Truth item now carries it, for everyone.
+  await page.goto("/ground-truth");
   await page.getByTestId("goal-g.activation").getByRole("button", { name: "Raise activation" }).click();
   const d = page.getByRole("dialog", { name: "Raise activation" });
   await expect(d.getByTestId("evidence-row").filter({ hasText: "Pricing page refresh" })).toHaveCount(1);

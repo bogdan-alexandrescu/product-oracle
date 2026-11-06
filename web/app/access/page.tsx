@@ -1,11 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 import { AuthCard } from "@/app/login/_components/AuthCard";
 import { Field, TEXTAREA } from "@/app/settings/_components/fields";
-import { Button, Notice } from "@/components/ds";
+import { Button, InfoTip, Notice } from "@/components/ds";
 import { api, MOCK_MODE, type Schemas } from "@/lib/api/client";
 import { formatDay } from "@/lib/format";
 import { errorMessage } from "@/lib/use-query";
@@ -68,29 +68,44 @@ export default function AccessPage() {
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  // pass-f F-47: the access check that failed (the server's words), apart from a note's error.
+  const [checkError, setCheckError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const live = useRef(true);
 
-  useEffect(() => {
-    let live = true;
-    const look = () =>
+  const look = useCallback(
+    () =>
       api.GET("/v1/auth/access").then(
         ({ data, response }) => {
-          if (!live) return;
-          if (!data) return setError(response.statusText || "Can't read your access");
+          if (!live.current) return;
+          if (!data) return setCheckError(response.statusText || "No answer");
+          setCheckError(null);
           if (data.state === "member" || data.state === "no_google_sign_in") return router.replace("/login");
           setAccess(data);
           // Approved: on into Oracle with a full load (the session is new).
           // eslint-disable-next-line @next/next/no-location-assign-relative-destination
           if (data.state === "approved") window.location.assign("/");
         },
-        (e) => live && setError(errorMessage(e)),
-      );
+        (e) => live.current && setCheckError(errorMessage(e)),
+      ),
+    [router],
+  );
+
+  useEffect(() => {
+    live.current = true;
     void look();
     const t = setInterval(() => void look(), POLL_MS);
     return () => {
-      live = false;
+      live.current = false;
       clearInterval(t);
     };
-  }, [router]);
+  }, [look]);
+
+  async function retry() {
+    setChecking(true);
+    await look();
+    setChecking(false);
+  }
 
   async function send(e: FormEvent) {
     e.preventDefault();
@@ -124,11 +139,23 @@ export default function AccessPage() {
       Sign out
     </Button>
   );
+  const failed = !access && !!checkError;
   return (
-    <AuthCard title={(state && TITLE[state]) || "Access"} testId="access-page">
+    <AuthCard title={failed ? "Can't check your access" : (state && TITLE[state]) || "Access"} testId="access-page">
       <div data-testid="access-state" data-state={state} className="flex flex-col gap-4 text-[15px] leading-[22px]">
         {error && <Notice tone="error">{error}</Notice>}
-        {!access && !error && <span className="block h-3 w-2/3 animate-pulse rounded bg-surface2" />}
+        {failed && (
+          <div data-testid="access-check-failed" className="flex flex-wrap items-center gap-2">
+            <Button variant="solid" disabled={checking} onClick={() => void retry()}>
+              {checking ? "Checking…" : "Retry"}
+            </Button>
+            {out}
+            <InfoTip label="the error" align="start">
+              {checkError}
+            </InfoTip>
+          </div>
+        )}
+        {!access && !error && !checkError && <span className="block h-3 w-2/3 animate-pulse rounded bg-surface2" />}
         {access && <p data-testid="access-body">{body(access)}</p>}
         {state === "pending" && (
           <>

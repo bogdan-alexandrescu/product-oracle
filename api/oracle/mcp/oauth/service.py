@@ -38,7 +38,7 @@ SCOPES = ("oracle:read", "oracle:write")
 SCOPE_DESCRIPTIONS = {
     # Plain words: the consent screen shows them as they are (qa-settings-41).
     "oracle:read": (
-        "See what you can see: the baseline, documents, runs and your sources. It also sees "
+        "See what you can see: the Ground Truth, documents, runs and your sources. It also sees "
         "the names of all Notion pages shared with Product Oracle, even ones not added as "
         "a source."
     ),

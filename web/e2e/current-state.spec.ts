@@ -2,7 +2,7 @@ import { login } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /**
- * Current state beside Desired state (the owner's picks: Proof table, Word pill, Owner confirms
+ * Running today beside the Ground Truth (the owner's picks: Proof table, Word pill, Owner confirms
  * each), against the mock (lib/api/mock/currentstate.ts): of the Simple features, three run today
  * (one with proof 41 days old), four are being built (two with every proof in) and the rest are new.
  * Everything is driven through the UI, on a desktop and on a phone.
@@ -27,15 +27,16 @@ for (const size of ["desktop", "phone"] as const) {
       await page.goto(url);
     }
 
-    test("Desired state is the left menu's name; Current state's table puts old proof first and Check again asks the owner", async ({ page }) => {
-      await open(page, "/baseline");
-      if (size === "desktop") await expect(page.getByTestId("nav-baseline")).toHaveAccessibleName(/Desired state/);
-      await expect(page.getByRole("heading", { name: "Desired state" })).toBeVisible();
+    test("Ground Truth is the left menu's name; Running today's table puts old proof first and Check again asks the owner", async ({ page }) => {
+      await open(page, "/ground-truth");
+      if (size === "desktop") await expect(page.getByTestId("nav-baseline")).toHaveAccessibleName(/Ground Truth/);
+      await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
       const tabs = page.getByTestId("cs-tabs");
-      await expect(tabs.getByRole("tab", { name: /Desired state/ })).toHaveAttribute("aria-selected", "true");
-      await tabs.getByRole("tab", { name: /Current state 3/ }).click();
-      await expect(page).toHaveURL(/\/baseline\?view=current/);
-      await expect(page.getByRole("heading", { name: "Current state" })).toBeVisible();
+      await expect(tabs.getByRole("tab", { name: /^Ground Truth/ })).toHaveAttribute("aria-selected", "true");
+      await tabs.getByRole("tab", { name: /Running today 3/ }).click();
+      await expect(page).toHaveURL(/\/ground-truth\?view=current/);
+      await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
+      await expect(tabs.getByRole("tab", { name: /Running today 3/ })).toHaveAttribute("aria-selected", "true");
       await expect(page.getByTestId("cs-summary")).toContainText("3 running");
       await expect(page.getByTestId("cs-summary")).toContainText("1 with old proof");
       const rows = page.getByTestId("cs1-row");
@@ -69,12 +70,14 @@ for (const size of ["desktop", "phone"] as const) {
       await expect(page.getByTestId("cs1-row").first().getByTestId("cs-confirmed-note")).toHaveText(/you confirmed/);
     });
 
-    test("Current state lists what is still in Desired state under the table, each feature a chip with its mark", async ({ page }) => {
-      await open(page, "/baseline?view=current");
+    test("Running today lists what is still to build under the table, each feature a chip with its mark", async ({ page }) => {
+      await open(page, "/ground-truth?view=current");
       await expect(page.getByTestId("cs1-row")).toHaveCount(3);
-      const desired = Number((await page.getByTestId("cs-tabs").getByRole("tab", { name: /Desired state/ }).textContent())!.replace(/\D+/g, ""));
+      // The Ground Truth tab counts every feature; three of them run today.
+      const all = Number((await page.getByTestId("cs-tabs").getByRole("tab", { name: /^Ground Truth/ }).textContent())!.replace(/\D+/g, ""));
+      const desired = all - 3;
       const box = page.getByTestId("cs-still-desired");
-      await expect(box).toContainText(`Still in Desired state: 4 in progress, ${desired - 4} new`);
+      await expect(box).toContainText(`Still to build: 4 in progress, ${desired - 4} new`);
       const chips = box.getByTestId("cs-still-chip");
       await expect(chips).toHaveCount(desired);
       // In progress first, then new; each chip names its mark.
@@ -88,9 +91,9 @@ for (const size of ["desktop", "phone"] as const) {
       expect((await box.boundingBox())!.y).toBeGreaterThanOrEqual(table.y + table.height);
     });
 
-    test("Desired state is one list of every planned feature with its mark; the baseline's tools sit under it", async ({ page }) => {
-      await open(page, "/baseline");
-      const desired = Number((await page.getByTestId("cs-tabs").getByRole("tab", { name: /Desired state/ }).textContent())!.replace(/\D+/g, ""));
+    test("The Ground Truth tab is one list of every feature with its mark; its tools sit under it", async ({ page }) => {
+      await open(page, "/ground-truth");
+      const desired = Number((await page.getByTestId("cs-tabs").getByRole("tab", { name: /^Ground Truth/ }).textContent())!.replace(/\D+/g, ""));
       const list = page.getByTestId("cs-desired");
       const rows = list.getByTestId("cs-desired-row");
       const limit = size === "phone" ? 9 : 14;
@@ -110,59 +113,64 @@ for (const size of ["desktop", "phone"] as const) {
         // Its area of focus.
         await expect(rows.nth(0)).toContainText(/Sign-up and onboarding|Billing|Search|Phone app|Reports|Teams and sharing/);
       }
-      // "and N more" opens the rest: every planned feature is on the list.
+      // "and N more" opens the rest: every feature is on the list, what runs today last (old proof first).
       if (desired > limit) {
         await list.getByRole("button", { name: `and ${desired - limit} more` }).click();
         await expect(rows).toHaveCount(desired);
       }
-      // The header is the title alone; Add item and Build baseline sit with the views under the list.
+      await expect(list.locator('[data-testid="cs-desired-row"] [data-mark="exists"], [data-testid="cs-desired-row"] [data-mark="exists_old"]')).toHaveCount(3);
+      await expect(rows.nth(desired - 3).getByTestId("cs-mark")).toHaveAttribute("data-mark", "exists_old");
+      await expect(rows.last().getByTestId("cs-mark")).toHaveAttribute("data-mark", "exists");
+      // The header is the title alone; Add item and Build the Ground Truth sit with the views under the list.
       await expect(page.getByTestId("confirmed-chip")).toHaveCount(0);
       const end = (await list.boundingBox())!;
-      for (const name of ["Add item", "Build baseline"]) {
+      for (const name of ["Add item", "Build the Ground Truth"]) {
         const button = page.getByRole("button", { name, exact: true });
         await expect(button).toBeVisible();
         expect((await button.boundingBox())!.y, `${name} is under the list`).toBeGreaterThan(end.y + end.height);
       }
-      await expect(page.getByRole("tablist", { name: "Baseline views" })).toBeVisible();
+      await expect(page.getByRole("tablist", { name: "Ground Truth views" })).toBeVisible();
     });
 
-    test("Ready to move: the proof opens, Not yet keeps it, Move to Current state moves it with a note", async ({ page }) => {
-      await open(page, "/baseline");
+    test("Ready to move: the proof opens, Not yet keeps it, Move to Running today moves it with a note", async ({ page }) => {
+      await open(page, "/ground-truth");
       const band = page.getByTestId("cs3-ready");
       await expect(band).toContainText("2 ready to move");
-      const names = await band.locator("button").allTextContents();
+      const names = await band.getByTestId("cs3-ready-chip").allTextContents();
       expect(names).toHaveLength(2);
-      // Not yet: it stays in Desired state, out of the band.
+      // Not yet: it stays still to build, out of the band.
       await band.getByRole("button", { name: names[1] }).click();
-      let dialog = page.getByRole("dialog", { name: `Move ${names[1]} to Current state` });
+      let dialog = page.getByRole("dialog", { name: `Move ${names[1]} to Running today` });
       await expect(dialog).toContainText("Oracle found proof that it runs today");
       await expect(dialog).toContainText("6 of 6 tracker tasks done");
       await dialog.getByRole("button", { name: "Not yet" }).click();
       await expect(dialog).toBeHidden();
       await expect(band).toContainText("1 ready to move");
-      // Kept in Desired state's list, now with its tasks instead of Proof is in.
+      // Kept on the Ground Truth list, now with its tasks instead of Proof is in.
       const kept = page.getByTestId("cs-desired-row").filter({ hasText: names[1] });
       await expect(kept).toContainText("6 of 6 tasks done");
       await expect(kept).not.toContainText("Proof is in");
-      // Move: it joins Current state, with when and how it moved.
+      // Move: it joins Running today, with when and how it moved.
       await band.getByRole("button", { name: names[0] }).click();
-      dialog = page.getByRole("dialog", { name: `Move ${names[0]} to Current state` });
+      dialog = page.getByRole("dialog", { name: `Move ${names[0]} to Running today` });
       await expect(dialog).toContainText("Code map: 10 files");
       await expect(dialog).toContainText("4 pull requests merged");
       await expect(dialog).toContainText("Used by 212 people in the test group");
-      await dialog.getByRole("button", { name: "Move to Current state" }).click();
+      await dialog.getByRole("button", { name: "Move to Running today" }).click();
       await expect(dialog).toBeHidden();
-      // The move ends on Current state, the moved feature on top: Moved <month day> · you confirmed (cs3-b-done).
-      await expect(page).toHaveURL(/\/baseline\?view=current/);
-      await expect(page.getByRole("heading", { name: "Current state" })).toBeVisible();
-      await expect(page.getByTestId("cs-tabs").getByRole("tab", { name: /Current state 4/ })).toHaveAttribute("aria-selected", "true");
+      // The move ends on Running today, the moved feature on top: Moved <month day> · you confirmed (cs3-b-done).
+      await expect(page).toHaveURL(/\/ground-truth\?view=current/);
+      await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
+      await expect(page.getByTestId("cs-tabs").getByRole("tab", { name: /Running today 4/ })).toHaveAttribute("aria-selected", "true");
       const moved = page.getByTestId("cs1-row").first();
       await expect(moved).toContainText(names[0]);
       await expect(moved.getByTestId("cs-moved-note")).toHaveText(/^Moved [A-Z][a-z]{2} \d{1,2} · you confirmed$/);
-      // Back on Desired state it has left the list and the band.
-      await page.getByTestId("cs-tabs").getByRole("tab", { name: /Desired state/ }).click();
+      // Back on the Ground Truth tab it has left the band, and the list marks it Exists.
+      await page.getByTestId("cs-tabs").getByRole("tab", { name: /^Ground Truth/ }).click();
       await expect(page.getByTestId("cs-desired")).toBeVisible();
-      await expect(page.getByTestId("cs-desired-row").filter({ hasText: names[0] })).toHaveCount(0);
+      const more = page.getByTestId("cs-desired").getByRole("button", { name: /^and \d+ more$/ });
+      if (await more.isVisible()) await more.click();
+      await expect(page.getByTestId("cs-desired-row").filter({ hasText: names[0] }).getByTestId("cs-mark")).toHaveAttribute("data-mark", "exists");
       await expect(band).toBeHidden();
     });
 

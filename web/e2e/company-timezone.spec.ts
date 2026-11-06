@@ -59,7 +59,7 @@ test("goal form: the Horizon tip reads the company's horizons", async ({ page })
   await page.getByRole("button", { name: "Save" }).first().click();
   await expect(page.getByRole("button", { name: "Reset to defaults" })).toBeVisible();
 
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   await page.getByTestId("goal-g.activation").getByRole("button", { name: "Raise activation" }).click();
   const d = page.getByRole("dialog", { name: "Raise activation" });
   await d.getByRole("button", { name: "Edit" }).click();

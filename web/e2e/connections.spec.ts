@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { login } from "./helpers";
+import { disconnectAll, login } from "./helpers";
 
 async function openConnections(page: Page) {
   await login(page);
@@ -26,6 +26,7 @@ test("connections: a card per data provider, and Claude is not one of them", asy
 
 test("connections: paste a token, reconnect, and sign in with OAuth", async ({ page }) => {
   await openConnections(page);
+  await disconnectAll(page, "slack");
   const slack = page.getByTestId("connection-card-slack");
   await slack.getByRole("button", { name: "Paste a token" }).click();
   await slack.getByLabel("Token", { exact: true }).fill("bad-token");

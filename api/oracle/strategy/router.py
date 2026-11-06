@@ -101,6 +101,41 @@ async def waive_strategy_finding(
     return finding
 
 
+@router.post("/findings/{finding_id}/reopen", response_model=StrategyFindingOut)
+async def reopen_strategy_finding(
+    finding_id: uuid.UUID, db: TenantDB, principal: Approver
+) -> StrategyFinding:
+    """Reopen a waived finding (whoever may waive it): it is open again and its waiver is
+    cleared, so the next check keeps it open until its subject lines up."""
+    finding = await db.scalar(
+        select(StrategyFinding).where(StrategyFinding.id == finding_id).with_for_update()
+    )
+    if finding is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Finding not found")
+    needed = "approver" if finding.kind in APPROVER_WAIVES else "owner"
+    if not has_role(principal.role, needed):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, f"Requires the {needed} role")
+    await recheck_caller(db, principal, needed)
+    if finding.status != "waived":
+        raise HTTPException(status.HTTP_409_CONFLICT, f"The finding is {finding.status}")
+    reason = finding.waive_reason
+    finding.status = "open"
+    finding.waived_by = None
+    finding.waived_at = None
+    finding.waive_reason = None
+    await audit.record(
+        db,
+        principal,
+        "strategy_finding.reopened",
+        "strategy_finding",
+        finding.id,
+        {"kind": finding.kind, "subject": finding.subject_ref, "waive_reason": reason},
+    )
+    await db.commit()
+    await db.refresh(finding)
+    return finding
+
+
 @router.post("/check", response_model=CheckOut)
 async def run_strategy_check(db: TenantDB, _: OwnerNow) -> CheckOut:
     """Recompute the drift findings now."""

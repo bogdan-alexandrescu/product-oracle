@@ -17,7 +17,7 @@ import { expect, test, type Locator, type Page } from "./test";
  *
  * qa-simple-roadmap-14 / 48: the item card's Status, Confidence, dates-source, "Needed by"
  * and "Decided in" read in plain words, not the API's lowercase enum values or a missing
- * colon ("Decided in D-4 Moved Weekly alert digest").
+ * colon ("Decided in D-9 Moved Weekly alert digest").
  */
 
 const ROADMAP = "/simple/roadmap";
@@ -77,10 +77,10 @@ test.describe("desktop 1440x900", () => {
     await expect(chip.locator("span[title]")).toHaveAttribute("title", title);
   });
 
-  test("qa-simple-roadmap-14 / 48: the item card reads in plain words, with a colon after Decided in D-4", async ({ page }) => {
+  test("qa-simple-roadmap-14 / 48: the item card reads in plain words, with a colon after Decided in D-9", async ({ page }) => {
     await login(page);
     // The mock seeds a meeting's decisions lazily, on a meetings/Decisions read, never on
-    // the roadmap alone — a Decisions visit first is what makes D-4 show on the card.
+    // the roadmap alone — a Decisions visit first is what makes D-9 show on the card.
     await page.goto("/simple/decisions");
     await expect(page.getByRole("region", { name: "Review: Usage alerts" })).toBeVisible();
     await page.goto(ROADMAP);
@@ -102,8 +102,8 @@ test.describe("desktop 1440x900", () => {
     await expect(card.getByTestId("card-needed")).toHaveText("None");
 
     // The meeting decision that moved it, with the colon the sentence needs.
-    // fix4 qa-simple-roadmap-3: the decision by its title, no "D-4".
+    // fix4 qa-simple-roadmap-3: the decision by its title, no "D-9".
     await expect(card.getByTestId("card-decided-in")).toContainText("Moved Weekly alert digest");
-    await expect(card.getByTestId("card-decided-in")).not.toContainText("D-4");
+    await expect(card.getByTestId("card-decided-in")).not.toContainText("D-9");
   });
 });

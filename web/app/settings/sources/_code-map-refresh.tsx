@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 
-import { Notice, Panel } from "@/components/ds";
+import { InfoTip, Notice, Panel } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -51,7 +51,16 @@ export function CodeMapRefreshSetting() {
   return (
     <Panel title="Code maps">
       <div className="flex flex-col gap-2 px-4 py-3">
-        <Field label="Refresh stale code maps" htmlFor={id}>
+        <Field
+          label="Refresh stale code maps"
+          htmlFor={id}
+          tip={
+            // Pass F F-36: the cost behind an (i), not a sentence on the page.
+            <InfoTip label="what a refresh costs" align="start">
+              <span data-testid="code-map-refresh-cost">Each refresh costs like Map the code. Less often costs less; only on demand costs nothing.</span>
+            </InfoTip>
+          }
+        >
           <select
             id={id}
             className={`${SELECT_FIELD} sm:max-w-[260px]`}
@@ -66,10 +75,6 @@ export function CodeMapRefreshSetting() {
             ))}
           </select>
         </Field>
-        <p className="text-sm text-text2" data-testid="code-map-refresh-cost">
-          Each refresh is one code map run per stale repository, charged like Map the code: refreshing less often costs less, and
-          only on demand costs nothing until someone presses Map the code.
-        </p>
         {saved && (
           <p role="status" className="text-sm text-text2">
             Saved

@@ -47,7 +47,7 @@ async function dragRow(page: Page, name: string, to: number): Promise<void> {
 
 /** Moves Setup checklist from #1 down to #3 with a reason, as the owner. */
 async function moveSetupDown(page: Page): Promise<void> {
-  await dragRow(page, "Setup checklist (SC)", 2);
+  await dragRow(page, "Setup checklist", 2);
   const dialog = page.getByRole("dialog", { name: /Why move Setup checklist/ });
   await dialog.getByLabel(/Reason/).fill("Rules first");
   await dialog.getByRole("button", { name: "Move" }).click();

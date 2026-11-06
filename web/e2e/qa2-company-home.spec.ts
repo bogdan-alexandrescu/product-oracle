@@ -106,7 +106,7 @@ test.describe("at 1440", () => {
 
   test("Set up: Invite team counts open invites, done rows say Change or Review", async ({ page }) => {
     // protects=qa-onboarding-18, -37; fails_when=Invite team leaves out the open invites, or a
-    // done row still says Open (Build baseline would start a second build); no_claim=the API
+    // done row still says Open (Build Ground Truth would start a second build); no_claim=the API
     // (api/tests/test_setup.py covers invited).
     await openHome(page);
     const invite = page.getByTestId("setup-row-invite");
@@ -116,7 +116,7 @@ test.describe("at 1440", () => {
     const build = page.getByTestId("setup-row-build_baseline");
     await expect(build).toHaveAttribute("data-done", "true");
     await expect(build.getByTestId("setup-action")).toHaveText("Review");
-    await expect(build.getByTestId("setup-action")).toHaveAttribute("href", "/baseline?from=setup");
+    await expect(build.getByTestId("setup-action")).toHaveAttribute("href", "/ground-truth?from=setup");
     // A step still to do keeps Open (the default company's tools are connected; its horizons are not confirmed).
     await expect(page.getByTestId("setup-row-horizons")).toHaveAttribute("data-done", "false");
     await expect(page.getByTestId("setup-row-horizons").getByTestId("setup-action")).toHaveText("Open");

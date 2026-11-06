@@ -400,9 +400,9 @@ const CARTS_V1: SectionSeed[] = [
     body: [
       "| Milestone | Feature | Goal | Outcome |",
       "|---|---|---|---|",
-      "| [Beta](#milestone-beta) | [Save cart](#feature-save-cart) | G2 | A cart survives the session |",
-      "|  | [Cart on every device](#feature-sync) | G2 | The same cart on phone and laptop |",
-      "| [General release](#milestone-ga) | [Reminder email](#feature-reminder) | G2 | Shoppers come back to finish |",
+      "| [Beta](#milestone-beta) | [Save cart](#feature-save-cart) | Retention | A cart survives the session |",
+      "|  | [Cart on every device](#feature-sync) | Retention | The same cart on phone and laptop |",
+      "| [General release](#milestone-ga) | [Reminder email](#feature-reminder) | Retention | Shoppers come back to finish |",
     ].join("\n"),
   },
   {
@@ -425,7 +425,7 @@ const CARTS_V1: SectionSeed[] = [
     body: "- Approve the beta scope: owner the founder, needed by 2026-11-01.\n- Pick the reminder delay (24 or 72 hours): owner the growth lead, needed by 2026-11-15.",
   },
   { key: "full", level: 1, heading: "Full version", body: "" },
-  { key: "feature-detail", level: 2, heading: "Feature detail", body: "One section per feature, in priority order." },
+  { key: "feature-detail", level: 2, heading: "Feature detail", body: "Keep a signed-in shopper's cart on our servers, so it follows them to any device." },
   {
     key: "feature-save-cart",
     level: 3,
@@ -602,7 +602,7 @@ const SPEC_ACCEPTANCE: SectionSeed = {
   key: "acceptance-criteria",
   level: 2,
   heading: "Acceptance criteria",
-  body: "In the baseline (decided with the PRD):\n\n- req-shipping-cost: A shopper sees the shipping cost on the cart page.\n\nProposed by this spec (not product requirements until the PRD adopts them):\n\n- The quote refreshes when the cart changes.",
+  body: "In the Ground Truth (decided with the PRD):\n\n- req-shipping-cost: A shopper sees the shipping cost on the cart page.\n\nProposed by this spec (not product requirements until the PRD adopts them):\n\n- The quote refreshes when the cart changes.",
 };
 const SPEC_ASSUMPTIONS: SectionSeed = { key: "assumptions", level: 2, heading: "Assumptions", body: "The cart service can call an internal endpoint." };
 const SPEC_SOURCES: SectionSeed = {
@@ -1006,7 +1006,7 @@ export const UPDATE_SOURCES = (rows: string[], evidence: string[]): SectionSeed[
     key: "sources-list",
     level: 3,
     heading: "Sources",
-    body: "- g1: oracle, Goals in the baseline, retrieved 2026-10-20\n- t1: oracle, Product tracks and milestones, retrieved 2026-10-20",
+    body: "- g1: oracle, Goals in the Ground Truth, retrieved 2026-10-20\n- t1: oracle, Product tracks and milestones, retrieved 2026-10-20",
   },
   { key: "sources-data", level: 3, heading: "Data points", body: rows.map((r) => `- ${r}`).join("\n") },
   { key: "sources-evidence", level: 3, heading: "Evidence by section", body: evidence.map((r) => `- ${r}`).join("\n") },
@@ -1017,7 +1017,7 @@ export const UPDATE_SEED_CITATIONS: CitationSeed[] = [
     id: "g1",
     source: "oracle",
     ref: "oracle://baseline/goals",
-    title: "Goals in the baseline",
+    title: "Goals in the Ground Truth",
     excerpt: "Confirmed goals with their targets and current values.",
     retrieved_at: "2026-10-20T08:00:00Z",
   },

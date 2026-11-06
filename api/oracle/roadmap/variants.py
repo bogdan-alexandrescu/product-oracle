@@ -207,13 +207,23 @@ class ItemView:
     # commitment; oracle.roadmap.schedule), or None: a capacity date is the item's place
     # in the team's queue, not how long the item takes (roadmap-draft-wording).
     date_kind: str | None = None
+    # E-14: its dates and delivery state as Simple reads them (oracle.simple.service
+    # delivery: a dated source's start and end, None for an estimate; planned, in_progress
+    # or done, from shipped and its tracker records): a link holder's card says both.
+    start: date | None = None
+    end: date | None = None
+    state: str = "planned"
 
 
 def render_key(items: list[ItemView]) -> tuple:
-    """What of the items a rendering reads from the baseline at render time (each one's
-    group, goal and flag): part of a cached render's key, so a goal renamed or
-    unconfirmed after the roadmap was written changes the next render."""
-    return tuple((i.key, i.group, i.group_rank, tuple(i.goals), i.no_goal) for i in items)
+    """What of the items a rendering reads at render time: from the baseline each one's
+    group, goal and flag, and for a link holder's cards its dates and delivery state
+    (E-14). Part of a cached render's key, so a goal renamed or unconfirmed after the
+    roadmap was written changes the next render."""
+    return tuple(
+        (i.key, i.group, i.group_rank, tuple(i.goals), i.no_goal, i.start, i.end, i.state)
+        for i in items
+    )
 
 
 def goal_names(item: ItemView, variant: Variant) -> list[str]:
@@ -255,6 +265,17 @@ def spans_row(key: str) -> bool:
     that lays a horizon's sections out as a grid of cards spans it across the row instead
     of one card column. Item cards stay cards, and Engineering has no goal groups."""
     return bool(_GROUP_KEY.match(key))
+
+
+def board_group(items: list[ItemView], section_key: str) -> list[ItemView]:
+    """The items of Board's goal group ``section_key`` (``now-group-2``), one per row of
+    its table and in their order (:func:`_board`); none for any other section."""
+    if not spans_row(section_key):
+        return []
+    horizon, n = section_key.split("-group-")
+    shown, _ = _shown(items, VARIANTS["board"])
+    groups = goal_groups(shown[horizon])
+    return groups[int(n) - 1][1] if 0 < int(n) <= len(groups) else []
 
 
 def label(audience: str) -> str:

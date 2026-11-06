@@ -220,6 +220,7 @@ export function NewRequestDialog({
       dirty={dirty}
       askOnCancel
       phoneSheet
+      scrollBody
       busy={busy}
       onSubmit={() => void submit()}
       actions={

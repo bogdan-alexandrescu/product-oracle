@@ -13,7 +13,10 @@ from oracle.templates.schemas import ThemeTokens
 from tests.intake_helpers import company, create_intake, summary
 
 RAW_STAMP = re.compile(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}")
-MONTH_FIRST = re.compile(r"[A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} [AP]M [A-Z]{3,4}")
+# Each part of a stamp is held on one line (no-break spaces, export.render.held_moment).
+MONTH_FIRST = re.compile(
+    r"[A-Z][a-z]{2}[ \u00a0]\d{1,2},[ \u00a0]\d{1,2}:\d{2}[ \u00a0][AP]M[ \u00a0][A-Z]{3,4}"
+)
 
 
 def test_moment_in_words_is_month_first():

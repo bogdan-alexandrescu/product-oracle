@@ -64,7 +64,7 @@ test("blocked: two blocks, failing hard checks, advisory and a disabled Publish"
   await expect(blocks.nth(1)).toContainText("Supported third-party operations");
   await expect(blocks.nth(1)).toContainText("Third-party");
   // qa4-docs-share-52: Resolve opens the blocker, where the inspector's Open blocker goes.
-  await expect(blocks.nth(0).getByRole("link", { name: "Resolve" })).toHaveAttribute("href", /\/baseline\?tab=blockers&blocker=/);
+  await expect(blocks.nth(0).getByRole("link", { name: "Resolve" })).toHaveAttribute("href", /\/ground-truth\?tab=blockers&blocker=/);
   await expect(blocks.nth(1).getByRole("link", { name: "Resolve" })).toHaveAttribute(
     "href",
     "/documents/online-deposits/v/3#solution",
@@ -309,10 +309,10 @@ test("PRD page: Publish replaces Approve version, for the latest version; roadma
   await expect(page.getByTestId("doc-header").getByRole("link", { name: "Publish", exact: true })).toHaveCount(0);
 });
 
-test("resolve a blocker: opens its baseline item", async ({ page }) => {
+test("resolve a blocker: opens its Ground Truth item", async ({ page }) => {
   await openPublish(page, "online-deposits");
   await page.getByTestId("block-row").nth(0).getByRole("link", { name: "Resolve" }).click();
-  await expect(page).toHaveURL(/\/baseline\?tab=blockers&blocker=/);
+  await expect(page).toHaveURL(/\/ground-truth\?tab=blockers&blocker=/);
   // #304: slugs such as c.same-day-refund are never shown; the blocker is named by its title.
   await expect(page.getByTestId("blocker-inspector").getByRole("heading", { name: "Same-day refund rule unanswered" })).toBeVisible();
 });

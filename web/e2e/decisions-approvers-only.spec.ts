@@ -64,7 +64,7 @@ for (const who of ["commenter", "viewer"]) {
 
     await login(page, `${who}@example.com`);
     await checkpointsOnDecisions(page);
-    await expect(rows(page).filter({ hasText: "Approve Baseline confirm · team-onboarding run" })).toBeVisible();
+    await expect(rows(page).filter({ hasText: "Approve Ground Truth confirm · team-onboarding run" })).toBeVisible();
     await expect(rows(page).filter({ hasText: title })).toHaveCount(0);
     await expect(page.locator("main")).not.toContainText("Investor update");
     await page.goto(address);

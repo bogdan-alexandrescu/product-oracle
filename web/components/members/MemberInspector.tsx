@@ -207,7 +207,7 @@ export function MemberInspector({
         <>
           <Chip hero>{ROLE_WORD[member.role]}</Chip>
           <Chip hero>{removed ? "Removed" : "Active"}</Chip>
-          {member.engineering_lead && <Chip hero>Eng lead</Chip>}
+          {member.engineering_lead && <Chip hero>Engineering lead</Chip>}
         </>
       }
     >

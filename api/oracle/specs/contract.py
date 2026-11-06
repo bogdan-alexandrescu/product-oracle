@@ -326,10 +326,10 @@ def _acceptance_body(inputs: SpecInputs, proposed: str | None) -> str:
     lines: list[str] = []
     decided = [(r, a) for r in inputs.requirements for a in r.acceptance]
     if decided:
-        lines += ["In the baseline (decided with the PRD):", ""]
+        lines += ["In the Ground Truth (decided with the PRD):", ""]
         lines += [f"- {escape_inline(r.key)}: {escape_inline(a)}" for r, a in decided]
     else:
-        lines.append("The baseline records no acceptance criteria for these requirements yet.")
+        lines.append("The Ground Truth records no acceptance criteria for these requirements yet.")
     if proposed:
         lines += [
             "",
@@ -881,7 +881,7 @@ _LABEL_START = re.compile(r"^[\W_]*(?:decided|proposed)\s*[^\w\s]")
 _LIST_MARKER = re.compile(r"^\s*(?:(?:>|[-*+]|\d{1,9}[.)]|\[[ x]\]|\[\^[^\]\s]*\]:?)\s*)+")
 # Oracle's notes and labels, as skeletons squashed: no body text or added heading may
 # take them.
-_NOTES = ("decidedintheapprovedprd", "decidedwiththeprd", "inthebaselinedecidedwiththeprd")
+_NOTES = ("decidedintheapprovedprd", "decidedwiththeprd", "inthegroundtruthdecidedwiththeprd")
 
 
 def _phrase(text: str) -> str:
@@ -1230,7 +1230,7 @@ def structure_problems(markdown: str, draft: ParsedDraft | None = None) -> list[
                     "body_takes_oracle_label",
                     "A paragraph, list item, heading or table cell may not start with a "
                     "Decided or Proposed label or Oracle's note ('Decided in the approved "
-                    "PRD', 'In the baseline (decided with the PRD)'), in the document, its "
+                    "PRD', 'In the Ground Truth (decided with the PRD)'), in the document, its "
                     "slides or its exports: Oracle shows each part's state itself.",
                     s.section_key,
                 )

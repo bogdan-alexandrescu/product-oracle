@@ -34,7 +34,7 @@ from oracle.authz import has_role
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document, DocumentVersion
 from oracle.members.names import display_name
-from oracle.simple import plan
+from oracle.simple import plan, waiting_list
 from oracle.simple.changes import ChangeError
 from oracle.simple.models import SimpleChange
 from oracle.simple.schemas import (
@@ -52,6 +52,7 @@ from oracle.simple.schemas import (
     SimpleQuestionSource,
     SimpleTaskWaiting,
 )
+from oracle.trash.filter import INCLUDE_TRASHED
 
 OPS: frozenset[str] = frozenset({"decide_question", "name_decider"})
 SOURCE_KIND = "prd_question"
@@ -186,9 +187,15 @@ async def import_answer(db: AsyncSession, document: Document, v: DocumentVersion
     codes = {_source(document.id, q["code"]) for q in rows}
     for q in rows:
         sid = _source(document.id, q["code"])
+        # edit-decisions: a question in Trash stays there (it is looked up with it, so it is
+        # not made again).
         d = await db.scalar(
-            select(Decision).where(Decision.source_kind == SOURCE_KIND, Decision.source_id == sid)
+            select(Decision)
+            .where(Decision.source_kind == SOURCE_KIND, Decision.source_id == sid)
+            .execution_options(**{INCLUDE_TRASHED: True})
         )
+        if d is not None and d.deleted_at is not None:
+            continue
         options = []
         if q.get("recommendation"):
             options.append({"key": "recommended", "label": q["recommendation"],
@@ -208,9 +215,14 @@ async def import_answer(db: AsyncSession, document: Document, v: DocumentVersion
                                     "ref": document.slug}])  # fmt: skip
             db.add(d)
         else:
-            d.title, d.question = cut(q["title"], 200), q["title"]
-            if d.status == "proposed":
-                d.options = options
+            kept = d.prd_question or {}
+            if kept.get("edited"):
+                # edit-decisions: changed in Simple's sheet; the PRD read again keeps that.
+                info["edited"], info["recommendation"] = True, kept.get("recommendation")
+            else:
+                d.title, d.question = cut(q["title"], 200), q["title"]
+                if d.status == "proposed":
+                    d.options = options
             if not (d.prd_question or {}).get("decider_set"):
                 d.approver_id = decider
             else:
@@ -234,7 +246,8 @@ async def import_answer(db: AsyncSession, document: Document, v: DocumentVersion
     for d in await db.scalars(select(Decision).where(Decision.origin == "prd")):
         info = d.prd_question or {}
         if (info.get("document_id") == str(document.id) and d.source_id not in codes
-                and d.status == "proposed" and not info.get("removed")):  # fmt: skip
+                and d.status == "proposed" and not info.get("removed")
+                and not info.get("added")):  # fmt: skip
             d.prd_question = {**info, "removed": True, "version_id": str(v.id)}
     await db.flush()
     views = await plan.views(db, {document.id})
@@ -417,8 +430,12 @@ async def rows(
     for c in await db.scalars(select(SimpleChange).where(
             SimpleChange.op == "decide_question", SimpleChange.status == "proposed")):  # fmt: skip
         pending.setdefault(c.target.get("decision_id"), c)
+    from oracle.simple import decision_sheet
+
+    edited = await decision_sheet.edits(db, {d.id for d in ds})
     names = await _names(db, {d.approver_id for d in ds} | {d.decided_by for d in ds}
-                         | {c.by for c in pending.values()})  # fmt: skip
+                         | {c.by for c in pending.values()}
+                         | {by for _, by in edited.values()})  # fmt: skip
     # The version each was read from (rows read before "version" was kept look it up).
     vids = {uuid.UUID(v) for d in ds if not (d.prd_question or {}).get("version")
             and (v := (d.prd_question or {}).get("version_id"))}  # fmt: skip
@@ -461,6 +478,8 @@ async def rows(
             decided_label = f"Decided{where} on {on} by {who}"
         c = pending.get(str(d.id))
         decides = open_ and may_decide(principal, d)
+        sheet = decision_sheet.can(principal, d)
+        at, by = edited.get(str(d.id), (None, None))
         out.append(SimpleQuestion(
             id=d.id, number=d.number, code=info.get("code", ""), title=d.title,
             status=d.status, column=column,  # type: ignore[arg-type]
@@ -490,7 +509,10 @@ async def rows(
                 propose=open_ and not decides and principal is not None
                 and has_role(principal.role, "commenter"),
                 name_decider=decides,
+                edit=sheet.edit, withdraw=sheet.withdraw, delete=sheet.delete,
             ),
+            edited_at=at,
+            edited_by=SimplePersonRef(id=by, name=names.get(by, "someone")) if by else None,
             source=SimpleQuestionSource(
                 version=info.get("version") or numbers.get(info.get("version_id") or ""),
                 read_at=info.get("read_at") or d.created_at),
@@ -511,7 +533,9 @@ async def _readable(db: AsyncSession, principal: Any) -> set[uuid.UUID]:
     from oracle.simple import meetings
 
     docs = await db.scalars(
-        select(Document).where(Document.kind == "prd", Document.deleted_at.is_(None))
+        select(Document).where(
+            Document.kind == "prd", Document.deleted_at.is_(None), meetings._current()
+        )
     )
     return {d.id for d in docs if await meetings._readable(db, principal, d)}
 
@@ -541,6 +565,7 @@ async def waiting(db: AsyncSession, principal: Any) -> SimpleDecisionsWaitingOut
         others=others,
         approvals_waiting=len(await _approvals(db, principal)),
         tasks=await tasks_waiting(db, me),
+        items=await waiting_list.items(db, principal, qs),
     )
 
 
@@ -589,13 +614,19 @@ async def tasks_waiting(db: AsyncSession, me: uuid.UUID | None) -> list[SimpleTa
 
 
 async def page_fields(
-    db: AsyncSession, principal: Any, readable: set[uuid.UUID], only: set[uuid.UUID] | None = None
+    db: AsyncSession,
+    principal: Any,
+    readable: set[uuid.UUID],
+    only: set[uuid.UUID] | None = None,
+    replaced: set[uuid.UUID] | None = None,
 ) -> dict:
     """The Decisions page's questions: of these PRDs (the page's PRD and goal filters), and
-    of ``only`` these decisions when the page shows one meeting."""
+    of ``only`` these decisions when the page shows one meeting. A ``replaced`` PRD's open
+    questions are left out (simple-replaced-prds); its decided ones stay as history."""
     from oracle.preferences.models import UserPreference
 
-    qs = await rows(db, principal, readable, only)
+    qs = [q for q in await rows(db, principal, readable, only)
+          if not (q.status == "proposed" and q.prd.id in (replaced or ()))]  # fmt: skip
     view = None
     if principal is not None:
         view = await db.scalar(select(UserPreference.value).where(

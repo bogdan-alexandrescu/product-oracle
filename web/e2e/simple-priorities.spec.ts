@@ -10,7 +10,9 @@ import { expect, test, type BrowserContext, type Locator, type Page } from "./te
  * Every action is driven through the UI: drags, the arrow keys, the dialogs and buttons.
  */
 
-const ORACLE = ["setup-checklist", "alert-rules", "alert-digest", "alert-mobile", "setup-import", "alert-export", "alert-sso", "price-tiers", "setup-video"];
+// roadmap-edit-fixes round 1: F-03 Health log is a live, planned roadmap item (not done, cut or in
+// Trash), so Priorities lists it as the roadmap does.
+const ORACLE = ["setup-checklist", "alert-rules", "alert-digest", "alert-mobile", "setup-import", "alert-export", "alert-sso", "setup-health-log", "price-tiers", "setup-video"];
 const PHONE = { width: 390, height: 844 };
 
 const signedIn = new WeakSet<BrowserContext>();
@@ -83,7 +85,7 @@ test.describe("desktop", () => {
 
     await dragRow(admin, "alert-export", 0);
     await giveReason(admin, "alert-export", "Two large customers asked for it this month", "Move");
-    await expect(admin.getByText("Moved Alert history export (AHE) to rank 1")).toBeVisible();
+    await expect(admin.getByText("Moved Alert history export to rank 1")).toBeVisible();
     expect((await codes(admin))[0]).toBe("alert-export");
     await expect(row(admin, "alert-export").getByTestId("prio-ghost")).toHaveText("Oracle #6");
     await expect(row(admin, "alert-export").getByTestId("prio-override")).toContainText("Moved by Avery Stone: “Two large customers asked for it this month”");
@@ -164,7 +166,7 @@ test.describe("desktop", () => {
   test("value / effort: a sideways drag re-estimates effort and the rank moves at once", async ({ page }) => {
     const admin = await as(page, "admin@example.com");
     await admin.getByRole("tab", { name: "Value / effort" }).click();
-    await expect(admin.getByRole("button", { name: "#7 Alert routing by team (ARB): goal value 3, effort 2 weeks, below the line" })).toBeVisible();
+    await expect(admin.getByRole("button", { name: "#7 Alert routing by team: goal value 3, effort 2 weeks, below the line" })).toBeVisible();
     await expect(admin.getByRole("button", { name: "#5 Sample data import (F-12): goal value 6, effort 3 weeks" })).toBeVisible();
     expect(await codes(admin, "side-row")).toEqual(ORACLE);
     const point = admin.locator('[data-testid="vxe-point"][data-code="setup-import"]');

@@ -26,8 +26,9 @@ import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
 import { draftDecisionNotes } from "./decision-notes";
 import { stableUuid } from "./ids";
-import { changeSentence } from "./simple-change-words";
-import { priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
+import { changePhrase, changeSentence } from "./simple-change-words";
+import { decidesAsk, milestoneValue, writeMilestone } from "./simple-milestones";
+import { addToCompany, featureItem, featureKeyOf, priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
 import { archiveGoal, goalBucketsDb, trashGoal, unarchiveGoal, type GoalBucketsTrash } from "./goal-buckets";
 import {
   canDecideItem,
@@ -38,15 +39,22 @@ import {
   draftChanges,
   openDraft,
   GOALS,
+  MAP_GOALS,
   goalId,
+  goalIdsOf,
   itemDeciderId,
   itemOwnerId,
   namedOn,
   lookalikes,
+  fileUnderCurrentPrd,
+  ofReplacedPrd,
   shiftPlan,
   ownDates,
   ownPrd,
   prdCode,
+  codedTitle,
+  dependencyOf,
+  loopOf,
   ROADMAP_SLUGS,
   readerDb,
   readsRoadmap,
@@ -81,16 +89,21 @@ export interface SimpleChangesCtx {
   role: Role;
   /** The company's owners (who decide proposals with no decider or roadmap owner). */
   owners: string[];
+  /** simple-replaced-prds: the slugs and ids of the PRDs marked replaced (their open drafts are never listed in Simple). */
+  replaced?: string[];
   /** Person id -> name. */
   names: Record<string, string>;
   /** Person id -> role (D-a: whether a track owner decides). */
   roles?: Record<string, Role>;
-  /** The company's confirmed goals (the baseline's), as the API lists them for suggestions (qa4-simple-home-4). */
+  /** The company's confirmed goals (the Ground Truth's), as the API lists them for suggestions (qa4-simple-home-4). */
   companyGoals?: { id: string; key: string; title: string }[];
   /** trash-features-goals: Settings › Trash (./trash.ts), shared with documents, intakes and runs. */
   trash?: TrashDb;
   /** edit-goals-prds: the goal buckets' Trash, writer and members (an accepted Ask to delete a goal). */
   goalBin?: GoalBucketsTrash;
+  /** S9 (targets.py add_feature_ask): files a feature ask in Requests, and drops it on undo. */
+  fileAsk?: (input: { id: string; title: string; channel: string; requester_name: string | null; requester_kind: string; filed_by: string }) => void;
+  dropAsk?: (id: string) => void;
 }
 
 /** edit-goals-prds (oracle.simple.goal_asks): a goal archived or restored, asked by who may not
@@ -152,6 +165,8 @@ const FIELDS: Record<string, string[]> = {
   restore: ["cut"],
   edit_title: ["title"],
   edit_outcome: ["outcome"],
+  // build-feature-panel (AN PR 1204): the panel's Notes row (changes.py edit_note).
+  edit_note: ["note"],
   accept_risk: ["risk"],
   // S6: a draft item confirmed (changes.py confirm_item).
   confirm_item: ["draft"],
@@ -162,6 +177,12 @@ const FIELDS: Record<string, string[]> = {
   set_goal: ["goal_id"],
   set_depends: ["depends_on"],
   set_status: ["status"],
+  // lane-gt-ui: the Ground Truth feature the item is (Add to Ground Truth, Link to a feature).
+  set_feature: ["feature_id"],
+  // goal-buckets-tasks: the goals an item serves (changes.py set_goals).
+  set_goals: ["goal_ids"],
+  // roadmap-decide: a dependent no longer depends on a cut item (changes.py remove_dependency).
+  remove_dependency: ["depends_on"],
 };
 const FIXES = ["shift_dependents", "move_dependency"];
 /** fix5-cut-dependents: the item and everything waiting on it, cut as one change (changes.py CUT_ALL). */
@@ -201,7 +222,7 @@ const TARGETS: Record<string, { id: string; adds?: boolean }> = {
   estimate_feature: { id: "item_id" },
   // S9: a milestone typed in chat, and a new feature ask (targets.py set_milestone, add_feature_ask).
   set_milestone: { id: "item_id" },
-  add_feature_ask: { id: "ask_id", adds: true },
+  add_feature_ask: { id: "request_id", adds: true },
   // Chat actions: an item's owner or decider (stored by item id; simple-roadmap's itemOwnerId / itemDeciderId read them).
   set_owner: { id: "item_id" },
   set_decider: { id: "item_id" },
@@ -254,12 +275,17 @@ const slugOf = (id: unknown): string | undefined => ROADMAP_SLUGS().find((r) => 
 
 /** Whether the caller applies (or accepts) this change: a key date's by the roadmap's rule
  * (drafts.can_edit), an add_item's by its roadmap's editors, else the item's deciders. */
-function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target"> & Partial<Pick<Change, "routed_to" | "after">>): boolean {
+function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target"> & Partial<Pick<Change, "routed_to" | "after" | "before">>): boolean {
   // Review major (changes.decides_all): a cut with its dependents needs rights on every item it cuts.
   if (c.op === CUT_ALL && c.after) return Object.keys(c.after).every((id) => decides(db, ctx, id));
   // A goal ask is decided by the owners it is sent to (goal_asks.may_decide).
   if (GOAL_ASK_OPS.includes(c.op)) return ctx.role === "owner";
-  if (KEY_DATE_OPS.includes(c.op)) {
+  // roadmap-decide: a change asked of a PRD's milestone (before.date) is the PRD owner's (or a company owner's).
+  if (c.op === "edit_goal_milestone" && c.before && !("milestone" in c.before)) {
+    const m = (db.goal_milestones ?? []).find((x) => x.id === c.target.milestone_id);
+    return !!m && decidesAsk(m, { role: ctx.role, name: ctx.names[ctx.id] });
+  }
+  if (KEY_DATE_OPS.includes(c.op) || c.op === MILESTONE_OP) {
     const rm = roadmapOfDoc(db, c.target.document_id);
     return ctx.role === "owner" || (c.routed_to ?? []).includes(ctx.id) || (!!rm && canEditRoadmap(db, rm, ctx));
   }
@@ -308,7 +334,7 @@ export function meetingRoute(db: SimpleDb, attendees: string[], ctx: Pick<Simple
 
 /** changes.current_route: who decides an open proposal now; else its stored route. */
 function route(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, c: Change): string[] {
-  if (c.status !== "proposed" || KEY_DATE_OPS.includes(c.op)) return c.routed_to;
+  if (c.status !== "proposed" || KEY_DATE_OPS.includes(c.op) || c.op === MILESTONE_OP) return c.routed_to;
   // walkc-meeting: a proposal made in a meeting stays with the meeting's deciders.
   if (db.meeting_proposals?.includes(c.id) && c.routed_to.length) return c.routed_to;
   if (c.op === "add_item" && !keyOf(db, c.target.item_id)) {
@@ -348,9 +374,12 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
     else if (f === "cut") out[f] = s.status === "cut";
     else if (f === "title") out[f] = s.title;
     else if (f === "outcome") out[f] = s.outcome ?? null;
+    else if (f === "note") out[f] = s.note ?? null;
     else if (f === "draft") out[f] = !!s.draft;
     else if (f === "confidence") out[f] = s.confidence ?? null;
+    else if (f === "feature_id") out[f] = s.feature_id ?? null;
     else if (f === "track_id") out[f] = s.track ? stableUuid(`simple-track/${s.track}`) : null;
+    else if (f === "goal_ids") out[f] = goalIdsOf(s);
     else if (f === "goal_id") out[f] = s.goal && !goalInTrash(db, s.goal) ? stableUuid(`simple-goal/${s.goal}`) : null;
     else if (f === "prd_document_id") out[f] = ownPrd(s).id;
     else if (f === "depends_on") out[f] = [...(s.depends ?? [])];
@@ -371,9 +400,17 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
   if ("cut" in values) s.status = values.cut ? "cut" : "planned";
   if ("title" in values) s.title = String(values.title);
   if ("draft" in values) s.draft = !!values.draft;
+  if ("goal_ids" in values) {
+    // set_goals (the goal buckets' move): the goals it serves.
+    const keys = (values.goal_ids as string[]).map((id) => Object.keys(GOALS).find((k) => goalId(k) === id)).filter((k): k is string => !!k);
+    s.goal = keys[0];
+    s.goals = keys.slice(1);
+  }
   if ("outcome" in values) s.outcome = (values.outcome as string | null) ?? null;
+  if ("note" in values) s.note = (values.note as string | null) ?? null;
   // one-feature-panel: a track, goal or PRD is one another item of the roadmap read has (as the API's are rows).
   const like = (f: (x: typeof s) => unknown, v: unknown) => db.items.find((x) => f(x) === v);
+  if ("feature_id" in values) s.feature_id = (values.feature_id as string | null) ?? null;
   if ("confidence" in values) s.confidence = (values.confidence as typeof s.confidence) ?? undefined;
   if ("track_id" in values) s.track = values.track_id ? like((x) => x.track && stableUuid(`simple-track/${x.track}`), values.track_id)?.track : undefined;
   if ("goal_id" in values) s.goal = values.goal_id ? (Object.keys(GOALS).find((k) => goalId(k) === values.goal_id) ?? like((x) => x.goal && goalId(x.goal), values.goal_id)?.goal) : undefined;
@@ -395,7 +432,10 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
 }
 
 function touched(c: Pick<Change, "op" | "target" | "after" | "before">): string[] {
-  return KEYED.includes(c.op) ? [...new Set([...Object.keys(c.after), ...Object.keys(c.before)])] : [String(c.target.item_id)];
+  if (KEYED.includes(c.op)) return [...new Set([...Object.keys(c.after), ...Object.keys(c.before)])];
+  // Review: a removed dependency touches the item it depended on too (changes.py _touched).
+  if (c.op === "remove_dependency" && c.target.subject) return [String(c.target.item_id), String(c.target.subject)];
+  return [String(c.target.item_id)];
 }
 
 function idle(s: Session): boolean {
@@ -422,6 +462,11 @@ function conflict(db: SimpleDb, ctx: SimpleChangesCtx, current: Values, ids: str
     .filter((c) => ["applied", "accepted", "undone"].includes(c.status) && (c.op === "set_goal_measure" ? [String(c.target.goal_id)] : touched(c)).some((i) => ids.includes(i)))
     .map((c) => ({ at: c.status === "accepted" && c.decided_at ? c.decided_at : c.at, who: c.status === "accepted" && c.decided_by ? c.decided_by : c.by }))
     .sort((a, b) => (a.at < b.at ? 1 : -1))[0];
+  // roadmap-edit-fixes (changes._last_writer): Oracle's draft filled it last: Oracle changed it.
+  const oracle = db.items.filter((x) => ids.includes(db.ids[x.key]) && x.drafted_at).map((x) => x.drafted_at!).sort().reverse()[0];
+  if (oracle && (!last || oracle >= last.at)) {
+    return json(409, { detail: { message: `${lead}: changed by Oracle`, current, changed_by: { id: null, name: "Oracle" }, changed_at: oracle } });
+  }
   const who = last ? { id: last.who, name: ctx.names[last.who] ?? "someone" } : null;
   return json(409, { detail: { message: `${lead}: changed by ${who?.name ?? "someone outside Simple"}`, current, changed_by: who, changed_at: last?.at ?? null } });
 }
@@ -463,6 +508,14 @@ function goalLabel(db: SimpleDb, id: unknown): string | null {
   return g?.trashed ? `${g.title} (deleted)` : null;
 }
 
+/** simple-replaced-prds (changes.listing): a proposal waiting on a replaced PRD's item leaves Simple with the item. */
+function onReplacedPrd(db: SimpleDb, c: Change): boolean {
+  if (c.status !== "proposed" || !c.target.item_id) return false;
+  const key = keyOf(db, c.target.item_id);
+  const s = key ? db.items.find((x) => x.key === key) : undefined;
+  return !!s && ofReplacedPrd(db, s);
+}
+
 function sees(db: SimpleDb, ctx: SimpleChangesCtx, c: Change): boolean {
   if (ctx.role === "owner" || c.by === ctx.id || route(db, ctx, c).includes(ctx.id)) return true;
   if ((db.drafts ?? []).some((d) => (c.draft_ids ?? []).includes(d.out.id) && seesDraft(d, ctx, db))) return true;
@@ -499,20 +552,39 @@ function changeLog(db: SimpleDb, id: string): Schemas["SimpleDraftChange"][] {
     .sort((a, b) => (a.at < b.at ? -1 : 1))
     .map((c) => {
       const kind = (db.sessions ?? []).find((x) => x.id === c.session_id)?.kind ?? null;
-      const titles = c.op === CUT_ALL ? ((c.target.titles as string[] | undefined) ?? []) : [];
+      // roadmap-decide: every line names its item (a fix: then what else moved).
+      const named = (c.target.titles as string[] | undefined) ?? [];
+      const own = c.target.item_id ? keyOf(db, String(c.target.item_id)) : undefined;
+      const titles = named.length ? named : own ? [seed(db, own).title] : c.target.name ? [String(c.target.name)] : [];
       return { id: c.id, op: c.op, item_id: (c.target.item_id as string) ?? null, by: c.by, by_name: c.by_name, at: c.at, session_kind: kind, in_meeting: kind === "meeting", titles };
     });
+}
+
+/** drafts._approver_of: the draft's final approval is the roadmap's decider's; with none, an editor's (an owner's, its track owner's). */
+function approverOf(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "id" | "role">, d: MockDraft): boolean {
+  const decider = db.deciders?.[d.roadmap];
+  return decider ? decider === ctx.id : canEditRoadmap(db, d.roadmap, ctx);
 }
 
 function draftOut(db: SimpleDb, ctx: SimpleChangesCtx, d: MockDraft): Schemas["SimpleDraftOut"] {
   const edits = canEditRoadmap(db, d.roadmap, ctx);
   const decider = db.deciders?.[d.roadmap];
+  const approver = approverOf(db, ctx, d);
   return {
     ...d.out, changes: draftChanges(db, d.out.id), change_log: changeLog(db, d.out.id), from_prds: draftPrds(d),
+    // roadmap-decide review (drafts.outs): the author and the roadmap's set decider, by name.
+    created_by_name: ctx.names[d.out.created_by] ?? null,
+    decider: decider ? { id: decider, name: ctx.names[decider] ?? "its decider" } : null,
     can_submit: d.out.status === "working" && edits,
     can_resume: d.out.status === "working" && (d.out.created_by === ctx.id || decider === ctx.id),
-    can_approve: d.out.status === "submitted" && edits,
-    can_withdraw: d.out.status === "submitted" && (d.out.created_by === ctx.id || edits),
+    // Review: a decider who approved already waits on the required reviewers, not on themself;
+    // an owner who sent a roadmap someone else decides does not approve it (drafts._approver_of).
+    can_approve: d.out.status === "submitted" && ((approver && !d.out.decider_approved) || d.out.waiting_on.includes(ctx.id)),
+    // roadmap-decide (drafts.outs): the decider's Approve and publish on a working draft (with no decider, an owner's).
+    can_publish: d.out.status === "working" && approver && edits,
+    // roadmap-decide review: who still reviews a working draft after the decider's approval.
+    required_reviewers: d.out.status === "working" ? (db.reviewers?.[d.roadmap] ?? []).filter((r) => r !== ctx.id) : [],
+    can_withdraw: d.out.status === "submitted" && (d.out.created_by === ctx.id || approver),
     published: !(db.unapproved ?? []).includes(d.roadmap),
     // decisions-reversed-or-trashed: notes on decisions it cited that were reversed since.
     decision_notes: [...(d.out.decision_notes ?? []), ...draftDecisionNotes()],
@@ -527,7 +599,9 @@ function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]
   const rm = asked ? readableRoadmap(asked, ctx.role) : undefined;
   if (asked && !rm && !p[3]) return json(404, { detail: "No such roadmap" });
   const open = (db.drafts ?? []).filter((d) => ["working", "submitted"].includes(d.out.status) && (!rm || d.roadmap === rm));
-  if (!p[3] && m === "GET") return json(200, open.filter((d) => seesDraft(d, ctx, db)).map((d) => draftOut(db, ctx, d)));
+  // simple-replaced-prds (as drafts.listing): a replaced PRD's open draft is history.
+  const current = (d: MockDraft) => !ctx.replaced?.some((r) => r === d.out.document.slug || r === d.out.document.id);
+  if (!p[3] && m === "GET") return json(200, open.filter((d) => current(d) && seesDraft(d, ctx, db)).map((d) => draftOut(db, ctx, d)));
   const d = (db.drafts ?? []).find((x) => x.out.id === p[3] && seesDraft(x, ctx, db));
   if (!d) return json(404, { detail: "No such draft" });
   if (!p[4] && m === "GET") return json(200, draftOut(db, ctx, d));
@@ -536,19 +610,35 @@ function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]
     if (!canEditRoadmap(db, d.roadmap, ctx)) return json(403, { detail: "Only an owner or the roadmap's decider (with none, its owner) submits" });
     if (d.out.status !== "working") return json(409, { detail: `This draft is ${d.out.status} already` });
     if (!draftChanges(db, d.out.id) && !draftPrds(d).length) return json(422, { detail: "Nothing to submit: the draft has no changes" });
-    // drafts._submit_roadmap: it waits on the roadmap's required reviewers.
-    Object.assign(d.out, { status: "submitted", version: (d.out.base_version ?? 1) + 1, submitted_at: now, submitted_by: ctx.id, waiting_on: [...(db.reviewers?.[d.roadmap] ?? [])] });
+    // inbox-meeting-proposals fix: it waits on the roadmap's required reviewers (not the one who sent it).
+    const waiting = (db.reviewers?.[d.roadmap] ?? []).filter((r) => r !== ctx.id);
+    Object.assign(d.out, { status: "submitted", version: (d.out.base_version ?? 1) + 1, submitted_at: now, submitted_by: ctx.id, waiting_on: waiting });
     return json(200, draftOut(db, ctx, d));
   }
   if (p[4] === "approve") {
+    // roadmap-decide (drafts.approve): the decider's approval of a working draft sends it first.
+    if (d.out.status === "working") {
+      // Review minor 6: one rule (can_publish) for the button and the endpoint.
+      if (!draftOut(db, ctx, d).can_publish) return json(403, { detail: "Only the roadmap's decider approves and publishes this draft" });
+      if (!draftChanges(db, d.out.id) && !draftPrds(d).length) return json(422, { detail: "Nothing to submit: the draft has no changes" });
+      // As submit (drafts._in_review): it waits on the roadmap's required reviewers.
+      const waiting = (db.reviewers?.[d.roadmap] ?? []).filter((r) => r !== ctx.id);
+      Object.assign(d.out, { status: "submitted", version: (d.out.base_version ?? 1) + 1, submitted_at: now, submitted_by: ctx.id, waiting_on: waiting });
+    }
+    // As drafts.approve: a second press in a stale tab, after this approver's approval published it, answers with it.
+    if (d.out.status === "approved" && (approverOf(db, ctx, d) || (db.reviewers?.[d.roadmap] ?? []).includes(ctx.id))) return json(200, draftOut(db, ctx, d));
     if (d.out.status !== "submitted") return json(409, { detail: `This draft is ${d.out.status}: only a submitted draft is approved` });
-    const waited = d.out.waiting_on.includes(ctx.id);
-    if (!canEditRoadmap(db, d.roadmap, ctx) && !waited) return json(403, { detail: "Only the decider and the required reviewers approve this draft" });
-    // drafts._approve: a required reviewer's approval, the decider's (an editor's here); the
-    // version is approved once the decider's is in and no reviewer is still waited on.
-    d.out.waiting_on = d.out.waiting_on.filter((i) => i !== ctx.id);
-    if (canEditRoadmap(db, d.roadmap, ctx)) d.out.decider_approved = true;
-    if (!d.out.decider_approved || d.out.waiting_on.length) return json(200, draftOut(db, ctx, d));
+    // As drafts._approve: the decider (with none, an editor), a required reviewer (one who approved
+    // already may approve again: nothing changes) or anyone it waits on.
+    const approver = approverOf(db, ctx, d);
+    const reviewer = d.out.waiting_on.includes(ctx.id) || (db.reviewers?.[d.roadmap] ?? []).includes(ctx.id);
+    if (!reviewer && !approver) return json(403, { detail: "Only the decider and the required reviewers approve this draft" });
+    // A required reviewer's approval takes them off waiting_on; the decider's (or an owner's) is
+    // the decider's. As drafts._settle: published once the decider approved and no one is left.
+    const waiting = d.out.waiting_on.filter((r) => r !== ctx.id);
+    const deciderApproved = d.out.decider_approved || approver;
+    Object.assign(d.out, { decider_approved: deciderApproved, waiting_on: waiting });
+    if (!deciderApproved || waiting.length) return json(200, draftOut(db, ctx, d));
     Object.assign(d.out, { status: "approved", approved_at: now });
     // trash-features-goals review 4: the version is made without the features in Trash.
     const without = db.items.filter((s) => s.trashed && s.roadmap === d.roadmap).map((s) => s.key);
@@ -557,7 +647,7 @@ function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]
   }
   if (p[4] === "withdraw") {
     // S3b-1: back to working, its changes kept; the version is withdrawn (never approved).
-    if (d.out.created_by !== ctx.id && !canEditRoadmap(db, d.roadmap, ctx)) return json(403, { detail: "Only the draft's author or the roadmap's decider withdraws it" });
+    if (d.out.created_by !== ctx.id && !approverOf(db, ctx, d)) return json(403, { detail: "Only the draft's author or the roadmap's decider withdraws it" });
     if (d.out.status !== "submitted") return json(409, { detail: `This draft is ${d.out.status}: only a submitted draft is withdrawn` });
     Object.assign(d.out, { status: "working", version: null, submitted_at: null, submitted_by: null, decider_approved: false, waiting_on: [] });
     return json(200, draftOut(db, ctx, d));
@@ -579,13 +669,28 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   if (target.item_id && !keyOf(db, target.item_id)) return json(404, { detail: "No such roadmap item" });
   // A feature ask is filed directly by every commenter and up (targets.py _who).
   const applies = body.op === "add_feature_ask" || decides(db, ctx, target.item_id);
+  // S6 (./simple-priorities.ts): a pin and an estimate are compared and stored as targets.py does.
+  const ranking = body.op === "override_priority" || body.op === "estimate_feature";
+  if (ranking && !target.item_id) {
+    if (typeof target.feature_id !== "string" || !target.feature_id) return json(422, { detail: "target: item_id or feature_id" });
+    // prio-company (targets.create): moving a feature not on the company roadmap adds it there,
+    // an owner's right; then the move is the item's. An estimate is the feature's (stored here
+    // under the item standing for it).
+    if (body.op === "override_priority" && ctx.role !== "owner") return json(403, { detail: "Only an owner can add a feature to the company roadmap" });
+    const key = body.op === "override_priority" ? addToCompany(db, target.feature_id) : featureItem(db, target.feature_id);
+    if (!key) return json(404, { detail: "No such feature" });
+    target.item_id = db.ids[key];
+  }
   if (spec.adds) target[spec.id] = crypto.randomUUID();
   const id = String(target[spec.id] ?? "");
   const stored = (db.targets ??= {})[id] ?? {};
-  // S6 (./simple-priorities.ts): a pin and an estimate are compared and stored as targets.py does.
-  const ranking = body.op === "override_priority" || body.op === "estimate_feature";
   const after = ranking ? priorityAfter(body.op, body.after ?? {}) : { ...body.after };
   if (typeof after === "string") return json(422, { detail: after });
+  // S9: a feature ask's requester and channel as targets.py stores them.
+  if (body.op === "add_feature_ask") {
+    const name = typeof after.requester_name === "string" ? after.requester_name.split(/\s+/).filter(Boolean).join(" ") || null : null;
+    Object.assign(after, { requester_name: name, requester_kind: after.requester_kind || (name ? "customer" : "unknown"), channel: after.channel || "other" });
+  }
   // walkc-roadmap-tasks: a task's owner is a person (targets.py stores owner_id); the chat's
   // "for <name>" names them.
   if (body.op === "add_item_task" && !after.owner_id && typeof after.owner_name === "string") {
@@ -614,9 +719,15 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
         ? { decider_id: itemDeciderId(db, keyOf(db, target.item_id)!, ctx.roles) }
         : (body.op as string) === "set_goal_measure"
           ? goalMeasure(db, target.goal_id)!
-          : spec.adds ? {} : Object.fromEntries(Object.keys(body.before).map((k) => [k, stored[k] ?? null]));
+          : body.op === "set_milestone"
+            ? { milestone: ownMilestone(db, keyOf(db, target.item_id)!) }
+            : spec.adds ? {} : Object.fromEntries(Object.keys(body.before).map((k) => [k, stored[k] ?? null]));
   const seen = ranking || (body.op as string) === "set_goal_measure" ? Object.fromEntries(Object.keys(before).map((k) => [k, body.before[k] ?? null])) : body.before;
-  if (!spec.adds && !same(before, seen)) return conflict(db, ctx, before, [id], "Changed since you saw it");
+  // goal-buckets-tasks: a milestone is matched by its name and date as the item reads them (changes._seen_milestone).
+  const matches = body.op === "set_milestone" ? seenMilestone(before.milestone) === seenMilestone(seen.milestone) : same(before, seen);
+  if (!spec.adds && !matches) return conflict(db, ctx, before, [id], "Changed since you saw it");
+  // build-feature-panel: an owner or decider set to what it is already records nothing (changes.py).
+  if ((body.op === "set_owner" || body.op === "set_decider") && same(before, Object.fromEntries(Object.keys(before).map((k) => [k, after[k] ?? null])))) return json(422, { detail: "No change: it is so already" });
   if (body.op === "override_priority" && after.override === null && !before.override) return json(409, { detail: "It is at Oracle's rank already" });
   const change: Change = {
     id: crypto.randomUUID(), session_id: session?.id ?? null, document_id: target.item_id ? stableUuid(`simple-doc/${seed(db, keyOf(db, target.item_id)!).roadmap}`) : null,
@@ -625,15 +736,42 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   };
   if (!applies) change.routed_to = route(db, ctx, change);
   if (applies) {
-    writeTarget(db, change, change.after);
+    writeTarget(db, change, change.after, false, ctx);
     session!.last_change_at = now;
   }
   (db.changes ??= []).push(change);
   return json(201, { change: view(db, ctx, change), flags: [] });
 }
 
-function writeTarget(db: SimpleDb, c: Change, values: Values, undo = false): void {
+/** A milestone as the item reads it: its name and day (changes._seen_milestone). */
+function seenMilestone(m: unknown): string {
+  const v = (m ?? {}) as Values;
+  return v.name || v.date ? JSON.stringify([v.name || null, v.date || null]) : "none";
+}
+
+/** The item's depends_on with only the change's own keys turned back (changes._depends_back); null: one changed since. */
+function dependsBack(current: Values, before: Values, after: Values): Values | null {
+  const now = (current.depends_on as string[] | null) ?? [];
+  const was = (before.depends_on as string[] | null) ?? [];
+  const made = (after.depends_on as string[] | null) ?? [];
+  const added = made.filter((k) => !was.includes(k));
+  const removed = was.filter((k) => !made.includes(k));
+  if (added.some((k) => !now.includes(k)) || removed.some((k) => now.includes(k))) return null;
+  return { depends_on: [...now.filter((k) => !added.includes(k)), ...removed] };
+}
+
+function writeTarget(db: SimpleDb, c: Change, values: Values, undo = false, ctx?: SimpleChangesCtx): void {
   const spec = TARGETS[c.op];
+  // S9: a feature ask is a request in Requests (targets.py: a ProductRequest under target.request_id).
+  if (c.op === "add_feature_ask" && ctx) {
+    const id = String(c.target[spec.id]);
+    if (undo) ctx.dropAsk?.(id);
+    else
+      ctx.fileAsk?.({
+        id, title: String(values.title ?? ""), channel: String(values.channel ?? "other"), requester_name: (values.requester_name as string | null) ?? null,
+        requester_kind: String(values.requester_kind ?? (values.requester_name ? "customer" : "unknown")), filed_by: c.by,
+      });
+  }
   const id = String(c.target[spec.id]);
   const targets = (db.targets ??= {});
   if (c.op === "set_goal_measure") {
@@ -645,6 +783,31 @@ function writeTarget(db: SimpleDb, c: Change, values: Values, undo = false): voi
   // walkc-roadmap-tasks: a task is stored under its item, open, as RoadmapItemTask is.
   else if (c.op === "add_item_task") targets[id] = { status: "todo", owner_id: null, due_date: null, ...values, kind: "item_task", item_id: c.target.item_id, at: c.at };
   else targets[id] = { ...(targets[id] ?? {}), ...values };
+  // An item's own milestone (set_milestone, and its undo) is what the roadmap reads of it.
+  if (c.op === "set_milestone") {
+    const key = keyOf(db, c.target.item_id);
+    const s = key ? db.items.find((x) => x.key === key) : undefined;
+    const m = values.milestone as { name: string; date?: string | null } | null | undefined;
+    if (s) {
+      const w = simpleWindows(companyToday())[s.horizon][0];
+      s.milestone = m ? { name: m.name, day: m.date ? Math.round((Date.parse(`${m.date}T00:00:00Z`) - Date.parse(`${w}T00:00:00Z`)) / DAY) : null } : undefined;
+    }
+  }
+}
+
+/** A milestone's date as its day from the horizon's start (SeedItem.milestone), null with no date. */
+function dayIn(horizon: SeedItem["horizon"], date: unknown): number | null {
+  if (typeof date !== "string" || !date) return null;
+  return Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${simpleWindows(companyToday())[horizon][0]}T00:00:00Z`)) / DAY);
+}
+
+/** An item's own milestone as RoadmapItem.milestone stores it: {name, date, date_source}, or null. */
+function ownMilestone(db: SimpleDb, key: string): Values | null {
+  const s = db.items.find((x) => x.key === key);
+  if (!s?.milestone || !(s.milestone.name || s.milestone.day != null)) return null;
+  const date = s.milestone.day == null ? null : addDays(simpleWindows(companyToday())[s.horizon][0], s.milestone.day);
+  // What the date engine stored besides (never shown, never compared).
+  return { date_source: date ? "typed" : null, ...(s.milestone.engine ?? {}), name: s.milestone.name ?? null, date };
 }
 
 /** The new [start, end] of every item a fix moves (changes._fix_plan). */
@@ -659,9 +822,30 @@ function fixPlan(db: SimpleDb, op: string, itemId: string, depId: string): Recor
   return shiftPlan(items, itemId, depId);
 }
 
+/**
+ * changes._move_feature: set_goals on an item with a baseline feature moves the feature too, as a
+ * goal-bucket move does: the goal it now moves most becomes the feature's first goal link (what the
+ * dated goal buckets place it by), and the goal it showed under is dropped unless the item still
+ * serves it. A roadmap goal is the goal buckets' goal of the same name.
+ */
+function moveFeature(db: SimpleDb, key: string, goalIds: string[]): void {
+  const code = featureKeyOf(db, key);
+  const gb = goalBucketsDb(db);
+  const f = gb.features.find((x) => x.key.toLowerCase() === code.toLowerCase());
+  const ids = goalIds.flatMap((id) => {
+    const name = GOALS[Object.keys(GOALS).find((k) => goalId(k) === id) ?? ""];
+    const g = gb.goals.find((x) => !x.archived && (x.id === id || (!!name && x.title === name)));
+    return g ? [g.id] : [];
+  });
+  if (!f || !ids.length) return;
+  const shown = f.goal_ids[0];
+  f.goal_ids = [ids[0], ...f.goal_ids.filter((g) => g !== ids[0] && (g !== shown || ids.includes(shown)))];
+}
+
 function apply(db: SimpleDb, c: Change, values: Values, undo = false): void {
   if (KEYED.includes(c.op)) for (const [id, v] of Object.entries(values)) write(db, keyOf(db, id)!, v as Values, c.target);
   else write(db, keyOf(db, c.target.item_id)!, values, c.target);
+  if (c.op === "set_goals") moveFeature(db, keyOf(db, c.target.item_id)!, values.goal_ids as string[]);
   if (c.op === "accept_date_suggestion") {
     const s = db.suggestions.find((x) => x.id === c.target.suggestion_id);
     // plan-model: a slice's suggestion is decided with the item's other open slices (and undone with them).
@@ -698,6 +882,35 @@ function kdChecked(v: Values): Values | string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(v.date ?? ""))) return "after.date: a day as YYYY-MM-DD";
   const note = String(v.note ?? "").trim() || null;
   return { name, date: String(v.date), note };
+}
+
+/** milestone-rights (goal_milestones.create_change): a roadmap's own goal milestone, proposed
+ * by who may not change it (an approver who is not its owner, a commenter); `after.milestone`
+ * null proposes removing it. Routed as a key date's proposal is. */
+const MILESTONE_OP = "edit_goal_milestone";
+
+function createMilestoneChange(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"]): Response {
+  if (ctx.role === "viewer") return json(403, { detail: "Viewers may not propose a change" });
+  const m = (db.goal_milestones ?? []).find((x) => x.id === body.target.milestone_id && !x.deleted);
+  if (!m) return json(404, { detail: "No such milestone" });
+  if (m.prd) return json(422, { detail: "A PRD's milestone: change it on its card (it asks the PRD's owner)" });
+  if (canEditRoadmap(db, m.roadmap, ctx)) return json(409, { detail: "You change this milestone directly" });
+  if (!("milestone" in body.before) || !("milestone" in (body.after ?? {}))) return json(422, { detail: "before.milestone and after.milestone (null: remove it)" });
+  const current = milestoneValue(m, db.ids);
+  if (!same(body.before.milestone, current)) return json(409, { detail: { message: "Changed since you saw it", current: { milestone: current }, changed_by: null, changed_at: null } });
+  const wanted = body.after?.milestone as Record<string, unknown> | null;
+  const after = wanted ? { ...current, ...Object.fromEntries(Object.entries(wanted).filter(([k, v]) => k in current && (v !== null || k === "goal_id"))) } : null;
+  if (after && same(after, current)) return json(422, { detail: "after.milestone: nothing changes" });
+  const doc = stableUuid(`simple-doc/${m.roadmap}`);
+  const decider = db.deciders?.[m.roadmap];
+  const change: Change = {
+    id: crypto.randomUUID(), session_id: null, document_id: doc, draft_ids: [], op: body.op, target: { milestone_id: m.id, roadmap_id: doc, name: m.name },
+    before: { milestone: current }, after: { milestone: after }, status: "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: iso(mockNowMs()),
+    decided_by: null, decided_at: null, reason: body.reason ?? null, decision_reason: null,
+    routed_to: decider ? [decider] : ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,
+  };
+  (db.changes ??= []).push(change);
+  return json(201, { change: view(db, ctx, change), flags: [] });
 }
 
 function writeKeyDate(db: SimpleDb, c: Change, value: unknown): void {
@@ -855,6 +1068,7 @@ function createKeyDate(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simpl
 async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"]): Promise<Response> {
   if (S7_OPS.includes(body.op)) return createS7(db, ctx, body);
   if (body.op === "delete_item") return createDeleteItem(db, ctx, body);
+  if (body.op === MILESTONE_OP) return createMilestoneChange(db, ctx, body);
   if (GOAL_ASK_OPS.includes(body.op) || body.op === "delete_goal") return createGoalAsk(db, ctx, body);
   const now = iso(mockNowMs());
   if (KEY_DATE_OPS.includes(body.op)) {
@@ -907,6 +1121,9 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     }
     if (Object.keys(stale).length) return conflict(db, ctx, stale, Object.keys(stale), "Changed since you saw it");
     const moves = fixPlan(seen, body.op, String(target.item_id), dep);
+    // roadmap-decide: the draft's change list names the item, then what else moved.
+    const titleOf = (id: string) => seed(seen, keyOf(db, id)!).title;
+    target.titles = [titleOf(String(target.item_id)), ...Object.keys(moves).filter((id) => id !== target.item_id).map(titleOf)];
     before = Object.fromEntries(Object.keys(moves).map((id) => [id, read(seen, keyOf(db, id)!, ["start_date", "end_date", "date_source"], target)]));
     after = Object.fromEntries(Object.entries(moves).map(([id, [s, e]]) => [id, { start_date: s, end_date: e, date_source: "typed" }]));
   } else if (body.op === CUT_ALL) {
@@ -927,6 +1144,8 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     after = Object.fromEntries(cut.map((i) => [i.id, { cut: true }]));
   } else {
     const fields = FIELDS[body.op];
+    // roadmap-decide review (changes.py): the page may not see every stored key; only the subject is checked.
+    if (body.op === "remove_dependency") body.before = read(seen, key, fields, target);
     const missing = fields.filter((f) => !(f in body.before));
     if (missing.length) return json(422, { detail: `before: ${missing.join(", ")} as you saw them` });
     const now_ = read(seen, key, fields, target);
@@ -938,6 +1157,10 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       const r = readDates(seen, key);
       const shown = { start_date: r.start, end_date: r.end };
       if (!same(seenNow, shown)) return conflict(db, ctx, shown, [String(target.item_id)], lead);
+    } else if (body.op === "edit_title" && !same(seenNow, now_)) {
+      // roadmap-edit-fixes: the read shows a title's code apart from its name.
+      const s = seed(seen, key);
+      if (!same(seenNow, { title: codedTitle(s.title, prdCode(s.section))[1] })) return conflict(db, ctx, now_, [String(target.item_id)], lead);
     } else if (!same(seenNow, now_)) return conflict(db, ctx, now_, [String(target.item_id)], lead);
     const a = body.after ?? {};
     let stored = fields;
@@ -969,39 +1192,82 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       after = { horizon: a.horizon };
     } else if (body.op === "reorder") after = { position: Number(a.position) };
     else if (body.op === "cut" || body.op === "restore") after = { cut: body.op === "cut" };
-    else if (body.op === "confirm_item") {
+    else if (body.op === "remove_dependency") {
+      const depKey = keyOf(db, String(target.subject ?? ""));
+      const own = seed(seen, key);
+      if (!depKey || !(own.depends ?? []).includes(depKey)) return json(422, { detail: "target.subject: an item the target depends on" });
+      target.titles = [own.title, seed(seen, depKey).title];
+      after = { depends_on: (own.depends ?? []).filter((k) => k !== depKey) };
+    } else if (body.op === "confirm_item") {
       if (!seed(seen, key).draft) return json(422, { detail: "Only a draft item is confirmed" });
       after = { draft: false };
     }
     else if (body.op === "edit_title") {
-      const title = String(a.title ?? "").trim();
+      let title = String(a.title ?? "").trim();
       if (!title) return json(422, { detail: "after.title: 1 to 200 characters" });
+      // roadmap-edit-fixes: a rename changes the name only; a code the title carries stays.
+      const s = seed(seen, key);
+      const [code, name] = codedTitle(s.title, prdCode(s.section));
+      if (code && name !== s.title && !codedTitle(title, null)[0]) title = `${code} ${title}`;
       after = { title };
     } else if (body.op === "edit_outcome") after = { outcome: a.outcome ?? null };
+    else if (body.op === "edit_note") {
+      const note = a.note == null ? null : String(a.note).trim();
+      if (note && note.length > 500) return json(422, { detail: "after.note: at most 500 characters" });
+      after = { note: note || null };
+    }
     else if (body.op === "set_confidence") {
       if (a.confidence != null && !["low", "medium", "high"].includes(String(a.confidence))) return json(422, { detail: "after.confidence: low, medium, high or null" });
       after = { confidence: a.confidence ?? null };
+    } else if (body.op === "set_feature") {
+      // The route checks it names a feature (server.ts), as changes.py's set_feature.
+      after = { feature_id: a.feature_id ?? null };
     } else if (body.op === "set_track" || body.op === "set_prd" || body.op === "set_goal") {
       const f = fields[0];
       const v = a[f] ?? null;
       const known = (x: (typeof seen.items)[number]) => read(seen, x.key, [f], target)[f];
       if (v !== null && !seen.items.some((x) => known(x) === v) && !(f === "goal_id" && Object.keys(GOALS).some((k) => goalId(k) === v && !goalInTrash(seen, k)))) return json(422, { detail: `after.${f}: ${{ track_id: "a product track", prd_document_id: "a PRD", goal_id: "a goal" }[f]}` });
       after = { [f]: v };
+      // roadmap-edit-fixes (changes._track_of_prd): a track is one PRD's, so it follows the PRD.
+      const track = f === "prd_document_id" && v ? seen.items.find((x) => ownPrd(x).id === v && x.track)?.track : undefined;
+      if (track && track !== seed(seen, key).track) {
+        after.track_id = stableUuid(`simple-track/${track}`);
+        stored = ["prd_document_id", "track_id"];
+      }
     } else if (body.op === "set_depends") {
       const keys = a.depends_on;
       if (!Array.isArray(keys) || keys.length > 50) return json(422, { detail: "after.depends_on: a list of at most 50 keys" });
-      const clean = [...new Set(keys.map((k) => String(k ?? "").trim()))];
+      let clean = [...new Set(keys.map((k) => String(k ?? "").trim()))];
+      // roadmap-edit-fixes round 1 (changes._plan): a removed key's item goes, by every key that names it.
+      const stored = seed(seen, key).depends ?? [];
+      const target = (k: string) => dependencyOf(seen.items, k)?.key;
+      const gone = new Set(stored.filter((k) => !clean.includes(k)).map(target).filter((k) => !!k));
+      clean = clean.filter((k) => !(stored.includes(k) && gone.has(target(k))));
       if (clean.some((k) => !k) || clean.includes(key)) return json(422, { detail: "after.depends_on: item or feature keys, never the item's own" });
       // changes._unknown_keys: a new key names an item (its key or code) or a feature.
-      const names = new Set(seen.items.flatMap((x) => [x.key, prdCode(x.section)]).filter((k): k is string => !!k).map((k) => k.toLowerCase()));
+      const names = new Set(seen.items.flatMap((x) => [x.key, prdCode(x.section), codedTitle(x.title, prdCode(x.section))[0], x.feature_key]).filter((k): k is string => !!k).map((k) => k.toLowerCase()));
       const unknown = clean.find((k) => !(seen.items.find((x) => x.key === key)?.depends ?? []).includes(k) && !names.has(k.toLowerCase()));
       if (unknown) return json(422, { detail: `after.depends_on: no item or feature has the key ${unknown}` });
+      // roadmap-edit-fixes (changes.loop_of): never a loop.
+      const have = seed(seen, key).depends ?? [];
+      const loop = loopOf(seen.items, key, clean.filter((k) => !have.includes(k)));
+      if (loop) return json(422, { detail: loop });
       after = { depends_on: clean };
     } else if (body.op === "set_status") {
       if (!["planned", "done", "cut"].includes(String(a.status))) return json(422, { detail: "after.status: planned, done or cut" });
       after = { status: a.status };
     }
-    else {
+    else if (body.op === "set_goals") {
+      // A goal by its id: the roadmap's, or the goal buckets' of the same name (as add_item reads it).
+      const raw = Array.isArray(a.goal_ids) ? (a.goal_ids as unknown[]).map(String) : [];
+      const keys = raw.map((v) => {
+        const bucket = db.goal_buckets?.goals.find((g) => g.id === v)?.title;
+        return Object.keys(GOALS).find((k) => goalId(k) === v || (!!bucket && GOALS[k] === bucket));
+      });
+      if (!raw.length) return json(422, { detail: "after.goal_ids: one goal or more" });
+      if (keys.some((k) => !k)) return json(422, { detail: "after.goal_ids: goals of this company" });
+      after = { goal_ids: [...new Set(keys.map((k) => goalId(k!)))] };
+    } else {
       const note = String((a.risk as Values | undefined)?.note ?? "").trim();
       if (!note) return json(422, { detail: "after.risk.note: 1 to 500 characters" });
       target.subject = target.subject ?? null;
@@ -1026,7 +1292,7 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     session!.last_change_at = now;
   } else {
     // As if applied: on a copy of the roadmap.
-    const copy = structuredClone({ items: db.items, own: db.own, suggestions: db.suggestions });
+    const copy = structuredClone({ items: db.items, own: db.own, suggestions: db.suggestions, goal_buckets: db.goal_buckets });
     apply(db, change, after);
     flags = flagsFor(db, touched(change));
     Object.assign(db, copy);
@@ -1092,7 +1358,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     const status = q.get("status");
     const rows = (db.changes ?? [])
       .filter((c) => (!q.get("session") || c.session_id === q.get("session")) && (!q.get("document") || c.document_id === q.get("document")) && (!status || c.status === status) && (q.get("mine") !== "true" || c.by === ctx.id))
-      .filter((c) => sees(db, ctx, c))
+      .filter((c) => sees(db, ctx, c) && !onReplacedPrd(db, c))
       .sort((a, b) => (a.at < b.at ? 1 : -1));
     return json(200, rows.map((c) => view(db, ctx, c)));
   }
@@ -1103,7 +1369,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   if (p[4] === "withdraw") {
     if (c.by !== ctx.id) return json(403, { detail: "Only the person who proposed it withdraws it" });
     if (c.status !== "proposed") return json(409, { detail: `This change is ${c.status} already` });
-    if (c.op === "add_item") return json(409, { detail: "This kind of proposal is not withdrawn here" });
+    if (c.op === "add_item" || c.op === MILESTONE_OP) return json(409, { detail: "This kind of proposal is not withdrawn here" });
     Object.assign(c, { status: "declined", decided_by: ctx.id, decided_at: now, decision_reason: "Withdrawn by the person who proposed it" });
     return json(200, { change: view(db, ctx, c), flags: [] });
   }
@@ -1114,7 +1380,8 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     const s = (db.sessions ?? []).find((x) => x.id === c.session_id);
     if (!s || s.closed_at || idle(s)) return json(409, { detail: "Its session is closed: undo works only in the change's session" });
     if (c.op === "set_goal_measure" && !same(goalMeasure(db, c.target.goal_id), c.after)) return conflict(db, ctx, goalMeasure(db, c.target.goal_id)!, [String(c.target.goal_id)], "Changed since");
-    if (TARGETS[c.op]) writeTarget(db, c, c.before, true);
+    let undone: { before: Values; after: Values } | undefined;
+    if (TARGETS[c.op]) writeTarget(db, c, c.before, true, ctx);
     else if (KEY_DATE_OPS.includes(c.op)) {
       const rm = roadmapOfDoc(db, c.target.document_id)!;
       if (!same(kdValue(keyDateNow(db, ctx, rm, String(c.target.key_date_id))), c.after.key_date ?? null)) return json(409, { detail: "Changed since" });
@@ -1127,6 +1394,16 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
       const drafts = intoDrafts(db, anchored(db, c), s, true);
       if (drafts instanceof Response) return drafts;
       applyS7(db, c, true);
+    } else if (c.op === "set_depends") {
+      // ask-oracle-actions (changes._depends_back): only the keys the change added or removed
+      // go back; the item's other dependencies stay as they are now.
+      const now_ = current(db, c, c.after);
+      const back = dependsBack(now_, c.before, c.after);
+      if (!back) return conflict(db, ctx, now_, touched(c), "Changed since");
+      const drafts = intoDrafts(db, c, s, true);
+      if (drafts instanceof Response) return drafts;
+      apply(db, c, back, true);
+      undone = { before: now_, after: back };
     } else {
       const now_ = current(db, c, c.after);
       if (!same(now_, c.after)) return conflict(db, ctx, now_, touched(c), "Changed since");
@@ -1134,7 +1411,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
       if (drafts instanceof Response) return drafts;
       apply(db, c, c.before, true);
     }
-    const u: Change = { ...c, id: crypto.randomUUID(), before: c.after, after: c.before, status: "undone", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: now, undoes_id: c.id, routed_to: [], decided_by: null, decided_at: null };
+    const u: Change = { ...c, id: crypto.randomUUID(), before: undone?.before ?? c.after, after: undone?.after ?? c.before, status: "undone", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: now, undoes_id: c.id, routed_to: [], decided_by: null, decided_at: null };
     db.changes!.push(u);
     s.last_change_at = now;
     return json(201, { change: view(db, ctx, u), flags: TARGETS[c.op] || KEY_DATE_OPS.includes(c.op) ? [] : flagsFor(db, touched(c)) });
@@ -1143,7 +1420,15 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   if (c.status !== "proposed") return json(409, { detail: `This change is ${c.status} already` });
   const body = (await req.json().catch(() => ({}))) as { reason?: string | null };
   if (p[4] === "accept" && c.op === "set_goal_measure" && !same(goalMeasure(db, c.target.goal_id), c.before)) return conflict(db, ctx, goalMeasure(db, c.target.goal_id)!, [String(c.target.goal_id)], "outdated");
-  if (p[4] === "accept" && TARGETS[c.op]) writeTarget(db, c, c.after);
+  if (p[4] === "accept" && TARGETS[c.op]) writeTarget(db, c, c.after, false, ctx);
+  // goal_milestones.decide: a milestone card's change (before.milestone); a change asked of a
+  // PRD's milestone (before.date) is decided below.
+  else if (p[4] === "accept" && c.op === MILESTONE_OP && "milestone" in (c.before ?? {})) {
+    const ms = (db.goal_milestones ?? []).find((x) => x.id === c.target.milestone_id && !x.deleted);
+    if (!ms) return json(404, { detail: "The milestone is gone" });
+    if (!same(milestoneValue(ms, db.ids), c.before.milestone)) return json(409, { detail: { message: "outdated: the milestone changed since the proposal", current: { milestone: milestoneValue(ms, db.ids) }, changed_by: null, changed_at: null } });
+    writeMilestone(ms, db.ids, c.after.milestone as Record<string, unknown> | null);
+  }
   else if (p[4] === "accept" && KEY_DATE_OPS.includes(c.op)) {
     const rm = roadmapOfDoc(db, c.target.document_id)!;
     if (!same(kdValue(keyDateNow(db, ctx, rm, String(c.target.key_date_id))), c.before.key_date ?? null)) return json(409, { detail: "outdated: the key date changed since the proposal" });
@@ -1161,6 +1446,11 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     c.draft_ids = drafts;
     session.last_change_at = now;
     applyS7(db, c);
+  } else if (c.op === "edit_goal_milestone") {
+    // roadmap-decide: accepting writes the PRD milestone's date and rule; either way it waits no more.
+    const m = (db.goal_milestones ?? []).find((x) => x.id === c.target.milestone_id);
+    if (m && p[4] === "accept") Object.assign(m, { date: (c.after.date as string | null) ?? m.date, counts_when: (c.after.counts_when as string | null) ?? m.counts_when });
+    if (m) m.pending = null;
   } else if (p[4] === "decline" && c.op === "add_item") reopenSuggestion(db, c);
   else if (p[4] === "accept" && GOAL_ASK_OPS.includes(c.op)) {
     const err = applyGoalAsk(db, ctx, c);
@@ -1223,6 +1513,18 @@ export function seedSimpleProposal(
 }
 
 /**
+ * inbox-meeting-proposals fix: a feature ask proposed by a teammate, on no roadmap (its
+ * document_id null), waiting on the company's owners; decided in its Inbox row and, accepted, filed in Requests.
+ */
+export function seedFeatureAskProposal(db: SimpleDb, who: Pick<SimpleChangesCtx, "owners"> & { id: string; name: string }, title: string, at: string): void {
+  (db.changes ??= []).push({
+    id: stableUuid(`simple-proposal/ask/${title}`), session_id: null, document_id: null, draft_ids: [],
+    op: "add_feature_ask", target: { request_id: stableUuid(`simple-ask/${title}`) }, before: {}, after: { title, requester_name: null, requester_kind: "unknown", channel: "other" }, status: "proposed", by: who.id, by_name: who.name, at,
+    decided_by: null, decided_at: null, reason: null, decision_reason: null, routed_to: [...who.owners], undoes_id: null, undone: false, can_decide: false, can_undo: false,
+  });
+}
+
+/**
  * meeting-changes-only-its-agenda (changes.create): a change a meeting makes to an item it does
  * not review is never applied: a proposal for the item's own decider (never the meeting's),
  * naming the meeting that asked for it.
@@ -1243,21 +1545,37 @@ export function proposeOffAgenda(db: SimpleDb, ctx: SimpleChangesCtx, body: Sche
   return { change: view(db, ctx, c), flags: [] };
 }
 
+/** A title in curly quotes, as change_words._quoted; null when blank. */
+function quotedTitle(value: unknown, limit = 80): string | null {
+  const text = String(value ?? "").split(/\s+/).filter(Boolean).join(" ");
+  return text ? `“${text.slice(0, limit)}${text.length > limit ? "…" : ""}”` : null;
+}
+
 /** Inbox rows (changes.inbox_rows): proposals waiting for me, decisions on mine. */
 export function simpleInboxRows(
   db: SimpleDb | undefined,
   me: string,
   seen: string | null,
-  who: Pick<SimpleChangesCtx, "owners" | "roles"> = { owners: [] },
+  who: Pick<SimpleChangesCtx, "owners" | "roles"> & { role?: Role; names?: Record<string, string> } = { owners: [] },
 ): { simple_proposals: Schemas["InboxSimpleChange"][]; simple_decisions: Schemas["InboxSimpleChange"][]; simple_approvals: Schemas["InboxSimpleApproval"][] } {
   const changes = db?.changes ?? [];
   const row = (c: Change, at: string | null, state?: Schemas["InboxSimpleChange"]["state"]): Schemas["InboxSimpleChange"] => {
     const key = db ? keyOf(db, c.target.item_id) : undefined;
+    const title = key ? seed(db!, key).title : null;
     return {
-      id: c.id, op: c.op, status: c.status, item_id: (c.target.item_id as string) ?? null, item_title: key ? seed(db!, key).title : typeof c.after.title === "string" ? c.after.title : null,
+      id: c.id, op: c.op, status: c.status, item_id: (c.target.item_id as string) ?? null, item_title: title ?? (typeof c.after.title === "string" ? c.after.title : null),
       document_id: c.document_id, by: c.by, by_name: c.by_name, at: c.at, decided_by: c.decided_by, decided_at: c.decided_at,
       reason: c.reason, decision_reason: c.decision_reason, state: state ?? (!seen || (at && at > seen) ? "new" : "open"),
       from_meeting: c.from_meeting ?? null,
+      // inbox-meeting-proposals: what was asked, the item by its name, and whether I may decide it now.
+      // A feature ask is not filed in Requests until it is accepted (changes.inbox_rows).
+      asked:
+        c.op === "add_feature_ask" && (c.status === "proposed" || c.status === "declined")
+          ? `proposed ${quotedTitle(c.after.title) ? `the feature ask ${quotedTitle(c.after.title)}` : "a feature ask"}`
+          : changePhrase(c.op, c.target, c.before, c.after, title),
+      can_decide: !!db && !!who.role && c.status === "proposed" && decidesChange(db, { ...who, id: me, role: who.role, names: {} }, c),
+      // inbox-meeting-proposals owner: asked through Ask Oracle, not on the page nor in a meeting.
+      from_ask: !c.from_meeting && c.status === "proposed" && !!db?.ask_proposals?.includes(c.id),
     };
   };
   return {
@@ -1265,10 +1583,16 @@ export function simpleInboxRows(
     simple_decisions: changes
       .filter((c) => c.by === me && (c.status === "accepted" || c.status === "declined"))
       .map((c) => row(c, c.decided_at, !seen || (c.decided_at ?? "") > seen ? undefined : "done")),
-    // S3b (drafts.inbox_rows): the drafts in review waiting on me.
+    // S3b (drafts.inbox_rows): drafts submitted with me among the required reviewers they wait
+    // on, or with me their decider (drafts._approver_of) whose approval is not in yet.
     simple_approvals: (db?.drafts ?? [])
-      .filter((d) => d.out.status === "submitted" && d.out.waiting_on.includes(me))
-      .map((d) => ({ draft_id: d.out.id, document: { id: d.out.document.id, slug: d.out.document.slug, title: d.out.document.title }, version: d.out.version ?? null, submitted_by: d.out.submitted_by ?? null, submitted_at: d.out.submitted_at ?? null, decider_approved: !!d.out.decider_approved, state: !seen || (d.out.submitted_at ?? "") > seen ? ("new" as const) : ("open" as const) })),
+      .filter((d) => d.out.status === "submitted" && (d.out.waiting_on.includes(me) || (!d.out.decider_approved && !!who.role && approverOf(db!, { id: me, role: who.role }, d))))
+      .sort((a, b) => ((a.out.submitted_at ?? "") < (b.out.submitted_at ?? "") ? -1 : 1))
+      .map((d) => ({
+        draft_id: d.out.id, document: { id: d.out.document.id, slug: d.out.document.slug, title: d.out.document.title }, version: d.out.version ?? null, submitted_by: d.out.submitted_by ?? null,
+        submitted_by_name: d.out.submitted_by ? (who.names?.[d.out.submitted_by] ?? null) : null, submitted_at: d.out.submitted_at ?? null,
+        decider_approved: !!d.out.decider_approved, state: !seen || (d.out.submitted_at ?? "") > seen ? ("new" as const) : ("open" as const),
+      })),
   };
 }
 
@@ -1278,6 +1602,9 @@ export function simpleInboxRows(
 const S7_OPS: string[] = ["add_item", "merge_item", "keep_both"];
 /** How long Oracle's drafting job of a quick-added draft runs in the mock (ms of the mock clock). */
 export const DRAFTING_MS = 2_500;
+/** Tests set this localStorage key to hold Oracle's drafting longer (ms of the mock clock). */
+export const MOCK_DRAFTING_MS_KEY = "po-mock-drafting-ms";
+const draftingMs = () => Number(globalThis.localStorage?.getItem(MOCK_DRAFTING_MS_KEY)) || DRAFTING_MS;
 
 /** The change as intoDrafts reads it: an add_item names an item of its roadmap (the new one may not exist yet). */
 function anchored(db: SimpleDb, c: Change): Change {
@@ -1318,8 +1645,10 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
     let goal: string | undefined;
     let quarter: { start: string; end: string } | null = null;
     if (where?.kind === "goal") {
-      goal = Object.keys(GOALS).find((k) => goalId(k) === value || k === value);
-      if (!goal) return json(422, { detail: "target.where.value: a goal's id" });
+      // The goal buckets' goals (./goal-buckets.ts) are the same goals, by their name.
+      const bucket = db.goal_buckets?.goals.find((g) => g.id === value)?.title;
+      goal = Object.keys(GOALS).find((k) => goalId(k) === value || k === value || (!!bucket && GOALS[k] === bucket));
+      if (!goal && !(value in MAP_GOALS)) return json(422, { detail: "target.where.value: a goal's id" });
     } else if (where?.kind === "horizon") {
       if (!["now", "next", "later"].includes(value)) return json(422, { detail: "target.where.value: now, next or later" });
       horizon = value as SeedItem["horizon"];
@@ -1335,8 +1664,15 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
     roadmap ??= (goal ? db.items.find((x) => x.goal === goal && !closed(x) && visible.includes(x.roadmap))?.roadmap : undefined) ?? visible.find((r) => canEditRoadmap(db, r, ctx)) ?? visible[0];
     target.roadmap_id = roadmapId(roadmap);
     target.item_id = crypto.randomUUID();
-    const after: Values = { title, horizon, goal_ids: goal ? [goalId(goal)] : [], ...(quarter ? { quarter } : {}) };
+    const after: Values = { title, horizon, goal_ids: goal ? [goalId(goal)] : value in MAP_GOALS ? [value] : [], ...(quarter ? { quarter } : {}) };
     if (typeof a.outcome === "string" && a.outcome.trim()) after.outcome = a.outcome.trim();
+    // An item added with its milestone (additions._plan: after.milestone {name, date}).
+    const m = a.milestone as { name?: unknown; date?: unknown } | null | undefined;
+    if (m && typeof m === "object") {
+      const name = String(m.name ?? "").trim();
+      if (!name || name.length > 200) return json(422, { detail: "after.milestone.name: 1 to 200 characters" });
+      after.milestone = { name, date: typeof m.date === "string" ? m.date : null, date_source: typeof m.date === "string" ? "typed" : null };
+    }
     return { target, before: {}, after, roadmap, applies: canEditRoadmap(db, roadmap, ctx) };
   }
   const key = keyOf(db, target.item_id);
@@ -1352,6 +1688,9 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
     const into = keyOf(db, target.into_id);
     const kept = into ? seed(db, into) : undefined;
     if (!kept || into === key || kept.roadmap !== s.roadmap || closed(kept)) return json(422, { detail: "target.into_id: another live item of the same roadmap" });
+    // roadmap-edit-fixes (changes._merge_plan): the kept item never takes a dependency that waits on it.
+    const loop = loopOf(db.items, kept.key, (s.depends ?? []).filter((d) => d !== kept.key), [s.key]);
+    if (loop) return json(422, { detail: loop });
     return { target, before: { status: "draft" }, after: { status: "merged", merged_into: { id: target.into_id, code: kept.key, title: kept.title } }, roadmap: s.roadmap, applies };
   }
   if (typeof target.feature_id === "string" && target.feature_id) {
@@ -1437,12 +1776,16 @@ function applyS7(db: SimpleDb, c: Change, undo = false): void {
     for (let n = 2; db.ids[key]; n++) key = `${slug(String(a.title))}-${n}`;
     const goalKey = Object.keys(GOALS).find((k) => (a.goal_ids as string[]).includes(goalId(k)));
     db.ids[key] = id;
-    db.items.push({
+    const added: SeedItem = {
       key, title: String(a.title), horizon: a.horizon as SeedItem["horizon"], roadmap, goal: goalKey,
       track: db.items.find((x) => x.roadmap === roadmap && x.track)?.track, draft: true, outcome: typeof a.outcome === "string" ? a.outcome : null,
-      drafting_until: mockNowMs() + DRAFTING_MS, quarter: (a.quarter as { start: string; end: string } | undefined) ?? undefined,
+      drafting_until: mockNowMs() + draftingMs(), quarter: (a.quarter as { start: string; end: string } | undefined) ?? undefined,
+      ...(a.milestone ? { milestone: { name: String((a.milestone as Values).name), day: dayIn(a.horizon as SeedItem["horizon"], (a.milestone as Values).date) } } : {}),
       looks_like: lookalikes(db, String(a.title), roadmap),
-    });
+    };
+    // simple-replaced-prds: never filed under a replaced PRD, which Simple leaves out.
+    fileUnderCurrentPrd(db, added);
+    db.items.push(added);
     return;
   }
   const s = seed(db, keyOf(db, id)!);

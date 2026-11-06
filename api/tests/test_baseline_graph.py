@@ -555,7 +555,7 @@ async def test_proposal_carries_its_run_summary_until_the_run_is_deleted(client,
         created_at = row.created_at
     assert run["id"] == str(run_id)
     assert run["flow"] == "baseline_to_prd"
-    assert run["flow_title"] == "Baseline to PRD"
+    assert run["flow_title"] == "Ground Truth to PRD"
     assert run["status"] == "running"
     assert run["created_at"].startswith(created_at.date().isoformat())
     assert listed["no-run"]["run"] is None
@@ -617,7 +617,7 @@ async def test_proposals_carry_summary_and_proposer(client, ctx):
     assert listed["by-run"]["proposer"]["kind"] == "run"
     assert listed["by-run"]["proposer"]["run_id"] == str(run_id)
     assert listed["by-run"]["proposer"]["label"] == (
-        f"Baseline to PRD · {company_time.day_in_words(started)}"
+        f"Ground Truth to PRD · {company_time.day_in_words(started)}"
     )
     assert all(p["summary"].startswith("Add feature “") for p in listed.values())
 

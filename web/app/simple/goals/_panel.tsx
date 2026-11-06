@@ -31,7 +31,13 @@ function usePhone(): boolean {
   );
 }
 
-export function FeaturePanel({ id, code, name, onClose }: { id: string; code?: string; name: string; onClose: () => void }) {
+/** Where the ladder places a feature: the goal and the milestone its card sits under. */
+export interface Placement {
+  goal: { id: string; title: string; metric: string | null; target: string | null; position: number };
+  milestone: string;
+}
+
+export function FeaturePanel({ id, code, name, placed, onClose }: { id: string; code?: string; name: string; placed?: Placement | null; onClose: () => void }) {
   const { can } = useMe();
   const phone = usePhone();
   const roadmap = useQuery("simple-roadmap:goal-map", () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: {} } })));
@@ -43,7 +49,11 @@ export function FeaturePanel({ id, code, name, onClose }: { id: string; code?: s
   // one-feature-panel: a dependency (or a feature that needs this one) opens in its place.
   const [opened, setOpened] = useState<string | null>(null);
   // one-feature-panel: the card's own item (its name checked; else its code, then its name).
-  const item = usePanelItem(roadmap.data?.items ?? [], { id, code: code ?? "", name }, opened);
+  const found = usePanelItem(roadmap.data?.items ?? [], { id, code: code ?? "", name }, opened);
+  // goal-ladder L-2: a feature the ladder places under a goal's milestone reads that goal here,
+  // so the panel and its card agree (the item's own goal, when it has one, stays).
+  const own = !!found && found.id === id && !!placed;
+  const item = useMemo(() => (found && own && !found.goal ? { ...found, goal: { ...placed!.goal, key: placed!.goal.id, due: null } } : found), [found, own, placed]);
   const act: Act = useCallback(
     async (what, body) => {
       try {
@@ -103,6 +113,11 @@ export function FeaturePanel({ id, code, name, onClose }: { id: string; code?: s
           onClose={onClose}
           onOpen={setOpened}
         />
+        {own && (
+          <p data-testid="gm-panel-milestone" className="simple-small mt-1 w-fit rounded-xl border border-line bg-surface px-3 py-1 shadow">
+            Serves {placed!.milestone}
+          </p>
+        )}
       </div>
     </div>
   );

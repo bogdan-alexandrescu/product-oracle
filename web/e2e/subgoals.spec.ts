@@ -6,7 +6,7 @@ import { login, signOut } from "./helpers";
 /**
  * Subgoals (#345), driven through the UI as a person would, on the mock layer: add a
  * subgoal under a goal, set its target and a value, link a feature to it, see the parent
- * roll up on Baseline and Plan, pick the subgoal in New PRD; move, promote and archive;
+ * roll up on Ground Truth and Plan, pick the subgoal in New PRD; move, promote and archive;
  * the tree at phone width and in both themes.
  */
 
@@ -17,7 +17,7 @@ const drawer = (page: Page, title: string) => page.getByRole("dialog", { name: t
 
 async function openBaseline(page: Page) {
   await login(page);
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   await expect(page.getByTestId("goal-g.activation")).toBeVisible();
 }
 
@@ -67,7 +67,7 @@ async function churnWithSubgoal(page: Page) {
 }
 
 // protects: a person adds a subgoal under a goal, gives it its own target and value, links
-// a feature to it, and sees the parent roll up from it on the Baseline and on Plan, then
+// a feature to it, and sees the parent roll up from it on the Ground Truth and on Plan, then
 // picks the subgoal under its goal in New PRD.
 // fails_when: the subgoal shows as a separate top-level goal, the parent keeps "–" or
 // says "of target", the link cannot be made, or the picker lists the subgoal without its parent.
@@ -156,14 +156,14 @@ test("move, promote and archive a subgoal; viewers see no tree controls", async 
 
   await signOut(page);
   await login(page, "viewer@example.com");
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   await expect(page.getByTestId("goal-g.activation")).toBeVisible();
   await expect(page.getByRole("button", { name: "Add subgoal" })).toHaveCount(0);
 });
 
 // protects: in a company that writes its own goal codes (#304, "G-B Growth"), a subgoal's
 // code is its parent's plus its place, in that style (G-B.1), and its chip shows code and
-// name on the Baseline, on Plan and in its card.
+// name on the Ground Truth, on Plan and in its card.
 // fails_when: the subgoal shows a place code (G2.1), no code, or a slug; or the chip drops its name.
 // no_claim: codes inside agent-written text.
 test("in the company's code style a subgoal is G-B.1, its chip showing code and name", async ({ page }) => {

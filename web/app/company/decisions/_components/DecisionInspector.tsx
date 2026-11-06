@@ -235,7 +235,7 @@ export function DecisionInspector({
                 <ul className="flex flex-col gap-1 text-sm">
                   {d.entities.map((e) => (
                     <li key={e.id}>
-                      <Link href={`/baseline?entity=${encodeURIComponent(e.id)}`} className="font-medium text-accent-ink hover:underline">
+                      <Link href={`/ground-truth?entity=${encodeURIComponent(e.id)}`} className="font-medium text-accent-ink hover:underline">
                         {e.title}
                       </Link>
                       <span className="text-text2"> · {entityTypeLabel(e.type)}</span>
@@ -322,7 +322,7 @@ function reviewFile(d: Decision): string | null {
 function SubjectLink({ subject: s, label }: { subject: Decision["subjects"][number]; label: string }) {
   const kind = String(s.kind);
   const href =
-    kind === "run" ? `/runs/${String(s.id)}` : kind === "entity" ? `/baseline?entity=${encodeURIComponent(String(s.id))}` : kind === "document" && s.ref ? `/documents/${String(s.ref)}` : kind === "document_version" && s.ref ? versionHref(String(s.ref)) : null;
+    kind === "run" ? `/runs/${String(s.id)}` : kind === "entity" ? `/ground-truth?entity=${encodeURIComponent(String(s.id))}` : kind === "document" && s.ref ? `/documents/${String(s.ref)}` : kind === "document_version" && s.ref ? versionHref(String(s.ref)) : null;
   return href ? (
     <Link href={href} className="font-medium text-accent-ink hover:underline">
       {label}

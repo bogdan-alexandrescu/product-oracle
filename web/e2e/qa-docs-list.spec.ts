@@ -130,10 +130,9 @@ test.describe("desktop", () => {
     const table = page.getByTestId("documents-table");
     const header = (k: string) =>
       table.getByRole("columnheader").filter({ has: page.getByTestId(`sort-${k}`) });
-    // Newest first by default: Updated is the sorted column.
-    await expect(header("updated")).toHaveAttribute("aria-sort", "descending");
-    await expect(page.getByTestId("sort-updated")).toHaveAccessibleName("Sort by Updated, newest first");
-    for (const k of ["title", "status", "latest"])
+    // prd-order: the company PRD order by default, so no column is sorted.
+    await expect(page.getByTestId("documents-order")).toHaveText("Company order");
+    for (const k of ["title", "status", "latest", "updated"])
       await expect(header(k)).toHaveAttribute("aria-sort", "none");
 
     await page.getByTestId("sort-title").click();
@@ -186,7 +185,7 @@ test.describe("desktop", () => {
   test("qa-docs-43: the delete dialog names the draft run in words, not its flow", async ({
     page,
   }) => {
-    // run-review: a Baseline to PRD run writes Usage alerts (priority-order's blocked run is
+    // run-review: a Ground Truth to PRD run writes Usage alerts (priority-order's blocked run is
     // for a PRD not imported yet since walk-docs-priorities).
     await open(page, "owner", "run-review");
     await row(page, "Usage alerts PRD")
@@ -201,7 +200,7 @@ test.describe("desktop", () => {
     await expect(goes.getByTestId("delete-run").first()).toHaveText(
       /^The run of [A-Z][a-z]{2} \d{1,2} that wrote /,
     );
-    await expect(goes).not.toContainText("Baseline to PRD");
+    await expect(goes).not.toContainText("Ground Truth to PRD");
     await expect(goes).not.toContainText(/Run\s{2}/);
   });
 
@@ -233,7 +232,8 @@ test.describe("desktop", () => {
       );
       await open(page);
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-      // Updated sorts newest first by default.
+      // prd-order: the company order by default; Updated sorts newest first when picked.
+      await page.getByTestId("sort-updated").click();
       await expect(page.getByTestId("sort-updated")).toHaveAttribute(
         "aria-label",
         /newest first/,

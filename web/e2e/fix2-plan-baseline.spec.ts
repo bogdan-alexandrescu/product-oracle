@@ -17,13 +17,13 @@ const scenario = (page: Page, name: string) =>
 
 async function openBaseline(page: Page, email?: string) {
   await login(page, email);
-  await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
+  await page.goto("/ground-truth");
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
   await expect(page.getByTestId("goal-g.activation")).toBeVisible();
 }
 
 const goalsTable = (page: Page) => page.getByRole("grid", { name: "Goals" });
-const sheet = (page: Page) => page.getByRole("dialog", { name: "Build the baseline" });
+const sheet = (page: Page) => page.getByRole("dialog", { name: "Build the Ground Truth" });
 
 /** An empty company's first source, one file in it, from Settings > Sources (Start waits for items: qa-onboarding-2). */
 async function addFileSource(page: Page) {
@@ -112,7 +112,7 @@ test.describe("desktop", () => {
   // what happens next; fails_when="Estimate $7.00" alone; no_claim=costs over the line.
   test("the build sheet's estimate names the approval line", async ({ page }) => {
     await login(page);
-    await page.goto("/baseline?build=1");
+    await page.goto("/ground-truth?build=1");
     await expect(sheet(page).getByTestId("build-estimate")).toHaveText("$7.00 estimated · below the $50 approval line · starts at once");
   });
 
@@ -124,12 +124,12 @@ test.describe("desktop", () => {
     await scenario(page, "empty");
     await login(page);
     await addFileSource(page);
-    await page.goto("/baseline?build=1");
+    await page.goto("/ground-truth?build=1");
     await sheet(page).getByRole("button", { name: "Start" }).click();
     await expect(sheet(page)).toHaveCount(0);
-    await expect(page.getByTestId("baseline-build-banner")).toContainText("Baseline being built");
+    await expect(page.getByTestId("baseline-build-banner")).toContainText("Ground Truth being built");
     await expect(page.getByTestId("baseline-build-banner")).toContainText("You'll get an Inbox item when it's ready to review.");
-    await expect(page.getByText(/^Building the baseline\./)).toHaveCount(0);
+    await expect(page.getByText(/^Building the Ground Truth\./)).toHaveCount(0);
     await expect(page.getByTestId("tab-count-blockers")).toHaveText("0");
     const goals = page.getByRole("region", { name: "Goals", exact: true });
     await expect(goals).toContainText("No goals yet");
@@ -144,7 +144,7 @@ test.describe("desktop", () => {
     await pickZone(page, "Europe/Berlin");
     await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
     await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
-    await page.goto("/baseline?build=1");
+    await page.goto("/ground-truth?build=1");
     await sheet(page).getByRole("button", { name: "Start" }).click();
     const banner = page.getByTestId("baseline-build-banner");
     await expect(banner).toContainText(/started .* (AM|PM) CES?T/);
@@ -169,11 +169,11 @@ test.describe("desktop", () => {
 test.describe("phone", () => {
   test.use({ viewport: PHONE });
 
-  // protects=qa-plan-25: every Baseline tab is whole on screen (they wrap); fails_when=a tab is
+  // protects=qa-plan-25: every Ground Truth tab is whole on screen (they wrap); fails_when=a tab is
   // cut or behind a scroll arrow; no_claim=Plan's tabs.
   test("the tabs wrap: every tab is whole on screen", async ({ page }) => {
     await openBaseline(page);
-    const tabs = page.getByRole("tablist", { name: "Baseline views" }).getByRole("tab");
+    const tabs = page.getByRole("tablist", { name: "Ground Truth views" }).getByRole("tab");
     await expect(tabs).toHaveCount(6);
     for (const tab of await tabs.all()) {
       const box = (await tab.boundingBox())!;

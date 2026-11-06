@@ -94,7 +94,7 @@ order:
   - key: bulk-edit
     rank: 3
     score: 0
-    explanation: "Serves no confirmed goal"
+    explanation: "New in this PRD; serves activation"
 """
 # saved-addresses ranked above the feature it depends on: one blocking problem.
 BLOCKING = (
@@ -103,6 +103,14 @@ BLOCKING = (
     .replace("rank: X\n", "rank: 2\n")
 )
 BLOCKED = "1 blocking problem left: fix or waive them, or send back to the agents"
+
+
+# The run's feature set, bulk-edit naming the goal it serves (none joins the baseline
+# without its goal: review of PR 1244, round 2).
+SERVED = CLEAN.replace(
+    "    title: Bulk edit\n    goals: []\n",
+    "    title: Bulk edit\n    goals: [{key: activation, contribution: 1}]\n",
+)
 
 
 async def seed_baseline(tenant_id) -> None:
@@ -136,7 +144,7 @@ async def seed_baseline(tenant_id) -> None:
         await s.commit()
 
 
-async def at_priority(client, owner, runtime, text=ORDER, features=CLEAN, **knobs) -> dict:  # noqa: F811
+async def at_priority(client, owner, runtime, text=ORDER, features=SERVED, **knobs) -> dict:  # noqa: F811
     """A baseline_to_prd run past its approved feature set (``features``), its priority
     segment ended with ``text`` as priority.yaml."""
     tenant_id, auth = owner
@@ -314,6 +322,27 @@ def test_check_differs_from_live_and_no_goal_are_advisory():
     assert codes(out) == [("differs_from_live", False, "d"), ("no_goal", False, "d")]
     assert out.blocking == 0
     assert out.problems[0]["message"] == "d is ranked 1 here and 4 in the live ranking"
+
+
+def test_new_features_ranked_above_do_not_make_a_feature_differ_from_live():
+    """Review of PR 1244 (RP1 a): a feature is compared with the live ranking by where it sits
+    among the live features the run ranks, as outside_limits does: new features ranked above
+    it (n1-n3, not in the live ranking) do not move it. a keeps its place among a, b, c."""
+    k = known(("a", "b", "c"), live=[live_row("a", 1), live_row("b", 2), live_row("c", 3)])
+    for key in ("n1", "n2", "n3"):
+        k.features[key] = key.title()
+    out = run_order.check_order(
+        order(("n1", 1), ("n2", 2), ("n3", 3), ("a", 4), ("b", 5), ("c", 6)), known=k
+    )
+    assert out.problems == []
+    # A real move among the live features is still flagged, in the order's own ranks.
+    k = known(("a", "b", "c", "d", "e"))
+    k.features["n1"] = "N1"
+    out = run_order.check_order(
+        order(("n1", 1), ("e", 2), ("a", 3), ("b", 4), ("c", 5), ("d", 6)), known=k
+    )
+    assert codes(out) == [("differs_from_live", False, "e")]
+    assert out.problems[0]["message"] == "e is ranked 2 here and 5 in the live ranking"
 
 
 def test_live_rank_is_restricted_to_the_ranked_features():
@@ -576,7 +605,7 @@ async def test_compare_rows_follow_the_check_and_the_live_ranking(client, owner,
     assert body["snapshot"]["run_id"] == run["id"]
     assert body["snapshot"]["check_result"]["problems"]
     assert body["live_generated_at"]
-    assert body["run"]["flow_title"] == "Baseline to PRD"
+    assert body["run"]["flow_title"] == "Ground Truth to PRD"
     assert body["checkpoint"]["id"] == pending(run)["id"]
     assert body["checkpoint"]["cannot_approve"] == BLOCKED
     rows = {r["key"]: r for r in body["rows"]}
@@ -831,3 +860,341 @@ async def test_approving_the_order_adds_its_new_features_as_proposed(client, own
         proposal = await s.scalar(select(Proposal).where(Proposal.run_id == uuid.UUID(run["id"])))
     assert entity is not None and entity.status == "proposed" and entity.title == "Bulk edit"
     assert proposal.status == "accepted"
+
+
+async def new_feature_graph(tenant_id, key="bulk-edit"):
+    """The feature ``key`` and its outgoing links as (type, other key, status, attrs)."""
+    async with tenant_session(tenant_id) as s:
+        by_id = {e.id: e for e in await s.scalars(select(Entity))}
+        entity = next((e for e in by_id.values() if e.key == key), None)
+        edges = (
+            list(await s.scalars(select(Edge).where(Edge.src_id == entity.id)))
+            if entity is not None
+            else []
+        )
+    links = sorted((e.type, by_id[e.dst_id].key, e.status, e.attrs) for e in edges)
+    return entity, links
+
+
+async def test_approved_new_features_carry_their_goal_links_and_attrs(client, owner, runtime):  # noqa: F811
+    """Review of PR 1244: an approved order's new feature joins the baseline with the
+    goal it serves and what it depends on, as proposed links a person confirms, and the
+    run's effort and confidence; live Priorities scores it under its goal."""
+    tenant_id, auth = owner
+    run = await at_priority(client, owner, runtime, ORDER_NEW, features=NEW_DEPENDS)
+    approver = await as_user(tenant_id, "approver")
+    run = await decide(client, approver, run, note="Good order")
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert snap.status == "saved"
+    entity, links = await new_feature_graph(tenant_id)
+    assert entity is not None and entity.status == "proposed"
+    assert entity.attrs["effort"] == 2 and entity.attrs["confidence"] == 0.6
+    assert links == [
+        ("depends_on", "address-lookup", "proposed", {}),
+        ("supports", "activation", "proposed", {"contribution": 2}),
+    ]
+    live = (await client.get("/v1/priorities", headers=auth)).json()
+    row = {f["key"]: f for f in live["features"]}["bulk-edit"]
+    assert row["serves_goal"] is True
+    assert [(g["goal"], g["link_status"]) for g in row["explanation"]["goals"]] == [
+        ("activation", "proposed")
+    ]
+    assert row["depends_on"] == ["address-lookup"]
+
+
+async def test_a_new_feature_with_no_open_create_is_still_added(client, owner, runtime):  # noqa: F811
+    """Review of PR 1244: a new key the run left no open create proposal for is added from
+    the approved feature set's entry, never skipped."""
+    tenant_id, _ = owner
+    run = await at_priority(client, owner, runtime, ORDER_NEW, features=NEW_DEPENDS)
+    async with tenant_session(tenant_id) as s:
+        for p in await s.scalars(select(Proposal).where(Proposal.run_id == uuid.UUID(run["id"]))):
+            p.status = "withdrawn"
+        await s.commit()
+    approver = await as_user(tenant_id, "approver")
+    run = await decide(client, approver, run, note="Good order")
+    entity, links = await new_feature_graph(tenant_id)
+    assert entity is not None and entity.status == "proposed" and entity.title == "Bulk edit"
+    assert entity.attrs["effort"] == 2 and entity.attrs["confidence"] == 0.6
+    assert [(t, k, st) for t, k, st, _ in links] == [
+        ("depends_on", "address-lookup", "proposed"),
+        ("supports", "activation", "proposed"),
+    ]
+
+
+# Review of PR 1244, round 2: no feature joins the baseline without its goal.
+def new_known(goals) -> run_order.Known:
+    """a and b in the baseline; new-one, new in the approved scope, naming ``goals``."""
+    k = known(("a", "b"), scope=("a", "b", "new-one"))
+    k.features["new-one"] = "Gift notes"
+    k.new_goals = {"new-one": goals}
+    k.goals = {"activation": "Activation"}
+    return k
+
+
+NEW_ONE = order(("a", 1), ("b", 2), ("new-one", 3))
+
+
+@pytest.mark.parametrize(
+    "goals",
+    [[], [{"key": "activation", "contribution": 0}]],
+    ids=["no-goal", "does-not-serve"],
+)
+def test_check_a_new_feature_naming_no_goal_is_blocking(goals):
+    out = run_order.check_order(NEW_ONE, known=new_known(goals))
+    assert codes(out) == [("new_feature_no_goal", True, "new-one")]
+    assert out.problems[0]["message"] == (
+        "Gift notes is new and names no goal it serves: the run must name one"
+    )
+
+
+@pytest.mark.parametrize(
+    "goals,extra",
+    [
+        ([{"key": "activation", "contribution": None}], ""),
+        ([], "    goal: activation\n"),
+        ([], "    goal: activation\n    contribution: 2\n"),
+    ],
+    ids=["feature-set-key-alone", "row-goal-alone", "row-goal-and-contribution"],
+)
+def test_check_a_new_feature_naming_its_goal_is_clean(goals, extra):
+    text = NEW_ONE + extra
+    out = run_order.check_order(text, known=new_known(goals))
+    assert out.problems == []
+
+
+def test_check_a_row_goal_that_does_not_serve_is_no_goal():
+    text = NEW_ONE + "    goal: activation\n    contribution: 0\n"
+    out = run_order.check_order(text, known=new_known([]))
+    assert codes(out) == [("new_feature_no_goal", True, "new-one")]
+
+
+# Review of PR 1244, round 3: a goal counts only when it is a known, non-rejected goal.
+@pytest.mark.parametrize(
+    "goals,extra",
+    [
+        ([], "    goal: no-such-goal\n"),
+        ([], "    goal: no-such-goal\n    contribution: 2\n"),
+        ([{"key": "no-such-goal", "contribution": 2}], ""),
+    ],
+    ids=["row-key-alone", "row-with-contribution", "feature-set"],
+)
+def test_check_a_new_feature_naming_an_unknown_goal_is_blocking(goals, extra):
+    out = run_order.check_order(NEW_ONE + extra, known=new_known(goals))
+    assert codes(out) == [("unknown_goal", True, "new-one")]
+    assert out.problems[0]["message"] == (
+        "Gift notes names the goal no-such-goal, which is not a goal in the baseline: "
+        "the run must name one that is"
+    )
+
+
+def test_check_an_unknown_goal_beside_a_known_one_is_still_blocking():
+    text = NEW_ONE + "    goal: no-such-goal\n"
+    out = run_order.check_order(text, known=new_known([{"key": "activation", "contribution": 2}]))
+    assert codes(out) == [("unknown_goal", True, "new-one")]
+
+
+@pytest.mark.parametrize(
+    "goals,extra",
+    [
+        (
+            [{"key": "activation", "contribution": None}],
+            "    goal: activation\n    contribution: 0\n",
+        ),
+        ([{"key": "activation", "contribution": 0}], "    goal: activation\n"),
+        ([{"key": "activation", "contribution": 0}], "    goal: activation\n    contribution: 2\n"),
+    ],
+    ids=["row-zero", "feature-set-zero", "feature-set-zero-row-two"],
+)
+def test_check_a_contribution_of_0_from_either_source_wins(goals, extra):
+    out = run_order.check_order(NEW_ONE + extra, known=new_known(goals))
+    assert codes(out) == [("new_feature_no_goal", True, "new-one")]
+
+
+# The run's feature set names bulk-edit's goal by key alone; its order row names none.
+KEY_ALONE = CLEAN.replace(
+    "    title: Bulk edit\n    goals: []\n", "    title: Bulk edit\n    goals: [activation]\n"
+)
+# bulk-edit ranked with no goal, weight or contribution in its row.
+ORDER_NO_GOAL = ORDER_NEW.replace("    goal: activation\n    weight: 3\n    contribution: 2\n", "")
+
+
+async def test_a_goal_named_by_key_alone_is_proposed_with_an_assumed_contribution(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+):
+    """The feature set names the goal with no contribution and the row leaves it out: the
+    supports link is still proposed, its contribution 1 marked assumed for a person to set;
+    live Priorities scores it under the goal, the contribution assumed."""
+    tenant_id, auth = owner
+    assert KEY_ALONE != CLEAN and ORDER_NO_GOAL != ORDER_NEW
+    run = await at_priority(client, owner, runtime, ORDER_NO_GOAL, features=KEY_ALONE)
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert run_order.blocking_of(snap.check_result) == 0, snap.check_result
+    approver = await as_user(tenant_id, "approver")
+    run = await decide(client, approver, run, note="Good order")
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert snap.status == "saved"
+    _, links = await new_feature_graph(tenant_id)
+    assert links == [
+        ("supports", "activation", "proposed", {"contribution": 1, "contribution_assumed": True})
+    ]
+    live = (await client.get("/v1/priorities", headers=auth)).json()
+    row = {f["key"]: f for f in live["features"]}["bulk-edit"]
+    assert row["serves_goal"] is True
+    (term,) = row["explanation"]["goals"]
+    assert (term["goal"], term["contribution"], term["contribution_assumed"]) == (
+        "activation",
+        1,
+        True,
+    )
+
+
+async def test_a_row_goal_with_no_contribution_is_proposed_as_assumed(client, owner, runtime):  # noqa: F811
+    tenant_id, _ = owner
+    """goals: [] in the feature set, the row naming its goal with no contribution: the link
+    is proposed, its contribution assumed; a feature-set contribution would win over it."""
+    row_goal = ORDER_NEW.replace("    weight: 3\n    contribution: 2\n", "")
+    run = await at_priority(client, owner, runtime, row_goal, features=CLEAN)
+    approver = await as_user(tenant_id, "approver")
+    run = await decide(client, approver, run, note="Good order")
+    _, links = await new_feature_graph(tenant_id)
+    assert links == [
+        ("supports", "activation", "proposed", {"contribution": 1, "contribution_assumed": True})
+    ]
+
+
+NO_GOAL = "Bulk edit is new and names no goal it serves: the run must name one"
+UNKNOWN_GOAL = (
+    "Bulk edit names the goal no-such-goal, which is not a goal in the baseline: "
+    "the run must name one that is"
+)
+# bulk-edit's row naming its goal with no contribution: the feature set's 0 wins.
+ROW_GOAL_ALONE = ORDER_NEW.replace("    weight: 3\n    contribution: 2\n", "")
+# bulk-edit's row naming a goal the baseline does not have (review of PR 1244, round 3).
+ROW_UNKNOWN_GOAL = ORDER_NEW.replace("    goal: activation\n", "    goal: no-such-goal\n")
+
+
+@pytest.mark.parametrize(
+    "goals,text,problem",
+    [
+        ("goals: []", ORDER_NO_GOAL, ("new_feature_no_goal", NO_GOAL)),
+        (
+            "goals: [{key: activation, contribution: 0}]",
+            ORDER_NO_GOAL,
+            ("new_feature_no_goal", NO_GOAL),
+        ),
+        (
+            "goals: [{key: activation, contribution: 0}]",
+            ROW_GOAL_ALONE,
+            ("new_feature_no_goal", NO_GOAL),
+        ),
+        ("goals: []", ROW_UNKNOWN_GOAL, ("unknown_goal", UNKNOWN_GOAL)),
+    ],
+    ids=["none", "zero", "zero-wins-over-the-row", "unknown-goal"],
+)
+async def test_approve_is_refused_while_a_new_feature_names_no_goal(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+    goals,
+    text,
+    problem,
+):
+    """goals: [] (or a goal it does not serve) and a row with no goal, or a goal the Ground
+    Truth does not have: a blocking problem naming the feature, so Approve order is refused
+    and nothing joins the baseline."""
+    tenant_id, _ = owner
+    features = CLEAN.replace(
+        "    title: Bulk edit\n    goals: []\n", f"    title: Bulk edit\n    {goals}\n"
+    )
+    run = await at_priority(client, owner, runtime, text, features=features)
+    (snap,) = await snapshots(tenant_id, run["id"])
+    blocking = [
+        (p["code"], p["feature"], p["message"])
+        for p in snap.check_result["problems"]
+        if p["blocking"]
+    ]
+    assert blocking == [(problem[0], "bulk-edit", problem[1])]
+    cp = pending(run)
+    assert cp["cannot_approve"] == BLOCKED
+    resp = await client.post(
+        f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/decide",
+        json={"decision": "approved"},
+        headers=await as_user(tenant_id, "approver"),
+    )
+    assert resp.status_code == 409, resp.text
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert snap.status == "proposed"
+    entity, _ = await new_feature_graph(tenant_id)
+    assert entity is None
+
+
+async def test_a_rejected_goal_does_not_count(client, owner, runtime):  # noqa: F811
+    """The row names a goal the baseline rejected: unknown_goal, blocking."""
+    tenant_id, _ = owner
+    async with tenant_session(tenant_id) as s:
+        s.add(
+            Entity(type="goal", key="old-goal", title="Old goal", status="rejected", origin="user")
+        )
+        await s.commit()
+    rejected = ORDER_NEW.replace("    goal: activation\n", "    goal: old-goal\n")
+    run = await at_priority(client, owner, runtime, rejected, features=CLEAN)
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert [(p["code"], p["feature"]) for p in snap.check_result["problems"] if p["blocking"]] == [
+        ("unknown_goal", "bulk-edit")
+    ]
+
+
+def test_check_missing_and_duplicate_name_the_feature():
+    """Review of PR 1244, round 4: a problem of no ranked row is said on the band in full, so
+    it names the feature by its name, never its key alone."""
+    k = known(("gift-notes", "gift-wrap", "gift-receipt"), scope=("gift-notes", "gift-receipt"))
+    k.features.update({"gift-notes": "Gift notes", "gift-receipt": "Gift receipt"})
+    text = order(("gift-notes", 1), ("gift-notes", 2))
+    out = run_order.check_order(text, known=k)
+    by_code = {p["code"]: p["message"] for p in out.problems}
+    assert by_code["duplicate_key"] == "Gift notes is ranked 2 times"
+    assert by_code["missing_feature"] == "Gift receipt is in the approved PRD scope and not ranked"
+
+
+# A goal a new feature serves, rejected between the order's check and Approve.
+STALE_GOAL = (
+    "Bulk edit serves the goal Activation, which was rejected after the order was checked: "
+    "the run must name a goal of the Ground Truth"
+)
+
+
+async def test_approve_rechecks_the_goals_of_its_new_features(client, owner, runtime):  # noqa: F811
+    """Review of PR 1244, round 4: the goal a new feature serves is rejected after the order
+    was checked. Approve order re-checks the goals and is refused with the problem named;
+    the order keeps the problem, nothing joins the baseline without its goal."""
+    tenant_id, _ = owner
+    run = await at_priority(client, owner, runtime, ORDER_NEW, features=CLEAN)
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert [p for p in snap.check_result["problems"] if p["blocking"]] == []
+    async with tenant_session(tenant_id) as s:
+        goal = await s.scalar(select(Entity).where(Entity.key == "activation"))
+        goal.status = "rejected"
+        await s.commit()
+    cp = pending(run)
+    resp = await client.post(
+        f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/decide",
+        json={"decision": "approved"},
+        headers=await as_user(tenant_id, "approver"),
+    )
+    assert resp.status_code == 409, resp.text
+    assert STALE_GOAL in resp.json()["detail"]["message"]
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert snap.status == "proposed"
+    assert [
+        (p["code"], p["feature"], p["message"])
+        for p in snap.check_result["problems"]
+        if p["blocking"]
+    ] == [("unknown_goal", "bulk-edit", STALE_GOAL)]
+    entity, _ = await new_feature_graph(tenant_id)
+    assert entity is None
+    # The run page and the Inbox say it too, and a second try is refused the same way.
+    run = await get(client, (await as_user(tenant_id, "approver")), run["id"])
+    assert pending(run)["cannot_approve"] == BLOCKED

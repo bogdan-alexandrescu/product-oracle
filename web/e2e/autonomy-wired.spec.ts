@@ -32,9 +32,13 @@ test("autonomy: priorities, roadmap watch, decisions and outcomes are in effect"
     await expect(row(page, key).getByTestId("autonomy-pending")).toHaveCount(0);
   }
   await expect(step(page, "roadmap_watch", "Recommend")).toHaveAttribute("aria-pressed", "true");
-  await expect(row(page, "roadmap_watch").getByTestId("autonomy-sentence")).toHaveText(
+  // qa-f-71: the row's sentence sits behind its (i), not loose on the page.
+  const roadmapWatch = row(page, "roadmap_watch");
+  await roadmapWatch.getByRole("button", { name: "About Watch the roadmap" }).click();
+  await expect(roadmapWatch.getByTestId("autonomy-sentence")).toHaveText(
     "Oracle proposes date and scope changes with evidence; a person decides.",
   );
+  await roadmapWatch.getByRole("button", { name: "About Watch the roadmap" }).click();
 });
 
 // protects=an owner sets Watch the roadmap to Observe with a reason, and the slipped item's card on

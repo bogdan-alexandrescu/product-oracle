@@ -12,6 +12,8 @@ Each checkpoint kind's blocking reasons come from the spec that owns the kind, r
 one gate every path reads.
 """
 
+import hashlib
+import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -35,6 +37,28 @@ UNKNOWN_CODES = frozenset(
 UNKNOWN_NOT_WAIVED = "This cannot be waived; leave it out or send it back"
 # C8 Priority order snapshot: every problem is fixed by C9 moves or Request changes.
 ORDER_NOT_WAIVED = "a priority order problem is never waived: send it back to the agents"
+
+
+# A waiver names a problem by its code (every problem of the code on the item) or, for a C6
+# or C8 problem, by its own ref: the code, REF_MARK and a short hash of what it is about.
+REF_MARK = "~"
+
+
+def problem_ref(p: dict[str, Any]) -> str:
+    """One stored problem's own name among its feature's: two problems of the same code
+    (a missing field on two requirements) are waived each on its own."""
+    about = "\n".join(str(p.get(k) or "") for k in ("code", "feature", "requirement", "message"))
+    return f"{p.get('code')}{REF_MARK}{hashlib.sha1(about.encode()).hexdigest()[:8]}"
+
+
+def answer_code(answer: str) -> str:
+    """The code a waiver's answer names (a ref's code)."""
+    return answer.split(REF_MARK, 1)[0]
+
+
+def names(answers: Iterable[str], code: str, ref: str | None) -> bool:
+    """A reason is named by its code (all of the code) or by its own ref."""
+    return any(a == code or (ref is not None and a == ref) for a in answers)
 
 
 class Action(Protocol):
@@ -66,6 +90,24 @@ def _roadmap_items(cp: Checkpoint) -> tuple[list[dict[str, Any]], int]:
     return list(check.get("reasons") or []), int(check.get("file_problems") or 0)
 
 
+_KEY = re.compile(r"(?<![\w-])[a-z0-9]+(?:[-_][a-z0-9]+)+(?![\w-])")
+
+
+def _titled(message: str | None, titles: dict[str, str]) -> str | None:
+    """A C6 problem's message as people read it: each feature's key as its title (a key
+    with none in words), as the review screen words it."""
+    if not message or not titles:
+        return message
+    text = _KEY.sub(lambda m: titles.get(m.group(0)) or _words(m.group(0)), message)
+    return text[:1].upper() + text[1:]
+
+
+def _words(key: str) -> str:
+    """A key in words ("address-sharing" is "Address sharing"), as the web's keyWords."""
+    words = re.sub(r"[-_]+", " ", key).strip()
+    return words[:1].upper() + words[1:]
+
+
 def _problems(check: Any, file_codes: Iterable[str] = ()) -> tuple[list[dict[str, Any]], int]:
     """A C6 or C8 stored check's problems as reasons: a problem of a feature is that
     feature's; one of no feature (or of the file itself) is file-level."""
@@ -73,6 +115,7 @@ def _problems(check: Any, file_codes: Iterable[str] = ()) -> tuple[list[dict[str
         return [], 0
     reasons: list[dict[str, Any]] = []
     file_problems = 0
+    titles = check.get("titles") or {}
     for p in check.get("problems") or []:
         blocking = p.get("blocking", True)
         if not p.get("feature") or p.get("code") in file_codes:
@@ -81,10 +124,11 @@ def _problems(check: Any, file_codes: Iterable[str] = ()) -> tuple[list[dict[str
         reasons.append(
             {
                 "item": p["feature"],
-                "item_title": None,
+                "item_title": titles.get(p["feature"]),
                 "code": p.get("code"),
+                "ref": problem_ref(p),
                 "severity": BLOCKING if blocking else "advisory",
-                "label": p.get("message"),
+                "label": _titled(p.get("message"), titles),
             }
         )
     return reasons, file_problems
@@ -141,18 +185,21 @@ OWNER_WAIVE_FIELD = "owner"
 
 def waivable(kind: str, code: str) -> bool:
     source = BLOCKING_SOURCES.get(kind)
+    code = answer_code(code)
     return (
         source is not None and source.not_waivable is not None and code not in source.not_waivable
     )
 
 
 def _waives(action: Action, kind: str, reason: dict[str, Any]) -> bool:
-    """A staged waiver of the reason's item answers the codes it names (every waivable
-    reason of the item when it names none); a non-waivable code is never answered."""
+    """A staged waiver of the reason's item answers the codes and refs it names (every
+    waivable reason of the item when it names none); a non-waivable code is never answered."""
     if action.state != "staged" or action.kind != "waive" or action.item_key != reason["item"]:
         return False
     code = reason["code"]
-    return waivable(kind, code) and (not action.answers or code in action.answers)
+    return waivable(kind, code) and (
+        not action.answers or names(action.answers, code, reason.get("ref"))
+    )
 
 
 def approve_gate(
@@ -172,6 +219,7 @@ def approve_gate(
             item=r["item"],
             item_title=r.get("item_title"),
             code=r["code"],
+            ref=r.get("ref") or r["code"],
             label=r.get("label") or r["code"],
             waivable=waivable(cp.kind, r["code"]),
             question_id=r.get("question_id"),

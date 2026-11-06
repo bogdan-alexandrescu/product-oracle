@@ -59,7 +59,7 @@ test("new roadmap: a board audience gets the outcome roadmap; company default", 
   await page.getByRole("link", { name: "New roadmap" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "New roadmap" })).toBeVisible();
   await expect(page.getByTestId("recommended-template")).toHaveText("Now / Next / Later");
-  // qa-docs-39: the baseline's count, read-only.
+  // qa-docs-39: the Ground Truth's count, read-only.
   await expect(page.getByTestId("confirmed-goals-count")).toHaveText("2");
 
   await answer(page, "Who reads it first?", "Board or investors");

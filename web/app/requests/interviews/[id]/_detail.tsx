@@ -147,7 +147,7 @@ export function InterviewDetail({ id }: { id: string }) {
             <ol className="flex list-decimal flex-col gap-2 py-3 pr-4 pl-9 text-[15px]">
               {iv.guide.map((g) => (
                 <li key={g.id}>
-                  {g.prompt}
+                  <span data-user-content>{g.prompt}</span>
                   {g.purpose && <span className="block text-sm text-text2">{g.purpose}</span>}
                 </li>
               ))}
@@ -166,7 +166,9 @@ export function InterviewDetail({ id }: { id: string }) {
                   {m.kind === "skip" ? (
                     <p className="text-[15px] text-text2 italic">Skipped: {prompt(m.guide_item) ?? "this question"}</p>
                   ) : (
-                    <p className="text-[15px] break-words whitespace-pre-wrap">{m.body}</p>
+                    <p className="text-[15px] break-words whitespace-pre-wrap" data-user-content>
+                      {m.body}
+                    </p>
                   )}
                 </li>
               ))}
@@ -191,7 +193,7 @@ export function InterviewDetail({ id }: { id: string }) {
               {quotes.length > 0 && (
                 <Part title="Quotes">
                   {quotes.map((x, i) => (
-                    <blockquote key={i} className="border-l-2 border-line-strong pl-3 break-words">
+                    <blockquote key={i} className="border-l-2 border-line-strong pl-3 break-words" data-user-content>
                       &ldquo;{x.text}&rdquo;
                     </blockquote>
                   ))}
@@ -203,7 +205,9 @@ export function InterviewDetail({ id }: { id: string }) {
                     {needs.map((n, i) => (
                       <li key={i} data-testid="snapshot-need">
                         <span className="font-semibold">{n.title}</span>
-                        <span className="block text-sm break-words text-text2">&ldquo;{n.quote}&rdquo;</span>
+                        <span className="block text-sm break-words text-text2" data-user-content>
+                          &ldquo;{n.quote}&rdquo;
+                        </span>
                       </li>
                     ))}
                   </ul>

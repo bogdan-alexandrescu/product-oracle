@@ -79,7 +79,10 @@ test("members: the Sign-in panel keeps Join at once, offers Viewer and Commenter
   await login(page);
   await page.goto("/settings/members");
   const panel = page.getByTestId("sign-in-rules");
+  // pass-f F-50: the rule's line is in the (i) by Without an invite.
+  await panel.getByRole("button", { name: "About without an invite" }).click();
   const line = panel.getByTestId("sign-in-rule-line");
+  await expect(line).toBeVisible();
   await expect(line).toHaveText(
     "Someone from these domains who signs in without an invite waits until an owner approves. Requests appear here and in the Inbox.",
   );
@@ -98,7 +101,13 @@ test("members: the Sign-in panel keeps Join at once, offers Viewer and Commenter
   await expect(deployed).toHaveAttribute("data-from", "deployment");
   await expect(deployed.locator('[title="Set where Oracle is deployed; change it there"]')).toBeVisible();
   await panel.getByRole("button", { name: "Edit domains" }).click();
-  await expect(panel).toContainText("Docs in picked Drive folders owned outside these domains are skipped (Settings › Sources).");
+  // pass-f F-50: what the list also decides is in the Company domains (i).
+  await panel.getByRole("button", { name: "About company domains" }).click();
+  await expect(panel.getByTestId("sign-in-domains-hint")).toBeVisible();
+  await expect(panel.getByTestId("sign-in-domains-hint")).toContainText(
+    "Settings › Sources, where it also decides which Google Drive docs Oracle reads: docs in picked folders owned outside these domains are skipped.",
+  );
+  await page.keyboard.press("Escape");
   await expect(panel.getByRole("button", { name: "Remove example.com" })).toHaveCount(0);
   await panel.getByLabel("Add a domain").fill("gmail.com");
   await panel.getByRole("button", { name: "Add", exact: true }).click();
@@ -165,7 +174,11 @@ test("members: Holds and See them open the approver's approvals", async ({ page 
   const list = holds.getByTestId("member-approvals");
   await expect(list.getByRole("listitem")).toHaveCount(3);
   await expect(list.getByRole("listitem").first()).toContainText("Section approval");
-  await expect(list.getByRole("link", { name: /usage-alerts v4/ }).first()).toHaveAttribute("href", "/documents/usage-alerts");
+  // pass-f F-16: the document's and the section's titles, not the slug or the key.
+  await expect(list.getByRole("link", { name: "Usage alerts v4" }).first()).toHaveAttribute("href", "/documents/usage-alerts");
+  await expect(list.getByRole("listitem").first()).toContainText("Problem");
+  await expect(list).not.toContainText("usage-alerts");
+  await expect(list).not.toContainText("#problem");
   await holds.getByRole("button", { name: "1 version approval" }).click();
   await expect(list.getByRole("listitem")).toHaveCount(1);
   await expect(list).toContainText("Version approval");

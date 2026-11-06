@@ -173,7 +173,12 @@ test("members: a commenter reads the people list, with no role selects, Remove o
   // AC 33
   await login(page, "commenter@example.com");
   await page.goto("/settings/members");
-  await expect(page.getByTestId("role-note")).toContainText("Your role is Commenter. Owners manage members and sign-in.");
+  // pass-f F-50: the note names the role; what it may do is in the (i).
+  const note = page.getByTestId("role-note");
+  await expect(note).toContainText("Your role is Commenter");
+  await note.getByRole("button", { name: "About your role" }).click();
+  await expect(note.getByRole("tooltip")).toHaveText("Owners manage members and sign-in.");
+  await page.keyboard.press("Escape");
   const list = page.getByTestId("people-readonly");
   const rows = list.getByTestId("person-row");
   await expect(rows.filter({ hasText: "approver@example.com" })).toContainText("Approver");
@@ -195,9 +200,11 @@ test("members: an approver invites viewers and commenters only and sees only the
   // AC 34
   await login(page, "approver@example.com");
   await page.goto("/settings/members");
-  await expect(page.getByTestId("role-note")).toContainText(
-    "Your role is Approver. You can invite viewers and commenters and approve their access requests.",
-  );
+  const note = page.getByTestId("role-note");
+  await expect(note).toContainText("Your role is Approver");
+  await note.getByRole("button", { name: "About your role" }).click();
+  await expect(note.getByRole("tooltip")).toHaveText("You can invite viewers and commenters and approve their access requests.");
+  await page.keyboard.press("Escape");
   const form = page.getByRole("form", { name: "Invite" });
   await expect(form.getByLabel("Role", { exact: true }).locator("option")).toHaveText(["Commenter", "Viewer"]);
   // The owner's invites are not theirs.
@@ -235,7 +242,7 @@ test("members: inviting outside the company's domains says so and adds no row", 
   const form = page.getByRole("form", { name: "Invite" });
   await form.getByLabel("Email").fill("x@elsewhere.test");
   await form.getByRole("button", { name: "Send invite", exact: true }).click();
-  await expect(form.getByRole("alert")).toContainText("outside the company's email domains");
+  await expect(form.getByRole("alert")).toContainText("x@elsewhere.test is not in the company domains");
   await expect(inviteRow(page, "x@elsewhere.test")).toHaveCount(0);
 });
 

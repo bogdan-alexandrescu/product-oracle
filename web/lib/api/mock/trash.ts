@@ -47,6 +47,10 @@ export interface TrashEntryRow {
   /** trash-features-goals: a goal deleted with features moved to another goal: their goal_ids
    * as they were (trash_items' `links`), put back on Restore. */
   goal_links?: { id: string; goal_ids: string[]; left?: string[] }[];
+  /** port-an-decisions: a removed agenda item's meeting, row and place, put back on Restore. */
+  agenda?: { meeting_id: string; row: unknown; at: number };
+  /** port-an-decisions: a deleted request's row, put back on Restore. */
+  request?: unknown;
 }
 
 export interface TrashDb {
@@ -55,6 +59,8 @@ export interface TrashDb {
   estimates: Record<string, { slug: string; flow: string; note: string | null }>;
   /** home-deleted-roadmap: the document kinds purged from Trash (the API reads its audit log). */
   purged?: string[];
+  /** home-deleted-roadmap: when each kind was last purged (the audit event's time). */
+  purged_at?: Record<string, string>;
 }
 
 export interface TrashContext<D extends TrashDocument, V extends TrashVersion> {
@@ -65,7 +71,10 @@ export interface TrashContext<D extends TrashDocument, V extends TrashVersion> {
   intakes: () => Intake[];
   /** The spec requests: a tech brief's link to its PRD (its versions name no source). */
   specRequests: () => { source_document_id: string; document_slug?: string | null }[];
-  me: { id: string; email: string; role: Role };
+  me: { id: string; email: string; name?: string | null; role: Role };
+  /** port-an-decisions: Restore of a meeting's agenda item or a request puts it back; the refusal's
+   * words when it cannot (409: its meeting has ended), else null. */
+  restoreRoot?: (entry: TrashEntryRow) => string | null;
   /** The document's designated decider (its review policy), who regenerates it whatever their role. */
   deciderOf?: (documentId: string) => string | null;
   /** New PRD (4): moving these documents to Trash releases what links to them; the result is kept for Restore. */
@@ -74,6 +83,8 @@ export interface TrashContext<D extends TrashDocument, V extends TrashVersion> {
   onRestore?: (released: unknown) => void;
   /** trash-features-goals: Restore of a roadmap feature or a goal (kept in place, marked `trashed`). */
   simple?: () => TrashedSimple | undefined;
+  /** prd-reads-working-draft: which company roadmap a PRD's run reads (./roadmap-read.ts). */
+  roadmapRead?: (me: { id: string; role: Role }) => string | null;
   uuid: () => string;
   now: () => string;
 }
@@ -83,7 +94,7 @@ export const emptyTrash = (): TrashDb => ({ entries: [], estimates: {} });
 /** Deletes an entry for good, noting the kinds of documents it held (as trash.purge's audit event).
  * trash-features-goals: a feature's or a goal's rows go too (trash_items.before_purge): the items
  * that depended on the feature drop its key, and the features drop the goal. */
-function purge(db: TrashDb, entry: TrashEntryRow, simple?: TrashedSimple) {
+function purge(db: TrashDb, entry: TrashEntryRow, now: string, simple?: TrashedSimple) {
   db.entries = db.entries.filter((e) => e !== entry);
   const root = entry.out.root;
   if (simple && root.type === "feature") {
@@ -102,7 +113,10 @@ function purge(db: TrashDb, entry: TrashEntryRow, simple?: TrashedSimple) {
     gb.goals.splice(0, gb.goals.length, ...gb.goals.filter((g) => !(g.id === root.id && g.trashed)));
     for (const f of gb.features ?? []) f.goal_ids = f.goal_ids.filter((g) => g !== root.id);
   }
-  db.purged = [...new Set([...(db.purged ?? []), ...(entry.documents as { kind?: string }[]).flatMap((d) => (d.kind ? [d.kind] : []))])];
+  const kinds = (entry.documents as { kind?: string }[]).flatMap((d) => (d.kind ? [d.kind] : []));
+  db.purged = [...new Set([...(db.purged ?? []), ...kinds])];
+  // home-deleted-roadmap: when each kind was last purged (the audit event's time).
+  db.purged_at = { ...db.purged_at, ...Object.fromEntries(kinds.map((k) => [k, now])) };
 }
 
 const RETENTION_DAYS = 30;
@@ -158,6 +172,9 @@ function daysLeft(entry: TrashEntryRow, now: string): number {
   return Math.max(0, Math.ceil(ms / DAY_MS));
 }
 
+/** As oracle.trash.service._actor_name: the person's name, else their email. */
+export const trashName = (me: { email: string; name?: string | null }): string => me.name || me.email;
+
 export const entryOut = (e: TrashEntryRow, now: string, canRestore = false): Schemas["TrashEntryOut"] => ({
   ...e.out,
   days_left: daysLeft(e, now),
@@ -166,10 +183,10 @@ export const entryOut = (e: TrashEntryRow, now: string, canRestore = false): Sch
 });
 
 /** As oracle.trash.service.may_restore (owner's answer, Nov 5): an owner restores anything;
- * whoever deleted a feature or a goal restores it too. */
+ * whoever deleted a feature, a goal, a decision, a question or a meeting's agenda item restores it too. */
 export function mayRestore(entry: TrashEntryRow, me: { id: string; role: string }): boolean {
   if (me.role === "owner") return true;
-  return entry.out.deleted_by === me.id && (entry.out.root.type === "feature" || entry.out.root.type === "goal");
+  return entry.out.deleted_by === me.id && ["feature", "goal", "decision", "question", "agenda_item"].includes(entry.out.root.type);
 }
 
 /** trash-features-goals: the Simple rows a feature's or a goal's entry marks `trashed`; the mock
@@ -181,6 +198,8 @@ export type TrashedSimple = {
   goal_milestones?: { roadmap: string; gates: string[] }[];
   /** trash-features-goals review 4: the roadmaps' versions, each with the features it was made without. */
   versions?: { roadmap: string; without: string[] }[];
+  /** edit-decisions: Simple's decisions and the PRD's questions (a question's `id` is set when it is trashed). */
+  sheet?: { id?: string; trashed?: boolean }[];
 };
 
 /** trash-features-goals: takes `entry` out of Trash, putting back the feature or the goal it
@@ -206,6 +225,7 @@ export function restoreFromTrash(db: TrashDb, entry: TrashEntryRow, now: string,
     const left = new Set(l.left ?? f?.goal_ids ?? []);
     if (f && f.goal_ids.length === left.size && f.goal_ids.every((g) => left.has(g))) f.goal_ids = [...l.goal_ids];
   }
+  if (root.type === "decision" || root.type === "question") simple?.sheet?.filter((r) => r.id === root.id).forEach((r) => (r.trashed = false));
   db.entries = db.entries.filter((e) => e !== entry);
   return entryOut(entry, now);
 }
@@ -229,7 +249,7 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
   const now = ctx.now();
   // The purge the ticker does, on every request routed here (Home's included), not only Trash's:
   // entries past their 30 days are gone.
-  for (const e of ctx.db.entries) if (daysLeft(e, now) <= 0) purge(ctx.db, e, ctx.simple?.());
+  for (const e of ctx.db.entries) if (daysLeft(e, now) <= 0) purge(ctx.db, e, now, ctx.simple?.());
 
   if (p[1] === "trash") {
     // Trash's list and Restore: commenters and up, each entry checked (mayRestore); purge: owners.
@@ -242,11 +262,13 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
     if (!entry) return json(404, { detail: "Not in Trash" });
     if (m === "POST" && p[3] === "restore") {
       if (!mayRestore(entry, ctx.me)) return json(403, { detail: "Only an owner, or whoever deleted it, restores this" });
+      const refused = entry.agenda || entry.request !== undefined ? (ctx.restoreRoot?.(entry) ?? null) : null;
+      if (refused) return json(409, { detail: refused });
       return json(200, restore(ctx, entry, now));
     }
     if (!owner) return ownerOnly;
     if (m === "DELETE" && !p[3]) {
-      purge(ctx.db, entry, ctx.simple?.());
+      purge(ctx.db, entry, now, ctx.simple?.());
       return json(204, undefined);
     }
     return null;
@@ -295,6 +317,8 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
     const run = {
       ...structuredClone(template),
       id: body.run_id!, flow, status: "succeeded", document_slug: doc.slug, created_at: now, created_by: ctx.me.id,
+      // prd-reads-working-draft: a PRD's run follows the company roadmap of record.
+      roadmap_read: doc.kind === "prd" ? (ctx.roadmapRead?.(ctx.me) ?? null) : null,
     } as RunOut;
     ctx.runs().push(run);
     return json(200, run);
@@ -339,12 +363,13 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
   // The mock has no publications: a document is "published" once a version is approved
   // and it is a PRD (enough for the second confirmation in the dialog).
   const published = docs.some((d) => d.kind === "prd" && ctx.versions.some((v) => v.document_id === d.id && v.approved_at));
+  // qa4-docs-26, F-69, as oracle.trash.service._said: a run says when it ran and what it wrote,
+  // in the delete dialog and in Trash.
+  const said = items.map((i) => {
+    const r = i.type === "run" ? runs.find((x) => x.id === i.id) : undefined;
+    return r ? { ...i, created_at: r.created_at, wrote: docs.find((d) => d.slug === r.document_slug)?.title ?? null } : i;
+  });
   if (isDependents) {
-    // qa4-docs-26, as oracle.trash.service.preview: a run says when it ran and what it wrote.
-    const said = items.map((i) => {
-      const r = i.type === "run" ? runs.find((x) => x.id === i.id) : undefined;
-      return r ? { ...i, created_at: r.created_at, wrote: docs.find((d) => d.slug === r.document_slug)?.title ?? null } : i;
-    });
     const out: Schemas["DependentsOut"] = { root, items: said, published, working_runs: working.map((r) => r.id) };
     return json(200, out);
   }
@@ -356,7 +381,7 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
   const intakeIds = new Set(intakes.map((i) => i.id));
   const entry: TrashEntryRow = {
     out: {
-      id: ctx.uuid(), root, items, deleted_by: ctx.me.id, deleted_by_name: ctx.me.email, deleted_at: now,
+      id: ctx.uuid(), root, items: said, deleted_by: ctx.me.id, deleted_by_name: trashName(ctx.me), deleted_at: now,
       reason: q.get("reason"), published,
       purge_after: new Date(new Date(now).getTime() + RETENTION_DAYS * DAY_MS).toISOString(),
     },

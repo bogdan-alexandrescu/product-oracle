@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { DeleteDialog, DeleteMenu } from "@/components/ArtifactMenu";
 import { decisionSentence, runLabel } from "@/lib/labels";
 import { SourceLink } from "@/components/BuildRoadmap";
+import { RoadmapRead } from "./_roadmap-read";
 import {
   Button,
   Chip,
@@ -36,8 +37,10 @@ import { RawFileSheet } from "@/components/review/RawFileSheet";
 import { StagingBar } from "@/components/staging/StagingBar";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
+import { named, namedText } from "@/lib/codes";
 import { failedAt, formatDateTime, formatDay, formatTime, plural } from "@/lib/format";
 import { useMe, type Operation } from "@/lib/me";
+import { unknownGoalWords } from "@/lib/order-problems";
 
 import { NewRunDialog, type RunStart } from "./_new-run-dialog";
 import { QueueWaitNote } from "./_queue-wait";
@@ -283,6 +286,16 @@ export function RunDetail({ id }: { id: string }) {
   // Imports a segment's refused draft again (the review still waits for a person).
   const retryImport = (seq: number) =>
     act(() => unwrap(api.POST("/v1/runs/{run_id}/segments/{seq}/retry-draft-import", { params: { path: { run_id: id, seq } } })));
+  // A failed run runs again from the segment it stopped at; a refusal is said at that segment.
+  const retrySegment = (seq: number, onError: (message: string) => void) =>
+    act(
+      () => unwrap(api.POST("/v1/runs/{run_id}/segments/{seq}/retry", { params: { path: { run_id: id, seq } } })),
+      async (e) => {
+        onError(errorMessage(e));
+        void reload();
+        return true;
+      },
+    );
   // A segment reused from earlier (skipped as reused) counts as done, as the API's progress counts it.
   const done = run.segments.filter((s) => s.status === "succeeded" || s.status === "skipped").length;
   const decideCp = run.checkpoints.find((c) => c.status === "pending" && c.can_decide);
@@ -334,6 +347,7 @@ export function RunDetail({ id }: { id: string }) {
                 <SourceLink source={run.source} />
               </span>
             )}
+            {run.roadmap_read && <RoadmapRead text={run.roadmap_read} />}
             {templateText && (
               <Chip kind="line" wrap data-testid="run-template">
                 {templateText}
@@ -429,6 +443,12 @@ export function RunDetail({ id }: { id: string }) {
           <ErrorNote>
             {run.status === "failed" && run.finished_at && <span data-testid="failed-at">{failedAt(run.finished_at)}. </span>}
             {run.error}
+            {/* As the API: a failed run over its ceiling is not retried. */}
+            {run.status === "failed" && run.overrun_ceiling_usd != null && run.spent_usd > run.overrun_ceiling_usd && (
+              <span className="block" data-testid="budget-stopped">
+                This run stopped at its budget; start it again with a new estimate.
+              </span>
+            )}
           </ErrorNote>
         )}
         {run.stuck && (
@@ -599,6 +619,7 @@ export function RunDetail({ id }: { id: string }) {
                   busy={busy}
                   onDecide={decide}
                   onRetryImport={retryImport}
+                  onRetrySegment={retrySegment}
                   onDraftChanged={() => void reload()}
                 />
               </Fragment>
@@ -782,7 +803,11 @@ function RunInspector({ run }: { run: RunOut }) {
               // qa-work-25: one format, in the normal font: "$4.90 of $14.50 estimated".
               // qa-work-23: the value's weight and colour, as every other Details value.
               <span data-testid="run-cost" data-cost="small" className="tnum">
-                {run.estimate_usd == null ? (
+                {run.status === "running" && run.spent_usd === 0 && !run.segments.some((x) => x.cost_reported) ? (
+                  <>
+                    Cost not reported yet{run.estimate_usd != null && <> · {usd(run.estimate_usd)} estimated</>}
+                  </>
+                ) : run.estimate_usd == null ? (
                   costText(run)
                 ) : (
                   <>
@@ -838,7 +863,7 @@ function ProposalsRow({ run }: { run: RunOut }) {
             {open > 0 ? (
               <>
                 {open} to review ·{" "}
-                <Link href={`/baseline?tab=proposals&run=${run.id}`} className="text-accent-ink hover:underline">
+                <Link href={`/ground-truth?tab=proposals&run=${run.id}`} className="text-accent-ink hover:underline">
                   Review
                 </Link>
               </>
@@ -866,7 +891,7 @@ function RunDecisions({ run }: { run: RunOut }) {
   // Who decided, as the API names them: a confirmed console answer is its author's, not the confirmer's.
   const said = (d: Schemas["RunDecision"]) => {
     const name = d.decided_by_name;
-    const checkpoint = d.kind === "baseline_confirm" ? "The baseline" : (CHECKPOINT_LABEL[d.kind as keyof typeof CHECKPOINT_LABEL] ?? "This checkpoint");
+    const checkpoint = d.kind === "baseline_confirm" ? "The Ground Truth" : (CHECKPOINT_LABEL[d.kind as keyof typeof CHECKPOINT_LABEL] ?? "This checkpoint");
     return decisionSentence(d, checkpoint, name);
   };
   return (
@@ -891,6 +916,15 @@ function RunDecisions({ run }: { run: RunOut }) {
           {q.data.map((d) => (
             <li key={d.checkpoint_id} data-testid="run-decision" className="break-words">
               {said(d)}
+              {d.answers?.length ? (
+                <ul aria-label={`Answered at ${CHECKPOINT_LABEL[d.kind as keyof typeof CHECKPOINT_LABEL] ?? "this checkpoint"}`} className="mt-1 ml-4 list-disc space-y-0.5 text-text2">
+                  {d.answers.map((a, i) => (
+                    <li key={i} data-testid="run-decision-answer">
+                      {[`${a.feature_title ? `${a.feature_title}: ` : ""}${a.question} → ${a.answer}`, a.answered_by_name, a.answered_at ? formatDateTime(a.answered_at) : null].filter(Boolean).join(" · ")}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </li>
           ))}
         </ol>
@@ -949,7 +983,16 @@ function SegmentProgress({ segment: s }: { segment: SegmentOut }) {
             <span data-testid="segment-proposals">{plural(s.proposals_written, "proposal")} written</span> ·{" "}
           </>
         )}
-        {s.checked_at ? `checked ${since(s.checked_at)} ago` : "Not checked yet: the agents' progress shows after the next check"}
+        {s.checked_at ? (
+          `checked ${since(s.checked_at)} ago`
+        ) : (
+          <span className="inline-flex items-center gap-1.5">
+            Not checked yet
+            <InfoTip label="the progress check" side="top" align="start">
+              The agents&apos; progress shows after the next check.
+            </InfoTip>
+          </span>
+        )}
       </p>
       {s.checked_at &&
         (s.agents.length > 0 ? (
@@ -982,6 +1025,7 @@ function SegmentItem({
   busy,
   onDecide,
   onRetryImport,
+  onRetrySegment,
   onDraftChanged,
 }: {
   run: RunOut;
@@ -990,6 +1034,8 @@ function SegmentItem({
   busy: boolean;
   onDecide: Decide;
   onRetryImport: (seq: number) => void;
+  /** Runs a failed run again from this segment (shown when the segment's can_retry is set). */
+  onRetrySegment: (seq: number, onError: (message: string) => void) => Promise<void>;
   /** D7: the shared draft changed, so the checkpoint's Approve words may have (the run re-read). */
   onDraftChanged: () => void;
 }) {
@@ -1005,6 +1051,17 @@ function SegmentItem({
   const draft = useDraft(run.id, waitingCp?.id ?? null);
   const shared = draft.review && draft.review.checkpoint_id === waitingCp?.id ? draft.review : null;
   const [draftError, setDraftError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
+  const retry = async () => {
+    setRetrying(true);
+    setRetryError(null);
+    try {
+      await onRetrySegment(s.seq, setRetryError);
+    } finally {
+      setRetrying(false);
+    }
+  };
   // D7: Approve's words and what needs the agents are the checkpoint's: re-read the run when
   // the draft moves on from the revision first read (a staged edit, another reviewer's).
   const seenRevision = useRef<string | null>(null);
@@ -1034,7 +1091,9 @@ function SegmentItem({
   const details =
     sentReviews.length > 0 ||
     editedBy.length > 0 ||
-    s.error ||
+    (s.error && s.error !== run.error) ||
+    s.can_retry ||
+    retryError ||
     s.autonomy_note ||
     s.items_check ||
     s.feature_set_check ||
@@ -1068,6 +1127,11 @@ function SegmentItem({
       setDraftError(errorMessage(e));
     }
   }
+  // D3: the gate's Waive… says a refusal under its own form, so it rejects instead.
+  const waive = async (body: ActionIn) => {
+    if (!shared) return;
+    draft.accept(await unwrap(api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions", { ...draftPath(shared.checkpoint_id), body })));
+  };
   const draftActs: DraftActs | undefined = shared
     ? {
         review: shared,
@@ -1239,12 +1303,21 @@ function SegmentItem({
       </div>
       {details && (
         <div className="space-y-2.5 pr-4 pb-3 pl-[56px] text-[15px] max-[600px]:pr-3 max-[600px]:pl-[44px]">
-          {s.error && (
+          {s.error && s.error !== run.error && (
             <p className="text-crit">
               {s.status === "failed" && s.finished_at && <span data-testid="failed-at">{failedAt(s.finished_at)}. </span>}
               {s.error}
             </p>
           )}
+          {s.can_retry && (
+            <div className="space-y-1.5" data-testid="segment-retry">
+              <p className="text-text2">Retry this step. It runs again from here; the steps before it stay approved.</p>
+              <Button disabled={busy} onClick={() => void retry()}>
+                {retrying ? "Retrying…" : "Retry"}
+              </Button>
+            </div>
+          )}
+          {retryError && <ErrorNote>{retryError}</ErrorNote>}
           {s.queue_wait && (
             <p>
               <QueueWaitNote wait={s.queue_wait} testId="segment-queue-wait" />
@@ -1285,10 +1358,11 @@ function SegmentItem({
               anchor={deciding.includes(waitingCp) && decidedOnScreen(waitingCp)}
             />
           )}
-          {waitingCp?.kind === "feature_set" && reviewHref(waitingCp) && !deciding.includes(waitingCp) && (
-            // C7: commenters suggest and viewers read on the review screen too.
+          {waitingCp?.kind === "feature_set" && !deciding.includes(waitingCp) && (
+            // C7: commenters suggest and viewers read on the review screen too: this run's
+            // feature set, by the run on screen (as every other review link here).
             <p className="mt-2" data-testid="review-link">
-              <LinkButton href={reviewHref(waitingCp)!} icon="flag">
+              <LinkButton href={reviewHref({ ...waitingCp, run_id: run.id })!} icon="flag">
                 Review feature set
               </LinkButton>
             </p>
@@ -1331,7 +1405,7 @@ function SegmentItem({
           {delivering.map((cp) => (
             <DeliveryLine key={cp.id} cp={cp} />
           ))}
-          <VagueGoalsLine count={vague} href={`/baseline?tab=proposals&run=${run.id}&interview=vague`} />
+          <VagueGoalsLine count={vague} href={`/ground-truth?tab=proposals&run=${run.id}&interview=vague`} />
           {screened && <ReviewScreenLine run={run} cp={screened} />}
           {deciding.filter((cp) => !decidedOnScreen(cp)).map((cp, i) =>
             // D10: a PRD or roadmap review with its draft imported is decided in the version;
@@ -1351,7 +1425,7 @@ function SegmentItem({
               review={shared?.checkpoint_id === cp.id ? shared : null}
               onSaveNote={(text) => saveNote(cp.id, text)}
               onReload={draft.reload}
-              onWaive={shared?.checkpoint_id === cp.id ? draftActs?.act : undefined}
+              onWaive={shared?.checkpoint_id === cp.id ? waive : undefined}
               noteRef={(el) => {
                 noteFields.current[cp.id] = el;
               }}
@@ -1755,7 +1829,18 @@ function actionLabel(a: DraftAction, reasons: ItemReason[]): string {
   const fix = reasons.flatMap((r) => r.fixes).find((f) => same(f.action));
   if (fix) return fix.label;
   if (a.kind === "edit") return `Edit ${(a.field ?? "").replace("clear:", "clear ").replace("_", " ")}`;
+  if (a.kind === "waive") return waiveLabel(a, reasons);
   return ACTION_WORDS[a.kind] ?? a.kind;
+}
+
+/** A waiver in the words of what it waives: "Waive No PRD section on F-12 Usage alerts". */
+function waiveLabel(a: DraftAction, reasons: ItemReason[]): string {
+  const own = reasons.filter((r) => r.item === a.item_key);
+  const feature = namedText(named(own[0]?.item_title || a.item_key, a.item_key));
+  // An answer is the reason's code, or its own ref (the code, "~", a hash).
+  const codes = (a.answers ?? []).map((x) => x.split("~")[0]);
+  const labels = [...new Set(own.filter((r) => codes.includes(r.code)).map((r) => r.label))];
+  return labels.length ? `Waive ${labels.join(", ")} on ${feature}` : `Waive ${feature}`;
 }
 
 /** `summary`: the counts without the per-item reasons (a Roadmap items stop decided on its review screen). */
@@ -2076,10 +2161,10 @@ function FromRunLink({ runId }: { runId: string }) {
   return (
     <p className="mt-2">
       {/* qa-work-45: a long label wraps inside the card's padding on a phone. */}
-      <LinkButton href={`/baseline?run=${runId}`} icon="baseline" className="h-auto! min-h-8 max-w-full py-1 text-left whitespace-normal!" data-testid="from-run-link">
+      <LinkButton href={`/ground-truth?run=${runId}`} icon="baseline" className="h-auto! min-h-8 max-w-full py-1 text-left whitespace-normal!" data-testid="from-run-link">
         {q.data && q.data.summary.need_you === 0
-          ? "Open the baseline (nothing flagged for you)"
-          : `Review in Baseline${q.data ? ` · ${q.data.summary.need_you} need you` : ""}`}
+          ? "Open the Ground Truth (nothing flagged for you)"
+          : `Review in Ground Truth${q.data ? ` · ${q.data.summary.need_you} need you` : ""}`}
       </LinkButton>
     </p>
   );
@@ -2204,8 +2289,8 @@ function Artifacts({
         type="button"
         onClick={() => void show(name, attempt)}
         aria-expanded={on}
-        // qa-work-8: the file in words ("Roadmap items"); its name on hover.
-        title={name}
+        // qa-work-8: the file in words ("Roadmap items"); its name on hover, said as a file name.
+        title={`File: ${name}`}
         className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 text-[13px] ${
           on ? "border-accent bg-accent-soft text-accent-ink" : "border-line-strong bg-surface text-text hover:bg-surface2"
         }`}
@@ -2385,10 +2470,11 @@ function CheckpointRow({
           {agentsOnly}
         </p>
       )}
-      {cp.kind === "feature_set" && reviewHref(cp) && cp.status === "pending" && (
-        // C7: the feature set is reviewed row by row on its own screen; the raw files stay below.
+      {cp.kind === "feature_set" && cp.status === "pending" && (
+        // C7: the feature set is reviewed row by row on its own screen (this run's, by the run on
+        // screen); the raw files stay below.
         <p className="mt-2">
-          <LinkButton href={reviewHref(cp)!} variant="solid" icon="flag">
+          <LinkButton href={reviewHref({ ...cp, run_id: run.id })!} variant="solid" icon="flag">
             Review feature set
           </LinkButton>
         </p>
@@ -2554,63 +2640,89 @@ function gateMessage(gate: CheckpointOut["gate"] | undefined): string | null {
 
 /** D3: the blocking reasons still open under the decision, each waivable one with Waive…. */
 function GateList({ gate, message, onWaive }: { gate: NonNullable<CheckpointOut["gate"]>; message: string; onWaive?: (body: ActionIn) => Promise<void> }) {
-  const [waiving, setWaiving] = useState<string | null>(null);
-  const [reason, setReason] = useState("");
-  const [busy, setBusy] = useState(false);
-  const key = (x: { item: string; code: string }) => `${x.item}|${x.code}`;
+  // Each problem by its own ref: two of the same code on one feature are two rows, each with its own Waive….
+  const seen = new Set<string>();
+  const rows = gate.left.filter((x) => {
+    const k = gateKey(x);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
   return (
     <div className="mt-2 text-sm" data-testid="approve-gate">
       <p className="text-warn">{message}</p>
       <ul className="mt-1 space-y-1">
-        {gate.left.map((x) => (
-          <li key={key(x)} data-testid="gate-reason">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium">{x.item_title ?? x.item}</span>
-              <Chip kind="crit" className={REASON_CHIP}>
-                {x.label}
-              </Chip>
-              {x.waivable && onWaive && waiving !== key(x) && (
-                <button
-                  type="button"
-                  className="inline-flex min-h-6 items-center font-medium text-accent-ink underline max-[600px]:min-h-11"
-                  onClick={() => {
-                    setWaiving(key(x));
-                    setReason("");
-                  }}
-                >
-                  Waive…
-                </button>
-              )}
-            </div>
-            {waiving === key(x) && onWaive && (
-              <form
-                className="mt-1 flex flex-wrap items-center gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  setBusy(true);
-                  void onWaive({ item_key: x.item, kind: "waive", answers: [x.code], value: { reason: reason.trim() } }).finally(() => {
-                    setBusy(false);
-                    // Another reason's form may have opened meanwhile: only this one closes.
-                    setWaiving((open) => (open === key(x) ? null : open));
-                  });
-                }}
-              >
-                <input
-                  aria-label={`Reason to waive: ${x.label}`}
-                  placeholder="Why this is fine for now"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  className={`${INPUT} h-8 min-w-0 flex-1`}
-                />
-                <Button type="submit" className="h-8 px-2.5 text-sm" disabled={busy || !reason.trim()}>
-                  Waive
-                </Button>
-              </form>
-            )}
-          </li>
+        {rows.map((x) => (
+          <GateRow key={gateKey(x)} x={x} onWaive={onWaive} />
         ))}
       </ul>
     </div>
+  );
+}
+
+const gateKey = (x: { item: string; code: string; ref?: string }) => `${x.item}|${x.ref || x.code}`;
+
+/** One blocking reason: its own reason box, text and Waive, so waiving it waives it alone. */
+function GateRow({ x, onWaive }: { x: NonNullable<CheckpointOut["gate"]>["left"][number]; onWaive?: (body: ActionIn) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <li data-testid="gate-reason" data-ref={x.ref || x.code}>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-medium">{x.item_title ?? x.item}</span>
+        <Chip kind="crit" className={REASON_CHIP}>
+          {x.code === "unknown_goal" ? unknownGoalWords(x.label) : x.label}
+        </Chip>
+        {x.waivable && onWaive && !open && (
+          <button
+            type="button"
+            className="inline-flex min-h-6 items-center font-medium text-accent-ink underline max-[600px]:min-h-11"
+            onClick={() => {
+              setOpen(true);
+              setReason("");
+              setError(null);
+            }}
+          >
+            Waive…
+          </button>
+        )}
+      </div>
+      {open && onWaive && (
+        <form
+          className="mt-1 flex flex-wrap items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setBusy(true);
+            setError(null);
+            // A refused waiver keeps its form and reason, with the API's words under it.
+            onWaive({ item_key: x.item, kind: "waive", answers: [x.ref || x.code], value: { reason: reason.trim() } })
+              .then(
+                () => setOpen(false),
+                (e: unknown) => setError(errorMessage(e)),
+              )
+              .finally(() => setBusy(false));
+          }}
+        >
+          <input
+            aria-label={`Reason to waive: ${x.label}`}
+            placeholder="Why this is fine for now"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className={`${INPUT} h-8 min-w-0 flex-1`}
+          />
+          <Button type="submit" className="h-8 px-2.5 text-sm" disabled={busy || !reason.trim()}>
+            Waive
+          </Button>
+        </form>
+      )}
+      {open && error && (
+        <p className="mt-1 text-sm text-crit" role="alert">
+          {error}
+        </p>
+      )}
+    </li>
   );
 }
 

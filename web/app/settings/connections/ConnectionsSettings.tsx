@@ -220,21 +220,19 @@ function CompanySlack() {
           {s.connected ? (s.needs_reconnect ? "Installed, needs a reconnect" : "Installed for notifications") : "Not installed"}
         </Chip>
       </p>
-      <p className="text-text2">
-        {s.connected ? (s.label ? <>Installed for the company in {s.label}: it </> : "Installed for the company, it ") : "Once installed for the company, it "}
-        posts the weekly report and mirrors discussions.{" "}
+      {/* Pass F F-56: what the app does behind the (i); only the way to set it up shows. */}
+      <p className="flex flex-wrap items-center gap-1 text-text2">
+        <InfoTip label="Oracle's Slack app" align="start">
+          {s.connected ? (s.label ? `Installed for the company in ${s.label}: it ` : "Installed for the company, it ") : "Once installed for the company, it "}
+          posts the weekly report and mirrors discussions. Your own Slack account, below, pulls channels you pick into Oracle.
+        </InfoTip>
         {owner ? (
-          <>
-            It is set up on{" "}
-            <Link href="/settings/notifications" className="font-medium text-accent underline underline-offset-2">
-              Notifications
-            </Link>
-            .
-          </>
+          <Link href="/settings/notifications" className="font-medium text-accent underline underline-offset-2">
+            Set up on Notifications
+          </Link>
         ) : (
-          "An owner sets it up on Notifications."
-        )}{" "}
-        Your own Slack account, below, pulls channels you pick into Oracle.
+          "An owner sets it up on Notifications"
+        )}
       </p>
     </div>
   );
@@ -246,6 +244,9 @@ function ConnectionRow({ connection: c, reload }: { connection: Connection; relo
   const [pending, setPending] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [changing, setChanging] = useState(false);
+  // Pass F F-61: the confirm row names the sources that stop syncing.
+  const sources = useQuery("sources", () => unwrap(api.GET("/v1/sources")));
+  const using = (sources.data ?? []).filter((s) => s.connection_id === c.id).map((s) => s.name);
 
   async function reconnect() {
     setPending(true);
@@ -322,6 +323,17 @@ function ConnectionRow({ connection: c, reload }: { connection: Connection; relo
           )}
         </span>
       </div>
+      {confirming && (
+        <p className="mt-1 break-words text-sm text-warn" data-testid="disconnect-stops">
+          {sources.error
+            ? "Could not check which sources use it."
+            : !sources.data
+              ? "Checking which sources use it…"
+              : using.length === 0
+                ? "No source uses it."
+                : `Stops syncing: ${using.join(", ")}`}
+        </p>
+      )}
       {c.endpoint_url && (
         <p className="mt-0.5 truncate text-sm text-text2" title={c.endpoint_url}>
           Endpoint: <span className="font-mono">{c.endpoint_url}</span>

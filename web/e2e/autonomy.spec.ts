@@ -34,11 +34,14 @@ test("autonomy: an owner sees the five groups and the vision locked at Draft", a
     await expect(page.getByRole("heading", { level: 2, name, exact: true })).toBeVisible();
   }
   await expect(page.getByTestId("autonomy-group-planning").getByTestId("autonomy-row-vision")).toContainText("Draft the vision");
+  // qa-f-71: a locked step's button is left out, not shown disabled; why is said behind the row's (i).
   for (const label of ["Recommend", "Act"]) {
-    const locked = step(page, "vision", label);
-    await expect(locked).toBeDisabled();
-    await expect(locked).toHaveAttribute("title", /^Stays with people: /);
+    await expect(step(page, "vision", label)).toHaveCount(0);
   }
+  const vision = row(page, "vision");
+  await vision.getByRole("button", { name: "About Draft the vision" }).click();
+  await expect(vision.getByRole("tooltip")).toContainText("Recommend and Act stay with people: the vision itself.");
+  await vision.getByRole("button", { name: "About Draft the vision" }).click();
   await expect(step(page, "vision", "Draft")).toHaveAttribute("aria-pressed", "true");
   await expect(step(page, "vision", "Observe")).toBeEnabled();
   const stays = page.getByTestId("autonomy-stays");
@@ -53,7 +56,10 @@ test("autonomy: an owner sees the five groups and the vision locked at Draft", a
 test("autonomy: an owner sets Order priorities to Act within 2 places, with a reason", async ({ page }) => {
   await openAutonomy(page);
   const priorities = row(page, "priorities");
+  // qa-f-71: the row's sentence sits behind its (i), not loose on the page.
+  await priorities.getByRole("button", { name: "About Order priorities" }).click();
   await expect(priorities.getByTestId("autonomy-sentence")).toHaveText("Oracle proposes an order; a person saves it.");
+  await priorities.getByRole("button", { name: "About Order priorities" }).click();
   await step(page, "priorities", "Act").click();
   const sheet = page.getByRole("dialog", { name: "Change Order priorities" });
   await expect(sheet).toBeVisible();

@@ -46,5 +46,5 @@ test("after the first page, a new time zone shows at once on a page still stream
   await expect(page).toHaveURL(/\/settings\/sources$/);
   const form = page.getByRole("form", { name: "Add a source" });
   await form.getByLabel("Kind").selectOption("fireflies");
-  await expect(form.getByTestId("fireflies-timezone")).toContainText("Pacific/Auckland", { timeout: 2500 });
+  await expect(form.getByTestId("fireflies-timezone")).toContainText("Auckland", { timeout: 2500 });
 });

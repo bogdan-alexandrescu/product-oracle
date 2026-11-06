@@ -577,10 +577,6 @@ def _dates(efforts: list[float], per_week: float, today: date) -> list[tuple[dat
     return out
 
 
-def _day(d: date) -> str:
-    return f"{company_time.calendar_day(d)}, {d.year}"
-
-
 async def run_queue(
     db: AsyncSession, prd_id: uuid.UUID | None, as_of: datetime | None = None
 ) -> list[dict[str, Any]]:
@@ -612,28 +608,25 @@ async def run_queue(
     ]
 
 
-def with_run_items(rows: list[dict[str, Any]], items_text: str | None) -> list[dict[str, Any]]:
+def with_run_items(
+    rows: list[dict[str, Any]], items: list[dict[str, Any]] | None
+) -> list[dict[str, Any]]:
     """The shared queue with this run's items file in it: the run's PRD's rows are replaced
     by the file's items (an item already on the roadmap keeps its place; a new one goes
     after its horizon's items, in file order) and the queue is planned again as one team,
-    so the run's own items and every other PRD's take their place together."""
-    if not rows or not items_text:
-        return rows
-    from oracle.runs.roadmap import ItemsYamlError, load_items_yaml
-
-    try:
-        data = load_items_yaml(items_text)
-    except ItemsYamlError:
-        return rows
-    entries = data.get("items") if isinstance(data, dict) else None
-    if not isinstance(entries, list):
+    so the run's own items and every other PRD's take their place together. ``items``: the
+    file's items as its check read them (``ItemsCheck.items``, from
+    oracle.runs.roadmap.check_items_async, kept per text): the file is never parsed here;
+    none (a missing or unreadable file): the queue as it is."""
+    if not rows or not items:
         return rows
     ours = {r["key"]: r for r in rows if r["ours"]}
     prd = next((r["prd"] for r in ours.values()), "")
     merged = [r for r in rows if not r["ours"]]
-    for i, raw in enumerate(entries):
+    for i, raw in enumerate(items):
         key = str(raw.get("id") or "").strip() if isinstance(raw, dict) else ""
-        if not key or any(r["key"] == key for r in merged):
+        # The check names an item without an id "#<n>": it is not placed, as before.
+        if not key or key.startswith("#") or any(r["key"] == key for r in merged):
             continue
         old = ours.get(key)
         if old is not None:
@@ -672,10 +665,8 @@ def queue_lines(rows: list[dict[str, Any]]) -> list[str]:
     ]
     for r in rows:
         mark = "*" if r["ours"] else "-"
-        out.append(
-            f"{mark} {r['title']} ({r['prd']}): "
-            f"{_day(date.fromisoformat(r['start']))} to {_day(date.fromisoformat(r['end']))}"
-        )
+        start, end = (company_time.calendar_day_with_year(r[k]) for k in ("start", "end"))
+        out.append(f"{mark} {r['title']} ({r['prd']}): {start} to {end}")
     out.append(
         "Add or change only this PRD's items; every other PRD's item stays as it is, and "
         "the plan tables list it as below."

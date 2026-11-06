@@ -24,18 +24,18 @@ test("qa4-docs-share-9: the guide names the real blocker, items with no confirme
   await expect(next).toContainText(/No item serves a confirmed goal|serves? no confirmed goal/);
   await expect(next).not.toContainText("Approve at least one item's public text");
   const link = next.getByRole("link", { name: "Link items to goals" });
-  await expect(link).toHaveAttribute("href", "/baseline?tab=flagged");
+  await expect(link).toHaveAttribute("href", "/ground-truth?tab=flagged");
   // Each left-out item says how to fix it too.
-  await expect(behaviour(page).getByRole("link", { name: "Link it to a goal" })).toHaveAttribute("href", "/baseline?tab=flagged");
+  await expect(behaviour(page).getByRole("link", { name: "Link it to a goal" })).toHaveAttribute("href", "/ground-truth?tab=flagged");
 
   // Draft public texts says why nothing was drafted, not that every item already has a text.
   await page.getByRole("button", { name: "Draft public texts" }).click();
   const status = page.getByTestId("public-draft");
-  await expect(status).toHaveText("No item serves a confirmed goal, so there was nothing to draft. Link items to a goal in Baseline first.");
+  await expect(status).toHaveText("No item serves a confirmed goal, so there was nothing to draft. Link items to a goal in the Ground Truth first.");
   await expect(status).not.toContainText("already has a public text");
 
   await link.click();
-  await expect(page).toHaveURL(/\/baseline\?tab=flagged$/);
+  await expect(page).toHaveURL(/\/ground-truth\?tab=flagged$/);
 });
 
 test("qa4-docs-share-47: the To approve count matches the rows with an Approve button", async ({ page }) => {

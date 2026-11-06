@@ -27,13 +27,14 @@ test("qa-work-2: a viewer gets no Sync now or Edit picks, and is told why", asyn
   await expect(inspector(page).getByRole("link", { name: "Edit picks" })).toHaveCount(0);
 });
 
-test("qa-work-2: Sync now says it started and finished, and Synced reads now", async ({ page }) => {
+test("qa-work-2: Sync now says it started and finished, and Synced's title reads now", async ({ page }) => {
   await openCoverage(page);
   const synced = row(page, "Product chat").getByTestId("coverage-synced");
-  await expect(synced).not.toHaveText("now");
+  // F-62: Synced shows a month-first date; the relative age (e.g. "now") is its title tooltip.
+  await expect(synced).not.toHaveAttribute("title", "now");
   await inspector(page).getByRole("button", { name: "Sync now" }).click();
   await expect(page.getByText("Product chat synced")).toBeVisible();
-  await expect(synced).toHaveText("now");
+  await expect(synced).toHaveAttribute("title", "now");
 });
 
 test("qa-work-49: the Kind filter and the selected result name kinds in words", async ({ page }) => {
@@ -58,8 +59,9 @@ test("qa-work-50: Fresh reads '50% fresh' with its counts on hover; one dash; sh
   await expect(fresh).toHaveText("50% fresh");
   await expect(fresh).toHaveAttribute("title", /1 of 2 items fresh/);
   await expect(row(page, "Legacy all-hands chat").getByTestId("coverage-fresh")).toHaveText("—");
+  // F-62: Synced reads a month-first date ("Oct 17"), never a bare relative age.
   const ages = await table(page).getByTestId("coverage-synced").allTextContents();
-  for (const age of ages) expect(age).toMatch(/^(now|Never|\d+(m|h|d|w|mo|y))$/);
+  for (const age of ages) expect(age).toMatch(/^(Never|[A-Z][a-z]{2} \d{1,2})$/);
 });
 
 test("qa-work-51: on a desktop the inspector says why an item was not read", async ({ page }) => {

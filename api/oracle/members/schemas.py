@@ -214,6 +214,9 @@ class TokenApprovalOut(BaseModel):
 
     kind: Literal["section", "version"]
     document: str
+    # pass-f F-16: what the page shows, the document's and the section's titles.
+    document_title: str | None = None
+    section_title: str | None = None
     version: int
     section_key: str | None = None
     review_id: uuid.UUID | None = None

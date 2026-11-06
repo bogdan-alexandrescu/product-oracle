@@ -54,15 +54,15 @@ test("Pick sources: a Slack source added and synced from Set up is counted on Ho
   await form.getByLabel("Kind").selectOption("slack");
   await expect(form.getByLabel("Connection")).toHaveValue(/.+/);
   await form.getByLabel("Name").fill("Team chat");
-  await form.getByRole("button", { name: "Paste ids" }).click();
-  await form.getByLabel("Channel ids (one per line)").fill("C0TEAMCHAT");
+  await form.getByRole("button", { name: "Paste links" }).click();
+  await form.getByLabel("Channel links (one per line)").fill("C0TEAMCHAT");
   await form.getByRole("button", { name: "Add source" }).click();
   const chat = page.getByRole("listitem", { name: "Team chat" });
   await expect(chat).toBeVisible();
   await expect(page.getByRole("list", { name: "My sources" }).getByRole("listitem")).toHaveCount(1);
   await chat.getByRole("button", { name: "Sync now" }).click();
   // The sync says what it read: the channel's messages, which the source now holds.
-  await expect(chat.getByRole("status")).toContainText("Synced: 2 items seen");
+  await expect(chat.getByRole("status")).toContainText("Synced: 2 items,");
   await expect(chat.getByTestId("source-items")).toHaveText("2 items");
 
   // Back to Home: the source is read, and the step is done (qa-onboarding-3).

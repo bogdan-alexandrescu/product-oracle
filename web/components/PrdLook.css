@@ -1,0 +1,84 @@
+/* PT1 a "Calm document": the PRD as one numbered, readable column with a contents rail. */
+
+.prd-look { display: grid; grid-template-columns: 232px minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
+.prd-main { min-width: 0; }
+.prd-side { min-width: 0; position: sticky; top: 16px; max-height: calc(100dvh - 32px); display: flex; flex-direction: column; }
+.prd-rail { position: sticky; top: 16px; max-height: calc(100dvh - 32px); overflow-y: auto; padding-right: 4px; }
+
+/* contents */
+.prd-dot { width: 8px; height: 8px; border-radius: 99px; flex: none; background: var(--line-strong); opacity: 0.45; }
+.prd-dot-pass { background: var(--pass, #15803d); opacity: 1; }
+.prd-dot-warn { background: var(--warn, #b45309); opacity: 1; }
+.prd-dot-crit { background: var(--crit, #b91c1c); opacity: 1; }
+.prd-toc-list { list-style: none; margin: 0; padding: 0; }
+.prd-toc-row { display: flex; width: 100%; align-items: center; gap: 8px; text-align: left; padding: 5px 10px; border-radius: 6px; font-size: 14px; line-height: 20px; color: var(--text2); }
+.prd-toc-row:hover { background: var(--surface2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.prd-toc-row[aria-current] { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
+.prd-toc-n { flex: none; min-width: 2.2em; color: var(--text-faint); font-size: 13px; }
+.prd-toc-row[aria-current] .prd-toc-n { color: var(--accent-ink); }
+.prd-toc-h { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prd-toc li[data-level="1"] .prd-toc-row { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); margin-top: 8px; }
+.prd-toc li[data-level="1"] .prd-toc-row[aria-current] { color: var(--accent-ink); }
+.prd-toc li[data-level="2"] .prd-toc-row { color: var(--text); font-weight: 550; }
+.prd-toc li[data-level="2"] .prd-toc-row[aria-current] { color: var(--accent-ink); font-weight: 600; }
+.prd-toc li:is([data-level="3"], [data-level="4"], [data-level="5"], [data-level="6"]) .prd-toc-row { padding-left: 22px; }
+.prd-toc-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--bg); }
+.prd-toc-filter { flex: 1; min-width: 0; height: 34px; border: 1px solid var(--line-strong); border-radius: 8px; padding: 0 10px; font-size: 14px; background: var(--surface); color: var(--text); }
+.prd-toc-count { font-size: 13px; color: var(--text2); white-space: nowrap; }
+.prd-toc-title { display: block; width: 100%; text-align: left; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); padding: 4px 10px 6px; border-radius: 6px; }
+.prd-toc-title:hover { color: var(--text); }
+
+/* the sheet and its sections */
+.prd-doc { max-width: 760px; margin: 0 auto; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 28px 20px 40px; }
+.prd-sec { position: relative; padding: 0 20px; border-top: 1px solid var(--line); }
+.prd-sec > section { padding: 28px 0 32px 0; scroll-margin-top: 16px; }
+.prd-sec:first-child { border-top: 0; }
+.prd-sec:has(> section[data-level="3"]), .prd-sec:has(> section[data-level="4"]) { border-top: 0; }
+.prd-sec > section:is([data-level="3"], [data-level="4"]) { padding-top: 8px; }
+.prd-sec > section[data-level="2"] h2 { font-size: 24px; line-height: 32px; }
+.prd-sec[data-current]::before { content: ""; position: absolute; left: 0; top: 30px; width: 3px; height: 28px; border-radius: 3px; background: var(--accent); }
+.prd-sec[data-prd-sec], .prd-divider { scroll-margin-top: 16px; }
+.prd-num { font-variant-numeric: tabular-nums; color: var(--text2); margin-right: 0.5em; font-weight: 600; }
+.prd-look .doc-body { font-size: 16.5px; line-height: 1.7; max-width: 680px; }
+.prd-look .doc-body > * + * { margin-top: 1em; }
+.prd-look .doc-body li + li { margin-top: 0.45em; }
+.prd-look .doc-body .table-wrap { max-width: none; margin-right: -20px; border: 1px solid var(--line); border-radius: 10px; scrollbar-width: thin; }
+.prd-look .doc-body table { width: 100%; border-style: hidden; }
+.prd-look .doc-body table:has(th:nth-child(6)) { min-width: 880px; }
+.prd-divider { margin: 32px 20px 0; display: flex; align-items: center; gap: 12px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint); }
+.prd-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.prd-sec:has(+ .prd-divider), .prd-divider + .prd-sec { border-top: 0; }
+
+/* narrower windows and phones */
+@media (max-width: 1360px) {
+  .prd-look { grid-template-columns: 200px minmax(0, 1fr) 320px; }
+}
+@media (max-width: 1100px) {
+  .prd-look { grid-template-columns: minmax(0, 1fr); }
+  .prd-rail { display: none; }
+  .prd-side { position: static; max-height: none; }
+}
+@media (max-width: 639px) {
+  .prd-side { display: none; }
+  .prd-doc { padding: 8px 4px 24px; border-radius: 10px; }
+  .prd-sec { padding: 0 12px; }
+  .prd-look .doc-body { font-size: 16px; }
+  .prd-look .doc-body .table-wrap { margin-right: 0; }
+}
+
+/* printed (Letter portrait): the document only, not the app around it */
+@media print {
+  .prd-look { display: block; }
+  .prd-rail, .prd-side { display: none !important; }
+  .prd-sec[data-current]::before { display: none; }
+  .prd-doc { border: 0 !important; box-shadow: none !important; padding: 0 !important; max-width: none !important; background: none !important; }
+  .prd-look section [aria-label^="Actions for"], .prd-look section button[aria-label^="Open feedback"], .prd-look [data-testid="review-bar"] { display: none !important; }
+  .prd-sec > section { break-inside: auto; }
+  .prd-look :is(h2, h3) { break-after: avoid; }
+  .prd-look .doc-body tr { break-inside: avoid; }
+  body:has(.prd-look) :is([data-testid="app-nav"], [data-testid="hop-dock"], [data-testid="tab-bar"], [data-testid="phone-header"], [data-testid="phone-bar"], [data-testid="version-toolbar"], [data-testid="view-note"], [data-testid="doc-header"] button, [data-testid="doc-header"] a, [role="tablist"]) { display: none !important; }
+  body:has(.prd-look) main { grid-column: 1 / -1 !important; }
+  body:has(.prd-look) div:has(> main) { display: block !important; }
+  body:has(.prd-look) { background: #fff !important; }
+}
+@page { size: Letter portrait; margin: 0.6in; }

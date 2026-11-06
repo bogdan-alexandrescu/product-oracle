@@ -360,6 +360,9 @@ def render_public(
 
     if shared_on and expires_on:
         footer = f"Shared {shared_on} · expires {expires_on}"
+    elif shared_on:
+        # E-14: a link's page, whose header says when the link ends.
+        footer = f"Shared {shared_on}"
     else:
         footer = "On a shared link, this shows when it was shared and when it ends."
     columns = [

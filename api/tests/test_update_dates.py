@@ -102,7 +102,8 @@ async def test_a_runs_import_marks_the_date_and_approval_waits_for_a_basis(clien
     md = (await client.get(f"{url}/markdown", headers=owner)).text
     assert "2026-12-15 <!-- oracle: date unverified -->" in md
     html = (await client.get(f"{url}/export", params={"format": "html"}, headers=owner)).text
-    assert "Dec 15, 2026 <strong>[unverified]</strong>" in html
+    # The export holds a date's parts on one line (no-break spaces, export.render.held_together).
+    assert "Dec\u00a015,\u00a02026 <strong>[unverified]</strong>" in html
 
     resp = await client.post(f"{url}/approve", headers=owner)
     assert resp.status_code == 409, resp.text

@@ -365,12 +365,12 @@ async def test_why_it_needs_you_names_one_count(client):
             "prd-x",
             ["it"],
             freshness="potentially_stale",
-            stale_reasons=["42 baseline items changed", "11 baseline items changed"],
+            stale_reasons=["42 Ground Truth items changed", "11 Ground Truth items changed"],
         )
         await s.commit()
     (item,) = (await plan(client, ctx))["items"]
     stale = [r["detail"] for r in item["reasons"] if r["kind"] == "stale"]
-    assert stale == ["11 baseline items changed"]
+    assert stale == ["11 Ground Truth items changed"]
 
 
 async def test_why_it_needs_you_says_changed_items_in_words(client):
@@ -583,7 +583,9 @@ def test_engineering_stop_lines():
     )
 
 
-async def test_cards_put_the_viewers_decisions_first(client):
+async def test_cards_follow_the_prd_order_and_keep_their_marks(client):
+    """prd-order: the cards in the company PRD order (no goals here: by title), the card
+    waiting for the viewer and the at-risk card keeping their marks."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -592,9 +594,10 @@ async def test_cards_put_the_viewers_decisions_first(client):
         late = await seed.doc("prd-late")
         await seed.version(late, 1)
         await s.commit()
-    order = [p["document"]["slug"] for p in (await plan(client, ctx))["prds"]]
-    assert order[:2] == ["prd-x", "prd-risky"], order
-    assert card(await plan(client, ctx), "prd-risky")["figure"] == "At risk"
+    out = await plan(client, ctx)
+    assert [p["document"]["slug"] for p in out["prds"]] == ["prd-late", "prd-risky", "prd-x"]
+    assert card(out, "prd-x")["waiting_for_viewer"] is True
+    assert card(out, "prd-risky")["figure"] == "At risk"
 
 
 # --- next decision (§7) ----------------------------------------------------------------------
@@ -684,7 +687,7 @@ async def test_next_decision(client, situation, named_owner, action, label, role
     if action == "review_prd":
         assert nxt["href"] == "/documents/prd-x/v/1" and nxt["viewer_may"] is True
     if action == "resolve_blocker":
-        assert nxt["href"].startswith("/baseline?entity=")
+        assert nxt["href"].startswith("/ground-truth?entity=")
 
 
 async def test_basis_ids_are_the_bases_the_date_source_names(client):
