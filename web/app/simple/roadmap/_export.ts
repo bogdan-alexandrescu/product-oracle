@@ -150,8 +150,9 @@ function rowWords(el: HTMLElement): string {
  * numbered short bars under it. */
 export function chartPicture(svg: SVGSVGElement, labels: HTMLElement | null): Picture {
   const lanes = labels ? [...labels.children].filter((el) => (el as HTMLElement).dataset.testid === "chart-group") : [];
-  // A goal lane's name is never cut: the names column widens to the longest (a phone's is narrow), to a limit.
-  const longest = Math.max(0, ...lanes.map((el) => widthOf(rowWords(el as HTMLElement).split(" · ")[0], 13, 600) + 14));
+  // A goal lane's words (its name, its metric) are never cut: the names column widens to the
+  // longest (a phone's is narrow), to a limit past which only the metric is cut.
+  const longest = Math.max(0, ...lanes.map((el) => widthOf(rowWords(el as HTMLElement), 13) + 16));
   const labelW = Math.max(labels?.offsetWidth ?? 0, Math.min(LANE_NAME_MAX, longest));
   const chart = svg.cloneNode(true) as SVGSVGElement;
   chart.setAttribute("x", String(labelW));
@@ -696,7 +697,10 @@ async function pagesOf(page: { markup: string; width: number; height: number }, 
       ctx.drawImage(img, x0, 0, w, top, m + left * g, m, w * g, top * g);
       ctx.drawImage(img, 0, y0, left, bandH, m, m + top * g, left * g, bandH * g);
       ctx.drawImage(img, x0, y0, w, bandH, m + left * g, m + top * g, w * g, bandH * g);
-      if (c > 0 && pic.axis) edgeOfAxis(ctx, pic.axis, x0 - pad, (X, Y) => [m + left * g + (X + pad - x0) * g, m + (Y + HEAD) * g], g);
+      const toPage = (X: number, Y: number): [number, number] => [m + left * g + (X + pad - x0) * g, m + (Y + HEAD) * g];
+      if (c > 0 && pic.axis) edgeOfAxis(ctx, pic.axis, x0 - pad, toPage, g);
+      // A label the column's right edge cuts ("3" of "30") is left to the next page.
+      if (c < cols.length - 1 && pic.axis) clearCut(ctx, pic.axis, x1 - pad, toPage);
       ctx.strokeStyle = "#d6e0ea";
       ctx.lineWidth = PAGE_PX;
       ctx.beginPath();
@@ -744,6 +748,16 @@ function edgeOfAxis(ctx: CanvasRenderingContext2D, axis: NonNullable<Picture["ax
   ctx.font = `600 ${10 * g}px sans-serif`;
   ctx.textAlign = "left";
   ctx.fillText(label, lx, ly);
+}
+
+/** Clears the part left of `x` of each axis word that `x` cuts. */
+function clearCut(ctx: CanvasRenderingContext2D, axis: NonNullable<Picture["axis"]>, x: number, at: (x: number, y: number) => [number, number]) {
+  ctx.fillStyle = "#ffffff";
+  for (const t of axis.words.filter((t) => t.x0 < x && t.x1 > x)) {
+    const [l, top] = at(t.x0 - 1, t.y - t.size);
+    const [r, b] = at(x, t.y + 3);
+    ctx.fillRect(l, top, r - l, b - top);
+  }
 }
 
 /** The key-date markers a picture draws, by name (ah-prd-milestones-once review: the Timeline's export draws them from the goal lanes). */
