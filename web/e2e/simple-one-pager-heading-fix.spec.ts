@@ -68,12 +68,15 @@ for (const phone of [false, true]) {
         await page.getByRole("link", { name: "Open in Detailed" }).click();
         await page.getByRole("link", { name: "Open latest (v4)" }).click();
         await expect(page).toHaveURL(/\/documents\/guided-setup\/v\/4/);
-        await expect(page.getByRole("heading", { name: "Later · 6 items" })).toBeVisible();
-        await expect(page.getByRole("heading", { name: "Later · 8 items" })).toHaveCount(0);
-        if (!phone) {
-          const outline = page.getByTestId("outline-rail").filter({ visible: true });
-          await expect(outline.locator('a[data-outline-key="later"]')).toContainText("Later · 6 items");
-        }
+        // Its contents (the outline; on a phone, the Sections list) name the new heading under
+        // the same section link, and the section opens with it.
+        if (phone) await page.getByRole("button", { name: "Section 1 of 12" }).click();
+        const contents = phone ? page.getByRole("dialog", { name: "Sections" }) : page.getByRole("navigation", { name: "Outline" });
+        const entry = contents.getByRole("link", { name: "Later · 6 items, Not reviewed" });
+        await expect(entry).toHaveAttribute("href", "/documents/guided-setup/v/4#later");
+        await expect(contents.getByText("Later · 8 items")).toHaveCount(0);
+        await entry.click();
+        await expect(page.getByRole("region", { name: "Later · 6 items" }).getByRole("heading", { name: "Later · 6 items" })).toBeVisible();
       });
     });
   }
