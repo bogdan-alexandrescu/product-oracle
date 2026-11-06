@@ -53,13 +53,16 @@ async function onePagers(page: Page): Promise<string[]> {
   return page.getByTestId("one-pager-row").getByRole("link").allTextContents();
 }
 
-/** The Roadmap's "came from" lines and PRD filter, each as the PRDs it names in order. */
-async function roadmap(page: Page): Promise<{ from: string[]; filter: string[] }> {
+/** The Roadmap's "came from" lines and PRD filter, each as the PRDs it names in order, once they read `expected` (the order loads after the lines). */
+async function roadmap(page: Page, expected: { from: string[]; filter: string[] }) {
   await page.goto("/simple/roadmap?roadmap=alerts-roadmap");
   await expect(page.getByTestId("draft-from-prd")).toHaveCount(2);
-  const from = (await page.getByTestId("draft-from-prd").allTextContents()).map((t) => (t.includes(CHECKOUT) ? CHECKOUT : t.includes(USAGE) ? USAGE : t));
-  const filter = await page.getByLabel("PRD", { exact: true }).locator("option").allTextContents();
-  return { from, filter: filter.filter((t) => t === CHECKOUT || t === "Usage alerts") };
+  const read = async () => {
+    const from = (await page.getByTestId("draft-from-prd").allTextContents()).map((t) => (t.includes(CHECKOUT) ? CHECKOUT : t.includes(USAGE) ? USAGE : t));
+    const filter = await page.getByLabel("PRD", { exact: true }).locator("option").allTextContents();
+    return { from, filter: filter.filter((t) => t === CHECKOUT || t === "Usage alerts") };
+  };
+  await expect.poll(read).toEqual(expected);
 }
 
 test("an owner moves a PRD and every page lists PRDs in the new order", async ({ page }) => {
@@ -72,7 +75,7 @@ test("an owner moves a PRD and every page lists PRDs in the new order", async ({
   // The default: the goal each PRD mainly serves, then the title.
   const before = await onePagers(page);
   expect(before.slice(0, 2)).toEqual([USAGE, CHECKOUT]);
-  expect(await roadmap(page)).toEqual({ from: [USAGE, CHECKOUT], filter: ["Usage alerts", CHECKOUT] });
+  await roadmap(page, { from: [USAGE, CHECKOUT], filter: ["Usage alerts", CHECKOUT] });
 
   // The owner moves Checkout redesign PRD up from its ⋯; the first PRD has no Move up.
   await page.goto("/simple/one-pagers");
@@ -84,7 +87,7 @@ test("an owner moves a PRD and every page lists PRDs in the new order", async ({
   await expect(page.getByTestId("one-pager-row").getByRole("link").first()).toHaveText(CHECKOUT);
   const after = await onePagers(page);
   expect(after).toEqual([CHECKOUT, USAGE, ...before.slice(2)]);
-  expect(await roadmap(page)).toEqual({ from: [CHECKOUT, USAGE], filter: [CHECKOUT, "Usage alerts"] });
+  await roadmap(page, { from: [CHECKOUT, USAGE], filter: [CHECKOUT, "Usage alerts"] });
 
   // A viewer reads the same order, on One-pagers and Home, and has no ⋯ to move one.
   await page.goto("/home");

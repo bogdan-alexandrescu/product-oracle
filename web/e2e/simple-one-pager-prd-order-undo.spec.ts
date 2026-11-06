@@ -36,8 +36,10 @@ for (const { name, viewport, scheme } of [
 
     test("an owner moves a PRD, undoes it, and a failed move says so", async ({ page }) => {
       test.setTimeout(120_000);
+      await page.addInitScript((t) => localStorage.setItem("oracle-theme", t), scheme);
       await login(page);
       await page.goto("/simple/one-pagers");
+      await expect(page.locator("html")).toHaveAttribute("data-theme", scheme);
       await expect(page.getByTestId("one-pagers-order")).toHaveText("Company order");
       const before = await onePagers(page);
       expect(before.slice(0, 2)).toEqual([USAGE, CHECKOUT]);

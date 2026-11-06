@@ -232,7 +232,8 @@ test.describe("desktop", () => {
       );
       await open(page);
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-      // Updated sorts newest first by default.
+      // prd-order: the company order by default; Updated sorts newest first when picked.
+      await page.getByTestId("sort-updated").click();
       await expect(page.getByTestId("sort-updated")).toHaveAttribute(
         "aria-label",
         /newest first/,
