@@ -105,7 +105,7 @@ test("the slice: a brief becomes a published PRD and a roadmap", async ({ page }
   // No baseline was approved yet: Oracle rebuilds it first, so its stop is listed too; the
   // Engineering dates stop (#690) is on by default, and off it skips its step.
   await expect(sheet.getByRole("switch")).toHaveCount(6);
-  for (const stop of ["Confirm the baseline", "Feature set and dependencies", "Engineering check", "Priority order", "Engineering dates"]) {
+  for (const stop of ["Confirm the Ground Truth", "Feature set and dependencies", "Engineering check", "Priority order", "Engineering dates"]) {
     await sheet.getByRole("switch", { name: stop }).uncheck();
   }
   await expect(sheet.getByRole("switch", { name: "PRD review" })).toBeChecked();
@@ -113,7 +113,7 @@ test("the slice: a brief becomes a published PRD and a roadmap", async ({ page }
   await expect(sheet.getByTestId("draft-estimate")).toContainText("$");
   await sheet.getByRole("button", { name: /^(Start drafting|Approve .* and start)$/ }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
 
   await tickUntil(page, "prd_draft", /Imported|Waiting|Succeeded|Done/);
   const review = page.getByTestId("checkpoint-prd_review");

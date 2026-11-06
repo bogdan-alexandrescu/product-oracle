@@ -31,6 +31,10 @@ def _key_date(c_before: dict, c_after: dict) -> str:
 
 def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -> str:
     """What was done, without who: "changed the estimate of F-08 Billing page"."""
+    from oracle.simple import plan_changes
+
+    if op in plan_changes.OPS:
+        return plan_changes.phrase(op, target, before, after, item)
     x = item or _quoted(after.get("title") or target.get("title")) or "an item"
     on = f" on {item}" if item else ""
     title = _quoted(after.get("title"))
@@ -154,13 +158,15 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             return f"named who decides {x}"
         # edit-decisions (oracle.simple.decision_sheet): the sheet's changes.
         case "edit_decision" | "edit_question":
-            return f"changed {_quoted(target.get('name')) or x}"
+            kind = "decision" if op == "edit_decision" else "question"
+            name = _quoted(target.get("name"))
+            return f"changed {name}" if name else f"changed a {kind} on {x}"
         case "withdraw_decision":
             return f"withdrew {_quoted(target.get('name')) or x}"
         case "add_question":
             asked = _quoted(after.get("title")) or "a question"
             prd = target.get("name")
-            return f"asked {asked} in {prd}" if prd else f"asked {asked}"
+            return f"asked {asked} in {prd}" if prd else f"asked {asked}{on}"
         # Goal milestones: a PRD's own milestone's date or counts-when rule, asked of its owner.
         case "edit_goal_milestone":
             name = _quoted(target.get("name")) or item
@@ -171,12 +177,12 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
         case "delete_item":
             return f"moved {x} to Trash"
         # edit-goals-prds: a goal archived, moved to Trash or restored (oracle.simple.goal_asks).
-        case "archive_goal":
-            return f"archived the goal {_quoted(target.get('title')) or 'a goal'}"
-        case "delete_goal":
-            return f"moved the goal {_quoted(target.get('title')) or 'a goal'} to Trash"
-        case "unarchive_goal":
-            return f"restored the goal {_quoted(target.get('title')) or 'a goal'}"
+        # The goal by its title, or else by the name the reader knows it by.
+        case "archive_goal" | "delete_goal" | "unarchive_goal":
+            verb = {"archive_goal": "archived", "delete_goal": "moved"}.get(op, "restored")
+            goal = _quoted(target.get("title")) or item
+            tail = " to Trash" if op == "delete_goal" else ""
+            return f"{verb} the goal {goal}{tail}" if goal else f"{verb} a goal{tail}"
         # roadmap-decide: a cut item's fix, the dependency dropped.
         case "remove_dependency":
             titles = target.get("titles") or []

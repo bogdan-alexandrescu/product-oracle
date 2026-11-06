@@ -5,7 +5,7 @@ import { login, signOut } from "./helpers";
 
 /**
  * F4 Engineering review stop, lane A (issue #181, review fix 1): the Engineering check of
- * Baseline to PRD, on by default in the Draft with Oracle sheet, waits for the engineering
+ * Ground Truth to PRD, on by default in the Draft with Oracle sheet, waits for the engineering
  * lead, who works it on its own review screen. On the mock layer, driven as a person would.
  *
  * Test cards:
@@ -14,7 +14,7 @@ import { login, signOut } from "./helpers";
  *   by $5.00; no_claim=the Engineering dates stop (lane B).
  * - "lead decides" (AC19-21): protects=the Inbox row, Review, Approve gated on every verdict
  *   and the blocking answer, the notes Not feasible and With changes need, a changed size in
- *   the Baseline; fails_when=Approve opens early, the tally does not move, a verdict saves
+ *   the Ground Truth; fails_when=Approve opens early, the tally does not move, a verdict saves
  *   without its note, or the run does not move on to the priority order; no_claim=the API's
  *   prompts to the prioritizer (api/tests/test_eng_review_stop.py).
  * - "started from the UI" (fix 1): protects=a run started in the sheet passes the stop through
@@ -126,7 +126,7 @@ test("lead decides: Approve waits for every verdict and the blocking answer, the
 
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await expect(page.getByTestId("segment-priority").getByTestId("segment-state")).toHaveText("Running");
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   await page.getByTestId("feature-f.saved-carts").getByRole("button", { name: "Saved carts" }).click();
   await expect(page.getByRole("dialog", { name: "Saved carts" }).locator('[data-attr="effort"]')).toHaveText("XL");
 });

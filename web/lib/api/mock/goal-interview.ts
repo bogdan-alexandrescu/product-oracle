@@ -158,7 +158,7 @@ export async function routeGoalInterview(ctx: GoalInterviewContext, req: Request
       subject: { entity_id: goal.id, interview: true },
       subject_key: `entity:${goal.id}`,
       subject_label: `Goal · ${goal.title}`,
-      subject_url: `/baseline?entity=${goal.id}`,
+      subject_url: `/ground-truth?entity=${goal.id}`,
       document_id: null,
       run_id: null,
       title: interviewTitle(goal.title, check(goal).missing),

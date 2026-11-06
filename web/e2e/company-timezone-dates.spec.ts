@@ -73,7 +73,7 @@ test("Fireflies picker: meeting days, times and From/To in the Company time zone
 test("blocker inspector: history and decision gate in the Company time zone", async ({ page }) => {
   await login(page);
   await setZone(page, "Pacific/Auckland");
-  await page.goto("/baseline?tab=blockers");
+  await page.goto("/ground-truth?tab=blockers");
   await page.getByTestId("blocker-row").filter({ hasText: "Same-day refund rule unanswered" }).click();
   const insp = page.getByTestId("blocker-inspector");
   await insp.getByRole("button", { name: "Plan experiment" }).click();

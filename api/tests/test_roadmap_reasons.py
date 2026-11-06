@@ -112,7 +112,7 @@ def test_serves_no_goal_traced_and_untraced():
     assert out[0]["text"] == "Mobile push supports no confirmed goal."
     assert out[0]["data"] == {"feature": "mobile-push"}
     assert out[1]["text"] == (
-        "Oracle could not trace it to a baseline feature, so no goal is known."
+        "Oracle could not trace it to a Ground Truth feature, so no goal is known."
     )
     assert [f["action"] for f in out[0]["fixes"]] == [
         {"kind": "accept", "item": "mobile-push", "field": None, "value": None},
@@ -485,7 +485,7 @@ async def test_advance_stores_reasons_on_the_segment_and_the_checkpoint(client, 
     assert by[("payment-step", "horizon_changed")]["label"] == "Moved from Now (roadmap v1)"
     assert by[("payment-step", "linked_blocker")]["text"] == "Payment provider rate limit is open."
     assert by[("mobile-push", "serves_no_goal")]["text"] == (
-        "Oracle could not trace it to a baseline feature, so no goal is known."
+        "Oracle could not trace it to a Ground Truth feature, so no goal is known."
     )
     assert by[("mobile-push", "stale_section")]["text"] == (
         "5.2 Shipping step changed in Checkout redesign PRD v2 after this item was derived from v1."

@@ -561,7 +561,7 @@ async def test_checkpoint_roles(client, owner, runtime):
 
     inbox = (await client.get("/v1/inbox", headers=approver)).json()
     assert [c["id"] for c in inbox["checkpoints"]] == [cp["id"]]
-    assert inbox["checkpoints"][0]["segment_title"] == "Baseline proposal"
+    assert inbox["checkpoints"][0]["segment_title"] == "Ground Truth proposal"
     run = await decide(client, approver, await get(client, approver, run["id"]))
     assert run["checkpoints"][0]["status"] == "approved"
 

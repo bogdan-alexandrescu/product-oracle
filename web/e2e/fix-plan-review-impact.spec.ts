@@ -6,7 +6,7 @@ import { login } from "./helpers";
 
 /*
  * Review minors on /impact and /priorities, driven through the UI as a person would:
- * 1. qa-plan-10: the lineage's upstream sub-line names a baseline item's kind, in words,
+ * 1. qa-plan-10: the lineage's upstream sub-line names a Ground Truth item's kind, in words,
  *    never its raw key; "What if … changed?" names it too.
  * 2. The lineage's grouped (past-15) view keeps the same names when it builds a category's
  *    upstream edges as it does when it builds the ones the subject column shows.
@@ -26,12 +26,12 @@ async function openImpact(page: Page, n = 2) {
   await page.goto(`/documents/checkout-redesign/v/${n}/impact`);
 }
 
-test("impact: the lineage names a baseline item's kind, not its raw key", async ({ page }) => {
+test("impact: the lineage names a Ground Truth item's kind, not its raw key", async ({ page }) => {
   await scenario(page, "impact");
   await login(page);
-  // A version's preview reaches only that document's sections (as the API's): a baseline
+  // A version's preview reaches only that document's sections (as the API's): a Ground Truth
   // item is an upstream on its own what-if, opened from its drawer as a person would.
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
   await page.getByRole("dialog", { name: "Guided setup" }).getByRole("link", { name: "What if it changed?" }).click();
   await expect(page).toHaveURL(/\/impact\/entities\/[^/]+$/);
@@ -54,7 +54,7 @@ test("impact: a recorded change highlights the rail by what it is about, not alw
   const table = page.getByRole("grid", { name: "Affected outputs" });
   const nav = page.getByRole("navigation", { name: "Oracle" });
 
-  // A change on a deleted baseline item (a requirement) belongs with Baseline, never PRDs,
+  // A change on a deleted Ground Truth item (a requirement) belongs with Ground Truth, never PRDs,
   // when it is opened on its own (qa-plan-12: opened from a PRD's Impact, it stays with PRDs).
   await table.getByText("Acceptance tests").first().click();
   await page.getByRole("complementary", { name: /Acceptance tests/ }).getByRole("link", { name: "Recorded change" }).click();
@@ -64,7 +64,7 @@ test("impact: a recorded change highlights the rail by what it is about, not alw
   await expect(nav.getByTestId("nav-baseline")).toHaveAttribute("aria-current", "page");
   await expect(nav.getByTestId("nav-prds")).not.toHaveAttribute("aria-current", "page");
 
-  // A change on a source's permission belongs with neither PRDs nor Baseline: the rail stays quiet.
+  // A change on a source's permission belongs with neither PRDs nor Ground Truth: the rail stays quiet.
   await page.goBack();
   await page.goBack();
   await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/impact$/);

@@ -190,10 +190,9 @@ test.describe("phone", () => {
   // qa-docs-10; no colour changes, so light only
   test("qa-docs-10: the one-pager's Timeline labels wrap instead of cutting the item count", async ({ page }) => {
     await login(page);
-    await page.goto("/simple/one-pagers");
-    await expect(page.getByRole("heading", { level: 1, name: "One-pagers" })).toBeVisible();
-    await page.getByRole("link", { name: "Saved carts PRD" }).first().click();
-    await expect(page).toHaveURL(/\/simple\/one-pagers\/saved-carts$/);
+    // C-13 (PR 1307): Saved carts reads its own sections and has no roadmap items of its own, so
+    // no Timeline; Guided setup's one-pager is the one whose strip has milestones.
+    await page.goto("/simple/one-pagers/guided-setup");
     const strip = page.getByTestId("one-pager").getByTestId("plan-strip");
     const labels = strip.getByTestId("plan-strip-label");
     await expect(labels.first()).toBeVisible();

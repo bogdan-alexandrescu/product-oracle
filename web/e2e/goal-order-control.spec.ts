@@ -8,7 +8,7 @@ import { login } from "./helpers";
  * The cards turn into a numbered row with a grip to drag and left / right arrows; Save order
  * keeps it on every page (a toast with Undo), Cancel leaves it. A small grey number, 1 to n,
  * sits before every goal's name on Home, the Roadmap's goal cards and lane headers, and
- * Baseline's goal table. The "simple-home" mock scenario's invented goals.
+ * Ground Truth's goal table. The "simple-home" mock scenario's invented goals.
  */
 
 async function start(page: Page, role?: "viewer") {
@@ -42,7 +42,7 @@ async function saveOrder(page: Page) {
   await expect(page.getByTestId("goal-order-edit")).toHaveCount(0);
 }
 
-/** Roadmap's goal cards and Baseline's goal rows carry the numbers in `want`'s order. */
+/** Roadmap's goal cards and Ground Truth's goal rows carry the numbers in `want`'s order. */
 async function everyPageShows(page: Page, want: string[], phone: boolean) {
   await page.goto("/simple/roadmap");
   const cards = page.getByTestId("goal-counters").getByTestId("goal-counter");
@@ -65,8 +65,8 @@ async function everyPageShows(page: Page, want: string[], phone: boolean) {
   await expect(group).toBeVisible();
   await expect(group.getByTestId("order-num")).toHaveText("1");
 
-  await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
+  await page.goto("/ground-truth");
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
   for (const [i, name] of want.entries()) {
     const row = page.locator('[data-testid^="goal-"]').filter({ has: page.getByRole("button", { name, exact: true }) }).first();
     await expect(row.getByTestId("order-num")).toHaveText(String(i + 1));

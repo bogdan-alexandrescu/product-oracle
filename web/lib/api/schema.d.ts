@@ -1319,8 +1319,8 @@ export interface paths {
         put?: never;
         /**
          * Propose Discussion Change
-         * @description ``goal_measure`` and ``entity_edit`` (commenters and up): an open baseline proposal
-         *     whose reason names the discussion and links its page; approvers accept it in Baseline.
+         * @description ``goal_measure`` and ``entity_edit`` (commenters and up): an open Ground Truth proposal
+         *     whose reason names the discussion and links its page; approvers accept it in the Ground Truth.
          *     A goal version takes B6's path: its fields pass B5's checks first (422, every problem),
          *     and a target the start or current value already meets gets Oracle's pushback once
          *     (409); proposing it again keeps it and logs the override. ``payload``: the person's
@@ -3995,7 +3995,7 @@ export interface paths {
          * List Source Coverage
          * @description What Oracle read from each of your sources: live and removed items, what it left
          *     out (by status), how fresh the items are against each kind's half-life, and how often
-         *     they are used as baseline evidence, citations and section links.
+         *     they are used as Ground Truth evidence, citations and section links.
          */
         get: operations["list_source_coverage"];
         put?: never;
@@ -4427,7 +4427,7 @@ export interface paths {
         };
         /**
          * Get Graph
-         * @description Every entity and edge (no evidence bodies): what the Baseline screen draws.
+         * @description Every entity and edge (no evidence bodies): what the Ground Truth screen draws.
          */
         get: operations["get_graph"];
         put?: never;
@@ -4446,10 +4446,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Baseline Review Status
-         * @description Whether a new PRD run may use the current baseline instead of rebuilding it: the
-         *     last baseline review, its age, whether a baseline build is under way, and the
-         *     baseline segment's estimate per depth (B1 "Reuse base").
+         * Get Ground Truth Review Status
+         * @description Whether a new PRD run may use the current Ground Truth instead of rebuilding it: the
+         *     last Ground Truth review, its age, whether a Ground Truth build is under way, and the
+         *     Ground Truth segment's estimate per depth (B1 "Reuse base").
          */
         get: operations["get_baseline_review_status"];
         put?: never;
@@ -4564,10 +4564,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Baseline From Run
-         * @description What a run wrote to the baseline, for a person to review (B2): every item it
+         * Get Ground Truth From Run
+         * @description What a run wrote to the Ground Truth, for a person to review (B2): every item it
          *     created, changed or proposed a change to, with the reasons each needs a person and the
-         *     shared draft's actions on it; the run's Confirm the baseline stop with its gate; the
+         *     shared draft's actions on it; the run's Confirm the Ground Truth stop with its gate; the
          *     other proposed goals.
          */
         get: operations["get_baseline_from_run"];
@@ -4924,7 +4924,7 @@ export interface paths {
         /**
          * Create Proposal
          * @description Suggest a change; an approver accepts or rejects it. A run's proposal records
-         *     the run, and is refused while Oracle is set to observe the baseline (H11); a
+         *     the run, and is refused while Oracle is set to observe the Ground Truth (H11); a
          *     person's never is.
          */
         post: operations["create_proposal"];
@@ -5154,7 +5154,7 @@ export interface paths {
         };
         /**
          * Get Priorities
-         * @description Rank the baseline's features by ``method``, in dependency order.
+         * @description Rank the Ground Truth's features by ``method``, in dependency order.
          *
          *     Features that serve no confirmed goal sink to the bottom and are flagged;
          *     dependency cycles are listed in ``cycles`` and their members flagged. People's
@@ -6722,7 +6722,7 @@ export interface paths {
         /**
          * Add Scope Requirement
          * @description Add a requirement to a feature (approver role or above): ``origin: person``; its
-         *     goals default to the feature's. Approving writes it to the baseline as the approver's.
+         *     goals default to the feature's. Approving writes it to the Ground Truth as the approver's.
          */
         post: operations["add_scope_requirement"];
         delete?: never;
@@ -7089,7 +7089,7 @@ export interface paths {
         /**
          * Create Question
          * @description Ask a teammate: a named person (commenter or above) is asked a question about an
-         *     intake, a document section, a run checkpoint item or a baseline entity. It lands in
+         *     intake, a document section, a run checkpoint item or a Ground Truth entity. It lands in
          *     their Inbox as "<your name> asks"; you see the answer on the subject. 422 when the
          *     subject does not exist or the person cannot answer. Audited (``question.asked``).
          */
@@ -7794,7 +7794,7 @@ export interface paths {
         put?: never;
         /**
          * Analyze Intake
-         * @description Re-read the pinned snapshot and the baseline (the author only). Decided gaps are
+         * @description Re-read the pinned snapshot and the Ground Truth (the author only). Decided gaps are
          *     never changed and answered questions never asked again.
          */
         post: operations["analyze_intake"];
@@ -7975,7 +7975,7 @@ export interface paths {
         };
         /**
          * Get Intake Composition Inputs
-         * @description What the module composer reads from this intake (brief, signals, scope, baseline
+         * @description What the module composer reads from this intake (brief, signals, scope, Ground Truth
          *     links, pinned snapshots, open critical gaps).
          */
         get: operations["get_intake_composition_inputs"];
@@ -7998,7 +7998,7 @@ export interface paths {
         put?: never;
         /**
          * Start Intake Run
-         * @description Create a draft baseline-to-PRD run pinned to the intake's snapshot. Nothing runs
+         * @description Create a draft Ground Truth to PRD run pinned to the intake's snapshot. Nothing runs
          *     until an approver estimates and starts it; while that run is a draft, posting again
          *     updates it (no second run), and the intake stays open until it starts (then it is
          *     converted). Drafting waits until decided (C5): 409
@@ -8776,7 +8776,7 @@ export interface paths {
         /**
          * Get Version Trace
          * @description A version's trace: its anchors (template, composition revision, snapshots), each
-         *     section's links to the baseline and the goals they serve, and the outputs that
+         *     section's links to the Ground Truth and the goals they serve, and the outputs that
          *     depend on each section (artifacts, roadmap items) with their freshness.
          */
         get: operations["get_version_trace"];
@@ -8842,7 +8842,7 @@ export interface paths {
         put?: never;
         /**
          * Create Section Links
-         * @description Link sections of a version to baseline items, evidence or source items (the
+         * @description Link sections of a version to Ground Truth items, evidence or source items (the
          *     internal per-claim links behind O1c). Pinned to the section's current hash. An
          *     approved version's links are pinned with it (409).
          */
@@ -8862,7 +8862,7 @@ export interface paths {
         };
         /**
          * Get Entity Trace
-         * @description A baseline node's trace: up to the goals it serves, down to requirements and
+         * @description A Ground Truth node's trace: up to the goals it serves, down to requirements and
          *     acceptance criteria, the sections linking it and the outputs built on it; for a
          *     requirement, its assumptions, blockers, alternatives, experiments, decisions, owners
          *     and risks. A feature serving no confirmed goal is flagged, with its priority.
@@ -8975,7 +8975,7 @@ export interface paths {
         /**
          * Create Artifact Dependencies
          * @description Record what an artifact version (or a derived document version) was made from:
-         *     document sections, whole document versions or baseline items, anchored at their
+         *     document sections, whole document versions or Ground Truth items, anchored at their
          *     current hash. Idempotent per anchor.
          */
         post: operations["create_artifact_dependencies"];
@@ -9107,7 +9107,7 @@ export interface paths {
         };
         /**
          * List Blockers
-         * @description Blockers (baseline constraints with a strategy), most severe first. Third-party
+         * @description Blockers (Ground Truth constraints with a strategy), most severe first. Third-party
          *     limits filter by ``limit_kind``: capacity, eligibility, permission or policy.
          */
         get: operations["list_blockers"];
@@ -12445,6 +12445,73 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/roadmap/milestones/carry-over": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Carry Over Old Milestones
+         * @description Bring old milestones over: copy every goal milestone of the older per-PRD roadmaps
+         *     (history while the company roadmap exists) onto the company roadmap, same name, date
+         *     and goal, its items re-pointed to the company roadmap's (same feature, else same item
+         *     key), each old one linked to its copy. One none of whose items are left is not copied:
+         *     it stays in ``old_milestones.needs_call`` for Keep or Drop. Run once by an owner (a
+         *     second run copies nothing), never on a read or a deploy.
+         */
+        post: operations["carry_over_old_milestones"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/milestones/{milestone_id}/keep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Keep Old Milestone
+         * @description Keep an old milestone with no items left: copied onto the company roadmap with no
+         *     items, linked. One not waiting on a call is 409.
+         */
+        post: operations["keep_old_milestone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/milestones/{milestone_id}/drop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Drop Old Milestone
+         * @description Drop an old milestone with no items left: it stays behind on its old roadmap and
+         *     leaves the list. One not waiting on a call is 409.
+         */
+        post: operations["drop_old_milestone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/roadmap/milestones/{milestone_id}": {
         parameters: {
             query?: never;
@@ -12595,7 +12662,7 @@ export interface paths {
         head?: never;
         /**
          * Update Bucket Goal
-         * @description Edit a goal's name, measure, target and date (its order stays Baseline's).
+         * @description Edit a goal's name, measure, target and date (its order stays the Ground Truth's).
          */
         patch: operations["update_bucket_goal"];
         trace?: never;
@@ -12980,6 +13047,40 @@ export interface paths {
          *     whoever deleted it.
          */
         post: operations["restore_bucket_goal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/removed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Simple Removed */
+        get: operations["list_simple_removed"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/tracks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Simple Tracks */
+        get: operations["list_simple_tracks"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -14381,7 +14482,7 @@ export interface paths {
         /**
          * Answer Feature State
          * @description The owner's answer to "does it still run?": still_runs counts as fresh proof,
-         *     changed keeps it in Current state, no_longer_runs puts it back in Desired state.
+         *     changed keeps it in Running today, no_longer_runs puts it back on the Ground Truth tab.
          */
         post: operations["answer_feature_state"];
         delete?: never;
@@ -14401,7 +14502,7 @@ export interface paths {
         put?: never;
         /**
          * Move Feature State
-         * @description Move a ready feature to Current state, or Not yet (off the ready band until its
+         * @description Move a ready feature to Running today, or Not yet (off the ready band until its
          *     proof is read again).
          */
         post: operations["move_feature_state"];
@@ -16060,7 +16161,7 @@ export interface components {
         };
         /**
          * AddChange
-         * @description Add an item: a Baseline feature (``feature_id``) or a new one (``title``).
+         * @description Add an item: a Ground Truth feature (``feature_id``) or a new one (``title``).
          */
         AddChange: {
             /**
@@ -19063,7 +19164,7 @@ export interface components {
             /** Message Id */
             message_id: string | null;
             /** Op */
-            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped" | "api_action");
+            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped" | "api_action");
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -19181,7 +19282,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -21399,7 +21500,7 @@ export interface components {
         };
         /**
          * DecisionEntityRef
-         * @description A linked baseline item, as a person reads it.
+         * @description A linked Ground Truth item, as a person reads it.
          */
         DecisionEntityRef: {
             /**
@@ -21418,7 +21519,7 @@ export interface components {
         };
         /**
          * DecisionEvidenceRef
-         * @description Evidence it rests on: the excerpt and link anyone who reads the baseline sees.
+         * @description Evidence it rests on: the excerpt and link anyone who reads the Ground Truth sees.
          */
         DecisionEvidenceRef: {
             /**
@@ -24611,7 +24712,7 @@ export interface components {
         };
         /**
          * FeatureTrace
-         * @description A feature the intake touches: from the baseline (``key``) or the brief.
+         * @description A feature the intake touches: from the Ground Truth (``key``) or the brief.
          */
         FeatureTrace: {
             /** Title */
@@ -25074,7 +25175,7 @@ export interface components {
         };
         /**
          * FitBaselineGoalOut
-         * @description The Baseline goal the milestone's gate counts toward (the milestone's first target's
+         * @description The Ground Truth goal the milestone's gate counts toward (the milestone's first target's
          *     goal, by name): what "Keep the date with a smaller goal" opens and saves through
          *     ``PATCH /v1/baseline/entities/{id}``. ``plan_target``: the number the PRD's milestone
          *     target names; ``smaller``: the goal's target is below it, so the answer counts the
@@ -25498,7 +25599,7 @@ export interface components {
         };
         /**
          * FromRunCheckpoint
-         * @description The run's latest Confirm the baseline stop, as the caller may use it.
+         * @description The run's latest Confirm the Ground Truth stop, as the caller may use it.
          */
         FromRunCheckpoint: {
             /**
@@ -25571,9 +25672,9 @@ export interface components {
         };
         /**
          * FromRunOut
-         * @description GET /v1/baseline/from-run/{run_id}: what the run wrote to the baseline, for a
+         * @description GET /v1/baseline/from-run/{run_id}: what the run wrote to the Ground Truth, for a
          *     person to review (B2). ``checkpoint`` null when the run never stopped at Confirm the
-         *     baseline.
+         *     Ground Truth.
          */
         FromRunOut: {
             run: components["schemas"]["ProposalRun"];
@@ -25602,8 +25703,8 @@ export interface components {
         };
         /**
          * FromRunRow
-         * @description One baseline item a run created (``new``), changed (``changed``) or proposed a
-         *     change to (``proposal``), as B2 Baseline review from this run lists it: its reasons
+         * @description One Ground Truth item a run created (``new``), changed (``changed``) or proposed a
+         *     change to (``proposal``), as B2 Ground Truth review from this run lists it: its reasons
          *     (recomputed on every read), the shared draft's actions on its key and its state.
          */
         FromRunRow: {
@@ -28111,7 +28212,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
             /**
              * Status
              * @enum {string}
@@ -36816,7 +36917,7 @@ export interface components {
         };
         /**
          * ReusedBaseline
-         * @description The baseline review a run reuses: its Confirm the baseline checkpoint.
+         * @description The Ground Truth review a run reuses: its Confirm the Ground Truth checkpoint.
          */
         ReusedBaseline: {
             /**
@@ -37099,9 +37200,9 @@ export interface components {
         };
         /**
          * ReviewStatusOut
-         * @description Whether a new PRD run may use the current baseline (B1 "Reuse base"): the last
-         *     baseline review (the newest approved Confirm the baseline) was approved in the past
-         *     30 days and no baseline build is under way.
+         * @description Whether a new PRD run may use the current Ground Truth (B1 "Reuse base"): the last
+         *     Ground Truth review (the newest approved Confirm the Ground Truth) was approved in the
+         *     past 30 days and no Ground Truth build is under way.
          */
         ReviewStatusOut: {
             /** Last Approved At */
@@ -37728,7 +37829,7 @@ export interface components {
         };
         /**
          * RowReason
-         * @description B2: why a run's baseline row needs a person. Its own fields, so a roadmap item's
+         * @description B2: why a run's Ground Truth row needs a person. Its own fields, so a roadmap item's
          *     reasons read as they are stored.
          */
         RowReason: {
@@ -37793,7 +37894,7 @@ export interface components {
         };
         /**
          * RunDecidedChange
-         * @description A change already done (an answer, a verified basis, a baseline proposal).
+         * @description A change already done (an answer, a verified basis, a Ground Truth proposal).
          */
         RunDecidedChange: {
             /** Kind */
@@ -37983,6 +38084,8 @@ export interface components {
             template?: string | null;
             /** Theme */
             theme?: string | null;
+            /** Roadmap Read */
+            roadmap_read?: string | null;
             /** Estimate Usd */
             estimate_usd?: number | null;
             /** Spent Usd */
@@ -38256,6 +38359,8 @@ export interface components {
             template?: string | null;
             /** Theme */
             theme?: string | null;
+            /** Roadmap Read */
+            roadmap_read?: string | null;
             /** Estimate Usd */
             estimate_usd?: number | null;
             /** Spent Usd */
@@ -40489,7 +40594,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -40538,7 +40643,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -41408,6 +41513,7 @@ export interface components {
              * @default false
              */
             can_propose: boolean;
+            carried_from?: components["schemas"]["SimpleDocRef"] | null;
         };
         /** SimpleGoalMilestoneIn */
         SimpleGoalMilestoneIn: {
@@ -42225,6 +42331,70 @@ export interface components {
             reason: string;
         };
         /**
+         * SimpleOldMilestone
+         * @description old-milestones (owner, Nov 4): a goal milestone still on an older per-PRD roadmap
+         *     (history) that is not on the company roadmap yet. ``items``: the titles of the items
+         *     it gates that are on the company roadmap (it would gate those there); none left: it
+         *     waits on an owner's Keep or Drop.
+         */
+        SimpleOldMilestone: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Date */
+            date?: string | null;
+            /** Goal Id */
+            goal_id?: string | null;
+            /** Goal Title */
+            goal_title?: string | null;
+            from_roadmap: components["schemas"]["SimpleDocRef"];
+            /**
+             * Items
+             * @default []
+             */
+            items: string[];
+        };
+        /**
+         * SimpleOldMilestones
+         * @description What "Bring old milestones over" would do: ``moves`` are copied (items re-pointed),
+         *     ``needs_call`` have no items left and wait on Keep or Drop. An owner's alone: anyone
+         *     else reads both empty and ``can_act`` false.
+         */
+        SimpleOldMilestones: {
+            /**
+             * Can Act
+             * @default false
+             */
+            can_act: boolean;
+            /**
+             * Moves
+             * @default []
+             */
+            moves: components["schemas"]["SimpleOldMilestone"][];
+            /**
+             * Needs Call
+             * @default []
+             */
+            needs_call: components["schemas"]["SimpleOldMilestone"][];
+        };
+        /**
+         * SimpleOldMilestonesResult
+         * @description After a carry-over, Keep or Drop: the ids of the company roadmap's new milestones
+         *     and what is left.
+         */
+        SimpleOldMilestonesResult: {
+            /**
+             * Carried
+             * @default []
+             */
+            carried: string[];
+            old_milestones: components["schemas"]["SimpleOldMilestones"];
+        };
+        /**
          * SimpleOpenDecision
          * @description S4: a proposed decision naming the item as a subject (the floating card's).
          */
@@ -42241,6 +42411,16 @@ export interface components {
         };
         /** SimpleOwnerRef */
         SimpleOwnerRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** SimplePerson */
+        SimplePerson: {
             /**
              * Id
              * Format: uuid
@@ -42525,6 +42705,16 @@ export interface components {
              * @default 0
              */
             past_edge: number;
+        };
+        /** SimplePrdRef */
+        SimplePrdRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
         };
         /** SimplePrioritiesOut */
         SimplePrioritiesOut: {
@@ -42949,6 +43139,45 @@ export interface components {
             /** Read At */
             read_at?: string | null;
         };
+        /**
+         * SimpleRemovedItem
+         * @description Something removed in Simple, to put back: a cut feature, an archived goal or a removed
+         *     goal milestone, with who removed it and when.
+         */
+        SimpleRemovedItem: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "feature" | "goal" | "milestone";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Where */
+            where: string;
+            /** At */
+            at?: string | null;
+            /** By Name */
+            by_name?: string | null;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
+            /** Decider Name */
+            decider_name?: string | null;
+            /** Roadmap Id */
+            roadmap_id?: string | null;
+        };
+        /** SimpleRemovedList */
+        SimpleRemovedList: {
+            /** Items */
+            items: components["schemas"]["SimpleRemovedItem"][];
+        };
         /** SimpleResumeOut */
         SimpleResumeOut: {
             session: components["schemas"]["SimpleSessionOut"];
@@ -43119,6 +43348,14 @@ export interface components {
              * @default []
              */
             goal_milestones: components["schemas"]["SimpleGoalMilestone"][];
+            /**
+             * @default {
+             *       "can_act": false,
+             *       "moves": [],
+             *       "needs_call": []
+             *     }
+             */
+            old_milestones: components["schemas"]["SimpleOldMilestones"];
             /**
              * Changes In Review
              * @default 0
@@ -43455,6 +43692,65 @@ export interface components {
             id: string;
             /** Title */
             title: string;
+        };
+        /** SimpleTrackRow */
+        SimpleTrackRow: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused" | "closed";
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Owner Name */
+            owner_name?: string | null;
+            /**
+             * Prd Id
+             * Format: uuid
+             */
+            prd_id: string;
+            /** Prd Title */
+            prd_title?: string | null;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
+            /** Decider Name */
+            decider_name?: string | null;
+            /**
+             * Feature Count
+             * @default 0
+             */
+            feature_count: number;
+            /**
+             * Moves Count
+             * @default 0
+             */
+            moves_count: number;
+        };
+        /** SimpleTracks */
+        SimpleTracks: {
+            /** Tracks */
+            tracks: components["schemas"]["SimpleTrackRow"][];
+            /**
+             * Can Add
+             * @default false
+             */
+            can_add: boolean;
+            /** Add Decider Name */
+            add_decider_name?: string | null;
+            /** People */
+            people: components["schemas"]["SimplePerson"][];
+            /** Prds */
+            prds: components["schemas"]["SimplePrdRef"][];
         };
         /**
          * SimpleUpcomingMeeting
@@ -46627,7 +46923,7 @@ export interface components {
         /**
          * TraceUpstreamRef
          * @description A dependency's upstream: a document version (a section of it, or all of it), or a
-         *     baseline entity.
+         *     Ground Truth entity.
          */
         TraceUpstreamRef: {
             /** Version Id */
@@ -47208,7 +47504,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "document" | "intake" | "run" | "feature" | "goal" | "decision" | "question" | "agenda_item" | "request";
+            type: "document" | "intake" | "run" | "feature" | "goal" | "decision" | "question" | "agenda_item" | "request" | "track";
             /**
              * Id
              * Format: uuid
@@ -47434,7 +47730,7 @@ export interface components {
         };
         /**
          * UsedIn
-         * @description One use of one of the source's items: baseline evidence (on an entity, or on an
+         * @description One use of one of the source's items: Ground Truth evidence (on an entity, or on an
          *     edge, shown on its source entity), a citation in a document version, or a section's
          *     evidence link.
          */
@@ -73191,6 +73487,88 @@ export interface operations {
             };
         };
     };
+    carry_over_old_milestones: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleOldMilestonesResult"];
+                };
+            };
+        };
+    };
+    keep_old_milestone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                milestone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleOldMilestonesResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    drop_old_milestone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                milestone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleOldMilestonesResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     delete_goal_milestone: {
         parameters: {
             query?: never;
@@ -74110,6 +74488,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_simple_removed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleRemovedList"];
+                };
+            };
+        };
+    };
+    list_simple_tracks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleTracks"];
                 };
             };
         };

@@ -23,7 +23,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
-from oracle.simple import approved_roadmap, changes, drafts, goal_milestones, service, suggestions
+from oracle.simple import (
+    approved_roadmap,
+    changes,
+    drafts,
+    goal_milestones,
+    old_milestones,
+    service,
+    suggestions,
+)
 from oracle.simple.schemas import (
     DateSuggestionEdit,
     DateSuggestionOut,
@@ -34,6 +42,7 @@ from oracle.simple.schemas import (
     SimpleGoalMilestone,
     SimpleGoalMilestoneIn,
     SimpleGoalMilestonePatch,
+    SimpleOldMilestonesResult,
     SimpleRoadmapOut,
     SimpleRoadmapWaiting,
 )
@@ -53,6 +62,7 @@ def _people(role: str):
 Reader = Annotated[Principal, Depends(_people("viewer"))]
 Commenter = Annotated[Principal, Depends(_people("commenter"))]
 Approver = Annotated[Principal, Depends(_people("approver"))]
+Owner = Annotated[Principal, Depends(_people("owner"))]
 Text = Annotated[str | None, Query(max_length=200)]
 
 
@@ -225,6 +235,35 @@ async def create_goal_milestone(
     are not proposed here, unlike key dates). A roadmap that is history (the company
     roadmap exists) is 409."""
     return await goal_milestones.create(db, principal, body)
+
+
+@router.post("/milestones/carry-over", response_model=SimpleOldMilestonesResult)
+async def carry_over_old_milestones(principal: Owner, db: TenantDB) -> SimpleOldMilestonesResult:
+    """Bring old milestones over: copy every goal milestone of the older per-PRD roadmaps
+    (history while the company roadmap exists) onto the company roadmap, same name, date
+    and goal, its items re-pointed to the company roadmap's (same feature, else same item
+    key), each old one linked to its copy. One none of whose items are left is not copied:
+    it stays in ``old_milestones.needs_call`` for Keep or Drop. Run once by an owner (a
+    second run copies nothing), never on a read or a deploy."""
+    return await old_milestones.carry_over(db, principal)
+
+
+@router.post("/milestones/{milestone_id}/keep", response_model=SimpleOldMilestonesResult)
+async def keep_old_milestone(
+    milestone_id: uuid.UUID, principal: Owner, db: TenantDB
+) -> SimpleOldMilestonesResult:
+    """Keep an old milestone with no items left: copied onto the company roadmap with no
+    items, linked. One not waiting on a call is 409."""
+    return await old_milestones.decide(db, principal, milestone_id, "keep")
+
+
+@router.post("/milestones/{milestone_id}/drop", response_model=SimpleOldMilestonesResult)
+async def drop_old_milestone(
+    milestone_id: uuid.UUID, principal: Owner, db: TenantDB
+) -> SimpleOldMilestonesResult:
+    """Drop an old milestone with no items left: it stays behind on its old roadmap and
+    leaves the list. One not waiting on a call is 409."""
+    return await old_milestones.decide(db, principal, milestone_id, "drop")
 
 
 @router.patch("/milestones/{milestone_id}", response_model=SimpleGoalMilestone)

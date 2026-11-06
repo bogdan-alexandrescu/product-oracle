@@ -400,7 +400,7 @@ async def _plan(
     if kind == "override":
         row = entry.row if entry is not None else row
         if row.feature_id is None:
-            raise ChangeError(422, "This item has no feature in the baseline to rank")
+            raise ChangeError(422, "This item has no feature in the Ground Truth to rank")
         target["feature_id"] = str(row.feature_id)
         clear = a.get("clear") is True
         pos = a.get("position")
@@ -443,7 +443,7 @@ async def _plan(
     if kind == "estimate":
         row = entry.row if entry is not None else row
         if row.feature_id is None:
-            raise ChangeError(422, "This item has no feature in the baseline to estimate")
+            raise ChangeError(422, "This item has no feature in the Ground Truth to estimate")
         target["feature_id"] = str(row.feature_id)
         after = {}
         for k in ESTIMATES:
@@ -466,7 +466,7 @@ async def _plan(
             raise ChangeError(422, f"before: {', '.join(missing)} as you saw them")
         f = await _feature(db, row.feature_id)
         if f is None:
-            raise ChangeError(422, "This item has no feature in the baseline to estimate")
+            raise ChangeError(422, "This item has no feature in the Ground Truth to estimate")
         current = estimates(f.attrs)
         seen = {k: given[k] for k in ESTIMATES}
         if any(not (v is None or (isinstance(v, int | float) and not isinstance(v, bool)))

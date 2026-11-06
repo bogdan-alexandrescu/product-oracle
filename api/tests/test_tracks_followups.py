@@ -72,14 +72,14 @@ async def test_a_create_track_race_returns_the_existing_track(client, owner, mon
     # The PRD already has a track: an ordinary second start is a conflict.
     assert (await client.post("/v1/tracks", json={"prd": PRD}, headers=auth)).status_code == 409
     # The race: the route's check saw no track; ensure_track found the one just made.
-    real = tracks.track_of_prd
+    real = tracks.any_track_of_prd
     calls = []
 
     async def first_none(db, prd_id):
         calls.append(1)
         return None if len(calls) == 1 else await real(db, prd_id)
 
-    monkeypatch.setattr(tracks, "track_of_prd", first_none)
+    monkeypatch.setattr(tracks, "any_track_of_prd", first_none)
     resp = await client.post("/v1/tracks", json={"prd": PRD}, headers=auth)
     assert resp.status_code == 200, resp.text
     assert resp.json()["id"] == existing["id"]

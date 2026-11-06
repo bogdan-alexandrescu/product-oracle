@@ -267,7 +267,7 @@ export function EntityDrawer({
       if (action === "confirm") return `Confirmed “${title}”.`;
       if (action === "archive") {
         const sub = d?.parent_id ? " Its parent no longer counts it." : "";
-        return `Archived “${title}”: it leaves the baseline; its history keeps the reason.${sub}`;
+        return `Archived “${title}”: it leaves the Ground Truth; its history keeps the reason.${sub}`;
       }
       return `Rejected “${title}”.`;
     });
@@ -759,8 +759,8 @@ function AskReason({
     >
       <p className="text-text2">
         {action === "reject"
-          ? "Reject this proposed item? It leaves the baseline."
-          : "Archive this item? It leaves the baseline and the Ledger; its history keeps it."}
+          ? "Reject this proposed item? It leaves the Ground Truth."
+          : "Archive this item? It leaves the Ground Truth and the Ledger; its history keeps it."}
       </p>
       <label className="flex flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2">
         Reason{action === "reject" && " (optional)"}

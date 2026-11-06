@@ -5,7 +5,7 @@ type RunOut = Schemas["RunOut"];
 
 // As the API's _STOP_WORDS (oracle.simple.meetings): a run's stops as people name them in Simple.
 const STOP_WORDS: Record<string, string> = {
-  baseline_confirm: "Baseline",
+  baseline_confirm: "Ground Truth",
   feature_set: "Feature set",
   eng_review: "Engineering check",
   priority_order: "Order",

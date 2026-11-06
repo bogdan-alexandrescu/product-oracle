@@ -89,7 +89,7 @@ async def list_blockers(
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[BlockerSummary]:
-    """Blockers (baseline constraints with a strategy), most severe first. Third-party
+    """Blockers (Ground Truth constraints with a strategy), most severe first. Third-party
     limits filter by ``limit_kind``: capacity, eligibility, permission or policy."""
     if document_id is not None:
         entities = await service.blockers_for_document(db, document_id)

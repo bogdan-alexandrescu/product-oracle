@@ -4,19 +4,19 @@ import { SUGGESTED_BLOCKER } from "../lib/api/mock/baseline";
 import { login } from "./helpers";
 
 /**
- * B4 (owner, 2026-10-20): an intake answer's constraint, accepted into the baseline, is a
+ * B4 (owner, 2026-10-20): an intake answer's constraint, accepted into the Ground Truth, is a
  * "suggested blocker"; Promote to blocker opens the blocker form pre-filled from it, all
  * editable, and saving makes it a blocker and clears the mark.
  */
 async function openProposals(page: Page, role?: "approver" | "viewer") {
   if (role) await page.addInitScript((r) => localStorage.setItem("po-mock-role", r), role);
   await login(page);
-  await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
+  await page.goto("/ground-truth");
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
   await page.getByRole("tab", { name: /Proposals/ }).click();
 }
 
-test("baseline: an approver promotes an intake's suggested blocker from the pre-filled form", async ({ page }) => {
+test("Ground Truth: an approver promotes an intake's suggested blocker from the pre-filled form", async ({ page }) => {
   await openProposals(page, "approver");
   const row = page.getByTestId("suggested-blocker-row");
   await expect(row).toHaveCount(1);
@@ -51,7 +51,7 @@ test("baseline: an approver promotes an intake's suggested blocker from the pre-
   await expect(page.getByTestId("suggested-blocker-row")).toHaveCount(0);
 });
 
-test("baseline: the suggested-blocker mark in the inspector, and Cancel keeps it", async ({ page }) => {
+test("Ground Truth: the suggested-blocker mark in the inspector, and Cancel keeps it", async ({ page }) => {
   await openProposals(page, "approver");
   await page.getByTestId("suggested-blocker-row").getByRole("button", { name: SUGGESTED_BLOCKER.title }).click();
   const drawer = page.getByTestId("entity-drawer");
@@ -70,7 +70,7 @@ test("baseline: the suggested-blocker mark in the inspector, and Cancel keeps it
   await expect(page.getByTestId("suggested-blocker-row")).toHaveCount(1);
 });
 
-test("baseline: a viewer sees the suggested blocker but cannot promote it", async ({ page }) => {
+test("Ground Truth: a viewer sees the suggested blocker but cannot promote it", async ({ page }) => {
   await openProposals(page, "viewer");
   const row = page.getByTestId("suggested-blocker-row");
   await expect(row).toHaveCount(1);

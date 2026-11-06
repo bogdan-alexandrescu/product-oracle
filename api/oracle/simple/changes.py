@@ -187,6 +187,8 @@ KEY_DATE_OPS = ("add_key_date", "edit_key_date", "remove_key_date")
 # to its decider now, as a question's do.
 SHEET_OPS = ("edit_decision", "edit_question", "withdraw_decision", "add_question")
 QUESTION_OPS = ("decide_question", "name_decider", *SHEET_OPS)
+# removed-tracks: things put back and tracks changed (oracle.simple.plan_changes).
+PLAN_OPS = ("restore_goal_milestone", "add_track", "edit_track", "delete_track")
 
 
 class ChangeError(Exception):
@@ -509,6 +511,7 @@ def current_route(
         c.status != "proposed"
         or c.op in ("edit_line", "edit_goal_milestone", *QUESTION_OPS)
         or c.op in KEY_DATE_OPS
+        or c.op in PLAN_OPS
     ):
         return list(c.routed_to or [])
     if c.op == CUT_ALL:
@@ -1008,7 +1011,7 @@ async def _merge_plan(
         fid = _uuid(target["feature_id"], "feature_id")
         feature = await db.get(Entity, fid)
         if feature is None or feature.type != "feature":
-            raise ChangeError(422, "target.feature_id: a baseline feature")
+            raise ChangeError(422, "target.feature_id: a Ground Truth feature")
         target["feature_id"], target["code"], target["title"] = str(fid), feature.key, feature.title
         after[str(row.id)] = {"feature_id": str(fid), "kept_both": True}
     else:
@@ -1199,6 +1202,7 @@ async def create(
         goal_milestones,
         key_dates,
         one_pager,
+        plan_changes,
         questions,
         targets,
         trash_items,
@@ -1221,6 +1225,8 @@ async def create(
         return await goal_asks.create_change(db, principal, body)
     if body.op in goal_milestones.OPS:
         return await goal_milestones.create_change(db, principal, body)
+    if body.op in plan_changes.OPS:
+        return await plan_changes.create_change(db, principal, body)
     if body.op in decision_sheet.OPS:
         return await decision_sheet.create(db, principal, body)
     me, now = _me(principal), company_time.now()
@@ -1335,6 +1341,7 @@ async def decide(
         goal_milestones,
         key_dates,
         one_pager,
+        plan_changes,
         questions,
         targets,
         trash_items,
@@ -1342,6 +1349,8 @@ async def decide(
 
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
+    if c.op in plan_changes.OPS:
+        return await plan_changes.decide(db, principal, c, action, reason)
     await off_agenda_bar(db, c, session_id)
     if c.op in questions.OPS:
         return await questions.decide(db, principal, c, action, reason, session_id)
@@ -1454,10 +1463,12 @@ async def withdraw(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> Si
 
 
 async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> SimpleChangeResult:
-    from oracle.simple import additions, key_dates, one_pager, questions, targets
+    from oracle.simple import additions, key_dates, one_pager, plan_changes, questions, targets
 
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
+    if c.op in plan_changes.OPS:
+        return await plan_changes.undo(db, principal, c)
     from oracle.simple import decision_sheet
 
     if c.op in decision_sheet.OPS:
@@ -1582,6 +1593,7 @@ class _View:
             goal_milestones,
             key_dates,
             one_pager,
+            plan_changes,
             questions,
             targets,
         )
@@ -1606,6 +1618,8 @@ class _View:
             return trash_items.may_decide_goal(self.principal)
         if c.op in goal_asks.OPS:
             return goal_asks.may_decide(self.principal)
+        if c.op in PLAN_OPS:
+            return plan_changes.may_decide(self.principal, c)
         if c.op == CUT_ALL:
             return decides_all(self.principal, cut_entries(c, self.by_id), self.deciders)
         e = self.entry(c)
@@ -1634,6 +1648,9 @@ class _View:
         return self.may_decide(c)
 
     def can_undo(self, c: SimpleChange) -> bool:
+        if c.op in PLAN_OPS:
+            # removed-tracks: undone by who made it, any time (oracle.simple.plan_changes).
+            return c.status == "applied" and c.by == self.me and c.id not in self.undone
         s = self.sessions.get(c.session_id) if c.session_id else None
         return (
             c.status == "applied"

@@ -44,7 +44,7 @@ const COPY: Record<Role, Copy> = {
   viewer: {
     role: "You are a viewer: you read the goals, PRDs and plan, and why each was chosen.",
     steps: [
-      { label: "Read the goals", href: "/baseline" },
+      { label: "Read the goals", href: "/ground-truth" },
       { label: "Open a PRD", href: "/documents" },
       { label: "Open the plan", href: "/plan" },
     ],

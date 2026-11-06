@@ -52,7 +52,7 @@ const FLAG_LABELS: Record<string, string> = {
   serves_no_goal: "Serves no confirmed goal",
   low_confidence: "Low confidence",
   linked_blocker: "Linked open blocker",
-  new_feature: "New, not in the baseline",
+  new_feature: "New, not in the Ground Truth",
   duplicate_of_existing: "Duplicate of an existing feature",
 };
 const FIELDS = ["decision", "decision_reason", "text", "acceptance", "goals", "depends_on", "blocker_keys"] as const;

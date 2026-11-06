@@ -153,7 +153,7 @@ limits, configurability and scaling (`categories.CATEGORIES`).
   with `untrusted: true`, to the item's owner (never through a run token), or to anyone
   when the author shared a finding citing it in full (S6, below).
 - The `intake_analysis` job's system prompt is the fixed file
-  `api/oracle/jobs/prompts/intake_analysis.v3.md`. Outside `untrusted_data` the user
+  `api/oracle/jobs/prompts/intake_analysis.v4.md`. Outside `untrusted_data` the user
   message carries only Oracle's own fixed values: the intake id, fields, category keys and
   labels, existing gaps as `ref`, category and status, the closed categories and the
   limits. Everything people or sources wrote travels inside `untrusted_data`: the title,

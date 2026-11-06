@@ -311,7 +311,7 @@ async def create_request(
     if body.feature_id is not None:
         feature = await db.get(Entity, body.feature_id)
         if feature is None or feature.type != "feature":
-            raise Invalid("feature_id is not a baseline feature")
+            raise Invalid("feature_id is not a Ground Truth feature")
     approver_ids = (
         list(body.engineering_approver_ids)
         if body.engineering_approver_ids is not None

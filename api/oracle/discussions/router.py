@@ -618,8 +618,8 @@ async def dismiss_discussion_change(
 async def propose_discussion_change(
     change_id: uuid.UUID, body: ChangeProposeIn, principal: Viewer, db: TenantDB
 ) -> ChangeResult | JSONResponse:
-    """``goal_measure`` and ``entity_edit`` (commenters and up): an open baseline proposal
-    whose reason names the discussion and links its page; approvers accept it in Baseline.
+    """``goal_measure`` and ``entity_edit`` (commenters and up): an open Ground Truth proposal
+    whose reason names the discussion and links its page; approvers accept it in the Ground Truth.
     A goal version takes B6's path: its fields pass B5's checks first (422, every problem),
     and a target the start or current value already meets gets Oracle's pushback once
     (409); proposing it again keeps it and logs the override. ``payload``: the person's

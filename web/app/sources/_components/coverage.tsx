@@ -241,10 +241,10 @@ function UseRow({ use }: { use: UsedIn }) {
   let extra: ReactNode = null;
   if (use.kind === "evidence") {
     icon = "baseline";
-    title = use.entity?.title ?? "Baseline item";
+    title = use.entity?.title ?? "Ground Truth item";
     // qa-work-34: the baseline type in words ("Feature"), never the lowercase enum.
     extra = use.entity ? <Chip kind="acc">{typeWords(use.entity.type)}</Chip> : null;
-    href = use.entity ? `/baseline?entity=${use.entity.id}` : "/baseline";
+    href = use.entity ? `/ground-truth?entity=${use.entity.id}` : "/ground-truth";
   } else if (use.document) {
     const base = `/documents/${use.document.slug}${use.version ? `/v/${use.version}` : ""}`;
     title = use.document.title;

@@ -10,20 +10,20 @@ test("approvals with their notes are listed in the run's Decisions, as the agent
   await login(page);
   await page.getByTestId("nav-runs").click();
   await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
 
   const inspector = page.getByRole("complementary", { name: "Run" }).filter({ visible: true });
   const section = inspector.getByTestId("run-decisions");
   await expect(section).toContainText("Decisions");
   await expect(section).toContainText("No decisions yet");
 
-  // Approve the baseline with a note: listed at once.
+  // Approve the Ground Truth with a note: listed at once.
   const baseline = page.getByTestId("checkpoint-baseline_confirm");
   await baseline.getByLabel("Note for the agents").fill("Name an owner for every goal");
   await baseline.getByRole("button", { name: "Approve and continue" }).click();
   const items = section.getByTestId("run-decision");
   await expect(items).toHaveCount(1);
-  await expect(items.nth(0)).toHaveText("The baseline was approved by Avery Stone. Note: Name an owner for every goal.");
+  await expect(items.nth(0)).toHaveText("The Ground Truth was approved by Avery Stone. Note: Name an owner for every goal.");
 
   // The feature set, approved with the note the later segments must respect.
   await page.getByRole("button", { name: "Refresh progress" }).click();

@@ -103,7 +103,14 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
     case "name_decider": return `named who decides ${x}`;
     // edit-decisions (decision_sheet, change_words.py): the sheet's changes.
     case "edit_decision":
-    case "edit_question": return `changed ${quoted(target.name) ?? x}`;
+    case "edit_question": {
+      const name = quoted(target.name);
+      return name ? `changed ${name}` : `changed a ${op === "edit_decision" ? "decision" : "question"} on ${x}`;
+    }
+    case "add_question": {
+      const asked = quoted(after.title) ?? "a question";
+      return target.name ? `asked ${asked} in ${target.name}` : `asked ${asked}${on}`;
+    }
     case "withdraw_decision": return `withdrew ${quoted(target.name) ?? x}`;
     // trash-features-goals: a feature moved to Trash (its name reads "(deleted)" once it is gone).
     case "delete_item": return `moved ${x} to Trash`;

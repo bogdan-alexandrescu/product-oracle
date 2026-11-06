@@ -15,7 +15,7 @@ import { leftOut } from "./decision-notes";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { newCompany, seeded, stableUuid } from "./ids";
-import { milestoneOut, routeMilestones, type MockMilestone } from "./simple-milestones";
+import { milestoneOut, oldMilestonesOut, routeMilestones, type MockMilestone, type OldCtx } from "./simple-milestones";
 import { betSubject, flowFor, type VisualsDb } from "./simple-visuals";
 import type { OnePagerDb } from "./simple-one-pager";
 import { appliedMilestones, type AppliedRecord } from "./approved-roadmap";
@@ -83,8 +83,8 @@ interface SeedItem {
   /** prio-company: the key of the item whose feature this one is (an item a move on Priorities
    * added to the company roadmap for a feature it did not hold); else its own feature. */
   feature?: string;
-  /** S7: the baseline feature (with no item) this draft was linked to by a merge. */
-  // A draft merged with a baseline feature that has no item: linked to it (still a draft).
+  /** S7: the Ground Truth feature (with no item) this draft was linked to by a merge. */
+  // A draft merged with a Ground Truth feature that has no item: linked to it (still a draft).
   linked_feature?: string;
   /** S7: Oracle's drafting job runs until this mock time (ms); the item is "drafting" until then. */
   drafting_until?: number;
@@ -98,7 +98,7 @@ interface SeedItem {
   draft_roadmap?: boolean;
   /** approved-prd-roadmap: an item an approved PRD put in the draft names that PRD. */
   from_prd?: { slug: string; title: string };
-  /** The Baseline feature it is (RoadmapItem.feature_id): an approved PRD's item matches by it. */
+  /** The Ground Truth feature it is (RoadmapItem.feature_id): an approved PRD's item matches by it. */
   feature_id?: string | null;
   /** approved-prd-roadmap: its dates as the PRD has them (ISO days; no start: end-only). */
   dates?: { start: string | null; end: string; source: "engineering" | "accepted" };
@@ -266,7 +266,7 @@ interface MockDraft {
 }
 
 /** `draft`: the number of the PRD draft (version) the roadmap's items were imported from. */
-const ROADMAPS: Record<string, { title: string; visibility: "company" | "approvers"; prd: string; draft: number }> = {
+export const ROADMAPS: Record<string, { title: string; visibility: "company" | "approvers"; prd: string; draft: number }> = {
   "alerts-roadmap": { title: "Alerts roadmap", visibility: "company", prd: "Usage alerts", draft: 5 },
   "onboarding-roadmap": { title: "Onboarding roadmap", visibility: "company", prd: "Guided setup", draft: 2 },
   "pricing-roadmap": { title: "Pricing roadmap", visibility: "approvers", prd: "Plan changes", draft: 3 },
@@ -277,6 +277,8 @@ const ROADMAPS: Record<string, { title: string; visibility: "company" | "approve
  * keeps the mock's own key.
  */
 const ROADMAP_DOC_SLUG: Record<string, string> = { "alerts-roadmap": "usage-alerts-roadmap" };
+/** The Simple roadmap whose items a roadmap document holds (its own slug, or alerts-roadmap for usage-alerts-roadmap). */
+export const roadmapKeyOf = (docSlug: string): string => Object.keys(ROADMAP_DOC_SLUG).find((k) => ROADMAP_DOC_SLUG[k] === docSlug) ?? docSlug;
 /** S7 adds Keep alerts quiet, a goal with no items yet (Oracle suggested features for it on its own). */
 export const GOALS: Record<string, string> = { "grow-retention": "Grow retention", "faster-activation": "Faster activation", "quiet-alerts": "Keep alerts quiet" };
 /** roadmap-talk's goals (the "roadmap-talk" scenario's items name them); known once such an item is seeded. */
@@ -297,7 +299,7 @@ const GOALS_KNOWN: Record<string, boolean> = {};
 
 /**
  * build-goal-order-control: the "goal-order" scenarios' added goals (server.ts seeds them), named
- * while the baseline holds them confirmed so their roadmap work names its goal. As knowManyPlans,
+ * while the Ground Truth holds them confirmed so their roadmap work names its goal. As knowManyPlans,
  * once another scenario's data loads the ones it added are taken out again. Invented data.
  */
 const GOAL_ORDER_GOALS: Record<string, string> = {
@@ -321,9 +323,9 @@ export function knowGoalOrderGoals(entities: { key: string; status: string }[]):
 }
 
 /**
- * goal-order: the company's goals (the baseline's), so Simple's goal refs, groups, buckets and
+ * goal-order: the company's goals (the Ground Truth's), so Simple's goal refs, groups, buckets and
  * goal cards follow the one goal order (lib/goal-order.ts). server.ts names them before every
- * Simple route; a goal the baseline does not hold comes after those it does, by key.
+ * Simple route; a goal the Ground Truth does not hold comes after those it does, by key.
  */
 let companyGoals: (OrderedGoal & { key: string })[] = [];
 export function knowCompanyGoals(goals: (OrderedGoal & { key: string })[]): void {
@@ -435,7 +437,7 @@ export const readableRoadmap = (asked: string | null, role: Role): string | unde
 export const closed = (s: SeedItem): boolean => s.status === "cut" || !!s.merged_into;
 /** roadmap-done (owner, Nov 4), as the API's status: a done (shipped) item is off the roadmap, never checked, and holds nothing up. */
 export const doneItem = (s: SeedItem): boolean => !closed(s) && !s.draft && s.status === "done";
-const TRACKS: Record<string, string> = { alerts: "Usage alerts track", onboarding: "Guided setup track", welcome: "Welcome media track" };
+export const TRACKS: Record<string, string> = { alerts: "Usage alerts track", onboarding: "Guided setup track", welcome: "Welcome media track" };
 
 const SEED: SeedItem[] = [
   { key: "alert-rules", title: "Alert rules engine", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 40, source: "typed", status: "in_progress", gates: [{ phase: "discover", day: 6 }, { phase: "build", day: 28 }], why: "Admins asked for it most this quarter.", section: "bets" },
@@ -1413,8 +1415,10 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
         }));
       }),
     ],
-    // build-milestones-on-roadmap: the shown roadmaps' milestones per goal (a PRD's among them).
-    goal_milestones: (db.goal_milestones ?? []).filter((m) => !m.deleted && (chosen ? m.roadmap === chosen : readable.includes(m.roadmap))).map((x) => milestoneOut(x, db.ids, x.prd ? role !== "viewer" : role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)), role !== "viewer", me && { role: me.role, name: me.names?.[me.id] })),
+    // build-milestones-on-roadmap: the shown roadmaps' milestones per goal (a PRD's among them);
+    // while the company roadmap exists, its own alone (older roadmaps are history, company.feeding_ids).
+    goal_milestones: (db.goal_milestones ?? []).filter((m) => !m.deleted && (!db.company_roadmap || m.roadmap === db.company_roadmap) && (chosen ? m.roadmap === chosen : readable.includes(m.roadmap))).map((x) => milestoneOut(x, db.ids, x.prd ? role !== "viewer" : role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)), role !== "viewer", me && { role: me.role, name: me.names?.[me.id] }, (slug) => roadmapTitle(db, slug))),
+    old_milestones: oldMilestonesOut(db.goal_milestones ?? [], role, oldCtx(db)),
     // service.build: the span of the shown items' PRDs' plans only (a replaced plan PRD's goes with its items).
     span: db.plan && shown.some((i) => !!i.prd && (i.prd.slug === PLAN_PRD_SLUG || !!db.plan?.prds?.includes(i.prd.slug))) ? planSpan() : null,
     // A working draft belongs to one roadmap: a chosen roadmap's read carries its own only.
@@ -1483,6 +1487,17 @@ export function appliedVersionOf(db: SimpleDb, slug: string, me: Who): Schemas["
 }
 
 const roadmapTitle = (db: SimpleDb, slug: string): string => db.titles?.[slug] ?? ROADMAPS[slug].title;
+
+/** old-milestones: the company roadmap and its items, for the older roadmaps' milestones (./simple-milestones.ts). */
+const oldCtx = (db: SimpleDb): OldCtx => ({
+  company: db.company_roadmap,
+  companyItems: new Map(db.items.filter((s) => s.roadmap === db.company_roadmap).map((s) => [s.key, s.title])),
+  feedingPrds: new Set(db.items.filter((s) => s.roadmap === db.company_roadmap).flatMap((s) => (s.prd_doc ? [s.prd_doc.slug] : []))),
+  // The mock's items carry no feature of their own: the same item key is the same feature.
+  companyKey: (_roadmap, key) => db.items.find((s) => s.roadmap === db.company_roadmap && s.key === key)?.key,
+  roadmapTitle: (slug) => roadmapTitle(db, slug),
+  goalTitle: (key) => GOALS[key] ?? null,
+});
 
 /** Roadmap-plus: the shown roadmaps' key dates (the draft's to who sees it) and who may change them. */
 function keyDatesOut(db: SimpleDb, full: SimpleDb, shown: string[], me: { id: string; role: Role }): Pick<Schemas["SimpleRoadmapOut"], "key_dates" | "key_date_roadmaps"> {
@@ -1648,7 +1663,7 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
     return json(200, { broken_links: links.length, dates_to_confirm: items.filter((i) => !!i.suggestion?.can_decide).length });
   }
   const slugOf = (id: string) => Object.keys(ROADMAPS).find((r) => roadmapId(r) === id) ?? null;
-  const ms = await routeMilestones(db, me, req, p, slugOf, (r) => canEditRoadmap(db, r, me), (r) => !!db.company_roadmap && r !== db.company_roadmap);
+  const ms = await routeMilestones(db, me, req, p, slugOf, (r) => canEditRoadmap(db, r, me), (r) => !!db.company_roadmap && r !== db.company_roadmap, oldCtx(db));
   if (ms) return ms;
   if (p[3] !== "date-suggestions") return null;
   if (!p[4] && m === "GET") {

@@ -344,7 +344,8 @@ class ProposalProposer(BaseModel):
     a member, an API token, or Oracle itself."""
 
     kind: Literal["run", "intake", "person", "token", "oracle"]
-    # "Baseline to PRD · Oct 16", "From an intake answer", "First Last", "API token “CI”", "Oracle"
+    # "Ground Truth to PRD · Oct 16", "From an intake answer", "First Last",
+    # "API token “CI”", "Oracle"
     label: str
     run_id: uuid.UUID | None = None
     # A person's: the web says "You" when it is the signed-in member's.
@@ -575,9 +576,9 @@ class BaselineSegmentUsd(BaseModel):
 
 
 class ReviewStatusOut(BaseModel):
-    """Whether a new PRD run may use the current baseline (B1 "Reuse base"): the last
-    baseline review (the newest approved Confirm the baseline) was approved in the past
-    30 days and no baseline build is under way."""
+    """Whether a new PRD run may use the current Ground Truth (B1 "Reuse base"): the last
+    Ground Truth review (the newest approved Confirm the Ground Truth) was approved in the
+    past 30 days and no Ground Truth build is under way."""
 
     last_approved_at: datetime | None = None
     checkpoint_id: uuid.UUID | None = None

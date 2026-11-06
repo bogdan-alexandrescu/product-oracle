@@ -59,7 +59,7 @@ const modeSwitch = (page: Page) => page.getByRole("radiogroup", { name: "Mode" }
 
 test("qa-onboarding-6: an invited commenter lands in Simple and is welcomed as a commenter, not with the owner's setup", async ({ page }) => {
   // fails_when: the commenter lands in Simple with no welcome, the wrong role's words or steps,
-  // a step not opening Simple's page, or the owner's "set up Oracle ... build the baseline" card
+  // a step not opening Simple's page, or the owner's "set up Oracle ... build the Ground Truth" card
   await newCompany(page);
   await invite(page, "pat.example@example.com", "commenter");
   await signIn(page, "pat.example@example.com");
@@ -71,7 +71,7 @@ test("qa-onboarding-6: an invited commenter lands in Simple and is welcomed as a
   await expect(steps).toHaveText([/Connect your tools/, /Pick your sources/, /Read a PRD and comment/]);
   await expect(steps.nth(2).getByRole("link")).toHaveAttribute("href", "/simple/one-pagers");
   await expect(simple(page).getByRole("heading", { name: "Welcome: set up Oracle" })).toHaveCount(0);
-  await expect(simple(page)).not.toContainText("build the baseline it plans from");
+  await expect(simple(page)).not.toContainText("build the Ground Truth it plans from");
 
   // A step opens where it is done and its "Back to Home" returns to Simple's Home.
   await steps.nth(0).getByRole("link").click();
@@ -94,7 +94,7 @@ test("qa-onboarding-6: an invited viewer lands in Simple, is welcomed as a viewe
   await expect(steps).toHaveText([/Read the goals/, /Open a PRD/, /Open the plan/]);
   await expect(steps.nth(1).getByRole("link")).toHaveAttribute("href", "/simple/one-pagers");
   await expect(steps.nth(2).getByRole("link")).toHaveAttribute("href", "/simple/roadmap");
-  await expect(simple(page)).not.toContainText("build the baseline it plans from");
+  await expect(simple(page)).not.toContainText("build the Ground Truth it plans from");
 
   // fix4 review: the card stays, its button busy, until the dismissal is saved, so a reload
   // right after it is gone cannot bring it back (the save answers late here).

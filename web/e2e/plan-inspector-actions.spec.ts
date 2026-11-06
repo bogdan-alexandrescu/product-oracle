@@ -8,13 +8,13 @@ import { login, signOut } from "./helpers";
  * The Plan inspector's owed pieces, driven through the UI on the mock layer
  * (NEXT_PUBLIC_API_MOCKS=1): F2's Ask, Discuss, Open blocker and Link to item on the alert
  * cards, F1 §8's tracker events in the item's history, and H1's Record a decision from a Plan
- * item. The "track-alerts" scenario seeds ENG-405's slip on "Daily alert digest email"; the
+ * item. The "track-alerts" scenario seeds ENG-405's slip on "Weekly alert digest"; the
  * "track-alerts-actions" scenario adds a blocker on "Alerts in the team chat" and a GitHub
  * issue on the track that no item names. Which actions the API offers whom is proven by
  * api/tests/test_track_alerts.py.
  */
 
-const SLIP = "Daily alert digest email";
+const SLIP = "Weekly alert digest";
 
 async function scenario(page: Page, name: string, role?: "viewer" | "commenter" | "approver") {
   await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, name] as const);
@@ -116,16 +116,16 @@ test("Discuss on the slip card starts a discussion on the item; a commenter gets
   await expect(sheet.getByTestId("discussion-thread").getByTestId("discussion-message").filter({ hasText: "a week's slip" })).toHaveCount(1);
 });
 
-// protects = a blocked item's card opens its blocker in Baseline; fails_when = no Open blocker,
-// or it opens another page; no_claim = the Baseline blocker view itself.
-test("Open blocker on a blocked item's card opens the blocker in Baseline", async ({ page }) => {
+// protects = a blocked item's card opens its blocker in Ground Truth; fails_when = no Open blocker,
+// or it opens another page; no_claim = the Ground Truth blocker view itself.
+test("Open blocker on a blocked item's card opens the blocker in Ground Truth", async ({ page }) => {
   await scenario(page, TRACK_ALERTS_ACTIONS_SCENARIO, "viewer");
   await login(page);
   await openItem(page, "Alerts in the team chat");
   const blocked = cards(page).filter({ hasText: "Chat app review takes two weeks (open)" });
   await expect(blocked.getByRole("link")).toHaveText(["Open blocker"]);
   await blocked.getByRole("link", { name: "Open blocker" }).click();
-  await expect(page).toHaveURL(/\/baseline\?tab=blockers&blocker=[0-9a-f-]+$/);
+  await expect(page).toHaveURL(/\/ground-truth\?tab=blockers&blocker=[0-9a-f-]+$/);
 });
 
 // protects = an issue on the track that no item names shows on the track's items with Link to

@@ -18,7 +18,7 @@ from tests.test_runs import RUN_BASELINE, as_user, confirm_goal, decide, get, ti
 from tests.test_runs import owner as owner  # (tenant id, owner token headers)
 from tests.test_runs import runtime as runtime  # the FakeRuntime fixture
 
-NO_DOCUMENT = "the Build the baseline flow writes no document"
+NO_DOCUMENT = "the Build the Ground Truth flow writes no document"
 
 
 async def create(client, headers, **knobs):
@@ -54,13 +54,13 @@ def test_the_baseline_flow_is_the_baseline_segment_alone():
     # flow has another segment, writes a document or is offered in the New run dialog;
     # no_claim=the segment's prompt (unchanged, owned by baseline_to_prd's tests).
     flow = flows.FLOWS["baseline"]
-    assert flow.title == "Build the baseline"
+    assert flow.title == "Build the Ground Truth"
     assert [s.name for s in flow.segments] == ["baseline"]
     assert flow.segments[0].checkpoint == "baseline_confirm"
     assert flow.writes_document is False and flow.target_kind is None
     assert flow.requires_document is False and flow.source_kind is None
     assert flow.in_new_run_dialog is False
-    assert flow.starts_from == ("Build the baseline · Baseline", "/baseline?build=1")
+    assert flow.starts_from == ("Build the Ground Truth · Ground Truth", "/ground-truth?build=1")
 
 
 def test_baseline_to_prd_shares_the_one_baseline_segment():
@@ -94,7 +94,7 @@ async def test_the_catalog_lists_build_the_baseline(client, owner, runtime):
     assert resp.status_code == 200, resp.text
     by_key = {f["key"]: f for f in resp.json()["flows"]}
     flow = by_key["baseline"]
-    assert flow["title"] == "Build the baseline"
+    assert flow["title"] == "Build the Ground Truth"
     assert flow["description"] == (
         "Read the sources and propose goals, products, features, constraints and evidence "
         "for you to review."
@@ -106,8 +106,8 @@ async def test_the_catalog_lists_build_the_baseline(client, owner, runtime):
     ]
     assert flow["in_new_run_dialog"] is False
     assert flow["starts_from"] == {
-        "label": "Build the baseline · Baseline",
-        "href": "/baseline?build=1",
+        "label": "Build the Ground Truth · Ground Truth",
+        "href": "/ground-truth?build=1",
     }
     for key in ("baseline_to_prd", "feedback_loop", "prd_to_roadmap"):
         assert by_key[key]["writes_document"] is True
@@ -123,7 +123,7 @@ async def test_an_approver_creates_a_run_with_no_document(client, owner, runtime
     tenant_id, _ = owner
     approver = await as_user(tenant_id, "approver")
     run = await create(client, approver, depth="standard", checkpoints={"baseline_confirm": True})
-    assert run["flow"] == "baseline" and run["flow_title"] == "Build the baseline"
+    assert run["flow"] == "baseline" and run["flow_title"] == "Build the Ground Truth"
     assert run["status"] == "draft"
     assert run["document_id"] is None and run["document_slug"] is None
     assert [s["name"] for s in run["segments"]] == ["baseline"]
@@ -163,7 +163,7 @@ async def test_the_estimate_follows_the_depth(client, owner, runtime):
         assert body["total_usd"] == total
         assert body["needs_approval"] is False
         assert [(s["seq"], s["name"], s["title"], s["roles"]) for s in body["segments"]] == [
-            (1, "baseline", "Baseline proposal", ["researcher", "analyst"])
+            (1, "baseline", "Ground Truth proposal", ["researcher", "analyst"])
         ]
 
 
@@ -249,7 +249,7 @@ async def test_second_baseline_build_refused(client, owner, runtime):
     await estimate(client, auth, waiting["id"])
     first = await started(client, auth)
     assert first["status"] == "running"
-    refusal = f"A baseline build is already under way (run {first['id']})"
+    refusal = f"A Ground Truth build is already under way (run {first['id']})"
 
     resp = await client.post("/v1/runs", json={"flow": "baseline"}, headers=auth)
     assert resp.status_code == 409 and resp.json()["detail"] == refusal

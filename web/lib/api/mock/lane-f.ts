@@ -712,7 +712,7 @@ function createOverride(st: LaneFState, me: string, input: Schemas["OverrideCrea
   const f = featureById(input.feature_id);
   const above = input.above_feature_id ? featureById(input.above_feature_id) : undefined;
   if (!reason || reason.length > 500) return json(422, { detail: "a reason of 1-500 characters is required" });
-  if (!f) return json(422, { detail: "feature_id must be a feature of the baseline that is not rejected" });
+  if (!f) return json(422, { detail: "feature_id must be a feature of the Ground Truth that is not rejected" });
   if (input.kind === "move" && (!above || above.key === f.key)) {
     return json(422, { detail: "a move needs another feature to go above" });
   }
@@ -1583,7 +1583,7 @@ export function previewHtml(t: Tokens, css: string, kind: Kind): string {
           ["Now", "Shipping cost in the cart (G1) · Saved addresses (G1)"],
           ["Next", "Shared projects (G2) · Usage alerts (G2)"],
           ["Later", "Scheduled exports (G2)"],
-          ["Sources and data points", "Baseline snapshot of 1 October."],
+          ["Sources and data points", "Ground Truth snapshot of 1 October."],
         ];
   const body = sections
     .map(([h, p], i) => {
@@ -1722,7 +1722,7 @@ export function recommendRoadmap(a: RoadmapAnswers, confirmed: number) {
     if (a.audience === "public") reason = "A public roadmap: Now / Next / Later rendered as status columns, public text only, with a disclaimer.";
   }
   if (key === "outcome-roadmap" && confirmed < 2) {
-    warnings.push(`Only ${confirmed} confirmed goal(s) in the baseline: the outcome roadmap will be thin. Confirm goals first (goals interview).`);
+    warnings.push(`Only ${confirmed} confirmed goal(s) in the Ground Truth: the outcome roadmap will be thin. Confirm goals first (goals interview).`);
   }
   if (a.public_version || a.audience === "public") {
     if (key === "outcome-roadmap" || key === "cycle-bets") {

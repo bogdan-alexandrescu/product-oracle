@@ -6,7 +6,7 @@ import { login } from "./helpers";
 /**
  * #340: the blocker inspector. A person edits a blocker's status, owner and description,
  * handles its solution options, sets its feasibility scope and runs its experiments, all
- * in the UI; it opens from the Blockers tab, the Baseline drawer and Publish's blocks.
+ * in the UI; it opens from the Blockers tab, the Ground Truth drawer and Publish's blocks.
  */
 const DEPOSITS = "Same-day refund rule unanswered";
 const LOOKUP = "The address lookup service allows 100 requests a minute per company";
@@ -14,8 +14,8 @@ const LOOKUP = "The address lookup service allows 100 requests a minute per comp
 async function openBlockers(page: Page, role?: "approver" | "commenter" | "viewer") {
   if (role) await page.addInitScript((r) => localStorage.setItem("po-mock-role", r), role);
   await login(page);
-  await page.goto("/baseline?tab=blockers");
-  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
+  await page.goto("/ground-truth?tab=blockers");
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
 }
 
 async function openBlocker(page: Page, statement: string) {
@@ -197,9 +197,9 @@ test("an approver sees the edit controls; the gating blocker's feasibility scope
   await expect(insp.getByRole("form", { name: "Edit blocker" })).toBeVisible();
 });
 
-test("opens from the Baseline drawer", async ({ page }) => {
+test("opens from the Ground Truth drawer", async ({ page }) => {
   await login(page);
-  await page.goto(`/baseline?entity=${DEPOSITS_IDS.blocker}`);
+  await page.goto(`/ground-truth?entity=${DEPOSITS_IDS.blocker}`);
   const drawer = page.getByTestId("entity-drawer");
   await drawer.getByRole("button", { name: "Open blocker" }).click();
   await expect(page.getByTestId("blocker-inspector").getByRole("heading", { name: DEPOSITS })).toBeVisible();
@@ -210,7 +210,7 @@ test("opens from Publish's blocks list", async ({ page }) => {
   await login(page);
   await page.goto("/documents/online-deposits/publish");
   await page.getByTestId("publish-inspector").getByRole("link", { name: "Open blocker" }).click();
-  await expect(page).toHaveURL(/\/baseline\?tab=blockers&blocker=/);
+  await expect(page).toHaveURL(/\/ground-truth\?tab=blockers&blocker=/);
   await expect(page.getByTestId("blocker-inspector").getByRole("heading", { name: DEPOSITS })).toBeVisible();
 });
 

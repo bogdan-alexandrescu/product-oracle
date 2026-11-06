@@ -418,7 +418,7 @@ class RunStagedChange(BaseModel):
 
 
 class RunDecidedChange(BaseModel):
-    """A change already done (an answer, a verified basis, a baseline proposal)."""
+    """A change already done (an answer, a verified basis, a Ground Truth proposal)."""
 
     kind: str
     label: str

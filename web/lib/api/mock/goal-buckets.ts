@@ -130,7 +130,7 @@ function json(status: number, body: unknown): Response {
 export type GoalPeople = { id: string; name: string; email: string; role: string; disabled?: boolean }[];
 
 function out(db: GoalBucketsDb, edits: boolean, people: GoalPeople = []): Schemas["GoalBucketsOut"] {
-  // goal-order: the goals in the one goal order, as the API lists them (the baseline's, then the rest as they were).
+  // goal-order: the goals in the one goal order, as the API lists them (the Ground Truth's, then the rest as they were).
   const live = db.goals.filter((g) => !g.archived && !g.trashed).sort((a, b) => goalRank(orderKey(a)) - goalRank(orderKey(b)));
   const ids = new Set(live.map((g) => g.id));
   const archived = db.goals.filter((g) => g.archived && !g.trashed).sort((a, b) => ((a.archived_at ?? "") < (b.archived_at ?? "") ? 1 : -1));
@@ -192,9 +192,9 @@ const itemGoalKey = (g: Goal | undefined) => (g ? Object.keys(GOALS).find((k) =>
 const orderKey = (g: Goal) => itemGoalKey(g) ?? g.title.toLowerCase();
 
 /**
- * goal-order: the bucket goals the baseline does not hold, each with the place stored on it, so the
+ * goal-order: the bucket goals the Ground Truth does not hold, each with the place stored on it, so the
  * one goal order (simple-roadmap knowCompanyGoals) ranks them as the API ranks every goal. With no
- * place they come after the baseline's goals, in the buckets' own order (each made after the last).
+ * place they come after the Ground Truth's goals, in the buckets' own order (each made after the last).
  */
 export function bucketGoalsInOrder(simple: { goal_buckets?: GoalBucketsDb }, baselineKeys: Set<string>): { id: string; key: string; title: string; position: number | null; created_at: string }[] {
   return (simple.goal_buckets?.goals ?? [])
@@ -204,7 +204,7 @@ export function bucketGoalsInOrder(simple: { goal_buckets?: GoalBucketsDb }, bas
 
 /**
  * goal-order: each live goal's place stored as it is listed (1 = first), on the bucket goal and on
- * the baseline's goal of the same key, so the goal buckets, Priorities and the Roadmap's goal rows
+ * the Ground Truth's goal of the same key, so the goal buckets, Priorities and the Roadmap's goal rows
  * read one order from the start (a scenario's seed).
  */
 export function placeBucketGoals(db: GoalBucketsDb, baseline: { key: string; type: string; attrs?: Record<string, unknown> | null }[]): void {
@@ -217,7 +217,7 @@ export function placeBucketGoals(db: GoalBucketsDb, baseline: { key: string; typ
 
 /**
  * goal-order: PATCH /v1/baseline/entities/{id} naming a bucket goal (the API's buckets are the
- * baseline's goals): its attrs.position is its place in the one goal order, and the baseline's goal
+ * Ground Truth's goals): its attrs.position is its place in the one goal order, and the Ground Truth's goal
  * of the same key takes it too, so every page follows. Approvers and owners, as the API.
  */
 export async function placeBucketGoal(simple: { goal_buckets?: GoalBucketsDb }, role: string, req: Request, p: string[], baseline: { key: string; type: string; attrs?: Record<string, unknown> | null }[]): Promise<Response | null> {

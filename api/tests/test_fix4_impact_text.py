@@ -9,6 +9,8 @@ words a person reads.
 The web mock (web/lib/api/mock/trace.ts) writes the same text.
 """
 
+import uuid
+
 import oracle.main  # noqa: F401
 from tests.baseline_helpers import make_ctx
 from tests.trace_helpers import depend, dependency, prd_v1, seed_chain, stub_artifact
@@ -91,3 +93,32 @@ async def test_qa_plan_43_the_plan_says_these_acceptance_tests(client):
     assert "Propose a new version of these acceptance tests" in tests_how, tests_how
     assert "this acceptance tests" not in tests_how
     assert "Propose a new version of this wireframe" in how[by_kind["wireframe"]]
+
+
+async def test_an_old_bulk_change_reads_ground_truth_items(client):
+    """PR 1248: a bulk write recorded before the Ground Truth rename says "42 baseline
+    items"; its impact page reads it in the new words, as stale reasons do, with no
+    migration; fails_when=the subject or the change still reads "42 baseline items"."""
+    from oracle import changes
+    from oracle.tenancy import tenant_session
+
+    ctx = await make_ctx()
+    roots = [{"id": str(uuid.uuid4()), "ref": f"feature:example-{i}"} for i in range(42)]
+    async with tenant_session(ctx.tenant_id) as s:
+        event = await changes.record_change(
+            s,
+            "entity",
+            cause="entity_updated",
+            actor=None,
+            subject_ref="42 baseline items",
+            data={"roots": roots, "entity_ids": [r["id"] for r in roots]},
+        )
+        await s.commit()
+        change_id = event.id
+    resp = await client.get(f"/v1/trace/changes/{change_id}/impact", headers=ctx.as_("viewer"))
+    assert resp.status_code == 200, resp.text
+    report = resp.json()
+    assert report["subject"]["ref"] == "42 Ground Truth items", report["subject"]
+    assert report["subject"]["title"] == "42 Ground Truth items", report["subject"]
+    assert report["change"]["subject_ref"] == "42 Ground Truth items", report["change"]
+    assert [c["subject_ref"] for c in report["changes"]] in ([], ["42 Ground Truth items"])

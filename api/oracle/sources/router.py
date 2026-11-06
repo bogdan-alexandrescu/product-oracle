@@ -214,7 +214,7 @@ def _person(principal: Principal) -> uuid.UUID:
 async def list_source_coverage(principal: CurrentPrincipal, db: TenantDB) -> CoverageList:
     """What Oracle read from each of your sources: live and removed items, what it left
     out (by status), how fresh the items are against each kind's half-life, and how often
-    they are used as baseline evidence, citations and section links."""
+    they are used as Ground Truth evidence, citations and section links."""
     return await coverage.list_coverage(db, _person(principal))
 
 

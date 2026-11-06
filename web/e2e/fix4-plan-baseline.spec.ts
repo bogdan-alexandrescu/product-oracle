@@ -13,8 +13,8 @@ const DESKTOP = { width: 1366, height: 820 };
 async function openBaseline(page: Page, email?: string) {
   await login(page, email);
   await page.getByTestId("nav-baseline").filter({ visible: true }).first().click();
-  await expect(page).toHaveURL(/\/baseline/);
-  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
+  await expect(page).toHaveURL(/\/ground-truth/);
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
   await expect(page.getByTestId("goal-g.activation")).toBeVisible();
 }
 
@@ -33,10 +33,10 @@ const clipped = (el: Locator) =>
 
 test.use({ viewport: DESKTOP });
 
-// protects=qa-plan-4: Plan's goal cards and the Baseline's Goals table read one confidence for
-// the same goal; fails_when=Plan rings 78 / 66 while the Baseline says not scored (no evidence);
+// protects=qa-plan-4: Plan's goal cards and the Ground Truth's Goals table read one confidence for
+// the same goal; fails_when=Plan rings 78 / 66 while the Ground Truth says not scored (no evidence);
 // no_claim=the API's scoring (pytest).
-test("qa-plan-4: Plan's goal cards and the Baseline's Goals table show the same confidence", async ({ page }) => {
+test("qa-plan-4: Plan's goal cards and the Ground Truth's Goals table show the same confidence", async ({ page }) => {
   await login(page);
   await page.getByTestId("nav-plan").filter({ visible: true }).first().click();
   await expect(page).toHaveURL(/\/plan/);

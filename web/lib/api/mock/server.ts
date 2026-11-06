@@ -103,7 +103,7 @@ import { liveReply, routeLive } from "./live";
 import { sourceBrowseRoute } from "./source-browse";
 import { DRAFT_NEW_ITEMS_SCENARIO, itemsChangedSince, routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
 import { BEFORE_DRAFTING, LATE_ANSWER_WITHHELD, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type IntakeContext, type SubjectLookup } from "./intake";
-import { ensureReports, inboxReports, REPORT_PRD_MOVED_SCENARIO, reportsRoute, type LiveTracks, type ReportsDb } from "./reports";
+import { ensureReports, inboxReports, REPORT_DRAFT_ITEM, REPORT_DRAFT_ITEM_SCENARIO, REPORT_PRD_MOVED_SCENARIO, reportsRoute, type LiveTracks, type ReportsDb } from "./reports";
 import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
 import { addDigest, addMetricsReview, ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
 import { emptyMetrics, metricInbox, openVariances, reviewBlocks, routeMetrics, seedMetrics, type MetricsContext, type MetricsDb } from "./metrics";
@@ -148,7 +148,7 @@ import {
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
 import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, seedStoredRefusalDraft, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
-import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, NOT_CLAIMS_LINE, NOT_CLAIMS_SCENARIO, SHARED_DATE_SCENARIO, TWO_WAY_DATES_SCENARIO, TWO_WAY_GA, VERSION_WARNINGS_SCENARIO, dateMarks, dateWarnings, versionWarnings, inboxTracks, planEntityTitle, planFeatureRows, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, PLAN_SAME_KEY_SCENARIO, SAME_KEY_ITEM, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, NOT_CLAIMS_LINE, NOT_CLAIMS_SCENARIO, SHARED_DATE_SCENARIO, TWO_WAY_DATES_SCENARIO, TWO_WAY_GA, VERSION_WARNINGS_SCENARIO, dateMarks, dateWarnings, versionWarnings, inboxTracks, planEntityTitle, planFeatureRows, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecPerson, type SpecsDb } from "./specs";
 import { inboxStrategy, planDrift, routeStrategy, seedNoStrategy, seedPlanDrift, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { seedImpact } from "./impact";
@@ -170,9 +170,11 @@ import { bucketGoalsInOrder, placeBucketGoal, placeBucketGoals, routeGoalBuckets
 import { proposeGoalDelete, routeSimpleChanges, seedFeatureAskProposal, seedSimpleProposal, simpleInboxRows, type SimpleChangesCtx } from "./simple-changes";
 import { routeCurrentState, seedCurrentState, type CurrentStateDb } from "./currentstate";
 import { featureKeyOf, prioritiesOut } from "./simple-priorities";
+import { restoreTrack, routeRemoved } from "./simple-removed";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, restoreAgendaItem, sheetDecisionMade, sheetProposals, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { goalSuggestionInboxRows, seedGoalSuggestions, seedHeldGoalSuggestion, seedPersonGoalSuggestion } from "./simple-suggestions";
 import { runGroupsOut } from "./simple-runs";
+import { roadmapRead } from "./roadmap-read";
 import { questionInboxRows } from "./simple-questions";
 import { onePagerInboxRows, planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedOnePagerFromSections, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb, type Sec } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
@@ -181,12 +183,12 @@ import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visual
 import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, seedTwoDependencies, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { groundTruthCheck } from "./ground-truth";
-import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
-import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, CROWDED_MILESTONES_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
-import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
+import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
+import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
+import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, knowGoalMapItems, seedFitDateRoadmap } from "./simple-roadmap";
-import { closed, GOALS, shownDates, storedDates } from "./simple-roadmap";
+import { closed, GOALS, seesDraft, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapItems, routeGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
@@ -978,6 +980,22 @@ function seedTrashReviewerScenario(): Db {
 }
 
 /**
+ * removed-tracks review (the Move to Trash confirm), "tracks-closed": Guided setup track holds 2
+ * live features and 1 cut, Welcome media track only a cut one (Welcome video), and Usage alerts
+ * track 5 live and 1 merged draft (Alert inbox, merged into Alert rules engine). Invented data.
+ */
+export const TRACKS_CLOSED_SCENARIO = "tracks-closed";
+
+function seedTracksClosedScenario(): Db {
+  const db = seed();
+  const rm = (db.simple_roadmap = seedSimpleRoadmap());
+  Object.assign(rm.items.find((s) => s.key === "setup-video")!, { track: "welcome", status: "cut", depends: [] });
+  rm.items.push({ key: "alert-inbox", title: "Alert inbox", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", draft: true, merged_into: "alert-rules" });
+  rm.ids["alert-inbox"] = stableUuid("simple-item/alert-inbox");
+  return db;
+}
+
+/**
  * meeting-changes-only-its-agenda "meeting-agenda" scenario: the default company, with the
  * Welcome video (on the onboarding roadmap) built from Usage alerts, so a review of Usage
  * alerts (pinned to the alerts roadmap) sees an item it does not review.
@@ -1126,7 +1144,7 @@ function seedSimpleHomeOnePrdScenario(): Db {
 /**
  * CLD's production walk (#723, 2026-10-27), the "simple-walk" scenario: "simple-home-one-prd"
  * whose Guided setup items carry milestone texts with their notes appended, as real roadmaps
- * do ("M1 · Measure it, make it safe (baseline needs the export); ..."), its one-pager's slice
+ * do ("M1 · Measure it, make it safe (the usage report needs the export); ..."), its one-pager's slice
  * alike with a long problem line, and Checkout redesign started from an empty skeleton (the
  * template's guidance only). Invented data.
  */
@@ -1136,7 +1154,7 @@ function seedSimpleWalkScenario(): Db {
   const M1 = "M1 · Measure it, make it safe";
   const M2 = "M2 · Ship to beta";
   const noted: [string, string, number, number, string, number][] = [
-    ["walk-export", "Baseline export", 5, 40, `${M1} (baseline needs the export); Alert digest in ${M2}`, 45],
+    ["walk-export", "Usage export", 5, 40, `${M1} (the usage report needs the export); Alert digest in ${M2}`, 45],
     ["walk-dry-run", "Dry run", 10, 45, `${M1} (owner asks for a dry run)`, 45],
     ["walk-audit", "Setup audit", 15, 35, `${M1}; follow-up in M3`, 45],
     ["walk-invites", "Beta invites", 45, 70, `${M2} (two teams first)`, 75],
@@ -1488,6 +1506,76 @@ function seedApprovedRoadmapScenario(crowded = false): Db {
     roadmap.status = "approved";
     applyRoadmapVersion(db, roadmap, db.versions.find((v) => v.document_id === roadmap.id && v.number === 3)!);
   }
+  return db;
+}
+
+/**
+ * plan-open-from-simple "report-draft-item" (./reports.ts): "alignment-report" with Quiet hours
+ * for alerts, which the week of Oct 12 names, only in a Usage alerts draft on Simple.
+ */
+function seedReportDraftItemScenario(): Db {
+  const db = seed();
+  const rm = seedSimpleRoadmap();
+  rm.items.push({ key: REPORT_DRAFT_ITEM.key, title: REPORT_DRAFT_ITEM.title, horizon: "next", roadmap: "alerts-roadmap", track: "alerts", draft: true });
+  rm.ids[REPORT_DRAFT_ITEM.key] = stableUuid(`simple-item/${REPORT_DRAFT_ITEM.key}`);
+  db.simple_roadmap = rm;
+  return db;
+}
+
+/**
+ * plan-open-from-simple "plan-same-key" (./roadmap.ts): the default company plus the Checkout
+ * redesign roadmap, built from Checkout redesign (v1 approved, draft 2 from PRD v2), on Simple
+ * with Free shipping threshold alert, whose key Usage alerts' roadmap holds for another item.
+ * Usage alerts' roadmap v1 is approved, so its item stays on the Plan with Approved only while
+ * the Checkout one, only in draft 2, does not.
+ */
+function seedPlanSameKeyScenario(): Db {
+  const db = seed();
+  const alerts = db.documents.find((d) => d.slug === "usage-alerts-roadmap")!;
+  db.versions.find((v) => v.document_id === alerts.id && v.number === 1)!.approved_at ??= "2026-10-05T09:00:00Z";
+  alerts.status = "approved";
+  const prd = db.documents.find((d) => d.slug === "checkout-redesign")!;
+  const at = "2026-10-20T09:00:00Z";
+  const roadmap: DocumentRow = { id: uuid(), slug: "checkout-redesign-roadmap", title: "Checkout redesign roadmap", status: "in_review", kind: "roadmap", template: null, template_version: null, theme: null, created_at: at, updated_at: at };
+  db.documents.push(roadmap);
+  for (const n of [1, 2] as const) {
+    const pv = db.versions.find((v) => v.document_id === prd.id && v.number === n)!;
+    const v = buildVersion(roadmap, { number: n, created_at: at, sections: [{ key: "summary", level: 2, heading: "Summary", body: "A clearer checkout, one page at a time." }], citations: [] });
+    if (n === 1) v.approved_at = at;
+    v.source = versionSource(prd, pv);
+    db.versions.push(v);
+  }
+  const rm = seedSimpleRoadmap();
+  (rm.extra_roadmaps ??= {})[roadmap.slug] = { title: roadmap.title, prd: "Checkout redesign", track: "checkout", track_title: "Checkout redesign track" };
+  rm.items.push({ key: SAME_KEY_ITEM.key, title: SAME_KEY_ITEM.title, horizon: "now", roadmap: roadmap.slug, track: "checkout", confidence: "medium", start: 10, end: 40, source: "typed" });
+  rm.ids[SAME_KEY_ITEM.key] = stableUuid(`simple-item/${SAME_KEY_ITEM.key}`);
+  db.simple_roadmap = rm;
+  return db;
+}
+
+/**
+ * B-26 "plan-timeline": the default company whose Simple roadmap also dates the Plan's Usage
+ * alerts items (the same keys on the same roadmap), with a milestone and dependencies; Budgets
+ * per team has no item there, so the Plan's Timeline lists it as not on the timeline.
+ */
+export const PLAN_TIMELINE_SCENARIO = "plan-timeline";
+/** "plan-timeline-edit": "plan-timeline" with usage-alerts-roadmap v1 approved, so its plan can be changed. */
+export const PLAN_TIMELINE_EDIT_SCENARIO = "plan-timeline-edit";
+function seedPlanTimelineScenario(): Db {
+  const db = seed();
+  const rm = seedSimpleRoadmap();
+  const add = [
+    { key: "threshold-alerts", title: "Threshold alerts on spend", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 35, source: "typed", milestone: { name: "Alpha", day: 35 } },
+    { key: "alert-rules-api", title: "Alert rules API", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 20, source: "typed" },
+    { key: "slack-alerts", title: "Alerts in the team chat", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 40, end: 75, source: "typed", depends: ["threshold-alerts"] },
+    { key: "usage-dashboard", title: "Usage dashboard", horizon: "now", roadmap: "alerts-roadmap", goal: "faster-activation", track: "alerts", confidence: "medium", start: 20, end: 60, source: "typed", depends: ["alert-rules-api"] },
+    { key: "spend-forecast", title: "Spend forecast for the month", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", confidence: "low" },
+  ] as const;
+  for (const it of add) {
+    rm.items.push({ ...it, depends: "depends" in it ? [...it.depends] : undefined, milestone: "milestone" in it ? { ...it.milestone } : undefined });
+    rm.ids[it.key] = stableUuid(`simple-item/${it.key}`);
+  }
+  db.simple_roadmap = rm;
   return db;
 }
 
@@ -3601,6 +3689,12 @@ function load(): Db {
                 ? seedSimpleCrossPrdDates
               : scenario === "simple-dated-move"
                 ? seedSimpleDatedMove
+              : scenario === PLAN_SAME_KEY_SCENARIO
+                ? seedPlanSameKeyScenario
+              : scenario === PLAN_TIMELINE_SCENARIO || scenario === PLAN_TIMELINE_EDIT_SCENARIO
+                ? seedPlanTimelineScenario
+              : scenario === REPORT_DRAFT_ITEM_SCENARIO
+                ? seedReportDraftItemScenario
               : scenario === "inbox-reviewer"
                 ? seedInboxReviewerScenario
               : scenario === INBOX_UNKNOWN_PROPOSER_SCENARIO
@@ -3814,6 +3908,14 @@ function load(): Db {
                 ? () => seedApprovedRoadmapScenario(true)
               : scenario === ONE_ROADMAP_SCENARIO
                 ? seedOneRoadmapScenario
+              : scenario === OLD_MILESTONES_SCENARIO
+                ? () => {
+                    const db = seedOneRoadmapScenario();
+                    db.simple_roadmap!.goal_milestones = seedOldMilestones(OLD_ROADMAP[0]);
+                    return db;
+                  }
+              : scenario === TRACKS_CLOSED_SCENARIO
+                ? seedTracksClosedScenario
               : scenario === "simple-500"
                 ? () => ({ ...seed(), simple_roadmap: seedSimpleMany() })
                 : scenario === "strategy" || scenario === "strategy-no-vision"
@@ -3837,11 +3939,12 @@ function load(): Db {
   // qa4-plan-3). It is approved where a scenario works on the approved plan: launches are
   // planned from it (New launch, #344, has items to pick), "plan-decider" (#346) edits it,
   // "date-bases" verifies its dates, "strategy-plan" reviews its items against the strategy,
-  // "outcomes" tracks outcomes of its items, "alerts-approved" is the approved plan alone, and
-  // the "track-alerts" scenarios watch its milestones (an accepted slip moves an approved item).
+  // "outcomes" tracks outcomes of its items, "alerts-approved" is the approved plan alone, the
+  // "track-alerts" scenarios watch its milestones (an accepted slip moves an approved item), and
+  // "plan-timeline-edit" changes the plan with the Timeline shown.
   const approvedPlan = [
     "launches", "plan-decider", "strategy-plan", "outcomes", DATE_BASES_SCENARIO, SHARED_DATE_SCENARIO, NOT_CLAIMS_SCENARIO, ALERTS_APPROVED_SCENARIO,
-    "track-alerts", "track-alerts-many", "track-alerts-actions", "track-alerts-history",
+    "track-alerts", "track-alerts-many", "track-alerts-actions", "track-alerts-history", PLAN_TIMELINE_EDIT_SCENARIO,
   ];
   if (approvedPlan.includes(scenario ?? "")) {
     const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
@@ -4119,7 +4222,7 @@ function seedRunDiscussionsScenario(db: Db): DiscussionsDb {
 }
 
 const CHECKPOINT_NAMES: Record<string, string> = {
-  baseline_confirm: "Confirm the baseline",
+  baseline_confirm: "Confirm the Ground Truth",
   feature_set: "Feature set",
   priority_order: "Priority order",
   prd_review: "PRD review",
@@ -4149,7 +4252,7 @@ function discussionDocument(db: Db, d: DiscussionRow): DocumentSection[] {
 }
 
 /** A `screen` subject's page name, never its route (oracle.discussions.context.page_name): "Home", "Settings · Members", "General" for /. */
-const SCREEN_PAGES: Record<string, string> = { home: "Home", requests: "Requests", baseline: "Baseline", documents: "PRDs", priorities: "Priorities", plan: "Plan", roadmap: "Plan", runs: "Runs", inbox: "Inbox", company: "Company", sources: "Sources", settings: "Settings" };
+const SCREEN_PAGES: Record<string, string> = { home: "Home", requests: "Requests", baseline: "Ground Truth", documents: "PRDs", priorities: "Priorities", plan: "Plan", roadmap: "Plan", runs: "Runs", inbox: "Inbox", company: "Company", sources: "Sources", settings: "Settings" };
 const SCREEN_SIMPLE_PAGES: Record<string, string> = { "": "Home", roadmap: "Roadmap", priorities: "Priorities", decisions: "Decisions", meetings: "Meetings", prds: "One-pager", "one-pagers": "One-pager" };
 function screenPageName(path: string): string {
   const parts = path.split("?")[0].split("/").filter(Boolean);
@@ -5687,6 +5790,9 @@ function ensureV2(db: Db): V2Db {
 /** The decision log, seeded on first use (the requests mock records a no in it, H10). */
 function ensureDecisions(db: Db, ctx: DecisionsContext): DecisionsDb {
   db.decisions ??= seeded("decisions", () => {
+    // A new company ("empty" scenario): no decisions yet, so Simple's Decisions (which lists the
+    // log's open calls) and the log say "No decisions yet".
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === "empty") return { decisions: [], reviews: [] };
     const log = seedDecisions(ctx);
     if (localStorage.getItem(MOCK_SCENARIO_KEY) === "large") enlargeDecisions(ctx, log, 250);
     if (localStorage.getItem(MOCK_SCENARIO_KEY) === "pricing") seedPricingDecisions(db, ctx, log);
@@ -6092,7 +6198,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       onTrash: (ids) => (localStorage.getItem(MOCK_SCENARIO_KEY) === TRASH_KEPT_LINKS_SCENARIO ? undefined : releaseDocuments(ensureRequests(db), ids)),
       // edit-decisions: Restore puts a decision or a PRD's question back on Simple's Decisions too.
       simple: () => db.simple_roadmap && { ...db.simple_roadmap, sheet: [...(db.simple_meetings?.decisions ?? []), ...(db.simple_meetings?.questions?.questions ?? [])] },
-      onRestore: (released) => relinkDocuments(ensureRequests(db), released as ReleasedRequest[], (id) => ensureV2(db).intakes.some((i) => i.id === id)),
+      // As the API: the draft only when the person starting the run may see it.
+      roadmapRead: (starter) => roadmapRead(db.documents, db.versions, db.simple_roadmap, String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"), (d) => seesDraft(d, starter, db.simple_roadmap)),
+      onRestore: (released) => (db.simple_roadmap && restoreTrack(db.simple_roadmap, released)) || relinkDocuments(ensureRequests(db), released as ReleasedRequest[], (id) => ensureV2(db).intakes.some((i) => i.id === id)),
       // port-an-decisions: Restore puts a meeting's removed agenda item or a deleted request back.
       restoreRoot: (entry) => {
         if (entry.request !== undefined) {
@@ -6904,7 +7012,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   db.simple_roadmap.prd_milestones = prdMilestonesOf(db);
   const simpleRoles = Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role]));
   const simpleOwners = db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id);
-  // Current state: every Simple feature's mark and proof; the approver role (confirm_entity) moves and answers.
+  // Running today: every Simple feature's mark and proof; the approver role (confirm_entity) moves and answers.
   if (p[1] === "feature-states") {
     const rows = prioritiesOut(db.simple_roadmap, { id: me.id, role: me.role, owners: simpleOwners, names: {} }, () => [], () => false).rows;
     db.current_state ??= seedCurrentState(rows, Date.now());
@@ -6993,6 +7101,11 @@ async function route(db: Db, req: Request): Promise<Response> {
       const out = appliedVersionOf(db.simple_roadmap!, doc.slug, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames });
       return out ? json(200, out) : json(404, { detail: "No such roadmap" });
     }
+    // removed-tracks: Simple's removed list, its tracks and their change ops (./simple-removed.ts).
+    const removedRes = await routeRemoved(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames }, r, p, () => (db.trash ??= emptyTrash()).entries, (id) =>
+      !!db.roadmap?.milestones.some((m) => m.track_id === id) || !!db.roadmap?.records.some((x) => x.track_id === id) || !!db.roadmap?.alerts?.some((x) => x.track_id === id) || !!db.launches?.launches.some((l) => l.track_id === id) || !!db.quality?.outcomes.some((o) => o.track_id === id),
+    );
+    if (removedRes) return removedRes;
     // trash-features-goals: a goal deleted to Settings › Trash (./trash.ts).
     // edit-goals-prds EG1: a goal's owner is one of the members; an ask goes to the company's owners.
     const people = db.members.map((x) => ({ id: x.id, name: displayName(x.email, x.name), email: x.email, role: x.role, disabled: x.status === "disabled" }));
@@ -7591,6 +7704,9 @@ async function route(db: Db, req: Request): Promise<Response> {
     followRunReview(db, doc, v, true, me.id);
     // approved-roadmap-to-simple: a roadmap version's plan table goes on its Simple items.
     if (doc.kind === "roadmap" && db.simple_roadmap?.extra_roadmaps?.[doc.slug]) applyRoadmapVersion(db, doc, v);
+    // #346: a version proposed from plan changes makes its items the roadmap's items in Simple.
+    const changeSet = doc.kind === "roadmap" ? db.plan_edits?.sets.find((x) => x.roadmap === doc.slug && x.proposed_version === v.number) : undefined;
+    if (changeSet && db.simple_roadmap) applyPlanChanges(db.simple_roadmap, doc.slug, changeSet.changes);
     // approved-prd-roadmap: its dated items and milestones go on its roadmap's working draft.
     if (doc.kind === "prd") {
       const row = draftDb(db).rows.find(
@@ -7842,7 +7958,9 @@ export async function mockFetch(req: Request): Promise<Response> {
   (globalThis as { __poMockFetch?: typeof mockFetch }).__poMockFetch ??= mockFetch;
   log.push(`${req.method} ${url.pathname}${url.search}`);
   await new Promise((r) => setTimeout(r, LATENCY_MS));
-  if (req.method === "GET" && url.pathname === localStorage.getItem(MOCK_FAIL_KEY)) {
+  // A path fails every GET of it; a path with its query ("/v1/documents?kind=prd") only that one.
+  const failing = localStorage.getItem(MOCK_FAIL_KEY);
+  if (req.method === "GET" && (url.pathname === failing || `${url.pathname}${url.search}` === failing)) {
     return new Response(JSON.stringify({ detail: "Mock failure" }), { status: 500, headers: { "content-type": "application/json" } });
   }
   if (localStorage.getItem(MOCK_FAIL_ONCE_KEY) === `${req.method} ${url.pathname}`) {

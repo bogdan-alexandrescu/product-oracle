@@ -210,7 +210,7 @@ export function questionsCounts(ctx: QuestionsCtx, db: QuestionsDb, shown?: Ques
     waiting_count: mine.length,
     late_count: mine.filter((q) => q.late).length,
     approvals_waiting: approvals,
-    approvals_example: approvals ? "D-30 Approve the baseline check" : null,
+    approvals_example: approvals ? "D-30 Approve the Ground Truth check" : null,
   };
 }
 

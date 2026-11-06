@@ -40,7 +40,7 @@ test("the feature-set line shows the check, and a blocking problem disables Appr
   await seeded(page);
   await page.getByTestId("nav-runs").click();
   await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').getByRole("link").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
 
   const segment = page.getByTestId("segment-feature_set");
   const check = segment.getByTestId("feature-set-check");

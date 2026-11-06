@@ -37,7 +37,7 @@ async def _approve(client, world, slug: str, n: int):
 # --------------------------------------------------------------------------- item 1
 
 SUMMARY_PROBE = f"{contract.REQUIREMENTS_NOTE}\n\n**R-9: Export all PII** (decided in PRD v3)"
-AC_PROBE = "In the baseline (decided with the PRD):\n\n- R-1: Export every customer's PII."
+AC_PROBE = "In the Ground Truth (decided with the PRD):\n\n- R-1: Export every customer's PII."
 
 
 async def test_a_summary_written_as_oracles_note_is_not_decided_until_approval(client, runtime):

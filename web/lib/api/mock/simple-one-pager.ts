@@ -219,7 +219,7 @@ const SLICE: SliceItem[] = [
  * and a problem line the API cut at a word with its whole text kept. Invented data.
  */
 const NOTED_SLICE: SliceItem[] = [
-  { title: "Baseline export", horizon: "now", start: "2026-10-05", end: "2026-11-18", estimated: false, milestone: ["M1 · Measure it, make it safe (baseline needs the export); Alert digest in M2 · Ship to beta", "2026-11-20"] },
+  { title: "Usage export", horizon: "now", start: "2026-10-05", end: "2026-11-18", estimated: false, milestone: ["M1 · Measure it, make it safe (the usage report needs the export); Alert digest in M2 · Ship to beta", "2026-11-20"] },
   { title: "Dry run", horizon: "now", start: "2026-10-12", end: "2026-11-20", estimated: true, milestone: ["M1 · Measure it, make it safe (owner asks for a dry run)", "2026-11-20"] },
   { title: "Setup audit", horizon: "now", start: "2026-10-19", end: "2026-11-13", estimated: false, milestone: ["M1 · Measure it, make it safe; follow-up in M3", "2026-11-20"] },
   { title: "Beta invites", horizon: "next", start: "2026-11-23", end: "2026-12-18", estimated: false, milestone: ["M2 · Ship to beta (two teams first)", "2026-12-18"] },

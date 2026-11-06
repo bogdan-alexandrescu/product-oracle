@@ -22,7 +22,7 @@ From the design's phasing table (v1 row), in build order:
    incremental sync with cursors; item versions
    so a run can pin the snapshot it started on (S4 Freshness); full-text search.
    DMs are never ingested; source ACL metadata is stored (S3 Visibility).
-3. **Baseline graph (B1–B3).** Typed entities (goal, product, feature, requirement,
+3. **Ground Truth graph (B1–B3).** Typed entities (goal, product, feature, requirement,
    constraint, decision, person) and edges (supports, depends_on, blocks, part_of,
    owned_by), evidence on every node and edge, user corrections locked, agent
    writes to locked items become proposals, conflicts resolved by precedence (code >
@@ -36,14 +36,14 @@ From the design's phasing table (v1 row), in build order:
    template follows O1c: no evidence in the body, a final Sources and data points
    section.
 5. **MCP server (X1).** Streamable HTTP at `/mcp`, authenticated by API tokens and
-   run-scoped, expiring run tokens; tools to search sources, read the baseline and
+   run-scoped, expiring run tokens; tools to search sources, read the Ground Truth and
    documents, and propose changes.
-6. **Runs on SwarmCloud (P2, W1, W2, P3).** Code-defined flows (Baseline → PRD,
+6. **Runs on SwarmCloud (P2, W1, W2, P3).** Code-defined flows (Ground Truth → PRD,
    Feedback loop) with knobs (depth, agent roles, checkpoints, budget); one
    SwarmCloud workflow per segment between checkpoints until `await_input` (#1436)
    lands; cost estimate first, runs over $50 wait for approval, overrun past 1.5×
    the estimate pauses; an Inbox of checkpoints waiting on you.
-7. **App navigation (I4).** Screens: Baseline, Runs, PRDs, Roadmap (v1.1),
+7. **App navigation (I4).** Screens: Ground Truth, Runs, PRDs, Roadmap (v1.1),
    Inbox, Settings (Members, Sources, Templates).
 
 ## Boundary with SwarmCloud
@@ -131,7 +131,7 @@ Every table is `TenantScoped` unless noted.
   are gone; Oracle's own Claude calls run on the Claude account pool.)
 - **Sources are owned and private** (`sources.owner_user_id`, `connection_id`): what
   a user's connections pull in is visible only to that user (S3 revised). Others see
-  it only as evidence the owner adds to the shared baseline (excerpt, url, ref), and a
+  it only as evidence the owner adds to the shared Ground Truth (excerpt, url, ref), and a
   run or an MCP call reads the items of the user it acts for. Source kinds add
   `fireflies` and `google_docs`.
 - **Confidence** (`evidence.confidence` + `confidence_factors` + `scored_at`,
@@ -155,9 +155,9 @@ Every table is `TenantScoped` unless noted.
 - A sync whose credential is rejected also marks the user's connection `expired` (with
   `last_error`). Disconnect revokes a grant Oracle obtained through GitHub, Slack or
   Google OAuth (best effort) before deleting Oracle's copy.
-- A run's `baseline` segment merges its `baseline.yaml` through the baseline's YAML import
-  as agent writes (locked items become proposals); priorities score unscored evidence
-  through the baseline's confidence.
+- A run's `baseline` segment merges its `baseline.yaml` through the Ground Truth's YAML
+  import as agent writes (locked items become proposals); priorities score unscored
+  evidence through the Ground Truth's confidence.
 
 ## Public-link evidence (migration 0006, owner's decision 2026-10-17)
 
@@ -189,8 +189,8 @@ the link", and plain public web pages.
   days), freshness from last_modified else fetched_at, and each distinct link counts as
   a mention. The page is public, so every user sees the snapshot, unlike items from
   private connections.
-- UI: "Add evidence link" in the Baseline feature drawer (with Refresh per link) and on
-  each document section (pick the baseline item it supports).
+- UI: "Add evidence link" in the Ground Truth feature drawer (with Refresh per link) and on
+  each document section (pick the Ground Truth item it supports).
 
 ## Agents and model calls (Bogdan, 2026-10-17)
 
@@ -261,11 +261,11 @@ words only: one company's Oracle, its users and their roles.
 | B1 Sources | `api/oracle/sources/` (not `connectors/`), `oracle sync` CLI, `web/app/settings/sources/`, `web/app/sources/` | Owner-scoped source registry, sync engine with versions and snapshots, uploads, item confidence, search ranked by relevance × confidence |
 | B2a GitHub + Notion | `api/oracle/sources/connectors/github.py`, `notion.py` (+ fixtures, tests) | Connectors on the protocol, provider OAuth metadata, recorded-fixture tests |
 | B2b Slack + Fireflies + Google Docs | `api/oracle/sources/connectors/slack.py`, `fireflies.py`, `google_docs.py` (+ fixtures, tests) | Same; Slack never ingests DMs |
-| C Baseline | `api/oracle/baseline/`, `oracle baseline push/pull`, `web/app/baseline/` | Graph API, locks, proposals, conflicts resolved by confidence then precedence, evidence scoring, traceability, YAML import/export, Baseline screen |
+| C Ground Truth | `api/oracle/baseline/`, `oracle baseline push/pull`, `web/app/baseline/` | Graph API, locks, proposals, conflicts resolved by confidence then precedence, evidence scoring, traceability, YAML import/export, Ground Truth screen |
 | D1 MCP | `api/oracle/mcp/` (not `oauth/`) | `/mcp` Streamable HTTP; every REST operation as a tool (generated from the routes, so parity holds as routes are added) plus curated tools; API-token and run-token auth with scope checks |
 | D2 MCP OAuth | `api/oracle/mcp/oauth/`, migration 0004, `web/app/oauth/` | OAuth 2.1 authorization server for MCP clients: metadata, dynamic client registration, authorization code + PKCE with a consent screen behind Google sign-in, tokens, refresh, revoke |
 | E Runs | `api/oracle/runs/`, `api/oracle/swarm/`, `oracle tick` CLI, `web/app/runs/`, `web/app/inbox/` | Flow templates, estimates and approval, segments against a fake agent runtime until SwarmCloud #1433 lands, checkpoints, Runs + Inbox screens |
 | F Priorities + templates | `api/oracle/priorities/`, `api/oracle/templates/`, `web/app/priorities/`, `web/app/settings/templates/`, `web/app/settings/themes/`, new-draft picker | Scoring methods with explanations (confidence from evidence), dependency order, snapshots; PRD + roadmap templates and themes (add / edit / delete) with built-ins from `docs/research/`; template + theme picker when a draft starts |
 
 Merge order: A, K, B1, B2a, B2b, C, F, D1, D2, E, then one integration pass
-(regenerate OpenAPI types, wire run artifacts into baseline import, end-to-end test).
+(regenerate OpenAPI types, wire run artifacts into the Ground Truth import, end-to-end test).

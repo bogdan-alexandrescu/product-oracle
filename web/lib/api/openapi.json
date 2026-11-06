@@ -4545,7 +4545,7 @@
           "discussions"
         ],
         "summary": "Propose Discussion Change",
-        "description": "``goal_measure`` and ``entity_edit`` (commenters and up): an open baseline proposal\nwhose reason names the discussion and links its page; approvers accept it in Baseline.\nA goal version takes B6's path: its fields pass B5's checks first (422, every problem),\nand a target the start or current value already meets gets Oracle's pushback once\n(409); proposing it again keeps it and logs the override. ``payload``: the person's\nEdit, proposed instead and saved only when it is used.",
+        "description": "``goal_measure`` and ``entity_edit`` (commenters and up): an open Ground Truth proposal\nwhose reason names the discussion and links its page; approvers accept it in the Ground Truth.\nA goal version takes B6's path: its fields pass B5's checks first (422, every problem),\nand a target the start or current value already meets gets Oracle's pushback once\n(409); proposing it again keeps it and logs the override. ``payload``: the person's\nEdit, proposed instead and saved only when it is used.",
         "operationId": "propose_discussion_change",
         "security": [
           {
@@ -12982,7 +12982,7 @@
           "sources"
         ],
         "summary": "List Source Coverage",
-        "description": "What Oracle read from each of your sources: live and removed items, what it left\nout (by status), how fresh the items are against each kind's half-life, and how often\nthey are used as baseline evidence, citations and section links.",
+        "description": "What Oracle read from each of your sources: live and removed items, what it left\nout (by status), how fresh the items are against each kind's half-life, and how often\nthey are used as Ground Truth evidence, citations and section links.",
         "operationId": "list_source_coverage",
         "responses": {
           "200": {
@@ -14777,7 +14777,7 @@
           "baseline"
         ],
         "summary": "Get Graph",
-        "description": "Every entity and edge (no evidence bodies): what the Baseline screen draws.",
+        "description": "Every entity and edge (no evidence bodies): what the Ground Truth screen draws.",
         "operationId": "get_graph",
         "responses": {
           "200": {
@@ -14807,8 +14807,8 @@
         "tags": [
           "baseline"
         ],
-        "summary": "Get Baseline Review Status",
-        "description": "Whether a new PRD run may use the current baseline instead of rebuilding it: the\nlast baseline review, its age, whether a baseline build is under way, and the\nbaseline segment's estimate per depth (B1 \"Reuse base\").",
+        "summary": "Get Ground Truth Review Status",
+        "description": "Whether a new PRD run may use the current Ground Truth instead of rebuilding it: the\nlast Ground Truth review, its age, whether a Ground Truth build is under way, and the\nGround Truth segment's estimate per depth (B1 \"Reuse base\").",
         "operationId": "get_baseline_review_status",
         "responses": {
           "200": {
@@ -15390,8 +15390,8 @@
         "tags": [
           "baseline"
         ],
-        "summary": "Get Baseline From Run",
-        "description": "What a run wrote to the baseline, for a person to review (B2): every item it\ncreated, changed or proposed a change to, with the reasons each needs a person and the\nshared draft's actions on it; the run's Confirm the baseline stop with its gate; the\nother proposed goals.",
+        "summary": "Get Ground Truth From Run",
+        "description": "What a run wrote to the Ground Truth, for a person to review (B2): every item it\ncreated, changed or proposed a change to, with the reasons each needs a person and the\nshared draft's actions on it; the run's Confirm the Ground Truth stop with its gate; the\nother proposed goals.",
         "operationId": "get_baseline_from_run",
         "security": [
           {
@@ -16812,7 +16812,7 @@
           "baseline"
         ],
         "summary": "Create Proposal",
-        "description": "Suggest a change; an approver accepts or rejects it. A run's proposal records\nthe run, and is refused while Oracle is set to observe the baseline (H11); a\nperson's never is.",
+        "description": "Suggest a change; an approver accepts or rejects it. A run's proposal records\nthe run, and is refused while Oracle is set to observe the Ground Truth (H11); a\nperson's never is.",
         "operationId": "create_proposal",
         "security": [
           {
@@ -17543,7 +17543,7 @@
           "priorities"
         ],
         "summary": "Get Priorities",
-        "description": "Rank the baseline's features by ``method``, in dependency order.\n\nFeatures that serve no confirmed goal sink to the bottom and are flagged;\ndependency cycles are listed in ``cycles`` and their members flagged. People's\nactive moves and pins apply after the formula (``overrides=false`` leaves them out):\neach row carries ``formula_rank`` (Oracle's rank) and the ``override`` that placed it.",
+        "description": "Rank the Ground Truth's features by ``method``, in dependency order.\n\nFeatures that serve no confirmed goal sink to the bottom and are flagged;\ndependency cycles are listed in ``cycles`` and their members flagged. People's\nactive moves and pins apply after the formula (``overrides=false`` leaves them out):\neach row carries ``formula_rank`` (Oracle's rank) and the ``override`` that placed it.",
         "operationId": "get_priorities",
         "security": [
           {
@@ -22888,7 +22888,7 @@
           "scope"
         ],
         "summary": "Add Scope Requirement",
-        "description": "Add a requirement to a feature (approver role or above): ``origin: person``; its\ngoals default to the feature's. Approving writes it to the baseline as the approver's.",
+        "description": "Add a requirement to a feature (approver role or above): ``origin: person``; its\ngoals default to the feature's. Approving writes it to the Ground Truth as the approver's.",
         "operationId": "add_scope_requirement",
         "security": [
           {
@@ -24652,7 +24652,7 @@
           "intake"
         ],
         "summary": "Create Question",
-        "description": "Ask a teammate: a named person (commenter or above) is asked a question about an\nintake, a document section, a run checkpoint item or a baseline entity. It lands in\ntheir Inbox as \"<your name> asks\"; you see the answer on the subject. 422 when the\nsubject does not exist or the person cannot answer. Audited (``question.asked``).",
+        "description": "Ask a teammate: a named person (commenter or above) is asked a question about an\nintake, a document section, a run checkpoint item or a Ground Truth entity. It lands in\ntheir Inbox as \"<your name> asks\"; you see the answer on the subject. 422 when the\nsubject does not exist or the person cannot answer. Audited (``question.asked``).",
         "operationId": "create_question",
         "security": [
           {
@@ -27499,7 +27499,7 @@
           "intake"
         ],
         "summary": "Analyze Intake",
-        "description": "Re-read the pinned snapshot and the baseline (the author only). Decided gaps are\nnever changed and answered questions never asked again.",
+        "description": "Re-read the pinned snapshot and the Ground Truth (the author only). Decided gaps are\nnever changed and answered questions never asked again.",
         "operationId": "analyze_intake",
         "security": [
           {
@@ -28017,7 +28017,7 @@
           "intake"
         ],
         "summary": "Get Intake Composition Inputs",
-        "description": "What the module composer reads from this intake (brief, signals, scope, baseline\nlinks, pinned snapshots, open critical gaps).",
+        "description": "What the module composer reads from this intake (brief, signals, scope, Ground Truth\nlinks, pinned snapshots, open critical gaps).",
         "operationId": "get_intake_composition_inputs",
         "security": [
           {
@@ -28070,7 +28070,7 @@
           "intake"
         ],
         "summary": "Start Intake Run",
-        "description": "Create a draft baseline-to-PRD run pinned to the intake's snapshot. Nothing runs\nuntil an approver estimates and starts it; while that run is a draft, posting again\nupdates it (no second run), and the intake stays open until it starts (then it is\nconverted). Drafting waits until decided (C5): 409\nwith ``blocking_gap_ids`` while a critical question everyone may see is neither\nanswered nor decided (a private one gates nothing until shared, S6).",
+        "description": "Create a draft Ground Truth to PRD run pinned to the intake's snapshot. Nothing runs\nuntil an approver estimates and starts it; while that run is a draft, posting again\nupdates it (no second run), and the intake stays open until it starts (then it is\nconverted). Drafting waits until decided (C5): 409\nwith ``blocking_gap_ids`` while a critical question everyone may see is neither\nanswered nor decided (a private one gates nothing until shared, S6).",
         "operationId": "start_intake_run",
         "security": [
           {
@@ -30741,7 +30741,7 @@
           "trace"
         ],
         "summary": "Get Version Trace",
-        "description": "A version's trace: its anchors (template, composition revision, snapshots), each\nsection's links to the baseline and the goals they serve, and the outputs that\ndepend on each section (artifacts, roadmap items) with their freshness.",
+        "description": "A version's trace: its anchors (template, composition revision, snapshots), each\nsection's links to the Ground Truth and the goals they serve, and the outputs that\ndepend on each section (artifacts, roadmap items) with their freshness.",
         "operationId": "get_version_trace",
         "security": [
           {
@@ -30941,7 +30941,7 @@
           "trace"
         ],
         "summary": "Create Section Links",
-        "description": "Link sections of a version to baseline items, evidence or source items (the\ninternal per-claim links behind O1c). Pinned to the section's current hash. An\napproved version's links are pinned with it (409).",
+        "description": "Link sections of a version to Ground Truth items, evidence or source items (the\ninternal per-claim links behind O1c). Pinned to the section's current hash. An\napproved version's links are pinned with it (409).",
         "operationId": "create_section_links",
         "security": [
           {
@@ -31016,7 +31016,7 @@
           "trace"
         ],
         "summary": "Get Entity Trace",
-        "description": "A baseline node's trace: up to the goals it serves, down to requirements and\nacceptance criteria, the sections linking it and the outputs built on it; for a\nrequirement, its assumptions, blockers, alternatives, experiments, decisions, owners\nand risks. A feature serving no confirmed goal is flagged, with its priority.",
+        "description": "A Ground Truth node's trace: up to the goals it serves, down to requirements and\nacceptance criteria, the sections linking it and the outputs built on it; for a\nrequirement, its assumptions, blockers, alternatives, experiments, decisions, owners\nand risks. A feature serving no confirmed goal is flagged, with its priority.",
         "operationId": "get_entity_trace",
         "security": [
           {
@@ -31331,7 +31331,7 @@
           "trace"
         ],
         "summary": "Create Artifact Dependencies",
-        "description": "Record what an artifact version (or a derived document version) was made from:\ndocument sections, whole document versions or baseline items, anchored at their\ncurrent hash. Idempotent per anchor.",
+        "description": "Record what an artifact version (or a derived document version) was made from:\ndocument sections, whole document versions or Ground Truth items, anchored at their\ncurrent hash. Idempotent per anchor.",
         "operationId": "create_artifact_dependencies",
         "requestBody": {
           "content": {
@@ -31776,7 +31776,7 @@
           "blockers"
         ],
         "summary": "List Blockers",
-        "description": "Blockers (baseline constraints with a strategy), most severe first. Third-party\nlimits filter by ``limit_kind``: capacity, eligibility, permission or policy.",
+        "description": "Blockers (Ground Truth constraints with a strategy), most severe first. Third-party\nlimits filter by ``limit_kind``: capacity, eligibility, permission or policy.",
         "operationId": "list_blockers",
         "security": [
           {
@@ -42943,6 +42943,146 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/simple/roadmap/milestones/carry-over": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Carry Over Old Milestones",
+        "description": "Bring old milestones over: copy every goal milestone of the older per-PRD roadmaps\n(history while the company roadmap exists) onto the company roadmap, same name, date\nand goal, its items re-pointed to the company roadmap's (same feature, else same item\nkey), each old one linked to its copy. One none of whose items are left is not copied:\nit stays in ``old_milestones.needs_call`` for Keep or Drop. Run once by an owner (a\nsecond run copies nothing), never on a read or a deploy.",
+        "operationId": "carry_over_old_milestones",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleOldMilestonesResult"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "owner",
+        "x-per-item": "owner"
+      }
+    },
+    "/v1/simple/roadmap/milestones/{milestone_id}/keep": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Keep Old Milestone",
+        "description": "Keep an old milestone with no items left: copied onto the company roadmap with no\nitems, linked. One not waiting on a call is 409.",
+        "operationId": "keep_old_milestone",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "milestone_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Milestone Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleOldMilestonesResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner",
+        "x-per-item": "owner"
+      }
+    },
+    "/v1/simple/roadmap/milestones/{milestone_id}/drop": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Drop Old Milestone",
+        "description": "Drop an old milestone with no items left: it stays behind on its old roadmap and\nleaves the list. One not waiting on a call is 409.",
+        "operationId": "drop_old_milestone",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "milestone_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Milestone Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleOldMilestonesResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner",
+        "x-per-item": "owner"
+      }
+    },
     "/v1/simple/roadmap/milestones/{milestone_id}": {
       "patch": {
         "tags": [
@@ -43298,7 +43438,7 @@
           "simple"
         ],
         "summary": "Update Bucket Goal",
-        "description": "Edit a goal's name, measure, target and date (its order stays Baseline's).",
+        "description": "Edit a goal's name, measure, target and date (its order stays the Ground Truth's).",
         "operationId": "update_bucket_goal",
         "security": [
           {
@@ -44546,6 +44686,66 @@
         },
         "x-min-role": "commenter",
         "x-per-item": "owner"
+      }
+    },
+    "/v1/simple/removed": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "List Simple Removed",
+        "operationId": "list_simple_removed",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleRemovedList"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/tracks": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "List Simple Tracks",
+        "operationId": "list_simple_tracks",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleTracks"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
       }
     },
     "/v1/simple/decisions/{decision_id}": {
@@ -48740,7 +48940,7 @@
           "currentstate"
         ],
         "summary": "Answer Feature State",
-        "description": "The owner's answer to \"does it still run?\": still_runs counts as fresh proof,\nchanged keeps it in Current state, no_longer_runs puts it back in Desired state.",
+        "description": "The owner's answer to \"does it still run?\": still_runs counts as fresh proof,\nchanged keeps it in Running today, no_longer_runs puts it back on the Ground Truth tab.",
         "operationId": "answer_feature_state",
         "security": [
           {
@@ -48806,7 +49006,7 @@
           "currentstate"
         ],
         "summary": "Move Feature State",
-        "description": "Move a ready feature to Current state, or Not yet (off the ready band until its\nproof is read again).",
+        "description": "Move a ready feature to Running today, or Not yet (off the ready band until its\nproof is read again).",
         "operationId": "move_feature_state",
         "security": [
           {
@@ -53913,7 +54113,7 @@
           "horizon"
         ],
         "title": "AddChange",
-        "description": "Add an item: a Baseline feature (``feature_id``) or a new one (``title``)."
+        "description": "Add an item: a Ground Truth feature (``feature_id``) or a new one (``title``)."
       },
       "AdvisoryIn": {
         "properties": {
@@ -62589,6 +62789,10 @@
                   "archive_goal",
                   "unarchive_goal",
                   "remove_dependency",
+                  "restore_goal_milestone",
+                  "add_track",
+                  "edit_track",
+                  "delete_track",
                   "edit_decision",
                   "edit_question",
                   "withdraw_decision",
@@ -63012,6 +63216,10 @@
               "archive_goal",
               "unarchive_goal",
               "remove_dependency",
+              "restore_goal_milestone",
+              "add_track",
+              "edit_track",
+              "delete_track",
               "edit_decision",
               "edit_question",
               "withdraw_decision",
@@ -69008,7 +69216,7 @@
           "status"
         ],
         "title": "DecisionEntityRef",
-        "description": "A linked baseline item, as a person reads it."
+        "description": "A linked Ground Truth item, as a person reads it."
       },
       "DecisionEvidenceRef": {
         "properties": {
@@ -69068,7 +69276,7 @@
           "id"
         ],
         "title": "DecisionEvidenceRef",
-        "description": "Evidence it rests on: the excerpt and link anyone who reads the baseline sees."
+        "description": "Evidence it rests on: the excerpt and link anyone who reads the Ground Truth sees."
       },
       "DecisionIn": {
         "properties": {
@@ -78106,7 +78314,7 @@
           "rationale"
         ],
         "title": "FeatureTrace",
-        "description": "A feature the intake touches: from the baseline (``key``) or the brief."
+        "description": "A feature the intake touches: from the Ground Truth (``key``) or the brief."
       },
       "FeedbackItemOut": {
         "properties": {
@@ -79419,7 +79627,7 @@
           "title"
         ],
         "title": "FitBaselineGoalOut",
-        "description": "The Baseline goal the milestone's gate counts toward (the milestone's first target's\ngoal, by name): what \"Keep the date with a smaller goal\" opens and saves through\n``PATCH /v1/baseline/entities/{id}``. ``plan_target``: the number the PRD's milestone\ntarget names; ``smaller``: the goal's target is below it, so the answer counts the\ngoal's own work in the milestone in proportion (:func:`_scale`)."
+        "description": "The Ground Truth goal the milestone's gate counts toward (the milestone's first target's\ngoal, by name): what \"Keep the date with a smaller goal\" opens and saves through\n``PATCH /v1/baseline/entities/{id}``. ``plan_target``: the number the PRD's milestone\ntarget names; ``smaller``: the goal's target is below it, so the answer counts the\ngoal's own work in the milestone in proportion (:func:`_scale`)."
       },
       "FitChangeOut": {
         "properties": {
@@ -80663,7 +80871,7 @@
           "wait"
         ],
         "title": "FromRunCheckpoint",
-        "description": "The run's latest Confirm the baseline stop, as the caller may use it."
+        "description": "The run's latest Confirm the Ground Truth stop, as the caller may use it."
       },
       "FromRunEdges": {
         "properties": {
@@ -80746,7 +80954,7 @@
           "summary"
         ],
         "title": "FromRunOut",
-        "description": "GET /v1/baseline/from-run/{run_id}: what the run wrote to the baseline, for a\nperson to review (B2). ``checkpoint`` null when the run never stopped at Confirm the\nbaseline."
+        "description": "GET /v1/baseline/from-run/{run_id}: what the run wrote to the Ground Truth, for a\nperson to review (B2). ``checkpoint`` null when the run never stopped at Confirm the\nGround Truth."
       },
       "FromRunProposal": {
         "properties": {
@@ -80857,7 +81065,7 @@
           "merge"
         ],
         "title": "FromRunRow",
-        "description": "One baseline item a run created (``new``), changed (``changed``) or proposed a\nchange to (``proposal``), as B2 Baseline review from this run lists it: its reasons\n(recomputed on every read), the shared draft's actions on its key and its state."
+        "description": "One Ground Truth item a run created (``new``), changed (``changed``) or proposed a\nchange to (``proposal``), as B2 Ground Truth review from this run lists it: its reasons\n(recomputed on every read), the shared draft's actions on its key and its state."
       },
       "FromRunSummary": {
         "properties": {
@@ -87166,6 +87374,10 @@
               "archive_goal",
               "unarchive_goal",
               "remove_dependency",
+              "restore_goal_milestone",
+              "add_track",
+              "edit_track",
+              "delete_track",
               "edit_decision",
               "edit_question",
               "withdraw_decision",
@@ -111356,7 +111568,7 @@
           "approved_at"
         ],
         "title": "ReusedBaseline",
-        "description": "The baseline review a run reuses: its Confirm the baseline checkpoint."
+        "description": "The Ground Truth review a run reuses: its Confirm the Ground Truth checkpoint."
       },
       "ReviewAction": {
         "properties": {
@@ -112157,7 +112369,7 @@
           "baseline_segment_usd"
         ],
         "title": "ReviewStatusOut",
-        "description": "Whether a new PRD run may use the current baseline (B1 \"Reuse base\"): the last\nbaseline review (the newest approved Confirm the baseline) was approved in the past\n30 days and no baseline build is under way."
+        "description": "Whether a new PRD run may use the current Ground Truth (B1 \"Reuse base\"): the last\nGround Truth review (the newest approved Confirm the Ground Truth) was approved in the\npast 30 days and no Ground Truth build is under way."
       },
       "ReviewTally": {
         "properties": {
@@ -113955,7 +114167,7 @@
           "text"
         ],
         "title": "RowReason",
-        "description": "B2: why a run's baseline row needs a person. Its own fields, so a roadmap item's\nreasons read as they are stored."
+        "description": "B2: why a run's Ground Truth row needs a person. Its own fields, so a roadmap item's\nreasons read as they are stored."
       },
       "RunCreate": {
         "properties": {
@@ -114088,7 +114300,7 @@
           "label"
         ],
         "title": "RunDecidedChange",
-        "description": "A change already done (an answer, a verified basis, a baseline proposal)."
+        "description": "A change already done (an answer, a verified basis, a Ground Truth proposal)."
       },
       "RunDecision": {
         "properties": {
@@ -114641,6 +114853,17 @@
               }
             ],
             "title": "Theme"
+          },
+          "roadmap_read": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Read"
           },
           "estimate_usd": {
             "anyOf": [
@@ -115510,6 +115733,17 @@
               }
             ],
             "title": "Theme"
+          },
+          "roadmap_read": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Read"
           },
           "estimate_usd": {
             "anyOf": [
@@ -121565,6 +121799,10 @@
               "archive_goal",
               "unarchive_goal",
               "remove_dependency",
+              "restore_goal_milestone",
+              "add_track",
+              "edit_track",
+              "delete_track",
               "edit_decision",
               "edit_question",
               "withdraw_decision",
@@ -121722,6 +121960,10 @@
               "archive_goal",
               "unarchive_goal",
               "remove_dependency",
+              "restore_goal_milestone",
+              "add_track",
+              "edit_track",
+              "delete_track",
               "edit_decision",
               "edit_question",
               "withdraw_decision",
@@ -123728,6 +123970,16 @@
             "type": "boolean",
             "title": "Can Propose",
             "default": false
+          },
+          "carried_from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDocRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -125821,6 +126073,123 @@
         "title": "SimpleNotApproved",
         "description": "A roadmap a meeting's session worked on that the caller does not approve."
       },
+      "SimpleOldMilestone": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "goal_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Title"
+          },
+          "from_roadmap": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "from_roadmap"
+        ],
+        "title": "SimpleOldMilestone",
+        "description": "old-milestones (owner, Nov 4): a goal milestone still on an older per-PRD roadmap\n(history) that is not on the company roadmap yet. ``items``: the titles of the items\nit gates that are on the company roadmap (it would gate those there); none left: it\nwaits on an owner's Keep or Drop."
+      },
+      "SimpleOldMilestones": {
+        "properties": {
+          "can_act": {
+            "type": "boolean",
+            "title": "Can Act",
+            "default": false
+          },
+          "moves": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleOldMilestone"
+            },
+            "type": "array",
+            "title": "Moves",
+            "default": []
+          },
+          "needs_call": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleOldMilestone"
+            },
+            "type": "array",
+            "title": "Needs Call",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "SimpleOldMilestones",
+        "description": "What \"Bring old milestones over\" would do: ``moves`` are copied (items re-pointed),\n``needs_call`` have no items left and wait on Keep or Drop. An owner's alone: anyone\nelse reads both empty and ``can_act`` false."
+      },
+      "SimpleOldMilestonesResult": {
+        "properties": {
+          "carried": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Carried",
+            "default": []
+          },
+          "old_milestones": {
+            "$ref": "#/components/schemas/SimpleOldMilestones"
+          }
+        },
+        "type": "object",
+        "required": [
+          "old_milestones"
+        ],
+        "title": "SimpleOldMilestonesResult",
+        "description": "After a carry-over, Keep or Drop: the ids of the company roadmap's new milestones\nand what is left."
+      },
       "SimpleOpenDecision": {
         "properties": {
           "id": {
@@ -125864,6 +126233,25 @@
           "name"
         ],
         "title": "SimpleOwnerRef"
+      },
+      "SimplePerson": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "SimplePerson"
       },
       "SimplePersonRef": {
         "properties": {
@@ -126486,6 +126874,25 @@
         ],
         "title": "SimplePlanStrip",
         "description": "The plan strip (the owner's pick for Home and the one-pager): the PRD's span by\nmonth with its milestones, today's line and how many commitments end past the edge."
+      },
+      "SimplePrdRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SimplePrdRef"
       },
       "SimplePrioritiesOut": {
         "properties": {
@@ -127543,6 +127950,108 @@
         "title": "SimpleQuestionSource",
         "description": "Where Oracle read the question: the PRD's approved version, and when."
       },
+      "SimpleRemovedItem": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "feature",
+              "goal",
+              "milestone"
+            ],
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "where": {
+            "type": "string",
+            "title": "Where"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By Name"
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
+          },
+          "decider_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decider Name"
+          },
+          "roadmap_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "title",
+          "where"
+        ],
+        "title": "SimpleRemovedItem",
+        "description": "Something removed in Simple, to put back: a cut feature, an archived goal or a removed\ngoal milestone, with who removed it and when."
+      },
+      "SimpleRemovedList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleRemovedItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "SimpleRemovedList"
+      },
       "SimpleResumeOut": {
         "properties": {
           "session": {
@@ -127982,6 +128491,14 @@
             "type": "array",
             "title": "Goal Milestones",
             "default": []
+          },
+          "old_milestones": {
+            "$ref": "#/components/schemas/SimpleOldMilestones",
+            "default": {
+              "can_act": false,
+              "moves": [],
+              "needs_call": []
+            }
           },
           "changes_in_review": {
             "type": "integer",
@@ -128819,6 +129336,149 @@
           "title"
         ],
         "title": "SimpleTrackRef"
+      },
+      "SimpleTrackRow": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused",
+              "closed"
+            ],
+            "title": "Status"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "owner_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Name"
+          },
+          "prd_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Prd Id"
+          },
+          "prd_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd Title"
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
+          },
+          "decider_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decider Name"
+          },
+          "feature_count": {
+            "type": "integer",
+            "title": "Feature Count",
+            "default": 0
+          },
+          "moves_count": {
+            "type": "integer",
+            "title": "Moves Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status",
+          "prd_id"
+        ],
+        "title": "SimpleTrackRow"
+      },
+      "SimpleTracks": {
+        "properties": {
+          "tracks": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleTrackRow"
+            },
+            "type": "array",
+            "title": "Tracks"
+          },
+          "can_add": {
+            "type": "boolean",
+            "title": "Can Add",
+            "default": false
+          },
+          "add_decider_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Add Decider Name"
+          },
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePerson"
+            },
+            "type": "array",
+            "title": "People"
+          },
+          "prds": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePrdRef"
+            },
+            "type": "array",
+            "title": "Prds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tracks",
+          "people",
+          "prds"
+        ],
+        "title": "SimpleTracks"
       },
       "SimpleUpcomingMeeting": {
         "properties": {
@@ -137856,7 +138516,7 @@
         },
         "type": "object",
         "title": "TraceUpstreamRef",
-        "description": "A dependency's upstream: a document version (a section of it, or all of it), or a\nbaseline entity."
+        "description": "A dependency's upstream: a document version (a section of it, or all of it), or a\nGround Truth entity."
       },
       "TrackAlertAccept": {
         "properties": {
@@ -139645,7 +140305,8 @@
               "decision",
               "question",
               "agenda_item",
-              "request"
+              "request",
+              "track"
             ],
             "title": "Type"
           },
@@ -140302,7 +140963,7 @@
           "item"
         ],
         "title": "UsedIn",
-        "description": "One use of one of the source's items: baseline evidence (on an entity, or on an\nedge, shown on its source entity), a citation in a document version, or a section's\nevidence link."
+        "description": "One use of one of the source's items: Ground Truth evidence (on an entity, or on an\nedge, shown on its source entity), a citation in a document version, or a section's\nevidence link."
       },
       "UsedItem": {
         "properties": {

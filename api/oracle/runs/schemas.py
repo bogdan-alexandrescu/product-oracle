@@ -94,7 +94,7 @@ class KnobsIn(BaseModel):
 
 
 class ReusedBaseline(BaseModel):
-    """The baseline review a run reuses: its Confirm the baseline checkpoint."""
+    """The Ground Truth review a run reuses: its Confirm the Ground Truth checkpoint."""
 
     checkpoint_id: uuid.UUID
     approved_at: datetime
@@ -360,7 +360,7 @@ class ItemReason(BaseModel):
 
 
 class RowReason(ItemReason):
-    """B2: why a run's baseline row needs a person. Its own fields, so a roadmap item's
+    """B2: why a run's Ground Truth row needs a person. Its own fields, so a roadmap item's
     reasons read as they are stored."""
 
     # Whether an approver may waive it (a blocking reason), and a detail line (the chip's
@@ -1015,6 +1015,10 @@ class RunSummary(BaseModel):
     source: VersionSource | None = None
     template: str | None = None
     theme: str | None = None
+    # prd-reads-working-draft: the company roadmap a PRD's run read, in words ("Company
+    # roadmap, working draft (edited Nov 5, 2026, 11:40 PM PST)" or "Company roadmap v7
+    # (published Nov 4)"); None before it read one, and on other runs.
+    roadmap_read: str | None = None
     estimate_usd: float | None = None
     spent_usd: float
     created_by: uuid.UUID | None = None
@@ -1781,8 +1785,8 @@ class FromRunProposal(BaseModel):
 
 
 class FromRunRow(BaseModel):
-    """One baseline item a run created (``new``), changed (``changed``) or proposed a
-    change to (``proposal``), as B2 Baseline review from this run lists it: its reasons
+    """One Ground Truth item a run created (``new``), changed (``changed``) or proposed a
+    change to (``proposal``), as B2 Ground Truth review from this run lists it: its reasons
     (recomputed on every read), the shared draft's actions on its key and its state."""
 
     key: str
@@ -1891,7 +1895,7 @@ class FromRunSummary(BaseModel):
 
 
 class FromRunCheckpoint(BaseModel):
-    """The run's latest Confirm the baseline stop, as the caller may use it."""
+    """The run's latest Confirm the Ground Truth stop, as the caller may use it."""
 
     id: uuid.UUID
     kind: CheckpointKind
@@ -1911,9 +1915,9 @@ class FromRunCheckpoint(BaseModel):
 
 
 class FromRunOut(BaseModel):
-    """GET /v1/baseline/from-run/{run_id}: what the run wrote to the baseline, for a
+    """GET /v1/baseline/from-run/{run_id}: what the run wrote to the Ground Truth, for a
     person to review (B2). ``checkpoint`` null when the run never stopped at Confirm the
-    baseline."""
+    Ground Truth."""
 
     run: ProposalRun
     checkpoint: FromRunCheckpoint | None = None

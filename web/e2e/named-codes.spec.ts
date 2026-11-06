@@ -24,13 +24,13 @@ async function mainText(page: Page): Promise<string> {
 const planGoal = (page: Page, item: string) =>
   page.getByTestId("plan-row").filter({ hasText: item }).filter({ visible: true }).getByTestId("plan-goal");
 
-test("Plan, Baseline and Priorities draw names, never a place code or a slug", async ({ page }) => {
+test("Plan, Ground Truth and Priorities draw names, never a place code or a slug", async ({ page }) => {
   await withCodes(page);
   await login(page);
 
   await page.goto("/plan");
   await expect(page.getByTestId("plan-row").first()).toBeVisible();
-  const chip = planGoal(page, "Daily alert digest email").getByTestId("code-chip");
+  const chip = planGoal(page, "Weekly alert digest").getByTestId("code-chip");
   await expect(chip.getByTestId("code-tag")).toHaveText("G-B");
   await expect(chip.getByTestId("code-name")).toHaveText("Growth");
   await expect(page.getByTestId("plan-goals")).toContainText("Growth");
@@ -39,7 +39,7 @@ test("Plan, Baseline and Priorities draw names, never a place code or a slug", a
   await expect(page.getByTestId("plan-group").first()).toContainText("G-A Activation");
   expect(await mainText(page)).not.toMatch(BARE);
 
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   await expect(page.getByTestId("feature-f.guided-setup")).toBeVisible();
   await expect(page.locator("main").getByTestId("code-tag").filter({ hasText: "G-B" }).first()).toBeVisible();
   expect(await mainText(page)).not.toMatch(BARE);
@@ -59,7 +59,7 @@ test("a goal chip's card opens on hover and Enter, shows name, target and Open, 
   await withCodes(page);
   await login(page);
   await page.goto("/plan");
-  const chip = planGoal(page, "Daily alert digest email").getByTestId("code-chip");
+  const chip = planGoal(page, "Weekly alert digest").getByTestId("code-chip");
   const card = page.getByTestId("code-card");
 
   await chip.hover();
@@ -67,13 +67,13 @@ test("a goal chip's card opens on hover and Enter, shows name, target and Open, 
   await expect(card).toContainText("Goal · confirmed");
   await expect(card.getByTestId("card-name")).toHaveText("Growth");
   await expect(card.getByTestId("card-line")).toHaveText("Target 12%");
-  await expect(card.getByRole("link", { name: "Open" })).toHaveAttribute("href", /^\/baseline\?entity=/);
+  await expect(card.getByRole("link", { name: "Open" })).toHaveAttribute("href", /^\/ground-truth\?entity=/);
   await page.keyboard.press("Escape");
   await expect(card).toHaveCount(0);
 
   // Tab to the chip from the row's title cell before it.
   await page.mouse.move(0, 0);
-  await page.getByTestId("plan-row").filter({ hasText: "Daily alert digest email" }).filter({ visible: true }).click();
+  await page.getByTestId("plan-row").filter({ hasText: "Weekly alert digest" }).filter({ visible: true }).click();
   for (let i = 0; i < 40 && !(await chip.evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press("Tab");
   await expect(chip).toBeFocused();
   // qa-company-4: focus alone does not open the card; Enter does.
@@ -84,10 +84,10 @@ test("a goal chip's card opens on hover and Enter, shows name, target and Open, 
   await page.keyboard.press("Escape");
   await expect(card).toHaveCount(0);
 
-  // Open goes to the goal on the Baseline.
+  // Open goes to the goal on the Ground Truth.
   await chip.click();
   await card.getByRole("link", { name: "Open" }).click();
-  await expect(page).toHaveURL(/\/baseline\?entity=/);
+  await expect(page).toHaveURL(/\/ground-truth\?entity=/);
 });
 
 test.describe("on a phone", () => {
@@ -177,7 +177,7 @@ test("the card reads in the dark theme", async ({ page }) => {
   await withCodes(page);
   await login(page);
   await page.goto("/plan");
-  const chip = planGoal(page, "Daily alert digest email").getByTestId("code-chip");
+  const chip = planGoal(page, "Weekly alert digest").getByTestId("code-chip");
   // Scroll to the chip first, as a person does: a scroll closes an open card, and the event of
   // the scroll Playwright makes inside click() arrives a frame after the card has opened.
   await chip.scrollIntoViewIfNeeded();
@@ -221,9 +221,9 @@ test("keyboard: Tab passes the chip; Enter opens the card, Tab leaves it; Escape
   await withCodes(page);
   await login(page);
   await page.goto("/plan");
-  const chip = planGoal(page, "Daily alert digest email").getByTestId("code-chip");
+  const chip = planGoal(page, "Weekly alert digest").getByTestId("code-chip");
   const card = page.getByTestId("code-card");
-  await page.getByTestId("plan-row").filter({ hasText: "Daily alert digest email" }).filter({ visible: true }).click();
+  await page.getByTestId("plan-row").filter({ hasText: "Weekly alert digest" }).filter({ visible: true }).click();
   for (let i = 0; i < 40 && !(await chip.evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press("Tab");
   await expect(chip).toBeFocused();
   // qa-company-4: no card on focus; the next Tab goes past the chip.
@@ -248,7 +248,7 @@ test("keyboard: Tab passes the chip; Enter opens the card, Tab leaves it; Escape
   await expect(chip).toBeFocused();
   await page.keyboard.press("Enter");
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/baseline\?entity=/);
+  await expect(page).toHaveURL(/\/ground-truth\?entity=/);
 });
 
 test("keyboard: a citation chip's card takes focus on open, Tab leaves it, and Escape gives focus back", async ({ page }) => {

@@ -5,7 +5,7 @@ import { login } from "./helpers";
 
 /**
  * O5 owner decision (2026-10-26): the roadmap's audience preview groups Board's and Team's
- * items by the confirmed goal each item's feature serves in the baseline, under each
+ * items by the confirmed goal each item's feature serves in the Ground Truth, under each
  * horizon. The "sharing" scenario's items: Falcon alerts rework and Billing ledger v2
  * serve G1 (Cut monthly churn to 2%), Northwind bulk import and Partner API beta serve G2
  * (Grow self-serve sign-ups); Ops console cleanup's feature serves no confirmed goal, so

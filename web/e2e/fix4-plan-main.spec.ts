@@ -41,7 +41,8 @@ test.describe("desktop", () => {
     await expect(inspector(page).getByRole("heading", { name: "Threshold alerts on spend" })).toBeVisible();
     const eng = inspector(page).getByTestId("plan-item-engineering");
     await expect(eng.getByTestId("plan-record")).toContainText("ENG-402 · In progress · no due date in the tracker");
-    await expect(eng.getByTestId("plan-record-date")).toHaveText("The roadmap shows Nov 20 ✓, the verified date (see Date), not a tracker due date.");
+    // B-25: the Date block carries the roadmap's date; Engineering does not repeat it.
+    await expect(eng.getByTestId("plan-record-date")).toHaveCount(0);
     await expect(eng).not.toContainText("· no date");
   });
 
@@ -59,9 +60,9 @@ test.describe("desktop", () => {
   test("qa-plan-29: Next reads who decides in one sentence, on the row and in the inspector", async ({ page }) => {
     await approvedWithDraft(page);
     await openPlan(page);
-    await expect(row(page, "Daily alert digest email").getByTestId("plan-next")).toHaveText("Owners decide on the slip");
+    await expect(row(page, "Weekly alert digest").getByTestId("plan-next")).toHaveText("Owners decide on the slip");
     await expect(row(page, "Alert rules API").getByTestId("plan-next").getByRole("link", { name: "Review the PRD" })).toBeVisible();
-    await row(page, "Daily alert digest email").getByTestId("plan-title").click();
+    await row(page, "Weekly alert digest").getByTestId("plan-title").click();
     await expect(inspector(page).getByTestId("plan-why-next")).toHaveText("Owners decide on the slip");
     await expect(inspector(page)).not.toContainText("Decide on slip");
   });
@@ -171,10 +172,10 @@ test.describe("phone", () => {
 
   test("qa-plan-32: the item sheet shows the title once and no second scrollbar", async ({ page }) => {
     await openPlan(page);
-    await row(page, "Daily alert digest email").getByTestId("plan-title").click();
+    await row(page, "Weekly alert digest").getByTestId("plan-title").click();
     const sheet = page.getByTestId("sheet-plan-item");
     await expect(sheet).toBeVisible();
-    await expect(sheet.getByRole("heading", { name: "Daily alert digest email" })).toHaveCount(1);
+    await expect(sheet.getByRole("heading", { name: "Weekly alert digest" })).toHaveCount(1);
     await expect(sheet.getByRole("heading", { name: "Item", exact: true })).toHaveCount(1);
     await expect(sheet).not.toContainText("· selected");
     const body = sheet.getByTestId("sheet-plan-item-body");

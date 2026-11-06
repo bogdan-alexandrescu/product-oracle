@@ -252,7 +252,7 @@ def _intake_inputs(intake: ProductIntake) -> tuple[dict[str, Any], dict[str, Pro
         "scope": inferred,
         "blockers": inferred,
         "stakeholders": inferred,
-        "baseline": Provenance("verified_fact", (), "confirmed baseline goals"),
+        "baseline": Provenance("verified_fact", (), "confirmed Ground Truth goals"),
         "sources": Provenance("verified_fact", (), "pinned source snapshots"),
     }
     if analysis.category:

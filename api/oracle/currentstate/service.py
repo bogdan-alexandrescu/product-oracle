@@ -1,8 +1,8 @@
-"""Current state beside Desired state: each confirmed feature's mark, its proof and the
+"""Running today beside the Ground Truth: each confirmed feature's mark, its proof and the
 owner's decisions.
 
 **The mark** (:func:`mark`): a feature *exists* when it was marked as already shipped or
-moved to Current state, unless the owner said it no longer runs; it reads *exists_old*
+moved to Running today, unless the owner said it no longer runs; it reads *exists_old*
 when its proof was last read more than 30 days ago, and *exists* with ``no_proof_yet``
 when it has no proof at all. Otherwise it is *in_progress* when any proof counts
 something or its items' tasks are under way, else *new*.

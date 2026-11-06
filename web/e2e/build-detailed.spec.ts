@@ -132,7 +132,7 @@ for (const size of SIZES) {
       await scenario(page, "track-alerts");
       await login(page);
       await page.goto("/plan");
-      await page.getByTestId("plan-row").filter({ visible: true }).filter({ hasText: "Daily alert digest" }).getByTestId("plan-title").click();
+      await page.getByTestId("plan-row").filter({ visible: true }).filter({ hasText: "Weekly alert digest" }).getByTestId("plan-title").click();
       const card = page.getByTestId("plan-inspector").filter({ visible: true }).getByTestId("plan-alert");
       await card.getByRole("button", { name: "Re-plan…" }).click();
       const dialog = page.getByRole("dialog", { name: "Re-plan this track" });
@@ -171,6 +171,15 @@ for (const size of SIZES) {
       await expect(found).toContainText("Oracle found 1 possible request in your sources");
       const filed = page.getByTestId("all-requests").getByText("Reorder last week's basket in one click").filter({ visible: true }).first();
       await expect(filed).toBeVisible();
+      if (phone) {
+        // RQ-1 (PR 1312): under 1100 px the filed request opens in the full-height Request sheet;
+        // closing it keeps the row picked, back on the list.
+        const sheet = page.getByRole("dialog", { name: "Request" });
+        await expect(sheet.getByTestId("request-inspector")).toContainText("Reorder last week's basket in one click");
+        await sheet.getByRole("button", { name: "Close Request" }).click();
+        await expect(sheet).toHaveCount(0);
+        await expect(page.getByTestId("all-requests").getByTestId("request-row").filter({ hasText: "Reorder last week's basket in one click" }).first()).toHaveAttribute("aria-current", "true");
+      }
 
       await page.getByRole("button", { name: "New request" }).filter({ visible: true }).first().click();
       const blank = page.getByRole("dialog", { name: "New request" });
