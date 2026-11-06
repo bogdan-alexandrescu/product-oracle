@@ -88,6 +88,13 @@ const VE_WORDS = (data: Out, mayChange: boolean): string => {
   return `${fCodes ? "Each mark shows the feature's code from its one-pager; point at it for its name, its rank is in the list." : "Each mark shows the feature's code; point at it for its name, its rank is in the list."} Hollow: below the line (${lineWords(data)}). A mark on a middle line counts on the side its rank puts it. ${mayChange ? "Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys); a feature with no goal has no goal value to change." : "Select a mark to find it in the list."}`;
 };
 
+/** Goal buckets' how-to-read words, behind the page's (i) like Value / effort's. */
+const BUCKETS_WORDS = (data: Out): string => {
+  // qa4-simple-plan-2: milestones or key dates on the roadmap (the Line's) are not a dated plan; never say there are no dates.
+  const dated = (data.lines ?? []).some((l) => l.kind === "milestone" || l.kind === "key_date");
+  return `${dated ? "Grouped by goal for this quarter; the milestones and key dates are on the Ranked list's Line." : "No dated plan yet, so the work is not placed by milestone."}${data.weeks_total > 0 ? ` Engineer-weeks per confirmed goal this quarter: ${fmt(data.weeks_total)} wk in all.` : ""}`;
+};
+
 /** The calendar quarter a date falls in, as people say it: "Q4 2026". */
 const quarterOf = (date: string): string => `Q${Math.floor((Number(date.slice(5, 7)) - 1) / 3) + 1} ${date.slice(0, 4)}`;
 
@@ -251,6 +258,7 @@ export function Priorities() {
               {SUBTITLE[tab]}
               {data && tab === "ranked" && splitAtLine(data) ? ` ${data.plan?.span ? "The plan's dates" : "Each feature's end date"} decide${data.plan?.span ? "" : "s"} what makes the line, so what makes it is listed first, each part by rank.` : ""}
               {tab === "value-effort" && data ? ` ${VE_WORDS(data, mayChange)}` : ""}
+              {tab === "buckets" && data && !(data.plan?.milestones.length && data.plan.span) ? <span data-testid="buckets-intro"> {BUCKETS_WORDS(data)}</span> : ""}
             </InfoTip>
           </p>
         </div>
@@ -1507,6 +1515,9 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
               const top = w ? `${sy + (d?.dy ?? 0)}px` : `calc(${yPct(r.goal_value ?? 0)}% + ${d?.dy ?? 0}px)`;
               const isMoved = !!movedWords(moved, r);
               const isSelected = selected === r.feature_id;
+              // The name tag stays inside the plot: it runs left from a mark in the right half, right from one in the left.
+              const onRight = w ? sx > w / 2 : xPct(effortOf(r)) > 50;
+              const tagRoom = w ? (onRight ? sx + 18 : w - sx + 18) : undefined;
               return (
                 <button
                   key={r.feature_id}
@@ -1547,7 +1558,8 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                   <span
                     data-testid="vxe-name"
                     aria-hidden
-                    className={`pointer-events-none absolute left-1/2 top-full z-30 mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-text px-2 py-0.5 text-[13px] font-semibold leading-[18px] text-bg group-hover:block group-focus-visible:block ${isSelected ? "block" : "hidden"}`}
+                    className={`pointer-events-none absolute ${onRight ? "right-0" : "left-0"} top-full z-30 mt-1 truncate whitespace-nowrap rounded-md bg-text px-2 py-0.5 text-[13px] font-semibold leading-[18px] text-bg group-hover:block group-focus-visible:block ${isSelected ? "block" : "hidden"}`}
+                    style={{ maxWidth: tagRoom }}
                   >
                     #{r.rank} {r.short_code || r.code} · {r.title}
                   </span>
@@ -2113,8 +2125,6 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
   // An empty "No goal" bucket warns about nothing: it is left out.
   const buckets: Bucket[] = all.filter((b) => !(b.no_goal && b.weeks === 0 && b.codes.length === 0)).map((b) => (moved.length ? { ...b, share: total ? b.weeks / total : 0 } : b));
   const percent = sharePercents(buckets.map((b) => b.weeks));
-  // qa4-simple-plan-2: milestones or key dates on the roadmap (the Line's) are not a dated plan; never say there are no dates.
-  const dated = (data.lines ?? []).some((l) => l.kind === "milestone" || l.kind === "key_date");
   const weeksOf = (r: Row) => (r.effort == null ? "" : `${fmt(r.effort)} wk`);
   // A goal's features as Archive counts them: its bucket's.
   const featuresOf: GoalFeatures = (title) => (buckets.find((b) => !b.no_goal && sameGoal(b.title, title))?.codes ?? []).map((c) => ({ code: c, name: rowOf.get(c)?.title ?? c, slices: [] }));
@@ -2123,12 +2133,6 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
   const planned = data.weeks_total > 0;
   return (
     <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
-      <p className="mb-3 text-text2" data-testid="buckets-intro">
-        {dated
-          ? "Grouped by goal for this quarter; the milestones and key dates are on the Ranked list's Line."
-          : "No dated plan yet, so the work is not placed by milestone."}
-        {planned ? ` Engineer-weeks per confirmed goal this quarter: ${fmt(moved.length ? total : data.weeks_total)} wk in all.` : null}
-      </p>
       {!planned && (
         <p className="mb-3 text-text2" data-testid="buckets-empty">
           Nothing planned this quarter.
