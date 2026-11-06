@@ -38,24 +38,31 @@ const onQuestion = (p: Pick<Proposal, "op">) => p.op === "decide_question" || p.
 /** A feature ask on no roadmap: no page shows it until it is filed, so its Inbox row decides it (no Open). */
 const askOnly = (p: Pick<Proposal, "op" | "document_id">) => p.op === "add_feature_ask" && !p.document_id;
 
+/** A change to a one-pager: a line's wording, or a number fix in a PRD section (set_section_number). */
+const onOnePager = (p: Pick<Proposal, "op">) => p.op === "edit_line" || p.op === "set_section_number";
+
 /**
  * Where a proposal is decided: a PRD question's on Decisions, at that question; a one-pager
- * wording's on its one-pager, at that line; else its roadmap's Needs a decision when it has
- * one; else Priorities (a priority or an estimate). A feature ask on no roadmap has none.
+ * wording's on its one-pager, at that line, a number fix's at the PRD section it changes; else
+ * its roadmap's Needs a decision when it has one; else Priorities (a priority or an estimate).
+ * A feature ask on no roadmap has none.
  */
-export function proposalHref(p: Pick<Proposal, "op" | "document_id" | "item_id" | "question_id" | "line_id">): string | null {
+export function proposalHref(p: Pick<Proposal, "op" | "document_id" | "item_id" | "question_id" | "line_id" | "section">): string | null {
   if (onQuestion(p) && p.document_id) return `/simple/decisions?prd=${p.document_id}${p.question_id ? `&question=${p.question_id}` : ""}`;
   if (p.op === "edit_line" && p.document_id) return `/simple/one-pagers/${p.document_id}${p.line_id ? `?line=${encodeURIComponent(p.line_id)}` : ""}`;
+  if (p.op === "set_section_number" && p.document_id) return `/simple/one-pagers/${p.document_id}${p.section ? `?section=${encodeURIComponent(p.section)}` : ""}`;
   if (p.document_id) return `/simple/roadmap?roadmap=${p.document_id}&review=proposals`;
   if (askOnly(p)) return null;
   return p.item_id ? `/simple/priorities?show=${p.item_id}` : "/simple/priorities";
 }
 
 /** Where a proposal is decided, in words, for Open's label. */
-const proposalWhere = (p: Proposal): string => (onQuestion(p) ? "in Decisions" : p.op === "edit_line" ? "on its one-pager" : p.document_id ? "on its roadmap" : "in Priorities");
+const proposalWhere = (p: Proposal): string => (onQuestion(p) ? "in Decisions" : onOnePager(p) ? "on its one-pager" : p.document_id ? "on its roadmap" : "in Priorities");
 
-/** What the row is on: its item, else its question (code and title) or one-pager line. */
-const proposalName = (p: Proposal): string => p.item_title ?? (p.subject ? (p.op === "edit_line" ? `“${p.subject}”` : p.subject) : onQuestion(p) ? "A question" : p.op === "edit_line" ? "A one-pager line" : "An item");
+/** What the row is on: its item, else its question (code and title), one-pager line or section number ("Section number on Guided setup: Use 6"). */
+const proposalName = (p: Proposal): string =>
+  p.item_title ??
+  (p.subject ? (p.op === "edit_line" ? `“${p.subject}”` : p.subject) : onQuestion(p) ? "A question" : p.op === "edit_line" ? "A one-pager line" : p.op === "set_section_number" ? "A section number" : "An item");
 
 const upper = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 

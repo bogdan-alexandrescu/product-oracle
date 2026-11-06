@@ -28,6 +28,7 @@ import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { draftDecisionNotes, leftOut } from "./decision-notes";
 import { stableUuid } from "./ids";
+import { changePhrase, changeSentence } from "./simple-change-words";
 import { annotate, resolved, setNumber, type Cites } from "./one-pager-checks";
 import { betSubject, flowFor, onePagerFlow, requestVisual, type VisualsDb } from "./simple-visuals";
 import { madeOrder } from "./made-order";
@@ -1118,30 +1119,62 @@ function createNumber(db: OnePagerDb, ctx: OnePagerCtx, b: Record<string, unknow
  * owner, or whom the proposal is routed to), each named by its line as it read, and the
  * decisions on mine of these one-pagers.
  */
+/**
+ * GET /v1/simple/changes?status=proposed's one-pager part (changes.listing sees edit_line and
+ * set_section_number on a PRD): the proposals this reader sees (an owner, its author, whom it is
+ * routed to), each with whether they may decide it and its words.
+ */
+export function onePagerProposalsOut(dbs: OnePagerDb[], me: { id: string; role: Role }, mine: boolean): Change[] {
+  return dbs
+    .flatMap((d) => d.changes)
+    .filter((c) => c.status === "proposed" && (!mine || c.by === me.id) && (me.role === "owner" || c.by === me.id || c.routed_to.includes(me.id)))
+    .map((c) => ({ ...c, can_decide: me.role === "owner" || c.routed_to.includes(me.id), can_undo: c.by === me.id, words: changeSentence(c, c.by_name, null, false) }));
+}
+
 export function onePagerInboxRows(
   dbs: OnePagerDb[],
   me: { id: string; role: Role },
   seen: string | null,
 ): { proposals: Schemas["InboxSimpleChange"][]; decisions: Schemas["InboxSimpleChange"][] } {
-  const row = (c: Change, at: string | null, state?: Schemas["InboxSimpleChange"]["state"]): Schemas["InboxSimpleChange"] => {
+  // What the row is on and what was asked, as changes.inbox_rows (_subject, asked_of) for each kind:
+  // a line's wording quotes the line; a number fix names its PRD and the section it changes.
+  const words = (d: OnePagerDb, c: Change): Pick<Schemas["InboxSimpleChange"], "asked" | "subject" | "line_id" | "section"> => {
+    const proposed = c.status === "proposed";
+    if (c.op === "set_section_number") {
+      const n = String(c.after.number ?? "");
+      const name = `Section number on ${d.doc.title}`;
+      const done = changePhrase(c.op, c.target, c.before, c.after, null);
+      return {
+        subject: n ? `${name}: Use ${n}` : name,
+        // Still to decide: "proposed setting the number in “Not this quarter” to 6".
+        asked: proposed ? `proposed setting${done.slice("set".length)}` : done,
+        line_id: null,
+        section: String(c.target.section ?? "") || null,
+      };
+    }
     const line = String(c.before.line ?? "").split(/\s+/).filter(Boolean).join(" ");
     const next = String(c.after.line ?? "").split(/\s+/).filter(Boolean).join(" ");
     return {
-      id: c.id, op: c.op, status: c.status, item_id: null, item_title: null, document_id: c.document_id, by: c.by, by_name: c.by_name, at: c.at,
-      decided_by: c.decided_by, decided_at: c.decided_at, reason: c.reason, decision_reason: c.decision_reason,
-      state: state ?? (!seen || (at && at > seen) ? "new" : "open"), from_meeting: null,
+      subject: line || null,
       // Still to decide, it reads as proposed (changes.inbox_rows asked_of); once decided, as done.
-      asked: c.status === "proposed" ? `proposed new wording for a one-pager line${next ? `: “${next}”` : ""}` : next ? `edited a one-pager line to “${next}”` : "edited a one-pager line",
-      can_decide: c.status === "proposed" && (me.role === "owner" || c.routed_to.includes(me.id)), from_ask: false,
-      subject: line || null, question_id: null, line_id: String(c.target.line_id ?? "") || null,
+      asked: proposed ? `proposed new wording for a one-pager line${next ? `: “${next}”` : ""}` : changePhrase(c.op, c.target, c.before, c.after, null),
+      line_id: String(c.target.line_id ?? "") || null,
+      section: null,
     };
   };
-  const all = dbs.flatMap((d) => d.changes);
+  const row = (d: OnePagerDb, c: Change, at: string | null, state?: Schemas["InboxSimpleChange"]["state"]): Schemas["InboxSimpleChange"] => ({
+    id: c.id, op: c.op, status: c.status, item_id: null, item_title: null, document_id: c.document_id, by: c.by, by_name: c.by_name, at: c.at,
+    decided_by: c.decided_by, decided_at: c.decided_at, reason: c.reason, decision_reason: c.decision_reason,
+    state: state ?? (!seen || (at && at > seen) ? "new" : "open"), from_meeting: null,
+    can_decide: c.status === "proposed" && (me.role === "owner" || c.routed_to.includes(me.id)), from_ask: false,
+    question_id: null, ...words(d, c),
+  });
+  const all = dbs.flatMap((d) => d.changes.map((c) => [d, c] as const));
   return {
     // As the API: routed to me (the mock routes a proposal to the owners).
-    proposals: all.filter((c) => c.status === "proposed" && c.routed_to.includes(me.id)).map((c) => row(c, c.at)),
+    proposals: all.filter(([, c]) => c.status === "proposed" && c.routed_to.includes(me.id)).map(([d, c]) => row(d, c, c.at)),
     decisions: all
-      .filter((c) => c.by === me.id && (c.status === "accepted" || c.status === "declined") && c.decision_reason !== "Withdrawn by its author")
-      .map((c) => row(c, c.decided_at, !seen || (c.decided_at ?? "") > seen ? undefined : "done")),
+      .filter(([, c]) => c.by === me.id && (c.status === "accepted" || c.status === "declined") && c.decision_reason !== "Withdrawn by its author")
+      .map(([d, c]) => row(d, c, c.decided_at, !seen || (c.decided_at ?? "") > seen ? undefined : "done")),
   };
 }

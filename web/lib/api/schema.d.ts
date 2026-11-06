@@ -28548,6 +28548,8 @@ export interface components {
             question_id?: string | null;
             /** Line Id */
             line_id?: string | null;
+            /** Section */
+            section?: string | null;
         };
         /**
          * InboxSimpleDateSuggestion

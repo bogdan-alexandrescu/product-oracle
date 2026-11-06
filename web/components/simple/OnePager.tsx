@@ -280,8 +280,11 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   const [feature, setFeature] = useState<Parameters<OpenFeature>[0] | null>(null);
   const codesQ = useQuery("simple-roadmap-codes", () => unwrap(api.GET("/v1/simple/roadmap", {})).catch(() => null));
   const codes = new Map((codesQ.data?.items ?? []).map((i) => [i.id, i.code ?? null]));
+  // PS1 a "Calm page": the whole PRD the page is built from, read under it; its codes for the lines.
+  const prd = usePrdSections(q.data?.document.slug ?? null, q.data?.version ?? 0);
   // inbox-meeting-proposals fix: ?line= (the Inbox's Open on a proposed wording) shows the
-  // lines and lands on that one, once the page is read.
+  // lines and lands on that one, once the page is read; ?section= (its Open on a proposed
+  // number fix, PR 1320 re-review) on that section of the whole PRD under the page, once read.
   const pageRead = !!q.data;
   const landed = useRef(false);
   useEffect(() => {
@@ -291,11 +294,16 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
     setLinesShown(true);
     requestAnimationFrame(() => document.querySelector(`[data-line="${CSS.escape(line)}"]`)?.scrollIntoView({ block: "center" }));
   }, [pageRead, sessionId]);
+  const prdRead = prd.sections.length > 0;
+  useEffect(() => {
+    const section = new URLSearchParams(window.location.search).get("section");
+    if (!pageRead || !prdRead || landed.current || !section || sessionId) return;
+    landed.current = true;
+    requestAnimationFrame(() => document.getElementById(`prd-sec-${section}`)?.scrollIntoView({ block: "start" }));
+  }, [pageRead, prdRead, sessionId]);
   // C-15: a code in Needs a look reads with the roadmap's name for it, when the roadmap has one.
   const codeNames = new Map((codesQ.data?.items ?? []).flatMap((i) => (i.code ? [[i.code, i.title] as const] : [])));
 
-  // PS1 a "Calm page": the whole PRD the page is built from, read under it; its codes for the lines.
-  const prd = usePrdSections(q.data?.document.slug ?? null, q.data?.version ?? 0);
 
   if (q.loading && !q.data) return <div className="px-6 py-8"><Loading /></div>;
   if (q.error || !q.data) {

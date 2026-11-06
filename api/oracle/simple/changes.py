@@ -2001,9 +2001,13 @@ async def _on_replaced_prds(db: AsyncSession, changes: list[SimpleChange]) -> se
     return {cid for iid in items for cid in by_item[iid]}
 
 
-def _subject(c: SimpleChange, questions: dict[str, Any]) -> dict[str, Any]:
-    """What a proposal on no item is on (InboxSimpleChange's subject, question_id, line_id):
-    its PRD question by code and title, or its one-pager line as it read."""
+def _subject(
+    c: SimpleChange, questions: dict[str, Any], prds: dict[uuid.UUID, str] | None = None
+) -> dict[str, Any]:
+    """What a proposal on no item is on (InboxSimpleChange's subject, question_id, line_id,
+    section): its PRD question by code and title, its one-pager line as it read, or a one-pager
+    number fix by its PRD's title ("Section number on Guided setup: Use 6", ``prds``) and the
+    section it changes."""
     if c.op in QUESTION_OPS:
         d = questions.get(str(c.target.get("decision_id")))
         if d is None:
@@ -2013,6 +2017,11 @@ def _subject(c: SimpleChange, questions: dict[str, Any]) -> dict[str, Any]:
     if c.op == "edit_line":
         line = " ".join(str((c.before or {}).get("line") or "").split())
         return {"subject": line or None, "line_id": c.target.get("line_id")}
+    if c.op == "set_section_number":
+        title = (prds or {}).get(c.document_id) if c.document_id else None
+        n = str((c.after or {}).get("number") or "")
+        name = f"Section number on {title}" if title else "Section number"
+        return {"subject": f"{name}: Use {n}" if n else name, "section": c.target.get("section")}
     return {}
 
 
@@ -2104,6 +2113,15 @@ async def inbox_rows(
     }
     # inbox-meeting-proposals fix: the PRD questions they are on (their code and title).
     on_questions = await _questions(db, waiting + decided)
+    # PR 1320 re-review: a one-pager number fix is named by its PRD.
+    from oracle.docs.models import Document
+
+    fixed_in = {c.document_id for c in waiting + decided if c.op == "set_section_number"}
+    prds = (
+        {d.id: d.title for d in await db.scalars(select(Document).where(Document.id.in_(fixed_in)))}
+        if fixed_in - {None}
+        else {}
+    )
     names = await _names(db, {c.by for c in waiting + decided})
     from oracle.simple import agenda, change_words
 
@@ -2132,6 +2150,10 @@ async def inbox_rows(
         if c.status == "proposed" and c.op == "edit_line":
             line = change_words._quoted((c.after or {}).get("line"))
             return f"proposed new wording for a one-pager line{f': {line}' if line else ''}"
+        if c.status == "proposed" and c.op == "set_section_number":
+            # "proposed setting the number in “Not this quarter” to 6"
+            done = change_words.phrase(c.op, c.target, c.before, c.after, named)
+            return f"proposed setting{done.removeprefix('set')}"
         if c.status in ("proposed", "declined") and c.op == "add_feature_ask":
             # Not filed in Requests until it is accepted.
             ask = change_words._quoted((c.after or {}).get("title"))
@@ -2142,7 +2164,7 @@ async def inbox_rows(
         iid = uuid.UUID(str(c.target["item_id"])) if c.target.get("item_id") else None
         m = asked.get(c.session_id) if c.session_id else None
         title = titles.get(iid) if iid else None
-        on = _subject(c, on_questions)
+        on = _subject(c, on_questions, prds)
         named = title or (on.get("subject") if "question_id" in on else None)
         return InboxSimpleChange(
             from_meeting=SimpleChangeMeeting(id=m.id, title=m.title) if m else None,

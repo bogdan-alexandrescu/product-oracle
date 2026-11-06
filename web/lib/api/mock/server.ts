@@ -179,7 +179,7 @@ import { runGroupsOut } from "./simple-runs";
 import { roadmapRead } from "./roadmap-read";
 import { questionInboxRows } from "./simple-questions";
 import { rebuildsOut } from "./rebuilds";
-import { onePagerInboxRows, planSlice, prdOnePager, routeOnePager, seedHeadingCountOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { onePagerInboxRows, onePagerProposalsOut, planSlice, prdOnePager, routeOnePager, seedHeadingCountOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
@@ -7525,8 +7525,10 @@ async function route(db: Db, req: Request): Promise<Response> {
       if (engineRes?.ok) {
         const rows = (await engineRes.json()) as Schemas["SimpleChangeOut"][];
         const sheet = (await sheetProposals(meetingsDb, meetingsCtx, q.get("status"))).filter((c) => q.get("mine") !== "true" || c.by === me.id);
+        // The one-pagers' proposals are Simple changes too (a line's wording, a number fix: PR 1320 re-review).
+        const onePagers = q.get("status") === "proposed" ? onePagerProposalsOut([...(db.simple_one_pager ? [db.simple_one_pager] : []), ...Object.values(db.simple_one_pagers ?? {})], { id: me.id, role: me.role }, q.get("mine") === "true") : [];
         // Newest first; a tie keeps each list's own order (the changes' is the order made, qaC-numfix).
-        return json(200, [...rows, ...sheet].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)));
+        return json(200, [...rows, ...sheet, ...onePagers].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)));
       }
       if (engineRes) return engineRes;
     }
