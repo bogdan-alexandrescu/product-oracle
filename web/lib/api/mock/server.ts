@@ -177,7 +177,7 @@ import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visual
 import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
-import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, CROWDED_MILESTONES_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
+import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, knowGoalMapItems, seedFitDateRoadmap } from "./simple-roadmap";
@@ -1445,6 +1445,32 @@ function seedPlanSameKeyScenario(): Db {
   (rm.extra_roadmaps ??= {})[roadmap.slug] = { title: roadmap.title, prd: "Checkout redesign", track: "checkout", track_title: "Checkout redesign track" };
   rm.items.push({ key: SAME_KEY_ITEM.key, title: SAME_KEY_ITEM.title, horizon: "now", roadmap: roadmap.slug, track: "checkout", confidence: "medium", start: 10, end: 40, source: "typed" });
   rm.ids[SAME_KEY_ITEM.key] = stableUuid(`simple-item/${SAME_KEY_ITEM.key}`);
+  db.simple_roadmap = rm;
+  return db;
+}
+
+/**
+ * B-26 "plan-timeline": the default company whose Simple roadmap also dates the Plan's Usage
+ * alerts items (the same keys on the same roadmap), with a milestone and dependencies; Budgets
+ * per team has no item there, so the Plan's Timeline lists it as not on the timeline.
+ */
+export const PLAN_TIMELINE_SCENARIO = "plan-timeline";
+/** "plan-timeline-edit": "plan-timeline" with usage-alerts-roadmap v1 approved, so its plan can be changed. */
+export const PLAN_TIMELINE_EDIT_SCENARIO = "plan-timeline-edit";
+function seedPlanTimelineScenario(): Db {
+  const db = seed();
+  const rm = seedSimpleRoadmap();
+  const add = [
+    { key: "threshold-alerts", title: "Threshold alerts on spend", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 35, source: "typed", milestone: { name: "Alpha", day: 35 } },
+    { key: "alert-rules-api", title: "Alert rules API", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 20, source: "typed" },
+    { key: "slack-alerts", title: "Alerts in the team chat", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 40, end: 75, source: "typed", depends: ["threshold-alerts"] },
+    { key: "usage-dashboard", title: "Usage dashboard", horizon: "now", roadmap: "alerts-roadmap", goal: "faster-activation", track: "alerts", confidence: "medium", start: 20, end: 60, source: "typed", depends: ["alert-rules-api"] },
+    { key: "spend-forecast", title: "Spend forecast for the month", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", confidence: "low" },
+  ] as const;
+  for (const it of add) {
+    rm.items.push({ ...it, depends: "depends" in it ? [...it.depends] : undefined, milestone: "milestone" in it ? { ...it.milestone } : undefined });
+    rm.ids[it.key] = stableUuid(`simple-item/${it.key}`);
+  }
   db.simple_roadmap = rm;
   return db;
 }
@@ -3504,6 +3530,8 @@ function load(): Db {
                 ? seedSimpleDatedMove
               : scenario === PLAN_SAME_KEY_SCENARIO
                 ? seedPlanSameKeyScenario
+              : scenario === PLAN_TIMELINE_SCENARIO || scenario === PLAN_TIMELINE_EDIT_SCENARIO
+                ? seedPlanTimelineScenario
               : scenario === REPORT_DRAFT_ITEM_SCENARIO
                 ? seedReportDraftItemScenario
               : scenario === "simple-home"
@@ -3696,11 +3724,12 @@ function load(): Db {
   // qa4-plan-3). It is approved where a scenario works on the approved plan: launches are
   // planned from it (New launch, #344, has items to pick), "plan-decider" (#346) edits it,
   // "date-bases" verifies its dates, "strategy-plan" reviews its items against the strategy,
-  // "outcomes" tracks outcomes of its items, "alerts-approved" is the approved plan alone, and
-  // the "track-alerts" scenarios watch its milestones (an accepted slip moves an approved item).
+  // "outcomes" tracks outcomes of its items, "alerts-approved" is the approved plan alone, the
+  // "track-alerts" scenarios watch its milestones (an accepted slip moves an approved item), and
+  // "plan-timeline-edit" changes the plan with the Timeline shown.
   const approvedPlan = [
     "launches", "plan-decider", "strategy-plan", "outcomes", DATE_BASES_SCENARIO, SHARED_DATE_SCENARIO, NOT_CLAIMS_SCENARIO, ALERTS_APPROVED_SCENARIO,
-    "track-alerts", "track-alerts-many", "track-alerts-actions", "track-alerts-history",
+    "track-alerts", "track-alerts-many", "track-alerts-actions", "track-alerts-history", PLAN_TIMELINE_EDIT_SCENARIO,
   ];
   if (approvedPlan.includes(scenario ?? "")) {
     const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
@@ -7285,6 +7314,9 @@ async function route(db: Db, req: Request): Promise<Response> {
     followRunReview(db, doc, v, true, me.id);
     // approved-roadmap-to-simple: a roadmap version's plan table goes on its Simple items.
     if (doc.kind === "roadmap" && db.simple_roadmap?.extra_roadmaps?.[doc.slug]) applyRoadmapVersion(db, doc, v);
+    // #346: a version proposed from plan changes makes its items the roadmap's items in Simple.
+    const changeSet = doc.kind === "roadmap" ? db.plan_edits?.sets.find((x) => x.roadmap === doc.slug && x.proposed_version === v.number) : undefined;
+    if (changeSet && db.simple_roadmap) applyPlanChanges(db.simple_roadmap, doc.slug, changeSet.changes);
     // approved-prd-roadmap: its dated items and milestones go on its roadmap's working draft.
     if (doc.kind === "prd") {
       const row = draftDb(db).rows.find(

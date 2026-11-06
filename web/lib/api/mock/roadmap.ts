@@ -253,10 +253,11 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
     if (rv) db.items[rv.id] = itemsFor(ctx, rv, track.id);
     // O4 'document dates': the roadmap's Beta date rests on ENG-412; its GA date's basis
     // (ENG-413) was withdrawn, so the version view marks it "date withdrawn". In the
-    // "plan-decider" scenario (#346) it stands, so a version proposed from it can be approved.
+    // "plan-decider" scenario (#346) and "plan-timeline-edit" it stands, so a version proposed
+    // from it can be approved.
     // F3 "date-bases": GA's date has no basis at all (unverified), and an approver's
     // ENG-420 waits for the engineering lead.
-    const ga = scenario === "plan-decider" ? "verified" : "withdrawn";
+    const ga = scenario === "plan-decider" || scenario === "plan-timeline-edit" ? "verified" : "withdrawn";
     const seeds =
       twoWay
         ? ([["ENG-412", "2026-11-30", "verified"], ["ENG-413", TWO_WAY_GA.backed, "verified"]] as const)

@@ -255,6 +255,8 @@ const ROADMAPS: Record<string, { title: string; visibility: "company" | "approve
  * keeps the mock's own key.
  */
 const ROADMAP_DOC_SLUG: Record<string, string> = { "alerts-roadmap": "usage-alerts-roadmap" };
+/** The Simple roadmap whose items a roadmap document holds (its own slug, or alerts-roadmap for usage-alerts-roadmap). */
+export const roadmapKeyOf = (docSlug: string): string => Object.keys(ROADMAP_DOC_SLUG).find((k) => ROADMAP_DOC_SLUG[k] === docSlug) ?? docSlug;
 /** S7 adds Keep alerts quiet, a goal with no items yet (Oracle suggested features for it on its own). */
 export const GOALS: Record<string, string> = { "grow-retention": "Grow retention", "faster-activation": "Faster activation", "quiet-alerts": "Keep alerts quiet" };
 /** roadmap-talk's goals (the "roadmap-talk" scenario's items name them); known once such an item is seeded. */
