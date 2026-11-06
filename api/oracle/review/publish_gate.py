@@ -115,6 +115,17 @@ async def check_roadmap_dates(db: AsyncSession, version: DocumentVersion) -> Non
         )
     )
     marks = doc_dates.flagged(await doc_dates.marks_for_version(db, version, sections))
+    if marks:
+        from oracle.roadmap.changeset import SECTION_KEY
+        from oracle.simple.models import SimpleDraft
+
+        made_in_simple = await db.scalar(
+            select(SimpleDraft.id).where(SimpleDraft.version_id == version.id).limit(1)
+        )
+        if made_in_simple is not None:
+            # A Simple draft changes items, not the text it carries over from its base
+            # version: only the section it adds is checked (hotfix 3, Nov 6).
+            marks = [m for m in marks if m.section_key == SECTION_KEY]
     if not marks:
         return
     detail, blocks = dates_refusal(marks, {s.section_key: s.heading for s in sections})
