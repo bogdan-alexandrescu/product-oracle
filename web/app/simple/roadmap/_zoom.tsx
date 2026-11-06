@@ -97,10 +97,12 @@ function rowsOf(data: Roadmap): Row[] {
   const out: Row[] = [];
   for (const [k, l] of order) {
     out.push({ kind: "lane", key: k, title: l.title, count: l.items.length });
-    for (const i of [...l.items].sort((a, b) =>
-      a.start.date < b.start.date ? -1 : 1,
-    ))
-      out.push({ kind: "item", item: i });
+    const sorted = [...l.items].sort((a, b) => (a.start.date < b.start.date ? -1 : 1));
+    // feature-parts: a part sits right under its parent (in the parent's lane, oneLane).
+    const ids = new Set(sorted.map((i) => i.id));
+    const under = (i: Item) => !!i.part_of && ids.has(i.part_of.id);
+    for (const i of sorted.filter((x) => !under(x)))
+      for (const x of [i, ...sorted.filter((p) => under(p) && p.part_of!.id === i.id)]) out.push({ kind: "item", item: x });
   }
   if (below.length) {
     out.push({
@@ -1198,6 +1200,8 @@ const TimelineRow = memo(function TimelineRow({
         >
           <span className="min-w-0 truncate" style={lk.name}>
             {i.title}
+            {/* panel-menu: a merged feature says where it went, where it was shown. */}
+            {i.merged_into && <span data-testid="row-merged" className="ml-1 text-text2">· Merged into {`${i.merged_into.code} ${i.merged_into.title}`.trim()}</span>}
           </span>
           {lk.chip && (
             <span

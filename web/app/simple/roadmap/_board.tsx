@@ -414,7 +414,7 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
           )}
           {item.merged_into && (
             <p className="mt-1 text-sm text-text2" data-testid="item-merged">
-              Merged into {item.merged_into.code}
+              Merged into {item.merged_into.code} {item.merged_into.title}
             </p>
           )}
           {item.looks_like.length > 0 && (
