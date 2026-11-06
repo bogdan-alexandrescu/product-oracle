@@ -23,6 +23,13 @@ Test cards (protects / fails_when / no_claim):
   in it, by code: no flag; a proposed F-15 still leaves them flagged; fails_when=an item
   matched by code reads "not a feature in the Ground Truth" and Add to Ground Truth would
   add the slice as a second feature.
+- test_an_item_of_a_running_feature_by_code_is_flagged: protects=an item linked to no
+  feature whose own code (f-03) or slice's feature (F-03 of f-3a) is a confirmed feature
+  that runs today is flagged runs_today_on_roadmap with that feature, and nothing else;
+  fails_when=an item matched by code to a running feature stays on the roadmap unflagged.
+- test_plan_and_item_codes_read_one_way: protects=f-1, 1 and F-001 all read F-01; a
+  negative or malformed number (-3, "-3", "3.5") is no code, flagged as such; fails_when=a
+  code reads F-1 in one place and F-01 in another, or a feature reads "F--3".
 - test_prd_plan_codes_read_as_codes: protects=a PRD plan code is read as an F-code (f-01
   matches the confirmed F-01; the number 15 reads F-15); fails_when=a plan feature coded f-01
   is flagged though F-01 is confirmed, or a flag shows a bare number.
@@ -354,6 +361,54 @@ async def test_prd_plan_codes_read_as_codes(client):
     # f-01 is the confirmed F-01; the number 15 reads F-15, never a bare 15.
     assert [f["feature"] for f in missing] == [{"id": None, "code": "F-15", "name": "Usage export"}]
     assert _fixes(missing[0]) == [("add_to_ground_truth", "F-15"), ("link_to_feature", "F-15")]
+
+
+async def test_an_item_of_a_running_feature_by_code_is_flagged(client):
+    w = await world()
+    prd_id, pv_id, rv_id = w["seed"]
+    async with tenant_session(w["ctx"].tenant_id) as s:
+        seed = Seed(s)
+        rv = await s.get(DocumentVersion, rv_id)
+        pv = await s.get(DocumentVersion, pv_id)
+        own = await seed.item(rv, pv, "alerts-x", title="Night alerts again", position=5,
+                              prd_section_key="f-03")  # fmt: skip
+        part = await seed.item(rv, pv, "alerts-a", title="Night alerts slice", position=6,
+                               prd_section_key="f-3a")  # fmt: skip
+        await s.commit()
+    out = await _check(client, w["ctx"])
+    feats = w["features"]
+    running = {f["item"]["id"]: f for f in _of(out, "runs_today_on_roadmap")}
+    # Linked to no feature, but F-03 by code (its own, or its slice's feature): F-03 runs today.
+    assert set(running) == {w["items"]["c"], str(own.id), str(part.id)}
+    for i, code in ((own, "F-03"), (part, "F-03a")):
+        r = running[str(i.id)]
+        assert r["item"]["code"] == code
+        assert r["feature"] == {"id": feats["F-03"], "code": "F-03", "name": "Night alerts"}
+        assert _fixes(r) == [("take_off_roadmap", str(i.id))]
+    flagged = {
+        (f.get("item") or {}).get("id")
+        for f in out["flags"]
+        if f["kind"] != "runs_today_on_roadmap"
+    }
+    assert flagged.isdisjoint({str(own.id), str(part.id)})
+
+
+async def test_plan_and_item_codes_read_one_way(client):
+    plan = {**PLAN, "features": [{"code": "f-1", "name": "Bulk import", "milestones": ["M1"]},
+                                 {"code": 1, "name": "Bulk import"},
+                                 {"code": " F-001 ", "name": "Bulk import"},
+                                 {"code": -3, "name": "Minus three"},
+                                 {"code": "-3", "name": "Dash three"},
+                                 {"code": "3.5", "name": "Half three"}]}  # fmt: skip
+    w = await world(plan)
+    out = await _check(client, w["ctx"])
+    # f-1, 1 and F-001 are all F-01; a negative or malformed number is no code, never "F--3".
+    missing = [f["feature"] for f in _of(out, "prd_feature_missing")]
+    assert missing == [
+        {"id": None, "code": None, "name": n} for n in ("Minus three", "Dash three", "Half three")
+    ]
+    for f in _of(out, "prd_feature_missing"):
+        assert _fixes(f)[0] == ("add_to_ground_truth", f["feature"]["name"])
 
 
 async def test_prd_features_match_by_code_only(client):
