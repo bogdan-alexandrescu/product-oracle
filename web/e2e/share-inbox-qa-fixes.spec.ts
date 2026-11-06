@@ -75,7 +75,7 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(list).toHaveText(/^# Ledger entries .* \(ENG-541\): tracks it too\.$/);
       await expect(list.locator("h1, h2, h3, h4, ul, ol")).toHaveCount(0);
       await expect(frame.locator("p").filter({ hasText: "(ENG-541) tracks it as well." })).toHaveText(/^# Ledger entries/);
-      const cell = frame.locator("tr").filter({ hasText: "Ops console cleanup" }).locator("td").nth(2);
+      const cell = frame.locator("tr").filter({ hasText: "# Ledger entries" }).locator("td").last();
       await expect(cell).toHaveText(/^# Ledger entries .* \(ENG-541\)$/);
       await expect(cell.locator("h1, h2, h3, h4, ul, ol")).toHaveCount(0);
     });
