@@ -1559,6 +1559,8 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
               // The name tag stays inside the plot: it runs left from a mark in the right half, right from one in the left.
               const onRight = w ? sx > w / 2 : xPct(effortOf(r)) > 50;
               const tagRoom = w ? (onRight ? sx + 18 : w - sx + 18) : undefined;
+              // Below the mark unless that passes the plot's foot (a mark on the zero line); then above it.
+              const tagAbove = !!h && sy + 18 + 4 + 22 > h && sy - 18 - 4 - 22 >= 0;
               return (
                 <button
                   key={r.feature_id}
@@ -1599,7 +1601,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                   <span
                     data-testid="vxe-name"
                     aria-hidden
-                    className={`pointer-events-none absolute ${onRight ? "right-0" : "left-0"} top-full z-30 mt-1 truncate whitespace-nowrap rounded-md bg-text px-2 py-0.5 text-[13px] font-semibold leading-[18px] text-bg group-hover:block group-focus-visible:block ${isSelected ? "block" : "hidden"}`}
+                    className={`pointer-events-none absolute ${onRight ? "right-0" : "left-0"} ${tagAbove ? "bottom-full mb-1" : "top-full mt-1"} z-30 truncate whitespace-nowrap rounded-md bg-text px-2 py-0.5 text-[13px] font-semibold leading-[18px] text-bg group-hover:block group-focus-visible:block ${isSelected ? "block" : "hidden"}`}
                     style={{ maxWidth: tagRoom }}
                   >
                     #{r.rank} {r.short_code || r.code} · {r.title}
