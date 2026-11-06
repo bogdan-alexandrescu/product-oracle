@@ -7324,7 +7324,9 @@ def _failed_why(run: Run, segment: RunSegment | None, status: WorkflowStatus) ->
         except (KeyError, StopIteration, IndexError):
             role = None
     title = flows.ROLES[role].title.lower() if role in flows.ROLES else None
-    return workflow.plain_failure((step.error if step else None) or status.error, title)
+    raw = (step.error if step else None) or status.error
+    log.warning("run %s step %s failed: %s", run.id, step.step_id if step else None, raw)
+    return workflow.plain_failure(raw, title)
 
 
 def _queued_expiry(run: Run, wf: dict[str, Any], status: WorkflowStatus) -> float | None:

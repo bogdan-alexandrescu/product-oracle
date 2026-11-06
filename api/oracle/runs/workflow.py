@@ -492,7 +492,8 @@ _BARE_EXIT = re.compile(r"^\s*[\w-]+ exited \d+:?\s*$")
 
 def plain_failure(error: str | None, role: str | None) -> str:
     """Why a run step stopped, in plain words for the run page: who stopped (its role,
-    e.g. the writer) and the cause read from the runtime's last error."""
+    e.g. the writer) and the cause read from the runtime's last error. Other runtime text
+    stays in the logs (:func:`oracle.runs.service._failed_why`), never on the page."""
     who = f"The {role}" if role else "The agents"
     text = (error or "").strip()
     if not text:
@@ -501,4 +502,4 @@ def plain_failure(error: str | None, role: str | None) -> str:
         return f"{who} stopped: its session ran out of room."
     if _BARE_EXIT.match(text):
         return f"{who} stopped: its session ended with an error and gave no reason."
-    return f"{who} stopped: {text}"
+    return f"{who} stopped. Retry this step."

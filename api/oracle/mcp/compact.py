@@ -13,7 +13,11 @@ from typing import Any
 ENTITY_FIELDS = ("id", "type", "key", "title", "status", "parent_id", "confidence")
 ENTITY_LIMIT = 50
 ENTITY_MAX_LIMIT = 200
-# get_intake_summary: an outline lists this many items of each section, cut to TEXT_CUT.
+# get_intake_summary: a summary up to SUMMARY_WHOLE bytes comes back whole; a larger one
+# as an outline listing this many items of each section, cut to TEXT_CUT, except the
+# sections the PRD writer must use whole (every work item is a requirement).
+SUMMARY_WHOLE = 64_000
+WHOLE_SECTIONS = frozenset({"work", "features", "goals"})
 OUTLINE_ITEMS = 3
 SECTION_LIMIT = 20
 TEXT_CUT = 300
@@ -48,7 +52,8 @@ def entities_page(rows: list[dict[str, Any]], args: dict[str, Any]) -> dict[str,
     picked = [
         r
         for r in rows
-        if (ids is None or str(r.get("id")) in ids)
+        # ids takes a scope row's entity_id or its key.
+        if (ids is None or str(r.get("id")) in ids or r.get("key") in ids)
         and (keys is None or r.get("key") in keys)
         and (types is None or r.get("type") in types)
         and (not status or r.get("status") == status)
@@ -82,15 +87,20 @@ def _cut(value: Any, n: int) -> Any:
 
 
 def summary_view(data: Any, section: str | None, offset: Any, limit: Any) -> dict[str, Any]:
-    """An intake summary as an outline (no ``section``): its plain fields, each list's
-    count and first items, cut short; or one section, a page of it."""
+    """An intake summary (no ``section``): whole up to :data:`SUMMARY_WHOLE` bytes, else
+    an outline: its plain fields and :data:`WHOLE_SECTIONS` whole, each other list's count
+    and first items, cut short. With ``section``, a page of that section."""
     if not isinstance(data, dict):
         return {"result": _cut(data, ITEM_CUT)}
     if section is None:
+        if len(json.dumps(data, default=str)) <= SUMMARY_WHOLE:
+            return data
         out: dict[str, Any] = {}
         sections: dict[str, int] = {}
         for k, v in data.items():
-            if isinstance(v, list):
+            if k in WHOLE_SECTIONS:
+                out[k] = v
+            elif isinstance(v, list):
                 sections[k] = len(v)
                 out[k] = _cut(v[:OUTLINE_ITEMS], TEXT_CUT)
             elif isinstance(v, dict) and len(json.dumps(v, default=str)) > ITEM_CUT:
@@ -100,8 +110,9 @@ def summary_view(data: Any, section: str | None, offset: Any, limit: Any) -> dic
                 out[k] = _cut(v, TEXT_CUT)
         out["sections"] = sections
         out["how_to_read"] = (
-            "An outline: each list shows its first items, long texts are cut. Read one "
-            "section whole with section=<name>, a page at a time (offset, limit)."
+            "An outline: work, features and goals are whole; each other list shows its "
+            "first items, long texts are cut. Read one section whole with section=<name>, "
+            "a page at a time (offset, limit)."
         )
         return out
     if section not in data:

@@ -301,7 +301,8 @@ async def test_a_realistic_writer_session_stays_under_budget(tenant_id):
     previous = "".join(f"Line {i} of an example earlier PRD.\n" for i in range(6_000))
     pages = [compact.text_page(previous, 0, None)]
     pages.append(compact.text_page(previous, compact.TEXT_PAGE, None))
-    summary = summary_with_work(10, 20)
+    summary = summary_with_work(10, 38)  # ~48 KB: comes back whole
+    assert len(json.dumps(summary)) > 45_000
     sizes = {
         "get_prd_scope": len(json.dumps(scope)),
         "list_entities": size(mine),

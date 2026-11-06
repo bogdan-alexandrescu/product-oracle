@@ -397,6 +397,7 @@ AFTER_COMMIT = {
     ("post", "/v1/runs/{run_id}/start"),
     ("post", "/v1/runs/{run_id}/approve"),
     ("post", "/v1/runs/{run_id}/resume"),
+    ("post", "/v1/runs/{run_id}/segments/{seq}/retry"),
 }
 NO_CALL = {
     ("post", "/v1/runs"),

@@ -172,7 +172,10 @@ _LIST_ENTITIES_SCHEMA = {
         "ids": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "Only these entities (ids): e.g. the features of this PRD's scope",
+            "description": "Only these entities, by id or key: e.g. the entity_id (or key) of "
+            "each feature and requirement in this PRD's scope (get_prd_scope; its own id is "
+            "the scope row's, not the entity's). A new one (entity_id null) is not in the "
+            "baseline: its scope row holds what there is",
         },
         "keys": {"type": "array", "items": {"type": "string"}, "description": "Only these keys"},
         "type": {
@@ -224,8 +227,9 @@ _INTAKE_SUMMARY_SCHEMA = {
         "intake_id": {"type": "string", "description": "The intake's id"},
         "section": {
             "type": "string",
-            "description": "Optional: one section of the summary (a name the outline's "
-            "sections lists), a page at a time. Left out: the outline.",
+            "description": "Optional: one section of the summary (e.g. work), a page at a "
+            "time. Left out: the whole summary, or past 64 KB an outline (work, features "
+            "and goals whole; other sections' first items).",
         },
         "offset": {"type": "integer", "minimum": 0, "description": "A section page's start"},
         "limit": {
