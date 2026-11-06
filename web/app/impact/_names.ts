@@ -207,6 +207,6 @@ export function subjectWords(report: Report, names: Names): SubjectWords {
       ? { href: "/sources", label: "Sources" }
       : ["member", "intake", "access_request"].includes(kind)
         ? null
-        : { href: "/baseline", label: "Baseline" };
+        : { href: "/ground-truth", label: "Ground Truth" };
   return { title, short: title, where: null, back, version: null };
 }

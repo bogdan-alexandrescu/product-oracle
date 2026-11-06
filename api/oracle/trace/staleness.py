@@ -349,7 +349,7 @@ async def _by_entities(db: AsyncSession, roots: list[Root], out: Affected) -> No
     link_why: dict[uuid.UUID, str] = {}
     for root in roots:
         e = entity(root.id)
-        label = _label(e) if e is not None else "a baseline item"
+        label = _label(e) if e is not None else "a Ground Truth item"
         reason_of.setdefault(root.id, f"{label} {root.text}")
         link_why.setdefault(root.id, f"links {label}, which {root.text}")
         for step in g.downstream(root.id):
@@ -955,7 +955,7 @@ async def add_dependencies(
     for ref in upstream:
         if ref.entity_id is not None:
             if await db.get(Entity, ref.entity_id) is None:
-                raise Invalid(f"unknown baseline entity {ref.entity_id}")
+                raise Invalid(f"unknown Ground Truth entity {ref.entity_id}")
             match = next((d for d in existing if d.upstream_entity_id == ref.entity_id), None)
             fields: dict[str, Any] = {"upstream_entity_id": ref.entity_id}
         else:

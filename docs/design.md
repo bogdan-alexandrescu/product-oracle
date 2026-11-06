@@ -16,7 +16,7 @@ A founder-led company has no head of product. Product decisions happen ad hoc, t
 company's knowledge is scattered across repositories, chat, docs and call transcripts,
 PRDs and roadmaps take too long or never get written, and engineering builds things
 that do not serve a company goal. Product Oracle acts as a very experienced head of
-product: it builds a cited **baseline** linking company goals to products to features,
+product: it builds a cited **Ground Truth** linking company goals to products to features,
 turns intake into a prioritized feature set, writes a **PRD** that iterates with the
 founder's feedback until approved, and later produces an approved **roadmap** as HTML
 and PDF. It is reachable through a web UI, a full REST API and an MCP server.
@@ -47,7 +47,7 @@ writing the PRD alone from memory plus a few searches.
 - **User (F2 Primary user):** a founder/CEO with no head of product. Oracle is the
   head of product: opinionated, makes the call, shows its reasoning; the founder
   approves or overrides.
-- **Wedge (F4 v1 scope):** baseline + PRD feedback loop. The roadmap follows in v1.1.
+- **Wedge (F4 v1 scope):** Ground Truth + PRD feedback loop. The roadmap follows in v1.1.
 - **v1 quality bar (F3b Sharpest pain):** goal traceability. Every proposed feature
   traces to a company goal with citations; anything serving no goal is flagged and
   sinks. Test: replay last quarter's features and check Oracle flags the regretted ones.
@@ -71,8 +71,8 @@ writing the PRD alone from memory plus a few searches.
 ## Premises
 
 1. Traceability beats prose: a PRD is only as good as the goal-to-feature links under
-   it, so the baseline is a correctable, cited graph, not document search
-   (B1 Baseline shape).
+   it, so the Ground Truth is a correctable, cited graph, not document search
+   (B1 Ground Truth shape).
 2. Oracle is the control plane, SwarmCloud the execution plane. Oracle owns state,
    knowledge, documents and approvals; SwarmCloud runs the agents (P2, X1).
 3. Agents read Oracle's knowledge through Oracle's own MCP server with a run-scoped,
@@ -129,7 +129,7 @@ writing the PRD alone from memory plus a few searches.
 - **Code understanding:** one SwarmCloud `indexer` task per repo builds a capability
   map (modules, APIs, data models, flags, jobs) plus issues, PRs, milestones and
   releases; refreshed on merge (S2 GitHub depth).
-- **Baseline graph (B1):** typed entities (Goal, Product, Feature, Requirement,
+- **Ground Truth graph (B1):** typed entities (Goal, Product, Feature, Requirement,
   Constraint, Decision, Person, Evidence) and edges (supports, depends_on, blocks,
   evidenced_by). User corrections are locked; agents must ask to override. Accepting a
   proposal applies it, and the item is then locked against Oracle's changes until a
@@ -140,9 +140,9 @@ writing the PRD alone from memory plus a few searches.
   precedence (code > tracker > docs > chat, newer beats older) and escalate only when
   they change a decision (B3 Conflicts).
 - **Pipelines (W1):** three built-in flows as code-defined templates with knobs
-  (depth, agent roles, checkpoints, budget): Baseline -> PRD, Feedback loop, Roadmap.
+  (depth, agent roles, checkpoints, budget): Ground Truth -> PRD, Feedback loop, Roadmap.
   Custom flows via API specs in v2; no visual builder.
-- **Checkpoints (W2):** baseline confirm, feature set + dependencies, priority order,
+- **Checkpoints (W2):** Ground Truth confirm, feature set + dependencies, priority order,
   PRD review, plus an eng review stop (E1); each toggleable when a flow starts, all on
   by default, each one approver per stop (C2 Approvals). Each is a SwarmCloud
   `await_input` step once #1436 lands; until then Oracle runs one workflow per segment
@@ -150,7 +150,7 @@ writing the PRD alone from memory plus a few searches.
   checked `feature_set.yaml` (every feature traces to a confirmed goal or is flagged;
   blocking problems disable Approve) becomes the features and requirements this PRD
   includes, excludes or defers, and the priority order, the PRD draft and the
-  document's next drafts read that scope, not the whole baseline (C6). The priority
+  document's next drafts read that scope, not the whole Ground Truth (C6). The priority
   order's `priority.yaml` is checked the same way (every included feature ranked once,
   after the features it depends on; blocking problems disable Approve) and compared with
   Oracle's live ranking on the Priorities screen; approving the stop saves it as this
@@ -170,7 +170,7 @@ writing the PRD alone from memory plus a few searches.
   request changes, chat that turns discussion into feedback items, Slack pings and
   thread replies; every version kept, any-two-version diff, and a per-version report
   of how each item was addressed.
-- **UX (I4):** a workspace (Baseline, Runs, PRDs, Roadmap, Inbox) with a
+- **UX (I4):** a workspace (Ground Truth, Runs, PRDs, Roadmap, Inbox) with a
   head-of-product chat docked beside every screen.
 
 ### Proposed phasing (pending approval)
@@ -178,7 +178,7 @@ writing the PRD alone from memory plus a few searches.
 | Phase | Ships |
 |-------|-------|
 | MVP | Thin app: import PRD drafts, review, feedback, diff, export (see `mvp-app.md`); the dogfood PRD itself comes from the agent track |
-| v1 | Baseline graph + Baseline -> PRD + Feedback loop flows on SwarmCloud; sources GitHub, uploads, Slack, Notion; UI + REST + MCP; HTML/PDF + SVG outputs |
+| v1 | Ground Truth graph + Ground Truth -> PRD + Feedback loop flows on SwarmCloud; sources GitHub, uploads, Slack, Notion; UI + REST + MCP; HTML/PDF + SVG outputs |
 | v1.1 | Roadmap flow + roadmap HTML/PDF; eng tracker two-way (E1); Fireflies, Google Docs; engineering inputs |
 | v1.2 | Figma read + `use_figma` frames (after the beta check), product analytics, customer voice; hi-fi / prototype opt-ins |
 
@@ -230,7 +230,7 @@ CI on GitHub Actions (lint, tests, build, image push).
 
 ## The Assignment
 
-Before the first baseline checkpoint, write down your company's 3–5 goals for the
+Before the first Ground Truth checkpoint, write down your company's 3–5 goals for the
 next two quarters, each with one measurable target and an owner. Oracle traces every
 feature to a goal; if the goals are vague or unwritten, the traceability bar fails on
 day one, however good the agents are.

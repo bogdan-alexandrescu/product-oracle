@@ -80,7 +80,7 @@ test("qa-work-9, 10, 23, 25: names not slugs or ids, one waiting count, flows in
   }
   await expect(rows(page).locator(".font-mono")).toHaveCount(0);
   // The flow's name shows in full on hover.
-  await expect(row(page, "team onboarding").locator('[title="Baseline to PRD"]')).toHaveCount(1);
+  await expect(row(page, "team onboarding").locator('[title="Ground Truth to PRD"]')).toHaveCount(1);
   // One cost format, in the normal font.
   const overrun = row(page, "Paused").locator("[data-cost]");
   await expect(overrun).toHaveText("$14.20 of $9.00 estimated");
@@ -119,7 +119,7 @@ test("qa-work-8, 24, 26, 4: a roadmap run's page in words, one Review items, the
   for (const text of await roles.allInnerTexts()) expect(text).toMatch(/^[A-Z]/);
   const file = segment.getByTestId("artifacts-current").getByRole("button").first();
   await expect(file).toHaveText("Roadmap items");
-  await expect(file).toHaveAttribute("title", "roadmap_items.yaml");
+  await expect(file).toHaveAttribute("title", "File: roadmap_items.yaml");
   // qa-work-24: a segment's name wraps rather than being cut.
   await expect(segment.getByTestId("segment-title")).toHaveCSS("white-space", "normal");
   // qa-work-26: one Review items action, no header Decide to the same screen.

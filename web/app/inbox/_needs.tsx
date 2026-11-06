@@ -1476,13 +1476,13 @@ export function inboxNeeds(
         // qa-company-3: a role that cannot decide reads the review; who decides is said.
         <>
           <ByRole who={`${ROLE_WORD[c.approver_role]} decide`} title={c.cannot_approve ?? `Only ${ROLE_WORD[c.approver_role].toLowerCase()} can decide this`} />
-          <LinkButton href={c.kind === "baseline_confirm" ? `/baseline?run=${c.run_id}` : (reviewHref(c) ?? review)}>
+          <LinkButton href={c.kind === "baseline_confirm" ? `/ground-truth?run=${c.run_id}` : (reviewHref(c) ?? review)}>
             Open
           </LinkButton>
         </>
       ) : c.kind === "baseline_confirm" ? (
         // B2: the run's review opens in the Baseline, filtered to the run.
-        <LinkButton href={`/baseline?run=${c.run_id}`}>Review</LinkButton>
+        <LinkButton href={`/ground-truth?run=${c.run_id}`}>Review</LinkButton>
       ) : isHeld(c) ? (
         // A held console approval is confirmed on the kind's review screen (D1, C7), else the run page.
         <LinkButton href={reviewHref(c) ?? review}>Review</LinkButton>

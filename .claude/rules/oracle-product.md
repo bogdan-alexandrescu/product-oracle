@@ -1,6 +1,7 @@
 # Product Oracle rules
 
 - UI copy uses plain, short words: no jargon, no code or id shown without its name ("F-26 Keys out of checkpoints", never "F-26").
+- Oracle's cited graph of goals, features and their links is the Ground Truth in every word a person sees; 'baseline' only ever means a key result's or goal measure's starting value.
 - Dates read month first everywhere a person sees them, in the UI and in exports: "Oct 31", "Oct 30, 2026, 2:49 PM PDT"; never ISO.
 - Roles in the web go through can() or an item's own can_* field only; never compare role names in components.
 - No company or customer data in code, tests, fixtures, mock data, commit messages or PR text: tests use invented example data (example.com addresses, made-up people and products).

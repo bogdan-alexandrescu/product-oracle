@@ -73,7 +73,7 @@ FLAG_LABELS = {
     "serves_no_goal": "Serves no confirmed goal",
     "low_confidence": "Low confidence",
     "linked_blocker": "Linked open blocker",
-    "new_feature": "New, not in the baseline",
+    "new_feature": "New, not in the Ground Truth",
     "duplicate_of_existing": "Duplicate of an existing feature",
 }
 # What a row's history keeps of the agent's values.
@@ -1049,7 +1049,7 @@ async def _feature_entity(db: AsyncSession, run: Run, feature: PrdScopeItem) -> 
             status="proposed",
         )
         if result.entity is None:
-            raise service.RunError(f"feature {feature.key} could not be added to the baseline")
+            raise service.RunError(f"feature {feature.key} could not be added to the Ground Truth")
         entity = result.entity
         if proposal is not None:
             proposal.status = "withdrawn"

@@ -840,7 +840,7 @@ function ProposalsRow({ run }: { run: RunOut }) {
             {open > 0 ? (
               <>
                 {open} to review ·{" "}
-                <Link href={`/baseline?tab=proposals&run=${run.id}`} className="text-accent-ink hover:underline">
+                <Link href={`/ground-truth?tab=proposals&run=${run.id}`} className="text-accent-ink hover:underline">
                   Review
                 </Link>
               </>
@@ -868,7 +868,7 @@ function RunDecisions({ run }: { run: RunOut }) {
   // Who decided, as the API names them: a confirmed console answer is its author's, not the confirmer's.
   const said = (d: Schemas["RunDecision"]) => {
     const name = d.decided_by_name;
-    const checkpoint = d.kind === "baseline_confirm" ? "The baseline" : (CHECKPOINT_LABEL[d.kind as keyof typeof CHECKPOINT_LABEL] ?? "This checkpoint");
+    const checkpoint = d.kind === "baseline_confirm" ? "The Ground Truth" : (CHECKPOINT_LABEL[d.kind as keyof typeof CHECKPOINT_LABEL] ?? "This checkpoint");
     return decisionSentence(d, checkpoint, name);
   };
   return (
@@ -1348,7 +1348,7 @@ function SegmentItem({
           {delivering.map((cp) => (
             <DeliveryLine key={cp.id} cp={cp} />
           ))}
-          <VagueGoalsLine count={vague} href={`/baseline?tab=proposals&run=${run.id}&interview=vague`} />
+          <VagueGoalsLine count={vague} href={`/ground-truth?tab=proposals&run=${run.id}&interview=vague`} />
           {screened && <ReviewScreenLine run={run} cp={screened} />}
           {deciding.filter((cp) => !decidedOnScreen(cp)).map((cp, i) =>
             // D10: a PRD or roadmap review with its draft imported is decided in the version;
@@ -2104,10 +2104,10 @@ function FromRunLink({ runId }: { runId: string }) {
   return (
     <p className="mt-2">
       {/* qa-work-45: a long label wraps inside the card's padding on a phone. */}
-      <LinkButton href={`/baseline?run=${runId}`} icon="baseline" className="h-auto! min-h-8 max-w-full py-1 text-left whitespace-normal!" data-testid="from-run-link">
+      <LinkButton href={`/ground-truth?run=${runId}`} icon="baseline" className="h-auto! min-h-8 max-w-full py-1 text-left whitespace-normal!" data-testid="from-run-link">
         {q.data && q.data.summary.need_you === 0
-          ? "Open the baseline (nothing flagged for you)"
-          : `Review in Baseline${q.data ? ` · ${q.data.summary.need_you} need you` : ""}`}
+          ? "Open the Ground Truth (nothing flagged for you)"
+          : `Review in Ground Truth${q.data ? ` · ${q.data.summary.need_you} need you` : ""}`}
       </LinkButton>
     </p>
   );
@@ -2232,8 +2232,8 @@ function Artifacts({
         type="button"
         onClick={() => void show(name, attempt)}
         aria-expanded={on}
-        // qa-work-8: the file in words ("Roadmap items"); its name on hover.
-        title={name}
+        // qa-work-8: the file in words ("Roadmap items"); its name on hover, said as a file name.
+        title={`File: ${name}`}
         className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 text-[13px] ${
           on ? "border-accent bg-accent-soft text-accent-ink" : "border-line-strong bg-surface text-text hover:bg-surface2"
         }`}

@@ -74,7 +74,7 @@ order:                                 # every feature the approved PRD scope in
     rank: <1..N, each once; a feature after every feature it depends on>
     score: <the score you computed>
     explanation: <every number of the score, and why it is ranked here>
-    # A feature new in this PRD (not in the baseline yet) also gives the formula's inputs,
+    # A feature new in this PRD (not in the Ground Truth yet) also gives the formula's inputs,
     # so it is scored on the same formula and ranked among the rest:
     goal: <the goal key it serves>
     weight: <that goal's weight>
@@ -310,7 +310,9 @@ def _check_features(out: OrderCheck, rows: list[dict[str, Any]], known: Known) -
     for r in rows:
         key = r["key"]
         if key not in known.features:
-            out.add("unknown_feature", f"{key} is not a feature of the baseline or the scope", key)
+            out.add(
+                "unknown_feature", f"{key} is not a feature of the Ground Truth or the scope", key
+            )
         elif scope is not None and key not in scope:
             out.add("not_in_scope", f"{key} is not included in the approved PRD scope", key)
     for key in known.scope or []:

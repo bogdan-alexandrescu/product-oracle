@@ -62,7 +62,7 @@ export function decisionSentence(
       ? `${checkpoint} was approved${by}${via}`
       : d.status === "skipped"
         ? `${checkpoint} was skipped${by}${via}`
-        : `Changes were asked for at ${checkpoint === "The baseline" ? "the baseline" : checkpoint}${by}${via}`;
+        : `Changes were asked for at ${checkpoint === "The Ground Truth" ? "the Ground Truth" : checkpoint}${by}${via}`;
   let out: string;
   if (!d.note) out = `${what}.`;
   else if (d.status === "skipped" && /^Turned off when the run started/.test(d.note)) out = `${what}: it was turned off when the run started.`;

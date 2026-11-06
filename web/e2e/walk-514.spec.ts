@@ -6,7 +6,7 @@ import { login, openSeeded, seedRoadmapReview } from "./helpers";
 
 /*
  * #514, the production walk of 2026-10-23: one waiting count on the rail, Home and the Inbox;
- * the Baseline run banner names what is closed; an unset Company time zone says which zone is
+ * the Ground Truth run banner names what is closed; an unset Company time zone says which zone is
  * used. Driven through the UI on the mock layer.
  */
 
@@ -41,15 +41,15 @@ test("the rail badge, Home and the Inbox count the same with a checkpoint of man
 const BASELINE_RUN = "7a11c0de-0000-4000-8000-0000000000b2";
 
 // Card run-review-closed: protects = #514 finding 2, once the run's review is decided the
-// Baseline banner says the run's review is closed, not "View only", while the page still
+// Ground Truth banner says the run's review is closed, not "View only", while the page still
 // offers decisions on proposals; fails_when = "View only" shows beside live actions;
 // no_claim = which proposals stay decidable (baseline-review.spec.ts).
-test("Baseline from a decided run says the run's review is closed, not View only", async ({ page }) => {
+test("Ground Truth from a decided run says the run's review is closed, not View only", async ({ page }) => {
   await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "baseline-review"] as const);
   await login(page);
-  await page.goto(`/baseline?run=${BASELINE_RUN}`);
+  await page.goto(`/ground-truth?run=${BASELINE_RUN}`);
   const band = page.getByTestId("from-run-band");
-  await expect(band).toContainText("From run · Build the baseline");
+  await expect(band).toContainText("From run · Build the Ground Truth");
   const row = page.getByTestId("from-run-row").filter({ hasText: "Gift notes" });
   await row.getByRole("button", { name: "More actions for Gift notes" }).click();
   await row.getByRole("button", { name: "Look again…" }).click();

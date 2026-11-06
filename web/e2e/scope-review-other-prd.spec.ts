@@ -14,7 +14,7 @@ async function openReview(page: Page) {
   await login(page, "approver@example.com");
   await page.getByTestId("nav-runs").click();
   await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').getByRole("link").first().click();
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
   await page.getByTestId("segment-feature_set").getByRole("link", { name: "Review feature set" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Feature set" })).toBeAttached();
 }

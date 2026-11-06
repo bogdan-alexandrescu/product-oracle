@@ -174,7 +174,7 @@ test.describe("phone", () => {
     page,
   }) => {
     await sharing(page);
-    // The published roadmap: Usage alerts' items serve no confirmed goal (read from the baseline,
+    // The published roadmap: Usage alerts' items serve no confirmed goal (read from the Ground Truth,
     // as the API's public check), so they are left out and leave nothing to approve.
     await page.goto("/documents/example-labs-roadmap/public");
     await expect(page.getByTestId("public-check")).toHaveText(

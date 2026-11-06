@@ -429,7 +429,7 @@ async def create_bucket_goal(body: GoalIn, principal: Approver, db: TenantDB) ->
 async def update_bucket_goal(
     goal_id: uuid.UUID, body: GoalIn, principal: Approver, db: TenantDB
 ) -> GoalBucketWrite:
-    """Edit a goal's name, measure, target and date (its order stays Baseline's)."""
+    """Edit a goal's name, measure, target and date (its order stays the Ground Truth's)."""
     g = await _entity(db, goal_id, "goal")
     if body.seen is not None and _changed_since(g, body.seen):
         raise HTTPException(status.HTTP_409_CONFLICT, GOAL_CHANGED)

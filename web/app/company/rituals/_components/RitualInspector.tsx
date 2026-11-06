@@ -87,7 +87,7 @@ export function prepareAsk(r: Ritual): string | null {
   const usd = r.prepare_usd ?? null;
   const paused = r.status !== "active";
   if (!usd && !paused) return null;
-  const what = r.kind === "baseline_rebuild" ? "starts the baseline build" : "writes its summary";
+  const what = r.kind === "baseline_rebuild" ? "starts the Ground Truth build" : "writes its summary";
   const cost = usd ? `, then ${what}: one Oracle run of about ${formatMoney(usd)}` : "";
   const still = paused ? `${r.title} is paused; it stays paused. ` : "";
   const waits = usd && r.kind === "baseline_rebuild" && usd > 50 ? " Over $50 it waits for an owner's approval." : "";

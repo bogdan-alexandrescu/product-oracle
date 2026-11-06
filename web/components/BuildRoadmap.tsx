@@ -232,7 +232,7 @@ export function BuildRoadmapDialog({ prd, onClose }: { prd: ApprovedPrd & { appr
             </label>
             <InfoTip label="Derive the items again" align="start">
               Oracle reuses the roadmap items already derived for this PRD version, so the Roadmap items step costs
-              nothing. Tick this to derive them again, for example after the baseline changed.
+              nothing. Tick this to derive them again, for example after the Ground Truth changed.
             </InfoTip>
           </div>
         </details>

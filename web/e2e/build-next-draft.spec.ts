@@ -99,7 +99,7 @@ test("the New run dialog no longer offers the feedback loop and points at where 
   await page.goto("/runs");
   await page.getByRole("button", { name: "Start a run…" }).click();
   const dialog = page.getByRole("dialog", { name: "Where to start a run" });
-  // C4: Baseline to PRD starts at New PRD too, so the dialog offers no flow.
+  // C4: Ground Truth to PRD starts at New PRD too, so the dialog offers no flow.
   await expect(dialog.getByRole("radio")).toHaveCount(0);
   await expect(dialog.getByText("Feedback loop")).toHaveCount(0);
   const pointers = dialog.getByTestId("flow-pointer");
@@ -110,7 +110,7 @@ test("the New run dialog no longer offers the feedback loop and points at where 
     // F5 lane 3: an engineering spec is requested from the Plan or a PRD's overview.
     "Request spec · Plan, an approved item, or a PRD's overview",
     "Vision or strategy · Company › Strategy, New vision or Draft next version",
-    "Build the baseline · Baseline",
+    "Build the Ground Truth · Ground Truth",
     // H9: a pricing memo is drafted from Company › Market › Pricing (D12).
     "Draft with Oracle · Company › Market › Pricing",
   ]);

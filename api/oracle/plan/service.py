@@ -73,7 +73,7 @@ RANK = {"viewer": 0, "commenter": 1, "approver": 2, "owner": 3}
 # The Runs page's checkpoint names (web/app/runs/_lib.tsx CHECKPOINT_LABEL), the feature
 # set's in its short form.
 CHECKPOINT_LABEL = {
-    "baseline_confirm": "Confirm the baseline",
+    "baseline_confirm": "Confirm the Ground Truth",
     "feature_set": "Feature set",
     "priority_order": "Priority order",
     "prd_review": "PRD review",
@@ -226,7 +226,7 @@ def next_of(
             "resolve_blocker",
             "Resolve blocker",
             _who("owner" if critical else "approver"),
-            f"/baseline?entity={open_blockers[0].id}",
+            f"/ground-truth?entity={open_blockers[0].id}",
         )
     if any(r["kind"] == "stale" for r in risk.reasons):
         return decision("reconcile", "Reconcile", _who("approver"))

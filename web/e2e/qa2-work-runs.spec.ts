@@ -151,10 +151,10 @@ test("rirs-21: the header's Decide goes to the one decision below, not a second 
   await expect(page.locator("#decide")).toBeFocused();
 });
 
-test("rirs-22: with nothing flagged, the baseline link says so instead of '0 need you'", async ({ page }) => {
+test("rirs-22: with nothing flagged, the Ground Truth link says so instead of '0 need you'", async ({ page }) => {
   await openRun(page, "team onboarding");
   const panel = page.locator("#decide");
-  await expect(panel.getByRole("link", { name: "Open the baseline (nothing flagged for you)" })).toBeVisible();
+  await expect(panel.getByRole("link", { name: "Open the Ground Truth (nothing flagged for you)" })).toBeVisible();
   await expect(panel).not.toContainText("0 need you");
 });
 

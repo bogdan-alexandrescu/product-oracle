@@ -242,7 +242,7 @@ const READ = ["read:sources", "read:baseline"];
 // The baseline segment: Baseline to PRD's first and the whole of Build the baseline (B1).
 const BASELINE_SEGMENT: Schemas["FlowSegmentOut"] = {
   name: "baseline",
-  title: "Baseline proposal",
+  title: "Ground Truth proposal",
   roles: ["researcher", "analyst"],
   scopes: [...READ, "write:proposals"],
   outputs: ["baseline.yaml", "summary.md"],
@@ -258,8 +258,8 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
   flows: [
     {
       key: "baseline_to_prd",
-      title: "Baseline to PRD",
-      description: "Baseline proposal, feature set and design, priority order, PRD draft.",
+      title: "Ground Truth to PRD",
+      description: "Ground Truth proposal, feature set and design, priority order, PRD draft.",
       requires_document: false,
       target_kind: "prd",
       source_kind: null,
@@ -358,7 +358,7 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
     },
     {
       key: "baseline",
-      title: "Build the baseline",
+      title: "Build the Ground Truth",
       description: "Read the sources and propose goals, products, features, constraints and evidence for you to review.",
       requires_document: false,
       writes_document: false,
@@ -366,7 +366,7 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       source_kind: null,
       // D12: started from the Baseline page, never from the New run dialog.
       in_new_run_dialog: false,
-      starts_from: { label: "Build the baseline · Baseline", href: "/baseline?build=1" },
+      starts_from: { label: "Build the Ground Truth · Ground Truth", href: "/ground-truth?build=1" },
       segments: [BASELINE_SEGMENT],
     },
     {
@@ -434,7 +434,7 @@ function buildUnderWay(ctx: RunsContext, flowKey: string): Response | null {
   const first = ctx.db.runs
     .filter((r) => r.flow === "baseline" && BUILD_UNDER_WAY.includes(r.status))
     .sort((a, b) => a.created_at.localeCompare(b.created_at))[0];
-  return first ? fail(409, `A baseline build is already under way (run ${first.id})`) : null;
+  return first ? fail(409, `A Ground Truth build is already under way (run ${first.id})`) : null;
 }
 const round2 = (n: number) => Math.round(n * 100) / 100;
 // The Company time zone's day, as the API words it in notes (#463).
@@ -578,7 +578,7 @@ function resolveKnobs(flowKey: string, raw: KnobsIn | undefined): RunOut["knobs"
 function targetGoals(ctx: Omit<RunsContext, "db">, flowKey: string, raw: string[] | null | undefined): Schemas["TargetGoal"][] | string | null {
   if (raw == null) return null;
   if (!raw.length) return [];
-  if (flowKey !== "baseline_to_prd") return "only a Baseline to PRD run names the goals it serves";
+  if (flowKey !== "baseline_to_prd") return "only a Ground Truth to PRD run names the goals it serves";
   const confirmed = ctx.confirmedGoals?.() ?? [];
   const out: Schemas["TargetGoal"][] = [];
   for (const ref of raw) {
@@ -1321,7 +1321,7 @@ function checkOrder(given: OrderSpec, scope: PrdScopeOut["features"] | null, goa
   for (const [k, n] of times) if (n > 1) add("duplicate_key", k, `${titleOf(k)} is ranked ${n} times`);
   const inScope = new Set((scope ?? []).map((f) => f.key));
   for (const k of keys) {
-    if (!live.some((f) => f.key === k) && !inScope.has(k) && !proposed.has(k)) add("unknown_feature", k, `${k} is not a feature of the baseline or the scope`);
+    if (!live.some((f) => f.key === k) && !inScope.has(k) && !proposed.has(k)) add("unknown_feature", k, `${k} is not a feature of the Ground Truth or the scope`);
     else if (scope && !inScope.has(k)) add("not_in_scope", k, `${k} is not included in the approved PRD scope`);
   }
   for (const f of scope ?? []) if (!(f.key in rank)) add("missing_feature", f.key, `${f.title || f.key} is in the approved PRD scope and not ranked`);
@@ -1854,10 +1854,10 @@ function launch(ctx: RunsContext, r: RunOut) {
   if (reused && first?.name === "baseline") {
     // C4: the reused baseline segment runs no step and costs nothing; its stop is skipped.
     const on = monthDay(reused.approved_at);
-    Object.assign(first, { status: "skipped", cost_usd: 0, estimate_usd: 0, reused, note: `Reused the baseline approved ${on}`, started_at: ctx.now(), finished_at: ctx.now() });
+    Object.assign(first, { status: "skipped", cost_usd: 0, estimate_usd: 0, reused, note: `Reused the Ground Truth approved ${on}`, started_at: ctx.now(), finished_at: ctx.now() });
     r.checkpoints.push({
       id: ctx.uuid(), run_id: r.id, kind: "baseline_confirm", status: "skipped", approver_role: "approver",
-      segment_seq: first.seq, decided_by: null, decided_at: ctx.now(), note: `Reused the baseline approved ${on}`, payload: {},
+      segment_seq: first.seq, decided_by: null, decided_at: ctx.now(), note: `Reused the Ground Truth approved ${on}`, payload: {},
       created_at: ctx.now(), can_decide: false, lead_stop: false, cannot_approve: null, approve_label: "Approve", needs_agents: [],
     });
     submit(ctx, r, r.segments[1]);
@@ -2274,7 +2274,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
         return {
           seq: s.seq, name: s.name, title: s.title, roles: s.roles, estimate_usd: s.estimate_usd ?? 0, reused: skip || !!fromDraft,
           reused_from_version: fromDraft?.version ?? null,
-          note: skip && reused ? `Current baseline, approved ${monthDay(reused.approved_at)}` : fromDraft ? itemsReusedNote(fromDraft) : skippedOff(s) ? OFF_NOTE : null,
+          note: skip && reused ? `Current Ground Truth, approved ${monthDay(reused.approved_at)}` : fromDraft ? itemsReusedNote(fromDraft) : skippedOff(s) ? OFF_NOTE : null,
         };
       }),
       approval_threshold_usd: THRESHOLD,
@@ -2625,7 +2625,7 @@ function seedRun(ctx: Omit<RunsContext, "db">, db: RunsDb, flow: RunOut["flow"],
 
 /** D11: how a decision reads for the run's agents (as api/oracle/runs/service.py). */
 const CHECKPOINT_TITLES: Record<CheckpointOut["kind"], string> = {
-  baseline_confirm: "Baseline",
+  baseline_confirm: "Ground Truth",
   feature_set: "Feature set",
   priority_order: "Priority order",
   prd_review: "PRD review",

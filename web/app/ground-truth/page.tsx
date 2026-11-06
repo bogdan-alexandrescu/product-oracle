@@ -15,21 +15,21 @@ import { useMe } from "@/lib/me";
 import { CurrentStateView, DesiredList, ReadyBand, StateTabs, useFeatureStates } from "@/components/current-state/CurrentState";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
-import { AddItemSheet, type AddKind } from "./_components/AddItem";
-import { BlockerInspector } from "./_components/BlockerInspector";
-import { BlockersTab } from "./_components/BlockersTab";
-import { BuildBanner, BuildBaselineSheet, BuildChip, currentBuild } from "./_components/BuildBaseline";
-import { goalTags, KPI_PHONE } from "./_components/common";
-import { ConflictsTab } from "./_components/ConflictsTab";
-import { EntityDrawer } from "./_components/EntityDrawer";
-import { FlaggedTab } from "./_components/FlaggedTab";
-import { BottomBar, FromRunBand, FromRunTab, RowActions, WhyCard } from "./_components/FromRunTab";
-import { fillNotice } from "./_components/goal-fields";
-import type { Stepper } from "./_components/GoalInterview";
-import { GraphTab } from "./_components/GraphTab";
-import { ItemsTab } from "./_components/ItemsTab";
-import { cardsOf, fieldName, noChange, ProposalsTab, type FromFilter } from "./_components/ProposalsTab";
-import { Tabs, type TabItem } from "./_components/Tabs";
+import { AddItemSheet, type AddKind } from "@/app/baseline/_components/AddItem";
+import { BlockerInspector } from "@/app/baseline/_components/BlockerInspector";
+import { BlockersTab } from "@/app/baseline/_components/BlockersTab";
+import { BuildBanner, BuildBaselineSheet, BuildChip, currentBuild } from "@/app/baseline/_components/BuildBaseline";
+import { goalTags, KPI_PHONE } from "@/app/baseline/_components/common";
+import { ConflictsTab } from "@/app/baseline/_components/ConflictsTab";
+import { EntityDrawer } from "@/app/baseline/_components/EntityDrawer";
+import { FlaggedTab } from "@/app/baseline/_components/FlaggedTab";
+import { BottomBar, FromRunBand, FromRunTab, RowActions, WhyCard } from "@/app/baseline/_components/FromRunTab";
+import { fillNotice } from "@/app/baseline/_components/goal-fields";
+import type { Stepper } from "@/app/baseline/_components/GoalInterview";
+import { GraphTab } from "@/app/baseline/_components/GraphTab";
+import { ItemsTab } from "@/app/baseline/_components/ItemsTab";
+import { cardsOf, fieldName, noChange, ProposalsTab, type FromFilter } from "@/app/baseline/_components/ProposalsTab";
+import { Tabs, type TabItem } from "@/app/baseline/_components/Tabs";
 
 /**
  * What a run wrote to the baseline (B2). A 404 is asked once more after a moment: a run just
@@ -98,7 +98,7 @@ function BackHomeFromUrl() {
 function BuildRefusedFromUrl() {
   const build = useSearchParams().get("build") === "1";
   if (!build) return null;
-  return <Notice testId="build-refused">Approvers and owners build the baseline.</Notice>;
+  return <Notice testId="build-refused">Approvers and owners build the Ground Truth.</Notice>;
 }
 
 /** ?add=goal opens Add goal (Company › Strategy's Add a goal, pass F F-42), once: the address drops it, so closing Add goal leaves no ?add behind. */
@@ -152,12 +152,12 @@ function InterviewFromUrl({ onGoal, onVague }: { onGoal: (id: string) => void; o
     const next = new URLSearchParams(params.toString());
     next.delete("interview");
     const rest = next.toString();
-    router.replace(rest ? `/baseline?${rest}` : "/baseline", { scroll: false });
+    router.replace(rest ? `/ground-truth?${rest}` : "/ground-truth", { scroll: false });
   }, [interview, entity, onGoal, onVague, params, router]);
   return null;
 }
 
-/** ?view=current: Detailed's Current state tab, on Desired state's own URL. */
+/** ?view=current: Detailed's Running today tab, on the Ground Truth's own URL. */
 function StateViewFromUrl({ onView }: { onView: (v: "desired" | "current") => void }) {
   const v = useSearchParams().get("view") === "current" ? "current" : "desired";
   useEffect(() => onView(v), [v, onView]);
@@ -204,7 +204,7 @@ export default function BaselinePage() {
   );
   const chooseFrom = (next: FromFilter) => {
     setFrom(next);
-    router.replace(next ? `/baseline?tab=proposals&run=${encodeURIComponent(next)}` : "/baseline?tab=proposals", { scroll: false });
+    router.replace(next ? `/ground-truth?tab=proposals&run=${encodeURIComponent(next)}` : "/ground-truth?tab=proposals", { scroll: false });
   };
   const shown = from ? (filtered.data ?? undefined) : proposals.data;
 
@@ -228,7 +228,7 @@ export default function BaselinePage() {
   const closeBuild = () => {
     setBuilding(false);
     setBuildFromSetup(false);
-    router.replace("/baseline", { scroll: false });
+    router.replace("/ground-truth", { scroll: false });
   };
   const started = () => {
     closeBuild();
@@ -509,7 +509,7 @@ export default function BaselinePage() {
   if (!capsReady && !capsError)
     return (
       <Page>
-        <PageHeader title="Desired state" />
+        <PageHeader title="Ground Truth" />
         <Loading />
       </Page>
     );
@@ -539,9 +539,9 @@ export default function BaselinePage() {
         <AddItemSheet kind={adding} graph={graph.data} tags={tags} onClose={() => setAdding(null)} onAdded={added} />
       )}
       {/* The owner's pick (cs3-b): the header is the title alone; the goals, areas and milestones
-          and their tools (Add item, Build baseline) sit with their views under the features list. */}
+          and their tools (Add item, Build the Ground Truth) sit with their views under the features list. */}
       <PageHeader
-        title="Desired state"
+        title="Ground Truth"
         action={
           <Suspense fallback={null}>
             <BackHomeFromUrl />
@@ -550,8 +550,8 @@ export default function BaselinePage() {
         status={capsReady && !canComment ? <ViewOnly /> : undefined}
       />
 
-      <p className="-mt-2 mb-3 max-w-[760px] text-[14px] text-text2">What the product should become: goals, areas of focus, milestones and the planned features.</p>
-      <StateTabs view="desired" desired={states.data?.desired ?? null} running={states.data?.running ?? null} />
+      <p className="-mt-2 mb-3 max-w-[760px] text-[14px] text-text2">Goals, areas of focus, milestones and every feature, each with its evidence and how far it is built.</p>
+      <StateTabs view="desired" all={states.data?.features.length ?? null} running={states.data?.running ?? null} />
       {states.data && <ReadyBand data={states.data} onChanged={stateChanged} />}
       {states.data && <DesiredList data={states.data} />}
       <div className="mt-6" />
@@ -615,7 +615,7 @@ export default function BaselinePage() {
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-2 max-[600px]:flex-col max-[600px]:items-stretch">
-          <Tabs label="Baseline views" items={tabs} value={tab} onChange={setTab} />
+          <Tabs label="Ground Truth views" items={tabs} value={tab} onChange={setTab} />
           <span className="flex flex-wrap items-center gap-2">
             {/* The Items tab has its own Add, on the kind it shows: one Add control there (qa-plan-49). */}
             {canWrite && tab !== "items" && (
@@ -629,7 +629,7 @@ export default function BaselinePage() {
                 <BuildChip build={build} />
               ) : (
                 <Button variant="primary" icon="baseline" onClick={() => openBuild(false)}>
-                  Build baseline
+                  Build the Ground Truth
                 </Button>
               ))}
           </span>

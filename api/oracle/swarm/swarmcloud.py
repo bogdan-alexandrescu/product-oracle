@@ -80,7 +80,7 @@ log = logging.getLogger(__name__)
 NO_MCP_NOTE = (
     "SwarmCloud's caller MCP (#1433) is switched off or not confirmed, so it cannot attach "
     "Oracle's MCP server or a run token to a task: agents cannot read Oracle's sources, "
-    "baseline or documents and work from their prompts only."
+    "Ground Truth or documents and work from their prompts only."
 )
 # Text artifacts worth bringing back; agent streams and logs stay in SwarmCloud.
 TEXT_SUFFIXES = (".md", ".yaml", ".yml", ".json", ".txt")

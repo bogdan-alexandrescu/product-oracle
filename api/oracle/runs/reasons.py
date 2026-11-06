@@ -280,6 +280,11 @@ class Entry:
     fixes: str
 
 
+# What a roadmap item no Ground Truth feature traces to says (serves_no_goal).
+SERVES_NO_GOAL_UNTRACED = (
+    "Oracle could not trace it to a Ground Truth feature, so no goal is known."
+)
+
 # code -> (severity, label template, sentence template, fixes); the templates' words are
 # filled in by the builders below. Order is the order reasons of one item are listed in.
 CATALOGUE: dict[str, Entry] = {
@@ -361,8 +366,7 @@ CATALOGUE: dict[str, Entry] = {
     "serves_no_goal": Entry(
         CONFIRM,
         "Serves no goal",
-        "{feature} supports no confirmed goal. / Oracle could not trace it to a baseline "
-        "feature, so no goal is known.",
+        "{feature} supports no confirmed goal. / " + SERVES_NO_GOAL_UNTRACED,
         "Accept; Drop",
     ),
     # H4 §5 drift: acted on (moved, dropped) or waived with a reason, never a plain Accept.
@@ -647,7 +651,7 @@ def _advisory(
             r(
                 "serves_no_goal",
                 "Serves no goal",
-                "Oracle could not trace it to a baseline feature, so no goal is known.",
+                SERVES_NO_GOAL_UNTRACED,
                 [accept(key), drop(key)],
                 {"feature": None},
             )

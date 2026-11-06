@@ -81,7 +81,7 @@ const SETUP_STEPS: Record<string, string> = {
   eng_lead: "/settings/members?from=simple-setup#engineering-lead",
   horizons: "/settings/company?from=simple-setup#horizons",
   timezone: "/settings/company?from=simple-setup#timezone",
-  build_baseline: "/baseline?build=1",
+  build_baseline: "/ground-truth?build=1",
 };
 
 /** An item code before a name ("F-06 Weekly alert digest"): Simple says the name alone (qa-simple-home-13). */
@@ -1236,7 +1236,7 @@ function SetupCard({ setup, owner, onHide }: { setup: Schemas["SetupOut"]; owner
     >
       <p className="simple-small">
         {owner
-          ? "A few steps make Oracle yours: connect your tools, pick the sources it reads, then build the baseline it plans from. Each step opens where it is done."
+          ? "A few steps make Oracle yours: connect your tools, pick the sources it reads, then build the Ground Truth it plans from. Each step opens where it is done."
           : "Two steps make Oracle yours: connect your tools and pick the sources it reads for you. Each step opens where it is done."}
       </p>
       <ul className="flex flex-col">

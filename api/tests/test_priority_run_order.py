@@ -605,7 +605,7 @@ async def test_compare_rows_follow_the_check_and_the_live_ranking(client, owner,
     assert body["snapshot"]["run_id"] == run["id"]
     assert body["snapshot"]["check_result"]["problems"]
     assert body["live_generated_at"]
-    assert body["run"]["flow_title"] == "Baseline to PRD"
+    assert body["run"]["flow_title"] == "Ground Truth to PRD"
     assert body["checkpoint"]["id"] == pending(run)["id"]
     assert body["checkpoint"]["cannot_approve"] == BLOCKED
     rows = {r["key"]: r for r in body["rows"]}

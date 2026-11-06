@@ -1014,7 +1014,7 @@ export function NewDraft({ kind }: { kind: Kind }) {
                             {rec?.confirmed_goals == null ? "–" : rec.confirmed_goals === 0 ? "None yet" : rec.confirmed_goals}
                           </span>
                           <InfoTip label="confirmed goals" align="start">
-                            The goals confirmed in the company&apos;s baseline. Confirm more there to plan for them here.
+                            The goals confirmed in the company&apos;s Ground Truth. Confirm more there to plan for them here.
                           </InfoTip>
                         </span>
                       </div>

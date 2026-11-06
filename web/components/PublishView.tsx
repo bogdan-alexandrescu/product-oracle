@@ -76,9 +76,9 @@ type Block = {
  * read, the check itself is the row.
  */
 function blocksOf(doc: string, n: number, readiness: Readiness, strategy: Schemas["DocumentBlockerStrategy"] | undefined): Block[] {
-  const entity = (id: string | undefined) => (id ? `/baseline?entity=${id}` : null);
+  const entity = (id: string | undefined) => (id ? `/ground-truth?entity=${id}` : null);
   // qa4-docs-share-52: a blocker's Resolve opens the blocker itself, where Open blocker goes.
-  const blocker = (id: string) => `/baseline?tab=blockers&blocker=${encodeURIComponent(id)}`;
+  const blocker = (id: string) => `/ground-truth?tab=blockers&blocker=${encodeURIComponent(id)}`;
   const section = (key: string | undefined) => (key ? sectionHref(doc, n, key) : null);
   // The gating blockers first, then the other refusals in the verdict's order.
   const keys = [...readiness.blocking].sort((a, b) => Number(b === BLOCKERS_CHECK) - Number(a === BLOCKERS_CHECK));
@@ -337,7 +337,7 @@ function BlockInspector({
       {block.blocker && (
         <InspectorSection label="Blocker strategy">
           <div className="flex flex-wrap items-center gap-2">
-            <LinkButton href={`/baseline?tab=blockers&blocker=${encodeURIComponent(block.blocker.blocker.id)}`}>
+            <LinkButton href={`/ground-truth?tab=blockers&blocker=${encodeURIComponent(block.blocker.blocker.id)}`}>
               Open blocker
             </LinkButton>
             <span className="text-sm text-text2">Status, options, feasibility scope and experiments</span>

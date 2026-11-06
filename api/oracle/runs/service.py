@@ -1235,7 +1235,7 @@ def _agent_out(agent: dict[str, Any], proposed_at: datetime | None) -> SegmentAg
 
 # D11: how a decision reads for the run's agents and on the run page.
 CHECKPOINT_TITLES = {
-    "baseline_confirm": "Baseline",
+    "baseline_confirm": "Ground Truth",
     "feature_set": "Feature set",
     "priority_order": "Priority order",
     "prd_review": "PRD review",
@@ -2214,14 +2214,14 @@ async def _one_build_at_a_time(db: AsyncSession, flow: flows.FlowDef) -> None:
         .limit(1)
     )
     if under_way is not None:
-        raise RunError(f"A baseline build is already under way (run {under_way})")
+        raise RunError(f"A Ground Truth build is already under way (run {under_way})")
 
 
 class NotReusable(RunError):
     """409 ``baseline_not_reusable``: the current baseline may not be reused (C4)."""
 
     def __init__(self, reason: str | None) -> None:
-        super().__init__(f"the current baseline is not reusable ({reason})")
+        super().__init__(f"the current Ground Truth is not reusable ({reason})")
         self.detail = {"code": "baseline_not_reusable", "reason": reason}
 
 
@@ -2229,7 +2229,7 @@ async def _reuse_knob(db: AsyncSession, flow: flows.FlowDef) -> dict[str, Any]:
     """The ``reuse_baseline`` knob for a run asking to reuse the current baseline: the
     review it reuses. 422 off Baseline to PRD; 409 when not reusable."""
     if flow.key != "baseline_to_prd":
-        raise Invalid(f"the {flow.title} flow does not reuse the baseline")
+        raise Invalid(f"the {flow.title} flow does not reuse the Ground Truth")
     st = await reuse.review_status(db)
     if not st.reusable:
         raise NotReusable(st.reason)
@@ -2348,7 +2348,7 @@ async def _target_goals(
     if not refs:
         return []
     if flow.key != "baseline_to_prd":
-        raise Invalid("only a Baseline to PRD run names the goals it serves")
+        raise Invalid("only a Ground Truth to PRD run names the goals it serves")
     refs = list(dict.fromkeys(r.strip() for r in refs))
     ids = [uuid.UUID(r) for r in refs if is_uuid(r)]
     rows = (
@@ -2461,7 +2461,7 @@ async def estimate(db: AsyncSession, principal: Principal | str, run_id: uuid.UU
         segments[sdef.name].estimate_usd = amount
         note = None
         if skip:
-            note = f"Current baseline, approved {reuse.short_date(reused['approved_at'], zone)}"
+            note = f"Current Ground Truth, approved {reuse.short_date(reused['approved_at'], zone)}"
         elif items_reused is not None and skip_items:
             note = _items_reused_note(items_reused, zone)
         elif off:
@@ -2748,7 +2748,7 @@ async def _skip_reused_baseline(
     """C4: the run uses the current baseline. Its baseline segment is recorded skipped at
     no cost and its Confirm the baseline stop skipped; nothing runs for them."""
     zone = await company_time.company_time_zone(db)
-    note = f"Reused the baseline approved {reuse.short_date(reused['approved_at'], zone)}"
+    note = f"Reused the Ground Truth approved {reuse.short_date(reused['approved_at'], zone)}"
     now = _now()
     art = _art(segment)
     art["reused"] = reused
@@ -5066,7 +5066,7 @@ async def _import_baseline(db: AsyncSession, run: Run, text: str) -> dict[str, A
                 text,
                 run_id=run.id,
                 origin="agent",
-                reason="Run baseline.yaml",
+                reason="The run's Ground Truth file (baseline.yaml)",
                 proposals_only=level != "act",
             )
         except yaml_io.YamlInvalid as exc:
@@ -5085,9 +5085,11 @@ async def _import_baseline(db: AsyncSession, run: Run, text: str) -> dict[str, A
 def _baseline_autonomy(level: str) -> dict[str, str]:
     """What the run page says when the baseline's level changed the merge (H11)."""
     if level == "observe":
-        note = "Baseline merge skipped: Oracle is set to observe the baseline"
+        note = "Ground Truth merge skipped: Oracle is set to observe the Ground Truth"
     else:
-        note = f"Baseline changes became proposals: Oracle is set to {level} for the baseline"
+        note = (
+            f"Ground Truth changes became proposals: Oracle is set to {level} for the Ground Truth"
+        )
     return {"level": level, "note": note}
 
 
@@ -5177,7 +5179,7 @@ async def _advance(
     if sdef.imports_baseline:
         text = art["files"].get("baseline.yaml")
         if text is None:
-            baseline_import = {"error": "the segment left no baseline.yaml"}
+            baseline_import = {"error": "the segment left no Ground Truth file (baseline.yaml)"}
         else:
             # Committed first: the import runs in its own transaction.
             _set_art(segment, art)
@@ -8248,7 +8250,7 @@ async def _unchecked(db: AsyncSession, why: dict[uuid.UUID, str]) -> list[TickUn
         return []
     runs = list(await db.scalars(select(Run).where(Run.id.in_(why))))
     refs = await _refs(db, runs)
-    # As the run's page heads it: "Team onboarding · Baseline to PRD".
+    # As the run's page heads it: "Team onboarding · Ground Truth to PRD".
     titles = {r.id: " · ".join(t for t in (refs.title(r), _flow(r).title) if t) for r in runs}
     await db.rollback()
     return [

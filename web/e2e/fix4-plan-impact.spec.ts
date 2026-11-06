@@ -13,10 +13,10 @@ import { login } from "./helpers";
 const scenario = (page: Page, name: string) =>
   page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, name]);
 
-/** Baseline > a feature > "What if it changed?". */
+/** Ground Truth > a feature > "What if it changed?". */
 async function openWhatIf(page: Page, key: string, title: string) {
   await login(page);
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   await page.getByTestId(`feature-${key}`).getByRole("button", { name: title }).click();
   await page.getByRole("dialog", { name: title }).getByRole("link", { name: "What if it changed?" }).click();
   await expect(page).toHaveURL(/\/impact\/entities\/[^/?]+$/);
@@ -44,7 +44,7 @@ const flowTitle = "Checkout flow (user flow) v1";
 test.describe("desktop", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test("qa-plan-10: a what-if names the item by its title, never its baseline key", async ({ page }) => {
+  test("qa-plan-10: a what-if names the item by its title, never its Ground Truth key", async ({ page }) => {
     await scenario(page, "impact");
     await openWhatIf(page, "f.guided-setup", "Guided setup");
     const sidebar = page.getByRole("complementary", { name: "Regeneration plan" });

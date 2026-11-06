@@ -265,7 +265,7 @@ async def test_triage_apply_drops_what_it_cannot_use(client, ctx):
     assert result["notes"] == [
         "1 entry dropped (not New)",
         "1 goal key dropped (not a confirmed goal)",
-        "1 feature key dropped (not a baseline feature)",
+        "1 feature key dropped (not a Ground Truth feature)",
         "1 duplicate dropped (unknown request)",
     ]
     s = (await get(client, ctx, fresh["id"]))["suggestion"]

@@ -89,7 +89,7 @@ Commenter = Annotated[Principal, Depends(require_role("commenter"))]
 Approver = Annotated[Principal, Depends(require_role("approver"))]
 ApproverNow = Annotated[Principal, Depends(require_role_now("approver"))]
 # H11: a run's propose_change while the baseline is at observe.
-OBSERVING_BASELINE = "Oracle is set to observe the baseline"
+OBSERVING_BASELINE = "Oracle is set to observe the Ground Truth"
 # The YAML import's body types (the CLI sends application/yaml).
 YAML_TYPES = ("application/yaml", "application/x-yaml", "text/yaml", "text/x-yaml")
 
@@ -255,18 +255,20 @@ _ENTITY_WRITE_RESPONSES = {
 
 @router.get("/graph", response_model=GraphOut)
 async def get_graph(principal: Reader, db: TenantDB) -> GraphOut:
-    """Every entity and edge (no evidence bodies): what the Baseline screen draws."""
+    """Every entity and edge (no evidence bodies): what the Ground Truth screen draws."""
     return GraphOut(
         entities=await _entities_out(db, await service.list_entities(db), principal),
         edges=await _edges_out(db, await service.list_edges(db), principal),
     )
 
 
-@router.get("/review-status", response_model=ReviewStatusOut)
+@router.get(
+    "/review-status", response_model=ReviewStatusOut, summary="Get Ground Truth Review Status"
+)
 async def get_baseline_review_status(principal: Reader, db: TenantDB) -> ReviewStatusOut:
-    """Whether a new PRD run may use the current baseline instead of rebuilding it: the
-    last baseline review, its age, whether a baseline build is under way, and the
-    baseline segment's estimate per depth (B1 "Reuse base")."""
+    """Whether a new PRD run may use the current Ground Truth instead of rebuilding it: the
+    last Ground Truth review, its age, whether a Ground Truth build is under way, and the
+    Ground Truth segment's estimate per depth (B1 "Reuse base")."""
     from oracle.runs import reuse
 
     st = await reuse.review_status(db)
@@ -430,11 +432,12 @@ async def merge_entity(
     "/from-run/{run_id}",
     response_model=FromRunOut,
     dependencies=[Depends(discussion_research.run_reader)],
+    summary="Get Ground Truth From Run",
 )
 async def get_baseline_from_run(run_id: uuid.UUID, principal: Reader, db: TenantDB) -> FromRunOut:
-    """What a run wrote to the baseline, for a person to review (B2): every item it
+    """What a run wrote to the Ground Truth, for a person to review (B2): every item it
     created, changed or proposed a change to, with the reasons each needs a person and the
-    shared draft's actions on it; the run's Confirm the baseline stop with its gate; the
+    shared draft's actions on it; the run's Confirm the Ground Truth stop with its gate; the
     other proposed goals."""
     from oracle.baseline import from_run
 
@@ -845,7 +848,7 @@ async def list_proposals(
 @router.post("/proposals", response_model=ProposalOut, status_code=status.HTTP_201_CREATED)
 async def create_proposal(body: ProposalCreate, principal: Commenter, db: TenantDB) -> ProposalOut:
     """Suggest a change; an approver accepts or rejects it. A run's proposal records
-    the run, and is refused while Oracle is set to observe the baseline (H11); a
+    the run, and is refused while Oracle is set to observe the Ground Truth (H11); a
     person's never is."""
     if principal.is_run and await autonomy.level(db, "baseline") == "observe":
         raise HTTPException(status.HTTP_403_FORBIDDEN, OBSERVING_BASELINE)

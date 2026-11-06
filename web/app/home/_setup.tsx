@@ -83,14 +83,14 @@ const STEPS: Record<string, Copy> = {
   },
   // B1: done once a Build the baseline run succeeded; detail is when the last one finished.
   build_baseline: {
-    label: "Build baseline",
-    href: "/baseline?build=1&from=setup",
+    label: "Build the Ground Truth",
+    href: "/ground-truth?build=1&from=setup",
     // qa-onboarding-10: a build under way says so (its row opens the run, see stepAction).
     status: (s) => (s.run_id ? "Building…" : !s.done ? "Not built" : s.detail ? `Built ${formatDay(s.detail)}` : "Built"),
     // Built: the row reviews the baseline, never starts a second build from Home.
     doneAction: "Review",
     // qa4-settings-5: from=setup, so the baseline keeps the way back to Home, as the other steps do.
-    doneHref: "/baseline?from=setup",
+    doneHref: "/ground-truth?from=setup",
   },
 };
 

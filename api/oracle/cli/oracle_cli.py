@@ -287,7 +287,7 @@ def baseline_pull(
         path.write_text(resp.text, encoding="utf-8")
     except OSError as e:
         raise CliError(f"cannot write {path}: {e.strerror}", 2) from e
-    print(f"Pulled the baseline to {path}", file=out)
+    print(f"Pulled the Ground Truth to {path}", file=out)
     return 0
 
 
@@ -549,7 +549,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="oracle",
         description=(
-            "Push PRD drafts and the baseline to Product Oracle, pull them back, sync "
+            "Push PRD drafts and the Ground Truth to Product Oracle, pull them back, sync "
             "sources, advance runs, manage the Claude account pool."
         ),
         epilog="Environment: ORACLE_URL (default http://localhost:8000), ORACLE_API_TOKEN.",
@@ -582,12 +582,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--source", help="source id (default: every active source of yours)")
     p.set_defaults(func=sync)
 
-    p = sub.add_parser("baseline", help="push or pull the baseline graph as YAML")
+    p = sub.add_parser("baseline", help="push or pull the Ground Truth graph as YAML")
     bsub = p.add_subparsers(dest="baseline_command", required=True)
     b = bsub.add_parser(
         "push", parents=[common], help="merge a YAML graph in (locked items get proposals)"
     )
-    b.add_argument("file", help="baseline YAML file")
+    b.add_argument("file", help="Ground Truth YAML file")
     b.set_defaults(func=baseline_push)
     b = bsub.add_parser("pull", parents=[common], help="write the whole graph as YAML")
     b.add_argument(

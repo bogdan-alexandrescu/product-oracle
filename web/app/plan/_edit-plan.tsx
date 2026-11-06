@@ -294,9 +294,9 @@ function Editor({ set, doc, onChange }: { set: ChangeSet; doc: DocumentSummary |
       >
         <label className="flex flex-col gap-1 text-sm">
           {/* qa4-plan-23: says what the choice is, and that no pick is a new item, not in the baseline. */}
-          Baseline feature
-          <select aria-label="Baseline feature" value={feature} onChange={(e) => setFeature(e.target.value)} className="h-8 rounded-lg border border-line-strong bg-surface px-2">
-            <option value="">New: not in the baseline</option>
+          Ground Truth feature
+          <select aria-label="Ground Truth feature" value={feature} onChange={(e) => setFeature(e.target.value)} className="h-8 rounded-lg border border-line-strong bg-surface px-2">
+            <option value="">New: not in the Ground Truth</option>
             {(features.data ?? []).map((f) => (
               <option key={f.id} value={f.id}>
                 {f.title}

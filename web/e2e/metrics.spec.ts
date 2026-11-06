@@ -57,10 +57,10 @@ async function openCompanyOnPhone(page: Page) {
   await expect(page).toHaveURL(/\/company\/strategy$/);
 }
 
-/** Opens a goal's drawer in the Baseline (the rail's Baseline). */
+/** Opens a goal's drawer in the Ground Truth (the rail's Ground Truth). */
 async function openGoal(page: Page, key: string, title: string) {
   await page.getByTestId("app-nav").getByTestId("nav-baseline").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
   await page.getByTestId(`goal-${key}`).getByRole("button", { name: title }).click();
   return page.getByRole("dialog", { name: title });
 }

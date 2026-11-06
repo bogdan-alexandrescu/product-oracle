@@ -80,7 +80,7 @@ KINDS: dict[str, RitualKind] = {
         # B1's Build the baseline on the ritual clock, seeded paused (off by default): at
         # its moment Oracle starts the run under H11 "Keep the baseline current"
         # (oracle.rituals.rebuild); at Observe the pre-read only reminds.
-        RitualKind("baseline_rebuild", "Baseline rebuild",
+        RitualKind("baseline_rebuild", "Ground Truth rebuild",
                    _s("monthly", week_of_month=1, weekday=0, time="09:00"), 30, 0,
                    ("baseline_rebuild",), None, False),
         RitualKind("custom", "Custom ritual",

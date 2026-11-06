@@ -100,14 +100,14 @@ async def test_the_reuse_note_and_banner_name_the_company_day(client, runtime, m
     resp = await client.post(f"/v1/runs/{run_id}/estimate", headers=ctx.as_("owner"))
     assert resp.status_code == 200, resp.text
     banner = {r["name"]: r for r in resp.json()["segments"]}["baseline"]["note"]
-    assert banner == "Current baseline, approved Oct 13"
+    assert banner == "Current Ground Truth, approved Oct 13"
 
     resp = await client.post(f"/v1/runs/{run_id}/start", headers=ctx.as_("owner"))
     assert resp.status_code == 200, resp.text
     started = resp.json()
-    assert started["segments"][0]["note"] == "Reused the baseline approved Oct 13"
+    assert started["segments"][0]["note"] == "Reused the Ground Truth approved Oct 13"
     [spec] = runtime.submitted
-    assert "The baseline was reviewed and approved on Oct 13;" in spec.steps[0].prompt
+    assert "The Ground Truth was reviewed and approved on Oct 13;" in spec.steps[0].prompt
     # The knob keeps the machine moment in UTC.
     assert started["segments"][0]["reused"]["approved_at"].startswith("2026-10-12T20:00")
 
@@ -138,7 +138,7 @@ async def test_a_runs_proposals_are_labelled_with_the_company_day(client):
     [made] = [p for p in resp.json() if p["run_id"] == str(run_id)]
     assert made["proposer"] == {
         "kind": "run",
-        "label": "Build the baseline · Oct 21",
+        "label": "Build the Ground Truth · Oct 21",
         "run_id": str(run_id),
         "user_id": None,
         "email": None,
@@ -417,12 +417,12 @@ def test_run_label_takes_the_company_zone():
     run = ProposalRun(
         id=uuid.uuid4(),
         flow="baseline",
-        flow_title="Build the baseline",
+        flow_title="Build the Ground Truth",
         status="running",
         created_at=datetime(2026, 10, 20, 23, 30, tzinfo=UTC),
     )
-    assert describe.run_label(run, AUCKLAND) == "Build the baseline · Oct 21"
-    assert describe.run_label(run, "America/Los_Angeles") == "Build the baseline · Oct 20"
+    assert describe.run_label(run, AUCKLAND) == "Build the Ground Truth · Oct 21"
+    assert describe.run_label(run, "America/Los_Angeles") == "Build the Ground Truth · Oct 20"
 
 
 def test_the_deck_banner_names_the_company_time():

@@ -591,7 +591,8 @@ function unplanned(db: RoadmapDb, trackId: string, keys: Set<string>): Schemas["
  * #505): one counted line per verb, the latest, so two bulk writes never read as two counts.
  */
 function staleWhy(reasons: readonly string[], fallback: string): string {
-  const counted = /^(\d+) baseline items? (.+)$/;
+  // As the API's staleness._COUNTED: one stored before the rename says "N baseline items".
+  const counted = /^(\d+) (?:Ground Truth|baseline) items? (.+)$/;
   const out: string[] = [];
   for (const r of reasons) {
     const verb = counted.exec(r)?.[2];
@@ -1377,7 +1378,7 @@ const ALERTS_APPROVED: PlanSeedItem[] = [
     reasons: [
       // #505: two bulk baseline writes marked it stale, as the API's stale reasons read; prod-6:
       // changes to its feature, goals and product, named by ref, read in words.
-      { kind: "stale", detail: staleWhy(["feature:alert-digest changed", "goal:g-paid-conversion changed", "goal:g-activation changed", "product:usage was confirmed", "42 baseline items changed", "11 baseline items changed"], "its PRD trace changed") },
+      { kind: "stale", detail: staleWhy(["feature:alert-digest changed", "goal:g-paid-conversion changed", "goal:g-activation changed", "product:usage was confirmed", "42 Ground Truth items changed", "11 Ground Truth items changed"], "its PRD trace changed") },
       { kind: "slipping", detail: "ENG-405 targets Dec 9, after the milestone date Nov 30." },
     ],
     next: { action: "decide_slip", who: "owner" } },
@@ -1392,7 +1393,7 @@ const ALERTS_APPROVED: PlanSeedItem[] = [
   { key: "team-budgets", title: "Budgets per team", horizon: "later", goals: ["g.early-churn"], state: "planned", section: "behaviour" },
 ];
 /**
- * Current state: the baseline features the Plan's items trace (as GET /v1/feature-states lists
+ * Running today: the baseline features the Plan's items trace (as GET /v1/feature-states lists
  * every confirmed feature, each with its roadmap items), so the Plan's item names carry their
  * pills. Their items are the approved version's rows (the Plan finds a pill by the feature's id).
  */

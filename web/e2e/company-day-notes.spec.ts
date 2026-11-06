@@ -4,7 +4,7 @@ import { login, pickZone } from "./helpers";
 
 /**
  * #463: days the API writes into text a person reads are the Company time zone's day. The
- * mock's Baseline to PRD run started at 07:30 UTC on Oct 16, which is 21:30 on Oct 15 in
+ * mock's Ground Truth to PRD run started at 07:30 UTC on Oct 16, which is 21:30 on Oct 15 in
  * Honolulu. Driven through the UI on the mock layer.
  */
 
@@ -18,8 +18,8 @@ async function setZone(page: Page, zone: string) {
 }
 
 async function openProposals(page: Page) {
-  await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
+  await page.goto("/ground-truth");
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
   await page.getByRole("tab", { name: /Proposals/ }).click();
   await expect(page.getByTestId("proposal")).toHaveCount(3);
 }
@@ -31,21 +31,21 @@ async function openProposals(page: Page) {
 test("proposals: the run that made them is named with the Company day", async ({ page }) => {
   await login(page);
   await openProposals(page);
-  await expect(page.getByLabel("From").locator("option")).toContainText(["Baseline to PRD · Oct 16"]);
+  await expect(page.getByLabel("From").locator("option")).toContainText(["Ground Truth to PRD · Oct 16"]);
 
   await setZone(page, "Pacific/Honolulu");
   await openProposals(page);
-  const label = "Baseline to PRD · Oct 15";
+  const label = "Ground Truth to PRD · Oct 15";
   await expect(page.getByLabel("From").locator("option")).toContainText([label]);
   const rows = page.getByTestId("proposal");
   const link = rows.filter({ hasText: "Guided setup" }).getByRole("link", { name: `From run · ${label}` });
   await expect(link).toHaveAttribute("href", `/runs/${AGENT_RUN}`);
-  await expect(page.getByText("Baseline to PRD · Oct 16")).toHaveCount(0);
+  await expect(page.getByText("Ground Truth to PRD · Oct 16")).toHaveCount(0);
 });
 
 const PROBLEM = "Returning buyers retype their address at every checkout. Saved addresses would make repeat checkout faster.";
 
-/** The mock's last baseline review, 16:40 UTC nine days ago, is the next day in Auckland (UTC+13). */
+/** The mock's last Ground Truth review, 16:40 UTC nine days ago, is the next day in Auckland (UTC+13). */
 function aucklandApprovalDay(): string {
   const at = new Date(mockNow().getTime() - 9 * 86_400_000);
   at.setUTCHours(16, 40, 0, 0);
@@ -54,11 +54,11 @@ function aucklandApprovalDay(): string {
   return `${months[next.getUTCMonth()]} ${next.getUTCDate()}`;
 }
 
-// protects: the reused baseline's approval day, in the Draft with Oracle sheet and on the
+// protects: the reused Ground Truth's approval day, in the Draft with Oracle sheet and on the
 // run page, is the Company day the API's notes name.
 // fails_when: either still shows the UTC day of the approval.
 // no_claim: the API's note text (pytest test_company_day_text.py).
-test("reuse: the baseline's approval day is the Company day in the sheet and on the run", async ({ page }) => {
+test("reuse: the Ground Truth's approval day is the Company day in the sheet and on the run", async ({ page }) => {
   await login(page);
   await setZone(page, "Pacific/Auckland");
   const day = aucklandApprovalDay();
@@ -72,7 +72,7 @@ test("reuse: the baseline's approval day is the Company day in the sheet and on 
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
 
   const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });
-  await expect(sheet.getByRole("radio", { name: `Use the current baseline (approved ${day})` })).toBeChecked();
+  await expect(sheet.getByRole("radio", { name: `Use the current Ground Truth (approved ${day})` })).toBeChecked();
   await sheet.getByRole("button", { name: "Estimate" }).click();
   // F4 (#181): the Engineering check and the Engineering dates are on by default, $5.00 each in the estimate (eng-review.spec.ts, eng-dates.spec.ts).
   await expect(sheet.getByTestId("draft-estimate")).toContainText("$29.50 estimated");

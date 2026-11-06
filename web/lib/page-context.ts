@@ -28,7 +28,7 @@ export const PAGE_CONTEXT: Record<string, PageContext> = {
   "/home": shown("Goals, tracks and open runs (the API's Home builder) and the page's shown text"),
   "/inbox": nameOnly("A person's own Inbox"),
   "/account": nameOnly("A person's own account"),
-  "/baseline": shown("The baseline's goals and entities as shown"),
+  "/ground-truth": shown("The Ground Truth's goals and entities as shown"),
   "/briefs/[id]": shown("The brief as shown"),
   "/intakes/[id]": shown("The intake as shown"),
   "/company": shown("The company page as shown"),

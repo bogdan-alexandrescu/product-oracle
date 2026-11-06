@@ -97,7 +97,7 @@ OPEN_QUESTIONS = ("asked", "delegated")
 # The checkpoint kinds whose segment leaves an item file the draft reviews.
 ITEM_FILES = {"roadmap_items": reasons.ITEMS_FILE}
 KIND_WORDS = {
-    "baseline_confirm": "baseline confirm",
+    "baseline_confirm": "Ground Truth confirm",
     "feature_set": "feature set",
     "priority_order": "priority order",
     "prd_review": "PRD review",
@@ -334,8 +334,8 @@ def _baseline_confirm(body: ActionIn, ctx: ValidationContext) -> None:
     Every other change is a baseline write, applied at once through the baseline routes."""
     if body.kind not in ("look_again", "waive"):
         raise InvalidAction(
-            f"{body.kind} does not apply to the baseline: confirm, reject, edit or merge it "
-            "through the baseline"
+            f"{body.kind} does not apply to the Ground Truth: confirm, reject, edit or merge it "
+            "through the Ground Truth"
         )
     if body.item_key not in ctx.item_keys:
         raise InvalidAction(f"{body.item_key} is not an item from this run")

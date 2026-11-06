@@ -915,7 +915,7 @@ async def _merge_plan(
         fid = _uuid(target["feature_id"], "feature_id")
         feature = await db.get(Entity, fid)
         if feature is None or feature.type != "feature":
-            raise ChangeError(422, "target.feature_id: a baseline feature")
+            raise ChangeError(422, "target.feature_id: a Ground Truth feature")
         target["feature_id"], target["code"], target["title"] = str(fid), feature.key, feature.title
         after[str(row.id)] = {"feature_id": str(fid), "kept_both": True}
     else:

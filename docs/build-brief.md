@@ -10,8 +10,8 @@ code disagree. State as of 2026-10-19, `main` at the "SwarmCloud interface" comm
 ## 1. What Oracle is
 
 An AI head of product. It turns a company's code, conversations and docs into a
-**baseline** that links company goals to products to features. It then runs agent flows
-that turn that baseline into a prioritized feature set, a **PRD** reviewed and revised
+**Ground Truth** that links company goals to products to features. It then runs agent flows
+that turn that Ground Truth into a prioritized feature set, a **PRD** reviewed and revised
 until approved, and a **roadmap** built from the approved PRD. Everything is exposed
 three ways: a web app, a full REST API, and an MCP server. Agents run in SwarmCloud;
 Oracle's own model jobs (review comments, reporting, refinement) run on Oracle's Claude
@@ -61,7 +61,7 @@ account pool.
 | Docs and exports | markdown-it, Jinja2, WeasyPrint 70 (PDF), python-pptx, pypdf | `api/oracle/docs/`, `api/oracle/export/` |
 | MCP | official `mcp` SDK, Streamable HTTP | `api/oracle/mcp/` |
 | Web | Next.js 16 app router, React 19, Tailwind 4, typed client from OpenAPI (`openapi-fetch` + `openapi-typescript`) | `web/app/`, `web/components/`, `web/lib/api/` |
-| CLI | `oracle` (push/pull drafts, sync, baseline YAML, Claude accounts, tick) | `api/oracle/cli/` |
+| CLI | `oracle` (push/pull drafts, sync, Ground Truth YAML, Claude accounts, tick) | `api/oracle/cli/` |
 | Runtime | Cloud Run (api, web), Cloud SQL Postgres 16, HTTPS load balancer with IAP on the app; a second backend without IAP for `/mcp`, `/oauth/{register,token,revoke}` and `/.well-known/*` | deploy scripts are local-only (`private/deploy/`); they name company infrastructure |
 
 **Request path:** every `/v1` route goes through
@@ -101,9 +101,9 @@ Common rules for all sources:
 
 ### Other inputs (built)
 
-- **Baseline:**
+- **Ground Truth:**
   - edits and confirmations in the app;
-  - baseline YAML import (`oracle baseline push`, API);
+  - Ground Truth YAML import (`oracle baseline push`, API);
   - agent proposals through MCP. Locked items turn those into proposals. Accepting a
     proposal applies it, and the item is then locked against Oracle's changes until a
     person unlocks it.
@@ -202,7 +202,7 @@ Maturity key:
 - `rank_weight`, `prefer` and `aggregate` drive search, conflicts and priorities.
 - Small and generic.
 
-**Baseline graph** (`oracle/baseline/`). Tested.
+**Ground Truth graph** (`oracle/baseline/`). Tested.
 - Typed entities (goal, product, feature, requirement, constraint, decision, person) and
   typed edges.
 - Evidence on every node and edge.
@@ -282,7 +282,7 @@ Maturity key:
 ### Clients and tooling
 
 **Web app** (`web/`). Prod.
-- Screens: Baseline, Sources, PRDs, Roadmap, Runs, Inbox, Priorities, Settings (members,
+- Screens: Ground Truth, Sources, PRDs, Roadmap, Runs, Inbox, Priorities, Settings (members,
   connections, sources, templates, themes, Claude accounts).
 - Also a document view with brief and full, Expand, Present, diffs and exports.
 
@@ -302,9 +302,9 @@ Maturity key:
 
 ## 6. Flows as built
 
-1. **Baseline to PRD.** Segments: baseline proposal → feature set and design → priority
-   order → PRD draft. Each ends at a checkpoint (baseline confirm, feature set, priority
-   order, PRD review).
+1. **Ground Truth to PRD.** Segments: Ground Truth proposal → feature set and design →
+   priority order → PRD draft. Each ends at a checkpoint (Ground Truth confirm, feature set,
+   priority order, PRD review).
 2. **Feedback loop.** It pulls the open feedback, writes the next draft with
    `resolutions`, and stops at a PRD review. On a roadmap that review is a roadmap
    review.
@@ -322,7 +322,7 @@ Maturity key:
   an API token, or a run token (agents).
 - **CLI** `oracle …` against `ORACLE_URL` with `ORACLE_API_TOKEN`.
 - **Files:** the draft markdown format (front matter, `{#id}` headings, `[c:id]` citation
-  chips, `resolutions`), the baseline YAML, and the template and theme formats in
+  chips, `resolutions`), the Ground Truth YAML, and the template and theme formats in
   `docs/research/templates/`.
 
 ## 8. Not built, or partial

@@ -15,7 +15,7 @@ import { CodeTag, goalLabel, milestoneColour, planFeatures, wk } from "./plan-bu
  * Goal buckets you can change (the owner's picks of mk-goalbuckets: GB1 a "Pencil, form in place",
  * GB2 a "Pick where they go", GB3 a "Drag to a goal"). The goals, their measure, target and date,
  * and each feature's goal links come from /v1/simple/goal-buckets: the goal entities and the
- * "supports" links Baseline edits. Every write answers with what Undo puts back.
+ * "supports" links the Ground Truth edits. Every write answers with what Undo puts back.
  */
 
 type Plan = Schemas["SimplePlanOut"];
@@ -188,7 +188,7 @@ export function GoalForm({ start, goal, order, title, year, onSave, onCancel }: 
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
         <OrderBadge n={order} />
         <h3 className="whitespace-nowrap text-[17px] font-[650]">{title}</h3>
-        <span className="text-[13px] text-text2 max-sm:basis-full sm:ml-auto">Goal {order} in the order; change it in Baseline</span>
+        <span className="text-[13px] text-text2 max-sm:basis-full sm:ml-auto">Goal {order} in the order; change it in the Ground Truth</span>
       </div>
       <Field label="Goal" error={!f.title.trim() ? "Name the goal." : undefined} now={now.title}>
         <textarea autoFocus rows={f.title.length > 60 ? 2 : 1} value={f.title} onChange={set("title")} className={`${INPUT} h-auto py-1.5`} />

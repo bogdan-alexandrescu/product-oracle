@@ -349,7 +349,7 @@ async def _stored(db: AsyncSession, changes: list[Any]) -> list[dict[str, Any]]:
         if isinstance(c, AddChange) and c.feature_id is not None:
             feature = await db.get(Entity, c.feature_id)
             if feature is None or feature.type != "feature":
-                raise ChangeSetError("feature_id is not a Baseline feature")
+                raise ChangeSetError("feature_id is not a Ground Truth feature")
             c = c.model_copy(update={"key": c.key or feature.key})
         elif isinstance(c, AddChange):
             c = c.model_copy(update={"key": c.key or slug(c.title)})

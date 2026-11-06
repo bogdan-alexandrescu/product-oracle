@@ -122,7 +122,7 @@ test("autonomy: at Act Oracle saves a run's order within the limits and tells it
   await setLevel(page, "priorities", "Order priorities", "Act");
   await rail(page).getByTestId("nav-runs").click();
   await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
   await page.getByTestId("checkpoint-baseline_confirm").getByRole("button", { name: "Approve and continue" }).click();
   await page.getByRole("button", { name: "Refresh progress" }).click();
   await page.getByTestId("checkpoint-feature_set").filter({ hasText: "Waiting" }).getByRole("button", { name: "Approve and continue" }).click();
@@ -142,6 +142,6 @@ test("autonomy: at Act Oracle saves a run's order within the limits and tells it
   await expect(did).toBeVisible();
   await expect(page.getByRole("button", { name: /^Undo Saved the priority order/ })).toHaveCount(0);
   await did.click();
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
   await expect(page.getByTestId("checkpoint-priority_order")).toContainText("Skipped");
 });
