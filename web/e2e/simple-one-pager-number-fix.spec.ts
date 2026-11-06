@@ -1,3 +1,4 @@
+import { MOCK_MEMBERS } from "../lib/api/mock/fixtures";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { MOCK_MEETINGS_KEY } from "../lib/api/mock/simple-meetings";
 import { THEME_KEY } from "../lib/theme";
@@ -129,3 +130,27 @@ for (const phone of [false, true]) {
     });
   }
 }
+
+// Fix round 3: the number changed since the page was read (here in a second tab of the same
+// browser, where the mock keeps its state); "Use 6" on the stale page is refused in words,
+// names who changed it, and applies nothing.
+test("a number changed since the page was read is refused in words", async ({ page }) => {
+  await setUp(page, "light");
+  await login(page);
+  await page.goto(URL);
+  const stale = item(page, COUNT).getByRole("button", { name: "Use 6" });
+  await expect(stale).toBeVisible();
+  const other = await page.context().newPage();
+  await login(other);
+  await other.goto(URL);
+  await item(other, COUNT).getByRole("button", { name: "Use 6" }).click();
+  await expect(fixed(other)).toHaveText([FIXED_COUNT]);
+  await other.close();
+  await stale.click();
+  const said = page.getByRole("alert").filter({ hasText: "This number changed since you read it" });
+  await expect(said).toBeVisible();
+  await expect(said).toContainText(`Changed by ${MOCK_MEMBERS[0].name}`);
+  // Nothing applied: the page now reads the draft as it is, with the one fix made in the other tab.
+  await expect(fixed(page)).toHaveText([FIXED_COUNT]);
+  await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
+});
