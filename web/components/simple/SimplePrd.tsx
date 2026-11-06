@@ -160,7 +160,7 @@ export function PrdWhole({ prd, doc }: { prd: PrdSections; doc: Doc }) {
       {read.map((s) => {
         const H = s.level <= 2 ? "h3" : "h4";
         return (
-          <section key={s.section_key} id={`prd-sec-${s.section_key}`} data-prd-sec={s.section_key} data-level={s.level} className="simple-prd-sec" aria-label={plainHeading(s.heading)}>
+          <section key={s.section_key} id={`prd-sec-${s.section_key}`} data-prd-sec={s.section_key} data-level={s.level} className="simple-prd-sec">
             <H className="simple-prd-sec-title">
               {nums.get(s.section_key) && <><span className="simple-prd-num">{nums.get(s.section_key)}</span>{" "}</>}
               {titleOf(s.heading)}

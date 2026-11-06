@@ -30,6 +30,8 @@ async function openPage(page: Page, email?: string) {
 }
 
 const whole = (page: Page) => page.getByRole("region", { name: "The whole PRD" });
+/** A section of the whole PRD, found by its numbered heading. */
+const prdSection = (page: Page, heading: string) => whole(page).locator("section").filter({ has: page.getByRole("heading", { name: heading, exact: true }) });
 
 for (const scheme of ["light", "dark"] as const) {
   test.describe(`desktop 1440 · ${scheme}`, () => {
@@ -44,11 +46,11 @@ for (const scheme of ["light", "dark"] as const) {
 
       // The whole PRD under the one-pager, numbered as on the Detailed side.
       await expect(whole(page).getByRole("heading", { level: 2, name: "The whole PRD" })).toBeVisible();
-      const problem = whole(page).getByRole("region", { name: "Problem" });
+      const problem = prdSection(page, "1 Problem");
       await expect(problem.getByRole("heading", { level: 3 })).toHaveText("1 Problem");
       await expect(problem).toContainText("New workspace admins stall during setup");
       // A code is never shown without its name.
-      const risks = whole(page).getByRole("region", { name: "Risks and open decisions" });
+      const risks = prdSection(page, "7 Risks and open decisions");
       await expect(risks).toContainText("F-26 Calendar invites may slip past M1");
       await expect(whole(page)).not.toContainText("[c:");
 
@@ -56,14 +58,14 @@ for (const scheme of ["light", "dark"] as const) {
       const contents = page.getByRole("navigation", { name: "Contents" });
       await expect(contents.getByRole("link", { name: "What we will build", exact: true })).toBeVisible();
       await contents.getByRole("link", { name: "11 Not this quarter" }).click();
-      const later = whole(page).getByRole("region", { name: "Not this quarter" });
+      const later = prdSection(page, "11 Not this quarter");
       await expect(later).toBeInViewport();
       await expect(contents).toBeInViewport();
       await contents.getByRole("link", { name: "Outcomes and how we measure them", exact: true }).click();
       await expect(onePager.getByRole("region", { name: "Outcomes and how we measure them" })).toBeInViewport();
 
       // The table reads in its own box.
-      await expect(whole(page).getByRole("region", { name: "Glossary" }).getByRole("region", { name: "Table" })).toContainText("Calendar invites");
+      await expect(prdSection(page, "9 Glossary").getByRole("region", { name: "Table" })).toContainText("Calendar invites");
 
       // A feature code in the PRD opens the feature panel.
       await risks.getByRole("button", { name: "Open F-26 Calendar invites" }).click();
@@ -92,7 +94,7 @@ for (const scheme of ["light", "dark"] as const) {
 
     test("a viewer reads the whole PRD with no Edit", async ({ page }) => {
       await openPage(page, "viewer@example.com");
-      await expect(whole(page).getByRole("region", { name: "Problem" })).toBeVisible();
+      await expect(prdSection(page, "1 Problem")).toBeVisible();
       await expect(page.getByRole("navigation", { name: "Contents" })).toBeVisible();
       await expect(page.getByRole("button", { name: /^Edit “/ })).toHaveCount(0);
     });
@@ -105,10 +107,10 @@ test.describe("phone 390", () => {
   test("the whole PRD reads under the one-pager; a table scrolls in its own box", async ({ page }) => {
     await openPage(page);
     await expect(page.getByRole("navigation", { name: "Contents" })).toBeHidden();
-    const targets = whole(page).getByRole("region", { name: "Targets" });
+    const targets = prdSection(page, "10 Targets");
     await targets.scrollIntoViewIfNeeded();
-    await expect(targets.getByRole("heading", { level: 3 })).toHaveText("10 Targets");
-    await expect(whole(page).getByRole("region", { name: "Glossary" }).getByRole("region", { name: "Table" })).toBeVisible();
+    await expect(targets).toContainText("Company-wide target: 250 paid workspaces a month");
+    await expect(prdSection(page, "9 Glossary").getByRole("region", { name: "Table" })).toBeVisible();
     // Nothing widens the page.
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   });
