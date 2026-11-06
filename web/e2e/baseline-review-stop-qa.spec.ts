@@ -122,16 +122,16 @@ for (const view of VIEWS) {
     test("B-03: a review that cannot load says so in plain words with Try again", async ({ page }) => {
       await open(page, MISSING);
       const err = page.getByTestId("load-error");
-      await expect(err).toContainText("Couldn't load this run's review.");
+      await expect(err).toContainText("Could not load this run's review.");
       await expect(err.getByRole("button", { name: "Try again" })).toBeVisible();
       // Never the API's words, nor any id.
       await expect(page.locator("#main")).not.toContainText(/not found/i);
       await expect(page.locator("#main")).not.toContainText(/[0-9a-f]{8}-[0-9a-f]{4}-/);
       // The From this run tab keeps its place and its body says what went wrong, not blank.
       await expect(page.getByRole("tab", { name: /From this run/ })).toHaveAttribute("aria-selected", "true");
-      await expect(page.getByRole("tabpanel")).toContainText("Couldn't load this run's review.");
+      await expect(page.getByRole("tabpanel")).toContainText("Could not load this run's review.");
       await err.getByRole("button", { name: "Try again" }).click();
-      await expect(err).toContainText("Couldn't load this run's review.");
+      await expect(err).toContainText("Could not load this run's review.");
       await shot(page, `b03-load-error-${tag}`);
     });
   });
@@ -164,7 +164,7 @@ test("B-03: switching to a run whose review cannot load says so above the earlie
   await page.getByRole("tab", { name: /From this run/ }).click();
   const panel = page.getByRole("tabpanel");
   const err = panel.getByTestId("load-error");
-  await expect(err).toContainText("Couldn't load this run's review.");
+  await expect(err).toContainText("Could not load this run's review.");
   await expect(err.getByRole("button", { name: "Try again" })).toBeVisible();
   // The earlier review stays below the notice, marked as not the one asked for, with no decision bar.
   const kept = page.getByTestId("from-run-view");
@@ -182,7 +182,7 @@ test("B-03: switching to a run whose review cannot load says so above the earlie
   expect(Number(await page.getByTestId("from-run-band-wrap").evaluate((el) => getComputedStyle(el).opacity))).toBeLessThan(1);
   await expect(page.getByTestId("tab-count-from-run")).toHaveCount(0);
   await err.getByRole("button", { name: "Try again" }).click();
-  await expect(err).toContainText("Couldn't load this run's review.");
+  await expect(err).toContainText("Could not load this run's review.");
   await shot(page, "b03-kept-review-failed");
 });
 
