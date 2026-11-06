@@ -10,6 +10,7 @@ import time
 
 import pytest
 
+from oracle.docs import source_words
 from oracle.docs.parser import CITATION_STRIP_RE, SECTION_ID_RE, DraftError, parse_draft
 from tests.fixtures import draft, import_draft, seed_auth
 from tests.test_mcp import api_token
@@ -143,3 +144,19 @@ def test_template_title_line_is_linear():
         _fast(lambda body=body: skeleton(body))
     assert "# My title   {#goals}" in skeleton("# Old   {#goals}\n\ntext\n")
     assert "# My title{#goals}" in skeleton("# {#goals}\n")
+
+
+@pytest.mark.parametrize("unit", ["](", "](a", "https://", "a.b/"])
+@pytest.mark.parametrize("lines", [1, 20])
+def test_source_words_check_is_linear_on_link_openers(unit, lines):
+    from tests.review_v2_helpers import DRAFT, replace
+
+    line = unit * (20_000 // len(unit))
+    body = "\n".join([line] * lines) + "\n"
+    texts = [
+        PRD + "\n" + body,
+        replace(DRAFT, "- Calendar survey, as of September.\n", body),
+    ]
+    for md in texts:
+        sections = parse_draft(md).sections
+        _fast(lambda: source_words.check(sections, md), limit=1.0)
