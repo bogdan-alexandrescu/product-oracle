@@ -176,6 +176,19 @@ class PrdMoveIn(BaseModel):
     to: Literal["up", "down"]
 
 
+class PrdPlaceIn(BaseModel):
+    """prd-order: a PRD's stored place (1 = first; null: none)."""
+
+    document_id: uuid.UUID
+    position: int | None = Field(default=None, ge=1)
+
+
+class PrdOrderIn(BaseModel):
+    """prd-order: PRDs' stored places to put back (the One-pagers' Undo after a move)."""
+
+    positions: list[PrdPlaceIn] = Field(min_length=1, max_length=1000)
+
+
 class VersionSummary(ORM):
     id: uuid.UUID
     document_id: uuid.UUID

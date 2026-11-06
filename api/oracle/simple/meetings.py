@@ -59,6 +59,7 @@ from oracle.baseline.goal_order import sort_goals
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError as ImportRejected
+from oracle.docs.prd_order import sort_prds
 from oracle.models import AuditEvent
 from oracle.roadmap.models import ProductTrack, RoadmapItem
 from oracle.simple import change_words, drafts, minutes
@@ -380,12 +381,14 @@ async def options(
     if prd:
         docs = [await _prd(db, principal, prd)]
     else:
+        # prd-order: the company PRD order, as every page lists PRDs.
         docs = [
             d
-            for d in await db.scalars(
-                select(Document)
-                .where(Document.kind == "prd", Document.deleted_at.is_(None))
-                .order_by(Document.title)
+            for d in await sort_prds(
+                db,
+                await db.scalars(
+                    select(Document).where(Document.kind == "prd", Document.deleted_at.is_(None))
+                ),
             )
             if await _readable(db, principal, d)
         ]
@@ -2832,8 +2835,9 @@ async def decisions_page(
         **await questions.page_fields(db, principal, qdocs, only),
         meetings=groups,
         other=[_row(d, names, principal, edited) for d in others],
+        # prd-order: the PRD filter lists the PRDs in the company PRD order.
         prds=[SimpleFilterOption(id=d.slug, title=d.title)
-              for d in sorted(docs.values(), key=lambda d: d.title) if d.id in readable],
+              for d in await sort_prds(db, docs.values()) if d.id in readable],
         # goal-order: the Goal filter lists the goals in the one goal order.
         goals=[SimpleFilterOption(id=g.key, title=g.title)
                for g in sort_goals(goals.values())],

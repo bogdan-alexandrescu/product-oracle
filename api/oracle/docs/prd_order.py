@@ -75,9 +75,24 @@ async def prd_ranks(db: AsyncSession) -> dict[uuid.UUID, int]:
     return {d.id: n for n, d in enumerate(prds, 1)}
 
 
+async def lock_prds(db: AsyncSession) -> list[Document]:
+    """Every PRD of the company, locked (in id order, so two writers never deadlock) until the
+    transaction ends: two owners moving at once never write the same places."""
+    stmt = select(Document).where(Document.kind == "prd").order_by(Document.id).with_for_update()
+    return list(await db.scalars(stmt))
+
+
+def _place(doc: Document, position: int | None) -> None:
+    if doc.position != position:
+        doc.position = position
+        # The place is not an edit: "Updated" keeps its time.
+        flag_modified(doc, "updated_at")
+
+
 async def move(db: AsyncSession, doc: Document, to: str) -> bool:
     """Move a PRD one place ``up`` or ``down`` in the company order, storing every PRD's
-    place (1..N) so the order stays as shown. False when it is already at that end."""
+    place (1..N) so the order stays as shown. False when it is already at that end. The
+    caller holds the lock (:func:`lock_prds`)."""
     prds = await sort_prds(db, await db.scalars(select(Document).where(Document.kind == "prd")))
     at = next(n for n, d in enumerate(prds) if d.id == doc.id)
     other = at - 1 if to == "up" else at + 1
@@ -85,9 +100,17 @@ async def move(db: AsyncSession, doc: Document, to: str) -> bool:
         return False
     prds[at], prds[other] = prds[other], prds[at]
     for n, d in enumerate(prds, 1):
-        if d.position != n:
-            d.position = n
-            # The place is not an edit: "Updated" keeps its time.
-            flag_modified(d, "updated_at")
+        _place(d, n)
     await db.flush()
     return True
+
+
+async def restore(
+    db: AsyncSession, prds: list[Document], places: dict[uuid.UUID, int | None]
+) -> None:
+    """Put back each named PRD's stored place (null: none; the One-pagers' Undo after a
+    move). The caller holds the lock (:func:`lock_prds`)."""
+    for d in prds:
+        if d.id in places:
+            _place(d, places[d.id])
+    await db.flush()

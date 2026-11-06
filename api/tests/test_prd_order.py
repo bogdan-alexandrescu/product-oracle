@@ -171,7 +171,9 @@ async def test_roadmap_prd_lanes_follow_the_prd_order(client):
     prds = await seed(ctx)
     async with tenant_session(ctx.tenant_id) as s:
         seed_ = Seed(s)
-        rv = await s.scalar(select(DocumentVersion).join(Document).where(Document.kind == "roadmap"))
+        rv = await s.scalar(
+            select(DocumentVersion).join(Document).where(Document.kind == "roadmap")
+        )
         await seed_.item(rv, None, "loose", position=99)
         await s.commit()
     r = await client.get("/v1/simple/roadmap", params={"group": "prd"}, headers=ctx.as_("owner"))

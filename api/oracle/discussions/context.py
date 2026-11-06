@@ -478,6 +478,7 @@ async def _features(db: AsyncSession, ctx: Context) -> None:
 
 async def _documents(db: AsyncSession, ctx: Context) -> None:
     from oracle.docs.models import Document, DocumentVersion
+    from oracle.docs.prd_order import prd_ranks
 
     latest = (
         select(
@@ -490,13 +491,17 @@ async def _documents(db: AsyncSession, ctx: Context) -> None:
         .group_by(DocumentVersion.document_id)
         .subquery()
     )
-    rows = await db.execute(
-        select(Document, latest.c.latest, latest.c.approved)
-        .join(latest, latest.c.document_id == Document.id)
-        .order_by(Document.title)
-        .limit(MAX_ENTITIES)
-    )
-    for doc, last, approved in rows:
+    rows = (
+        await db.execute(
+            select(Document, latest.c.latest, latest.c.approved).join(
+                latest, latest.c.document_id == Document.id
+            )
+        )
+    ).all()
+    # prd-order: PRDs first, in the company PRD order; then the rest by title.
+    ranks = await prd_ranks(db)
+    rows.sort(key=lambda r: (ranks.get(r[0].id, len(ranks) + 1), r[0].title))
+    for doc, last, approved in rows[:MAX_ENTITIES]:
         line = f"{doc.kind}; latest v{last}" + (f"; approved v{approved}" if approved else "")
         ctx.add("document", str(doc.id), doc.title, line, url=f"/documents/{doc.slug}")
 

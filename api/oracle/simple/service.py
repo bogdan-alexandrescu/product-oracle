@@ -37,6 +37,7 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.baseline.goal_order import goal_position, goal_sort_key
 from oracle.baseline.models import Edge, Entity
+from oracle.docs import prd_order
 from oracle.docs.models import Document, DocumentVersion
 from oracle.members.names import display_name
 from oracle.priorities.scoring import _number
@@ -1160,8 +1161,9 @@ def _matches(e: Entry, value: str | None, *refs: Any) -> bool:
     return any(r is not None and value in (str(r), getattr(r, "slug", None)) for r in refs)
 
 
-def _group_of(e: Entry, group: str) -> tuple[str, str, tuple]:
-    """(key, title, sort key) of the item's group; goals in the one goal order."""
+def _group_of(e: Entry, group: str, prd_ranks: dict[uuid.UUID, int]) -> tuple[str, str, tuple]:
+    """(key, title, sort key) of the item's group; goals in the one goal order, PRDs in the
+    company PRD order (``prd_ranks``, oracle.docs.prd_order), each "No ..." group last."""
     if group == "goal":
         if e.goal is not None:
             return str(e.goal.id), e.goal.title, (0, goal_sort_key(e.goal))
@@ -1171,7 +1173,8 @@ def _group_of(e: Entry, group: str) -> tuple[str, str, tuple]:
             return str(e.track.id), e.track.title, (0, f"{e.track.title.casefold()}{e.track.id}")
         return NONE, "No track", (1,)
     if e.prd is not None:
-        return str(e.prd.id), e.prd.title, (0, f"{e.prd.title.casefold()}{e.prd.id}")
+        rank = prd_ranks.get(e.prd.id, len(prd_ranks) + 1)
+        return str(e.prd.id), e.prd.title, (0, rank, f"{e.prd.title.casefold()}{e.prd.id}")
     return NONE, "No PRD", (1,)
 
 
@@ -1217,8 +1220,9 @@ async def build(
         and (end is None or e.resolved.start.date <= end)
     ]
     groups: dict[str, tuple[tuple, str, list[uuid.UUID]]] = {}
+    ranks = await prd_order.prd_ranks(db) if group == "prd" else {}
     for e in shown:
-        key, title, sort = _group_of(e, group)
+        key, title, sort = _group_of(e, group, ranks)
         groups.setdefault(key, (sort, title, []))[2].append(e.row.id)
     ordered = sorted(groups.items(), key=lambda kv: kv[1][0])
     owners = list(

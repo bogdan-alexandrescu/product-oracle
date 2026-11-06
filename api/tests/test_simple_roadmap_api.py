@@ -369,10 +369,11 @@ async def test_grouping_and_filters(client):
         ("No track", 1),
     ]
 
+    # prd-order: PRD lanes in the company PRD order (Payments serves a goal, Onboarding none).
     body = await get(client, ctx, group="prd")
     assert [(g["title"], len(g["item_ids"])) for g in body["groups"]] == [
-        ("Onboarding Prd", 1),
         ("Payments Prd", 2),
+        ("Onboarding Prd", 1),
     ]
 
     assert set(by_key(await get(client, ctx, prd="payments-prd"))) == {"cards", "refunds"}

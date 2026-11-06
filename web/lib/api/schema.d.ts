@@ -448,6 +448,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/prd-order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Restore Prd Order
+         * @description prd-order: put back PRDs' stored places in the company PRD order (null: none), as
+         *     the One-pagers' Undo after a Move up / Move down. Owners only; audited as
+         *     ``document.reorder``. Returns the PRDs in their new order.
+         */
+        put: operations["restore_prd_order"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{doc}/visibility": {
         parameters: {
             query?: never;
@@ -33293,6 +33315,27 @@ export interface components {
              */
             to: "up" | "down";
         };
+        /**
+         * PrdOrderIn
+         * @description prd-order: PRDs' stored places to put back (the One-pagers' Undo after a move).
+         */
+        PrdOrderIn: {
+            /** Positions */
+            positions: components["schemas"]["PrdPlaceIn"][];
+        };
+        /**
+         * PrdPlaceIn
+         * @description prd-order: a PRD's stored place (1 = first; null: none).
+         */
+        PrdPlaceIn: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Position */
+            position?: number | null;
+        };
         /** PrdRef */
         PrdRef: {
             /**
@@ -49170,6 +49213,53 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DocumentSummary"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_prd_order: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrdOrderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSummary"][];
+                };
+            };
+            /** @description Not an owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such PRD */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
