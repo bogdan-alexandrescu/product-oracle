@@ -33,6 +33,7 @@ import { DateMarkContext, type DateMarkCtx } from "@/components/DateMarker";
 import { DateMarker, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
 import { DraftNewItems } from "@/components/DraftNewItems";
 import { DraftWithOracleButton, isTemplateOnly } from "@/components/DraftWithOracle";
+import { numbersOf, PrdLook } from "@/components/PrdLook";
 import { SectionView } from "@/components/SectionView";
 import { SpecDesignLinks } from "@/components/DesignReview";
 import { SpecStaleness } from "@/components/SpecStaleness";
@@ -367,8 +368,12 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   // Brief / Full says which sections exist; the strip and the arrows step through these.
   const shownSections = view === "brief" ? briefSections : sections;
   const hashKey = keyFromHash(hash, allKeys);
+  // PT1 a: a PRD reads as one document; the section open is the one being read, the first at arrival.
+  const calm = document_?.kind === "prd";
   const openSection =
-    shownSections.find((s) => s.section_key === hashKey) ?? shownSections.find((s) => !s.verdict) ?? shownSections[0];
+    shownSections.find((s) => s.section_key === hashKey) ??
+    (calm ? undefined : shownSections.find((s) => !s.verdict)) ??
+    shownSections[0];
   const openKey = openSection?.section_key ?? null;
   // e2e-review-live: other reviewers' work shows without a reload. On window focus, and every
   // LIVE_POLL_MS while a run review waits on this version, the review state is read again in
@@ -402,6 +407,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     document_ ? (openSection ? `${document_.title} · ${openSection.heading}` : document_.title) : null,
   );
   const openIdx = openSection ? shownSections.indexOf(openSection) : -1;
+  const calmNums = useMemo(() => numbersOf(shownSections), [shownSections]);
   const prevSection = openIdx > 0 ? shownSections[openIdx - 1] : null;
   const nextSection = openIdx >= 0 ? shownSections[openIdx + 1] ?? null : null;
   // The next section without a verdict after the open one, wrapping round.
@@ -431,6 +437,9 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     setHash(`#${key}`);
     if (decodeURIComponent(window.location.hash.slice(1)) !== key) window.history.pushState(null, "", `#${key}`);
   }, []);
+
+  /** The reader scrolled to a section: it is the open one, with no new history entry. */
+  const read = useCallback((key: string) => setHash(`#${key}`), []);
 
   const switchView = useCallback(
     (v: DocumentView) => {
@@ -1464,7 +1473,43 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
 
         {/* The outline rail (>= 1280 px), the section with the switcher above it below that,
             and the review panel; each column sticks and scrolls inside itself. */}
-        {onDocument && (
+        {onDocument && calm && version && (
+          <PrdLook
+            sections={shownSections}
+            current={openKey}
+            onRead={read}
+            onPick={select}
+            nodes={shownSections.map((s) => (
+              <SectionView
+                key={s.id}
+                {...sectionProps(s)}
+                look={{ num: calmNums.get(s.section_key), hideReview: s.section_key !== openKey }}
+                expand={view === "brief" ? expandFor(s.section_key) : undefined}
+                headTools={
+                  <Button
+                    icon="comment"
+                    className="min-[1101px]:hidden max-[639px]:hidden"
+                    onClick={() => {
+                      select(s.section_key);
+                      showFeedback();
+                    }}
+                    aria-label={`Open feedback on this section: ${openCounts.get(s.section_key) ?? 0}`}
+                  >
+                    Feedback <b className="tnum text-accent-ink">{openCounts.get(s.section_key) ?? 0}</b>
+                  </Button>
+                }
+              />
+            ))}
+          >
+            {panel("side")}
+          </PrdLook>
+        )}
+        {onDocument && calm && !version && (
+          <div className="rounded-panel border border-line bg-surface px-4 py-6">
+            {error ? <ErrorNote>{error}</ErrorNote> : <Loading label="Loading version…" />}
+          </div>
+        )}
+        {onDocument && !calm && (
         <div
           data-testid="prd-layout"
           className={`grid items-start gap-4 max-[1100px]:grid-cols-1 max-[600px]:gap-3 ${
@@ -1585,7 +1630,20 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
           >
             {/* qa4-docs-37: the open section's place, in words: "N/M" elsewhere counts reviews. */}
             <span className="tnum truncate">
-              Section {openIdx + 1} <span className="text-text2">of {shownSections.length}</span>
+              {calm && openSection ? (
+                calmNums.get(openSection.section_key) ? (
+                  <>
+                    Section {calmNums.get(openSection.section_key)}{" "}
+                    <span className="text-text2">of {shownSections.filter((s) => s.level === 2).length}</span>
+                  </>
+                ) : (
+                  openSection.heading
+                )
+              ) : (
+                <>
+                  Section {openIdx + 1} <span className="text-text2">of {shownSections.length}</span>
+                </>
+              )}
             </span>
           </button>
           <button
