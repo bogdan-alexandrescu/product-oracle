@@ -767,8 +767,8 @@ async def _plan(
         if seen_ != shown:
             raise await _conflict(db, shown, {str(row.id)}, lead)
     elif op == "set_milestone":
-        # goal-buckets-tasks, build-feature-panel: the milestone as the item reads it (name, date): the date
-        # engine's own fields (date_source, basis_ids...) are not seen.
+        # goal-buckets-tasks, build-feature-panel: the milestone as the item reads it (name,
+        # date): the date engine's own fields (date_source, basis_ids...) are not seen.
         if _seen_milestone(seen_["milestone"]) != _seen_milestone(current["milestone"]):
             raise await _conflict(db, current, {str(row.id)}, lead)
     elif seen_ != current:

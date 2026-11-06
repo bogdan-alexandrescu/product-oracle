@@ -18923,7 +18923,7 @@ export interface components {
             /** Message Id */
             message_id: string | null;
             /** Op */
-            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped");
+            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped");
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -19039,7 +19039,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -27777,7 +27777,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency";
             /**
              * Status
              * @enum {string}
@@ -39921,7 +39921,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -39970,7 +39970,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -40787,6 +40787,11 @@ export interface components {
              * @default false
              */
             can_change: boolean;
+            /**
+             * Can Propose
+             * @default false
+             */
+            can_propose: boolean;
         };
         /** SimpleGoalMilestoneIn */
         SimpleGoalMilestoneIn: {
@@ -40847,6 +40852,10 @@ export interface components {
             target?: string | null;
             /** Due */
             due?: string | null;
+            /** Current */
+            current?: number | null;
+            /** Unit */
+            unit?: string | null;
         };
         /** SimpleGoalSuggestion */
         SimpleGoalSuggestion: {
@@ -41916,6 +41925,7 @@ export interface components {
              * @default []
              */
             lines: components["schemas"]["SimpleLine"][];
+            company_roadmap?: components["schemas"]["SimpleDocRef"] | null;
             plan?: components["schemas"]["SimplePlanOut"] | null;
         };
         /**
@@ -42052,6 +42062,8 @@ export interface components {
              * @default
              */
             short_code: string;
+            /** Own Key */
+            own_key?: string | null;
             /** Title */
             title: string;
             goal?: components["schemas"]["SimplePriorityGoal"] | null;
@@ -42111,6 +42123,11 @@ export interface components {
              * @default false
              */
             can_reorder: boolean;
+            /**
+             * On Roadmap
+             * @default false
+             */
+            on_roadmap: boolean;
             /**
              * Applies
              * @default false
@@ -42308,6 +42325,8 @@ export interface components {
             title: string;
             /** Outcome */
             outcome?: string | null;
+            /** Note */
+            note?: string | null;
             /**
              * Horizon
              * @enum {string}
