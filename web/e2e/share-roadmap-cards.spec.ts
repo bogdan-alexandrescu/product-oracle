@@ -22,8 +22,15 @@ async function openLink(page: Page, audience: "Board" | "Public", label: string)
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "sharing"));
   await login(page);
   if (audience === "Public") {
-    // The Public version is checked first (its two approved texts), as an owner does.
+    // The Public version is checked first, as an owner does: its draft text approved, then the check.
     await page.goto(`${DOC}/public`);
+    const row = page.getByTestId("public-row").filter({ hasText: "Northwind bulk import" });
+    await row.getByRole("button", { name: "Edit" }).click();
+    await row.getByLabel("Public title").fill("Bulk import");
+    await row.getByLabel("Public description").fill("Bring in many records at once from a spreadsheet.");
+    await row.getByLabel("Stage").selectOption("planned");
+    await row.getByRole("button", { name: "Approve" }).click();
+    await expect(row.getByTestId("public-state")).toHaveText("Approved");
     await page.getByRole("button", { name: "Mark as checked" }).click();
     await expect(page.getByTestId("public-check")).toContainText("Checked by");
   }
@@ -55,7 +62,7 @@ for (const width of [1440, 390]) {
         // No bare "Item" header: each item is a card.
         await expect(frame.locator("th:visible")).toHaveCount(0);
         // Every card says when (its date, or its horizon when it has none) and its status.
-        const cards = frame.locator(".section-wide tr");
+        const cards = frame.locator(".section-wide tbody tr");
         await expect(cards.first()).toBeVisible();
         const count = await cards.count();
         expect(count).toBeGreaterThanOrEqual(4);
