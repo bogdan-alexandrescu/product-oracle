@@ -89,7 +89,8 @@ def _cut(value: Any, n: int) -> Any:
 def summary_view(data: Any, section: str | None, offset: Any, limit: Any) -> dict[str, Any]:
     """An intake summary (no ``section``): whole up to :data:`SUMMARY_WHOLE` bytes, else
     an outline: its plain fields and :data:`WHOLE_SECTIONS` whole, each other list's count
-    and first items, cut short. With ``section``, a page of that section."""
+    and first items, cut short. With ``section``, a page of that section (items of
+    :data:`WHOLE_SECTIONS` whole, others with long texts cut to :data:`ITEM_CUT`)."""
     if not isinstance(data, dict):
         return {"result": _cut(data, ITEM_CUT)}
     if section is None:
@@ -125,7 +126,8 @@ def summary_view(data: Any, section: str | None, offset: Any, limit: Any) -> dic
     page = value[start : start + limit_n]
     end = start + len(page)
     return {
-        section: _cut(page, ITEM_CUT),
+        # Every work item is a requirement: the sections the writer must use come whole.
+        section: page if section in WHOLE_SECTIONS else _cut(page, ITEM_CUT),
         "total": len(value),
         "offset": start,
         "next_offset": end if end < len(value) else None,

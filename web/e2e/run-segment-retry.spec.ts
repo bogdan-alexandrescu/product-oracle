@@ -13,10 +13,10 @@ function status(page: Page) {
  * Seeds the mock with a Baseline to PRD run that failed at its PRD draft: the steps before it
  * succeeded and their stops were approved; the writer's session ran out of room. Returns its id.
  */
-async function seedFailedRun(page: Page): Promise<string> {
+async function seedFailedRun(page: Page, overBudget = false): Promise<string> {
   // Seed from a page that runs no app code (a mock request in flight would save over the seed).
   await page.goto("/icon.svg");
-  return page.evaluate((cause) => {
+  return page.evaluate(([cause, overBudget]) => {
     const key = "po-mock-db-v2";
     const db = JSON.parse(localStorage.getItem(key)!);
     type S = Record<string, unknown> & { seq: number; name: string; checkpoint: string | null };
@@ -60,10 +60,12 @@ async function seedFailedRun(page: Page): Promise<string> {
         can_decide: false,
       }));
     Object.assign(run, { status: "failed", waiting_on: null, finished_at: at, error: `PRD draft: ${cause}`, can_retry: false, stuck: null });
+    // Its spend past its ceiling: it stopped at its budget.
+    if (overBudget) Object.assign(run, { spent_usd: 40, overrun_ceiling_usd: 1 });
     db.runs.runs.push(run);
     localStorage.setItem(key, JSON.stringify(db));
     return id;
-  }, CAUSE);
+  }, [CAUSE, overBudget] as const);
 }
 
 test("a run that failed at its PRD draft: Retry runs that step again, the steps before it stay approved", async ({ page }) => {
@@ -78,6 +80,7 @@ test("a run that failed at its PRD draft: Retry runs that step again, the steps 
   await expect(prd.getByTestId("segment-state")).toHaveText("Failed");
   const retry = prd.getByRole("button", { name: "Retry", exact: true });
   await expect(retry).toBeVisible();
+  await expect(prd.getByTestId("segment-retry")).toContainText("Retry this step.");
   // Only the step the run stopped at offers it.
   await expect(page.getByRole("button", { name: "Retry", exact: true })).toHaveCount(1);
 
@@ -100,4 +103,19 @@ test("a viewer reads why the run failed but is offered no Retry", async ({ page 
   const prd = page.getByTestId("segment-prd_draft");
   await expect(prd).toContainText(CAUSE);
   await expect(page.getByRole("button", { name: "Retry", exact: true })).toHaveCount(0);
+  // "Retry this step." only beside a Retry the person has.
+  await expect(page.getByText("Retry this step.")).toHaveCount(0);
+});
+
+test("a run that stopped at its budget says why and offers no Retry", async ({ page }) => {
+  await login(page);
+  const id = await seedFailedRun(page, true);
+  await page.goto(`/runs/${id}`);
+  await expect(status(page)).toHaveText("Failed");
+  await expect(page.getByTestId("budget-stopped")).toHaveText("This run stopped at its budget; start it again with a new estimate.");
+
+  const prd = page.getByTestId("segment-prd_draft");
+  await expect(prd).toContainText(CAUSE);
+  await expect(page.getByRole("button", { name: "Retry", exact: true })).toHaveCount(0);
+  await expect(page.getByText("Retry this step.")).toHaveCount(0);
 });

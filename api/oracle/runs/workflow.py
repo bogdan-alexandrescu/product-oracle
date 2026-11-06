@@ -502,4 +502,4 @@ def plain_failure(error: str | None, role: str | None) -> str:
         return f"{who} stopped: its session ran out of room."
     if _BARE_EXIT.match(text):
         return f"{who} stopped: its session ended with an error and gave no reason."
-    return f"{who} stopped. Retry this step."
+    return f"{who} stopped."

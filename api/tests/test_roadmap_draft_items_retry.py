@@ -33,7 +33,9 @@ RETRY = "/v1/runs/{run}/segments/{seq}/retry"
 async def failed_items_run(client, owner, runtime, then: Outcome) -> dict:  # noqa: F811
     """v1's items run, failed at its writer; ``then`` is what its retry does."""
     tenant_id, auth = owner
-    runtime.script["roadmap_items"] = [Outcome(state="failed", error=OUT_OF_ROOM), then]
+    # It fails early, so a retry stays within the run's spend ceiling.
+    early = Outcome(state="failed", error=OUT_OF_ROOM, cost_usd=Decimal("0.10"))
+    runtime.script["roadmap_items"] = [early, then]
     await new_version(client, auth, 1)
     await tick(client, auth)
     await tick(client, auth)

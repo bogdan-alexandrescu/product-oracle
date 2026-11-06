@@ -439,6 +439,12 @@ export function RunDetail({ id }: { id: string }) {
           <ErrorNote>
             {run.status === "failed" && run.finished_at && <span data-testid="failed-at">{failedAt(run.finished_at)}. </span>}
             {run.error}
+            {/* As the API: a failed run over its ceiling is not retried. */}
+            {run.status === "failed" && run.overrun_ceiling_usd != null && run.spent_usd > run.overrun_ceiling_usd && (
+              <span className="block" data-testid="budget-stopped">
+                This run stopped at its budget; start it again with a new estimate.
+              </span>
+            )}
           </ErrorNote>
         )}
         {run.stuck && (
@@ -1273,7 +1279,7 @@ function SegmentItem({
           )}
           {s.can_retry && (
             <div className="space-y-1.5" data-testid="segment-retry">
-              <p className="text-text2">Retry runs this step again from here; the steps before it stay approved.</p>
+              <p className="text-text2">Retry this step. It runs again from here; the steps before it stay approved.</p>
               <Button disabled={busy} onClick={() => void retry()}>
                 {retrying ? "Retrying…" : "Retry"}
               </Button>

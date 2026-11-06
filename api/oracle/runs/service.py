@@ -11022,10 +11022,15 @@ async def stop_run(
     await audit.record(db, principal, "run.cancelled", "run", run.id, data or {})
 
 
+# A failed run whose spend is over its ceiling: running a step again would only pause it.
+BUDGET_STOPPED = "This run stopped at its budget; start it again with a new estimate"
+
+
 def _retryable_seq(run: Run, segments: list[RunSegment]) -> int | None:
     """The segment a failed run can be retried from: the one that failed (its stop's
-    approvals before it kept), while no workflow of the run is still attached."""
-    if run.status != "failed" or _live(run) is not None:
+    approvals before it kept), while no workflow of the run is still attached and its
+    spend is within its ceiling."""
+    if run.status != "failed" or _live(run) is not None or _overrun(run) is not None:
         return None
     failed = [s for s in segments if s.status == "failed"]
     return failed[-1].seq if failed else None
@@ -11048,6 +11053,8 @@ async def retry_segment(
     segment = next((s for s in segments if s.seq == seq), None)
     if segment is None:
         raise NotFound("Segment not found")
+    if run.status == "failed" and _overrun(run) is not None:
+        raise RunError(BUDGET_STOPPED)
     if _retryable_seq(run, segments) != seq:
         raise RunError("nothing to retry: only the segment a failed run stopped at can be retried")
     was = segment.error
@@ -11058,6 +11065,11 @@ async def retry_segment(
     segment.finished_at = None
     run.error = None
     run.finished_at = None
+    if _flow(run).stores_draft_items:
+        from oracle.roadmap import draft_items
+
+        # Its draft roadmap runs again with it: no stale failure, and no Derive meanwhile.
+        await draft_items.run_retried(db, run)
     await _submit(db, run, segment, segments)
     await audit.record(
         db, principal, "run.segment_retried", "run", run.id, {"seq": seq, "error": was}

@@ -569,7 +569,9 @@ async def test_a_retried_items_run_is_waited_for_not_skipped(client, owner, runt
     from tests.test_run_segment_retry import OUT_OF_ROOM
 
     tenant_id, auth = owner
-    runtime.script["roadmap_items"] = [Outcome(state="failed", error=OUT_OF_ROOM), Outcome(polls=3)]
+    # It fails early, so its retry stays within the items run's spend ceiling.
+    early = Outcome(state="failed", error=OUT_OF_ROOM, cost_usd=Decimal("0.10"))
+    runtime.script["roadmap_items"] = [early, Outcome(polls=3)]
     run = await _at_prd_review(client, auth)
     for _ in range(4):
         if (await _draft(tenant_id)).status == "failed":

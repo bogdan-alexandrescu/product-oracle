@@ -133,6 +133,8 @@ export interface RunsContext {
   mayDecide?: (c: Pick<CheckpointOut, "kind" | "approver_role">, flow: RunOut["flow"]) => boolean;
   /** As oracle.members.leads.lead_stop: an engineering stop outside prd_to_spec once a lead is named. */
   leadStop?: (c: Pick<CheckpointOut, "kind">, flow: RunOut["flow"]) => boolean;
+  /** As the API's draft_items.run_retried: a retried prd_draft_items run re-opens its draft roadmap. */
+  draftItemsRetried?: (runId: string) => void;
   /** F4: Approve at the Engineering check sets a feature's effort (a person's edit, locked). */
   setEffort?: (featureKey: string, size: string, runId: string) => void;
   /** B2: the baseline's rows of a run under its shared draft's actions (absent: no goals rule). */
@@ -579,9 +581,15 @@ function targetGoals(ctx: Omit<RunsContext, "db">, flowKey: string, raw: string[
   return out;
 }
 
+/** As the API: a failed run whose spend is over its ceiling stopped at its budget; it is not retried. */
+const BUDGET_STOPPED = "This run stopped at its budget; start it again with a new estimate";
+function budgetStopped(r: RunOut): boolean {
+  return r.status === "failed" && r.overrun_ceiling_usd != null && r.spent_usd > r.overrun_ceiling_usd;
+}
+
 /** The segment a failed run stopped at (its last failed one), as the API's retry_segment reads it. */
 function retrySegmentOf(r: RunOut): SegmentOut | undefined {
-  if (r.status !== "failed") return undefined;
+  if (r.status !== "failed" || budgetStopped(r)) return undefined;
   return [...r.segments].sort((a, b) => b.seq - a.seq).find((s) => s.status === "failed");
 }
 
@@ -2271,9 +2279,11 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const s = r.segments.find((x) => x.seq === Number(p[4]));
     if (!s) return fail(404, `run ${r.id} has no segment ${p[4]}`);
     if (!mayRetrySegment(ctx, r)) return fail(403, "Only an owner or the approver who created the run can retry it");
+    if (budgetStopped(r)) return fail(409, BUDGET_STOPPED);
     if (retrySegmentOf(r)?.seq !== s.seq) return fail(409, "nothing to retry: only the segment a failed run stopped at can be retried");
     Object.assign(s, { status: "running", error: null, finished_at: null, started_at: ctx.now() });
     Object.assign(r, { status: "running", error: null, finished_at: null });
+    if (r.flow === DRAFT_ITEMS_FLOW) ctx.draftItemsRetried?.(r.id);
     return done();
   }
   if (action === "stop-cancelling" && m === "POST") {

@@ -317,6 +317,12 @@ export function draftRoadmapSummary(db: DraftRoadmapDb | undefined, doc: Doc | u
  * version starts (a run, created by its requester) unless the requester can no longer
  * start runs.
  */
+/** As the API's draft_items.run_retried: a failed items run retried re-opens its own draft roadmap. */
+export function draftItemsRunRetried(db: DraftRoadmapDb, runId: string) {
+  const row = db.rows.find((r) => r.run_id === runId && r.status === "failed");
+  if (row) Object.assign(row, { status: "running", error: null });
+}
+
 export function tickDraftRoadmaps(ctx: DraftRoadmapContext, db: DraftRoadmapDb) {
   const busy = new Set<string>();
   for (const r of db.rows.filter((x) => x.status === "running")) {
