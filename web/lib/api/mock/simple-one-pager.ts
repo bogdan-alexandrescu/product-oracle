@@ -392,6 +392,117 @@ export function seedSkeletonOnePager(doc: OnePagerDb["doc"]): OnePagerDb {
 }
 
 /**
+ * vqa B-13: a mock PRD's own one-pager, built from its own sections as the API's quick read
+ * builds one (one_pager.mapping and one_pager.extract over the FALLBACK blocks): each block
+ * takes the sections whose heading or key holds its words (narrower blocks first), and its
+ * lines are their bullets and table rows, else their sentences, capped. Never another PRD's
+ * words under this PRD's title.
+ */
+type PrdSection = { section_key: string; level: number; heading: string; body_md: string };
+const FALLBACK_BLOCKS: { key: string; title: string; rules: string; kind: Schemas["OnePagerBlock"]["kind"]; max: number; words: number; whole?: boolean; match: string[] }[] = [
+  { key: "problem", title: "Problem and who has it", rules: "At most 60 words", kind: "text", max: 1, words: 60, whole: true, match: ["problem", "who has it", "who", "user", "customer", "why", "background", "context", "pain"] },
+  { key: "bets", title: "What we will build", rules: "3-5 bets", kind: "lines", max: 5, words: 30, match: ["build", "solution", "scope", "bet", "requirement", "feature", "proposal", "approach", "what we"] },
+  { key: "outcomes", title: "Outcomes and how we measure them", rules: "2-4 metrics, from → to", kind: "metrics", max: 4, words: 30, match: ["outcome", "metric", "success", "measure", "goal", "kpi", "impact"] },
+  { key: "not_doing", title: "Not doing", rules: "At most 5 lines", kind: "lines", max: 5, words: 30, match: ["not doing", "non-goal", "non goal", "out of scope", "won't", "not in scope"] },
+  { key: "risks", title: "Risks and open decisions", rules: "At most 5", kind: "lines", max: 5, words: 30, match: ["risk", "open question", "open decision", "decision", "assumption", "dependenc", "question"] },
+];
+const MATCH_ORDER = ["not_doing", "risks", "outcomes", "problem", "bets"];
+const BULLET = /^\s*(?:[-*+]|\d+[.)])\s+(.*\S)\s*$/;
+const TABLE_SEP = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/;
+const METRIC = /^(.*?)[:\s,-]*\s(?:from\s+)?([~<>]?[$€£]?\d[\d.,]*\s?(?:%|ms|s|x|k|m|days?|hours?|minutes?)?)\s*(?:→|->|\bto\b)\s*([~<>]?[$€£]?\d[\d.,]*\s?(?:%|ms|s|x|k|m|days?|hours?|minutes?)?)/i;
+/** one_pager._plain: markdown marks and links' targets out, footnote marks out, one space. */
+const mdPlain = (t: string) => t.replace(/[*_`]+|\[([^\]]*)\]\([^)]*\)|\[\^?[\w-]+\]/g, (_, link?: string) => link ?? "").split(/\s+/).filter(Boolean).join(" ");
+const cells = (row: string) => {
+  let r = row.trim();
+  if (r.startsWith("|")) r = r.slice(1);
+  if (r.endsWith("|") && !r.endsWith("\\|")) r = r.slice(0, -1);
+  return r.split(/(?<!\\)\|/).map((c) => c.trim());
+};
+const rowLine = (cs: string[]) => cs.map((c) => mdPlain(c.replace(/\\\|/g, "/")).replace(/^[\s|]+|[\s|]+$/g, "")).filter(Boolean).slice(0, 2).join(": ");
+
+/** one_pager._facts: a section's bullets and table body rows, else its sentences; citations resolved. */
+function facts(body: string): string[] {
+  const lines = resolved(uncomment(body)).split("\n");
+  const rows: string[][] = [];
+  const rest: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes("|") && i + 1 < lines.length && TABLE_SEP.test(lines[i + 1])) {
+      i += 2;
+      while (i < lines.length && lines[i].includes("|") && lines[i].trim()) rows.push(cells(lines[i++]));
+      i--;
+      continue;
+    }
+    rest.push(lines[i]);
+  }
+  const listed = [
+    ...rest.flatMap((l) => (BULLET.exec(l) ? [mdPlain(BULLET.exec(l)![1])] : [])),
+    ...rows.map(rowLine),
+  ].filter((x) => x && !templateOnly(x));
+  if (listed.length) return listed;
+  return mdPlain(rest.join("\n")).split(/(?<=[.!?])\s+/).filter((x) => x && !templateOnly(x));
+}
+
+/** one_pager.clip: at most `words` words and 300 characters, cut at a word with "…". */
+function clip(text: string, words: number): [string, string | undefined] {
+  const t = text.split(/\s+/).filter(Boolean).join(" ");
+  const w = t.split(" ");
+  let shown = w.length <= words ? t : `${w.slice(0, words).join(" ").replace(/[,;:]+$/, "")}…`;
+  if (shown.length > 300) {
+    const head = shown.slice(0, 299);
+    shown = `${(head.includes(" ") ? head.slice(0, head.lastIndexOf(" ")) : head).replace(/[,;: …]+$/, "")}…`;
+  }
+  return [shown, shown !== t ? t.slice(0, 2000) : undefined];
+}
+
+export function prdOnePager(doc: OnePagerDb["doc"], prdSections: PrdSection[], cites: Cites = {}): OnePagerDb {
+  const db = seedOnePager();
+  const own = prdSections.filter((s) => s.level > 1 && (s.body_md ?? "").trim());
+  const mapped: Record<string, PrdSection[]> = Object.fromEntries(FALLBACK_BLOCKS.map((b) => [b.key, []]));
+  for (const sec of own) {
+    const name = `${sec.heading} ${sec.section_key}`.toLowerCase().replace(/_/g, " ");
+    const k = MATCH_ORDER.find((key) => FALLBACK_BLOCKS.find((b) => b.key === key)!.match.some((w) => name.includes(w)));
+    if (k) mapped[k].push(sec);
+  }
+  const blocks: OnePagerDb["blocks"] = FALLBACK_BLOCKS.map((spec) => {
+    const secs = mapped[spec.key];
+    const lines: SeedLine[] = [];
+    if (spec.whole) {
+      let text = "";
+      let whole = "";
+      const keys: string[] = [];
+      for (const sec of secs)
+        for (const fact of facts(sec.body_md)) {
+          whole = `${whole} ${fact}`.trim();
+          if (text.split(" ").filter(Boolean).length >= spec.words) continue;
+          text = `${text} ${fact}`.trim();
+          if (!keys.includes(sec.section_key)) keys.push(sec.section_key);
+        }
+      if (text) {
+        const shown = clip(text, spec.words)[0];
+        lines.push({ id: `${spec.key}-1`, text: shown, keys, ...(shown !== whole ? { full: whole.slice(0, 2000) } : {}) });
+      }
+    } else {
+      let all = secs.flatMap((sec) => facts(sec.body_md).map((f) => [f, sec.section_key] as const));
+      if (spec.kind === "metrics") all = [...all].sort((a, b) => Number(!METRIC.test(a[0])) - Number(!METRIC.test(b[0])));
+      all.slice(0, spec.max).forEach(([fact, key], i) => {
+        const [shown, cut] = clip(fact, spec.words);
+        const m = spec.kind === "metrics" ? METRIC.exec(fact) : null;
+        lines.push({
+          id: `${spec.key}-${i + 1}`, text: shown, keys: [key], ...(cut ? { full: cut } : {}),
+          ...(m ? { metric: { name: m[1].replace(/^[\s:,-]+|[\s:,-]+$/g, "") || fact, from: m[2].trim(), to: m[3].trim() } } : {}),
+        });
+      });
+    }
+    return { key: spec.key, title: spec.title, rules: spec.rules, kind: spec.kind, lines };
+  });
+  db.doc = doc;
+  db.cites = cites;
+  db.sections = own.map((s) => ({ key: s.section_key, heading: s.heading, body: s.body_md }));
+  db.blocks = [...blocks, db.blocks.find((b) => b.kind === "timeline")!];
+  return db;
+}
+
+/**
  * As one_pager.milestone_span (P4): from the earliest start of the items under dated milestones
  * (or that date, when earlier) to the latest milestone date; null with no dated milestone.
  */

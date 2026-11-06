@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 
+import { InfoTip } from "@/components/ds";
 import { MarkFor } from "@/components/current-state/CurrentState";
 import { useOpenFeature } from "@/components/simple/OpenFeature";
 import { calendarDay } from "@/lib/dates";
@@ -13,10 +15,46 @@ const ms = (day: string) => Date.parse(`${day}T00:00:00Z`);
 /** The row grid: a label column beside the bars; on a phone the label sits above its bars
  * (qa-simple-prd-38: a narrow label column cut "Checkout redesi…" and "No milestone…"). */
 const GRID = "grid grid-cols-[minmax(10rem,32%)_1fr] gap-x-2 max-[600px]:grid-cols-1";
+/** vqa B-14: on a wide screen the one-pager's label column fits a milestone's name and its item
+ * count ("M1 · Measure it, make it safe · 3 roadmap items"). */
+const WIDE_LABELS = "min-[1280px]:grid-cols-[minmax(10rem,min(26rem,58%))_1fr]";
 
 /** A row's name as read: a bare milestone code says it is a milestone ("Milestone M1"); a
  * named one keeps its name ("M1 · Prove it"). */
 const rowName = (r: PlanStrip["rows"][number]) => (r.milestone && /^M\d{1,2}$/i.test(r.name) ? `Milestone ${r.name}` : r.name);
+
+/**
+ * vqa B-14: a one-pager row's label on one line ("Milestone M1 · 12 roadmap items"), cut with
+ * an ellipsis when the column is too narrow; then an (i) beside it holds the whole label, the
+ * item count with it. The words stay in the label for screen readers and the row's link.
+ */
+function RowLabel({ name, count, testId }: { name: string; count: string; testId: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [cut, setCut] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // A ResizeObserver reports once when it starts, then on every change of the column's width.
+    const ro = new ResizeObserver(() => setCut(el.scrollWidth > el.clientWidth + 1));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [name, count]);
+  const whole = `${name} · ${count}`;
+  return (
+    <span className="flex max-w-full min-w-0 items-center gap-1">
+      <span ref={ref} className="min-w-0 truncate font-semibold" data-testid={`${testId}-label`} data-cut={cut ? "true" : undefined}>
+        <span>{name} ·</span> <span>{count}</span>
+      </span>
+      {cut && (
+        <span className="pointer-events-auto relative z-10">
+          <InfoTip label={whole} align="start" testId={`${testId}-label-tip`}>
+            {whole}
+          </InfoTip>
+        </span>
+      )}
+    </span>
+  );
+}
 
 /**
  * The plan strip (the owner's pick after CLD's production walk, 2026-10-27), on Home and the
@@ -62,20 +100,38 @@ export function PlanByMonth({
   const grid = plan.months.map((m) => (
     <span key={m} aria-hidden data-testid={`${testId}-gridline`} className="pointer-events-none absolute inset-y-0 w-0 border-l border-line" style={{ left: `${pct(m)}%` }} />
   ));
-  const line = today != null && (
-    <span aria-hidden className="pointer-events-none absolute inset-y-0 w-0 border-l-2 border-crit" style={{ left: `${today}%` }} />
-  );
+  // vqa B-14: today's line runs down the rows only, below the month names, never through one
+  // ("Nov"); the first row's piece is the one a test finds.
+  const line = (first: boolean) =>
+    today != null && (
+      <span
+        aria-hidden
+        data-testid={first ? `${testId}-today` : undefined}
+        className="pointer-events-none absolute inset-y-0 w-0 border-l-2 border-crit"
+        style={{ left: `${today}%` }}
+      />
+    );
   // Which rows hold the commitments past the edge (the strip counts them; a row ending past
   // the edge with a committed item holds them): "1 commitment with no milestone ends after Jan".
   const after = `after ${calendarDay(plan.end, { month: "short" })}`;
-  const holders = plan.rows.filter((r) => !r.estimated && r.end > plan.end).map((r) => (r.milestone ? `in ${rowName(r)}` : "with no milestone"));
+  const holderRows = plan.rows.filter((r) => !r.estimated && r.end > plan.end);
+  const holders = holderRows.map((r) => (r.milestone ? `in ${rowName(r)}` : "with no milestone"));
   const holderText = holders.length > 1 ? `${holders.slice(0, -1).join(", ")} and ${holders.at(-1)}` : (holders[0] ?? "");
   // qa4-simple-prd-15: the one-pager counts "roadmap items" in its rows, so its footnote does too.
+  const rowGrid = named ? GRID : `${GRID} ${WIDE_LABELS}`;
   const edgeWord = legend ? ["roadmap item", "roadmap items"] : ["commitment", "commitments"];
-  const edgeLine = `${plan.past_edge} ${plan.past_edge === 1 ? edgeWord[0] : edgeWord[1]}${holderText ? ` ${holderText}` : ""} ${plan.past_edge === 1 ? "ends" : "end"} ${after}`;
+  const ends = plan.past_edge === 1 ? "ends" : "end";
+  // vqa B-14: on the one-pager, when one row holds every item past the edge and only some of
+  // its items end there, the footnote and that row count the row's own items, as its label
+  // does: "No milestone · 2 roadmap items", "1 of 2 ends after Jan", and "1 of the 2 roadmap
+  // items with no milestone ends after Jan", never a bare "1 roadmap item" beside "2".
+  const some = legend && holderRows.length === 1 && plan.past_edge > 0 && plan.past_edge < holderRows[0].items ? holderRows[0] : null;
+  const edgeLine = some
+    ? `${plan.past_edge} of the ${some.items} roadmap items ${holderText} ${ends} ${after}`
+    : `${plan.past_edge} ${plan.past_edge === 1 ? edgeWord[0] : edgeWord[1]}${holderText ? ` ${holderText}` : ""} ${ends} ${after}`;
   return (
     <div data-testid={testId} className="flex flex-col gap-1">
-      <div className={`${GRID} items-end`}>
+      <div className={`${rowGrid} items-end`}>
         <span aria-hidden className="max-[600px]:hidden" />
         <div className="relative h-6 text-[13px] text-text2">
           {plan.months.map((m) => (
@@ -83,58 +139,84 @@ export function PlanByMonth({
               {calendarDay(m, { month: "short" })}
             </span>
           ))}
-          {today != null && (
-            <span data-testid={`${testId}-today`} aria-label={`Today, ${calendarDay(plan.today!, { month: "short", day: "numeric" })}`} className="absolute inset-y-0 w-0 border-l-2 border-crit" style={{ left: `${today}%` }} />
-          )}
         </div>
       </div>
       <ul className="flex flex-col">
-        {shown.map((r) => {
+        {shown.map((r, k) => {
           const left = pct(r.start);
           const width = Math.max(1.5, pct(r.end) - left);
           // qa-simple-prd-p3-15: the one-pager names what the items are.
           const n = `${r.items} ${legend ? "roadmap " : ""}${r.items === 1 ? "item" : "items"}`;
           const label = named ? `${prd.title} · ${r.milestone ? rowName(r) : "no milestone"} · ${n}` : `${rowName(r)} · ${n}`;
           const when = r.date ? calendarDay(r.date, { month: "short", day: "numeric" }) : null;
+          const rowLabel = `${label}${when ? ` · ${when}` : ""}: open the roadmap filtered to ${prd.title}`;
+          const words = (
+            <span className={`flex min-w-0 flex-col leading-tight max-[600px]:flex-row max-[600px]:flex-wrap max-[600px]:items-baseline max-[600px]:gap-x-2 ${named ? "" : "pointer-events-none relative"}`}>
+              {/* qa4-simple-home-7 (Home, named): one line, an ellipsis when it does not fit, the whole label in its
+                  tooltip; vqa B-14 (the one-pager): one line too, the whole label behind an (i) when cut. */}
+              {named ? (
+                <span className="max-w-full min-w-0 truncate font-semibold" title={label} data-testid={`${testId}-label`}>
+                  {label}
+                </span>
+              ) : (
+                <RowLabel name={rowName(r)} count={n} testId={testId} />
+              )}
+              {when && <span className="simple-small tnum">{when}{r.past_edge ? `, after ${calendarDay(plan.end, { month: "short" })}` : ""}</span>}
+              {/* qa4-simple-prd-15: a row with no milestone date that runs past the edge says when it ends;
+                  vqa B-14: how many of its items, when only some do (as the footnote counts them). */}
+              {!when && legend && !r.estimated && r.end > plan.end && (
+                <span className="simple-small" data-testid={`${testId}-ends`}>
+                  {some === r ? `${plan.past_edge} of ${r.items} ${ends} ${after}` : `ends ${after}`}
+                </span>
+              )}
+            </span>
+          );
+          const bars = (
+            <span className={`relative h-7 ${named ? "" : "pointer-events-none"}`}>
+              {grid}
+              <span
+                aria-hidden
+                data-estimated={r.estimated ? "true" : undefined}
+                data-testid={`${testId}-span`}
+                className={`absolute top-2 h-3 rounded ${r.estimated ? "border border-dashed border-accent" : "bg-accent"}`}
+                style={{
+                  left: `${left}%`,
+                  width: `${Math.min(width, 100 - left)}%`,
+                  ...(r.estimated ? { backgroundImage: "repeating-linear-gradient(135deg, var(--accent) 0 4px, transparent 4px 9px)" } : {}),
+                }}
+              />
+              {r.date && !r.past_edge && (
+                <span aria-hidden data-testid={`${testId}-diamond`} className="absolute top-[5px] size-[18px] -translate-x-1/2 rotate-45 border-[3px] border-surface bg-accent-ink" style={{ left: `${pct(r.date)}%` }} />
+              )}
+              {line(k === 0)}
+            </span>
+          );
           return (
             <li key={`${r.name}|${r.date ?? ""}`}>
-              <Link
-                href={href}
-                data-testid={`${testId}-row`}
-                data-milestone={r.milestone ? "true" : undefined}
-                aria-label={`${label}${when ? ` · ${when}` : ""}: open the roadmap filtered to ${prd.title}`}
-                className={`${GRID} items-center rounded-md py-1 hover:bg-surface2`}
-              >
-                <span className="flex min-w-0 flex-col leading-tight max-[600px]:flex-row max-[600px]:flex-wrap max-[600px]:items-baseline max-[600px]:gap-x-2">
-                  {/* qa-docs-10: the label wraps in full, never cutting the name or its count; on Home (named),
-                      qa4-simple-home-7: one line, an ellipsis when it does not fit, the whole label in its tooltip. */}
-                  <span className={`font-semibold ${named ? "max-w-full min-w-0 truncate" : "[overflow-wrap:anywhere]"}`} title={named ? label : undefined} data-testid={`${testId}-label`}>
-                    {/* qa4-simple-prd-14: a label wraps between its name and its count, never mid-phrase. */}
-                    {named ? label : (<><span className="whitespace-nowrap">{rowName(r)} ·</span> <span className="whitespace-nowrap">{n}</span></>)}
-                  </span>
-                  {when && <span className="simple-small tnum">{when}{r.past_edge ? `, after ${calendarDay(plan.end, { month: "short" })}` : ""}</span>}
-                  {/* qa4-simple-prd-15: a row with no milestone date that runs past the edge says when it ends. */}
-                  {!when && legend && !r.estimated && r.end > plan.end && <span className="simple-small" data-testid={`${testId}-ends`}>ends {after}</span>}
-                </span>
-                <span className="relative h-7">
-                  {grid}
-                  <span
-                    aria-hidden
-                    data-estimated={r.estimated ? "true" : undefined}
-                    data-testid={`${testId}-span`}
-                    className={`absolute top-2 h-3 rounded ${r.estimated ? "border border-dashed border-accent" : "bg-accent"}`}
-                    style={{
-                      left: `${left}%`,
-                      width: `${Math.min(width, 100 - left)}%`,
-                      ...(r.estimated ? { backgroundImage: "repeating-linear-gradient(135deg, var(--accent) 0 4px, transparent 4px 9px)" } : {}),
-                    }}
-                  />
-                  {r.date && !r.past_edge && (
-                    <span aria-hidden data-testid={`${testId}-diamond`} className="absolute top-[5px] size-[18px] -translate-x-1/2 rotate-45 border-[3px] border-surface bg-accent-ink" style={{ left: `${pct(r.date)}%` }} />
-                  )}
-                  {line}
-                </span>
-              </Link>
+              {named ? (
+                <Link
+                  href={href}
+                  data-testid={`${testId}-row`}
+                  data-milestone={r.milestone ? "true" : undefined}
+                  aria-label={rowLabel}
+                  className={`${rowGrid} items-center rounded-md py-1 hover:bg-surface2`}
+                >
+                  {words}
+                  {bars}
+                </Link>
+              ) : (
+                // vqa B-14: the whole row opens the roadmap (a link laid over it), and the label's (i)
+                // sits above that link, never a button inside a link.
+                <div
+                  data-testid={`${testId}-row`}
+                  data-milestone={r.milestone ? "true" : undefined}
+                  className={`${rowGrid} relative items-center rounded-md py-1 hover:bg-surface2`}
+                >
+                  <Link href={href} aria-label={rowLabel} className="absolute inset-0 rounded-md" />
+                  {words}
+                  {bars}
+                </div>
+              )}
               {items && (r.item_ids ?? []).some((id) => titles.has(id)) && (
                 // The row's items, one per line: the name wraps whole, its pill says what it is.
                 <ul data-testid={`${testId}-items`} aria-label={`${rowName(r)}: its roadmap items`} className="simple-small flex flex-col gap-1 pb-2 pl-3 pt-0.5">

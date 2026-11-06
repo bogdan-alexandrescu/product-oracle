@@ -52,7 +52,7 @@ const BLOCK_NOUN: Record<string, string> = {
   "Critical blocker": "critical blocker",
   "Security or policy": "security or policy problem",
   "Third-party": "third-party problem",
-  "Hard check": "failed check",
+  "Failed check": "failed check",
   "Unconfirmed date": "unconfirmed date",
 };
 /** The kinds whose approve checks the dates the text writes, not the PRD checks (api/oracle/review/publish_gate.py). */
@@ -101,7 +101,7 @@ function blocksOf(doc: string, n: number, readiness: Readiness, strategy: Schema
       {
         id: key,
         title: item?.title ?? key,
-        kind: CHECK_KIND[key] ?? "Hard check",
+        kind: CHECK_KIND[key] ?? "Failed check",
         href: section(item?.section_keys[0]) ?? entity(item?.evidence_ids[0]),
         check: item,
       },
@@ -309,12 +309,12 @@ function BlockInspector({
     <Inspector
       testId="publish-inspector"
       label="Selected block"
-      eyebrow="Block · selected"
+      eyebrow="Selected"
       title={block.title}
       chips={
         <>
           <Chip hero>{block.kind}</Chip>
-          {(block.check || block.blocker) && <Chip hero>Hard check</Chip>}
+          {(block.check || block.blocker) && <Chip hero>Must fix</Chip>}
         </>
       }
       action={
@@ -780,6 +780,8 @@ export function PublishView({ doc }: { doc: string }) {
         // build-review: an approved version reads "Approved" in both modes; Publish stays the button's name.
         back={<DocCrumb doc={d} />}
         title="Publish"
+        // B-23: the phone bar reads "Publish" alone; the crumb already names the document.
+        phoneSuffix={false}
         suffix={d ? `${d.title}${n != null ? ` v${n}` : ""}` : undefined}
         status={sharable && published ? undefined : blocksChip}
         action={action}
