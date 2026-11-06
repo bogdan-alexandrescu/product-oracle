@@ -1,0 +1,68 @@
+import { login } from "./helpers";
+import { expect, test } from "./test";
+
+/**
+ * C-8: the one-pager's Present is a run of full-screen slides, driven through the UI on the
+ * mock's invented PRD "guided-setup", on a desktop and a phone, light and dark.
+ *
+ * Card one-pager-present-slides: protects = Present shows one block a slide (the problem,
+ * what we build, outcomes, not doing, risks), then the timeline on its own slide; the
+ * arrow keys and Space page them, the count says where you are, the type is larger than
+ * the page's, the Next and Previous buttons page them too, and Stop presenting ends it;
+ * fails_when = Present is the same page without its menu, the keys do nothing, or the
+ * timeline sits below the fold; no_claim = the browser's own full-screen frame.
+ */
+
+const URL = "/simple/prds/guided-setup";
+
+for (const phone of [false, true]) {
+  for (const scheme of ["light", "dark"] as const) {
+    test.describe(`${phone ? "phone" : "desktop"} · ${scheme}`, () => {
+      test.use({ viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 900 }, colorScheme: scheme });
+
+      test("Present pages through one slide a block, the timeline last", async ({ page }) => {
+        await login(page, "viewer@example.com");
+        await page.goto(URL);
+        await expect(page.getByRole("heading", { level: 1, name: "Guided setup" })).toBeVisible();
+        await page.getByRole("button", { name: "Present" }).click();
+        await expect(page.getByTestId("one-pager")).toHaveAttribute("data-presenting", "true");
+        const slide = page.getByTestId("slide");
+        const count = page.getByTestId("slide-count");
+        await expect(slide.getByRole("heading", { level: 2 })).toHaveText("Problem and who has it");
+        await expect(count).toHaveText(/^1 \/ 6$/);
+        await expect(slide).toContainText("New workspace admins stall during setup");
+        // The page's own blocks are not under the slide.
+        await expect(page.getByRole("region", { name: "What we will build" })).toHaveCount(0);
+        const size = await slide.locator("li").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+        expect(size).toBeGreaterThanOrEqual(20);
+
+        await page.keyboard.press("ArrowRight");
+        await expect(slide.getByRole("heading", { level: 2 })).toHaveText("What we will build");
+        await expect(count).toHaveText("2 / 6");
+        await expect(slide).toContainText("A setup checklist that shows the next step");
+        await page.keyboard.press("Space");
+        await expect(slide.getByRole("heading", { level: 2 })).toHaveText("Outcomes and how we measure them");
+        await expect(slide).toContainText("48% → 65%");
+        await page.keyboard.press("ArrowLeft");
+        await expect(count).toHaveText("2 / 6");
+        await page.getByRole("button", { name: "Next slide" }).click();
+        await page.getByRole("button", { name: "Next slide" }).click();
+        await expect(slide.getByRole("heading", { level: 2 })).toHaveText("Not doing");
+        await page.keyboard.press("ArrowRight");
+        await expect(slide.getByRole("heading", { level: 2 })).toHaveText("Risks and open decisions");
+        await page.keyboard.press("ArrowRight");
+        await expect(count).toHaveText("6 / 6");
+        await expect(slide.getByRole("heading", { level: 2 })).toHaveText("Timeline");
+        // The timeline is the slide, in view without scrolling.
+        await expect(slide.getByText("Today").first()).toBeInViewport();
+        await expect(page.getByRole("button", { name: "Next slide" })).toBeDisabled();
+        await page.keyboard.press("ArrowRight");
+        await expect(count).toHaveText("6 / 6");
+
+        await page.getByRole("button", { name: "Stop presenting" }).click();
+        await expect(page.getByTestId("one-pager")).not.toHaveAttribute("data-presenting", "true");
+        await expect(page.getByRole("region", { name: "What we will build" })).toBeVisible();
+      });
+    });
+  }
+}
