@@ -60,9 +60,10 @@ export function entryText(root: TrashItem, items: TrashItem[]): string {
   return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
 }
 
-/** A toast's few words for a Trash entry: "Usage alerts PRD and 3 items that went with it". */
+/** A toast's few words for a Trash entry: "Usage alerts PRD and 3 items that went with it"; a
+ * feature by its code and name ("F-26 Alert rules engine"), as its Trash row reads it. */
 export function entrySummary(root: TrashItem, items: TrashItem[]): string {
-  const name = root.type === "run" ? itemTitle(root, root.title) : root.title;
+  const name = root.code ? `${root.code} ${root.title}` : root.type === "run" ? itemTitle(root, root.title) : root.title;
   const n = items.length;
   return n ? `${name} and ${n} ${n === 1 ? "item" : "items"} that went with it` : name;
 }
