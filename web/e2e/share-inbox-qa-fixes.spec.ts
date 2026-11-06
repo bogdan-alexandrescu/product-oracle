@@ -54,11 +54,13 @@ for (const scheme of ["light", "dark"] as const) {
     });
 
     test("G-5: every Inbox row's Open is one bordered button, and a long title wraps", async ({ page }) => {
+      // Comment rows (feedback with nothing to accept) beside Proposal and "Oracle asks" rows.
+      await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "suggestions"));
       await login(page);
       await page.goto("/inbox");
       await expect(page.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible();
-      const needs = page.getByTestId("inbox-needs");
-      const comment = needs.locator("tr[data-row]").filter({ hasText: "Comment" }).first();
+      const needs = page.getByRole("tabpanel");
+      const comment = needs.getByTestId("inbox-feedback").locator("tr[data-row]").filter({ hasText: "Comment" }).first();
       await expect(comment.getByRole("link", { name: /^Open/ })).toHaveAttribute("data-variant", "secondary");
       const opens = needs.getByRole("link", { name: /^Open/ });
       await expect(opens.first()).toBeVisible();
