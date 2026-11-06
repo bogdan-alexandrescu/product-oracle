@@ -16,7 +16,7 @@ import { expect, test, type Locator, type Page } from "./test";
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 
-async function open(page: Page, role?: "commenter") {
+async function open(page: Page, role?: "commenter" | "approver") {
   await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, LADDER_SCENARIO] as const);
   if (role) await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_ROLE_KEY, role] as const);
   await login(page);
@@ -177,6 +177,23 @@ for (const [label, size] of [["1440", DESKTOP], ["390", PHONE]] as const) {
       const row = page.getByRole("listitem").filter({ hasText: "Half the support tickets per team" }).first();
       await expect(row.getByTestId("trash-kind")).toHaveText("Goal");
       await expect(row.getByRole("button", { name: /Restore/ })).toBeVisible();
+    });
+
+    test("an approver who is not the roadmap's decider gets no Move to Trash on a milestone", async ({ page }) => {
+      // protects=a milestone's can_change (the roadmap's owner or decider, as the API's 403 checks) gates
+      // its ⋯ menu, its grip and its Delete key, not the map's can_edit: an approver turns on Edit ladder
+      // and sees no Move to Trash on a key result (their goal and feature menus stay);
+      // fails_when=the approver is offered a Trash the API then refuses; no_claim=the decider's own menu.
+      await open(page, "approver");
+      await page.getByTestId("ld-edit").click();
+      const kr = krCard(page, "Renewal rate at 85% for spring renewals");
+      await expect(kr).toHaveCount(1);
+      await expect(kr.getByTestId("ld-more")).toHaveCount(0);
+      await kr.focus();
+      await page.keyboard.press("Delete");
+      await expect(kr).toHaveCount(1);
+      await expect(page.getByRole("menuitem", { name: "Move to Trash", exact: true })).toHaveCount(0);
+      await expect(goalCard(page, "Half the support tickets per team").getByTestId("ld-more").first()).toBeVisible();
     });
 
     test("a commenter's drop becomes a suggestion", async ({ page }) => {
