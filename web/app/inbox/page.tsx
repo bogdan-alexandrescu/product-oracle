@@ -110,8 +110,9 @@ function Inbox() {
   // Remind on a one-pager: a PRD's owner or decider nudged me to review its draft.
   const reminderRows = useReminderRows(seenBefore);
   const rows = inbox ? [...allNeeds(inbox, asked.rows, busy, act, seenBefore, onActed, false, fixed, requests.rows, perms), ...webhookRows, ...reminderRows, ...minutesRows(inbox.simple_minutes ?? [])] : null;
-  const waiting = rows ? waitingNeeds(rows).length : undefined;
   const kindRows = rows && kind ? rows.filter((r) => needKind(r.group) === kind.id) : rows;
+  // Under ?kind= the header counts that kind only, as Home's chip did.
+  const waiting = kindRows ? waitingNeeds(kindRows).length : undefined;
 
   return (
     <Page>
@@ -141,14 +142,15 @@ function Inbox() {
           // last visit does not hold an emptied New open).
           key={`${arrived ? (arrivalQ.data ?? "first") : "arriving"}|${kind?.id ?? "all"}`}
           rows={kindRows}
-          waiting={waitingNeeds(kindRows).length} questionsError={questionsQ.error} notice={notice} onTabChange={() => {
+          waiting={waiting ?? 0} questionsError={questionsQ.error} notice={notice} onTabChange={() => {
             asked.moveSettled();
           }}
         />
       )}
       {asked.sheet}
       {/* qa-shell-19: only someone who can edit a source is asked to fix one. */}
-      {sourcesQ.data && perms.can("update_source") && <SourcesNeedingAttention sources={sourcesQ.data} mayEdit />}
+      {/* Sources to fix are no kind of Home's: hidden under ?kind= until Show all. */}
+      {!kind && sourcesQ.data && perms.can("update_source") && <SourcesNeedingAttention sources={sourcesQ.data} mayEdit />}
     </Page>
   );
 }

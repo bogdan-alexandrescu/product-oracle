@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 
-import { Button, Chip, type ChipKind } from "@/components/ds";
+import { Button, Chip, InfoTip, type ChipKind } from "@/components/ds";
 import { FIELD_LABEL, InlineError, SELECT, TEXTAREA } from "@/components/review/parts";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import {
@@ -191,7 +191,7 @@ function ChangeRow({ c, d, onDone }: { c: ChangeOut; d: Discussion; onDone: () =
   // (Record: F3's date rights, which the change's action carries).
   const op = action ? VERB_OP[action.verb] : undefined;
   const allowed = !!action?.allowed && (!op || can(op, action.allowed));
-  // QA pass D-4: why the action is off, as a line under the buttons a phone can read (no tooltip only).
+  // QA pass D-4: why the action is off, in an (i) beside it that opens on tap, so a phone can read it.
   const whyNot = action && !allowed ? action.why_not : null;
   const whyId = useId();
 
@@ -262,9 +262,16 @@ function ChangeRow({ c, d, onDone }: { c: ChangeOut; d: Discussion; onDone: () =
       {buttons && mode === null && (
         <span className="flex flex-wrap gap-1" data-testid="change-actions">
           {action && (
-            <Button variant="solid" disabled={busy || !allowed} aria-describedby={whyNot ? whyId : undefined} onClick={act}>
-              {action.verb}
-            </Button>
+            <span className="inline-flex items-center gap-1">
+              <Button variant="solid" disabled={busy || !allowed} aria-describedby={whyNot ? whyId : undefined} onClick={act}>
+                {action.verb}
+              </Button>
+              {whyNot && (
+                <InfoTip id={whyId} label={`why you cannot ${action.verb.toLowerCase()}`} align="start">
+                  {whyNot}
+                </InfoTip>
+              )}
+            </span>
           )}
           {c.can.suggest && (
             <Button disabled={busy} onClick={() => void run(() => actOnChange(c, "suggest"))}>
@@ -287,11 +294,6 @@ function ChangeRow({ c, d, onDone }: { c: ChangeOut; d: Discussion; onDone: () =
             </Button>
           )}
         </span>
-      )}
-      {buttons && mode === null && whyNot && (
-        <p id={whyId} className="text-sm text-text2" data-testid="change-why-not">
-          {whyNot}
-        </p>
       )}
       {mode === "stage" && (
         <StageForm c={c} subject={d.subject_label} busy={busy} onStage={(extra) => void run(() => actOnChange(c, "stage", extra))} onCancel={() => setMode(null)} />
