@@ -4231,7 +4231,8 @@ function load(): Db {
   }
   // P-1: the goal map is seeded with the db, not on its first read, so its features (roadmap
   // items "gm-f1", ...) are on every page from the first load, whichever page opens first.
-  db.goal_map ??= seedGoalMap(scenario);
+  // A new company ("empty") has no features on its map yet.
+  db.goal_map ??= scenario === "empty" ? { ...seedGoalMap(scenario), features: [] } : seedGoalMap(scenario);
   if (db.simple_roadmap) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
   save(db);
   // The caller owns this object now (see `cached`).
