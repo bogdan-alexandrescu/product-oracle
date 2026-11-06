@@ -576,7 +576,8 @@ function ShareLinks({ doc, reloadKey }: { doc: string; reloadKey: number }) {
     }
   };
   const columns: Column<Link_>[] = [
-    { key: "label", header: "Label", width: "20%", phone: "title", wrap: true, cell: (l) => <span className="font-medium">{l.label}</span> },
+    // R-5: the label takes the room the fixed columns leave; the actions keep theirs.
+    { key: "label", header: "Label", phone: "title", wrap: true, cell: (l) => <span className="font-medium">{l.label}</span> },
     { key: "audience", header: "Audience", width: "110px", phone: "meta", cell: (l) => audienceLabel(l.audience) },
     { key: "version", header: "Version", width: "80px", phone: "meta", cell: (l) => <span className="tnum">v{l.version_number}</span> },
     { key: "by", header: "Created by", width: "120px", narrow: "mid", phone: "hide", cell: (l) => l.created_by_name ?? "A member" },
@@ -642,6 +643,10 @@ function ShareLinks({ doc, reloadKey }: { doc: string; reloadKey: number }) {
     {
       key: "actions",
       header: "",
+      // R-5: room for "New passcode" whole; the owner's other buttons wrap beneath it. An
+      // empty table has no buttons, and its empty row spans the hidden columns too, so Label
+      // shares the room with it there.
+      width: links.length > 0 ? "160px" : undefined,
       phone: "meta",
       wrap: true,
       cell: (l) => {
