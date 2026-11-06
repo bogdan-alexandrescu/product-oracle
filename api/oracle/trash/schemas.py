@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 # edit-decisions: an open decision or a PRD question (oracle.simple.decision_sheet).
 # port-an-decisions: a meeting's agenda item or a request.
 # removed-tracks: a product track.
+# goal-map-editing: a goal milestone.
 TrashItemType = Literal[
     "document",
     "intake",
@@ -19,6 +20,7 @@ TrashItemType = Literal[
     "agenda_item",
     "request",
     "track",
+    "milestone",
 ]
 
 
@@ -30,7 +32,7 @@ class TrashItem(BaseModel):
     slug: str | None = None
     title: str
     # A document's kind (prd, roadmap, spec, update, ...), "intake", a run's flow,
-    # "feature", "goal" or "Track".
+    # "feature", "goal", "Track" or "Milestone".
     kind: str
     # A feature's code on its roadmap ("F-26"), shown before its name.
     code: str | None = None

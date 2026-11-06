@@ -44662,6 +44662,57 @@
         "x-min-role": "approver"
       }
     },
+    "/v1/simple/goal-map/links/detach": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Detach Feature Link",
+        "description": "goal-map-editing: a feature no longer serves the milestone (Edit ladder).",
+        "operationId": "detach_feature_link",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DetachIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalMapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "approver"
+      }
+    },
     "/v1/simple/goal-map/place-card": {
       "post": {
         "tags": [
@@ -71861,6 +71912,27 @@
         ],
         "title": "DesignReviewOut"
       },
+      "DetachIn": {
+        "properties": {
+          "feature": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Feature"
+          },
+          "milestone": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Milestone"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feature",
+          "milestone"
+        ],
+        "title": "DetachIn",
+        "description": "goal-map-editing: a feature let go of one milestone (dropped on \"Not on a key\nresult\" or \"No goal\")."
+      },
       "DiffLine": {
         "properties": {
           "op": {
@@ -82940,6 +83012,18 @@
           "name": {
             "type": "string",
             "title": "Name"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal"
           }
         },
         "type": "object",
@@ -82948,7 +83032,7 @@
           "name"
         ],
         "title": "GmUnplaced",
-        "description": "A feature of the Simple roadmap serving no milestone of the map."
+        "description": "A feature of the Simple roadmap serving no milestone of the map, with the goal its\nitem serves (goal-map-editing: the ladder draws it under that goal, else in No goal)."
       },
       "GoalBucketFeature": {
         "properties": {
@@ -141669,7 +141753,8 @@
               "question",
               "agenda_item",
               "request",
-              "track"
+              "track",
+              "milestone"
             ],
             "title": "Type"
           },

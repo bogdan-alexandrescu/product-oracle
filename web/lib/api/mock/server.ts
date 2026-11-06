@@ -193,7 +193,7 @@ import { knowPrdOrder } from "./prd-rank";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, knowGoalMapItems, ownPrd, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, MAP_GOALS, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
-import { goalMapGoals, goalMapIdOf, goalMapItems, routeGoalMap, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
+import { goalMapGoals, goalMapIdOf, goalMapItems, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
@@ -4015,7 +4015,11 @@ function load(): Db {
                     for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") e.status = "proposed";
                     for (const g of ladderGoals(goalMapIdOf)) db.baseline.entities.push({ ...template, ...g, status: "confirmed", body: null, locked: false, locked_by: null, locked_at: null });
                     const rm = (db.simple_roadmap = seedSimpleRoadmap());
-                    rm.items = ladderItems().map((x) => ({ ...x, heading: `${x.section.toUpperCase()} ${x.title}`, horizon: "next" as const, roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium" as const }));
+                    // goal-map-editing: a feature on no milestone names its goal itself (by the goal's id).
+                    rm.items = ladderItems().map(({ goal, ...x }) => ({ ...x, heading: `${x.section.toUpperCase()} ${x.title}`, horizon: "next" as const, roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium" as const, ...(goal ? { map_goal: goalMapIdOf(goal) } : {}) }));
+                    // goal-map-editing: one goal store, so a ladder goal goes to Trash as any goal does.
+                    const gb = (rm.goal_buckets = seedGoalBuckets());
+                    for (const g of ladderGoals(goalMapIdOf)) gb.goals.push({ id: g.id, key: g.key, title: g.title, order: gb.goals.length + 1, measure: String(g.attrs.metric ?? ""), target: String(g.attrs.target ?? ""), due: null, archived: false });
                     rm.ids = Object.fromEntries(rm.items.map((x) => [x.key, stableUuid(`simple-item/${x.key}`)]));
                     return db;
                   }
@@ -6472,7 +6476,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       // TRASH_KEPT_LINKS_SCENARIO: a PRD trashed before this release kept its request links.
       onTrash: (ids) => (localStorage.getItem(MOCK_SCENARIO_KEY) === TRASH_KEPT_LINKS_SCENARIO ? undefined : releaseDocuments(ensureRequests(db), ids)),
       // edit-decisions: Restore puts a decision or a PRD's question back on Simple's Decisions too.
-      simple: () => db.simple_roadmap && { ...db.simple_roadmap, sheet: [...(db.simple_meetings?.decisions ?? []), ...(db.simple_meetings?.questions?.questions ?? [])] },
+      // goal-map-editing: and a goal map milestone back on the map.
+      simple: () => db.simple_roadmap && { ...db.simple_roadmap, sheet: [...(db.simple_meetings?.decisions ?? []), ...(db.simple_meetings?.questions?.questions ?? [])], goal_map: db.goal_map },
       // As the API: the draft only when the person starting the run may see it.
       roadmapRead: (starter) => roadmapRead(db.documents, db.versions, db.simple_roadmap, String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"), (d) => seesDraft(d, starter, db.simple_roadmap)),
       onRestore: (released) => (db.simple_roadmap && restoreTrack(db.simple_roadmap, released)) || relinkDocuments(ensureRequests(db), released as ReleasedRequest[], (id) => ensureV2(db).intakes.some((i) => i.id === id)),
@@ -7419,21 +7424,24 @@ async function route(db: Db, req: Request): Promise<Response> {
     };
     const bucketsRes = await routeGoalBuckets(db.simple_roadmap!, me.role, r, p, bin);
     if (bucketsRes) return bucketsRes;
+    // goal-ladder: add_item (and goal-map-editing: set_goal) may name any confirmed goal by its id (additions._where), as Home's goals are the map's.
+    if (db.goal_map) for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") MAP_GOALS[e.id] = e.title;
+    // goal-map-editing: the map's milestones are Simple Roadmap's own (edit, Trash, restore).
+    const ladderMsRes = await routeLadderMilestone(db, { id: me.id, role: me.role, name: simpleNames[me.id] ?? me.email }, r, p, bin.trash, bin.now);
+    if (ladderMsRes) return ladderMsRes;
     const goalMapRes = await routeGoalMap(db, localStorage.getItem(MOCK_SCENARIO_KEY), { role: me.role, name: simpleNames[me.id] ?? "You", id: me.id }, r, p, (itemId) => {
       const key = db.simple_roadmap && Object.keys(db.simple_roadmap.ids).find((k) => db.simple_roadmap!.ids[k] === itemId);
       return db.simple_roadmap?.items.find((i) => i.key === key) ?? null;
     }, async () => {
       // goal-map-scoreboard: the Simple roadmap as this reader reads it (goal_map._unplaced reads service.load).
       const read = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, new Request("http://mock/v1/simple/roadmap"), ["v1", "simple", "roadmap"], new URLSearchParams());
-      const body = read && read.ok ? ((await read.json()) as { items: { id: string; title: string; status: string }[] }) : { items: [] };
+      const body = read && read.ok ? ((await read.json()) as { items: { id: string; title: string; status: string; goal?: { id: string } | null }[] }) : { items: [] };
       return body.items;
-    }, () => db.baseline.entities.filter((e) => e.type === "goal"));
+    }, () => db.baseline.entities.filter((e) => e.type === "goal"), (goalId) => !!db.simple_roadmap?.goal_buckets?.goals.some((g) => g.id === goalId && g.trashed));
     // one-feature-panel: the map's features are roadmap items (their panel opens on their own item).
     if (db.goal_map) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
     // pre-demo QA P-6: the panel reads the goal each feature serves on the map (one link, service._ladder_goals).
     if (db.goal_map && db.simple_roadmap) db.simple_roadmap.map_goals = goalMapGoals(db.goal_map, db.baseline.entities.filter((e) => e.type === "goal"));
-    // goal-ladder: add_item may name any confirmed goal by its id (additions._where), as Home's goals are the map's.
-    if (db.goal_map) for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") MAP_GOALS[e.id] = e.title;
     if (goalMapRes) return goalMapRes;
     const simpleRes = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, r, p, q);
     if (simpleRes) return simpleRes;

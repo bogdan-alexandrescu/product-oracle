@@ -38,7 +38,7 @@ from oracle.tenancy import tenant_session
 from tests.test_simple_goal_map_api import URL, read, world
 
 DETACH = f"{URL}/links/detach"
-MILESTONE = "/v1/simple/milestones/{}"
+MILESTONE = "/v1/simple/roadmap/milestones/{}"
 NOW = datetime(2026, 11, 3, 17, 0, tzinfo=UTC)
 
 

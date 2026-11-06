@@ -85,7 +85,7 @@ for (const [label, size] of [["1440", DESKTOP], ["390", PHONE]] as const) {
 
     test("a feature on no milestone, put on a milestone: it moves there and the badge count drops", async ({ page }) => {
       // protects=every feature is on the ladder (F-66 under Goal 1's "Not on a key result"), the
-      // badge leads to those groups, and a drop (or Move to… on a phone) links it to M1 with Undo;
+      // badge leads to those groups, and a drop (or Move to… on a phone) links it to M3 with Undo;
       // fails_when=unlinked features are not drawn, the drop only places the card, or the badge
       // keeps its count; no_claim=the API's link (pytest test_simple_goal_ladder_editing_api).
       await open(page);
@@ -99,14 +99,15 @@ for (const [label, size] of [["1440", DESKTOP], ["390", PHONE]] as const) {
       await expect(free).toContainText("Not on a key result");
       if (!phone(page)) await expect(page.getByTestId("ld-nogoal")).toContainText("F-64");
       await page.getByTestId("ld-edit").click();
-      const m1 = page.locator("[data-ld-group]").filter({ hasText: "Weekly active teams first measured" }).first();
+      // M3, the goal's last milestone: its work sits just above the group.
+      const m3 = page.locator("[data-ld-group]").filter({ hasText: "Mobile check-ins weekly for half of teams" }).first();
       if (phone(page)) {
         await menu(page, card(page, "F-66"), "Move to…");
-        await page.getByTestId("ld-move-sheet").getByText("Weekly active teams first measured").click();
+        await page.getByTestId("ld-move-sheet").getByText("Mobile check-ins weekly for half of teams").click();
         await page.getByTestId("ld-move-go").click();
-      } else await drag(page, card(page, "F-66"), m1.locator("span").first());
-      await expect(toast(page, "Moved F-66")).toContainText("Weekly active teams first measured");
-      await expect(m1.getByTestId("ld-feature").filter({ hasText: "F-66" })).toHaveCount(1);
+      } else await drag(page, card(page, "F-66"), m3.locator("span").first());
+      await expect(toast(page, "Moved F-66")).toContainText("Mobile check-ins weekly for half of teams");
+      await expect(m3.getByTestId("ld-feature").filter({ hasText: "F-66" })).toHaveCount(1);
       await expect(badge).toHaveText("5 features serve no gate");
     });
 
@@ -167,7 +168,7 @@ for (const [label, size] of [["1440", DESKTOP], ["390", PHONE]] as const) {
       await page.getByTestId("ld-edit").click();
       if (phone(page)) await goalTab(page, 4);
       await menu(page, goalCard(page, "Half the support tickets per team"), "Move to Trash");
-      const dialog = page.getByRole("dialog");
+      const dialog = page.getByRole("alertdialog");
       await expect(dialog).toContainText("3 milestones");
       await dialog.getByRole("button", { name: "Move to Trash" }).click();
       await expect(toast(page, "to Trash")).toContainText("Half the support tickets per team");

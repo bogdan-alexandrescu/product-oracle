@@ -604,7 +604,8 @@ function Flags({ map, open }: { map: GoalMap; open: Ctx["open"] }) {
         </button>
       )}
       {unplaced > 0 && (
-        <button type="button" data-testid="gm-flag-unplaced" className={chip} onClick={() => open("unplaced")}>
+        // goal-map-editing: leads to the features on no milestone on the ladder, highlighted.
+        <button type="button" data-testid="gm-flag-unplaced" className={chip} onClick={() => window.dispatchEvent(new Event("ld-show-loose"))}>
           {unplaced} {unplaced === 1 ? "feature serves" : "features serve"} no gate
         </button>
       )}

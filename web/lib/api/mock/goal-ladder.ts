@@ -2,7 +2,7 @@
  * goal-ladder: the "goal-ladder" scenario (LADDER_SCENARIO), the Goal map drawn as the Goal
  * ladder at real volume: four goals in priority order and a guardrail, twelve milestones, 63
  * features under them (one serving two milestones, in two goals), one more with no roadmap item, two Simple roadmap
- * features with no goal (the map's unplaced) and about 40 dependencies, some across goals. Each feature
+ * features with no goal and four serving a goal but no milestone (the map's unplaced) and about 40 dependencies, some across goals. Each feature
  * is its own Simple roadmap item ("gm-f1", ...; code F-01, ...) with its status, dates and
  * what it waits on, as the API reads them. Invented company, people and products only.
  */
@@ -129,6 +129,11 @@ const ROWS: Row[] = [
   ["Weekly summary email every owner can tune", "g1", "m1", "Reports", "planned", "2026-11-16", "2026-12-18", [3]],
   ["Accessibility pass on boards, lists and forms", null, "", "Platform", "planned", "2026-11-23", "2027-01-15", []],
   ["Year-end export of all projects for records", null, "", "Platform", "planned", null, null, []],
+  // goal-map-editing: features that serve a goal but no milestone yet ("Not on a key result").
+  ["Team templates gallery", "g1", "", "Reports", "planned", null, null, []],
+  ["Usage tips in the weekly email", "g1", "", "Support", "planned", null, null, []],
+  ["Bulk invite from a spreadsheet", "g2", "", "Onboarding", "planned", null, null, []],
+  ["Seat usage chart for admins", "g3", "", "Billing", "planned", null, null, []],
 ];
 /** F-03 also serves M10 (two milestones, two goals). */
 const ALSO: Record<number, string> = { 3: "m10" };
@@ -138,7 +143,7 @@ const pad = (n: number) => String(n).padStart(2, "0");
 /** The ladder's goal map (short ids: goal-map.ts gives them the API's UUIDs; features are "f1"...). */
 export function ladderMap(): GoalMap {
   const features: GmFeature[] = ROWS.flatMap(([name, g, m, a], i) => {
-    if (!g) return [];
+    if (!g || !m) return [];
     const milestones = [m, ...(ALSO[i + 1] ? [ALSO[i + 1]] : [])].map((x) => `l${x}`);
     const link = (milestone: string) => ({ milestone, expected: "", confidence: "Medium" as const, measured: null, lift: "not_measured" as const, shipped_on: null, before: null, after: null });
     return [{ id: `f${i + 1}`, name, area: area(a), milestones, lever: a, expected: "", confidence: "Medium" as const, released: false, measured: null, lift: "not_measured" as const, links: milestones.map(link) }];
@@ -169,9 +174,13 @@ export function ladderGoals(idOf: (k: string) => string): { id: string; key: str
   return GOALS.map((g) => ({ id: idOf(g.id), key: `g.${g.id}`, title: g.name, status: "confirmed", attrs: { metric: g.measure, target: g.target, unit: g.unit, math: g.math, position: g.position } }));
 }
 
-/** Each feature as its Simple roadmap item: key, title, code's section, status, dates and what it waits on. */
-export function ladderItems(): { key: string; title: string; section: string; status: "done" | "in_progress" | "planned"; dates?: { start: string | null; end: string; source: "engineering" }; depends: string[] }[] {
-  return ROWS.map(([title, , , , status, start, end, deps], i) => ({
+/**
+ * Each feature as its Simple roadmap item: key, title, code's section, status, dates and what it
+ * waits on; one on no milestone names its goal itself (`goal`, the ladder's short id: "lg1").
+ */
+export function ladderItems(): { key: string; title: string; section: string; status: "done" | "in_progress" | "planned"; dates?: { start: string | null; end: string; source: "engineering" }; depends: string[]; goal?: string }[] {
+  return ROWS.map(([title, g, m, , status, start, end, deps], i) => ({
     key: `gm-f${i + 1}`, title, section: `f-${pad(i + 1)}`, status, ...(end ? { dates: { start, end, source: "engineering" as const } } : {}), depends: deps.map((d) => `gm-f${d}`),
+    ...(g && !m ? { goal: `l${g}` } : {}),
   }));
 }

@@ -40,6 +40,7 @@ import {
   openDraft,
   GOALS,
   MAP_GOALS,
+  mapGoalRef,
   goalId,
   goalIdsOf,
   itemDeciderId,
@@ -380,7 +381,7 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
     else if (f === "feature_id") out[f] = s.feature_id ?? null;
     else if (f === "track_id") out[f] = s.track ? stableUuid(`simple-track/${s.track}`) : null;
     else if (f === "goal_ids") out[f] = goalIdsOf(s);
-    else if (f === "goal_id") out[f] = s.goal && !goalInTrash(db, s.goal) ? stableUuid(`simple-goal/${s.goal}`) : null;
+    else if (f === "goal_id") out[f] = s.goal && !goalInTrash(db, s.goal) ? stableUuid(`simple-goal/${s.goal}`) : s.map_goal && mapGoalRef(db, s.map_goal) ? s.map_goal : null;
     else if (f === "prd_document_id") out[f] = ownPrd(s).id;
     else if (f === "depends_on") out[f] = [...(s.depends ?? [])];
     else if (f === "status") out[f] = s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned");
@@ -413,7 +414,11 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
   if ("feature_id" in values) s.feature_id = (values.feature_id as string | null) ?? null;
   if ("confidence" in values) s.confidence = (values.confidence as typeof s.confidence) ?? undefined;
   if ("track_id" in values) s.track = values.track_id ? like((x) => x.track && stableUuid(`simple-track/${x.track}`), values.track_id)?.track : undefined;
-  if ("goal_id" in values) s.goal = values.goal_id ? (Object.keys(GOALS).find((k) => goalId(k) === values.goal_id) ?? like((x) => x.goal && goalId(x.goal), values.goal_id)?.goal) : undefined;
+  if ("goal_id" in values) {
+    s.goal = values.goal_id ? (Object.keys(GOALS).find((k) => goalId(k) === values.goal_id) ?? like((x) => x.goal && goalId(x.goal), values.goal_id)?.goal) : undefined;
+    // goal-map-editing: a confirmed goal named by its id alone (goal-ladder's).
+    s.map_goal = !s.goal && values.goal_id && String(values.goal_id) in MAP_GOALS ? String(values.goal_id) : undefined;
+  }
   if ("prd_document_id" in values) {
     const x = like((x) => ownPrd(x).id, values.prd_document_id);
     if (x) s.prd_doc = ownPrd(x);
@@ -1226,7 +1231,7 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       const f = fields[0];
       const v = a[f] ?? null;
       const known = (x: (typeof seen.items)[number]) => read(seen, x.key, [f], target)[f];
-      if (v !== null && !seen.items.some((x) => known(x) === v) && !(f === "goal_id" && Object.keys(GOALS).some((k) => goalId(k) === v && !goalInTrash(seen, k)))) return json(422, { detail: `after.${f}: ${{ track_id: "a product track", prd_document_id: "a PRD", goal_id: "a goal" }[f]}` });
+      if (v !== null && !seen.items.some((x) => known(x) === v) && !(f === "goal_id" && (Object.keys(GOALS).some((k) => goalId(k) === v && !goalInTrash(seen, k)) || !!mapGoalRef(seen, String(v))))) return json(422, { detail: `after.${f}: ${{ track_id: "a product track", prd_document_id: "a PRD", goal_id: "a goal" }[f]}` });
       after = { [f]: v };
       // roadmap-edit-fixes (changes._track_of_prd): a track is one PRD's, so it follows the PRD.
       const track = f === "prd_document_id" && v ? seen.items.find((x) => ownPrd(x).id === v && x.track)?.track : undefined;
