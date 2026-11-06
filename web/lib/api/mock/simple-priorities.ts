@@ -13,6 +13,7 @@ import type { Schemas } from "@/lib/api/client";
 import { PLAN_PRD_SLUG, planOut, planSlices } from "./simple-plan";
 import { closed, companyToday, goalRank, roadmapOut, type SeedItem, type SimpleDb } from "./simple-roadmap";
 import { flowFor } from "./simple-visuals";
+import { madeOrder } from "./made-order";
 import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
 import { COMPANY_TITLE } from "./one-roadmap";
 
@@ -277,10 +278,10 @@ function ancestors(id: string, byId: Map<string, Item>, seen = new Set<string>()
 /** The latest override_priority change that holds for this item (applied or accepted, not undone). */
 function activeOverride(db: SimpleDb, itemId: string): Schemas["SimpleChangeOut"] | undefined {
   const cs = db.changes ?? [];
-  const last = cs
-    .filter((c) => c.op === "override_priority" && c.target.item_id === itemId && ["applied", "accepted"].includes(c.status) && !cs.some((u) => u.undoes_id === c.id))
-    .sort((a, b) => ((a.decided_at ?? a.at) < (b.decided_at ?? b.at) ? -1 : 1))
-    .at(-1);
+  const last = madeOrder(
+    cs.filter((c) => c.op === "override_priority" && c.target.item_id === itemId && ["applied", "accepted"].includes(c.status) && !cs.some((u) => u.undoes_id === c.id)),
+    (c) => [c.decided_at ?? c.at],
+  ).at(-1);
   // The last one a clear (back to Oracle's rank): no override.
   return last?.after.override ? last : undefined;
 }
@@ -478,7 +479,8 @@ export function prioritiesOut(
   // prio-company: the feature's own code beside its name (priorities.FEATURE_CODE), never letters made up.
   rows.forEach((r) => (r.own_key = /^[A-Z]{1,3}-\d+$/.test(r.short_code) ? r.short_code : null));
   const codes = new Map(read.items.map((i) => [i.id, i]));
-  const proposals: Schemas["SimplePriorityProposal"][] = (db.changes ?? [])
+  // As priorities.py lists them: by at, a tie in the order made.
+  const proposals: Schemas["SimplePriorityProposal"][] = madeOrder(db.changes ?? [], (c) => [c.at])
     // Ranking proposals, and a draft's Confirm or Merge (S7: a merge_item), as priorities.py.
     .filter((c) => c.status === "proposed" && codes.has(String(c.target.item_id)))
     .filter((c) => c.op === "override_priority" || c.op === "estimate_feature" || ((c.op === "confirm_item" || c.op === "cut" || c.op === "merge_item") && codes.get(String(c.target.item_id))!.draft))

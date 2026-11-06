@@ -463,9 +463,30 @@ function newSession(db: SimpleDb, me: string, kind: Session["kind"]): Session {
   return s;
 }
 
+/** A conflict's field and the fields of a change that write it (changes.py WRITES). */
+const WRITES: Record<string, string[]> = { status: ["status", "cut", "shipped"], goal_id: ["goal_id", "goal_ids"] };
+const IS_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** changes._fields: the fields a conflict is about (its items' when keyed by item id); null for any field. */
+function conflictFields(current: Values): string[] | null {
+  const keys = Object.entries(current).flatMap(([k, v]) => (IS_ID.test(k) && v && typeof v === "object" && !Array.isArray(v) ? Object.keys(v) : [k]));
+  if (!keys.length || keys.includes("dependents")) return null;
+  return keys.flatMap((k) => WRITES[k] ?? [k]);
+}
+
+/** changes._writes: whether the change wrote one of these fields of one of these items. */
+function writesFields(c: Change, ids: string[], fields: string[] | null): boolean {
+  if (!(c.op === "set_goal_measure" ? [String(c.target.goal_id)] : touched(c)).some((i) => ids.includes(i))) return false;
+  // A goal's measure: any change of it (targets._last_writer looks by the goal, not its fields).
+  if (!fields || c.op === "set_goal_measure") return true;
+  const wrote = KEYED.includes(c.op) ? ids.flatMap((i) => Object.keys((c.after[i] as Values | undefined) ?? {})) : Object.keys(c.after);
+  return wrote.some((f) => fields.includes(f));
+}
+
 function conflict(db: SimpleDb, ctx: SimpleChangesCtx, current: Values, ids: string[], lead: string): Response {
+  const fields = conflictFields(current);
   const writes = (db.changes ?? [])
-    .filter((c) => ["applied", "accepted", "undone"].includes(c.status) && (c.op === "set_goal_measure" ? [String(c.target.goal_id)] : touched(c)).some((i) => ids.includes(i)))
+    .filter((c) => ["applied", "accepted", "undone"].includes(c.status) && writesFields(c, ids, fields))
     .map((c) => ({ at: c.status === "accepted" && c.decided_at ? c.decided_at : c.at, who: c.status === "accepted" && c.decided_by ? c.decided_by : c.by }));
   const last = madeOrder(writes, (w) => [w.at], true)[0];
   // roadmap-edit-fixes (changes._last_writer): Oracle's draft filled it last: Oracle changed it.
