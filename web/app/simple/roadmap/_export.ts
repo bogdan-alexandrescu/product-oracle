@@ -166,7 +166,11 @@ export function chartPicture(svg: SVGSVGElement, labels: HTMLElement | null): Pi
       if (widthOf(words, 13) > labelW - 14 && rest.length && r.height >= 32) {
         rows.push(`<text x="10" y="${y + r.height / 2 - 2}" font-size="13" fill="var(--text)">${esc(fit(first, labelW - 14, 13))}</text>`);
         rows.push(`<text x="10" y="${y + r.height / 2 + 12}" font-size="11" fill="var(--text2)">${esc(fit(rest.join(" · "), labelW - 14, 11))}</text>`);
-      } else rows.push(`<text x="10" y="${y + r.height / 2 + 5}" font-size="13" fill="var(--text)">${esc(fit(words, labelW - 14, 13) || cut(words, 34))}</text>`);
+      } else {
+        // One line: smaller type before a word of it is lost.
+        const size = widthOf(words, 13) <= labelW - 14 ? 13 : 11;
+        rows.push(`<text x="10" y="${y + r.height / 2 + (size === 13 ? 5 : 4)}" font-size="${size}" fill="var(--text)">${esc(fit(words, labelW - 14, size) || cut(words, 34))}</text>`);
+      }
     }
   }
   const width = labelW + svg.width.baseVal.value;
@@ -253,7 +257,7 @@ export function zoomPicture(scroll: HTMLElement, today: string): Picture {
     const said = el.getAttribute("aria-label") ?? "";
     const full = calendarDay(day, { month: "short", day: "numeric", year: "numeric" });
     const name = said.includes(`, ${full}`) ? said.slice(0, said.indexOf(`, ${full}`)) : said;
-    flags.push({ x, words: `◆ ${name} · ${shortDay(day)}`, name });
+    flags.push({ x, words: `${name} · ${shortDay(day)}`, name });
     lines.push(`<line x1="${x}" x2="${x}" y1="@T" y2="@H" stroke="var(--text2)" stroke-width="1.5" stroke-dasharray="4 3"/>`);
   }
   flags.sort((a, b) => a.x - b.x);
@@ -261,13 +265,15 @@ export function zoomPicture(scroll: HTMLElement, today: string): Picture {
   for (const f of flags) {
     const size = f.today ? 11 : 12;
     let words = f.words;
-    let w = widthOf(words, size, f.today ? 700 : 400) + 12;
+    // A milestone's diamond is drawn (not a glyph a font may lack), 10 px before its words.
+    const lead = f.today ? 0 : 12;
+    let w = widthOf(words, size, f.today ? 700 : 400) + 12 + lead;
     // After its line, or ending at it where the chart's right edge is near; cut to the room left.
     let left = f.x + 2;
     if (left + w > width - 2) left = Math.max(labelW + 2, f.x - w - 2);
     if (left + w > width - 2) {
-      words = fit(words, width - 2 - left - 12, size);
-      w = widthOf(words, size) + 12;
+      words = fit(words, width - 2 - left - 12 - lead, size);
+      w = widthOf(words, size) + 12 + lead;
     }
     let row = ends.findIndex((e) => e + 6 <= left);
     if (row < 0) row = ends.push(-Infinity) - 1;
@@ -276,7 +282,7 @@ export function zoomPicture(scroll: HTMLElement, today: string): Picture {
     parts.push(
       f.today
         ? `<g data-testid="export-today-pill"><rect x="${left}" y="${y}" width="${w}" height="16" rx="8" fill="var(--today)"/><text x="${left + 6}" y="${y + 12}" font-size="11" font-weight="700" fill="#ffffff">Today</text></g>`
-        : `<g data-testid="key-date-marker" data-name="${esc(f.name ?? "")}"><rect x="${left}" y="${y}" width="${w}" height="16" rx="8" fill="var(--surface)" stroke="var(--line)"/><text data-testid="export-milestone" x="${left + 6}" y="${y + 12}" font-size="12" fill="var(--text)">${esc(words)}</text></g>`,
+        : `<g data-testid="key-date-marker" data-name="${esc(f.name ?? "")}"><rect x="${left}" y="${y}" width="${w}" height="16" rx="8" fill="var(--surface)" stroke="var(--line)"/><rect x="${left + 7}" y="${y + 4.5}" width="7" height="7" fill="var(--text)" transform="rotate(45 ${left + 10.5} ${y + 8})"/><text data-testid="export-milestone" x="${left + 6 + lead}" y="${y + 12}" font-size="12" fill="var(--text)">${esc(words)}</text></g>`,
     );
   }
   const head = ROW0 + Math.max(1, ends.length) * MS_ROW + 6;
@@ -324,6 +330,15 @@ export function zoomPicture(scroll: HTMLElement, today: string): Picture {
       if (x1 + 6 + ww <= width - 2) at = Math.max(x1 + 6, labelW + 4);
       else if (x0 - 6 - ww >= labelW + 2) [at, anchor, place] = [x0 - 6, "end", "before"];
       else if (b - a >= ww + 8) [at, place] = [a + 6, "inside"];
+      // A bar wholly out of the window says where it lies, at that edge.
+      const off = b <= a ? (x1 <= labelW ? "Earlier: " : "Later: ") : "";
+      if (off) {
+        const ow = widthOf(off + words, 11) + 8;
+        [at, anchor, place] = off === "Earlier: " ? [labelW + 8, "start", "earlier"] : [width - 8, "end", "later"];
+        out.push(`<rect x="${anchor === "end" ? at - ow + 4 : at - 4}" y="${y + 9}" width="${ow}" height="16" rx="8" fill="var(--surface)" stroke="var(--line)"/>`);
+        out.push(`<text data-testid="export-bar-words" data-place="${place}" x="${at}" y="${y + 21}" font-size="11" text-anchor="${anchor}" fill="var(--text2)">${esc(off + words)}</text>`);
+        at = null;
+      }
       if (at !== null) {
         const bx = anchor === "end" ? at - ww + 4 : at - 4;
         out.push(`<rect x="${bx}" y="${y + 9}" width="${ww}" height="16" rx="3" fill="var(--surface)"${place === "inside" ? ' opacity="0.9"' : ""}/>`);
@@ -433,7 +448,8 @@ export function framed(pic: Picture, head: ExportHead, today: string): { markup:
     `<text x="${pad}" y="76" font-size="12" fill="var(--text2)">${esc(cut(head.filters, 140))}</text>` +
     `<g transform="translate(${pad}, ${HEAD})">${pic.body}</g>` +
     `<line x1="${pad}" x2="${width - pad}" y1="${height - FOOT}" y2="${height - FOOT}" stroke="var(--line)"/>` +
-    `<text x="${pad}" y="${height - 13}" font-size="11" fill="var(--text2)">${esc(cut(b?.disclaimer ?? "", 120))}</text>` +
+    // The disclaimer ends short of the day and time at the right.
+    `<text x="${pad}" y="${height - 13}" font-size="11" fill="var(--text2)">${esc(fit(b?.disclaimer ?? "", width - 2 * pad - widthOf(stamp(today, b), 11) - 16, 11))}</text>` +
     `<text x="${width - pad}" y="${height - 13}" font-size="11" text-anchor="end" fill="var(--text2)">${esc(stamp(today, b))}</text>` +
     `</svg>`;
   return { markup: lightColours(markup), width, height };
