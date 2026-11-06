@@ -260,16 +260,16 @@ test("a /simple link opens in Simple for an owner whose saved mode is Detailed",
   await expectDetailed(page, "/home");
 });
 
-test("Simple's rail has its six destinations and none of Detailed's", async ({ page }) => {
+test("Simple's rail has its seven destinations, the one Inbox among them, and none of Detailed's others", async ({ page }) => {
   await signIn(page, EMAILS.viewer);
   await expectSimple(page, "/simple");
   const rail = simpleRail(page);
-  const links = rail.getByRole("link", { name: /^(Home|One-pagers|Roadmap|Priorities|Meetings|Decisions)$/ });
+  const links = rail.getByRole("link", { name: /^(Home|One-pagers|Roadmap|Priorities|Meetings|Decisions|Inbox)$/ });
   // Names, not text: a destination may carry a count ("Meetings" described as "1 review live or coming up").
-  const names = ["Home", "One-pagers", "Roadmap", "Priorities", "Meetings", "Decisions"];
+  const names = ["Home", "One-pagers", "Roadmap", "Priorities", "Meetings", "Decisions", "Inbox"];
   await expect(links).toHaveCount(names.length);
   for (const [i, name] of names.entries()) await expect(links.nth(i)).toHaveAccessibleName(name);
-  for (const detailed of ["Requests", "Desired state", "PRDs", "Plan", "Runs", "Inbox", "Company", "Settings"]) {
+  for (const detailed of ["Requests", "Desired state", "PRDs", "Plan", "Runs", "Company", "Settings"]) {
     await expect(rail.getByRole("link", { name: detailed, exact: true })).toHaveCount(0);
   }
   // qa-shell-16: one Ask control, the rail's Ask Oracle; no Ask strip beside it.

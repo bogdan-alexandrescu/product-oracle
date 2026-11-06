@@ -10,7 +10,7 @@ import { login } from "./helpers";
 
 const DB_KEY = "po-mock-db-v2";
 
-async function openHome(page: Page, scenario?: "large" | "empty") {
+async function openHome(page: Page, scenario?: "large" | "empty" | "inbox-reviewer") {
   if (scenario) await page.addInitScript((s) => localStorage.setItem("po-mock-scenario", s), scenario);
   await login(page);
   await page.goto("/home");
@@ -177,6 +177,28 @@ test("Questions asked of me: rail badge, Home and the Inbox count the same", asy
   await expect(page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^New/ })).toHaveText("New11");
   await expect(page.getByTestId("inbox-tab-new").getByTestId("inbox-questions")).toBeVisible();
   await expect(badge).toHaveText("11");
+});
+
+test("A Simple proposal waiting on me: rail badge, Home and the Inbox count the same", async ({ page }) => {
+  // inbox-meeting-proposals fix: a teammate's feature ask, on no roadmap, and their new name for an item wait on the owners.
+  await openHome(page, "inbox-reviewer");
+  const badge = page.getByTestId("nav-inbox-badge");
+  const needs = page.getByTestId("home-needs");
+  await expect(needs.getByTestId("home-count-proposals")).toHaveText(/Proposals\s*2/);
+  await expect(badge).toHaveText(/^\d+$/);
+  const waiting = (await badge.textContent())!.trim();
+  await expect(page.getByText(`${waiting} waiting`)).toBeVisible();
+  await expect(needs.getByTestId("panel-count")).toHaveText(waiting);
+  // The (i) says what it counts, Simple's proposals, Oracle's dates and goal suggestions among them.
+  await needs.getByRole("button", { name: "About Needs you" }).click();
+  await expect(page.getByText(/approvals, runs, access, reviews, questions, proposals, Oracle's dates and goal suggestions\./)).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await page.getByTestId("nav-inbox").click();
+  await expect(page).toHaveURL(/\/inbox$/);
+  await expect(page.getByRole("row").filter({ hasText: "Bulk export" }).filter({ hasText: "asked for by" })).toHaveCount(1);
+  await expect(page.getByText(`${waiting} waiting`).filter({ visible: true })).toBeVisible();
+  await expect(badge).toHaveText(waiting);
 });
 
 test("Questions asked of me: Home shows one with 7 or more inbox items, and only mine", async ({ page }) => {
