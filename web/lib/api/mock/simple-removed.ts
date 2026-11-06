@@ -174,7 +174,7 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
     else (db.plan_proposed ??= []).push(res.change.id);
     return json(201, res);
   };
-  /** A track to Settings › Trash: its features go to no track, kept for a restore (the root's item_ids; as the API, no items of its own). */
+  /** A track to Settings › Trash: its features go to no track, kept for a restore (as the API's Trash list, no item ids and no items of its own). */
   const trashTrack = (k: string) => {
     const title = TRACKS[k];
     const own = db.track_owners?.[k];
@@ -184,7 +184,7 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
     delete TRACKS[k];
     const at = now();
     trash().push({
-      out: { id: crypto.randomUUID(), root: { type: "track", id: trackId(k), slug: null, title, kind: "Track", item_ids: items.map((s) => db.ids[s.key]) }, items: [], deleted_by: ctx.id, deleted_by_name: ctx.names[ctx.id] ?? null, deleted_at: at, reason: null, published: false, purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString() } as never,
+      out: { id: crypto.randomUUID(), root: { type: "track", id: trackId(k), slug: null, title, kind: "Track" }, items: [], deleted_by: ctx.id, deleted_by_name: ctx.names[ctx.id] ?? null, deleted_at: at, reason: null, published: false, purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString() } as never,
       documents: [], versions: [], runs: [], intakes: [], released: { track: k },
     });
   };

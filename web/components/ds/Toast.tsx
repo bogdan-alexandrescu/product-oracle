@@ -72,11 +72,12 @@ export function ToastHost() {
   }, [shown, held]);
   return (
     // While a sheet or a modal dialog is open (a phone's bottom sheet too: Key dates, Needs a
-    // decision), the message moves to the top, clear of its controls;
+    // decision), the message moves to the top, clear of its controls (on a phone, just under the
+    // top bar, so it covers neither the header nor the sheet);
     // the Roadmap's own messages sit in the corner on a desktop.
     <div
       data-testid="toasts"
-      className={`pointer-events-none fixed left-0 right-[var(--backdrop-room,0px)] bottom-4 z-[60] flex justify-center px-3 max-[600px]:bottom-20 [body:has([aria-modal=true])_&]:bottom-auto [body:has([aria-modal=true])_&]:top-4 [body:has([data-sheet=bottom])_&]:bottom-auto [body:has([data-sheet=bottom])_&]:top-4${shown?.place === "corner" ? " min-[601px]:inset-x-auto min-[601px]:right-4 min-[601px]:justify-end min-[601px]:px-0" : ""}${shown?.place === "rail" ? " min-[601px]:inset-x-auto min-[601px]:left-[calc(var(--simple-rail-width,232px)+16px)] min-[601px]:justify-start min-[601px]:px-0" : ""}`}
+      className={`pointer-events-none fixed left-0 right-[var(--backdrop-room,0px)] bottom-4 z-[60] flex justify-center px-3 max-[600px]:bottom-20 [body:has([aria-modal=true])_&]:bottom-auto [body:has([aria-modal=true])_&]:top-4 [body:has([data-sheet=bottom])_&]:bottom-auto [body:has([data-sheet=bottom])_&]:top-[var(--phone-top-bar)] ${shown?.place === "corner" ? "min-[601px]:inset-x-auto min-[601px]:right-4 min-[601px]:justify-end min-[601px]:px-0" : ""}${shown?.place === "rail" ? "min-[601px]:inset-x-auto min-[601px]:left-[calc(var(--simple-rail-width,232px)+16px)] min-[601px]:justify-start min-[601px]:px-0" : ""}`}
     >
       {shown && (
         <div

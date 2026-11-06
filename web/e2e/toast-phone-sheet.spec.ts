@@ -3,8 +3,9 @@ import { expect, test } from "./test";
 
 /**
  * Card toast-phone-sheet (PR 1246): protects = on a phone, a message shown while a bottom sheet
- * is open (Key dates) sits at the top of the screen, clear of the sheet and its buttons;
- * fails_when = the message sits near the bottom, over the open sheet; no_claim = the message's
+ * is open (Key dates) sits right under the phone's top bar (44 px), clear of the header, the sheet
+ * and its buttons; fails_when = the message sits near the bottom, over the open sheet, or its top
+ * rule is not built and it lands wherever its place in the page puts it; no_claim = the message's
  * words (roadmap-keydates.spec.ts). Invented data: the mock's Onboarding roadmap.
  */
 
@@ -25,6 +26,9 @@ test("on a phone, a message shown over the Key dates sheet sits at the top, clea
   await expect(sheet).toBeVisible();
   const said = (await message.boundingBox())!;
   const at = (await sheet.boundingBox())!;
-  expect(said.y).toBeLessThan(844 / 8);
+  const header = (await page.getByTestId("phone-header").boundingBox())!;
+  expect(header.height).toBe(44);
+  await expect(page.getByTestId("toasts")).toHaveCSS("top", "44px");
+  expect(said.y).toBe(44);
   expect(said.y + said.height).toBeLessThanOrEqual(at.y);
 });
