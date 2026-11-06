@@ -38,6 +38,9 @@ for (const phone of [false, true]) {
       await expect(note(page)).toContainText("Needs a look");
       await expect(note(page)).toContainText("2 bets; a one-pager has 3 to 5");
       await expect(note(page)).toContainText("A line in “Risks and open decisions” says “TBD”");
+      // C-15: each failed check is one short line with its detail behind an (i), as the PRD's own looks are.
+      await expect(note(page).getByTestId("needs-look-line")).toHaveText(["2 bets; a one-pager has 3 to 5", "A line in “Risks and open decisions” says “TBD”"]);
+      await expect(note(page).getByRole("button", { name: "About 2 bets; a one-pager has 3 to 5" })).toHaveAccessibleDescription(/last good version/);
       await expect(lineText(page, "Pricing for teams is TBD")).toBeVisible();
       await expect(lineText(page, "A sample project created on day one")).toHaveCount(0);
     });

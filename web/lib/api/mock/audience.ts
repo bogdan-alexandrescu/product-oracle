@@ -286,6 +286,13 @@ export type BoardItem = {
   no_goal: boolean;
   /** The goal it is grouped under: the first by title of the confirmed goals its feature reaches; null for "No goal". */
   group: string | null;
+  /**
+   * E-14 (as the API's ItemView, from simple.service.delivery): its dates as Simple reads them (null where Simple
+   * only estimates) and its delivery state (from its shipped mark and tracker records).
+   */
+  start?: string | null;
+  end?: string | null;
+  state?: "planned" | "in_progress" | "done";
 };
 
 export const NO_GOAL_GROUP = "No goal";
@@ -326,10 +333,7 @@ function boardSections<S extends Section>(sections: S[], items: BoardItem[]): S[
   const leftOut = sorted.filter((i) => i.no_goal && i.horizon in HORIZONS).length;
   const out: S[] = [];
   for (const [horizon, heading] of Object.entries(HORIZONS)) {
-    const rows = sorted
-      .filter((i) => i.horizon === horizon && !i.no_goal)
-      .sort((a, b) => (a.rank === null ? 1 : 0) - (b.rank === null ? 1 : 0) || (a.rank ?? 0) - (b.rank ?? 0) || a.position - b.position)
-      .slice(0, 7);
+    const rows = boardRows(sorted, horizon);
     if (!rows.length) continue;
     out.push(section(horizon, heading, ""));
     goalGroups(rows).forEach(([title, group], n) => {
@@ -344,6 +348,22 @@ function boardSections<S extends Section>(sections: S[], items: BoardItem[]): S[
     else out.push(section("brief-items", "Roadmap items", note));
   }
   return out;
+}
+
+/** Board's rows of `horizon`: its items serving a goal, best ranked first, at most 7 (as the API's variants._shown). */
+function boardRows(items: BoardItem[], horizon: string): BoardItem[] {
+  return [...items]
+    .sort((a, b) => a.position - b.position)
+    .filter((i) => i.horizon === horizon && !i.no_goal)
+    .sort((a, b) => (a.rank === null ? 1 : 0) - (b.rank === null ? 1 : 0) || (a.rank ?? 0) - (b.rank ?? 0) || a.position - b.position)
+    .slice(0, 7);
+}
+
+/** The items of Board's goal group `sectionKey` ("now-group-2"), one per row of its table, in order; none for another key (as the API's variants.board_group). */
+export function boardGroup(items: BoardItem[], sectionKey: string): BoardItem[] {
+  if (!spansRow(sectionKey)) return [];
+  const [horizon, n] = sectionKey.split("-group-");
+  return goalGroups(boardRows(items, horizon))[Number(n) - 1]?.[1] ?? [];
 }
 
 /**

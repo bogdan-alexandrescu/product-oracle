@@ -7,6 +7,7 @@ import { askWith } from "@/components/hop/open-state";
 import { toast } from "@/components/ds/Toast";
 import { meetingMoment } from "@/components/simple/FlowVisual";
 import { useFeatureFound, useOpenFeature } from "@/components/simple/OpenFeature";
+import { editedWords, useDecisionSheet } from "@/components/simple/questions/DecisionSheet";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
@@ -345,6 +346,9 @@ export function QuestionRow({
 }) {
   const zone = useCompanyZone();
   const { me } = useMe();
+  // eq2 b: the title opens the question's sheet where one is mounted; withdrawn there just now, it stays struck through with Undo.
+  const sheet = useDecisionSheet();
+  const gone = q.status === "withdrawn" ? sheet?.withdrawn[q.id] : undefined;
   const [open, setOpen] = useState<"answers" | "people" | "answerer" | null>(null);
   const { busy, decide, nameDecider, undo } = actions;
   const writes = q.can.decide || q.can.propose;
@@ -398,7 +402,13 @@ export function QuestionRow({
   // qa-simple-decide-8: the same verbs and the same actions for a question in every view
   // (List, Board, Home, a meeting's agenda); one primary button per row (qa-simple-decide-24).
   let buttons: ReactNode = null;
-  if (done) {
+  if (gone) {
+    buttons = (
+      <button type="button" disabled={gone.undoing} className="simple-button" onClick={() => sheet!.undoWithdraw(q.id)}>
+        Undo
+      </button>
+    );
+  } else if (done) {
     if ((mode === "due" || mode === "here") && q.undo_id)
       buttons = (
         <button type="button" disabled={busy} className={`simple-button ${mode === "here" ? "simple-button-quiet" : ""}`} onClick={() => void undo(q.undo_id!)}>
@@ -446,11 +456,30 @@ export function QuestionRow({
   return (
     <Tag data-testid={testId} data-code={q.code} aria-label={`${q.code} ${q.title}`} className="simple-row">
       <span aria-hidden className={`simple-ico ${done ? "simple-ico-done" : ""}`}>
-        <Icon name={done ? "check" : "flag"} size={20} stroke={1.7} />
+        <Icon name={done ? "check" : gone ? "x" : "flag"} size={20} stroke={1.7} />
       </span>
       <div className="simple-rb">
+        {gone ? (
+          <>
+            <span className="break-words">
+              {!plain && <span className="simple-code">{q.code}</span>}{" "}
+              <s className="font-[650] text-text2" data-testid="question-withdrawn">
+                {q.title}
+              </s>
+            </span>
+            <span className="simple-meta">Withdrawn by you just now · kept in the PRD&apos;s history</span>
+          </>
+        ) : (
+        <>
         <span className="break-words">
-          {plain ? (
+          {sheet && !done ? (
+            <>
+              {!plain && <span className="simple-code">{q.code}</span>}{" "}
+              <button type="button" data-testid="question-open" title={plain ? `${q.code} · ${q.title}` : undefined} className="text-left font-[650] underline decoration-1 underline-offset-4 hover:text-accent-ink" onClick={() => sheet.open({ kind: "question", q })}>
+                {q.title}
+              </button>
+            </>
+          ) : plain ? (
             <b className="font-[650]" title={`${q.code} · ${q.title}`}>
               {q.title}
             </b>
@@ -496,6 +525,13 @@ export function QuestionRow({
           <span className="simple-meta" data-testid="question-pending">
             {q.pending.by.name} proposed: {q.pending.answer}
           </span>
+        )}
+        {!done && q.edited_at && (
+          <span className="simple-meta" data-testid="question-edited">
+            {editedWords(q.edited_at, q.edited_by, me?.user_id ?? undefined, zone)?.replace(/^e/, "E")}
+          </span>
+        )}
+        </>
         )}
         {open === "answers" && (
           <div ref={answersRef}>

@@ -68,21 +68,26 @@ for (const [name, viewport] of [
 test.describe("desktop", () => {
   test.use({ viewport: DESKTOP });
 
-  test("qa4-work-15: one line of headers, each over its column's values, and a one-line PRD box header", async ({ page }) => {
+  test("qa4-work-15, RQ-3: one line of headers, Request over the title, each other header over its column's values, and a one-line PRD box header", async ({ page }) => {
     await login(page);
     await openRequests(page);
     const head = page.getByTestId("request-list-head");
     const choose = page.getByTestId("request-list-head-choose");
     await expect(choose).toHaveText("PRD");
-    await expect(head.getByText("Request", { exact: true })).toHaveCount(0);
     const chooseBox = (await choose.boundingBox())!;
-    // One line: "PRD" does not wrap, and every header sits on the same line as it.
+    // One line: "PRD" does not wrap.
     expect(chooseBox.height).toBeLessThan(20);
     const first = rows(page).first();
     const box = (await first.getByTestId("request-choose").boundingBox())!;
     expect(Math.abs(chooseBox.x + chooseBox.width / 2 - (box.x + box.width / 2))).toBeLessThan(2);
+    // RQ-3: "Request" heads the title, on PRD's line; no "State" header over the title.
+    const titleHead = (await page.getByTestId("request-list-head-title").boundingBox())!;
+    await expect(page.getByTestId("request-list-head-title")).toHaveText("Request");
+    const titleBox = (await first.getByRole("button").first().boundingBox())!;
+    expect(Math.abs(titleHead.x - titleBox.x)).toBeLessThan(2);
+    expect(Math.abs(titleHead.y - chooseBox.y)).toBeLessThan(2);
+    await expect(head.getByText("State", { exact: true })).toHaveCount(0);
     for (const [key, label] of [
-      ["state", "State"],
       ["goal", "Goal"],
       ["theme", "Theme"],
       ["asker", "Asked by"],

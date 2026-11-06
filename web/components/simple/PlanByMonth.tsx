@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 
 import { MarkFor } from "@/components/current-state/CurrentState";
 import { useOpenFeature } from "@/components/simple/OpenFeature";
@@ -37,6 +38,7 @@ export function PlanByMonth({
   named = false,
   legend = false,
   items,
+  fold = false,
 }: {
   plan: PlanStrip;
   prd: { slug: string; title: string };
@@ -48,6 +50,8 @@ export function PlanByMonth({
   /** The one-pager (build-current-state review 2): its roadmap items (OnePagerOut.timeline),
    * listed under their row, one per line, each with its word pill (inside WithFeatureMarks). */
   items?: { id: string; title: string; code?: string | null }[];
+  /** The timeline slide (C-8): each row's items fold to its count, their names on hover and on asking. */
+  fold?: boolean;
 }) {
   const open = useOpenFeature();
   const from = ms(plan.start);
@@ -58,6 +62,7 @@ export function PlanByMonth({
   const shown = plan.rows.slice(0, PLAN_ROWS);
   const more = plan.rows.length - shown.length;
   const titles = new Map((items ?? []).map((i) => [i.id, i]));
+  const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(new Set());
   // qa-simple-home-12: each month's line runs down through the rows, so a bar reads against the axis above it.
   const grid = plan.months.map((m) => (
     <span key={m} aria-hidden data-testid={`${testId}-gridline`} className="pointer-events-none absolute inset-y-0 w-0 border-l border-line" style={{ left: `${pct(m)}%` }} />
@@ -96,8 +101,9 @@ export function PlanByMonth({
           const n = `${r.items} ${legend ? "roadmap " : ""}${r.items === 1 ? "item" : "items"}`;
           const label = named ? `${prd.title} · ${r.milestone ? rowName(r) : "no milestone"} · ${n}` : `${rowName(r)} · ${n}`;
           const when = r.date ? calendarDay(r.date, { month: "short", day: "numeric" }) : null;
+          const rowKey = `${r.name}|${r.date ?? ""}`;
           return (
-            <li key={`${r.name}|${r.date ?? ""}`}>
+            <li key={rowKey}>
               <Link
                 href={href}
                 data-testid={`${testId}-row`}
@@ -135,7 +141,20 @@ export function PlanByMonth({
                   {line}
                 </span>
               </Link>
-              {items && (r.item_ids ?? []).some((id) => titles.has(id)) && (
+              {fold && (r.item_ids ?? []).some((id) => titles.has(id)) && (
+                <button
+                  type="button"
+                  data-testid={`${testId}-names`}
+                  aria-expanded={unfolded.has(rowKey)}
+                  aria-label={`${unfolded.has(rowKey) ? "Hide" : "Show"} the names in ${rowName(r)}`}
+                  title={(r.item_ids ?? []).flatMap((id) => { const it = titles.get(id); return it ? [it.code ? `${it.code} ${it.title}` : it.title] : []; }).join("\n")}
+                  onClick={() => setUnfolded((s) => { const x = new Set(s); if (!x.delete(rowKey)) x.add(rowKey); return x; })}
+                  className="simple-small ml-3 font-semibold text-accent-ink underline"
+                >
+                  {unfolded.has(rowKey) ? "Hide names" : "Show names"}
+                </button>
+              )}
+              {items && (!fold || unfolded.has(rowKey)) && (r.item_ids ?? []).some((id) => titles.has(id)) && (
                 // The row's items, one per line: the name wraps whole, its pill says what it is.
                 <ul data-testid={`${testId}-items`} aria-label={`${rowName(r)}: its roadmap items`} className="simple-small flex flex-col gap-1 pb-2 pl-3 pt-0.5">
                   {(r.item_ids ?? []).flatMap((id) => {

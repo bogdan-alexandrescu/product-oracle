@@ -225,6 +225,8 @@ PER_ITEM: dict[str, Role | None] = {
     "delete_discussion_message": None,
     "delete_goal_milestone": "owner",
     "delete_scope_item": "approver",
+    # edit-decisions: its decider, whoever made it or an owner (decision_sheet.may_change).
+    "delete_simple_decision": "owner",
     "discard_simple_chat_card": None,
     "dismiss_date_suggestion": "owner",
     "dismiss_discussion_change": "approver",
@@ -233,6 +235,8 @@ PER_ITEM: dict[str, Role | None] = {
     "draft_request_replies": "approver",
     "drop_old_milestone": "owner",
     "edit_document_section": "approver",
+    # agenda-sheet: an owner or the decider edits, an approver proposes (meetings.edit_agenda).
+    "edit_simple_meeting_agenda": "owner",
     "edit_simple_meeting_minutes": "owner",
     "end_simple_meeting": "owner",
     "enhance_scope_requirement": "approver",

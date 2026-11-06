@@ -561,6 +561,69 @@ def _status(row: RoadmapItem, recs: list[TrackerRecord], cut: set[str]) -> str:
     return "planned"
 
 
+@dataclass(frozen=True)
+class Delivery:
+    """An item's delivery state and dated start and end, as Simple reads them."""
+
+    state: str
+    start: date | None
+    end: date | None
+
+
+async def delivery(db: AsyncSession, rows: list[RoadmapItem]) -> dict[uuid.UUID, Delivery]:
+    """E-14: item id -> its delivery state (planned, in_progress or done, as :func:`_status`
+    reads its shipped mark and tracker records) and its start and end as Simple dates it
+    (:func:`_candidates`: its own dates, engineering dates, its tracker records' dates),
+    each None when Simple only estimates it. Tracker records are the item's track's, else
+    its PRD's, as :func:`items` reads them; nothing here is cut, merged or a draft."""
+    keys = {r.item_key for r in rows}
+    if not keys:
+        return {}
+    prds = {r.prd_document_id for r in rows if r.prd_document_id is not None}
+    track_of_prd: dict[Any, ProductTrack] = {}
+    if prds:
+        tracked = await db.scalars(
+            select(ProductTrack).where(ProductTrack.prd_document_id.in_(prds))
+        )
+        track_of_prd = {t.prd_document_id: t for t in tracked}
+    records: dict[tuple[Any, str], list[TrackerRecord]] = defaultdict(list)
+    prd_records: dict[tuple[Any, str], list[TrackerRecord]] = defaultdict(list)
+    for rec in await db.scalars(select(TrackerRecord).where(TrackerRecord.item_key.in_(keys))):
+        if rec.track_id is not None:
+            records[(rec.track_id, rec.item_key)].append(rec)
+        else:
+            prd_records[(rec.prd_document_id, rec.item_key)].append(rec)
+    bases_by_key: dict[tuple[Any, str], list[ScheduleBasis]] = defaultdict(list)
+    bases_by_ref: dict[tuple[Any, str], list[ScheduleBasis]] = defaultdict(list)
+    if prds:
+        for b in await db.scalars(
+            select(ScheduleBasis).where(
+                ScheduleBasis.status == "verified", ScheduleBasis.prd_document_id.in_(prds)
+            )
+        ):
+            if b.item_key:
+                bases_by_key[(b.prd_document_id, b.item_key)].append(b)
+            elif b.tracker_key:
+                bases_by_ref[(b.prd_document_id, b.tracker_key)].append(b)
+    out: dict[uuid.UUID, Delivery] = {}
+    for row in rows:
+        track_id = row.track_id
+        if track_id is None and (t := track_of_prd.get(row.prd_document_id)) is not None:
+            track_id = t.id if t.roadmap_document_id == row.roadmap_document_id else None
+        recs = (records.get((track_id, row.item_key), []) if track_id is not None else []) or (
+            prd_records.get((row.prd_document_id, row.item_key), [])
+        )
+        cands = _candidates(row, recs, bases_by_key, bases_by_ref)
+        start, end = dates._best(cands, "start"), dates._best(cands, "end")
+        state = _status(row, recs, set())
+        out[row.id] = Delivery(
+            state if state in ("in_progress", "done") else "planned",
+            start.start if start is not None else None,
+            end.end if end is not None else None,
+        )
+    return out
+
+
 def _milestone(
     row: RoadmapItem,
     track: ProductTrack | None,

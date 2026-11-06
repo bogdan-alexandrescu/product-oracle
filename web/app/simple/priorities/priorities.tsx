@@ -1939,8 +1939,8 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
                 title="Edit goal"
                 year={year}
                 onCancel={() => setEditingGoal(null)}
-                onSave={async (f, seen) => {
-                  if (await writes.edit(rec, f, year, seen)) setEditingGoal(null);
+                onSave={async (f, seen, refused) => {
+                  if (await writes.edit(rec, f, year, seen, refused)) setEditingGoal(null);
                 }}
               />
             ) : (
@@ -2114,8 +2114,8 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
                   title="Edit goal"
                   year={year}
                   onCancel={() => setEditing(null)}
-                  onSave={async (f, seen) => {
-                    if (await writes.edit(rec, f, year, seen)) setEditing(null);
+                  onSave={async (f, seen, refused) => {
+                    if (await writes.edit(rec, f, year, seen, refused)) setEditing(null);
                   }}
                 />
               ) : (

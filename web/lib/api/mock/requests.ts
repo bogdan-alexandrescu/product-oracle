@@ -144,6 +144,8 @@ export interface RequestsContext {
   entities?: () => { id: string; type: string; title: string; status: string; attrs?: Record<string, unknown> | null }[];
   edges?: () => { src_id: string; dst_id: string; type: string; status: string }[];
   decisions?: RequestDecisions;
+  /** port-an-decisions: an owner's delete keeps the row in a Trash entry (Restore puts it back). */
+  trash?: (row: unknown, reason: string | null) => Schemas["TrashEntryOut"];
   /** The Company time zone. */
   zone?: () => string;
   /** C1 lane 2: a brief's title by its id; null when it is gone. */
@@ -753,6 +755,17 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
         drafting: rootReplies(row).some((x) => !!x.job_at),
       };
       return json(200, detail);
+    }
+    // port-an-decisions (requests.service.trash_request): an owner deletes it to Settings › Trash.
+    if (p.length === 3 && m === "DELETE" && ctx.trash) {
+      if (!atLeast(ctx.role, "owner")) return forbidden("owner");
+      const merged = db.requests.filter((r) => r.merged_into_id === row.id);
+      if (merged.length) {
+        const n = merged.length;
+        return fail(409, `${n} ${n === 1 ? "request is" : "requests are"} merged into it ('${merged[0]!.title}'${n > 1 ? " and more" : ""}): reopen them first`);
+      }
+      db.requests.splice(db.requests.indexOf(row), 1);
+      return json(200, ctx.trash(row, q.get("reason")));
     }
     if (p.length === 3 && m === "PATCH") {
       if (!atLeast(ctx.role, "commenter")) return forbidden("commenter");

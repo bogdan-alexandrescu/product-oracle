@@ -102,7 +102,7 @@ const OFF_REASON = "Two-way tracker sync is off: Oracle makes no tracker writes.
 const UNVERIFIED = "a dated milestone needs a verified estimate, capacity or commitment (basis_ids); Oracle never invents dates";
 // The API's texts for an item's refused date (api/oracle/roadmap/schedule.py).
 // #396: where a person records a date basis (api/oracle/wording.py RECORD_DATE_BASIS).
-const RECORD_DATE_BASIS = "record a date basis on Plan › Dates (or ask the engineering lead to)";
+const RECORD_DATE_BASIS = "add a date source on Plan › Dates (or ask the engineering lead to)";
 const DATE_UNVERIFIED =
   `a date needs a verified estimate, capacity or commitment recorded for this PRD (and item) that supports it (${RECORD_DATE_BASIS}); Oracle never invents dates`;
 const OUTSIDE_NOW = "dated milestones belong only in now; the date was dropped";
