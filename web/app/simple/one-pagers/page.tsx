@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useState } from "react";
 
+import { InfoTip } from "@/components/ds/InfoTip";
 import { toast } from "@/components/ds/Toast";
 import { PrdMoveMenu } from "@/components/simple/PrdMoveMenu";
 import { NewPrdButton, NewPrdSheet, StartedRows, useCanStartPrd, useStartedPrds } from "@/components/simple/NewPrd";
@@ -31,7 +32,7 @@ export default function OnePagers() {
   const rows = q.data ? sortPrds(q.data) : null;
   const { can } = useMe();
   const canMove = can("move_document");
-  // V-8: the help line names only what this reader can do here.
+  // V-8, R-8: the words behind the (i) name only what this reader can do here (no review offered to who cannot start one).
   const canWord = can("create_simple_change");
   const canReview = can("start_simple_meeting");
   const lead = `Open a PRD to read it on one page${canWord && canReview ? ", change its wording or start a review" : canWord ? " or change its wording" : canReview ? " or start a review" : ""}.`;
@@ -65,14 +66,15 @@ export default function OnePagers() {
     [q],
   );
   return (
-    // qa4-simple-prd-25: a help line, saying what a person can do here.
-    <SimplePage title="One-pagers" lead={lead}>
+    <SimplePage title="One-pagers">
       <SimpleSection
         title="PRDs"
         testId="simple-one-pagers"
         action={
           // NP1: New PRD beside "Company order", opening the guided sheet.
           <span className="flex flex-wrap items-center gap-3">
+            {/* qa4-simple-prd-25: what a person can do here, behind an (i), not on the page. */}
+            <InfoTip label="One-pagers" align="start" side="bottom">{lead}</InfoTip>
             {/* prd-order: the list says its order, the one company PRD order. */}
             {rows && rows.length + mine.length > 1 ? (
               <span className="simple-small" data-testid="one-pagers-order">

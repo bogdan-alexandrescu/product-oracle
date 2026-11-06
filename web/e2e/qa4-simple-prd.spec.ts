@@ -42,7 +42,8 @@ test.describe("desktop", () => {
   test("a never-published PRD is not called published, and its dates agree with the list (qa4-simple-prd-3, 9, 25, 34)", async ({ page }) => {
     await login(page);
     await page.goto("/simple/one-pagers");
-    await expect(page.getByText("Open a PRD to read it on one page, change its wording or start a review.")).toBeVisible();
+    await page.getByRole("button", { name: "About One-pagers" }).focus();
+    await expect(page.getByRole("tooltip").filter({ hasText: "Open a PRD to read it on one page, change its wording or start a review." })).toBeVisible();
     const row = page.getByTestId("one-pager-row").filter({ hasText: "Saved carts PRD" });
     await expect(row).toContainText("Updated Oct 18, 2026");
     await row.getByRole("link", { name: "Saved carts PRD" }).click();
