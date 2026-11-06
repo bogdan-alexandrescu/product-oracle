@@ -1017,6 +1017,46 @@ function seedSimpleCrossPrdDates(): Db {
   return db;
 }
 
+/**
+ * roadmap-edit-fixes "roadmap-edit-fixes": "simple-home", with the Setup checklist waiting on
+ * the Alert rules engine of the Usage alerts PRD by that feature's key (neither an item key
+ * nor a code), and the Welcome video's title carrying its code (F-07 Welcome video).
+ */
+function seedRoadmapEditFixes(): Db {
+  const db = seedSimpleHomeScenario();
+  const items = db.simple_roadmap!.items;
+  const rules = items.find((x) => x.key === "alert-rules");
+  if (rules) rules.feature_key = "alert-rules-engine";
+  dependOnOtherPrd(db.simple_roadmap!, "setup-checklist", "alert-rules-engine");
+  const video = items.find((x) => x.key === "setup-video");
+  if (video) video.title = "F-07 Welcome video";
+  return db;
+}
+
+/**
+ * roadmap-edit-fixes round 1 "roadmap-edit-fixes-2": "simple-home", with Alert history export
+ * waiting on the Weekly alert digest by its code in lower case (f-06), Sample data import on the
+ * Setup checklist by its key and by its feature's key (both kept), the Alert rules engine done
+ * (the digest that starts before it ends is not broken), and the cut In-app tour waiting on the
+ * Setup checklist past its start (a cut item's link counts nowhere).
+ */
+function seedRoadmapEditFixes2(): Db {
+  const db = seedSimpleHomeScenario();
+  const items = db.simple_roadmap!.items;
+  const at = (key: string) => items.find((x) => x.key === key);
+  const exportItem = at("alert-export");
+  if (exportItem) exportItem.depends = ["f-06"];
+  const checklist = at("setup-checklist");
+  if (checklist) checklist.feature_key = "guided-checklist";
+  const sample = at("setup-import");
+  if (sample) sample.depends = ["setup-checklist", "guided-checklist"];
+  const rules = at("alert-rules");
+  if (rules) rules.status = "done";
+  const tour = at("setup-tour");
+  if (tour) tour.depends = ["setup-checklist"];
+  return db;
+}
+
 /** hotfix-2 "simple-dated-move": "simple-home" with Alert replay engine, dated only by engineering's end. */
 function seedSimpleDatedMove(): Db {
   const db = seedSimpleHomeScenario();
@@ -3680,6 +3720,10 @@ function load(): Db {
                 ? seedMeetingAgendaScenario
               : scenario === "simple-cross-prd-dates"
                 ? seedSimpleCrossPrdDates
+              : scenario === "roadmap-edit-fixes"
+                ? seedRoadmapEditFixes
+              : scenario === "roadmap-edit-fixes-2"
+                ? seedRoadmapEditFixes2
               : scenario === "simple-dated-move"
                 ? seedSimpleDatedMove
               : scenario === PLAN_SAME_KEY_SCENARIO

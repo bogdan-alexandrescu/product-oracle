@@ -47,6 +47,9 @@ import {
   ownDates,
   ownPrd,
   prdCode,
+  codedTitle,
+  dependencyOf,
+  loopOf,
   ROADMAP_SLUGS,
   readerDb,
   readsRoadmap,
@@ -425,6 +428,11 @@ function conflict(db: SimpleDb, ctx: SimpleChangesCtx, current: Values, ids: str
     .filter((c) => ["applied", "accepted", "undone"].includes(c.status) && (c.op === "set_goal_measure" ? [String(c.target.goal_id)] : touched(c)).some((i) => ids.includes(i)))
     .map((c) => ({ at: c.status === "accepted" && c.decided_at ? c.decided_at : c.at, who: c.status === "accepted" && c.decided_by ? c.decided_by : c.by }))
     .sort((a, b) => (a.at < b.at ? 1 : -1))[0];
+  // roadmap-edit-fixes (changes._last_writer): Oracle's draft filled it last: Oracle changed it.
+  const oracle = db.items.filter((x) => ids.includes(db.ids[x.key]) && x.drafted_at).map((x) => x.drafted_at!).sort().reverse()[0];
+  if (oracle && (!last || oracle >= last.at)) {
+    return json(409, { detail: { message: `${lead}: changed by Oracle`, current, changed_by: { id: null, name: "Oracle" }, changed_at: oracle } });
+  }
   const who = last ? { id: last.who, name: ctx.names[last.who] ?? "someone" } : null;
   return json(409, { detail: { message: `${lead}: changed by ${who?.name ?? "someone outside Simple"}`, current, changed_by: who, changed_at: last?.at ?? null } });
 }
@@ -975,6 +983,10 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       const r = readDates(seen, key);
       const shown = { start_date: r.start, end_date: r.end };
       if (!same(seenNow, shown)) return conflict(db, ctx, shown, [String(target.item_id)], lead);
+    } else if (body.op === "edit_title" && !same(seenNow, now_)) {
+      // roadmap-edit-fixes: the read shows a title's code apart from its name.
+      const s = seed(seen, key);
+      if (!same(seenNow, { title: codedTitle(s.title, prdCode(s.section))[1] })) return conflict(db, ctx, now_, [String(target.item_id)], lead);
     } else if (!same(seenNow, now_)) return conflict(db, ctx, now_, [String(target.item_id)], lead);
     const a = body.after ?? {};
     let stored = fields;
@@ -1011,8 +1023,12 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       after = { draft: false };
     }
     else if (body.op === "edit_title") {
-      const title = String(a.title ?? "").trim();
+      let title = String(a.title ?? "").trim();
       if (!title) return json(422, { detail: "after.title: 1 to 200 characters" });
+      // roadmap-edit-fixes: a rename changes the name only; a code the title carries stays.
+      const s = seed(seen, key);
+      const [code, name] = codedTitle(s.title, prdCode(s.section));
+      if (code && name !== s.title && !codedTitle(title, null)[0]) title = `${code} ${title}`;
       after = { title };
     } else if (body.op === "edit_outcome") after = { outcome: a.outcome ?? null };
     else if (body.op === "set_confidence") {
@@ -1024,15 +1040,30 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       const known = (x: (typeof seen.items)[number]) => read(seen, x.key, [f], target)[f];
       if (v !== null && !seen.items.some((x) => known(x) === v) && !(f === "goal_id" && Object.keys(GOALS).some((k) => goalId(k) === v && !goalInTrash(seen, k)))) return json(422, { detail: `after.${f}: ${{ track_id: "a product track", prd_document_id: "a PRD", goal_id: "a goal" }[f]}` });
       after = { [f]: v };
+      // roadmap-edit-fixes (changes._track_of_prd): a track is one PRD's, so it follows the PRD.
+      const track = f === "prd_document_id" && v ? seen.items.find((x) => ownPrd(x).id === v && x.track)?.track : undefined;
+      if (track && track !== seed(seen, key).track) {
+        after.track_id = stableUuid(`simple-track/${track}`);
+        stored = ["prd_document_id", "track_id"];
+      }
     } else if (body.op === "set_depends") {
       const keys = a.depends_on;
       if (!Array.isArray(keys) || keys.length > 50) return json(422, { detail: "after.depends_on: a list of at most 50 keys" });
-      const clean = [...new Set(keys.map((k) => String(k ?? "").trim()))];
+      let clean = [...new Set(keys.map((k) => String(k ?? "").trim()))];
+      // roadmap-edit-fixes round 1 (changes._plan): a removed key's item goes, by every key that names it.
+      const stored = seed(seen, key).depends ?? [];
+      const target = (k: string) => dependencyOf(seen.items, k)?.key;
+      const gone = new Set(stored.filter((k) => !clean.includes(k)).map(target).filter((k) => !!k));
+      clean = clean.filter((k) => !(stored.includes(k) && gone.has(target(k))));
       if (clean.some((k) => !k) || clean.includes(key)) return json(422, { detail: "after.depends_on: item or feature keys, never the item's own" });
       // changes._unknown_keys: a new key names an item (its key or code) or a feature.
-      const names = new Set(seen.items.flatMap((x) => [x.key, prdCode(x.section)]).filter((k): k is string => !!k).map((k) => k.toLowerCase()));
+      const names = new Set(seen.items.flatMap((x) => [x.key, prdCode(x.section), codedTitle(x.title, prdCode(x.section))[0], x.feature_key]).filter((k): k is string => !!k).map((k) => k.toLowerCase()));
       const unknown = clean.find((k) => !(seen.items.find((x) => x.key === key)?.depends ?? []).includes(k) && !names.has(k.toLowerCase()));
       if (unknown) return json(422, { detail: `after.depends_on: no item or feature has the key ${unknown}` });
+      // roadmap-edit-fixes (changes.loop_of): never a loop.
+      const have = seed(seen, key).depends ?? [];
+      const loop = loopOf(seen.items, key, clean.filter((k) => !have.includes(k)));
+      if (loop) return json(422, { detail: loop });
       after = { depends_on: clean };
     } else if (body.op === "set_status") {
       if (!["planned", "done", "cut"].includes(String(a.status))) return json(422, { detail: "after.status: planned, done or cut" });
@@ -1434,6 +1465,9 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
     const into = keyOf(db, target.into_id);
     const kept = into ? seed(db, into) : undefined;
     if (!kept || into === key || kept.roadmap !== s.roadmap || closed(kept)) return json(422, { detail: "target.into_id: another live item of the same roadmap" });
+    // roadmap-edit-fixes (changes._merge_plan): the kept item never takes a dependency that waits on it.
+    const loop = loopOf(db.items, kept.key, (s.depends ?? []).filter((d) => d !== kept.key), [s.key]);
+    if (loop) return json(422, { detail: loop });
     return { target, before: { status: "draft" }, after: { status: "merged", merged_into: { id: target.into_id, code: kept.key, title: kept.title } }, roadmap: s.roadmap, applies };
   }
   if (typeof target.feature_id === "string" && target.feature_id) {

@@ -21,7 +21,7 @@ import { NewPrdButton, NewPrdSheet, StartedCard, useCanStartPrd, useStartedPrds 
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { DecisionSheetHost, SheetHandle, showOutdated, useDecisionSheet } from "@/components/simple/questions/DecisionSheet";
 import { Named } from "./roadmap/_fields";
-import { FeaturePanel } from "./roadmap/_panel";
+import { FeaturePanel, useItemChanged } from "./roadmap/_panel";
 import { QuestionRow, useQuestionActions, type Question } from "@/components/simple/questions/Questions";
 import { SimplePage } from "@/components/simple/SimplePage";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -157,6 +157,7 @@ export default function SimpleHome() {
     setStamp((s) => s + 1);
     waitingChanged();
   };
+  useItemChanged(reloadAll);
 
   const inbox = useQuery(k("inbox"), loadInbox, { keepPrevious: true });
   // vqa-simple-runs: Back to Home shows the page as it was left (cacheComponents keeps its

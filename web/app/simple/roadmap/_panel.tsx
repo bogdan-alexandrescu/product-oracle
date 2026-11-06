@@ -3,11 +3,11 @@
 // buckets) opens the same panel the Timeline does, with the same card, so the feature can be
 // read and changed where it is listed.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { toast as dsToast, type ToastAsk } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
-import { CARD_CHANGED_EVENT, GOAL_OPS, sendGoalChanged } from "@/lib/api/simple-chat";
+import { CARD_CHANGED_EVENT, GOAL_OPS, ITEM_CHANGED_EVENT, sendGoalChanged, sendItemChanged } from "@/lib/api/simple-chat";
 import { useQuery } from "@/lib/use-query";
 
 import { FloatingCard, type Act } from "./_card";
@@ -40,6 +40,19 @@ export function usePanelItem(items: Item[], feature: PanelFeature, opened: strin
   const found = byId(opened) ?? byId(pinned) ?? (own && own.title === feature.name ? own : undefined) ?? itemFor(items, feature);
   if (found && !opened && !pinned) setPinned(found.id);
   return found;
+}
+
+/** roadmap-edit-fixes round 1: `reload` runs whenever a feature panel on the page changes an item. */
+export function useItemChanged(reload: () => unknown): void {
+  const ref = useRef(reload);
+  useEffect(() => {
+    ref.current = reload;
+  });
+  useEffect(() => {
+    const on = () => void ref.current();
+    window.addEventListener(ITEM_CHANGED_EVENT, on);
+    return () => window.removeEventListener(ITEM_CHANGED_EVENT, on);
+  }, []);
 }
 
 /** The feature's item panel (a side panel; a phone's bottom sheet), as the roadmap opens it. */
@@ -94,6 +107,7 @@ export function FeaturePanel({
                     void undo(r.change.id).then(
                       () => {
                         if (GOAL_OPS.includes(body.op)) sendGoalChanged();
+                        sendItemChanged();
                         return reload();
                       },
                       (e) => toast({ message: String(e.message) }),
@@ -109,6 +123,7 @@ export function FeaturePanel({
         } else toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not make this change" });
       } finally {
         await reload();
+        sendItemChanged();
       }
     },
     [item, reload],
@@ -122,6 +137,7 @@ export function FeaturePanel({
       toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not decide it" });
     }
     await reload();
+    sendItemChanged();
   };
 
   const body = !data ? (

@@ -109,10 +109,11 @@ const CODES = {
   "setup-import": "F-12",
   "alert-export": "AHE",
   "alert-sso": "ARB",
+  // F-03 Health log: the Guided setup PRD's feature on the onboarding roadmap (no code of its own,
+  // its section's); a live, planned roadmap item, so it is a mark too.
+  "setup-health-log": "F-03",
   "price-tiers": "NPT",
   "setup-video": "WV",
-  // F-03 Health log: the Guided setup PRD's feature on the onboarding roadmap (no code of its own, its section's).
-  "setup-health-log": "F-03",
 };
 
 test.describe("desktop", () => {

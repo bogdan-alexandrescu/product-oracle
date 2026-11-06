@@ -40,7 +40,9 @@ from oracle.authz import has_role
 from oracle.baseline.goal_order import goal_position, sort_goals
 from oracle.baseline.models import Edge, Entity
 from oracle.config import get_settings
+from oracle.roadmap.models import RoadmapItem
 from oracle.simple.router import Approver, Reader
+from oracle.trash.filter import INCLUDE_TRASHED
 
 router = APIRouter(prefix="/v1/simple/goal-buckets", tags=["simple"])
 
@@ -358,6 +360,25 @@ def _goal_snap(g: Entity) -> GoalSnap:
     return GoalSnap(id=g.id, title=g.title, status=g.status, attrs=dict(g.attrs or {}))
 
 
+async def _trashed_without_live(db: AsyncSession, feature_ids: set[uuid.UUID]) -> set[uuid.UUID]:
+    """Feature ids with at least one roadmap item in Trash and no live one anywhere
+    (trash-features-goals): those leave the goal buckets with their roadmap item. A feature
+    with no roadmap item at all, or whose only item sits on a roadmap this reader cannot
+    see, keeps showing as it did: this only drops a feature actually in Trash."""
+    if not feature_ids:
+        return set()
+    rows = await db.execute(
+        select(RoadmapItem.feature_id, RoadmapItem.deleted_at)
+        .where(RoadmapItem.feature_id.in_(feature_ids))
+        .execution_options(**{INCLUDE_TRASHED: True})
+    )
+    trashed: set[uuid.UUID] = set()
+    live: set[uuid.UUID] = set()
+    for feature_id, deleted_at in rows:
+        (live if deleted_at is None else trashed).add(feature_id)
+    return trashed - live
+
+
 @router.get("", response_model=GoalBucketsOut, name="list_goal_buckets")
 async def list_goal_buckets(principal: Reader, db: TenantDB) -> GoalBucketsOut:
     """The goals in order and each feature's goal links."""
@@ -366,6 +387,8 @@ async def list_goal_buckets(principal: Reader, db: TenantDB) -> GoalBucketsOut:
     live = {g.id for g in goals}
     live_features = select(Entity).where(Entity.type == "feature", Entity.status != "rejected")
     features = list(await db.scalars(live_features))
+    trashed = await _trashed_without_live(db, {f.id for f in features})
+    features = [f for f in features if f.id not in trashed]
     edges = await _links(db)
     from oracle.simple.changes import _company_owners
 

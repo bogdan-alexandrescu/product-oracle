@@ -128055,6 +128055,33 @@
             "title": "Depends Keys",
             "default": []
           },
+          "depends_key_of": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Depends Key Of",
+            "default": {}
+          },
+          "depends_keys_of": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Depends Keys Of",
+            "default": {}
+          },
+          "suggested_depends": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Suggested Depends",
+            "default": []
+          },
           "can_decide": {
             "type": "boolean",
             "title": "Can Decide",
