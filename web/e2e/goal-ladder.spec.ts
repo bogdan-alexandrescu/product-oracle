@@ -1,4 +1,4 @@
-import { LADDER_SCENARIO } from "../lib/api/mock/goal-ladder";
+import { BARE, LADDER_SCENARIO } from "../lib/api/mock/goal-ladder";
 import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 import { expect, test, type Page } from "./test";
@@ -408,6 +408,23 @@ test.describe("visual QA fixes (L-1 to L-8), 1440 light", () => {
       "Not added, it would make a loop: F-04 Saved views that follow a person across projects and devices already waits on F-02 Activity events pipeline with daily rollups for every workspace",
     );
     await expect(page.getByTestId("ld-refused")).toHaveCount(1);
+  });
+
+  test("L-5b: a link refused for another reason says so in plain words, not the loop words or the API's field path", async ({ page }) => {
+    // protects=ld2-a-refused; fails_when=any refusal says it would make a loop; no_claim=the loop words.
+    await open(page, "light");
+    await page.getByTestId("ld-edit").click();
+    const bare = page.getByTestId("ld-feature").filter({ hasText: BARE });
+    // The feature has no roadmap item yet, so the link onto F-45 has no key to name it by.
+    await reveal(page, bare);
+    await bare.click();
+    await showBoth(page, bare, card(page, "F-45"));
+    await dragBy(page, await mid(bare.getByTestId("ld-dot")), await mid(card(page, "F-45")));
+    const note = page.getByRole("status").filter({ hasText: "Not added" });
+    await expect(note).toHaveText(`Not added: ${BARE} has no roadmap item yet to link to`);
+    await expect(page.getByRole("status").filter({ hasText: "after.depends_on" })).toHaveCount(0);
+    await expect(page.getByRole("status").filter({ hasText: "loop" })).toHaveCount(0);
+    await expect(page.getByTestId("ld-refused")).toHaveCount(0);
   });
 
   test("L-7: Escape lets go of the menu, then the arrow, then the card", async ({ page }) => {

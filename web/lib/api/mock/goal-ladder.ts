@@ -1,8 +1,8 @@
 /**
  * goal-ladder: the "goal-ladder" scenario (LADDER_SCENARIO), the Goal map drawn as the Goal
  * ladder at real volume: four goals in priority order and a guardrail, twelve milestones, 63
- * features under them (one serving two milestones, in two goals), two Simple roadmap features
- * with no goal (the map's unplaced) and about 40 dependencies, some across goals. Each feature
+ * features under them (one serving two milestones, in two goals), one more with no roadmap item, two Simple roadmap
+ * features with no goal (the map's unplaced) and about 40 dependencies, some across goals. Each feature
  * is its own Simple roadmap item ("gm-f1", ...; code F-01, ...) with its status, dates and
  * what it waits on, as the API reads them. Invented company, people and products only.
  */
@@ -17,6 +17,8 @@ type Status = GmMilestone["status"];
 export const LADDER_SCENARIO = "goal-ladder";
 /** The scenario's names, for its specs. */
 export const LADDER = { today: "2026-11-03" } as const;
+/** The feature with no roadmap item. */
+export const BARE = "Pause a plan from the mobile app";
 
 const goal = (id: string, name: string, math: string, current: number | null, target: number, unit: string, status: Status, position: number): GmGoal & { position: number } => ({
   id, name, measure: name.toLowerCase(), target, current, unit, status, math, builds_on: [], history: [], metric: { id: `metric-${id}`, title: name }, missing: null, choices: [], read_on: "Nov 1", position,
@@ -141,6 +143,9 @@ export function ladderMap(): GoalMap {
     const link = (milestone: string) => ({ milestone, expected: "", confidence: "Medium" as const, measured: null, lift: "not_measured" as const, shipped_on: null, before: null, after: null });
     return [{ id: `f${i + 1}`, name, area: area(a), milestones, lever: a, expected: "", confidence: "Medium" as const, released: false, measured: null, lift: "not_measured" as const, links: milestones.map(link) }];
   });
+  // One feature with no roadmap item (no code, no key): a link onto it is refused, for a reason that is not a loop.
+  const link = { milestone: "lm12", expected: "", confidence: "Medium" as const, measured: null, lift: "not_measured" as const, shipped_on: null, before: null, after: null };
+  features.push({ id: "bare-feature", name: BARE, area: area("Mobile"), milestones: ["lm12"], lever: "Mobile", expected: "", confidence: "Medium", released: false, measured: null, lift: "not_measured", links: [link] });
   return {
     goals: GOALS.map(({ position, ...g }) => (void position, { ...g })),
     areas: AREAS.map((a) => ({ id: area(a), name: a, lever: a })),
