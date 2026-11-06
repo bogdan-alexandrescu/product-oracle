@@ -93,11 +93,11 @@ for (const phone of [false, true]) {
         await open(page, "alert-rules");
         await tap(panel(page).getByRole("button", { name: "Add a dependency" }));
         const pick = panel(page).getByLabel("Feature it depends on");
-        const digest = (await pick.locator("option").allTextContents()).find((t) => t.includes("Weekly alert digest"));
-        expect(digest).toBeTruthy();
-        await pick.selectOption({ label: digest! });
-        await tap(panel(page).getByRole("button", { name: "Save" }));
-        await expect(page.getByText("F-06 Weekly alert digest already depends on Alert rules engine")).toBeVisible();
+        // The loop-making choice is offered but cannot be picked, and says why.
+        const digest = pick.locator("option").filter({ hasText: "Weekly alert digest" });
+        await expect(digest).toHaveCount(1);
+        await expect(digest).toBeDisabled();
+        await expect(digest).toContainText("it would make a loop");
         await expect(panel(page).getByTestId("card-depends")).toContainText("Nothing");
         await page.reload();
         await open(page, "alert-rules");

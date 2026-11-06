@@ -4585,9 +4585,11 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
   const company = () => db.documents.find((d) => d.company_roadmap && d.kind === "roadmap");
   const ref = (d: DocumentRow) => ({ id: d.id, slug: d.slug, title: d.title });
   // simple-replaced-prds: GET /v1/simple/one-pagers, as GET /v1/documents?kind=prd without a PRD
-  // marked replaced (Simple shows the PRDs that replaced it; Detailed keeps it as history); newest first.
+  // marked replaced (Simple shows the PRDs that replaced it; Detailed keeps it as history), in the
+  // company PRD order as list_documents(db, "prd") gives them.
   if (p[1] === "simple" && p[2] === "one-pagers" && !p[3] && m === "GET") {
-    return json(200, db.documents.filter((d) => d.kind === "prd" && !(d.replaced_by ?? []).length && canSee(me.role, d.visibility)).map((d) => documentSummary(db, d)).sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at)));
+    const ranks = prdOrder(db);
+    return json(200, db.documents.filter((d) => d.kind === "prd" && !(d.replaced_by ?? []).length && canSee(me.role, d.visibility)).map((d) => documentSummary(db, d, ranks)).sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity)));
   }
   if (p[1] === "roadmaps" && p[2] === "company" && !p[3]) {
     if (m === "GET") {
