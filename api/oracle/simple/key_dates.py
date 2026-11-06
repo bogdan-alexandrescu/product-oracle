@@ -308,16 +308,19 @@ async def read_key_dates(
     docs: dict[uuid.UUID, Document],
     entries: list[Any],
     views: dict[uuid.UUID, Any] | None = None,
+    prds: dict[uuid.UUID, list[Document]] | None = None,
 ) -> tuple[list[SimpleKeyDate], list[SimpleKeyDateRoadmap]]:
     """The key dates Simple › Roadmap and Simple › Priorities read (priorities-keydates, the
     owner, Nov 2: "the same way"): these roadmaps' own (:func:`roadmap_key_dates`) and each
     dated milestone of the PRDs their items come from that the reader may see
     (:func:`prd_key_dates`), in date order. ``views``: the PRDs' plans when the caller has
-    read them already (:func:`key_date_prds` names the PRDs), else read here."""
+    read them already (:func:`key_date_prds` names the PRDs), else read here; ``prds``: the
+    PRDs :func:`key_date_prds` named, when the caller has read them, else read here."""
     from oracle.simple import plan as plans
 
     own, roadmaps = await roadmap_key_dates(db, principal, docs)
-    prds = await key_date_prds(db, principal, docs, entries)
+    if prds is None:
+        prds = await key_date_prds(db, principal, docs, entries)
     if views is None:
         views = await plans.views(db, {p.id for of in prds.values() for p in of})
     old = published_copies(docs, prds, views)

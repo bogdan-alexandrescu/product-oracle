@@ -1278,7 +1278,9 @@ async def build(
         | set(track_prd.values())
         | {p.id for of in kd_prds.values() for p in of},
     )
-    kds, kd_roadmaps = await key_dates.read_key_dates(db, principal, kd_docs, read.entries, views)
+    kds, kd_roadmaps = await key_dates.read_key_dates(
+        db, principal, kd_docs, read.entries, views, kd_prds
+    )
     from oracle.simple import goal_milestones
 
     shown_goal_milestones = await goal_milestones.list_for_roadmaps(
