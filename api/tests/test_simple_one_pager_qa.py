@@ -8,6 +8,15 @@ Test cards (protects / fails_when / no_claim):
   slice's feature's code) or by the feature its plan links; fails_when=the Timeline reads
   "No roadmap items yet" while the Roadmap has the PRD's items, or another feature's item is
   counted; no_claim=the strip's layout (tests/test_simple_plan_strip*).
+- test_timeline_places_items_by_this_prds_plan: protects=each listed item sits under THIS
+  PRD's milestone that slices its feature, else "No milestone", in this PRD's dates;
+  fails_when=another PRD's plan (whose milestone slices the same feature code) names a row
+  ("M1 · Billing beta"), merges into this PRD's M1 or sets the span; no_claim=the strip's
+  layout.
+- test_timeline_reads_the_approved_versions_plan: protects=a PRD whose plan is read from
+  its approved version's Milestones/Features tables (no stored plan) lists the company
+  roadmap's items of those features, placed in its milestones; fails_when=only a stored
+  "ready" plan is read; no_claim=the tables' parsing (tests/test_simple_plan*).
 - test_not_in_prd_said_once_per_section: protects=a line that only says "Not in the PRD yet"
   (Oracle's answer, a stored build) is never shown: its block is marked missing once;
   fails_when=the words show as lines, twice in a block; no_claim=the job's prompt.
@@ -82,6 +91,90 @@ async def test_timeline_counts_the_company_roadmap_items_of_the_prd(client):
     assert titles == ["Invite helper", "Progress meter", "Setup checklist"], titles
     assert view["plan"] is not None
     assert view["span_start"] is None or view["span_start"] <= view["span_end"]
+
+
+async def other_prd_slicing_f07(s) -> Document:
+    """Another PRD whose own plan slices F-07 into its M1 "Billing beta"."""
+    other = Document(slug="usage-billing", title="Usage billing", kind="prd",
+                     status="approved", visibility="company")  # fmt: skip
+    s.add(other)
+    await s.flush()
+    ov = await version(s, other, 1, "# Usage billing\n")
+    s.add(SimplePrdPlan(document_id=other.id, version_id=ov.id, status="ready", source="prd",
+                        data={"milestones": [{"code": "M1", "name": "Billing beta",
+                                              "start": "2026-09-01", "end": "2027-03-31"}],
+                              "features": [{"code": "F-07", "name": "Setup checklist",
+                                            "milestones": ["M1"]}]}))  # fmt: skip
+    return other
+
+
+@pytest.mark.parametrize("own_plan", [False, True])
+async def test_timeline_places_items_by_this_prds_plan(client, own_plan):
+    ctx = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        prd = await s.scalar(select(Document).where(Document.slug == "guided-setup"))
+        pv = await s.scalar(select(DocumentVersion).where(DocumentVersion.document_id == prd.id))
+        other = await other_prd_slicing_f07(s)
+        features = [{"code": "F-07", "name": "Setup checklist", "milestones": ["M1"]}]
+        data = (
+            {"milestones": [{"code": "M1", "name": "Setup basics",
+                             "start": "2026-11-02", "end": "2026-12-18"}], "features": features}
+            if own_plan
+            else {"features": [{"code": "F-07", "name": "Setup checklist"}]}
+        )  # fmt: skip
+        s.add(SimplePrdPlan(document_id=prd.id, version_id=pv.id, status="ready", source="prd",
+                            data=data))  # fmt: skip
+        await company_roadmap(s, prd.id, [
+            {"item_key": "own", "title": "Progress meter", "prd_document_id": prd.id,
+             "prd_section_key": "f-07"},
+            # The other PRD's item of this PRD's feature F-07.
+            {"item_key": "f-07", "title": "Setup checklist", "prd_section_key": "f-07",
+             "prd_document_id": other.id},
+        ])  # fmt: skip
+        await s.commit()
+    view = await get(client, ctx, "viewer")
+    assert sorted(i["title"] for i in view["timeline"]) == ["Progress meter", "Setup checklist"]
+    rows = view["plan"]["rows"]
+    names = [r["name"] for r in rows]
+    assert not any("Billing beta" in n for n in names), names
+    if own_plan:
+        assert names == ["M1 · Setup basics"], names
+        assert (view["span_start"], view["span_end"]) == ("2026-11-02", "2026-12-18")
+    else:
+        assert names == ["No milestone"], names
+        assert rows[0]["items"] == 2
+        assert view["span_start"] is None and view["span_end"] is None
+
+
+PLAN_TABLES = """
+
+## Milestones
+
+| Milestone | Name | Start | End |
+|---|---|---|---|
+| M1 | Setup basics | 2 Nov 2026 | 18 Dec 2026 |
+
+## Features
+
+| Feature | Name | Milestone |
+|---|---|---|
+| F-01 | Checklist polish | M1 |
+"""
+
+
+async def test_timeline_reads_the_approved_versions_plan(client):
+    ctx = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        prd = await s.scalar(select(Document).where(Document.slug == "guided-setup"))
+        pv = await s.scalar(select(DocumentVersion).where(DocumentVersion.document_id == prd.id))
+        pv.markdown = (pv.markdown or "") + PLAN_TABLES
+        await company_roadmap(s, prd.id, [
+            {"item_key": "f-01", "title": "Checklist polish", "prd_section_key": "f-01"},
+        ])  # fmt: skip
+        await s.commit()
+    view = await get(client, ctx, "viewer")
+    assert [i["title"] for i in view["timeline"]] == ["Checklist polish"]
+    assert [r["name"] for r in view["plan"]["rows"]] == ["M1 · Setup basics"]
 
 
 NOT_YET = "Not in the PRD yet"
