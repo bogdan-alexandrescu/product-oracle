@@ -105,14 +105,16 @@ for (const [label, use] of [
         }
       }
 
-      // The Timeline's export (drawn from the goal lanes off screen) marks each milestone once.
+      // The Timeline's export marks each milestone once at most, never a copy: a desktop's is the
+      // zoomed Timeline shown (E-1), which draws no key dates over its chart; a phone's (a quarter
+      // list on the page) is drawn from the goal lanes off screen, which mark each once.
       await page.evaluate(() => (window.__poExports = []));
       const [png] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Export PNG" }).click()]);
       expect(png.suggestedFilename()).toBe("roadmap-timeline.png");
       const [drawn] = await page.evaluate(() => window.__poExports ?? []);
       expect(drawn.title).toBe("Roadmap · Timeline");
       for (const [name, plain] of MILESTONES) {
-        expect(drawn.keyDates.filter((k) => k === name)).toHaveLength(1);
+        expect(drawn.keyDates.filter((k) => k === name)).toHaveLength(label === "phone" ? 1 : 0);
         expect(drawn.keyDates).not.toContain(plain);
       }
     });

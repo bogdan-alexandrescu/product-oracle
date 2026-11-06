@@ -56,8 +56,9 @@ function GoalCard({
           </span>
         )}
       </div>
-      <div className="flex min-w-0 items-center justify-between gap-2">
-        <span className="min-w-0" data-testid="goal-figure">
+      {/* QA pass D-3: value and confidence wrap to their own rows when a narrow card has no room for both. */}
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <span className="min-w-0 max-w-full" data-testid="goal-figure">
           {p.state === "none" || (p.state === "notarget" && !g.currentText) ? (
             <b className="tnum font-display text-[34px] leading-9 font-bold text-text2" aria-label="No current value">
               –
@@ -78,12 +79,12 @@ function GoalCard({
         {!noValue &&
           (g.confidence == null ? (
             // qa4-plan-24: no score yet says so and why, never an empty ring with a dash.
-            <span data-testid="goal-confidence" className="max-w-28 flex-none text-right text-[13px] leading-4 font-medium text-text2">
+            <span data-testid="goal-confidence" className="ml-auto max-w-28 flex-none text-right text-[13px] leading-4 font-medium text-text2">
               No confidence yet: add evidence
             </span>
           ) : (
             // The ring says what it is: the evidence's confidence, not the goal's progress.
-            <span className="flex flex-none flex-col items-center gap-0.5" data-testid="goal-confidence">
+            <span className="ml-auto flex flex-none flex-col items-center gap-0.5" data-testid="goal-confidence">
               <Ring value={g.confidence} size={44} label={`Confidence ${g.confidence}`} />
               <span aria-hidden className="text-[12px] leading-4 font-medium text-text2">
                 confidence
