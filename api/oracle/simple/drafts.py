@@ -1164,6 +1164,8 @@ async def submit(
     for src in await prd_roadmap.sources_out(db, d):
         lines.append(f"- Added from {src.prd.title} (version {src.version}): {src.items} items")
     markdown = await changeset._markdown(db, base, "\n".join(lines))
+    # The draft changes items, not the base version's text: only the section it adds is
+    # checked for dates, as Oracle's own revisions are (hotfix 3, Nov 6).
     result = await docs_service.import_draft(
         db,
         document.slug,
@@ -1173,6 +1175,7 @@ async def submit(
         source_version_id=base.source_version_id,
         base_version=latest,
         cause="simple_draft",
+        date_sections={changeset.SECTION_KEY},
         commit=False,
     )
     version = await db.scalar(
