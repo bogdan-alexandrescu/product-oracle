@@ -341,3 +341,33 @@ async def test_inbox_staged_rows_follow_the_prd_order():
                                   staged_by=uuid.uuid4()))  # fmt: skip
         await s.commit()
         assert [r.slug for r in await staged_rows(s)] == ["banana", "apple", "cherry"]
+
+
+async def test_one_roadmap_read_ranks_the_prds_once(client):
+    """protects=GET /v1/simple/roadmap computing the company PRD order once per request (it
+    is one pass over the goals and the roadmap items, and the Key dates and the Goal
+    milestones both need it); fails_when=a second part of the read ranks them again;
+    no_claim=wall time."""
+    from sqlalchemy import event
+
+    from oracle.db import get_engine
+
+    ctx = await make_ctx()
+    await seed(ctx)
+    ranking: list[str] = []
+
+    def count(conn, cursor, statement, *args):
+        # main_goals' read of the items: only the PRD order selects these three columns.
+        if "roadmap_items.prd_document_id, roadmap_items.goal_ids, roadmap_items.feature_id" in (
+            statement
+        ):
+            ranking.append(statement)
+
+    engine = get_engine().sync_engine
+    event.listen(engine, "before_cursor_execute", count)
+    try:
+        r = await client.get("/v1/simple/roadmap", headers=ctx.as_("owner"))
+    finally:
+        event.remove(engine, "before_cursor_execute", count)
+    assert r.status_code == 200, r.text
+    assert len(ranking) == 1, f"the PRD order was ranked {len(ranking)} times in one read"
