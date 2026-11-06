@@ -25,7 +25,9 @@
 [data-ps1] .ps1-table tr:last-child td { border-bottom: 0; } /* MOCK-HOOK */
 [data-ps1] .ps1-link { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 2px; } /* MOCK-HOOK */
 [data-ps1] .ps1-code { display: inline; padding: 0; margin: 0; border-radius: 3px; color: var(--accent-ink); font-weight: 600; text-decoration: none; background: transparent; text-align: left; cursor: pointer; } /* MOCK-HOOK */
-[data-ps1] li > div [data-testid="one-pager-line-text"] { display: inline; } /* MOCK-HOOK: the words run on beside the code */
+[data-ps1] li span.flex-1:has(> .ps1-code:first-child) { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; align-items: start; } /* MOCK-HOOK: the code in its own column, the words beside it */
+[data-ps1] li span.flex-1:has(> .ps1-code:first-child) > :not(.ps1-code) { grid-column: 2; justify-self: start; margin-left: 0; } /* MOCK-HOOK */
+[data-ps1] li span.flex-1 > .ps1-code:first-child { margin-right: 0; margin-top: 2px; } /* MOCK-HOOK */
 [data-ps1] .ps1-code:hover { background: var(--accent-soft); text-decoration: underline; text-underline-offset: 3px; } /* MOCK-HOOK */
 [data-ps1] li > div .ps1-code:first-child { margin-right: 8px; padding: 1px 6px; border: 1px solid var(--accent-mid, var(--simple-rule)); border-radius: 6px; font-size: 15px; font-variant-numeric: tabular-nums; } /* MOCK-HOOK */
 [data-ps1] .ps1-more, [data-ps1] .ps1-from-toggle { margin-top: 8px; font-size: 15px; font-weight: 600; color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; text-align: left; } /* MOCK-HOOK */
@@ -115,7 +117,7 @@
 [data-ps1="e"] .ps1-table table { width: 100%; font-family: var(--font-sans); font-size: 13px; border-top: 2px solid currentColor; border-bottom: 2px solid currentColor; } /* MOCK-HOOK */
 [data-ps1="e"] .ps1-table th { background: transparent; white-space: normal; } /* MOCK-HOOK */
 [data-ps1="e"] .ps1-table :is(th, td) { padding: 6px 8px; min-width: 0; } /* MOCK-HOOK */
-@media (max-width: 767px) { [data-ps1="e"] .ps1-table { overflow-x: auto; } [data-ps1="e"] .ps1-table :is(th, td) { min-width: 7em; } } /* MOCK-HOOK */
+@media (max-width: 767px) { [data-ps1="e"] .ps1-table { overflow-x: auto; border: 1px solid var(--simple-rule); } [data-ps1="e"] .ps1-table :is(th, td) { min-width: 7em; } } /* MOCK-HOOK */
 
 /* ---- the One-pagers list in each look ---- */
 [data-ps1-list="b"] { display: grid !important; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; } /* MOCK-HOOK */

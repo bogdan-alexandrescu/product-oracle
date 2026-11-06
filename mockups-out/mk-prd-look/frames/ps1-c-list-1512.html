@@ -2871,7 +2871,9 @@ pre .date-mark, code .date-mark { font-family: var(--font-sans,inherit); }
 [data-ps1] .ps1-table tr:last-child td { border-bottom: 0px; }
 [data-ps1] .ps1-link { color: var(--accent-ink); text-underline-offset: 2px; text-decoration: underline; }
 [data-ps1] .ps1-code { color: var(--accent-ink); text-align: left; cursor: pointer; background: 0px 0px; border-radius: 3px; margin: 0px; padding: 0px; font-weight: 600; text-decoration: none; display: inline; }
-[data-ps1] li > div [data-testid="one-pager-line-text"] { display: inline; }
+[data-ps1] li span.flex-1:has(> .ps1-code:first-child) { grid-template-columns: auto minmax(0px, 1fr); align-items: start; column-gap: 8px; display: grid; }
+[data-ps1] li span.flex-1:has(> .ps1-code:first-child) > :not(.ps1-code) { grid-column: 2; justify-self: start; margin-left: 0px; }
+[data-ps1] li span.flex-1 > .ps1-code:first-child { margin-top: 2px; margin-right: 0px; }
 [data-ps1] .ps1-code:hover { background: var(--accent-soft); text-underline-offset: 3px; text-decoration: underline; }
 [data-ps1] li > div .ps1-code:first-child { border: 1px solid var(--accent-mid,var(--simple-rule)); font-variant-numeric: tabular-nums; border-radius: 6px; margin-right: 8px; padding: 1px 6px; font-size: 15px; }
 [data-ps1] .ps1-more, [data-ps1] .ps1-from-toggle { color: var(--accent-ink); text-underline-offset: 3px; text-align: left; margin-top: 8px; font-size: 15px; font-weight: 600; text-decoration: underline; }
@@ -2964,7 +2966,7 @@ pre .date-mark, code .date-mark { font-family: var(--font-sans,inherit); }
 [data-ps1="e"] .ps1-table th { white-space: normal; background: 0px 0px; }
 [data-ps1="e"] .ps1-table :is(th, td) { min-width: 0px; padding: 6px 8px; }
 @media (max-width: 767px) {
-  [data-ps1="e"] .ps1-table { overflow-x: auto; }
+  [data-ps1="e"] .ps1-table { border: 1px solid var(--simple-rule); overflow-x: auto; }
   [data-ps1="e"] .ps1-table :is(th, td) { min-width: 7em; }
 }
 [data-ps1-list="b"] { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; display: grid !important; }

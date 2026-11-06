@@ -387,7 +387,7 @@ export function mkRoadmapItems(): { key: string; title: string; horizon: "now" |
     const mi = ms.findIndex((m) => m.codes.includes(f.code)); // MOCK-HOOK
     const m = ms[mi]; // MOCK-HOOK
     const body = sections.find((s) => s.key === `feature-${f.code.toLowerCase()}`)?.body ?? ""; // MOCK-HOOK
-    const deps = (/Depends on ([^.]+)\./.exec(body)?.[1].match(/\b[A-Z]{1,3}-\d+\b/g) ?? []).map((c) => `crew-${c.toLowerCase()}`).filter((k) => feats.some((x) => x.key === k)); // MOCK-HOOK
+    const deps = (/Depends on ([^.]+)\./.exec(body)?.[1].match(/\b[A-Z]{1,3}-\d+\b/g) ?? []).filter((c) => ms.findIndex((x) => x.codes.includes(c)) <= mi).map((c) => `crew-${c.toLowerCase()}`).filter((k) => feats.some((x) => x.key === k)); // MOCK-HOOK: on the roadmap only what ships by the same milestone (a later one would be a plan's conflict, not the PRD's)
     const h = m ? horizonOf(m.day) : "later"; // MOCK-HOOK
     const start = m ? (mi ? ms[mi - 1].day : "2026-11-02") : undefined; // MOCK-HOOK
     return {
