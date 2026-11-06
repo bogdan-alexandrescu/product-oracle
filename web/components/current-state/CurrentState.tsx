@@ -10,7 +10,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { Button, PageHeader } from "@/components/ds";
+import { Button, InfoTip, PageHeader } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -379,15 +379,12 @@ export function DesiredList({ data }: { data: FeatureStates }) {
               <span className={phone ? "sr-only" : ""}>{MARK_WORD[f.mark]}</span>
             </span>
             <span className="min-w-[10rem] flex-1 font-medium">{f.title}</span>
-            {!phone && <span className="w-[200px] text-[13px] text-text2">{f.area ?? ""}</span>}
-            {!phone && <span className="w-[140px] text-[13px] text-text2">{f.milestone ?? ""}</span>}
-            {f.ready ? (
-              <span className="text-[13px] font-semibold text-pass">Proof is in</span>
-            ) : f.mark === "in_progress" && tasks?.total ? (
-              <span className="text-[13px] text-text2">
-                {tasks.count ?? 0} of {tasks.total} tasks done
-              </span>
-            ) : null}
+            {!phone && <span className="w-[200px] flex-none text-[13px] text-text2" data-testid="cs-desired-area">{f.area ?? ""}</span>}
+            {!phone && <span className="w-[140px] flex-none text-[13px] text-text2">{f.milestone ?? ""}</span>}
+            {/* A fixed width off a phone, so every row's columns line up (D-5). */}
+            <span className={`text-[13px] ${phone ? "" : "w-[130px] flex-none"} ${f.ready ? "font-semibold text-pass" : "text-text2"}`} data-testid="cs-desired-progress">
+              {f.ready ? "Proof is in" : f.mark === "in_progress" && tasks?.total ? `${tasks.count ?? 0} of ${tasks.total} tasks done` : ""}
+            </span>
           </div>
         );
       })}
@@ -439,7 +436,9 @@ export function CurrentSummary({ data }: { data: FeatureStates }) {
         </span>
       )}
       <span className="text-text2">{data.in_progress} still being built</span>
-      <span className="text-text2">· Oracle reads code maps, merged pull requests and done tasks each night; you confirm.</span>
+      <InfoTip label="Running today" align="start">
+        Oracle reads code maps, merged pull requests and done tasks each night; you confirm.
+      </InfoTip>
     </div>
   );
 }
@@ -470,10 +469,17 @@ export function ReadyBand({ data, onChanged }: { data: FeatureStates; onChanged:
   return (
     <>
       <div data-testid="cs3-ready" className="mb-3 flex flex-wrap items-center gap-2 rounded-xl bg-pass-bg px-4 py-2.5 text-[14px]">
-        <b>{ready.length} ready to move</b>: shipped, with proof. Each one needs your yes.
+        {/* One inline run, so it never breaks between the count and its words (P-2). */}
+        <span className="inline-flex items-center gap-1 whitespace-nowrap" data-testid="cs3-ready-words">
+          <b>{ready.length} ready to move</b>
+          {/* Who may say yes reads the ask; anyone else, who does (D-2). */}
+          <InfoTip label="Ready to move" align="start" testId="cs3-ready-tip">
+            {data.can_move ? "Shipped, with proof. Each one needs your yes." : "Shipped, with proof. An approver or owner says yes to each move."}
+          </InfoTip>
+        </span>
         <span className="ml-2 inline-flex flex-wrap gap-1.5">
           {ready.map((f) => (
-            <button key={f.feature_id} type="button" onClick={() => setOpen(f)} className={`rounded-full border border-line bg-surface px-2.5 py-0.5 text-[13px] ${open?.feature_id === f.feature_id ? "ring-2 ring-accent" : ""}`}>
+            <button key={f.feature_id} type="button" data-testid="cs3-ready-chip" onClick={() => setOpen(f)} className={`rounded-full border border-line bg-surface px-2.5 py-0.5 text-[13px] ${open?.feature_id === f.feature_id ? "ring-2 ring-accent" : ""}`}>
               {f.title}
             </button>
           ))}
@@ -525,8 +531,7 @@ export function CurrentStateView({ q, onChanged }: { q: ReturnType<typeof useFea
   const phone = usePhoneWidth();
   return (
     <>
-      <PageHeader title="Ground Truth" />
-      <p className="-mt-2 mb-3 max-w-[760px] text-[14px] text-text2">What runs today: each built feature with its proof, and how fresh that proof is.</p>
+      <PageHeader title="Ground Truth" info={<InfoTip label="Running today">What runs today: each built feature with its proof, and how fresh that proof is.</InfoTip>} />
       <StateTabs view="current" all={q.data?.features.length ?? null} running={q.data?.running ?? null} />
       {q.error && <p className="text-[14px] text-fail">{q.error}</p>}
       {q.data && (
