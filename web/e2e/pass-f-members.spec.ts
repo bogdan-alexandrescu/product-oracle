@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { ADMIN, login } from "./helpers";
 
 /*
  * Visual QA pass F, Members, invites and access (on the mock layer).
@@ -47,7 +47,7 @@ test.describe("pass-f members", () => {
   test("F-16 F-53: the Remove dialog names documents and sections, and its subtitle wraps", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await login(page);
-    await openMembers(page);
+    await page.goto("/settings/members");
     await memberRow(page, "approver@example.com").getByRole("button", { name: "Remove approver@example.com" }).click();
     const dialog = page.getByTestId("remove-dialog");
     const subject = dialog.getByTestId("confirm-subject");
@@ -156,7 +156,8 @@ test.describe("pass-f members", () => {
       expect(await email.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
     }
     await expect(page.locator("#engineering-lead")).toHaveText("Engineering lead");
-    const me = page.getByTestId("member-row").filter({ has: page.getByText("you", { exact: true }) });
+    const me = memberRow(page, ADMIN.email);
+    await expect(me).toHaveCount(1);
     await expect(me.getByRole("button", { name: /^Remove / })).toHaveCount(0);
     await expect(me).not.toContainText("You can't remove yourself");
   });
