@@ -168,15 +168,22 @@ async def test_x7_x10_the_share_link_pdf_footer_prints_only_its_parts(client, ct
     assert "Example Labs roadmap" in carrier
 
 
-async def test_x7_an_internal_pdf_footer_joins_version_and_status(client, prd):
+async def test_x7_x10_an_internal_pdf_footer_joins_version_and_status(client, prd):
     html = (await client.get(f"{BASE}/export?format=html", headers=prd)).text
-    carrier = re.search(r'<div class="doc-strings".*?</div>', html, re.S).group(0)
-    text = _visible(carrier)
-    assert re.search(r"Checkout PRD · Version 1 · Draft", text), text
+    assert 'string(doc-title) " \\00B7' not in html
+    # The separator rides on the version and status, which an internal export prints.
+    assert 'string-set: doc-version " \\00B7  " content(text)' in html
+    assert 'string-set: doc-status " \\00B7  " content(text)' in html
+    assert re.search(r'class="banner-footer-title"[^>]*>Checkout PRD<', html)
+    left = re.findall(r"@bottom-left \{([^}]*)\}", html)
+    assert left and all("white-space: nowrap" in b for b in left)
 
 
 def test_x12_a_flagged_date_is_a_small_plain_mark():
-    html = "<p>Beta on Nov 20, 2026 <strong>[unverified]</strong> and GA <strong>[date withdrawn]</strong></p>"
+    html = (
+        "<p>Beta on Nov 20, 2026 <strong>[unverified]</strong> and GA "
+        "<strong>[date withdrawn]</strong></p>"
+    )
     out = render_module.date_marks(html)
     assert "[unverified]" not in out and "<strong>" not in out
     assert '<span class="date-mark" data-date-mark="unverified">unverified</span>' in out

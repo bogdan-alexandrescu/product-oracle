@@ -103,7 +103,7 @@ def test_markdown_export_carries_footnotes_not_raw_tokens():
     assert not RAW.search(out), out
     assert "Teams plan by capacity[^1]; the AI estimate is off." in out
     assert out.rstrip().endswith("[^1]: Capacity plan (upload: capacity-plan.pdf)")
-    assert out.startswith("---\ndocument: planning\n---\n<!-- Product Oracle export:")
+    assert out.startswith("---\ndocument: planning\n---\n") and "<!--" not in out
 
 
 def test_html_and_pdf_body_drop_a_citation_that_points_to_nothing():

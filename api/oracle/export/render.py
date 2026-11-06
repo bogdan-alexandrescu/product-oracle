@@ -399,6 +399,9 @@ _POSITION_RUNNING = re.compile(r"position\s*:\s*running\s*\(", re.IGNORECASE)
 _BRACE_OR_END = re.compile(r"[{};]")
 # The repeated header sits in the page's top margin, so its title and source are capped.
 HEADER_TEXT_MAX = 90
+# The page footer shares its line with the page number.
+FOOTER_TEXT_MAX = 60
+_TAGS = re.compile(r"<[^>]+>")
 
 
 def _without_comments(css: str) -> str:
@@ -875,25 +878,39 @@ def build_context(ev: ExportVersion) -> dict:
     notes = _Footnotes(by_key={c.cite_key: c for c in ev.citations})
     sections = []
     present = {s.section_key for s in ev.sections}
+    # X-8: every goal code reads with its name; X-9: the Sources section's list lines
+    # that only repeat a citation are left out (the footnotes name each source once).
+    goals = goal_names(ev.all_sections)
+    appendix = sources_keys(ev.sections)
     for s in ev.sections:
         # One env per section: markdown-it keeps link reference definitions in it, and a
         # definition in one section must not turn text in another into a link.
         env = {"footnotes": notes}
-        heading = _HEADING_ID.sub("", s.heading)
+        heading = with_goal_names(_HEADING_ID.sub("", s.heading), goals)
+        # Guidance comments and presenter notes are never exported.
+        text = with_goal_names(layers.slide_body(s.body_md), goals)
+        if s.section_key in appendix:
+            kept = without_listed_citations(text, set(notes.by_key))
+            if text.strip() and not kept:
+                continue
+            text = kept
         sections.append(
             RenderedSection(
                 key=s.section_key,
                 level=min(max(s.level, 1), 6),
                 heading=Markup(md.renderInline(heading, env)),
-                # Guidance comments and presenter notes are never exported.
                 body=Markup(
                     absolute_doc_links(
                         unlink_missing(
-                            section_body_html(
-                                ev,
-                                s.section_key,
-                                layers.slide_body(s.body_md),
-                                lambda text, env=env: md.render(text, env),
+                            date_marks(
+                                wide_tables(
+                                    section_body_html(
+                                        ev,
+                                        s.section_key,
+                                        text,
+                                        lambda text, env=env: md.render(text, env),
+                                    )
+                                )
                             ),
                             present,
                         )
@@ -927,6 +944,8 @@ def build_context(ev: ExportVersion) -> dict:
         "added_footnotes": [f for f in footnotes if f.key in ev.added_citations],
         "added_label": ev.added_label,
         "title": ev.title,
+        # X-10: the page footer's title is capped, so it never pushes the page number over.
+        "footer_title": _cap(ev.title, FOOTER_TEXT_MAX),
         "slug": ev.document.slug,
         "number": v.number,
         "status": ev.status,
@@ -995,6 +1014,101 @@ def render_html(ev: ExportVersion) -> str:
     if ev.theme is not None:
         return render_themed_html(ev)
     return _jinja().get_template("prd.html.j2").render(**build_context(ev))
+
+
+# --- goal names, wide tables and date marks (export QA X) ----------------------------
+
+# A goal's code and its name where the version names it: "**G2 (retention)**",
+# "G2 (Retention)", or a goals list's "- G1 Activation: 40% to 55%".
+_GOAL_NAMED = re.compile(r"\b(G\d{1,3})\b\**\s*\(([A-Za-z][^()\n]{0,40})\)")
+_GOAL_LISTED = re.compile(
+    r"^[ \t]*[-*+][ \t]+\**(G\d{1,3})\**[ \t]+\**([A-Z][A-Za-z][^:*|\n]{0,40}?)\**[ \t]*:", re.M
+)
+# A goal's code standing alone: not inside a word, link target or path, and not already
+# followed by a bracketed name.
+_GOAL_CODE = re.compile(r"(?<![\w#/-])(G\d{1,3})(?![\w-])(?!\**\s*\()")
+
+
+def goal_names(sections: list[Section]) -> dict[str, str]:
+    """Each goal code the version names, with its name ("G2" -> "Retention"): what the Goal
+    trace or goals list says, read once per export."""
+    out: dict[str, str] = {}
+    for s in sections:
+        text = f"{s.heading}\n{s.body_md or ''}"
+        for pattern in (_GOAL_NAMED, _GOAL_LISTED):
+            for m in pattern.finditer(text):
+                name = m.group(2).strip()
+                out.setdefault(m.group(1), name[:1].upper() + name[1:])
+    return out
+
+
+def with_goal_names(body: str, names: dict[str, str]) -> str:
+    """Every goal code the version names reads with its name ("G2 Retention", E-12, X-8):
+    in a table cell or in prose; a code already followed by its name is left as it is."""
+    if not names:
+        return body
+
+    def named(m: re.Match[str]) -> str:
+        code = m.group(1)
+        name = names.get(code)
+        if name is None or body[m.end() :].lstrip(" *").lower().startswith(name.lower()):
+            return m.group(0)
+        return f"{code} {name}"
+
+    return _GOAL_CODE.sub(named, body)
+
+
+def goal_codes(sections: list[Section]) -> dict[str, str]:
+    """Each goal name the version gives a code, with that code ("activation" -> "G1")."""
+    return {name.casefold(): code for code, name in goal_names(sections).items()}
+
+
+# A table of this many columns or more is set in a smaller font (X-2).
+WIDE_TABLE_COLUMNS = 7
+_TABLE = re.compile(r"<table>(.*?)</table>", re.S)
+_FIRST_ROW = re.compile(r"<tr>(.*?)</tr>", re.S)
+
+
+def wide_tables(html: str) -> str:
+    """Each table of many columns marked ``table-wide`` for the smaller font."""
+
+    def mark(m: re.Match[str]) -> str:
+        row = _FIRST_ROW.search(m.group(1))
+        cells = len(re.findall(r"<t[hd][\s>]", row.group(1))) if row else 0
+        if cells < WIDE_TABLE_COLUMNS:
+            return m.group(0)
+        return f'<table class="table-wide">{m.group(1)}</table>'
+
+    return _TABLE.sub(mark, html)
+
+
+_DATE_MARK = re.compile(r"<strong>\[(unverified|date withdrawn)\]</strong>")
+
+
+def date_marks(html: str) -> str:
+    """A flagged date's ``**[unverified]**`` as the app shows it: a small plain mark (X-12)."""
+
+    def mark(m: re.Match[str]) -> str:
+        label = m.group(1)
+        kind = "withdrawn" if label == "date withdrawn" else label
+        return f'<span class="date-mark" data-date-mark="{kind}">{label}</span>'
+
+    return _DATE_MARK.sub(mark, html)
+
+
+# A Sources list line that only repeats a citation: "- c1 slack Drop-off thread [c:c1]".
+_LISTED_CITATION = re.compile(r"^[ \t]*[-*+][ \t]+(\S+)[ \t][^\n]*\[c:([^\]\n]+)\][ \t]*$", re.M)
+
+
+def without_listed_citations(md: str, keys: set[str]) -> str:
+    """``md`` without the list lines that only repeat a citation (its id, kind and title):
+    the Sources list prints each source once, by title (X-9)."""
+
+    def drop(m: re.Match[str]) -> str:
+        cited = {k.strip() for k in m.group(2).split(",")}
+        return "" if m.group(1) in keys and m.group(1) in cited else m.group(0)
+
+    return re.sub(r"\n{3,}", "\n\n", _LISTED_CITATION.sub(drop, md)).strip()
 
 
 # --- themed export (O1c) ----------------------------------------------------------
@@ -1133,11 +1247,17 @@ def build_themed_context(ev: ExportVersion) -> dict:
 
     plain, linked = _themed_markdown(False), _themed_markdown(True)
     present = {s.section_key for s in ev.sections} | {"sources"}
+    # X-8: every goal code reads with its name, as the deck's do.
+    goals = goal_names(ev.all_sections)
 
     def render(s: Section, md: MarkdownIt) -> ThemedSection:
         # One env per section, so a link reference definition stays in its section.
         env = {"numbers": numbers}
-        heading = _HEADING_ID.sub("", s.heading)
+        heading = with_goal_names(_HEADING_ID.sub("", s.heading), goals)
+        text = with_goal_names(_body_md(s, md is plain), goals)
+        if md is linked:
+            # X-9: the source list below names each citation once, by title.
+            text = without_listed_citations(text, set(by_key))
         return ThemedSection(
             key=s.section_key,
             level=min(max(s.level, 1), 6),
@@ -1145,12 +1265,13 @@ def build_themed_context(ev: ExportVersion) -> dict:
             body=Markup(
                 absolute_doc_links(
                     unlink_missing(
-                        _decorate(
-                            section_body_html(
-                                ev,
-                                s.section_key,
-                                _body_md(s, md is plain),
-                                lambda text: md.render(text, env),
+                        date_marks(
+                            wide_tables(
+                                _decorate(
+                                    section_body_html(
+                                        ev, s.section_key, text, lambda t: md.render(t, env)
+                                    )
+                                )
                             )
                         ),
                         present,
@@ -1189,7 +1310,8 @@ def build_themed_context(ev: ExportVersion) -> dict:
     if sources_rendered and sources_rendered[0].key == SOURCES_KEY:
         sources_heading = sources_rendered[0].heading
         sources_intro = sources_rendered[0].body
-        sources_parts = sources_rendered[1:]
+        # A part that only listed the citations is left out: they print once, below.
+        sources_parts = [p for p in sources_rendered[1:] if str(p.body).strip()]
     else:
         sources_heading, sources_intro, sources_parts = Markup("Sources and data points"), None, []
 
@@ -1274,6 +1396,10 @@ def build_themed_context(ev: ExportVersion) -> dict:
         "toc": toc if features.get("toc") else [],
         "status_header": bool(features.get("status_header")) and not ev.link_holder,
         "legend": bool(features.get("legend")),
+        # X-11: the legend explains goal codes only where the export prints them.
+        "legend_codes": any(
+            _GOAL_CODE.search(_TAGS.sub(" ", str(r.body) + str(r.heading))) for r in rendered
+        ),
         "page_fit": features.get("page_fit"),
         "has_title_section": has_title_section,
         "groups": groups,
@@ -1293,6 +1419,8 @@ def build_themed_context(ev: ExportVersion) -> dict:
         # for the page's top margin (stored theme copies included, so it lives here).
         "running_header": running,
         "header_title": _cap(ev.title, HEADER_TEXT_MAX) if running else None,
+        # X-10: the page footer's title is capped, so it never pushes the page number over.
+        "footer_title": _cap(ev.title, FOOTER_TEXT_MAX),
         "header_source_label": _header_source(ev.source)
         if running and not ev.link_holder
         else None,
@@ -1313,39 +1441,21 @@ def render_themed_html(ev: ExportVersion) -> str:
 # --- markdown export --------------------------------------------------------------
 
 
-def banner_line(ev: ExportVersion) -> str:
-    parts = [
-        f"{ev.document.title} ({ev.document.slug})",
-        f"version {ev.version.number}",
-        f"status {ev.status}",
-        f"imported {company_time.stamp(ev.version.created_at, ev.zone)}",
-    ]
-    if ev.layer != "full":
-        parts.insert(2, ev.layer_label.lower())
-    if ev.audience_label:
-        parts.insert(2, f"audience {ev.audience_label}")
-    if ev.version.approved_at is not None:
-        parts.append(f"approved {company_time.stamp(ev.version.approved_at, ev.zone)}")
-    if ev.source is not None:
-        parts.append(f"from {ev.source.title} ({ev.source.slug}) version {ev.source.version}")
-    # "--" would end the HTML comment early.
-    return "Product Oracle export: " + " · ".join(parts).replace("--", "- -")
-
-
 def render_markdown(ev: ExportVersion) -> str:  # full layer only
-    """The stored markdown with a banner comment.
+    """The stored markdown as plain markdown (X-17): no banner comment, its days month
+    first ("Nov 30, 2026") as in the HTML, PDF and deck.
 
-    The comment goes after the YAML front matter (front matter must stay first), so
-    the export can still be re-imported. A roadmap's flagged dates carry an HTML comment
-    after each (``<!-- oracle: date unverified -->``), which the import drops. The body's
-    days stay as stored (``2027-01-29``), not month first as in the HTML, PDF and deck:
-    the file is the source a person edits and imports again. Its ``[c:id]`` citations
-    are Markdown footnotes (``[^1]``, defined at the end), never raw markers; one that
-    points to no citation of the version is dropped (raw-tokens-everywhere).
+    The YAML front matter and each heading's ``{#id}`` stay: the import refuses a file
+    without them (oracle.docs.parser ``missing_front_matter``, ``missing_section_id``),
+    so the export can still be edited and imported again; a month-first day imports as
+    the ISO one did (oracle.roadmap.doc_dates). A roadmap's flagged dates carry an HTML
+    comment after each (``<!-- oracle: date unverified -->``), which the import drops.
+    Its ``[c:id]`` citations are Markdown footnotes (``[^1]``, defined at the end), never
+    raw markers; one that points to no citation of the version is dropped
+    (raw-tokens-everywhere).
     """
     from oracle.roadmap import doc_dates
 
-    banner = f"<!-- {banner_line(ev)} -->\n"
     markdown = (
         ev.markdown
         if ev.markdown is not None
@@ -1354,6 +1464,7 @@ def render_markdown(ev: ExportVersion) -> str:  # full layer only
         )
     )
     markdown = markdown_footnotes(markdown, citation_labels({c.cite_key: c for c in ev.citations}))
+    head, rest = "", markdown
     if markdown.startswith("---"):
         m = re.compile(r"^---[ \t]*\r?\n.*?^(?:---|\.\.\.)[ \t]*(?:\r?\n|\Z)", re.S | re.M).match(
             markdown
@@ -1362,5 +1473,29 @@ def render_markdown(ev: ExportVersion) -> str:  # full layer only
             head, rest = markdown[: m.end()], markdown[m.end() :]
             if not head.endswith("\n"):
                 head += "\n"
-            return head + banner + rest
-    return banner + markdown
+    return head + _days_in_plain_words(rest)
+
+
+def _days_in_plain_words(text: str) -> str:
+    """``text``'s calendar days month first, outside code (plain spaces: a file, not a page)."""
+
+    def day(m: re.Match[str]) -> str:
+        try:
+            d = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return m.group(0)
+        return f"{company_time.calendar_day(d)}, {d.year}"
+
+    out: list[str] = []
+    fence: str | None = None
+    for line in text.splitlines(keepends=True):
+        mark = re.match(r"[ \t]{0,3}(`{3,}|~{3,})", line)
+        if fence is None and mark:
+            fence = mark.group(1)[0] * len(mark.group(1))
+        elif fence is not None and line.strip().startswith(fence):
+            fence = None
+        elif fence is None:
+            parts = re.split(r"(`[^`\n]*`)", line)
+            line = "".join(p if p.startswith("`") else _PROSE_DAY.sub(day, p) for p in parts)
+        out.append(line)
+    return "".join(out)
