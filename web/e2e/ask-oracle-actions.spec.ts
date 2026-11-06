@@ -38,6 +38,15 @@ async function say(box: Locator, text: string) {
 
 const last = (box: Locator) => box.getByTestId("chat-message").last();
 
+/** The feature panel's talk: on this line it opens from the panel's "Talk to Oracle". */
+async function talkOf(panel: Locator): Promise<Locator> {
+  await expect(panel).toBeVisible();
+  await tap(panel.getByRole("button", { name: "Talk to Oracle" }));
+  const talk = panel.getByTestId("item-talk");
+  await expect(talk).toBeVisible();
+  return talk;
+}
+
 /** Says `line`; one card removes the dependency; Apply applies it; the same line again finds none; Undo restores it. */
 async function removeAndUndo(box: Locator, line: string) {
   await say(box, line);
@@ -76,34 +85,35 @@ test("the feature talk removes a dependency from the owner's sentence, with Undo
   await expect(bar).toBeVisible();
   await bar.click();
   const panel = page.getByTestId("floating-card");
-  await expect(panel).toBeVisible();
-  const talk = panel.getByTestId("item-talk");
+  const talk = await talkOf(panel);
   await removeAndUndo(talk, `it should not depend on the ${DEP.toLowerCase()}. remove that dependency relationship`);
 });
 
 /**
- * Card ask-actions-panel-link: protects = a dependency the talk removes reads in the same
- * feature panel as Oracle's link removed by the person, with Restore, which puts it back as
- * Oracle's (api: panel._link_steps); fails_when = the panel still lists the link as Oracle's
- * or forgets it once removed; no_claim = a dependency the talk adds.
+ * Card ask-actions-panel-link: protects = a dependency the talk removes leaves the same
+ * feature panel's "Depends on" at once, and Undo puts it back there; fails_when = the panel
+ * still lists it once removed, or Undo leaves it out; no_claim = a dependency the talk adds.
  */
-test("a dependency the feature talk removes reads in the feature panel, with Restore", async ({ page }) => {
+test("a dependency the feature talk removes leaves the feature panel, and Undo puts it back", async ({ page }) => {
   await signIn(page, "/simple/roadmap");
   await tap(page.getByTestId("format-gantt"));
   await page.locator('[data-testid="bar"][data-item="alert-digest"]').click();
   const panel = page.getByTestId("floating-card");
-  await expect(panel).toBeVisible();
-  const row = panel.getByTestId("fp-list-depends").getByTestId("fp-dep").filter({ hasText: DEP });
-  await expect(row).toContainText("Found by Oracle");
-  const talk = panel.getByTestId("item-talk");
+  const row = panel.getByTestId("card-depends").getByTestId("card-depends-row").filter({ hasText: DEP });
+  await expect(row).toHaveCount(1);
+  const talk = await talkOf(panel);
   await say(talk, `it should not depend on the ${DEP.toLowerCase()}. remove that dependency relationship`);
   const card = last(talk).getByTestId("chat-card");
   await expect(card.getByTestId("chat-card-summary")).toHaveText(SUMMARY);
   await tap(card.getByRole("button", { name: "Apply", exact: true }));
   await expect(card.getByTestId("chat-card-outcome")).toContainText("Applied by you");
-  await expect(row).toContainText("Oracle's link, removed by");
-  await tap(row.getByRole("button", { name: "Restore" }));
-  await expect(row).toContainText("Found by Oracle");
+  await tap(panel.getByRole("tab", { name: "Details" }).or(panel.getByRole("button", { name: "Details" })).first());
+  await expect(row).toHaveCount(0);
+  await tap(panel.getByRole("tab", { name: "Talk to Oracle" }).or(panel.getByRole("button", { name: "Talk to Oracle" })).first());
+  await tap(talk.locator('[data-testid="chat-card"][data-status="applied"]').getByRole("button", { name: "Undo" }));
+  await expect(talk.locator('[data-testid="chat-card"][data-status="undone"]')).toHaveCount(1);
+  await tap(panel.getByRole("tab", { name: "Details" }).or(panel.getByRole("button", { name: "Details" })).first());
+  await expect(row).toHaveCount(1);
 });
 
 /**
@@ -169,7 +179,7 @@ test("the feature talk applies an action of the API, with Undo, and one that can
   await expect(bar).toBeVisible();
   await bar.click();
   const panel = page.getByTestId("floating-card");
-  await apiActions(panel.getByTestId("item-talk"));
+  await apiActions(await talkOf(panel));
 });
 
 /** Card ask-actions-api-panel: the same from the Ask Oracle panel. */
@@ -230,7 +240,7 @@ test("a pasted token never lands in a card, in the three chats", async ({ contex
   await expect(bar).toBeVisible();
   await bar.click();
   const panel = page.getByTestId("floating-card");
-  await refused(panel.getByTestId("item-talk"));
+  await refused(await talkOf(panel));
 
   await page.goto("/simple/roadmap");
   await tap(page.getByTestId("simple-ask").filter({ visible: true }).first());

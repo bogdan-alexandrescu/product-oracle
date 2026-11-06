@@ -115,6 +115,8 @@ test("the feature talk keeps only the newest card per target active", async ({ p
     const bar = page.locator('[data-testid="bar"][data-item="alert-digest"]');
     await expect(bar).toBeVisible();
     await bar.click();
+    // This line's feature panel opens its talk from "Talk to Oracle".
+    await tap(page.getByTestId("floating-card").getByRole("button", { name: "Talk to Oracle" }));
     await expect(page.getByTestId("item-talk")).toBeVisible();
   };
   await signIn(page, "/simple/roadmap");
