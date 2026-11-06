@@ -26,8 +26,9 @@ Test cards (protects / fails_when / no_claim):
   dependencies onto the kept item, points the draft's dependents at the kept item, and
   closes the draft (status merged, merged_into names the kept item); undo restores both;
   approvers who see the draft (its reviewers) propose it, viewers get 403, a non-draft is
-  422; fails_when=a link is lost or
-  undo leaves a half merge; no_claim=merging two published items.
+  never linked to a feature (422); fails_when=a link is lost or
+  undo leaves a half merge; no_claim=merging two published items
+  (tests/test_simple_feature_parts.py).
 - test_reconcile_and_keep_both: protects=a draft whose title looks like an existing item
   or a baseline feature lists it in ``looks_like`` (item first); keep_both empties it and
   its undo brings it back; merging with a feature links the draft to it; fails_when=a
@@ -327,9 +328,10 @@ async def test_merge_item_per_role(client):
     assert items[w.ids["import-a"]]["goal_ids"] == []
     assert items[w.ids["import-a"]]["depends_on"] == []
     assert items[dependent]["depends_on"] == [draft]
-    # A published item is not merged away.
+    # feature-parts: a published item merges into another item, never into a feature.
     r = await client.post(CHANGES, headers=w.as_("owner"), json={
-        "op": "merge_item", "target": {"item_id": w.ids["import-b"], "into_id": w.ids["import-a"]},
+        "op": "merge_item", "target": {"item_id": w.ids["import-b"],
+                                       "feature_id": w.features["audit-log"]},
         "before": {}, "after": {}})  # fmt: skip
     assert r.status_code == 422
 
