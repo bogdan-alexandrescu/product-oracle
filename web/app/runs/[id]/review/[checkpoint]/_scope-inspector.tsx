@@ -32,6 +32,8 @@ import {
   type Review,
   type Scope,
   type Ui,
+  answers,
+  refOf,
 } from "./_scope-lib";
 
 /**
@@ -421,7 +423,8 @@ function GoalsEditor({ feature, scope, mode, ops, onDone }: { feature: Feature; 
   );
 }
 
-function WaiveForm({ feature, code, ops, onDone }: { feature: Feature; code: string; ops: Ops; onDone: () => void }) {
+/** Waive one reason, named by its own ref: two problems of one code are waived each with its own reason. */
+function WaiveForm({ feature, reason, ops, onDone }: { feature: Feature; reason: string; ops: Ops; onDone: () => void }) {
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   return (
@@ -433,7 +436,7 @@ function WaiveForm({ feature, code, ops, onDone }: { feature: Feature; code: str
           variant="solid"
           disabled={!note.trim()}
           onClick={() =>
-            void ops.act({ item_key: feature.key, kind: "waive", answers: [code], value: { reason: note.trim() }, note: note.trim() }).then(onDone, (e) => setError(errorMessage(e)))
+            void ops.act({ item_key: feature.key, kind: "waive", answers: [reason], value: { reason: note.trim() }, note: note.trim() }).then(onDone, (e) => setError(errorMessage(e)))
           }
         >
           Waive
@@ -494,10 +497,10 @@ export function ScopeInspector({
   const [blockedOn, setBlockedOn] = useState<string | null>(null);
   const onlyBlocked = f.decision === "include" && !kept && f.reasons.some((r) => !r.answered && r.severity === "blocking") && !f.reasons.some((r) => !r.answered && r.severity !== "blocking");
   // Undo of one reason: a call staged before each reason had its own may answer others too; they stay kept.
-  const undoReason = async (answer: (typeof staged)[number], code: string) => {
+  const undoReason = async (answer: (typeof staged)[number], ref: string) => {
     if (answer.kind === "accept" && answer.field == null) {
-      const covered = f.reasons.filter((r) => r.answered && r.severity !== "blocking" && (!answer.answers.length || answer.answers.includes(r.code)));
-      for (const r of covered) if (r.code !== code) await ops.act({ item_key: f.key, kind: "accept", answers: [r.code] });
+      const covered = f.reasons.filter((r) => r.answered && r.severity !== "blocking" && answers(answer, r));
+      for (const r of covered) if (refOf(r) !== ref) await ops.act({ item_key: f.key, kind: "accept", answers: [r.code] });
     }
     await ops.removeAction(answer.id);
   };
@@ -531,9 +534,9 @@ export function ScopeInspector({
         <InspectorSection label={mode === "approver" ? "Needs you because" : "Needs a decision because"}>
           <ul className="flex flex-col gap-2">
             {f.reasons.map((r) => {
-              const answer = staged.find((a) => (a.kind === "waive" || a.kind === "accept") && (!a.answers.length || a.answers.includes(r.code)));
+              const answer = staged.find((a) => (a.kind === "waive" || a.kind === "accept") && answers(a, r));
               return (
-                <li key={r.code} className={`rounded-button border p-2.5 ${r.severity === "blocking" ? "border-crit/40" : "border-warn/40"}`} data-testid={`reason-${r.code}`}>
+                <li key={refOf(r)} className={`rounded-button border p-2.5 ${r.severity === "blocking" ? "border-crit/40" : "border-warn/40"}`} data-testid={`reason-${r.code}`}>
                   <span className="flex flex-wrap items-center gap-2">
                     <Chip kind={r.severity === "blocking" ? "crit" : "warn"}>{r.severity === "blocking" ? "Blocking" : "To confirm"}</Chip>
                     <span className="min-w-0 flex-1 text-sm break-words">{reasonText(r, scope)}</span>
@@ -542,7 +545,7 @@ export function ScopeInspector({
                     <p className="mt-1.5 flex items-center gap-1.5 text-sm text-pass">
                       ✓ {answer.kind === "waive" ? `Waived: ${((answer.value ?? {}) as { reason?: string }).reason ?? answer.note ?? ""}` : "Included"}
                       {mode === "approver" && (
-                        <Button variant="ghost" className="h-8 px-2 text-sm" onClick={() => void undoReason(answer, r.code)}>
+                        <Button variant="ghost" className="h-8 px-2 text-sm" onClick={() => void undoReason(answer, refOf(r))}>
                           Undo
                         </Button>
                       )}
@@ -560,7 +563,7 @@ export function ScopeInspector({
                       ) : null;
                     })()
                   )}
-                  {waiving === r.code && mode === "approver" && <WaiveForm feature={f} code={r.code} ops={ops} onDone={onWaiveDone} />}
+                  {waiving === refOf(r) && mode === "approver" && <WaiveForm feature={f} reason={refOf(r)} ops={ops} onDone={onWaiveDone} />}
                 </li>
               );
             })}

@@ -77117,6 +77117,14 @@
             "type": "object",
             "title": "Flags",
             "default": {}
+          },
+          "titles": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Titles",
+            "default": {}
           }
         },
         "type": "object",
@@ -80548,6 +80556,11 @@
           "code": {
             "type": "string",
             "title": "Code"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref",
+            "default": ""
           },
           "label": {
             "type": "string",
@@ -115593,6 +115606,11 @@
           "code": {
             "type": "string",
             "title": "Code"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref",
+            "default": ""
           },
           "severity": {
             "type": "string",

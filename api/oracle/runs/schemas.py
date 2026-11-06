@@ -492,6 +492,8 @@ class FeatureSetCheck(BaseModel):
     excluded: int
     problems: list[FeatureSetProblem]
     flags: dict[str, list[str]] = {}
+    # Each feature's title by its key (included and left out).
+    titles: dict[str, str] = {}
 
 
 class ScopeGoal(BaseModel):
@@ -561,6 +563,9 @@ class ScopeReason(BaseModel):
     answers it."""
 
     code: str
+    # This reason's own name among its feature's (a problem's gate.problem_ref, a flag's
+    # code): Waive on it names it, so it is waived alone, with its own reason.
+    ref: str = ""
     severity: Literal["blocking", "to_confirm"]
     label: str
     requirement: str | None = None
@@ -860,6 +865,9 @@ class GateLeft(BaseModel):
     item: str
     item_title: str | None = None
     code: str
+    # This reason's own name among its item's (a C6 or C8 problem's gate.problem_ref, else
+    # its code): Waive… on it names it, so it is waived alone, with its own reason.
+    ref: str = ""
     label: str
     waivable: bool
     # F4's blocking_question: the question left unanswered.
