@@ -217,7 +217,7 @@ test("F-78: a long wait reads in days, says last update, and a step not heard fr
   await expect(first.getByTestId("agent-heartbeat")).toContainText(/^last (update|proposal|activity) /);
   await expect(progress.getByTestId("segment-no-news")).toHaveCount(0);
 
-  await page.clock.fastForward("72:00:00");
+  await page.clock.fastForward(72 * 3600_000);
   await expect(progress).toContainText(/checked 3 days ago/);
   await expect(first.getByTestId("agent-elapsed")).toHaveText(/^3 days elapsed$/);
   await expect(progress.getByTestId("segment-no-news")).toHaveText(/^No news since [A-Z][a-z]{2} \d{1,2}/);
