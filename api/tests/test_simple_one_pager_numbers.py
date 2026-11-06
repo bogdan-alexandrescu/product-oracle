@@ -40,9 +40,14 @@ A count in a section's HEADING (owner, Nov 5, 'Fix the heading too'), on the inv
   fails_when=the import drops the heading or changes the key.
 """
 
+from types import SimpleNamespace
+
+import pytest
 from sqlalchemy import select
 
 from oracle.docs.models import DocumentVersion, Section
+from oracle.simple import change_words, one_pager, one_pager_checks
+from oracle.simple.changes import ChangeError
 from oracle.simple.models import SimpleChange, SimpleDraft
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
@@ -100,14 +105,14 @@ async def test_each_numbers_item_carries_its_fix(client):
     assert r.status_code == 201, r.text
     c = r.json()["change"]
     assert c["op"] == "set_section_number" and c["status"] == "applied"
-    assert "6 features wait for next quarter." in c["after"]["sections"]["later"]["body"]
+    assert "Six features wait for next quarter." in c["after"]["sections"]["later"]["body"]
     assert "Eight features" in c["before"]["sections"]["later"]["body"]
     mine = await get(client, ctx, "owner", DOC)
     assert look(mine, COUNT) is None and look(mine, PER) is not None
     assert mine["draft"]["changes"] == 1
     async with tenant_session(ctx.tenant_id) as s:
         [d] = list(await s.scalars(select(SimpleDraft)))
-        assert d.overlay["sections"]["later"].startswith("6 features wait for next quarter.")
+        assert d.overlay["sections"]["later"].startswith("Six features wait for next quarter.")
     seen = await get(client, ctx, "viewer", DOC)
     assert seen["draft"] is None
     # The per-unit fix sets the company-wide target to what the parts add up to.
@@ -317,3 +322,85 @@ async def test_submitted_draft_imports_the_heading(client):
         )
         assert later.heading == "Later · 6 items"
         assert later.body_md.startswith("- Invite by QR code")
+
+
+# --------------------------------------------------------------------------- fix round 2
+
+
+async def test_fixes_in_the_draft_are_listed_with_undo(client):
+    ctx = await clear_world(client)
+    view = await get(client, ctx, "owner", DOC)
+    assert view["fixed"] == []
+    one = await fix(client, ctx, "owner", look(view, COUNT)["fix"])
+    two = await fix(client, ctx, "owner", look(view, PER)["fix"])
+    assert one.status_code == two.status_code == 201
+    # A reload reads them from the draft's live changes, each with its Undo.
+    mine = await get(client, ctx, "owner", DOC)
+    assert mine["draft"]["changes"] == 2
+    assert [(x["change_id"], x["can_undo"]) for x in mine["fixed"]] == [
+        (one.json()["change"]["id"], True),
+        (two.json()["change"]["id"], True),
+    ]
+    assert mine["fixed"][0]["words"] == "Fixed: set to 6 in “Not this quarter”"
+    assert mine["fixed"][1]["words"].startswith("Fixed: set to 200 in “")
+    assert (await get(client, ctx, "viewer", DOC))["fixed"] == []
+    u = await client.post(f"{CHANGES}/{one.json()['change']['id']}/undo", headers=ctx.as_("owner"))
+    assert u.status_code in (200, 201), u.text
+    after = await get(client, ctx, "owner", DOC)
+    assert [x["change_id"] for x in after["fixed"]] == [two.json()["change"]["id"]]
+    assert look(after, COUNT) is not None
+
+
+async def test_a_heading_fix_is_listed(client):
+    ctx = await head_world(client)
+    f = look(await get(client, ctx, "owner", HEAD_DOC), HEAD)["fix"]
+    assert (await fix(client, ctx, "owner", f)).status_code == 201
+    [x] = (await get(client, ctx, "owner", HEAD_DOC))["fixed"]
+    assert x["words"] == "Fixed: set to 6 in “Later · 6 items”" and x["can_undo"] is True
+
+
+async def test_a_count_in_words_stays_in_words(client):
+    ctx = await clear_world(client)
+    f = look(await get(client, ctx, "owner", DOC), COUNT)["fix"]
+    r = await fix(client, ctx, "owner", f)
+    assert r.status_code == 201, r.text
+    body = r.json()["change"]["after"]["sections"]["later"]["body"]
+    assert "Six features wait for next quarter." in body and "6 features" not in body
+    assert one_pager_checks.set_number("eight items", "eight items", "6") == "six items"
+    assert one_pager_checks.set_number("EIGHT items", "EIGHT items", "6") == "SIX items"
+    assert one_pager_checks.set_number("8 items", "8 items", "6") == "6 items"
+    # A value with no word for it is written as a numeral.
+    assert one_pager_checks.set_number("Eight items", "Eight items", "250") == "250 items"
+
+
+async def test_change_sentence_names_the_section(client):
+    ctx = await head_world(client)
+    f = look(await get(client, ctx, "owner", HEAD_DOC), HEAD)["fix"]
+    c = (await fix(client, ctx, "owner", f)).json()["change"]
+    words = change_words.phrase(c["op"], c["target"], c["before"], c["after"], None)
+    assert words == "set the count in “Later” to 6"
+    body = {"sections": {"later": {"heading": "Not this quarter", "body": "x"}}}
+    assert (
+        change_words.phrase("set_section_number", {"section": "later"}, body, {"number": "6"}, None)
+        == "set the number in “Not this quarter” to 6"
+    )
+
+
+async def test_empty_before_is_refused(client):
+    ctx = await clear_world(client)
+    f = look(await get(client, ctx, "owner", DOC), COUNT)["fix"]
+    r = await fix(client, ctx, "owner", f, before="")
+    assert r.status_code == 422, r.text
+
+
+def test_setext_heading_is_patched():
+    md = "Later · 8 items {#later}\n---------------\n\n- One\n"
+    sec = Section(section_key="later", heading="Later · 8 items", body_md="- One")
+    got = one_pager.patched_markdown(
+        SimpleNamespace(markdown=md), [sec], {}, {"later": "Later · 6 items"}
+    )
+    assert got.startswith("Later · 6 items {#later}\n---------------\n")
+    gone = Section(section_key="later", heading="Soon · 8 items", body_md="- One")
+    with pytest.raises(ChangeError) as e:
+        one_pager.patched_markdown(SimpleNamespace(markdown=md), [gone], {}, {"later": "Soon · 6"})
+    assert "“Soon · 8 items”" in str(e.value.detail)
