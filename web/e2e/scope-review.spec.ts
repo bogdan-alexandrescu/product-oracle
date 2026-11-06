@@ -25,7 +25,7 @@ async function seeded(page: Page, email = APPROVER) {
 async function openReview(page: Page, slug: string) {
   await page.getByTestId("nav-runs").click();
   await page.locator(`[data-testid="run-row"][data-document="${slug}"]`).getByRole("link").first().click();
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
   await page.getByTestId("segment-feature_set").getByRole("link", { name: "Review feature set" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/review\/[0-9a-f-]+/);
   await expect(page.getByRole("heading", { level: 1, name: "Feature set" })).toBeAttached();
@@ -133,7 +133,7 @@ test("add a requirement, approve with edits, and the baseline lists it under its
   await expect(page).toHaveURL(new RegExp(`/runs/${SCOPE_REVIEW_RUN}$`));
   await expect(page.getByTestId("checkpoint-feature_set")).toContainText("Approved");
 
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   const feature = page.getByTestId("feature-saved-addresses");
   await expect(feature).toBeVisible();
   const requirement = page.locator('[data-testid^="requirement-r."]').filter({ hasText: text });
@@ -293,7 +293,7 @@ for (const email of [APPROVER, COMMENTER]) {
     await seeded(page, email);
     await page.getByTestId("nav-runs").click();
     await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').getByRole("link").first().click();
-    await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
     const segment = page.getByTestId("segment-feature_set");
     await expect(segment.getByRole("link", { name: "Review feature set" })).toHaveCount(1);
     await expect(page.getByTestId("review-screen-line")).toHaveCount(0);

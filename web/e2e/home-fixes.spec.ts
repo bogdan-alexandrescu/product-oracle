@@ -274,7 +274,7 @@ test("Home for a viewer of a new company: one line per block, no actions they ca
   await page.addInitScript(() => localStorage.setItem("po-mock-role", "viewer"));
   await openHome(page, "empty");
   await expect(page.getByTestId("home-goals-empty")).toContainText("No goals yet");
-  await expect(page.getByRole("link", { name: "Build the baseline" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Build the Ground Truth" })).toHaveCount(0);
   await expect(page.getByTestId("home-in-flight-empty")).toContainText("Nothing in flight");
   await expect(page.getByRole("link", { name: "New PRD" })).toHaveCount(0);
 });

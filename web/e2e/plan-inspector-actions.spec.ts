@@ -125,7 +125,7 @@ test("Open blocker on a blocked item's card opens the blocker in Baseline", asyn
   const blocked = cards(page).filter({ hasText: "Chat app review takes two weeks (open)" });
   await expect(blocked.getByRole("link")).toHaveText(["Open blocker"]);
   await blocked.getByRole("link", { name: "Open blocker" }).click();
-  await expect(page).toHaveURL(/\/baseline\?tab=blockers&blocker=[0-9a-f-]+$/);
+  await expect(page).toHaveURL(/\/ground-truth\?tab=blockers&blocker=[0-9a-f-]+$/);
 });
 
 // protects = an issue on the track that no item names shows on the track's items with Link to

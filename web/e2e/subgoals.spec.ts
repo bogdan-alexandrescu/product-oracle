@@ -17,7 +17,7 @@ const drawer = (page: Page, title: string) => page.getByRole("dialog", { name: t
 
 async function openBaseline(page: Page) {
   await login(page);
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   await expect(page.getByTestId("goal-g.activation")).toBeVisible();
 }
 
@@ -156,7 +156,7 @@ test("move, promote and archive a subgoal; viewers see no tree controls", async 
 
   await signOut(page);
   await login(page, "viewer@example.com");
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   await expect(page.getByTestId("goal-g.activation")).toBeVisible();
   await expect(page.getByRole("button", { name: "Add subgoal" })).toHaveCount(0);
 });

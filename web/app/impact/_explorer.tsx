@@ -116,7 +116,7 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
   // qa-plan-59: every Impact page leads back to what it is about (the version, Baseline or
   // Sources); a version's by its breadcrumb (below).
   const backTo =
-    source.kind === "entity" ? { href: "/baseline", label: "Baseline" } : source.kind === "change" ? (from ?? subject?.back) : undefined;
+    source.kind === "entity" ? { href: "/ground-truth", label: "Ground Truth" } : source.kind === "change" ? (from ?? subject?.back) : undefined;
   // qa-plan-59 / review: the rail highlights by what a recorded change's impact is about (a
   // PRD version, Baseline, Sources), once the report has said so; nothing it can't place.
   useChangeDestination(source.kind === "change" ? source.id : undefined, source.kind === "change" ? backTo?.href : undefined);
@@ -409,7 +409,7 @@ function Lineage({
       <div className="grid grid-cols-[22fr_8fr_32fr_8fr_30fr] px-4 pt-3 text-[13px] font-semibold text-text2">
         <span>Subject</span>
         <span />
-        <span>{source.kind === "change" ? "What it reached" : "Changed sections & baseline items"}</span>
+        <span>{source.kind === "change" ? "What it reached" : "Changed sections & Ground Truth items"}</span>
         <span />
         <span>{grouped && !openCategory ? `Outputs by category · past ${GROUP_AT}` : "Affected outputs · stalest first"}</span>
       </div>
@@ -861,7 +861,7 @@ function PlanList({ report }: { report: Report }) {
                       {names.section(k)}
                     </Chip>
                   ))}
-                  {p.entity_ids.length > 0 && <span className="text-[13px] text-text2">{p.entity_ids.length} baseline item{p.entity_ids.length === 1 ? "" : "s"}</span>}
+                  {p.entity_ids.length > 0 && <span className="text-[13px] text-text2">{p.entity_ids.length} Ground Truth item{p.entity_ids.length === 1 ? "" : "s"}</span>}
                 </div>
                 <p className="text-sm text-text2">{names.words(p.how)}</p>
               </div>
@@ -887,7 +887,7 @@ function PlanList({ report }: { report: Report }) {
 
 function EntitiesPanel({ report }: { report: Report }) {
   return (
-    <Panel title="Baseline items reached" count={report.affected_entities.length}>
+    <Panel title="Ground Truth items reached" count={report.affected_entities.length}>
       <ul>
         {report.affected_entities.map((e) => (
           <li key={e.id} className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5 text-sm last:border-b-0">

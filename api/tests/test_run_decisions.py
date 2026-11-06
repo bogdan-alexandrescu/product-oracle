@@ -171,10 +171,10 @@ async def test_decided_checkpoints_in_segment_then_decided_order_and_who_decided
         "summary": f"Feature set · approved by admin@example.com, an owner · note: {NOTE}",
     }
     assert second["summary"] == (
-        "Baseline · approved by Pat Example, an approver · note: Good enough"
+        "Ground Truth · approved by Pat Example, an approver · note: Good enough"
     )
     assert first["summary"] == (
-        "Baseline · changes requested by Pat Example, an approver · note: Name the owner of G1"
+        "Ground Truth · changes requested by Pat Example, an approver · note: Name the owner of G1"
     )
     # The pending Engineering check is absent.
     assert pending(run)["kind"] == "eng_review"
@@ -200,7 +200,7 @@ async def test_skipped_checkpoints_are_listed_and_a_run_without_decisions_is_emp
     assert skipped["note"] == "Turned off when the run started."
     assert skipped["decided_by_role"] is None and skipped["via"] == "oracle"
     assert skipped["decided_by_name"] is None
-    assert skipped["summary"] == "Baseline · skipped · note: Turned off when the run started."
+    assert skipped["summary"] == "Ground Truth · skipped · note: Turned off when the run started."
 
 
 async def test_an_unknown_run_gets_nothing(client, owner, runtime):
@@ -358,7 +358,7 @@ async def test_a_held_console_approval_is_absent_until_an_approver_confirms_it(
     # A member without a name is named by their email.
     assert d["decided_by_name"] == "viewer.console@example.com"
     assert d["summary"].startswith(
-        "Baseline · approved by viewer.console@example.com, a viewer in SwarmCloud's console"
+        "Ground Truth · approved by viewer.console@example.com, a viewer in SwarmCloud's console"
     )
 
 
@@ -402,7 +402,7 @@ async def test_a_personal_tokens_decision_names_its_owner(client, owner, runtime
     run = await decide(client, {"Authorization": f"Bearer {raw}"}, run, note=NOTE)
     [d] = await decisions(client, auth, run["id"])
     assert d["decided_by_role"] == "approver" and d["decided_by_name"] == "Pat Example"
-    assert d["summary"].startswith("Baseline · approved by Pat Example, an approver")
+    assert d["summary"].startswith("Ground Truth · approved by Pat Example, an approver")
 
 
 async def test_a_counted_console_answer_is_listed_as_the_consoles(client, owner, swarmcloud):

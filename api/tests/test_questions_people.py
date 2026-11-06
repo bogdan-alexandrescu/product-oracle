@@ -306,8 +306,8 @@ async def test_every_subject_kind_reads_with_its_title_and_link(client):
             client, ctx, prompt="Who decides?", asked_to=uid(ctx, "approver"), subject=subject
         )
     rows = {r["subject"]["kind"]: r["subject"] for r in await inbox(client, ctx, "approver")}
-    assert rows["entity"] == {"kind": "entity", "title": "Baseline · Activation",
-                              "href": f"/baseline?entity={ent['id']}"}  # fmt: skip
+    assert rows["entity"] == {"kind": "entity", "title": "Ground Truth · Activation",
+                              "href": f"/ground-truth?entity={ent['id']}"}  # fmt: skip
     assert rows["checkpoint_item"]["href"] == f"/runs/{run_id}#decide"
     assert rows["checkpoint_item"]["title"] == "Roadmap items · item-3"
     assert rows["intake"]["title"] == "Before drafting · Saved addresses"

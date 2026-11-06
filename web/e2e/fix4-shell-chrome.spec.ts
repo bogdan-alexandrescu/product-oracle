@@ -154,7 +154,7 @@ test.describe("qa-shell-31 on a phone, drawn after the page", () => {
 
   test("qa-shell-31: the tab bar stays under a page's own sheet, whose buttons can be pressed", async ({ page }) => {
     await login(page);
-    await page.goto("/baseline");
+    await page.goto("/ground-truth");
     await page.getByRole("button", { name: "Add item" }).click();
     const form = page.getByRole("dialog", { name: "Add an item" });
     await form.getByLabel("Kind").selectOption("assumption");

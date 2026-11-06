@@ -648,7 +648,7 @@ ItemKey = Annotated[str, Field(min_length=1, max_length=120)]
 
 
 class AddChange(BaseModel):
-    """Add an item: a Baseline feature (``feature_id``) or a new one (``title``)."""
+    """Add an item: a Ground Truth feature (``feature_id``) or a new one (``title``)."""
 
     op: Literal["add"]
     title: str = Field(min_length=1, max_length=200)

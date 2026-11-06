@@ -341,7 +341,7 @@ async def conflicts(
             out.append(
                 ConflictView(
                     kind="baseline",
-                    topic=f"{titles.get(row.entity_id, 'Baseline item')}: {row.field}",
+                    topic=f"{titles.get(row.entity_id, 'Ground Truth item')}: {row.field}",
                     claims=[
                         ClaimOut(
                             value=cl.get("value"),

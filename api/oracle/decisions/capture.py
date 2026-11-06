@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
 # The stop of each checkpoint kind, as checkpoint records name it.
 STOP_LABELS = {
-    "baseline_confirm": "Baseline confirm",
+    "baseline_confirm": "Ground Truth confirm",
     "feature_set": "Feature set",
     "priority_order": "Priority order",
     "prd_review": "PRD review",

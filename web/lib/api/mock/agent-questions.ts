@@ -82,7 +82,7 @@ function more(other: Person): StoredAgentQuestion[] {
     role,
     feature,
     question,
-    why: "Nothing in the baseline or the interviews says; both ways change the requirements.",
+    why: "Nothing in the Ground Truth or the interviews says; both ways change the requirements.",
     options: [opt(a, al, "The agent's pick."), opt(b, bl, "More work in this PRD.")],
     recommended: a,
     answer: i === 2 ? { option: a, note: null, by: other, at: "2026-10-17T18:40:00Z" } : null,

@@ -46,7 +46,7 @@ test("a skeleton-only PRD: Draft with Oracle is the main action and starts its d
   await dialog.getByRole("button", { name: "Start run" }).click();
 
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
   await expect(page.getByRole("link", { name: /^Saved wishlists/ }).first()).toBeVisible();
   await expect(page.getByText(/^Template: /).first()).toBeVisible();
 });

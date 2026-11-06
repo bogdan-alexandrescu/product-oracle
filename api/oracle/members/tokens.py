@@ -172,7 +172,7 @@ async def list_tokens(
         users = await _users(session, (r.created_by for _, r in pairs))
         for token, run in pairs:
             creator = users.get(run.created_by)  # type: ignore[arg-type]
-            # The flow's own title ("Baseline to PRD"), not its key (qa-settings-29).
+            # The flow's own title ("Ground Truth to PRD"), not its key (qa-settings-29).
             flow = FLOWS[run.flow].title if run.flow in FLOWS else run.flow.replace("_", " ")
             out.append(
                 ApiTokenOut(

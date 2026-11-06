@@ -90,7 +90,7 @@ FORMAT = """\
 version: 1
 document: <this PRD's slug>
 features:
-  - key: <a baseline feature key, or one you proposed with propose_change>
+  - key: <a Ground Truth feature key, or one you proposed with propose_change>
     title: <title>
     summary: <one line>
     goals: [{key: <a confirmed goal key>, contribution: <0-3>}]   # [] = serves none
@@ -99,7 +99,7 @@ features:
     confidence: <0-1, from the evidence>
     evidence: [<evidence or source item ids>]   # optional
     requirements:
-      - key: <a baseline requirement key, or one you proposed>
+      - key: <a Ground Truth requirement key, or one you proposed>
         text: <the requirement>
         acceptance: [<criteria>]
 excluded:                                # considered and left out
@@ -464,7 +464,7 @@ def _check_sets(
         if key not in known.features:
             out.add(
                 "unknown_feature",
-                f"{key} is neither a baseline feature nor one this run proposed",
+                f"{key} is neither a Ground Truth feature nor one this run proposed",
                 key,
             )
     included_set, left_set = set(included), set(left_out) - set(included)
@@ -474,7 +474,7 @@ def _check_sets(
             if r["key"] and r["key"] not in known.requirements:
                 out.add(
                     "unknown_requirement",
-                    f"requirement {r['key']} of {key} is neither a baseline requirement nor "
+                    f"requirement {r['key']} of {key} is neither a Ground Truth requirement nor "
                     "one this run proposed",
                     key,
                     r["key"],
@@ -496,7 +496,7 @@ def _check_sets(
             elif dep not in included_set and dep not in known.features:
                 out.add(
                     "unknown_dependency",
-                    f"{key} depends on {dep}, which is not in the feature set or the baseline",
+                    f"{key} depends on {dep}, which is not in the feature set or the Ground Truth",
                     key,
                 )
         for b in f["blockers"]:

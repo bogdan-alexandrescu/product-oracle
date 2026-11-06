@@ -98,7 +98,7 @@ export function RunCost({ run }: { run: RunSummary }) {
 export const WAITING_STATUSES: RunStatus[] = ["awaiting_checkpoint", "awaiting_approval", "paused_overrun"];
 
 export const CHECKPOINT_LABEL: Record<CheckpointKind, string> = {
-  baseline_confirm: "Confirm the baseline",
+  baseline_confirm: "Confirm the Ground Truth",
   feature_set: "Feature set and dependencies",
   priority_order: "Priority order",
   prd_review: "PRD review",
@@ -290,6 +290,7 @@ const FILE_WORDS: Record<string, string> = {
   "design.json": "Design data",
   "summary.md": "Summary",
   "review.yaml": "Review",
+  "baseline.yaml": "Ground Truth",
 };
 export const fileLabel = (name: string) => FILE_WORDS[name] ?? keyWords(name.replace(/\.[a-z]+$/i, ""));
 

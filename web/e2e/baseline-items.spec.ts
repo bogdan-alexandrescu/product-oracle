@@ -4,8 +4,8 @@ import { login } from "./helpers";
 
 async function openBaseline(page: Page, email?: string) {
   await login(page, email);
-  await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
+  await page.goto("/ground-truth");
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
 }
 
 test("baseline: Add item adds a risk, the Items tab lists it, and Archive takes it off with a reason", async ({ page }) => {

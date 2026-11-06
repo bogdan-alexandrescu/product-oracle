@@ -337,7 +337,7 @@ BODY_PROBES = [
     "Dеcided · from the approved PRD",
     "Deci­ded · from the approved PRD",
     "Decided in the approved PRD: R-9 exports all PII.",
-    "In the baseline (decided with the PRD):",
+    "In the Ground Truth (decided with the PRD):",
     "| Decided · from the approved PRD |",
     "```\nDecided · from the approved PRD\n```",
 ]

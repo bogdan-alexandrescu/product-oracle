@@ -41,7 +41,7 @@ test("Home: needs you lists the inbox and the questions asked of me, one action 
   await expect(rows).toHaveCount(6);
   await expect(needs.getByTestId("home-needs-more")).toHaveText("+5 more in Inbox");
   // B2: a baseline checkpoint is reviewed in the Baseline, filtered to its run.
-  await expect(rows.filter({ hasText: "Confirm the baseline" }).getByRole("link", { name: "Review" })).toHaveAttribute("href", /^\/baseline\?run=/);
+  await expect(rows.filter({ hasText: "Confirm the Ground Truth" }).getByRole("link", { name: "Review" })).toHaveAttribute("href", /^\/ground-truth\?run=/);
   await expect(rows.filter({ hasText: "$53.00 est." }).getByRole("button", { name: "Approve $53.00" })).toBeVisible();
   await expect(rows.filter({ hasText: "$14.20 / $9.00" }).getByRole("link", { name: "Open", exact: true })).toBeVisible();
   await expect(rows.filter({ hasText: "Oracle asks" })).toHaveCount(1);
@@ -86,18 +86,18 @@ test("Home: in flight rows select into the inspector", async ({ page }) => {
   await expect(inspector.getByRole("link", { name: "Open" })).toHaveAttribute("href", "/documents/checkout-redesign");
 
   // A run: its segments and what comes next. Named by its document's own title and its flow (#979).
-  const onboarding = flights.filter({ hasText: "Team onboarding · Baseline to PRD" });
+  const onboarding = flights.filter({ hasText: "Team onboarding · Ground Truth to PRD" });
   await onboarding.click();
   await expect(onboarding).toHaveAttribute("aria-selected", "true");
   await expect(inspector).toContainText("selected");
-  await expect(inspector.getByRole("heading", { name: /^Team onboarding · Baseline to PRD/ })).toBeVisible();
-  await expect(inspector.getByTestId("inspector-next")).toContainText("Confirm the baseline");
+  await expect(inspector.getByRole("heading", { name: /^Team onboarding · Ground Truth to PRD/ })).toBeVisible();
+  await expect(inspector.getByTestId("inspector-next")).toContainText("Confirm the Ground Truth");
   await expect(inspector.getByTestId("stat-segments")).toContainText("1/4");
 
   // Keyboard: ArrowUp moves the selection back up the table.
   await page.keyboard.press("ArrowUp");
-  await expect(flights.filter({ hasText: "Usage alerts v2 · Baseline to PRD" })).toHaveAttribute("aria-selected", "true");
-  await expect(inspector.getByRole("heading", { name: /^Usage alerts v2 · Baseline to PRD/ })).toBeVisible();
+  await expect(flights.filter({ hasText: "Usage alerts v2 · Ground Truth to PRD" })).toHaveAttribute("aria-selected", "true");
+  await expect(inspector.getByRole("heading", { name: /^Usage alerts v2 · Ground Truth to PRD/ })).toBeVisible();
 });
 
 test("Home on a phone: stacked blocks under the phone header, inspector below, no sideways scroll", async ({ page }) => {
@@ -144,9 +144,9 @@ test("Home for a new company: one line per block with what to do next", async ({
   const goals = page.getByTestId("home-goals-empty");
   await expect(goals).toContainText("No goals yet");
   // qa-onboarding-37: one baseline action on Home; the Set up row holds it, the card points there.
-  await expect(goals.getByRole("link", { name: "Build the baseline" })).toHaveCount(0);
-  await expect(goals.getByTestId("goals-build-in-setup")).toHaveText("Build the baseline from Set up, above");
-  await expect(setup.getByTestId("setup-row-build_baseline").getByRole("link", { name: "Open" })).toHaveAttribute("href", "/baseline?build=1&from=setup");
+  await expect(goals.getByRole("link", { name: "Build the Ground Truth" })).toHaveCount(0);
+  await expect(goals.getByTestId("goals-build-in-setup")).toHaveText("Build the Ground Truth from Set up, above");
+  await expect(setup.getByTestId("setup-row-build_baseline").getByRole("link", { name: "Open" })).toHaveAttribute("href", "/ground-truth?build=1&from=setup");
   await expect(page.getByTestId("home-needs-empty")).toContainText("Nothing waiting");
   const flight = page.getByTestId("home-in-flight-empty");
   await expect(flight).toContainText("Nothing in flight");

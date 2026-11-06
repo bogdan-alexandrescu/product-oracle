@@ -41,7 +41,7 @@ test("the draft's author sees what synced since the draft and refreshes it", asy
   await banner(page).getByRole("button", { name: "Refresh" }).click();
   const dialog = page.getByRole("dialog", { name: "Refresh draft" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole("radio", { name: /Baseline to PRD/ })).toBeChecked();
+  await expect(dialog.getByRole("radio", { name: /Ground Truth to PRD/ })).toBeChecked();
   await expect(dialog.getByLabel("PRD document")).toHaveValue("usage-alerts");
 });
 

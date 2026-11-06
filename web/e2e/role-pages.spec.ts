@@ -37,10 +37,10 @@ for (const role of ROLES) {
     await login(page, email(role));
 
     // Baseline: approvers change it, commenters propose, viewers only read it.
-    await open(page, "/baseline", "Desired state");
+    await open(page, "/ground-truth", "Ground Truth");
     await expect(page.getByText("Read only", { exact: true })).toHaveCount(0);
     await expectViewOnly(page, !commenter);
-    if (!approver) await expect(page.getByRole("button", { name: "Build baseline" })).toHaveCount(0);
+    if (!approver) await expect(page.getByRole("button", { name: "Build the Ground Truth" })).toHaveCount(0);
 
     // Plan: approvers start PRDs and build the baseline; below that it is read only.
     await open(page, "/plan", "Plan");

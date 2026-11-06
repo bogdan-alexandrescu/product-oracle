@@ -323,7 +323,7 @@ def create_app() -> FastAPI:
     app.include_router(simple_meetings_router)
     app.include_router(simple_priorities_router)
     app.include_router(simple_visuals_router)
-    # Current state beside Desired state: features that already run, with their proof.
+    # Running today beside the Ground Truth: features that already run, with their proof.
     app.include_router(currentstate_router)
     app.include_router(strategy_router)
     app.include_router(launches_router)

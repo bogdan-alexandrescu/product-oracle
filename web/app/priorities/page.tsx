@@ -115,7 +115,7 @@ const FLAGS: Record<string, { label: string; short?: string; kind: ChipKind; tit
 
 const CONFIDENCE_SOURCE: Record<Schemas["ConfidenceUsed"]["source"], string> = {
   evidence: "from evidence",
-  baseline: "from the baseline",
+  baseline: "from the Ground Truth",
   attrs: "set on the feature",
   default: "assumed",
 };
@@ -842,7 +842,7 @@ function NewFeaturesNote({ c }: { c: CompareOut }) {
   if (c.snapshot.status === "saved")
     return (
       <Notice tone="pass" testId="new-features-note">
-        {`Order approved. The ${n === 1 ? "new feature" : `${n} new features`} joined the baseline as proposed, at the ${n === 1 ? "rank" : "ranks"} you approved.`}
+        {`Order approved. The ${n === 1 ? "new feature" : `${n} new features`} joined the Ground Truth as proposed, at the ${n === 1 ? "rank" : "ranks"} you approved.`}
       </Notice>
     );
   if (c.snapshot.status !== "proposed") return null;
@@ -850,7 +850,7 @@ function NewFeaturesNote({ c }: { c: CompareOut }) {
   const prd = c.snapshot.document ? prdName(c.snapshot.document).replace(/ PRD$/, "") : "this PRD";
   return (
     <Notice tone="info" testId="new-features-note">
-      {`This order ranks the ${features} ${prd} adds, scored on the same formula and goals as the rest. Approving the order adds ${n === 1 ? "it" : "them"} to the baseline as proposed.`}
+      {`This order ranks the ${features} ${prd} adds, scored on the same formula and goals as the rest. Approving the order adds ${n === 1 ? "it" : "them"} to the Ground Truth as proposed.`}
     </Notice>
   );
 }
@@ -1192,7 +1192,7 @@ function Priorities() {
             {fonts && featureRoom ? fitWords(f.title, featureRoom, 500, 15) : f.title}
             {f.new && (
               <span className="ml-2 inline-block align-middle">
-                <Chip kind="acc" title="Not in the baseline yet: proposed by this PRD's run">
+                <Chip kind="acc" title="Not in the Ground Truth yet: proposed by this PRD's run">
                   New in this PRD
                 </Chip>
               </span>

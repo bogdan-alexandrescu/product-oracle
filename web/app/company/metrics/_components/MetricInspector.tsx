@@ -157,7 +157,7 @@ export function MetricInspector({
         <InspectorSection label={metric.kind === "input" ? "Drives" : goal ? "Goal and inputs" : "Inputs"}>
           {goal && (
             <InspectorRow value={distanceText(goals, goal.id)}>
-              <Link href={`/baseline?entity=${goal.id}`} className="hover:underline">
+              <Link href={`/ground-truth?entity=${goal.id}`} className="hover:underline">
                 {goal.title}
               </Link>
             </InspectorRow>

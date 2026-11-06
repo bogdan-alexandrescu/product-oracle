@@ -13,8 +13,8 @@ const DESKTOP = { width: 1366, height: 820 };
 async function openBaseline(page: Page, email?: string) {
   await login(page, email);
   await page.getByTestId("nav-baseline").filter({ visible: true }).first().click();
-  await expect(page).toHaveURL(/\/baseline/);
-  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
+  await expect(page).toHaveURL(/\/ground-truth/);
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
   await expect(page.getByTestId("goal-g.activation")).toBeVisible();
 }
 

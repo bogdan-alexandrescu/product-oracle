@@ -43,7 +43,7 @@ for (const width of [1440, 1512]) {
 test("baseline at 1440: the Goals table keeps Metric; Weight and Features go first", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await login(page);
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   await expect(page.getByTestId("goal-g.activation")).toBeVisible();
   const table = page.getByRole("grid", { name: "Goals" });
   await expect(table.getByRole("columnheader", { name: "Metric" })).toBeVisible();

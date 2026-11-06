@@ -11,7 +11,7 @@ import { FeedbackList } from "@/components/review/FeedbackList";
 import { TabBar } from "@/components/review/parts";
 import { ErrorNote, Loading, SpecStateBadge } from "@/components/ui";
 import type { CitationOut, VersionOut } from "@/lib/api/client";
-import { citationHref, citationSourceLabel, formatDateTime } from "@/lib/format";
+import { citationHref, citationRefText, citationSourceLabel, formatDateTime } from "@/lib/format";
 
 export type PanelTab = "feedback" | "sources" | "history";
 
@@ -147,16 +147,16 @@ function sourceRow(c: CitationOut, number: number) {
           href={href}
           target="_blank"
           rel="noopener noreferrer"
-          title={c.title ?? c.ref}
+          title={c.title ?? citationRefText(c.ref)}
           data-testid="source-title"
           className="line-clamp-2 min-w-0 font-medium break-words text-text underline-offset-2 hover:underline"
         >
-          {c.title ?? c.ref}
+          {c.title ?? citationRefText(c.ref)}
         </a>
       ) : (
-        // A baseline item named in free text (source oracle): its ref on hover, no link.
-        <span title={c.ref} data-testid="source-title" className="line-clamp-2 min-w-0 font-medium break-words text-text">
-          {c.title ?? c.ref}
+        // A Ground Truth item named in free text (source oracle): its ref on hover, no link.
+        <span title={citationRefText(c.ref)} data-testid="source-title" className="line-clamp-2 min-w-0 font-medium break-words text-text">
+          {c.title ?? citationRefText(c.ref)}
         </span>
       )}
     </li>

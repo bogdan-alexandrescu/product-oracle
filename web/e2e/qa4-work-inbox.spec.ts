@@ -55,8 +55,8 @@ test.describe("desktop", () => {
   test("qa4-work-38: the baseline checkpoint row says what is needed, not 'nothing left to decide'", async ({ page }) => {
     await login(page);
     await openInbox(page);
-    const label = page.getByTestId("checkpoint-label").filter({ hasText: "Confirm the baseline" }).first();
-    await expect(label).toHaveText(/^Confirm the baseline: (approve to continue|all \d+ items? handled, approve to continue)$/);
+    const label = page.getByTestId("checkpoint-label").filter({ hasText: "Confirm the Ground Truth" }).first();
+    await expect(label).toHaveText(/^Confirm the Ground Truth: (approve to continue|all \d+ items? handled, approve to continue)$/);
     await expect(page.getByTestId("inbox-needs")).not.toContainText("nothing left to decide");
   });
 });

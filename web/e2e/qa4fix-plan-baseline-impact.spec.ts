@@ -14,9 +14,9 @@ const PHONE = { width: 390, height: 844 };
 
 async function openBaseline(page: Page) {
   await login(page);
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   await expect(
-    page.getByRole("heading", { level: 1, name: "Desired state" }),
+    page.getByRole("heading", { level: 1, name: "Ground Truth" }),
   ).toBeVisible();
   await expect(page.getByTestId("goal-g.activation").first()).toBeVisible();
 }
@@ -192,7 +192,7 @@ test.describe("desktop", () => {
   }) => {
     await scenario(page, "impact");
     await login(page);
-    await page.goto("/baseline");
+    await page.goto("/ground-truth");
     await page
       .getByTestId("feature-f.guided-setup")
       .getByRole("button", { name: "Guided setup" })

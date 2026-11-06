@@ -337,8 +337,8 @@ test("webhooks: AC17, a run's checkpoint waiting, decided and the run succeeding
 
   // Build the baseline: the fake runtime's run waits at Confirm the baseline; approve it.
   await page.getByTestId("nav-baseline").filter({ visible: true }).first().click();
-  await page.getByRole("button", { name: "Build baseline" }).click();
-  const build = page.getByRole("dialog", { name: "Build the baseline" });
+  await page.getByRole("button", { name: "Build the Ground Truth" }).click();
+  const build = page.getByRole("dialog", { name: "Build the Ground Truth" });
   await build.getByRole("button", { name: "Start" }).click();
   await expect(build).toHaveCount(0);
   await page.getByTestId("baseline-build-banner").getByRole("link", { name: "Open run" }).click();

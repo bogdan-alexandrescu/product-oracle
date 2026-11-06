@@ -57,7 +57,7 @@ support notes and notes. A tier change adds what is missing and removes only unt
 ## The launch kit run
 
 One agent run per launch (`launch_kit`, one writer step at quick depth: $3.00). It reads the
-launch, its items' PRD sections, the baseline and the requesters' own words, never other
+launch, its items' PRD sections, the Ground Truth and the requesters' own words, never other
 source text, and writes `launch.yaml` (changelog entries, task drafts, a pre-mortem, one
 personal note per requester). Oracle validates it (`api/oracle/launches/kit.py`): a valid
 file moves the named tasks to `drafted` and adds draft changelog entries; an invalid one

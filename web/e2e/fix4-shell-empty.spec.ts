@@ -52,14 +52,14 @@ test("qa-shell-9, 10, 30: the owner of a new company walks every empty page and 
   await expect(page.getByRole("button", { name: "Start a run…" })).toBeVisible();
 
   // Baseline: no 0/0 counts, and each empty table says how to fill it.
-  await open(page, "nav-baseline", "Desired state");
+  await open(page, "nav-baseline", "Ground Truth");
   await expect(page.getByTestId("kpi-goals")).toContainText("No goals yet");
   await expect(page.getByTestId("kpi-traced")).toContainText("No features yet");
   await expect(page.locator('dl[aria-label="Counts"]')).not.toContainText("0/0");
   await expect(page.getByTestId("confirmed-chip")).toHaveCount(0);
-  await expect(page.getByTestId("table-empty").filter({ visible: true })).toHaveText("No goals yet. Add one, or draft them from your sources with Build baseline.");
-  await expect(page.getByTestId("features-empty")).toHaveText("No features yet. Add one, or draft them from your sources with Build baseline.");
-  await expect(page.getByRole("button", { name: "Build baseline" })).toBeVisible();
+  await expect(page.getByTestId("table-empty").filter({ visible: true })).toHaveText("No goals yet. Add one, or draft them from your sources with Build the Ground Truth.");
+  await expect(page.getByTestId("features-empty")).toHaveText("No features yet. Add one, or draft them from your sources with Build the Ground Truth.");
+  await expect(page.getByRole("button", { name: "Build the Ground Truth" })).toBeVisible();
 
   // Simple's Decisions: nothing is filtered, so "No decisions yet", never "No decision matches".
   await page.goto("/simple/decisions");
@@ -95,7 +95,7 @@ test("qa-shell-9: a viewer's empty pages offer nothing they cannot do", async ({
   await expect(page.getByTestId("runs-empty")).toContainText("No runs yet. Runs show here once an approver starts one.");
   await expect(page.getByRole("button", { name: "Start a run…" })).toHaveCount(0);
 
-  await open(page, "nav-baseline", "Desired state");
+  await open(page, "nav-baseline", "Ground Truth");
   await expect(page.getByTestId("kpi-goals")).toContainText("No goals yet");
   await expect(page.getByTestId("table-empty").filter({ visible: true })).toHaveText("No goals yet. They appear here once someone adds one.");
   await expect(page.getByTestId("features-empty")).toHaveText("No features yet. They appear here once someone adds one.");
@@ -109,8 +109,8 @@ test("qa-shell-30: on a phone the Baseline's counts say No goals yet in full", a
   await page.setViewportSize(PHONE);
   await emptyCompany(page);
   await login(page);
-  await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
+  await page.goto("/ground-truth");
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
   for (const [id, text] of [
     ["kpi-goals", "No goals yet"],
     ["kpi-traced", "No features yet"],

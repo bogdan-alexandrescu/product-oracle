@@ -47,7 +47,7 @@ class CompanyTick:
     meetings_ended: int = 0
     # Simple S7: goals Oracle queued suggestions for (once each, when they had no items).
     goal_suggestions: int = 0
-    # Current state: features whose proof was read again (once a night each).
+    # Running today: features whose proof was read again (once a night each).
     proofs_reread: int = 0
     # What raised, step by step (logged); the other steps still ran.
     errors: list[BaseException] = field(default_factory=list)
@@ -146,7 +146,7 @@ async def tick_company(
         await db.rollback()
         out.errors.append(exc)
     try:
-        # Current state: each feature's proof read again once a night.
+        # Running today: each feature's proof read again once a night.
         from oracle import company_time
         from oracle.currentstate import service as current_state
 

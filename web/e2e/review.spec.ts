@@ -119,15 +119,15 @@ test("a citation of Oracle's baseline reads 'Oracle baseline', its ref as text, 
   await page.goto("/documents/checkout-redesign/v/2");
 
   const chip = (await openSection(page, "problem")).getByTestId("cite-o-g1");
-  await expect(chip).toHaveText(/Oracle baseline/);
+  await expect(chip).toHaveText(/Oracle Ground Truth/);
   await chip.hover();
   const card = page.getByRole("tooltip");
   await expect(card).toContainText("Goal G1: raise first-order completion");
-  await expect(card.getByTestId("cite-ref")).toHaveText("baseline goal g1 (activation), locked");
+  await expect(card.getByTestId("cite-ref")).toHaveText("Ground Truth goal g1 (activation), locked");
   await expect(card.getByRole("link")).toHaveCount(0);
 
   await openTab(page, "Sources");
-  const row = page.getByTestId("sources-list").filter({ visible: true }).getByRole("listitem").filter({ hasText: "Oracle baseline" });
+  const row = page.getByTestId("sources-list").filter({ visible: true }).getByRole("listitem").filter({ hasText: "Oracle Ground Truth" });
   await expect(row).toContainText("Goal G1: raise first-order completion");
   await expect(row.getByRole("link")).toHaveCount(0);
 });

@@ -489,7 +489,7 @@ export function FitPanel({ goal, onClose, onApproved, onGoalSaved }: { goal: Goa
             <div className="flex flex-col gap-2 rounded-xl border border-line p-3" data-testid="fit-keep-date">
               <p className="simple-small">
                 {!bg
-                  ? `Oracle finds no Baseline goal named “${goal.goal ?? goal.milestone_name}”, so it cannot offer to keep ${day(a.target)} with a smaller goal.`
+                  ? `Oracle finds no Ground Truth goal named “${goal.goal ?? goal.milestone_name}”, so it cannot offer to keep ${day(a.target)} with a smaller goal.`
                   : `Or keep ${day(a.target)} and ask for less: the goal is ${targetInSentence(bg)}. Only an owner or approver can change it.`}
               </p>
             </div>

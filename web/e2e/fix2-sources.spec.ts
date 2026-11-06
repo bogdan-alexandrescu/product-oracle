@@ -12,7 +12,7 @@ import { login } from "./helpers";
 
 const setup = (page: Page) => page.getByTestId("home-setup");
 const row = (page: Page, key: string) => page.getByTestId(`setup-row-${key}`);
-const sheet = (page: Page) => page.getByRole("dialog", { name: "Build the baseline" });
+const sheet = (page: Page) => page.getByRole("dialog", { name: "Build the Ground Truth" });
 
 async function newCompany(page: Page) {
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "empty"));

@@ -45,7 +45,7 @@ async def get_priorities(
         bool, Query(description="false: Oracle's order only, without people's moves and pins")
     ] = True,
 ) -> PriorityRanking:
-    """Rank the baseline's features by ``method``, in dependency order.
+    """Rank the Ground Truth's features by ``method``, in dependency order.
 
     Features that serve no confirmed goal sink to the bottom and are flagged;
     dependency cycles are listed in ``cycles`` and their members flagged. People's

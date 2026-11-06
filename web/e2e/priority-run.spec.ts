@@ -34,13 +34,13 @@ async function seeded(page: Page) {
 test("review and approve the run's order", async ({ page }) => {
   await seeded(page);
   await page.goto(`/runs/${PRIORITY_RUN}`);
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
   const cp = page.getByTestId("checkpoint-priority_order");
   await cp.getByRole("link", { name: "Review the order" }).click();
 
   await expect(page).toHaveURL(/\/priorities\?snapshot=/);
   const band = page.getByTestId("snapshot-band");
-  await expect(band).toContainText("Proposed by Baseline to PRD · Saved addresses PRD · waiting for you");
+  await expect(band).toContainText("Proposed by Ground Truth to PRD · Saved addresses PRD · waiting for you");
   // The method switch is locked to the snapshot's method.
   const methods = page.getByRole("radiogroup", { name: "Ranking method" });
   await expect(methods.getByRole("radio", { name: "Goal-weighted" })).toHaveAttribute("aria-checked", "true");

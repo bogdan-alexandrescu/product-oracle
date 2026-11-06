@@ -4,8 +4,8 @@ import { login } from "./helpers";
 
 async function openFeature(page: Page, key: string, title: string) {
   await login(page);
-  await page.goto("/baseline");
-  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
+  await page.goto("/ground-truth");
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
   await page.getByTestId(`feature-${key}`).getByRole("button", { name: title }).click();
   return page.getByRole("dialog", { name: title });
 }
@@ -25,7 +25,7 @@ test("baseline: editing a feature's milestone saves only it, and shows in its hi
 
   // Meanwhile the same person changes the effort in a second tab.
   const other = await context.newPage();
-  await other.goto("/baseline");
+  await other.goto("/ground-truth");
   await other.getByTestId("feature-f.saved-carts").getByRole("button", { name: "Saved carts" }).click();
   const od = other.getByRole("dialog", { name: "Saved carts" });
   await od.getByRole("button", { name: "Edit" }).click();

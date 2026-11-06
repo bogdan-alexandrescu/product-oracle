@@ -105,7 +105,7 @@ test("Why it needs you says what changed in words", async ({ page }) => {
   await openPlan(page);
   await row(page, "Daily alert digest email").getByTestId("plan-title").click();
   const why = inspector(page).getByTestId("plan-why");
-  await expect(why).toContainText("The feature and 2 goals changed; the product was confirmed; 11 baseline items changed");
+  await expect(why).toContainText("The feature and 2 goals changed; the product was confirmed; 11 Ground Truth items changed");
   await expect(why).not.toContainText("feature:");
   await expect(why).not.toContainText("goal:");
   await expect(why).not.toContainText("product:");

@@ -26,7 +26,7 @@ async function openRituals(page: Page) {
 }
 
 async function confirmAGoal(page: Page) {
-  await page.goto("/baseline");
+  await page.goto("/ground-truth");
   await page.getByRole("region", { name: "Goals", exact: true }).getByRole("button", { name: "Add", exact: true }).click();
   const form = page.getByRole("dialog", { name: "Add an item" });
   await form.getByLabel("Title").fill("Halve support tickets");

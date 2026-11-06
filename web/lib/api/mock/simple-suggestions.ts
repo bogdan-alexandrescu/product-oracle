@@ -31,7 +31,7 @@ interface Idea {
 }
 
 const ev = (label: string, kind: string, confidence: "high" | "medium" | "low", ref: string | null = null): Schemas["SimpleEvidence"] => ({
-  label, kind, ref, url: ref ? `/baseline?entity=${ref}` : null, confidence,
+  label, kind, ref, url: ref ? `/ground-truth?entity=${ref}` : null, confidence,
 });
 
 /** Each goal's invented ideas, in the order Oracle offers them. */

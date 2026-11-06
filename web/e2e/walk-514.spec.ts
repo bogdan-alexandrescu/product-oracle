@@ -47,9 +47,9 @@ const BASELINE_RUN = "7a11c0de-0000-4000-8000-0000000000b2";
 test("Baseline from a decided run says the run's review is closed, not View only", async ({ page }) => {
   await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "baseline-review"] as const);
   await login(page);
-  await page.goto(`/baseline?run=${BASELINE_RUN}`);
+  await page.goto(`/ground-truth?run=${BASELINE_RUN}`);
   const band = page.getByTestId("from-run-band");
-  await expect(band).toContainText("From run · Build the baseline");
+  await expect(band).toContainText("From run · Build the Ground Truth");
   const row = page.getByTestId("from-run-row").filter({ hasText: "Gift notes" });
   await row.getByRole("button", { name: "More actions for Gift notes" }).click();
   await row.getByRole("button", { name: "Look again…" }).click();

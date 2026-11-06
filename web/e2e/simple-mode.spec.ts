@@ -269,7 +269,7 @@ test("Simple's rail has its six destinations and none of Detailed's", async ({ p
   const names = ["Home", "One-pagers", "Roadmap", "Priorities", "Meetings", "Decisions"];
   await expect(links).toHaveCount(names.length);
   for (const [i, name] of names.entries()) await expect(links.nth(i)).toHaveAccessibleName(name);
-  for (const detailed of ["Requests", "Desired state", "PRDs", "Plan", "Runs", "Inbox", "Company", "Settings"]) {
+  for (const detailed of ["Requests", "Ground Truth", "PRDs", "Plan", "Runs", "Inbox", "Company", "Settings"]) {
     await expect(rail.getByRole("link", { name: detailed, exact: true })).toHaveCount(0);
   }
   // qa-shell-16: one Ask control, the rail's Ask Oracle; no Ask strip beside it.

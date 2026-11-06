@@ -1178,7 +1178,7 @@ export default function SourceSettingsPage() {
           <Chip hero>Only you</Chip>
           <InfoTip label="private sources" hero align="start" side="bottom">
             Your sources are yours alone: what they pull in through your connections is visible only to you, and reaches
-            others only as evidence you add to the baseline. Direct messages are never pulled in.
+            others only as evidence you add to the Ground Truth. Direct messages are never pulled in.
           </InfoTip>
         </>
       }
@@ -1202,7 +1202,7 @@ export default function SourceSettingsPage() {
         title="Sources"
         info={
           <InfoTip label="sources" align="start" side="bottom">
-            What your connections pull in. Only you see it; it reaches others only as evidence you add to the baseline.
+            What your connections pull in. Only you see it; it reaches others only as evidence you add to the Ground Truth.
           </InfoTip>
         }
         status={

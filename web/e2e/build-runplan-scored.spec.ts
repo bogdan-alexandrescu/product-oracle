@@ -36,7 +36,7 @@ test.describe("desktop", () => {
     await openOrder(page);
     const note = page.getByTestId("new-features-note");
     await expect(note).toHaveText(
-      "This order ranks the 6 features Saved addresses adds, scored on the same formula and goals as the rest. Approving the order adds them to the baseline as proposed.",
+      "This order ranks the 6 features Saved addresses adds, scored on the same formula and goals as the rest. Approving the order adds them to the Ground Truth as proposed.",
     );
     const rows = page.locator('tr[data-testid^="priority-row-"]');
     await expect(rows).toHaveCount(11);
@@ -69,7 +69,7 @@ test.describe("desktop", () => {
     const band = page.getByTestId("snapshot-band");
     await band.getByRole("button", { name: "Approve order" }).click();
     await expect(band).toContainText("Saved for Saved addresses");
-    await expect(note).toHaveText("Order approved. The 6 new features joined the baseline as proposed, at the ranks you approved.");
+    await expect(note).toHaveText("Order approved. The 6 new features joined the Ground Truth as proposed, at the ranks you approved.");
     await expect(page.getByTestId("priority-row-N-1").getByText("New in this PRD")).toBeVisible();
   });
 });

@@ -27,13 +27,13 @@ PROMPTS = Path(__file__).resolve().parent / "prompts"
 
 #: The prompt each job kind runs with.
 CURRENT = {
-    "review_comments": "review_comments.v2",
-    "reporting": "reporting.v1",
+    "review_comments": "review_comments.v3",
+    "reporting": "reporting.v2",
     "refinement": "refinement.v2",
-    "intake_analysis": "intake_analysis.v3",
+    "intake_analysis": "intake_analysis.v4",
     "quality_review": "quality_review.v1",
     "refinement_batch": "refinement_batch.v3",
-    "decision_options": "decision_options.v1",
+    "decision_options": "decision_options.v2",
     "interview_guide": "interview_guide.v1",
     "interview_turn": "interview_turn.v1",
     # A team member's turn runs as the interview_turn job with its own prompt.
@@ -43,8 +43,8 @@ CURRENT = {
     "why_not_reply": "why_not_reply.v1",
     "public_text": "public_text.v1",
     "one_pager": "one_pager.v2",
-    "item_draft": "item_draft.v2",
-    "goal_suggestions": "goal_suggestions.v2",
+    "item_draft": "item_draft.v3",
+    "goal_suggestions": "goal_suggestions.v3",
     "simple_visual": "simple_visual.v2",
     "meeting_minutes": "meeting_minutes.v2",
     "chat_reader": "chat_reader.v4",

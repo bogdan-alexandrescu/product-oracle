@@ -439,7 +439,7 @@ async def test_propose_then_accept_closes_the_interview(client, fake):
     assert p["actor"] == f"user:{uid(ctx, 'commenter')}"
     # G3's Propose: the reason names the discussion and links its page.
     assert p["payload"]["reason"] == (
-        f"From discussion Make “Cut early churn” measurable (/baseline?discussion={d_id})"
+        f"From discussion Make “Cut early churn” measurable (/ground-truth?discussion={d_id})"
     )
     unchanged = await client.get(f"{B}/entities/{goal['id']}", headers=ctx.as_("viewer"))
     assert "target" not in unchanged.json()["attrs"]

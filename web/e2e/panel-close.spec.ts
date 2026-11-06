@@ -161,7 +161,7 @@ test.describe("desktop", () => {
 
   test("Baseline: a blocker's panel has one ×; it and Esc close the panel, focus back on the row", async ({ page }) => {
     await login(page);
-    await page.goto("/baseline?tab=blockers");
+    await page.goto("/ground-truth?tab=blockers");
     const row = page.getByTestId("blocker-row").filter({ hasText: "Same-day refund rule unanswered" });
     await row.click();
     const panel = page.getByTestId("blocker-inspector");
@@ -191,7 +191,7 @@ test.describe("desktop", () => {
 
   test("Baseline: a goal's panel has one ×, which closes it", async ({ page }) => {
     await login(page);
-    await page.goto("/baseline");
+    await page.goto("/ground-truth");
     const goal = page.getByTestId("goal-g.activation");
     await expect(goal).toBeVisible();
     await goal.getByRole("button", { name: "Raise activation", exact: true }).click();

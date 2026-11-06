@@ -211,7 +211,7 @@ export function StackInspector({ stack, row, onWaived }: { stack: Stack | undefi
         </InspectorRow>
         <InspectorRow>
           {row.goal ? (
-            <Link href={`/baseline?entity=${row.goal.id}`} className="text-accent-ink hover:underline">
+            <Link href={`/ground-truth?entity=${row.goal.id}`} className="text-accent-ink hover:underline">
               {row.goal.title}
             </Link>
           ) : (

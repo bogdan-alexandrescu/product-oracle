@@ -220,7 +220,7 @@ class DecisionSummary(BaseModel):
 
 
 class DecisionEntityRef(BaseModel):
-    """A linked baseline item, as a person reads it."""
+    """A linked Ground Truth item, as a person reads it."""
 
     id: uuid.UUID
     type: str
@@ -230,7 +230,7 @@ class DecisionEntityRef(BaseModel):
 
 
 class DecisionEvidenceRef(BaseModel):
-    """Evidence it rests on: the excerpt and link anyone who reads the baseline sees."""
+    """Evidence it rests on: the excerpt and link anyone who reads the Ground Truth sees."""
 
     id: uuid.UUID
     entity_id: uuid.UUID | None = None

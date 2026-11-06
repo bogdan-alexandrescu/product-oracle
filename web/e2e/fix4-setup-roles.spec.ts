@@ -25,7 +25,7 @@ const OWNER_LINKS = {
   members: "/settings/members?from=setup#engineering-lead",
   horizons: "/settings/company?from=setup#horizons",
   timezone: "/settings/company?from=setup#timezone",
-  build: "/baseline?build=1",
+  build: "/ground-truth?build=1",
 };
 
 /** The empty scenario, with the mock's company store reset once at the start. */
@@ -90,15 +90,15 @@ for (const r of ROLES) {
 
     // Baseline's ?build=1: the build for an approver; for the others, who builds it.
     await page.goto(OWNER_LINKS.build);
-    await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
-    const sheet = page.getByRole("dialog", { name: "Build the baseline" });
+    await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
+    const sheet = page.getByRole("dialog", { name: "Build the Ground Truth" });
     if (r.builds) {
       await expect(sheet).toBeVisible();
       await expect(page.getByTestId("build-refused")).toHaveCount(0);
     } else {
-      await expect(page.getByTestId("build-refused")).toHaveText("Approvers and owners build the baseline.");
+      await expect(page.getByTestId("build-refused")).toHaveText("Approvers and owners build the Ground Truth.");
       await expect(sheet).toHaveCount(0);
-      await expect(page.getByRole("button", { name: "Build baseline" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Build the Ground Truth" })).toHaveCount(0);
     }
   });
 }

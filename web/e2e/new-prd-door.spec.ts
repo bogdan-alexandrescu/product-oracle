@@ -103,7 +103,7 @@ test("brief to draft: goals, out of scope and a template, then Draft with Oracle
   await expect(estimate(page)).toContainText("$29.50 estimated");
   await sheet(page).getByRole("button", { name: "Start drafting" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
   await expect(page.getByText(/^Template: /)).toBeVisible();
   // The current baseline was reused: its segment ran no step.
   await expect(page.getByTestId("segment-baseline").getByTestId("segment-state")).toHaveText(/^Reused \(approved [A-Z][a-z]{2} \d{1,2}\)$/);
@@ -116,17 +116,17 @@ test("baseline choice: reuse is preselected; Rebuild costs the baseline segment 
   await continueToIntake(page);
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
 
-  const reuse = sheet(page).getByRole("radio", { name: /^Use the current baseline \(approved .+\)$/ });
+  const reuse = sheet(page).getByRole("radio", { name: /^Use the current Ground Truth \(approved .+\)$/ });
   const rebuild = sheet(page).getByRole("radio", { name: "Rebuild it ($7.00)" });
   await expect(reuse).toBeChecked();
   await expect(rebuild).not.toBeChecked();
-  await expect(sheet(page).getByRole("switch", { name: "Confirm the baseline" })).toHaveCount(0);
+  await expect(sheet(page).getByRole("switch", { name: "Confirm the Ground Truth" })).toHaveCount(0);
 
   await sheet(page).getByRole("button", { name: "Estimate" }).click();
   await expect(estimate(page)).toContainText("$29.50 estimated");
   await rebuild.check();
   await expect(estimate(page)).toContainText("$36.50 estimated");
-  await expect(sheet(page).getByRole("switch", { name: "Confirm the baseline" })).toBeChecked();
+  await expect(sheet(page).getByRole("switch", { name: "Confirm the Ground Truth" })).toBeChecked();
 
   // Deep and rebuilding goes over $50: an owner approves before it starts.
   await sheet(page).getByRole("group", { name: "Depth" }).getByRole("button", { name: "Deep" }).click();
@@ -192,10 +192,10 @@ test("stale baseline: only 'Oracle rebuilds the baseline first', with the reason
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
 
   await expect(sheet(page).getByRole("radio")).toHaveCount(0);
-  await expect(sheet(page)).toContainText("Oracle rebuilds the baseline first");
-  await sheet(page).getByRole("button", { name: "About the baseline" }).click();
-  await expect(sheet(page).getByRole("tooltip")).toContainText("The last baseline review was approved 41 days ago");
-  await expect(sheet(page).getByRole("switch", { name: "Confirm the baseline" })).toBeChecked();
+  await expect(sheet(page)).toContainText("Oracle rebuilds the Ground Truth first");
+  await sheet(page).getByRole("button", { name: "About the Ground Truth" }).click();
+  await expect(sheet(page).getByRole("tooltip")).toContainText("The last Ground Truth review was approved 41 days ago");
+  await expect(sheet(page).getByRole("switch", { name: "Confirm the Ground Truth" })).toBeChecked();
   await sheet(page).getByRole("button", { name: "Estimate" }).click();
   await expect(estimate(page)).toContainText("$36.50 estimated");
 });
@@ -245,7 +245,7 @@ test("New run no longer offers Baseline to PRD and points at New PRD", async ({ 
   // With no flow left to offer, the dialog is "Where to start a run": only the pointer lines and Close (D12, qa-work-7).
   const dialog = page.getByRole("dialog", { name: "Where to start a run" });
   await expect(dialog.getByTestId("flow-pointers")).toBeVisible();
-  await expect(dialog.getByRole("radio", { name: "Baseline to PRD" })).toHaveCount(0);
+  await expect(dialog.getByRole("radio", { name: "Ground Truth to PRD" })).toHaveCount(0);
   const pointer = dialog.getByRole("link", { name: "New PRD · PRDs" });
   await expect(pointer).toHaveAttribute("href", "/documents/new?kind=prd");
   await pointer.click();

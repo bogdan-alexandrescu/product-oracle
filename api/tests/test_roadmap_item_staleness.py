@@ -8,6 +8,8 @@ import pytest
 from sqlalchemy import select
 
 from oracle import changes
+from oracle.auth.deps import Principal
+from oracle.baseline import service as baseline
 from oracle.baseline.models import Entity
 from oracle.docs.models import Document, DocumentVersion
 from oracle.docs.visibility import Hidden, _words_of
@@ -209,7 +211,7 @@ async def test_bulk_changes_name_the_count_that_applies_to_the_item_once(
                 "entity",
                 cause="entity_updated",
                 actor=None,
-                subject_ref=f"{n} baseline items",
+                subject_ref=f"{n} Ground Truth items",
                 data={"roots": roots, "entity_ids": [r["id"] for r in roots]},
             )
             await s.commit()
@@ -219,6 +221,86 @@ async def test_bulk_changes_name_the_count_that_applies_to_the_item_once(
     reasons = (await items(client, auth))["payment-step"]["stale_reasons"]
     # Only the requirement of the 42 and of the 11 is the payment step's: it is named, once.
     assert reasons == ["requirement:saved-cards changed"], reasons
+
+
+async def test_a_real_bulk_write_reads_ground_truth_items_merged_and_plural(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+):
+    """#505 / prod-6 with the Ground Truth rename: a bulk write through the Ground Truth
+    service (:func:`baseline.batched_changes`) names its size "N Ground Truth items", so the
+    payment step's reason is narrowed to its own count, plural, and two bulk writes read one
+    line; fails_when=the service writes "N baseline items" and the item reads "5 baseline
+    items changed; 4 baseline items changed" or "3 Ground Truth items was confirmed"."""
+    tenant_id, auth = owner
+    await approved_prd(client, auth)
+    await seed_baseline(tenant_id)
+    ids = await seed_trace(tenant_id)
+    await built_roadmap(client, auth, runtime)
+    # The payment step's own feature, blocker and acceptance criterion; a bulk write adds
+    # features that are not its own.
+    touched = (ids["feature"], ids["blocker"], ids["criterion"])
+    writer = baseline.Writer(None, "user")
+
+    async def bulk(n: int) -> None:
+        async with tenant_session(tenant_id) as s:
+            async with baseline.batched_changes(s):
+                for i, entity_id in enumerate(touched):
+                    entity = await s.get(Entity, entity_id)
+                    await baseline.update_entity(s, writer, entity, {"body": f"Edit {n}.{i}"})
+                for i in range(n - len(touched)):
+                    other = await baseline.create_entity(
+                        s, writer, type_="feature", key=f"other-{n}-{i}", title=f"Other {n}.{i}"
+                    )
+                    await baseline.update_entity(s, writer, other.entity, {"body": "Edited"})
+            await s.commit()
+
+    await bulk(5)
+    async with tenant_session(tenant_id) as s:
+        refs = set(
+            await s.scalars(
+                select(ChangeEvent.subject_ref).where(
+                    ChangeEvent.subject_kind == "entity", ChangeEvent.subject_id.is_(None)
+                )
+            )
+        )
+    assert refs == {"5 Ground Truth items"}, refs
+    await bulk(4)
+    reasons = (await items(client, auth))["payment-step"]["stale_reasons"]
+    # The 5 and then the 4 each touch three of the payment step's own: one line, its count.
+    assert reasons == ["3 Ground Truth items changed"], reasons
+
+    # A bulk confirm of its three reads "were confirmed", never "was confirmed".
+    approver = Principal(tenant_id=tenant_id, kind="user", role="owner")
+    async with tenant_session(tenant_id) as s:
+        for entity_id in touched:
+            (await s.get(Entity, entity_id)).status = "proposed"
+        await s.commit()
+    async with tenant_session(tenant_id) as s:
+        async with baseline.batched_changes(s):
+            for entity_id in touched:
+                entity = await s.get(Entity, entity_id)
+                await baseline.set_entity_status(s, approver, entity, "confirmed", None)
+        await s.commit()
+    reasons = (await items(client, auth))["payment-step"]["stale_reasons"]
+    assert reasons == ["3 Ground Truth items changed", "3 Ground Truth items were confirmed"]
+
+
+def test_a_stored_baseline_items_reason_reads_ground_truth_and_merges():
+    """Change events and stale reasons stored before the rename say "N baseline items":
+    they count as a bulk write's size, merge with the new form and read Ground Truth on
+    the read path, with no migration; fails_when=an old row shows "42 baseline items
+    changed" or keeps two counted lines."""
+    old = ["42 baseline items changed", "11 Ground Truth items changed"]
+    assert staleness.one_count(old) == ["11 Ground Truth items changed"]
+    assert staleness.for_reader(["42 baseline items changed"], None) == [
+        "42 Ground Truth items changed"
+    ]
+    assert staleness.stale_why(["3 baseline items were confirmed"], "x") == (
+        "3 Ground Truth items were confirmed"
+    )
+    assert staleness._SIZE.fullmatch("42 baseline items")
 
 
 async def test_a_section_link_names_the_section_and_the_feature_it_links(
@@ -279,8 +361,11 @@ def test_an_old_literal_section_link_reason_is_reworded_when_read():
     assert staleness.detail_for_reader(old, None) == reworded
     # Already-worded (new-form) reasons, and counted ones, pass through unchanged.
     new = "PRD section s-5-1 links Promo codes, which changed"
-    counted = "PRD section s-5-1 links 3 baseline items, which changed"
+    counted = "PRD section s-5-1 links 3 Ground Truth items, which changed"
     assert staleness.for_reader([new, counted], None) == [new, counted]
+    # One stored before the Ground Truth rename reads Ground Truth.
+    old_count = "PRD section s-5-1 links 3 baseline items, which changed"
+    assert staleness.for_reader([old_count], None) == [counted]
 
 
 def test_an_old_literal_reason_naming_a_hidden_decision_is_hidden_before_it_is_reworded():
@@ -318,7 +403,7 @@ def _hiding(title: str) -> Hidden:
         # A half that reads as a ref-named reason ("plan:x renamed") is put into words.
         ("plan:enterprise renamed; tier two", "tier two"),
         # A half that reads as a counted reason is absorbed by a later count.
-        ("2 baseline items changed; tier two", "tier two"),
+        ("2 Ground Truth items changed; tier two", "tier two"),
     ],
 )
 def test_an_old_alert_line_cut_on_a_hidden_title_is_hidden_before_it_is_reworded(title, shown):
@@ -329,10 +414,12 @@ def test_an_old_alert_line_cut_on_a_hidden_title_is_hidden_before_it_is_reworded
     shown; no_claim=a title named in other words (Hidden.names)."""
     hidden = _hiding(title)
     detail = staleness.detail_for_reader(
-        f"{title} changed; 5 baseline items changed; requirement:x changed", hidden
+        f"{title} changed; 5 Ground Truth items changed; requirement:x changed", hidden
     )
     assert shown not in detail, detail
-    assert detail == f"{staleness.HIDDEN_REASON}; 5 baseline items changed; a requirement changed"
+    assert detail == (
+        f"{staleness.HIDDEN_REASON}; 5 Ground Truth items changed; a requirement changed"
+    )
 
 
 def test_an_old_alert_line_cut_on_a_hidden_title_keeps_its_other_reasons():

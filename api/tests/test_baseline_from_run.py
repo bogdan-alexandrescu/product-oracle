@@ -158,7 +158,7 @@ async def test_rows_are_what_the_run_created_changed_or_proposed(client, owner, 
     assert rows["feature:checkout"]["change"] == "proposal"
     assert len(rows["feature:checkout"]["proposal_ids"]) == 1
     assert rows["feature:f.saved-carts-2"]["edges"] == {"new": 1, "changed": 0}
-    assert view["run"]["flow_title"] == "Build the baseline"
+    assert view["run"]["flow_title"] == "Build the Ground Truth"
     assert view["checkpoint"]["kind"] == "baseline_confirm"
     assert view["checkpoint"]["status"] == "pending"
     assert [g["key"] for g in view["other_proposed_goals"]] == []

@@ -171,7 +171,7 @@ test("an approver discusses a pending checkpoint in a sheet on the run page", as
   const sheet = page.getByTestId("sheet-discuss");
   await expect(sheet).toBeVisible();
   const form = sheet.getByTestId("start-discussion");
-  await expect(form.getByRole("textbox", { name: "Title" })).toHaveValue(/Confirm the baseline$/);
+  await expect(form.getByRole("textbox", { name: "Title" })).toHaveValue(/Confirm the Ground Truth$/);
   await form.getByRole("textbox", { name: "First message" }).fill("Is G2's target the one from the plan?");
   await form.getByRole("button", { name: "Start discussion" }).click();
   await expect(sheet.getByTestId("discussion-thread")).toBeVisible();

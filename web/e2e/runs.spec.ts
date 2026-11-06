@@ -44,7 +44,7 @@ test("runs list shows each run with its status, and cost only on the approval an
   await expect(rows).toHaveCount(5);
   const waiting = rows.and(page.locator('[data-document="team-onboarding"]'));
   await expect(waiting).toContainText("Waiting for review");
-  await expect(waiting).toContainText("Confirm the baseline");
+  await expect(waiting).toContainText("Confirm the Ground Truth");
   // P3d Cost prominence: no figure on a row that needs no cost decision.
   await expect(waiting).not.toContainText("$");
   const approval = rows.and(page.locator('[data-document="usage-alerts-v2"]'));
@@ -58,7 +58,7 @@ test("runs list shows each run with its status, and cost only on the approval an
 test("run detail: approve each checkpoint through to the imported PRD", async ({ page }) => {
   await openRuns(page);
   await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
   await expect(page.getByTestId("run-notes")).toContainText("Test mode: each step finishes at once");
   // P3d Cost prominence: the cost is one small line in Details.
   await expect(page.getByTestId("run-details").getByTestId("run-cost")).toHaveText("$6.30 of $26.50 estimated");
@@ -67,8 +67,8 @@ test("run detail: approve each checkpoint through to the imported PRD", async ({
   // Decide as the page's primary action.
   const chip = page.getByTestId("segment-baseline").getByTestId("checkpoint-waiting");
   await expect(chip).toHaveText(/^Waiting/);
-  await expect(page.getByTestId("checkpoint-baseline_confirm")).toContainText("Confirm the baseline");
-  await expect(page.getByRole("complementary", { name: "Run" }).filter({ visible: true })).toContainText("Confirm the baseline");
+  await expect(page.getByTestId("checkpoint-baseline_confirm")).toContainText("Confirm the Ground Truth");
+  await expect(page.getByRole("complementary", { name: "Run" }).filter({ visible: true })).toContainText("Confirm the Ground Truth");
   await page.getByRole("button", { name: "Decide", exact: true }).click();
   await expect(page).toHaveURL(/#decide$/);
   await expect(page.locator("#decide")).toBeInViewport();
@@ -76,7 +76,7 @@ test("run detail: approve each checkpoint through to the imported PRD", async ({
 
   // The baseline's artifacts can be read before deciding.
   const baseline = page.getByTestId("segment-baseline");
-  await baseline.getByRole("button", { name: "Baseline", exact: true }).click();
+  await baseline.getByRole("button", { name: "Ground Truth", exact: true }).click();
   await expect(page.getByTestId("artifact-content")).toContainText("confidence");
 
   // Requesting changes needs a note; the segment runs again.
@@ -262,7 +262,7 @@ test("a rejected draft: Retry import imports it, and the segment links the PRD",
   await login(page);
   const id = await seedRejectedDraft(page);
   await page.goto(`/runs/${id}`);
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
 
   const prd = page.getByTestId("segment-prd_draft");
   await expect(prd).toContainText("Draft not imported: prd.md was rejected: [invalid_citation]");
@@ -627,7 +627,7 @@ test("fix-work review: a check that could not read some runs says so on a run th
   await openRuns(page);
   await page.getByTestId("run-row").filter({ hasText: "team onboarding" }).getByRole("link").click();
   // The run's own page first: until it opens, the list's five statuses are on screen.
-  await expect(page.getByRole("heading", { level: 1, name: /^Team onboarding · Baseline to PRD/ })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /^Team onboarding · Ground Truth to PRD/ })).toBeVisible();
   await expect(status(page)).toHaveText("Waiting for review");
   await page.getByRole("button", { name: "Refresh progress" }).click();
   const result = page.getByTestId("tick-result");
@@ -645,7 +645,7 @@ async function refusedBaseline(page: Page) {
   await page.goto("/runs");
   await expect(page.getByRole("heading", { level: 1, name: "Runs" })).toBeVisible();
   await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
   // The baseline step runs again.
   const cp = page.getByTestId("checkpoint-baseline_confirm");
   await cp.getByLabel("Note for the agents").fill("Add a target for G2");
@@ -656,7 +656,7 @@ async function refusedBaseline(page: Page) {
   await page.getByRole("button", { name: "Refresh progress" }).click();
   const result = page.getByTestId("tick-result");
   await expect(result).toContainText(
-    "SwarmCloud refused to send baseline.yaml (422 validation_error: artifact name not allowed), which the Baseline proposal step needs to import its results.",
+    "SwarmCloud refused to send baseline.yaml (422 validation_error: artifact name not allowed), which the Ground Truth proposal step needs to import its results.",
   );
   await expect(result).not.toContainText("could not be checked");
   await expect(status(page)).toHaveText("Running");

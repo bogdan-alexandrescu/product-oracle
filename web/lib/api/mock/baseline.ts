@@ -1543,7 +1543,7 @@ export async function routeBaseline(
     if (e instanceof MockError) return fail(e.status, e.message);
     throw e;
   }
-  return json(501, { detail: "This baseline route is not available in mock mode" });
+  return json(501, { detail: "This Ground Truth route is not available in mock mode" });
 }
 
 /**

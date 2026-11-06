@@ -171,9 +171,9 @@ test("qa-onboarding-22, 23, qa-work-3, 31: a new company's first brief, from New
   // qa-onboarding-23: the estimate in the baseline dialog's words.
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
   const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });
-  await expect(sheet.getByTestId("draft-baseline-none")).toContainText("Build the baseline ($7.00)");
+  await expect(sheet.getByTestId("draft-baseline-none")).toContainText("Build the Ground Truth ($7.00)");
   await sheet.getByRole("button", { name: "Estimate" }).click();
   await expect(sheet.getByTestId("draft-estimate")).toHaveText(
-    /^\$[\d,]+\.\d{2} estimated \(\$7\.00 to build the baseline, \$[\d,]+\.\d{2} to draft the PRD\) · (below the \$50 approval line · starts at once|above the \$50 approval line · an owner approves it before it starts)$/,
+    /^\$[\d,]+\.\d{2} estimated \(\$7\.00 to build the Ground Truth, \$[\d,]+\.\d{2} to draft the PRD\) · (below the \$50 approval line · starts at once|above the \$50 approval line · an owner approves it before it starts)$/,
   );
 });

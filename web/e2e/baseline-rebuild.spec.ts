@@ -33,11 +33,11 @@ async function openRituals(page: Page) {
  */
 async function resumeAndPrepare(page: Page, cost: string | null) {
   await openRituals(page);
-  const row = ritualRow(page, "Baseline rebuild");
+  const row = ritualRow(page, "Ground Truth rebuild");
   await expect(row).toContainText("Paused");
   await row.click();
   await inspector(page).getByRole("button", { name: "Resume" }).click();
-  await expect(ritualRow(page, "Baseline rebuild")).not.toContainText("Paused");
+  await expect(ritualRow(page, "Ground Truth rebuild")).not.toContainText("Paused");
   await inspector(page).getByRole("button", { name: "Prepare now" }).click();
   if (cost) {
     const ask = page.getByRole("alertdialog", { name: "Prepare now" });
@@ -45,7 +45,7 @@ async function resumeAndPrepare(page: Page, cost: string | null) {
     await ask.getByRole("button", { name: "Prepare now" }).click();
   }
   await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
-  await expect(page.getByTestId("occurrence-heading").getByRole("heading", { level: 2, name: "Baseline rebuild" })).toBeVisible();
+  await expect(page.getByTestId("occurrence-heading").getByRole("heading", { level: 2, name: "Ground Truth rebuild" })).toBeVisible();
 }
 
 // protects=at the default level (Act) the occurrence starts B1's build with its estimate shown,
@@ -56,16 +56,16 @@ test("baseline rebuild: an owner turns it on and Oracle starts the build with it
   await login(page);
   await resumeAndPrepare(page, "$7.00");
   const card = page.getByTestId("occurrence-rebuild");
-  await expect(card).toContainText("Oracle started the baseline build · Estimate $7.00 at standard depth. Its proposals wait for your review.");
+  await expect(card).toContainText("Oracle started the Ground Truth build · Estimate $7.00 at standard depth. Its proposals wait for your review.");
   await expect(page.getByTestId("occurrence-summary")).toHaveCount(0);
   await card.getByRole("link", { name: "Open run" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Build the baseline" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Build the Ground Truth" })).toBeVisible();
   await page.getByTestId("app-nav").getByTestId("nav-inbox").click();
-  const did = page.getByTestId("inbox-oracle-actions").getByRole("row").filter({ hasText: "Started the baseline rebuild" });
-  await expect(did).toContainText("Started the baseline rebuild · Estimate $7.00");
+  const did = page.getByTestId("inbox-oracle-actions").getByRole("row").filter({ hasText: "Started the Ground Truth rebuild" });
+  await expect(did).toContainText("Started the Ground Truth rebuild · Estimate $7.00");
   await expect(did).not.toContainText("limit");
-  await expect(did).toContainText("Keep the baseline current");
+  await expect(did).toContainText("Keep the Ground Truth current");
 });
 
 // protects=at Observe Oracle only reminds: no build starts, the card says why, and its Build the
@@ -77,17 +77,17 @@ test("baseline rebuild: at Observe the occurrence only reminds and links the Bui
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-autonomy").click();
   await page.getByTestId("autonomy-row-baseline").getByRole("group").getByRole("button", { name: "Observe", exact: true }).click();
-  const sheet = page.getByRole("dialog", { name: "Change Keep the baseline current" });
+  const sheet = page.getByRole("dialog", { name: "Change Keep the Ground Truth current" });
   await sheet.getByLabel("Why").fill("We rebuild by hand this quarter");
   await sheet.getByRole("button", { name: "Save" }).click();
   await expect(sheet).toBeHidden();
   await resumeAndPrepare(page, null);
   const card = page.getByTestId("occurrence-rebuild");
-  await expect(card).toContainText("Not started: Oracle is set to observe the baseline. Build it from the Baseline page.");
+  await expect(card).toContainText("Not started: Oracle is set to observe the Ground Truth. Build it from the Ground Truth page.");
   await expect(page.getByTestId("ritual-block").filter({ hasText: "Estimate $7.00 at standard depth" })).toBeVisible();
-  await card.getByRole("link", { name: "Build the baseline" }).click();
-  await expect(page).toHaveURL(/\/baseline\?build=1$/);
-  const build = page.getByRole("dialog", { name: "Build the baseline" });
+  await card.getByRole("link", { name: "Build the Ground Truth" }).click();
+  await expect(page).toHaveURL(/\/ground-truth\?build=1$/);
+  const build = page.getByRole("dialog", { name: "Build the Ground Truth" });
   await expect(build).toContainText("$7.00 estimated · below the $50 approval line");
 });
 
@@ -101,15 +101,15 @@ test("baseline rebuild: a $14 build starts with no ritual cost cap", async ({ pa
   await login(page);
   await resumeAndPrepare(page, "$14.00");
   const card = page.getByTestId("occurrence-rebuild");
-  await expect(card).toContainText("Oracle started the baseline build · Estimate $14.00 at standard depth. Its proposals wait for your review.");
+  await expect(card).toContainText("Oracle started the Ground Truth build · Estimate $14.00 at standard depth. Its proposals wait for your review.");
   const last = page.getByTestId("ritual-block").getByRole("link", { name: /^Last built / });
   await expect(last).toHaveText("Last built Oct 20, 2026, 9:00 AM PDT");
   await last.click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Build the baseline" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Build the Ground Truth" })).toBeVisible();
   await page.getByTestId("app-nav").getByTestId("nav-inbox").click();
-  const did = page.getByTestId("inbox-oracle-actions").getByRole("row").filter({ hasText: "Started the baseline rebuild" });
-  await expect(did).toContainText("Started the baseline rebuild · Estimate $14.00");
+  const did = page.getByTestId("inbox-oracle-actions").getByRole("row").filter({ hasText: "Started the Ground Truth rebuild" });
+  await expect(did).toContainText("Started the Ground Truth rebuild · Estimate $14.00");
   await expect(did).not.toContainText("limit");
 });
 
@@ -129,8 +129,8 @@ test("baseline rebuild: a $70 build waits for the owner's approval", async ({ pa
   await page.getByRole("button", { name: "Approve $70.00 and start" }).click();
   await expect(page.getByRole("button", { name: "Approve $70.00 and start" })).toHaveCount(0);
   await page.getByTestId("app-nav").getByTestId("nav-inbox").click();
-  const did = page.getByTestId("inbox-oracle-actions").getByRole("row").filter({ hasText: "Started the baseline rebuild" });
-  await expect(did).toContainText("Started the baseline rebuild · Estimate $70.00 · Waits for an owner's approval");
+  const did = page.getByTestId("inbox-oracle-actions").getByRole("row").filter({ hasText: "Started the Ground Truth rebuild" });
+  await expect(did).toContainText("Started the Ground Truth rebuild · Estimate $70.00 · Waits for an owner's approval");
   await page.goto(occurrence);
-  await expect(page.getByTestId("occurrence-rebuild")).toContainText("Oracle started the baseline build · Estimate $70.00 at standard depth. Its proposals wait for your review.");
+  await expect(page.getByTestId("occurrence-rebuild")).toContainText("Oracle started the Ground Truth build · Estimate $70.00 at standard depth. Its proposals wait for your review.");
 });

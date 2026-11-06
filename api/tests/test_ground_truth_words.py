@@ -4,7 +4,8 @@ under oracle/ says "Desired state" or "Current state", or "baseline" for the gra
 
 The check reads every string literal in oracle/ (docstrings aside: those are for the code's
 readers, save the API's, which the OpenAPI scan reads), every job prompt Oracle runs with
-now and the OpenAPI document's summaries and descriptions. What may still say baseline:
+now and the OpenAPI document's summaries and descriptions (a field's title is its id). What
+may still say baseline:
 
 - internal ids: /v1/baseline routes, baseline_* values, read:baseline, baseline.yaml, MCP
   tool names, oracle.baseline modules (anything joined to a "_", "/", ".", ":" or "-");
@@ -35,6 +36,7 @@ ALLOWED = re.compile(
             r"(?:its|a|the KR's|the metric's|the measure's|goal's|key result's) baseline\b"
             r"(?! (?:item|feature|graph|page|build|rebuild|proposal|change))",
             r"between the baseline and",
+            r"baseline, target and horizon",
             r"Success metric and baseline",
             r"baseline \(starting value\)",
             r"\bbaseline\|goal\b",
@@ -42,6 +44,8 @@ ALLOWED = re.compile(
             # Stored reasons written before the rename, still read and merged.
             r"\(\\d\+\) baseline items\?",
             r"\\d\+ baseline items\?",
+            r"\(\?:Ground Truth\|baseline\) items\?",
+            r"\\d\+\) baseline \(items\?\)",
             # An instruction that forbids the old word, or an id written in a sentence.
             r'never "baseline"',
             r'"baseline decision <key>"',
@@ -108,11 +112,7 @@ def test_no_api_summary_or_description_says_an_old_name():
     def walk(node, where):
         if isinstance(node, dict):
             for key, value in node.items():
-                if (
-                    key in ("summary", "description", "title")
-                    and isinstance(value, str)
-                    and _left(value)
-                ):
+                if key in ("summary", "description") and isinstance(value, str) and _left(value):
                     found.append(f"{where}.{key}: {value[:120]!r}")
                 walk(value, f"{where}.{key}")
         elif isinstance(node, list):

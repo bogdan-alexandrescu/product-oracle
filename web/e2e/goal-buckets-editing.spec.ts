@@ -58,7 +58,7 @@ for (const size of SIZES) {
       await page.getByTestId("add-goal").getByRole("button", { name: "+ Add goal" }).click();
       const form = page.getByTestId("add-goal").getByTestId("goal-form");
       await expect(form.getByRole("heading", { name: "New goal" })).toBeVisible();
-      await expect(form).toContainText("Goal 5 in the order; change it in Baseline");
+      await expect(form).toContainText("Goal 5 in the order; change it in the Ground Truth");
       const save = form.getByRole("button", { name: "Save goal" });
       await expect(save).toBeDisabled();
       await form.getByLabel("Goal").fill("Quieter support inbox");
