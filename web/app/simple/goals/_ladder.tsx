@@ -68,6 +68,8 @@ interface LdFeature {
   /** What it waits on and what waits on it (features on the map only). */
   waits: string[];
   wanted: string[];
+  /** What this person suggested it wait on, not yet decided. */
+  suggested: string[];
 }
 
 interface V {
@@ -88,6 +90,9 @@ interface V {
   live: { id: string; dx: number; dy: number } | null;
   menu: string | null;
   setMenu: (id: string | null) => void;
+  /** The picked arrow ("from>to"), whose pop-up shows; it lasts while its card stays picked. */
+  arrow: string | null;
+  setArrow: (key: string | null) => void;
   adding: string | null;
   setAdding: (ms: string | null) => void;
   drop: string | null;
@@ -132,10 +137,12 @@ export interface LadderProps {
 
 export function GoalLadder(props: LadderProps) {
   const { map } = props;
-  const { can } = useMe();
+  const { can, me } = useMe();
   const phone = usePhone();
   const roadmap = useQuery("simple-roadmap:goal-map", () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: {} } })));
   const items = useMemo(() => new Map((roadmap.data?.items ?? []).map((i) => [i.id, i])), [roadmap.data]);
+  // The person's own pending suggestions: a suggested link shows on the card that would wait.
+  const proposals = useQuery("simple-proposals", () => unwrap(api.GET("/v1/simple/changes", { params: { query: { status: "proposed" } } })));
   const canChange = map.can_edit;
   const may = canChange || can("create_simple_change");
   const [edit, setEdit] = useState(false);
@@ -147,6 +154,9 @@ export function GoalLadder(props: LadderProps) {
   const [drop, setDrop] = useState<string | null>(null);
   const [refused, setRefused] = useState<[string, string] | null>(null);
   const [fresh, setFresh] = useState<string | null>(null);
+  const [arrowAt, setArrowAt] = useState<{ key: string; sel: string | null } | null>(null);
+  // An arrow's pop-up closes when another card is picked.
+  const arrow = arrowAt?.sel === sel ? arrowAt.key : null;
 
   const goals = map.goals;
   const ms = useMemo(() => goals.flatMap((g) => map.milestones.filter((m) => m.goal === g.id)), [goals, map.milestones]);
@@ -156,18 +166,29 @@ export function GoalLadder(props: LadderProps) {
     const goalOf = new Map(map.milestones.map((m) => [m.id, m.goal]));
     const base = map.features.map((f) => {
       const item = items.get(f.id);
-      return { f, item, code: item?.code ?? "", goal: goalOf.get(f.milestones[0]) ?? null, waits: (item?.depends_on ?? []).filter((d) => on.has(d)), wanted: [] as string[] };
+      return { f, item, code: item?.code ?? "", goal: goalOf.get(f.milestones[0]) ?? null, waits: (item?.depends_on ?? []).filter((d) => on.has(d)), wanted: [] as string[], suggested: [] as string[] };
     });
     const by = new Map(base.map((x) => [x.f.id, x]));
     for (const x of base) for (const d of x.waits) by.get(d)?.wanted.push(x.f.id);
+    // A suggested link names the feature it would wait on by its key or code.
+    const ofKey = (k: string) => base.find((y) => y.item?.key === k || (!!y.code && y.code.toLowerCase() === k.toLowerCase()));
+    for (const c of proposals.data ?? []) {
+      const x = c.op === "set_depends" && c.by === me?.user_id ? by.get(String(c.target.item_id ?? "")) : undefined;
+      if (!x) continue;
+      const was = new Set((c.before.depends_on as string[] | undefined) ?? []);
+      for (const k of (c.after.depends_on as string[] | undefined) ?? []) {
+        const y = !was.has(k) ? ofKey(k) : undefined;
+        if (y && !x.suggested.includes(y.f.id)) x.suggested.push(y.f.id);
+      }
+    }
     return base;
-  }, [map, items]);
+  }, [map, items, proposals.data, me?.user_id]);
   const byId = useMemo(() => new Map(feats.map((x) => [x.f.id, x])), [feats]);
   const places = useMemo(() => new Map(map.places.map((p) => [p.feature, { x: p.x, y: p.y }])), [map.places]);
 
   const reload = useCallback(async () => {
-    await Promise.all([props.reloadMap(), roadmap.reload()]);
-  }, [props, roadmap]);
+    await Promise.all([props.reloadMap(), roadmap.reload(), proposals.reload()]);
+  }, [props, roadmap, proposals]);
   const named = useCallback((id: string) => {
     const x = byId.get(id);
     return x ? `${x.code} ${x.f.name}`.trim() : "";
@@ -184,7 +205,10 @@ export function GoalLadder(props: LadderProps) {
       action:
         c.status === "applied" && c.can_undo
           ? { label: "Undo", onClick: () => void (onUndo ? onUndo() : undo(c.id).then(() => undefined)).then(reload, failed) }
-          : undefined,
+          : c.status === "proposed" && c.op !== "add_item"
+            ? // Undo takes the suggestion back (the proposer withdraws it).
+              { label: "Undo", onClick: () => void unwrap(api.POST("/v1/simple/changes/{change_id}/withdraw", { params: { path: { change_id: c.id } } })).then(reload, failed) }
+            : undefined,
     });
   };
   const dependsKey = (x: LdFeature | undefined) => x?.item?.key ?? x?.code ?? "";
@@ -218,9 +242,12 @@ export function GoalLadder(props: LadderProps) {
         setFresh(waiter);
         setSel(waiter);
       } catch (e) {
-        // A loop is refused with the engine's reason; the drawn arrow stays red until the next pick.
-        setRefused([on, waiter]);
-        failed(e);
+        // A loop is refused (422); the drawn arrow stays red until the next pick, and the words
+        // name both cards: the one drawn from already waits on the one drawn onto.
+        if (e instanceof ChangeFailed && e.status === 422) {
+          setRefused([on, waiter]);
+          toast({ message: `Not added, it would make a loop: ${named(on)} already waits on ${named(waiter)}` });
+        } else failed(e);
       }
     },
     unlink: async (waiter, on) => {
@@ -322,7 +349,22 @@ export function GoalLadder(props: LadderProps) {
     return () => window.removeEventListener("pointerdown", close);
   }, [menu]);
 
-  const v: V = { map, goals, ms, msCode, feats, byId, sel, setSel: (id) => { setSel(id); setRefused(null); }, edit, canChange, may, phone, places, live, menu, setMenu, adding, setAdding, drop, refused, fresh, onOpen: props.onOpen, act };
+  // Escape lets go, in order: an open menu, a picked arrow and its pop-up, then the picked card.
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || sheet) return;
+      if (menu) setMenu(null);
+      else if (arrow) setArrowAt(null);
+      else if (sel) {
+        setSel(null);
+        setRefused(null);
+      }
+    };
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [menu, arrow, sel, sheet]);
+
+  const v: V = { map, goals, ms, msCode, feats, byId, sel, setSel: (id) => { setSel(id); setRefused(null); }, edit, canChange, may, phone, places, live, menu, setMenu, arrow, setArrow: (key) => setArrowAt(key ? { key, sel } : null), adding, setAdding, drop, refused, fresh, onOpen: props.onOpen, act };
   const drag = { setLive, setDrop };
 
   return (
@@ -341,7 +383,7 @@ export function GoalLadder(props: LadderProps) {
         )}
       </div>
       </header>
-      {props.guardrail}
+      {!phone && props.guardrail}
       {phone ? <Phone v={v} /> : (
         <>
           <PeriodStrip v={v} />
@@ -515,13 +557,11 @@ function Reading({ g, canEdit, onPick }: { g: GmGoal; canEdit: boolean; onPick: 
         Add a value
       </Link>
     );
-  return (
-    <span data-testid="gm-goal-source" className="text-[12px] leading-4 text-text2">
-      {g.metric ? `From ${g.metric.title}` : "Typed in by hand"}
-      {g.read_on ? ` · ${g.read_on}` : ""}
-    </span>
-  );
+  return null;
 }
+
+/** Where a goal's reading comes from, for the reading's tooltip (the frames show no line for it). */
+const source = (g: GmGoal) => `${g.metric ? `From ${g.metric.title}` : "Typed in by hand"}${g.read_on ? ` · ${g.read_on}` : ""}`;
 
 function GoalCard({ g, i, v }: { g: GmGoal; i: number; v: V }) {
   const p = useLadderProps();
@@ -541,7 +581,7 @@ function GoalCard({ g, i, v }: { g: GmGoal; i: number; v: V }) {
       </span>
       <span className="text-[16px] leading-5 font-semibold">{g.name}</span>
       <span className="text-[13px] leading-[18px] text-text2">{g.math}</span>
-      <span className="flex items-baseline gap-2 text-[14px]">
+      <span className="flex items-baseline gap-2 text-[14px]" title={g.missing ? undefined : source(g)}>
         <b className="text-[16px]">{num(g.current, g.unit)}</b> of {num(g.target, g.unit)}
         <span className={`ml-auto font-semibold ${KR[g.status]}`}>{KR_WORD[g.status]}</span>
       </span>
@@ -597,9 +637,10 @@ function FeatureCard({ x, v, ms, compact }: { x: LdFeature; v: V; ms?: string; c
   const { sel, byId } = v;
   const picked = sel ? byId.get(sel) : undefined;
   const related = !sel || sel === f.id || x.waits.includes(sel) || (picked?.waits ?? []).includes(f.id);
-  const dim = !!sel && !related && !v.phone;
-  const isSel = sel === f.id;
   const menu = v.menu === `f:${f.id}`;
+  // A card whose menu is open is never dimmed: its menu is drawn solid over the rest.
+  const dim = !!sel && !related && !v.phone && !menu;
+  const isSel = sel === f.id;
   const place = v.places.get(f.id);
   const live = v.live?.id === f.id ? v.live : null;
   const dx = (place?.x ?? 0) + (live?.dx ?? 0);
@@ -626,7 +667,7 @@ function FeatureCard({ x, v, ms, compact }: { x: LdFeature; v: V; ms?: string; c
           v.setSel(isSel ? null : f.id);
         }
       }}
-      style={dx || dy ? { transform: `translate(${dx}px, ${dy}px)`, zIndex: 20, ...(place && !live ? { boxShadow: "0 8px 24px rgb(0 0 0 / .18)" } : {}) } : undefined}
+      style={dx || dy ? { transform: `translate(${dx}px, ${dy}px)`, zIndex: menu ? 40 : 20, ...(place && !live ? { boxShadow: "0 8px 24px rgb(0 0 0 / .18)" } : {}) } : menu ? { zIndex: 40 } : undefined}
       className={`relative flex cursor-pointer touch-none flex-col gap-0.5 rounded-xl border bg-surface ${compact ? "px-2 py-1.5" : "px-2.5 py-1.5"} transition-opacity select-none ${dim ? "[&>*]:opacity-40" : ""} ${isSel || place ? "border-accent" : "border-line hover:border-line-strong"} ${isSel ? "ring-2 ring-accent/40" : ""} ${fresh ? "border-accent! ring-2 ring-accent/40" : ""} ${live ? "rotate-1 shadow-2xl" : ""} ${v.drop === `card:${f.id}` ? "border-accent! bg-accent-soft" : ""} ${loop ? "border-crit! ring-2 ring-crit/30" : ""}`}
     >
       <span className="flex items-start gap-1.5">
@@ -647,6 +688,11 @@ function FeatureCard({ x, v, ms, compact }: { x: LdFeature; v: V; ms?: string; c
           </span>
         )}
       </span>
+      {x.suggested.map((id) => (
+        <span key={id} data-testid="ld-suggested" className="w-fit rounded-md bg-warn-bg px-2 py-0.5 text-[12px] leading-4 font-semibold text-warn">
+          Suggested: wait on {`${v.byId.get(id)?.code ?? ""} ${v.byId.get(id)?.f.name ?? ""}`.trim()}
+        </span>
+      ))}
       {isSel && !v.phone && (
         <button type="button" data-testid="ld-open" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); v.onOpen(f); }} className="w-fit text-[13px] font-semibold text-accent-ink hover:underline">
           Open
@@ -783,7 +829,7 @@ function curve(a: DOMRect, b: DOMRect, box: DOMRect, s: number): { d: string; mi
   if (Math.abs(a.left - b.left) < 40 * s) {
     // In one column: out of the right edge and back in, bowed by how far apart they are.
     const x = (a.right - box.left) / s;
-    const bow = 10 + Math.min(8, Math.abs(by - ay) / 60);
+    const bow = 28 + Math.min(36, Math.abs(by - ay) / 12);
     return { d: `M${x},${ay} C${x + bow},${ay} ${x + bow},${by} ${x + 2},${by}`, mid: [x + bow * 0.75, (ay + by) / 2] };
   }
   const right = b.left > a.left;
@@ -793,14 +839,14 @@ function curve(a: DOMRect, b: DOMRect, box: DOMRect, s: number): { d: string; mi
   return { d: `M${x1},${ay} C${x1 + dx},${ay} ${x2 - dx},${by} ${x2},${by}`, mid: [(x1 + x2) / 2, (ay + by) / 2] };
 }
 
-function Arrows({ v, root, drawing }: { v: V; root: RefObject<HTMLDivElement | null>; drawing: { from: string; x: number; y: number } | null }) {
+function Arrows({ v, root, drawing, zoom }: { v: V; root: RefObject<HTMLDivElement | null>; drawing: { from: string; x: number; y: number } | null; zoom: number }) {
+  // Lines are drawn in canvas units: divided by the zoom, they are 3 px on screen (5 px picked).
+  const px = (n: number) => n / zoom;
   const [paths, setPaths] = useState<Path[]>([]);
   const [pend, setPend] = useState<string | null>(null);
   const [line, setLine] = useState<string | null>(null);
-  const [pickedAt, setPickedAt] = useState<{ key: string; sel: string | null } | null>(null);
-  // An arrow's pop-up closes when another card is picked.
-  const picked = pickedAt?.sel === v.sel ? pickedAt.key : null;
-  const setPicked = (key: string | null) => setPickedAt(key ? { key, sel: v.sel } : null);
+  const picked = v.arrow;
+  const setPicked = v.setArrow;
   const { sel, feats, refused, live, places } = v;
   useLayoutEffect(() => {
     const el = root.current;
@@ -847,16 +893,16 @@ function Arrows({ v, root, drawing }: { v: V; root: RefObject<HTMLDivElement | n
     <>
       <svg className="pointer-events-none absolute inset-0 z-10 h-full w-full overflow-visible" aria-hidden>
         <defs>
-          <marker id="ld-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <marker id="ld-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)" />
           </marker>
-          <marker id="ld-head-crit" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <marker id="ld-head-crit" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="var(--crit)" />
           </marker>
         </defs>
         {paths.map((p) => (
           <g key={p.key}>
-            <path data-testid="ld-arrow" data-arrow={p.key} d={p.d} fill="none" markerEnd="url(#ld-head)" className="text-accent" stroke="currentColor" strokeWidth={picked === p.key ? 4 : 2} strokeOpacity={picked && picked !== p.key ? 0.35 : 0.95} />
+            <path data-testid="ld-arrow" data-arrow={p.key} d={p.d} fill="none" markerEnd="url(#ld-head)" className="text-accent" stroke="currentColor" strokeWidth={px(picked === p.key ? 5 : 3)} strokeOpacity={picked && picked !== p.key ? 0.35 : 0.95} />
             {/* a wider line under the pointer, to pick the arrow */}
             <path
               data-testid="ld-arrow-hit"
@@ -864,7 +910,7 @@ function Arrows({ v, root, drawing }: { v: V; root: RefObject<HTMLDivElement | n
               d={p.d}
               fill="none"
               stroke="transparent"
-              strokeWidth={14}
+              strokeWidth={px(14)}
               className="pointer-events-auto cursor-pointer"
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
@@ -874,7 +920,7 @@ function Arrows({ v, root, drawing }: { v: V; root: RefObject<HTMLDivElement | n
             />
           </g>
         ))}
-        {(line || pend) && <path data-testid={line ? "ld-drawing" : "ld-refused"} d={(line ?? pend)!} fill="none" stroke="currentColor" className={line ? "text-accent" : "text-crit"} strokeWidth={2.5} strokeDasharray="6 4" markerEnd={line ? "url(#ld-head)" : "url(#ld-head-crit)"} />}
+        {(line || pend) && <path data-testid={line ? "ld-drawing" : "ld-refused"} d={(line ?? pend)!} fill="none" stroke="currentColor" className={line ? "text-accent" : "text-crit"} strokeWidth={px(3)} strokeDasharray={`${px(6)} ${px(4)}`} markerEnd={line ? "url(#ld-head)" : "url(#ld-head-crit)"} />}
       </svg>
       {pick && (
         <span
@@ -934,7 +980,8 @@ function Canvas({ v, drag }: { v: V; drag: { setLive: (l: V["live"]) => void; se
       return { z: nz, x: cx - ((cx - o.x) / o.z) * nz, y: cy - ((cy - o.y) / o.z) * nz };
     });
   const fitAll = () => {
-    const z = Math.min(1.5, Math.max(0.3, Math.floor(((size.w - 32) / size.cw) * 100) / 100));
+    // Fit never below 85%: smaller, names cannot be read.
+    const z = Math.min(1.5, Math.max(0.85, Math.floor(((size.w - 32) / size.cw) * 100) / 100));
     setView({ x: 16, y: 12, z });
   };
   const canPlace = v.may;
@@ -1100,7 +1147,7 @@ function Canvas({ v, drag }: { v: V; drag: { setLive: (l: V["live"]) => void; se
       >
         <div data-ld-canvas className="absolute top-0 left-0 origin-top-left" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})` }}>
           <div ref={root} className="relative">
-            <Arrows v={v} root={root} drawing={drawing} />
+            <Arrows v={v} root={root} drawing={drawing} zoom={view.z} />
             <Columns v={v} />
           </div>
         </div>
@@ -1134,6 +1181,13 @@ function Phone({ v }: { v: V }) {
           </button>
         ))}
       </div>
+      {/* The guardrail as one line under the goal picker (ld1-a-phone). */}
+      {v.map.guardrail && (
+        <span data-testid="ld-phone-guardrail" className="truncate text-[13px] leading-5 text-text2" title={`Guardrail: ${v.map.guardrail.name} ${v.map.guardrail.rule}`}>
+          <Icon name="lock" size={16} className={`mr-1 inline align-[-3px] ${v.map.guardrail.held ? "text-pass" : "text-crit"}`} />
+          Guardrail: {v.map.guardrail.name} {v.map.guardrail.rule} · <b className={v.map.guardrail.held ? "text-pass" : "text-crit"}>Held {v.map.guardrail.days.filter((d) => d === 0).length} of 7 days</b>
+        </span>
+      )}
       <GoalCard g={g} i={gi} v={v} />
       {v.ms.filter((m) => m.goal === g.id).map((m) => (
         <div key={m.id} className="flex flex-col gap-1.5 rounded-2xl bg-surface2 p-2" data-ld-group={m.id} data-testid="ld-group">

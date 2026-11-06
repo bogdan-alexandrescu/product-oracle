@@ -20,7 +20,7 @@ import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { GoalLadder } from "./_ladder";
-import { FeaturePanel } from "./_panel";
+import { FeaturePanel, type Placement } from "./_panel";
 
 /** one-feature-panel: each feature's code (its roadmap item's), shown before its name. */
 const Codes = createContext<Map<string, string>>(new Map());
@@ -68,15 +68,25 @@ function Guardrail({ map }: { map: GoalMap }) {
     <div data-testid="gm-guardrail" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-pass/40 bg-pass-bg px-4 py-2.5">
       <Icon name="lock" size={18} className="text-pass" />
       <span className="font-semibold">Guardrail: {g.name} {g.rule}</span>
-      <span className="text-text2">Every milestone must hold it.</span>
-      <span className={`ml-auto font-semibold ${g.held ? "text-pass" : "text-crit"}`}>
-        {g.current === null ? "Not measured today" : `${num(g.current, "")} today`} · held {g.days.filter((v) => v === 0).length} of 7 days
+      {/* As the frames (ld1-d-rest): how many of the last 7 days held it; today's reading is its tooltip. */}
+      <span className={`ml-auto font-semibold ${g.held ? "text-pass" : "text-crit"}`} title={`Every milestone must hold it. ${g.current === null ? "Not measured today" : `${num(g.current, "")} today`}`}>
+        Held {g.days.filter((v) => v === 0).length} of 7 days
       </span>
     </div>
   );
 }
 
 
+
+/** The goal and milestone (with its ladder code, M1...) the ladder puts a feature's card under. */
+function placement(map: GoalMap, feature: string): Placement | null {
+  const m = map.milestones.find((x) => x.id === map.features.find((f) => f.id === feature)?.milestones[0]);
+  const gi = map.goals.findIndex((g) => g.id === m?.goal);
+  const g = map.goals[gi];
+  if (!m || !g) return null;
+  const n = map.goals.flatMap((x) => map.milestones.filter((y) => y.goal === x.id)).findIndex((y) => y.id === m.id) + 1;
+  return { goal: { id: g.id, title: g.name, metric: g.metric?.title ?? null, target: num(g.target, g.unit), position: gi + 1 }, milestone: `M${n} ${m.name}` };
+}
 
 const msName = (map: GoalMap, id: string) => map.milestones.find((m) => m.id === id)?.name ?? "";
 
@@ -324,7 +334,7 @@ export function GoalMapPage() {
       {edit && draft && (
         <Editor map={map} edit={edit} draft={draft} setDraft={setDraft} goal={map.goals.find((g) => g.id === goalId) ?? map.goals[0]} onClose={close} onSave={() => void save()} open={open} onOpen={(f) => setPanel(f)} />
       )}
-      {panel && <FeaturePanel id={panel.id} code={codes.get(panel.id)} name={panel.name} onClose={() => setPanel(null)} />}
+      {panel && <FeaturePanel id={panel.id} code={codes.get(panel.id)} name={panel.name} placed={placement(map, panel.id)} onClose={() => setPanel(null)} />}
       {prd && (
         <NewPrdSheet
           prefill={prd}
