@@ -321,6 +321,7 @@ function FeatureCard({ f, v, ms, compact }: { f: LdFeature; v: V; ms?: string; c
       {ld2 === "c" && handles && !compact && <span className={`w-max rounded-full border border-dashed px-2 text-[12px] leading-5 ${v.st === "pick" && f.id === "f24" ? "border-accent text-accent-ink" : "border-line-strong text-text2"}`}>+ Waits on</span>}
       {fresh && v.st === "added" && <span className="w-max rounded-full bg-accent-soft px-2 text-[12px] leading-5 font-semibold text-accent-ink">New</span>}
       {prop && <span className="w-fit rounded-xl bg-warn-bg px-2 py-px text-[12px] leading-4 font-semibold text-warn" title="Waiting for an approver">Suggested: {opWords(prop, v)}</span>}
+      {v.ld1 === "d" && v.st === "placed" && f.id === "f15" && <span className="w-fit rounded-full bg-accent-soft px-2 text-[12px] leading-5 font-semibold text-accent-ink">Placed by hand · serves {v.l.milestones.find((m) => m.id === f.milestones[0])!.code} {v.l.milestones.find((m) => m.id === f.milestones[0])!.name}</span>}
       {ms && f.milestones.length > 1 && <span className="text-[12px] leading-4 text-text2">Also serves {f.milestones.filter((x) => x !== ms).map((x) => v.l.milestones.find((m) => m.id === x)!.code).join(", ")}</span>}
       {/* the edge dots a dependency is drawn from (LD2 a, while editing or the card is selected) */}
       {ld2 === "a" && handles && (isSel || drawFrom) && <span className={`absolute top-1/2 ${drawFrom ? "-left-[7px]" : "-right-[7px]"} h-3 w-3 -translate-y-1/2 rounded-full border-2 border-surface bg-accent`} />}
@@ -500,7 +501,7 @@ function Arrows({ root, v }: { root: RefObject<HTMLDivElement | null>; v: V }) {
       if (st === "drag") {
         const g = el.querySelector('[data-ld-group="m6"]')?.getBoundingClientRect();
         if (g) {
-          el.style.setProperty("--gx", `${(g.left - box.left) / s + 245}px`);
+          el.style.setProperty("--gx", `${(g.left - box.left) / s + 185}px`);
           el.style.setProperty("--gy", `${(g.top - box.top) / s - 6}px`);
         }
       }
@@ -524,8 +525,12 @@ function Arrows({ root, v }: { root: RefObject<HTMLDivElement | null>; v: V }) {
           <path d="M0,0 L10,5 L0,10 z" fill="var(--text-faint)" />
         </marker>
       </defs>
-      {paths.map((p) => (
-        <path key={p.key} d={p.d} fill="none" markerEnd={p.lit ? "url(#ld-head)" : "url(#ld-head-dim)"} className={p.lit ? "text-accent" : "text-text-faint"} stroke="currentColor" strokeWidth={st === "arrow" && p.key === "f2-f3" ? 4 : p.lit ? 2 : 1.4} strokeOpacity={st === "arrow" && p.key !== "f2-f3" ? 0.35 : p.lit ? 0.95 : sel ? 0.12 : 0.7} />
+      {/* the arrows not picked fade as one layer, so lines sharing a gap never add up to a solid line */}
+      <g opacity={sel && st !== "arrow" ? 0.15 : 1}>
+        {paths.filter((p) => !p.lit).map((p) => <path key={p.key} d={p.d} fill="none" markerEnd="url(#ld-head-dim)" className="text-text-faint" stroke="currentColor" strokeWidth={1.4} strokeOpacity={0.7} />)}
+      </g>
+      {paths.filter((p) => p.lit).map((p) => (
+        <path key={p.key} d={p.d} fill="none" markerEnd="url(#ld-head)" className="text-accent" stroke="currentColor" strokeWidth={st === "arrow" && p.key === "f2-f3" ? 4 : 2} strokeOpacity={st === "arrow" && p.key !== "f2-f3" ? 0.35 : 0.95} />
       ))}
     </svg>
     <svg ref={over} className="pointer-events-none absolute inset-0 z-20 h-full w-full overflow-visible" aria-hidden>
