@@ -331,3 +331,24 @@ async def test_sent_draft_waits_for_its_decider(client):
     r = await client.post(f"/v1/simple/drafts/{d['id']}/approve", headers=ctx.as_("decider"))
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "approved", r.text
+
+
+async def test_a_second_approve_of_a_published_version_answers_as_published(client):
+    """inbox-mock-matches-api (port AN 5): an approver's Approve pressed again in a stale tab,
+    after their approval published the version, answers with the published draft (200), never
+    a 409; who neither decides nor reviews it is still refused."""
+    ctx = await make_people()
+    w = await World(ctx).build(decider=True, ops=["move_dates"])
+    r = await w.post(client, "owner", "move_dates")
+    assert r.status_code == 201, r.text
+    r = await client.get("/v1/simple/drafts", headers=ctx.as_("owner"))
+    (d,) = [x for x in r.json() if x["status"] == "working"]
+    r = await client.post(f"/v1/simple/drafts/{d['id']}/submit", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    r = await client.post(f"/v1/simple/drafts/{d['id']}/approve", headers=ctx.as_("decider"))
+    assert r.json()["status"] == "approved", r.text
+    r = await client.post(f"/v1/simple/drafts/{d['id']}/approve", headers=ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "approved", r.text
+    r = await client.post(f"/v1/simple/drafts/{d['id']}/approve", headers=ctx.as_("owner"))
+    assert r.status_code == 403, r.text
