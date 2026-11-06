@@ -180,8 +180,7 @@ for (const [size, viewport] of [["1440", DESKTOP], ["390", PHONE]] as const) {
 
       if (size === "1440")
         test("P-3: every mark's name tag stays inside the plot's top and foot", async ({ page }) => {
-          // Real bug: Alert history export's mark sits on the zero line, so its name hangs about 20 px below the plot, over the effort ticks.
-          test.fail();
+          // Alert history export's mark sits on the zero line: its name flips above the mark instead of hanging below the plot.
           await open(page, OWNER, theme, "value-effort");
           const marks = page.getByTestId("vxe-point");
           await expect(marks.first()).toBeVisible();
