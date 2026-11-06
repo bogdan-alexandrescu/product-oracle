@@ -129,7 +129,13 @@ test("inbox names the PRD: a stop's row says which PRD it is for", async ({ page
   await withScenario(page, "scope-review");
   await login(page, "approver@example.com");
   await page.goto("/inbox");
-  const labels = page.getByTestId("inbox-checkpoints").getByTestId("checkpoint-label");
+  // The runs at this stop read as one row ("Feature set and dependencies · 3 runs"); Show runs
+  // lists each run under it.
+  const box = page.getByTestId("inbox-checkpoints");
+  const group = box.getByTestId("checkpoint-group").filter({ hasText: /^Feature set and dependencies · \d+ runs$/ });
+  await expect(group).toHaveCount(1);
+  await box.locator("tr").filter({ has: group }).getByTestId("checkpoint-group-toggle").click();
+  const labels = box.getByTestId("checkpoint-label");
   await expect(labels.first()).toBeVisible();
   const texts = await labels.allInnerTexts();
   const sets = texts.filter((t) => t.startsWith("Feature set and dependencies"));
