@@ -2863,10 +2863,11 @@ pre .date-mark, code .date-mark { font-family: var(--font-sans,inherit); }
 [data-ps1] .ps1-body li + li { margin-top: 4px; }
 [data-ps1] .ps1-body blockquote { border-left: 3px solid var(--simple-rule); color: var(--text2); padding-left: 12px; }
 [data-ps1] .ps1-subhead { font-weight: 650; }
-[data-ps1] .ps1-table { border: 1px solid var(--simple-rule); border-radius: 8px; max-width: 100%; overflow-x: auto; }
+[data-ps1] .ps1-table { border: 1px solid var(--simple-rule); background: linear-gradient(to right, var(--surface) 40%, transparent) left / 32px 100% no-repeat local, linear-gradient(to left, var(--surface) 40%, transparent) right / 32px 100% no-repeat local, radial-gradient(farthest-side at 0 50%, #00000038, transparent) left / 14px 100% no-repeat scroll, radial-gradient(farthest-side at 100% 50%, #00000038, transparent) right / 14px 100% no-repeat scroll, var(--surface); border-radius: 8px; width: 0px; min-width: 100%; max-width: 100%; overflow-x: auto; }
 [data-ps1] .ps1-table table { border-collapse: collapse; min-width: 100%; font-size: 15px; line-height: 1.45; }
 [data-ps1] .ps1-table th { text-align: left; background: var(--surface2,var(--bg)); color: var(--text); white-space: nowrap; font-weight: 650; }
-[data-ps1] .ps1-table :is(th, td) { border-bottom: 1px solid var(--simple-rule); vertical-align: top; min-width: 7em; padding: 8px 12px; }
+[data-ps1] .ps1-table :is(th, td) { border-bottom: 1px solid var(--simple-rule); vertical-align: top; min-width: 12em; padding: 8px 12px; }
+[data-ps1] .ps1-table :is(th, td):first-child { min-width: 4em; }
 [data-ps1] .ps1-table tr:last-child td { border-bottom: 0px; }
 [data-ps1] .ps1-link { color: var(--accent-ink); text-underline-offset: 2px; text-decoration: underline; }
 [data-ps1] .ps1-code { color: var(--accent-ink); text-align: left; cursor: pointer; background: 0px 0px; border-radius: 3px; margin: 0px; padding: 0px; font-weight: 600; text-decoration: none; display: inline; }

@@ -15,10 +15,13 @@
 [data-ps1] .ps1-body li + li { margin-top: 4px; } /* MOCK-HOOK */
 [data-ps1] .ps1-body blockquote { border-left: 3px solid var(--simple-rule); padding-left: 12px; color: var(--text2); } /* MOCK-HOOK */
 [data-ps1] .ps1-subhead { font-weight: 650; } /* MOCK-HOOK */
-[data-ps1] .ps1-table { overflow-x: auto; max-width: 100%; border: 1px solid var(--simple-rule); border-radius: 8px; } /* MOCK-HOOK */
+[data-ps1] .ps1-table { overflow-x: auto; max-width: 100%; width: 0; min-width: 100%; /* no width of its own: a wide table never widens the page */ border: 1px solid var(--simple-rule); border-radius: 8px; } /* MOCK-HOOK */
+/* MOCK-HOOK: a table wider than its box shows a shade at the side that has more columns (covers that scroll with the table hide it at either end). */
+[data-ps1] .ps1-table { background: linear-gradient(to right, var(--surface) 40%, transparent) left / 32px 100% no-repeat local, linear-gradient(to left, var(--surface) 40%, transparent) right / 32px 100% no-repeat local, radial-gradient(farthest-side at 0 50%, rgb(0 0 0 / 0.22), transparent) left / 14px 100% no-repeat scroll, radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 0.22), transparent) right / 14px 100% no-repeat scroll, var(--surface); } /* MOCK-HOOK */
 [data-ps1] .ps1-table table { border-collapse: collapse; font-size: 15px; line-height: 1.45; min-width: 100%; } /* MOCK-HOOK */
 [data-ps1] .ps1-table th { text-align: left; font-weight: 650; background: var(--surface2, var(--bg)); color: var(--text); white-space: nowrap; } /* MOCK-HOOK */
-[data-ps1] .ps1-table :is(th, td) { padding: 8px 12px; border-bottom: 1px solid var(--simple-rule); vertical-align: top; min-width: 7em; } /* MOCK-HOOK */
+[data-ps1] .ps1-table :is(th, td) { padding: 8px 12px; border-bottom: 1px solid var(--simple-rule); vertical-align: top; min-width: 12em; } /* MOCK-HOOK */
+[data-ps1] .ps1-table :is(th, td):first-child { min-width: 4em; } /* MOCK-HOOK: an id or a name column stays narrow */
 [data-ps1] .ps1-table tr:last-child td { border-bottom: 0; } /* MOCK-HOOK */
 [data-ps1] .ps1-link { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 2px; } /* MOCK-HOOK */
 [data-ps1] .ps1-code { display: inline; padding: 0; margin: 0; border-radius: 3px; color: var(--accent-ink); font-weight: 600; text-decoration: none; background: transparent; text-align: left; cursor: pointer; } /* MOCK-HOOK */

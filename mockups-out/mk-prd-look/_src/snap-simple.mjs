@@ -36,11 +36,11 @@ let COST_SEC = process.env.SNAP_COST ?? "feature-f-9"; // a run of feature secti
 function frames(o) {
   const p = `${PAGE}?ps1=${o}`;
   const cost = {
-    a: { to: COST_SEC }, // the whole PRD under the page: a long scroll, the contents cut long names
+    a: { to: COST_SEC }, // the whole PRD under the page: a long scroll (the scrollbar's small thumb)
     b: { to: COST_SEC }, // cards take height: fewer sections on a screen
     c: { to: COST_SEC }, // folded sections: one more click to read each
     d: { to: "#ps1-rest" }, // what no question reads is a list of folds at the end
-    e: { to: HARD, across: true }, // the sheet is narrow: the widest table scrolls across inside the page
+    e: { to: LONG }, // the PDF's small type: tables set small to fit the sheet
   }[o];
   return [
     [`ps1-${o}-list-1512`, `/simple/one-pagers?ps1=${o}`, [1512, 900], { list: true }],
@@ -215,12 +215,6 @@ async function main() {
       }
       await page.waitForTimeout(1200);
       if (opts.to) await reveal(page, opts.to);
-      if (opts.across) {
-        await page.evaluate((k) => {
-          const box = [...document.querySelectorAll(`[data-ps1-sec="${k}"] .ps1-table`)].find((el) => el.scrollWidth > el.clientWidth + 8);
-          if (box) box.scrollLeft = box.scrollWidth;
-        }, HARD);
-      }
       if (opts.edit) {
         // Change wording: point at a "Not doing" line (else the first line), Edit, type the new words; Save when asked.
         const line = (await page.locator('[data-line^="not_doing-"]').count()) ? page.locator('[data-line^="not_doing-"]').nth(1) : page.locator("[data-line]").first();
