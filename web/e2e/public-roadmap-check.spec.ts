@@ -90,8 +90,11 @@ test("check the Public version, then share it with a passcode", async ({ page })
     await expect(shared.getByRole("heading", { name: stage })).toBeVisible();
   }
   await expect(shared.getByText("This roadmap shows our current plans.", { exact: false })).toBeVisible();
-  await expect(shared.getByText(/Shared .* · expires /)).toBeVisible();
+  // E-14: the header says when the link ends; the page's footer says only when it was shared.
+  await expect(page.getByTestId("shared-about")).toContainText(/Link ends [A-Z][a-z]{2} \d{1,2}, \d{4}/);
+  await expect(shared.getByText(/^Shared [A-Z][a-z]{2} \d{1,2}, \d{4}$/)).toBeVisible();
   const text = await shared.locator("body").innerText();
+  expect(text).not.toMatch(/expires/);
   for (const marker of MARKERS) expect(text).not.toContain(marker);
 });
 

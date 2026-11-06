@@ -13,7 +13,7 @@ import type { Schemas } from "@/lib/api/client";
 import { formatInZone } from "@/lib/dates";
 import { mockName as personName } from "./people";
 
-import { NO_GOAL_FLAG } from "./audience";
+import { NO_GOAL_FLAG, boardGroup, type BoardItem } from "./audience";
 import type { SectionSeed } from "./fixtures";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
@@ -762,23 +762,26 @@ const joinRow = (cells: string[]) => `| ${cells.join(" | ")} |`;
 /**
  * A section's text as a link holder reads it (qa-docs-12, qa-docs-13; as the API's render.reader_body): no
  * left-out line nor an item's no-goal flag, and in each table no column every row leaves empty and, under a goal group's heading, no Goal
- * column (it repeats the heading). The first column always stays.
+ * column (it repeats the heading). The first column always stays. A goal group's rows are Board's items of that group
+ * (`boardGroup`, by key), each card with its dates and delivery state (E-14).
  */
-export function readerBody(md: string, sectionKey: string): string {
+export function readerBody(md: string, sectionKey: string, items: BoardItem[] = []): string {
   const group = GROUP_KEY.test(sectionKey);
   const lines = (md ?? "").split("\n").filter((l) => !LEFT_OUT.test(l.trim()) && l.trim() !== NO_GOAL_FLAG);
   const out: string[] = [];
   for (let i = 0; i < lines.length; ) {
-    const head = lines[i].trim().startsWith("|") ? splitRow(lines[i]) : null;
+    const cols = lines[i].trim().startsWith("|") ? splitRow(lines[i]) : null;
     const delim = lines[i + 1]?.trim() ?? "";
-    if (!head || !/^\|?[\s:|-]+\|?$/.test(delim) || !delim.includes("-") || splitRow(delim).length !== head.length) {
+    if (!cols || !/^\|?[\s:|-]+\|?$/.test(delim) || !delim.includes("-") || splitRow(delim).length !== cols.length) {
       out.push(lines[i]);
       i += 1;
       continue;
     }
     let end = i + 2;
     while (end < lines.length && lines[end].trim().startsWith("|")) end += 1;
-    const rows = lines.slice(i + 2, end).map((l) => [...splitRow(l), ...head.map(() => "")]);
+    let rows = lines.slice(i + 2, end).map((l) => [...splitRow(l), ...cols.map(() => "")]);
+    let head = cols;
+    if (group) [head, rows] = withWhen(cols, rows, boardGroup(items, sectionKey));
     const keep = head
       .map((name, n) => ({ name: name.replace(/^[*\s]+|[*\s]+$/g, "").toLowerCase(), n }))
       .filter(({ name, n }) => n === 0 || (!(group && (name === "goal" || name === "goals")) && rows.some((r) => r[n].trim())))
@@ -789,10 +792,51 @@ export function readerBody(md: string, sectionKey: string): string {
   return out.join("\n").replace(/\n{3,}/g, "\n\n").replace(/^\n+|\n+$/g, "");
 }
 
+/** E-14: an item's delivery state as its card says it (as the API's render.STATE_WORDS). */
+const STATE_WORDS: Record<string, string> = { planned: "Planned", in_progress: "In progress", done: "Shipped" };
+
+/**
+ * E-14 (as the API's render._with_when): a goal group's item table as a link holder reads it: each item's name,
+ * when (its dates as Simple reads them, month first: "Oct 5 – Nov 20" or "Nov 20"; nothing when it has none, as the
+ * horizon is the heading above it), status (its delivery state: "Planned", "In progress", "Shipped"), its confidence
+ * in words ("High confidence"), then the other columns; the reader styles draw each row as a card. `items` are the
+ * group's, one per row (`boardGroup`); rows of another count read no item.
+ */
+function withWhen(head: string[], rows: string[][], items: BoardItem[]): [string[], string[][]] {
+  const names = head.map((h) => h.replace(/^[*\s]+|[*\s]+$/g, "").toLowerCase());
+  const sure = names.indexOf("confidence");
+  const rest = head.map((_, n) => n).filter((n) => n > 0 && n !== sure);
+  const words = (cell: string) => (cell.trim() ? `${cell.trim()[0].toUpperCase()}${cell.trim().slice(1)} confidence` : "");
+  const ofRow = items.length === rows.length ? items : rows.map(() => undefined);
+  return [
+    [head[0], "When", "Status", "Confidence", ...rest.map((n) => head[n])],
+    rows.map((r, k) => {
+      const item = ofRow[k];
+      const when = item ? (itemDates(item.start ?? null, item.end ?? null) ?? "") : "";
+      const status = item ? (STATE_WORDS[item.state ?? "planned"] ?? STATE_WORDS.planned) : "";
+      return [r[0], when, status, sure >= 0 ? words(r[sure]) : "", ...rest.map((n) => r[n])];
+    }),
+  ];
+}
+
+/** An item's dates, month first ("Oct 5 – Nov 20", "Nov 20"); the year only when the two fall in different years (as the API's render._dates). */
+function itemDates(start: string | null, end: string | null): string | null {
+  const parse = (d: string) => new Date(`${d.slice(0, 10)}T00:00:00Z`);
+  const md = (d: Date) => `${d.toLocaleString("en-US", { month: "short", timeZone: "UTC" })} ${d.getUTCDate()}`;
+  const s = start ? parse(start) : null;
+  const e = end ? parse(end) : null;
+  if (s && e && s < e) {
+    if (s.getUTCFullYear() !== e.getUTCFullYear()) return `${md(s)}, ${s.getUTCFullYear()} – ${md(e)}, ${e.getUTCFullYear()}`;
+    return `${md(s)} – ${md(e)}`;
+  }
+  const day = e ?? s;
+  return day ? md(day) : null;
+}
+
 /** An audience rendering's sections as a link holder reads them (`readerBody`). */
-export function readerSections<S extends { section_key: string; body_md: string; body_text: string }>(sections: S[]): S[] {
+export function readerSections<S extends { section_key: string; body_md: string; body_text: string }>(sections: S[], items: BoardItem[] = []): S[] {
   return sections.map((s) => {
-    const body = readerBody(s.body_md, s.section_key);
+    const body = readerBody(s.body_md, s.section_key, items);
     return body === s.body_md ? s : { ...s, body_md: body, body_text: body };
   });
 }
@@ -809,6 +853,15 @@ const READER_CSS =
   "th,td{word-break:normal;overflow-wrap:normal;hyphens:manual}" +
   "th:first-child,td:first-child{min-width:8rem}" +
   "@media (max-width:640px){body{margin:0;padding:0}table{display:block;overflow-x:auto;max-width:100%}}" +
+  // E-14: a goal group's items (name, when, status) are cards that fill the column, one to a row on a phone.
+  ".section-wide table{display:block;width:100%;max-width:100%;overflow:visible;border:0}" +
+  ".section-wide thead{display:none}" +
+  ".section-wide tbody{display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));gap:.6rem}" +
+  ".section-wide tr{display:flex;flex-direction:column;gap:.15rem;min-width:0;border:1px solid #d0d5dd;border-radius:8px;padding:.6rem .75rem}" +
+  ".section-wide td{display:block;border:0;padding:0;min-width:0!important}" +
+  ".section-wide td:first-child{font-weight:600}" +
+  ".section-wide td+td{font-size:.875rem;color:#475569}" +
+  ".section-wide td:empty{display:none}" +
   "@media (prefers-color-scheme:dark){html,body{background:#0f172a!important;color:#e2e8f0!important}" +
   "body *{color:inherit!important;background-color:transparent!important;border-color:#334155!important}" +
   "body a{color:#93c5fd!important}body th{background-color:#1e293b!important}}";
@@ -894,11 +947,13 @@ function showPage(ctx: SharesContext, link: LinkRow, kind: "page"): Response {
   // qa-docs-14: the same day as the header's (the status's expires_on), in its words; "by" only with a company name.
   const zone = ctx.zone?.() ?? "America/Los_Angeles";
   const by = ctx.company.trim() ? ` by ${ctx.company.trim()}` : "";
-  const footer = `Shared with you${by} on ${day(link.created_at, zone)} · link expires ${day(link.expires_at, zone)}`;
+  // E-14: the page's header says when the link ends; the footer does not say it again.
+  const footer = `Shared with you${by} on ${day(link.created_at, zone)}`;
   let content: string;
   if (link.audience === "public") {
     if (!publicChecked(ctx, doc, pub!)) content = page(UPDATING, `<p>${UPDATING}.</p>`);
-    else content = forReader(renderPublic(review(ctx, doc, v), `Shared ${day(link.created_at, zone)} · expires ${day(link.expires_at, zone)}`));
+    // E-14: the page's header says when the link ends; only the PDF (no header) says it too.
+    else content = forReader(renderPublic(review(ctx, doc, v), `Shared ${day(link.created_at, zone)}`));
   } else {
     content = forReader(ctx.renderAudience(doc, v, link.audience, true).replace("</body>", `<footer class="share-footer">${esc(footer)}</footer></body>`));
   }

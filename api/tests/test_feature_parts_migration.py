@@ -1,8 +1,8 @@
-"""Migration 0113_feature_parts (feature-parts).
+"""Migration 0115_feature_parts (feature-parts).
 
 Card: protects=roadmap_items.parent_key (nullable text, the key of the item a feature is
 part of) comes with the revision and goes with its downgrade, chained on
-0112_trash_features_goals as the single head; fails_when=the column is missing after the
+0114_trash_agenda_requests as the single head; fails_when=the column is missing after the
 upgrade, survives the downgrade, or the chain has two heads; no_claim=the change engine's
 use (tests/test_simple_feature_parts.py).
 
@@ -19,8 +19,8 @@ from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0113_feature_parts"
-PREVIOUS = "0112_trash_features_goals"
+REVISION = "0115_feature_parts"
+PREVIOUS = "0114_trash_agenda_requests"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_feature_parts")

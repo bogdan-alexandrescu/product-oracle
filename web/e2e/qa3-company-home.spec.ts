@@ -44,7 +44,8 @@ test.describe("at 1440", () => {
           kind: el.getAttribute("data-kind"),
         };
       });
-      expect(look).toEqual({ border: 0, clickable: false, kind: null });
+      // QA pass D-2: a link to the Inbox on its kind, still flat text, not a pill.
+      expect(look).toEqual({ border: 0, clickable: true, kind: null });
     }
   });
 

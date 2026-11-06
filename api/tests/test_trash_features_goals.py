@@ -45,6 +45,14 @@ Test cards (protects / fails_when / no_claim):
   Priorities' goal buckets: Restore keeps that feature's links as they are now and puts
   the feature still where the delete left it back on the restored goal;
   fails_when=Restore overwrites the move made since; no_claim=Undo of the move.
+- test_a_goal_in_trash_takes_no_set_goal_measure_or_edit: protects=a goal in Trash is
+  refused as a feature panel's new goal (set_goal, 422), as the goal whose measure the
+  panel changes (set_goal_measure, 422) and by Edit goal (PATCH, 404), and stays as it was;
+  fails_when=a write reaches a goal in Trash; no_claim=the web.
+- test_restore_of_a_goal_keeps_a_new_first_goal_set_since_the_delete: protects=a goal
+  deleted with its features moved to another goal, then a feature's goals reordered (the
+  same goals, a new first one): Restore keeps the reorder; fails_when=Restore takes the
+  same goals in another order as unchanged and puts the old links back; no_claim=the web.
 - test_a_new_feature_never_takes_a_trashed_key_and_restore_keeps_dependents: protects=a
   new feature never takes a trashed feature's key; Restore refuses (409) when a live item
   holds it anyway; restored, the item that depended on it points at it again;
@@ -955,3 +963,71 @@ async def test_restore_skips_a_version_that_can_no_longer_be_approved(client):
     r = await client.post(f"{ITEMS}/{victim}/restore", headers=w.ctx.as_("owner"))
     assert r.status_code == 200, r.text
     assert await _on_versions(w, "move_dates-b") == {1: 1, 3: 1}
+
+
+@pytest.mark.asyncio
+async def test_a_goal_in_trash_takes_no_set_goal_measure_or_edit(client):
+    w = await _world()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        other = await Seed(s).entity("goal", "fewer-tickets", position=2, metric="Tickets",
+                                     target_text="20", due="2027-02-26")  # fmt: skip
+        await s.commit()
+        other_id = str(other.id)
+    for gid in (other_id, w.goal_id):
+        r = await client.delete(f"{BUCKETS}/goals/{gid}", headers=w.ctx.as_("owner"))
+        assert r.status_code == 200, r.text
+
+    # The feature panel cannot give cut-b a goal in Trash.
+    body = {"op": "set_goal", "target": {"item_id": w.ids["cut-b"]},
+            "before": {"goal_id": None}, "after": {"goal_id": other_id}}  # fmt: skip
+    r = await client.post(CHANGES, json=body, headers=w.ctx.as_("owner"))
+    assert r.status_code == 422, r.text
+    # Nor change how cut-a's goal, now in Trash, is measured.
+    body = {"op": "set_goal_measure", "target": {"item_id": w.ids["cut-a"], "goal_id": w.goal_id},
+            "before": {"measure": "Rides", "target": "100", "due": "2027-03-31"},
+            "after": {"measure": "Trips"}}  # fmt: skip
+    r = await client.post(CHANGES, json=body, headers=w.ctx.as_("owner"))
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == "target.goal_id: the goal the item serves"
+    # Nor does Edit goal reach it.
+    edit = {"title": "Faster rides", "measure": "Trips", "target": "100", "due": "2027-03-31"}
+    r = await client.patch(f"{BUCKETS}/goals/{w.goal_id}", json=edit, headers=w.ctx.as_("owner"))
+    assert r.status_code == 404, r.text
+
+    async with tenant_session(w.ctx.tenant_id) as s:
+        g = await s.scalar(
+            select(Entity).where(Entity.id == uuid.UUID(w.goal_id)).execution_options(**ALL)
+        )
+        assert (g.attrs or {}).get("metric") == "Rides"
+        b = await s.get(RoadmapItem, uuid.UUID(w.ids["cut-b"]))
+        assert uuid.UUID(other_id) not in (b.goal_ids or [])
+
+
+@pytest.mark.asyncio
+async def test_restore_of_a_goal_keeps_a_new_first_goal_set_since_the_delete(client):
+    w = await Buckets().build()
+    grow, quiet = w.goals["grow"], w.goals["quiet"]
+    later = (await client.post(f"{BUCKETS}/goals", headers=w.as_("owner"), json=GOAL)).json()
+    later_id = later["goal"]["id"]
+    async with tenant_session(w.ctx.tenant_id) as s:
+        s.add(Edge(src_id=uuid.UUID(w.features["both"]), dst_id=uuid.UUID(later_id),
+                   type="supports", status="confirmed", origin="user",
+                   attrs={"contribution": 1}))  # fmt: skip
+        await s.commit()
+    assert (await w.links(client))["both"] == ["grow", "quiet", later_id]
+
+    r = await client.delete(f"{BUCKETS}/goals/{grow}", params={"to_goal_id": quiet},
+                            headers=w.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert (await w.links(client))["both"] == ["quiet", later_id]
+
+    # The same goals, a new first one: both is dropped on the later goal's bucket.
+    r = await client.post(f"{BUCKETS}/features/{w.features['both']}/move",
+                          headers=w.as_("owner"), json={"to_goal_id": later_id})  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert (await w.links(client))["both"] == [later_id, "quiet"]
+
+    r = await client.post(f"{BUCKETS}/goals/{grow}/restore", headers=w.as_("owner"))
+    assert r.status_code == 200, r.text
+    # The reorder made since stays.
+    assert (await w.links(client))["both"] == [later_id, "quiet"]

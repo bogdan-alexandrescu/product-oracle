@@ -8,8 +8,8 @@ keeps writing.
 Live-safe: adding a nullable column takes a short lock; the wait for it is capped
 (LOCK_TIMEOUT). The downgrade drops the column (every part is a feature of its own again).
 
-Revision ID: 0113_feature_parts
-Revises: 0112_trash_features_goals
+Revision ID: 0115_feature_parts
+Revises: 0114_trash_agenda_requests
 """
 
 from collections.abc import Sequence
@@ -17,8 +17,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0113_feature_parts"
-down_revision: str | None = "0112_trash_features_goals"
+revision: str = "0115_feature_parts"
+down_revision: str | None = "0114_trash_agenda_requests"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

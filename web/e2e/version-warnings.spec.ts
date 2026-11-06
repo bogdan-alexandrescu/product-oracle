@@ -29,7 +29,7 @@ test("the Warnings panel says what to do, and the date warning opens Plan › Da
   await openVersion(page);
   const date = warning(page, "unverified_date");
   await expect(date).toContainText("the date Dec 15, 2026");
-  await expect(date).toContainText("record a date basis on Plan › Dates");
+  await expect(date).toContainText("add a date source on Plan › Dates");
   await expect(date).toContainText('"Usage alerts PRD"');
   const citation = warning(page, "unknown_citation_item");
   await expect(citation).toContainText("a source item Oracle no longer has");

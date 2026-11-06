@@ -137,7 +137,7 @@ for (const phone of [false, true]) {
       await pastMeeting(page, true);
       const minutes = page.getByRole("region", { name: "Minutes" });
       await expect(minutes.getByRole("link", { name: "Should muted teams still get the weekly digest?", exact: true })).toBeVisible();
-      await expect(minutes).not.toContainText("D-3");
+      await expect(minutes).not.toContainText("D-8");
     });
 
     test("qa4-simple-decide-24: the sidebar says it lists this meeting's decisions", async ({ page }) => {
@@ -231,7 +231,7 @@ for (const phone of [false, true]) {
     test("qa4-simple-decide-39: a decision's link is named by its code and its words", async ({ page }) => {
       await pastMeeting(page);
       const taken = page.getByRole("list", { name: "Decisions taken" });
-      await expect(taken.getByRole("link", { name: /^D-4 Moved / })).toBeVisible();
+      await expect(taken.getByRole("link", { name: /^D-9 Moved / })).toBeVisible();
       await expect(taken.getByRole("link", { name: /^D-\d+$/ })).toHaveCount(0);
     });
 
