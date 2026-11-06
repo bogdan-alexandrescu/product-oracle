@@ -32,17 +32,17 @@ export const FRAMES = [
   { file: "ld1-d-viewer", url: M + "ld1=d&as=viewer", caption: "A viewer can pan and zoom but not move cards" },
   // LD2 a: arrows only for the picked card, counts on each card
   { file: "ld2-a-rest", url: M + "ld1=a&ld2=a", scrollSel: F3, caption: "At rest: no arrows; each card counts what it waits on (←) and what waits on it (→)" },
-  { file: "ld2-a-select", url: M + "ld1=a&ld2=a&sel=f3", scrollSel: F3, caption: "F-03 Renewal health score picked: what it waits on and what waits on it lit, across goals too; the rest dimmed" },
+  { file: "ld2-a-select", url: M + "ld1=a&ld2=a&sel=f3", scrollSel: F3, caption: "F-03 Renewal health score picked: what it waits on and what waits on it lit; the rest dimmed" },
   { file: "ld2-a-draw", url: M + "ld1=a&ld2=a&edit=1&st=draw&sel=f34", scrollSel: F24, caption: "Editing: dragging from F-34's edge dot onto F-24 draws the new arrow; F-24 lights up as the drop" },
   { file: "ld2-a-linked", url: M + "ld1=a&ld2=a&edit=1&st=linked&sel=f24", scrollSel: F24, caption: "Dropped: F-24 now waits on F-34, its arrows lit, with Undo" },
   { file: "ld2-a-arrow", url: M + "ld1=a&ld2=a&edit=1&st=arrow&sel=f3", scrollSel: F3, caption: "An arrow picked: it says which card waits on which, with Remove" },
   { file: "ld2-a-loop", url: M + "ld1=a&ld2=a&edit=1&st=loop&sel=f2", scrollSel: '[data-ld-card="f2"]', caption: "A loop refused: F-02 cannot wait on F-04; the reason is behind (i)" },
   { file: "ld2-a-commenter", url: M + "ld1=a&ld2=a&edit=1&st=linked&sel=f24&as=commenter", scrollSel: F24, caption: "A commenter's same drag: the ladder stays as it was, F-24 shows the suggestion and it goes to an approver" },
-  { file: "ld2-a-select-1512", url: M + "ld1=a&ld2=a&sel=f2", size: W, scrollSel: '[data-ld-card="f3"]', caption: "Hard case at 1512: F-02, the most waited-on feature, picked; its arrows reach into three goals" },
+  { file: "ld2-a-select-1512", url: M + "ld1=a&ld2=a&sel=f2", size: W, scrollSel: '[data-ld-card="f3"]', caption: "Hard case at 1512: F-02, the most waited-on feature, picked; its arrows reach into Goal 1 and Goal 4" },
   // LD2 b: all arrows drawn
   { file: "ld2-b-rest", url: M + "ld1=a&ld2=b", scrollSel: F3, caption: "Every dependency drawn as a thin arrow, all the time" },
   { file: "ld2-b-select", url: M + "ld1=a&ld2=b&sel=f3", scrollSel: F3, caption: "F-03 picked: its arrows lit on top of the rest" },
-  { file: "ld2-b-rest-1512", url: M + "ld1=a&ld2=b", size: W, scrollSel: '[data-ld-card="f22"]', caption: "Hard case at 1512: 55 arrows over 65 cards; arrows inside one column bow out over the next column's cards" },
+  { file: "ld2-b-rest-1512", url: M + "ld1=a&ld2=b", size: W, scrollSel: '[data-ld-card="f22"]', caption: "Hard case at 1512: 40 arrows over 65 cards; arrows inside one column bow out over the next column's cards" },
   { file: "ld2-b-viewer", url: M + "ld1=a&ld2=b&as=viewer", scrollSel: F3, caption: "A viewer sees every arrow; nothing to drag" },
   // LD2 c: chips, no arrows
   { file: "ld2-c-rest", url: M + "ld1=a&ld2=c", scrollSel: F3, caption: "No arrows: each card lists what it waits on as chips with the feature's code and name" },

@@ -6,7 +6,7 @@
       "code": "LD1",
       "name": "Ladder layout",
       "question": "Where does the ladder live, and how do goals, milestones and features stack?",
-      "common": "Invented data at real volume: 4 goals and a guardrail, 12 milestones, 65 features, 55 dependencies (some across goals), one feature serving two milestones, two with no goal, every status. Every proposal keeps the guardrail as a strip (never a goal card), joins no goal to another, shows each feature's code and name, status in colour (Done green, In progress blue, Planning and Backlog orange, Not on the eng board yet red) and its dates, month first. A feature is drawn once; its second milestone points to it. Clicking a feature opens the one feature panel as built (details, depends on and what depends on it, dates, goal and measure, all editable). There is no yearly goal box: Oracle has no goal above the goals, so the title and its one line sit there.",
+      "common": "Invented data at real volume: 4 goals and a guardrail, 12 milestones, 65 features, 40 dependencies (some across goals), one feature serving two milestones, two with no goal, every status. Every proposal keeps the guardrail as a strip (never a goal card), joins no goal to another, shows each feature's code and name, status in colour (Done green, In progress blue, Planning and Backlog orange, Not on the eng board yet red) and its dates, month first. A feature is drawn once; its second milestone points to it. Clicking a feature opens the one feature panel as built (details, depends on and what depends on it, dates, goal and measure, all editable). A phone shows one goal at a time, its milestones with their features under them, the same in every proposal (frame ld1-a-phone). There is no yearly goal box: Oracle has no goal above the goals, so the title and its one line sit there.",
       "proposals": [
         {
           "letter": "a",
@@ -134,7 +134,7 @@
           "name": "Arrows for the picked card",
           "recommended": true,
           "what": "No arrows at rest: each card counts what it waits on (←2) and what waits on it (3→). Picking a card lights its arrows both ways, across goals too, and dims the rest. While editing, a picked card shows a dot on its edge: drag from it onto another card to add the link. Pick an arrow to see which card waits on which, with Remove.",
-          "why": "With 55 links on 65 cards only the picked card's arrows stay readable; the counts still flag the busy cards at rest, and the drag from a dot is the board's own gesture.",
+          "why": "With 40 links on 65 cards only the picked card's arrows stay readable; the counts still flag the busy cards at rest, and the drag from a dot is the board's own gesture.",
           "plus": "Clean scoreboard at rest; the links of one card read at a glance, across goals; adding is one drag.",
           "cost": "A link is seen only by picking a card; a printout shows counts, not arrows. Web: an arrow layer measured from the cards, the edge dot and the arrow pop-up. API: no new op; set_depends adds and removes, and the loop check the change engine has refuses the loop.",
           "frames": [
@@ -144,7 +144,7 @@
             },
             {
               "file": "frames/ld2-a-select.html",
-              "caption": "F-03 Renewal health score picked: what it waits on and what waits on it lit, across goals too; the rest dimmed"
+              "caption": "F-03 Renewal health score picked: what it waits on and what waits on it lit; the rest dimmed"
             },
             {
               "file": "frames/ld2-a-draw.html",
@@ -168,7 +168,7 @@
             },
             {
               "file": "frames/ld2-a-select-1512.html",
-              "caption": "Hard case at 1512: F-02, the most waited-on feature, picked; its arrows reach into three goals"
+              "caption": "Hard case at 1512: F-02, the most waited-on feature, picked; its arrows reach into Goal 1 and Goal 4"
             }
           ]
         },
@@ -178,7 +178,7 @@
           "recommended": false,
           "what": "Every dependency drawn as a thin arrow all the time; picking a card lights its own.",
           "plus": "Every link is on the page with no click; reads like the board's arrows.",
-          "cost": "55 arrows over 65 cards: links inside one column bow over the next column's cards and the page reads as a net at 1440 and 1512. Web: the same arrow layer as a. API: none new (set_depends).",
+          "cost": "40 arrows over 65 cards: links inside one column bow over the next column's cards and the page reads as a net at 1440 and 1512. Web: the same arrow layer as a. API: none new (set_depends).",
           "frames": [
             {
               "file": "frames/ld2-b-rest.html",
@@ -190,7 +190,7 @@
             },
             {
               "file": "frames/ld2-b-rest-1512.html",
-              "caption": "Hard case at 1512: 55 arrows over 65 cards; arrows inside one column bow out over the next column's cards"
+              "caption": "Hard case at 1512: 40 arrows over 65 cards; arrows inside one column bow out over the next column's cards"
             },
             {
               "file": "frames/ld2-b-viewer.html",
