@@ -13,7 +13,7 @@ import type { Schemas } from "@/lib/api/client";
 import { formatInZone } from "@/lib/dates";
 import { mockName as personName } from "./people";
 
-import { NO_GOAL_FLAG, type BoardItem } from "./audience";
+import { NO_GOAL_FLAG, boardGroup, type BoardItem } from "./audience";
 import type { SectionSeed } from "./fixtures";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
@@ -762,11 +762,11 @@ const joinRow = (cells: string[]) => `| ${cells.join(" | ")} |`;
 /**
  * A section's text as a link holder reads it (qa-docs-12, qa-docs-13; as the API's render.reader_body): no
  * left-out line nor an item's no-goal flag, and in each table no column every row leaves empty and, under a goal group's heading, no Goal
- * column (it repeats the heading). The first column always stays.
+ * column (it repeats the heading). The first column always stays. A goal group's rows are Board's items of that group
+ * (`boardGroup`, by key), each card with its dates and delivery state (E-14): its When and Status columns stay.
  */
 export function readerBody(md: string, sectionKey: string, items: BoardItem[] = []): string {
   const group = GROUP_KEY.test(sectionKey);
-  const when = group ? sectionKey.split("-group-")[0] : undefined;
   const lines = (md ?? "").split("\n").filter((l) => !LEFT_OUT.test(l.trim()) && l.trim() !== NO_GOAL_FLAG);
   const out: string[] = [];
   for (let i = 0; i < lines.length; ) {
@@ -781,10 +781,10 @@ export function readerBody(md: string, sectionKey: string, items: BoardItem[] = 
     while (end < lines.length && lines[end].trim().startsWith("|")) end += 1;
     let rows = lines.slice(i + 2, end).map((l) => [...splitRow(l), ...cols.map(() => "")]);
     let head = cols;
-    if (when) [head, rows] = withWhen(cols, rows, when, items);
+    if (group) [head, rows] = withWhen(cols, rows, boardGroup(items, sectionKey));
     const keep = head
       .map((name, n) => ({ name: name.replace(/^[*\s]+|[*\s]+$/g, "").toLowerCase(), n }))
-      .filter(({ name, n }) => n === 0 || (!(group && (name === "goal" || name === "goals")) && rows.some((r) => r[n].trim())))
+      .filter(({ name, n }) => n === 0 || (group && (n === 1 || n === 2)) || (!(group && (name === "goal" || name === "goals")) && rows.some((r) => r[n].trim())))
       .map(({ n }) => n);
     out.push(joinRow(keep.map((n) => head[n])), "|" + "---|".repeat(keep.length), ...rows.map((r) => joinRow(keep.map((n) => r[n]))));
     i = end;
@@ -792,27 +792,29 @@ export function readerBody(md: string, sectionKey: string, items: BoardItem[] = 
   return out.join("\n").replace(/\n{3,}/g, "\n\n").replace(/^\n+|\n+$/g, "");
 }
 
-const HORIZON_WORDS: Record<string, string> = { now: "Now", next: "Next", later: "Later" };
+/** E-14: an item's delivery state as its card says it (as the API's render.STATE_WORDS). */
+const STATE_WORDS: Record<string, string> = { planned: "Planned", in_progress: "In progress", done: "Shipped" };
 
 /**
  * E-14 (as the API's render._with_when): a goal group's item table as a link holder reads it: each item's name,
- * when (its own dates, month first: "Oct 5 – Nov 20" or "Nov 20"; its horizon only when it has none), status (its
- * delivery state: "In progress", "Planned"), its confidence in words ("High confidence"), then the other columns;
- * the reader styles draw each row as a card.
+ * when (its dates as Simple reads them, month first: "Oct 5 – Nov 20" or "Nov 20"; nothing when it has none, as the
+ * horizon is the heading above it), status (its delivery state: "Planned", "In progress", "Shipped"), its confidence
+ * in words ("High confidence"), then the other columns; the reader styles draw each row as a card. `items` are the
+ * group's, one per row (`boardGroup`); rows of another count read no item.
  */
-function withWhen(head: string[], rows: string[][], horizon: string, items: BoardItem[]): [string[], string[][]] {
+function withWhen(head: string[], rows: string[][], items: BoardItem[]): [string[], string[][]] {
   const names = head.map((h) => h.replace(/^[*\s]+|[*\s]+$/g, "").toLowerCase());
   const sure = names.indexOf("confidence");
   const rest = head.map((_, n) => n).filter((n) => n > 0 && n !== sure);
   const words = (cell: string) => (cell.trim() ? `${cell.trim()[0].toUpperCase()}${cell.trim().slice(1)} confidence` : "");
-  const byTitle = new Map(items.map((i) => [i.title.trim().toLowerCase(), i]));
-  const stage = COLUMNS.find(([key]) => key === HORIZON_STAGE[horizon])?.[1] ?? "";
+  const ofRow = items.length === rows.length ? items : rows.map(() => undefined);
   return [
     [head[0], "When", "Status", "Confidence", ...rest.map((n) => head[n])],
-    rows.map((r) => {
-      const item = byTitle.get(r[0].replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace("\u2691", "").trim().toLowerCase());
-      const when = item ? itemDates(item.start ?? null, item.end ?? null) : null;
-      return [r[0], when ?? HORIZON_WORDS[horizon] ?? horizon, item?.shipped ? "Shipped" : stage, sure >= 0 ? words(r[sure]) : "", ...rest.map((n) => r[n])];
+    rows.map((r, k) => {
+      const item = ofRow[k];
+      const when = item ? (itemDates(item.start ?? null, item.end ?? null) ?? "") : "";
+      const status = item ? (STATE_WORDS[item.state ?? "planned"] ?? STATE_WORDS.planned) : "";
+      return [r[0], when, status, sure >= 0 ? words(r[sure]) : "", ...rest.map((n) => r[n])];
     }),
   ];
 }
