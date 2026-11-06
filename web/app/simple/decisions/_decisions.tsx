@@ -17,6 +17,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { calendarDay, useCompanyZone } from "@/lib/dates";
 import { zoneName } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
+import { useWaitingList, WaitingRow } from "@/components/simple/WaitingItems";
 
 import { DeliveryLine, emailWords, slackWords } from "../meetings/_delivery";
 import { DecidedItem, LINK, momentWords } from "../meetings/_flow";
@@ -243,16 +244,29 @@ function QuestionList({ d, actions, filtered, onClear }: { d: Schemas["SimpleDec
   const mine = open.filter((x) => x.waiting_for_me && x.status === "proposed" && (x.can.decide || x.can.propose));
   const others = open.filter((x) => !mine.includes(x));
   const shown = all ? mine : mine.slice(0, FIRST);
+  // home-waiting-one-list: and everything else that waits on me, from the one list Home reads
+  // (run stops, broken links, dates, drafts, proposals, goal suggestions), each with its action;
+  // the filters narrow the PRDs' questions only, so these show unfiltered.
+  const waiting = useWaitingList();
+  const extra = filtered ? [] : (waiting.data?.items ?? []).filter((i) => i.kind !== "question");
+  const count = Math.min(d.waiting_count, mine.length) + extra.length;
   return (
     <>
-      <QuestionCard label="Waiting for you" testId="questions-mine" questions={mine.length ? mine : open} count={Math.min(d.waiting_count, mine.length)} source>
-        {mine.length === 0 ? (
-          <p className="simple-meta">
-            Nothing waits on you. {filtered && <ClearFilters onClear={onClear} />}
-          </p>
+      <QuestionCard label="Waiting for you" testId="questions-mine" questions={mine.length ? mine : open} count={count} source>
+        {mine.length === 0 && extra.length === 0 ? (
+          !filtered && !waiting.data && !waiting.error ? (
+            <p className="simple-meta" role="status">
+              Loading what waits on you…
+            </p>
+          ) : (
+            <p className="simple-meta">
+              Nothing waits on you. {filtered && <ClearFilters onClear={onClear} />}
+            </p>
+          )
         ) : (
           <ul>
             {shown.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} />)}
+            {extra.map((i) => <WaitingRow key={i.key} item={i} />)}
           </ul>
         )}
         {mine.length > FIRST && (

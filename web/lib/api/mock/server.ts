@@ -187,6 +187,7 @@ import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections,
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
+import { waitingItems } from "./waiting-list";
 import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience, spansRow, type BoardItem } from "./audience";
 import {
   draftPublicTexts,
@@ -7437,6 +7438,18 @@ if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_API_MOCKS === "1") 
   };
 }
 
+/** GET /v1/simple/decisions/waiting with `items` (./waiting-list.ts), as the signed-in person reads each route. */
+async function withWaitingItems(db: Db, req: Request, res: Response): Promise<Response> {
+  const out = (await res.json()) as Schemas["SimpleDecisionsWaitingOut"];
+  const get = async (path: string) => {
+    const r = await route(db, new Request(new URL(path, req.url), { headers: req.headers }));
+    if (!r.ok) throw new Error(path);
+    return r.json();
+  };
+  const me = (await get("/v1/me").catch(() => undefined)) as { user_id?: string; role?: string } | undefined;
+  return json(200, { ...out, items: await waitingItems(get, me?.user_id ?? "", out.questions, me?.role ?? "") });
+}
+
 export async function mockFetch(req: Request): Promise<Response> {
   // Every call, in order: tests count them (Home's call budget).
   const url = new URL(req.url);
@@ -7455,7 +7468,9 @@ export async function mockFetch(req: Request): Promise<Response> {
   const next = queue.then(async () => {
     const db = load();
     const marks = db.webhooks?.hooks.length ? runMarks(db.runs?.runs) : null;
-    const res = await route(db, req);
+    let res = await route(db, req);
+    // home-waiting-one-list: the waiting list's items, read from the routes each kind lives on.
+    if (req.method === "GET" && url.pathname === "/v1/simple/decisions/waiting" && res.ok) res = await withWaitingItems(db, req, res);
     // I1: the runs' changes this call made, as webhook events (./webhooks.ts).
     if (marks) await captureRunChanges(webhooksDeliveryContext(db), marks, db.runs?.runs);
     // S9: a meeting chat's poll (every 2 s, in each attendee's tab) writes nothing, so it never

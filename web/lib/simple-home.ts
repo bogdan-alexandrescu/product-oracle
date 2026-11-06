@@ -120,6 +120,23 @@ export type BrokenLink = { item: Item; flag: Schemas["SimpleFlag"]; dependency: 
 
 export const isBrokenLink = (f: Schemas["SimpleFlag"]): boolean => f.state === "red" && f.fixes.length > 0;
 
+/** The dates an item stores (typed or accepted), as the change engine compares them; null for the others. */
+export function storedDates(i: Item): { start_date: string | null; end_date: string | null } {
+  const own = (d: Schemas["SimpleDate"]) => (d.source === "typed" || d.source === "accepted" ? d.date : null);
+  return { start_date: own(i.start), end_date: own(i.end) };
+}
+
+/** A broken link's one-click fixes (Home's broken-links card, Decisions' broken-link rows). */
+export type FixOp = "shift_dependents" | "move_dependency" | "accept_risk";
+
+/** A broken link's fix as one change through the engine (POST /v1/simple/changes). */
+export function fixChange(b: BrokenLink, op: FixOp, note = ""): Schemas["SimpleChangeIn"] {
+  const dep = b.dependency;
+  return op === "accept_risk"
+    ? { op, target: { item_id: b.item.id, flag: b.flag.kind, subject: b.flag.subject }, before: { risk: null }, after: { risk: { note: note.trim() } } }
+    : { op, target: { item_id: b.item.id, subject: b.flag.subject }, before: { [b.item.id]: storedDates(b.item), ...(dep ? { [dep.id]: storedDates(dep) } : {}) } };
+}
+
 export function brokenLinks(roadmap: Roadmap | undefined): BrokenLink[] {
   if (!roadmap) return [];
   const byId = new Map(roadmap.items.map((i) => [i.id, i]));
