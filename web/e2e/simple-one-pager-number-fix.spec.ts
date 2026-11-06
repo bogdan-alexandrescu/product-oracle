@@ -18,6 +18,10 @@ import { expect, test, type Page } from "./test";
  *   the item waits for approval with Withdraw; the owner reads the proposal on the item and
  *   accepts it, and the item leaves; fails_when=the approver's click writes the PRD, or the
  *   owner cannot accept it there.
+ * - protects=each fix in the working draft is listed ("Fixed: set to 6 in “Not this
+ *   quarter”") with its own Undo, after a reload too, and a count in words stays in words
+ *   ("Six features"); Undo of one leaves the other (fix round 2); fails_when=the draft bar
+ *   says "2 changes" and nothing lists them, or only the latest fix has an Undo.
  * - protects=a viewer reads no fix; fails_when=a viewer is offered "Use 6".
  */
 
@@ -37,7 +41,12 @@ async function setUp(page: Page, scheme: "light" | "dark", scenario = "", meetin
   await page.emulateMedia({ colorScheme: scheme });
 }
 
+const FIXED_COUNT = "Fixed: set to 6 in “Not this quarter”";
+const FIXED_PER = "Fixed: set to 200 in “Targets”";
+
 const look = (page: Page) => page.getByRole("region", { name: "Needs a look" });
+const fixed = (page: Page) => look(page).getByTestId("needs-look-fixed").getByRole("status");
+const fixedItem = (page: Page, text: string) => look(page).getByTestId("needs-look-fixed").filter({ hasText: text });
 const item = (page: Page, text: string) => look(page).getByRole("listitem").filter({ has: page.getByTestId("needs-look-line").getByText(text, { exact: true }) });
 
 for (const phone of [false, true]) {
@@ -57,11 +66,35 @@ for (const phone of [false, true]) {
         if (phone) expect((await use.boundingBox())!.height).toBeGreaterThanOrEqual(44);
         await use.click();
         await expect(look(page).getByTestId("needs-look-line")).toHaveText([PER]);
-        await expect(look(page).getByRole("status")).toHaveText("Set to 6");
+        await expect(fixed(page)).toHaveText([FIXED_COUNT]);
         await look(page).getByRole("button", { name: "Undo" }).click();
         await expect(look(page).getByTestId("needs-look-line")).toHaveText([COUNT, PER]);
         await expect(item(page, COUNT).getByRole("button", { name: "Use 6" })).toBeVisible();
-        await expect(look(page).getByRole("status")).toHaveCount(0);
+        await expect(fixed(page)).toHaveCount(0);
+      });
+
+      test(`each fix stays listed with its Undo after a reload (${where})`, async ({ page }) => {
+        await setUp(page, scheme);
+        await login(page);
+        await page.goto(URL);
+        await expect(page.locator("html")).toHaveAttribute("data-theme", scheme);
+        await item(page, COUNT).getByRole("button", { name: "Use 6" }).click();
+        await expect(fixed(page)).toHaveText([FIXED_COUNT]);
+        await item(page, PER).getByRole("button", { name: "Use 200" }).click();
+        await expect(look(page).getByTestId("needs-look-line")).toHaveCount(0);
+        // Both fixes are listed, each with its Undo; the draft bar counts them.
+        await expect(fixed(page)).toHaveText([FIXED_COUNT, FIXED_PER]);
+        await expect(page.getByRole("status", { name: "Working draft" })).toContainText("2 changes");
+        // A reload reads them from the draft: still listed, each with its Undo.
+        await page.reload();
+        await expect(fixed(page)).toHaveText([FIXED_COUNT, FIXED_PER]);
+        await expect(look(page).getByRole("button", { name: "Undo" })).toHaveCount(2);
+        // The section reads the count in words, as it was written.
+        await expect(page.getByText("Six features wait for next quarter.").first()).toBeAttached();
+        await fixedItem(page, FIXED_COUNT).getByRole("button", { name: "Undo" }).click();
+        await expect(look(page).getByTestId("needs-look-line")).toHaveText([COUNT]);
+        await expect(fixed(page)).toHaveText([FIXED_PER]);
+        await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
       });
 
       test(`an approver proposes the fix and the owner accepts it on the item (${where})`, async ({ page }) => {

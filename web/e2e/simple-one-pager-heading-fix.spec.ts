@@ -1,6 +1,7 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { THEME_KEY } from "../lib/theme";
-import { login } from "./helpers";
+import { MOCK_MEETINGS_KEY } from "../lib/api/mock/simple-meetings";
+import { login, signOut } from "./helpers";
 import { expect, test, type Page } from "./test";
 
 /**
@@ -16,6 +17,11 @@ import { expect, test, type Page } from "./test";
  *   in its outline, under the same section link; fails_when=the heading item has no fix, the
  *   fix leaves the heading as it was, or the next version keeps "8 items"; no_claim=the op's
  *   own rules (api tests/test_simple_one_pager_numbers.py).
+ * - protects=an approver who owns the PRD's track sends the heading fix as a proposal (the
+ *   PRD has a decider, Dana Decider): the item waits for approval and the heading is as it
+ *   was; the owner reads the proposal on the item and accepts it, and the one-pager lists
+ *   the fix in the draft, with no Undo (the fix is the approver's); fails_when=the proposal
+ *   writes the heading, or the owner cannot accept it there.
  */
 
 const URL = "/simple/one-pagers/guided-setup";
@@ -49,7 +55,7 @@ for (const phone of [false, true]) {
         // Use 6, then Undo: the item comes back with its fix.
         await item(page, HEAD).getByRole("button", { name: "Use 6" }).click();
         await expect(look(page).getByTestId("needs-look-line")).toHaveText([PER]);
-        await expect(look(page).getByRole("status")).toHaveText("Set to 6: “Later · 6 items”");
+        await expect(look(page).getByRole("status")).toHaveText("Fixed: set to 6 in “Later · 6 items”");
         await look(page).getByRole("button", { name: "Undo" }).click();
         await expect(look(page).getByTestId("needs-look-line")).toHaveText([HEAD, PER]);
 
@@ -57,7 +63,7 @@ for (const phone of [false, true]) {
         const use = item(page, HEAD).getByRole("button", { name: "Use 6" });
         if (phone) expect((await use.boundingBox())!.height).toBeGreaterThanOrEqual(44);
         await use.click();
-        await expect(look(page).getByRole("status")).toHaveText("Set to 6: “Later · 6 items”");
+        await expect(look(page).getByRole("status")).toHaveText("Fixed: set to 6 in “Later · 6 items”");
         await expect(look(page).getByTestId("needs-look-line")).toHaveText([PER]);
         await bar(page).getByRole("button", { name: "Send for approval…" }).click();
         const dialog = page.getByTestId("send-for-approval");
@@ -77,6 +83,38 @@ for (const phone of [false, true]) {
         await expect(contents.getByText("Later · 8 items")).toHaveCount(0);
         await entry.click();
         await expect(page.getByRole("region", { name: "Later · 6 items" }).getByRole("heading", { name: "Later · 6 items" })).toBeVisible();
+      });
+
+      test(`an approver proposes the heading fix and the owner accepts it (${where})`, async ({ page }) => {
+        await page.context().addInitScript(
+          ([sKey, mKey, tKey, t]) => {
+            localStorage.setItem(sKey, "one-pager-heading-count");
+            localStorage.setItem(mKey, "track-owner");
+            localStorage.setItem(tKey, t);
+          },
+          [MOCK_SCENARIO_KEY, MOCK_MEETINGS_KEY, THEME_KEY, scheme] as const,
+        );
+        await page.emulateMedia({ colorScheme: scheme });
+        await login(page, "approver@example.com");
+        await page.goto(URL);
+        await expect(page.locator("html")).toHaveAttribute("data-theme", scheme);
+        await item(page, HEAD).getByRole("button", { name: "Use 6" }).click();
+        await expect(item(page, HEAD).getByTestId("needs-look-proposal")).toHaveText("Waiting for approval");
+        await expect(item(page, HEAD).getByRole("button", { name: "Withdraw" })).toBeVisible();
+        // The owner signs in on the same page (the rail's account menu, desktop-wide).
+        const size = page.viewportSize()!;
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await page.goto("/home");
+        await signOut(page);
+        await login(page);
+        await page.setViewportSize(size);
+        await page.goto(URL);
+        await expect(item(page, HEAD).getByTestId("needs-look-proposal")).toHaveText(/ proposes 6$/);
+        await item(page, HEAD).getByRole("button", { name: "Accept" }).click();
+        await expect(look(page).getByTestId("needs-look-line")).toHaveText([PER]);
+        await expect(look(page).getByTestId("needs-look-fixed")).toHaveText("Fixed: set to 6 in “Later · 6 items”");
+        // The fix was the approver's: the owner reads it without an Undo.
+        await expect(look(page).getByTestId("needs-look-fixed").getByRole("button", { name: "Undo" })).toHaveCount(0);
       });
     });
   }
