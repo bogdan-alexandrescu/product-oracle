@@ -541,3 +541,21 @@ def test_r4_the_mock_leaves_code_out_as_the_api_does():
         if got != (api := deck_module.code_left_out(body, "H"))
     ]
     assert not wrong, "\n\n".join(f"{b!r}\n api: {a!r}\nmock: {m!r}" for b, a, m in wrong)
+
+
+# PR 1300 review round 5: a list marker alone on its line, its code on the next, keeps the
+# code line in that item: never an empty bullet with the code after it.
+ON_NEXT_LINE = {
+    "fence": "-\n  ```\n  ship the carts\n  ```\n- then check",
+    "ordered": "1.\n   ```\n   ship the carts\n   ```\n2. then check",
+    "quoted": "> -\n>   ```\n>   ship the carts\n>   ```\n> - then check",
+}
+
+
+@pytest.mark.parametrize("body", ON_NEXT_LINE.values(), ids=ON_NEXT_LINE.keys())
+def test_r5_code_under_a_bare_list_marker_stays_in_its_item(body):
+    out = deck_module.code_left_out(body, HREF)
+    html = render_module._markdown().render(out)
+    items = [re.sub(r"<[^>]+>", "", x).strip() for x in re.findall(r"<li>(.*?)</li>", html, re.S)]
+    assert items == ["Code: 1 line, in the full PRD", "then check"], (out, html)
+    assert "ship the carts" not in out and "<pre" not in html
