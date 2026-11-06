@@ -8,7 +8,8 @@ import { expect, test } from "./test";
  * Card one-pager-present-slides: protects = Present shows one block a slide (the problem,
  * what we build, outcomes, not doing, risks), then the timeline on its own slide; the
  * arrow keys and Space page them, the count says where you are, the type is larger than
- * the page's, the Next and Previous buttons page them too, and Stop presenting ends it;
+ * the page's, the Next and Previous buttons page them too, a feature named on the timeline
+ * slide opens the feature panel over it, and Stop presenting ends it;
  * fails_when = Present is the same page without its menu, the keys do nothing, or the
  * timeline sits below the fold; no_claim = the browser's own full-screen frame.
  */
@@ -58,6 +59,15 @@ for (const phone of [false, true]) {
         await expect(page.getByRole("button", { name: "Previous slide" })).toBeInViewport();
         await expect(page.getByRole("button", { name: "Next slide" })).toBeDisabled();
         await page.keyboard.press("ArrowRight");
+        await expect(count).toHaveText("6 / 6");
+        // A feature named on the timeline slide opens the one feature panel, over the slide.
+        await slide.getByText("Setup checklist", { exact: true }).first().click();
+        await expect(page.getByTestId("item-panel")).toBeVisible();
+        await expect(page.getByTestId("item-panel")).toBeInViewport();
+        // Escape closes the panel and keeps presenting.
+        await page.keyboard.press("Escape");
+        await expect(page.getByTestId("item-panel")).toHaveCount(0);
+        await expect(page.getByTestId("one-pager")).toHaveAttribute("data-presenting", "true");
         await expect(count).toHaveText("6 / 6");
 
         await page.getByRole("button", { name: "Stop presenting" }).click();
