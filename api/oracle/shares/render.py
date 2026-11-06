@@ -188,13 +188,66 @@ def for_reader(html: str) -> str:
     return style + html
 
 
-def reader_body(body_md: str, section_key: str, items: Sequence[ItemView] = ()) -> str:
+# G-3: a goal code ("G1") or a tracker key ("ENG-512") as the roadmap's words write it.
+_CODE = re.compile(r"(?<![\w(-])(G-?\d+|[A-Z][A-Z0-9]{1,9}-\d+)(?![\w)-])")
+
+
+def with_names(text: str, names: dict[str, str]) -> str:
+    """G-3: each code ``names`` knows read by its name with the code beside it ("Activation
+    (G1)"); a code already beside its name (the Goals list's "G1 Activation") stays."""
+
+    def named(m: re.Match) -> str:
+        name = names.get(m.group(1))
+        if not name or name == m.group(1) or text[m.end() :].lstrip().startswith(name):
+            return m.group(0)
+        return name if m.group(1) in name else f"{name} ({m.group(1)})"
+
+    return _CODE.sub(named, text) if names else text
+
+
+async def code_names(db, texts: Sequence[str]) -> dict[str, str]:
+    """G-3: the name of each goal code and tracker key ``texts`` write: the goal's title
+    (its key, any case, with or without the dash) and the tracker issue's title."""
+    from oracle.baseline.models import Entity
+    from oracle.roadmap.models import TrackerRecord
+
+    codes = {m.group(1) for t in texts for m in _CODE.finditer(t or "")}
+    if not codes:
+        return {}
+    out: dict[str, str] = {}
+    refs = [c for c in codes if not re.fullmatch(r"G-?\d+", c)]
+    if refs:
+        rows = await db.execute(
+            select(TrackerRecord.external_ref, TrackerRecord.title).where(
+                TrackerRecord.external_ref.in_(refs), TrackerRecord.title.is_not(None)
+            )
+        )
+        out.update({ref: title for ref, title in rows if title})
+    goals = {c.replace("-", "").lower(): c for c in codes if re.fullmatch(r"G-?\d+", c)}
+    if goals:
+        rows = await db.execute(
+            select(Entity.key, Entity.title).where(Entity.type == "goal", Entity.title.is_not(None))
+        )
+        for key, title in rows:
+            code = goals.get((key or "").replace("-", "").lower())
+            if code and title:
+                out[code] = title
+    return out
+
+
+def reader_body(
+    body_md: str,
+    section_key: str,
+    items: Sequence[ItemView] = (),
+    names: dict[str, str] | None = None,
+) -> str:
     """A section's text as a link holder reads it (qa-docs-12, qa-docs-13): no left-out
     line (the company's note on what it left out) nor an item's no-goal flag, and in each
     table no column every row leaves empty and, under a goal group's heading, no Goal
     column (it repeats the heading). The first column always stays. A goal group's rows
     are Board's items of that group (:func:`variants.board_group`, by key), each card
-    with its dates and delivery state (E-14)."""
+    with its dates and delivery state (E-14). Each code ``names`` knows reads by its name
+    (:func:`with_names`, G-3)."""
     from oracle.roadmap import variants
 
     group = variants.spans_row(section_key)
@@ -232,7 +285,7 @@ def reader_body(body_md: str, section_key: str, items: Sequence[ItemView] = ()) 
         out.append("|" + "---|" * len(keep))
         out += [variants._join_row([r[n] for n in keep]) for r in rows]
         i = end
-    return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip("\n")
+    return with_names(re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip("\n"), names or {})
 
 
 # E-14: an item's delivery state (oracle.simple.service delivery) as its card says it.
@@ -284,7 +337,7 @@ def _with_footer(html: str, footer: str) -> str:
     return html + footer
 
 
-def _for_link_holder(ev):
+def _for_link_holder(ev, names: dict[str, str] | None = None):
     """The export as a link holder may see it: no citation, no Sources appendix, no
     evidence link (the render then has nothing to number or list)."""
     from oracle.export.render import sources_keys
@@ -296,7 +349,9 @@ def _for_link_holder(ev):
         for s in sections:
             if s.section_key in appendix:
                 continue
-            s.body_md = reader_body(strip_citations(s.body_md or ""), s.section_key, ev.items)
+            s.body_md = reader_body(
+                strip_citations(s.body_md or ""), s.section_key, ev.items, names
+            )
             s.citation_keys = []
             out.append(s)
         return out
@@ -381,11 +436,14 @@ async def render_share(ctx: ShareContext, fmt: str = "html") -> str | bytes:
         # The items' goal groups are read from the baseline at render time: a goal renamed
         # or unconfirmed since makes a new key, so the page regroups (owner decision
         # 2026-10-26).
-        key = (ctx.publication_id, ctx.audience, fmt, variants.render_key(ev.items))
+        # G-3: the names its codes read by are part of what it shows.
+        names = await code_names(db, [s.body_md or "" for s in ev.all_sections])
+        key = (ctx.publication_id, ctx.audience, fmt, variants.render_key(ev.items),
+               tuple(sorted(names.items())))  # fmt: skip
         if key in _cache and fmt == "html":
             await db.commit()
             return for_reader(_with_footer(str(_cache[key]), footer))
-        ev = _for_link_holder(detached(ev))
+        ev = _for_link_holder(detached(ev), names)
         await db.commit()  # no connection held while it waits for the pool
     if fmt == "html":
         html = await _on_pool(ctx, _render_audience, ev, "html")
