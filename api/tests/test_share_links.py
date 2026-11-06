@@ -25,7 +25,14 @@ from oracle.shares.models import ShareLink, ShareLinkView
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
 from tests.coverage_helpers import run_headers
-from tests.test_export_audience import OWNER_MARK, REVENUE_MARK, SLUG, _text, seed_roadmap
+from tests.test_export_audience import (
+    OWNER_MARK,
+    REVENUE_MARK,
+    SECTIONS,
+    SLUG,
+    _text,
+    seed_roadmap,
+)
 from tests.test_public_texts import MARKERS, approve_both
 from tests.test_public_texts import seed as seed_public
 
@@ -97,6 +104,22 @@ async def opened(client, token: str, passcode: str = PASSCODE) -> dict[str, str]
     resp = await unlock(client, token, passcode)
     assert resp.status_code == 303, resp.text
     return {"Cookie": cookie_of(resp)}
+
+
+# The roadmap's own words name goals and tracker issues by code (G-3).
+SECTIONS_WITH_CODES = [
+    (k, lv, h, b)
+    if k not in ("now-csv-parser", "risks")
+    else (
+        k,
+        lv,
+        h,
+        "Parse every column. Serves G1. ENG-413 tracks it."
+        if k == "now-csv-parser"
+        else "| Item | Depends on |\n|---|---|\n| Bulk import | ENG-413 |",
+    )
+    for k, lv, h, b in SECTIONS
+]
 
 
 # --- unit ------------------------------------------------------------------------------
@@ -1100,3 +1123,41 @@ async def test_the_footer_ends_on_the_headers_day_in_its_words(client, ctx):
     # E-14: the page's header says when the link ends; the footer does not say it again.
     assert "expires" not in text and got["expires_on"] not in text, text
     assert re.search(r" on [A-Z][a-z]{2} \d{1,2}, \d{4}$", text.strip()), text
+
+
+async def test_a_link_holder_reads_each_code_beside_its_name(client, ctx):
+    """protects=G-3: on a shared roadmap a goal reads by its name with its code beside it,
+    and a tracker issue (an item's or a dependency's) by its title with its key beside it;
+    fails_when=the page reads "Serves G1.", "ENG-413 tracks it" or a Depends on cell of a
+    bare key; no_claim=codes the company has no goal or tracker record for."""
+    from oracle.roadmap.models import TrackerRecord
+
+    await seed_roadmap(ctx, publish=True, sections=SECTIONS_WITH_CODES)
+    async with tenant_session(ctx.tenant_id) as s:
+        csv = await s.scalar(select(TrackerRecord).where(TrackerRecord.external_ref == "ENG-413"))
+        csv.title = "Parse uploaded files"
+        await s.commit()
+    token = token_of((await create(client, ctx, "owner", audience="engineering")).json())
+    page = await client.get(f"{PUBLIC}/{token}", headers=await opened(client, token))
+    assert page.status_code == 200, page.text
+    shown = _text(page.text)
+    assert "Serves Activation (G1)." in shown
+    assert "Parse uploaded files (ENG-413) tracks it." in shown
+    assert re.search(r"Bulk import\s*\|?\s*Parse uploaded files \(ENG-413\)", shown), shown
+    assert "Serves G1" not in shown and " ENG-413 tracks" not in shown
+    # The goals list already names each goal beside its code.
+    assert "G1 Activation" in shown and "Activation (G1) Activation" not in shown
+
+
+def test_a_code_with_no_name_known_is_left_as_written():
+    """protects=G-3: the reader rewrites only codes it has a name for, once; fails_when=an
+    unknown key is changed or a named one is wrapped twice."""
+    from oracle.shares.render import reader_body
+
+    names = {"G1": "Activation", "ENG-413": "Parse uploaded files"}
+    got = reader_body("Serves G1. ENG-413 and ENG-999 track it. G12 too.", "now-x", names=names)
+    assert (
+        got
+        == "Serves Activation (G1). Parse uploaded files (ENG-413) and ENG-999 track it. G12 too."
+    )
+    assert reader_body(got, "now-x", names=names) == got
