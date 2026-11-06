@@ -34,6 +34,17 @@ Test cards (protects / fails_when / no_claim):
   leave it out while it is in Trash; with a goal picked its features move there; either
   way Restore puts every link (id, attrs, status, origin, created_at) and every item's
   goal_ids back exactly; fails_when=a feature or an item loses its goal; no_claim=the web.
+- test_restore_of_a_goal_keeps_a_goal_set_since_the_delete: protects=a goal deleted with
+  its features moved to another goal, then one item given a third goal in its panel
+  (set_goal): Restore leaves that item on the third goal and puts the item still where
+  the delete left it back on the restored goal; fails_when=Restore overwrites the goal
+  set since or leaves the untouched item on the goal the delete moved it to;
+  no_claim=the web.
+- test_restore_of_a_goal_keeps_a_feature_moved_since_the_delete: protects=a goal deleted
+  with its features moved to another goal, then one feature moved to a third goal in
+  Priorities' goal buckets: Restore keeps that feature's links as they are now and puts
+  the feature still where the delete left it back on the restored goal;
+  fails_when=Restore overwrites the move made since; no_claim=Undo of the move.
 - test_a_new_feature_never_takes_a_trashed_key_and_restore_keeps_dependents: protects=a
   new feature never takes a trashed feature's key; Restore refuses (409) when a live item
   holds it anyway; restored, the item that depended on it points at it again;
@@ -64,7 +75,8 @@ from oracle.simple.models import SimpleDraft
 from oracle.tenancy import tenant_session
 from oracle.trash import service as trash_service
 from oracle.trash.filter import INCLUDE_TRASHED
-from tests.test_simple_changes_api import World, clock, make_people  # noqa: F401
+from tests.test_simple_changes_api import CHANGES, World, clock, make_people  # noqa: F401
+from tests.test_simple_goal_buckets_api import GOAL
 from tests.test_simple_goal_buckets_api import URL as BUCKETS
 from tests.test_simple_goal_buckets_api import World as Buckets
 from tests.test_simple_roadmap_api import Seed
@@ -391,6 +403,65 @@ async def test_delete_a_goal_and_restore_keep_links_and_item_goals_exactly(clien
     items = await _items(client, w)
     assert items["cut-a"]["goal_ids"] == [w.goal_id]
     assert items["cut-a"]["goal"]["id"] == w.goal_id
+
+
+@pytest.mark.asyncio
+async def test_restore_of_a_goal_keeps_a_goal_set_since_the_delete(client):
+    w = await _world()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        seed = Seed(s)
+        moved_to = await seed.entity("goal", "fewer-tickets", position=2)
+        later = await seed.entity("goal", "happier-riders", position=3)
+        b = await s.get(RoadmapItem, uuid.UUID(w.ids["cut-b"]))
+        b.goal_ids = [uuid.UUID(w.goal_id)]
+        await s.commit()
+        to_id, later_id = str(moved_to.id), str(later.id)
+
+    r = await client.delete(f"{BUCKETS}/goals/{w.goal_id}", params={"to_goal_id": to_id},
+                            headers=w.ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    items = await _items(client, w)
+    assert items["cut-a"]["goal_ids"] == [to_id] and items["cut-b"]["goal_ids"] == [to_id]
+
+    # The feature panel gives cut-a another goal while the deleted one is in Trash.
+    body = {"op": "set_goal", "target": {"item_id": w.ids["cut-a"]},
+            "before": {"goal_id": to_id}, "after": {"goal_id": later_id}}  # fmt: skip
+    r = await client.post(CHANGES, json=body, headers=w.ctx.as_("owner"))
+    assert r.status_code == 201, r.text
+    assert r.json()["change"]["status"] == "applied"
+    assert (await _items(client, w))["cut-a"]["goal_ids"] == [later_id]
+
+    r = await client.post(f"{BUCKETS}/goals/{w.goal_id}/restore", headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    items = await _items(client, w)
+    # The goal set since stays; the item still where the delete left it goes back.
+    assert items["cut-a"]["goal_ids"] == [later_id]
+    assert items["cut-a"]["goal"]["id"] == later_id
+    assert items["cut-b"]["goal_ids"] == [w.goal_id]
+
+
+@pytest.mark.asyncio
+async def test_restore_of_a_goal_keeps_a_feature_moved_since_the_delete(client):
+    w = await Buckets().build()
+    grow, quiet = w.goals["grow"], w.goals["quiet"]
+    r = await client.delete(f"{BUCKETS}/goals/{grow}", params={"to_goal_id": quiet},
+                            headers=w.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert await w.links(client) == {"solo": ["quiet"], "both": ["quiet"]}
+
+    # Priorities' goal buckets move solo onto a new goal while the deleted one is in Trash.
+    later = (await client.post(f"{BUCKETS}/goals", headers=w.as_("owner"), json=GOAL)).json()
+    later_id = later["goal"]["id"]
+    r = await client.post(f"{BUCKETS}/features/{w.features['solo']}/move",
+                          headers=w.as_("owner"),
+                          json={"from_goal_id": quiet, "to_goal_id": later_id})  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert (await w.links(client))["solo"] == [later_id]
+
+    r = await client.post(f"{BUCKETS}/goals/{grow}/restore", headers=w.as_("owner"))
+    assert r.status_code == 200, r.text
+    # The move made since stays; the feature still where the delete left it goes back.
+    assert await w.links(client) == {"solo": [later_id], "both": ["grow", "quiet"]}
 
 
 @pytest.mark.asyncio

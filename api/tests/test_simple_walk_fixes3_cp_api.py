@@ -6,7 +6,8 @@ Test cards (protects / fails_when / no_claim):
 - test_every_op_has_a_plain_sentence: protects=every op of the change engine
   (schemas.ChangeOp) reads as a sentence with who, what and the item's code and name, "·
   undone" once undone, never the op's internal name; fails_when=an op has no sentence of
-  its own (it falls back to "changed <item>") or shows its op name; no_claim=the web's
+  its own (it falls back to "changed <item>") or shows its op name, or a goal op
+  (archive_goal, delete_goal, unarchive_goal) misses the goal's title; no_claim=the web's
   layout (web/e2e/simple-walk-fixes3-cp.spec.ts).
 - test_change_list_says_an_undone_estimate_in_words: protects=GET /v1/simple/changes
   gives each change its plain words, as Home's "Since your last visit" shows them: "<who>
@@ -37,6 +38,7 @@ from tests.test_simple_priorities_api import World as PriorityWorld
 from tests.test_simple_targets_api import no_llm  # noqa: F401
 
 ITEM = "F-08 Billing page"
+GOAL = "Grow weekly sign-ups"
 
 
 def test_every_op_has_a_plain_sentence():
@@ -54,7 +56,12 @@ def test_every_op_has_a_plain_sentence():
                                       status="applied", undone=True)  # fmt: skip
         assert words.startswith("Ana ") and words.endswith(" · undone"), (op, words)
         assert "_" not in words, (op, words)
-    item_ops = [op for op in ops if op not in ("edit_line", "add_feature_ask")
+    # A goal op names the goal by its title, not the item (change_words.phrase).
+    goal_ops = ("archive_goal", "delete_goal", "unarchive_goal")
+    assert set(goal_ops) <= set(ops)
+    for op in goal_ops:
+        assert GOAL in change_words.phrase(op, {"title": GOAL}, {}, {}, ITEM), op
+    item_ops = [op for op in ops if op not in ("edit_line", "add_feature_ask", *goal_ops)
                 and "key_date" not in op]  # fmt: skip
     for op in item_ops:
         assert ITEM in change_words.phrase(op, {}, {}, {}, ITEM), op
