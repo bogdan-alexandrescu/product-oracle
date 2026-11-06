@@ -1,9 +1,9 @@
 /**
  * The API's unknown_goal sentence (oracle.priorities.run_order._check_new_goals): "Gift wrap
- * choice names the goal g.no-such-goal, which is not a goal in the baseline: ...". The key
+ * choice names the goal g.no-such-goal, which is not a goal of the Ground Truth: ...". The key
  * is all the run gave, so it has no name to show.
  */
-const UNKNOWN_GOAL_TEXT = /^(.*? names )the goal (\S+), (which is not a goal in the baseline.*)$/;
+const UNKNOWN_GOAL_TEXT = /^(.*? names )the goal (\S+), (which is not a goal of the Ground Truth.*)$/;
 
 /** The sentence's parts around the goal key, or null when it names no unknown goal. */
 export function unknownGoalParts(message: string): { before: string; key: string; after: string } | null {

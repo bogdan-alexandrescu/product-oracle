@@ -155,9 +155,9 @@ test.describe("at 1440", () => {
     const blocker = page.getByTestId("home-inspector").getByTestId("inspector-blocker-row").first();
     await expect(blocker).toBeVisible();
     const resolve = blocker.getByRole("link", { name: /^Resolve/ });
-    await expect(resolve).toHaveAttribute("href", /^\/baseline\?tab=blockers&blocker=/);
+    await expect(resolve).toHaveAttribute("href", /^\/ground-truth\?tab=blockers&blocker=/);
     await resolve.click();
-    await expect(page).toHaveURL(/\/(baseline|ground-truth)\?tab=blockers&blocker=/);
+    await expect(page).toHaveURL(/\/ground-truth\?tab=blockers&blocker=/);
   });
 
   test("D-5: a viewer's blocker row says Open", async ({ page }) => {
@@ -165,7 +165,7 @@ test.describe("at 1440", () => {
     const blocker = page.getByTestId("home-inspector").getByTestId("inspector-blocker-row").first();
     await expect(blocker).toBeVisible();
     await expect(blocker.getByRole("link", { name: /^Resolve/ })).toHaveCount(0);
-    await expect(blocker.getByRole("link", { name: /^Open/ })).toHaveAttribute("href", /^\/baseline\?tab=blockers&blocker=/);
+    await expect(blocker.getByRole("link", { name: /^Open/ })).toHaveAttribute("href", /^\/ground-truth\?tab=blockers&blocker=/);
   });
 
   test("D-7: a failed setup load shows Try again where Set up goes", async ({ page }) => {

@@ -356,7 +356,7 @@ export function GroundTruthFlags({
                       <InfoTip label={s.name}>{f.words}</InfoTip>
                     </span>
                     {waiting ? (
-                      <Link href={asks(f) ? "/baseline?tab=proposals" : "/simple/roadmap"} data-testid="gt-pending" className="block text-[13px] text-accent-ink underline">
+                      <Link href={asks(f) ? "/ground-truth?tab=proposals" : "/simple/roadmap"} data-testid="gt-pending" className="block text-[13px] text-accent-ink underline">
                         Waiting for an approver
                       </Link>
                     ) : unconfirmed ? (
