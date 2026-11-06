@@ -194,6 +194,9 @@ class ItemView:
     economics: dict[str, Any] = field(default_factory=dict)
     # [(issue key, url or None)] from the tracker records of the item's track.
     tracker: list[tuple[str, str | None]] = field(default_factory=list)
+    # Each of those records' title by its issue key: the only titles a link holder's page
+    # may name a key by (oracle.shares.render.code_names).
+    tracker_titles: dict[str, str] = field(default_factory=dict)
     # From the item's feature-to-goal link (oracle.launches.tiers): the goal it serves
     # best, or none.
     goals: list[str] = field(default_factory=list)

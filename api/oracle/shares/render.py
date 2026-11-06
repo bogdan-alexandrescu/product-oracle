@@ -26,7 +26,7 @@ import re
 import urllib.parse
 import uuid
 from collections import OrderedDict
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, datetime
 from types import SimpleNamespace
@@ -191,33 +191,44 @@ def for_reader(html: str) -> str:
 # G-3: a goal code ("G1") or a tracker key ("ENG-512") as the roadmap's words write it.
 _CODE = re.compile(r"(?<![\w(-])(G-?\d+|[A-Z][A-Z0-9]{1,9}-\d+)(?![\w)-])")
 
-# A name spliced into the text reads as written: no table column, link or emphasis of its own.
-_MARKDOWN = re.compile(r"[\\|*_\[\]`<>]")
+# A name spliced into the text reads as written, on one line: no table column, heading, link,
+# emphasis or strikethrough of its own.
+_MARKDOWN = re.compile(r"[\\|*_\[\]`<>~]")
 
 _GOAL_LINE = re.compile(r"^\s*[-*]\s*(G-?\d+)\b[\s.:]+(\S.*?)\s*$", re.M)
 
 
 def with_names(text: str, names: dict[str, str]) -> str:
     """G-3: each code ``names`` knows read by its name with the code beside it ("Activation
-    (G1)"); a code already beside its name (the Goals list's "G1 Activation") stays."""
+    (G1)"); a code already beside its name (the Goals list's "G1 Activation") stays, as does
+    one inside its own name ("Issue ENG-413"), so a second pass changes nothing. A name
+    reads on one line: each whitespace run in it is one space."""
 
     def named(m: re.Match) -> str:
-        name = names.get(m.group(1))
-        if not name or name == m.group(1) or text[m.end() :].lstrip().startswith(name):
+        code = m.group(1)
+        name = " ".join(names.get(code, "").split())
+        if not name or name == code or text[m.end() :].lstrip().startswith(name):
             return m.group(0)
         shown = _MARKDOWN.sub(r"\\\g<0>", name)
-        return shown if m.group(1) in name else f"{shown} ({m.group(1)})"
+        if code not in name:
+            return f"{shown} ({code})"
+        before, _, after = shown.partition(code)
+        if text[: m.start()].endswith(before) and text[m.end() :].startswith(after):
+            return m.group(0)
+        return shown
 
     return _CODE.sub(named, text) if names else text
 
 
-async def code_names(db, texts: Sequence[str], items: Sequence[ItemView] = ()) -> dict[str, str]:
+async def code_names(
+    db, texts: Sequence[str], items: Sequence[ItemView] = (), item_fields: Collection[str] = ()
+) -> dict[str, str]:
     """G-3: the name of each goal code and tracker key ``texts`` write: the confirmed
     goal's title (its key, any case, with or without the dash) and the tracker issue's
-    title when the version's own ``items`` carry its record (the keys the page already
+    title from the very record one of the version's own ``items`` carries, when the
+    audience's ``item_fields`` show the items' tracker keys (the keys the page already
     shows through an item). A link holder reads no more than the page shows."""
     from oracle.baseline.models import Entity
-    from oracle.roadmap.models import TrackerRecord
 
     codes = {m.group(1) for t in texts for m in _CODE.finditer(t or "")}
     if not codes:
@@ -229,15 +240,9 @@ async def code_names(db, texts: Sequence[str], items: Sequence[ItemView] = ()) -
         for t in texts
         for m in _GOAL_LINE.finditer(t or "")
     }
-    carried = {ref for item in items for ref, _ in item.tracker}
-    refs = [c for c in codes if c in carried]
-    if refs:
-        rows = await db.execute(
-            select(TrackerRecord.external_ref, TrackerRecord.title).where(
-                TrackerRecord.external_ref.in_(refs), TrackerRecord.title.is_not(None)
-            )
-        )
-        out.update({ref: title for ref, title in rows if title})
+    if "tracker" in item_fields:
+        for item in items:
+            out.update({k: v for k, v in item.tracker_titles.items() if k in codes and v})
     goals = {c.replace("-", "").lower(): c for c in codes if re.fullmatch(r"G-?\d+", c)}
     if goals:
         rows = await db.execute(
@@ -454,7 +459,12 @@ async def render_share(ctx: ShareContext, fmt: str = "html") -> str | bytes:
         # or unconfirmed since makes a new key, so the page regroups (owner decision
         # 2026-10-26).
         # G-3: the names its codes read by are part of what it shows.
-        names = await code_names(db, [s.body_md or "" for s in ev.all_sections], ev.items)
+        names = await code_names(
+            db,
+            [s.body_md or "" for s in ev.all_sections],
+            ev.items,
+            variants.VARIANTS[ctx.audience].item_fields,
+        )
         key = (ctx.publication_id, ctx.audience, fmt, variants.render_key(ev.items),
                tuple(sorted(names.items())))  # fmt: skip
         if key in _cache and fmt == "html":
