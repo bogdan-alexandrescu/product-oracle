@@ -51,6 +51,11 @@ It gives each feature its mark:
 
 - Every roadmap item is a Ground Truth feature or a slice of one (F-15a, F-15b: one slice per
   milestone the feature spans).
+- An item matches by code too: an item linked to no feature whose own code (F-02) or whose
+  slice's feature (F-15, for F-15a) is a Ground Truth feature's code is in the Ground Truth
+  and is not flagged. A feature a run only proposed does not count, so its items are flagged.
+- A slice's code: its section's (F-15b), else the next letter no other slice of that feature
+  has (an item of a PRD feature over several milestones, after an F-15b item: F-15c).
 - Its goal, what it depends on, its effort and its mark come from the Ground Truth.
 - Its dates come from its date sources or from Oracle's estimate.
 - A feature that runs today leaves the roadmap.
@@ -70,7 +75,7 @@ check's `action`, with the button's words):
 
 | Kind | What it means | Fixes |
 | --- | --- | --- |
-| `unlinked_item` | A roadmap item linked to no feature | Add to Ground Truth (`add_to_ground_truth`), Link to a feature (`link_to_feature`) |
+| `unlinked_item` | A roadmap item linked to no feature, whose code (or slice's feature's code) no Ground Truth feature has | Add to Ground Truth (`add_to_ground_truth`), Link to a feature (`link_to_feature`) |
 | `unlinked_item` | A roadmap item linked to a feature a run proposed but no approver confirmed | Confirm it (`confirm_feature`), Link to a feature (`link_to_feature`) |
 | `slice_parent_missing` | A roadmap slice item (F-15a, or an item of a PRD feature over several milestones) linked to no feature, whose feature (F-15) is not in the Ground Truth | Add to Ground Truth (adds F-15), Link to a feature (links the item) |
 | `prd_feature_missing` | A feature of a PRD's approved version whose code no Ground Truth feature has, or that has no code | Add to Ground Truth, Link to a feature |
@@ -84,6 +89,7 @@ button's words.
 - One missing feature is one flag of its own: a PRD feature over two milestones is one
   `prd_feature_missing`, never also a `slice_parent_missing` per milestone. A roadmap slice
   item of a feature the PRD flags already is an `unlinked_item`, with its slice code (F-15a).
+- A PRD's feature code is read as an F-code: "f-15" and the number 15 are F-15.
 - A PRD's feature with the name of a Ground Truth feature but another code is still flagged,
   with the hint "Same name as F-05 Bulk import." and that feature to link to.
 - An item can carry two flags: `unlinked_item` and `runs_today_on_roadmap` both flag an item

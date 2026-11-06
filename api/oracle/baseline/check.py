@@ -7,7 +7,9 @@ Truth entries by code. Anything that breaks this is allowed (no save is refused)
 here, each flag with one plain sentence and the fixes a person can make in the UI:
 
 - ``unlinked_item``: a roadmap item linked to no Ground Truth feature (none, or one a run
-  only proposed: then "Confirm it" confirms that feature, beside "Link to a feature");
+  only proposed: then "Confirm it" confirms that feature, beside "Link to a feature"); an
+  item linked to none whose own code (F-02) or whose slice's feature (F-15 of F-15a) is a
+  Ground Truth feature's code is in it, by code, and not flagged;
 - ``slice_parent_missing``: a roadmap slice item (section F-15a, or an item of a PRD feature
   over several milestones) linked to no feature, whose feature (F-15) is not in the Ground
   Truth; one flagged as ``prd_feature_missing`` already is an ``unlinked_item`` instead, so
@@ -77,6 +79,18 @@ FIX_WORDS = {
     "pick_goal": "Pick a goal",
     "take_off_roadmap": "Take it off the roadmap",
 }
+
+
+def _plan_code(raw: Any) -> str:
+    """A PRD plan feature's code as an F-code ("f-15" and 15 read "F-15"), "" for none."""
+    from oracle.simple.priorities import PRD_SECTION_CODE, prd_code
+
+    if isinstance(raw, int) and not isinstance(raw, bool):
+        return f"F-{raw:02d}"
+    code = raw.strip() if isinstance(raw, str) else ""
+    if code.isdigit():
+        return f"F-{int(code):02d}"
+    return (prd_code(code) or code) if PRD_SECTION_CODE.fullmatch(code) else code
 
 
 def _doc(d: Document | None) -> GroundTruthDoc | None:
@@ -225,7 +239,7 @@ async def run(db: AsyncSession) -> GroundTruthOut:
         for f in data.get("features") or []:
             if not isinstance(f, dict):
                 continue
-            code = str(f.get("code") or "").strip()
+            code = _plan_code(f.get("code"))
             name = str(f.get("name") or "").strip() or code
             if code:
                 spans[(prd.id, code)] = len([m for m in f.get("milestones") or [] if m])
@@ -246,19 +260,24 @@ async def run(db: AsyncSession) -> GroundTruthOut:
                 like=ref(like) if like is not None else None,
             )
 
-    # Each roadmap slice item: its code (F-15a) and its feature's (F-15).
+    # Each roadmap slice item: its code (F-15a) and its feature's (F-15). An item of a PRD
+    # feature over several milestones takes the next letter no slice item has (F-15c after
+    # an F-15b item).
     slice_of: dict[uuid.UUID, tuple[str, str]] = {}
-    seen: dict[tuple[uuid.UUID | None, str], int] = {}
+    taken: dict[tuple[uuid.UUID | None, str], set[str]] = {}
     for i in items:
         if m := SLICE_SECTION.fullmatch((i.prd_section_key or "").strip()):
             parent = f"{m.group(1).upper()}-{m.group(2)}"
             slice_of[i.id] = (f"{parent}{m.group(3).lower()}", parent)
-        elif (code := prd_code(i.prd_section_key)) and spans.get(
-            (i.prd_document_id, code),
-            0,  # type: ignore[arg-type]
-        ) > 1:
-            n = seen[(i.prd_document_id, code)] = seen.get((i.prd_document_id, code), -1) + 1
-            slice_of[i.id] = (f"{code}{LETTERS[min(n, len(LETTERS) - 1)]}", code)
+            taken.setdefault((i.prd_document_id, parent), set()).add(m.group(3).lower())
+    for i in items:
+        code = prd_code(i.prd_section_key)
+        key = (i.prd_document_id, code or "")
+        if code and spans.get(key, 0) > 1:  # type: ignore[arg-type]
+            used = taken.setdefault(key, set())
+            letter = next((x for x in LETTERS if x not in used), LETTERS[-1])
+            used.add(letter)
+            slice_of[i.id] = (f"{code}{letter}", code)
 
     def item_ref(i: RoadmapItem) -> GroundTruthRef:
         code = slice_of[i.id][0] if i.id in slice_of else prd_code(i.prd_section_key)
@@ -270,6 +289,9 @@ async def run(db: AsyncSession) -> GroundTruthOut:
         linked = by_id.get(i.feature_id) if i.feature_id is not None else None
         target = str(i.id)
         parent = slice_of[i.id][1] if i.id in slice_of else None
+        # In the Ground Truth by code: its own (F-02) or its slice's feature's (F-15).
+        if linked is None and {parent, item_ref(i).code} & truth_codes:
+            continue
         if (
             linked is None
             and parent is not None
