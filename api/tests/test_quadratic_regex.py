@@ -160,3 +160,28 @@ def test_source_words_check_is_linear_on_link_openers(unit, lines):
     for md in texts:
         sections = parse_draft(md).sections
         _fast(lambda sections=sections, md=md: source_words.check(sections, md), limit=1.0)
+
+
+def _heading_shapes():
+    return {
+        "spaces": lambda i: f"## S{i} x" + " " * 15_000 + f"y {{#s{i}}}",
+        "openers": lambda i: f"## S{i} " + "{#" * 7_000 + f" {{#s{i}}}",
+    }
+
+
+@pytest.mark.parametrize("shape", sorted(_heading_shapes()))
+@pytest.mark.parametrize("kind", ["issue", "source"])
+def test_source_words_check_is_linear_on_long_headings(shape, kind):
+    make = _heading_shapes()[shape]
+    body = "See be#1357.\n" if kind == "issue" else "- docs/notes.md\n"
+    key = "" if kind == "issue" else "sources-"
+    parts = []
+    for i in range(50):
+        head = make(i).replace(f"{{#s{i}}}", f"{{#{key}s{i}}}")
+        parts.append(f"{head}\n\n{body}")
+    md = PRD + "\n" + "\n".join(parts)
+    sections = parse_draft(md).sections
+    assert sum(1 for s in sections if s.section_key.endswith(f"s{49}")) == 1
+    found = source_words.check(sections, md)
+    assert found
+    _fast(lambda: source_words.check(sections, md), limit=1.0)
