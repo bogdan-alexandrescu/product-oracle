@@ -19,6 +19,7 @@ import { numbersOf } from "@/components/PrdLook";
 import { useOpenFeature } from "@/components/simple/OpenFeature";
 import { api, unwrap, type Schemas, type SectionOut } from "@/lib/api/client";
 import { buildCodeIndex, splitCodes, type CodeIndex } from "@/lib/code-index";
+import { calendarDay } from "@/lib/dates";
 import { parseBlocks, type Inline } from "@/lib/markdown";
 import { useQuery } from "@/lib/use-query";
 
@@ -187,7 +188,7 @@ export function Ps1Summary({ v }: { v: View }) {
   const metrics = v.blocks.find((b) => b.key === "outcomes")?.lines.filter((l) => l.metric).slice(0, 2) ?? []; // MOCK-HOOK
   const count = (k: string) => v.blocks.find((b) => b.key === k)?.lines.length ?? 0; // MOCK-HOOK
   const next = [...v.timeline].filter((t) => t.end).sort((a, b) => String(a.end).localeCompare(String(b.end)))[0]; // MOCK-HOOK
-  const md = (iso?: string | null) => (iso ? new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : ""); // MOCK-HOOK
+  const md = (iso?: string | null) => (iso ? calendarDay(iso, { month: "short", day: "numeric", year: "numeric" }) : ""); // MOCK-HOOK
   return (
     <div className="ps1-summary simple-noprint" role="list" aria-label="This PRD in numbers">
       {metrics.map((l) => (

@@ -312,7 +312,6 @@ function findSec(secs: MkSec[], keys: string[], re: RegExp): MkSec | undefined {
   const full = (s: MkSec) => /[\p{L}\p{N}]/u.test(s.body); // MOCK-HOOK
   return keys.map((k) => secs.find((s) => s.key === k && full(s))).find(Boolean) ?? secs.find((s) => re.test(s.heading) && full(s)); // MOCK-HOOK
 }
-const CODE = /\b([A-Z]{1,3}-\d+)\b/; // MOCK-HOOK
 /** MOCK-HOOK: the PRD's features: "F-7 Parts used on the job…" from its features list, else its feature sections. */
 export function mkFeatures(secs: MkSec[]): { code: string; name: string; key: string }[] {
   const list = findSec(secs, ["features"], /prioriti[sz]ed features|^features$/i); // MOCK-HOOK
