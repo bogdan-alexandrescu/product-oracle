@@ -43,6 +43,7 @@ from datetime import date
 import pytest
 
 from oracle import company_time
+from oracle.auth.models import User
 from oracle.roadmap.models import RoadmapItem
 from oracle.tenancy import tenant_session
 from tests.test_simple_changes_api import CHANGES, make_people
@@ -285,7 +286,13 @@ async def test_panel_goal_measure_change(client):
 
 
 async def test_goal_measure_conflict_names_the_last_in_one_instant(client):
-    p = await Panel().build(await make_people())
+    ctx = await make_people()
+    async with tenant_session(ctx.tenant_id) as s:
+        ctx.users["second"] = User(email="second.owner@example.com", name="Sam Second",
+                                   password_hash="x", role="owner")  # fmt: skip
+        s.add(ctx.users["second"])
+        await s.commit()
+    p = await Panel().build(ctx)
     goal = (await p.read(client))["a"]["goal"]
     seen = {"measure": goal["metric"], "target": goal["target"], "due": goal["due"]}
     first = {"measure": "Monthly payers", "target": "800 payers", "due": "2027-06-30"}
@@ -296,13 +303,14 @@ async def test_goal_measure_conflict_names_the_last_in_one_instant(client):
                 "before": before, "after": after}  # fmt: skip
         return await client.post(CHANGES, json=body, headers=p.ctx.as_(who))
 
-    # The clock is pinned: the owner, then the decider, set the measure in one instant.
+    # The clock is pinned: two owners set the measure, one after the other, in one instant.
     assert (await post(seen, first, "owner")).status_code == 201
-    assert (await post(first, second, "decider")).status_code == 201
+    r = await post(first, second, "second")
+    assert r.status_code == 201 and r.json()["change"]["status"] == "applied", r.text
     stale = await post(seen, {"measure": "Daily payers", "target": None, "due": None}, "owner")
     assert stale.status_code == 409, stale.text
-    assert stale.json()["detail"]["changed_by"]["id"] == str(p.ctx.users["decider"].id)
-    assert "changed by Dee Cider" in stale.json()["detail"]["message"]
+    assert stale.json()["detail"]["changed_by"]["id"] == str(p.ctx.users["second"].id)
+    assert "changed by Sam Second" in stale.json()["detail"]["message"]
 
 
 async def test_panel_depends_keys_must_name_something(client):
