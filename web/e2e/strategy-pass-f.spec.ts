@@ -145,9 +145,9 @@ test("pass F: phone, a tapped stack row opens its details in a sheet", async ({ 
   const root = strategyPage(page);
   const retention = root.getByTestId("strategy-stack").getByTestId("stack-row").filter({ hasText: "Retention" });
   // The row is titled with its goal's name, and no label shows without a value after it.
-  await expect(retention.locator('td[data-phone="title"]')).toHaveText("Retention");
+  await expect(retention.locator('td[data-phone="title"]')).toHaveText("Retention", { useInnerText: true });
   const dark = root.getByTestId("strategy-stack").getByTestId("stack-row").filter({ hasText: "Dark mode" });
-  await expect(dark.locator('td[data-phone="title"]')).toHaveText("Dark mode");
+  await expect(dark.locator('td[data-phone="title"]')).toHaveText("Dark mode", { useInnerText: true });
   for (const row of [retention, dark]) {
     expect(await row.innerText()).not.toContain("—");
     const cells = await row.locator("td").evaluateAll((tds) =>
