@@ -1531,6 +1531,7 @@ code .date-mark {
   [data-testid="skip-link"],
   [data-testid="version-toolbar"],
   [data-testid="version-tabs"],
+  [data-testid="view-note"],
   [data-testid="outline-rail"],
   [data-testid="section-switcher"],
   [data-testid="review-panel-column"],
