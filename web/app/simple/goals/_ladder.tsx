@@ -17,6 +17,7 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 
 import Link from "next/link";
 import { Icon } from "@/components/ds/Icon";
+import { InfoTip } from "@/components/ds/InfoTip";
 import { toast } from "@/components/ds/Toast";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import type { GmFeature, GmGoal, GmMilestone, GmStatus, GoalMap } from "@/lib/api/mock/goal-map";
@@ -566,8 +567,18 @@ function Reading({ g, canEdit, onPick }: { g: GmGoal; canEdit: boolean; onPick: 
   return null;
 }
 
-/** Where a goal's reading comes from, for the reading's tooltip (the frames show no line for it). */
-const source = (g: GmGoal) => `${g.metric ? `From ${g.metric.title}` : "Typed in by hand"}${g.read_on ? ` · ${g.read_on}` : ""}`;
+/** Where a goal's reading comes from, behind the reading's (i) (the frames show no line for it). */
+function Source({ g }: { g: GmGoal }) {
+  if (g.missing) return null;
+  return (
+    <InfoTip label="where this reading comes from" testId="gm-goal-source-tip">
+      <span data-testid="gm-goal-source">
+        {g.metric ? `From ${g.metric.title}` : "Typed in by hand"}
+        {g.read_on ? ` · ${g.read_on}` : ""}
+      </span>
+    </InfoTip>
+  );
+}
 
 function GoalCard({ g, i, v }: { g: GmGoal; i: number; v: V }) {
   const p = useLadderProps();
@@ -587,8 +598,9 @@ function GoalCard({ g, i, v }: { g: GmGoal; i: number; v: V }) {
       </span>
       <span className="text-[16px] leading-5 font-semibold">{g.name}</span>
       <span className="text-[13px] leading-[18px] text-text2">{g.math}</span>
-      <span className="flex items-baseline gap-2 text-[14px]" title={g.missing ? undefined : source(g)}>
+      <span className="flex items-baseline gap-2 text-[14px]">
         <b className="text-[16px]">{num(g.current, g.unit)}</b> of {num(g.target, g.unit)}
+        <Source g={g} />
         <span className={`ml-auto font-semibold ${KR[g.status]}`}>{KR_WORD[g.status]}</span>
       </span>
       <Reading g={g} canEdit={v.canChange} onPick={p.onMetric} />

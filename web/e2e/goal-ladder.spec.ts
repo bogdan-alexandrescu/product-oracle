@@ -359,7 +359,8 @@ test.describe("visual QA fixes (L-1 to L-8), 1440 light", () => {
     // the reading's source line; fails_when=the extra prose comes back; no_claim=the reading itself.
     await open(page, "light", "viewer");
     await expect(page.getByTestId("gm-guardrail")).toHaveText("Guardrail: Pages load in under 2 seconds for 95% of viewsHeld 7 of 7 days");
-    await expect(page.getByTestId("gm-goal-source")).toHaveCount(0);
+    // The reading's source sits behind the goal's (i), not in a line of its own.
+    await expect(page.getByTestId("gm-goal-source").first()).toBeHidden();
   });
 
   test("compare page: flags beside the toggle, milestone status on its own line, undated work says No dates yet", async ({ page }) => {
