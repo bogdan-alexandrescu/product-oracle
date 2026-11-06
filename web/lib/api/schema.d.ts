@@ -42281,6 +42281,7 @@ export interface components {
              * @default false
              */
             applies: boolean;
+            part_of?: components["schemas"]["SimplePartRef"] | null;
             /** Before Override */
             before_override?: {
                 [key: string]: unknown;

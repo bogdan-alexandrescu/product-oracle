@@ -45,11 +45,11 @@ export function FeaturePanel({ id, code, name, onClose }: { id: string; code?: s
   // one-feature-panel: the card's own item (its name checked; else its code, then its name).
   const item = usePanelItem(roadmap.data?.items ?? [], { id, code: code ?? "", name }, opened);
   const act: Act = useCallback(
-    async (what, body) => {
+    async (what, body, note) => {
       try {
         const r = await propose(body);
         toast({
-          message: resultWords(r, what, item?.deciders),
+          message: resultWords(r, what, item?.deciders, note),
           action: r.change.status === "applied" && r.change.can_undo ? { label: "Undo", onClick: () => void undo(r.change.id).then(reload, (e) => toast({ message: String(e.message) })) } : undefined,
         });
       } catch (e) {

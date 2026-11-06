@@ -15,6 +15,7 @@ import type { Act } from "./_card";
 import {
   confidenceWord,
   datesFrom,
+  partsWords,
   statusWord,
   yearSpan,
   type Item,
@@ -199,7 +200,10 @@ export function PanelFields({
     before: Record<string, unknown>,
     after: Record<string, unknown>,
     more?: Record<string, string>,
-  ) => act(what, { op: op as never, target: { ...target, ...more }, before, after });
+    note?: string,
+  ) => act(what, { op: op as never, target: { ...target, ...more }, before, after }, note);
+  // panel-menu: a feature with parts says, as it is cut or moved, that they stay as they are.
+  const parts = (how: Parameters<typeof partsWords>[1]) => partsWords(item.parts.length, how) || undefined;
   const others = [...items.values()].filter(
     (i) => i.id !== item.id && i.status !== "merged",
   );
@@ -332,6 +336,8 @@ export function PanelFields({
                 "set_status",
                 { status: item.status },
                 { status: v },
+                undefined,
+                v === "cut" && item.status !== "cut" ? parts("stay") : undefined,
               )
             }
           />
@@ -452,6 +458,8 @@ export function PanelFields({
                 "set_goal",
                 { goal_id: item.goal?.id ?? null },
                 { goal_id: v || null },
+                undefined,
+                parts("goal"),
               )
             }
           />
@@ -519,6 +527,8 @@ export function PanelFields({
                 "set_prd",
                 { prd_document_id: item.prd?.id ?? null },
                 { prd_document_id: v || null },
+                undefined,
+                parts("PRD"),
               )
             }
           />

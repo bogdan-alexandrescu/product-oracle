@@ -931,12 +931,12 @@ export function SimpleRoadmap() {
 
   /** One change through the engine, its toast (with Undo when it applied) and the reload; null when it failed. */
   const run = useCallback(
-    async (what: string, body: Parameters<Act>[1]): Promise<ChangeResult | null> => {
+    async (what: string, body: Parameters<Act>[1], note?: string): Promise<ChangeResult | null> => {
       try {
         const r = await propose(body);
         const target = latest.current.get(String(body.target?.item_id ?? ""));
         toast({
-          message: resultWords(r, what, target?.deciders),
+          message: resultWords(r, what, target?.deciders, note),
           action: r.change.status === "applied" && r.change.can_undo ? { label: "Undo", onClick: () => void undo(r.change.id).then(reload, (e) => toast({ message: String(e.message) })) } : undefined,
         });
         return r;
@@ -955,8 +955,8 @@ export function SimpleRoadmap() {
     [reload],
   );
   const act: Act = useCallback(
-    async (what, body) => {
-      await run(what, body);
+    async (what, body, note) => {
+      await run(what, body, note);
     },
     [run],
   );

@@ -81,11 +81,11 @@ export function FeaturePanel({
   const [opened, setOpened] = useState<string | null>(null);
   const item = usePanelItem(items, feature, opened);
   const act: Act = useCallback(
-    async (what, body) => {
+    async (what, body, note) => {
       try {
         const r = await propose(body);
         toast({
-          message: resultWords(r, what, item?.deciders),
+          message: resultWords(r, what, item?.deciders, note),
           action:
             r.change.status === "applied" && r.change.can_undo
               ? {

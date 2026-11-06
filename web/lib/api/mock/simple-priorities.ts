@@ -352,6 +352,8 @@ export function prioritiesOut(
       in_plan: false,
       can_reorder: can && mine,
       applies: mine && decides(i.id),
+      // feature-parts: the feature it is part of, as the roadmap reads it.
+      part_of: mine ? (i.part_of ?? null) : null,
       before_override: (stored(db, i.id).override as Record<string, unknown> | undefined) ?? null,
     };
   });

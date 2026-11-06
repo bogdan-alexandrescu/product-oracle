@@ -340,8 +340,21 @@ export const deciderWords = (deciders: string[] | undefined): string =>
   deciders?.length ? (deciders.length === 1 ? deciders[0] : `${deciders.slice(0, -1).join(", ")} or ${deciders.at(-1)}`) : "the roadmap's owner";
 
 /** The words a change's result says: applied (undo) or proposed (to whom, and where it shows). */
-export function resultWords(r: ChangeResult, what: string, deciders?: string[]): string {
-  return r.change.status === "applied" ? `${what} in your working draft` : `${what} proposed: it waits for ${deciderWords(deciders)} in Needs a decision`;
+export function resultWords(r: ChangeResult, what: string, deciders?: string[], note?: string): string {
+  const said = r.change.status === "applied" ? `${what} in your working draft` : `${what} proposed: it waits for ${deciderWords(deciders)} in Needs a decision`;
+  return note ? `${said}. ${note}` : said;
+}
+
+/**
+ * panel-menu: what happens to a feature's parts when it goes to Trash, is cut or moves to
+ * another goal or PRD, said at that moment: they stay on the roadmap, each with its own goal and
+ * PRD ("Its 2 parts stay on the roadmap."). "" when it has none.
+ */
+export function partsWords(n: number, how: "stay" | "goal" | "PRD"): string {
+  if (!n) return "";
+  const its = n === 1 ? "Its 1 part" : `Its ${n} parts`;
+  if (how === "stay") return `${its} ${n === 1 ? "stays" : "stay"} on the roadmap.`;
+  return `${its} ${n === 1 ? "keeps its" : "keep their"} own ${how}.`;
 }
 
 const PHASE_SPLIT: [Item["phases"][number]["key"], number][] = [
