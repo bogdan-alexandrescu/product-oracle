@@ -107,5 +107,9 @@ test("qa-F-75: editing a section's name as a row and saving a new version persis
   // The section id is kept (only its name changed); the new version's row and its stored body
   // both show the new name.
   await expect(page.getByTestId("version-body")).toContainText("## Problem statement {#problem}");
+  // F-75: the version's Markdown is closed until asked for.
+  await expect(page.getByTestId("version-body")).toBeHidden();
+  await page.getByText("Show as Markdown").click();
+  await expect(page.getByTestId("version-body")).toBeVisible();
   await expect(page.getByLabel("Section 1 heading")).toHaveValue("Problem statement");
 });

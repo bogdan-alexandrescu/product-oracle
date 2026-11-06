@@ -41,6 +41,12 @@ test("autonomy: a locked step's button is left out; why is said behind the row's
   // "Draft the vision" is locked at Draft: Recommend and Act are left out entirely.
   await expect(step(page, "vision", "Recommend")).toHaveCount(0);
   await expect(step(page, "vision", "Act")).toHaveCount(0);
+  // No empty box where they were: the strip ends at Draft, its Draft in the same column as a full row's.
+  const strip = await vision.getByTestId("autonomy-steps").boundingBox();
+  const draft = await step(page, "vision", "Draft").boundingBox();
+  const fullDraft = await step(page, "priorities", "Draft").boundingBox();
+  expect(Math.abs(strip!.x + strip!.width - (draft!.x + draft!.width))).toBeLessThan(3);
+  expect(Math.abs(draft!.x - fullDraft!.x)).toBeLessThan(2);
   await expect(vision.getByTestId("autonomy-locked")).toBeHidden();
   await vision.getByRole("button", { name: "About Draft the vision" }).click();
   await expect(vision.getByTestId("autonomy-locked")).toHaveText("Recommend and Act stay with people: the vision itself.");
