@@ -14,15 +14,18 @@ import { expect, test, type Page } from "./test";
 
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
-const APPROVER = "avery.lane@example.com";
-const VIEWER = "vic.moss@example.com";
+const APPROVER = "approver@example.com";
+const VIEWER = "viewer@example.com";
 
 async function open(page: Page, email: string = ADMIN.email, scheme: "light" | "dark" = "light") {
   await page.context().addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, SCOREBOARD_SCENARIO] as const);
   await page.emulateMedia({ colorScheme: scheme });
   await login(page, email);
-  await page.goto("/simple/home");
-  await page.getByTestId("simple-nav-goals").first().click();
+  await page.goto("/simple");
+  if (page.viewportSize()!.width <= 600) {
+    await page.getByTestId("simple-tab-more").click();
+    await page.getByTestId("simple-more-sheet").getByRole("link", { name: "Goal map" }).click();
+  } else await page.getByTestId("simple-nav-goals").first().click();
   await expect(page).toHaveURL(/\/simple\/goals$/);
   await expect(page.getByTestId("gm-page")).toBeVisible();
 }
@@ -127,7 +130,7 @@ for (const scheme of ["light", "dark"] as const) {
       // items; fails_when=either is cut off or missing on a phone.
       await open(page, ADMIN.email, scheme);
       const phone = page.getByTestId("gm-ladder-phone");
-      const rev = phone.locator(".simple-card").filter({ hasText: "$12k revenue per day" });
+      const rev = phone.locator(".simple-card").filter({ hasText: /^\$12k revenue per day/ });
       await expect(rev).toContainText("No metric picked");
       await expect(rev.getByTestId("gm-pick-metric")).toBeVisible();
       await page.getByTestId("gm-flag-gaps").click();
@@ -171,7 +174,7 @@ test.describe("Home", () => {
     // way to the map; no_claim=Home's other parts (another lane ports them).
     await page.context().addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, SCOREBOARD_SCENARIO] as const);
     await login(page, ADMIN.email);
-    await page.goto("/simple/home");
+    await page.goto("/simple");
     const card = page.getByTestId("home-goal").first();
     const link = card.getByTestId("home-goal-map");
     await expect(link).toHaveText("Goal map");
