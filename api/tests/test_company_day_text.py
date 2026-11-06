@@ -436,7 +436,8 @@ def test_the_deck_banner_names_the_company_time():
     ev = ExportVersion(
         document=doc, version=version, sections=[], citations=[], latest_number=2, zone=AUCKLAND
     )
-    banner = deck._banner(ev)
+    # A date's parts are held together by no-break spaces (E-11); read as a person does.
+    banner = deck._banner(ev).replace("\u00a0", " ")
     # In words, capitalised, no ISO date (QA docs-30).
     assert "Approved Oct 13, 2026, 9:00 AM NZDT" in banner
     assert "2026-" not in banner

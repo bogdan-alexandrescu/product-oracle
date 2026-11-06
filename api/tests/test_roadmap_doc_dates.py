@@ -220,12 +220,13 @@ async def test_a_withdrawn_basis_marks_the_approved_version_s_dates(client, owne
     url = f"{VERSIONS}/1/export"
     for layer in ("full",):
         html = (await client.get(url, params={"format": "html", "layer": layer}, headers=auth)).text
+        html = html.replace("\u00a0", " ")  # a date's no-break spaces (E-11)
         assert "Nov 30, 2026 <strong>[date withdrawn]</strong>" in html, layer
     # Present and the slide export: the deck.
     deck = (await client.get(f"{VERSIONS}/1/deck", headers=auth)).json()
     text = " ".join(s["html"] for s in deck["slides"]) + " ".join(
         e["html"] for s in deck["slides"] for e in s["expand"]
-    )
+    ).replace("\u00a0", " ")
     assert "Nov 30, 2026 <strong>[date withdrawn]</strong>" in text
     # The markdown export is the stored text (a copy for editing) with the comment.
     md = (await client.get(url, params={"format": "md"}, headers=auth)).text
