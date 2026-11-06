@@ -157,6 +157,81 @@ for (const [size, viewport] of [["1440", DESKTOP], ["390", PHONE]] as const) {
           }
         });
 
+      if (size === "1440")
+        test("P-3: every mark's name tag stays inside the plot and the page is no wider than the window", async ({ page }) => {
+          await open(page, OWNER, theme, "value-effort");
+          const marks = page.getByTestId("vxe-point");
+          await expect(marks.first()).toBeVisible();
+          const n = await marks.count();
+          expect(n).toBeGreaterThan(1);
+          for (let k = 0; k < n; k++) {
+            const mark = marks.nth(k);
+            const code = await mark.getAttribute("data-code");
+            await mark.hover();
+            const tag = mark.getByTestId("vxe-name");
+            await expect(tag, `${code}'s name shows on hover`).toBeVisible();
+            const plot = (await page.getByTestId("vxe-plot").boundingBox())!;
+            const b = (await tag.boundingBox())!;
+            expect(b.x, `${code}'s name runs off the plot's left`).toBeGreaterThanOrEqual(plot.x - 0.5);
+            expect(b.x + b.width, `${code}'s name runs off the plot's right`).toBeLessThanOrEqual(plot.x + plot.width + 0.5);
+            expect(await page.evaluate(() => document.documentElement.scrollWidth), `${code}'s name widens the page`).toBeLessThanOrEqual(DESKTOP.width);
+          }
+        });
+
+      if (size === "1440")
+        test("P-3: every mark's name tag stays inside the plot's top and foot", async ({ page }) => {
+          // Real bug: Alert history export's mark sits on the zero line, so its name hangs about 20 px below the plot, over the effort ticks.
+          test.fail();
+          await open(page, OWNER, theme, "value-effort");
+          const marks = page.getByTestId("vxe-point");
+          await expect(marks.first()).toBeVisible();
+          for (let k = 0; k < (await marks.count()); k++) {
+            const mark = marks.nth(k);
+            const code = await mark.getAttribute("data-code");
+            await mark.hover();
+            const tag = mark.getByTestId("vxe-name");
+            await expect(tag).toBeVisible();
+            const plot = (await page.getByTestId("vxe-plot").boundingBox())!;
+            const b = (await tag.boundingBox())!;
+            expect(b.y, `${code}'s name runs off the plot's top`).toBeGreaterThanOrEqual(plot.y - 0.5);
+            expect(b.y + b.height, `${code}'s name runs off the plot's foot`).toBeLessThanOrEqual(plot.y + plot.height + 0.5);
+          }
+        });
+
+      if (size === "390")
+        test("P-3: a mark with a very long title shows its name cut with an ellipsis, still inside the plot", async ({ page }) => {
+          const long = "Alert history export for every workspace, every team and every project, in every file format, with a copy sent to each admin by email every week";
+          await open(page, OWNER, theme);
+          // Rename the feature through its panel (More actions, Rename, Save), then read the chart.
+          await page.getByTestId("prio-title").filter({ hasText: "Alert history export" }).first().click();
+          const panel = page.getByTestId("item-panel");
+          await expect(panel).toBeVisible();
+          await panel.getByRole("button", { name: "More actions" }).click();
+          await panel.getByRole("menuitem", { name: "Rename" }).click();
+          await panel.getByLabel("Name").fill(long);
+          await panel.getByRole("button", { name: "Save" }).click();
+          await expect(panel.getByRole("button", { name: "Save" })).toHaveCount(0);
+          await page.keyboard.press("Escape");
+          await page.getByRole("tab", { name: "Value / effort" }).click();
+          const mark = page.locator('[data-testid="vxe-point"][data-code="alert-export"]');
+          await mark.scrollIntoViewIfNeeded();
+          await expect(mark).toHaveAccessibleName(new RegExp(long.slice(0, 40)));
+          await mark.click();
+          const tag = mark.getByTestId("vxe-name");
+          await expect(tag).toBeVisible();
+          await expect(tag).toContainText(long);
+          const cut = await tag.evaluate((el) => {
+            const s = getComputedStyle(el);
+            return { ellipsis: s.textOverflow === "ellipsis" && s.overflow !== "visible" && s.whiteSpace === "nowrap", wider: el.scrollWidth > el.clientWidth };
+          });
+          expect(cut, "the tag is cut with an ellipsis").toEqual({ ellipsis: true, wider: true });
+          const plot = (await page.getByTestId("vxe-plot").boundingBox())!;
+          const b = (await tag.boundingBox())!;
+          expect(b.x, "the name runs off the plot's left").toBeGreaterThanOrEqual(plot.x - 0.5);
+          expect(b.x + b.width, "the name runs off the plot's right").toBeLessThanOrEqual(plot.x + plot.width + 0.5);
+          expect(await page.evaluate(() => document.documentElement.scrollWidth), "the name widens the page").toBe(PHONE.width);
+        });
+
       test("V-3: the Compare switch's off knob stands out from its track", async ({ page }) => {
         await open(page, OWNER, theme);
         const sw = page.getByRole("switch", { name: "Compare with Oracle" });
