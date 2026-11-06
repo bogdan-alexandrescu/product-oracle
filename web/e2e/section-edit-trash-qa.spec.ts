@@ -29,8 +29,8 @@ async function tap(l: Locator) {
 }
 
 async function noWiderThanTheScreen(page: Page) {
-  const { sw, iw } = await page.evaluate(() => ({ sw: document.scrollingElement!.scrollWidth, iw: window.innerWidth }));
-  expect(sw, "page scroll width").toBe(iw);
+  const { sw, cw } = await page.evaluate(() => ({ sw: document.scrollingElement!.scrollWidth, cw: document.scrollingElement!.clientWidth }));
+  expect(sw, "page scroll width").toBeLessThanOrEqual(cw);
 }
 
 /** Reads the mock API (never changes it): the goal buckets' goals and each feature's goals. */
@@ -92,7 +92,11 @@ for (const theme of THEMES)
       const bucket = page.locator(`[data-goal-id="${goal.id}"]`);
       await bucket.getByRole("button", { name: `More for ${goal.title}` }).click();
       await page.getByRole("menuitem", { name: "Delete goal" }).click();
-      await page.getByRole("dialog", { name: `Delete ${goal.title}` }).getByRole("button", { name: "Delete goal" }).click();
+      const dialog = page.getByRole("dialog", { name: `Delete ${goal.title}` });
+      // Its features that serve no other goal move to the first goal offered.
+      const pick = dialog.getByLabel("Goal", { exact: true });
+      if (await pick.count()) await pick.selectOption({ index: 1 });
+      await dialog.getByRole("button", { name: "Delete goal" }).click();
       await expect(bucket).toHaveCount(0);
 
       await page.setViewportSize(size);
