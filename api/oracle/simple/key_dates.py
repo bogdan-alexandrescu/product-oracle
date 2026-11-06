@@ -352,7 +352,7 @@ async def key_date_prds(
     """roadmap-keydates: per roadmap, the PRDs its items come from that the reader may see,
     in the company PRD order (prd-order)."""
     from oracle.docs import visibility
-    from oracle.docs.prd_order import sort_prds
+    from oracle.docs.prd_order import prd_ranks
 
     found: dict[uuid.UUID, dict[uuid.UUID, Document]] = {}
     for e in entries:
@@ -363,7 +363,11 @@ async def key_date_prds(
             and not getattr(e.prd, "deleted_at", None)
         ):
             found.setdefault(e.roadmap.id, {})[e.prd.id] = e.prd
-    return {r: await sort_prds(db, of.values()) for r, of in found.items()}
+    if not found:
+        return {}
+    rank = await prd_ranks(db)
+    last = len(rank) + 1
+    return {r: sorted(of.values(), key=lambda d: rank.get(d.id, last)) for r, of in found.items()}
 
 
 async def _current(
