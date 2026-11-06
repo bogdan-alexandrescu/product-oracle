@@ -53,7 +53,7 @@ const MILESTONES: GmMilestone[] = [
   ms("lm6", "lg2", "Setup time one day for new teams", 1, null, "2027-01-29", "not_measured", "Onboarding"),
   ms("lm7", "lg3", "Seat revenue baseline for large teams", 10000, 10000, "2026-12-04", "met", "Billing"),
   ms("lm8", "lg3", "Self-serve seat changes for every plan", null, null, null, "no_gate", "Billing"),
-  ms("lm9", "lg3", "Seat revenue of 20,000 per month", 20000, null, "2027-03-19", "not_measured", "Reports"),
+  ms("lm9", "lg3", "Seat revenue of $20,000 per month", 20000, null, "2027-03-19", "not_measured", "Reports"),
   ms("lm10", "lg4", "Ticket baseline by topic", 3.1, 3.1, "2026-11-27", "missed", "Support"),
   ms("lm11", "lg4", "Help answers inside every screen", 100, 40, "2027-01-15", "on_track", "Support"),
   ms("lm12", "lg4", "Tickets per team down to 1.5", null, null, "2027-03-12", "no_gate", "Onboarding"),

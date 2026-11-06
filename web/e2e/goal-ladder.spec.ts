@@ -520,15 +520,15 @@ test.describe("Goal ladder findings: numbers, first view, week captions, 1440", 
   });
 
   test("V-6: the week strip's captions name the whole milestone and never end on a small word", async ({ page }) => {
-    // protects=ld1-d-rest's strip: "M9 Seat revenue of 20,000" with the full name as its title;
-    // fails_when=a caption is cut ("M9 Seat revenue of 20,000 per") with no way to read the rest;
+    // protects=ld1-d-rest's strip: "M9 Seat revenue of $20,000" with the full name as its title;
+    // fails_when=a caption is cut ("M9 Seat revenue of $20,000 per") with no way to read the rest;
     // no_claim=where the captions sit.
     await open(page, "light");
     const m2 = page.getByTestId("ld-week-mark").filter({ hasText: "M2 Renewal" });
     await expect(m2).toHaveAttribute("title", /M2 Renewal rate at 85% for spring renewals/);
     const m9 = page.getByTestId("ld-week-mark").filter({ hasText: "M9 Seat" });
-    await expect(m9).toHaveText("M9 Seat revenue of 20,000");
-    await expect(m9).toHaveAttribute("title", /M9 Seat revenue of 20,000 per month/);
+    await expect(m9).toHaveText("M9 Seat revenue of $20,000");
+    await expect(m9).toHaveAttribute("title", /M9 Seat revenue of \$20,000 per month/);
     // Wrapped, not clipped: no caption is wider than its box.
     for (const mark of await page.getByTestId("ld-week-mark").all()) {
       expect(await mark.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);

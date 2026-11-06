@@ -601,10 +601,14 @@ function GoalCard({ g, i, v }: { g: GmGoal; i: number; v: V }) {
       </span>
       <span className="text-[16px] leading-5 font-semibold">{g.name}</span>
       <span className="text-[13px] leading-[18px] text-text2">{g.math}</span>
-      <span className="flex items-baseline gap-2 text-[14px]">
-        <b className="text-[16px]">{num(g.current, g.unit)}</b> of {num(g.target, g.unit)}
-        <Source g={g} />
-        <span className={`ml-auto font-semibold ${KR[g.status]}`}>{KR_WORD[g.status]}</span>
+      <span data-testid="ld-goal-measure" className="flex flex-wrap items-baseline gap-x-2 text-[14px]">
+        <span className="inline-flex items-baseline gap-2 whitespace-nowrap">
+          <span data-testid="ld-goal-numbers" className="leading-5 whitespace-nowrap">
+            <b className="text-[16px]">{num(g.current, g.unit)}</b> of {num(g.target, g.unit)}
+          </span>
+          <Source g={g} />
+        </span>
+        <span data-testid="ld-goal-status" className={`ml-auto leading-5 font-semibold whitespace-nowrap ${KR[g.status]}`}>{KR_WORD[g.status]}</span>
       </span>
       <Reading g={g} canEdit={v.canChange} onPick={p.onMetric} />
       {draws.length > 0 && <span className="text-[12px] leading-4 text-text2">Draws on: {draws.join(", ")}</span>}
