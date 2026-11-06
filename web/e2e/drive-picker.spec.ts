@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "./test";
 
 import { fakeGoogle, FOLDER } from "./google-fake";
-import { login, searchSources } from "./helpers";
+import { disconnectAll, login, searchSources } from "./helpers";
 
 const PICKED = [
   { id: "1DocRoadmapExample", name: "Roadmap notes" },
@@ -239,6 +239,7 @@ test("sources › Google Docs: a connection without drive.readonly asks to recon
 test("connections › Google: a drive.readonly grant needs no reconnect; a drive.file one does", async ({ page }) => {
   await login(page);
   await page.goto("/settings/connections");
+  await disconnectAll(page, "google");
   const google = page.getByTestId("connection-card-google");
   await google.getByRole("button", { name: "Paste a token" }).click();
   await google.getByLabel("Token", { exact: true }).fill("legacy-google-token");

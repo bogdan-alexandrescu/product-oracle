@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { login, openSection, sectionAction } from "./helpers";
+import { disconnectAll, login, openSection, sectionAction } from "./helpers";
 
 /*
  * Live Ask (#710, lane 3) through the UI, on the mock layer: Oracle reads the asker's own
@@ -36,9 +36,11 @@ const panel = (page: Page) => page.getByTestId("hop-panel").filter({ visible: tr
 const thread = (page: Page) => panel(page).getByTestId("discussion-thread");
 const replies = (page: Page) => thread(page).getByTestId("oracle-reply");
 
-/** Connects Fireflies in Settings > Connections with a key and the label "Fireflies Archive". */
+/** Connects Fireflies in Settings > Connections with a key and the label "Fireflies Archive"
+ * (the seeded account disconnected first). */
 async function connectFireflies(page: Page) {
   await page.goto("/settings/connections");
+  await disconnectAll(page, "fireflies");
   const card = page.getByTestId("connection-card-fireflies");
   await card.getByRole("button", { name: "Paste a token" }).click();
   await card.getByLabel("Token", { exact: true }).fill("ff-example-key-1234");

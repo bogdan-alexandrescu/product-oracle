@@ -17,6 +17,17 @@ async function newCompany(page: Page) {
   await login(page);
 }
 
+/** A new company has no accounts: Settings › Connections, Slack, Paste a token; then Home. */
+async function connectSlack(page: Page) {
+  await page.goto("/settings/connections");
+  const slack = page.getByTestId("connection-card-slack");
+  await slack.getByRole("button", { name: "Paste a token" }).click();
+  await slack.getByLabel("Token", { exact: true }).fill("example-slack-1234");
+  await slack.getByRole("button", { name: "Connect", exact: true }).click();
+  await expect(slack.getByText("Connected with a token")).toBeVisible();
+  await page.goto("/home");
+}
+
 /** Home's Set up › Pick sources › Open. */
 async function openPickSources(page: Page) {
   const action = page.getByTestId("setup-row-sources").getByTestId("setup-action");
@@ -51,6 +62,7 @@ test.describe("desktop", () => {
   test("qa-onboarding-5/12: a Slack source waits for a channel; its dates name the zone in words", async ({ page }) => {
     // fails_when=Add source is allowed with no channel, or the note shows "America/Los_Angeles".
     await newCompany(page);
+    await connectSlack(page);
     await openPickSources(page);
     const form = page.getByRole("form", { name: "Add a source" });
     await form.getByLabel("Kind").selectOption("slack");
@@ -72,6 +84,7 @@ test.describe("desktop", () => {
   test("qa-onboarding-4: after Sync now the result and the card agree", async ({ page }) => {
     // fails_when=Sync now reports items seen while the card says "No items yet".
     await newCompany(page);
+    await connectSlack(page);
     await openPickSources(page);
     const form = page.getByRole("form", { name: "Add a source" });
     await form.getByLabel("Kind").selectOption("slack");

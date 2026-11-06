@@ -90,6 +90,25 @@ export async function clearName(page: Page, email: string) {
 }
 
 /** Signs out from the user menu. */
+/**
+ * On Settings › Connections, disconnects every account of `provider` the person has, as a
+ * person would (Disconnect, then Confirm disconnect), until its card says "Not connected".
+ * The mock seeds the owner's Slack, Fireflies and Google accounts (one list with Sources,
+ * pass F F-60): a test that connects one from scratch starts here.
+ */
+export async function disconnectAll(page: Page, provider: string) {
+  const card = page.getByTestId(`connection-card-${provider}`).filter({ visible: true });
+  await expect(card.getByRole("button", { name: "Add another account" })).toBeVisible();
+  const rows = card.locator('li[data-testid^="connection-"]');
+  for (let left = await rows.count(); left > 0; left--) {
+    const row = rows.first();
+    await row.getByRole("button", { name: "Disconnect", exact: true }).click();
+    await row.getByRole("button", { name: "Confirm disconnect" }).click();
+    await expect(rows).toHaveCount(left - 1);
+  }
+  await expect(card).toContainText("Not connected");
+}
+
 export async function signOut(page: Page) {
   await page.getByTestId("user-menu").click();
   await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Sign out" }).click();

@@ -293,6 +293,11 @@ export function mockConnectionEndpoint(id: string): string | null {
   return row ? (row.endpoint_url ?? FIREFLIES_DEFAULT_ENDPOINT) : null;
 }
 
+/** The provider of a stored connection (any person's); null when there is none. */
+export function mockConnectionProvider(id: string): string | null {
+  return load().connections.find((c) => c.id === id)?.provider ?? null;
+}
+
 /** The person's connections (the Sources page offers them to a source; ./sources.ts). */
 export function mockConnectionRows(email?: string): ConnectionRow[] {
   const db = load();
@@ -314,19 +319,43 @@ function load(): ConnDb {
   return { connections: newCompany() ? [] : seedConnections(), settings: {} };
 }
 
-/** The seeded connections (seedConnections), the default company's owner's own. */
-const SEEDED_IDS = ["c0000000-0000-4000-8000-000000000002", "c0000000-0000-4000-8000-000000000004"];
+/**
+ * The seeded connections (seedConnections), the default company's owner's own. Literal ids
+ * (Fireflies' is FIREFLIES_CONNECTION_ID, Notion's MOCK_NOTION_CONNECTION_ID): this is read
+ * while ./fireflies.ts, which imports this file, may not be loaded yet.
+ */
+export const SEEDED_CONNECTION = {
+  slack: "c0000000-0000-4000-8000-000000000001",
+  github: "c0000000-0000-4000-8000-000000000002",
+  fireflies: "c0000000-0000-4000-8000-000000000003",
+  notion: "c0000000-0000-4000-8000-000000000004",
+  google: "c0000000-0000-4000-8000-000000000005",
+  oldGoogle: "c0000000-0000-4000-8000-000000000006",
+  partnerSlack: "c0000000-0000-4000-8000-000000000007",
+} as const;
+const SEEDED_IDS: string[] = Object.values(SEEDED_CONNECTION);
 
 /**
- * qa5-mock-people: the default company's person has connected GitHub with a token (the
- * Sources page's "example-org" account) and Notion; Slack, Google Docs and Fireflies are left
- * for the tests to connect. A new company (the "empty" scenario) starts with none.
+ * qa5-mock-people, pass F F-60: the default company's person's connections, the one list the
+ * Connections and Sources pages both read (as the API's one connections table): GitHub with
+ * a token (the "example-org" account), Notion, two Slack workspaces, Fireflies and two Google
+ * sign-ins, one of them from before Drive read access ("Reconnect to choose files"). A new
+ * company (the "empty" scenario) starts with none.
  */
 function seedConnections(): ConnectionRow[] {
-  const row = (id: string, provider: string, account_id: string, account_label: string, scopes: string[], created_at: string, last_used_at: string): ConnectionRow => ({
+  const row = (
+    id: string,
+    provider: string,
+    auth_mode: "oauth" | "token",
+    account_id: string,
+    account_label: string,
+    scopes: string[],
+    created_at: string,
+    last_used_at: string,
+  ): ConnectionRow => ({
     id,
     provider,
-    auth_mode: "token",
+    auth_mode,
     account_id,
     account_label,
     scopes,
@@ -337,9 +366,16 @@ function seedConnections(): ConnectionRow[] {
     created_at,
     updated_at: created_at,
   });
+  const c = SEEDED_CONNECTION;
   return [
-    row(SEEDED_IDS[0], "github", "github-example-org", "example-org", ["repo"], "2026-09-02T10:00:00Z", "2026-10-20T06:00:00Z"),
-    row(SEEDED_IDS[1], "notion", "notion-example", "Example Notion", [], "2026-09-10T14:30:00Z", "2026-10-19T06:00:00Z"),
+    row(c.github, "github", "token", "github-example-org", "example-org", ["repo"], "2026-09-02T10:00:00Z", "2026-10-20T06:00:00Z"),
+    row(c.notion, "notion", "token", "notion-example", "Example Notion", [], "2026-09-10T14:30:00Z", "2026-10-19T06:00:00Z"),
+    row(c.slack, "slack", "token", "slack-example-co", "Example Co chat", [], "2026-09-03T09:00:00Z", "2026-10-20T06:00:00Z"),
+    row(c.partnerSlack, "slack", "token", "slack-partner", "Partner workspace", [], "2026-09-04T09:00:00Z", "2026-10-20T06:00:00Z"),
+    // The account a Fireflies key connects (identity below), so pasting it again keeps this row.
+    row(c.fireflies, "fireflies", "token", "fireflies-1", "pat@example.com", [], "2026-09-12T11:00:00Z", "2026-10-19T06:00:00Z"),
+    row(c.google, "google", "oauth", "google-1", "pat@example.com", ["openid", "email", DRIVE_READONLY], "2026-09-15T16:00:00Z", "2026-10-20T06:00:00Z"),
+    row(c.oldGoogle, "google", "oauth", "google-old-drive", "old-drive@example.com", ["openid", "email", DRIVE_FILE], "2026-08-20T16:00:00Z", "2026-10-01T06:00:00Z"),
   ];
 }
 
@@ -573,7 +609,7 @@ async function handle(db: ConnDb, req: Request, p: string[], role: string, email
     }
 
     if (p[3] === "notion" && p[4] === "pages" && m === "GET") {
-      // The Sources page's mock Notion connection, or one connected on Settings > Connections.
+      // The seeded Notion connection (every person may browse it), or one of the person's own.
       const own = db.connections.find((c) => c.id === p[2] && yours(db, c, email));
       if (p[2] !== MOCK_NOTION_CONNECTION_ID && !own) return json(404, { detail: "Connection not found" });
       if (own && own.provider !== "notion") return json(409, { detail: "This is not a Notion connection" });
