@@ -213,6 +213,13 @@ export function describe(p: Proposal, entities: Entity[], edges: Edge[], awaitin
     const category = (isRecord(fields.attrs) ? fields.attrs : {}).category || "a question";
     return `Waiting for the author to share an answer (${words(String(category))})`;
   }
+  if (isRecord(payload.fix)) {
+    // A commenter's Ground Truth fix (./ground-truth.ts), as oracle.baseline.fixes.sentence.
+    const fix = payload.fix;
+    const title = entities.find((e) => e.id === p.entity_id)?.title ?? "a removed feature";
+    if (fix.action === "link_prd_feature") return `Link the PRD’s ${`${String(fix.code)} ${String(fix.name ?? "")}`.trim()} to “${title}”`;
+    return `Give “${title}” a feature code`;
+  }
   const op = String(payload.op || "update");
   const targetId = typeof fields.id === "string" ? fields.id : undefined;
   if (payload.kind === "edge") {

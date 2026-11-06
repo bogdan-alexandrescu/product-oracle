@@ -57,8 +57,8 @@ from oracle.roadmap import company
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple.models import SimplePrdPlan
 
-# A feature's F-code (F-12; a clash reads F-12.2).
-F_CODE = re.compile(r"[A-Z]{1,3}-\d+(?:\.\d+)?")
+# A feature's F-code (F-12; a clash reads F-12.2; a slice F-12a).
+F_CODE = re.compile(r"[A-Z]{1,3}-\d+(?:\.\d+)?[a-j]?")
 # A slice's PRD section (f-15a: the first slice of F-15).
 SLICE_SECTION = re.compile(r"([a-z]{1,3})-(\d+)([a-j])", re.IGNORECASE)
 LETTERS = "abcdefghij"
@@ -104,6 +104,13 @@ def _plan_code(raw: Any) -> str:
     if not any(c.isalpha() for c in code):
         return ""
     return _code(code) or code
+
+
+def _uuid(raw: Any) -> uuid.UUID | None:
+    try:
+        return uuid.UUID(str(raw))
+    except ValueError:
+        return None
 
 
 def _doc(d: Document | None) -> GroundTruthDoc | None:
@@ -239,8 +246,8 @@ async def run(db: AsyncSession) -> GroundTruthOut:
             if i.roadmap_document_id == d.id:
                 roadmap_of_prd.setdefault(i.prd_document_id, d)
 
-    # A PRD's features, by code only.
-    truth_of = {_code(code_of[f.id]): f for f in truth if f.id in code_of}
+    # A PRD's features, by code only (a slice's code, F-12a, as stored).
+    truth_of = {(_code(c) or c): f for f in truth if (c := code_of.get(f.id))}
     truth_codes = set(truth_of)
     same_name: dict[str, Entity] = {}
     for f in truth:
@@ -248,16 +255,26 @@ async def run(db: AsyncSession) -> GroundTruthOut:
     plans = await _prd_plans(db)
     spans: dict[tuple[uuid.UUID, str], int] = {}
     missing: set[tuple[uuid.UUID, str]] = set()
+    # A PRD's feature linked to a Ground Truth feature (Link to a feature,
+    # oracle.baseline.fixes) is that feature: neither it nor its items are flagged.
+    linked: dict[tuple[uuid.UUID, str], Entity] = {}
     for prd, data in plans:
+        links = data.get("links") or {}
         roadmap = roadmap_of_prd.get(prd.id) or (active if active in roadmaps.values() else None)
         for f in data.get("features") or []:
             if not isinstance(f, dict):
                 continue
+            raw = str(f.get("code") or "").strip()
             code = _plan_code(f.get("code"))
             name = str(f.get("name") or "").strip() or code
             if code:
                 spans[(prd.id, code)] = len([m for m in f.get("milestones") or [] if m])
             if not name or code in truth_codes:
+                continue
+            to = by_id.get(_uuid(links.get(raw, links.get(code))))  # type: ignore[arg-type]
+            if to is not None and to.id in truth_ids:
+                if code:
+                    linked[(prd.id, code)] = to
                 continue
             if code:
                 missing.add((prd.id, code))
@@ -303,18 +320,18 @@ async def run(db: AsyncSession) -> GroundTruthOut:
         if by_id.get(i.feature_id) is None:  # type: ignore[arg-type]
             parent = slice_of[i.id][1] if i.id in slice_of else None
             for code in (item_ref(i).code, parent):
-                if code in truth_of:
-                    by_code[i.id] = truth_of[code]
+                if code in truth_of or (i.prd_document_id, code) in linked:
+                    by_code[i.id] = truth_of.get(code) or linked[(i.prd_document_id, code)]  # type: ignore[index]
                     break
 
     for i in items:
         if i.feature_id in truth_ids or i.id in by_code:
             continue
-        linked = by_id.get(i.feature_id) if i.feature_id is not None else None
+        own = by_id.get(i.feature_id) if i.feature_id is not None else None
         target = str(i.id)
         parent = slice_of[i.id][1] if i.id in slice_of else None
         if (
-            linked is None
+            own is None
             and parent is not None
             and parent not in truth_codes
             and (i.prd_document_id, parent) not in missing
@@ -328,15 +345,15 @@ async def run(db: AsyncSession) -> GroundTruthOut:
             continue
         # Linked to a feature a run proposed: an approver confirms it (the owner, Nov 5).
         first = (
-            ("confirm_feature", str(linked.id))
-            if linked is not None and linked.status == "proposed"
+            ("confirm_feature", str(own.id))
+            if own is not None and own.status == "proposed"
             else ("add_to_ground_truth", target)
         )
         flag(
             "unlinked_item",
             [first, ("link_to_feature", target)],
             item=item_ref(i),
-            feature=ref(linked) if linked is not None else None,
+            feature=ref(own) if own is not None else None,
             where=where_of(i),
         )
 

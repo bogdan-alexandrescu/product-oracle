@@ -928,7 +928,12 @@ async def decide_proposal(
         manages = INTAKE_ATTRS if proposal.id in await intake_made(db, [proposal]) else ()
         writer = Writer(principal, "user", run_id=proposal.run_id, reason=reason, manages=manages)
         fields = _without(dict(p.get("fields") or {}), skipped)
-        if p["kind"] == "entity":
+        if p.get("fix"):
+            # A commenter's Ground Truth fix (Give it a code, Link to a feature).
+            from oracle.baseline import fixes
+
+            await fixes.apply_proposal(db, writer, proposal)
+        elif p["kind"] == "entity":
             if p["op"] == "create":
                 await create_entity(db, writer, **_entity_create_args(fields))
             else:
@@ -1327,6 +1332,14 @@ async def create_entity(
 ) -> WriteResult:
     if type_ not in ENTITY_TYPES:
         raise InvalidError(f"type must be one of {', '.join(ENTITY_TYPES)}")
+    if type_ == "feature":
+        from oracle.baseline import fixes
+
+        # A code key is stored as the check reads it (F-9 is F-09), and is one feature's.
+        if (code := fixes.canonical_code(key)) is not None:
+            key = code
+            if await fixes.code_taken(db, code):
+                raise ConflictError(f"Another feature already has the code {code}.")
     if await find_entity(db, type_, key) is not None:
         raise ConflictError(f"{type_}:{key} already exists")
     await check_parent(db, type_, parent_id)

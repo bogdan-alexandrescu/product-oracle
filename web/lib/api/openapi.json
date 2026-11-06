@@ -17252,6 +17252,225 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/baseline/entities/{entity_id}/code": {
+      "post": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Give Code",
+        "description": "Give it a code (the check's ``no_code``): the company's next F-number (its highest + 1),\nor for a slice its feature's number with the next letter (F-15a), stored as the feature's\nkey. Refused for a feature with a code, one not in the Ground Truth, or a slice whose\nfeature has none. Approvers and owners give it at once; a commenter's is a proposal.",
+        "operationId": "give_code",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entity Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroundTruthFixOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      },
+      "delete": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Take Code Back",
+        "description": "Undo Give it a code: the feature's key as it was.",
+        "operationId": "take_code_back",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entity Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroundTruthFixOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/baseline/prd-links": {
+      "post": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Link Prd Feature",
+        "description": "Link to a feature (the check's ``prd_feature_missing`` and ``slice_parent_missing``): a\nfeature of a PRD's approved plan, by its code there, becomes that confirmed Ground Truth\nfeature: the check stops flagging it and the PRD reads the feature's code. Approvers and\nowners link at once; a commenter's is a proposal.",
+        "operationId": "link_prd_feature",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrdLinkCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroundTruthFixOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      },
+      "delete": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Unlink Prd Feature",
+        "description": "Undo Link to a feature: the PRD's feature is its own again (and flagged again).",
+        "operationId": "unlink_prd_feature",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prd_document_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Prd Document Id"
+            }
+          },
+          {
+            "name": "code",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Unlink Prd Feature"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
     "/v1/baseline/yaml": {
       "get": {
         "tags": [
@@ -74951,7 +75170,7 @@
             "type": "string",
             "maxLength": 120,
             "minLength": 1,
-            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "pattern": "^(?:[a-z0-9][a-z0-9._-]*|[A-Z]{1,3}-\\d+[a-j]?)$",
             "title": "Key"
           },
           "title": {
@@ -83123,6 +83342,51 @@
         ],
         "title": "GroundTruthFix",
         "description": "A fix a person makes in the UI. ``target``: the item's or feature's id; for a PRD's\nfeature its code, or its name when it has none (with ``where.prd``); for a slice's Add to\nGround Truth its feature's code (F-15); for ``confirm_feature`` the proposed feature's id.\n``words``: the button's plain words (\"Confirm it\")."
+      },
+      "GroundTruthFixOut": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "done",
+              "proposed"
+            ],
+            "title": "Status"
+          },
+          "feature": {
+            "$ref": "#/components/schemas/GroundTruthRef"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "proposal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "feature"
+        ],
+        "title": "GroundTruthFixOut",
+        "description": "A fix made (``done``: approvers and owners), or sent for an approver (``proposed``:\na commenter's, with its proposal). ``code``: the code given, when one was."
       },
       "GroundTruthFlag": {
         "properties": {
@@ -102403,6 +102667,34 @@
         "type": "object",
         "title": "PrdAnswers",
         "description": "At most four questions (docs/research/prd-formats.md, template picker)."
+      },
+      "PrdLinkCreate": {
+        "properties": {
+          "prd_document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Prd Document Id"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Code"
+          },
+          "feature_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Feature Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prd_document_id",
+          "code",
+          "feature_id"
+        ],
+        "title": "PrdLinkCreate",
+        "description": "Link a feature of a PRD's approved plan (by its code there) to a Ground Truth feature."
       },
       "PrdLinks": {
         "properties": {

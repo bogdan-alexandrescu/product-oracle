@@ -30,6 +30,9 @@ Test cards (protects / fails_when / no_claim):
 - test_plan_and_item_codes_read_one_way: protects=f-1, 1 and F-001 all read F-01; a
   negative or malformed number (-3, "-3", "3.5") is no code, flagged as such; fails_when=a
   code reads F-1 in one place and F-01 in another, or a feature reads "F--3".
+- test_a_slice_given_a_code_is_in_the_ground_truth: protects=a slice feature given a code
+  (F-16a, its key) counts by that code: the roadmap's F-16a item is in it, and the feature
+  has a code; fails_when=the slice's code is not read, so its item stays flagged.
 - test_prd_plan_codes_read_as_codes: protects=a PRD plan code is read as an F-code (f-01
   matches the confirmed F-01; the number 15 reads F-15); fails_when=a plan feature coded f-01
   is flagged though F-01 is confirmed, or a flag shows a bare number.
@@ -49,6 +52,9 @@ Test cards (protects / fails_when / no_claim):
 - test_each_fix_has_its_words: protects=every fix carries the button's plain words (Add to
   Ground Truth, Link to a feature, Confirm it, Give it a code, Pick a goal, Take it off the
   roadmap); fails_when=a fix has no words or the wrong ones.
+- test_an_item_on_a_proposed_feature_is_confirmed: protects=a roadmap item linked to a
+  feature a run only proposed offers Confirm it (that feature) and Link to a feature, not
+  Add to Ground Truth; fails_when=it offers to add a feature that already exists.
 - test_words_carry_no_ids: protects=each flag's words are one short plain sentence with no
   id or key; fails_when=a uuid, slug or code shows in the words.
 - test_anyone_who_reads_the_roadmap_reads_it: protects=a viewer reads the check; no
@@ -352,6 +358,22 @@ async def test_a_proposed_code_still_flags_its_items(client):
     assert ids["F-02"] not in unlinked
 
 
+async def test_a_slice_given_a_code_is_in_the_ground_truth(client):
+    w = await world()
+    async with tenant_session(w["ctx"].tenant_id) as s:
+        seed = Seed(s)
+        # A slice feature given a code (Give it a code: F-16a, stored as its key).
+        part = await seed.entity("feature", "F-16a")
+        part.title, part.status = "Usage report", "confirmed"
+        await s.commit()
+        part_id = str(part.id)
+    out = await _check(client, w["ctx"])
+    # The roadmap's F-16a item is that feature, by code; the feature reads F-16a, no no_code.
+    flagged = {(f.get("item") or {}).get("id") for f in out["flags"]}
+    assert w["items"]["report"] not in flagged
+    assert all((f.get("feature") or {}).get("id") != part_id for f in _of(out, "no_code"))
+
+
 async def test_prd_plan_codes_read_as_codes(client):
     plan = {**PLAN, "features": [{"code": "f-01", "name": "Bulk import", "milestones": ["M1"]},
                                  {"code": 15, "name": "Usage export"}]}  # fmt: skip
@@ -513,6 +535,14 @@ async def test_each_fix_has_its_words(client):
             assert x["words"] == FIX_WORDS[x["action"]], x
             seen.add(x["action"])
     assert seen == set(FIX_WORDS)
+
+
+async def test_an_item_on_a_proposed_feature_is_confirmed(client):
+    w = await world()
+    out = await _check(client, w["ctx"])
+    d = next(f for f in _of(out, "unlinked_item") if f["item"]["id"] == w["items"]["d"])
+    assert _fixes(d) == [("confirm_feature", w["features"]["proposed"]),
+                         ("link_to_feature", w["items"]["d"])]  # fmt: skip
 
 
 async def test_words_carry_no_ids(client):

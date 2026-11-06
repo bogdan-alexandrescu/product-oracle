@@ -41,6 +41,12 @@ export interface BaselineState {
   measurements?: Schemas["MeasurementOut"][];
   /** Which metric wrote each measurement (goal_measurements.metric_id), by measurement id; not served. */
   measurementMetric?: Record<string, string>;
+  /** Link to a feature (./ground-truth.ts): a PRD plan's feature code -> the Ground Truth feature it is, by PRD id. */
+  prdLinks?: Record<string, Record<string, string>>;
+  /** Give it a code (./ground-truth.ts): the key each feature had before its code was given, for Undo. */
+  codeFrom?: Record<string, string>;
+  /** Every code Give it a code gave (an undone one stays an alias of its feature: never given again). */
+  codesGiven?: string[];
 }
 
 type FieldChange = { entity_id: string; field: string; before: unknown; after: unknown; at: string };
@@ -818,11 +824,27 @@ export function setEntityEffort(s: BaselineState, key: string, size: string, use
 }
 
 const KEY_RE = /^[a-z0-9][a-z0-9._-]*$/;
+/** A feature's key may be its F-code (F-09, a slice F-15a), as the API's EntityCreate allows (a feature's only). */
+const CODE_KEY_RE = /^[A-Z]{1,3}-\d+[a-j]?$/;
+/** A code read one way, as oracle.baseline.fixes.canonical_code: F-9 and F-009 read F-09, a slice keeps its letter (F-9a reads F-09a). */
+function canonicalCode(key: string): string | null {
+  const m = /^([A-Z]{1,3})-(\d+)((?:\.\d+)?)([a-j]?)$/.exec(key.trim());
+  return m ? `${m[1]}-${String(Number(m[2])).padStart(2, "0")}${m[3]}${m[4]}` : null;
+}
 
 /** A person's new entity, as service.create_entity: confirmed and locked, a goal proposed (B2). */
 function createEntity(s: BaselineState, input: Schemas["EntityCreate"], userId: string): EntityRow {
   if (!input.title?.trim()) throw new MockError(422, "title must not be empty");
-  if (!input.key || input.key.length > 120 || !KEY_RE.test(input.key)) throw new MockError(422, "key: lowercase letters, digits, . _ -");
+  if (!input.key || input.key.length > 120 || !(KEY_RE.test(input.key) || CODE_KEY_RE.test(input.key))) throw new MockError(422, "key: lowercase letters, digits, . _ -");
+  if (CODE_KEY_RE.test(input.key) && input.type !== "feature") throw new MockError(422, "Only a feature's key can be a feature code.");
+  // A code key is stored as the check reads it (F-9 is F-09) and is one feature's: refused when a feature's key, or a
+  // code once given and taken back (an alias never given again), reads it, as service.create_entity.
+  const code = input.type === "feature" ? canonicalCode(input.key) : null;
+  if (code) {
+    input = { ...input, key: code };
+    const had = [...s.entities.filter((e) => e.type === "feature").map((e) => e.key), ...(s.codesGiven ?? [])];
+    if (had.some((k) => (canonicalCode(k) ?? k) === code)) throw new MockError(409, `Another feature already has the code ${code}.`);
+  }
   if (s.entities.some((e) => e.type === input.type && e.key === input.key)) throw new MockError(409, `${input.type}:${input.key} already exists`);
   if (input.type === "goal" && input.status === "confirmed") {
     throw new MockError(422, "goals start proposed; confirm them with POST .../confirm");

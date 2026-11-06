@@ -5055,6 +5055,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/baseline/entities/{entity_id}/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Give Code
+         * @description Give it a code (the check's ``no_code``): the company's next F-number (its highest + 1),
+         *     or for a slice its feature's number with the next letter (F-15a), stored as the feature's
+         *     key. Refused for a feature with a code, one not in the Ground Truth, or a slice whose
+         *     feature has none. Approvers and owners give it at once; a commenter's is a proposal.
+         */
+        post: operations["give_code"];
+        /**
+         * Take Code Back
+         * @description Undo Give it a code: the feature's key as it was.
+         */
+        delete: operations["take_code_back"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/baseline/prd-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Link Prd Feature
+         * @description Link to a feature (the check's ``prd_feature_missing`` and ``slice_parent_missing``): a
+         *     feature of a PRD's approved plan, by its code there, becomes that confirmed Ground Truth
+         *     feature: the check stops flagging it and the PRD reads the feature's code. Approvers and
+         *     owners link at once; a commenter's is a proposal.
+         */
+        post: operations["link_prd_feature"];
+        /**
+         * Unlink Prd Feature
+         * @description Undo Link to a feature: the PRD's feature is its own again (and flagged again).
+         */
+        delete: operations["unlink_prd_feature"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/baseline/yaml": {
         parameters: {
             query?: never;
@@ -26487,6 +26541,23 @@ export interface components {
             words: string;
         };
         /**
+         * GroundTruthFixOut
+         * @description A fix made (``done``: approvers and owners), or sent for an approver (``proposed``:
+         *     a commenter's, with its proposal). ``code``: the code given, when one was.
+         */
+        GroundTruthFixOut: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "done" | "proposed";
+            feature: components["schemas"]["GroundTruthRef"];
+            /** Code */
+            code?: string | null;
+            /** Proposal Id */
+            proposal_id?: string | null;
+        };
+        /**
          * GroundTruthFlag
          * @description One place that breaks the Ground Truth: allowed, flagged "Not in the Ground Truth".
          */
@@ -33696,6 +33767,24 @@ export interface components {
             readers?: ("founder" | "product_eng" | "leadership" | "engineers_or_agents")[] | null;
             /** Model Driven */
             model_driven?: boolean | null;
+        };
+        /**
+         * PrdLinkCreate
+         * @description Link a feature of a PRD's approved plan (by its code there) to a Ground Truth feature.
+         */
+        PrdLinkCreate: {
+            /**
+             * Prd Document Id
+             * Format: uuid
+             */
+            prd_document_id: string;
+            /** Code */
+            code: string;
+            /**
+             * Feature Id
+             * Format: uuid
+             */
+            feature_id: string;
         };
         /**
          * PrdLinks
@@ -59416,6 +59505,135 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GroundTruthOut"];
+                };
+            };
+        };
+    };
+    give_code: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroundTruthFixOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    take_code_back: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroundTruthFixOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    link_prd_feature: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrdLinkCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroundTruthFixOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unlink_prd_feature: {
+        parameters: {
+            query: {
+                prd_document_id: string;
+                code: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

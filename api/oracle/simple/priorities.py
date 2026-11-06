@@ -279,7 +279,8 @@ def _drafts(read_: service.Read, principal: Any) -> list[SimplePriorityDraft]:
     return out
 
 
-FEATURE_CODE = re.compile(r"[A-Z]{1,3}-\d+")
+# A slice of a feature reads its number with a letter (F-15a, oracle.baseline.fixes).
+FEATURE_CODE = re.compile(r"[A-Z]{1,3}-\d+[a-j]?")
 
 
 def _initials(name: str) -> str:
