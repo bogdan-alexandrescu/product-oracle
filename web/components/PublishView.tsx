@@ -52,7 +52,7 @@ const BLOCK_NOUN: Record<string, string> = {
   "Critical blocker": "critical blocker",
   "Security or policy": "security or policy problem",
   "Third-party": "third-party problem",
-  "Hard check": "failed check",
+  "Failed check": "failed check",
   "Unconfirmed date": "unconfirmed date",
 };
 /** The kinds whose approve checks the dates the text writes, not the PRD checks (api/oracle/review/publish_gate.py). */
@@ -76,9 +76,9 @@ type Block = {
  * read, the check itself is the row.
  */
 function blocksOf(doc: string, n: number, readiness: Readiness, strategy: Schemas["DocumentBlockerStrategy"] | undefined): Block[] {
-  const entity = (id: string | undefined) => (id ? `/baseline?entity=${id}` : null);
+  const entity = (id: string | undefined) => (id ? `/ground-truth?entity=${id}` : null);
   // qa4-docs-share-52: a blocker's Resolve opens the blocker itself, where Open blocker goes.
-  const blocker = (id: string) => `/baseline?tab=blockers&blocker=${encodeURIComponent(id)}`;
+  const blocker = (id: string) => `/ground-truth?tab=blockers&blocker=${encodeURIComponent(id)}`;
   const section = (key: string | undefined) => (key ? sectionHref(doc, n, key) : null);
   // The gating blockers first, then the other refusals in the verdict's order.
   const keys = [...readiness.blocking].sort((a, b) => Number(b === BLOCKERS_CHECK) - Number(a === BLOCKERS_CHECK));
@@ -101,7 +101,7 @@ function blocksOf(doc: string, n: number, readiness: Readiness, strategy: Schema
       {
         id: key,
         title: item?.title ?? key,
-        kind: CHECK_KIND[key] ?? "Hard check",
+        kind: CHECK_KIND[key] ?? "Failed check",
         href: section(item?.section_keys[0]) ?? entity(item?.evidence_ids[0]),
         check: item,
       },
@@ -294,12 +294,15 @@ function BlockInspector({
   question,
   n,
   kind,
+  canPublish,
   onChanged,
 }: {
   block: Block;
   question: Question | undefined;
   n: number;
   kind?: string;
+  /** D-1: what publishing does is shown only to whoever may publish (can("approve_version")). */
+  canPublish: boolean;
   onChanged: (message: string) => void;
 }) {
   const why = block.blocker?.gate.rationale ?? block.check?.rationale;
@@ -309,12 +312,12 @@ function BlockInspector({
     <Inspector
       testId="publish-inspector"
       label="Selected block"
-      eyebrow="Block · selected"
+      eyebrow="Selected"
       title={block.title}
       chips={
         <>
           <Chip hero>{block.kind}</Chip>
-          {(block.check || block.blocker) && <Chip hero>Hard check</Chip>}
+          {(block.check || block.blocker) && <Chip hero>Must fix</Chip>}
         </>
       }
       action={
@@ -337,7 +340,7 @@ function BlockInspector({
       {block.blocker && (
         <InspectorSection label="Blocker strategy">
           <div className="flex flex-wrap items-center gap-2">
-            <LinkButton href={`/baseline?tab=blockers&blocker=${encodeURIComponent(block.blocker.blocker.id)}`}>
+            <LinkButton href={`/ground-truth?tab=blockers&blocker=${encodeURIComponent(block.blocker.blocker.id)}`}>
               Open blocker
             </LinkButton>
             <span className="text-sm text-text2">Status, options, feasibility scope and experiments</span>
@@ -349,9 +352,11 @@ function BlockInspector({
           <AcceptRisk key={block.id} blocker={block.blocker} onDone={onChanged} />
         </InspectorSection>
       )}
-      <InspectorSection label="On publish">
-        <OnPublish n={n} kind={kind} />
-      </InspectorSection>
+      {canPublish && (
+        <InspectorSection label="On publish">
+          <OnPublish n={n} kind={kind} />
+        </InspectorSection>
+      )}
     </Inspector>
   );
 }
@@ -380,8 +385,8 @@ function SubHead({ title, count, muted = false, children }: { title: string; cou
   );
 }
 
-/** One block: icon, title, kind chip, Resolve. Click selects it. */
-function BlockRow({ block, selected, onSelect }: { block: Block; selected: boolean; onSelect: () => void }) {
+/** One block: icon, title, kind chip, Resolve (D-1: only for whoever may publish). Click selects it. */
+function BlockRow({ block, selected, canResolve, onSelect }: { block: Block; selected: boolean; canResolve: boolean; onSelect: () => void }) {
   return (
     <div
       data-testid="block-row"
@@ -409,7 +414,7 @@ function BlockRow({ block, selected, onSelect }: { block: Block; selected: boole
         <Chip kind="crit">{block.kind}</Chip>
       </span>
       <span className="text-right max-[600px]:col-start-3 max-[600px]:row-start-2">
-        {block.href && (
+        {block.href && canResolve && (
           <LinkButton href={block.href} variant={selected ? "solid" : "secondary"} onClick={(e) => e.stopPropagation()}>
             Resolve
           </LinkButton>
@@ -767,8 +772,8 @@ export function PublishView({ doc }: { doc: string }) {
 
   const inspector =
     n == null || !readiness ? undefined : selected ? (
-      <BlockInspector key={selected.id} block={selected} question={questionFor(selected)} n={n} kind={d?.kind} onChanged={changed} />
-    ) : (
+      <BlockInspector key={selected.id} block={selected} question={questionFor(selected)} n={n} kind={d?.kind} canPublish={canPublish} onChanged={changed} />
+    ) : !published && !canPublish ? undefined : (
       <ReadyInspector n={n} published={published} kind={d?.kind} />
     );
 
@@ -780,6 +785,8 @@ export function PublishView({ doc }: { doc: string }) {
         // build-review: an approved version reads "Approved" in both modes; Publish stays the button's name.
         back={<DocCrumb doc={d} />}
         title="Publish"
+        // B-23: the phone bar reads "Publish" alone; the crumb already names the document.
+        phoneSuffix={false}
         suffix={d ? `${d.title}${n != null ? ` v${n}` : ""}` : undefined}
         status={sharable && published ? undefined : blocksChip}
         action={action}
@@ -822,7 +829,7 @@ export function PublishView({ doc }: { doc: string }) {
                 </div>
                 {blocks.map((b) => (
                   <div key={b.id}>
-                    <BlockRow block={b} selected={b.id === selected?.id} onSelect={() => setPicked(b.id)} />
+                    <BlockRow block={b} selected={b.id === selected?.id} canResolve={canPublish} onSelect={() => setPicked(b.id)} />
                     {phone && b.id === selected?.id && inspector && <div className="border-t border-line p-2">{inspector}</div>}
                   </div>
                 ))}

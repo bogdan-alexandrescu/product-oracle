@@ -17,7 +17,9 @@ FlagKind = Literal[
     "cut_with_dependents",
     "draft_without_owner",
 ]
-FixKind = Literal["shift_dependents", "move_dependency", "accept_risk"]
+FixKind = Literal[
+    "shift_dependents", "move_dependency", "accept_risk", "restore", "remove_dependency"
+]
 ItemStatus = Literal["planned", "in_progress", "done", "cut", "draft", "merged"]
 SuggestionStatus = Literal["open", "accepted", "edited", "dismissed"]
 
@@ -47,6 +49,15 @@ class SimplePhase(BaseModel):
     estimated: bool
 
 
+class SimpleFlagDependent(BaseModel):
+    """An item not cut or done that depends on a cut item, wherever the view's filters are."""
+
+    id: uuid.UUID
+    title: str
+    # The reader decides that item (else its Remove the dependency is a proposal).
+    can_decide: bool = False
+
+
 class SimpleFlag(BaseModel):
     kind: FlagKind
     # One line, in words.
@@ -60,6 +71,18 @@ class SimpleFlag(BaseModel):
     # qa-simple-home-1: the items "Move the dependents" (shift_dependents) moves, the
     # flagged item first, as the change engine moves them; empty for other flags.
     moves: list[uuid.UUID] = []
+    # roadmap-decide review: cut_with_dependents' live dependents across the whole roadmap
+    # (one a filter hides too), each with its own Remove the dependency; empty otherwise.
+    dependents: list[SimpleFlagDependent] = []
+
+
+class SimpleRoadmapWaiting(BaseModel):
+    """roadmap-decide review: the light count the side menu reads: the broken links of the
+    whole roadmap as the reader sees it (the working draft's to who sees it), and the dates
+    the reader may confirm in it (Needs a decision's Dates to confirm)."""
+
+    broken_links: int
+    dates_to_confirm: int
 
 
 class SimpleDocRef(BaseModel):
@@ -80,6 +103,10 @@ class SimpleGoalRef(BaseModel):
     # (the panel edits how it is measured through that edit, which takes the whole goal).
     target: str | None = None
     due: dt.date | None = None
+    # build-feature-panel (AN PR 1204): the goal's latest reading and its unit (attrs.current,
+    # attrs.unit), for the panel's Reading row ("Today 61% · target 70% by Jun 30, 2027").
+    current: float | None = None
+    unit: str | None = None
 
 
 class SimpleTrackRef(BaseModel):
@@ -279,6 +306,8 @@ class SimpleRoadmapItem(BaseModel):
     code: str | None = None
     title: str
     outcome: str | None = None
+    # build-feature-panel (AN PR 1204): the item's notes (op edit_note), the panel's Notes row.
+    note: str | None = None
     horizon: Literal["now", "next", "later"]
     roadmap: SimpleDocRef
     prd: SimpleDocRef | None = None
@@ -314,6 +343,14 @@ class SimpleRoadmapItem(BaseModel):
     # owner is shown) and the keys it depends on as stored (set_depends' ``before``).
     own_owner_id: str | None = None
     depends_keys: list[str] = []
+    # roadmap-edit-fixes: the stored key (of depends_keys) that names each item of
+    # depends_on, by item id (another PRD's feature key is neither its key nor its code);
+    # and Oracle's ideas of what a new item depends on (keys), a person's to add.
+    depends_key_of: dict[str, str] = {}
+    # roadmap-edit-fixes round 1: every stored key that names each item of depends_on (its key
+    # and its feature's key, say), by item id: the panel's x drops them all.
+    depends_keys_of: dict[str, list[str]] = {}
+    suggested_depends: list[str] = []
     can_decide: bool = False
     deciders: list[str] = []
     reasons: list[str] = []
@@ -433,6 +470,8 @@ class SimpleMilestonePending(BaseModel):
     counts_when: str | None = None
     asked_of: str | None = None
     change_id: uuid.UUID | None = None
+    # roadmap-decide: the viewer is the PRD's owner (or a company owner) and decides it.
+    can_decide: bool = False
 
 
 MilestoneProgress = Literal["on_track", "at_risk", "not_started", "met"]
@@ -456,6 +495,11 @@ class SimpleGoalMilestone(BaseModel):
     prd_owner: str | None = None
     pending: SimpleMilestonePending | None = None
     can_change: bool = False
+    # milestone-rights: a roadmap's own milestone the reader may not change but may propose
+    # a change to (op edit_goal_milestone, routed to who decides the roadmap).
+    can_propose: bool = False
+    # old-milestones: the older per-PRD roadmap it was brought over from, if it was.
+    carried_from: "SimpleDocRef | None" = None
 
 
 class SimpleGoalMilestoneIn(BaseModel):
@@ -475,6 +519,39 @@ class SimpleGoalMilestonePatch(BaseModel):
     counts_when: str | None = None
 
 
+class SimpleOldMilestone(BaseModel):
+    """old-milestones (owner, Nov 4): a goal milestone still on an older per-PRD roadmap
+    (history) that is not on the company roadmap yet. ``items``: the titles of the items
+    it gates that are on the company roadmap (it would gate those there); none left: it
+    waits on an owner's Keep or Drop."""
+
+    id: uuid.UUID
+    name: str
+    date: dt.date | None = None
+    goal_id: uuid.UUID | None = None
+    goal_title: str | None = None
+    from_roadmap: "SimpleDocRef"
+    items: list[str] = []
+
+
+class SimpleOldMilestones(BaseModel):
+    """What "Bring old milestones over" would do: ``moves`` are copied (items re-pointed),
+    ``needs_call`` have no items left and wait on Keep or Drop. An owner's alone: anyone
+    else reads both empty and ``can_act`` false."""
+
+    can_act: bool = False
+    moves: list[SimpleOldMilestone] = []
+    needs_call: list[SimpleOldMilestone] = []
+
+
+class SimpleOldMilestonesResult(BaseModel):
+    """After a carry-over, Keep or Drop: the ids of the company roadmap's new milestones
+    and what is left."""
+
+    carried: list[uuid.UUID] = []
+    old_milestones: SimpleOldMilestones
+
+
 class SimpleRoadmapOut(BaseModel):
     today: dt.date
     group: RoadmapGroup
@@ -485,6 +562,8 @@ class SimpleRoadmapOut(BaseModel):
     # build-milestones-on-roadmap: each shown roadmap's milestones per goal (its own, and
     # those read from the PRDs its items come from).
     goal_milestones: list[SimpleGoalMilestone] = []
+    # old-milestones: the older roadmaps' goal milestones an owner may bring over.
+    old_milestones: SimpleOldMilestones = SimpleOldMilestones()
     # S3b: changes waiting in working drafts and proposals of roadmaps whose drafts the
     # reader may not see (the banner's count, no details: they read the published version).
     changes_in_review: int = 0
@@ -532,6 +611,7 @@ ChangeOp = Literal[
     "restore",
     "edit_title",
     "edit_outcome",
+    "edit_note",
     "accept_date_suggestion",
     "accept_risk",
     "shift_dependents",
@@ -573,8 +653,12 @@ ChangeOp = Literal[
     "set_goal",
     "set_depends",
     "set_status",
+    # lane-gt-ui: the Ground Truth feature the item is (Add to Ground Truth, Link to a feature).
+    "set_feature",
     # one-feature-panel: how the goal the item serves is measured (its target and date).
     "set_goal_measure",
+    # goal-buckets-tasks: the goals an item serves (into the working draft).
+    "set_goals",
     # chat-actions: the item's own owner and decider (into the working draft).
     "set_owner",
     "set_decider",
@@ -598,6 +682,20 @@ ChangeOp = Literal[
     # owners by who may not (oracle.simple.goal_asks).
     "archive_goal",
     "unarchive_goal",
+    # roadmap-decide: a dependent no longer depends on a cut item (its fix).
+    "remove_dependency",
+    # removed-tracks: a removed goal milestone put back; a track added, edited (title, owner,
+    # status) or moved to Trash (oracle.simple.plan_changes).
+    "restore_goal_milestone",
+    "add_track",
+    "edit_track",
+    "delete_track",
+    # edit-decisions (oracle.simple.decision_sheet): an open decision's or a PRD question's
+    # fields, its withdrawal (the "not now"), and a question added to a PRD.
+    "edit_decision",
+    "edit_question",
+    "withdraw_decision",
+    "add_question",
 ]
 # chat-actions: chat cards applied through the meetings module or Oracle's decisions, not
 # the change engine (oracle.simple.chat_actions).
@@ -610,6 +708,8 @@ ChatActionOp = Literal[
     "suggest_feature",
     # item-chat-understands: an item already shipped (oracle.simple.shipped).
     "mark_shipped",
+    # ask-oracle-actions: any action of the API's catalogue (oracle.simple.ask_actions).
+    "api_action",
 ]
 ChangeStatus = Literal["applied", "proposed", "accepted", "declined", "undone"]
 SessionKind = Literal["editing", "meeting"]
@@ -786,6 +886,19 @@ class InboxSimpleChange(BaseModel):
     state: Literal["new", "open", "done"]
     # meeting-changes-only-its-agenda: the meeting that asked for it.
     from_meeting: SimpleChangeMeeting | None = None
+    # inbox-meeting-proposals: what was asked, in plain words, the item by its name
+    # ("cut Delivery integrity"), and whether I may accept or decline it now.
+    asked: str | None = None
+    can_decide: bool = False
+    # inbox-meeting-proposals owner: asked through Ask Oracle (by ``by_name``), not on the
+    # page nor in a meeting.
+    from_ask: bool = False
+    # inbox-meeting-proposals fix: what a proposal on no item is on, so its row is named and
+    # opens where it is decided: a PRD question ("Q3 Offline mode scope", ``question_id``) or
+    # a one-pager line (as it reads, ``line_id``).
+    subject: str | None = None
+    question_id: uuid.UUID | None = None
+    line_id: str | None = None
 
 
 DraftStatus = Literal["working", "submitted", "approved", "discarded"]
@@ -811,7 +924,7 @@ class SimpleDraftChange(BaseModel):
     session_kind: Literal["editing", "meeting"] | None
     in_meeting: bool
     # fix5-cut-dependents: the titles of every item a cut_with_dependents cut (the item
-    # first); empty for every other op.
+    # first); roadmap-decide: every other op names its item (a fix: then what else moved).
     titles: list[str] = []
 
 
@@ -843,8 +956,13 @@ class SimpleDraftOut(BaseModel):
     base_version: int | None
     version: int | None
     created_by: uuid.UUID
+    # roadmap-decide review: the author's name, so the banner names whose draft it is at once.
+    created_by_name: str | None = None
     created_at: dt.datetime
     participant_ids: list[uuid.UUID]
+    # roadmap-decide review: the roadmap's set decider (who approves it), by name; none when
+    # an owner decides.
+    decider: SimplePersonRef | None = None
     # Applied changes in it, not undone.
     changes: int
     submitted_at: dt.datetime | None
@@ -859,6 +977,12 @@ class SimpleDraftOut(BaseModel):
     can_submit: bool
     can_resume: bool
     can_approve: bool
+    # roadmap-decide (owner, Nov 4: draft, shown live): the decider's Approve and publish on a
+    # working draft, in place of Send for review (POST .../approve sends it and approves it).
+    can_publish: bool = False
+    # roadmap-decide review: a working draft's required reviewers who still review it after
+    # the decider's approval (the reader left out), named before Approve and publish.
+    required_reviewers: list[uuid.UUID] = []
     # D-d: every applied change it holds, not undone, oldest first (one shared draft per
     # roadmap: approving it publishes them all).
     change_log: list[SimpleDraftChange] = []
@@ -902,6 +1026,8 @@ class InboxSimpleApproval(BaseModel):
     document: SimpleDocRef
     version: int | None
     submitted_by: uuid.UUID | None
+    # inbox-meeting-proposals fix: who submitted it, by name (or e-mail).
+    submitted_by_name: str | None = None
     submitted_at: dt.datetime | None
     decider_approved: bool
     state: Literal["new", "open"]
@@ -952,6 +1078,9 @@ class SimplePriorityRow(BaseModel):
     # reader, unique in the company (a digit added on a clash, in the features' creation
     # order). oracle.simple.priorities.short_codes.
     short_code: str = ""
+    # prio-company (Nov 4): the feature's own code (F-12, or its PRD's F-06) shown beside its
+    # name; None when it has none (never letters made up from its name).
+    own_key: str | None = None
     title: str
     goal: SimplePriorityGoal | None = None
     milestone: str | None = None
@@ -982,6 +1111,9 @@ class SimplePriorityRow(BaseModel):
     # rest outside the plan).
     in_plan: bool = False
     can_reorder: bool = False
+    # prio-company (Nov 4): the feature has an item on the company roadmap (else on every
+    # roadmap while there is no company roadmap); false: an owner's move adds it there.
+    on_roadmap: bool = False
     # The caller's change applies (else it is proposed).
     applies: bool = False
     # The feature's active override as override_priority's ``before.override`` wants it.
@@ -1187,6 +1319,8 @@ class SimplePrioritiesOut(BaseModel):
     # Roadmap-plus: the line drawn, and the lines offered (Pick a date aside).
     line: SimpleLine | None = None
     lines: list[SimpleLine] = []
+    # prio-company (Nov 4): the one roadmap priorities moves; None while there is none.
+    company_roadmap: "SimpleDocRef | None" = None
     # plan-charts: the plan "this quarter" is (Goal buckets by milestone); none with no
     # dated plan.
     plan: SimplePlanOut | None = None
@@ -1632,6 +1766,9 @@ class ChatCardOut(BaseModel):
     # meeting-changes-only-its-agenda: in a meeting, the card's item is not on its agenda:
     # "Delivery integrity is on another roadmap: sent to its owner to decide".
     elsewhere: str | None = None
+    # chat-latest-card: a newer card in the chat replaced this one (its id): an open card
+    # is no longer actionable; an applied one keeps its Undo.
+    replaced_by: uuid.UUID | None = None
 
 
 class ChatChoiceOut(BaseModel):
@@ -1924,6 +2061,10 @@ class SimpleMeetingCan(BaseModel):
     redraft: bool = False
     # Whoever ended the meeting or an owner retries a failed email or Slack post.
     retry_delivery: bool = False
+    # agenda-sheet: an owner or the PRD's decider changes the agenda; an approver who is
+    # not the decider proposes; others read.
+    edit_agenda: bool = False
+    propose_agenda: bool = False
 
 
 class SimpleMeetingNote(BaseModel):
@@ -1944,11 +2085,59 @@ class SimpleAgendaItem(BaseModel):
     title: str
 
 
+class SimpleAgendaRow(BaseModel):
+    """agenda-sheet: one row of the meeting's agenda: a feature of its PRD or a topic a
+    person typed, with its minutes; ``state`` reads the chat's next and skip."""
+
+    id: str
+    kind: Literal["feature", "topic"]
+    feature_id: uuid.UUID | None = None
+    title: str
+    mins: int
+    by_name: str | None = None
+    state: Literal["done", "now", "next", "skipped"]
+
+
+class SimpleAgendaProposal(BaseModel):
+    """agenda-sheet: an approver's agenda changes waiting for the meeting's decider."""
+
+    by: SimplePersonRef
+    decider: SimplePersonRef | None = None
+    words: list[str] = []
+    # The proposer's earlier ops whose item is gone since, as words: dropped, not proposed.
+    dropped: list[str] = []
+
+
 class SimpleAgenda(BaseModel):
-    """chat-actions: the item the meeting takes next and the items it skips."""
+    """chat-actions: the item the meeting takes next and the items it skips.
+    agenda-sheet: the rows in order, the PRD's features not on it yet, what the last batch
+    of the sheet did (for its Undo line) and an approver's waiting proposal."""
 
     next: SimpleAgendaItem | None = None
     skipped: list[SimpleAgendaItem] = []
+    items: list[SimpleAgendaRow] = []
+    addable: list[SimpleAgendaItem] = []
+    batch: str | None = None
+    words: list[str] = []
+    # The accepted proposal's ops whose item was gone, as words: left out of the batch.
+    left_out: list[str] = []
+    # port-an-decisions: the batch removed items that wait in Settings › Trash (Open Trash).
+    in_trash: bool = False
+    proposal: SimpleAgendaProposal | None = None
+    # Who decides what an approver proposes: the PRD's decider (none: an owner).
+    decider: SimplePersonRef | None = None
+
+
+class SimpleAgendaEditIn(BaseModel):
+    """agenda-sheet: one op of the Agenda sheet. ``batch`` names the sheet's opening, so
+    Undo puts back the agenda as it was when that batch began."""
+
+    op: Literal["add", "rename", "move", "remove", "undo", "accept", "withdraw"]
+    item_id: str | None = Field(default=None, max_length=64)
+    feature_id: uuid.UUID | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    to: int | None = Field(default=None, ge=0, le=200)
+    batch: str | None = Field(default=None, max_length=64)
 
 
 class SimpleDraftRoadmapItem(BaseModel):
@@ -2039,6 +2228,8 @@ class SimpleUpcomingMeeting(BaseModel):
     # What the ritual reviews when all of it was deleted for good (purged from Trash, none
     # left); Home says "Its roadmap was deleted" and links the ritual's settings.
     reviews_deleted: Literal["roadmap"] | None = None
+    # home-deleted-roadmap: when it was deleted for good (its last purge); Home shows the day.
+    reviews_deleted_at: dt.datetime | None = None
 
 
 class SimpleMeetingsOut(BaseModel):
@@ -2122,6 +2313,15 @@ class SimpleDecisionRow(BaseModel):
     # prd-questions: a PRD's question keeps its code ("Q10"); a decided one, its answer.
     code: str | None = None
     chosen: str | None = None
+    # edit-decisions (ec1 b): every field the sheet shows and changes, what the reader may
+    # do there, and the last change made from it.
+    question: str | None = None
+    context: str | None = None
+    options: list["SimpleQuestionOption"] = []
+    review_at: dt.date | None = None
+    can: "SimpleDecisionCan | None" = None
+    edited_at: dt.datetime | None = None
+    edited_by: SimplePersonRef | None = None
 
 
 class SimpleMeetingGroup(BaseModel):
@@ -2179,6 +2379,24 @@ class SimpleQuestionCan(BaseModel):
     propose: bool = False
     # Names the decider (owners and the decider; others propose).
     name_decider: bool = False
+    # edit-decisions (eq2 b): changes its text, recommendation and other answers at once
+    # (owners and the decider; ``propose`` suggests the change instead); withdraws it (the
+    # "not now", with Undo); deletes it to Trash.
+    edit: bool = False
+    withdraw: bool = False
+    delete: bool = False
+
+
+class SimpleDecisionCan(BaseModel):
+    """edit-decisions (ec1 b): what the reader may do on an open decision's sheet, from
+    the decision's own rights (its creator, its decider or an owner edits, withdraws and
+    deletes; owners reassign; another commenter or approver proposes an edit)."""
+
+    edit: bool = False
+    propose: bool = False
+    withdraw: bool = False
+    delete: bool = False
+    reassign: bool = False
 
 
 class SimpleQuestionSource(BaseModel):
@@ -2223,6 +2441,10 @@ class SimpleQuestion(BaseModel):
     # A live review meeting's agenda: the change that decided it in this meeting, for its
     # Undo (only who made it, while the meeting runs).
     undo_id: uuid.UUID | None = None
+    # edit-decisions: the last change made from the sheet, who and when ("Edited by you
+    # just now").
+    edited_at: dt.datetime | None = None
+    edited_by: SimplePersonRef | None = None
 
 
 class SimpleRunStepOut(BaseModel):
@@ -2288,6 +2510,35 @@ class SimpleDecisionsOut(BaseModel):
     runs: list[SimpleRunGroup] = []
 
 
+class SimpleWaitingItem(BaseModel):
+    """home-decisions-one-list: one thing waiting on the signed-in person
+    (oracle.simple.waiting_list): what it is, its action in words and where it is done."""
+
+    kind: Literal[
+        "run_stop",
+        "question",
+        "decision",
+        "broken_link",
+        "date",
+        "draft",
+        "proposal",
+        "goal_suggestion",
+        "goal",
+    ]
+    # Unique in the list (kind and id); ``ref_id`` is the id its own endpoint acts on (the
+    # checkpoint, question, decision's number, item, date suggestion, draft, change, goal
+    # suggestion or proposed goal).
+    key: str
+    ref_id: str
+    title: str
+    detail: str = ""
+    action: str
+    href: str
+    at: dt.datetime | None = None
+    # A proposal's change operation (Accept/Decline act on it through /v1/simple/changes).
+    op: str | None = None
+
+
 class SimpleDecisionsWaitingOut(BaseModel):
     """prd-questions: the one list Home's "Decisions waiting for you", the rail's count and
     the review meeting's "Decisions due" read: product decisions waiting for this person
@@ -2302,6 +2553,10 @@ class SimpleDecisionsWaitingOut(BaseModel):
     # walkc-roadmap-tasks: the open item tasks this person owns (due first; not counted in
     # ``count``, which is decisions only).
     tasks: list[SimpleTaskWaiting] = []
+    # home-decisions-one-list: everything waiting on this person (run stops, questions,
+    # decision-log calls, broken links, dates, drafts, proposals, goal suggestions), each
+    # with its action.
+    items: list[SimpleWaitingItem] = []
 
 
 class InboxSimpleMinutes(BaseModel):
@@ -2320,3 +2575,101 @@ OnePagerOut.model_rebuild()
 
 
 SimpleMeetingOut.model_rebuild()
+SimpleDecisionRow.model_rebuild()
+
+
+# --------------------------------------------------------------------------- removed-tracks
+
+
+class SimpleRemovedItem(BaseModel):
+    """Something removed in Simple, to put back: a cut feature, an archived goal or a removed
+    goal milestone, with who removed it and when."""
+
+    kind: Literal["feature", "goal", "milestone"]
+    # The roadmap item's, the goal entity's or the milestone's id.
+    id: uuid.UUID
+    title: str
+    # Where it was: the feature's roadmap, "Goals", the milestone's goal.
+    where: str
+    at: dt.datetime | None = None
+    by_name: str | None = None
+    # The reader puts it back directly; else it is proposed to ``decider_name``.
+    can_decide: bool = False
+    decider_name: str | None = None
+    roadmap_id: uuid.UUID | None = None
+
+
+class SimpleRemovedList(BaseModel):
+    items: list[SimpleRemovedItem]
+
+
+class SimpleTrackRow(BaseModel):
+    id: uuid.UUID
+    title: str
+    status: Literal["active", "paused", "closed"]
+    owner_id: uuid.UUID | None = None
+    owner_name: str | None = None
+    prd_id: uuid.UUID
+    prd_title: str | None = None
+    # The reader edits or deletes it directly; else it is proposed to ``decider_name``.
+    can_decide: bool = False
+    decider_name: str | None = None
+    # Its live features over the whole roadmap (cut and merged ones left out), whatever
+    # the roadmap's filters show.
+    feature_count: int = 0
+    # Every feature on it, cut and merged ones too: what Move to Trash sends to no track.
+    moves_count: int = 0
+
+
+class SimplePerson(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
+class SimplePrdRef(BaseModel):
+    id: uuid.UUID
+    title: str
+
+
+class SimpleTracks(BaseModel):
+    tracks: list[SimpleTrackRow]
+    # The reader adds a track directly; else it is proposed to ``add_decider_name``.
+    can_add: bool = False
+    add_decider_name: str | None = None
+    # Who can own a track (enabled members), and the PRDs a new track can take.
+    people: list[SimplePerson]
+    prds: list[SimplePrdRef]
+
+
+class InboxSimpleDateSuggestion(BaseModel):
+    """inbox-meeting-proposals fix: Oracle's open date suggestion on an item I may decide
+    (``simple_date_suggestions``, counted in ``total``): one row per item, its slices'
+    span; decided on the item's roadmap."""
+
+    id: uuid.UUID
+    item_id: uuid.UUID
+    item_title: str
+    # The item's roadmap (where it is decided).
+    document_id: uuid.UUID
+    start_date: dt.date
+    end_date: dt.date
+    basis: str
+    at: dt.datetime
+    state: Literal["new", "open"]
+
+
+class InboxSimpleGoalSuggestion(BaseModel):
+    """inbox-meeting-proposals fix: an open feature suggested for a goal whose suggestions
+    I decide (``simple_goal_suggestions``, counted in ``total``)."""
+
+    id: uuid.UUID
+    goal: SimpleGoalBrief
+    title: str
+    outcome: str
+    # Oracle suggested it; else a person did (``proposed_by_name``).
+    from_oracle: bool
+    proposed_by_name: str | None = None
+    # The goal's roadmap, where its suggestions are decided (none: no roadmap yet).
+    document_id: uuid.UUID | None = None
+    at: dt.datetime
+    state: Literal["new", "open"]

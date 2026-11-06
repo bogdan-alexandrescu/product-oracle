@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
 # The stop of each checkpoint kind, as checkpoint records name it.
 STOP_LABELS = {
-    "baseline_confirm": "Baseline confirm",
+    "baseline_confirm": "Ground Truth confirm",
     "feature_set": "Feature set",
     "priority_order": "Priority order",
     "prd_review": "PRD review",
@@ -449,6 +449,13 @@ async def checkpoint(
     from oracle.runs import agent_questions
 
     context += await agent_questions.decision_lines(db, run, cp)
+    if cp.status == "approved":
+        # The architect's questions answered at the Engineering check, decided with it.
+        from oracle.runs import stop_answers
+
+        context += stop_answers.decision_lines(
+            await stop_answers.named(db, await stop_answers.engineering(db, cp))
+        )
     subjects: list[dict[str, Any]] = [
         {
             "kind": "run",

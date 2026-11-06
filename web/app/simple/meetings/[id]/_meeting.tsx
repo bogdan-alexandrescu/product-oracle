@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { MarkFor, WithFeatureMarks } from "@/components/current-state/CurrentState";
 import { Button, confirmInPage, toast } from "@/components/ds";
 import { setToastPlace } from "@/components/ds/Toast";
 import { MeetingChat } from "@/components/simple/chat/MeetingChat";
@@ -12,7 +11,7 @@ import { OnePager } from "@/components/simple/OnePager";
 import { QuestionRow, sourceName, useQuestionActions } from "@/components/simple/questions/Questions";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import type { MeetingAgenda, MeetingNote } from "@/lib/api/simple-chat";
+import type { MeetingNote } from "@/lib/api/simple-chat";
 import { calendarDay, todayIn, useCompanyZone } from "@/lib/dates";
 import { zoneName } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -24,9 +23,12 @@ import { DeliveryLine, emailWords, slackWords } from "../_delivery";
 import { DecidedItem, LINK, momentWords } from "../_flow";
 import { DraftDates } from "./_draft";
 import { SimpleSelect } from "@/components/simple/meetings/SimpleSelect";
+import { AgendaSheet } from "@/components/simple/meetings/AgendaSheet";
+import { OpenFeatureContext } from "@/components/simple/OpenFeature";
+import { FeaturePanel, type PanelFeature } from "../../roadmap/_panel";
 
-// Chat actions (notes, open questions, the agenda's next and skipped items): optional until schema.d.ts carries them.
-type Meeting = Schemas["SimpleMeetingOut"] & { notes?: MeetingNote[]; agenda?: MeetingAgenda };
+// Chat actions (notes, open questions): optional until schema.d.ts carries them.
+type Meeting = Schemas["SimpleMeetingOut"] & { notes?: MeetingNote[] };
 type Mode = Meeting["change_mode"];
 
 const STEPS = ["One-pager", "Roadmap", "Decisions"] as const;
@@ -184,6 +186,8 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   const name = namer(m);
   const { me, can } = useMe();
   const phone = usePhone();
+  // build-feature-panel (AN PR 1204 review 5): a feature named on the agenda or the Roadmap step opens the one feature panel.
+  const [feature, setFeature] = useState<PanelFeature | null>(null);
   // walkc-meeting r2 (5a): an invited attendee has not joined until they press Join.
   const joined = m.attendees.some((a) => a.id === me?.user_id && a.joined);
   // qa-simple-decide-2: Approve says what it approves (the one-pager's edits in this meeting); none: no button.
@@ -251,6 +255,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   const roadmapRefresh = `${cardTick}|${m.meeting_decisions.map((d) => d.id).join()}|${m.drafts.map((d) => `${d.status}-${d.changes}`).join()}`;
   return (
     <div className="flex min-h-full flex-col">
+      {feature && <FeaturePanel key={feature.id ?? feature.name} feature={feature} phone={phone} canChange={can("create_simple_change")} onClose={() => setFeature(null)} />}
       {/* qa-simple-decide-48: on a phone the header scrolls away with the page (not sticky). */}
       <header className="sticky top-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-3 max-[600px]:static max-[600px]:gap-y-1 max-[600px]:py-2" aria-label="Meeting">
         {/* qa4-simple-decide-27: the back link and the title share one line and one baseline. */}
@@ -369,7 +374,13 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
           )}
         </div>
       )}
-      <AgendaStrip agenda={m.agenda} />
+      {/* agenda-sheet: Now, Next, Item n of N and the Agenda sheet (mk-edit-meetings-tracks, b); its
+          feature names open the one feature panel (build-feature-panel). */}
+      {(m.agenda.items ?? []).length > 0 && (
+        <OpenFeatureContext.Provider value={setFeature}>
+          <AgendaSheet meetingId={m.id} agenda={m.agenda} can={m.can} phone={phone} reload={reload} />
+        </OpenFeatureContext.Provider>
+      )}
       <div className="grid flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_380px]">
         {/* qa-simple-decide-49: the app has the one <main>; the stage is a section. */}
         <section aria-label="Stage" className="min-w-0">
@@ -387,7 +398,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
               />
             </MeetingClock.Provider>
           )}
-          {step === 1 && <RoadmapSlice m={m} reload={reload} refresh={roadmapRefresh} />}
+          {step === 1 && <RoadmapSlice m={m} reload={reload} refresh={roadmapRefresh} open={setFeature} />}
           {step === 2 && <DecisionsStep m={m} reload={reload} />}
         </section>
         <aside aria-label="Chat column" className="flex min-w-0 flex-col gap-4">
@@ -409,8 +420,8 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
                 {m.meeting_decisions.map((d) => (
                   <li key={d.id} data-testid="meeting-decision">
                     <strong>{code(d)}</strong> {d.title}
-                    {/* qa-simple-decide-50: the day too, as elsewhere in Simple; qa4-simple-decide-19: the meeting's one format, no zone letters. */}
-                    <span className="block text-sm text-text-faint">{d.approver.name} · {momentWords(d.at, zone)}</span>
+                    {/* qa-simple-decide-50: the day too, as elsewhere in Simple; RP2 c: the decision stamp keeps its zone ("Wed Nov 4, 4:41 PM PST"). */}
+                    <span className="block text-sm text-text-faint" data-testid="decision-stamp">{d.approver.name} · {momentWords(d.at, zone, false, true)}</span>
                   </li>
                 ))}
               </ul>
@@ -422,28 +433,12 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   );
 }
 
-/** The agenda as the meeting's chat changed it ("next: …", "skip …"): every attendee sees it. */
-function AgendaStrip({ agenda }: { agenda?: MeetingAgenda }) {
-  if (!agenda || (!agenda.next && agenda.skipped.length === 0)) return null;
+/** A feature's name that opens its panel (build-feature-panel). */
+function FeatureName({ id, title, open, strong = false }: { id: string; title: string; open: (f: PanelFeature) => void; strong?: boolean }) {
   return (
-    <div role="status" aria-label="Agenda" data-testid="agenda-strip" className="flex flex-wrap items-center gap-x-6 gap-y-1 border-b border-line px-4 py-2 text-base [overflow-wrap:anywhere]">
-      {agenda.next && (
-        // The item taken next, with its feature's Current-state pill (the agenda names roadmap items).
-        <div className="flex flex-wrap items-center gap-2">
-          <p data-testid="agenda-next">
-            <span className="font-semibold">Next:</span> {agenda.next.title}
-          </p>
-          <WithFeatureMarks>
-            <MarkFor itemId={agenda.next.id} />
-          </WithFeatureMarks>
-        </div>
-      )}
-      {agenda.skipped.length > 0 && (
-        <p data-testid="agenda-skipped" className="text-text2">
-          <span className="font-semibold">Skipped:</span> {agenda.skipped.map((x) => x.title).join(", ")}
-        </p>
-      )}
-    </div>
+    <button type="button" className="text-left hover:underline" onClick={() => open({ id, code: "", name: title })}>
+      {strong ? <strong>{title}</strong> : title}
+    </button>
   );
 }
 
@@ -460,7 +455,7 @@ function NotesSoFar({ notes, mayChange }: { notes: MeetingNote[]; mayChange: boo
         <ul className="mt-2 space-y-2">
           {notes.map((n) => (
             <li key={n.card_id} data-testid="meeting-note" data-kind={n.kind} className="[overflow-wrap:anywhere]">
-              <span className="font-semibold">{n.kind === "question" ? "Open question:" : "Note:"}</span> {n.text}
+              <span className="font-semibold">{n.kind === "question" ? "Open question:" : "Note:"}</span> <span data-user-content>{n.text}</span>
               <span className="block text-sm text-text-faint">{n.by_name}</span>
             </li>
           ))}
@@ -512,7 +507,7 @@ function ChangeMode({ m, busy, onSave }: { m: Meeting; busy: boolean; onSave: (b
 
 const HORIZONS = ["now", "next", "later"] as const;
 
-function RoadmapSlice({ m, reload, refresh }: { m: Meeting; reload: () => Promise<unknown>; refresh: string }) {
+function RoadmapSlice({ m, reload, refresh, open }: { m: Meeting; reload: () => Promise<unknown>; refresh: string; open: (f: PanelFeature) => void }) {
   const zone = useCompanyZone();
   const q = useQuery(`simple-meeting-roadmap|${m.prd.slug}`, () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: { prd: m.prd.slug } } })));
   // walkc-meeting r2 (5d): a card applied in the chat (or another attendee's change) shows here at once.
@@ -572,7 +567,7 @@ function RoadmapSlice({ m, reload, refresh }: { m: Meeting; reload: () => Promis
         {items.map((i) => (
           <li key={i.id} data-item={i.key} className="flex flex-wrap items-center justify-between gap-2 py-2">
             <span className="min-w-0 flex-1">
-              <strong>{i.title}</strong> · {i.status === "cut" ? "Cut" : cap(i.horizon)} · <span className="whitespace-nowrap" data-testid="roadmap-span">{dayWords(i.start.date, zone)} – {dayWords(i.end.date, zone)}</span>
+              <FeatureName id={i.id} title={i.title} open={open} strong /> · {i.status === "cut" ? "Cut" : cap(i.horizon)} · <span className="whitespace-nowrap" data-testid="roadmap-span">{dayWords(i.start.date, zone)} – {dayWords(i.end.date, zone)}</span>
             </span>
             {/* qa-simple-decide-45: a cut item comes back with Restore. */}
             {m.can.change && i.status === "cut" && (
@@ -705,7 +700,7 @@ function Comments({ m, reload }: { m: Meeting; reload: () => Promise<unknown> })
           <ul className="mt-2 space-y-2" aria-label="Comments">
             {comments.map((c) => (
               <li key={c.id} data-testid="meeting-comment" className="[overflow-wrap:anywhere]">
-                {c.text}
+                <span data-user-content>{c.text}</span>
                 <span className="block text-sm text-text-faint">
                   {c.by_name}
                   {c.at ? ` · ${momentWords(c.at, zone)}` : ""}
@@ -863,14 +858,14 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
             </>
           ) : (
             <>
-              <p data-testid="minutes-summary">{minutes?.summary || "No summary."}</p>
+              <p data-testid="minutes-summary">{minutes?.summary ? <span data-user-content>{minutes.summary}</span> : "No summary."}</p>
               <h3 className="font-semibold">Open questions</h3>
               {/* qa-simple-decide-52: each open question leads to where it is decided. */}
               {minutes?.open_questions.length ? (
                 <ul className="list-disc pl-5">
                   {minutes.open_questions.map((x) => (
                     <li key={x}>
-                      <Link className="text-accent-ink hover:underline" href={`/simple/decisions?meeting=${m.id}`}>{questionWords(x)}</Link>
+                      <Link className="text-accent-ink hover:underline" href={`/simple/decisions?meeting=${m.id}`} data-user-content>{questionWords(x)}</Link>
                     </li>
                   ))}
                 </ul>
@@ -880,7 +875,7 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
               <h3 className="font-semibold">Action items</h3>
               {minutes?.action_items.length ? (
                 <ul className="list-disc pl-5">
-                  {minutes.action_items.map((a, i) => <li key={i}>{a.title} · {a.owner_name ?? owner(a.owner_id) ?? "no owner"}{a.due_date ? ` · by ${dayWords(a.due_date, zone)}` : ""}</li>)}
+                  {minutes.action_items.map((a, i) => <li key={i}><span data-user-content>{a.title}</span> · {a.owner_name ?? owner(a.owner_id) ?? "no owner"}{a.due_date ? ` · by ${dayWords(a.due_date, zone)}` : ""}</li>)}
                 </ul>
               ) : (
                 <p className="simple-small">None.</p>
@@ -892,7 +887,7 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
             <>
               <h3 className="font-semibold">Notes</h3>
               <ul className="list-disc pl-5" data-testid="minutes-notes">
-                {(m.notes ?? []).filter((n) => n.kind === "note").map((n) => <li key={n.id}>{n.text} · {n.by_name}</li>)}
+                {(m.notes ?? []).filter((n) => n.kind === "note").map((n) => <li key={n.id}><span data-user-content>{n.text}</span> · {n.by_name}</li>)}
               </ul>
             </>
           )}
@@ -901,7 +896,7 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
             <>
               <h3 className="font-semibold">Comments</h3>
               <ul className="list-disc pl-5 [overflow-wrap:anywhere]" data-testid="minutes-comments">
-                {(m.notes ?? []).filter((n) => n.kind === "comment").map((n) => <li key={n.id}>{n.text} · {n.by_name}</li>)}
+                {(m.notes ?? []).filter((n) => n.kind === "comment").map((n) => <li key={n.id}><span data-user-content>{n.text}</span> · {n.by_name}</li>)}
               </ul>
             </>
           )}

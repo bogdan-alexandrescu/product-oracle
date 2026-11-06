@@ -89,7 +89,7 @@ test.describe("desktop", () => {
     await row(page, "Bulk address edit").getByTestId("feature-title").click();
     await expect(inspector(page).getByTestId("reason-depends_on_excluded")).toContainText("Bulk address edit depends on Shared address book export, which is left out");
     await row(page, "Saved addresses").getByTestId("feature-title").click();
-    await expect(inspector(page)).toContainText("A goal not in the baseline");
+    await expect(inspector(page)).toContainText("A goal not in the Ground Truth");
     const text = await page.locator("main").innerText();
     for (const key of ["repeat-checkout", "fewer-failed-deliveries", "shared-address-book-export", "bulk-address-edit", "saved-addresses"]) expect(text).not.toContain(key);
   });
@@ -198,7 +198,7 @@ test.describe("phone", () => {
   test("rirs-24: the run's full name shows on the page, wrapped", async ({ page }) => {
     await seeded(page, "feature-set");
     await openReview(page);
-    const name = page.getByRole("link", { name: "Saved addresses · Baseline to PRD", exact: true });
+    const name = page.getByRole("link", { name: "Saved addresses · Ground Truth to PRD", exact: true });
     await expect(name).toHaveAttribute("data-testid", "review-back");
     await expect(name).toBeVisible();
     expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);

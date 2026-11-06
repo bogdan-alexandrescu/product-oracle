@@ -41,7 +41,7 @@ test("evidence: the owner reads the coverage matrix and links a target to an uns
   await expect(column(page, "problem")).not.toHaveAttribute("data-gap", "true");
   await expect(page.getByTestId("evidence-unsupported")).toContainText("unsupported");
   // Targets as rows, grouped; a cell is the link's kind and confidence, dashed when stale.
-  await expect(page.getByTestId("evidence-matrix").getByText("Baseline items")).toBeVisible();
+  await expect(page.getByTestId("evidence-matrix").getByText("Ground Truth items")).toBeVisible();
   await expect(page.getByTestId("evidence-matrix").getByText("Draft citations")).toBeVisible();
   await expect(cell(page, "Usage export", "goal-trace")).toHaveAttribute("data-stale", "true");
   // qa4-docs-18: the cell says how strong the link is; its kind is in the cell's label.

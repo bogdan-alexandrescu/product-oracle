@@ -3,7 +3,7 @@
 import { RoleBadge } from "@/components/RoleBadge";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
 
 import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
 import { CommentPopover, SelectionButton, type PageRect } from "@/components/CommentPopover";
@@ -940,7 +940,10 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   // date-warnings-honest: one date warning per date and item that lacks a basis (the API
   // counts them so); the header names how many dates and opens Plan › Dates filtered to them.
   const dateWarnings = warnings.filter((w) => w.code === "unverified_date");
-  const otherWarnings = warnings.length - dateWarnings.length;
+  const otherWarnings = warnings.filter((w) => w.code !== "unverified_date");
+  // B-09: the sections the header's warnings point to, once each, in document order.
+  const warnedKeys = new Set(otherWarnings.flatMap((w) => w.section_keys));
+  const warnedSections = (version?.sections ?? []).map((s) => s.section_key).filter((k) => warnedKeys.has(k));
   const lackingDays = [...new Set(dateWarnings.map(warningDay).filter((d): d is string => !!d))];
   // The header counts dates, not date-and-item pairs: one date written for two items is one.
   const lackingCount = new Set(dateWarnings.map((w) => warningDay(w) ?? w.message)).size;
@@ -1221,15 +1224,31 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                 </span>
               )}
               {latest != null && n !== latest && <Chip kind="na">Earlier version</Chip>}
-              {otherWarnings > 0 && (
-                <Chip kind="warn">
-                  {otherWarnings} warning{otherWarnings === 1 ? "" : "s"}
-                </Chip>
+              {otherWarnings.length > 0 && (
+                // B-09: a button that opens its warnings on hover, a tap or the keyboard (a title opens nothing on a phone).
+                <InfoTip
+                  label="warnings"
+                  align="start"
+                  side="bottom"
+                  testId="version-warnings-chip"
+                  trigger={
+                    <Chip kind="warn">
+                      {otherWarnings.length} warning{otherWarnings.length === 1 ? "" : "s"}
+                    </Chip>
+                  }
+                >
+                  {/* Spans: the header's status sits in a <p>. */}
+                  <span className="flex flex-col gap-1.5">
+                    {otherWarnings.map((w, i) => (
+                      <span key={i}>{w.message.charAt(0).toUpperCase() + w.message.slice(1)}</span>
+                    ))}
+                  </span>
+                </InfoTip>
               )}
               {dateWarnings.length > 0 && (
                 <Link href={datesHref(lackingDays)} data-testid="dates-lacking" className="inline-flex">
                   <Chip kind="warn">
-                    {lackingCount} date{lackingCount === 1 ? " lacks" : "s lack"} a basis
+                    {lackingCount} date{lackingCount === 1 ? " lacks" : "s lack"} a date source
                   </Chip>
                 </Link>
               )}
@@ -1253,8 +1272,9 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                   Discuss
                 </Button>
               )}
-              {/* C1e: accepted changes staged for the next draft, built in one job. */}
-              {document_?.kind === "prd" && <BuildDraftButton doc={doc} />}
+              {/* C1e: accepted changes staged for the next draft, built in one job; a roadmap's
+                  staged changes build its next draft the same way (next to Approve version). */}
+              {(document_?.kind === "prd" || document_?.kind === "roadmap") && <BuildDraftButton doc={doc} />}
               {/* H9: an approved pricing memo's Decide (the pricing owner), or who it waits for. */}
               {document_?.kind === "pricing" && n === latest && <PricingDecide slug={document_.slug} />}
               {templateOnly && !replaced && document_ && <DraftWithOracleButton slug={document_.slug} />}
@@ -1403,35 +1423,35 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                 </Link>
               </p>
             )}
-            {warnings.map((w, i) => (
-              <div key={i} role="status" data-warning={w.code} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-button bg-warn-bg px-3 py-2 text-sm text-warn">
-                <Icon name="alert" size={16} />
-                <p className="min-w-0 flex-1 font-medium">{w.message}</p>
-                {/* #396: a date warning says to record a date basis on Plan › Dates (F3). */}
-                {w.code === "unverified_date" && (
-                  <Link href={datesHref([warningDay(w)].filter((d): d is string => !!d))} className="font-medium underline underline-offset-2">
-                    Open Plan › Dates
-                  </Link>
-                )}
-                {w.section_keys.map((k) => (
-                  <a
-                    key={k}
-                    href={sectionHref(doc, n, k)}
-                    data-own-nav
-                    onClick={(e) => {
-                      // On the Items tab the link opens the section on the Document tab.
-                      if (!plainClick(e) || !onDocument) return;
-                      e.preventDefault();
-                      if (!shownSections.some((s) => s.section_key === k)) setViewOverride("full");
-                      select(k);
-                    }}
-                    className="font-medium underline underline-offset-2"
-                  >
-                    {headings.get(k) ?? k}
-                  </a>
-                ))}
-              </div>
-            ))}
+            {/* B-09: the warnings themselves are in the header chip's tip (dates: its own chip);
+                the body names, in one short line, the sections they point to. */}
+            {warnedSections.length > 0 && (
+              <p role="status" data-testid="warned-sections" className="flex items-start gap-x-2 text-sm text-text2">
+                <Icon name="alert" size={16} className="text-warn" />
+                <span>
+                  Still open in{" "}
+                  {warnedSections.map((k, i) => (
+                    <Fragment key={k}>
+                      {i > 0 && ", "}
+                      <a
+                        href={sectionHref(doc, n, k)}
+                        data-own-nav
+                        onClick={(e) => {
+                          // On the Items tab the link opens the section on the Document tab.
+                          if (!plainClick(e) || !onDocument) return;
+                          e.preventDefault();
+                          if (!shownSections.some((s) => s.section_key === k)) setViewOverride("full");
+                          select(k);
+                        }}
+                        className="font-medium text-accent-ink underline underline-offset-2"
+                      >
+                        {headings.get(k) ?? k}
+                      </a>
+                    </Fragment>
+                  ))}
+                </span>
+              </p>
+            )}
             {readOnly && (
               <p role="status" className="rounded-button bg-pass-bg px-3 py-2 text-sm font-medium text-pass">
                 Approved {formatDate(version.approved_at!)} · review is closed
@@ -1454,6 +1474,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
             liveTick={liveTick}
             onDecided={() => void Promise.all([verQ.reload(), docQ.reload()])}
             onOpen={setRunReviewOpen}
+            approvedAs={version.approved_at ? (document_?.kind === "prd" ? "PRD" : (document_?.kind ?? "document")) : null}
           />
         )}
         {pane === "items" && isRoadmap && (

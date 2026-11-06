@@ -663,7 +663,7 @@ def recommend_roadmap(
 
     if key == "outcome-roadmap" and confirmed_goals is not None and confirmed_goals < 2:
         warnings.append(
-            f"Only {confirmed_goals} confirmed goal(s) in the baseline: the outcome roadmap "
+            f"Only {confirmed_goals} confirmed goal(s) in the Ground Truth: the outcome roadmap "
             "will be thin. Confirm goals first (goals interview)."
         )
     if a.public_version or a.audience == "public":

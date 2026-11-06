@@ -11,7 +11,13 @@ from oracle.priorities.schemas import PriorityCheck
 from oracle.reports.schemas import InboxReport, InboxReportFailure
 from oracle.review.schemas import FeedbackKind
 from oracle.roadmap.schemas import InboxDateBasis
-from oracle.simple.schemas import InboxSimpleApproval, InboxSimpleChange, InboxSimpleMinutes
+from oracle.simple.schemas import (
+    InboxSimpleApproval,
+    InboxSimpleChange,
+    InboxSimpleDateSuggestion,
+    InboxSimpleGoalSuggestion,
+    InboxSimpleMinutes,
+)
 
 Flow = Literal[
     "baseline_to_prd",
@@ -88,7 +94,7 @@ class KnobsIn(BaseModel):
 
 
 class ReusedBaseline(BaseModel):
-    """The baseline review a run reuses: its Confirm the baseline checkpoint."""
+    """The Ground Truth review a run reuses: its Confirm the Ground Truth checkpoint."""
 
     checkpoint_id: uuid.UUID
     approved_at: datetime
@@ -354,7 +360,7 @@ class ItemReason(BaseModel):
 
 
 class RowReason(ItemReason):
-    """B2: why a run's baseline row needs a person. Its own fields, so a roadmap item's
+    """B2: why a run's Ground Truth row needs a person. Its own fields, so a roadmap item's
     reasons read as they are stored."""
 
     # Whether an approver may waive it (a blocking reason), and a detail line (the chip's
@@ -492,6 +498,8 @@ class FeatureSetCheck(BaseModel):
     excluded: int
     problems: list[FeatureSetProblem]
     flags: dict[str, list[str]] = {}
+    # Each feature's title by its key (included and left out).
+    titles: dict[str, str] = {}
 
 
 class ScopeGoal(BaseModel):
@@ -561,6 +569,9 @@ class ScopeReason(BaseModel):
     answers it."""
 
     code: str
+    # This reason's own name among its feature's (a problem's gate.problem_ref, a flag's
+    # code): Waive on it names it, so it is waived alone, with its own reason.
+    ref: str = ""
     severity: Literal["blocking", "to_confirm"]
     label: str
     requirement: str | None = None
@@ -860,6 +871,9 @@ class GateLeft(BaseModel):
     item: str
     item_title: str | None = None
     code: str
+    # This reason's own name among its item's (a C6 or C8 problem's gate.problem_ref, else
+    # its code): Waive… on it names it, so it is waived alone, with its own reason.
+    ref: str = ""
     label: str
     waivable: bool
     # F4's blocking_question: the question left unanswered.
@@ -927,6 +941,21 @@ class CheckpointOut(BaseModel):
     vague_goals: int | None = None
 
 
+class RunDecisionAnswer(BaseModel):
+    """A question answered at a decided stop: the architect's at an approved Engineering
+    check, or the agents' on the Questions from the agents cards of a stop approved or sent
+    back (``oracle.runs.stop_answers``)."""
+
+    question: str
+    answer: str
+    # The feature it is about, when the question names one: its key, and its name from the
+    # briefs or the run's feature set (None when neither names it). A person reads the name.
+    feature_key: str | None = None
+    feature_title: str | None = None
+    answered_by_name: str | None = None
+    answered_at: datetime | None = None
+
+
 class RunDecision(BaseModel):
     """A decided checkpoint of a run, as its agents read it (``get_checkpoint_review``):
     who decided (the person's name beside their role), when, and what. A console
@@ -957,6 +986,8 @@ class RunDecision(BaseModel):
     # The decision in one line, as the run page shows it:
     # "Feature set · approved by Ana Example, an approver · note: Keep bulk import out of v1".
     summary: str
+    # The questions answered at the stop, so a person sees what was decided there.
+    answers: list[RunDecisionAnswer] = []
 
 
 class RunProgress(BaseModel):
@@ -984,6 +1015,10 @@ class RunSummary(BaseModel):
     source: VersionSource | None = None
     template: str | None = None
     theme: str | None = None
+    # prd-reads-working-draft: the company roadmap a PRD's run read, in words ("Company
+    # roadmap, working draft (edited Nov 5, 2026, 11:40 PM PST)" or "Company roadmap v7
+    # (published Nov 4)"); None before it read one, and on other runs.
+    roadmap_read: str | None = None
     estimate_usd: float | None = None
     spent_usd: float
     created_by: uuid.UUID | None = None
@@ -1558,6 +1593,9 @@ class InboxOut(BaseModel):
     # Engineering leads, and owners while no lead is named (F3 Date bases): proposed
     # schedule bases to verify or reject, each in ``total``.
     dates: list[InboxDateBasis] = []
+    # F-7: my unread webhook notices (paused, address changed), approvers and owners; in
+    # ``total``.
+    webhooks: int = 0
     total: int
     # Approvers and owners: feedback in every state, newest first (declined and done
     # capped to the most recent), the counts per state, and the staged rows.
@@ -1600,6 +1638,10 @@ class InboxOut(BaseModel):
     # Simple S3b: versions from Simple drafts waiting for my approval as a required
     # reviewer (in ``total``).
     simple_approvals: list[InboxSimpleApproval] = []
+    # inbox-meeting-proposals fix: Oracle's open date suggestions and the goals' open
+    # suggestions I may decide (each in ``total``).
+    simple_date_suggestions: list[InboxSimpleDateSuggestion] = []
+    simple_goal_suggestions: list[InboxSimpleGoalSuggestion] = []
     # Simple S8: meeting minutes sent to me as an attendee (not counted in ``total``).
     simple_minutes: list[InboxSimpleMinutes] = []
 
@@ -1746,8 +1788,8 @@ class FromRunProposal(BaseModel):
 
 
 class FromRunRow(BaseModel):
-    """One baseline item a run created (``new``), changed (``changed``) or proposed a
-    change to (``proposal``), as B2 Baseline review from this run lists it: its reasons
+    """One Ground Truth item a run created (``new``), changed (``changed``) or proposed a
+    change to (``proposal``), as B2 Ground Truth review from this run lists it: its reasons
     (recomputed on every read), the shared draft's actions on its key and its state."""
 
     key: str
@@ -1856,7 +1898,7 @@ class FromRunSummary(BaseModel):
 
 
 class FromRunCheckpoint(BaseModel):
-    """The run's latest Confirm the baseline stop, as the caller may use it."""
+    """The run's latest Confirm the Ground Truth stop, as the caller may use it."""
 
     id: uuid.UUID
     kind: CheckpointKind
@@ -1876,9 +1918,9 @@ class FromRunCheckpoint(BaseModel):
 
 
 class FromRunOut(BaseModel):
-    """GET /v1/baseline/from-run/{run_id}: what the run wrote to the baseline, for a
+    """GET /v1/baseline/from-run/{run_id}: what the run wrote to the Ground Truth, for a
     person to review (B2). ``checkpoint`` null when the run never stopped at Confirm the
-    baseline."""
+    Ground Truth."""
 
     run: ProposalRun
     checkpoint: FromRunCheckpoint | None = None

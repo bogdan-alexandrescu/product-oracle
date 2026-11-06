@@ -66,6 +66,8 @@ const empty = (): Holding => ({ held: {}, section_approvals: 0, version_approval
 const approval = (who: string, at: string, section_key: string | null): Schemas["TokenApprovalOut"] => ({
   kind: section_key ? "section" : "version",
   document: "usage-alerts",
+  document_title: "Usage alerts",
+  section_title: section_key ? section_key.charAt(0).toUpperCase() + section_key.slice(1) : null,
   version: 4,
   section_key,
   approver_id: who,
@@ -91,7 +93,7 @@ function holdings(ctx: MembersContext): Record<string, Holding> {
       },
       section_approvals: 3,
       version_approvals: [{ document: "usage-alerts", title: "Usage alerts", version: 4 }],
-      checkpoint_decisions: [{ run_id: "run-mock-feature-set", checkpoint_id: "cp-mock-feature-set", kind: "feature_set", title: "Baseline to PRD · Usage alerts" }],
+      checkpoint_decisions: [{ run_id: "run-mock-feature-set", checkpoint_id: "cp-mock-feature-set", kind: "feature_set", title: "Ground Truth to PRD · Usage alerts" }],
       spend_approvals: [],
       approvals: [
         approval(approver.id, "2026-10-18T10:00:00Z", "problem"),

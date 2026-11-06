@@ -42,9 +42,9 @@ test("claude accounts: the method is a choice and the one solid button in the pa
   expect(transparent(accent)).toBe(false);
   const fills = await add.getByRole("button").evaluateAll((els) => els.map((el) => getComputedStyle(el).backgroundColor));
   expect(fills.filter((c) => c === accent)).toHaveLength(1);
-  await expect(add).toContainText(
-    "Claude adds the account signed in on that page. To add a different one, open the link in a browser signed in to it",
-  );
+  // Pass F, F-73: the reason is behind an (i).
+  await expect(add).toContainText("Adds the account signed in on Claude's page");
+  await expect(add.getByText("To add a different one", { exact: false }).filter({ visible: true })).toHaveCount(0);
 
   // It starts the sign-in: Claude's page opens.
   const popup = page.waitForEvent("popup");

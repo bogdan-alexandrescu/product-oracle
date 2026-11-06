@@ -199,7 +199,10 @@ function AnswerBubble({ answer, people, me }: { answer: Card["answers"][number];
           </time>
           {label && <Chip kind={kind}>{label}</Chip>}
         </div>
-        <p className="mt-1 text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text">
+        <p
+          className="mt-1 text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text"
+          data-user-content={answer.kind === "answer" ? true : undefined}
+        >
           {answer.kind === "answer"
             ? answer.body
             : answer.kind === "delegate"

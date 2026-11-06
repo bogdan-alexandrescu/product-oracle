@@ -45,17 +45,20 @@ def _excerpt(text: str | None) -> str | None:
 
 
 async def last_seen_and(
-    db: AsyncSession, principal_id: uuid.UUID, *flags: ColumnElement[bool]
-) -> tuple[datetime | None, list[bool]]:
-    """My last Inbox visit, and each of ``flags`` in the same read (#689 review: the Inbox's
-    checks for rows most readers never have ride on it rather than read on their own)."""
+    db: AsyncSession,
+    principal_id: uuid.UUID,
+    *flags: ColumnElement[bool],
+    count: ColumnElement[int],
+) -> tuple[datetime | None, list[bool], int]:
+    """My last Inbox visit, each of ``flags`` and ``count`` in the same read (#689 review: the
+    Inbox's checks for rows most readers never have ride on it rather than read on their own)."""
     stored = (
         select(UserPreference.value)
         .where(UserPreference.principal_id == principal_id, UserPreference.key == LAST_SEEN)
         .scalar_subquery()
     )
-    value, *got = (await db.execute(select(stored, *flags))).one()
-    return _seen_at(value), [bool(f) for f in got]
+    value, counted, *got = (await db.execute(select(stored, count, *flags))).one()
+    return _seen_at(value), [bool(f) for f in got], int(counted or 0)
 
 
 def _seen_at(value: Any) -> datetime | None:
@@ -259,5 +262,9 @@ async def staged_rows(db: AsyncSession) -> list[InboxStaged]:
                 draft_job_status=job.status if job else None,
             )
         )
-    out.sort(key=lambda r: r.title.lower())
+    # prd-order: PRDs in the company PRD order, other documents after them by title.
+    from oracle.docs.prd_order import prd_ranks
+
+    ranks = await prd_ranks(db)
+    out.sort(key=lambda r: (ranks.get(r.document_id, len(ranks) + 1), r.title.lower()))
     return [r for r in out if r.count or r.gone_count]

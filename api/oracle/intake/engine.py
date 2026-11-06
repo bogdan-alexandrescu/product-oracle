@@ -192,14 +192,14 @@ async def coverage_from_baseline(
     ]
     if owners or await _owned_by(db, [e.id for e in [*goals, *baseline.features]]):
         covered["ownership"] = {
-            "reason": "The baseline names an owner for the linked goal or feature.",
+            "reason": "The Ground Truth names an owner for the linked goal or feature.",
             "entity_ids": [str(e.id) for e in owners],
         }
     constraints = [c for c in baseline.constraints if c.status == "confirmed"]
     if constraints:
         for key in ("constraints", "blockers"):
             covered[key] = {
-                "reason": "Confirmed constraint(s) in the baseline: "
+                "reason": "Confirmed constraint(s) in the Ground Truth: "
                 + ", ".join(c.title for c in constraints),
                 "entity_ids": [str(c.id) for c in constraints],
             }
@@ -231,7 +231,7 @@ def elsewhere_reason(category: str) -> str:
 def baseline_reason(category: str, reason: str) -> str:
     """Why a critical gap the baseline answers waits for review here (B4)."""
     return (
-        f"{reason.rstrip('.')}. A critical gap is not closed by the baseline alone: an "
+        f"{reason.rstrip('.')}. A critical gap is not closed by the Ground Truth alone: an "
         f"{cats.reviewer(category)} reviews it here before it counts as decided."
     )
 

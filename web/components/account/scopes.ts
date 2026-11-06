@@ -9,7 +9,7 @@ export const SCOPE_LABEL: Record<string, string> = {
   "oracle:write": "Write",
   // A run's token for its agents (oracle.runtokens.SCOPES).
   "read:sources": "Read sources",
-  "read:baseline": "Read the baseline",
+  "read:baseline": "Read the Ground Truth",
   "read:documents": "Read documents",
   "read:web": "Search the web",
   "read:intake-input": "Read the intake",

@@ -51,7 +51,9 @@ function CodeMap({ b }: { b: TechBrief }) {
         <p className="font-semibold">No code map: assumptions</p>
         <ul className="mt-1 list-disc pl-5">
           {b.assumptions.map((a) => (
-            <li key={a}>{readerText(a, b.questions)}</li>
+            <li key={a} data-user-content>
+              {readerText(a, b.questions)}
+            </li>
           ))}
         </ul>
       </Block>
@@ -145,10 +147,16 @@ function Questions({ b }: { b: TechBrief }) {
               <li key={q.id} data-testid={`brief-question-${q.id}`}>
                 <p className="font-semibold">
                   {/* qa4-docs-53: an answered question no longer blocks. */}
-                  {q.question} {q.blocking && (answer ? <Chip kind="na">Was blocking · answered</Chip> : <Chip kind="crit">Blocking</Chip>)}
+                  <span data-user-content>{q.question}</span> {q.blocking && (answer ? <Chip kind="na">Was blocking · answered</Chip> : <Chip kind="crit">Blocking</Chip>)}
                 </p>
-                {q.why && <p className="text-text2">Why: {readerText(q.why, b.questions)}</p>}
-                <p>{answer ? <>Answer: {readerText(answer, b.questions)}</> : <span className="text-text2">Not answered yet</span>}</p>
+                {q.why && (
+                  <p className="text-text2">
+                    Why: <span data-user-content>{readerText(q.why, b.questions)}</span>
+                  </p>
+                )}
+                <p>{answer ? <>
+                      Answer: <span data-user-content>{readerText(answer, b.questions)}</span>
+                    </> : <span className="text-text2">Not answered yet</span>}</p>
               </li>
             );
           })}
@@ -167,7 +175,7 @@ function Verdict({ b }: { b: TechBrief }) {
       ) : (
         <>
           <p className="font-semibold">{v.value ? sentence(v.value) : "Approved at the Engineering check"}</p>
-          {v.note && <p>{readerText(v.note, b.questions)}</p>}
+          {v.note && <p data-user-content>{readerText(v.note, b.questions)}</p>}
           {v.at && <p className="text-[13px] text-text2">{formatDateTime(v.at)}</p>}
         </>
       )}
@@ -227,12 +235,16 @@ export function BriefDetail({ id }: { id: string }) {
           <div className="grid grid-cols-[minmax(0,1fr)_340px] items-start gap-4 max-[1100px]:grid-cols-1 max-[600px]:gap-3">
             <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
               <Block title="Approach" testId="brief-approach">
-                {approach?.lead && <p className="break-words">{approach.lead}</p>}
+                {approach?.lead && (
+                  <p className="break-words" data-user-content>
+                    {approach.lead}
+                  </p>
+                )}
                 {/* Production minors 19: the approach's steps as a list, not one paragraph. */}
                 {approach && approach.items.length > 0 && (
                   <ul className="mt-1 list-disc pl-5" data-testid="brief-approach-steps">
                     {approach.items.map((item, i) => (
-                      <li key={i} className="break-words">
+                      <li key={i} className="break-words" data-user-content>
                         {item}
                       </li>
                     ))}
@@ -247,8 +259,12 @@ export function BriefDetail({ id }: { id: string }) {
                   <ul className="flex flex-col gap-2">
                     {b.risks.map((r) => (
                       <li key={r.risk}>
-                        <span className="font-semibold">{readerText(r.risk, b.questions)}</span> <Chip kind={LEVEL[r.level] ?? "na"}>{sentence(r.level)}</Chip>
-                        {r.mitigation && <p className="text-text2">Mitigation: {readerText(r.mitigation, b.questions)}</p>}
+                        <span className="font-semibold" data-user-content>
+                          {readerText(r.risk, b.questions)}
+                        </span> <Chip kind={LEVEL[r.level] ?? "na"}>{sentence(r.level)}</Chip>
+                        {r.mitigation && <p className="text-text2">
+                            Mitigation: <span data-user-content>{readerText(r.mitigation, b.questions)}</span>
+                          </p>}
                       </li>
                     ))}
                   </ul>

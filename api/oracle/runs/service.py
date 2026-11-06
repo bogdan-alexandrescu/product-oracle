@@ -130,7 +130,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import ColumnElement, and_, func, literal_column, or_, select
+from sqlalchemy import ColumnElement, and_, func, literal, literal_column, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, autonomy, company_time, confidence, safe_yaml, webhooks, wording
@@ -184,6 +184,7 @@ from oracle.runs import (
     review_link,
     review_text,
     roadmap,
+    stop_answers,
     waits,
     workflow,
 )
@@ -224,6 +225,7 @@ from oracle.runs.schemas import (
     QueueWait,
     RunCreate,
     RunDecision,
+    RunDecisionAnswer,
     RunNoteRefs,
     RunOut,
     RunPatch,
@@ -323,6 +325,11 @@ ORACLE_KNOBS = (
     "draft_items_reused",
     # #482: a Regenerate's note to the agents (oracle.trash.regenerate).
     "regenerate_note",
+    # prd-reads-working-draft: which company roadmap the run read ("Company roadmap,
+    # working draft (edited Nov 5, 2026, 11:40 PM PST)"; oracle.simple.roadmap_of_record).
+    "roadmap_read",
+    # The roadmap each step read, by step name ({"prd_draft": "Company roadmap v7 ..."}).
+    "roadmap_read_by",
 )
 ITEMS_FILE = "roadmap_items.yaml"
 
@@ -722,6 +729,7 @@ def _summary(
         source=refs.sources.get(source_id) if source_id else None,
         template=run.knobs.get("template"),
         theme=run.knobs.get("theme"),
+        roadmap_read=run.knobs.get("roadmap_read"),
         estimate_usd=_usd(run.estimate_usd),
         spent_usd=float(run.spent_usd or 0),
         created_by=run.created_by,
@@ -1233,7 +1241,7 @@ def _agent_out(agent: dict[str, Any], proposed_at: datetime | None) -> SegmentAg
 
 # D11: how a decision reads for the run's agents and on the run page.
 CHECKPOINT_TITLES = {
-    "baseline_confirm": "Baseline",
+    "baseline_confirm": "Ground Truth",
     "feature_set": "Feature set",
     "priority_order": "Priority order",
     "prd_review": "PRD review",
@@ -1355,6 +1363,7 @@ async def decisions_of_runs(
             )
     by = {cp.id: _decider_of(cp) for cp in decided}
     people = await _people_named(db, {i for i in by.values() if i})
+    answered = await stop_answers.of_checkpoints(db, {r.id: r for r in runs}, decided)
     out: dict[uuid.UUID, list[RunDecision]] = {i: [] for i in flows_of}
     for cp in decided:
         flow = flows_of[cp.run_id]
@@ -1390,6 +1399,17 @@ async def decisions_of_runs(
                 review=cp.review or extra.get("review"),
                 delivered=delivered,
                 summary=decision_summary(cp.kind, cp.status, role, via, cp.note, delivered, who),
+                answers=[
+                    RunDecisionAnswer(
+                        question=a.question,
+                        answer=a.answer,
+                        feature_key=a.feature_key,
+                        feature_title=a.feature_title,
+                        answered_by_name=a.by_name,
+                        answered_at=a.at,
+                    )
+                    for a in answered.get(cp.id, [])
+                ],  # fmt: skip
             )
         )
     far = datetime.max.replace(tzinfo=UTC)
@@ -2200,14 +2220,14 @@ async def _one_build_at_a_time(db: AsyncSession, flow: flows.FlowDef) -> None:
         .limit(1)
     )
     if under_way is not None:
-        raise RunError(f"A baseline build is already under way (run {under_way})")
+        raise RunError(f"A Ground Truth build is already under way (run {under_way})")
 
 
 class NotReusable(RunError):
     """409 ``baseline_not_reusable``: the current baseline may not be reused (C4)."""
 
     def __init__(self, reason: str | None) -> None:
-        super().__init__(f"the current baseline is not reusable ({reason})")
+        super().__init__(f"the current Ground Truth is not reusable ({reason})")
         self.detail = {"code": "baseline_not_reusable", "reason": reason}
 
 
@@ -2215,7 +2235,7 @@ async def _reuse_knob(db: AsyncSession, flow: flows.FlowDef) -> dict[str, Any]:
     """The ``reuse_baseline`` knob for a run asking to reuse the current baseline: the
     review it reuses. 422 off Baseline to PRD; 409 when not reusable."""
     if flow.key != "baseline_to_prd":
-        raise Invalid(f"the {flow.title} flow does not reuse the baseline")
+        raise Invalid(f"the {flow.title} flow does not reuse the Ground Truth")
     st = await reuse.review_status(db)
     if not st.reusable:
         raise NotReusable(st.reason)
@@ -2334,7 +2354,7 @@ async def _target_goals(
     if not refs:
         return []
     if flow.key != "baseline_to_prd":
-        raise Invalid("only a Baseline to PRD run names the goals it serves")
+        raise Invalid("only a Ground Truth to PRD run names the goals it serves")
     refs = list(dict.fromkeys(r.strip() for r in refs))
     ids = [uuid.UUID(r) for r in refs if is_uuid(r)]
     rows = (
@@ -2447,7 +2467,7 @@ async def estimate(db: AsyncSession, principal: Principal | str, run_id: uuid.UU
         segments[sdef.name].estimate_usd = amount
         note = None
         if skip:
-            note = f"Current baseline, approved {reuse.short_date(reused['approved_at'], zone)}"
+            note = f"Current Ground Truth, approved {reuse.short_date(reused['approved_at'], zone)}"
         elif items_reused is not None and skip_items:
             note = _items_reused_note(items_reused, zone)
         elif off:
@@ -2734,7 +2754,7 @@ async def _skip_reused_baseline(
     """C4: the run uses the current baseline. Its baseline segment is recorded skipped at
     no cost and its Confirm the baseline stop skipped; nothing runs for them."""
     zone = await company_time.company_time_zone(db)
-    note = f"Reused the baseline approved {reuse.short_date(reused['approved_at'], zone)}"
+    note = f"Reused the Ground Truth approved {reuse.short_date(reused['approved_at'], zone)}"
     now = _now()
     art = _art(segment)
     art["reused"] = reused
@@ -2921,6 +2941,15 @@ async def _prompt_context(
             if files:
                 prior_files.append((s.seq, _flow(run).segment(s.name).title, sorted(files)))
     prior_files += list(planned or [])
+    run_items = None
+    if (
+        run.flow == "prd_to_roadmap"
+        and segment.name == "roadmap_draft"
+        and (items_text := prior.get(ITEMS_FILE))
+    ):
+        # roadmap-plan-tables: the checkpoint's check of the file (kept by
+        # oracle.runs.roadmap), not a second parse in the prompt.
+        run_items = (await items_check(db, run, items_text)).items
     # A person sent the segment back (D5): it starts from its previous files and the
     # problems Oracle's check found in them. A runtime retry has no change request.
     previous = (segment.artifacts or {}).get("previous") if change_request else None
@@ -2939,11 +2968,14 @@ async def _prompt_context(
     # of a member-view run's prompt (reviewer notes, the change request, the Regenerate
     # note; discussions: oracle.discussions.agent_view.for_member_run).
     hidden = await member_hidden(db, run)
+    # A PRD writer reads each stop's note in its decided block, with the stop's name, who
+    # decided and the decision record (stop_answers.prompt_lines).
     notes = [
         f"{c.kind}: {c.note}"
         for c in await _checkpoints(db, [run.id])
         if c.status == "approved" and c.note and not (hidden and hidden.names(c.note))
-    ]
+        and segment.name not in stop_answers.WRITERS
+    ]  # fmt: skip
     if change_request and hidden and hidden.names(change_request):
         change_request = WITHHELD_NOTE
     feedback: list[dict[str, Any]] = []
@@ -2990,6 +3022,7 @@ async def _prompt_context(
         low_confidence=await _low_threshold(db),
         depth=knobs.depth,
         prior_outputs=prior,
+        run_items=run_items,
         reviewer_notes=notes,
         feedback=feedback,
         staged=chosen,
@@ -3010,12 +3043,14 @@ async def _prompt_context(
         extra_lines=[
             *await extensions.prompt_lines(db, run),
             *await eng_check.prompt_lines(db, run.id, segment.name),
+            *await stop_answers.prompt_lines(db, run, segment.name, segment.seq, hidden),
             *(
                 await eng_check.run_architect_lines(db, run, mcp_reachable=mcp_reachable)
                 if flows.BRIEFS_FILE in _flow(run).segment(segment.name).outputs
                 else []
             ),
             *await eng_dates.prompt_lines(db, run, segment.name),
+            *await _roadmap_lines(db, run, segment.name, kind, hidden),
             *_regenerate_note(run, hidden),
             *await _carried_lines(db, run, segment.name),
         ],
@@ -3031,6 +3066,34 @@ async def _prompt_context(
         if (reused := run.knobs.get("reuse_baseline")) and segment.name != "baseline"
         else None,
     )
+
+
+async def _roadmap_lines(
+    db: AsyncSession, run: Run, segment: str, kind: str | None, hidden: Any
+) -> list[str]:
+    """prd-reads-working-draft: a PRD's run follows the company roadmap of record (its
+    working draft when newer than the published version; oracle.simple.roadmap_of_record)
+    and keeps the words saying which one it read (``roadmap_read``, the run page's)."""
+    from oracle.simple import roadmap_of_record
+
+    if run.flow not in roadmap_of_record.FLOWS or segment not in roadmap_of_record.SEGMENTS:
+        return []
+    if kind != "prd":
+        return []
+    # The draft is read by its own rule (oracle.simple.drafts.sees): the run reads it when
+    # the person who started the run may see it (the owner always may), else the published
+    # version; a run nobody started (Oracle's own) has nobody who may see it, so it reads
+    # the published version.
+    record = await roadmap_of_record.read(db, reader=run.created_by)
+    if record is None:
+        return []
+    # Each step keeps the roadmap it read (``roadmap_read_by``); ``roadmap_read`` is the
+    # last step's, the one the run page shows.
+    knobs = dict(run.knobs or {})
+    by_step = {**(knobs.get("roadmap_read_by") or {}), segment: record.label}
+    if knobs.get("roadmap_read") != record.label or knobs.get("roadmap_read_by") != by_step:
+        run.knobs = {**knobs, "roadmap_read": record.label, "roadmap_read_by": by_step}
+    return roadmap_of_record.prompt_lines(record, run.document_id, hidden)
 
 
 async def _carried_lines(db: AsyncSession, run: Run, segment: str) -> list[str]:
@@ -4743,12 +4806,14 @@ async def _plan_table_problems(
     the items file the roadmap_items segment wrote and the source PRD's verified bases."""
     from oracle.runs import plan_tables
 
-    items = None
+    text = None
     for seg in await db.scalars(
         select(RunSegment).where(RunSegment.run_id == run.id).order_by(RunSegment.seq)
     ):
         files = (seg.artifacts or {}).get("files") or {}
-        items = files.get(plan_tables.ITEMS_FILE, items)
+        text = files.get(plan_tables.ITEMS_FILE, text)
+    # The checkpoint's check of the file (kept by oracle.runs.roadmap): never parsed again.
+    items = (await items_check(db, run, text)).items if text else None
     source = await db.get(DocumentVersion, source_id) if source_id else None
     bases = await schedule.verified_bases(db, source.document_id if source else None)
     # one-roadmap-many-prds: the other PRDs' items on the company roadmap are in the tables too.
@@ -4843,6 +4908,12 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
     if kind == "prd" and (problems := await _work_problems(db, run, markdown)):
         # Walk 2 problem 19: what the brief's answers made work is never a blocker.
         return rejection.refused(name, problems)
+    if kind == "prd":
+        # A question a person answered at a stop is decided: a draft that still lists it
+        # under Decisions needed or Open questions goes back to the writer.
+        problems = await stop_answers.open_problems(db, run, markdown)
+        if problems:
+            return rejection.refused(name, problems)
     async with tenant_session(tenant_id) as s:
         try:
             result = await docs_service.import_draft(
@@ -5030,7 +5101,7 @@ async def _import_baseline(db: AsyncSession, run: Run, text: str) -> dict[str, A
                 text,
                 run_id=run.id,
                 origin="agent",
-                reason="Run baseline.yaml",
+                reason="The run's Ground Truth file (baseline.yaml)",
                 proposals_only=level != "act",
             )
         except yaml_io.YamlInvalid as exc:
@@ -5049,9 +5120,11 @@ async def _import_baseline(db: AsyncSession, run: Run, text: str) -> dict[str, A
 def _baseline_autonomy(level: str) -> dict[str, str]:
     """What the run page says when the baseline's level changed the merge (H11)."""
     if level == "observe":
-        note = "Baseline merge skipped: Oracle is set to observe the baseline"
+        note = "Ground Truth merge skipped: Oracle is set to observe the Ground Truth"
     else:
-        note = f"Baseline changes became proposals: Oracle is set to {level} for the baseline"
+        note = (
+            f"Ground Truth changes became proposals: Oracle is set to {level} for the Ground Truth"
+        )
     return {"level": level, "note": note}
 
 
@@ -5141,7 +5214,7 @@ async def _advance(
     if sdef.imports_baseline:
         text = art["files"].get("baseline.yaml")
         if text is None:
-            baseline_import = {"error": "the segment left no baseline.yaml"}
+            baseline_import = {"error": "the segment left no Ground Truth file (baseline.yaml)"}
         else:
             # Committed first: the import runs in its own transaction.
             _set_art(segment, art)
@@ -7739,6 +7812,9 @@ async def _take_answer(
     if counted and approved and not ours and cp.kind == "feature_set":
         # The gate below reads the scope as stored, re-checked now (C6).
         await _recheck_scope(db, cp)
+    if counted and approved and not ours and cp.kind == "priority_order":
+        # And the goals the order's new features serve, as of now (C8).
+        await _recheck_order_goals(db, cp)
     if counted and approved and not ours:
         # D3 "Console gate": held while a blocking reason is not fixed or waived.
         shut = await approve_gate_of(db, cp)
@@ -7807,6 +7883,7 @@ async def _take_answer(
     }
     cp.status = "approved" if approved else "changes_requested"
     cp.decided_at = record.answered_at or _now()
+    await stop_answers.record(db, run, cp)
     cp.note = applied
     if not ours:
         _record_decider(
@@ -8208,7 +8285,7 @@ async def _unchecked(db: AsyncSession, why: dict[uuid.UUID, str]) -> list[TickUn
         return []
     runs = list(await db.scalars(select(Run).where(Run.id.in_(why))))
     refs = await _refs(db, runs)
-    # As the run's page heads it: "Team onboarding · Baseline to PRD".
+    # As the run's page heads it: "Team onboarding · Ground Truth to PRD".
     titles = {r.id: " · ".join(t for t in (refs.title(r), _flow(r).title) if t) for r in runs}
     await db.rollback()
     return [
@@ -8464,6 +8541,20 @@ async def decide_checkpoint(
         if (shut := await approve_gate_of(db, cp)) and not shut.open:
             await db.commit()
             raise blocking_open(shut)
+    if (
+        decision == "approved"
+        and cp.kind == "priority_order"
+        and (stale := await _recheck_order_goals(db, cp))
+    ):
+        # A goal a new feature serves was rejected since the order was checked: the order
+        # keeps the problem for the band and the Inbox, and nothing is decided.
+        if (shut := await approve_gate_of(db, cp)) and not shut.open:
+            await db.commit()
+            error = blocking_open(shut)
+            message = "; ".join(p["message"] for p in stale)
+            error.args = (message,)
+            error.detail["message"] = message  # type: ignore[attr-defined]
+            raise error
     if decision == "approved" and (blocked := _cannot_approve(cp)):
         # Approve, a confirmed console approval and Continue alike: nothing is decided.
         raise RunError(blocked)
@@ -8533,6 +8624,9 @@ async def decide_checkpoint(
     cp.decided_by = principal.id
     cp.decided_at = _now()
     cp.note = note
+    # The stop's answered cards, kept as it is decided: a send-back reruns the segment,
+    # whose next files replace the questions.
+    await stop_answers.record(db, run, cp)
     if document_review is not None:
         cp.review = document_review
     elif send_back:
@@ -10173,6 +10267,22 @@ async def _recheck_scope(db: AsyncSession, cp: Checkpoint) -> int:
     return feature_set.blocking_of(check)
 
 
+async def _recheck_order_goals(db: AsyncSession, cp: Checkpoint) -> list[dict[str, Any]]:
+    """Re-check, at approval, the goals a priority order's new features serve (C8): one
+    rejected since the order was checked is a blocking problem added to the order's check
+    and the checkpoint's, so every approval path refuses on it. Returns the new problems."""
+    snapshot = await run_order.snapshot_for(db, cp)
+    if snapshot is None or snapshot.status != "proposed":
+        return []
+    stale = await run_order.stale_goals(db, snapshot)
+    if stale:
+        check = dict(snapshot.check_result or {})
+        check["problems"] = [*(check.get("problems") or []), *stale]
+        snapshot.check_result = check
+        cp.payload = {**(cp.payload or {}), "priority_check": check}
+    return stale
+
+
 async def _scope_decided(
     db: AsyncSession, principal: Principal | None, run: Run, cp: Checkpoint
 ) -> None:
@@ -11464,8 +11574,9 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     from oracle.intake.read import inbox_due as intake_reads_due
 
     # INT2's intake-read rows, read below only for a reader who has one.
-    seen, (has_intake_reads,) = await inbox_states.last_seen_and(
-        db, principal.id, intake_reads_due(principal)
+    # F-7: my unread webhook notices ride on the same read (R-1: no read of their own).
+    seen, (has_intake_reads,), webhook_notices = await inbox_states.last_seen_and(
+        db, principal.id, intake_reads_due(principal), count=_unread_webhook_notices(principal)
     )
     if has_role(principal.role, "approver"):
         states, counts = await inbox_states.feedback_states(db, seen)
@@ -11636,11 +11747,20 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
 
     simple_proposals, simple_decisions = await simple_rows(db, principal, seen)
     counted += len(simple_proposals)
-    # Simple S3b: versions from Simple drafts waiting for my approval as a required reviewer.
+    # Simple S3b: versions from Simple drafts waiting for my approval as a required reviewer;
+    # inbox-meeting-proposals fix: open date and goal suggestions I may decide. The three
+    # are read together, in one read.
+    from oracle.simple.additions import inbox_rows as goal_suggestion_rows
     from oracle.simple.drafts import inbox_rows as simple_approval_rows
+    from oracle.simple.drafts import waiting as simple_waiting
+    from oracle.simple.suggestions import inbox_rows as date_suggestion_rows
 
-    simple_approvals = await simple_approval_rows(db, principal, seen)
+    simple_open = await simple_waiting(db)
+    simple_approvals = await simple_approval_rows(db, principal, seen, simple_open.drafts)
     counted += len(simple_approvals)
+    simple_date_suggestions = await date_suggestion_rows(db, principal, seen, simple_open.dates)
+    simple_goal_suggestions = await goal_suggestion_rows(db, principal, seen, simple_open.goals)
+    counted += len(simple_date_suggestions) + len(simple_goal_suggestions)
     # Simple S8: meeting minutes sent to me as an attendee (nothing to decide: not counted).
     from oracle.simple.meetings import inbox_rows as simple_minutes_rows
 
@@ -11694,7 +11814,9 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         + sum(1 for r in discussions if r.state in ("new", "open"))
         # A track is one row, its open alerts its children (#514: as a checkpoint's items).
         + sum(1 for t in track_groups if t.counts.new + t.counts.open > 0)
+        + webhook_notices
         + counted,
+        webhooks=webhook_notices,
         tracks=track_groups,
         launches=launch_rows,
         rituals=rituals,
@@ -11712,7 +11834,33 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         simple_proposals=simple_proposals,
         simple_decisions=simple_decisions,
         simple_approvals=simple_approvals,
+        simple_date_suggestions=simple_date_suggestions,
+        simple_goal_suggestions=simple_goal_suggestions,
         simple_minutes=simple_minutes,
+    )
+
+
+WEBHOOK_NOTICE_KINDS = ("webhook_paused", "webhook_url_changed")
+
+
+def _unread_webhook_notices(principal: Principal) -> ColumnElement[int]:
+    """How many of my webhook notices (paused, address changed) are unread, counted Inbox
+    rows (F-7), as a clause the Inbox reads in a query it makes anyway; none for a role that
+    cannot open Settings › Webhooks (F-25)."""
+    from oracle.authz import has_role
+    from oracle.review.models import Notification
+
+    if principal.user_id is None or not has_role(principal.role, "approver"):
+        return literal(0)
+    return (
+        select(func.count())
+        .select_from(Notification)
+        .where(
+            Notification.user_id == principal.user_id,
+            Notification.kind.in_(WEBHOOK_NOTICE_KINDS),
+            Notification.read_at.is_(None),
+        )
+        .scalar_subquery()
     )
 
 

@@ -97,7 +97,7 @@ OPEN_QUESTIONS = ("asked", "delegated")
 # The checkpoint kinds whose segment leaves an item file the draft reviews.
 ITEM_FILES = {"roadmap_items": reasons.ITEMS_FILE}
 KIND_WORDS = {
-    "baseline_confirm": "baseline confirm",
+    "baseline_confirm": "Ground Truth confirm",
     "feature_set": "feature set",
     "priority_order": "priority order",
     "prd_review": "PRD review",
@@ -334,8 +334,8 @@ def _baseline_confirm(body: ActionIn, ctx: ValidationContext) -> None:
     Every other change is a baseline write, applied at once through the baseline routes."""
     if body.kind not in ("look_again", "waive"):
         raise InvalidAction(
-            f"{body.kind} does not apply to the baseline: confirm, reject, edit or merge it "
-            "through the baseline"
+            f"{body.kind} does not apply to the Ground Truth: confirm, reject, edit or merge it "
+            "through the Ground Truth"
         )
     if body.item_key not in ctx.item_keys:
         raise InvalidAction(f"{body.item_key} is not an item from this run")
@@ -687,6 +687,10 @@ async def put_action(
     if body.kind == "waive" and cp.kind == "roadmap_items":
         # An owner's waiver of Stopped in the strategy is its own action (gate.OWNER_WAIVES).
         field = gate.OWNER_WAIVE_FIELD if OWNER_WAIVES & set(body.answers) else None
+    elif body.kind == "waive" and len(body.answers) == 1 and gate.REF_MARK in body.answers[0]:
+        # One problem of a feature waived by its own ref is its own action, with its own
+        # reason: waiving another problem of the feature neither replaces nor joins it.
+        field = body.answers[0]
     if (
         body.kind == "accept"
         and cp.kind in ("feature_set", "roadmap_items")
@@ -808,7 +812,7 @@ def _waivable(cp: Checkpoint, body: ActionIn, found: _File | None, stages: bool)
         for p in (found.checked.check.problems if found and found.checked else [])
         if not p.get("item")
     }
-    if body.item_key == WHOLE_FILE or any(a in file_codes for a in body.answers):
+    if body.item_key == WHOLE_FILE or any(gate.answer_code(a) in file_codes for a in body.answers):
         raise service.Invalid(gate.FILE_NOT_WAIVED)
     if any(not gate.waivable(cp.kind, a) for a in body.answers):
         raise service.Invalid(gate.BLOCKING_SOURCES[cp.kind].refusal)

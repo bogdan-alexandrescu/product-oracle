@@ -200,15 +200,15 @@ def goal_alignment(q: QualityInputs) -> CheckOutcome:
     else:
         if not q.confirmed_goals:
             status = "critical"
-            reasons.append("The company baseline has no confirmed goal to trace this PRD to")
+            reasons.append("The company Ground Truth has no confirmed goal to trace this PRD to")
         elif not goal_sections:
             status = "critical"
             reasons.append("No goals section and no link to a company goal")
         else:
             status = "warning"
             reasons.append(
-                "The goals section names goals in words but is not linked to the baseline's "
-                "confirmed goals"
+                "The goals section names goals in words but is not linked to the Ground "
+                "Truth's confirmed goals"
             )
     if gaps:
         status = "critical"
@@ -241,7 +241,9 @@ def evidence_provenance(q: QualityInputs) -> CheckOutcome:
         ids += [c.id for c in other]
     if not evidence and not citations:
         status = "critical"
-        reasons.append("No source evidence: nothing in the baseline or the citations backs the PRD")
+        reasons.append(
+            "No source evidence: nothing in the Ground Truth or the citations backs the PRD"
+        )
     scored = [ev for ev in evidence if ev.confidence is not None]
     low = [ev for ev in scored if float(ev.confidence) < q.low]
     if scored and len(low) == len(scored):
@@ -562,7 +564,7 @@ def ownership_readiness(q: QualityInputs) -> CheckOutcome:
     if not (named or in_text or owned or q.closed_gaps("ownership")):
         status = "critical"
         reasons.append(
-            "Nobody owns this PRD: no owner in the front matter, the text or the baseline"
+            "Nobody owns this PRD: no owner in the front matter, the text or the Ground Truth"
         )
     if not ops:
         status = _worst(status, "warning")
@@ -766,7 +768,7 @@ CRITERIA: tuple[Criterion, ...] = (
         "goal_alignment",
         "Business goal alignment and strategic value",
         "Does every feature serve a confirmed company goal, and how does it rank?",
-        ("baseline goal traceability", "goal-weighted priority ranking", "goal questions"),
+        ("Ground Truth goal traceability", "goal-weighted priority ranking", "goal questions"),
         goal_alignment,
     ),
     Criterion(

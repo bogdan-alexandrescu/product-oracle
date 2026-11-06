@@ -39,7 +39,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import safe_yaml
 from oracle.auth.deps import Principal
-from oracle.baseline import scoring, service
+from oracle.baseline import fixes, scoring, service
 from oracle.baseline.models import EDGE_TYPES, ENTITY_TYPES, NODE_STATUSES, Edge, Entity, Evidence
 from oracle.baseline.schemas import ImportIssue, YamlImportResult
 from oracle.sources.models import Source, SourceItem
@@ -343,6 +343,12 @@ async def _merge(
     own = await _own_item_ids(db, principal)
     result = YamlImportResult()
     by_ref: dict[str, Entity] = {_ref(e): e for e in (await db.scalars(select(Entity))).all()}
+    # A feature given a code (oracle.baseline.fixes) is still found by the key it had: an
+    # export taken before updates it (its key stays the code), never adds a second one.
+    by_id = {e.id: e for e in by_ref.values()}
+    for key, fid in (await fixes.former_keys(db)).items():
+        if fid in by_id:
+            by_ref.setdefault(f"feature:{key}", by_id[fid])
     # Entities the file adds that became proposals (proposals_only): not there yet.
     proposed: set[str] = set()
 

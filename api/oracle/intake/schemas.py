@@ -286,7 +286,7 @@ class GoalLink(BaseModel):
 
 
 class FeatureTrace(BaseModel):
-    """A feature the intake touches: from the baseline (``key``) or the brief."""
+    """A feature the intake touches: from the Ground Truth (``key``) or the brief."""
 
     title: str
     entity_id: uuid.UUID | None = None

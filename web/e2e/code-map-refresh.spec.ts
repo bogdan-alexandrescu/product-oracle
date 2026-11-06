@@ -38,7 +38,10 @@ for (const phone of [false, true]) {
         const select = page.getByLabel("Refresh stale code maps");
         await expect(select).toBeVisible();
         await expect(select).toHaveValue("daily");
-        await expect(page.getByTestId("code-map-refresh-cost")).toContainText("Each refresh is one code map run per stale repository");
+        // Pass F F-36: the cost sits behind the (i) beside the label.
+        await page.getByRole("button", { name: "About what a refresh costs" }).click();
+        await expect(page.getByRole("tooltip")).toContainText("Each refresh costs like Map the code.");
+        await page.keyboard.press("Escape");
         for (const label of ["Hourly", "Every 6 hours", "Weekly", "Only on demand"]) {
           await select.selectOption({ label });
           await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();

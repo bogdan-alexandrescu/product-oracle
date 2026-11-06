@@ -18,7 +18,7 @@ import type { ReviewViewProps } from "./_shell";
 import { FixButtons, LeaveOutPicker, RequirementRow, ScopeInspector } from "./_scope-inspector";
 import { runDocName } from "../../../_lib";
 
-import { actionsOn, changeText, decisionText, describeAction, fixesFor, goalName, goalsOf, named, pct, reasonText, type Feature, type Mode, type Ops, type Reason, type Review, type Scope, type Ui } from "./_scope-lib";
+import { actionsOn, changeText, depOf, refOf, decisionText, describeAction, fixesFor, goalName, goalsOf, named, pct, reasonText, type Feature, type Mode, type Ops, type Reason, type Review, type Scope, type Ui } from "./_scope-lib";
 
 type Filter = "needs" | "all" | "out" | "changed";
 type Group = "goal" | "reason";
@@ -34,7 +34,7 @@ const REASON_CHIP: Record<string, string> = {
   serves_no_goal: "No confirmed goal",
   low_confidence: "Low confidence",
   linked_blocker: "Linked open blocker",
-  new_feature: "New, not in the baseline",
+  new_feature: "New, not in the Ground Truth",
   duplicate_of_existing: "Duplicate",
 };
 const FILE_PROBLEMS = ["unreadable_yaml", "missing_file", "wrong_version", "wrong_document", "no_features"];
@@ -70,9 +70,15 @@ function changedChips(f: Feature, scope: Scope): string[] {
 const openReasons = (f: Feature): Reason[] => f.reasons.filter((r) => !r.answered);
 
 /** A reason's chip on a row; a left-out dependency is named (qa-work-12: the fix's button stays short). */
+/** The problem a waiver waives, as a person names it: "Bulk edit depends on Address sharing". */
+function waivedText(r: Reason, f: Feature, scope: Scope): string {
+  const dep = r.code === "depends_on_excluded" ? depOf(r, f, scope) : undefined;
+  return dep ? `${f.title} depends on ${dep.title}` : `${f.title} · ${reasonChip(r, f, scope).toLowerCase()}`;
+}
+
 function reasonChip(r: Reason, f: Feature, scope: Scope): string {
   if (r.code === "depends_on_excluded") {
-    const dep = f.depends_on.map((d) => scope.features.find((x) => x.key === d)).find((d) => d && d.decision !== "include");
+    const dep = depOf(r, f, scope);
     if (dep) return `Depends on ${dep.title}, left out`;
   }
   return REASON_CHIP[r.code] ?? r.label;
@@ -241,13 +247,17 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
     for (const a of it.actions) {
       if (a.state !== "staged" || (a.kind !== "accept" && a.kind !== "waive")) continue;
       if (a.kind === "accept") accepted.add(a.id);
-      // Each call by the reason it answers ("Bulk edit: included · low confidence").
+      // Each call by the reason it answers ("Bulk edit: included · low confidence"); a waiver
+      // names the problem it waives ("Waive: Bulk edit depends on Address sharing").
       const f = scope.features.find((x) => x.key === it.key);
-      const why = a.answers.map((code) => {
-        const r = f?.reasons.find((x) => x.code === code);
-        return (r && f ? reasonChip(r, f, scope) : (REASON_CHIP[code] ?? code)).toLowerCase();
+      const why = a.answers.map((name) => {
+        const r = f?.reasons.find((x) => refOf(x) === name) ?? f?.reasons.find((x) => x.code === name);
+        if (r && f) return a.kind === "waive" ? waivedText(r, f, scope) : reasonChip(r, f, scope).toLowerCase();
+        const code = name.split("~")[0];
+        return a.kind === "waive" ? `${title(it.key)} · ${(REASON_CHIP[code] ?? code).toLowerCase()}` : (REASON_CHIP[code] ?? code).toLowerCase();
       });
-      chips.push({ key: a.id, label: [`${title(it.key)}: ${a.kind === "waive" ? "waived" : "included"}`, ...why].join(" · "), onRemove: () => ops.removeAction(a.id) });
+      const label = a.kind === "waive" ? `Waive: ${why.length ? why.join("; ") : title(it.key)}` : [`${title(it.key)}: included`, ...why].join(" · ");
+      chips.push({ key: a.id, label, onRemove: () => ops.removeAction(a.id) });
     }
   }
   const s = scope.summary;

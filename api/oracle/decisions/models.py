@@ -28,6 +28,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
+from oracle.trash.models import Trashable, trashed_index
 from oracle.v2.models import _fk, _json, _lock_version, _updated_at, _uuids
 
 REVERSIBILITY = ("reversible", "irreversible")
@@ -88,7 +89,7 @@ DECIDED_SQL = (
 )
 
 
-class Decision(TenantScoped, Base):
+class Decision(Trashable, TenantScoped, Base):
     __tablename__ = "decisions"
     __table_args__ = (
         UniqueConstraint("tenant_id", "number"),
@@ -108,6 +109,9 @@ class Decision(TenantScoped, Base):
         Index(
             "ix_decisions_run", "tenant_id", "run_id", postgresql_where=text("run_id IS NOT NULL")
         ),
+        # edit-decisions: an open decision or PRD question deleted to Trash
+        # (oracle.simple.decision_sheet).
+        trashed_index("decisions"),
     )
 
     updated_at: Mapped[datetime] = _updated_at()

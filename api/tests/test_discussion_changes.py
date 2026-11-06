@@ -715,7 +715,7 @@ async def test_propose_through_g3_keeps_b6s_goal_guards(client):
     assert attrs["target"] == 8 and attrs["target_text"] is None
     reason = p.payload["reason"]
     assert reason.startswith("From discussion Churn measure")
-    assert f"/baseline?discussion={d['id']}" in reason and "/v1/" not in reason
+    assert f"/ground-truth?discussion={d['id']}" in reason and "/v1/" not in reason
 
 
 # protects=item 2 of #504's review (Record on with F3): Oracle may propose Record in its

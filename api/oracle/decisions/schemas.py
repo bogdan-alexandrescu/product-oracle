@@ -103,6 +103,8 @@ class DecisionCreate(BaseModel):
     evidence_ids: list[uuid.UUID] = Field(default=[], max_length=MAX_IDS)
     entity_ids: list[uuid.UUID] = Field(default=[], max_length=MAX_IDS)
     subjects: list[Subject] = Field(default=[], max_length=MAX_SUBJECTS)
+    # edit-decisions: Simple's new decision sets its review day at once.
+    review_at: date | None = None
 
     @field_validator("options")
     @classmethod
@@ -220,7 +222,7 @@ class DecisionSummary(BaseModel):
 
 
 class DecisionEntityRef(BaseModel):
-    """A linked baseline item, as a person reads it."""
+    """A linked Ground Truth item, as a person reads it."""
 
     id: uuid.UUID
     type: str
@@ -230,7 +232,7 @@ class DecisionEntityRef(BaseModel):
 
 
 class DecisionEvidenceRef(BaseModel):
-    """Evidence it rests on: the excerpt and link anyone who reads the baseline sees."""
+    """Evidence it rests on: the excerpt and link anyone who reads the Ground Truth sees."""
 
     id: uuid.UUID
     entity_id: uuid.UUID | None = None

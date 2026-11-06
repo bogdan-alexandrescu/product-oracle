@@ -105,20 +105,20 @@ test.describe("desktop", () => {
     await expect(page).toHaveURL(/\/plan$/);
   });
 
-  test("qa-plan-11: a baseline item's Impact leads back with ‹ Baseline on the title's row", async ({ page }) => {
+  test("qa-plan-11: a Ground Truth item's Impact leads back with ‹ Ground Truth on the title's row", async ({ page }) => {
     await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "impact"] as const);
     await login(page);
-    await page.goto("/baseline");
+    await page.goto("/ground-truth");
     await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
     await page.getByRole("dialog", { name: "Guided setup" }).getByRole("link", { name: "What if it changed?" }).click();
     await expect(page).toHaveURL(/\/impact\/entities\/[^/]+$/);
     const back = page.getByTestId("impact-back").filter({ visible: true });
-    await expect(back).toHaveText("‹ Baseline");
+    await expect(back).toHaveText("‹ Ground Truth");
     const b = await box(back);
     const t = await box(page.getByRole("heading", { level: 1 }));
     expect(Math.abs(b.y + b.height / 2 - (t.y + t.height / 2))).toBeLessThanOrEqual(4);
     await back.click();
-    await expect(page).toHaveURL(/\/baseline$/);
+    await expect(page).toHaveURL(/\/ground-truth$/);
   });
 
   test("qa-plan-13: the issue key and its date stay together; who decides is on its own line", async ({ page }) => {
@@ -127,7 +127,7 @@ test.describe("desktop", () => {
     await expect(eng).toHaveText("ENG-402 · Nov 20 ✓");
     // One line: no "ENG-402 · Nov" then "20 ✓".
     expect((await box(eng)).height).toBeLessThanOrEqual(24);
-    const next = row(page, "Daily alert digest email").getByTestId("plan-next");
+    const next = row(page, "Weekly alert digest").getByTestId("plan-next");
     // fix4 qa-plan-29: who decides reads in one sentence.
     await expect(next).toHaveText("Owners decide on the slip");
     const review = row(page, "Alert rules API").getByTestId("plan-next").getByRole("link", { name: "Review the PRD" });

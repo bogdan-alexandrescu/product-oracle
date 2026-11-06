@@ -40,7 +40,9 @@ from oracle.authz import has_role
 from oracle.baseline.goal_order import goal_position, sort_goals
 from oracle.baseline.models import Edge, Entity
 from oracle.config import get_settings
+from oracle.roadmap.models import RoadmapItem
 from oracle.simple.router import Approver, Reader
+from oracle.trash.filter import INCLUDE_TRASHED
 
 router = APIRouter(prefix="/v1/simple/goal-buckets", tags=["simple"])
 
@@ -73,6 +75,8 @@ class GoalBucketFeature(BaseModel):
     title: str
     # The goals it serves, the one it moves most first.
     goal_ids: list[uuid.UUID] = Field(default_factory=list)
+    # Those whose contribution is assumed (an approved order's ASSUMED_LINK), for a person to set.
+    assumed_goal_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 class GoalBucketsOut(BaseModel):
@@ -261,7 +265,10 @@ async def _set_links(db: AsyncSession, feature_id: uuid.UUID, links: list[GoalLi
     for goal_id, lk in want.items():
         attrs = {} if lk.contribution is None else {"contribution": lk.contribution}
         if goal_id in have:
-            have[goal_id].attrs = {**(have[goal_id].attrs or {}), **attrs}
+            old = dict(have[goal_id].attrs or {})
+            if attrs and attrs["contribution"] != old.get("contribution"):
+                old.pop("contribution_assumed", None)  # set here: no longer assumed
+            have[goal_id].attrs = {**old, **attrs}
         else:
             db.add(Edge(src_id=feature_id, dst_id=goal_id, type="supports",
                         status="confirmed", origin="user", attrs=attrs))  # fmt: skip
@@ -293,6 +300,20 @@ async def _restore_links(db: AsyncSession, snap: FeatureSnap) -> None:
                         status=lk.status or "confirmed", origin=lk.origin or "user",
                         attrs=attrs, created_at=lk.created_at))  # fmt: skip
     await db.flush()
+
+
+async def move_links(
+    db: AsyncSession, before: FeatureSnap, to_goal_id: uuid.UUID, from_goal_id: uuid.UUID | None
+) -> None:
+    """A move: ``to_goal_id`` becomes the feature's first goal link, its link to
+    ``from_goal_id`` is dropped, and its other links stay, after it. The change engine's
+    ``set_goals`` moves an item's feature this way too."""
+    links = [lk for lk in before.links if lk.goal_id not in (from_goal_id, to_goal_id)]
+    links = [GoalLinkSnap(goal_id=lk.goal_id, contribution=min(lk.contribution or 0, TOP - 1))
+             for lk in links]  # fmt: skip
+    await _set_links(
+        db, before.feature_id, [GoalLinkSnap(goal_id=to_goal_id, contribution=TOP), *links]
+    )
 
 
 def _sig(tenant_id: uuid.UUID, undo: GoalBucketsUndo) -> str:
@@ -358,6 +379,25 @@ def _goal_snap(g: Entity) -> GoalSnap:
     return GoalSnap(id=g.id, title=g.title, status=g.status, attrs=dict(g.attrs or {}))
 
 
+async def _trashed_without_live(db: AsyncSession, feature_ids: set[uuid.UUID]) -> set[uuid.UUID]:
+    """Feature ids with at least one roadmap item in Trash and no live one anywhere
+    (trash-features-goals): those leave the goal buckets with their roadmap item. A feature
+    with no roadmap item at all, or whose only item sits on a roadmap this reader cannot
+    see, keeps showing as it did: this only drops a feature actually in Trash."""
+    if not feature_ids:
+        return set()
+    rows = await db.execute(
+        select(RoadmapItem.feature_id, RoadmapItem.deleted_at)
+        .where(RoadmapItem.feature_id.in_(feature_ids))
+        .execution_options(**{INCLUDE_TRASHED: True})
+    )
+    trashed: set[uuid.UUID] = set()
+    live: set[uuid.UUID] = set()
+    for feature_id, deleted_at in rows:
+        (live if deleted_at is None else trashed).add(feature_id)
+    return trashed - live
+
+
 @router.get("", response_model=GoalBucketsOut, name="list_goal_buckets")
 async def list_goal_buckets(principal: Reader, db: TenantDB) -> GoalBucketsOut:
     """The goals in order and each feature's goal links."""
@@ -366,6 +406,8 @@ async def list_goal_buckets(principal: Reader, db: TenantDB) -> GoalBucketsOut:
     live = {g.id for g in goals}
     live_features = select(Entity).where(Entity.type == "feature", Entity.status != "rejected")
     features = list(await db.scalars(live_features))
+    trashed = await _trashed_without_live(db, {f.id for f in features})
+    features = [f for f in features if f.id not in trashed]
     edges = await _links(db)
     from oracle.simple.changes import _company_owners
 
@@ -395,6 +437,13 @@ async def list_goal_buckets(principal: Reader, db: TenantDB) -> GoalBucketsOut:
                 key=f.key,
                 title=f.title,
                 goal_ids=[e.dst_id for e in edges if e.src_id == f.id and e.dst_id in live],
+                assumed_goal_ids=[
+                    e.dst_id
+                    for e in edges
+                    if e.src_id == f.id
+                    and e.dst_id in live
+                    and (e.attrs or {}).get("contribution_assumed") is True
+                ],
             )
             for f in sorted(features, key=lambda f: f.key)
         ],
@@ -429,7 +478,7 @@ async def create_bucket_goal(body: GoalIn, principal: Approver, db: TenantDB) ->
 async def update_bucket_goal(
     goal_id: uuid.UUID, body: GoalIn, principal: Approver, db: TenantDB
 ) -> GoalBucketWrite:
-    """Edit a goal's name, measure, target and date (its order stays Baseline's)."""
+    """Edit a goal's name, measure, target and date (its order stays the Ground Truth's)."""
     g = await _entity(db, goal_id, "goal")
     if body.seen is not None and _changed_since(g, body.seen):
         raise HTTPException(status.HTTP_409_CONFLICT, GOAL_CHANGED)
@@ -472,13 +521,13 @@ async def archive_bucket_goal(
     goal_id: uuid.UUID, body: ArchiveIn, principal: Approver, db: TenantDB
 ) -> GoalBucketWrite:
     """Archive a goal and move its features' links in one step."""
-    undo = await archive(db, goal_id, body.to_goal_id)
+    undo = await archive(db, goal_id, body.to_goal_id, principal.user_id)
     await db.commit()
     return GoalBucketWrite(undo=_signed(principal.tenant_id, undo))
 
 
 async def archive(
-    db: AsyncSession, goal_id: uuid.UUID, to_goal_id: uuid.UUID | None
+    db: AsyncSession, goal_id: uuid.UUID, to_goal_id: uuid.UUID | None, by: uuid.UUID | None
 ) -> GoalBucketsUndo:
     """Archive the goal, its features moved off it (also an accepted Ask to archive)."""
     g = await _entity(db, goal_id, "goal")
@@ -490,7 +539,10 @@ async def archive(
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Pick another goal")
     undo = GoalBucketsUndo(goals=[_goal_snap(g)], features=await move_off(db, g, to_goal_id))
     g.status = "rejected"
-    g.attrs = {**(g.attrs or {}), "archived_at": company_time.now().isoformat()}
+    now = company_time.now()
+    g.attrs = {**(g.attrs or {}), "archived_at": now.isoformat()}
+    # removed-tracks: who archived it and when (Simple's Removed list).
+    g.archived_at, g.archived_by = now, by
     await db.flush()
     return undo
 
@@ -517,6 +569,7 @@ async def unarchive(db: AsyncSession, g: Entity) -> GoalBucketsUndo:
     undo = GoalBucketsUndo(goals=[_goal_snap(g)])
     g.status = "confirmed"
     g.attrs = {k: v for k, v in (g.attrs or {}).items() if k != "archived_at"}
+    g.archived_at = g.archived_by = None
     await db.flush()
     return undo
 
@@ -531,12 +584,7 @@ async def move_bucket_feature(
     await _entity(db, feature_id, "feature")
     await _entity(db, body.to_goal_id, "goal")
     (before,) = await _snap(db, [feature_id])
-    links = [lk for lk in before.links if lk.goal_id not in (body.from_goal_id, body.to_goal_id)]
-    links = [GoalLinkSnap(goal_id=lk.goal_id, contribution=min(lk.contribution or 0, TOP - 1))
-             for lk in links]  # fmt: skip
-    await _set_links(
-        db, feature_id, [GoalLinkSnap(goal_id=body.to_goal_id, contribution=TOP), *links]
-    )
+    await move_links(db, before, body.to_goal_id, body.from_goal_id)
     await db.commit()
     undo = GoalBucketsUndo(features=[before])
     return GoalBucketWrite(undo=_signed(principal.tenant_id, undo))
@@ -552,6 +600,8 @@ async def undo_goal_buckets(
     for snap in body.goals:
         g = await _entity(db, snap.id, "goal")
         g.title, g.status, g.attrs = snap.title, snap.status, snap.attrs
+        if g.status != "rejected":
+            g.archived_at = g.archived_by = None
     for f in body.features:
         await _entity(db, f.feature_id, "feature")
         await _restore_links(db, f)

@@ -99,8 +99,9 @@ test("qa-onboarding-17 / qa-onboarding-36: one invite button, primary; disabled 
   await send.click();
   await expect(page.getByRole("form", { name: "Invite" }).getByRole("alert")).toHaveText("Enter an email to send an invite.");
 
-  // The owner's own Remove, and a viewer's Eng lead box, say why in words.
-  await expect(memberRow(page, "admin@example.com").getByTestId("remove-reason")).toHaveText("You can't remove yourself");
+  // pass-f F-52: the owner's own row offers no Remove at all; a viewer's Engineering lead box says why in words.
+  await expect(memberRow(page, "admin@example.com").getByRole("button", { name: /^Remove/ })).toHaveCount(0);
+  await expect(memberRow(page, "admin@example.com").getByTestId("remove-reason")).toHaveCount(0);
   await expect(memberRow(page, "viewer@example.com")).toContainText("Not for viewers");
   const form = page.getByRole("form", { name: "Invite" });
   await form.getByLabel("Role", { exact: true }).selectOption("viewer");
@@ -138,7 +139,12 @@ test("qa-onboarding-19: an invite email that stalls hands over the sign-in link 
 test("qa-onboarding-21: #engineering-lead marks the column, says what to pick and says Saved", async ({ page }) => {
   await login(page);
   await page.goto("/settings/members#engineering-lead");
-  await expect(page.getByTestId("lead-step-hint")).toContainText("Pick who checks feasibility");
+  // pass-f F-30: one short line; how to pick is in its (i).
+  const hint = page.getByTestId("lead-step-hint");
+  await expect(hint).toContainText("Pick an engineering lead");
+  await hint.getByRole("button", { name: "About the engineering lead" }).click();
+  await expect(hint.getByRole("tooltip")).toContainText("checks feasibility");
+  await page.keyboard.press("Escape");
   await expect(page.locator("#engineering-lead")).toHaveAttribute("data-highlight", "true");
   await page.getByRole("checkbox", { name: "Engineering lead: commenter@example.com" }).check();
   await expect(page.getByTestId("lead-saved")).toHaveText("Saved");
@@ -147,17 +153,28 @@ test("qa-onboarding-21: #engineering-lead marks the column, says what to pick an
 test("qa-settings-16: a viewer reads their role capitalised and what each role can do", async ({ page }) => {
   await login(page, "viewer@example.com");
   await page.goto("/settings/members");
-  await expect(page.getByTestId("role-note")).toContainText("Your role is Viewer.");
+  // pass-f F-50: the note names the role; what it may do, and what each role can do, are in (i)s.
+  await expect(page.getByTestId("role-note")).toContainText("Your role is Viewer");
+  await page.getByTestId("role-note").getByRole("button", { name: "About your role" }).click();
+  await expect(page.getByTestId("role-note").getByRole("tooltip")).toHaveText("Owners manage members and sign-in.");
+  await page.keyboard.press("Escape");
+  await page.getByTestId("role-viewer").getByRole("button", { name: "About the Viewer role" }).click();
+  await expect(page.getByTestId("role-viewer").getByTestId("role-can")).toBeVisible();
   await expect(page.getByTestId("role-viewer").getByTestId("role-can")).toHaveText("Reads documents, versions, diffs, feedback and exports.");
+  await page.keyboard.press("Escape");
+  await page.getByTestId("role-owner").getByRole("button", { name: "About the Owner role" }).click();
   await expect(page.getByTestId("role-owner").getByTestId("role-can")).toBeVisible();
 });
 
-test("qa-settings-17: Sign-in's Company domains says it is the Sources list too, with a link", async ({ page }) => {
+test("qa-settings-17: Sign-in's Company domains says it is the Sources list too", async ({ page }) => {
   await login(page);
   await page.goto("/settings/members");
+  // pass-f F-50: the hint is in the (i) by Company domains and names Settings › Sources in words.
+  await page.getByTestId("sign-in-rules").getByRole("button", { name: "About company domains" }).click();
   const hint = page.getByTestId("sign-in-domains-hint");
+  await expect(hint).toBeVisible();
   await expect(hint).toContainText("Who may sign in");
-  await expect(hint.getByRole("link", { name: "Settings › Sources" })).toHaveAttribute("href", "/settings/sources#company-domains");
+  await expect(hint).toContainText("Settings › Sources");
 });
 
 test("qa-settings-43: the panel's dates read like the table's", async ({ page }) => {

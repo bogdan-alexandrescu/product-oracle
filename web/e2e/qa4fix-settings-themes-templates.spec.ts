@@ -52,6 +52,8 @@ test("qa4-settings-42: a template created from the starter saves no placeholder 
   await expect(page.getByRole("heading", { level: 1, name: "Travel brief" })).toBeVisible();
   await expect(page.getByTestId("suggest-when")).toHaveCount(0);
   await expect(page.getByText("right pick")).toHaveCount(0);
+  // qa-F-75: sections are rows by default; check the stored body under Edit as Markdown.
+  await page.getByRole("button", { name: "Edit as Markdown" }).click();
   await expect(page.getByLabel("Template body")).not.toHaveValue(/right pick/);
 });
 
@@ -61,7 +63,7 @@ test("qa4-settings-43: Key and Name placeholders read as examples", async ({ pag
   await page.goto("/settings/templates/new");
   await expect(page.getByLabel("Name")).toHaveAttribute("placeholder", "e.g. Launch brief");
   await page.goto("/settings/themes/new");
-  await expect(page.getByLabel("Key")).toHaveAttribute("placeholder", "e.g. company-brand");
+  await expect(page.getByRole("textbox", { name: "Key" })).toHaveCount(0);
   await expect(page.getByLabel("Name")).toHaveAttribute("placeholder", "e.g. Company brand");
 });
 

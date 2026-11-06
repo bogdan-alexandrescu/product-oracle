@@ -8,7 +8,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from sqlalchemy import or_, select, true, update
+from sqlalchemy import and_, or_, select, true, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1572,15 +1572,28 @@ async def member_approvals(
 
 async def _approvals(session: AsyncSession, ids: set[uuid.UUID]) -> list[dict[str, object]]:
     """The approvals given by or through ``ids`` (users, API tokens), lapsed included."""
-    from oracle.docs.models import Document, DocumentVersion
+    from oracle.docs.models import Document, DocumentVersion, Section
     from oracle.review.models import SectionReview
 
     out: list[dict[str, object]] = []
     rows = (
         await session.execute(
-            select(SectionReview, DocumentVersion.number, Document.slug)
+            select(
+                SectionReview,
+                DocumentVersion.number,
+                Document.slug,
+                Document.title,
+                Section.heading,
+            )
             .join(DocumentVersion, DocumentVersion.id == SectionReview.version_id)
             .join(Document, Document.id == DocumentVersion.document_id)
+            .outerjoin(
+                Section,
+                and_(
+                    Section.version_id == SectionReview.version_id,
+                    Section.section_key == SectionReview.section_key,
+                ),
+            )
             .where(
                 SectionReview.verdict == "approved",
                 or_(SectionReview.token_id.in_(ids), SectionReview.reviewer_id.in_(ids)),
@@ -1588,11 +1601,13 @@ async def _approvals(session: AsyncSession, ids: set[uuid.UUID]) -> list[dict[st
             .order_by(SectionReview.created_at, SectionReview.id)
         )
     ).all()
-    for review, number, slug in rows:
+    for review, number, slug, title, heading in rows:
         out.append(
             {
                 "kind": "section",
                 "document": slug,
+                "document_title": title,
+                "section_title": heading,
                 "version": number,
                 "section_key": review.section_key,
                 "review_id": review.id,
@@ -1611,9 +1626,9 @@ async def _approvals(session: AsyncSession, ids: set[uuid.UUID]) -> list[dict[st
         *(DocumentVersion.approval_lapses.contains([{"approved_by": t}]) for t in tids),
     )
     lapsed_who = DocumentVersion.approval_lapsed_by.in_(ids)
-    for version, slug in (
+    for version, slug, title in (
         await session.execute(
-            select(DocumentVersion, Document.slug)
+            select(DocumentVersion, Document.slug, Document.title)
             .join(Document, Document.id == DocumentVersion.document_id)
             .where(or_(who, lapsed_who, in_history))
             .order_by(DocumentVersion.created_at)
@@ -1622,6 +1637,8 @@ async def _approvals(session: AsyncSession, ids: set[uuid.UUID]) -> list[dict[st
         base = {
             "kind": "version",
             "document": slug,
+            "document_title": title,
+            "section_title": None,
             "version": version.number,
             "section_key": None,
             "review_id": None,
@@ -1801,11 +1818,10 @@ async def check_invite_domain(session: AsyncSession, email: str) -> None:
         return
     domains = sorted(await sign_in_domains(session))
     if email.partition("@")[2] not in domains:
-        named = ", ".join(domains) or "none set yet"
         raise MemberError(
             "invalid",
-            f"{email} is outside the company's email domains ({named}), so Google sign-in "
-            "can't let them join. Add the domain under Sign-in first.",
+            # pass-f F-50: one short line; why it matters is on the page's (i).
+            f"{email} is not in the company domains",
         )
 
 

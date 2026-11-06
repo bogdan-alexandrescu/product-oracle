@@ -100,10 +100,11 @@ test("10b: a version with an unverified date shows the marker and Approve is dis
   await expect(timeline.getByRole("group", { name: "Verdict for Timeline" })).toBeVisible();
 });
 
-test("10c: Present on a board update shows its brief as 2 slides", async ({ page }) => {
-  // protects=the board update's front matter groups its six brief sections into two slides:
+test("10c: Present on a board update shows its brief as 3 slides", async ({ page }) => {
+  // protects=the board update's front matter groups its six brief sections into two groups:
   // Present shows the title slide, "Product in one line" (with Goals under it), "Timeline" (with
-  // shipped, slipped and the asks under it), then Sources and data points; fails_when=each brief
+  // shipped, slipped and the asks under it) on two slides as it holds more than one slide fits,
+  // then Sources and data points; fails_when=each brief
   // section becomes its own slide, or a group loses a section; no_claim=the PPTX export's layout.
   await login(page);
   await openUpdates(page);
@@ -112,22 +113,25 @@ test("10c: Present on a board update shows its brief as 2 slides", async ({ page
   await expect(page).toHaveURL(/\/present$/);
   const present = page.getByTestId("present-mode");
   const counter = page.getByTestId("slide-counter");
-  // Title, the two product slides, Sources and data points.
-  await expect(counter).toHaveText("1 / 4");
+  // Title, the two product slides, Sources and data points; the second slide holds more than a
+  // slide fits, so it goes on a continuation slide (visual QA E-9: never clipped).
+  await expect(counter).toHaveText("1 / 5");
   await page.keyboard.press("ArrowRight");
-  const slide1 = present.getByRole("region", { name: "Slide 2 of 4: Product in one line" });
+  const slide1 = present.getByRole("region", { name: "Slide 2 of 5: Product in one line" });
   await expect(slide1).toBeVisible();
   await expect(present.getByRole("heading", { name: "Goals: where we are" })).toBeVisible();
   await expect(slide1).toContainText("Weekly active teams");
   await page.keyboard.press("ArrowRight");
-  const slide2 = present.getByRole("region", { name: "Slide 3 of 4: Timeline" });
+  const slide2 = present.getByRole("region", { name: "Slide 3 of 5: Timeline (1 of 2)" });
   await expect(slide2).toBeVisible();
+  await page.keyboard.press("ArrowRight");
+  await expect(present.getByRole("region", { name: "Slide 4 of 5: Timeline (2 of 2)" })).toBeVisible();
   for (const h of ["Shipped since last board", "What slipped or did not work", "Decisions we need from the board"]) {
     await expect(present.getByRole("heading", { name: h })).toBeVisible();
   }
   await page.keyboard.press("ArrowRight");
-  await expect(present.getByRole("region", { name: "Slide 4 of 4: Sources and data points" })).toBeVisible();
-  await expect(counter).toHaveText("4 / 4");
+  await expect(present.getByRole("region", { name: "Slide 5 of 5: Sources and data points" })).toBeVisible();
+  await expect(counter).toHaveText("5 / 5");
 });
 
 test("10d: an approver sees and comments on updates without verdicts or Approve; a commenter sees none", async ({ page }) => {

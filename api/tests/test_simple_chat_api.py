@@ -64,6 +64,10 @@ Test cards (protects / fails_when / no_claim):
   is proposed by approvers and commenters (nothing written); add_feature_ask files a
   request for every commenter and up, its undo removes it; viewers get 403;
   fails_when=a role does more than its gesture; no_claim=Requests' triage.
+- test_set_milestone_before_is_name_and_date: protects=a milestone the item has is changed
+  and cleared with ``before`` as the read shows it ({name, date}, no date_source), while a
+  wrong name or date is still refused as stale; fails_when=date_source makes it stale;
+  no_claim=the chat's cards.
 - test_walk_order_undo_and_fixes: protects=Walk me through it lists the broken links
   first, then the next meeting's agenda, then the proposals waiting on them; a broken
   link's card applies a one-click fix and undoes; a commenter's walk has the same broken
@@ -432,9 +436,10 @@ async def test_meeting_change_mode_decides_who_applies(client, meetings, mode):
     ctx = await make_people()
     w = await World(ctx).build()
     mid = _meeting(ctx, meetings, mode, ("decider",) if mode == "named" else ())
-    lines = {"owner": "rename Alert export to Alert export A",
-             "decider": "rename Alert digest to Alert digest B",
-             "commenter": "rename Partner API to Partner API C"}  # fmt: skip
+    # chat-latest-card: acting on a card replaces every earlier one, so the owner's is last.
+    lines = {"decider": "rename Alert digest to Alert digest B",
+             "commenter": "rename Partner API to Partner API C",
+             "owner": "rename Alert export to Alert export A"}  # fmt: skip
     cards = {}
     for who, line in lines.items():
         cards[who] = (await say(client, ctx, "owner", line, mid))["cards"][0]["id"]
@@ -695,6 +700,31 @@ async def test_new_ops_per_role(client, role):
     assert r.status_code == 201, r.text
     async with tenant_session(ctx.tenant_id) as s:
         assert list(await s.scalars(select(ProductRequest))) == []
+
+
+async def test_set_milestone_before_is_name_and_date(client):
+    ctx = await make_people()
+    w = await World(ctx).build()
+    target = {"item_id": w.ids["Bulk import"]}
+
+    async def send(before, after):
+        body = {"op": "set_milestone", "target": target, "before": {"milestone": before},
+                "after": {"milestone": after}}  # fmt: skip
+        return await client.post(CHANGES, json=body, headers=ctx.as_("owner"))
+
+    r = await send(None, {"name": "Beta", "date": "2027-03-01"})
+    assert r.status_code == 201, r.text
+    r = await send({"name": "Beta", "date": "2027-02-01"}, {"name": "Launch", "date": None})
+    assert r.status_code == 409, r.text
+    r = await send({"name": "Beta", "date": "2027-03-01"}, {"name": "Launch", "date": None})
+    assert r.status_code == 201, r.text
+    r = await send({"name": "Launch", "date": None}, {"name": "Pilot", "date": "2027-04-01"})
+    assert r.status_code == 201, r.text
+    assert (await w.item("Bulk import")).milestone == {
+        "name": "Pilot", "date": "2027-04-01", "date_source": "typed"}  # fmt: skip
+    r = await send({"name": "Pilot", "date": "2027-04-01"}, None)
+    assert r.status_code == 201, r.text
+    assert (await w.item("Bulk import")).milestone is None
 
 
 async def test_walk_order_undo_and_fixes(client, meetings):

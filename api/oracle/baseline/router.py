@@ -14,11 +14,13 @@ from sqlalchemy import inspect, select
 
 from oracle import autonomy
 from oracle.auth.deps import Principal, TenantDB, body_type
-from oracle.authz import recheck_caller, require_role, require_role_now
+from oracle.authz import has_role, recheck_caller, require_role, require_role_now
 from oracle.baseline import (
+    check,
     conflicts,
     describe,
     evidence,
+    fixes,
     goals,
     measurements,
     public_links,
@@ -52,6 +54,9 @@ from oracle.baseline.schemas import (
     FillFromTextResult,
     GoalProgress,
     GraphOut,
+    GroundTruthFixOut,
+    GroundTruthOut,
+    GroundTruthRef,
     LinkErrorOut,
     LinkPreviewOut,
     LinkTarget,
@@ -60,6 +65,7 @@ from oracle.baseline.schemas import (
     MergeIn,
     NodeStatus,
     OriginIn,
+    PrdLinkCreate,
     ProposalAccept,
     ProposalAlso,
     ProposalCreate,
@@ -87,7 +93,7 @@ Commenter = Annotated[Principal, Depends(require_role("commenter"))]
 Approver = Annotated[Principal, Depends(require_role("approver"))]
 ApproverNow = Annotated[Principal, Depends(require_role_now("approver"))]
 # H11: a run's propose_change while the baseline is at observe.
-OBSERVING_BASELINE = "Oracle is set to observe the baseline"
+OBSERVING_BASELINE = "Oracle is set to observe the Ground Truth"
 # The YAML import's body types (the CLI sends application/yaml).
 YAML_TYPES = ("application/yaml", "application/x-yaml", "text/yaml", "text/x-yaml")
 
@@ -253,18 +259,20 @@ _ENTITY_WRITE_RESPONSES = {
 
 @router.get("/graph", response_model=GraphOut)
 async def get_graph(principal: Reader, db: TenantDB) -> GraphOut:
-    """Every entity and edge (no evidence bodies): what the Baseline screen draws."""
+    """Every entity and edge (no evidence bodies): what the Ground Truth screen draws."""
     return GraphOut(
         entities=await _entities_out(db, await service.list_entities(db), principal),
         edges=await _edges_out(db, await service.list_edges(db), principal),
     )
 
 
-@router.get("/review-status", response_model=ReviewStatusOut)
+@router.get(
+    "/review-status", response_model=ReviewStatusOut, summary="Get Ground Truth Review Status"
+)
 async def get_baseline_review_status(principal: Reader, db: TenantDB) -> ReviewStatusOut:
-    """Whether a new PRD run may use the current baseline instead of rebuilding it: the
-    last baseline review, its age, whether a baseline build is under way, and the
-    baseline segment's estimate per depth (B1 "Reuse base")."""
+    """Whether a new PRD run may use the current Ground Truth instead of rebuilding it: the
+    last Ground Truth review, its age, whether a Ground Truth build is under way, and the
+    Ground Truth segment's estimate per depth (B1 "Reuse base")."""
     from oracle.runs import reuse
 
     st = await reuse.review_status(db)
@@ -312,7 +320,12 @@ async def create_entity(body: EntityCreate, principal: ApproverNow, db: TenantDB
             status=body.status,
             parent_id=body.parent_id,
         )
+        if result.entity is not None:
+            await service.link_new_feature(
+                db, _writer(principal, body), result.entity, body.serves, body.roadmap_item_id
+            )
     except service.BaselineError as exc:
+        await db.rollback()
         raise _fail(exc) from exc
     return await _entity_write(db, result, created=True)
 
@@ -428,11 +441,12 @@ async def merge_entity(
     "/from-run/{run_id}",
     response_model=FromRunOut,
     dependencies=[Depends(discussion_research.run_reader)],
+    summary="Get Ground Truth From Run",
 )
 async def get_baseline_from_run(run_id: uuid.UUID, principal: Reader, db: TenantDB) -> FromRunOut:
-    """What a run wrote to the baseline, for a person to review (B2): every item it
+    """What a run wrote to the Ground Truth, for a person to review (B2): every item it
     created, changed or proposed a change to, with the reasons each needs a person and the
-    shared draft's actions on it; the run's Confirm the baseline stop with its gate; the
+    shared draft's actions on it; the run's Confirm the Ground Truth stop with its gate; the
     other proposed goals."""
     from oracle.baseline import from_run
 
@@ -843,7 +857,7 @@ async def list_proposals(
 @router.post("/proposals", response_model=ProposalOut, status_code=status.HTTP_201_CREATED)
 async def create_proposal(body: ProposalCreate, principal: Commenter, db: TenantDB) -> ProposalOut:
     """Suggest a change; an approver accepts or rejects it. A run's proposal records
-    the run, and is refused while Oracle is set to observe the baseline (H11); a
+    the run, and is refused while Oracle is set to observe the Ground Truth (H11); a
     person's never is."""
     if principal.is_run and await autonomy.level(db, "baseline") == "observe":
         raise HTTPException(status.HTTP_403_FORBIDDEN, OBSERVING_BASELINE)
@@ -968,6 +982,113 @@ async def resolve_conflict(
 async def get_trace(principal: Reader, db: TenantDB) -> TraceReport:
     """Features that serve no confirmed goal, or rest on weak evidence; goal coverage."""
     return await trace.report(db, principal)
+
+
+@router.get("/check", response_model=GroundTruthOut)
+async def get_check(principal: Reader, db: TenantDB) -> GroundTruthOut:
+    """The Ground Truth check (docs/ground-truth.md): every roadmap item, slice and PRD
+    feature not in the Ground Truth, and every feature with no F-code, no goal, or running
+    today while still on the roadmap; each with plain words and its fixes, counted per kind.
+    Flags only: nothing is refused on save."""
+    return await check.run(db)
+
+
+CommenterNow = Annotated[Principal, Depends(require_role_now("commenter"))]
+
+
+async def _fixed(db, principal, feature: Entity, run, fix: dict) -> GroundTruthFixOut:
+    """An approver's or owner's fix applied at once (``run``); a commenter's proposed."""
+    if has_role(principal.role, "approver"):
+        writer = service.Writer(principal, "user", reason=f"Ground Truth fix: {fix['action']}")
+        code = await run(writer)
+        status_ = "done"
+        proposal = None
+    else:
+        writer = service.Writer(principal, "agent", reason=f"Ground Truth fix: {fix['action']}")
+        proposal = await fixes.propose(db, writer, feature, fix)
+        code, status_ = None, "proposed"
+    out = GroundTruthFixOut(
+        status=status_,
+        feature=GroundTruthRef(
+            id=feature.id, code=await fixes.code_of(db, feature), name=feature.title
+        ),  # fmt: skip
+        code=code,
+        proposal_id=proposal.id if proposal is not None else None,
+    )
+    await db.commit()
+    return out
+
+
+@router.post("/entities/{entity_id}/code", response_model=GroundTruthFixOut)
+async def give_code(
+    entity_id: uuid.UUID, principal: CommenterNow, db: TenantDB
+) -> GroundTruthFixOut:
+    """Give it a code (the check's ``no_code``): the company's next F-number (its highest + 1),
+    or for a slice its feature's number with the next letter (F-15a), stored as the feature's
+    key. Refused for a feature with a code, one not in the Ground Truth, or a slice whose
+    feature has none. Approvers and owners give it at once; a commenter's is a proposal."""
+    try:
+        feature = await fixes._feature(db, entity_id)
+        await fixes.next_code(db, feature)
+        return await _fixed(
+            db, principal, feature, lambda w: fixes.give_code(db, w, feature),
+            {"action": fixes.GIVE_CODE},
+        )  # fmt: skip
+    except service.BaselineError as exc:
+        raise _fail(exc) from exc
+
+
+@router.delete("/entities/{entity_id}/code", response_model=GroundTruthFixOut)
+async def take_code_back(
+    entity_id: uuid.UUID, principal: ApproverNow, db: TenantDB
+) -> GroundTruthFixOut:
+    """Undo Give it a code: the feature's key as it was."""
+    writer = service.Writer(principal, "user", reason="Ground Truth fix undone: give_code")
+    try:
+        feature = await fixes.take_code_back(db, writer, entity_id)
+    except service.BaselineError as exc:
+        raise _fail(exc) from exc
+    out = GroundTruthFixOut(
+        status="done", feature=GroundTruthRef(id=feature.id, code=None, name=feature.title)
+    )
+    await db.commit()
+    return out
+
+
+@router.post("/prd-links", response_model=GroundTruthFixOut)
+async def link_prd_feature(
+    body: PrdLinkCreate, principal: CommenterNow, db: TenantDB
+) -> GroundTruthFixOut:
+    """Link to a feature (the check's ``prd_feature_missing`` and ``slice_parent_missing``): a
+    feature of a PRD's approved plan, by its code there, becomes that confirmed Ground Truth
+    feature: the check stops flagging it and the PRD reads the feature's code. Approvers and
+    owners link at once; a commenter's is a proposal."""
+    code = body.code.strip()
+    try:
+        _, f, feature = await fixes.check_link(db, body.prd_document_id, code, body.feature_id)
+
+        async def run(_w):
+            await fixes.link(db, body.prd_document_id, code, feature.id)
+            return None
+
+        fix = {"action": fixes.LINK_PRD, "prd_document_id": str(body.prd_document_id),
+               "code": code, "name": str(f.get("name") or code)}  # fmt: skip
+        return await _fixed(db, principal, feature, run, fix)
+    except service.BaselineError as exc:
+        raise _fail(exc) from exc
+
+
+@router.delete("/prd-links", status_code=status.HTTP_200_OK)
+async def unlink_prd_feature(
+    prd_document_id: uuid.UUID, code: str, principal: ApproverNow, db: TenantDB
+) -> dict[str, bool]:
+    """Undo Link to a feature: the PRD's feature is its own again (and flagged again)."""
+    try:
+        await fixes.unlink(db, prd_document_id, code.strip())
+    except service.BaselineError as exc:
+        raise _fail(exc) from exc
+    await db.commit()
+    return {"ok": True}
 
 
 @router.get(

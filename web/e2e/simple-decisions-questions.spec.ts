@@ -8,10 +8,14 @@ import { expect, test, type Page } from "./test";
  */
 
 const region = (page: Page, name: string) => page.getByRole("region", { name, exact: true });
-/** "Waiting for you" says its count in the yellow chip beside its title (none when nothing waits). */
+/** "Waiting for you" says its count in the yellow chip beside its title (none when nothing waits):
+ * `n` questions, and (home-waiting-one-list) everything else waiting on the person, each a row there. */
 async function waiting(page: Page, n: number) {
-  const chip = region(page, "Waiting for you").getByTestId("questions-mine-count");
-  if (n > 0) await expect(chip).toHaveText(String(n));
+  const mine = region(page, "Waiting for you");
+  const chip = mine.getByTestId("questions-mine-count");
+  await expect(mine.getByTestId("waiting-item").first().or(mine.getByText("Nothing waits on you."))).toBeVisible();
+  const others = await mine.getByTestId("waiting-item").count();
+  if (n + others > 0) await expect(chip).toHaveText(String(n + others));
   else await expect(chip).toHaveCount(0);
 }
 /** A decision taken outside meetings (a PRD's question keeps its code). */
@@ -209,7 +213,9 @@ for (const phone of [false, true]) {
         const n = Number(await count.textContent());
         expect(n).toBeGreaterThanOrEqual(9);
         await expect(page.getByTestId("home-summary-decisions")).toContainText(String(n));
-        if (!phone) await expect(page.getByTestId("simple-nav-decisions-count")).toHaveText(String(n));
+        // home-waiting-one-list: the rail counts everything waiting on you (Decisions' "Waiting for you"), the decisions among it.
+        const rail = phone ? 0 : Number(await page.getByTestId("simple-nav-decisions-count").textContent());
+        if (!phone) expect(rail).toBeGreaterThanOrEqual(n);
         const q5 = card.getByTestId("home-question").first();
         // fix4 (qa-simple-home-13): Home names the question and what it blocks in words, no codes.
         await expect(q5).toContainText("Reminder default time");
@@ -225,7 +231,7 @@ for (const phone of [false, true]) {
         await expect(q5.getByRole("button", { name: "Undo" })).toBeVisible();
         await expect(count).toHaveText(String(n - 1));
         await expect(card.locator('[data-late="true"]')).toHaveCount(0);
-        if (!phone) await expect(page.getByTestId("simple-nav-decisions-count")).toHaveText(String(n - 1));
+        if (!phone) await expect(page.getByTestId("simple-nav-decisions-count")).toHaveText(String(rail - 1));
       });
 
       /**

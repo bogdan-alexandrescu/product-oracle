@@ -75,18 +75,18 @@ for (const [name, viewport] of [
   });
 }
 
-test("qa-work-39, qa4-work-15: State sits over the state chips, on one line of headers", async ({ page }) => {
+test("qa-work-39, qa4-work-15, RQ-3: Request heads the title and the state chips, on one line of headers", async ({ page }) => {
   await login(page);
   await openRequests(page);
   const head = page.getByTestId("request-list-head");
-  // qa4-work-15: no "Request" stacked over the column names.
-  await expect(head.getByText("Request", { exact: true })).toHaveCount(0);
-  const stateHead = (await head.getByText("State", { exact: true }).boundingBox())!;
+  // RQ-3: "Request" over the title, not "State": the chips under the title need no header.
+  await expect(head.getByText("State", { exact: true })).toHaveCount(0);
+  const titleHead = (await head.getByText("Request", { exact: true }).boundingBox())!;
   const ageHead = (await head.getByText("Age", { exact: true }).boundingBox())!;
   const first = rows(page).first();
   const chip = (await first.locator("[data-field=state]").boundingBox())!;
-  expect(Math.abs(stateHead.x - chip.x)).toBeLessThan(2);
-  expect(Math.abs(stateHead.y - ageHead.y)).toBeLessThan(2);
+  expect(Math.abs(titleHead.x - chip.x)).toBeLessThan(2);
+  expect(Math.abs(titleHead.y - ageHead.y)).toBeLessThan(2);
 });
 
 test("qa-onboarding-26: Auto-sort reads the same for every role", async ({ page }) => {

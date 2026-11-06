@@ -126,7 +126,7 @@ _DROPS = (
     ("entry", "suggestion declined", "dropped"),
     ("entry", "not readable", "dropped"),
     ("goal key", "not a confirmed goal", "dropped"),
-    ("feature key", "not a baseline feature", "dropped"),
+    ("feature key", "not a Ground Truth feature", "dropped"),
     ("theme", "unknown theme", "dropped"),
     ("duplicate", "unknown request", "dropped"),
     ("found item", "not your source", "dropped"),
@@ -292,7 +292,7 @@ async def _suggest(
         if entry.get("feature") is not None:
             feature_id = lookups.features.get(str(entry["feature"]))
             if feature_id is None:
-                drops[("feature key", "not a baseline feature")] += 1
+                drops[("feature key", "not a Ground Truth feature")] += 1
         duplicate = None
         if entry.get("duplicate_of") is not None:
             duplicate = _uuid(entry["duplicate_of"])

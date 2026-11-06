@@ -95,15 +95,18 @@ def _entity_ids(event: ChangeEvent) -> set[uuid.UUID]:
     return ids
 
 
-# A bulk write's reason: "11 baseline items changed" (#505).
-_COUNTED = re.compile(r"(\d+) baseline items? (.+)")
-_SIZE = re.compile(r"\d+ baseline items?")
+# A bulk write's reason: "11 Ground Truth items changed" (#505). Change events and
+# reasons stored before the Ground Truth rename say "11 baseline items": they count the
+# same, and the read path says them in the new words (:func:`_reworded`).
+_COUNTED = re.compile(r"(\d+) (?:Ground Truth|baseline) items? (.+)")
+_SIZE = re.compile(r"\d+ (?:Ground Truth|baseline) items?")
+_OLD_COUNT = re.compile(r"\b(\d+) baseline (items?)\b")
 
 
 def one_count(reasons: Iterable[str]) -> list[str]:
     """The reasons with one counted line per verb, the latest (#505): two bulk writes read
-    "11 baseline items changed", never "42 baseline items changed; 11 baseline items
-    changed"."""
+    "11 Ground Truth items changed", never "42 Ground Truth items changed; 11 Ground
+    Truth items changed"."""
     out: list[str] = []
     for reason in reasons:
         if m := _COUNTED.fullmatch(reason):
@@ -113,7 +116,7 @@ def one_count(reasons: Iterable[str]) -> list[str]:
     return out
 
 
-# A reason naming one baseline item by its ref ("feature:delivery-x changed").
+# A reason naming one Ground Truth item by its ref ("feature:delivery-x changed").
 _REF = re.compile(r"([a-z][a-z_]*):\S+ (.+)")
 # What there is one of for an item: its feature, the product.
 _THE = ("feature", "product")
@@ -129,7 +132,7 @@ def _noun(kind: str, n: int) -> str:
 
 
 def in_words(reasons: Iterable[str]) -> list[str]:
-    """Reasons naming baseline items by ref, said in words (prod-6): "feature:delivery-x
+    """Reasons naming Ground Truth items by ref, said in words (prod-6): "feature:delivery-x
     changed", "goal:g-b changed", "goal:g-c changed" read "The feature and 2 goals
     changed"; one line per verb, where its first reason stood. Other reasons are kept."""
     out: list[str | tuple[str, dict[str, int]]] = []
@@ -169,7 +172,7 @@ def stale_why(reasons: Iterable[str] | None, default: str) -> str:
 
 
 # A reason naming what the reader may not see, said without it (#541).
-HIDDEN_REASON = "a linked baseline item changed"
+HIDDEN_REASON = "a linked Ground Truth item changed"
 
 # A section-link reason stored before prod-6's fix, naming the linked item by its bare
 # ref ("PRD section s-5-1 links feature:promo-codes, which changed") instead of its
@@ -183,7 +186,13 @@ def _reworded(reason: str) -> str:
     migration is never needed: the read path keeps up with the wording on its own."""
     if m := _OLD_SECTION_LINK.fullmatch(reason):
         return f"PRD section {m[1]} links {_noun(m[2], 1)}{m[3]}"
-    return reason
+    return ground_truth_count(reason)
+
+
+def ground_truth_count(text: str) -> str:
+    """``text`` with an old bulk write's size ("42 baseline items") in the Ground Truth
+    words; the stale reasons and a change's impact page (oracle.trace.impact) read it so."""
+    return _OLD_COUNT.sub(r"\1 Ground Truth \2", text)
 
 
 # The reason an earlier rule wrote on an item with no PRD section for any new PRD version:
@@ -363,7 +372,7 @@ async def _by_entities(db: AsyncSession, event: ChangeEvent, found: dict) -> Non
     verb = VERBS.get(event.cause, "changed")
     if event.subject_kind == "blocker_status":
         verb = "changed status"
-    # A bulk write names its size ("42 baseline items"); an item says what of it is its own.
+    # A bulk write names its size ("42 Ground Truth items"); an item says what of it is its own.
     counted = event.subject_ref is None or bool(_SIZE.fullmatch(event.subject_ref))
     refs = {
         u: str(root["ref"])
@@ -388,7 +397,7 @@ async def _by_entities(db: AsyncSession, event: ChangeEvent, found: dict) -> Non
         if len(linked) == 1 and (name := names.get(next(iter(linked)))):
             return name
         n = len(linked) or len(ids)
-        return f"{n} baseline item{'' if n == 1 else 's'}"
+        return f"{n} Ground Truth item{'' if n == 1 else 's'}"
 
     def what(linked: set[uuid.UUID]) -> str:
         if not counted:
@@ -396,7 +405,7 @@ async def _by_entities(db: AsyncSession, event: ChangeEvent, found: dict) -> Non
         if len(linked) == 1 and (ref := refs.get(next(iter(linked)))):
             return ref
         n = len(linked) or len(ids)
-        return f"{n} baseline item{'' if n == 1 else 's'}"
+        return f"{n} Ground Truth item{'' if n == 1 else 's'}"
 
     def said(linked: set[uuid.UUID]) -> str:
         subject = what(linked)

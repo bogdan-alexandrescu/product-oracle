@@ -9,8 +9,8 @@ test("inbox lists checkpoints, cost approvals, overruns and feedback by state", 
   await expect(page.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible();
 
   const checkpoints = page.getByTestId("inbox-checkpoints");
-  await expect(checkpoints).toContainText("Confirm the baseline");
-  await expect(checkpoints).toContainText("Baseline proposal");
+  await expect(checkpoints).toContainText("Confirm the Ground Truth");
+  await expect(checkpoints).toContainText("Ground Truth proposal");
   await expect(page.getByTestId("inbox-approvals")).toContainText("Usage alerts v2");
   await expect(page.getByTestId("inbox-overruns")).toContainText("Spent $14.20 of $9.00 estimated");
   // One list by state (C1e): New is the default tab, everything new on a first visit.
@@ -37,10 +37,10 @@ test("inbox lists checkpoints, cost approvals, overruns and feedback by state", 
   // D14: a feedback row's primary action is outline too.
   await expect(feedback.getByRole("button", { name: "Accept", exact: true }).first()).toHaveAttribute("data-variant", "secondary");
 
-  // B2: the baseline checkpoint is reviewed in the Baseline, filtered to its run (not the run page).
+  // B2: the Ground Truth checkpoint is reviewed in the Ground Truth, filtered to its run (not the run page).
   await expect(
-    checkpoints.locator("tr[data-row]").filter({ hasText: "Confirm the baseline" }).getByRole("link", { name: "Review" }),
-  ).toHaveAttribute("href", /^\/baseline\?run=[0-9a-f-]+$/);
+    checkpoints.locator("tr[data-row]").filter({ hasText: "Confirm the Ground Truth" }).getByRole("link", { name: "Review" }),
+  ).toHaveAttribute("href", /^\/ground-truth\?run=[0-9a-f-]+$/);
   // D10: a PRD review's Decide opens its version at the run review, not the run page.
   await checkpoints.getByRole("link", { name: "Decide" }).first().click();
   await expect(page).toHaveURL(/\/documents\/[a-z0-9-]+\/v\/\d+\?run_review=[0-9a-f-]+$/);
@@ -142,7 +142,7 @@ test("inbox: a decision not delivered yet shows under its own heading, uncounted
   await expect(group.getByRole("heading", { name: "Decision not delivered yet" })).toBeVisible();
   const row = group.locator("tr[data-row]");
   await expect(row).toHaveCount(1);
-  await expect(row).toContainText("Confirm the baseline: approved by admin@example.com");
+  await expect(row).toContainText("Confirm the Ground Truth: approved by admin@example.com");
   await expect(row).toContainText("Last: SwarmCloud HTTP 503 unavailable");
   await expect(row).toContainText("Team onboarding");
   // Nothing to decide here: only Open, to the run.

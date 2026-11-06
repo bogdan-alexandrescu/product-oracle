@@ -20,6 +20,7 @@ from oracle.baseline.models import Edge, Entity
 from oracle.docs.models import Document, DocumentVersion
 from oracle.roadmap import items as roadmap_items
 from oracle.roadmap.models import RoadmapItem, ScheduleBasis
+from oracle.runs.roadmap import check_items
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
 
@@ -329,7 +330,7 @@ def test_plan_tables_cover_every_item_on_the_company_roadmap():
     from oracle.runs import plan_tables
 
     others = [{"key": "read-replicas", "title": "Read replicas", "end": "2026-12-18"}]
-    plan = plan_tables.engineering_plan(SAFETY_ITEMS, [], others=others)
+    plan = plan_tables.engineering_plan(check_items(SAFETY_ITEMS).items, [], others=others)
     assert [r.key for r in plan.items] == ["report-button", "block-list", "read-replicas"]
     rr = plan.items[-1]
     assert (rr.end, rr.basis) == (date(2026, 12, 18), "team queue")
@@ -337,7 +338,9 @@ def test_plan_tables_cover_every_item_on_the_company_roadmap():
         plan_tables.table_lines(plan)
     )
     # A draft that leaves the other PRD's item out of its Plan table is refused.
-    only_ours = plan_tables.markdown(plan_tables.engineering_plan(SAFETY_ITEMS, []))
+    only_ours = plan_tables.markdown(
+        plan_tables.engineering_plan(check_items(SAFETY_ITEMS).items, [])
+    )
     codes = {p.code for p in plan_tables.check(only_ours, plan, TODAY)}
     assert "missing_plan_item" in codes
     assert not plan_tables.check(plan_tables.markdown(plan), plan, TODAY)
@@ -393,8 +396,8 @@ async def test_a_prd_runs_own_items_take_their_place_in_the_shared_queue(client)
     ctx, ids = await world(client)
     async with tenant_session(ctx.tenant_id) as s:
         rows = await company.run_queue(s, ids["safety"])
-    queued = company.with_run_items(rows, SAFETY_ITEMS)
-    plan = plan_tables.engineering_plan(SAFETY_ITEMS, [], others=queued)
+    queued = company.with_run_items(rows, check_items(SAFETY_ITEMS).items)
+    plan = plan_tables.engineering_plan(check_items(SAFETY_ITEMS).items, [], others=queued)
     by = {r.key: r for r in plan.items}
     assert [r.key for r in plan.items] == ["report-button", "block-list", "read-replicas"]
     # One team, one week each: report button, then read replicas, then the new block list.

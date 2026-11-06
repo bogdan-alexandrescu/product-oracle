@@ -7,8 +7,8 @@ import { login } from "./helpers";
  * A new company's first request (qa-onboarding-12, qa-onboarding-47), in the "empty" scenario
  * (members only: no goals, documents or runs), driven through the UI as a person would on the
  * mock API: file the first request, open it, try to qualify it, follow the page's way to a
- * goal (Build the baseline), then write a brief through PRDs > New PRD and Draft with Oracle,
- * which builds the baseline first and starts the run.
+ * goal (Build the Ground Truth), then write a brief through PRDs > New PRD and Draft with Oracle,
+ * which builds the Ground Truth first and starts the run.
  */
 
 const TITLE = "Export invoices as a spreadsheet";
@@ -53,9 +53,9 @@ test("qa-onboarding-47, qa-onboarding-12: a new company goes from its first requ
   await expect(panel.getByRole("button", { name: "Qualify request" })).toBeDisabled();
   await expect(panel).not.toContainText("Link a confirmed goal first");
 
-  // The way to a goal: Build the baseline.
-  await needs.getByRole("link", { name: "Build the baseline" }).click();
-  await expect(page).toHaveURL(/\/baseline\?build=1$/);
+  // The way to a goal: Build the Ground Truth.
+  await needs.getByRole("link", { name: "Build the Ground Truth" }).click();
+  await expect(page).toHaveURL(/\/ground-truth\?build=1$/);
 
   // On to a first PRD, as a new owner would: PRDs > New PRD, a title and the problem, Continue to the brief.
   await page.keyboard.press("Escape");
@@ -68,14 +68,14 @@ test("qa-onboarding-47, qa-onboarding-12: a new company goes from its first requ
   await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
 
-  // Draft with Oracle: a new company has no baseline, so Oracle builds it first.
+  // Draft with Oracle: a new company has no Ground Truth, so Oracle builds it first.
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
   const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });
   const none = sheet.getByTestId("draft-baseline-none");
-  await expect(none).toContainText("Build the baseline ($7.00)");
-  await expect(none).toContainText("No baseline exists yet");
+  await expect(none).toContainText("Build the Ground Truth ($7.00)");
+  await expect(none).toContainText("No Ground Truth exists yet");
   await expect(sheet.getByRole("radio")).toHaveCount(0);
-  await expect(sheet).not.toContainText("Use the current baseline");
+  await expect(sheet).not.toContainText("Use the current Ground Truth");
 
   await sheet.getByRole("button", { name: "Estimate" }).click();
   await expect(sheet.getByTestId("draft-estimate")).toHaveText(/^\$[\d,]+\.\d{2} estimated/);

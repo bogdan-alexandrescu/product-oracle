@@ -201,7 +201,7 @@ class StalenessAction(BaseModel):
 
 class TraceUpstreamRef(BaseModel):
     """A dependency's upstream: a document version (a section of it, or all of it), or a
-    baseline entity."""
+    Ground Truth entity."""
 
     version_id: uuid.UUID | None = None
     section_key: str | None = Field(default=None, max_length=200)

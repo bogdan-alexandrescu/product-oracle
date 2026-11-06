@@ -10,12 +10,14 @@ import { useQuery } from "@/lib/use-query";
 import { SETTINGS_WRITES, settingsTabOf, useSettingsTabs } from "@/lib/settings-tabs";
 
 /** Where a role turned away from a page finds what it can have instead (qa-settings-37). */
-const ELSEWHERE: Record<string, { text: string; href: string; label: string }> = {
+const ELSEWHERE: Record<string, { text: string; href?: string; label?: string }> = {
   "/settings/api-tokens": {
     text: "Owners see every token here. Your own API tokens are on My account.",
     href: "/account",
     label: "Open My account",
   },
+  // Pass F, F-77: the lowest role that can use it, not only "ask an owner".
+  "/settings/webhooks": { text: "An approver or owner can set up webhooks. Ask one if you need it." },
 };
 
 /**
@@ -53,11 +55,11 @@ export function SettingsGate({ children }: { children: ReactNode }) {
       <Panel testId="not-for-role" bodyClassName="flex flex-col items-center gap-3 pb-8">
         <Empty icon="lock">Not available for your role</Empty>
         <p className="text-[15px] text-text2">{ELSEWHERE[pathname]?.text ?? askOwner}</p>
-        {ELSEWHERE[pathname] ? (
+        {ELSEWHERE[pathname]?.href ? (
           <LinkButton href={ELSEWHERE[pathname].href} variant="secondary">
             {ELSEWHERE[pathname].label}
           </LinkButton>
-        ) : tabs[0] && (
+        ) : !ELSEWHERE[pathname] && tabs[0] && (
           <LinkButton href={tabs[0].href} variant="ghost">
             Open {tabs[0].label}
           </LinkButton>

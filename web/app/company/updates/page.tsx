@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
-import { Button, Chip, DataTable, Empty, InfoTip, LinkButton, Panel, type Column } from "@/components/ds";
+import { Button, Chip, DataTable, InfoTip, LinkButton, Panel, type Column } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
@@ -161,7 +161,22 @@ function Updates() {
         }
       >
         {q.data && rows.length === 0 ? (
-          <Empty testId="updates-empty">No updates yet</Empty>
+          // Visual QA CO-2: as Metrics and Market, one short line and the way to start one.
+          <CompanyEmpty
+            testId="updates-empty"
+            title="No updates yet"
+            action={
+              mayCreate ? (
+                // Review r2 of PR 1286: on a phone it reads as the header's ("+ Update"), named in full.
+                <Button icon="plus" aria-label="New update" title="New update" onClick={() => setCreating(true)}>
+                  <span className="max-[600px]:hidden">New update</span>
+                  <span className="hidden max-[600px]:inline">Update</span>
+                </Button>
+              ) : undefined
+            }
+          >
+            Oracle drafts the board and investor updates from your goals and metrics.
+          </CompanyEmpty>
         ) : (
           <DataTable
             label="Updates"

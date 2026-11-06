@@ -65,10 +65,16 @@ test.describe("desktop", () => {
 
   test("qa4-docs-21: the changed-sections banner names the section by its heading, not its key", async ({ page }) => {
     await openVersion(page, WORKSPACES);
-    const banner = page.locator('[data-warning="locked_section_changed"]').filter({ visible: true });
-    await expect(banner).toContainText("Sections approved in v1 changed in this version:");
-    await expect(banner.getByRole("link", { name: "3. Scope" })).toBeVisible();
-    await expect(banner).not.toContainText(": scope");
+    // B-09: the warning is in the header chip's tip; the body names the section in one line.
+    await expect(page.locator('[data-warning]:not([data-state="done"])').filter({ visible: true })).toHaveCount(0);
+    await page.getByTestId("version-warnings-chip").filter({ visible: true }).click();
+    const tip = page.getByRole("tooltip").filter({ visible: true });
+    await expect(tip).toContainText("Sections approved in v1 changed in this version:");
+    await expect(tip).not.toContainText(": scope");
+    const line = page.getByTestId("warned-sections").filter({ visible: true });
+    await expect(line).toContainText("Still open in");
+    await expect(line.getByRole("link", { name: "3. Scope" })).toBeVisible();
+    await expect(line).not.toContainText("scope");
   });
 
   test("qa4-docs-31: the Export menu says Markdown, not a bare MD", async ({ page }) => {

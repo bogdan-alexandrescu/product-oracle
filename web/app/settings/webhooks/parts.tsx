@@ -76,7 +76,7 @@ export function ago(iso: string, now: number = Date.now()): string {
 
 /** The API's delivery error codes (oracle/webhooks/outbox.py) in a few words, for a chip. */
 const ERROR_SHORT: Record<string, string> = {
-  connect: "No answer",
+  connect: "Couldn't reach",
   timeout: "Too slow",
   tls: "Not secure",
   not_public: "Not public",
@@ -84,16 +84,25 @@ const ERROR_SHORT: Record<string, string> = {
   too_large: "Too big",
 };
 
-/** "✓ 200", "✕ 500", "✕ No answer", "Pending", "Withheld": never a raw error code (qa4-settings-25). */
+/**
+ * "✓ Delivered", "✕ Server error", "✕ Couldn't reach", "Retrying", "Pending", "Withheld": never a
+ * raw error code (qa4-settings-25) or an HTTP number (pass F, F-64); a retry carries no cross (F-65).
+ */
 export function outcomeText(d: { status: string; http_status?: number | null; error?: string | null }): string {
-  if (d.status === "succeeded") return `✓ ${d.http_status ?? ""}`.trim();
+  if (d.status === "succeeded") return "✓ Delivered";
   if (d.status === "pending") return "Pending";
   if (d.status === "withheld") return "Withheld";
-  if (d.http_status != null) return `✕ ${d.http_status}`;
-  return `✕ ${(d.error && ERROR_SHORT[d.error]) ?? (d.status === "retrying" ? "Retrying" : "Failed")}`;
+  if (d.status === "retrying") return "Retrying";
+  if (d.http_status != null) return "✕ Server error";
+  return `✕ ${(d.error && ERROR_SHORT[d.error]) ?? "Failed"}`;
 }
 
-/** A failed send in a sentence: "Couldn't reach hooks.example.com", "hooks.example.com answered 500". */
+/** What the receiving server answered, in words: "Answered OK", "Server answered with an error". */
+export function answerText(httpStatus: number): string {
+  return httpStatus < 400 ? "Answered OK" : "Server answered with an error";
+}
+
+/** A failed send in a sentence: "Couldn't reach hooks.example.com", "hooks.example.com answered with an error". */
 export function failureText(d: { http_status?: number | null; error?: string | null }, host: string): string {
   switch (d.error) {
     case "connect":
@@ -109,7 +118,7 @@ export function failureText(d: { http_status?: number | null; error?: string | n
     case "too_large":
       return "The event was too big to send";
   }
-  return d.http_status != null ? `${host} answered ${d.http_status}` : `Couldn't send to ${host}`;
+  return d.http_status != null ? `${host} answered with an error` : `Couldn't send to ${host}`;
 }
 
 /** An event type's plain label, as the New webhook form shows it (qa4-settings-26). */

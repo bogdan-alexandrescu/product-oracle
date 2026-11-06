@@ -192,7 +192,7 @@ async def check_import(
         warnings.append(
             VersionWarning(
                 code="unknown_goal",
-                message="goal keys not in the baseline (the goal may be proposed later): "
+                message="goal keys not in the Ground Truth (the goal may be proposed later): "
                 + ", ".join(goals),
             )
         )
@@ -201,7 +201,7 @@ async def check_import(
         warnings.append(
             VersionWarning(
                 code="unknown_feature",
-                message="feature keys not in the baseline: " + ", ".join(features),
+                message="feature keys not in the Ground Truth: " + ", ".join(features),
             )
         )
     focus = [c for c in choices if c.stance == "focus"]

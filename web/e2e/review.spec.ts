@@ -107,9 +107,9 @@ test("add an anchored comment that survives reload", async ({ page }) => {
   await expect(comment).toContainText("raised on v2");
 });
 
-test("a citation of Oracle's baseline reads 'Oracle baseline', its ref as text, not a link", async ({ page }) => {
+test("a citation of Oracle's Ground Truth reads 'Oracle Ground Truth', its ref as text, not a link", async ({ page }) => {
   await login(page);
-  // Version 2 of checkout-redesign cites a baseline goal in its Problem section.
+  // Version 2 of checkout-redesign cites a Ground Truth goal in its Problem section.
   await page.evaluate(() => {
     const key = "po-mock-db-v2";
     const db = JSON.parse(localStorage.getItem(key)!);
@@ -132,15 +132,15 @@ test("a citation of Oracle's baseline reads 'Oracle baseline', its ref as text, 
   await page.goto("/documents/checkout-redesign/v/2");
 
   const chip = (await openSection(page, "problem")).getByTestId("cite-o-g1");
-  await expect(chip).toHaveText(/Oracle baseline/);
+  await expect(chip).toHaveText(/Oracle Ground Truth/);
   await chip.hover();
   const card = page.getByRole("tooltip");
   await expect(card).toContainText("Goal G1: raise first-order completion");
-  await expect(card.getByTestId("cite-ref")).toHaveText("baseline goal g1 (activation), locked");
+  await expect(card.getByTestId("cite-ref")).toHaveText("Ground Truth goal g1 (activation), locked");
   await expect(card.getByRole("link")).toHaveCount(0);
 
   await openTab(page, "Sources");
-  const row = page.getByTestId("sources-list").filter({ visible: true }).getByRole("listitem").filter({ hasText: "Oracle baseline" });
+  const row = page.getByTestId("sources-list").filter({ visible: true }).getByRole("listitem").filter({ hasText: "Oracle Ground Truth" });
   await expect(row).toContainText("Goal G1: raise first-order completion");
   await expect(row.getByRole("link")).toHaveCount(0);
 });

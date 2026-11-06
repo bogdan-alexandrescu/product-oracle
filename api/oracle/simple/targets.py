@@ -42,7 +42,8 @@ company's owners. A proposal writes nothing, an add creates no row, until accept
 - ``add_feature_ask`` (S9): a feature ask filed in Oracle's Requests (``product_requests``,
   state new, ``target.request_id``): ``after`` {title, requester_name, requester_kind,
   channel}. Anyone who may file a request (commenter and up) files it directly, as in
-  Requests; its undo deletes it while it is still new and unchanged.
+  Requests; its undo deletes it while it is still new and unchanged. With no one named
+  (not a customer's), it was asked by the teammate who filed it.
 - ``add_launch_task`` / ``set_launch_task_status``: a task on the item's live launch
   (a launch of its track whose items include it; ``target.launch_id``, ``task_id`` once
   added) through oracle.launches.service. The launches service deletes no task: the undo
@@ -51,7 +52,9 @@ company's owners. A proposal writes nothing, an add creates no row, until accept
 History is never deleted: the change rows stay in ``simple_changes``.
 """
 
+import hashlib
 import uuid
+from types import SimpleNamespace
 from typing import Any
 
 from pydantic import ValidationError
@@ -62,6 +65,7 @@ from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.baseline.models import Entity
+from oracle.docs.models import DocumentVersion
 from oracle.launches import service as launches
 from oracle.launches.models import TASK_AUDIENCES, Launch, LaunchTask
 from oracle.launches.models import TASK_STATUSES as LAUNCH_TASK_STATUSES
@@ -71,7 +75,8 @@ from oracle.priorities.schemas import OverrideCreate
 from oracle.priorities.scoring import _number
 from oracle.requests.models import CHANNELS as REQUEST_CHANNELS
 from oracle.requests.models import REQUESTER_KINDS, ProductRequest
-from oracle.roadmap.models import RoadmapItem
+from oracle.roadmap import company
+from oracle.roadmap.models import ProductTrack, RoadmapItem
 from oracle.simple import changes, service
 from oracle.simple.changes import ChangeError
 from oracle.simple.models import (
@@ -360,8 +365,15 @@ async def _plan(
         after = {"title": _title(a.get("title"), kind), "requester_name": name,
                  "requester_kind": rkind, "channel": channel}  # fmt: skip
         return target, {}, after
-    if entry is None and kind != "action":
+    # prio-company (Nov 4): a feature with no item on the roadmap is ranked and estimated by
+    # its own id (``target.feature_id``).
+    feature = body.target.get("feature_id") if kind in ("override", "estimate") else None
+    if entry is None and kind != "action" and not feature:
         raise ChangeError(422, "target.item_id: the roadmap item")
+    if entry is None and feature:
+        row: Any = SimpleNamespace(feature_id=changes._uuid(feature, "feature_id"))
+        if await _feature(db, row.feature_id) is None:
+            raise ChangeError(404, "No such feature")
 
     if kind == "goal":
         gid = _id_str(body.target.get("goal_id"), "target.goal_id")
@@ -386,9 +398,9 @@ async def _plan(
         return target, current, after
 
     if kind == "override":
-        row = entry.row  # type: ignore[union-attr]
+        row = entry.row if entry is not None else row
         if row.feature_id is None:
-            raise ChangeError(422, "This item has no feature in the baseline to rank")
+            raise ChangeError(422, "This item has no feature in the Ground Truth to rank")
         target["feature_id"] = str(row.feature_id)
         clear = a.get("clear") is True
         pos = a.get("position")
@@ -429,9 +441,9 @@ async def _plan(
         return target, current, after
 
     if kind == "estimate":
-        row = entry.row  # type: ignore[union-attr]
+        row = entry.row if entry is not None else row
         if row.feature_id is None:
-            raise ChangeError(422, "This item has no feature in the baseline to estimate")
+            raise ChangeError(422, "This item has no feature in the Ground Truth to estimate")
         target["feature_id"] = str(row.feature_id)
         after = {}
         for k in ESTIMATES:
@@ -454,7 +466,7 @@ async def _plan(
             raise ChangeError(422, f"before: {', '.join(missing)} as you saw them")
         f = await _feature(db, row.feature_id)
         if f is None:
-            raise ChangeError(422, "This item has no feature in the baseline to estimate")
+            raise ChangeError(422, "This item has no feature in the Ground Truth to estimate")
         current = estimates(f.attrs)
         seen = {k: given[k] for k in ESTIMATES}
         if any(not (v is None or (isinstance(v, int | float) and not isinstance(v, bool)))
@@ -677,10 +689,14 @@ async def _apply(
 async def _create(db: AsyncSession, principal: Any, c: SimpleChange) -> None:
     kind, t, a = KIND[c.op], c.target, c.after
     if kind == "ask":
+        name, rkind = a["requester_name"], a["requester_kind"]
+        if name is None and rkind in ("unknown", "team"):
+            # Named by no one (a teammate's own ask): asked by the teammate who filed it.
+            u = await db.get(User, c.by)
+            name, rkind = (u.name or u.email, "team") if u is not None else (None, rkind)
         db.add(ProductRequest(id=uuid.UUID(t["request_id"]), title=a["title"],
-                              channel=a["channel"], origin="person",
-                              requester_name=a["requester_name"],
-                              requester_kind=a["requester_kind"], filed_by=c.by))  # fmt: skip
+                              channel=a["channel"], origin="person", requester_name=name,
+                              requester_kind=rkind, filed_by=c.by))  # fmt: skip
         return
     item = await db.get(RoadmapItem, uuid.UUID(t["item_id"])) if t.get("item_id") else None
     if t.get("item_id") and item is None:
@@ -741,6 +757,77 @@ async def _who(
     return entry, False, await changes.routed_to(db, entry, read_)
 
 
+async def add_to_company(db: AsyncSession, principal: Any, feature_id: Any) -> service.Entry | None:
+    """prio-company (Nov 4): the feature's item on the company roadmap, added to its shown
+    version (made when it has none) when it has none there, its draft there confirmed rather
+    than a second item added; None while there is no company roadmap (a move then ranks the
+    feature alone). The caller commits."""
+    from oracle.simple.additions import _shown_version
+
+    fid = changes._uuid(feature_id, "feature_id")
+    f = await _feature(db, fid)
+    if f is None or f.type != "feature":
+        raise ChangeError(404, "No such feature")
+    doc = await company.active(db)
+    if doc is None:
+        return None
+    read_ = await service.load(db)
+    there = [e for e in read_.entries
+             if e.roadmap.id == doc.id and e.row.feature_id == fid and e.status != "cut"
+             and not e.row.merged_into]  # fmt: skip
+    for e in there:
+        if not e.row.draft:
+            return e
+    if there:
+        row = there[0].row
+        row.draft = False
+        await db.flush()
+        data = {"feature_id": str(fid), "roadmap_id": str(doc.id), "from": "priorities"}
+        await audit.record(db, principal, "roadmap.item_confirmed", "roadmap_item", row.id, data)
+        return (await service.load(db)).by_id().get(row.id)
+    base = await _shown_version(db, doc.id)
+    if base is None:
+        body = f"# {doc.title}\n"
+        v = DocumentVersion(document_id=doc.id, number=1, markdown=body,
+                            content_hash=hashlib.sha256(body.encode()).hexdigest())  # fmt: skip
+        db.add(v)
+        await db.flush()
+        base = v.id
+    taken = set(
+        await db.scalars(select(RoadmapItem.item_key).where(RoadmapItem.roadmap_version_id == base))
+    )
+    key, n = f.key, 2
+    while key in taken:
+        key, n = f"{f.key}-{n}", n + 1
+    position = await db.scalar(
+        select(func.max(RoadmapItem.position)).where(RoadmapItem.roadmap_version_id == base)
+    )
+    track = await db.scalar(
+        select(ProductTrack)
+        .where(ProductTrack.roadmap_document_id == doc.id)
+        .order_by(ProductTrack.created_at)
+        .limit(1)
+    )
+    row = RoadmapItem(
+        roadmap_document_id=doc.id,
+        roadmap_version_id=base,
+        item_key=key,
+        position=(position or 0) + 1,
+        title=f.title or f.key,
+        horizon="later",
+        feature_id=fid,
+        track_id=track.id if track is not None else None,
+        prd_document_id=track.prd_document_id if track is not None else None,
+        prd_version_id=track.current_version_id if track is not None else None,
+        note="added from Priorities",
+    )
+    db.add(row)
+    await db.flush()
+    data = {"feature_id": str(fid), "roadmap_id": str(doc.id), "from": "priorities"}
+    await audit.record(db, principal, "roadmap.item_added", "roadmap_item", row.id, data)
+    return (await service.load(db)).by_id().get(row.id)
+
+
 async def _record(db: AsyncSession, principal: Any, c: SimpleChange, **data: Any) -> None:
     await audit.record(db, principal, f"simple_change.{c.status}", "simple_change", c.id,
                        data={"op": c.op, "target": c.target, **data})  # fmt: skip
@@ -753,6 +840,12 @@ async def create(
     the meeting does not review is a proposal for the item's decider."""
     me, now = changes._me(principal), company_time.now()
     entry, applies, routed = await _who(db, principal, body.target.get("item_id"), body.op)
+    if entry is None and KIND.get(body.op) == "override" and body.target.get("feature_id"):
+        # prio-company (Nov 4): moving a feature not on the company roadmap adds it there,
+        # an owner's right; then the move is the item's.
+        if not has_role(principal.role, "owner"):
+            raise ChangeError(403, "Only an owner can add a feature to the company roadmap")
+        entry = await add_to_company(db, principal, body.target["feature_id"])
     off = agenda is not None and entry is not None and not agenda.covers(entry.row)
     if off:
         applies, routed = False, await changes.routed_to(db, entry, await service.load(db))

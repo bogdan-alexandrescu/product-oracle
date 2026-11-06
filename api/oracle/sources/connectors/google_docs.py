@@ -163,7 +163,11 @@ def _ids(config: dict[str, Any], key: str) -> list[str]:
         raise ConnectorConfigError(f"{key} must be a list of Drive ids")
     for i in ids:
         if not valid_id(i):
-            raise ConnectorBadInput(f"{i[:60]!r} {NOT_A_DRIVE_ID}")
+            raise ConnectorBadInput(
+                f"{i[:60]!r} {NOT_A_DRIVE_ID}",
+                is_action=True,
+                cause=f"{i[:60]!r} {NOT_A_DRIVE_ID.split(':')[0]}",
+            )
     return ids
 
 
@@ -179,7 +183,11 @@ def _options(config: dict[str, Any], check_names: bool = True) -> tuple[list[str
     if not folders and not docs:
         raise ConnectorConfigError("allowlist at least one folder or doc")
     if len(folders) + len(docs) > MAX_PICKED:
-        raise ConnectorConfigError(f"choose at most {MAX_PICKED} files and folders per source")
+        raise ConnectorConfigError(
+            f"choose at most {MAX_PICKED} files and folders per source",
+            is_action=True,
+            cause=f"over {MAX_PICKED} files and folders",
+        )
     if not check_names:
         return folders, docs
     if not set(names) <= set(folders) | set(docs):

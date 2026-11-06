@@ -140,6 +140,8 @@ test("a deleted feature and goal are listed in Settings › Trash and restored f
 
   await page.getByRole("button", { name: `Restore ${feature.title}` }).click();
   await expect(featureRow).toHaveCount(0);
+  // The note names the feature as its row did, code first.
+  await expect(page.getByRole("status").filter({ hasText: "Restored" })).toContainText(`Restored ${feature.code} ${feature.title}`);
   await page.getByRole("button", { name: `Restore ${goal.title}` }).click();
   await expect(goalRow).toHaveCount(0);
 
@@ -178,6 +180,10 @@ test("whoever deleted a feature or a goal sees it in Trash and restores it, with
   const goalRow = entries.filter({ hasText: goal.title });
   await expect(featureRow).toContainText("Feature");
   await expect(goalRow).toContainText("Goal");
+  // Only owners delete for good: an approver has Restore, never Delete for good or Empty Trash.
+  await expect(featureRow.getByRole("button", { name: `Restore ${feature.title}` })).toBeVisible();
+  await expect(page.getByRole("button", { name: /for good$/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Empty Trash" })).toHaveCount(0);
 
   await featureRow.getByRole("button", { name: `Restore ${feature.title}` }).click();
   await expect(featureRow).toHaveCount(0);
@@ -229,7 +235,8 @@ type RoadmapItem = Item & { key: string; roadmap: { slug: string } };
 
 async function alerts(page: Page): Promise<RoadmapItem[]> {
   const all = (await call(page, "GET", "/v1/simple/roadmap")).body as { items: RoadmapItem[] };
-  return all.items.filter((i) => i.roadmap.slug === "alerts-roadmap");
+  // The Alerts roadmap as the API names it: its document's slug.
+  return all.items.filter((i) => i.roadmap.slug === "usage-alerts-roadmap");
 }
 
 test("a feature deleted before the roadmap's next version is published comes back on it from Trash", async ({ page }) => {

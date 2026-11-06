@@ -5,6 +5,7 @@ import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "rea
 import { Button, Chip, InfoTip, Label, Notice, SegmentedControl } from "@/components/ds";
 import { api, ApiError, type Schemas, unwrap } from "@/lib/api/client";
 import { calendarDay, dayIn, todayIn, useCompanyZone, zoneDay, zoneTime, zoneWeekday } from "@/lib/dates";
+import { zoneName } from "@/lib/format";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { INPUT } from "../_components/fields";
@@ -455,7 +456,7 @@ export function FirefliesPicker({
             Ongoing
           </label>
           <span className="flex h-9 items-center gap-1 text-sm text-text2" data-testid="fireflies-timezone">
-            {zone}
+            {zoneName(zone)}
             <InfoTip label="time zone" align="end">
               Dates are whole days in the Company time zone, and meeting times are shown in it. An owner sets it on Settings ›
               Company.

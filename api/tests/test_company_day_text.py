@@ -100,14 +100,14 @@ async def test_the_reuse_note_and_banner_name_the_company_day(client, runtime, m
     resp = await client.post(f"/v1/runs/{run_id}/estimate", headers=ctx.as_("owner"))
     assert resp.status_code == 200, resp.text
     banner = {r["name"]: r for r in resp.json()["segments"]}["baseline"]["note"]
-    assert banner == "Current baseline, approved Oct 13"
+    assert banner == "Current Ground Truth, approved Oct 13"
 
     resp = await client.post(f"/v1/runs/{run_id}/start", headers=ctx.as_("owner"))
     assert resp.status_code == 200, resp.text
     started = resp.json()
-    assert started["segments"][0]["note"] == "Reused the baseline approved Oct 13"
+    assert started["segments"][0]["note"] == "Reused the Ground Truth approved Oct 13"
     [spec] = runtime.submitted
-    assert "The baseline was reviewed and approved on Oct 13;" in spec.steps[0].prompt
+    assert "The Ground Truth was reviewed and approved on Oct 13;" in spec.steps[0].prompt
     # The knob keeps the machine moment in UTC.
     assert started["segments"][0]["reused"]["approved_at"].startswith("2026-10-12T20:00")
 
@@ -138,7 +138,7 @@ async def test_a_runs_proposals_are_labelled_with_the_company_day(client):
     [made] = [p for p in resp.json() if p["run_id"] == str(run_id)]
     assert made["proposer"] == {
         "kind": "run",
-        "label": "Build the baseline · Oct 21",
+        "label": "Build the Ground Truth · Oct 21",
         "run_id": str(run_id),
         "user_id": None,
         "email": None,
@@ -160,13 +160,13 @@ EXCEPTIONS = {
     ("market/blocks.py", "finding_row"): "a finding's published date: a calendar date, no time",
     ("metrics/review.py", "variances"): "a metric week's Monday: a calendar date, no time of day",
     ("priorities/service.py", "_cited_as"): "machine field: a citation's ISO date",
-    ("roadmap/doc_dates.py", "shown_day"): "a date written in a draft: a calendar date, no time",
     ("roadmap/draft_items.py", "_day"): "a draft item's date in a check's words: a calendar date",
     ("requests/triage.py", "prompt_lines"): "agent prompt, labelled UTC",
     ("requests/triage.py", "daily_due"): "machine field: the triage_day knob",
     ("requests/triage.py", "daily"): "machine field: the triage_day knob",
     ("rituals/blocks.py", "outcomes_due"): "machine field: compared with stored ISO days",
     ("simple/constraints.py", "_day"): "a roadmap item's date: a calendar date, no time of day",
+    ("shares/render.py", "_dates"): "a shared card's item dates: calendar dates, no time of day",
     ("simple/dates.py", "_day"): "a suggested start or end: a calendar date, no time of day",
     ("simple/chat.py", "_day_words"): "a change card's item dates: calendar dates, no time of day",
     ("simple/chat.py", "_b_move"): "the first day of a named period (this quarter): calendar date",
@@ -269,6 +269,9 @@ def test_the_helper_words_a_moment_with_the_zones_short_name():
     assert company_time.stamp(LATE.replace(tzinfo=None), AUCKLAND) == "Oct 13, 2026, 9:00 AM NZDT"
     assert company_time.day_first_in_words(LATE, AUCKLAND) == "13 Oct"
     assert company_time.day_first_in_words(LATE, "America/Los_Angeles") == "12 Oct"
+    # A calendar day says its year only when it is not the company's year.
+    assert company_time.calendar_day(date(2026, 11, 4), date(2026, 11, 5)) == "Nov 4"
+    assert company_time.calendar_day(date(2027, 1, 8), date(2026, 11, 5)) == "Jan 8, 2027"
 
 
 def test_the_spec_sources_name_the_company_day_of_the_prd_approval():
@@ -332,7 +335,8 @@ async def test_the_served_review_yaml_names_the_company_day(client):
 def test_the_export_dates_are_the_company_time_with_its_short_name():
     from oracle.export import render
 
-    assert render._format_dt(LATE, AUCKLAND) == "Oct 13, 2026, 9:00 AM NZDT"
+    # Each part held on one line, as on the slides (PR 1300 round 3).
+    assert render._format_dt(LATE, AUCKLAND).replace("\u00a0", " ") == "Oct 13, 2026, 9:00 AM NZDT"
     assert render._format_dt(None, AUCKLAND) == ""
 
 
@@ -418,12 +422,12 @@ def test_run_label_takes_the_company_zone():
     run = ProposalRun(
         id=uuid.uuid4(),
         flow="baseline",
-        flow_title="Build the baseline",
+        flow_title="Build the Ground Truth",
         status="running",
         created_at=datetime(2026, 10, 20, 23, 30, tzinfo=UTC),
     )
-    assert describe.run_label(run, AUCKLAND) == "Build the baseline · Oct 21"
-    assert describe.run_label(run, "America/Los_Angeles") == "Build the baseline · Oct 20"
+    assert describe.run_label(run, AUCKLAND) == "Build the Ground Truth · Oct 21"
+    assert describe.run_label(run, "America/Los_Angeles") == "Build the Ground Truth · Oct 20"
 
 
 def test_the_deck_banner_names_the_company_time():
@@ -436,7 +440,8 @@ def test_the_deck_banner_names_the_company_time():
     ev = ExportVersion(
         document=doc, version=version, sections=[], citations=[], latest_number=2, zone=AUCKLAND
     )
-    banner = deck._banner(ev)
+    # A date's parts are held together by no-break spaces (E-11); read as a person does.
+    banner = deck._banner(ev).replace("\u00a0", " ")
     # In words, capitalised, no ISO date (QA docs-30).
     assert "Approved Oct 13, 2026, 9:00 AM NZDT" in banner
     assert "2026-" not in banner

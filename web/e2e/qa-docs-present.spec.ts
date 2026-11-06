@@ -22,7 +22,8 @@ test.describe("desktop", () => {
     await openPresent(page);
     const text = (await banner(page).innerText()).trim();
     expect(text).toMatch(/· Draft ·/);
-    expect(text).toMatch(/Imported [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d{2} [AP]M/);
+    // A date's parts are held together by no-break spaces (\s matches them; E-11).
+    expect(text).toMatch(/Imported [A-Z][a-z]{2}\s\d{1,2},\s\d{4}, \d{1,2}:\d{2}\s[AP]M/);
     expect(text).not.toMatch(/\d{4}-\d{2}-\d{2}/);
     expect(text).not.toMatch(/· draft|imported /);
     // Not again in the control bar.
@@ -84,5 +85,5 @@ test("qa-docs-6 / qa-docs-30: dark theme, the phone slide fits and its banner re
   await expect(page.getByTestId("slide-counter")).toHaveText("1 / 10");
   const slide = (await page.getByTestId("audience-view").locator(".current-slide").boundingBox())!;
   expect(slide.x + slide.width).toBeLessThanOrEqual(390);
-  await expect(banner(page)).toContainText(/Imported [A-Z][a-z]{2} \d{1,2}, /);
+  await expect(banner(page)).toContainText(/Imported [A-Z][a-z]{2}\s\d{1,2},\s/);
 });

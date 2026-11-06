@@ -9,6 +9,7 @@
  * on purpose: health, drift and staleness follow the API's rules, not its every message.
  * Synthetic placeholders only. Reads need a viewer; writes an approver, as in the API.
  */
+import { prdRanker } from "./prd-rank";
 import { APPROVED_ROADMAP_SCENARIO, TRAILS_BASES, TRAILS_PRD_SLUG } from "./approved-roadmap";
 import type { Schemas } from "@/lib/api/client";
 import { calendarDay } from "@/lib/dates";
@@ -56,6 +57,8 @@ export interface RoadmapDb {
   changes: Change[];
   /** F2: track alerts (seeded only in the "track-alerts" scenario, so other specs' Inbox counts stay). */
   alerts?: StoredAlert[];
+  /** plan-open-from-simple "plan-same-key": the Checkout redesign roadmap draft holds a key Usage alerts' roadmap holds too. */
+  same_key?: boolean;
   /** F2: tracker record history, one row per changed field. */
   recordEvents?: (TrackerRecordEventOut & { record_id: string })[];
   /** F2: dates accepted from the tracker, by item key, with the reference of the basis they rest on (the Plan row reads them). */
@@ -100,7 +103,7 @@ const OFF_REASON = "Two-way tracker sync is off: Oracle makes no tracker writes.
 const UNVERIFIED = "a dated milestone needs a verified estimate, capacity or commitment (basis_ids); Oracle never invents dates";
 // The API's texts for an item's refused date (api/oracle/roadmap/schedule.py).
 // #396: where a person records a date basis (api/oracle/wording.py RECORD_DATE_BASIS).
-const RECORD_DATE_BASIS = "record a date basis on Plan › Dates (or ask the engineering lead to)";
+const RECORD_DATE_BASIS = "add a date source on Plan › Dates (or ask the engineering lead to)";
 const DATE_UNVERIFIED =
   `a date needs a verified estimate, capacity or commitment recorded for this PRD (and item) that supports it (${RECORD_DATE_BASIS}); Oracle never invents dates`;
 const OUTSIDE_NOW = "dated milestones belong only in now; the date was dropped";
@@ -230,9 +233,10 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
   const planStale = scenario === PLAN_STALE_SCENARIO;
   const simpleItemBasis = scenario === SIMPLE_ITEM_BASIS_SCENARIO;
   const trails = scenario === APPROVED_ROADMAP_SCENARIO;
-  const key = withItems || withDiff || noGaBasis || planStale || simpleItemBasis || trails ? `roadmap:${scenario}` : "roadmap";
+  const sameKey = scenario === PLAN_SAME_KEY_SCENARIO;
+  const key = withItems || withDiff || noGaBasis || planStale || simpleItemBasis || trails || sameKey ? `roadmap:${scenario}` : "roadmap";
   return seeded(key, () => {
-    const db: RoadmapDb = { items: {}, tracks: [], milestones: [], bases: [], records: [], changes: [] };
+    const db: RoadmapDb = { items: {}, tracks: [], milestones: [], bases: [], records: [], changes: [], ...(sameKey ? { same_key: true } : {}) };
     const prd = ctx.documents.find((d) => d.slug === "usage-alerts");
     const roadmap = ctx.documents.find((d) => d.slug === "usage-alerts-roadmap");
     const accepted = prd && latest(ctx, prd.id, true);
@@ -250,10 +254,11 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
     if (rv) db.items[rv.id] = itemsFor(ctx, rv, track.id);
     // O4 'document dates': the roadmap's Beta date rests on ENG-412; its GA date's basis
     // (ENG-413) was withdrawn, so the version view marks it "date withdrawn". In the
-    // "plan-decider" scenario (#346) it stands, so a version proposed from it can be approved.
+    // "plan-decider" scenario (#346) and "plan-timeline-edit" it stands, so a version proposed
+    // from it can be approved.
     // F3 "date-bases": GA's date has no basis at all (unverified), and an approver's
     // ENG-420 waits for the engineering lead.
-    const ga = scenario === "plan-decider" ? "verified" : "withdrawn";
+    const ga = scenario === "plan-decider" || scenario === "plan-timeline-edit" ? "verified" : "withdrawn";
     const seeds =
       twoWay
         ? ([["ENG-412", "2026-11-30", "verified"], ["ENG-413", TWO_WAY_GA.backed, "verified"]] as const)
@@ -338,7 +343,7 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
       seedAlerts(db, track.id, scenario === TRACK_ALERTS_MANY_SCENARIO, scenario === TRACK_ALERTS_ACTIONS_SCENARIO, scenario === TRACK_ALERTS_HISTORY_SCENARIO);
     // "launches": a second track, Checkout redesign PRD, with no roadmap yet (New launch's Track picker).
     // fix4: the alignment report scenarios have it too, so a report's second track is one the mock keeps.
-    const secondTrack = scenario === "launches" || scenario === "alignment-report" || scenario === "report-prd-moved" || scenario === REPORT_OFF_TRACK_SCENARIO || scenario === REPORT_ITEM_MILESTONE_SCENARIO;
+    const secondTrack = scenario === "launches" || scenario === "alignment-report" || scenario === "report-prd-moved" || scenario === "report-draft-item" || scenario === REPORT_OFF_TRACK_SCENARIO || scenario === REPORT_ITEM_MILESTONE_SCENARIO;
     const checkout = secondTrack ? ctx.documents.find((d) => d.slug === "checkout-redesign") : undefined;
     if (checkout) {
       const started = latest(ctx, checkout.id)?.number ?? 1;
@@ -587,7 +592,8 @@ function unplanned(db: RoadmapDb, trackId: string, keys: Set<string>): Schemas["
  * #505): one counted line per verb, the latest, so two bulk writes never read as two counts.
  */
 function staleWhy(reasons: readonly string[], fallback: string): string {
-  const counted = /^(\d+) baseline items? (.+)$/;
+  // As the API's staleness._COUNTED: one stored before the rename says "N baseline items".
+  const counted = /^(\d+) (?:Ground Truth|baseline) items? (.+)$/;
   const out: string[] = [];
   for (const r of reasons) {
     const verb = counted.exec(r)?.[2];
@@ -1368,12 +1374,12 @@ const ALERTS_APPROVED: PlanSeedItem[] = [
     feature: ["threshold-alerts", "Threshold alerts"],
     requirements: [["req-alert-threshold", "Alert when spend crosses a threshold"], ["req-alert-email", "Alerts reach the team by email"]],
     records: [{ ref: "ENG-402", state: "in_progress" }], date: "2026-11-20", dateStatus: "verified", dateSource: "ENG-402" },
-  { key: "alert-digest", title: "Daily alert digest email", horizon: "now", goals: ["g.paid-conversion"], state: "at_risk", section: "behaviour",
+  { key: "alert-digest", title: "Weekly alert digest", horizon: "now", goals: ["g.paid-conversion"], state: "at_risk", section: "behaviour",
     records: [{ ref: "ENG-405", state: "in_progress", target: "2026-12-09" }], date: "2026-11-30", dateStatus: "verified", dateSource: "ENG-412", slipDays: 9,
     reasons: [
       // #505: two bulk baseline writes marked it stale, as the API's stale reasons read; prod-6:
       // changes to its feature, goals and product, named by ref, read in words.
-      { kind: "stale", detail: staleWhy(["feature:alert-digest changed", "goal:g-paid-conversion changed", "goal:g-activation changed", "product:usage was confirmed", "42 baseline items changed", "11 baseline items changed"], "its PRD trace changed") },
+      { kind: "stale", detail: staleWhy(["feature:alert-digest changed", "goal:g-paid-conversion changed", "goal:g-activation changed", "product:usage was confirmed", "42 Ground Truth items changed", "11 Ground Truth items changed"], "its PRD trace changed") },
       { kind: "slipping", detail: "ENG-405 targets Dec 9, after the milestone date Nov 30." },
     ],
     next: { action: "decide_slip", who: "owner" } },
@@ -1388,7 +1394,7 @@ const ALERTS_APPROVED: PlanSeedItem[] = [
   { key: "team-budgets", title: "Budgets per team", horizon: "later", goals: ["g.early-churn"], state: "planned", section: "behaviour" },
 ];
 /**
- * Current state: the baseline features the Plan's items trace (as GET /v1/feature-states lists
+ * Running today: the baseline features the Plan's items trace (as GET /v1/feature-states lists
  * every confirmed feature, each with its roadmap items), so the Plan's item names carry their
  * pills. Their items are the approved version's rows (the Plan finds a pill by the feature's id).
  */
@@ -1553,6 +1559,15 @@ const CHECKOUT_DRAFT: PlanSeedItem[] = [
 ];
 
 /**
+ * plan-open-from-simple "plan-same-key": the default company plus the Checkout redesign roadmap
+ * (server.ts), whose draft 2 also holds threshold-alerts, a key Usage alerts' roadmap holds for
+ * another item (keys are unique only per roadmap version). Simple shows the Checkout one.
+ */
+export const PLAN_SAME_KEY_SCENARIO = "plan-same-key";
+export const SAME_KEY_ITEM: PlanSeedItem = { key: "threshold-alerts", title: "Free shipping threshold alert", horizon: "now", goals: ["g.paid-conversion"], section: "s-5-2" };
+const checkoutDraft = (db: RoadmapDb): PlanSeedItem[] => (db.same_key ? [...CHECKOUT_DRAFT, SAME_KEY_ITEM] : CHECKOUT_DRAFT);
+
+/**
  * The Plan's mock (api/oracle/plan): a tracked PRD (Usage alerts, with a roadmap draft 2 that
  * moves, changes and drops items), a PRD waiting at the feature set checkpoint (Saved carts),
  * a PRD at the engineering check with a lead named (Clinic outreach), and a never-approved PRD
@@ -1657,7 +1672,7 @@ function planHistory(ctx: PlanContext, db: RoadmapDb, q: URLSearchParams): Respo
     return out(versions);
   }
   if (roadmap === CHECKOUT_ROADMAP_SLUG) {
-    const d = CHECKOUT_DRAFT.find((i) => i.key === key);
+    const d = checkoutDraft(db).find((i) => i.key === key);
     return out(d ? [{ version: 2, prd_version: 2, horizon: d.horizon, approved_at: null }] : []);
   }
   return notFound(`document '${roadmap}'`);
@@ -1767,13 +1782,12 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
   // qa4-plan-4: the Checkout redesign PRD has no roadmap document, so (as the API lists only
   // roadmap documents' versions) it has no roadmap rows and its card names no roadmap draft.
   if (checkout && scope === "all" && roadmapDoc(CHECKOUT_ROADMAP_SLUG)) {
-    for (const s of CHECKOUT_DRAFT) items.push(row(s, checkout, 2, { slug: CHECKOUT_ROADMAP_SLUG, version: 2 }, "draft", { kind: "new", fields: [], notes: [] }));
+    for (const s of checkoutDraft(db)) items.push(row(s, checkout, 2, { slug: CHECKOUT_ROADMAP_SLUG, version: 2 }, "draft", { kind: "new", fields: [], notes: [] }));
   }
 
   // As oracle.plan.service: the card's word and health are the track's own health (qa-plan-1).
   const health = track ? overview(ctx, db, track).health : null;
   const prds: PlanPrd[] = [];
-  const order = new Map<string, number>();
   for (const d of ctx.documents) {
     if ((d.kind ?? "prd") !== "prd") continue;
     const versions = ctx.versions.filter((v) => v.document_id === d.id).sort((a, b) => a.number - b.number);
@@ -1805,13 +1819,13 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
       const draft = d.slug === "checkout-redesign" && roadmapDoc(CHECKOUT_ROADMAP_SLUG) ? " · roadmap draft 2" : "";
       const label = approved != null ? `Approved v${approved} · draft ${latest}` : `Draft ${latest}`;
       card = { ...base, stage: review ? "in_review" : "draft", stage_label: review ? `${label} in review${draft}` : label, journey_step: 8 };
-      if (d.slug === "checkout-redesign" && scope === "all" && draft) card.figure = `${CHECKOUT_DRAFT.length} items`;
+      if (d.slug === "checkout-redesign" && scope === "all" && draft) card.figure = `${checkoutDraft(db).length} items`;
     }
-    order.set(d.id, (card.waiting_for_viewer ? 0 : 2) + (card.track?.health === "at_risk" || card.track?.health === "off_track" ? 0 : 1));
     prds.push(card);
   }
-  const rank = (c: PlanPrd) => order.get(c.document.id) ?? 3;
-  prds.sort((a, b) => rank(a) - rank(b) || b.updated_at.localeCompare(a.updated_at));
+  // prd-order (as oracle.plan.service): the cards, and Group by PRD's lanes, in the company PRD order.
+  const rank = prdRanker();
+  prds.sort((a, b) => rank(a.document) - rank(b.document) || a.document.slug.localeCompare(b.document.slug));
   return {
     scope: scope as Schemas["PlanOut"]["scope"],
     generated_at: now(),
@@ -1977,13 +1991,13 @@ const SLIP_RECORD_ID = stableUuid("plan:record:ENG-405#0");
 const DONE_DAYS = 30;
 
 /**
- * One open date slip: ENG-405 (Daily alert digest email) moved from Nov 30 to Dec 9; Beta rests
+ * One open date slip: ENG-405 (Weekly alert digest) moved from Nov 30 to Dec 9; Beta rests
  * on Nov 30. `many` adds two open "not on the roadmap" alerts on the same track.
  */
 function seedAlerts(db: RoadmapDb, trackId: string, many = false, actions = false, history = false) {
   db.alerts = [
     {
-      id: stableUuid("track-alert/alert-digest/date_slip"), track_id: trackId, item_key: "alert-digest", item_title: "Daily alert digest email",
+      id: stableUuid("track-alert/alert-digest/date_slip"), track_id: trackId, item_key: "alert-digest", item_title: "Weekly alert digest",
       kind: "date_slip", detail: "ENG-405 moved to 2026-12-09; Beta rests on 2026-11-30",
       data: {
         tracker_ref: "ENG-405", tracker_date: "2026-12-09", milestone_date: "2026-11-30", milestone_name: "Beta", slip_days: 9,

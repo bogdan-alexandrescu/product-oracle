@@ -73,7 +73,7 @@ RANK = {"viewer": 0, "commenter": 1, "approver": 2, "owner": 3}
 # The Runs page's checkpoint names (web/app/runs/_lib.tsx CHECKPOINT_LABEL), the feature
 # set's in its short form.
 CHECKPOINT_LABEL = {
-    "baseline_confirm": "Confirm the baseline",
+    "baseline_confirm": "Confirm the Ground Truth",
     "feature_set": "Feature set",
     "priority_order": "Priority order",
     "prd_review": "PRD review",
@@ -226,7 +226,7 @@ def next_of(
             "resolve_blocker",
             "Resolve blocker",
             _who("owner" if critical else "approver"),
-            f"/baseline?entity={open_blockers[0].id}",
+            f"/ground-truth?entity={open_blockers[0].id}",
         )
     if any(r["kind"] == "stale" for r in risk.reasons):
         return decision("reconcile", "Reconcile", _who("approver"))
@@ -596,6 +596,11 @@ async def build(db: AsyncSession, principal: Principal, scope: PlanScope = "all"
         if have is None or (r.id in pending and have.id not in pending):
             run_of_prd[r.document_id] = r
     draft_sources = {v.source_version_id: v.number for v in draft_v.values() if v is not None}
+    # prd-order: the PRD cards (and Group by PRD's lanes, which take their order) in the
+    # company PRD order; a card keeps its waiting-for-me and at-risk marks.
+    from oracle.docs.prd_order import prd_ranks
+
+    ranks = await prd_ranks(db)
     cards: list[tuple[tuple, PlanPrd]] = []
     for doc in read.docs.values():
         if doc.kind != "prd":
@@ -670,8 +675,7 @@ async def build(db: AsyncSession, principal: Principal, scope: PlanScope = "all"
             waiting_for_viewer=mine,
             updated_at=doc.updated_at,
         )
-        risky = track is not None and health.get(track.id) in ("at_risk", "off_track")
-        cards.append(((not mine, not risky, -doc.updated_at.timestamp(), doc.slug), out))
+        cards.append(((ranks.get(doc.id, len(ranks) + 1), doc.slug), out))
     prds = [c for _, c in sorted(cards, key=lambda c: c[0])]
     return PlanOut(
         scope=scope,

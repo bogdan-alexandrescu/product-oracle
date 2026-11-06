@@ -109,6 +109,9 @@ const CODES = {
   "setup-import": "F-12",
   "alert-export": "AHE",
   "alert-sso": "ARB",
+  // F-03 Health log: the Guided setup PRD's feature on the onboarding roadmap (no code of its own,
+  // its section's); a live, planned roadmap item, so it is a mark too.
+  "setup-health-log": "F-03",
   "price-tiers": "NPT",
   "setup-video": "WV",
 };
@@ -215,7 +218,7 @@ test.describe("desktop", () => {
     const ranked = admin.locator(
       '[data-testid="prio-row"][data-code="setup-import"]',
     );
-    await expect(ranked.getByTestId("prio-code")).toHaveText("F-12");
+    await expect(ranked.getByTestId("prio-own-key")).toHaveText("F-12");
     await expect(ranked.getByTestId("prio-rank")).toHaveText("2");
     await admin.getByRole("tab", { name: "Goal buckets" }).click();
     await expect(

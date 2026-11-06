@@ -59,7 +59,7 @@ test.describe("desktop", () => {
   test("qa4fix-docs-share review: the advisory blocker check is critical when a critical blocker has no workable option or experiment", async ({ page }) => {
     // As the API's rule: the seeded critical blocker's one option is rejected and its experiment fails.
     await login(page);
-    await page.goto("/baseline?tab=blockers");
+    await page.goto("/ground-truth?tab=blockers");
     const lookup = page.getByTestId("blocker-row").filter({ hasText: "The address lookup service allows 100 requests a minute per company" });
     await lookup.click();
     const insp = page.getByTestId("blocker-inspector");

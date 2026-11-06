@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
 import { DeleteDialog } from "@/components/ArtifactMenu";
-import { Button, Chip, confirmInPage, Icon, Notice, Page, PageHeader, Sheet, Split } from "@/components/ds";
+import { Button, Chip, confirmInPage, Icon, InfoTip, Notice, Page, PageHeader, Sheet, Split } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { Menu, TabBar } from "@/components/review/parts";
 import { ApiError, api, unwrap } from "@/lib/api/client";
@@ -146,11 +146,17 @@ export function BeforeDrafting({ id }: { id: string }) {
   if (gone) {
     return (
       <Page>
-        <PageHeader back={<BackToPrds />} title="This brief is not here" />
+        <PageHeader
+          back={<BackToPrds />}
+          title="This brief is not here"
+          // F-30: why, in the title's (i).
+          info={
+            <InfoTip label="a brief that is not here" align="start" side="bottom">
+              It may have been drafted into a PRD, archived, or deleted. A drafted brief lives on as its PRD; a deleted one waits in Trash for a while.
+            </InfoTip>
+          }
+        />
         <div data-testid="intake-gone" className="flex flex-col items-start gap-3 rounded-panel border border-line bg-surface p-4 shadow-panel">
-          <p className="text-[15px] text-text">
-            It may have been drafted into a PRD, archived, or deleted. A drafted brief lives on as its PRD; a deleted one waits in Trash for a while.
-          </p>
           <Link href="/documents" className="font-semibold text-accent-ink underline">
             Back to PRDs
           </Link>

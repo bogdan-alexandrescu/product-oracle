@@ -50,11 +50,13 @@ export interface OnePagerCtx {
   planPages?: string[];
   /** e2e-pdf-export ("one-pager-overflow"): the pages the one-pager runs to past its one (the API lays it out). */
   overflowPages?: number;
+  /** simple-replaced-prds: the PRDs that replaced this one, when it is marked replaced (its read, PDF and Remind are a 404 naming them). */
+  replacedBy?: Schemas["PrdRef"][];
 }
 
 const REMIND_EVERY_MS = 24 * 60 * 60 * 1000;
 
-interface Sec {
+export interface Sec {
   key: string;
   heading: string;
   body: string;
@@ -217,7 +219,7 @@ const SLICE: SliceItem[] = [
  * and a problem line the API cut at a word with its whole text kept. Invented data.
  */
 const NOTED_SLICE: SliceItem[] = [
-  { title: "Baseline export", horizon: "now", start: "2026-10-05", end: "2026-11-18", estimated: false, milestone: ["M1 · Measure it, make it safe (baseline needs the export); Alert digest in M2 · Ship to beta", "2026-11-20"] },
+  { title: "Usage export", horizon: "now", start: "2026-10-05", end: "2026-11-18", estimated: false, milestone: ["M1 · Measure it, make it safe (the usage report needs the export); Alert digest in M2 · Ship to beta", "2026-11-20"] },
   { title: "Dry run", horizon: "now", start: "2026-10-12", end: "2026-11-20", estimated: true, milestone: ["M1 · Measure it, make it safe (owner asks for a dry run)", "2026-11-20"] },
   { title: "Setup audit", horizon: "now", start: "2026-10-19", end: "2026-11-13", estimated: false, milestone: ["M1 · Measure it, make it safe; follow-up in M3", "2026-11-20"] },
   { title: "Beta invites", horizon: "next", start: "2026-11-23", end: "2026-12-18", estimated: false, milestone: ["M2 · Ship to beta (two teams first)", "2026-12-18"] },
@@ -389,6 +391,185 @@ export function seedSkeletonOnePager(doc: OnePagerDb["doc"]): OnePagerDb {
   db.sections = db.sections.map((x) => ({ ...x, body: "<!-- Write this section. -->\n- <Milestone>: <Feature>\n- →" }));
   db.blocks = db.blocks.map((b) => ({ ...b, lines: b.kind === "timeline" ? [] : [{ id: `${b.key}-1`, text: guide[b.key] ?? "→", keys: [db.sections[0].key] }] }));
   return db;
+}
+
+/**
+ * C-13: every PRD but the seed read its own sections, as api/oracle/simple/one_pager.py's
+ * `extract` does (Oracle's quick read): each block maps the PRD's own sections by heading
+ * words (MATCH order: not_doing, risks, outcomes, problem, bets; the narrower words first),
+ * then each block's lines come from those sections' bullets, or sentences for the Problem
+ * (one line, `extract`'s whole_block). A block with no matching section is `missing: true`
+ * with no lines, never a line of Guided setup's. The timeline carries no lines: the page's
+ * `slice` is the PRD's own roadmap items (none wired up here yet: `[]`, so its span and
+ * strip read "No roadmap items yet"), never SLICE's 22 invented ones.
+ */
+interface FallbackSpec {
+  key: string;
+  title: string;
+  rules: string;
+  kind: Schemas["OnePagerBlock"]["kind"];
+  maxLines: number;
+  maxWords: number;
+  wholeBlock?: boolean;
+  words: string[];
+}
+
+const FALLBACK_SPECS: FallbackSpec[] = [
+  { key: "problem", title: "Problem and who has it", rules: "At most 60 words", kind: "text", maxLines: 1, maxWords: 60, wholeBlock: true, words: ["problem", "who has it", "who", "user", "customer", "why", "background", "context", "pain"] },
+  { key: "bets", title: "What we will build", rules: "3-5 bets", kind: "lines", maxLines: 5, maxWords: 30, words: ["build", "solution", "scope", "bet", "requirement", "feature", "proposal", "approach", "what we"] },
+  { key: "outcomes", title: "Outcomes and how we measure them", rules: "2-4 metrics, from → to", kind: "metrics", maxLines: 4, maxWords: 30, words: ["outcome", "metric", "success", "measure", "goal", "kpi", "impact"] },
+  { key: "not_doing", title: "Not doing", rules: "At most 5 lines", kind: "lines", maxLines: 5, maxWords: 30, words: ["not doing", "non-goal", "non goal", "out of scope", "won't", "not in scope"] },
+  { key: "risks", title: "Risks and open decisions", rules: "At most 5", kind: "lines", maxLines: 5, maxWords: 30, words: ["risk", "open question", "open decision", "decision", "assumption", "dependenc", "question"] },
+];
+const MATCH_ORDER = ["not_doing", "risks", "outcomes", "problem", "bets"] as const;
+const FACT_BULLET = /^\s*(?:[-*+]|\d+[.)])\s+(.*\S)\s*$/;
+const SENTENCE = /(?<=[.!?])\s+/;
+/** As one_pager.metric_of on a quick read's fact: "name: from -> to", each side a number with its unit. */
+const METRIC = /^(.*?)[:\s,-]*\s(?:from\s+)?([~<>]?[$€£]?\d[\d.,]*\s?(?:%|ms|s|x|k|m|days?|hours?|minutes?)?)\s*(?:→|->|\bto\b)\s*([~<>]?[$€£]?\d[\d.,]*\s?(?:%|ms|s|x|k|m|days?|hours?|minutes?)?)/i;
+const factMetric = (fact: string): Line["metric"] | undefined => {
+  const m = METRIC.exec(fact);
+  return m ? { name: m[1].replace(/^[\s:,-]+|[\s:,-]+$/g, "") || fact, from: m[2].trim(), to: m[3].trim() } : undefined;
+};
+
+/** As one_pager.mapping: each section to the first block (MATCH order) whose words its
+ * heading or key holds; an empty section maps nowhere. */
+function mapToBlocks(sections: Sec[]): Record<string, Sec[]> {
+  const out: Record<string, Sec[]> = { problem: [], bets: [], outcomes: [], not_doing: [], risks: [] };
+  const byKey = new Map(FALLBACK_SPECS.map((s) => [s.key, s] as const));
+  for (const sec of sections) {
+    if (!sec.body.trim()) continue;
+    const name = `${sec.heading} ${sec.key}`.toLowerCase().replace(/_/g, " ");
+    for (const k of MATCH_ORDER) {
+      if (byKey.get(k)!.words.some((w) => name.includes(w))) {
+        out[k].push(sec);
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+/** As one_pager._facts: a section's bullets, else its sentences; citations resolved, as the
+ * PRD's PDF resolves them (never a raw "[c:id]" on a line). */
+function factsOf(sec: Sec): string[] {
+  // As one_pager._facts: bullets and table body rows (one line each), else sentences.
+  const { rows, rest } = tablesOf(uncomment(resolved(sec.body)));
+  const bullets = rest.map((l) => FACT_BULLET.exec(l)?.[1]).filter((x): x is string => !!x).map((x) => unpiped(mdPlain(x)));
+  const facts = [...bullets, ...rows.map(rowLine)].filter((x) => x && !templateOnly(x));
+  if (facts.length) return facts;
+  return mdPlain(rest.join("\n"))
+    .split(SENTENCE)
+    .map((s) => unpiped(s.trim()))
+    .filter((x) => x && !templateOnly(x));
+}
+
+/** As one_pager._MD/_plain: no "**", "_" or "`" marks, a link's words only, no footnote marks. */
+const MD = /[*_`]+|\[([^\]]*)\]\([^)]*\)|\[\^?[\w-]+\]/g;
+const mdPlain = (t: string) => plain(t.replace(MD, (_m, g: string | undefined) => g ?? ""));
+const TABLE_SEP = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/;
+const cellsOf = (row: string) => row.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "").split(/(?<!\\)\|/).map((c) => c.trim());
+const rowLine = (cells: string[]) => cells.map((c) => mdPlain(c.replace(/\\\|/g, "/")).replace(/^[\s|]+|[\s|]+$/g, "")).filter(Boolean).slice(0, 2).join(": ");
+const unpiped = (text: string) => {
+  const t = text.trim();
+  return (t.startsWith("|") || t.endsWith("|") ? (t.replace(/^[\s|]+|[\s|]+$/g, "").includes("|") ? rowLine(cellsOf(t)) : t) : t).replace(/^[\s|]+|[\s|]+$/g, "");
+};
+/** As one_pager._tables: a table's body rows; its header and separator rows are never a line. */
+function tablesOf(md: string): { rows: string[][]; rest: string[] } {
+  const lines = md.split("\n");
+  const rows: string[][] = [];
+  const rest: string[] = [];
+  for (let i = 0; i < lines.length; ) {
+    if (lines[i].includes("|") && i + 1 < lines.length && TABLE_SEP.test(lines[i + 1])) {
+      i += 2;
+      while (i < lines.length && lines[i].includes("|") && lines[i].trim()) rows.push(cellsOf(lines[i++]));
+      continue;
+    }
+    rest.push(lines[i++]);
+  }
+  return { rows, rest };
+}
+
+/** As one_pager.clip: at most `words` words and 300 characters, cut at a word with "…";
+ * the whole text (at most 2000 characters) when that cuts it. */
+function clip(text: string, words: number): [string, string | undefined] {
+  const t = text.split(/\s+/).filter(Boolean).join(" ");
+  const w = t.split(" ");
+  let shown = w.length <= words ? t : `${w.slice(0, words).join(" ").replace(/[,;:]+$/, "")}…`;
+  if (shown.length > 300) {
+    const head = shown.slice(0, 299);
+    shown = `${(head.includes(" ") ? head.slice(0, head.lastIndexOf(" ")) : head).replace(/[,;: …]+$/, "")}…`;
+  }
+  return [shown, shown !== t ? t.slice(0, 2000) : undefined];
+}
+
+/** As extract's whole_block (the Problem): every mapped section's facts concatenated into
+ * one line, held to its word cap; the whole text kept as `full` when that cuts it. */
+function buildProblem(spec: FallbackSpec, secs: Sec[]): SeedLine | null {
+  let text = "";
+  let whole = "";
+  const keys: string[] = [];
+  for (const sec of secs) {
+    for (const fact of factsOf(sec)) {
+      whole = `${whole} ${fact}`.trim();
+      if (text.split(" ").filter(Boolean).length >= spec.maxWords) continue;
+      text = `${text} ${fact}`.trim();
+      if (!keys.includes(sec.key)) keys.push(sec.key);
+    }
+  }
+  if (!text) return null;
+  const shown = clip(text, spec.maxWords)[0];
+  const line: SeedLine = { id: "problem-1", text: shown, keys };
+  if (shown !== whole) line.full = whole.slice(0, 2000);
+  return line;
+}
+
+/** As extract's other blocks: one line per fact (its section's bullets, or sentences with
+ * none), held to the block's line cap; a metrics block's "from -> to" facts come first. */
+function buildLines(spec: FallbackSpec, secs: Sec[]): SeedLine[] {
+  const raw = secs.flatMap((sec) => factsOf(sec).map((fact) => ({ fact, key: sec.key })));
+  const ordered =
+    spec.kind === "metrics"
+      ? raw.map((f, i) => ({ ...f, i, has: METRIC.test(f.fact) })).sort((a, b) => (a.has === b.has ? a.i - b.i : a.has ? -1 : 1))
+      : raw;
+  return ordered.slice(0, spec.maxLines).map(({ fact, key }, i) => {
+    const [text, cut] = clip(fact, spec.maxWords);
+    const line: SeedLine = { id: `${spec.key}-${i + 1}`, text, keys: [key], ...(cut ? { full: cut } : {}) };
+    if (spec.kind === "metrics") {
+      const m = factMetric(fact);
+      if (m) line.metric = m;
+    }
+    return line;
+  });
+}
+
+/**
+ * As one_pager.extract, read from a PRD's own published sections (never Guided setup's
+ * copied ones). `slice`: the PRD's own roadmap items, when the mock links any to it; `[]`
+ * with none, so the header's span and the strip read the PRD's own (or "No roadmap items
+ * yet"), never SLICE's. `cites`: that version's citations, as the page's sources read them.
+ */
+export function seedOnePagerFromSections(doc: OnePagerDb["doc"], sections: Sec[], slice: SliceItem[] = [], cites: Cites = {}): OnePagerDb {
+  const mapped = mapToBlocks(sections);
+  const blocks: OnePagerDb["blocks"] = FALLBACK_SPECS.map((spec) => {
+    const secs = mapped[spec.key];
+    const lines = spec.wholeBlock ? (() => { const l = buildProblem(spec, secs); return l ? [l] : []; })() : buildLines(spec, secs);
+    return { key: spec.key, title: spec.title, rules: spec.rules, kind: spec.kind, lines, missing: secs.length === 0 };
+  });
+  blocks.push({ key: "timeline", title: "Timeline", rules: "The PRD's roadmap slice", kind: "timeline", lines: [] });
+  return { doc, version: 1, sections, blocks, draft: null, changes: [], slice, cites };
+}
+
+/**
+ * vqa B-13: a mock PRD's own one-pager from a version's sections as the API reads them (its
+ * `#` title and empty sections left out), with that version's citations; never another PRD's
+ * words under this PRD's title.
+ */
+export type PrdSection = { section_key: string; level: number; heading: string; body_md: string };
+export function prdOnePager(doc: OnePagerDb["doc"], prdSections: PrdSection[], cites: Cites = {}): OnePagerDb {
+  const sections: Sec[] = prdSections
+    .filter((s) => s.level > 1 && (s.body_md ?? "").trim())
+    .map((s) => ({ key: s.section_key, heading: s.heading, body: s.body_md }));
+  return seedOnePagerFromSections(doc, sections, [], cites);
 }
 
 /**
@@ -649,8 +830,11 @@ async function body(req: Request): Promise<Record<string, unknown>> {
 export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Request, p: string[]): Promise<Response | null> {
   if (p[1] !== "simple") return null;
   const m = req.method;
+  // simple-replaced-prds (as one_pager._document with current): a replaced PRD has no one-pager in Simple.
+  const replaced = () => json(404, { detail: { message: "This PRD was replaced", replaced_by: ctx.replacedBy ?? [] } });
   if (p[2] === "one-pagers" && m === "GET") {
     if (p[3] !== db.doc.slug && p[3] !== db.doc.id) return json(404, { detail: "No such PRD" });
+    if (ctx.replacedBy?.length) return replaced();
     if (p[4] === "pdf") {
       const over = !ctx.planPages?.length && ctx.overflowPages ? ctx.overflowPages : 0;
       const pages = ctx.planPages?.length ? ["The timeline", ...ctx.planPages] : over ? Array.from({ length: over }, (_, i) => `Page ${i + 1}`) : ["One page"];
@@ -686,6 +870,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
   }
   if (p[2] === "one-pagers" && p[4] === "remind" && m === "POST") {
     if (p[3] !== db.doc.slug && p[3] !== db.doc.id) return json(404, { detail: "No such PRD" });
+    if (ctx.replacedBy?.length) return replaced();
     if (RANK[ctx.role] < RANK.commenter || !mayRemind(ctx)) return json(403, { detail: "Only the PRD's owners and its decider remind its reviewers" });
     const d = db.draft;
     if (!d || d.status !== "submitted" || !d.waiting_on?.length) return json(409, { detail: "No submitted draft of this PRD waits on a review" });
@@ -777,4 +962,37 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     return json(201, { change: out(db, ctx, u), flags: [] });
   }
   return null;
+}
+
+/**
+ * inbox-meeting-proposals fix (changes.inbox_rows): the proposed wordings waiting for `me` (an
+ * owner, or whom the proposal is routed to), each named by its line as it read, and the
+ * decisions on mine of these one-pagers.
+ */
+export function onePagerInboxRows(
+  dbs: OnePagerDb[],
+  me: { id: string; role: Role },
+  seen: string | null,
+): { proposals: Schemas["InboxSimpleChange"][]; decisions: Schemas["InboxSimpleChange"][] } {
+  const row = (c: Change, at: string | null, state?: Schemas["InboxSimpleChange"]["state"]): Schemas["InboxSimpleChange"] => {
+    const line = String(c.before.line ?? "").split(/\s+/).filter(Boolean).join(" ");
+    const next = String(c.after.line ?? "").split(/\s+/).filter(Boolean).join(" ");
+    return {
+      id: c.id, op: c.op, status: c.status, item_id: null, item_title: null, document_id: c.document_id, by: c.by, by_name: c.by_name, at: c.at,
+      decided_by: c.decided_by, decided_at: c.decided_at, reason: c.reason, decision_reason: c.decision_reason,
+      state: state ?? (!seen || (at && at > seen) ? "new" : "open"), from_meeting: null,
+      // Still to decide, it reads as proposed (changes.inbox_rows asked_of); once decided, as done.
+      asked: c.status === "proposed" ? `proposed new wording for a one-pager line${next ? `: “${next}”` : ""}` : next ? `edited a one-pager line to “${next}”` : "edited a one-pager line",
+      can_decide: c.status === "proposed" && (me.role === "owner" || c.routed_to.includes(me.id)), from_ask: false,
+      subject: line || null, question_id: null, line_id: String(c.target.line_id ?? "") || null,
+    };
+  };
+  const all = dbs.flatMap((d) => d.changes);
+  return {
+    // As the API: routed to me (the mock routes a proposal to the owners).
+    proposals: all.filter((c) => c.status === "proposed" && c.routed_to.includes(me.id)).map((c) => row(c, c.at)),
+    decisions: all
+      .filter((c) => c.by === me.id && (c.status === "accepted" || c.status === "declined") && c.decision_reason !== "Withdrawn by its author")
+      .map((c) => row(c, c.decided_at, !seen || (c.decided_at ?? "") > seen ? undefined : "done")),
+  };
 }

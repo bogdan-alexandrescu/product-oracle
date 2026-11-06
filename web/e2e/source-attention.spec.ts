@@ -3,7 +3,7 @@ import { expect, test } from "./test";
 import { login } from "./helpers";
 
 const LEGACY = "Legacy all-hands chat";
-const MESSAGE = "Allowlist at most 100 channels: edit this source to sync it again";
+const MESSAGE = "Pick 100 channels or fewer, then it syncs again";
 
 test("settings › sources: a source needing attention shows why, refuses to sync, and Edit puts it right", async ({ page }) => {
   await login(page);
@@ -30,11 +30,11 @@ test("settings › sources: a source needing attention shows why, refuses to syn
   await expect(picker.getByTestId("picked-count")).toHaveText("120 selected");
   await expect(picker.getByTestId("too-many-channels")).toHaveText("A source takes at most 100 channels: untick 20 to save it.");
   await row.getByRole("button", { name: "Save channels" }).click();
-  await expect(row.getByRole("alert").filter({ hasText: "allowlist at most 100 channels" })).toBeVisible();
+  await expect(row.getByRole("alert").filter({ hasText: "pick 100 channels or fewer" })).toBeVisible();
 
   // Back within the rules: active again, and the next sync goes through.
-  await picker.getByRole("button", { name: "Paste ids" }).click();
-  await row.getByLabel("Channel ids (one per line)").fill("C0100GENERAL\nC0109RELEASES");
+  await picker.getByRole("button", { name: "Paste links" }).click();
+  await row.getByLabel("Channel links (one per line)").fill("C0100GENERAL\nC0109RELEASES");
   await row.getByRole("button", { name: "Save channels" }).click();
   await expect(row.getByRole("status")).toHaveText("Channels saved.");
   await expect(row).toContainText("Active");

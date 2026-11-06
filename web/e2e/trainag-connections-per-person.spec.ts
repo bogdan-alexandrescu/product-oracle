@@ -1,4 +1,4 @@
-import { login, signOut } from "./helpers";
+import { disconnectAll, login, signOut } from "./helpers";
 import { expect, test, type Page } from "./test";
 
 /**
@@ -16,6 +16,7 @@ async function slackCard(page: Page, email: string) {
 
 test("connections: each person's own; disconnecting yours leaves another's", async ({ page }) => {
   let slack = await slackCard(page, "admin@example.com");
+  await disconnectAll(page, "slack");
   await slack.getByRole("button", { name: "Paste a token" }).click();
   await slack.getByLabel("Token", { exact: true }).fill("example-slack-1234");
   await slack.getByLabel("Label (optional)").fill("Avery's Slack");

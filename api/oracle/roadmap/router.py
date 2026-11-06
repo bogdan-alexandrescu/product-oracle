@@ -994,8 +994,9 @@ async def create_track(
     version starts it too). A PRD has one track: 409 when it already has one; 200 with
     that track when a concurrent start made it first."""
     prd = await _document(db, body.prd, "prd")
-    if await tracks.track_of_prd(db, prd.id) is not None:
-        raise HTTPException(status.HTTP_409_CONFLICT, f"'{prd.slug}' already has a track")
+    if (had := await tracks.any_track_of_prd(db, prd.id)) is not None:
+        where = " (in Settings > Trash: restore it from there)" if had.deleted_at else ""
+        raise HTTPException(status.HTTP_409_CONFLICT, f"'{prd.slug}' already has a track{where}")
     version = await tracks.latest_approved(db, prd.id)
     if version is None:
         raise HTTPException(

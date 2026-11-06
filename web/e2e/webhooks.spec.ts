@@ -74,7 +74,7 @@ test("webhooks: an owner creates one, gets the secret once, sends a test event t
   await sheet.getByRole("button", { name: "Copy" }).click();
   await expect(sheet.getByRole("button", { name: "Copied" })).toBeVisible();
   await sheet.getByRole("button", { name: "Send test event" }).click();
-  await expect(sheet.getByTestId("test-result")).toContainText("✓ 200");
+  await expect(sheet.getByTestId("test-result")).toContainText("✓ Delivered");
   await sheet.getByRole("button", { name: "Done" }).click();
   await expect(sheet).toHaveCount(0);
 
@@ -90,17 +90,17 @@ test("webhooks: an owner creates one, gets the secret once, sends a test event t
   const row = page.getByTestId("webhook-row").filter({ hasText: "Tracker bot" });
   await expect(row).toContainText("hooks.example.test");
   await expect(row).toContainText("Active");
-  await expect(row).toContainText("✓ 200");
+  await expect(row).toContainText("✓ Delivered");
   await row.click();
   const inspector = page.getByTestId("webhook-inspector");
   await expect(inspector.getByTestId("secret-hint")).toHaveText(`…${secret.slice(-4)}`);
   await expect(page.locator("body")).not.toContainText(secret);
 
-  // The delivery log: the test event, ✓ 200; its row opens the body, headers and response.
+  // The delivery log: the test event, ✓ Delivered; its row opens the body, headers and response.
   const log = inspector.getByTestId("delivery-log");
   const delivery = log.getByTestId("delivery-row").first();
   await expect(delivery).toContainText("Test event");
-  await expect(delivery).toContainText("✓ 200");
+  await expect(delivery).toContainText("✓ Delivered");
   await delivery.click();
   const detail = page.getByRole("dialog", { name: "Delivery" });
   await expect(detail.getByTestId("delivery-body")).toContainText("Test from Product Oracle");
@@ -134,7 +134,7 @@ test("webhooks: rotate shows a new secret once and both sign for 24 hours; pause
   const rotated = await shown.getByLabel("Signing secret", { exact: true }).inputValue();
   expect(rotated).not.toBe(secret);
   await shown.getByRole("button", { name: "Send test event" }).click();
-  await expect(shown.getByTestId("test-result")).toContainText("✓ 200");
+  await expect(shown.getByTestId("test-result")).toContainText("✓ Delivered");
   await shown.getByRole("button", { name: "Done" }).click();
   await expect(inspector.getByTestId("secret-hint")).toHaveText(`…${rotated.slice(-4)}`);
   // During the overlap the old and the new secret both sign.
@@ -163,7 +163,7 @@ test("webhooks: an owner sees who made each, turns on owners-and-approvers conte
   await expect(deploy).toContainText("Priya Raman");
   await expect(deploy).toContainText("Paused: failing");
   // Last delivery reads how long ago, not a day.
-  await expect(deploy).toContainText("✕ 500 · 4 h ago");
+  await expect(deploy).toContainText("Retrying · 4 h ago");
 
   // The owners-and-approvers switch needs a why.
   await page.getByRole("button", { name: "New webhook" }).click();
@@ -171,7 +171,7 @@ test("webhooks: an owner sees who made each, turns on owners-and-approvers conte
   await sheet.getByLabel("Name").fill("Leads channel");
   await sheet.getByLabel("URL").fill("https://hooks.example.test/leads");
   await sheet.getByRole("checkbox", { name: "All Approvals" }).check();
-  await sheet.getByRole("switch", { name: "Include owners-and-approvers content" }).click();
+  await sheet.getByRole("switch", { name: "Private details" }).click();
   await expect(sheet.getByRole("button", { name: "Create" })).toBeDisabled();
   await sheet.getByLabel("Why").fill("The leads channel is owners and approvers only");
   await sheet.getByRole("button", { name: "Create" }).click();
@@ -181,12 +181,12 @@ test("webhooks: an owner sees who made each, turns on owners-and-approvers conte
   // Take over the approver's paused webhook: it becomes the owner's.
   await deploy.click();
   const inspector = page.getByTestId("webhook-inspector");
-  await expect(inspector.getByTestId("delivery-row").first()).toContainText("500");
+  await expect(inspector.getByTestId("delivery-row").first()).toContainText("Server answered with an error");
   // QD4 a: the log is cards (event, status, then when, HTTP and time), its times in Company time.
   const log = inspector.getByTestId("delivery-log");
   await expect(log.getByRole("columnheader")).toHaveCount(0);
   await expect(log.getByRole("list", { name: "Delivery log" })).toBeVisible();
-  await expect(log.getByTestId("delivery-row").first().getByTestId("delivery-http")).toHaveText("500");
+  await expect(log.getByTestId("delivery-row").first().getByTestId("delivery-http")).toHaveText("Server answered with an error");
   await expect(log).toContainText("Times are in Company time");
   await inspector.getByLabel("Status").selectOption("failed");
   await expect(inspector.getByTestId("delivery-row")).toHaveCount(2);
@@ -207,7 +207,7 @@ test("webhooks: an approver sees only their own and gets no owners-and-approvers
   await page.getByRole("button", { name: "New webhook" }).click();
   const sheet = page.getByRole("dialog", { name: "New webhook" });
   await expect(sheet.getByRole("checkbox", { name: "A run started" })).toBeVisible();
-  await expect(sheet.getByRole("switch", { name: "Include owners-and-approvers content" })).toHaveCount(0);
+  await expect(sheet.getByRole("switch", { name: "Private details" })).toHaveCount(0);
 });
 
 test("webhooks: a commenter does not see the Webhooks tab", async ({ page }) => {
@@ -277,7 +277,7 @@ test("webhooks: an owner edits the name, the URL and the events, and turns owner
   await edit.getByLabel("URL").fill("http://relay.example.test/leads");
   await edit.getByRole("checkbox", { name: "All Approvals" }).check();
   await edit.getByRole("checkbox", { name: "A run started" }).uncheck();
-  await edit.getByRole("switch", { name: "Include owners-and-approvers content" }).click();
+  await edit.getByRole("switch", { name: "Private details" }).click();
   await expect(edit.getByRole("button", { name: "Save" })).toBeDisabled();
   await edit.getByLabel("Why").fill("The leads channel is owners and approvers only");
   await edit.getByRole("button", { name: "Save" }).click();
@@ -297,7 +297,7 @@ test("webhooks: an owner edits the name, the URL and the events, and turns owner
 
   // Off again, with a reason too.
   await inspector.getByRole("button", { name: "Edit" }).click();
-  await edit.getByRole("switch", { name: "Include owners-and-approvers content" }).click();
+  await edit.getByRole("switch", { name: "Private details" }).click();
   await expect(edit.getByRole("button", { name: "Save" })).toBeDisabled();
   await edit.getByLabel("Why").fill("Moved to the approvers' own channel");
   await edit.getByRole("button", { name: "Save" }).click();
@@ -314,7 +314,7 @@ test("webhooks: an approver re-points their webhook and the owner's Inbox says s
   await inspector.getByRole("button", { name: "Edit" }).click();
   const edit = page.getByRole("dialog", { name: "Edit webhook" });
   // No owners-and-approvers switch for an approver.
-  await expect(edit.getByRole("switch", { name: "Include owners-and-approvers content" })).toHaveCount(0);
+  await expect(edit.getByRole("switch", { name: "Private details" })).toHaveCount(0);
   await edit.getByLabel("URL").fill("https://relay.example.test/notes");
   await edit.getByRole("button", { name: "Save" }).click();
   await expect(edit).toHaveCount(0);
@@ -335,10 +335,10 @@ test("webhooks: AC17, a run's checkpoint waiting, decided and the run succeeding
   const { sheet } = await createWebhook(page, "Run watcher", "https://hooks.example.test/runs");
   await sheet.getByRole("button", { name: "Done" }).click();
 
-  // Build the baseline: the fake runtime's run waits at Confirm the baseline; approve it.
+  // Build the Ground Truth: the fake runtime's run waits at Confirm the Ground Truth; approve it.
   await page.getByTestId("nav-baseline").filter({ visible: true }).first().click();
-  await page.getByRole("button", { name: "Build baseline" }).click();
-  const build = page.getByRole("dialog", { name: "Build the baseline" });
+  await page.getByRole("button", { name: "Build the Ground Truth" }).click();
+  const build = page.getByRole("dialog", { name: "Build the Ground Truth" });
   await build.getByRole("button", { name: "Start" }).click();
   await expect(build).toHaveCount(0);
   await page.getByTestId("baseline-build-banner").getByRole("link", { name: "Open run" }).click();
@@ -359,7 +359,7 @@ test("webhooks: AC17, a run's checkpoint waiting, decided and the run succeeding
   const log = page.getByTestId("webhook-inspector").getByTestId("delivery-log");
   // qa4-settings-26: the log names each event as the form does.
   for (const type of ["A run is waiting at a checkpoint for a person", "A checkpoint was approved or sent back with changes", "A run succeeded"]) {
-    await expect(log.getByTestId("delivery-row").filter({ hasText: type })).toContainText("✓ 200");
+    await expect(log.getByTestId("delivery-row").filter({ hasText: type })).toContainText("✓ Delivered");
   }
   // The newest first: the run's success above its checkpoint's decision.
   await expect(log.getByTestId("delivery-row").first()).toContainText("A run succeeded");

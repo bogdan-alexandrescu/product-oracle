@@ -66,7 +66,7 @@ type Refusal =
 const toApprove = (r: Row) => r.left_out_reason !== "no_goal" && (r.state === "draft" || r.state === "changed" || r.state === "missing");
 
 /** qa4-docs-share-9: where an item's feature is linked to a confirmed goal (Baseline's Flagged tab). */
-const GOALS_HREF = "/baseline?tab=flagged";
+const GOALS_HREF = "/ground-truth?tab=flagged";
 
 /** qa4-docs-share-48: a new text's stage, from the item's horizon. */
 const HORIZON_STAGE: Record<string, Stage> = { now: "in_progress", next: "planned", later: "exploring" };
@@ -508,7 +508,7 @@ function CheckState({ doc, data, onChecked, onShow }: { doc: string; data: Texts
               step: 1,
               text: `${
                 noGoalCount === data.rows.length ? "No item serves a confirmed goal" : `${plural(noGoalCount, "item")} ${noGoalCount === 1 ? "serves" : "serve"} no confirmed goal and the rest are excluded`
-              }, so the public page is empty. Link items to a goal in Baseline, then approve their public text.`,
+              }, so the public page is empty. Link items to a goal in the Ground Truth, then approve their public text.`,
               control: <LinkButton href={GOALS_HREF}>Link items to goals</LinkButton>,
             }
           : data.not_ready.length > 0
@@ -572,7 +572,7 @@ function draftOutcome(job: LlmJob, rows: Row[]): string {
   const n = Number((job.output as { drafted?: number } | null)?.drafted ?? 0);
   if (n === 0 && rows.length > 0 && rows.every((r) => r.left_out_reason === "no_goal"))
     // qa4-docs-share-9: nothing serves a goal, so nothing was drafted; say so, not "every item has a text".
-    return "No item serves a confirmed goal, so there was nothing to draft. Link items to a goal in Baseline first.";
+    return "No item serves a confirmed goal, so there was nothing to draft. Link items to a goal in the Ground Truth first.";
   if (n === 0) return "Every item that serves a goal already has a public text.";
   return `Oracle drafted ${n} public ${n === 1 ? "text" : "texts"}. Check each one before you approve it.`;
 }

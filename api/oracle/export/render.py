@@ -67,6 +67,16 @@ class NoBrief(ValueError):
 
 
 LAYER_LABEL = {"full": "Full", "brief": "Brief", "deck": "Deck"}
+# A document's kind as a sentence names it ("export the full PRD instead", E-15).
+KIND_LABEL = {
+    "prd": "PRD",
+    "roadmap": "roadmap",
+    "spec": "spec",
+    "vision": "vision",
+    "strategy": "strategy",
+    "update": "update",
+    "pricing": "pricing memo",
+}
 
 
 @dataclass
@@ -235,16 +245,20 @@ def detached(ev: ExportVersion) -> ExportVersion:
     )
 
 
-def apply_layer(ev: ExportVersion, layer: str) -> ExportVersion:
-    """Restrict the export to a layer. Raises NoBrief for a version without a brief."""
+def apply_layer(ev: ExportVersion, layer: str, present: bool = False) -> ExportVersion:
+    """Restrict the export to a layer. Raises NoBrief for a version without a brief (for
+    Present mode, ``present``, in words that do not speak of exporting)."""
     ev.layer = layer
     if layer == "full":
         return ev
     brief = [s for s in ev.all_sections if s.layer == layers.BRIEF]
     if not brief:
+        kind = KIND_LABEL.get(ev.document.kind, "document")
+        title = f"Version {ev.version.number} of {ev.document.title}"
         raise NoBrief(
-            f"version {ev.version.number} of '{ev.document.slug}' has no brief sections; "
-            "export the full document instead"
+            f"{title} has no brief to present: open the full {kind} instead."
+            if present
+            else f"{title} has no brief: export the full {kind} instead."
         )
     appendix = sources_keys(ev.all_sections)
     ev.sections = [
@@ -304,6 +318,10 @@ async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
     # roadmap-draft-wording: the kind of the verified basis each dated milestone names
     # (a capacity date is the item's place in the team's queue).
     kinds = await _date_kinds(db, rows)
+    # E-14: each item's dates and delivery state as Simple reads them, for a link holder's cards.
+    from oracle.simple.service import delivery
+
+    shown = await delivery(db, rows)
     ev.items = []
     for r in rows:
         goal, goal_title = (goal_of or {}).get(r.item_key, ("none", None))
@@ -326,6 +344,9 @@ async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
                 group=group_of.get(r.item_key),
                 group_rank=rank_of.get(r.item_key),
                 date_kind=kinds.get(r.id),
+                start=shown[r.id].start,
+                end=shown[r.id].end,
+                state=shown[r.id].state,
             )
         )
 
@@ -758,12 +779,22 @@ def _day_in_words(m: re.Match[str]) -> str:
         d = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
     except ValueError:
         return m.group(0)
-    return f"{company_time.calendar_day(d)}, {d.year}"
+    return held_together(f"{company_time.calendar_day(d)}, {d.year}")
+
+
+# A date's parts are joined by no-break spaces where people read it, so "Nov 15, 2026" never
+# wraps between "Nov 15," and "2026" (visual QA E-11, PR 1300 review).
+NBSP = "\u00a0"
+
+
+def held_together(words: str) -> str:
+    """``words`` (a date in words) with no-break spaces between its parts."""
+    return words.replace(" ", NBSP)
 
 
 def days_in_words(text: str) -> str:
     """Prose with its calendar days month first, as people read dates ("to Jan 29, 2027";
-    walk-docs-priorities 9). The stored text is not changed."""
+    walk-docs-priorities 9), each held on one line. The stored text is not changed."""
     return _PROSE_DAY.sub(_day_in_words, text)
 
 
@@ -788,9 +819,34 @@ def _safe_href(ref: str | None) -> str | None:
     return ref if urlsplit(ref).scheme in ("http", "https") else None
 
 
+def held_moment(words: str) -> str:
+    """A moment in words with its day and its time each held on one line, as on the slides:
+    "Oct 30, 2026," then "2:49 PM PDT"."""
+    day, _, time = words.rpartition(", ")
+    return f"{held_together(day)}, {held_together(time)}" if day else held_together(words)
+
+
 def _format_dt(value: datetime | None, zone: str) -> str:
-    """A moment in the Company time zone with its short name (#463)."""
-    return company_time.stamp(value, zone) if value is not None else ""
+    """A moment in the Company time zone with its short name (#463), each part held on one
+    line (:func:`held_moment`): the HTML and PDF exports and the Sources slides."""
+    return held_moment(company_time.stamp(value, zone)) if value is not None else ""
+
+
+def snapshot_in_words(snapshot: str | None, zone: str, when=None) -> str:
+    """The version's sources snapshot as people read it (visual QA E-6): a moment through
+    ``when`` (the approval's own format; :func:`_format_dt` by default), a day as "Oct 16,
+    2026"; text that is neither keeps its words, its days month first."""
+    if not snapshot:
+        return ""
+    # Shown after "Sources as of": a snapshot that says so itself is not doubled.
+    text = re.sub(r"^(?:sources\s+)?as\s+of\s+", "", snapshot.strip(), flags=re.I)
+    try:
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+            return held_together(company_time.calendar_day_with_year(date.fromisoformat(text)))
+        moment = datetime.fromisoformat(text)
+    except ValueError:
+        return days_in_words(text)
+    return (when or (lambda v: _format_dt(v, zone)))(moment)
 
 
 @dataclass
@@ -877,7 +933,7 @@ def build_context(ev: ExportVersion) -> dict:
         "date": _format_dt(ev.date, ev.zone),
         "imported_at": _format_dt(v.created_at, ev.zone),
         "approved_at": _format_dt(v.approved_at, ev.zone),
-        "snapshot": v.snapshot,
+        "snapshot": snapshot_in_words(v.snapshot, ev.zone),
         "has_title_section": any(s.level == 1 for s in ev.sections),
         "sections": sections,
         "footnotes": [f for f in footnotes if f.key not in ev.added_citations],
@@ -1195,7 +1251,7 @@ def build_themed_context(ev: ExportVersion) -> dict:
         if value is None:
             return ""
         if ev.dates_in_words:
-            return company_time.moment_in_words(value, ev.zone)
+            return held_moment(company_time.moment_in_words(value, ev.zone))
         return _format_dt(value, ev.zone)
 
     return {
@@ -1205,10 +1261,10 @@ def build_themed_context(ev: ExportVersion) -> dict:
         "number": v.number,
         "latest_number": ev.latest_number,
         "status": ev.status,
-        "as_of": v.snapshot or when(ev.date),
+        "as_of": snapshot_in_words(v.snapshot, ev.zone, when) or when(ev.date),
         "imported_at": when(v.created_at),
         "approved_at": when(v.approved_at),
-        "snapshot": v.snapshot,
+        "snapshot": snapshot_in_words(v.snapshot, ev.zone, when),
         "template": ev.document.template,
         "template_name": ev.template_name,
         "template_version": ev.document.template_version,
@@ -1262,14 +1318,14 @@ def banner_line(ev: ExportVersion) -> str:
         f"{ev.document.title} ({ev.document.slug})",
         f"version {ev.version.number}",
         f"status {ev.status}",
-        f"imported {_format_dt(ev.version.created_at, ev.zone)}",
+        f"imported {company_time.stamp(ev.version.created_at, ev.zone)}",
     ]
     if ev.layer != "full":
         parts.insert(2, ev.layer_label.lower())
     if ev.audience_label:
         parts.insert(2, f"audience {ev.audience_label}")
     if ev.version.approved_at is not None:
-        parts.append(f"approved {_format_dt(ev.version.approved_at, ev.zone)}")
+        parts.append(f"approved {company_time.stamp(ev.version.approved_at, ev.zone)}")
     if ev.source is not None:
         parts.append(f"from {ev.source.title} ({ev.source.slug}) version {ev.source.version}")
     # "--" would end the HTML comment early.

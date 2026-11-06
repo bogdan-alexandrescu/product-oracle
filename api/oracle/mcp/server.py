@@ -136,7 +136,7 @@ class Catalog:
 
     def instructions(self) -> str:
         lines = [
-            "Product Oracle: the company's product baseline, sources, documents and "
+            "Product Oracle: the company's product Ground Truth, sources, documents and "
             "reviews. Each REST operation is a tool named after its operationId; the "
             "curated tools (search, get_baseline, trace_feature, list_open_feedback, "
             "get_document_markdown, propose_change, push_draft) are the shortest path "

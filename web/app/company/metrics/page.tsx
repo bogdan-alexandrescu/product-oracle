@@ -4,7 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, useSyncExternalStore } from "react";
 
 import { Button, Chip, type Column, DataTable, InfoTip, PageSkeleton, Panel, Sheet, Sparkline, Split, ViewOnly } from "@/components/ds";
-import { ErrorNote } from "@/components/ui";
+import { LoadError } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
@@ -90,9 +90,16 @@ function Metrics() {
       key: "title",
       header: "Metric",
       phone: "title",
-      cell: (m) => <span className={`truncate font-medium ${m.kind === "input" ? "pl-5 max-[600px]:pl-3" : ""}`}>{m.title}</span>,
+      // D-9: the metric's kind (Result or Driver) as a chip beside its name, in the panel's words; never hidden.
+      cell: (m) => (
+        <span className={`flex min-w-0 items-center gap-2 ${m.kind === "input" ? "pl-5 max-[600px]:pl-3" : ""}`}>
+          <span className="truncate font-medium">{m.title}</span>
+          <Chip kind={m.kind === "output" ? "acc" : "line"} className="flex-none" data-testid="metric-kind">
+            {KIND_LABEL[m.kind]}
+          </Chip>
+        </span>
+      ),
     },
-    { key: "kind", header: "Kind", width: "84px", phone: "hide", narrow: "mid", cell: (m) => <span className="text-sm text-text2">{KIND_LABEL[m.kind]}</span> },
     {
       key: "last",
       header: "Last week",
@@ -108,12 +115,15 @@ function Metrics() {
     {
       key: "change",
       header: "Change",
-      width: "140px",
+      width: "184px",
       phone: "meta",
       cell: (m) =>
         m.change ? (
-          <span className="flex min-w-0 items-center gap-1.5 text-sm" data-col="change">
-            <span className="tnum truncate">{changeText(m.change.value, m.change.pct)}</span>
+          // pass F F-40: the whole change, its chip beside it or under it, never cut.
+          <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm" data-col="change">
+            <span className="tnum whitespace-nowrap" data-testid="change-value">
+              {changeText(m.change.value, m.change.pct)}
+            </span>
             {m.change.variance && <Chip kind={VARIANCE_KIND[m.change.variance]}>{VARIANCE_LABEL[m.change.variance]}</Chip>}
           </span>
         ) : (
@@ -151,7 +161,18 @@ function Metrics() {
   ];
 
   const inspector = detail ? (
-    <MetricInspector key={detail.id} metric={detail} metrics={rows} goals={goals} onEdit={() => setForm("edit")} onChanged={changed} />
+    <MetricInspector
+      key={detail.id}
+      metric={detail}
+      metrics={rows}
+      goals={goals}
+      onEdit={() => {
+        // pass F F-4: on a phone the form replaces the metric sheet, never sits behind it.
+        setSheetOpen(false);
+        setForm("edit");
+      }}
+      onChanged={changed}
+    />
   ) : null;
 
   return (
@@ -164,17 +185,18 @@ function Metrics() {
           // the tab strip for one with the button, then back once the list came back empty.
           writer &&
           rows.length > 0 && (
-            <Button variant="primary" icon="plus" onClick={() => setForm("add")}>
+            <Button variant="primary" icon="plus" disabled={!!listQ.error} onClick={() => setForm("add")}>
               Add metric
             </Button>
           )
         }
       />
-      {listQ.error && <ErrorNote>{listQ.error}</ErrorNote>}
+      {/* F-1: a list that did not load says so, with Try again, and no empty table under it. */}
+      {listQ.error && <LoadError what="the metrics" error={listQ.error} onRetry={() => void listQ.reload()} />}
       <Split inspector={!phone ? inspector : undefined}>
         <Panel
           title="Metrics"
-          count={listQ.data ? rows.length : undefined}
+          count={listQ.data && !listQ.error ? rows.length : undefined}
           tools={
             <div className="flex items-center gap-2">
               <label className="flex items-center gap-1.5 text-sm text-text2">
@@ -182,14 +204,14 @@ function Metrics() {
                 Archived
               </label>
               <InfoTip label="metrics" align="end">
-                The numbers Oracle reads every week, Monday to Sunday in the Company time zone. Outputs are results the company wants; inputs are
-                numbers the team can move, listed under the output they drive. A week whose change is outside the normal range is a variance,
-                and the metric&apos;s owner explains it in the Weekly metrics review.
+                The numbers Oracle reads every week, Monday to Sunday in the Company time zone. Results are what the company wants; drivers are
+                numbers the team can move, listed under the result they drive. A week whose change is outside the normal range is an unusual
+                week, and the metric&apos;s owner explains it in the Weekly metrics review.
               </InfoTip>
             </div>
           }
         >
-          {listQ.data && rows.length === 0 ? (
+          {listQ.error ? null : listQ.data && rows.length === 0 ? (
             // qa-company-16: how this page relates to the goal values on Home, and what to add.
             <CompanyEmpty
               testId="metrics-empty"
@@ -202,9 +224,12 @@ function Metrics() {
                 ) : undefined
               }
             >
-              The goal values on Home come from each goal. Add a metric here to track a number every week, read from your product
-              analytics, typed by hand or sent by API. A metric linked to a goal keeps that goal&apos;s current value up to date, and Oracle
-              flags a week that changes more than usual.{writer ? "" : " Approvers and owners add metrics."}
+              Track a number every week.{" "}
+              <InfoTip label="metrics">
+                A metric is read from your product analytics, typed by hand or sent from another tool. One linked to a goal keeps that
+                goal&apos;s current value up to date, and Oracle flags a week that changes more than usual.
+                {writer ? "" : " Approvers and owners add metrics."}
+              </InfoTip>
             </CompanyEmpty>
           ) : (
             <DataTable

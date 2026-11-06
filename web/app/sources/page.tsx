@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { type FormEvent, Suspense, useState, useSyncExternalStore } from "react";
+import { type FormEvent, Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import {
   Button,
@@ -20,7 +20,7 @@ import {
   Split,
   toast,
 } from "@/components/ds";
-import { INPUT, Loading } from "@/components/ui";
+import { INPUT, LoadError, Loading } from "@/components/ui";
 import { api, type Schemas, unwrap } from "@/lib/api/client";
 import { formatDateTime, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -46,7 +46,7 @@ import {
   matchLevel,
   pct,
 } from "./_components/confidence";
-import { CoverageInspector, CoverageTable, CoverageTabs, NoSources, type CoverageTab } from "./_components/coverage";
+import { CoverageCountsTip, CoverageInspector, CoverageTable, CoverageTabs, NoSources, type CoverageTab } from "./_components/coverage";
 
 type Results = Schemas["SearchResults"];
 type Hit = Schemas["SearchHit"];
@@ -233,6 +233,20 @@ function SourcesSearchPage() {
   const currentConnection = (sources.data ?? []).find((s) => s.id === currentId)?.connection_id;
   const endpoint = currentConnection ? kinds.data?.flatMap((k) => k.connections).find((c) => c.id === currentConnection)?.endpoint_url : null;
 
+  // F-62: at phone width the inspector sits below the whole list; picking a source scrolls
+  // it into view instead of leaving it off screen. Never on the page's first load: the first
+  // source shown (none before it) is not a pick.
+  const inspectorRef = useRef<HTMLDivElement>(null);
+  const shownSource = useRef<string | null>(null);
+  useEffect(() => {
+    const before = shownSource.current;
+    shownSource.current = currentId;
+    if (!before || !currentId) return;
+    if (isPhone && !results && tab === "mine") inspectorRef.current?.scrollIntoView({ block: "nearest" });
+    // Only the picked source moves the panel; a resize or tab change must not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentId]);
+
   async function run(e: FormEvent) {
     e.preventDefault();
     if (!q.trim()) return;
@@ -329,19 +343,21 @@ function SourcesSearchPage() {
     );
   } else if (tab === "mine" && current) {
     inspector = (
-      <CoverageInspector
-        key={current.source_id}
-        summary={current}
-        detail={detail.data ?? undefined}
-        busy={syncing}
-        canSync={canSync}
-        capsReady={capsReady}
-        notice={syncNotice?.sourceId === current.source_id ? syncNotice : null}
-        onSync={() => void syncNow()}
-        onLoadMore={() => void loadMore()}
-        loadingMore={loadingMore}
-        endpoint={endpoint}
-      />
+      <div ref={inspectorRef}>
+        <CoverageInspector
+          key={current.source_id}
+          summary={current}
+          detail={detail.data ?? undefined}
+          busy={syncing}
+          canSync={canSync}
+          capsReady={capsReady}
+          notice={syncNotice?.sourceId === current.source_id ? syncNotice : null}
+          onSync={() => void syncNow()}
+          onLoadMore={() => void loadMore()}
+          loadingMore={loadingMore}
+          endpoint={endpoint}
+        />
+      </div>
     );
   } else if (tab === "company" && cPicked && !isPhone) {
     inspector = <CompanyInspector row={cPicked} />;
@@ -482,25 +498,26 @@ function SourcesSearchPage() {
             // Train N: the Company tab follows the capabilities; busy until they answer.
             busy={!capsReady && !capsError}
             tools={
-              owner ? (
-                <>
-                  <CoverageTabs value={tab} onChange={selectTab} />
-                  <CountsOnlyTip />
-                </>
-              ) : undefined
+              <>
+                {owner && <CoverageTabs value={tab} onChange={selectTab} />}
+                {tab === "company" ? <CountsOnlyTip /> : <CoverageCountsTip />}
+              </>
             }
           >
-            {coverage.error && <Notice tone="error">{coverage.error}</Notice>}
+            {/* F-1: a list that did not load says so, with Try again, and no table under it. */}
             {tab === "company" ? (
-              <>
-                {company.error && <Notice tone="error">{company.error}</Notice>}
+              company.error ? (
+                <LoadError what="the company's coverage" error={company.error} onRetry={() => void company.reload()} />
+              ) : (
                 <CompanyTable
                   data={company.data ?? undefined}
                   loading={company.loading}
                   selected={cPicked ? companyRowKey(cPicked) : null}
                   onSelect={setCompanyPick}
                 />
-              </>
+              )
+            ) : coverage.error ? (
+              <LoadError what="your sources" error={coverage.error} onRetry={() => void coverage.reload()} />
             ) : rows && rows.length === 0 ? (
               <NoSources />
             ) : (

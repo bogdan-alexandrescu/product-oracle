@@ -10,7 +10,7 @@ const BASELINE_RUN = "7a11c0de-0000-4000-8000-0000000000b2";
  * the tab holding what waits (qa-company-2, qa-shell-7), the Seen tab (qa-company-48), only
  * the actions a role can take (qa-company-3, qa-shell-1), one line of actions per row
  * (qa-company-9), runs named in words with no short id or section key (qa-company-11,
- * qa-shell-32), Confirm the baseline's line (qa-company-12), ages in one unit and never a
+ * qa-shell-32), Confirm the Ground Truth's line (qa-company-12), ages in one unit and never a
  * dash (qa-company-46), and the tabs on one line on a phone (qa-company-47).
  */
 
@@ -104,20 +104,20 @@ test("runs are named in words: no short id, slug, section key or code font", asy
   await expect(needs.getByRole("columnheader", { name: "Run" })).toHaveCount(0);
 });
 
-test("Confirm the baseline says what needs me in words, never '0 need you'", async ({ page }) => {
-  // The default seed's baseline run has no rows left: said in words, with no zero counts.
+test("Confirm the Ground Truth says what needs me in words, never '0 need you'", async ({ page }) => {
+  // The default seed's Ground Truth run has no rows left: said in words, with no zero counts.
   await openInbox(page);
-  const label = () => page.getByTestId("inbox-checkpoints").getByTestId("checkpoint-label").filter({ hasText: "Confirm the baseline" });
-  await expect(label()).toHaveText(/^Confirm the baseline: (approve to continue|all \d+ items? handled, approve to continue)$/);
+  const label = () => page.getByTestId("inbox-checkpoints").getByTestId("checkpoint-label").filter({ hasText: "Confirm the Ground Truth" });
+  await expect(label()).toHaveText(/^Confirm the Ground Truth: (approve to continue|all \d+ items? handled, approve to continue)$/);
   await expect(page.getByTestId("inbox-needs")).not.toContainText(/\b0 need you|\b0 not decided/);
 });
 
-test("Confirm the baseline with work left counts it in words", async ({ page }) => {
+test("Confirm the Ground Truth with work left counts it in words", async ({ page }) => {
   // The "baseline-review" scenario: a run whose rows still need the owner.
   await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "baseline-review"] as const);
   await openInbox(page);
-  const row = page.locator("tr[data-row]").filter({ has: page.locator(`a[href="/baseline?run=${BASELINE_RUN}"]`) }).filter({ visible: true });
-  await expect(row.getByTestId("checkpoint-label")).toHaveText("Confirm the baseline: 4 need you, 2 not decided");
+  const row = page.locator("tr[data-row]").filter({ has: page.locator(`a[href="/ground-truth?run=${BASELINE_RUN}"]`) }).filter({ visible: true });
+  await expect(row.getByTestId("checkpoint-label")).toHaveText("Confirm the Ground Truth: 4 need you, 2 not decided");
 });
 
 test("ages are in one unit, never a dash or more than 23 hours", async ({ page }) => {

@@ -35,6 +35,7 @@ import {
   type InspectorStat,
 } from "@/components/ds";
 import { ClaudeOffNotice, limitWord } from "@/components/ClaudeOffNotice";
+import { LoadError } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatPercent, inWords } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -99,7 +100,7 @@ export function ClaudeAccounts() {
         }
         status={
           <>
-            {q.data && <SummaryChips page={q.data} />}
+            {q.data && <SummaryChips page={q.data} onOpen={(id) => setChosen(id)} />}
             {capsReady && !owner && <ViewOnly />}
           </>
         }
@@ -119,8 +120,9 @@ export function ClaudeAccounts() {
           ) : null
         }
       />
-      {q.error && <Notice tone="error">{q.error}</Notice>}
-      {q.loading && !q.data && (
+      {/* F-1: a list that did not load says so, with Try again (no Add account under it). */}
+      {q.error && <LoadError what="your Claude accounts" error={q.error} onRetry={() => void q.reload()} />}
+      {q.loading && !q.data && !q.error && (
         <Panel title="Accounts">
           <DataTable<Account>
             label="Subscription accounts"
@@ -158,11 +160,12 @@ export function ClaudeAccounts() {
 }
 
 /** The summary as chips; the hidden dots keep it one readable sentence for tests and readers. */
-function SummaryChips({ page }: { page: Page }) {
+function SummaryChips({ page, onOpen }: { page: Page; onOpen: (id: string) => void }) {
   const n = page.accounts.length;
   // What the pool would give a call to, not the state alone: a spent account is AVAILABLE.
   const available = page.accounts.filter((a) => a.takes_calls).length;
-  const broken = page.accounts.filter(needsAHuman).length;
+  const brokenRows = page.accounts.filter(needsAHuman).sort((a, b) => a.label.localeCompare(b.label));
+  const broken = brokenRows.length;
   const missing = page.unreadable_document_count;
   const sweep = page.refresh_sweep;
   const sweepOk = sweep.readable && !!sweep.last_completed_at && sweep.last_outcome === "ok";
@@ -184,9 +187,18 @@ function SummaryChips({ page }: { page: Page }) {
       {broken > 0 && (
         <>
           <Dot />
-          <Chip kind="warn">
-            {broken} need{broken === 1 ? "s" : ""} a sign-in
-          </Chip>
+          {/* F-66: the count leads to the account it counts, where Sign in again is. */}
+          <button
+            type="button"
+            className="rounded-full focus-visible:outline-2 focus-visible:outline-accent"
+            title={`Open ${brokenRows[0].label}`}
+            data-testid="needs-signin-count"
+            onClick={() => onOpen(brokenRows[0].account_id)}
+          >
+            <Chip kind="warn">
+              {broken} need{broken === 1 ? "s" : ""} a sign-in
+            </Chip>
+          </button>
         </>
       )}
       <Dot />
@@ -293,7 +305,7 @@ function Pool({
           <button
             type="button"
             tabIndex={-1}
-            aria-current={shown?.account_id === a.account_id ? "true" : undefined}
+            aria-current={showDetail && shown?.account_id === a.account_id ? "true" : undefined}
             className="min-w-0 truncate text-left font-semibold"
           >
             {a.label}
@@ -373,7 +385,8 @@ function Pool({
             columns={columns}
             rows={accounts}
             rowKey={(a) => a.account_id}
-            selected={shown?.account_id ?? null}
+            // F-73: no row stays chosen while the Add panel takes the pane.
+            selected={showDetail ? (shown?.account_id ?? null) : null}
             onSelect={(id) => {
               choose(id);
               setTapped((n) => n + 1);
@@ -823,7 +836,7 @@ function HoldingNow({ account, now, zone }: { account: Account; now: number; zon
   if (q.error)
     return (
       <div className="mt-2">
-        <Notice tone="error">{q.error}</Notice>
+        <LoadError what="who holds it" error={q.error} onRetry={() => void q.reload()} />
       </div>
     );
   const b = q.data!;
@@ -862,7 +875,7 @@ function HoldingHistory({ account, now, zone }: { account: Account; now: number;
   if (q.error)
     return (
       <div className="mt-2">
-        <Notice tone="error">{q.error}</Notice>
+        <LoadError what="its history" error={q.error} onRetry={() => void q.reload()} />
       </div>
     );
   const h = q.data!;
@@ -1041,9 +1054,9 @@ const REFRESH_WORDS: Record<string, string> = {
   still_valid: "Still valid: the token has hours left, so nothing was exchanged.",
   published: "Still valid, and its access token is now the one calls use.",
   held_deferred: "A job is running on it, so the exchange waits until the token nears expiry.",
-  reauth_required: "The refresh token is gone. Sign in again.",
+  reauth_required: "Its sign-in ended. Sign in again to use it.",
   unreadable: "The stored credential cannot be read. Sign in again.",
-  refresh_failed: "The exchange failed; the sweep tries again in five minutes.",
+  refresh_failed: "The sign-in check failed; Oracle tries again in five minutes.",
   [NO_REFRESH]: "Nothing is stored to exchange. Sign in again.",
 };
 
@@ -1109,7 +1122,7 @@ function Remove({ account, reload }: { account: Account; reload: () => Promise<v
         <InfoTip label="deleting">
           Jobs on it: {account.assigned}
           {account.assigned > 0 && " (in use: press Move jobs off first)"}. Its credential is deleted
-          with it. Type the label to arm the button.
+          with it. Type its label to turn on Remove.
         </InfoTip>
       }
     >
@@ -1197,7 +1210,13 @@ function SignInSteps({
     }
   }
 
-  const which = <p className="text-sm text-text2">{WHICH_ACCOUNT}</p>;
+  // F-73: which account Claude adds is a reason, so it sits behind an (i).
+  const which = (
+    <span className="inline-flex items-center gap-1 text-sm text-text2">
+      Adds the account signed in on Claude&apos;s page
+      <InfoTip label="which account is added">{WHICH_ACCOUNT}.</InfoTip>
+    </span>
+  );
   const copiedNote = copied && (
     <span role="status" className="text-sm font-medium text-pass">
       Link copied
@@ -1335,7 +1354,7 @@ function SignInAgain({
   const tip = (
     <InfoTip label="signing in again">
       {prominent
-        ? "Its refresh token is gone and the sweep has stopped trying. Signing in again puts it back the way it was."
+        ? "Its sign-in ended. Sign in again to use it; it comes back as it was."
         : "Replaces its credential with a fresh sign-in; its state, holds and readings stay."}
     </InfoTip>
   );
@@ -1580,8 +1599,8 @@ function Fallback({
       tools={
         // The tip sits outside the `fallback` block, so a reader's block holds no buttons.
         <InfoTip label="the fallback">
-          Used while no account is registered or every account is spent: a <code className="font-mono">claude setup-token</code>{" "}
-          value or an Anthropic API key. Accounts that are paused or draining are waited for, never replaced by this.
+          Used while no account is registered or every account is spent: a long-lived Claude key or an
+          Anthropic API key. Accounts that are paused or draining are waited for, never replaced by this.
         </InfoTip>
       }
     >

@@ -22,3 +22,20 @@ export const shownStatus = (s: Source): Source["status"] => (needsPerson(s) ? "n
 
 /** Sources that need attention, as Settings › Sources' header and the Inbox count them. */
 export const needingAttention = (sources: Source[]): Source[] => sources.filter((s) => shownStatus(s) === "needs_attention");
+
+/**
+ * Why a source needs attention, for who reads it: someone who may edit it reads the API's
+ * message as it is, what to do; someone who may not reads the API's cause and the role that
+ * can ("Over 100 channels: your role cannot edit sources; a commenter or above can. Ask an
+ * owner to raise your role."), as the Inbox names it. The API lists only the caller's own
+ * sources and editing one needs commenter or above, so a role that cannot edit cannot even
+ * its own. ``mayEdit`` comes from can() only.
+ */
+export function attentionMessage(s: Source, mayEdit: boolean): string {
+  const message = s.last_error ?? "";
+  if (mayEdit || !s.attention) return message;
+  const cause = s.attention.cause;
+  // A cause that holds a colon already ("... is a direct message: DMs are never ingested") ends as a sentence.
+  const join = cause.includes(":") ? ". Your" : ": your";
+  return `${cause}${join} role cannot edit sources; a commenter or above can. Ask an owner to raise your role.`;
+}

@@ -1,10 +1,10 @@
 import { expect, test, type Page } from "./test";
 
-import { login } from "./helpers";
+import { disconnectAll, login } from "./helpers";
 
 /**
  * QA fixes on Settings › Sources, Settings › Connections, the Set up checklist's Pick sources
- * step and the Build the baseline sheet, walked through the UI as a person would.
+ * step and the Build the Ground Truth sheet, walked through the UI as a person would.
  *
  * no_claim for every test here: the in-browser mock stands in for the API (api/tests/test_setup.py
  * covers the API's Pick sources rule; api/tests/test_connection_providers.py the Slack label).
@@ -12,7 +12,7 @@ import { login } from "./helpers";
 
 const setup = (page: Page) => page.getByTestId("home-setup");
 const row = (page: Page, key: string) => page.getByTestId(`setup-row-${key}`);
-const sheet = (page: Page) => page.getByRole("dialog", { name: "Build the baseline" });
+const sheet = (page: Page) => page.getByRole("dialog", { name: "Build the Ground Truth" });
 
 async function newCompany(page: Page) {
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "empty"));
@@ -120,7 +120,7 @@ test("Sources: plain counts and names, Add a source is the header's main button"
   // Drive notes in words: a dash before the folder's note, "Skipped" apart from its reason.
   const notes = page.getByRole("list", { name: "Sync notes for Product docs" });
   await expect(notes.getByRole("listitem", { name: "Lost access to Vendor research" })).toHaveText(
-    /Vendor research\s*— its docs are hidden until Oracle can read it again/,
+    /Vendor research[\s\S]*Choose another/,
   );
   const skipped = notes.getByRole("listitem").filter({ hasText: "owned outside example.com" });
   await expect(skipped.getByText("Skipped", { exact: true })).toBeVisible();
@@ -130,7 +130,7 @@ test("Sources: plain counts and names, Add a source is the header's main button"
 
   // Company email domains say how they differ from sign-in domains.
   const hint = page.getByTestId("company-domains-hint");
-  await expect(hint).toContainText("Which owners’ Drive files are read.");
+  await expect(hint).toContainText("Same list as");
   await expect(hint.getByRole("link", { name: "Members › Sign-in" })).toHaveAttribute("href", "/settings/members");
 });
 
@@ -141,6 +141,7 @@ test("Connections: Connect says why it waits, a bad token is turned down under t
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page);
   await page.goto("/settings/connections");
+  await disconnectAll(page, "slack");
   const slack = page.getByTestId("connection-card-slack");
   await slack.getByRole("button", { name: "Paste a token" }).click();
   const token = slack.getByLabel("Token", { exact: true });
@@ -178,6 +179,7 @@ test("Connections: opening Paste a token leaves the neighbouring card its own he
   await page.setViewportSize({ width: 1280, height: 900 });
   await login(page);
   await page.goto("/settings/connections");
+  await disconnectAll(page, "slack");
   const github = page.getByTestId("connection-card-github");
   const slack = page.getByTestId("connection-card-slack");
   const before = (await github.boundingBox())!.height;

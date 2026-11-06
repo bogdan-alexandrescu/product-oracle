@@ -330,6 +330,44 @@ async def _plan(db: AsyncSession, principal: Any, body: SimpleChangeIn, read_: s
     return doc, target, after
 
 
+async def _home(
+    db: AsyncSession, doc: uuid.UUID
+) -> tuple[ProductTrack | None, uuid.UUID | None, uuid.UUID | None]:
+    """The track (so it has an owner) and the PRD a feature added in Simple is filed under:
+    the roadmap's first track of a current PRD. When every track's PRD is replaced
+    (simple-replaced-prds), the first track's, under the PRD that replaced it (its own track's
+    version, else its latest approved one), so service.load still reads the item."""
+    tracks = list(
+        await db.scalars(
+            select(ProductTrack)
+            .where(ProductTrack.roadmap_document_id == doc)
+            .order_by(ProductTrack.created_at)
+        )
+    )
+    if not tracks:
+        return None, None, None
+    replaced = await company.replaced_prd_ids(db)
+    if live := next((t for t in tracks if t.prd_document_id not in replaced), None):
+        return live, live.prd_document_id, live.current_version_id
+    first, prd, seen = tracks[0], tracks[0].prd_document_id, set[uuid.UUID]()
+    while prd in replaced and prd not in seen:
+        seen.add(prd)
+        d = await db.get(Document, prd)
+        prd = d.replaced_by[0] if d is not None and d.replaced_by else prd
+    if prd in replaced:
+        return first, first.prd_document_id, first.current_version_id
+    own = await db.scalar(select(ProductTrack).where(ProductTrack.prd_document_id == prd))
+    version = own.current_version_id if own is not None else None
+    if version is None:
+        version = await db.scalar(
+            select(DocumentVersion.id)
+            .where(DocumentVersion.document_id == prd, DocumentVersion.approved_at.is_not(None))
+            .order_by(DocumentVersion.number.desc())
+            .limit(1)
+        )
+    return first, prd, version
+
+
 async def _place(
     db: AsyncSession, principal: Any, c: SimpleChange, session: Any, me: uuid.UUID
 ) -> RoadmapItem:
@@ -363,13 +401,7 @@ async def _place(
         )
     )
     goal_ids = [uuid.UUID(g) for g in c.after.get("goal_ids") or []]
-    # Its track: the roadmap's track of the goal's items, else its first (so it has an owner).
-    track = await db.scalar(
-        select(ProductTrack)
-        .where(ProductTrack.roadmap_document_id == doc)
-        .order_by(ProductTrack.created_at)
-        .limit(1)
-    )
+    track, prd, prd_version = await _home(db, doc)
     row = RoadmapItem(
         id=item_id,
         roadmap_document_id=doc,
@@ -383,8 +415,8 @@ async def _place(
         draft=True,
         goal_ids=goal_ids,
         track_id=track.id if track is not None else None,
-        prd_document_id=track.prd_document_id if track is not None else None,
-        prd_version_id=track.current_version_id if track is not None else None,
+        prd_document_id=prd,
+        prd_version_id=prd_version,
         note="added in Simple",
         start_date=date.fromisoformat(c.after["start_date"]) if c.after.get("start_date") else None,
         end_date=date.fromisoformat(c.after["end_date"]) if c.after.get("end_date") else None,
@@ -620,6 +652,38 @@ async def _drafting(db: AsyncSession, ids: list[str]) -> set[str]:
     )
 
 
+async def _dependency_ideas(
+    db: AsyncSession, read_: service.Read, shown: list[service.Entry]
+) -> dict[uuid.UUID, list[str]]:
+    """roadmap-edit-fixes: Oracle's ideas of what each new item depends on (its drafting
+    job's ``depends_on``), a person's to add: those it does not depend on yet, never one that
+    would close a loop."""
+    if not shown:
+        return {}
+    wanted = {str(e.row.id): e for e in shown}
+    by_id = read_.by_id()
+    out: dict[uuid.UUID, list[str]] = {}
+    for item_id, keys in (
+        await db.execute(
+            select(LlmJob.input["item_id"].astext, LlmJob.output["depends_on"])
+            .where(LlmJob.kind == "item_draft", LlmJob.input["item_id"].astext.in_(wanted))
+            .order_by(LlmJob.created_at)
+        )
+    ).all():
+        e = wanted[item_id]
+        have = set(e.row.depends_on or [])
+        ok = [
+            k
+            for k in (keys if isinstance(keys, list) else [])
+            if isinstance(k, str)
+            and k not in have
+            and k != e.row.item_key
+            and await changes.loop_of(db, by_id, e, [k]) is None
+        ]
+        out[e.row.id] = ok
+    return out
+
+
 async def item_extras(
     db: AsyncSession, read_: service.Read, shown: list[service.Entry]
 ) -> dict[uuid.UUID, dict[str, Any]]:
@@ -631,9 +695,12 @@ async def item_extras(
         return out
     features = await _features(db) if drafts_ else []
     running = await _drafting(db, [str(e.row.id) for e in drafts_])
+    ideas = await _dependency_ideas(db, read_, drafts_)
     by_key = {(e.roadmap.id, e.row.item_key): e for e in read_.entries}
     for e in drafts_:
         x: dict[str, Any] = {"drafting": str(e.row.id) in running}
+        if ideas.get(e.row.id):
+            x["suggested_depends"] = ideas[e.row.id]
         if not e.row.kept_both and not e.row.merged_into and e.status == "draft":
             x["looks_like"] = reconcile(e.row.title, read_.entries, features, e.row.id,
                                         e.roadmap.id)  # fmt: skip
@@ -653,8 +720,14 @@ async def item_extras(
 
 
 async def run_item_draft(s: AsyncSession, job: LlmJob, ask) -> dict[str, Any]:
-    """The ``item_draft`` job: one call; fills what a person has not."""
-    row = await s.get(RoadmapItem, uuid.UUID(str(job.input.get("item_id"))), with_for_update=True)
+    """The ``item_draft`` job: one call; fills what a person has not.
+
+    roadmap-edit-fixes: nothing is locked while Oracle is asked (a person keeps editing);
+    after, the item and its draft are read again and only fields still empty are filled, so
+    a person's value always wins. Its dependency ideas are suggestions (``depends_on`` of
+    the job's output, read as ``suggested_depends``), never written; ``at``: when it filled
+    (a conflict it caused names Oracle, oracle.simple.changes._last_writer)."""
+    row = await s.get(RoadmapItem, uuid.UUID(str(job.input.get("item_id"))))
     if row is None or not row.draft or row.merged_into:
         return {"drafted": False}
     d = await s.get(SimpleDraft, row.simple_draft_id) if row.simple_draft_id else None
@@ -691,6 +764,14 @@ async def run_item_draft(s: AsyncSession, job: LlmJob, ask) -> dict[str, Any]:
         checks = quality.item_draft(answer, goals)
     if checks:
         return {"drafted": False, "checks": quality.said(checks)}
+    # What a person saved while Oracle was asked.
+    row = await s.get(RoadmapItem, row.id, with_for_update=True, populate_existing=True)
+    if row is None or not row.draft or row.merged_into:
+        return {"drafted": False}
+    if d is not None:
+        d = await s.get(SimpleDraft, d.id, with_for_update=True, populate_existing=True)
+    ov = (d.overlay or {}).get(str(row.id)) if d is not None else None
+    cur = drafts.overlaid(row, ov)
     values: dict[str, Any] = {}
     outcome = answer.get("outcome")
     if not cur.outcome and isinstance(outcome, str) and outcome.strip():
@@ -701,15 +782,19 @@ async def run_item_draft(s: AsyncSession, job: LlmJob, ask) -> dict[str, Any]:
         values["feature_id"] = str(feature.id)
     known = {k for k, _ in keys}
     deps = [k for k in answer.get("depends_on") or [] if isinstance(k, str) and k in known]
-    if deps and not cur.depends_on:
-        values["depends_on"] = list(dict.fromkeys(deps))
-    for f, v in values.items():
-        setattr(row, f, drafts._typed(f, v))
-    if ov is not None and values:
-        d.overlay = {**(d.overlay or {}), str(row.id): {**ov, **values}}  # type: ignore[union-attr]
+    if ov is not None:
+        if values:
+            d.overlay = {**(d.overlay or {}), str(row.id): {**ov, **values}}  # type: ignore[union-attr]
+    else:
+        for f, v in values.items():
+            setattr(row, f, drafts._typed(f, v))
     suggested = await _date_suggestion(s, cur, answer, quarter)
     await s.flush()
-    return {"drafted": True, "filled": sorted(values), "dates": suggested}
+    out: dict[str, Any] = {"drafted": True, "filled": sorted(values), "dates": suggested}
+    out["depends_on"] = list(dict.fromkeys(deps))
+    if values:
+        out["at"] = company_time.now().isoformat()
+    return out
 
 
 async def _date_suggestion(s: AsyncSession, cur: RoadmapItem, answer: dict, quarter: Any) -> bool:
@@ -1120,6 +1205,52 @@ async def deciding(
             routes[d.id] = next(iter(await _route(db, d.id, w)), None)
         out[g.id] = (drafts.can_edit(principal, d.id, w), routes[d.id])
     return out
+
+
+async def inbox_rows(
+    db: AsyncSession, principal: Any, seen: Any, rows: list[SimpleGoalSuggestion] | None = None
+) -> list[Any]:
+    """inbox-meeting-proposals fix: the open suggestions of the goals whose suggestions I
+    decide, oldest first, for the Inbox (a failed-checks one only to owners, as listed).
+    ``rows``: the open suggestions, oldest first, when the Inbox read them already
+    (drafts.waiting)."""
+    from oracle.simple.schemas import InboxSimpleGoalSuggestion
+
+    if _me_or_none(principal) is None or getattr(principal, "is_run", False):
+        return []
+    if rows is None:
+        rows = list(
+            await db.scalars(
+                select(SimpleGoalSuggestion)
+                .where(SimpleGoalSuggestion.status == "open")
+                .order_by(SimpleGoalSuggestion.created_at, SimpleGoalSuggestion.id)
+            )
+        )
+    owner = has_role(principal.role, "owner")
+    rows = [r for r in rows if owner or not r.checks]
+    if not rows:
+        return []
+    goals = [g for g in await _goals(db) if g.id in {r.goal_id for r in rows}]
+    by_id = {g.id: g for g in goals}
+    read_ = await service.load(db, await drafts.overlays_for(db, principal))
+    rule = await deciding(db, principal, goals, read_)
+    docs = {g.id: await _job_document(db, g, read_) for g in goals if rule[g.id][0]}
+    people = await _display_names(db, {r.proposed_by for r in rows if r.proposed_by})
+    return [
+        InboxSimpleGoalSuggestion(
+            id=r.id,
+            goal=_brief(by_id[r.goal_id]),
+            title=r.title,
+            outcome=r.outcome or "",
+            from_oracle=r.origin != "person",
+            proposed_by_name=people.get(r.proposed_by) if r.proposed_by else None,
+            document_id=docs[r.goal_id].id if docs.get(r.goal_id) else None,
+            at=r.created_at,
+            state="new" if seen is None or r.created_at > seen else "open",
+        )
+        for r in rows
+        if r.goal_id in by_id and rule[r.goal_id][0]
+    ]
 
 
 def _me_or_none(principal: Any) -> uuid.UUID | None:

@@ -435,7 +435,7 @@ async def company_coverage(db: AsyncSession) -> CompanyCoverage:
     now = _now()
     members = (
         await db.execute(
-            select(User.id, User.email, User.role)
+            select(User.id, User.email, User.name, User.role)
             .where(User.disabled_at.is_(None))
             .order_by(User.created_at, User.email)
         )
@@ -491,7 +491,7 @@ async def company_coverage(db: AsyncSession) -> CompanyCoverage:
 
     out = [
         CompanyMemberCoverage(
-            member=CompanyMember(id=m.id, email=m.email, name=None, role=m.role),
+            member=CompanyMember(id=m.id, email=m.email, name=m.name, role=m.role),
             kinds=kinds.get(m.id, []),
         )
         for m in sorted(members, key=order)

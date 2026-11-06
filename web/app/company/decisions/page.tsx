@@ -228,10 +228,15 @@ function Decisions() {
     {
       key: "ref",
       header: "No.",
-      width: "64px",
+      // Visual QA CO-1: wide enough for D-9999 in tabular figures, so no two numbers read the same.
+      width: "84px",
       phone: "meta",
       // qa-company-39: the number in body text, not a link-coloured code.
-      cell: (d) => <span className="tnum text-sm">{d.ref}</span>,
+      cell: (d) => (
+        <span className="tnum text-sm whitespace-nowrap" data-testid="decision-ref">
+          {d.ref}
+        </span>
+      ),
     },
     // The title wraps: it is what a row is read by, never cut mid-word.
     {

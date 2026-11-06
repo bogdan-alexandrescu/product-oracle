@@ -181,7 +181,7 @@ test("Inspector: decline Oracle's suggestion; it stays declined, with who and wh
 
 test("Inspector: Oracle's suggestion names the feature it suggests", async ({ page }) => {
   // protects=review fix 6 (the suggestion names the feature by its title); fails_when=the
-  // suggestion says "A feature in the baseline" or a feature other than the one accepting
+  // suggestion says "A feature in the Ground Truth" or a feature other than the one accepting
   // links; no_claim=the triage that picks the feature.
   await login(page);
   await openRequests(page);

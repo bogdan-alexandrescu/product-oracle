@@ -97,6 +97,21 @@ export const BIG_PRD: DocumentSeed = {
   versions: [{ number: 1, created_at: "2026-10-19T09:00:00Z", snapshot: "2026-10-19T08:55Z", sections: sections(), citations: [] }],
 };
 
+/**
+ * The same long outline as a strategy document (not a PRD), so the outline rail and the section
+ * switcher, which only non-PRD documents still use, have a document long enough to test.
+ */
+export const BIG_STRATEGY_SLUG = "platform-handbook-strategy";
+export const BIG_STRATEGY: DocumentSeed = {
+  ...BIG_PRD,
+  slug: BIG_STRATEGY_SLUG,
+  title: "Platform handbook strategy",
+  kind: "strategy",
+  template: undefined,
+  template_version: undefined,
+  versions: [{ ...BIG_PRD.versions[0], sections: sections().map((s) => (s.key === "title" ? { ...s, heading: "Platform handbook strategy" } : s)) }],
+};
+
 /** Review state of the seed: verdicts by section key. */
 export const BIG_PRD_REVIEWS: Record<string, { verdict: "approved" | "changes_requested" | "rejected"; note: string | null }> = {
   title: { verdict: "approved", note: null },

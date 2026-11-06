@@ -101,7 +101,7 @@ export function useAccessRequestRows(requests: AccessRequest[], reload: () => Pr
           {error}
         </span>
       ) : (
-        <span className="block truncate text-text2" title={r.note ?? undefined}>
+        <span className="block truncate text-text2" title={r.note ?? undefined} data-user-content={r.note ? true : undefined}>
           {r.note ? <>&ldquo;{r.note}&rdquo;</> : "No note"}
         </span>
       ),

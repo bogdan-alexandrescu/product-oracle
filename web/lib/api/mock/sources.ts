@@ -5,10 +5,8 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import type { CitedItem } from "./baseline";
-import { FIREFLIES_DEFAULT_ENDPOINT, mockConnectionEndpoint, mockConnectionRows, reconnectReason } from "./connections";
-import { FIREFLIES_CONNECTION_ID } from "./fireflies";
+import { mockConnectionEndpoint, mockConnectionRows, reconnectReason, SEEDED_CONNECTION } from "./connections";
 import { mockUuid, PRODUCT_CHAT_ID, seeded, seededItemId } from "./ids";
-import { MOCK_NOTION_CONNECTION_ID } from "./notion";
 
 type Source = Schemas["SourceOut"];
 // `folder`: the picked Drive folder a Google Doc came from (mock only).
@@ -24,8 +22,6 @@ interface SourcesDb {
   /** Source id -> the connection a Disconnect took from it (sources.lost_provider and
    * lost_account_id) and whose it was: that person connecting that account again links it. */
   lost?: Record<string, { provider: string; account_id: string; email?: string }>;
-  /** Connections a Disconnect deleted: no longer offered to a source. */
-  removed?: string[];
 }
 
 type Role = Schemas["Me"]["role"];
@@ -36,7 +32,7 @@ export type SourcesContext = {
   /** The mock scenario ("empty" starts with no sources). */
   scenario: string | null;
   me: { email: string; role: Role };
-  members: { id: string; email: string; role: Role; disabled: boolean }[];
+  members: { id: string; email: string; name?: string | null; role: Role; disabled: boolean }[];
   /** Baseline evidence, citations and section links pointing at source items. */
   uses: () => UsedIn[];
 };
@@ -49,30 +45,6 @@ export const SOURCES_STORAGE_KEY = "po-mock-sources-v2";
  */
 export const MOCK_SYNC_SUPERSEDED_KEY = "po-mock-sync-superseded";
 
-/** A Fireflies connection's endpoint, as Settings > Connections set it (the default otherwise). */
-function withEndpoint(c: Schemas["ConnectionChoice"]): Schemas["ConnectionChoice"] {
-  if (c.id !== FIREFLIES_CONNECTION_ID) return c;
-  return { ...c, endpoint_url: mockConnectionEndpoint(c.id) ?? FIREFLIES_DEFAULT_ENDPOINT };
-}
-
-const CONNECTIONS: Record<string, Schemas["ConnectionChoice"][]> = {
-  slack: [
-    { id: "c0000000-0000-4000-8000-000000000001", account_label: "Example Co chat", status: "active" },
-    { id: "c0000000-0000-4000-8000-000000000003", account_label: "Partner workspace", status: "active" },
-  ],
-  github: [{ id: "c0000000-0000-4000-8000-000000000002", account_label: "example-org", status: "active" }],
-  notion: [{ id: MOCK_NOTION_CONNECTION_ID, account_label: "Example Notion", status: "active" }],
-  fireflies: [{ id: FIREFLIES_CONNECTION_ID, account_label: "pat@example.com", status: "active" }],
-  google: [
-    { id: "c0000000-0000-4000-8000-000000000005", account_label: "pat@example.com", status: "active", reconnect_reason: null },
-    {
-      id: "c0000000-0000-4000-8000-000000000006",
-      account_label: "old-drive@example.com",
-      status: "active",
-      reconnect_reason: "Reconnect to choose files",
-    },
-  ],
-};
 const PROVIDER: Record<Source["kind"], string | null> = {
   upload: null,
   github: "github",
@@ -150,12 +122,14 @@ const RATE_LIMITED_CHANNEL = "C0RATELIMIT";
 
 const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
 
+const LEGACY_ID = "50000000-0000-4000-8000-000000000003";
+
 function seed(): SourcesDb {
   const chat: Source = {
     id: PRODUCT_CHAT_ID,
     kind: "slack",
     name: "Product chat",
-    connection_id: CONNECTIONS.slack[0].id,
+    connection_id: SEEDED_CONNECTION.slack,
     // Saved with the channels' names, as the picker saves them: the row reads "#product", not an id.
     config: { channels: ["C0123PRODUCT", "C0456FEEDBACK"], labels: { C0123PRODUCT: "#product", C0456FEEDBACK: "#customer-feedback" } },
     status: "active",
@@ -175,7 +149,7 @@ function seed(): SourcesDb {
     id: "50000000-0000-4000-8000-000000000002",
     kind: "github",
     name: "Example repo",
-    connection_id: CONNECTIONS.github[0].id,
+    connection_id: SEEDED_CONNECTION.github,
     config: { repos: ["example-org/example-app"] },
     status: "error",
     last_error: "The connection was rejected: token expired",
@@ -189,13 +163,13 @@ function seed(): SourcesDb {
   // Saved before the 100-channel rule (as the API's 0016 migration leaves such a source):
   // syncs answer needs_attention until it is edited back within the rules.
   const legacy: Source = {
-    id: "50000000-0000-4000-8000-000000000003",
+    id: LEGACY_ID,
     kind: "slack",
     name: "Legacy all-hands chat",
-    connection_id: CONNECTIONS.slack[0].id,
+    connection_id: SEEDED_CONNECTION.slack,
     config: { channels: Array.from({ length: 120 }, (_, i) => `C9${String(i + 1).padStart(3, "0")}LEGACY`) },
     status: "needs_attention",
-    last_error: `Allowlist at most ${MAX_CHANNELS} channels: edit this source to sync it again`,
+    last_error: `Pick ${MAX_CHANNELS} channels or fewer, then it syncs again`,
     last_synced_at: "2026-10-01T08:00:00Z",
     created_at: "2026-03-02T09:00:00Z",
     updated_at: "2026-10-18T08:00:00Z",
@@ -208,7 +182,7 @@ function seed(): SourcesDb {
     id: "50000000-0000-4000-8000-000000000004",
     kind: "fireflies",
     name: "Customer calls",
-    connection_id: FIREFLIES_CONNECTION_ID,
+    connection_id: SEEDED_CONNECTION.fireflies,
     config: { from_date: "2026-09-01", title_contains: ["Customer interview"] },
     status: "active",
     last_error: null,
@@ -227,7 +201,7 @@ function seed(): SourcesDb {
     id: "50000000-0000-4000-8000-000000000005",
     kind: "google_docs",
     name: "Product docs",
-    connection_id: CONNECTIONS.google[0].id,
+    connection_id: SEEDED_CONNECTION.google,
     config: {
       docs: ["1DocPricingExample", "1DocActivationExample", "1DocInterviewsExample"],
       folders: ["1FolderSpecsExample", "1FolderVendorExample"],
@@ -278,7 +252,7 @@ function seed(): SourcesDb {
     id: "50000000-0000-4000-8000-000000000006",
     kind: "google_docs",
     name: "Drive folders",
-    connection_id: CONNECTIONS.google[1].id,
+    connection_id: SEEDED_CONNECTION.oldGoogle,
     // Picked by name, as the Drive picker saves picks (qa-settings-23: the row reads the name).
     config: { folders: ["1FolderProductExample"], names: { "1FolderProductExample": "Product planning" } },
     status: "active",
@@ -392,8 +366,19 @@ function load(scenario: string | null = localStorage.getItem("po-mock-scenario")
   }
   // A new company: nobody has connected anything yet.
   if (scenario === "empty") return { sources: [], items: [], snapshots: [], team: {} };
-  return seeded("sources", seed);
+  const db = seeded("sources", seed);
+  // Saved before the date-order rule: its next sync needs attention for a cause, not the cap.
+  if (scenario === REFUSED_ORDER_SCENARIO) {
+    const legacy = db.sources.find((s) => s.id === LEGACY_ID);
+    if (legacy) {
+      Object.assign(legacy, { config: { channels: ["C0100GENERAL"], since: "2026-03-01", until: "2026-02-01" }, status: "active", last_error: null });
+    }
+  }
+  return db;
 }
+
+/** A Slack source whose saved until is before its since (e2e/visual-qa-a-settings-company.spec.ts). */
+export const REFUSED_ORDER_SCENARIO = "source-refused-order";
 
 function store(db: SourcesDb) {
   localStorage.setItem(SOURCES_STORAGE_KEY, JSON.stringify(db));
@@ -403,7 +388,6 @@ function store(db: SourcesDb) {
  * connection, each keeping the provider and account it lost. */
 export function forgetMockConnection(conn: { id: string; provider: string; account_id: string }, email?: string) {
   const db = load();
-  db.removed = [...new Set([...(db.removed ?? []), conn.id])];
   for (const s of db.sources) {
     if (s.connection_id !== conn.id) continue;
     s.connection_id = null;
@@ -421,7 +405,6 @@ const CONNECTION_REMOVED = "The connection was removed: pick another one";
  * sources that lost it are linked to the new connection. Never another account's. */
 export function relinkMockSources(conn: { id: string; provider: string; account_id: string }, email?: string) {
   const db = load();
-  db.removed = (db.removed ?? []).filter((id) => id !== conn.id);
   for (const s of db.sources) {
     const lost = db.lost?.[s.id];
     if (s.connection_id || !lost || PROVIDER[s.kind] !== conn.provider) continue;
@@ -438,14 +421,11 @@ export function relinkMockSources(conn: { id: string; provider: string; account_
   store(db);
 }
 
-/** The person's connections of `provider` a source can use (/v1/sources/kinds): the
- * Sources page's own, less those a Disconnect deleted, and those made on Settings › Connections. */
-function choicesFor(db: SourcesDb, provider: string, email?: string): Schemas["ConnectionChoice"][] {
-  const removed = new Set(db.removed ?? []);
-  const fixed = (CONNECTIONS[provider] ?? []).filter((c) => !removed.has(c.id));
-  const live = mockConnectionRows(email)
-    // The seeded Notion account is on both lists, under two ids: offered once.
-    .filter((r) => r.provider === provider && !fixed.some((c) => c.id === r.id || c.account_label === r.account_label))
+/** The person's connections of `provider` a source can use (/v1/sources/kinds): their rows in
+ * the one connections store (./connections.ts) that Settings › Connections reads too (F-60). */
+function choicesFor(provider: string, email?: string): Schemas["ConnectionChoice"][] {
+  return mockConnectionRows(email)
+    .filter((r) => r.provider === provider)
     .map((r) => ({
       id: r.id,
       account_label: r.account_label,
@@ -453,7 +433,6 @@ function choicesFor(db: SourcesDb, provider: string, email?: string): Schemas["C
       reconnect_reason: reconnectReason(r.provider, r.scopes),
       endpoint_url: provider === "fireflies" ? mockConnectionEndpoint(r.id) : null,
     }));
-  return [...fixed.map(withEndpoint), ...live];
 }
 
 /** A source's kind and repositories (the code map mock, ./engineering.ts); null when there is none. */
@@ -559,8 +538,18 @@ function hideOutsidePicks(db: SourcesDb, s: Source): number {
 const FIRST_SLACK_READ = ["Customers keep asking for a weekly summary email.", "The export button is hard to find on a phone."];
 
 function counted(db: SourcesDb, s: Source): Source {
-  return { ...s, item_count: db.items.filter((i) => i.source_id === s.id && !i.deleted_at).length };
+  return { ...s, item_count: db.items.filter((i) => i.source_id === s.id && !i.deleted_at).length, attention: attentionOf(s) };
 }
+
+/** As the API's attention_of: a source a rule of its saved config stops reads the cause and
+ * whether last_error is itself the fix; any other source none. */
+function attentionOf(s: Source): Source["attention"] {
+  if (s.status !== "needs_attention") return null;
+  const refused = badConfig(s.kind, s.config);
+  return refused ? { cause: upper(refused.cause ?? refused.message), is_action: !!refused.is_action } : null;
+}
+
+const upper = (text: string) => `${text.slice(0, 1).toUpperCase()}${text.slice(1)}`;
 
 function search(db: SourcesDb, q: URLSearchParams): Schemas["SearchResults"] {
   const query = q.get("q") ?? "";
@@ -582,42 +571,58 @@ function search(db: SourcesDb, q: URLSearchParams): Schemas["SearchResults"] {
   return { query, as_of: q.get("as_of"), hits };
 }
 
+/** A config the API refuses, as its ConnectorConfigError: the message, whether it is itself
+ * the fix (``is_action``) and then the cause a role that cannot edit reads. */
+type Refusal = { message: string; is_action?: boolean; cause?: string };
+
+/** A day as people read it: "Jan 1, 2000". */
+const shownDay = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+
 /**
  * The API's Slack config rules (oracle.sources.connectors.slack check_config), as the
- * connector words them: at most 100 channels, dates from 2000-01-01 to 2100-12-31, until
- * not before since; Notion needs a root. Other kinds pass.
+ * connector words them: at most 100 channels, dates from Jan 1, 2000 to Dec 31, 2100, the end
+ * not before the start; Notion needs a root. Other kinds pass.
  */
-function badConfig(kind: Source["kind"], config: Record<string, unknown>): string | null {
+function badConfig(kind: Source["kind"], config: Record<string, unknown>): Refusal | null {
   const rule = LABELLED[kind];
   if (rule && config.labels !== undefined) {
-    if (!mapsStrings(config.labels)) return rule.message;
-    if (Object.keys(config.labels).length > rule.max) return `labels takes at most ${rule.max} entries`;
+    if (!mapsStrings(config.labels)) return { message: rule.message };
+    if (Object.keys(config.labels).length > rule.max) return { message: `labels takes at most ${rule.max} entries` };
   }
   // As the real connector reads a Notion allowlist: "roots" only.
   if (kind === "notion") {
-    return Array.isArray(config.roots) && config.roots.length ? null : "allowlist at least one root page or database";
+    return Array.isArray(config.roots) && config.roots.length ? null : { message: "allowlist at least one root page or database" };
   }
   // As the GitHub connector's _parse_config reads include: absent (all), or at least one known kind.
   if (kind === "github" && config.include !== undefined) {
     const include = config.include;
-    if (!Array.isArray(include) || !include.length) return `include at least one of ${GITHUB_INCLUDE.join(", ")}`;
+    if (!Array.isArray(include) || !include.length) {
+      return { message: `include at least one of ${GITHUB_INCLUDE.join(", ")}`, is_action: true, cause: "nothing to include" };
+    }
     const unknown = include.find((i) => !GITHUB_INCLUDE.includes(String(i)));
-    if (unknown !== undefined) return `unknown include '${unknown}'; use ${GITHUB_INCLUDE.join(", ")}`;
+    if (unknown !== undefined) return { message: `unknown include '${unknown}'; use ${GITHUB_INCLUDE.join(", ")}` };
   }
   if (kind !== "slack") return null;
   const channels = config.channels;
   // As the Slack connector's _channels: a source reads at least one channel (qa-onboarding-4).
-  if (!Array.isArray(channels) || channels.length === 0) return "allowlist at least one channel id";
-  if (channels.length > MAX_CHANNELS) return `allowlist at most ${MAX_CHANNELS} channels`;
+  if (!Array.isArray(channels) || channels.length === 0) return { message: "allowlist at least one channel id" };
+  if (channels.length > MAX_CHANNELS) {
+    return { message: `pick ${MAX_CHANNELS} channels or fewer`, is_action: true, cause: `over ${MAX_CHANNELS} channels` };
+  }
   for (const key of ["since", "until"] as const) {
     const v = config[key];
     if (v == null) continue;
     if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v) || v < FIRST_DAY || v > LAST_DAY) {
-      return `${key} must be a date (YYYY-MM-DD) from ${FIRST_DAY} to ${LAST_DAY}`;
+      const label = key === "since" ? "start date" : "end date";
+      return {
+        message: `pick ${key === "since" ? "a" : "an"} ${label} from ${shownDay(FIRST_DAY)} to ${shownDay(LAST_DAY)}`,
+        is_action: true,
+        cause: `the ${label} is out of range`,
+      };
     }
   }
   const { since, until } = config;
-  if (typeof since === "string" && typeof until === "string" && until < since) return "until must be on or after since";
+  if (typeof since === "string" && typeof until === "string" && until < since) return { message: "the end date must be on or after the start date" };
   return null;
 }
 
@@ -630,8 +635,14 @@ export async function routeSources(req: Request, p: string[], q: URLSearchParams
   return res;
 }
 
+const ROLE_ORDER: readonly Role[] = ["viewer", "commenter", "approver", "owner"];
+
 async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParams, ctx: SourcesContext): Promise<Response> {
   const m = req.method;
+  // As the API's SourceWriter: a source's writes (add, edit, delete, pause, resume, sync, uploads) need a commenter.
+  if (p[1] === "sources" && m !== "GET" && ROLE_ORDER.indexOf(ctx.me.role) < ROLE_ORDER.indexOf("commenter")) {
+    return json(403, { detail: "Requires the commenter role" });
+  }
   if (p[1] === "search") return json(200, search(db, q));
   if (p[1] === "snapshots") {
     if (p.length === 2 && m === "POST") {
@@ -653,14 +664,14 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     if (m === "GET") return json(200, db.sources.map((s) => counted(db, s)));
     const body = (await req.json()) as Schemas["SourceCreate"];
     if (!AVAILABLE[body.kind]) return json(422, { detail: "connector not available yet" });
-    const choice = Object.values(CONNECTIONS).flat().find((c) => c.id === body.connection_id);
+    const choice = choicesFor("google", ctx.me.email).find((c) => c.id === body.connection_id);
     if (body.kind === "google_docs" && choice?.reconnect_reason && body.config?.folders) {
       return json(422, {
         detail: "Reconnect to choose files: this Google connection cannot read folders; reconnect Google to give Oracle read access to your Drive",
       });
     }
     const invalid = badConfig(body.kind, body.config ?? {});
-    if (invalid) return json(422, { detail: invalid });
+    if (invalid) return json(422, { detail: invalid.message });
     if (db.sources.some((s) => s.name === body.name.trim())) {
       return json(409, { detail: "You already have a source with this name" });
     }
@@ -700,7 +711,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
         kind,
         provider: PROVIDER[kind],
         connector_available: AVAILABLE[kind],
-        connections: PROVIDER[kind] ? choicesFor(db, PROVIDER[kind]!, ctx.me.email) : [],
+        connections: PROVIDER[kind] ? choicesFor(PROVIDER[kind]!, ctx.me.email) : [],
       })),
     );
   }
@@ -731,7 +742,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
         });
       }
       const invalid = patch.config ? badConfig(s.kind, patch.config) : null;
-      if (invalid) return json(422, { detail: invalid });
+      if (invalid) return json(422, { detail: invalid.message });
       // As the API's _check_connection: one of the person's active connections of the kind's provider.
       const relinked = "connection_id" in patch && patch.connection_id !== s.connection_id;
       if (relinked) {
@@ -739,9 +750,9 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
         const id = patch.connection_id ?? null;
         if (!provider) return json(422, { detail: "Uploads take no connection" });
         if (!id) return json(422, { detail: `A ${s.kind} source needs one of your ${provider} connections` });
-        const choice = choicesFor(db, provider, ctx.me.email).find((c) => c.id === id);
+        const choice = choicesFor(provider, ctx.me.email).find((c) => c.id === id);
         if (!choice) {
-          const other = Object.values(PROVIDER).find((p) => p && p !== provider && choicesFor(db, p, ctx.me.email).some((c) => c.id === id));
+          const other = Object.values(PROVIDER).find((p) => p && p !== provider && choicesFor(p, ctx.me.email).some((c) => c.id === id));
           if (other) return json(422, { detail: `A ${s.kind} source needs a ${provider} connection, not a ${other} one` });
           return json(404, { detail: "Connection not found" });
         }
@@ -768,7 +779,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
       if (config && reconfigured) {
         s.config = config;
         if (s.kind === "google_docs") {
-          const choice = Object.values(CONNECTIONS).flat().find((c) => c.id === s.connection_id);
+          const choice = choicesFor("google", ctx.me.email).find((c) => c.id === s.connection_id);
           s.reconnect_reason = choice?.reconnect_reason ?? null;
           // Narrowing takes effect on save (S5, owner 2026-10-20): what left the picks is
           // deleted now, and what the last sync said about what is still picked stays.
@@ -800,7 +811,9 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     const broken = badConfig(s.kind, s.config);
     if (broken) {
       s.status = "needs_attention";
-      s.last_error = `${broken[0].toUpperCase()}${broken.slice(1)}: edit this source to sync it again`;
+      // As the API's _needs_attention: a refusal that is the fix reads once; any other names the edit.
+      const message = upper(broken.message);
+      s.last_error = broken.is_action ? `${message}, then it syncs again` : `${message}. Edit this source to sync it again.`;
       return json(200, { source_id: s.id, outcome: "needs_attention", upserted: 0, versions_written: 0, deleted: 0, checkpoints: 0, retry_after: null, error: s.last_error, source: counted(db, s) });
     }
     // As the API's credential_for: a source a Disconnect left without a connection.
@@ -1061,7 +1074,7 @@ function companyCoverage(db: SourcesDb, ctx: SourcesContext): Schemas["CompanyCo
     });
     const items = kinds.reduce((n, k) => n + k.items, 0);
     const share = items ? kinds.reduce((n, k) => n + k.freshness.fresh, 0) / items : -1;
-    return { member: { id: m.id, email: m.email, name: null, role: m.role }, kinds, order: [kinds.length ? 1 : 0, share] as const };
+    return { member: { id: m.id, email: m.email, name: m.name ?? null, role: m.role }, kinds, order: [kinds.length ? 1 : 0, share] as const };
   });
   // Setup first (no source), then the lowest fresh share.
   rows.sort((a, b) => a.order[0] - b.order[0] || a.order[1] - b.order[1] || a.member.email.localeCompare(b.member.email));

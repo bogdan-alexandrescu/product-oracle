@@ -100,7 +100,7 @@ Third-party sellers. G3 · ●○○ low
 
 ## Sources and data points {#sources}
 
-Goals and estimates come from the baseline.
+Goals and estimates come from the Ground Truth.
 """
 
 

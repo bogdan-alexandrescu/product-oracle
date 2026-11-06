@@ -302,7 +302,7 @@ async def test_checkpoint_approvals_and_send_backs_are_recorded(client, run_ctx)
     assert first.chosen_option == "approve" and first.rationale == "Goals read right"
     assert str(first.run_id) == run["id"] and first.review_at is None
     assert first.decided_via == "oracle" and first.decided_actor == "user"
-    assert first.title.startswith("Approve Baseline confirm · ")
+    assert first.title.startswith("Approve Ground Truth confirm · ")
     assert [o["key"] for o in first.options] == ["approve", "request_changes"]
 
     await tick(client, h)

@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 
 import { ApiError } from "@/lib/api/client";
+import { CARD_CHANGED_EVENT } from "@/lib/api/simple-chat";
 import { CompanyZoneContext } from "@/lib/me";
 
 export type Query<T> = {
@@ -13,6 +14,16 @@ export type Query<T> = {
   reload: () => Promise<void>;
   setData: (update: (prev: T | undefined) => T | undefined) => void;
 };
+
+const CHANGED = "po:data-changed";
+
+/**
+ * After an action made beside the page (Ask Oracle's panel applied a card): every page's data
+ * on screen reads again in place, so it shows the change at once (the owner's full-awareness rule).
+ */
+export function dataChanged() {
+  window.dispatchEvent(new Event(CHANGED));
+}
 
 /** Message for an unknown thrown value; network failures read as "cannot reach". */
 export function errorMessage(e: unknown): string {
@@ -79,6 +90,13 @@ export function useQuery<T>(key: string, load: () => Promise<T>, { keepPrevious 
     }
   }, [key, onAuth]);
 
+  // An action beside the page (dataChanged): read again, the data kept on screen meanwhile.
+  useEffect(() => {
+    const again = () => void run();
+    window.addEventListener(CHANGED, again);
+    return () => window.removeEventListener(CHANGED, again);
+  }, [run]);
+
   useEffect(() => {
     let live = true;
     const n = begin(key);
@@ -92,6 +110,15 @@ export function useQuery<T>(key: string, load: () => Promise<T>, { keepPrevious 
       live = false;
     };
   }, [key, onAuth]);
+
+  // build-feature-panel (AN PR 1204 review 7): a change made anywhere (the feature panel, a chat
+  // card, an Undo) is said once (sendCardChanged); every query on the page reads again, so the
+  // page behind the panel and its counts show it at once.
+  useEffect(() => {
+    const on = () => void run();
+    window.addEventListener(CARD_CHANGED_EVENT, on);
+    return () => window.removeEventListener(CARD_CHANGED_EVENT, on);
+  }, [run]);
 
   const stale = state.key !== key;
   return {

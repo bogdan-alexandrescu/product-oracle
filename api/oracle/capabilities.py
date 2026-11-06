@@ -190,6 +190,8 @@ PER_ITEM: dict[str, Role | None] = {
     "cancel_again_run": "owner",
     "cancel_discussion_reply": "approver",
     "cancel_run": "owner",
+    # old-milestones: an owner brings old milestones over, keeps or drops one.
+    "carry_over_old_milestones": "owner",
     # S8: attendees, or whom the meeting's change mode lets change (oracle.simple.meetings).
     "change_simple_meeting_draft_dates": None,
     "choose_simple_chat_choice": None,
@@ -223,13 +225,18 @@ PER_ITEM: dict[str, Role | None] = {
     "delete_discussion_message": None,
     "delete_goal_milestone": "owner",
     "delete_scope_item": "approver",
+    # edit-decisions: its decider, whoever made it or an owner (decision_sheet.may_change).
+    "delete_simple_decision": "owner",
     "discard_simple_chat_card": None,
     "dismiss_date_suggestion": "owner",
     "dismiss_discussion_change": "approver",
     "dismiss_overrun_run": "owner",
     # H10: a request's replies are its filer's, an approver's or an owner's.
     "draft_request_replies": "approver",
+    "drop_old_milestone": "owner",
     "edit_document_section": "approver",
+    # agenda-sheet: an owner or the decider edits, an approver proposes (meetings.edit_agenda).
+    "edit_simple_meeting_agenda": "owner",
     "edit_simple_meeting_minutes": "owner",
     "end_simple_meeting": "owner",
     "enhance_scope_requirement": "approver",
@@ -250,6 +257,7 @@ PER_ITEM: dict[str, Role | None] = {
     "get_next_question_batch": "approver",
     "get_simple_chat": "viewer",
     "get_simple_meeting_chat": None,
+    "keep_old_milestone": "owner",
     "keep_request_no": None,
     # #618 review: a track alert's audience keeps and reopens it (oracle.roadmap.alerts
     # in_audience): the track's owner, else every owner, and the leads for slips.

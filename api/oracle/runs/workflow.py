@@ -359,7 +359,7 @@ def expires_at(submitted: datetime, seconds: int) -> datetime:
 # The note on a run that is one workflow per segment while caller MCP is on.
 SEGMENT_MODE_WITH_MCP = (
     "Caller MCP is on, so each segment's workflow carries the run token in its credential "
-    "map and its agents read Oracle's sources, baseline, documents and earlier outputs "
+    "map and its agents read Oracle's sources, Ground Truth, documents and earlier outputs "
     "through Oracle's MCP server (intended: agents read Oracle's data whenever MCP is on, "
     "whether or not checkpoints wait in SwarmCloud)."
 )

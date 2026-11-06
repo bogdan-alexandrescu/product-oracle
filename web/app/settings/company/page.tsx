@@ -154,6 +154,8 @@ function HorizonsPanel() {
         tools={
           <InfoTip label="horizons" side="bottom">
             Roadmaps use these for Now, Next and Later. Runs already under way keep what they started with.
+            {/* F-30: why Save is on with nothing changed, here rather than beside it. */}
+            {setting?.is_default && " Save keeps the default horizons."}
           </InfoTip>
         }
       >
@@ -247,11 +249,7 @@ function HorizonsPanel() {
               <Button type="submit" variant="solid" disabled={busy || !(changed || setting.is_default)}>
                 Save
               </Button>
-              {!saved && !changed && (
-                <SaveHint testId="horizons-save-reason">
-                  {setting.is_default ? "Save keeps the default horizons." : "Change a horizon to save it."}
-                </SaveHint>
-              )}
+              {!saved && !changed && !setting.is_default && <SaveHint testId="horizons-save-reason">Change a horizon to save it.</SaveHint>}
               {saved && <SavedNote testId="horizons-saved" />}
               {!setting.is_default && (
                 <Button variant="ghost" disabled={busy} onClick={() => void reset()} className="ml-auto">
@@ -514,6 +512,8 @@ function TimezonePanel({ canChange }: { canChange: boolean }) {
           <InfoTip label="time zone" side="bottom">
             Every date and time Oracle shows is in it, as are goals&apos; today, the weekly alignment report and rituals.
             Rituals on the old zone move with it.
+            {/* F-30: why Save waits before a zone is set, here rather than beside it. */}
+            {settingQ.data && !zone && " Pick a time zone to save it."}
           </InfoTip>
         }
       >
@@ -559,9 +559,7 @@ function TimezonePanel({ canChange }: { canChange: boolean }) {
               <Button type="submit" variant="solid" disabled={busy || !changed}>
                 Save
               </Button>
-              {!saved && !changed && (
-                <SaveHint testId="timezone-save-reason">{zone ? "Pick another time zone to save it." : "Pick a time zone to save it."}</SaveHint>
-              )}
+              {!saved && !changed && !!zone && <SaveHint testId="timezone-save-reason">Pick another time zone to save it.</SaveHint>}
               {saved && <SavedNote testId="timezone-saved" />}
             </div>
           </form>
@@ -697,10 +695,23 @@ export default function CompanySettingsPage() {
   const readsBranding = can(BRANDING_OPS.get);
   return (
     <>
-      <PageHeader title="Company" status={capsReady && (readsSettings || readsBranding) && !canChange ? <ViewOnly /> : undefined} />
+      <PageHeader
+        title="Company"
+        status={
+          capsReady &&
+          !canChange &&
+          (readsSettings || readsBranding) && (
+            <span className="inline-flex items-center gap-1.5">
+              <ViewOnly />
+              {/* qa-onboarding-25, F-70: why, behind the (i), not a sentence on the page. */}
+              <InfoTip label="View only" align="start" side="bottom" testId="company-owner-only">
+                Only owners set horizons and the time zone.
+              </InfoTip>
+            </span>
+          )
+        }
+      />
       <div className="flex min-w-0 flex-col gap-4">
-        {/* qa-onboarding-25: a role that cannot change them (a Set up link, a shared link) reads why. */}
-        {capsReady && !canChange && <Notice testId="company-owner-only">Only owners set horizons and the time zone.</Notice>}
         {readsSettings && (
           <>
             <HorizonsPanel />

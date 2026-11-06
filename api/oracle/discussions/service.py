@@ -81,7 +81,7 @@ STARTER_ONLY = "Only the starter can change this"
 NOT_FOUND = "Discussion not found"
 # The Runs page's checkpoint names (web/app/runs/_lib.tsx CHECKPOINT_LABEL).
 CHECKPOINT_LABEL = {
-    "baseline_confirm": "Confirm the baseline",
+    "baseline_confirm": "Confirm the Ground Truth",
     "feature_set": "Feature set",
     "priority_order": "Priority order",
     "prd_review": "PRD review",
@@ -452,10 +452,10 @@ class Labels:
             return label, f"/runs/{run.id}"
         if kind == "entity":
             entity = await self.get(Entity, s["entity_id"])
-            return (entity.title if entity else gone), "/baseline"
+            return (entity.title if entity else gone), "/ground-truth"
         if kind == "conflict":
             conflict = await self.get(Conflict, s["conflict_id"])
-            return (f"Conflict on {conflict.field}" if conflict else gone), "/baseline"
+            return (f"Conflict on {conflict.field}" if conflict else gone), "/ground-truth"
         if kind == "intake":
             intake = await self.get(ProductIntake, s["intake_id"])
             return (intake.title if intake else gone), f"/briefs/{s['intake_id']}"

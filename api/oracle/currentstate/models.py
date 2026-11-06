@@ -1,5 +1,5 @@
-"""Current state (migration 0107_feature_states): a feature's place (Desired, marked as
-already shipped, or moved to Current state by the owner) and its proof.
+"""Running today (migration 0107_feature_states): a feature's place (Desired, marked as
+already shipped, or moved to Running today by the owner) and its proof.
 
 ``feature_states``: one row per feature. ``status`` is ``desired`` (the default),
 ``shipped`` (the item chat's "Mark as already shipped" card: it exists, no proof read

@@ -25,7 +25,7 @@ async function plan(page: Page, scenario = "simple-plan", email: string = ADMIN.
 async function paper(page: Page, email: string = ADMIN.email) {
   await login(page, email);
   await page.goto("/simple/one-pagers");
-  await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Team workspaces PRD" }).click();
+  await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Saved carts PRD" }).click();
   await expect(page.getByRole("article", { name: "One-pager" })).toBeVisible();
 }
 
@@ -140,18 +140,18 @@ test.describe("desktop, no plan", () => {
   test("the editor takes the cursor; Escape and Ctrl+Enter; an empty line says why (p3-2, 27)", async ({ page }) => {
     await paper(page);
     await line(page, "not_doing-2").hover();
-    await page.getByRole("button", { name: "Edit “A mobile setup flow" }).click();
+    await page.getByRole("button", { name: "Edit “Sharing a cart with someone" }).click();
     const box = page.getByLabel("New wording for");
     await expect(box).toBeFocused();
-    expect(await box.evaluate((el: HTMLTextAreaElement) => el.selectionEnd - el.selectionStart)).toBe("A mobile setup flow".length);
+    expect(await box.evaluate((el: HTMLTextAreaElement) => el.selectionEnd - el.selectionStart)).toBe("Sharing a cart with someone else.".length);
     await page.keyboard.press("Escape");
     await expect(box).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Edit “A mobile setup flow" })).toBeFocused();
+    await expect(page.getByRole("button", { name: "Edit “Sharing a cart with someone" })).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(box).toBeFocused();
     await box.fill("");
     await expect(page.getByTestId("line-edit-empty")).toContainText("A line needs words");
-    await box.fill("A phone setup flow");
+    await box.fill("Sharing a cart with a partner.");
     await page.keyboard.press("Control+Enter");
     await expect(line(page, "not_doing-2")).toHaveAttribute("data-state", "edited");
   });
@@ -161,11 +161,11 @@ test.describe("desktop, no plan", () => {
     const text = line(page, "problem-1").getByTestId("one-pager-line-text");
     const before = (await text.boundingBox())!.width;
     await text.hover();
-    await expect(page.getByRole("button", { name: /^Edit “New workspace admins/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Edit “Shoppers build a cart/ })).toBeVisible();
     expect((await text.boundingBox())!.width).toBe(before);
-    await page.getByRole("button", { name: /Calendar access may scare admins away/ }).click();
-    const sources = page.getByRole("region", { name: /Sources of “Calendar access/ });
-    await expect(sources.getByTestId("source-line")).toHaveText("Calendar access may scare admins away");
+    await page.getByRole("button", { name: /Too many emails: one reminder per cart/ }).click();
+    const sources = page.getByRole("region", { name: /Sources of “Too many emails/ });
+    await expect(sources.getByTestId("source-line")).toHaveText("Too many emails: one reminder per cart, never more.");
   });
 
   test("the same header as a plan's, its status as the list's; the strip's legend (p3-16, 15)", async ({ page }) => {
@@ -179,6 +179,8 @@ test.describe("desktop, no plan", () => {
     await expect(page.getByRole("article", { name: "One-pager" }).getByRole("heading", { level: 1 })).toHaveCount(0);
     await expect(page.getByTestId("one-pager-meta")).toContainText(listed);
     await expect(page.getByTestId("one-pager-meta").locator("b").filter({ hasText: /\S/ }).first()).toBeVisible();
+    // C-13: Team workspaces has no roadmap slice of its own; Guided setup's strip has the legend.
+    await page.goto("/simple/one-pagers/guided-setup");
     const legend = page.getByTestId("plan-strip-legend");
     await expect(legend).toContainText("Today Oct 22");
     await expect(legend).toContainText("hatched = not confirmed");
@@ -201,14 +203,14 @@ test.describe("desktop, no plan", () => {
   test("a commenter's own proposal is theirs, and withdrawn (p3-17)", async ({ page }) => {
     await paper(page, "commenter@example.com");
     await line(page, "not_doing-1").hover();
-    await page.getByRole("button", { name: "Propose wording for “Single sign-on setup" }).click();
-    await page.getByLabel("New wording for").fill("Single sign-on, later");
+    await page.getByRole("button", { name: "Propose wording for “Carts for guests without" }).click();
+    await page.getByLabel("New wording for").fill("Carts for guests, later.");
     await page.getByRole("button", { name: "Propose", exact: true }).click();
-    const note = page.getByRole("note").filter({ hasText: "You proposed new wording for “Single sign-on setup" }).filter({ visible: true });
+    const note = page.getByRole("note").filter({ hasText: "You proposed new wording for “Carts for guests without" }).filter({ visible: true });
     await expect(note).toBeVisible();
     await expect(note).not.toContainText("Theo Brandt proposes");
     await note.getByRole("button", { name: "Withdraw" }).click();
-    await expect(page.getByRole("note").filter({ hasText: "Single sign-on setup" })).toHaveCount(0);
+    await expect(page.getByRole("note").filter({ hasText: "Carts for guests without" })).toHaveCount(0);
   });
 
   test("presenting keeps focus on the page, and Escape stops it (p3-18, 19)", async ({ page }) => {
@@ -236,8 +238,8 @@ test.describe("phone, no plan", () => {
 
   test("a touch on a line's hidden Edit opens nothing; it shows the Edit (p3-1)", async ({ page }) => {
     await paper(page);
-    const row = line(page, "bets-1");
-    // PS1 a: the calmer spacing between blocks puts the line below a phone's first screen.
+    // A line long enough to run under its hidden Edit (a Saved carts risk).
+    const row = line(page, "risks-4");
     await row.scrollIntoViewIfNeeded();
     const b = (await row.getByTestId("one-pager-line-text").boundingBox())!;
     const e = (await row.locator("[data-edit-for]").boundingBox())!;

@@ -62,8 +62,16 @@ export function sameLabels(a: Record<string, string>, b: Record<string, string>)
   return keys.length === Object.keys(b).length && keys.every((k) => a[k] === b[k]);
 }
 
+/** Pass F F-57: a pasted link reads as what it names (a Slack channel's link, a GitHub repository's). */
+function fromLink(line: string): string {
+  const slack = line.match(/slack\.com\/archives\/([A-Z0-9]+)/i);
+  if (slack) return slack[1];
+  const github = line.match(/github\.com\/([\w.-]+\/[\w.-]+?)(?:\.git)?(?:[/?#]|$)/i);
+  return github ? github[1] : line;
+}
+
 function parseLines(text: string): string[] {
-  return [...new Set(text.split(/[\n,]/).map((l) => l.trim()).filter(Boolean))];
+  return [...new Set(text.split(/[\n,]/).map((l) => fromLink(l.trim())).filter(Boolean))];
 }
 
 function Row({ item, checked, onToggle }: { item: BrowseItem; checked: boolean; onToggle: (on: boolean) => void }) {
@@ -112,6 +120,7 @@ export function BrowseList({
   onLabels,
   load,
   extra,
+  unknownLabel,
 }: {
   /** The group's name: "Slack channels". */
   label: string;
@@ -128,6 +137,11 @@ export function BrowseList({
   load: (search: string, cursor: string | null) => Promise<BrowsePage>;
   /** More fields under the list (Slack's "Since"). */
   extra?: ReactNode;
+  /**
+   * Pass F F-58: how a pick with no saved name reads ("Unknown channel"), its id small after it,
+   * never as its name; without it the pick reads by its id (a GitHub repository's name).
+   */
+  unknownLabel?: string;
 }) {
   const pasteId = useId();
   const [pasting, setPasting] = useState(connectionId === null);
@@ -188,11 +202,19 @@ export function BrowseList({
   const toggle = (id: string, on: boolean) => onPicked(on ? [...picked.filter((x) => x !== id), id] : picked.filter((x) => x !== id));
   const listed = new Set((items ?? []).map((i) => i.id));
   // Picks the current list does not show, first, while not searching.
+  const unnamed = (id: string) => !seen[id] && !labels[id];
   const extraPicks = search.trim()
     ? []
     : picked
         .filter((id) => !listed.has(id))
-        .map((id) => seen[id] ?? { id, label: labels[id] ?? id, isPrivate: false });
+        .map(
+          (id) =>
+            seen[id] ??
+            (labels[id] || !unknownLabel
+              ? { id, label: labels[id] ?? id, isPrivate: false }
+              : { id, label: unknownLabel, hint: id, meta: <span className="max-w-24 truncate font-mono">{id}</span>, isPrivate: false }),
+        );
+  const unknownPicks = unknownLabel ? picked.filter((id) => !listed.has(id) && unnamed(id)) : [];
 
   return (
     <div role="group" aria-label={label} className="flex min-w-0 flex-col gap-2.5">
@@ -224,11 +246,20 @@ export function BrowseList({
                 setPasting((v) => !v);
               }}
             >
-              {pasting ? "Pick from list" : "Paste ids"}
+              {pasting ? "Pick from list" : "Paste links"}
             </Button>
           )}
         </span>
       </div>
+      {!pasting && unknownPicks.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-text2" data-testid="unknown-picks">
+            {unknownPicks.length} {unknownLabel?.toLowerCase()}
+            {unknownPicks.length === 1 ? "" : "s"}
+          </span>
+          <Button onClick={() => onPicked(picked.filter((id) => !unknownPicks.includes(id)))}>Remove unknown</Button>
+        </div>
+      )}
 
       {pasting ? (
         <div className="flex min-w-0 flex-col gap-1.5">

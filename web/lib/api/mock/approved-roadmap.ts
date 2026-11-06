@@ -12,7 +12,8 @@
 import type { Schemas } from "@/lib/api/client";
 import type { SectionSeed } from "./fixtures";
 import { stableUuid } from "./ids";
-import { companyToday, simpleWindows, type SeedItem, type SimpleDb } from "./simple-roadmap";
+import { slugOf } from "./plan-edits";
+import { companyToday, roadmapKeyOf, simpleWindows, type SeedItem, type SimpleDb } from "./simple-roadmap";
 
 export const APPROVED_ROADMAP_SCENARIO = "approved-roadmap";
 /** The "crowded-milestones" scenario: Example trails with version 3 already approved and five
@@ -154,6 +155,41 @@ export function applyApprovedRoadmap(db: SimpleDb, slug: string, version: { numb
     moved_out: moved.length || was?.version !== version.number ? moved : was.moved_out,
   };
   return true;
+}
+
+/**
+ * Plan changes (#346): approving the version a change set proposed makes its items the roadmap's
+ * items, as Simple reads them (the API's change set writes the version's own RoadmapItem rows):
+ * an added item joins in its horizon (no dates yet), a moved or deferred one changes horizon and
+ * keeps its dates, a cut one leaves. A reorder changes nothing Simple shows.
+ */
+export function applyPlanChanges(db: SimpleDb, docSlug: string, changes: Schemas["ChangeSetOut"]["changes"]): void {
+  const roadmap = roadmapKeyOf(docSlug);
+  const w = simpleWindows(companyToday());
+  const days = (a: string, b: string) => Math.round((Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000);
+  const mine = () => db.items.filter((s) => s.roadmap === roadmap);
+  for (const c of changes) {
+    if (c.op === "add") {
+      const key = c.key ?? slugOf(c.title);
+      if (mine().some((s) => s.key === key)) continue;
+      const like = mine()[0];
+      db.items.push({ key, title: c.title, roadmap, horizon: c.horizon, ...(like?.track ? { track: like.track } : {}), ...(like?.goal ? { goal: like.goal } : {}) });
+      db.ids[key] = stableUuid(`simple-item/${key}`);
+      continue;
+    }
+    const s = mine().find((x) => x.key === c.key);
+    if (!s) continue;
+    if (c.op === "cut") db.items.splice(db.items.indexOf(s), 1);
+    else if (c.op === "move" || c.op === "defer") {
+      const to = c.op === "move" ? c.horizon : "later";
+      // Its days count from its horizon's start: moved by the windows' gap, so its dates stay.
+      const shift = days(w[s.horizon][0], w[to][0]);
+      if (s.start !== undefined) s.start += shift;
+      if (s.end !== undefined) s.end += shift;
+      if (s.milestone?.day != null) s.milestone = { ...s.milestone, day: s.milestone.day + shift };
+      s.horizon = to;
+    }
+  }
 }
 
 /** The applied version's milestones as Simple's milestone marks, on the track of the items they gate. */

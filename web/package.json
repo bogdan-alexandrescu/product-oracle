@@ -12,7 +12,8 @@
     "dev:mock": "NEXT_PUBLIC_API_MOCKS=1 next dev",
     "test:e2e": "playwright test",
     "test:ci": "node --env-file=e2e/ci.env node_modules/@playwright/test/cli.js test",
-    "test:e2e:real": "playwright test -c playwright.real.config.ts"
+    "test:e2e:real": "playwright test -c playwright.real.config.ts",
+    "prose:ratchet": "node e2e/prose-ratchet.mjs"
   },
   "dependencies": {
     "next": "16.4.2",

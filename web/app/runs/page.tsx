@@ -290,7 +290,7 @@ export default function RunsPage() {
                 No runs yet.{" "}
                 {can("create_run", true) ? "Start one from Start a run… or from the page it works on." : "Runs show here once an approver starts one."}{" "}
                 <InfoTip label="runs" align="start">
-                  Runs turn the baseline into a PRD draft: each one plans the work, gathers evidence from your sources and
+                  Runs turn the Ground Truth into a PRD draft: each one plans the work, gathers evidence from your sources and
                   writes a cited draft for review.
                 </InfoTip>
               </Empty>

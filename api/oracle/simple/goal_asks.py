@@ -50,7 +50,7 @@ async def _apply(db: AsyncSession, principal: Any, c: SimpleChange) -> None:
     to = c.target.get("to_goal_id")
     to_id = _id(to, "to_goal_id") if to else None
     if c.op == "archive_goal":
-        await goal_buckets.archive(db, goal_id, to_id)
+        await goal_buckets.archive(db, goal_id, to_id, c.by)
         return
     await goal_buckets.unarchive(db, await goal_buckets._entity(db, goal_id, "goal"))
 

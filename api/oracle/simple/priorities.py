@@ -64,6 +64,7 @@ from oracle.simple.schemas import (
     SimplePriorityRow,
     SimpleQuarter,
 )
+from oracle.trash.filter import INCLUDE_TRASHED
 
 router = APIRouter(prefix="/v1/simple", tags=["simple"])
 
@@ -278,7 +279,8 @@ def _drafts(read_: service.Read, principal: Any) -> list[SimplePriorityDraft]:
     return out
 
 
-FEATURE_CODE = re.compile(r"[A-Z]{1,3}-\d+")
+# A slice of a feature reads its number with a letter (F-15a, oracle.baseline.fixes).
+FEATURE_CODE = re.compile(r"[A-Z]{1,3}-\d+[a-j]?")
 
 
 def _initials(name: str) -> str:
@@ -491,16 +493,37 @@ def _same_as(name: str, day: date) -> set[tuple[str, date]]:
     return {(re.split(r"[\s·]", name)[0], day)} | ({("~" + words, day)} if words else set())
 
 
+# prio-company (Nov 4): a name carrying a template's lone "N" placeholder ("Milestone N
+# agents") is no name a person reads; a real name with brackets ("Beta [internal]") is.
+_PLACEHOLDER = re.compile(r"(^|\s)N(\s|$)")
+
+
+def readable(name: str | None) -> str | None:
+    """``name`` when a person can read it, else None (a placeholder left from a template)."""
+    name = (name or "").strip()
+    return name if name and not _PLACEHOLDER.search(name) else None
+
+
+def _code_of(name: str) -> str | None:
+    """A milestone's code ("M1" of "M1 · Measured"), None for a name with no code."""
+    m = _CODE.match(name)
+    return re.split(r"[\s·:.–—]", name)[0] if m else None
+
+
 async def lines(
     db: AsyncSession, principal: Any, read_: service.Read
 ) -> tuple[list[SimpleLine], dict[str, SimpleLine]]:
-    """The lines offered: Now, each key date and each dated milestone the reader sees; and the
-    line each milestone left out is drawn at (prio-line-once, below), by its key."""
+    """The lines offered: Now, each key date and each dated milestone of the roadmap the
+    reader sees (the company roadmap's while there is one: ``service.load``), each naming its
+    PRD, each once; and the line each milestone left out is drawn at (prio-line-once,
+    below), by its key."""
     docs = {e.roadmap.id: e.roadmap for e in read_.entries}
     # priorities-keydates: the roadmap's key dates as Simple › Roadmap reads them, its PRDs'
     # milestones with them.
     kds, _ = await key_dates.read_key_dates(db, principal, docs, read_.entries)
-    tracks = {e.track.id for e in read_.entries if e.track is not None}
+    kds = [k for k in kds if readable(k.name)]
+    tracks = {e.track.id: e.track for e in read_.entries if e.track is not None}
+    prds = {e.prd.id: e.prd for e in read_.entries if e.prd is not None}
     out = [NOW_LINE]
     out += [
         SimpleLine(
@@ -514,24 +537,47 @@ async def lines(
     ]
     # prio-line-once (the owner, Nov 3: "show it once"): a plan milestone the same as a PRD key
     # date on its day (_same_as: its code, or its name without the code) is that milestone,
-    # listed once, "From the PRD"; a saved pick of it draws the key date's line.
+    # listed once, "From the PRD"; a saved pick of it draws the key date's line. prio-company
+    # (Nov 4): one of the PRD's codes on any day is that milestone too (a stale copy: "M1 ·
+    # Measured" beside "M1 · Measured and mapped"), and a line the same as one listed, once.
     from_prd: dict[tuple[str, date], SimpleLine] = {}
+    by_code: dict[tuple[uuid.UUID, str], SimpleLine] = {}
+    seen: dict[tuple[str, date | None], SimpleLine] = {}
     for k, ln in zip(kds, out[1:], strict=True):
         for same_as in _same_as(k.name, k.date) if k.prd else ():
             from_prd.setdefault(same_as, ln)
+        code = _code_of(k.name)
+        if k.prd is not None and code:
+            by_code.setdefault((k.prd.id, code), ln)
+    kept = [out[0]]
+    for ln in out[1:]:
+        twin = seen.get((f"{ln.label}|{ln.prd.id if ln.prd else ''}", ln.date))
+        if twin is None:
+            seen[(f"{ln.label}|{ln.prd.id if ln.prd else ''}", ln.date)] = ln
+            kept.append(ln)
+    out = kept
     same: dict[str, SimpleLine] = {}
     for m in read_.milestones:
         if m.target_date is None or m.track_id not in tracks or m.status == "dropped":
             continue
+        if not readable(m.name):
+            continue
         key = f"milestone:{m.id}"
+        track = tracks[m.track_id]
+        code = _code_of(m.name)
         kd = next(
             (from_prd[x] for x in sorted(_same_as(m.name, m.target_date)) if x in from_prd), None
-        )
-        if kd is not None:
-            same[key] = kd
+        ) or (by_code.get((track.prd_document_id, code)) if code else None)
+        prd = prds.get(track.prd_document_id)
+        ref = SimpleDocRef(id=prd.id, slug=prd.slug, title=prd.title) if prd else None
+        ln = SimpleLine(key=key, kind="milestone", label=f"{m.name} · {_day(m.target_date)}",
+                        date=m.target_date, prd=ref)  # fmt: skip
+        twin = kd or seen.get((f"{ln.label}|{ref.id if ref else ''}", ln.date))
+        if twin is not None:
+            same[key] = twin
             continue
-        out.append(SimpleLine(key=key, kind="milestone", label=f"{m.name} · {_day(m.target_date)}",
-                              date=m.target_date))  # fmt: skip
+        seen[(f"{ln.label}|{ref.id if ref else ''}", ln.date)] = ln
+        out.append(ln)
     # Key dates and milestones in date order, one list (Now first).
     return [out[0], *sorted(out[1:], key=lambda x: x.date or date.max)], same
 
@@ -567,6 +613,35 @@ def above(e: service.Entry | None, line: SimpleLine) -> bool:
     return e.resolved.end.date <= line.date
 
 
+async def _trashed_without_live(db: AsyncSession, feature_ids: set[str]) -> set[str]:
+    """Feature ids (``ranking.features``' ``entity_id`` strings) with at least one roadmap
+    item in Trash and no live one anywhere (trash-features-goals): those leave Priorities
+    with their roadmap item, not just the reader's view of it. A feature with no roadmap
+    item at all, or whose only item sits on a roadmap this reader cannot see, keeps showing
+    as it did (its row un-reorderable): this only drops a feature actually in Trash."""
+    ids = {uuid.UUID(f) for f in feature_ids}
+    if not ids:
+        return set()
+    rows = await db.execute(
+        select(RoadmapItem.feature_id, RoadmapItem.deleted_at)
+        .where(RoadmapItem.feature_id.in_(ids))
+        .execution_options(**{INCLUDE_TRASHED: True})
+    )
+    trashed: set[str] = set()
+    live: set[str] = set()
+    for feature_id, deleted_at in rows:
+        (live if deleted_at is None else trashed).add(str(feature_id))
+    return trashed - live
+
+
+def _milestone_name(e: service.Entry | None) -> str | None:
+    """The item's milestone as a person reads it: its own name, else the track milestone's
+    it is on, else none (prio-company: never a template's placeholder)."""
+    if e is None or e.milestone is None:
+        return None
+    return readable(e.milestone.name) or readable(e.milestone.record_name)
+
+
 async def build(
     db: AsyncSession, principal: Any, line_key: str | None = None
 ) -> SimplePrioritiesOut:
@@ -579,17 +654,34 @@ async def build(
     by_feature = {str(o.feature_id): o for o in active.values()}
     names = await changes._names(db, {o.created_by for o in active.values()})
     can_change = has_role(principal.role, "commenter")
+    trashed = await _trashed_without_live(
+        db, {f.entity_id for f in ranking.features if f.entity_id not in items}
+    )
+    features = [f for f in ranking.features if f.entity_id not in trashed]
+    # prio-company (Nov 4): an owner moves every row; a feature not on the company roadmap
+    # their move adds there (targets.add_to_company). Anyone else moves what is on it.
+    owner = has_role(principal.role, "owner")
+    the_company = await company.active(db)
     code_of = {
         f.key: (items[f.entity_id].row.item_key if f.entity_id in items else f.key)
-        for f in ranking.features
+        for f in features
     }
-    id_of = {f.key: f.entity_id for f in ranking.features}
+    id_of = {f.key: f.entity_id for f in features}
+    key_of = {f.entity_id: f.key for f in features}
+    by_id = read_.by_id()
     rows: list[SimplePriorityRow] = []
     deps: dict[str, list[str]] = {}
     prd_of: list[str | None] = []
-    for f in ranking.features:
+    for f in features:
         e = items.get(f.entity_id)
-        deps[f.entity_id] = [id_of[d] for d in f.depends_on if d in id_of]
+        # roadmap-edit-fixes round 1: a feature on the roadmap needs what its item depends
+        # on, as its panel lists it; the baseline's feature edges only for one that is not.
+        needs = f.depends_on
+        if e is not None:
+            fids = [str(d.row.feature_id) for i in e.depends_on
+                    if (d := by_id.get(i)) is not None and d.row.feature_id]  # fmt: skip
+            needs = list(dict.fromkeys(key_of[x] for x in fids if x in key_of and x != f.entity_id))
+        deps[f.entity_id] = [id_of[d] for d in needs if d in id_of]
         gv = f.explanation.inputs.get("goal_value")
         prd_of.append(str(e.prd.id) if e is not None and e.prd is not None else None)
         o = active.get(f.override.id) if f.override is not None else None
@@ -602,14 +694,14 @@ async def build(
                 code=e.row.item_key if e is not None else f.key,
                 title=e.row.title if e is not None else f.title,
                 goal=_goal(f, e),
-                milestone=e.milestone.name if e is not None and e.milestone is not None else None,
+                milestone=_milestone_name(e),
                 horizon=e.row.horizon if e is not None else None,  # type: ignore[arg-type]
                 goal_value=_value(f, "goal_value"),
                 effort=_value(f, "effort"),
                 score=f.score,
                 confidence=round(f.explanation.confidence.value, 2),
                 value_estimated=bool(isinstance(gv, dict) and gv.get("estimated")),
-                depends_on=[code_of[d] for d in f.depends_on if d in code_of],
+                depends_on=[code_of[d] for d in needs if d in code_of],
                 override=SimplePriorityOverride(
                     by_name=names.get(o.created_by, f.override.by) if o else f.override.by,
                     reason=f.override.reason,
@@ -622,14 +714,16 @@ async def build(
                 end_estimated=e is not None and e.resolved.end.estimated,
                 estimate_pending=e is not None and e.row.estimate_pending,
                 no_goal=not f.serves_goal,
-                can_reorder=can_change and e is not None,
-                applies=e is not None and service.can_decide(principal, e, read_.deciders),
+                can_reorder=can_change and (e is not None or owner),
+                on_roadmap=e is not None,
+                applies=service.can_decide(principal, e, read_.deciders) if e else owner,
                 before_override=targets._snap(by_feature.get(f.entity_id)),
             )
         )
     short = await _short_codes(db)
-    for f, r in zip(ranking.features, rows, strict=True):
+    for f, r in zip(features, rows, strict=True):
         r.short_code = short.get(f.key, f.key)
+        r.own_key = r.short_code if FEATURE_CODE.fullmatch(r.short_code) else None
     _after(rows, deps)
     this_quarter, inside = await plan_quarter(db, read_)
     goal_rows = await db.scalars(select(Entity).where(Entity.type == "goal"))
@@ -653,6 +747,11 @@ async def build(
         can_change=can_change,
         line=line,
         lines=offered,
+        company_roadmap=SimpleDocRef(
+            id=the_company.id, slug=the_company.slug, title=the_company.title
+        )
+        if the_company is not None
+        else None,
     )
 
 

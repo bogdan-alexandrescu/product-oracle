@@ -231,7 +231,13 @@ async def load_features(
                         if parent is None
                         else _subgoal_weight(goal, parent, goals.values())
                     ),
-                    contribution=_contribution((edge.attrs or {}).get("contribution")),
+                    # Assumed (an approved order's link to a goal named with none): scored
+                    # on the default, marked assumed, until a person sets it.
+                    contribution=(
+                        None
+                        if (edge.attrs or {}).get("contribution_assumed")
+                        else _contribution((edge.attrs or {}).get("contribution"))
+                    ),
                     edge_status=edge.status,
                     goal_id=str(goal.id),
                     parent_key=parent.key if parent else None,
@@ -653,7 +659,7 @@ async def _override_inputs(
 async def _feature(db: AsyncSession, entity_id: uuid.UUID, field: str) -> Entity:
     e = await db.get(Entity, entity_id)
     if e is None or e.type != "feature" or e.status == "rejected":
-        raise InvalidError(f"{field} must be a feature of the baseline that is not rejected")
+        raise InvalidError(f"{field} must be a feature of the Ground Truth that is not rejected")
     return e
 
 

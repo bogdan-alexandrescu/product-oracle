@@ -29,7 +29,7 @@ test("metrics: an owner adds a metric linked to a goal and sees its row", async 
   await expect(sheet).toBeHidden();
 
   const row = page.getByTestId("metric-row").filter({ hasText: "Setup completion rate" });
-  await expect(row).toContainText("Output");
+  await expect(row).toContainText("Result");
   await expect(row).toContainText("By hand");
   await row.click();
   await expect(page.getByRole("link", { name: goal.title })).toBeVisible();

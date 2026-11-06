@@ -17,7 +17,7 @@ brief: [summary, goals, problems, brief-items, brief-roadmap, not-doing, top-ris
 
 ## Goals served {#goals}
 
-<!-- Brief: fits one slide; plain language for an all-hands. The confirmed goals (from the baseline) this cycle's bets serve, one line each with metric, target and owner, and a short code (G1, G2...) used as chips on bets. -->
+<!-- Brief: fits one slide; plain language for an all-hands. The confirmed goals (from the Ground Truth) this cycle's bets serve, one line each with metric, target and owner, and a short code (G1, G2...) used as chips on bets. -->
 
 ## Problems we are solving {#problems}
 

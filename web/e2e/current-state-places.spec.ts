@@ -4,7 +4,7 @@ import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN } from "./helpers";
 
 /*
- * Current state's word pill where a feature is named outside Priorities and the roadmap:
+ * Running today's word pill where a feature is named outside Priorities and the roadmap:
  * a feature (or its roadmap item) Oracle's Ask answer cites, and the item a review meeting's
  * agenda takes next, and each roadmap item a one-pager's plan strip lists under its row. Each
  * pill is a button whose card says what the mark means and names the feature. Against the mock
@@ -168,7 +168,7 @@ for (const size of ["desktop", "phone"] as const) {
       const p = (await pill.boundingBox())!;
       if (p.y < t.y + t.height && t.y < p.y + p.height) expect(p.x - (t.x + t.width)).toBeLessThanOrEqual(16);
       // An item with no feature behind it shows none.
-      await expect(rows.filter({ hasText: "Daily alert digest email" }).getByTestId("cs-mark")).toHaveCount(0);
+      await expect(rows.filter({ hasText: "Weekly alert digest" }).getByTestId("cs-mark")).toHaveCount(0);
       await tap(traced.getByRole("button", { name: "What New means" }));
       const card = traced.getByTestId("cs-mark-card");
       await expect(card).toBeVisible();

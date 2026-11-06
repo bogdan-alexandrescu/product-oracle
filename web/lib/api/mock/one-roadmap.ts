@@ -12,6 +12,8 @@ import { stableUuid } from "./ids";
 import type { SeedItem, SimpleDb } from "./simple-roadmap";
 
 export const ONE_ROADMAP_SCENARIO = "one-roadmap";
+/** old-milestones: "one-roadmap" with goal milestones still on the older Trust plan roadmap. */
+export const OLD_MILESTONES_SCENARIO = "old-milestones";
 export const COMPANY_SLUG = "product-roadmap";
 export const COMPANY_TITLE = "Product roadmap";
 /** The area PRDs that feed it (slug, title), and the PRD they replace. */

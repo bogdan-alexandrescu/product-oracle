@@ -308,16 +308,19 @@ async def read_key_dates(
     docs: dict[uuid.UUID, Document],
     entries: list[Any],
     views: dict[uuid.UUID, Any] | None = None,
+    prds: dict[uuid.UUID, list[Document]] | None = None,
 ) -> tuple[list[SimpleKeyDate], list[SimpleKeyDateRoadmap]]:
     """The key dates Simple › Roadmap and Simple › Priorities read (priorities-keydates, the
     owner, Nov 2: "the same way"): these roadmaps' own (:func:`roadmap_key_dates`) and each
     dated milestone of the PRDs their items come from that the reader may see
     (:func:`prd_key_dates`), in date order. ``views``: the PRDs' plans when the caller has
-    read them already (:func:`key_date_prds` names the PRDs), else read here."""
+    read them already (:func:`key_date_prds` names the PRDs), else read here; ``prds``: the
+    PRDs :func:`key_date_prds` named, when the caller has read them, else read here."""
     from oracle.simple import plan as plans
 
     own, roadmaps = await roadmap_key_dates(db, principal, docs)
-    prds = key_date_prds(principal, docs, entries)
+    if prds is None:
+        prds = await key_date_prds(db, principal, docs, entries)
     if views is None:
         views = await plans.views(db, {p.id for of in prds.values() for p in of})
     old = published_copies(docs, prds, views)
@@ -346,12 +349,13 @@ def published_copies(
     }
 
 
-def key_date_prds(
-    principal: Any, docs: dict[uuid.UUID, Document], entries: list[Any]
+async def key_date_prds(
+    db: AsyncSession, principal: Any, docs: dict[uuid.UUID, Document], entries: list[Any]
 ) -> dict[uuid.UUID, list[Document]]:
     """roadmap-keydates: per roadmap, the PRDs its items come from that the reader may see,
-    by title."""
+    in the company PRD order (prd-order)."""
     from oracle.docs import visibility
+    from oracle.docs.prd_order import prd_ranks
 
     found: dict[uuid.UUID, dict[uuid.UUID, Document]] = {}
     for e in entries:
@@ -362,7 +366,11 @@ def key_date_prds(
             and not getattr(e.prd, "deleted_at", None)
         ):
             found.setdefault(e.roadmap.id, {})[e.prd.id] = e.prd
-    return {r: sorted(of.values(), key=lambda d: d.title) for r, of in found.items()}
+    if not found:
+        return {}
+    rank = await prd_ranks(db)
+    last = len(rank) + 1
+    return {r: sorted(of.values(), key=lambda d: rank.get(d.id, last)) for r, of in found.items()}
 
 
 async def _current(

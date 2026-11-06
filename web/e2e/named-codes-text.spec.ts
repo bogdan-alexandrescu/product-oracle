@@ -62,11 +62,11 @@ test("hover and Enter open the card; a range lists its members; Go to section op
   await expect(card.getByTestId("card-members").getByRole("listitem")).toHaveCount(3);
   await page.keyboard.press("Escape");
 
-  // A goal opens on the Baseline.
+  // A goal opens on the Ground Truth.
   await s.getByTestId("named-code").filter({ hasText: "G-B" }).click();
   await expect(card).toContainText("Goal");
   await expect(card.getByTestId("card-name")).toHaveText("Growth");
-  await expect(card.getByRole("link", { name: "Open" })).toHaveAttribute("href", /^\/baseline\?entity=/);
+  await expect(card.getByRole("link", { name: "Open" })).toHaveAttribute("href", /^\/ground-truth\?entity=/);
   await page.keyboard.press("Escape");
 
   await s.getByTestId("named-code").filter({ hasText: "F-28" }).click();
@@ -98,7 +98,7 @@ test("an Inbox row stays one plain link; its expanded detail names the codes in 
   const card = page.getByTestId("code-card");
   await expect(card).toBeVisible();
   await expect(card.getByTestId("card-name")).toHaveText("Growth");
-  await expect(card.getByRole("link", { name: "Open" })).toHaveAttribute("href", /^\/baseline\?entity=/);
+  await expect(card.getByRole("link", { name: "Open" })).toHaveAttribute("href", /^\/ground-truth\?entity=/);
   await page.keyboard.press("Escape");
 
   await more.click();

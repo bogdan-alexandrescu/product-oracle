@@ -29,15 +29,17 @@ def citation_contract() -> str:
     return (
         "Citation contract: citations are a list under citations in the YAML front matter; "
         f"each has id, source (one of: {sources}), ref (a URL to the item; for oracle, the "
-        'baseline item\'s kind and key, e.g. "baseline decision <key>"), title, excerpt and '
+        'Ground Truth item\'s kind and key, e.g. "baseline decision <key>": an identifier Oracle '
+        "reads, never shown to people, who read it as the Ground Truth's decision <key>), "
+        "title, excerpt and "
         "retrieved_at (when you read it, ISO 8601), and may have item (the id of the source "
         f"item you read), confidence ({CONFIDENCE_RANGE}: how much the evidence counts; "
         "null when there is no score, with confidence_note saying why) and low_confidence "
         "(true when the confidence is under the company's low threshold). Every [c:id] chip "
         "in the body must match a citation's id. Oracle refuses a draft with any other "
         f"source, a confidence outside {CONFIDENCE_MIN} to {CONFIDENCE_MAX}, a ref with "
-        "a scheme other than http, https or urn (for oracle, one that names no baseline "
-        "item of the company), or a chip that matches no id."
+        "a scheme other than http, https or urn (for oracle, one that names no Ground "
+        "Truth item of the company), or a chip that matches no id."
     )
 
 
@@ -153,6 +155,11 @@ class DocumentSummary(ORM):
     source: VersionSource | None = None
     # one-roadmap-many-prds: the company's one roadmap, which every PRD feeds.
     company_roadmap: bool = False
+    # prd-order: a PRD's stored place (1 = first; an owner's Move up / Move down), and its
+    # place in the one company PRD order every page lists PRDs in (oracle.docs.prd_order).
+    # Null for every other kind.
+    position: int | None = None
+    order: int | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -163,6 +170,25 @@ class DocumentSummary(ORM):
         elif self.audience is None:
             self.audience = "team"
         return self
+
+
+class PrdMoveIn(BaseModel):
+    """prd-order: one place up or down in the company PRD order."""
+
+    to: Literal["up", "down"]
+
+
+class PrdPlaceIn(BaseModel):
+    """prd-order: a PRD's stored place (1 = first; null: none)."""
+
+    document_id: uuid.UUID
+    position: int | None = Field(default=None, ge=1)
+
+
+class PrdOrderIn(BaseModel):
+    """prd-order: PRDs' stored places to put back (the One-pagers' Undo after a move)."""
+
+    positions: list[PrdPlaceIn] = Field(min_length=1, max_length=1000)
 
 
 class VersionSummary(ORM):
