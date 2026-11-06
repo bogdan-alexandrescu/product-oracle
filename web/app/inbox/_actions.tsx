@@ -234,7 +234,7 @@ export function InboxActions({
   return (
     <span
       data-inbox-actions
-      className="inline-flex flex-wrap items-center justify-end gap-1.5 whitespace-nowrap min-[601px]:flex-nowrap max-[600px]:flex max-[600px]:w-full max-[600px]:justify-start"
+      className="inline-flex flex-wrap items-center justify-end gap-1.5 whitespace-nowrap min-[1100px]:flex-nowrap max-[600px]:flex max-[600px]:w-full max-[600px]:justify-start"
     >
       {primary && (
         <Button disabled={busy} onClick={onPrimary}>
