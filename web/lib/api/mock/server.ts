@@ -590,6 +590,7 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * pricing roadmap's decider (#723 S1 Home review).
  * "trash-reviewer" as "simple-deciders" with Avery Lane the alerts roadmap's required reviewer
  * (trash-features-goals review 4).
+ * "parts-tree" as "simple-deciders" with a published three-level tree of parts (panel-menu fix round).
  * "simple-home-move" as "simple-home" plus a "Move the dependents" proposal Home's Accept confirms.
  * "simple-home-same-name" as "simple-home" plus a second goal named Grow retention and a proposal to change an owner.
  * "goal-order" as "simple-home" with five goals in a set order, each with work; "goal-order-hard" adds three more and an archived one.
@@ -962,6 +963,19 @@ function seedTrashReviewerScenario(): Db {
   const db = seedSimpleDecidersScenario();
   const avery = db.members.find((m) => m.email === "avery.lane@example.com")!;
   db.simple_roadmap!.reviewers = { "alerts-roadmap": [avery.id] };
+  return db;
+}
+
+/**
+ * panel-menu fix round "parts-tree" scenario: "simple-deciders" with a published tree of parts at
+ * three levels, Alert rules engine > Alert routing by team > Alert history export, so every role
+ * reads the same tree.
+ */
+function seedPartsTreeScenario(): Db {
+  const db = seedSimpleDecidersScenario();
+  const items = db.simple_roadmap!.items;
+  items.find((i) => i.key === "alert-sso")!.parent = "alert-rules";
+  items.find((i) => i.key === "alert-export")!.parent = "alert-sso";
   return db;
 }
 
@@ -3452,6 +3466,8 @@ function load(): Db {
                 ? seedSimpleDecidersScenario
               : scenario === "trash-reviewer"
                 ? seedTrashReviewerScenario
+              : scenario === "parts-tree"
+                ? seedPartsTreeScenario
               : scenario === "meeting-agenda"
                 ? seedMeetingAgendaScenario
               : scenario === "simple-cross-prd-dates"

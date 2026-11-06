@@ -142,7 +142,8 @@ for (const size of SIZES)
         await expect(toasts(page).getByText(/Merged 'Alert history export' into Mobile alert push proposed/)).toBeVisible();
         await expect(panel(page).getByTestId("item-merged")).toHaveCount(0);
 
-        await menu(page, "Delete feature");
+        // As a row's Delete: who may not decide proposes it.
+        await menu(page, "Propose: delete");
         await expect(toasts(page)).toContainText("Sent: delete Alert history export. Its decider decides.");
         await expect(panel(page)).toBeVisible();
         await expect(row(page, "alert-export")).toHaveCount(1);
