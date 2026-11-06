@@ -105,7 +105,7 @@ test.describe("desktop", () => {
 
   test("qa-simple-home-16: with nothing waiting, Home says so in one line", async ({ page }) => {
     await signIn(page, ADMIN.email, "empty");
-    await expect(home(page).getByTestId("home-nothing-waits")).toHaveText(/^Nothing waits on you\. .+ Open the roadmap$/);
+    await expect(home(page).getByTestId("home-nothing-waits")).toHaveText(/^Nothing waiting.*Open the roadmap$/);
     await expect(home(page).getByTestId("home-decisions-empty")).toHaveCount(0);
     await expect(home(page).getByTestId("home-proposals-empty")).toHaveCount(0);
     await expect(home(page).getByTestId("home-summary-decisions")).toHaveCount(0);

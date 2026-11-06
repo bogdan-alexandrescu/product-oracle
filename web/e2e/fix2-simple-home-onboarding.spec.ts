@@ -92,7 +92,10 @@ test("qa-onboarding-48: a new company's owner switches to Simple, sees the setup
 
   // The welcome and its steps, first on a new company's Home (above the empty goal band).
   await expect(setupCard(page).getByRole("heading", { name: "Welcome: set up Oracle" })).toBeVisible();
-  await expect(setupCard(page)).toContainText("connect your tools, pick the sources it reads, then build the baseline");
+  // F-30: how setup works is in the title's (i).
+  await setupCard(page).getByRole("button", { name: "About setting up Oracle" }).click();
+  await expect(setupCard(page).getByRole("tooltip")).toContainText("connect your tools, pick the sources it reads, then build the baseline");
+  await page.keyboard.press("Escape");
   await expect(progress(page)).toHaveText("2 of 8 done");
   await expect(setupCard(page).getByTestId("home-setup-step")).toHaveText([
     // fix4 (qa-onboarding-19): Detailed's words and figures.

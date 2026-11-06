@@ -32,10 +32,11 @@ async function newCompany(page: Page) {
 /** `text` is not on the page in `scope` until the (i) named "About <label>" is clicked; then it shows. */
 async function behindTip(scope: Locator, label: string, text: string) {
   await expect(scope.getByText(text, { exact: false }).filter({ visible: true })).toHaveCount(0);
-  await scope.getByRole("button", { name: `About ${label}` }).click();
+  const tip = scope.getByRole("button", { name: `About ${label}` });
+  await tip.click();
   await expect(scope.getByRole("tooltip").filter({ hasText: text })).toBeVisible();
-  // Closed again, so the next tip opens on its own.
-  await scope.page().keyboard.press("Escape");
+  // Unpinned again (Escape would close Build the baseline's dialog too).
+  await tip.click();
 }
 
 /** At 390 px wide the page does not scroll sideways. */
@@ -108,7 +109,7 @@ test("Build the baseline: what it does is in the title's (i)", async ({ page }) 
 
 test("A brief that is not here: why is in the title's (i)", async ({ page }) => {
   await login(page, ADMIN.email);
-  await page.goto("/intakes/no-such-brief");
+  await page.goto("/intakes/c5000000-0000-4000-8000-0000000000ff");
   await expect(page.getByRole("heading", { level: 1, name: /This brief is not here/ })).toBeAttached();
   await behindTip(page.locator("body"), "a brief that is not here", "It may have been drafted into a PRD, archived, or deleted. A drafted brief lives on as its PRD; a deleted one waits in Trash for a while.");
   await expect(page.getByTestId("intake-gone").getByRole("link", { name: "Back to PRDs" })).toBeVisible();

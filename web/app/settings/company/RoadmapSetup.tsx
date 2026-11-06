@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { Button, Notice, Panel } from "@/components/ds";
+import { Button, InfoTip, Notice, Panel } from "@/components/ds";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -135,7 +135,15 @@ export function TeamCapacityPanel({ canChange }: { canChange: boolean }) {
   };
   return (
     <div id="team-capacity" className="scroll-mt-4" data-testid="team-capacity-panel">
-      <Panel title="Team capacity">
+      <Panel
+        title="Team capacity"
+        tools={
+          // F-30: what the team is for, in the title's (i).
+          <InfoTip label="team capacity" side="bottom">
+            One team builds every PRD&apos;s items, in order. Dates on the roadmap follow its size and focus.
+          </InfoTip>
+        }
+      >
         {settingQ.error && (
           <div className="p-4">
             <Notice tone="error">{settingQ.error}</Notice>
@@ -150,7 +158,6 @@ export function TeamCapacityPanel({ canChange }: { canChange: boolean }) {
               void save();
             }}
           >
-            <p className="px-4 pt-3 text-sm text-text2 max-[600px]:px-3">One team builds every PRD&apos;s items, in order. Dates on the roadmap follow its size and focus.</p>
             <div className={ROW}>
               <label htmlFor="team-size" className={ROW_LABEL}>
                 Team size

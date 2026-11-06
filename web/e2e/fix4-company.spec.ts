@@ -68,7 +68,11 @@ test("qa-settings-13: every section enables Save only after a change, with the h
 
   // Horizons: the defaults are confirmed by Save; once stored, Save waits for a change.
   const horizons = page.locator("#horizons");
-  await expect(horizons.getByTestId("horizons-save-reason")).toHaveText("Save keeps the default horizons.");
+  // F-30: why Save is on with the defaults is in the panel's (i).
+  await expect(horizons.getByTestId("horizons-save-reason")).toHaveCount(0);
+  await horizons.getByRole("button", { name: "About horizons" }).click();
+  await expect(horizons.getByRole("tooltip")).toContainText("Save keeps the default horizons.");
+  await page.keyboard.press("Escape");
   await horizons.getByLabel("Now").selectOption("2");
   await expect(horizons.getByTestId("horizons-save-reason")).toHaveCount(0);
   await horizons.getByRole("button", { name: "Save" }).click();
@@ -88,7 +92,10 @@ test("qa-settings-13: every section enables Save only after a change, with the h
   // Time zone: waits for a pick, then for another one.
   const panel = timezone(page);
   await expect(panel.getByRole("button", { name: "Save" })).toBeDisabled();
-  await expect(panel.getByTestId("timezone-save-reason")).toHaveText("Pick a time zone to save it.");
+  await expect(panel.getByTestId("timezone-save-reason")).toHaveCount(0);
+  await panel.getByRole("button", { name: "About time zone" }).click();
+  await expect(panel.getByRole("tooltip")).toContainText("Pick a time zone to save it.");
+  await page.keyboard.press("Escape");
   const zone = panel.getByRole("combobox", { name: "Company time zone" });
   await zone.fill("Berlin");
   await panel.getByRole("listbox", { name: "Time zones" }).locator('[data-zone="Europe/Berlin"]').click();

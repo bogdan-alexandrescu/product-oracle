@@ -109,7 +109,9 @@ test.describe("at 1440", () => {
     await openHome(page, "viewer@example.com");
     const empty = page.getByTestId("home-needs-empty");
     await expect(empty).toContainText("Nothing waiting");
-    await expect(empty.getByTestId("home-needs-empty-what")).toHaveText("Questions someone asks you show here.");
+    // F-30: what shows here is in the line's (i).
+    await empty.getByTestId("home-needs-empty-what").click();
+    await expect(empty.getByRole("tooltip")).toHaveText("Questions someone asks you show here.");
     await empty.getByRole("link", { name: "Read the plan" }).click();
     await expect(page).toHaveURL(/\/plan$/);
   });
