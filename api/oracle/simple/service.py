@@ -97,6 +97,9 @@ class Entry:
     # roadmap-edit-fixes: the stored key that names each dependency (another PRD's feature
     # key is neither the item's key nor its code), so a removal sends that key.
     depends_key_of: dict[uuid.UUID, str] = field(default_factory=dict)
+    # roadmap-edit-fixes round 1: every stored key that names each dependency (its key and
+    # its feature's key, as an old draft and the panel each wrote): a removal drops them all.
+    depends_keys_of: dict[uuid.UUID, list[str]] = field(default_factory=dict)
     blockers: list[constraints.Blocker] = field(default_factory=list)
     suggestion: RoadmapDateSuggestion | None = None
     # plan-model review: the span of all the item's open slice suggestions (what Accept
@@ -466,12 +469,16 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
     feature_keys = await company.feature_keys_of(db, [e.row for e in entries])
     for version_rows in versions.values():
         at = company.resolve_dependencies(version_rows, feature_keys)
+        loose = _loose_keys(version_rows, feature_keys)
         for row in version_rows:
             e = entry_of[row.id]
             for k in row.depends_on or []:
-                for d in at.get(k, ()):
+                for d in at.get(k) or loose.get(k.lower(), ()):
                     dep = entry_of[d.id]
-                    if dep is not e and d.id not in e.depends_on:
+                    if dep is e:
+                        continue
+                    e.depends_keys_of.setdefault(d.id, []).append(k)
+                    if d.id not in e.depends_on:
                         e.depends_on.append(d.id)
                         e.depends_key_of[d.id] = k
                         dep.needed_by.append(e.row.id)
@@ -837,6 +844,23 @@ def prd_section_label(section_key: str, heading: str | None, name: str = "") -> 
 
 # A leading code ("F-06 ", "F-05b ") on a section's label.
 _LEADING_CODE = re.compile(r"^[A-Z][A-Z0-9]*-\d+[a-z]?\s+")
+
+
+def _loose_keys(
+    rows: list[RoadmapItem], feature_keys: dict[uuid.UUID, str]
+) -> dict[str, list[RoadmapItem]]:
+    """roadmap-edit-fixes round 1: what a stored dependency key names when it is no item key
+    or feature key as stored (company.resolve_dependencies): the same in any case, or a code
+    (its PRD section's, "f-03", or the one its title carries, "F-19 Pipeline"), as
+    set_depends accepts them, so a dependency the panel lists is read (Needed by) and
+    removable."""
+    out: dict[str, list[RoadmapItem]] = {}
+    for r in rows:
+        names = (r.item_key, feature_keys.get(r.id), _prd_code(r.prd_section_key),
+                 coded_title(r.title, None)[0])  # fmt: skip
+        for n in dict.fromkeys(n.lower() for n in names if n):
+            out.setdefault(n, []).append(r)
+    return out
 
 
 def coded_title(title: str, code: str | None) -> tuple[str | None, str]:

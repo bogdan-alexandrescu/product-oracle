@@ -865,6 +865,11 @@ async def _plan(
         clean = list(dict.fromkeys(" ".join(str(k or "").split()) for k in keys))
         if any(not k or len(k) > TITLE_MAX for k in clean) or row.item_key in clean:
             raise ChangeError(422, "after.depends_on: item or feature keys, never the item's own")
+        # roadmap-edit-fixes round 1: a removed key's item goes, by every key that names it.
+        gone = {k for k in row.depends_on or [] if k not in clean}
+        for keys_ in entry.depends_keys_of.values():
+            if gone & set(keys_):
+                clean = [k for k in clean if k not in keys_]
         added = [k for k in clean if k not in (row.depends_on or [])]
         unknown = await _unknown_keys(db, added, read_)
         if unknown:

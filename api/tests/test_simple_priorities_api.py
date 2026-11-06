@@ -131,8 +131,10 @@ async def test_read_order_and_rows(client):
     assert (one["can_reorder"], one["applies"], one["value_estimated"]) == (True, True, False)
     assert one["after"] is None
     assert rows["pay-3"]["milestone"] == "Beta"
-    assert rows["pay-3"]["depends_on"] == ["pay-2"]
-    assert rows["pay-3"]["after"] == {"code": "pay-2", "title": "Pay 2"}
+    # roadmap-edit-fixes round 1: a feature on the roadmap needs what its item depends on (its
+    # panel's list); the baseline edge exports -> sync alone is not shown there, so not here.
+    assert rows["pay-3"]["depends_on"] == []
+    assert rows["pay-3"]["after"] is None
     assert rows["pay-2"]["above_line"] is False and rows["pay-2"]["after"] is None
     ins = rows["insights"]
     assert (ins["item_id"], ins["horizon"], ins["can_reorder"]) == (None, None, False)

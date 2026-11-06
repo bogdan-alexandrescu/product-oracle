@@ -126,7 +126,9 @@ def check(nodes: list[Node]) -> dict[str, list[Flag]]:
         flags: list[Flag] = []
         for dep_id in n.depends_on:
             dep = by_id.get(dep_id)
-            if dep is None or dep.id == n.id or dep.status == "cut":
+            # roadmap-edit-fixes round 1: a done dependency is met whatever its dates, and a
+            # cut item's own links break nothing.
+            if dep is None or dep.id == n.id or dep.status in ("cut", "done") or n.status == "cut":
                 continue
             if dep.end.estimated and n.start.estimated:
                 continue

@@ -610,12 +610,21 @@ async def build(
         for f in features
     }
     id_of = {f.key: f.entity_id for f in features}
+    key_of = {f.entity_id: f.key for f in features}
+    by_id = read_.by_id()
     rows: list[SimplePriorityRow] = []
     deps: dict[str, list[str]] = {}
     prd_of: list[str | None] = []
     for f in features:
         e = items.get(f.entity_id)
-        deps[f.entity_id] = [id_of[d] for d in f.depends_on if d in id_of]
+        # roadmap-edit-fixes round 1: a feature on the roadmap needs what its item depends
+        # on, as its panel lists it; the baseline's feature edges only for one that is not.
+        needs = f.depends_on
+        if e is not None:
+            fids = [str(d.row.feature_id) for i in e.depends_on
+                    if (d := by_id.get(i)) is not None and d.row.feature_id]  # fmt: skip
+            needs = list(dict.fromkeys(key_of[x] for x in fids if x in key_of and x != f.entity_id))
+        deps[f.entity_id] = [id_of[d] for d in needs if d in id_of]
         gv = f.explanation.inputs.get("goal_value")
         prd_of.append(str(e.prd.id) if e is not None and e.prd is not None else None)
         o = active.get(f.override.id) if f.override is not None else None
@@ -635,7 +644,7 @@ async def build(
                 score=f.score,
                 confidence=round(f.explanation.confidence.value, 2),
                 value_estimated=bool(isinstance(gv, dict) and gv.get("estimated")),
-                depends_on=[code_of[d] for d in f.depends_on if d in code_of],
+                depends_on=[code_of[d] for d in needs if d in code_of],
                 override=SimplePriorityOverride(
                     by_name=names.get(o.created_by, f.override.by) if o else f.override.by,
                     reason=f.override.reason,
