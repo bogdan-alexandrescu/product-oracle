@@ -327,11 +327,11 @@ async def run(db: AsyncSession) -> GroundTruthOut:
     for i in items:
         if i.feature_id in truth_ids or i.id in by_code:
             continue
-        linked = by_id.get(i.feature_id) if i.feature_id is not None else None
+        own = by_id.get(i.feature_id) if i.feature_id is not None else None
         target = str(i.id)
         parent = slice_of[i.id][1] if i.id in slice_of else None
         if (
-            linked is None
+            own is None
             and parent is not None
             and parent not in truth_codes
             and (i.prd_document_id, parent) not in missing
@@ -345,15 +345,15 @@ async def run(db: AsyncSession) -> GroundTruthOut:
             continue
         # Linked to a feature a run proposed: an approver confirms it (the owner, Nov 5).
         first = (
-            ("confirm_feature", str(linked.id))
-            if linked is not None and linked.status == "proposed"
+            ("confirm_feature", str(own.id))
+            if own is not None and own.status == "proposed"
             else ("add_to_ground_truth", target)
         )
         flag(
             "unlinked_item",
             [first, ("link_to_feature", target)],
             item=item_ref(i),
-            feature=ref(linked) if linked is not None else None,
+            feature=ref(own) if own is not None else None,
             where=where_of(i),
         )
 

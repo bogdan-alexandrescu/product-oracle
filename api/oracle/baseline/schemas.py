@@ -1,3 +1,4 @@
+import re
 import uuid
 from datetime import date, datetime
 from typing import Any, Literal
@@ -43,6 +44,11 @@ ConflictStatus = Literal["open", "resolved", "logged"]
 LinkKind = Literal["notion", "google_docs", "web"]
 
 KEY_PATTERN = r"^[a-z0-9][a-z0-9._-]*$"
+# A feature's key may be its F-code (F-09, a slice F-15a), as Give it a code stores it, so
+# Add to Ground Truth makes a PRD's feature or a slice's feature with its code
+# (docs/ground-truth.md). A feature's only.
+FEATURE_CODE_KEY = r"[A-Z]{1,3}-\d+[a-j]?"
+CREATE_KEY_PATTERN = rf"^(?:[a-z0-9][a-z0-9._-]*|{FEATURE_CODE_KEY})$"
 
 
 class ORM(BaseModel):
@@ -54,7 +60,7 @@ class ORM(BaseModel):
 
 class EntityCreate(BaseModel):
     type: EntityType
-    key: str = Field(min_length=1, max_length=120, pattern=KEY_PATTERN)
+    key: str = Field(min_length=1, max_length=120, pattern=CREATE_KEY_PATTERN)
     title: str = Field(min_length=1)
     body: str | None = None
     attrs: dict[str, Any] = {}
@@ -65,6 +71,12 @@ class EntityCreate(BaseModel):
     origin: WriteOrigin = "user"
     run_id: uuid.UUID | None = None
     reason: str | None = None
+
+    @model_validator(mode="after")
+    def _code_key_is_a_features(self) -> "EntityCreate":
+        if self.type != "feature" and re.fullmatch(FEATURE_CODE_KEY, self.key):
+            raise ValueError("Only a feature's key can be a feature code.")
+        return self
 
 
 class EntityPatch(BaseModel):
