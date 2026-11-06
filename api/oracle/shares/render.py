@@ -194,7 +194,7 @@ def reader_body(body_md: str, section_key: str, items: Sequence[ItemView] = ()) 
     table no column every row leaves empty and, under a goal group's heading, no Goal
     column (it repeats the heading). The first column always stays. A goal group's rows
     are Board's items of that group (:func:`variants.board_group`, by key), each card
-    with its dates and delivery state (E-14): its When and Status columns stay."""
+    with its dates and delivery state (E-14)."""
     from oracle.roadmap import variants
 
     group = variants.spans_row(section_key)
@@ -223,7 +223,6 @@ def reader_body(body_md: str, section_key: str, items: Sequence[ItemView] = ()) 
             n
             for n, name in enumerate(head)
             if n == 0
-            or (group and n in (1, 2))
             or (
                 not (group and name.strip("* ").lower() in ("goal", "goals"))
                 and any(r[n].strip() for r in rows)

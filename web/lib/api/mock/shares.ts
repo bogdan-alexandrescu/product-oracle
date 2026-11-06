@@ -763,7 +763,7 @@ const joinRow = (cells: string[]) => `| ${cells.join(" | ")} |`;
  * A section's text as a link holder reads it (qa-docs-12, qa-docs-13; as the API's render.reader_body): no
  * left-out line nor an item's no-goal flag, and in each table no column every row leaves empty and, under a goal group's heading, no Goal
  * column (it repeats the heading). The first column always stays. A goal group's rows are Board's items of that group
- * (`boardGroup`, by key), each card with its dates and delivery state (E-14): its When and Status columns stay.
+ * (`boardGroup`, by key), each card with its dates and delivery state (E-14).
  */
 export function readerBody(md: string, sectionKey: string, items: BoardItem[] = []): string {
   const group = GROUP_KEY.test(sectionKey);
@@ -784,7 +784,7 @@ export function readerBody(md: string, sectionKey: string, items: BoardItem[] = 
     if (group) [head, rows] = withWhen(cols, rows, boardGroup(items, sectionKey));
     const keep = head
       .map((name, n) => ({ name: name.replace(/^[*\s]+|[*\s]+$/g, "").toLowerCase(), n }))
-      .filter(({ name, n }) => n === 0 || (group && (n === 1 || n === 2)) || (!(group && (name === "goal" || name === "goals")) && rows.some((r) => r[n].trim())))
+      .filter(({ name, n }) => n === 0 || (!(group && (name === "goal" || name === "goals")) && rows.some((r) => r[n].trim())))
       .map(({ n }) => n);
     out.push(joinRow(keep.map((n) => head[n])), "|" + "---|".repeat(keep.length), ...rows.map((r) => joinRow(keep.map((n) => r[n]))));
     i = end;
