@@ -357,7 +357,7 @@ function SummaryCard({ occ, canAsk, onChanged }: { occ: Occurrence; canAsk: bool
   const makes = digest
     ? "Oracle writes this week's digest from the findings below"
     : metrics
-      ? "Oracle drafts an explanation for each open variance below"
+      ? "Oracle drafts an explanation for each open unusual week below"
       : "Oracle reads this pre-read and writes a short summary of it for the attendees";
   const words = digest
     ? { title: "Digest", ask: "Write the digest with Oracle", running: "Writing the digest…", failed: "Digest failed · Write the digest with Oracle to retry", none: "No digest" }

@@ -67,7 +67,7 @@ async def get_variance(
         stmt = stmt.with_for_update()
     row = await db.scalar(stmt)
     if row is None:
-        raise _missing("Variance")
+        raise _missing("Unusual week")
     return row
 
 
@@ -79,9 +79,9 @@ async def _check(db: AsyncSession, m: dict[str, Any], metric: Metric | None) -> 
         raise MetricError(f"Unknown unit {m['unit']!r}: use a goal unit (%, USD, ms, ...)")
     if m["kind"] == "input":
         if m.get("drives_metric_id") is None:
-            raise MetricError("An input needs the output it drives")
+            raise MetricError("A driver needs the result it drives")
         if m.get("goal_id") is not None:
-            raise MetricError("Only an output links a goal")
+            raise MetricError("Only a result links a goal")
         if metric is not None and m["drives_metric_id"] == metric.id:
             raise MetricError("A metric cannot drive itself")
         target = await db.get(Metric, m["drives_metric_id"])
@@ -89,9 +89,9 @@ async def _check(db: AsyncSession, m: dict[str, Any], metric: Metric | None) -> 
             raise MetricError("The metric it drives was not found")
         if target.kind != "output":
             # Inputs drive outputs only, so drives links never make a cycle.
-            raise MetricError("An input drives an output, never another input")
+            raise MetricError("A driver drives a result, never another driver")
     elif m.get("drives_metric_id") is not None:
-        raise MetricError("An output drives no other metric")
+        raise MetricError("A result drives no other metric")
     if m.get("goal_id") is not None:
         goal = await db.get(Entity, m["goal_id"])
         if goal is None or goal.type != "goal" or goal.status != "confirmed":
@@ -286,7 +286,7 @@ async def test_query(db: AsyncSession, query: str) -> tuple[list[MetricTestWeek]
 
 def _lock(row: MetricVariance, lock_version: int | None) -> None:
     if lock_version is not None and lock_version != row.lock_version:
-        raise MetricError("The variance changed since you opened it; reload it", 409)
+        raise MetricError("The unusual week changed since you opened it; reload it", 409)
 
 
 async def explain(
@@ -307,7 +307,7 @@ async def unknown(
 ) -> MetricVariance:
     _lock(row, lock_version)
     if row.status in ("explained", "noise"):
-        raise MetricError("This variance is already answered", 409)
+        raise MetricError("This unusual week is already answered", 409)
     zone = await company_time.company_time_zone(db)
     today = await company_today(db, zone)
     if not today < find_out_by <= today + timedelta(days=MAX_FIND_OUT_DAYS):

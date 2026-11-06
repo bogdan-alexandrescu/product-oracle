@@ -857,7 +857,7 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
     if (r.kind === REBUILD) return fail(409, "Start the baseline rebuild from the Baseline page");
     if (r.kind === DIGEST.kind && !ctx.marketWrites()) return fail(409, "Oracle does not write the digest at Observe");
     const special = FLOW_FOR_KIND[r.kind];
-    if (special?.flow === "metrics_variance" && !ctx.openVariances?.(o.id)) return fail(409, "No open variance to explain");
+    if (special?.flow === "metrics_variance" && !ctx.openVariances?.(o.id)) return fail(409, "This review has no open unusual week to explain");
     const id = ctx.uuid();
     Object.assign(o, { summary_state: "running", summary_run_id: id, summary_reads: 0, summary_note: null });
     return json(201, { id, flow: special?.flow ?? "ritual_summary", status: "running", estimate_usd: priceOf(r.kind) });

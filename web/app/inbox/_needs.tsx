@@ -1997,7 +1997,7 @@ export function metricNeeds(inbox: InboxOut, seenBefore: string | null | undefin
     const fresh = seenBefore !== undefined && (seenBefore === null || raised > Date.parse(seenBefore));
     const label =
       r.reason === "explain"
-        ? `Explain a variance · ${r.metric_title} · week of ${calendarDay(r.week_start)}`
+        ? `Explain an unusual week · ${r.metric_title} · week of ${calendarDay(r.week_start)}`
         : r.reason === "find_out"
           ? `Find out · ${r.metric_title} · due ${r.due_on ? calendarDay(r.due_on) : "now"}`
           : `Metric not read for a day · ${r.metric_title}`;

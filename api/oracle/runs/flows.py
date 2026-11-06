@@ -1304,8 +1304,8 @@ FLOWS: dict[str, FlowDef] = {
         FlowDef(
             key="metrics_variance",
             member_output=True,
-            title="Variance explanations",
-            description="Oracle drafts an explanation of each open variance of a weekly "
+            title="Unusual week explanations",
+            description="Oracle drafts an explanation of each open unusual week of a weekly "
             "metrics review from what it can read, and says so when nothing explains it "
             "(H5).",
             target_kind=None,
@@ -1319,7 +1319,7 @@ FLOWS: dict[str, FlowDef] = {
             segments=(
                 SegmentDef(
                     name="explain",
-                    title="Variance explanations",
+                    title="Unusual week explanations",
                     roles=("analyst",),
                     scopes=READ,
                     outputs=("summary.md", "variances.yaml"),
