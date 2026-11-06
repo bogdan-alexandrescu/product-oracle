@@ -222,4 +222,6 @@ test("F-78: a long wait reads in days, says last update, and a step not heard fr
   await expect(first.getByTestId("agent-elapsed")).toHaveText(/^3 days elapsed$/);
   await expect(progress.getByTestId("segment-no-news")).toHaveText(/^No news since [A-Z][a-z]{2} \d{1,2}/);
   await expect(progress).not.toContainText(/\d{2,}h \d{2}m/);
+  await expect(progress.getByRole("button", { name: "Refresh progress" })).toBeVisible();
+  await expect(progress.getByRole("button", { name: "Cancel run" })).toBeVisible();
 });

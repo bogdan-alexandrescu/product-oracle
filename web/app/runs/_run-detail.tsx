@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Fragment, useCallback, useEffect, useId, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { DeleteDialog, DeleteMenu } from "@/components/ArtifactMenu";
@@ -290,6 +290,35 @@ export function RunDetail({ id }: { id: string }) {
   // D1: Decide opens the Roadmap items review screen.
   const decideHref = decideCp && decidedOnScreen(decideCp) ? reviewHref({ ...decideCp, run_id: run.id }) : null;
   const open = !FINAL_STATUSES.includes(run.status) && run.status !== "draft";
+  const mayCancel = mayManage("cancel_run") && WORKING.has(run.status);
+  async function cancelRun() {
+    if (await confirmInPage({ destructive: true, action: "Cancel run", message: "Cancel this run? Agents still working are stopped." })) {
+      void act(() => unwrap(api.POST("/v1/runs/{run_id}/cancel", path)));
+    }
+  }
+  function refreshProgress() {
+    setChecked(null);
+    void act(async () => {
+      const out = await unwrap(api.POST("/v1/internal/tick"));
+      setChecked(tickResult(out, run!, !!decideCp));
+      return out;
+    });
+  }
+  // F-78: a step with no news offers both ways on beside it.
+  const quietActions = (
+    <>
+      {can("tick") && open && (
+        <Button disabled={busy} onClick={refreshProgress}>
+          Refresh progress
+        </Button>
+      )}
+      {mayCancel && (
+        <Button variant="danger" disabled={busy} onClick={() => void cancelRun()}>
+          Cancel run
+        </Button>
+      )}
+    </>
+  );
 
   return (
     <Page>
@@ -398,11 +427,7 @@ export function RunDetail({ id }: { id: string }) {
                 variant="danger"
                 disabled={busy}
                 data-testid="run-cancel"
-                onClick={async () => {
-                  if (await confirmInPage({ destructive: true, action: "Cancel run", message: "Cancel this run? Agents still working are stopped." })) {
-                    void act(() => unwrap(api.POST("/v1/runs/{run_id}/cancel", path)));
-                  }
-                }}
+                onClick={() => void cancelRun()}
               >
                 Cancel run
               </Button>
@@ -557,14 +582,7 @@ export function RunDetail({ id }: { id: string }) {
               {can("tick") && open && run.segments.some((s) => s.status !== "pending") && (
                 <Button
                   disabled={busy}
-                  onClick={() => {
-                    setChecked(null);
-                    void act(async () => {
-                      const out = await unwrap(api.POST("/v1/internal/tick"));
-                      setChecked(tickResult(out, run, !!decideCp));
-                      return out;
-                    });
-                  }}
+                  onClick={refreshProgress}
                 >
                   Refresh progress
                 </Button>
@@ -600,6 +618,7 @@ export function RunDetail({ id }: { id: string }) {
                   onDecide={decide}
                   onRetryImport={retryImport}
                   onDraftChanged={() => void reload()}
+                  quietActions={quietActions}
                 />
               </Fragment>
             ))}
@@ -926,7 +945,7 @@ function lastWork(a: Schemas["SegmentAgent"], since: (at: string) => string): st
 const STALE_MS = 24 * 3600_000;
 
 /** #258: a running segment's agents as Oracle last read them, and what it has spent so far. */
-function SegmentProgress({ segment: s }: { segment: SegmentOut }) {
+function SegmentProgress({ segment: s, quietActions }: { segment: SegmentOut; quietActions?: ReactNode }) {
   // The elapsed times count on between reads.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -951,9 +970,12 @@ function SegmentProgress({ segment: s }: { segment: SegmentOut }) {
         {s.checked_at ? `checked ${since(s.checked_at)} ago` : "Not checked yet: the agents' progress shows after the next check"}
       </p>
       {quiet && s.checked_at && (
-        <p data-testid="segment-no-news" className="font-semibold text-warn">
-          No news since {formatDateTime(s.checked_at)}
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p data-testid="segment-no-news" className="font-semibold text-warn">
+            No news since {formatDateTime(s.checked_at)}
+          </p>
+          {quietActions}
+        </div>
       )}
       {s.checked_at &&
         (s.agents.length > 0 ? (
@@ -987,6 +1009,7 @@ function SegmentItem({
   onDecide,
   onRetryImport,
   onDraftChanged,
+  quietActions,
 }: {
   run: RunOut;
   segment: SegmentOut;
@@ -996,6 +1019,8 @@ function SegmentItem({
   onRetryImport: (seq: number) => void;
   /** D7: the shared draft changed, so the checkpoint's Approve words may have (the run re-read). */
   onDraftChanged: () => void;
+  /** F-78: Refresh progress and Cancel run, beside a running step's "No news since". */
+  quietActions?: ReactNode;
 }) {
   const kind = s.checkpoint;
   const { me, can } = useMe();
@@ -1254,7 +1279,7 @@ function SegmentItem({
               <QueueWaitNote wait={s.queue_wait} testId="segment-queue-wait" />
             </p>
           )}
-          {s.status === "running" && <SegmentProgress segment={s} />}
+          {s.status === "running" && <SegmentProgress segment={s} quietActions={quietActions} />}
           {s.autonomy_note && (
             // H11: the baseline's level changed this segment's merge.
             <p data-testid="autonomy-note" className="text-text2">
