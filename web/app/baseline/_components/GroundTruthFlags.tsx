@@ -38,8 +38,25 @@ const FIX_LABEL: Record<Action, string> = {
 const subject = (f: Flag) => f.item ?? f.feature!;
 const shown = (r: Schemas["GroundTruthRef"]) => (r.code ? `${r.code} ${r.name}` : r.name);
 
-/** A key for a new feature from its name, not one the graph has (as page.tsx's addSubgoal). */
-function newKey(name: string, graph: GraphOut | undefined): string {
+/** A feature code (F-09, F-15), or a slice's (F-15a): its feature's code and the letter. */
+const CODE = /^([A-Z]{1,3}-\d+)([a-j])?$/;
+
+/**
+ * The code the feature Add to Ground Truth makes should have: the fix's target when it is one (a
+ * PRD's feature F-09; a slice flag's feature F-15, so one add clears every slice of it by code),
+ * else the flagged item's own code or its slice's feature's (F-02; F-09 for an item F-09a).
+ */
+function addCode(flag: Flag, target: string): string | undefined {
+  return CODE.exec(target)?.[1] ?? CODE.exec(flag.item?.code ?? "")?.[1];
+}
+
+/**
+ * A key for a new feature: its code when the graph has no feature by it (the check reads a code
+ * from the key, so the feature is in the Ground Truth by that code and needs no Give it a code),
+ * else from its name, not one the graph has (as page.tsx's addSubgoal).
+ */
+function newKey(name: string, graph: GraphOut | undefined, code?: string): string {
+  if (code && !(graph?.entities ?? []).some((e) => e.type === "feature" && e.key === code)) return code;
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "feature";
   const taken = new Set((graph?.entities ?? []).map((e) => e.key));
   let key = slug;
@@ -121,15 +138,16 @@ export function GroundTruthFlags({
   const add = (flag: Flag, target: string) =>
     act(async () => {
       const name = (flag.feature ?? flag.item)!.name;
-      const key = newKey(name, graph);
+      const key = newKey(name, graph, addCode(flag, target));
       if (!canWrite) {
         await unwrap(api.POST("/v1/baseline/proposals", { body: { op: "create", kind: "entity", fields: { type: "feature", key, title: name } } }));
         return { text: `Proposed “${name}” for the Ground Truth.` };
       }
       const out = await unwrap(api.POST("/v1/baseline/entities", { body: { type: "feature", key, title: name, attrs: {}, origin: "user" } }));
       if (!out.entity) return { text: `Proposed “${name}” for the Ground Truth.` };
-      // The check reads a PRD's feature by code only: the new feature is linked to what was
-      // flagged, the roadmap item (an unlinked item, a slice item) or the PRD's feature.
+      // Keyed by its code, it is in the Ground Truth by that code (every slice of it too); it is
+      // also linked to what was flagged, the roadmap item (an unlinked item, a slice item) or the
+      // PRD's feature, so the flag goes when the code was taken and the key is from its name.
       if (flag.item?.id) await linkItem(flag.item.id, out.entity.id);
       else if (flag.where.prd) await unwrap(api.POST("/v1/baseline/prd-links", { body: { prd_document_id: flag.where.prd.id, code: target, feature_id: out.entity.id } }));
       return { text: `Added “${name}” to the Ground Truth.` };
