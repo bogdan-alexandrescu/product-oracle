@@ -83,7 +83,7 @@ test("Home: in flight rows select into the inspector", async ({ page }) => {
   await expect(inspector).toContainText("PRD · selected");
   await expect(inspector.getByRole("heading", { name: "Checkout redesign PRD" })).toBeVisible();
   await expect(inspector.getByTestId("stat-sections")).toContainText("Approved");
-  await expect(inspector.getByRole("link", { name: "Open" })).toHaveAttribute("href", "/documents/checkout-redesign");
+  await expect(inspector.getByRole("link", { name: "Open", exact: true })).toHaveAttribute("href", "/documents/checkout-redesign");
 
   // A run: its segments and what comes next. Named by its document's own title and its flow (#979).
   const onboarding = flights.filter({ hasText: "Team onboarding · Baseline to PRD" });
