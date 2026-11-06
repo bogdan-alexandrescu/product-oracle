@@ -8,7 +8,11 @@ refusal names the PRD by its title.
 """
 
 import io
+import json
 import re
+import shutil
+import subprocess
+from pathlib import Path
 
 import pytest
 from pptx import Presentation
@@ -475,3 +479,65 @@ async def test_r3_an_indented_code_block_is_one_line_on_its_slide(client, tenant
     assert re.search(
         r'<a href="[^"]*/documents/checkout/v/1#s-top-risks">' + CODE_LINE, risks["html"]
     )
+
+
+# PR 1300 review round 4: a code block that opens on a list item's line is one item, "Code: 1
+# line", never a blank bullet nor code; a fence in a list or a quote ends with its item or
+# quote; a lone \r is a line break; a line that only looks like a fence ("```a`b") is text.
+ON_ITEM = {
+    "fence": "- ```\n  ship the carts\n  ```\n- then check",
+    "ordered": "1. ```sh\n   ship the carts\n2. then check",
+    "indented": "-     ship the carts\n- then check",
+}
+
+
+@pytest.mark.parametrize("body", ON_ITEM.values(), ids=ON_ITEM.keys())
+def test_r4_code_on_a_list_item_line_is_one_item(body):
+    out = deck_module.code_left_out(body, HREF)
+    html = render_module._markdown().render(out)
+    items = [re.sub(r"<[^>]+>", "", x).strip() for x in re.findall(r"<li>(.*?)</li>", html, re.S)]
+    assert items == ["Code: 1 line, in the full PRD", "then check"], (out, html)
+    assert "ship the carts" not in out and "<pre" not in html
+
+
+def test_r4_a_lone_carriage_return_is_a_line_break():
+    out = deck_module.code_left_out("Steps:\r\r```\rship the carts\r```\rAfter.", HREF)
+    assert _code_lines(out) == ["Code: 1 line, in the full PRD"], out
+    assert "ship the carts" not in out and "\r" not in out
+    assert out.startswith("Steps:") and out.endswith("After.")
+
+
+def test_r4_a_line_that_only_looks_like_a_fence_is_text():
+    units = deck_module._units("```a`b\n\nFirst paragraph.\n\nSecond paragraph.")
+    assert [u.text for u in units] == ["```a`b", "First paragraph.", "Second paragraph."]
+
+
+CASES = Path(__file__).parent / "fixtures" / "code_left_out_cases.json"
+MOCK = Path(__file__).parents[2] / "web" / "lib" / "api" / "mock" / "code-left-out.ts"
+NODE_RUN = (
+    "const { codeLeftOut } = await import(process.argv[1]);"
+    "let s = ''; process.stdin.on('data', (d) => (s += d));"
+    "process.stdin.on('end', () => console.log("
+    "JSON.stringify(JSON.parse(s).map((b) => codeLeftOut(b, 'H')))));"
+)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_r4_the_mock_leaves_code_out_as_the_api_does():
+    """web/lib/api/mock/code-left-out.ts, run through node, gives what code_left_out gives
+    for every case in the shared fixture."""
+    cases = json.loads(CASES.read_text(encoding="utf-8"))
+    run = subprocess.run(
+        ["node", "--input-type=module", "-e", NODE_RUN, MOCK.as_uri()],
+        input=json.dumps(cases),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    mock = json.loads(run.stdout)
+    wrong = [
+        (body, api, got)
+        for body, got in zip(cases, mock, strict=True)
+        if got != (api := deck_module.code_left_out(body, "H"))
+    ]
+    assert not wrong, "\n\n".join(f"{b!r}\n api: {a!r}\nmock: {m!r}" for b, a, m in wrong)

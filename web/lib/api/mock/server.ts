@@ -3758,7 +3758,7 @@ function load(): Db {
   }
   // PR 1300 review round 3, again: every kind of code block (export/deck.py code_left_out): an
   // indented one, a four-backtick fence holding a ``` line, a one-line fence right after a
-  // paragraph line and an empty fence.
+  // paragraph line and an empty fence; round 4: a fence opening on a list item's line.
   if (scenario === "code-kinds") {
     const carts = db.documents.find((d) => d.slug === "saved-carts");
     const problem = carts && docVersions(db, carts).find((v) => v.number === 2)?.sections.find((s) => s.section_key === "problem");
@@ -3766,7 +3766,8 @@ function load(): Db {
       problem.body_md =
         "Steps to try:\n\n" + Array.from({ length: 40 }, (_, i) => `    step ${i + 1} of the rollout`).join("\n") +
         "\n\nThe check, fenced with four backticks:\n\n````\n```\nrun the check\n````\n\n" +
-        "One command:\n~~~\nmake carts\n~~~\nNothing to run:\n\n```\n```\n\nAfter the steps.";
+        "One command:\n~~~\nmake carts\n~~~\nNothing to run:\n\n```\n```\n\n" +
+        "To ship:\n\n- ```\n  ship the carts\n  ```\n- then check\n\nAfter the steps.";
       problem.body_text = problem.body_md;
     }
   }

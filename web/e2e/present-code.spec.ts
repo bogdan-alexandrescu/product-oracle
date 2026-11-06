@@ -50,6 +50,7 @@ test("a code block is one line linking to the full PRD, never blank slides", asy
 // Round 3, again: every code block is found as CommonMark finds it (the mock's "code-kinds"
 // scenario): an indented block, a four-backtick fence holding a ``` line and a one-line fence
 // are each one line; an empty fence shows nothing; the line is never part of a paragraph.
+// Round 4: a fence opening on a list item's line is one item, the next item kept.
 test("every kind of code block is one line, an empty one none", async ({ page }) => {
   await page.addInitScript(([key]) => localStorage.setItem(key, "code-kinds"), [MOCK_SCENARIO_KEY] as const);
   await login(page);
@@ -74,13 +75,16 @@ test("every kind of code block is one line, an empty one none", async ({ page })
     "Code: 40 lines, in the full PRD",
     "Code: 2 lines, in the full PRD",
     "Code: 1 line, in the full PRD",
+    "Code: 1 line, in the full PRD",
   ]);
   for (const link of await links.all()) {
     await expect(link).toHaveAttribute("href", /^https?:\/\/[^/]+\/documents\/saved-carts\/v\/2#s-problem$/);
   }
-  for (const code of ["step 7 of the rollout", "run the check", "make carts", "```", "Code: 0"]) {
+  for (const code of ["step 7 of the rollout", "run the check", "make carts", "ship the carts", "```", "Code: 0"]) {
     await expect(body).not.toContainText(code);
   }
   await expect(body.locator("p", { hasText: "One command:" })).toHaveText("One command:");
   await expect(body.locator("p", { hasText: "Nothing to run:" })).toHaveText("Nothing to run:");
+  // Round 4: a fence opening on a list item's line is that item's one line; the next item stays, no bullet is blank.
+  await expect(body.getByRole("listitem")).toHaveText(["Code: 1 line, in the full PRD", "then check"]);
 });
