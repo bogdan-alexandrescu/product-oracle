@@ -518,7 +518,11 @@ async def _last_writer(db: AsyncSession, item_ids: set[str]) -> tuple[Any, Any]:
     rows = await db.scalars(
         select(SimpleChange)
         .where(SimpleChange.status.in_(WRITTEN))
-        .order_by(SimpleChange.decided_at.desc().nulls_last(), SimpleChange.at.desc())
+        .order_by(
+            SimpleChange.decided_at.desc().nulls_last(),
+            SimpleChange.at.desc(),
+            SimpleChange.seq.desc(),
+        )
         .limit(500)
     )
     best: tuple[datetime, uuid.UUID] | None = None
@@ -1597,7 +1601,7 @@ async def listing(
     status: str | None,
     mine: bool,
 ) -> list[SimpleChangeOut]:
-    q = select(SimpleChange).order_by(SimpleChange.at.desc(), SimpleChange.id).limit(500)
+    q = select(SimpleChange).order_by(SimpleChange.at.desc(), SimpleChange.seq.desc()).limit(500)
     if session_id is not None:
         q = q.where(SimpleChange.session_id == session_id)
     if document_id is not None:
@@ -1633,7 +1637,11 @@ async def inbox_rows(
                     & (SimpleChange.decided_at >= since)
                 )
             )
-            .order_by(SimpleChange.decided_at.desc().nulls_last(), SimpleChange.at.desc())
+            .order_by(
+                SimpleChange.decided_at.desc().nulls_last(),
+                SimpleChange.at.desc(),
+                SimpleChange.seq.desc(),
+            )
         )
     )
     waiting = [c for c in rows if c.status == "proposed"]
