@@ -34,7 +34,7 @@ import { DateMarker, type ExpandCtx, type Highlight } from "@/components/Markdow
 import { DraftNewItems } from "@/components/DraftNewItems";
 import { DraftWithOracleButton, isTemplateOnly } from "@/components/DraftWithOracle";
 import { SectionView } from "@/components/SectionView";
-import { PrdLook, usePt1 } from "@/components/PrdLook"; // MOCK-HOOK
+import { numbersOf, PrdLook, usePt1 } from "@/components/PrdLook"; // MOCK-HOOK
 import { SpecDesignLinks } from "@/components/DesignReview";
 import { SpecStaleness } from "@/components/SpecStaleness";
 import { buildCodeIndex } from "@/lib/code-index";
@@ -404,6 +404,8 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     document_ ? (openSection ? `${document_.title} · ${openSection.heading}` : document_.title) : null,
   );
   const openIdx = openSection ? shownSections.indexOf(openSection) : -1;
+  const pt1Nums = useMemo(() => numbersOf(shownSections), [shownSections]); // MOCK-HOOK (mk-prd-look)
+  const pt1Top = shownSections.filter((s) => s.level === 2).length; // MOCK-HOOK
   const prevSection = openIdx > 0 ? shownSections[openIdx - 1] : null;
   const nextSection = openIdx >= 0 ? shownSections[openIdx + 1] ?? null : null;
   // The next section without a verdict after the open one, wrapping round.
@@ -1618,7 +1620,11 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
           >
             {/* qa4-docs-37: the open section's place, in words: "N/M" elsewhere counts reviews. */}
             <span className="tnum truncate">
-              Section {openIdx + 1} <span className="text-text2">of {shownSections.length}</span>
+              {pt1.look && openSection && pt1Nums.get(openSection.section_key) ? ( /* MOCK-HOOK: the look's own number, as in its headings */
+                <>Section {pt1Nums.get(openSection.section_key)} <span className="text-text2">of {pt1Top}</span></> /* MOCK-HOOK */
+              ) : ( /* MOCK-HOOK */
+                <>Section {openIdx + 1} <span className="text-text2">of {shownSections.length}</span></>
+              ) /* MOCK-HOOK */}
             </span>
           </button>
           <button

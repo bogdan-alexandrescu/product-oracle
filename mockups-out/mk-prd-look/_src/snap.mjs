@@ -37,7 +37,7 @@ function frames(o) {
   return [
     [`pt1-${o}-top-1512`, q(), [1512, 900]],
     [`pt1-${o}-long-1512`, q(`&sec=${LONG}`), [1512, 900]],
-    [`pt1-${o}-toc-1512`, q(`&sec=${LONG}&toc=1`), [1512, 900], { type: "re" }],
+    [`pt1-${o}-toc-1512`, q(`&sec=${LONG}&toc=1`), [1512, 900], { pick: PICK }],
     [`pt1-${o}-landed-1512`, q(`&sec=${PICK}`), [1512, 900]],
     [`pt1-${o}-actions-1512`, q(`&sec=${PICK}`), [1512, 900], { menu: PICK }],
     [`pt1-${o}-edit-1512`, q(`&sec=${PICK}&edit=1`), [1512, 900]],
@@ -96,8 +96,11 @@ async function fetchFont(page, url) {
   if (fontNames.has(url)) return fontNames.get(url);
   const name = path.basename(new URL(url).pathname);
   const file = path.join(ASSETS, name);
-  if (!fs.existsSync(file)) {
+  // A file saved before is kept only when it is a font (wOF2 / wOFF), not a page saved by mistake.
+  if (!fs.existsSync(file) || !/^wOF[F2]/.test(fs.readFileSync(file).subarray(0, 4).toString("latin1"))) {
     const res = await page.request.get(url);
+    // A font that does not load would draw every frame in a fallback face: stop rather than save a 404 page.
+    if (!res.ok() || !/font|octet/.test(res.headers()["content-type"] ?? "")) throw new Error(`font ${url}: ${res.status()} ${res.headers()["content-type"]}`);
     fs.writeFileSync(file, await res.body());
   }
   fontNames.set(url, name);
@@ -107,6 +110,15 @@ async function fetchFont(page, url) {
 /** The page as a static file: the DOM cloned, every stylesheet inlined, scripts removed, fonts in assets/. */
 async function staticHtml(page, [w, h], { print = false } = {}) {
   const snap = await page.evaluate(() => {
+    // The page's scroll is kept as the block at the top of the view and its offset, not as pixels: a static
+    // frame seen in another browser (a desktop scrollbar on a phone frame) wraps its text a little differently.
+    if (scrollY > 0) {
+      const top = [...document.querySelectorAll("[data-pt1] .pt1-main :is(section, h1, h2, h3, h4, p, li, tr, table, pre, blockquote)")].find((el) => {
+        const b = el.getBoundingClientRect();
+        return b.top >= 0 && b.height > 0 && !el.closest(".pt1-strip");
+      });
+      if (top) top.setAttribute("data-mockup-top", String(Math.round(top.getBoundingClientRect().top)));
+    }
     for (const el of document.querySelectorAll("*")) if (el.scrollTop > 0 || el.scrollLeft > 0) el.setAttribute("data-mockup-scroll", `${el.scrollLeft},${el.scrollTop}`);
     for (const el of document.querySelectorAll("input, textarea")) {
       if (el.type === "checkbox" || el.type === "radio") el.toggleAttribute("checked", el.checked);
@@ -116,14 +128,16 @@ async function staticHtml(page, [w, h], { print = false } = {}) {
     let css = "";
     for (const sheet of document.styleSheets) {
       try {
-        for (const r of sheet.cssRules) css += r.cssText + "\n";
+        // url() in a sheet is relative to the sheet (../media/x.woff2), not to the page: make it absolute here.
+        const base = sheet.href ?? location.href;
+        for (const r of sheet.cssRules) css += r.cssText.replace(/url\(["']?([^"')]+)["']?\)/g, (m, u) => (u.startsWith("data:") ? m : `url("${new URL(u, base).href}")`)) + "\n";
       } catch {
         /* a sheet from another origin: none here */
       }
     }
     const clone = document.documentElement.cloneNode(true);
     for (const el of clone.querySelectorAll("script, link[rel=stylesheet], link[rel=preload], link[rel=modulepreload], style, noscript, next-route-announcer, nextjs-portal")) el.remove();
-    return { html: clone.outerHTML, css, base: location.origin, x: scrollX, y: scrollY, theme: document.documentElement.dataset.theme ?? "" };
+    return { html: clone.outerHTML, css, base: location.origin, page: location.href.replace(/\?.*/, ""), x: scrollX, y: scrollY, theme: document.documentElement.dataset.theme ?? "" };
   });
   let css = snap.css;
   if (print) css = css.replaceAll("@media print", "@media all");
@@ -137,11 +151,19 @@ async function staticHtml(page, [w, h], { print = false } = {}) {
     `<meta charset="utf-8">`,
     `<meta name="mockup-viewport" content="${w}x${h}">`,
     `<style>${css}</style>`,
-    // ?theme=light|dark sets data-theme on <html>; the saved scroll positions are restored.
-    `<script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;addEventListener("load",function(){document.querySelectorAll("[data-mockup-scroll]").forEach(function(e){var p=e.getAttribute("data-mockup-scroll").split(",");e.scrollLeft=+p[0];e.scrollTop=+p[1]});scrollTo(${snap.x},${snap.y})})})()</script>`,
+    // ?theme=light|dark sets data-theme on <html> (a printed page is always light); the saved scroll is restored.
+    `<script>(function(){var t=${print ? '"light"' : 'new URLSearchParams(location.search).get("theme")'};if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;addEventListener("load",function(){document.querySelectorAll("[data-mockup-scroll]").forEach(function(e){var p=e.getAttribute("data-mockup-scroll").split(",");e.scrollLeft=+p[0];e.scrollTop=+p[1]});scrollTo(${snap.x},${snap.y});var a=document.querySelector("[data-mockup-top]");if(a)scrollBy(0,a.getBoundingClientRect().top-Number(a.getAttribute("data-mockup-top")))})})()</script>`,
   ].join("\n");
   let html = snap.html.replace(/<head>/, `<head>\n${head}\n`);
-  html = html.replace(/(src|href)="\/(?!\/)/g, `$1="${snap.base}/`);
+  // A frame is a static file: a link to this page's own section stays a #link, every other link goes nowhere.
+  const self = snap.page.replace(/#.*/, "");
+  html = html.replace(/href="([^"#]*)(#[^"]*)?"/g, (m, u, hash = "") => {
+    if (!u) return m;
+    const abs = new URL(u, snap.base + "/").href;
+    if (abs.startsWith("data:") || abs.startsWith("file:")) return m;
+    return abs === self && hash ? `href="${hash}"` : `href="#"`;
+  });
+  html = html.replace(/(src)="\/(?!\/)/g, `$1="${snap.base}/`);
   return `<!doctype html>\n${html}`;
 }
 
@@ -182,6 +204,15 @@ async function main() {
       if (opts.menu) {
         await page.locator(`section[data-section-key="${opts.menu}"] [data-pt1-head] button[aria-label^="Actions for"]`).first().click();
         await page.waitForTimeout(400);
+      }
+      if (opts.pick) {
+        // Contents open: the picked section's name typed into Find a section, its row the one left to pick.
+        const heading = await page.locator(`section[data-section-key="${opts.pick}"] [data-pt1-head] :is(h1, h2, h3)`).first().evaluate((h) => [...h.childNodes].filter((n) => !(n instanceof Element && n.classList.contains("pt1-num"))).map((n) => n.textContent).join("").trim());
+        const find = page.locator('[data-pt1] input[aria-label="Find a section"]:visible').first();
+        await find.fill(heading.split(/\s+/)[0]);
+        await page.waitForTimeout(300);
+        await page.locator("[data-pt1] .pt1-toc-row:visible").filter({ hasText: heading }).first().hover();
+        await page.waitForTimeout(300);
       }
       if (opts.scrollTo) {
         await page.evaluate((k) => (document.querySelector(`[data-pt1-sec="${k}"]`) ?? document.querySelector("[data-folded]"))?.scrollIntoView({ block: "start" }), opts.scrollTo);

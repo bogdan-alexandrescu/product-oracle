@@ -15,7 +15,7 @@
           "what": "One readable column about 720 px wide on a white sheet. Every section has a number (1, 2, 10.4, 11.7), a rule and generous space above it, and a larger heading; body text is set a size up with more line height. A contents rail on the left stays in view, lights the section being read and shows each section's review state as a dot. The review bar shows on the section being read; every other section shows only its ⋯ menu.",
           "why": "It fixes what makes a PRD hard to read today, the lack of space and landmarks between sections, without moving anything people already know: the toolbar, the version header, the review panel and every section action stay where they are. It needs no change to the template and works on every PRD as written, and the PDF can take the same numbers and rules in a few lines.",
           "plus": "Calm and fast to scan; numbers make sections easy to name in a review (\"see 10.4\"); the lit rail shows where you are in a 50-section PRD.",
-          "cost": "At 1440 the rail cuts long feature names short, and the review bar shows only on the section being read. Template file: no change (numbers come from the heading levels). PDF (prd.html.j2): add the section numbers and the rule and space between sections; about 20 lines of CSS.",
+          "cost": "At 1440 the rail cuts long feature names short, the 720 px column makes the widest table scroll across at 1512 and 1440, and the review bar shows only on the section being read. Template file: no change (numbers come from the heading levels). PDF (prd.html.j2): add the section numbers and the rule and space between sections; about 20 lines of CSS.",
           "frames": [
             {
               "file": "pt1-a-top-1512.html",
@@ -27,7 +27,7 @@
             },
             {
               "file": "pt1-a-toc-1512.html",
-              "caption": "The contents rail with Find a section, read from 13 Milestones; 10.4 Requirements about to be picked"
+              "caption": "The contents rail opened from 13 Milestones, \"Requirements\" typed in Find a section: 10.4 Requirements about to be picked"
             },
             {
               "file": "pt1-a-landed-1512.html",
@@ -35,7 +35,7 @@
             },
             {
               "file": "pt1-a-actions-1512.html",
-              "caption": "The ⋯ menu on 10.4 Requirements open: evidence, Edit, Refine, ask, discuss, decide"
+              "caption": "The ⋯ menu on 10.4 Requirements open: add evidence, edit, ask Oracle to rewrite, ask a teammate, discuss, decide"
             },
             {
               "file": "pt1-a-edit-1512.html",
@@ -93,15 +93,15 @@
             },
             {
               "file": "pt1-b-toc-1512.html",
-              "caption": "The Sections strip opened from 13 Milestones; 10.4 Requirements about to be picked"
+              "caption": "The Sections strip opened from 13 Milestones, \"Requirements\" typed in Find a section: 10.4 Requirements about to be picked"
             },
             {
               "file": "pt1-b-landed-1512.html",
-              "caption": "Landed on 10.4 Requirements, lit in the contents"
+              "caption": "Landed on 10.4 Requirements, named in the Sections strip at the top"
             },
             {
               "file": "pt1-b-actions-1512.html",
-              "caption": "The ⋯ menu on 10.4 Requirements open: evidence, Edit, Refine, ask, discuss, decide"
+              "caption": "The ⋯ menu on 10.4 Requirements open: add evidence, edit, ask Oracle to rewrite, ask a teammate, discuss, decide"
             },
             {
               "file": "pt1-b-edit-1512.html",
@@ -159,15 +159,15 @@
             },
             {
               "file": "pt1-c-toc-1512.html",
-              "caption": "The Sections strip opened from 13 Milestones; 10.4 Requirements about to be picked"
+              "caption": "The Sections strip opened from 13 Milestones, \"Requirements\" typed in Find a section: 10.4 Requirements about to be picked"
             },
             {
               "file": "pt1-c-landed-1512.html",
-              "caption": "Landed on 10.4 Requirements, lit in the contents"
+              "caption": "Landed on 10.4 Requirements, named in the Sections strip at the top"
             },
             {
               "file": "pt1-c-actions-1512.html",
-              "caption": "The ⋯ menu on 10.4 Requirements open: evidence, Edit, Refine, ask, discuss, decide"
+              "caption": "The ⋯ menu on 10.4 Requirements open: add evidence, edit, ask Oracle to rewrite, ask a teammate, discuss, decide"
             },
             {
               "file": "pt1-c-edit-1512.html",
@@ -225,7 +225,7 @@
             },
             {
               "file": "pt1-d-toc-1512.html",
-              "caption": "The contents rail with Find a section, read from 13 Milestones; 10.4 Requirements about to be picked"
+              "caption": "The contents rail opened from 13 Milestones, \"Requirements\" typed in Find a section: 10.4 Requirements about to be picked"
             },
             {
               "file": "pt1-d-landed-1512.html",
@@ -233,7 +233,7 @@
             },
             {
               "file": "pt1-d-actions-1512.html",
-              "caption": "The ⋯ menu on 10.4 Requirements open: evidence, Edit, Refine, ask, discuss, decide"
+              "caption": "The ⋯ menu on 10.4 Requirements open: add evidence, edit, ask Oracle to rewrite, ask a teammate, discuss, decide"
             },
             {
               "file": "pt1-d-edit-1512.html",
@@ -291,15 +291,15 @@
             },
             {
               "file": "pt1-e-toc-1512.html",
-              "caption": "The Contents strip opened from 13 Milestones; 10.4 Requirements about to be picked"
+              "caption": "The Contents strip opened from 13 Milestones, \"Requirements\" typed in Find a section: 10.4 Requirements about to be picked"
             },
             {
               "file": "pt1-e-landed-1512.html",
-              "caption": "Landed on 10.4 Requirements, lit in the contents"
+              "caption": "Landed on 10.4 Requirements, named in the Contents strip at the top"
             },
             {
               "file": "pt1-e-actions-1512.html",
-              "caption": "The ⋯ menu on 10.4 Requirements open: evidence, Edit, Refine, ask, discuss, decide"
+              "caption": "The ⋯ menu on 10.4 Requirements open: add evidence, edit, ask Oracle to rewrite, ask a teammate, discuss, decide"
             },
             {
               "file": "pt1-e-edit-1512.html",

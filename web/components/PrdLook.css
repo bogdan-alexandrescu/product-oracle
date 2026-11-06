@@ -225,3 +225,7 @@
   body:has([data-pt1]) { background: #fff !important; } /* MOCK-HOOK */
 } /* MOCK-HOOK */
 @page { size: Letter portrait; margin: 0.6in; } /* MOCK-HOOK */
+
+/* ---------- one status per section ---------- */
+/* b, c, d show the review state in the section's own line: the review bar does not draw it a second time. */ /* MOCK-HOOK */
+:is([data-pt1="b"], [data-pt1="c"], [data-pt1="d"]) .pt1-sec > section [data-testid="verdict-state"] > :first-child:not([data-testid="verdict-pending"]) { display: none; } /* MOCK-HOOK */

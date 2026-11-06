@@ -2330,7 +2330,7 @@ function seed(): Db {
     const has = (k: string) => mk.sections.some((x) => x.section_key === k); // MOCK-HOOK
     for (const k of ["summary", "goal-trace", "problem", "non-goals", "audience", "why-now", "feature-f-1", "feature-f-2", "feature-f-3"]) // MOCK-HOOK
       if (has(k)) addReview(db, mk, k, { verdict: "approved", note: "" }, { created_at: "2026-11-05T10:12:00Z" }); // MOCK-HOOK
-    if (has("risks")) addReview(db, mk, "risks", { verdict: "changes_requested", note: "K9 needs a date for the talk with the union reps." }, { created_at: "2026-11-05T11:40:00Z" }); // MOCK-HOOK
+    if (has("risks")) addReview(db, mk, "risks", { verdict: "changes_requested", note: "Add a date for the talk with the union reps." }, { created_at: "2026-11-05T11:40:00Z" }); // MOCK-HOOK
     if (has("requirements")) addComment(db, mk, { section_key: "requirements", anchor: { exact: "A job cannot close without either a signature or a reason for none", prefix: "", suffix: "" }, body: "What counts as a reason? A short list would stop free text here." }, at("2026-11-05T09:30:00Z")); // MOCK-HOOK
     if (has("risks")) addComment(db, mk, { section_key: "risks", anchor: { exact: "Union reps object to recorded time on site", prefix: "", suffix: "" }, body: "Jonah, can we meet the reps before the pilot rather than after?" }, at("2026-11-05T11:42:00Z")); // MOCK-HOOK
   }

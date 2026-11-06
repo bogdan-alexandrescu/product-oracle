@@ -54,7 +54,7 @@ const partOf = (key: string): Part | null =>
 
 const STATUS: Record<string, { label: string; kind: "pass" | "warn" | "crit" | "na" }> = {
   approved: { label: "Approved", kind: "pass" },
-  changes_requested: { label: "Changes asked", kind: "warn" },
+  changes_requested: { label: "Changes requested", kind: "warn" }, // the review bar's own word
   rejected: { label: "Rejected", kind: "crit" },
   none: { label: "Not reviewed", kind: "na" },
 };
@@ -62,7 +62,7 @@ const statusOf = (s: SectionOut) => STATUS[s.verdict && !s.verdict.lapsed_at ? s
 const DATE = /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.? \d{1,2}(?:, \d{4})?/;
 
 /** Numbers as the reader reads them: 1, 2, 2.1 …; level-1 sections (the title, "Full version") carry none. */
-function numbersOf(sections: SectionOut[]): Map<string, string> {
+export function numbersOf(sections: SectionOut[]): Map<string, string> {
   const m = new Map<string, string>();
   let major = 0;
   let minor = 0;
@@ -464,7 +464,7 @@ function Summary({
           </p>
           {asked.map((s) => (
             <button key={s.id} type="button" className="pt1-sum-link pt1-sum-warn" onClick={() => onGo(s.section_key)}>
-              Changes asked: {nums.get(s.section_key)} {s.heading}
+              Changes requested: {nums.get(s.section_key)} {s.heading}
             </button>
           ))}
         </div>
