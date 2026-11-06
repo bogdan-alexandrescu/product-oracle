@@ -1,0 +1,1026 @@
+{
+ "members": [
+  {
+   "id": "F-1",
+   "severity": "major",
+   "page": "/settings/notifications, /settings/members, /settings/sources (sources and code maps), /sources, /settings/templates, /settings/themes, /settings/claude-accounts, /settings/webhooks, /settings/trash, /settings/autonomy, /settings/api-tokens, /company/metrics, /company/strategy, document History > Oracle's work",
+   "viewport": "both",
+   "role": "all",
+   "what": "On a failed load (po-mock-fail=<route>), these pages show only the server's raw words in a red bar (in the mock, \"Mock failure\"). They don't say what failed and offer no Try again. Under the bar the page keeps going as if it had loaded: Templates and Themes say \"No PRD templates\" / \"No themes yet\", Metrics says \"Nothing yet\", Sources shows \"My sources\" with an empty list and a live Add form, Members keeps the invite form live with \"\u2013\" tiles, and Oracle's work keeps Suggest changes now / Write reports now live. Claude accounts and Autonomy show nothing else. Seen by four separate walkthroughs (settings, members, sources, code maps and jobs, metrics and strategy, notifications). Runs and Inbox already do it right: \"Couldn't load your runs.\" plus Try again (parent check).",
+   "fix": "Use the shared failed-load pattern from Runs and Inbox (\"Couldn't load <the thing>.\" + Try again, with the server detail behind an (i)) on every one of these lists. While a list is in error, hide its empty-state text and turn off create buttons that depend on it.",
+   "files": [
+    "web/app/settings/*/",
+    "web/components/ApiTokensSettings.tsx",
+    "web/components/MembersSettings.tsx",
+    "web/app/settings/sources/page.tsx",
+    "web/app/settings/sources/_code-maps.tsx",
+    "web/components/JobsPanel.tsx",
+    "web/app/company/metrics/page.tsx",
+    "web/app/company/strategy/",
+    "web/app/settings/notifications/NotificationsSettings.tsx"
+   ]
+  },
+  {
+   "id": "F-15",
+   "severity": "major",
+   "page": "/settings/members",
+   "viewport": "both",
+   "role": "owner",
+   "what": "When no engineering lead is named, the Engineering lead row in the Invite panel shows 'Nobody named yet. Pick who carries engineering che' cut off at the panel edge at 1440. At 390 the text and its (i) info button run to x=425, past the 390 screen, so the (i) cannot be reached.",
+   "fix": "Replace the sentence with a short 'None yet' and let the row wrap (flex-wrap, min-w-0, no nowrap) so the (i) stays inside the panel; move 'Pick who carries engineering checks' into the (i).",
+   "files": [
+    "web/components/MembersSettings.tsx"
+   ]
+  },
+  {
+   "id": "F-16",
+   "severity": "major",
+   "page": "/settings/members",
+   "viewport": "both",
+   "role": "owner",
+   "what": "Remove dialog, 'Lapses for good' > 'See them' lists approvals with the raw document slug in code type ('usage-alerts v4') and raw section keys ('#problem', '#goals', '#scope') instead of document and section names.",
+   "fix": "Show the document title ('Usage alerts v4') and the section title; keep the link, drop the monospace slug and '#key'.",
+   "files": [
+    "web/components/members/MemberApprovals.tsx"
+   ]
+  },
+  {
+   "id": "F-22",
+   "severity": "minor",
+   "page": "/settings/members",
+   "viewport": "both",
+   "role": "owner",
+   "what": "A failed invite email shows technical text: \"Last tried Nov 5, 7:10 PM PST \u00b7 the Gmail API answered 503\" (and \"Oracle didn't email this invite. Send them this link: http://127.0.0.1:3100/\").",
+   "fix": "Say \"Last tried Nov 5, 7:10 PM PST \u00b7 the mail service was down\" (map the status to words on the API or in the row).",
+   "files": [
+    "web/components/MembersSettings.tsx",
+    "api/oracle/members/mailer.py"
+   ]
+  },
+  {
+   "id": "F-30",
+   "severity": "minor",
+   "page": "/home, /simple, /settings/company, /settings/members, /baseline?build=1, /intakes/<bad>",
+   "viewport": "both",
+   "role": "all",
+   "what": "Explanation sentences sit on the page: Simple Welcome \"A few steps make Oracle yours: \u2026 Each step opens where it is done.\"; Simple empty card \"Nothing waits on you. Decisions and proposals on your items show here when they come.\"; Detailed \"Approvals, reviews and the questions asked of you show here.\"; Company \"Save keeps the default horizons.\", \"Pick a time zone to save it.\", \"One team builds every PRD's items, in order. Dates on the roadmap follow its size and focus.\"; Members \"Pick who checks feasibility: tick Eng lead for the person who speaks for engineering\u2026\" and the Sign-in help lines; Build the baseline intro \"Oracle reads your connected sources and proposes\u2026\"; brief-not-found \"It may have been drafted into a PRD, archived, or deleted. A drafted brief lives on as its PRD\u2026\".",
+   "fix": "Move each sentence into the title's (i); keep one short state line (\"Nothing waiting\").",
+   "files": [
+    "web/app/simple/page.tsx",
+    "web/app/home/_welcome.tsx",
+    "web/components/MembersSettings.tsx",
+    "web/app/settings/company/page.tsx",
+    "web/app/baseline/_components/BuildBaseline.tsx",
+    "web/app/intakes"
+   ]
+  },
+  {
+   "id": "F-47",
+   "severity": "minor",
+   "page": "/access",
+   "viewport": "both",
+   "role": "all",
+   "what": "When the access check fails, the card shows the title 'Access' and one red line 'Can't read your access' (or the server's status text) with no Retry and no Sign out button. The page only retries by itself on a timer.",
+   "fix": "Add a Retry button and the Sign out button in the error state; title it 'Can't check your access'.",
+   "files": [
+    "web/app/access/page.tsx"
+   ]
+  },
+  {
+   "id": "F-48",
+   "severity": "minor",
+   "page": "/settings/members",
+   "viewport": "1440",
+   "role": "owner",
+   "what": "The scenarios revoke-failures and access-failures show nothing on Members: the removed member (Former Pm) row has no mark that GitHub or Slack access could not be taken away, and the Expired invites list has no mark for a revoked invite whose access removal keeps failing. The only place is an Inbox row 'Couldn't revoke former.pm@example.com's GitHub ac\u2026' (cut off).",
+   "fix": "Show a 'Couldn't revoke' badge on the removed member and invite rows that opens the same Retry/Dismiss action as the Inbox; do not cut the Inbox title mid-word.",
+   "files": [
+    "web/components/MembersSettings.tsx"
+   ]
+  },
+  {
+   "id": "F-49",
+   "severity": "minor",
+   "page": "/settings/members",
+   "viewport": "both",
+   "role": "owner",
+   "what": "The count tiles in the Invite panel (Active 4, Removed 1, Open invites 0, Expired 2) and the 'N active' badge in the title are not links: they do not lead to or filter the people or invites they count.",
+   "fix": "Make Active/Removed filter the People list, Open/Expired scroll to the invites list.",
+   "files": [
+    "web/components/MembersSettings.tsx"
+   ]
+  },
+  {
+   "id": "F-50",
+   "severity": "minor",
+   "page": "/settings/members",
+   "viewport": "both",
+   "role": "all",
+   "what": "Explanation sentences sit on the page: 'Who may sign in from Google. It is the same list as Company email domains in Settings > Sources, where it also decides which Google Drive docs Oracle reads.'; 'Someone from these domains who signs in without an invite waits until an owner approves...'; 'The role an approved request starts with...'; the banner 'Your role is Viewer/Commenter/Approver. Owners manage members and sign-in.'; role descriptions under Owner/Approver/Commenter/Viewer; the long invite error 'x@other.org is outside the company's email domains (example.com), so Google sign-in can't let them join. Add the domain under Sign-in first.'",
+   "fix": "Move each sentence into the (i) next to its heading or the field; shorten the error to 'x@other.org is not in the company domains' with an 'Add domain' action.",
+   "files": [
+    "web/components/MembersSettings.tsx"
+   ]
+  },
+  {
+   "id": "F-52",
+   "severity": "minor",
+   "page": "/settings/members",
+   "viewport": "1440",
+   "role": "owner",
+   "what": "Member emails are cut off with an ellipsis in the People table even at 1440 ('admin@example.co\u2026', 'approver@example\u2026'), the column heads use the short 'Eng lead' (the panel says 'Engineering lead'), and the owner's own row shows a greyed Remove button with 'You can't remove yourself' under it.",
+   "fix": "Give the Member column more width or wrap the email; use 'Engineering lead'; leave out Remove on your own row.",
+   "files": [
+    "web/components/MembersSettings.tsx"
+   ]
+  },
+  {
+   "id": "F-53",
+   "severity": "minor",
+   "page": "/settings/members",
+   "viewport": "390",
+   "role": "owner",
+   "what": "In the Remove dialog the subtitle is cut off: 'approver@example.com \u00b7 Appro\u2026'.",
+   "fix": "Let the subtitle wrap onto two lines.",
+   "files": [
+    "web/components/MembersSettings.tsx"
+   ]
+  },
+  {
+   "id": "F-54",
+   "severity": "minor",
+   "page": "/settings/members",
+   "viewport": "1440",
+   "role": "owner",
+   "what": "After sending an invite, the green 'Invite sent to sam.rivera@example.com' note stays on the page, also behind later dialogs (Remove dialog), until reload.",
+   "fix": "Clear the note after a few seconds or when another action starts.",
+   "files": [
+    "web/components/MembersSettings.tsx"
+   ]
+  }
+ ],
+ "sources": [
+  {
+   "id": "F-2",
+   "severity": "major",
+   "page": "/settings/sources",
+   "viewport": "both",
+   "role": "viewer",
+   "what": "Signed in as a viewer, /settings/sources lists Add a source, Sync now, Pause, Edit, Map the code and the Add source form. Pressing Sync now as a viewer works in the mock (\"Synced: 2 items seen, 1 new version, 0 deleted.\"), but the real API (api/oracle/sources/router.py SourceWriter = require_role(\"commenter\")) refuses create, update and delete for viewers. (Parent re-check: /sources already hides Sync now from a viewer, so the two pages disagree. Shot verify-sources-viewer-1440.png.)",
+   "fix": "Gate the source write controls with can('create_source') / can('update_source') / can('delete_source') (capabilities), and make the mock refuse source writes from viewers with 403, as the API does.",
+   "files": [
+    "web/app/settings/sources/page.tsx",
+    "web/lib/api/mock/server.ts"
+   ]
+  },
+  {
+   "id": "F-3",
+   "severity": "major",
+   "page": "/settings/sources",
+   "viewport": "both",
+   "role": "viewer",
+   "what": "A viewer (and a commenter-less role) sees Map the code, Share with the company and Make private on every code map line. Pressing Map the code answers with the red line \"Only commenters, approvers and owners can do this.\" The same role sees Add a source.",
+   "fix": "Wrap the Map the code, Share with the company and Make private buttons in can(<create code map / share code map key>) (the API needs commenter for POST /v1/code-maps and its sharing route); hide for viewer.",
+   "files": [
+    "web/app/settings/sources/_code-maps.tsx"
+   ]
+  },
+  {
+   "id": "F-5",
+   "severity": "major",
+   "page": "/settings/sources",
+   "viewport": "both",
+   "role": "owner",
+   "what": "A code map whose run is paused over its budget (run_status paused_overrun) shows only the chip \"Code map: building\" with no word that it is paused and no action; the page keeps polling every 1.5 s forever. Only awaiting_approval has a line (\"waits for an owner to approve its cost\"), and that line has no link or button to the run, for an owner or anyone else.",
+   "fix": "Show 'Paused: over budget' (warn chip) for run_status paused_overrun and for awaiting_approval show 'Waiting for an owner to approve its cost' with, for owners (can('resume_run') / approve), a link or button to the run page (/runs/<run_id>) where Resume / Approve live. Stop polling while paused. Seed a paused and an awaiting-approval code map in the mock (engineering.ts) so a Playwright spec can drive it: the mock never produces either state.",
+   "files": [
+    "web/app/settings/sources/_code-maps.tsx",
+    "web/lib/api/mock/engineering.ts"
+   ]
+  },
+  {
+   "id": "F-17",
+   "severity": "major",
+   "page": "/sources",
+   "viewport": "both",
+   "role": "owner",
+   "what": "The Coverage help tooltip (i) on the Mine/Company switch ends with '(S5 Connector auth, S6 Private findings)': internal ticket codes shown to people.",
+   "fix": "Delete the parenthesis from the tooltip text.",
+   "files": [
+    "web/app/sources/_components/company-coverage.tsx"
+   ]
+  },
+  {
+   "id": "F-18",
+   "severity": "major",
+   "page": "/settings/sources",
+   "viewport": "both",
+   "role": "owner",
+   "what": "The '1 in error' and '3 need attention' chips next to the title are plain text, not links: clicking does nothing. Rows that need attention (e.g. 'No access Customer interviews Q3', 'Lost access to Vendor research', 'Skipped ... 3 docs') have no action to fix them.",
+   "fix": "Make each chip a button that filters/scrolls to those sources; give 'No access' / 'Lost access' rows a Reconnect or Choose another action.",
+   "files": [
+    "web/app/settings/sources/page.tsx"
+   ]
+  },
+  {
+   "id": "F-36",
+   "severity": "minor",
+   "page": "/settings/sources",
+   "viewport": "both",
+   "role": "owner",
+   "what": "The Code maps panel carries a two-line explanation under the select: \"Each refresh is one code map run per stale repository, charged like Map the code: refreshing less often costs less, and only on demand costs nothing until someone presses Map the code.\" The Skipped lines also say \"\u2014 shared from outside the company. Nothing to do: Oracle never reads it.\" and the Google Drive panel has long paragraphs under Company email domains and Company shared drives.",
+   "fix": "Move the text into an InfoTip next to the label \"Refresh stale code maps\" and shorten (\"Each refresh costs like Map the code. Less often costs less.\"); same for the Skipped and Drive paragraphs.",
+   "files": [
+    "web/app/settings/sources/_code-map-refresh.tsx",
+    "web/app/settings/sources/page.tsx"
+   ]
+  },
+  {
+   "id": "F-37",
+   "severity": "minor",
+   "page": "/settings/sources",
+   "viewport": "both",
+   "role": "owner",
+   "what": "A failed code map prints \"The code map run failed: index: No Claude account could take this call: every Claude account was spent; the earliest window was due to clear Sun Oct 25, 3:00 PM PDT.\" The \"index:\" label is an internal step name, and the reset date is already past on Nov 5 (the job panel hides past resets, the code map line does not). The weekday form (\"Sun Oct 25\") also differs from the app's date style.",
+   "fix": "Strip \"The code map run failed: index: \" and drop a reset time in the past (reuse jobFailure / next_reset_at check from JobsPanel); say \"Every Claude account is out of quota. Try again later.\"",
+   "files": [
+    "web/app/settings/sources/_code-maps.tsx",
+    "web/lib/format.ts",
+    "web/lib/api/mock/engineering.ts"
+   ]
+  },
+  {
+   "id": "F-38",
+   "severity": "minor",
+   "page": "/settings/sources",
+   "viewport": "both",
+   "role": "all",
+   "what": "A ready code map says \"Share with the company: everyone in the company can read it and runs use it\" but no page lets anyone open or read a code map: there is no link or view on the line, in the app at all (no route reads /v1/code-maps/{id}).",
+   "fix": "Add a link or a small read-only view (modules, APIs, data models) on the code map line, or reword the share dialog.",
+   "files": [
+    "web/app/settings/sources/_code-maps.tsx"
+   ]
+  },
+  {
+   "id": "F-55",
+   "severity": "minor",
+   "page": "/sources",
+   "viewport": "both",
+   "role": "owner",
+   "what": "Company coverage chips '3 of 4 members have a source' and '1 with stale sources' are not links; the member rows show emails (commenter@example.com 'No sources') with no action, and the first column header reads 'Kind' above member names.",
+   "fix": "Make the chips filter the table; show the member's name with the email secondary; fix the header; for 'No sources' offer nothing or a nudge.",
+   "files": [
+    "web/app/sources/_components/company-coverage.tsx"
+   ]
+  },
+  {
+   "id": "F-56",
+   "severity": "minor",
+   "page": "/sources and /settings/sources and /settings/connections",
+   "viewport": "both",
+   "role": "all",
+   "what": "Explanation sentences sit on the page: Coverage 'Items read: what Oracle holds from the source. Not read: ... Used: ...'; Google Drive 'Docs in a picked folder owned outside these domains are skipped...', 'Which owners' Drive files are read...', 'A doc in a shared drive counts as the company's only when...'; Code maps 'Each refresh is one code map run per stale repository...'; '\u2014 shared from outside the company. Nothing to do: Oracle never reads it.'; '\u2014 its docs are hidden until Oracle can read it again'; Slack range 'Optional, whole days in the Company time zone...'; Notion 'Only pages you shared with Product Oracle in Notion appear here'; Slack app 'Once installed for the company, it posts the weekly report...'; empty list 'No sources yet. Add one with Add a source to give Oracle something to read.'; 'Name the source to add it' beside the disabled button.",
+   "fix": "Move each into the existing (i) or a tooltip; keep only short labels (e.g. 'No sources yet').",
+   "files": [
+    "web/app/sources/_components/coverage.tsx",
+    "web/app/settings/sources/page.tsx",
+    "web/app/settings/sources/CompanyDrive.tsx",
+    "web/app/settings/sources/NotionPicker.tsx",
+    "web/app/settings/sources/_slack-picker.tsx",
+    "web/app/settings/connections/ConnectionsSettings.tsx"
+   ]
+  },
+  {
+   "id": "F-57",
+   "severity": "minor",
+   "page": "/settings/sources",
+   "viewport": "both",
+   "role": "owner",
+   "what": "Jargon: 'Paste ids' (Slack, GitHub, Google pickers), 'Drive file ids / Ids or links...', Notion 'Page link or id', sync result 'Synced: 2 items seen, 2 new versions, 0 deleted.', '120 unknown channels', 'Allowlist at most 100 channels', tooltip 'evidence you add to the baseline' / 'confidence'.",
+   "fix": "'Paste links', 'Page link', 'Synced: 2 items, 2 changed, 0 removed.', 'Too many channels: pick 100 or fewer', 'baseline' -> plain word.",
+   "files": [
+    "web/app/settings/sources/_browse-list.tsx",
+    "web/app/settings/sources/DriveFiles.tsx",
+    "web/app/settings/sources/NotionPicker.tsx",
+    "web/app/settings/sources/page.tsx"
+   ]
+  },
+  {
+   "id": "F-58",
+   "severity": "minor",
+   "page": "/settings/sources",
+   "viewport": "1440",
+   "role": "owner",
+   "what": "Editing 'Legacy all-hands chat' lists 120 raw channel ids (C9001LEGACY, C9002LEGACY ...) as the only label, with all 120 ticked and no names.",
+   "fix": "Show 'Unknown channel' plus a short id tail, or a 'Remove unknown channels' action; keep ids out of the primary label.",
+   "files": [
+    "web/app/settings/sources/_slack-picker.tsx",
+    "web/app/settings/sources/_browse-list.tsx"
+   ]
+  },
+  {
+   "id": "F-59",
+   "severity": "minor",
+   "page": "/settings/sources",
+   "viewport": "1440",
+   "role": "owner",
+   "what": "Add-source Kind select is too narrow: 'Google Docs' is cut to 'Google Doc'. Fireflies form shows a raw time-zone id 'America/Los_Angeles'.",
+   "fix": "Widen the select or stack it above Name; show 'Pacific Time'.",
+   "files": [
+    "web/app/settings/sources/page.tsx",
+    "web/app/settings/sources/FirefliesPicker.tsx"
+   ]
+  },
+  {
+   "id": "F-60",
+   "severity": "minor",
+   "page": "/settings/connections",
+   "viewport": "both",
+   "role": "owner",
+   "what": "Connections disagrees with Sources: with the default company Slack, Fireflies and Google Docs show 'Not connected' (and '2 connected'), while Sources lists active Fireflies/Google Docs sources and offers connections 'Example Co chat', 'Partner workspace', 'pat@example.com', 'old-drive@example.com'. In the 'empty' company the Slack picker still lists Example Co chat and channels. GitHub shows 'Connected with a token' while the Example repo source says 'The connection was rejected: token expired'; Reconnect there only jumps to Connections with no sign of what to fix.",
+   "fix": "Make web/lib/api/mock/sources.ts read connections from the connections store (po-mock-connections-v1); mark a rejected connection 'Needs reconnect' there.",
+   "files": [
+    "web/lib/api/mock/sources.ts",
+    "web/lib/api/mock/connections.ts",
+    "web/app/settings/connections/ConnectionsSettings.tsx"
+   ]
+  },
+  {
+   "id": "F-61",
+   "severity": "minor",
+   "page": "/settings/connections",
+   "viewport": "both",
+   "role": "owner",
+   "what": "Disconnect shows only 'Confirm disconnect / Cancel' with no word of which sources stop syncing (Notion has source pickers using it).",
+   "fix": "Name the sources that use the connection in the confirm row.",
+   "files": [
+    "web/app/settings/connections/ConnectionsSettings.tsx"
+   ]
+  },
+  {
+   "id": "F-62",
+   "severity": "minor",
+   "page": "/sources",
+   "viewport": "390",
+   "role": "owner",
+   "what": "Phone: selecting a source row opens its coverage panel below the whole list, off screen, with no scroll; Synced column shows '2w', '3w', '5w', 'now' instead of a date.",
+   "fix": "Scroll the panel into view (or open as a sheet); show 'Oct 17' with a tooltip for the relative age.",
+   "files": [
+    "web/app/sources/page.tsx",
+    "web/app/sources/_components/coverage.tsx"
+   ]
+  },
+  {
+   "id": "F-63",
+   "severity": "minor",
+   "page": "/settings/sources",
+   "viewport": "1440",
+   "role": "owner",
+   "what": "Add source > Google Docs > Choose from Drive answers 'Cannot reach the API.' (no retry; says API). Could be this sandbox only; not verified.",
+   "fix": "'Could not open Google Drive. Try again.' with a retry button.",
+   "files": [
+    "web/app/settings/sources/DriveFiles.tsx"
+   ]
+  }
+ ],
+ "metrics-strategy": [
+  {
+   "id": "F-4",
+   "severity": "major",
+   "page": "/company/metrics",
+   "viewport": "390",
+   "role": "owner",
+   "what": "On a phone, Metric sheet > Edit opens the 'Edit metric' form BEHIND the metric sheet: only the form's title peeks above the sheet, so its fields and Cancel/Save cannot be reached. The form's backdrop is z-40, the Sheet is z-50.",
+   "fix": "Render MetricForm above the sheet (z-[60]) or close the sheet before opening the form.",
+   "files": [
+    "web/app/company/metrics/_components/MetricForm.tsx",
+    "web/components/ds/Sheet.tsx",
+    "web/app/company/metrics/page.tsx"
+   ]
+  },
+  {
+   "id": "F-12",
+   "severity": "major",
+   "page": "/company/strategy",
+   "viewport": "390",
+   "role": "all",
+   "what": "Drift list on a phone squeezes the subject name into a thin column: 'Retention' wraps as 'Retenti / on', 'Dark mode' as 'Da / rk / m / od / e'; the 'Open' link sits on the far right of the same row.",
+   "fix": "Stack the subject name on its own full-width line on phones (flex-wrap, min-w-0 with the date and links on the next line).",
+   "files": [
+    "web/app/company/strategy/_components/DriftList.tsx"
+   ]
+  },
+  {
+   "id": "F-13",
+   "severity": "major",
+   "page": "/company/strategy",
+   "viewport": "both",
+   "role": "owner",
+   "what": "While the strategy stack is loading or has failed, the Vision and Product strategy cards say 'The vision is not approved yet' and 'The product strategy is not approved yet' (with 'Open the draft to review it; an owner approves it'), though both are approved. The stack table shows grey bars forever after a failure. Drift rows also flash the raw ref 'retention' (lowercase) before 'Retention'.",
+   "fix": "Show a skeleton on both cards until the stack answers; on failure show 'Could not load the strategy' with a Try again button and no 'not approved' copy; do not render finding subjects until the stack has loaded.",
+   "files": [
+    "web/app/company/strategy/page.tsx",
+    "web/app/company/strategy/_components/Cards.tsx",
+    "web/app/company/strategy/_components/StackTable.tsx",
+    "web/app/company/strategy/_components/lib.ts"
+   ]
+  },
+  {
+   "id": "F-14",
+   "severity": "major",
+   "page": "/company/metrics",
+   "viewport": "1440",
+   "role": "all",
+   "what": "The metric chart has no axes: no dates on the x axis, no values on the y axis, no target line, and no way to read a week's number (hover shows only the normal-range band and definition lines). Only a caption 'Week of Aug 3 to week of Oct 26.' tells the span. The inspector has no list of weekly values, and recording a value shows no confirmation of what was saved.",
+   "fix": "Add x labels (first, middle, last week as 'Aug 3'), y min/max, a target line when the linked goal has one, hover/focus value labels, and a weekly values list with edit.",
+   "files": [
+    "web/app/company/metrics/_components/MetricChart.tsx",
+    "web/app/company/metrics/_components/MetricInspector.tsx"
+   ]
+  },
+  {
+   "id": "F-40",
+   "severity": "minor",
+   "page": "/company/metrics",
+   "viewport": "1440",
+   "role": "all",
+   "what": "In the Metrics table (with the inspector open) the Change column is clipped by the Better/Worse chip: '+37 (+9...' and '-1.1 (-2...'. Title attribute absent.",
+   "fix": "Widen the Change column (or put the chip under the value), do not truncate the number.",
+   "files": [
+    "web/app/company/metrics/page.tsx"
+   ]
+  },
+  {
+   "id": "F-41",
+   "severity": "minor",
+   "page": "/company/strategy",
+   "viewport": "both",
+   "role": "all",
+   "what": "A waived finding shows the internal slug 'product-strategy-team-plans' next to 'Focus without a goal' instead of the focus choice's name ('Team plans'). A waived finding also has no way to reopen it.",
+   "fix": "Look the name up from the choice titles for waived findings (fall back to detail.title / 'Product strategy'), never print subject_ref; add a Reopen action.",
+   "files": [
+    "web/app/company/strategy/_components/lib.ts",
+    "web/app/company/strategy/_components/DriftList.tsx"
+   ]
+  },
+  {
+   "id": "F-42",
+   "severity": "minor",
+   "page": "/company/strategy",
+   "viewport": "1440",
+   "role": "all",
+   "what": "Counts on the Product strategy card ('4 items', '1 item', '2 items still planned', 'No drift', 'No goal derives from it') and the focus-choice goal pills are plain text: they lead to nothing, and 'No goal derives from it' has no action (add a goal). Only the stack rows open a side panel.",
+   "fix": "Make the counts links to the matching rows (stack row/Plan filter) and give 'No goal derives from it' an 'Add a goal' action.",
+   "files": [
+    "web/app/company/strategy/_components/Cards.tsx"
+   ]
+  },
+  {
+   "id": "F-43",
+   "severity": "minor",
+   "page": "/company/strategy",
+   "viewport": "1440",
+   "role": "all",
+   "what": "In the stack side panel the Findings entry wraps 'Retention' as 'Reten / tion' (narrow column) next to the date; the chain's first line is cut with an ellipsis: 'Every small team plans its product like a large ...'.",
+   "fix": "Let the finding subject take its own line; allow the vision line to wrap (2 lines).",
+   "files": [
+    "web/app/company/strategy/_components/StackTable.tsx",
+    "web/app/company/strategy/_components/DriftList.tsx"
+   ]
+  },
+  {
+   "id": "F-44",
+   "severity": "minor",
+   "page": "/company/strategy",
+   "viewport": "390",
+   "role": "all",
+   "what": "On a phone, tapping a stack row selects it but nothing visible happens: its details panel is rendered at the very bottom of the page (after the Drift list), scroll position stays at 0. The 'Not under the strategy' rows show bare '\u2014' marks with no column names ('\u2014 / Retention \u2014 / \u2014 Dark mode').",
+   "fix": "Open the stack row's details in a sheet on phones; on phones label each cell (Goal, Roadmap item) or hide empty cells.",
+   "files": [
+    "web/app/company/strategy/page.tsx",
+    "web/app/company/strategy/_components/StackTable.tsx"
+   ]
+  },
+  {
+   "id": "F-45",
+   "severity": "minor",
+   "page": "/company/strategy and /company/metrics",
+   "viewport": "both",
+   "role": "all",
+   "what": "Explanation sentences sit on the page, not behind an (i): the empty states ('The goal values on Home come from each goal. Add a metric here to track a number every week...', 'Where the company is headed in the next few years...', 'Oracle checks every day that each goal follows from...'), the chart caption ('Shaded: the last 6 weeks. The band is the normal range.', 'The chart starts once there are two weeks.'), and the form help under fields ('An output is a result the company wants...', 'A PostHog query that returns one number for a week. Where it should count only that week, write {period_start} and {period_end}...', 'A week whose change is at least this share of the week before is a variance too.', 'Oracle writes the draft; an owner reviews and approves it.'). Jargon: 'Output: a result / Input: a lever', 'variance', 'threshold', 'sent by API', 'PostHog query', '{period_start}'.",
+   "fix": "Move the sentences into the (i) tooltips, keep one short line per empty state, and use plain words ('Result' / 'Driver', 'unusual week', 'alert size').",
+   "files": [
+    "web/app/company/metrics/page.tsx",
+    "web/app/company/metrics/_components/MetricChart.tsx",
+    "web/app/company/metrics/_components/MetricForm.tsx",
+    "web/app/company/strategy/_components/Cards.tsx",
+    "web/app/company/strategy/_components/StackTable.tsx",
+    "web/app/company/strategy/_components/DriftList.tsx",
+    "web/app/company/strategy/_components/DraftSheet.tsx"
+   ]
+  },
+  {
+   "id": "F-46",
+   "severity": "minor",
+   "page": "/company/metrics",
+   "viewport": "both",
+   "role": "owner",
+   "what": "Recording a value: the Record button is disabled with no hint when the text is not a number, and a saved value gives no confirmation; Archive acts at once with no confirm or undo toast (Restore exists only in the still-open panel). The same drift row link text is just 'Open' four times on /company/strategy (and 'Waive' next to a 'Waived' tab).",
+   "fix": "Say 'Enter a number' under the field, toast 'Saved week of Oct 26', name the link 'Open goal / Open item'.",
+   "files": [
+    "web/app/company/metrics/_components/MetricInspector.tsx",
+    "web/app/company/strategy/_components/DriftList.tsx"
+   ]
+  }
+ ],
+ "notifications-inbox": [
+  {
+   "id": "F-6",
+   "severity": "major",
+   "page": "/inbox",
+   "viewport": "both",
+   "role": "owner",
+   "what": "A Slack report failure shows a raw Slack code in the Inbox row: \"Report not posted to Slack \u00b7 channel_not_found\" (Kind \"Couldn't post\", with \"tried 12 times\"). Seen with scenario alignment-report.",
+   "fix": "Map Slack codes to plain words (e.g. \"Oracle isn't in #plan or the channel was removed. Pick another channel.\") and fall back to \"Slack refused it\" for unknown codes; never print f.error raw. Retry/Dismiss stay.",
+   "files": [
+    "web/app/inbox/_needs.tsx",
+    "web/lib/api/mock/reports.ts"
+   ]
+  },
+  {
+   "id": "F-9",
+   "severity": "major",
+   "page": "/home",
+   "viewport": "1440",
+   "role": "approver",
+   "what": "Needs you row \"Review due \u00b7 Price the team plan per seat\": the wide \"Reaffirm +90 days\" button pushes Open off the panel; Open is cut in half (shows \"O\") at the right edge. A row with Decide + Open fits, this one does not.",
+   "fix": "Let the action cell shrink the text column (min-w-0 on the item column, flex-none on actions) or wrap the buttons; shorten the label.",
+   "files": [
+    "web/app/inbox/_needs.tsx",
+    "web/app/home/page.tsx"
+   ]
+  },
+  {
+   "id": "F-10",
+   "severity": "major",
+   "page": "/home",
+   "viewport": "390",
+   "role": "approver",
+   "what": "Needs you row \"Decision needs you \u00b7 Ship usage caps before\u2026 anomaly detection\": the clamped two-line title overlaps the \"Decision \u00b7 Decision log 18h\" line under it (the words \"anomaly detection\" are printed over the meta row).",
+   "fix": "Give the title cell its own row height (line-clamp with a fixed block, or drop the WRAP_TWO clamp when the row stacks) so the meta row starts below it.",
+   "files": [
+    "web/app/inbox/_needs.tsx"
+   ]
+  },
+  {
+   "id": "F-23",
+   "severity": "minor",
+   "page": "/settings/notifications",
+   "viewport": "both",
+   "role": "owner",
+   "what": "Explanation paragraphs sit on the page: \"Oracle's Slack app posts the weekly alignment report to a channel you pick, and people can mirror discussions to a Slack thread. It is installed once for the company and posts as Product Oracle.\"; \"Every week Oracle reports the roadmap against engineering for the week that ended, in owners' Inbox. Inbox only until Slack is connected.\"; \"People can mirror discussions to a Slack thread.\". \"Not set \u00b7 Pacific is used\" is vague, and the label \"Make the weekly report\" reads oddly. The Disconnect dialog is titled just \"Disconnect\" (not \"Disconnect Slack?\") with a four-sentence body that says \"revokes Oracle's Slack token\".",
+   "fix": "Move the paragraphs behind an (i); keep one short status line (\"Reports go to #product and the Inbox\"). Retitle the dialog \"Disconnect Slack?\" and say \"Reports stop posting to Slack and mirrored threads stop mirroring.\"",
+   "files": [
+    "web/app/settings/notifications/NotificationsSettings.tsx"
+   ]
+  }
+ ],
+ "settings-integrations": [
+  {
+   "id": "F-7",
+   "severity": "major",
+   "page": "/inbox",
+   "viewport": "both",
+   "role": "owner",
+   "what": "The count does not match the rows: with webhook notifications the header says \"Needs you 11\" / \"11 waiting\" and the rail badge says 11, but 13 rows are listed (\"Webhook paused: Webhook Deploy notifier paused: failing for 3 days\" and \"Webhook address: Priya Raman changed where webhook Deploy notifier sends\" are shown but not counted). Resuming/opening them changes no count. The \"Sources that need attention 3\" panel is also outside the badge, and on an empty Inbox the page says \"Needs you 0\" / \"Nothing needs you yet\" while three sources need attention.",
+   "fix": "Count what is shown (webhook rows, report rows and source rows) in the header, the tabs and the rail/phone badge, or move the uncounted rows to their own counted panel; drop the empty-state sentence or keep it only in the (i).",
+   "files": [
+    "web/app/inbox/_webhooks.tsx",
+    "web/app/inbox/page.tsx",
+    "web/lib/waiting.ts",
+    "web/components/ds/AppShell.tsx"
+   ]
+  },
+  {
+   "id": "F-19",
+   "severity": "major",
+   "page": "/settings/api-tokens",
+   "viewport": "both",
+   "role": "owner",
+   "what": "The (i) next to the title shows codes and jargon: \"A member's API token (po_\u2026) \u2026 capped by its scopes\", \"(ort_\u2026)\", \"(OAuth, poa_\u2026)\".",
+   "fix": "Say what each kind is for in plain words; drop the po_/ort_/poa_ prefixes and OAuth.",
+   "files": [
+    "web/components/ApiTokensSettings.tsx:36-40"
+   ]
+  },
+  {
+   "id": "F-20",
+   "severity": "major",
+   "page": "/settings/webhooks",
+   "viewport": "1440",
+   "role": "owner",
+   "what": "The (i) next to the title tells people to read \"the runbook (docs/ops-webhooks.md)\", an internal file name, and lists \"webhook-id, webhook-timestamp, webhook-signature\" and \"Standard Webhooks\".",
+   "fix": "Link the help page by name (\"Webhooks guide\") or drop it; keep header names out of the tooltip.",
+   "files": [
+    "web/app/settings/webhooks/WebhooksSettings.tsx:90"
+   ]
+  },
+  {
+   "id": "F-21",
+   "severity": "minor",
+   "page": "/inbox",
+   "viewport": "1440",
+   "role": "owner",
+   "what": "The Kind cell of the webhook-address row is cut: \"Webhook addr\u2026\" (its sibling reads \"Webhook paused\").",
+   "fix": "Shorten the kind to \"Webhook moved\" / \"Webhook link\" or let the Kind column wrap.",
+   "files": [
+    "web/app/inbox/_webhooks.tsx",
+    "web/app/inbox/_needs.tsx"
+   ]
+  },
+  {
+   "id": "F-25",
+   "severity": "minor",
+   "page": "/inbox",
+   "viewport": "both",
+   "role": "viewer",
+   "what": "Commenter and viewer Inboxes list \"Webhook paused\" / \"Webhook address\" rows (Settings \u203a Webhooks, Open) although they cannot open Settings \u203a Webhooks (the link lands on \"Not available for your role\"). Seen with po-mock-role=viewer and scenario webhooks; the mock hands the owner's notifications to the overridden role, so this may be a mock-only artifact, but the row has no can() check on Open.",
+   "fix": "Show the row's Open link only when can() allows the webhook settings (the real API only notifies creators and owners); make the mock filter by the real recipient rule.",
+   "files": [
+    "web/app/inbox/_webhooks.tsx",
+    "web/lib/api/mock/webhooks.ts"
+   ]
+  },
+  {
+   "id": "F-33",
+   "severity": "minor",
+   "page": "/documents/%E0%A4%A , /runs/%ff , /s/%E0%A4%A , /i/%E0%A4%A",
+   "viewport": "both",
+   "role": "all",
+   "what": "A malformed % in a dynamic path answers a bare unstyled \"Internal Server Error\" text page (no app chrome, no Go to Home) instead of the 404 card.",
+   "fix": "Catch the decode failure (proxy/middleware or [id] page) and call notFound().",
+   "files": [
+    "web/app/documents",
+    "web/app/runs/[id]",
+    "web/app/s/[token]/page.tsx",
+    "web/app/i/[token]/page.tsx"
+   ]
+  },
+  {
+   "id": "F-51",
+   "severity": "minor",
+   "page": "/account",
+   "viewport": "both",
+   "role": "all",
+   "what": "Long explanation paragraphs show on the page: under Change password ('Changing it signs out every other session and revokes your personal API tokens, every MCP client you authorized and the current tokens of runs you started...'), under Create token ('Your role can't comment on or change documents, so Write only lets a token post...'), the Slack pings paragraph, and a blue note. Jargon in the words: 'MCP clients', 'API tokens', 'Scopes', placeholder 'e.g. laptop cli'.",
+   "fix": "Put the sentences behind the (i) buttons; name them in plain words ('Connected apps', 'Access keys', 'What it can do'); placeholder 'e.g. My laptop'.",
+   "files": [
+    "web/app/account/page.tsx",
+    "web/components/ApiTokensSettings.tsx"
+   ]
+  },
+  {
+   "id": "F-64",
+   "severity": "minor",
+   "page": "/settings/webhooks",
+   "viewport": "both",
+   "role": "owner",
+   "what": "Webhook panel row \"Payload format\" shows a date (\"Oct 25, 2026\") with the explanation line \"The layout of the JSON Oracle sends, named by the day it was set.\"; also \"Owners-and-approvers content\", \"Signing secret\", \"HTTP 500\" in the log and \"\u2715 500\" in Last delivery.",
+   "fix": "Rename to \"Format version\" with the sentence behind an (i); show \"Server answered with an error\" instead of the number.",
+   "files": [
+    "web/app/settings/webhooks/WebhookInspector.tsx:101",
+    "web/app/settings/webhooks/DeliveryLog.tsx"
+   ]
+  },
+  {
+   "id": "F-65",
+   "severity": "minor",
+   "page": "/settings/webhooks",
+   "viewport": "1440",
+   "role": "owner",
+   "what": "After Send test event, the list cell \"Last delivery\" reads \"\u2715 Retrying \u00b7 Just n\u2026\" (clipped), and a retry in progress carries the failure cross. On phone the same test shows \"No answer\" in the log, \"Couldn't reach\" in the panel.",
+   "fix": "Let the cell wrap or shorten to \"Retrying \u00b7 now\"; use no cross for retrying; one wording for an unreachable host.",
+   "files": [
+    "web/app/settings/webhooks/WebhooksSettings.tsx:63",
+    "web/app/settings/webhooks/DeliveryLog.tsx"
+   ]
+  },
+  {
+   "id": "F-66",
+   "severity": "minor",
+   "page": "/settings/api-tokens, /settings/claude-accounts",
+   "viewport": "both",
+   "role": "owner",
+   "what": "Title badges \"6 active\", \"2 revoked\", \"1 expired\" (api-tokens) and \"2 available\", \"1 needs a sign-in\" (claude-accounts) are plain pills: clicking them does nothing; the tokens list has no status filter, only kind and member.",
+   "fix": "Make each badge a filter chip (set the list to those items) or drop the unneeded ones.",
+   "files": [
+    "web/components/ApiTokensSettings.tsx",
+    "web/app/settings/claude-accounts/ClaudeAccounts.tsx"
+   ]
+  },
+  {
+   "id": "F-67",
+   "severity": "minor",
+   "page": "/settings/api-tokens",
+   "viewport": "both",
+   "role": "owner",
+   "what": "A whole panel \"Where tokens come from\" (four explanation sentences) sits above the list; on a phone it fills the first screen before any token. The Run token name is cut: \"Run \u00b7 Baseline to P\u2026\" at 1440.",
+   "fix": "Move the panel text behind the title (i); give the Name column room or a tooltip with the full name.",
+   "files": [
+    "web/components/ApiTokensSettings.tsx:134"
+   ]
+  },
+  {
+   "id": "F-73",
+   "severity": "minor",
+   "page": "/settings/claude-accounts",
+   "viewport": "both",
+   "role": "owner",
+   "what": "Tooltips and text use internal words: \"Its refresh token is gone and the sweep has stopped trying\", \"The refresh token is gone\", \"a claude setup-token value\", \"Type the label to arm the button\"; Add account panel says \"Claude adds the account signed in on that page. To add a different one, open the link in a browser signed in to it\" (explanation on the page). The sign-in button opens claude.ai in a new tab. The account list stays on \"old-laptop\" highlighted while the Add panel is open.",
+   "fix": "Reword (\"Its sign-in ended. Sign in again to use it.\"); move the sentence behind an (i).",
+   "files": [
+    "web/app/settings/claude-accounts/ClaudeAccounts.tsx:1044",
+    "web/app/settings/claude-accounts/ClaudeAccounts.tsx:1338"
+   ]
+  },
+  {
+   "id": "F-77",
+   "severity": "minor",
+   "page": "/settings/webhooks, /settings/templates/new, /settings/themes/new",
+   "viewport": "1440",
+   "role": "approver/commenter/viewer",
+   "what": "A role that cannot use a page (Not available for your role) is told \"Ask an owner (Avery Stone) if you need it.\" and sees \"Open Members\", even for approver-level pages; Trash for a viewer is a dead end with only that link.",
+   "fix": "Name the lowest role that can use the page (\"An approver or owner can\u2026\").",
+   "files": [
+    "web/app/settings/_gate.tsx"
+   ]
+  }
+ ],
+ "setup-errors-other": [
+  {
+   "id": "F-8",
+   "severity": "major",
+   "page": "/home",
+   "viewport": "1440",
+   "role": "owner",
+   "what": "When GET /v1/setup fails, the Set up panel and the Set up chip silently vanish: no message, no Try again. Home looks like a finished company. Simple Home does the same: the Welcome: set up Oracle card is gone.",
+   "fix": "Show a Set up load error in the Set up slot (\"Couldn't load Set up.\" with Try again, wired to setupQ.reload) on both Home pages.",
+   "files": [
+    "web/app/home/page.tsx",
+    "web/app/simple/page.tsx"
+   ]
+  },
+  {
+   "id": "F-11",
+   "severity": "major",
+   "page": "/briefs/<bad id>",
+   "viewport": "both",
+   "role": "owner",
+   "what": "Unknown tech brief shows only a bare red banner \"Tech brief not found\" (the API's own words) at the top of an otherwise empty page: no title, no Back to PRDs, no Go to Home. Runs, documents and intakes use the not-found card.",
+   "fix": "Render NotFoundPanel (title \"Tech brief not found\", Back to PRDs, Go to Home) when the brief GET answers 404; show ErrorNote with Try again for other failures.",
+   "files": [
+    "web/app/briefs/_brief-detail.tsx"
+   ]
+  },
+  {
+   "id": "F-24",
+   "severity": "minor",
+   "page": "/account",
+   "viewport": "390",
+   "role": "all",
+   "what": "The five Slack ping checkboxes are 15x16 px on a phone (the weekly-report checkbox on /settings/notifications was made size-6 with a 44 px row for this reason). The panel opens with a two-sentence explanation and the notice \"Slack is not connected yet: connect it in Settings \u203a Notifications. Your choices apply once it is.\"",
+   "fix": "Give the label row min-h-11 and a larger box under 600px as the report checkbox does; put the explanation behind an (i).",
+   "files": [
+    "web/components/account/SlackPingsPanel.tsx"
+   ]
+  },
+  {
+   "id": "F-26",
+   "severity": "minor",
+   "page": "/simple/meetings/[id]",
+   "viewport": "390",
+   "role": "owner",
+   "what": "In the minutes, Decisions taken shows \"D-4\" in a blue link and its sentence wraps under it (\"D-4 Moved Weekly alert digest \u00b7 Avery Stone\" breaks as \"Stone\" alone on the second line, no hanging indent). Delivery lines read \"Slack \u00b7 not posted (not picked)\" (\"picked\" is vague). The minutes cards carry no email text, so there is no email preview to judge beyond Delivery.",
+   "fix": "Show the decision's name as the link and drop the \"D-4\" code; say \"Slack \u00b7 not sent (not chosen for this meeting)\"; add a hanging indent to the list item.",
+   "files": [
+    "web/app/simple/meetings/[id]/_meeting.tsx"
+   ]
+  },
+  {
+   "id": "F-27",
+   "severity": "minor",
+   "page": "/simple",
+   "viewport": "1440",
+   "role": "owner",
+   "what": "Simple Home's Welcome card lists finished steps (Invite team, Company domains, Horizons, Time zone) as plain text; only unfinished steps are links. Detailed Home gives every step Open or Change. A finished step cannot be revisited from Simple.",
+   "fix": "Link finished steps too (\"Change\"), as Detailed Home does.",
+   "files": [
+    "web/app/simple/page.tsx"
+   ]
+  },
+  {
+   "id": "F-28",
+   "severity": "minor",
+   "page": "/simple",
+   "viewport": "1440",
+   "role": "owner",
+   "what": "After Hide on Simple's Set up card (4 of 8 done), nothing on Simple brings it back; the toast says \"Set up hidden. Detailed Home keeps it behind its Set up chip.\" The owner must switch to Detailed.",
+   "fix": "Add a Set up chip or a Home menu entry on Simple to show it again.",
+   "files": [
+    "web/app/simple/page.tsx"
+   ]
+  },
+  {
+   "id": "F-29",
+   "severity": "minor",
+   "page": "/home",
+   "viewport": "390",
+   "role": "owner",
+   "what": "Set up row \"Company domains\" is cut to \"Company domai\u2026\" and its value to \"example.c\u2026\" on a phone; the full name is only a hover title.",
+   "fix": "Let the label wrap (or put the value under the label) when the row is narrow.",
+   "files": [
+    "web/app/home/_setup.tsx"
+   ]
+  },
+  {
+   "id": "F-31",
+   "severity": "minor",
+   "page": "/home (Goals i)",
+   "viewport": "1440",
+   "role": "owner",
+   "what": "The (i) on Goals says \"\u2026You can also push a baseline YAML with oracle push.\" (a command and a file format).",
+   "fix": "Say \"You can also send a baseline file from the command line\" or drop the sentence.",
+   "files": [
+    "web/app/home/_goals-panel.tsx"
+   ]
+  },
+  {
+   "id": "F-34",
+   "severity": "minor",
+   "page": "/home, /simple, /baseline",
+   "viewport": "both",
+   "role": "approver,viewer",
+   "what": "In a new company (po-mock-scenario=empty) the mock still has seed decisions: approver Home shows \"2 waiting\" (\"Ship usage caps before anomaly detection\", \"Price the team plan per seat\"); viewer's Simple Home shows \"Decided lately\" with three decisions; Desired state shows \"Threshold alerts / Sign-up and onboarding\" chips and \"Desired state 1\". Owner sees Nothing waiting, so roles disagree on the same empty company.",
+   "fix": "Make decisions, reviews and the Desired state chips honour the empty scenario (newCompany()).",
+   "files": [
+    "web/lib/api/mock/server.ts",
+    "web/lib/api/mock/simple-meetings.ts",
+    "web/lib/api/mock/baseline.ts"
+   ]
+  }
+ ],
+ "settings-other": [
+  {
+   "id": "F-32",
+   "severity": "minor",
+   "page": "/settings/bad, /nope",
+   "viewport": "1440",
+   "role": "owner",
+   "what": "Signed in, an unknown /settings/<x> or top-level URL shows the 404 card with no app sidebar or Settings tabs, while /runs/<bad> keeps the shell. \"Back to Settings\" is the only way into the tabs.",
+   "fix": "Draw the signed-in shell around not-found for known sections (as runs/documents do).",
+   "files": [
+    "web/app/not-found.tsx",
+    "web/app/settings/layout.tsx"
+   ]
+  },
+  {
+   "id": "F-68",
+   "severity": "minor",
+   "page": "/settings/trash",
+   "viewport": "both",
+   "role": "owner",
+   "what": "Trash lists deleted items with Restore only: there is no way to delete one for good or empty Trash, though the tooltip says they go \"after 30 days\" and the API has a purge route. After Restore the note reads \"Restored Saved carts PRD and 1 more\": \"1 more\" is not named.",
+   "fix": "Add a \"Delete for good\" (and Empty Trash) action for the roles that may; name every restored item in the note.",
+   "files": [
+    "web/app/settings/trash/page.tsx"
+   ]
+  },
+  {
+   "id": "F-69",
+   "severity": "minor",
+   "page": "/settings/trash",
+   "viewport": "both",
+   "role": "owner",
+   "what": "The delete dialog lists \"The run of Oct 16 that wrote Saved carts PRD\" but Trash then lists that item as \"Run Baseline to PRD\" (a different name for the same item).",
+   "fix": "Use one title in the dialog and the Trash row.",
+   "files": [
+    "web/app/settings/trash/page.tsx"
+   ]
+  },
+  {
+   "id": "F-70",
+   "severity": "minor",
+   "page": "/settings/company",
+   "viewport": "both",
+   "role": "owner",
+   "what": "Several explanation sentences sit on the page: \"Save keeps the default horizons.\", \"Team capacity: One team builds every PRD's items, in order. Dates on the roadmap follow its size and focus.\", \"No product roadmap yet. The company has one roadmap, and every PRD's items go on it.\", \"Exports print no company name until you add one.\", \"PNG, JPEG or WebP, at most 512 KB\u2026\", and after a logo is added a block \"Exports and decks use the dark logo\u2026\" with six identical lines \"Clean document: light background, uses the logo\". Viewers/commenters also read \"Only owners set horizons and the time zone.\"",
+   "fix": "Move them behind the (i) of each card; list only the themes that differ, or drop the list.",
+   "files": [
+    "web/app/settings/company/RoadmapSetup.tsx:153",
+    "web/app/settings/company/BrandingPanel.tsx:174",
+    "web/app/settings/company/BrandingPanel.tsx"
+   ]
+  },
+  {
+   "id": "F-71",
+   "severity": "minor",
+   "page": "/settings/autonomy",
+   "viewport": "both",
+   "role": "all",
+   "what": "Each of the ~14 rows carries an explanation sentence (\"Oracle suggests duplicates, goals and when to say no for each request; a person decides. Oracle never says no on its own.\") plus lock lines \"Act stays with people: \u2026\". The tooltip names the top level \"Act within limits\" but the buttons say \"Act\". Locked \"Act\" buttons are shown disabled to owners.",
+   "fix": "Keep one short line or move the text behind an (i); use the same word in the tooltip and the buttons; hide the locked level.",
+   "files": [
+    "web/app/settings/autonomy/AutonomySettings.tsx"
+   ]
+  },
+  {
+   "id": "F-72",
+   "severity": "minor",
+   "page": "/settings/analytics",
+   "viewport": "both",
+   "role": "owner",
+   "what": "Page text: \"Oracle reads each metric's weekly value with a query in your PostHog project. Use a personal API key that may only read queries.\" and hint lines under each field; options \"Own host\"; Host defaults to \"EU cloud\" when nothing is saved.",
+   "fix": "Put the sentences behind an (i); name the options \"US\", \"EU\", \"Your own server\".",
+   "files": [
+    "web/app/settings/analytics"
+   ]
+  },
+  {
+   "id": "F-74",
+   "severity": "minor",
+   "page": "/settings/themes",
+   "viewport": "both",
+   "role": "all",
+   "what": "The (i) next to the title says \"Text colours must be readable on the background (WCAG AA).\"",
+   "fix": "Say \"Text must be easy to read on its background.\"",
+   "files": [
+    "web/app/settings/themes/page.tsx:177"
+   ]
+  },
+  {
+   "id": "F-75",
+   "severity": "minor",
+   "page": "/settings/templates/<template>, /settings/templates/new",
+   "viewport": "both",
+   "role": "owner, approver",
+   "what": "A template's page shows its body as raw markup: front matter lines \"template: ai-feature\", \"theme: technical-spec\", \"brief: [behaviour, evals]\" and section ids like \"{#behaviour}\"; the status line reads \"Valid. Sections: \u2026 \u00b7 theme Technical spec \u00b7 brief Model behaviour, Evals\". New template: three sections each labelled just \"In the brief\" (checkbox) and an explanation line \"Every document from this template has these sections\u2026\"; \"Its key is made from the name.\"",
+   "fix": "Edit sections as named rows by default (as New template does) and keep markup behind an \"Edit as Markdown\" switch; reword \"In the brief\" to \"Show in the brief\".",
+   "files": [
+    "web/components/TemplateDetail.tsx:286",
+    "web/components/TemplateBodyEditor.tsx",
+    "web/app/settings/templates/new/page.tsx:169"
+   ]
+  },
+  {
+   "id": "F-76",
+   "severity": "minor",
+   "page": "/settings/themes/new",
+   "viewport": "1440",
+   "role": "owner, approver",
+   "what": "New theme asks for a \"Key\" with \"Lowercase letters, digits and hyphens, starting with a letter or digit. It cannot change later.\" before the name.",
+   "fix": "Make the key from the name as New template does.",
+   "files": [
+    "web/app/settings/themes/new/page.tsx"
+   ]
+  }
+ ],
+ "codemaps-jobs": [
+  {
+   "id": "F-35",
+   "severity": "minor",
+   "page": "/documents/[doc]/v/[n]?tab=history (Oracle's work)",
+   "viewport": "both",
+   "role": "all",
+   "what": "Job rows show a raw section key in code font instead of the section's name, e.g. \"#problem-statement-and-goals\", \"#1-problem\", \"#2-metrics\", and the result line reads \"Revision of #2-metrics ready to review\". The same raw key shows in the Reports list (\"#problem\", \"#goal-trace\").",
+   "fix": "Look up the section title from the version (as the outline does: \"1. Problem\", \"Goal trace\") and show it; write \"Revision of 2. Metrics is ready to review\".",
+   "files": [
+    "web/components/JobsPanel.tsx",
+    "web/components/ReportsPanel.tsx"
+   ]
+  },
+  {
+   "id": "F-39",
+   "severity": "minor",
+   "page": "/runs/[id] (run paused over budget)",
+   "viewport": "both",
+   "role": "commenter",
+   "what": "The held-run notice says \"... held until an owner resumes it. Resuming lets it spend up to $18.70 in total, $4.50 more. Cancel run stops it.\" to a commenter or viewer, who see no Resume or Cancel run button. The notice is also a three-sentence explanation block on the page.",
+   "fix": "Keep one short line (\"Paused: over budget. An owner can resume it.\") and move the allowance and limit detail behind the Overrun (i) in the inspector; mention Cancel run only when can('cancel_run').",
+   "files": [
+    "web/app/runs/_run-detail.tsx"
+   ]
+  },
+  {
+   "id": "F-78",
+   "severity": "minor",
+   "page": "/runs/[id] (running run, Refresh progress / run ticker)",
+   "viewport": "1440",
+   "role": "owner",
+   "what": "A running segment's progress line reads \"$2.34 spent so far \u00b7 checked 475h 30m ago\" and each agent \"Running \u00b7 475h 32m elapsed \u00b7 last heartbeat 475h 30m ago\". Long waits are counted in hours (475h is about 20 days), \"heartbeat\" is jargon, and a run nobody has checked for 20 days still reads plainly \"Running\" with no sign it may be stuck.",
+   "fix": "Show a duration over 48h as days, or as the month-first date (\"checked Oct 17, 1:00 AM\"). Say \"last update\" instead of \"last heartbeat\". When the last check is older than a set limit, show a \"No news since Oct 17\" warning with Refresh progress / Cancel run next to it.",
+   "files": [
+    "web/app/runs/_run-detail.tsx"
+   ]
+  }
+ ]
+}
