@@ -104,6 +104,9 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
         case "edit_line":
             line = _quoted(after.get("line"))
             return f"edited a one-pager line to {line}" if line else "edited a one-pager line"
+        case "set_section_number":
+            n = str(after.get("number") or "")
+            return f"set a number in a PRD section to {n}" if n else "set a number in a PRD section"
         case "add_key_date":
             return f"added {_key_date(before, after)}"
         case "edit_key_date":

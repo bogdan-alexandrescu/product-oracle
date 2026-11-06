@@ -1097,6 +1097,7 @@ OP_WORDS = {
     "move_dependency": "Moved the dependency of",
     "confirm_item": "Confirmed",
     "edit_line": "New wording for",
+    "set_section_number": "New number in",
     "add_key_date": "Added the key date",
     "edit_key_date": "Changed the key date",
     "remove_key_date": "Removed the key date",

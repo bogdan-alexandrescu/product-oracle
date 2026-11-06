@@ -633,6 +633,8 @@ ChangeOp = Literal[
     # S5: a one-pager line, as a section patch of each of its source sections
     # (oracle.simple.one_pager).
     "edit_line",
+    # A number inside a PRD section, the one-pager's "Needs a look" fix (owner, Nov 5).
+    "set_section_number",
     # Roadmap-plus: a roadmap's key dates, into its working draft (oracle.simple.key_dates).
     "add_key_date",
     "edit_key_date",
@@ -1390,6 +1392,30 @@ class OnePagerLine(BaseModel):
     words: str | None = None
 
 
+class OnePagerFixProposal(BaseModel):
+    """An open proposal of the fix: who made it, and whether the reader decides or
+    withdraws it."""
+
+    change_id: uuid.UUID
+    by_name: str
+    can_decide: bool
+    can_undo: bool
+
+
+class OnePagerFix(BaseModel):
+    """A "numbers" item's one-click fix (owner, Nov 5): POST /v1/simple/changes with ``op``
+    ``action``, this ``target``, ``before: {number: before}`` and ``after: {number: value}``;
+    ``words`` is its button ("Use 6")."""
+
+    action: Literal["set_section_number"]
+    # {document_id, section (its key), said (the words the number is in)}.
+    target: dict[str, str]
+    before: str
+    value: str
+    words: str
+    proposal: OnePagerFixProposal | None = None
+
+
 class OnePagerLook(BaseModel):
     """One "Needs a look" item for the PRD's owners (numbers that disagree, a code with no
     name): what to look at, and the sections it is in. Shared by the one-pager's checks."""
@@ -1398,6 +1424,8 @@ class OnePagerLook(BaseModel):
     text: str
     where: list[str] = []
     source_keys: list[str] = []
+    # A "numbers" item's fix; null for other items and a number in no section's text.
+    fix: OnePagerFix | None = None
 
 
 class OnePagerItem(BaseModel):

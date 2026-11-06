@@ -516,7 +516,7 @@ def current_route(
         return list(c.routed_to or [])
     if (
         c.status != "proposed"
-        or c.op in ("edit_line", "edit_goal_milestone", *QUESTION_OPS)
+        or c.op in ("edit_line", "set_section_number", "edit_goal_milestone", *QUESTION_OPS)
         or c.op in KEY_DATE_OPS
         or c.op in PLAN_OPS
     ):
@@ -1756,7 +1756,8 @@ class _View:
         owners, decider and reviewers (#723 owner answer)."""
         # S5: a one-pager line's change is on a PRD, not a roadmap of this read.
         if (c.document_id is not None and c.document_id not in self.docs
-                and c.op not in ("edit_line", "edit_goal_milestone", *QUESTION_OPS)):  # fmt: skip
+                and c.op not in ("edit_line", "set_section_number", "edit_goal_milestone",
+                                 *QUESTION_OPS)):  # fmt: skip
             return False
         if self.me is None:
             return False

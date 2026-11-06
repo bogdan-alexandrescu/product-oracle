@@ -63393,6 +63393,7 @@
                   "estimate_feature",
                   "confirm_item",
                   "edit_line",
+                  "set_section_number",
                   "add_key_date",
                   "edit_key_date",
                   "remove_key_date",
@@ -63821,6 +63822,7 @@
               "estimate_feature",
               "confirm_item",
               "edit_line",
+              "set_section_number",
               "add_key_date",
               "edit_key_date",
               "remove_key_date",
@@ -88221,6 +88223,7 @@
               "estimate_feature",
               "confirm_item",
               "edit_line",
+              "set_section_number",
               "add_key_date",
               "edit_key_date",
               "remove_key_date",
@@ -99903,6 +99906,84 @@
         ],
         "title": "OnePagerDraft"
       },
+      "OnePagerFix": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "set_section_number",
+            "title": "Action"
+          },
+          "target": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Target"
+          },
+          "before": {
+            "type": "string",
+            "title": "Before"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "words": {
+            "type": "string",
+            "title": "Words"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OnePagerFixProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "target",
+          "before",
+          "value",
+          "words"
+        ],
+        "title": "OnePagerFix",
+        "description": "A \"numbers\" item's one-click fix (owner, Nov 5): POST /v1/simple/changes with ``op``\n``action``, this ``target``, ``before: {number: before}`` and ``after: {number: value}``;\n``words`` is its button (\"Use 6\")."
+      },
+      "OnePagerFixProposal": {
+        "properties": {
+          "change_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Change Id"
+          },
+          "by_name": {
+            "type": "string",
+            "title": "By Name"
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide"
+          },
+          "can_undo": {
+            "type": "boolean",
+            "title": "Can Undo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "change_id",
+          "by_name",
+          "can_decide",
+          "can_undo"
+        ],
+        "title": "OnePagerFixProposal",
+        "description": "An open proposal of the fix: who made it, and whether the reader decides or\nwithdraws it."
+      },
       "OnePagerFlow": {
         "properties": {
           "title": {
@@ -100221,6 +100302,16 @@
             "type": "array",
             "title": "Source Keys",
             "default": []
+          },
+          "fix": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OnePagerFix"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -123098,6 +123189,7 @@
               "estimate_feature",
               "confirm_item",
               "edit_line",
+              "set_section_number",
               "add_key_date",
               "edit_key_date",
               "remove_key_date",
@@ -123260,6 +123352,7 @@
               "estimate_feature",
               "confirm_item",
               "edit_line",
+              "set_section_number",
               "add_key_date",
               "edit_key_date",
               "remove_key_date",
