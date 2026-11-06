@@ -105,7 +105,8 @@ test.describe("EC1 b and EC2 b: the Engineering check", () => {
         await withScenario(page, "eng-check-shop");
         await login(page, email);
         await page.goto(`/runs/${ENG_CHECK_RUN}`);
-        await page.getByTestId("review-screen-line").filter({ visible: true }).getByRole("link", { name: "Review" }).click();
+        // The lead reads Review; one who does not decide it reads View.
+        await page.getByTestId("review-screen-line").filter({ visible: true }).getByRole("link", { name: /^(Review|View)$/ }).click();
         await expect(page.getByTestId("brief-row")).toHaveCount(9);
         await expect(bar(page)).toBeVisible();
         // Both edges read in one frame, so a scroll still moving reads no gap the page never draws.
@@ -117,8 +118,13 @@ test.describe("EC1 b and EC2 b: the Engineering check", () => {
         expect(await toBar(), "no empty band between the list and the bar").toBeLessThanOrEqual(1);
         expect(await toBar(), "the list never runs under the bar").toBeGreaterThanOrEqual(-1);
         await page.mouse.move(900, 400);
-        await page.mouse.wheel(0, 5000);
-        await expect.poll(async () => page.evaluate(() => Math.ceil(scrollY + innerHeight) >= document.documentElement.scrollHeight)).toBe(true);
+        // Wheeled on, as a person would, until the page's very end.
+        await expect
+          .poll(async () => {
+            await page.mouse.wheel(0, 2000);
+            return page.evaluate(() => Math.ceil(scrollY + innerHeight) >= document.documentElement.scrollHeight);
+          })
+          .toBe(true);
         await expect.poll(async () => Math.abs(await toBar()), { message: "the list still ends at the bar at the page's end" }).toBeLessThanOrEqual(1);
       });
     }
