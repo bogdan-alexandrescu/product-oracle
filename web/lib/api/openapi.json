@@ -61997,6 +61997,7 @@
                   "restore",
                   "edit_title",
                   "edit_outcome",
+                  "edit_note",
                   "accept_date_suggestion",
                   "accept_risk",
                   "shift_dependents",
@@ -62400,6 +62401,7 @@
               "restore",
               "edit_title",
               "edit_outcome",
+              "edit_note",
               "accept_date_suggestion",
               "accept_risk",
               "shift_dependents",
@@ -86032,6 +86034,7 @@
               "restore",
               "edit_title",
               "edit_outcome",
+              "edit_note",
               "accept_date_suggestion",
               "accept_risk",
               "shift_dependents",
@@ -119883,6 +119886,7 @@
               "restore",
               "edit_title",
               "edit_outcome",
+              "edit_note",
               "accept_date_suggestion",
               "accept_risk",
               "shift_dependents",
@@ -120033,6 +120037,7 @@
               "restore",
               "edit_title",
               "edit_outcome",
+              "edit_note",
               "accept_date_suggestion",
               "accept_risk",
               "shift_dependents",
@@ -122085,6 +122090,28 @@
               }
             ],
             "title": "Due"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
           }
         },
         "type": "object",
@@ -125668,6 +125695,17 @@
               }
             ],
             "title": "Outcome"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
           },
           "horizon": {
             "type": "string",

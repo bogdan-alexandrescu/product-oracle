@@ -122,6 +122,8 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "restore": ("cut",),
     "edit_title": ("title",),
     "edit_outcome": ("outcome",),
+    # build-feature-panel (AN PR 1204): the panel's Notes row, at most 500 characters.
+    "edit_note": ("note",),
     "accept_risk": ("risk",),
     "confirm_item": ("draft",),
     "keep_both": ("kept_both",),
@@ -601,6 +603,13 @@ def dependents(entry: service.Entry, by_id: dict[uuid.UUID, service.Entry]) -> l
     return out
 
 
+def _seen_milestone(m: Any) -> tuple | None:
+    """A milestone as the item reads it: its name and day, None when it has neither."""
+    if not isinstance(m, dict) or not (m.get("name") or m.get("date")):
+        return None
+    return (m.get("name") or None, _iso(_day(m.get("date"), "milestone.date")))
+
+
 async def _plan(
     db: AsyncSession, principal: Any, body: SimpleChangeIn, read_: service.Read
 ) -> tuple[service.Entry, dict[str, Any], dict[str, Any], dict[str, Any]]:
@@ -704,6 +713,12 @@ async def _plan(
         shown = {"start_date": _iso(r.start.date), "end_date": _iso(r.end.date)}
         if seen_ != shown:
             raise await _conflict(db, shown, {str(row.id)}, lead)
+    elif op == "set_milestone" and _seen_milestone(seen_["milestone"]) == _seen_milestone(
+        current["milestone"]
+    ):
+        # build-feature-panel: the milestone as the item reads it (its name and day); the
+        # date engine's own fields (date_source, basis_ids...) are not seen by the panel.
+        pass
     elif seen_ != current:
         raise await _conflict(db, current, {str(row.id)}, lead)
     a = body.after
@@ -800,6 +815,15 @@ async def _plan(
             ):
                 raise ChangeError(422, f"after.{field}: a member of this company")
         after = {field: str(person) if person else None}
+        if after == current:
+            # build-feature-panel: e.g. its track's owner picked when it is so already.
+            raise ChangeError(422, "No change: it is so already")
+    elif op == "edit_note":
+        note = a.get("note")
+        note = str(note).strip() if note is not None else None
+        if note is not None and len(note) > NOTE_MAX:
+            raise ChangeError(422, f"after.note: at most {NOTE_MAX} characters")
+        after = {"note": note or None}
     elif op == "edit_outcome":
         outcome = a.get("outcome")
         outcome = str(outcome).strip() if outcome is not None else None

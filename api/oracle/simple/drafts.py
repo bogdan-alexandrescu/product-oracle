@@ -969,6 +969,7 @@ OP_WORDS = {
     "restore": "Restored",
     "edit_title": "Renamed",
     "edit_outcome": "New outcome for",
+    "edit_note": "New notes for",
     "accept_risk": "Accepted a risk on",
     "shift_dependents": "Moved the dependents of",
     "move_dependency": "Moved the dependency of",

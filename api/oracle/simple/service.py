@@ -910,6 +910,7 @@ def item_out(
         code=e.code or _prd_code(row.prd_section_key),
         title=row.title,
         outcome=row.outcome,
+        note=row.note,
         horizon=row.horizon,  # type: ignore[arg-type]
         roadmap=_ref(e.roadmap),  # type: ignore[arg-type]
         prd=_ref(e.prd),
@@ -921,6 +922,8 @@ def item_out(
             position=goal_position(e.goal.attrs),
             target=_goal_target(e.goal),
             due=_goal_due(e.goal),
+            current=_goal_current(e.goal),
+            unit=((e.goal.attrs or {}).get("unit") or None),
         )
         if e.goal
         else None,
@@ -1075,6 +1078,12 @@ def _goal_target(goal: Entity) -> str | None:
     from oracle.simple.goal_buckets import _target  # goal_buckets imports the router
 
     return _target(goal.attrs or {})
+
+
+def _goal_current(goal: Entity) -> float | None:
+    """build-feature-panel: the goal's latest reading (attrs.current) when it is a number."""
+    v = (goal.attrs or {}).get("current")
+    return v if isinstance(v, int | float) and not isinstance(v, bool) else None
 
 
 def _goal_due(goal: Entity) -> date | None:

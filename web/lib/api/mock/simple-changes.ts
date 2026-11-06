@@ -153,6 +153,8 @@ const FIELDS: Record<string, string[]> = {
   restore: ["cut"],
   edit_title: ["title"],
   edit_outcome: ["outcome"],
+  // build-feature-panel (AN PR 1204): the panel's Notes row (changes.py edit_note).
+  edit_note: ["note"],
   accept_risk: ["risk"],
   // S6: a draft item confirmed (changes.py confirm_item).
   confirm_item: ["draft"],
@@ -349,6 +351,7 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
     else if (f === "cut") out[f] = s.status === "cut";
     else if (f === "title") out[f] = s.title;
     else if (f === "outcome") out[f] = s.outcome ?? null;
+    else if (f === "note") out[f] = s.note ?? null;
     else if (f === "draft") out[f] = !!s.draft;
     else if (f === "confidence") out[f] = s.confidence ?? null;
     else if (f === "track_id") out[f] = s.track ? stableUuid(`simple-track/${s.track}`) : null;
@@ -373,6 +376,7 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
   if ("title" in values) s.title = String(values.title);
   if ("draft" in values) s.draft = !!values.draft;
   if ("outcome" in values) s.outcome = (values.outcome as string | null) ?? null;
+  if ("note" in values) s.note = (values.note as string | null) ?? null;
   // one-feature-panel: a track, goal or PRD is one another item of the roadmap read has (as the API's are rows).
   const like = (f: (x: typeof s) => unknown, v: unknown) => db.items.find((x) => f(x) === v);
   if ("confidence" in values) s.confidence = (values.confidence as typeof s.confidence) ?? undefined;
@@ -618,6 +622,8 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
           : spec.adds ? {} : Object.fromEntries(Object.keys(body.before).map((k) => [k, stored[k] ?? null]));
   const seen = ranking || (body.op as string) === "set_goal_measure" ? Object.fromEntries(Object.keys(before).map((k) => [k, body.before[k] ?? null])) : body.before;
   if (!spec.adds && !same(before, seen)) return conflict(db, ctx, before, [id], "Changed since you saw it");
+  // build-feature-panel: an owner or decider set to what it is already records nothing (changes.py).
+  if ((body.op === "set_owner" || body.op === "set_decider") && same(before, Object.fromEntries(Object.keys(before).map((k) => [k, after[k] ?? null])))) return json(422, { detail: "No change: it is so already" });
   if (body.op === "override_priority" && after.override === null && !before.override) return json(409, { detail: "It is at Oracle's rank already" });
   const change: Change = {
     id: crypto.randomUUID(), session_id: session?.id ?? null, document_id: target.item_id ? stableUuid(`simple-doc/${seed(db, keyOf(db, target.item_id)!).roadmap}`) : null,
@@ -1009,6 +1015,11 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       if (!title) return json(422, { detail: "after.title: 1 to 200 characters" });
       after = { title };
     } else if (body.op === "edit_outcome") after = { outcome: a.outcome ?? null };
+    else if (body.op === "edit_note") {
+      const note = a.note == null ? null : String(a.note).trim();
+      if (note && note.length > 500) return json(422, { detail: "after.note: at most 500 characters" });
+      after = { note: note || null };
+    }
     else if (body.op === "set_confidence") {
       if (a.confidence != null && !["low", "medium", "high"].includes(String(a.confidence))) return json(422, { detail: "after.confidence: low, medium, high or null" });
       after = { confidence: a.confidence ?? null };

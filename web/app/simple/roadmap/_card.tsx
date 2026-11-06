@@ -384,6 +384,7 @@ const OP_WORDS: Record<string, string> = {
   restore: "Restore it",
   edit_title: "Rename it",
   edit_outcome: "Change the outcome",
+  edit_note: "Change the notes",
   accept_date_suggestion: "Accept Oracle's dates",
   accept_risk: "Accept a risk",
   shift_dependents: "Move the dependents",
@@ -855,6 +856,15 @@ export function FloatingCard({
       <LooksLike item={item} act={act} canChange={canChange} />
       <div className={wide && !phone ? "grid grid-cols-2 gap-4" : ""}>
         <div>
+          {!canChange && (
+            // build-feature-panel (AN PR 1204): who may only read says so, with a way to suggest a change.
+            <p className="mt-2 rounded-lg bg-surface2 px-3 py-2 text-sm text-text2" data-testid="card-read-only">
+              You can read this feature. Its owner and approvers can change it.{" "}
+              <button type="button" onClick={() => setTalk(true)} className="font-medium text-accent-ink underline">
+                Suggest a change
+              </button>
+            </p>
+          )}
           <PanelFields item={item} items={items} act={act} canChange={canChange} onOpen={onOpen} />
           <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
           {item.slices.length > 0 && (

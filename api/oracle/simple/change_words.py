@@ -57,6 +57,8 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             return f"cut {x} and its dependents {names}"
         case "edit_title":
             return f"renamed {x} to {title}" if title else f"renamed {x}"
+        case "edit_note":
+            return f"changed the notes of {x}"
         case "edit_outcome":
             return f"changed the outcome of {x}"
         case "accept_risk":

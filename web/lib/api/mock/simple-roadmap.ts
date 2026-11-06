@@ -62,6 +62,8 @@ interface SeedItem {
   risks?: { flag: Flag["kind"]; note: string; subject?: string | null }[];
   /** Simple S3a's change engine (./simple-changes.ts) edits these. */
   outcome?: string | null;
+  /** build-feature-panel (AN PR 1204): the item's notes (op edit_note), the panel's Notes row. */
+  note?: string | null;
   position?: number;
   /** S4 (the floating card): the priority's rationale and the PRD section it came from. */
   why?: string;
@@ -348,6 +350,8 @@ const METRICS: Record<string, string> = { "grow-retention": "Teams active after 
 const PLAN_GOALS: Record<string, string> = { growth: "Growth" };
 /** one-feature-panel: each goal's target and date (invented), as the goal edit reads them. */
 const TARGETS: Record<string, [string, string]> = { "grow-retention": ["70% of teams", "2027-03-31"], "faster-activation": ["2 days", "2027-02-26"], "quiet-alerts": ["Under 10% of teams", "2027-03-31"] };
+/** build-feature-panel (AN PR 1204): each goal's latest reading and unit (invented), the panel's Reading row. */
+const READINGS: Record<string, { current: number; unit: string }> = { "grow-retention": { current: 61, unit: "%" }, "faster-activation": { current: 3, unit: "days" } };
 export type RoadmapGoalFields = { title: string; metric: string | null; target: string | null; due: string | null };
 /** A goal's key from its id (the goal edit takes either kind of goal, as the API's one goal entity):
  * a roadmap goal's, or a goal bucket's of that key. */
@@ -1226,12 +1230,12 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     const sliced = slicesOf(s, rm.prd.toLowerCase().replace(/ /g, "-"));
     const suggestion = itemSuggestion(db, db.ids[s.key]);
     return {
-      id: db.ids[s.key], key: s.key, title: s.title, outcome: s.outcome ?? null, horizon: s.horizon,
+      id: db.ids[s.key], key: s.key, title: s.title, outcome: s.outcome ?? null, note: s.note ?? null, horizon: s.horizon,
       estimate_pending: !!s.estimate_pending,
       code: prdCode(s.section),
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: ROADMAP_DOC_SLUG[s.roadmap] ?? s.roadmap, title: rm.title },
       prd: ownPrd(s),
-      goal: s.goal && !inTrash(s.goal) ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, ...roadmapGoal(reader.full, s.goal), position: goalPositionOf(s.goal) } : null,
+      goal: s.goal && !inTrash(s.goal) ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, ...roadmapGoal(reader.full, s.goal), position: goalPositionOf(s.goal), ...READINGS[s.goal] } : null,
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
       confidence: s.confidence ?? null,
       status: s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned"),
