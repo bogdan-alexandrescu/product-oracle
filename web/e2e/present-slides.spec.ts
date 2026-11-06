@@ -54,7 +54,8 @@ for (const phone of [false, true]) {
         await expect(count).toHaveText("6 / 6");
         await expect(slide.getByRole("heading", { level: 2 })).toHaveText("Timeline");
         // The timeline is the slide, in view without scrolling.
-        await expect(slide.getByText("Today").first()).toBeInViewport();
+        await expect(slide.getByLabel("Timeline strip")).toBeInViewport();
+        await expect(page.getByRole("button", { name: "Previous slide" })).toBeInViewport();
         await expect(page.getByRole("button", { name: "Next slide" })).toBeDisabled();
         await page.keyboard.press("ArrowRight");
         await expect(count).toHaveText("6 / 6");

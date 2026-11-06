@@ -68,7 +68,7 @@ export function OnePagerSlides({
   const title = b?.title ?? timeline?.title ?? "Timeline";
   const nav = "inline-flex min-h-11 min-w-11 items-center justify-center rounded-[10px] border border-line-strong bg-surface px-3.5 text-[15px] font-semibold text-text disabled:opacity-40";
   return (
-    <div className="flex min-h-screen flex-col" data-testid="slides">
+    <div className="flex h-dvh flex-col" data-testid="slides">
       <div className="flex flex-wrap items-center gap-3 px-6 pt-4 max-[767px]:px-4">
         <span className="min-w-0 truncate text-[15px] font-semibold text-text2">{v.document.title}</span>
         {top}
@@ -82,7 +82,7 @@ export function OnePagerSlides({
         aria-roledescription="slide"
         aria-label={`${title}, slide ${at + 1} of ${count}`}
         data-testid="slide"
-        className={`mx-auto flex w-full flex-1 flex-col gap-6 px-6 py-8 max-[767px]:px-4 ${isTimeline ? "max-w-none md:px-12" : "max-w-[1100px] justify-center"}`}
+        className={`mx-auto flex min-h-0 w-full flex-1 flex-col gap-6 overflow-auto px-6 py-8 max-[767px]:px-4 ${isTimeline ? "max-w-none md:px-12" : "max-w-[1100px] justify-center"}`}
       >
         <h2 className="text-[clamp(30px,4vw,52px)] leading-[1.15] font-bold tracking-[-.01em]">{title}</h2>
         {b ? (
@@ -99,7 +99,7 @@ export function OnePagerSlides({
           <p className="text-[clamp(20px,2.4vw,30px)] text-text-faint">No roadmap items yet</p>
         )}
       </section>
-      <div className="flex items-center justify-center gap-4 px-6 pb-6">
+      <div className="flex flex-none items-center justify-center gap-4 px-6 py-4">
         <button type="button" className={nav} disabled={at === 0} onClick={() => go(at - 1)} aria-label="Previous slide">
           ←
         </button>
