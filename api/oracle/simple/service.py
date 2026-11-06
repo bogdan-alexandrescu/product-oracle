@@ -469,11 +469,17 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
     feature_keys = await company.feature_keys_of(db, [e.row for e in entries])
     for version_rows in versions.values():
         at = company.resolve_dependencies(version_rows, feature_keys)
-        loose = _loose_keys(version_rows, feature_keys)
+        loose: dict[str, list[RoadmapItem]] | None = None
         for row in version_rows:
             e = entry_of[row.id]
             for k in row.depends_on or []:
-                for d in at.get(k) or loose.get(k.lower(), ()):
+                found = at.get(k)
+                if not found:
+                    # Read only when a key is no exact key (most are).
+                    if loose is None:
+                        loose = _loose_keys(version_rows, feature_keys)
+                    found = loose.get(k.lower(), [])
+                for d in found:
                     dep = entry_of[d.id]
                     if dep is e:
                         continue
