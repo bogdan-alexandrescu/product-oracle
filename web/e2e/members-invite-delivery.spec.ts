@@ -80,7 +80,9 @@ test("invite: an address outside the company's domains is refused under the fiel
   await invite(page, "pat@example.org");
 
   const form = page.getByRole("form", { name: "Invite" });
-  await expect(form.getByRole("alert")).toContainText("pat@example.org is outside the company's email domains (example.com)");
+  // pass-f F-50: a short refusal, and an owner may add the domain from it.
+  await expect(form.getByRole("alert")).toContainText("pat@example.org is not in the company domains");
+  await expect(form.getByRole("alert").getByRole("button", { name: "Add domain" })).toBeVisible();
   await expect(page.getByLabel("Email")).toHaveAttribute("aria-invalid", "true");
   await expect(inviteRow(page, "pat@example.org")).toHaveCount(0);
   await expect(page.getByTestId("invite-outcome")).toHaveCount(0);

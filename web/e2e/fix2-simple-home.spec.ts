@@ -261,7 +261,10 @@ test("qa-simple-home-28: Proposals' All opens the review list", async ({ page })
 test("qa-simple-home-28: a new company's empty proposals card says what will show there", async ({ page }) => {
   await signIn(page, EMAILS.owner, "empty");
   // fix4 (qa-simple-home-16): folded into the one "Nothing waits" line, which still says what will show.
-  await expect(page.getByTestId("simple-page").getByTestId("home-nothing-waits")).toContainText("Decisions and proposals on your items show here when they come.");
+  // F-30: in the line's (i).
+  const waits = page.getByTestId("simple-page").getByTestId("home-nothing-waits");
+  await waits.getByRole("button", { name: "About what waits for you" }).click();
+  await expect(waits.getByRole("tooltip")).toHaveText("Decisions and proposals on your items show here when they come.");
 });
 
 test("qa-simple-home-34: a broken link's actions sit in a row, so the row hugs its text", async ({ page }) => {

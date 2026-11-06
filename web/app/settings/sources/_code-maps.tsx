@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { Button, Chip, confirmInPage, InfoTip, Notice, type ChipKind } from "@/components/ds";
 import { DOCS_ONLY } from "@/components/tech-brief";
+import { LoadError } from "@/components/ui";
 import { api, type Schemas, unwrap } from "@/lib/api/client";
 import { failedAt, formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -140,19 +141,22 @@ export function CodeMaps({ source }: { source: Source }) {
   if (repos.length === 0) return null;
   return (
     <div className="mt-2 flex flex-col gap-1.5">
-      {q.error && <Notice tone="error">{q.error}</Notice>}
-      <ul aria-label={`Code maps of ${source.name}`} className="flex flex-col gap-1.5">
-        {repos.map((repo) => (
-          <CodeMapLine
-            key={repo}
-            repo={repo}
-            sourceId={source.id}
-            // Newest first: the repo's latest map.
-            map={maps?.find((m) => same(m.repo, repo))}
-            onChange={(m) => q.setData((prev) => [m, ...(prev ?? []).filter((x) => x.id !== m.id)])}
-          />
-        ))}
-      </ul>
+      {/* F-1: a list that did not load says so, with Try again, and offers no Map the code under it. */}
+      {q.error && <LoadError what={`the code maps of ${source.name}`} error={q.error} onRetry={() => void q.reload()} />}
+      {!q.error && (
+        <ul aria-label={`Code maps of ${source.name}`} className="flex flex-col gap-1.5">
+          {repos.map((repo) => (
+            <CodeMapLine
+              key={repo}
+              repo={repo}
+              sourceId={source.id}
+              // Newest first: the repo's latest map.
+              map={maps?.find((m) => same(m.repo, repo))}
+              onChange={(m) => q.setData((prev) => [m, ...(prev ?? []).filter((x) => x.id !== m.id)])}
+            />
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

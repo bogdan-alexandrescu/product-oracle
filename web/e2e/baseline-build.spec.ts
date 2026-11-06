@@ -39,9 +39,15 @@ test("approver starts a build: depth, review toggle and estimate, then the banne
   await page.goto("/baseline");
   await openSheet(page);
   const s = sheet(page);
-  await expect(s).toContainText(
+  // F-30: what a build does is in the title's (i).
+  await s.getByRole("button", { name: "About building the baseline" }).click();
+  await expect(s.getByRole("tooltip")).toHaveText(
     "Oracle reads your connected sources and proposes goals, products, features, constraints and evidence. Nothing is confirmed until you review it.",
   );
+  // Closed again: unpinned, and the pointer off the (i).
+  await s.getByRole("button", { name: "About building the baseline" }).click();
+  await s.getByRole("heading", { name: "Build the baseline" }).hover();
+  await expect(s.getByRole("tooltip")).toHaveCount(0);
   const depth = s.getByRole("group", { name: "Depth" });
   await expect(depth.getByRole("button", { name: "Standard" })).toHaveAttribute("aria-pressed", "true");
   await expect(depth.getByRole("button", { name: "Quick" })).toHaveAttribute("title", "Strongest few sources per claim");

@@ -330,7 +330,11 @@ test("Simple's Home: each part says when it has nothing", async ({ page }) => {
   await page.goto("/simple");
   await expectSimple(page, "/simple");
   // fix4 (qa-simple-home-16): nothing waiting is one line, not two empty cards.
-  await expect(page.getByTestId("home-nothing-waits")).toContainText("Nothing waits on you. Decisions and proposals on your items show here when they come.");
+  // F-30: the one line is "Nothing waiting"; what comes here is in its (i).
+  const waits = page.getByTestId("home-nothing-waits");
+  await expect(waits).toContainText("Nothing waiting");
+  await waits.getByRole("button", { name: "About what waits for you" }).click();
+  await expect(waits.getByRole("tooltip")).toHaveText("Decisions and proposals on your items show here when they come.");
   await expect(page.getByTestId("home-meeting-empty")).toContainText("No review meeting scheduled");
 });
 

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import { Button, Empty, InfoTip } from "@/components/ds";
 import { InlineError, JobStatusChip } from "@/components/review/parts";
-import { ErrorNote, Loading } from "@/components/ui";
+import { ErrorNote, LoadError, Loading } from "@/components/ui";
 import { api, unwrap, type JobSettings, type LlmJob, type LlmJobKind } from "@/lib/api/client";
 import { formatDateTime, formatUsd, jobFailure, JOB_KIND_LABEL, JOB_SETTING_LABEL, NO_ACCOUNT_REASON } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -184,6 +184,7 @@ function SettingsForm({ doc }: { doc: string }) {
       setError(e instanceof Error ? e.message : "Could not save.");
     }
   }
+  if (q.error && !q.data) return <LoadError what="Oracle's switches" error={q.error} onRetry={() => void q.reload()} />;
   if (!q.data) return null;
   return (
     <fieldset className="rounded-button border border-line px-3 pt-1 pb-2.5" data-testid="llm-job-settings">
@@ -241,17 +242,22 @@ export function JobsPanel({ doc, version, refreshKey = 0 }: { doc: string; versi
       {canSettings && <SettingsForm doc={doc} />}
       {canQueue && (
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => queue("review_comments")}>Suggest changes now</Button>
-          <Button onClick={() => queue("reporting")}>Write reports now</Button>
+          {/* F-1: nothing to start while the list of Oracle's work did not load. */}
+          <Button disabled={!!q.error} onClick={() => queue("review_comments")}>
+            Suggest changes now
+          </Button>
+          <Button disabled={!!q.error} onClick={() => queue("reporting")}>
+            Write reports now
+          </Button>
         </div>
       )}
       {error && <ErrorNote>{error}</ErrorNote>}
-      {q.error && <ErrorNote>{q.error}</ErrorNote>}
+      {q.error && <LoadError what="Oracle's work" error={q.error} onRetry={() => void q.reload()} />}
       {!q.data && !q.error && <Loading />}
-      {q.data && q.data.length === 0 && (
+      {!q.error && q.data && q.data.length === 0 && (
         <Empty>Oracle hasn&apos;t worked on this version yet.</Empty>
       )}
-      {q.data && q.data.length > 0 && (
+      {!q.error && q.data && q.data.length > 0 && (
         <ol className="flex flex-col" aria-label="Oracle's work">
           {q.data.map((j) => (
             <JobRow key={j.id} job={j} onChanged={() => void q.reload()} />

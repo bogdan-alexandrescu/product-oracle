@@ -100,7 +100,7 @@ test("qa-onboarding-8: a refused invite clears the last one's Invite sent", asyn
   await expect(page.getByTestId("invite-outcome")).toHaveText("Invite sent to gone@example.com");
   await form.getByLabel("Email").fill("outside@gmail.com");
   await form.getByRole("button", { name: "Send invite" }).click();
-  await expect(form.getByRole("alert")).toContainText("outside the company's email domains");
+  await expect(form.getByRole("alert")).toContainText("outside@gmail.com is not in the company domains");
   await expect(page.getByTestId("invite-outcome")).toHaveCount(0);
 });
 
@@ -174,7 +174,7 @@ test("qa-settings-5 / qa-settings-6 / qa-settings-7: one name rule, one read-onl
   await expect(roles.locator('[data-testid^="role-"]:not([data-testid="role-can"])')).toHaveCount(4);
   await expect(roles).not.toContainText("Engineering lead");
   await expect(page.getByTestId("roles-lead")).toContainText("Engineering lead");
-  await expect(page.getByTestId("roles-lead").getByTestId("engineering-lead-none")).toHaveText("Nobody named yet. Pick who carries engineering checks.");
+  await expect(page.getByTestId("roles-lead").getByTestId("engineering-lead-none")).toHaveText("None yet");
 
 });
 
@@ -209,7 +209,7 @@ test("qa-settings-9: a sign-in rule says Saved when it lands", async ({ page }) 
   await expect(rules.getByRole("button", { name: "Join at once" })).toHaveAttribute("aria-pressed", "true");
   // The first Saved goes after a moment, so the second one is the second save's own.
   await expect(rules.getByTestId("sign-in-saved")).toHaveCount(0, { timeout: 8000 });
-  await rules.getByLabel("Default role").selectOption("viewer");
+  await rules.getByLabel("Default role", { exact: true }).selectOption("viewer");
   await expect(rules.getByTestId("sign-in-saved")).toHaveText("Saved");
   await expect(rules.getByTestId("sign-in-saved")).toHaveCount(1);
 });
@@ -228,8 +228,9 @@ test.describe("on a phone", () => {
     expect((await box(commenter.getByTestId("member-open"))).height).toBeGreaterThanOrEqual(44);
     await expect(memberRow(page, "viewer@example.com").getByTestId("never-signed-in")).toHaveText("Never signed in");
     await expect(memberRow(page, "viewer@example.com")).not.toContainText("Signed in —");
-    const sources = page.getByTestId("sign-in-rules").getByRole("link", { name: "Settings › Sources" });
-    expect((await box(sources)).height).toBeGreaterThanOrEqual(44);
+    // pass-f F-50: Settings › Sources is named inside the Company domains (i), no longer a link.
+    const about = page.getByTestId("sign-in-rules").getByRole("button", { name: "About company domains" });
+    expect(Math.min((await box(about)).width, (await box(about)).height)).toBeGreaterThanOrEqual(24);
   });
 
   test("qa-settings-44: a picked member's panel comes into view", async ({ page }) => {

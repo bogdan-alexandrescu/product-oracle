@@ -348,16 +348,19 @@ export default function HomePage() {
           {inbox && !questionsQ.loading && !questionsQ.error && shownNeeds.length === 0 && (
             // qa-company-14: what shows here for this person, and somewhere to go meanwhile.
             <Empty testId="home-needs-empty">
-              <span className="block font-semibold">Nothing waiting</span>
-              <span className="block" data-testid="home-needs-empty-what">
-                {can("approve_version", true)
-                  ? "Approvals, reviews and the questions asked of you show here."
-                  : can("create_comment")
-                    ? "Reviews of your PRDs and the questions asked of you show here."
-                    : "Questions someone asks you show here."}
+              {/* F-30: one short line; what shows here is in its (i). */}
+              <span className="inline-flex items-center gap-1.5 font-semibold">
+                Nothing waiting
+                <InfoTip label="what needs you" align="start" testId="home-needs-empty-what">
+                  {can("approve_version", true)
+                    ? "Approvals, reviews and the questions asked of you show here."
+                    : can("create_comment")
+                      ? "Reviews of your PRDs and the questions asked of you show here."
+                      : "Questions someone asks you show here."}
+                </InfoTip>
               </span>
               {!can("create_comment") && (
-                <Link href="/plan" className="mt-1 inline-block font-semibold text-accent-ink hover:underline" data-testid="home-needs-empty-link">
+                <Link href="/plan" className="mt-1 block font-semibold text-accent-ink hover:underline" data-testid="home-needs-empty-link">
                   Read the plan
                 </Link>
               )}

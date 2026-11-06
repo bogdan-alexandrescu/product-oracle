@@ -233,7 +233,10 @@ test("time zone: with none chosen, Save waits for a pick and the zone stays unse
   const panel = page.getByTestId("timezone-panel");
   await expect(panel.getByLabel("Company time zone")).toHaveValue("");
   await expect(panel.getByRole("button", { name: "Save" })).toBeDisabled();
-  await expect(panel.getByTestId("timezone-save-reason")).toHaveText("Pick a time zone to save it.");
+  // F-30: why Save waits is in the panel's (i).
+  await panel.getByRole("button", { name: "About time zone" }).click();
+  await expect(panel.getByRole("tooltip")).toContainText("Pick a time zone to save it.");
+  await page.keyboard.press("Escape");
   await page.goto("/settings/notifications");
   await expect(page.getByTestId("report-zone")).toHaveText("Not set · Pacific is used");
 

@@ -144,6 +144,7 @@ export function TeamCapacityPanel({ canChange }: { canChange: boolean }) {
       <Panel
         title="Team capacity"
         tools={
+          // F-30: what the team is for, in the title's (i).
           <InfoTip label="team capacity" side="bottom">
             One team builds every PRD&apos;s items, in order. Dates on the roadmap follow its size and focus.
           </InfoTip>

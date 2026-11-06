@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { entrySummary, entryText, itemKind, itemTitle } from "@/components/ArtifactMenu";
 import { Button, Chip, confirmInPage, Empty, InfoTip, Notice, PageHeader, Panel, toast } from "@/components/ds";
+import { LoadError } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { artifactsChanged } from "@/lib/artifacts";
 import { formatDateTime } from "@/lib/format";
@@ -158,9 +159,10 @@ export default function TrashPage() {
       ) : (
         <Panel
           title="Deleted"
-          count={q.data?.length}
+          count={q.error ? undefined : q.data?.length}
           tools={
             mayPurge &&
+            !q.error &&
             !!q.data?.length && (
               <Button variant="ghost" disabled={emptying} onClick={() => void emptyTrash()}>
                 Empty Trash
@@ -168,9 +170,14 @@ export default function TrashPage() {
             )
           }
         >
-          {q.error && <Notice tone="error">{q.error}</Notice>}
+          {/* F-1: a list that did not load says so, with Try again, and nothing under it. */}
+          {q.error && (
+            <div className="p-4">
+              <LoadError what="the trash" error={q.error} onRetry={() => void q.reload()} />
+            </div>
+          )}
           {emptyError && <Notice tone="error">{emptyError}</Notice>}
-          {q.data && q.data.length === 0 && (
+          {!q.error && q.data && q.data.length === 0 && (
             <Empty testId="trash-empty">
               <span className="inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
                 Trash is empty.
@@ -192,7 +199,7 @@ export default function TrashPage() {
               </span>
             </Empty>
           )}
-          {q.data && q.data.length > 0 && (
+          {!q.error && q.data && q.data.length > 0 && (
             <ul className="divide-y divide-line">
               {q.data.map((e) => (
                 <Row key={e.id} e={e} mayPurge={mayPurge} onGone={() => q.setData((rows) => rows?.filter((r) => r.id !== e.id))} />

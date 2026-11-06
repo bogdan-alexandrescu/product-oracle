@@ -8,7 +8,8 @@ import { ActedCell, SETTLING, Unavailable, useActed } from "@/components/account
 import { AccessRequests } from "@/components/members/AccessRequests";
 import { personName, RemoveDialog, RoleDialog } from "@/components/members/ChangePreview";
 import { MemberInspector } from "@/components/members/MemberInspector";
-import { SignInRules } from "@/components/members/SignInRules";
+import { loadRevokeFailures, RevokeBadge, RevokeFailuresSection, type RevokeFailure } from "@/components/members/RevokeFailures";
+import { ADD_DOMAIN_EVENT, SignInRules } from "@/components/members/SignInRules";
 import { FindPerson, matches, NoMatch, PeopleReadOnly } from "@/components/members/PeopleReadOnly";
 import { Field, INPUT, SELECT, TEXTAREA } from "@/app/settings/_components/fields";
 import {
@@ -22,6 +23,7 @@ import {
   InspectorRow,
   InspectorSection,
   Notice,
+  Numeral,
   PageHeader,
   Panel,
   Split,
@@ -43,6 +45,7 @@ const ROLES: { role: Role; label: string; can: string }[] = [
 ];
 export const ROLE_LABEL = Object.fromEntries(ROLES.map((r) => [r.role, r.label])) as Record<Role, string>;
 const INVITE_FORM = "invite-form";
+const PEOPLE = "people";
 /** A3: the engineering lead is a flag any commenter or above carries, not a fifth role. */
 const LEAD_TIP =
   "Engineering lead: decides both engineering stops (the check after the feature set and the dates after the PRD draft) and verifies dates. Any commenter or above can carry it.";
@@ -54,8 +57,11 @@ const CHECKBOX = "size-4 accent-[var(--accent)] disabled:opacity-50 max-[600px]:
 const ROLE_SELECT = SELECT.replace("min-w-0", "min-w-[8.5rem]");
 /** A role that can't be changed here: the same chip everywhere (qa-settings-6). */
 const RoleChip = ({ role }: { role: Role }) => <Chip kind="line">{ROLE_LABEL[role]}</Chip>;
-const SELF_NOT_REMOVED = "You can't remove yourself";
 const NO_EMAIL = "Enter an email to send an invite.";
+/** How long "Invite sent to …" stays (pass-f F-54). */
+const SENT_NOTE_MS = 6000;
+/** The API's refusal of an address outside the company domains (pass-f F-50). */
+const OUTSIDE_DOMAINS = /is not in the company domains/;
 /** The invite's personal note (#203): plain text, at most this long; a counter shows near it. */
 const MESSAGE_MAX = 500;
 const MESSAGE_COUNT_FROM = 400;
@@ -215,9 +221,14 @@ function RoleNote() {
       data-testid="role-note"
       className="flex flex-wrap items-center gap-2 rounded-button bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink"
     >
-      <span>
-        Your role is <b>{role ? ROLE_LABEL[role] : "not known"}</b>.{" "}
-        {can("create_invite") ? "You can invite viewers and commenters and approve their access requests." : "Owners manage members and sign-in."}
+      {/* pass-f F-50: what the role may do is behind the (i), not a sentence on the page. */}
+      <span className="inline-flex items-center gap-1.5">
+        <span>
+          Your role is <b>{role ? ROLE_LABEL[role] : "not known"}</b>
+        </span>
+        <InfoTip label="your role" align="start">
+          {can("create_invite") ? "You can invite viewers and commenters and approve their access requests." : "Owners manage members and sign-in."}
+        </InfoTip>
       </span>
       {engineeringLead && <span>You are an engineering lead.</span>}
     </p>
@@ -232,11 +243,12 @@ function RolesSection({ members, label = "Roles" }: { members?: Member[]; label?
       <InspectorSection label={label ?? undefined} testId="roles-list">
         {ROLES.map((r) => (
           <div key={r.role} data-testid={`role-${r.role}`} className="flex items-start gap-2.5 py-1">
-            <span className="min-w-0 flex-1">
-              <span className="block font-semibold">{r.label}</span>
-              <span data-testid="role-can" className="block text-[13px] leading-5 break-words text-text2">
-                {r.can.charAt(0).toUpperCase() + r.can.slice(1)}.
-              </span>
+            {/* pass-f F-50: what each role can do is behind its (i). */}
+            <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
+              <span className="font-semibold">{r.label}</span>
+              <InfoTip label={`the ${r.label} role`} align="start">
+                <span data-testid="role-can">{r.can.charAt(0).toUpperCase() + r.can.slice(1)}.</span>
+              </InfoTip>
             </span>
             {members && (
               <span className="tnum flex-none font-semibold">{members.filter((m) => m.role === r.role && m.status !== "disabled").length}</span>
@@ -256,7 +268,8 @@ function RolesSection({ members, label = "Roles" }: { members?: Member[]; label?
               ) : undefined
             }
           >
-            <span className="inline-flex items-center gap-1.5">
+            {/* pass-f F-15: the row wraps, so its (i) stays inside the panel on a phone. */}
+            <span className="inline-flex min-w-0 flex-wrap items-center gap-1.5 whitespace-normal">
               {/* The row keeps the words "Engineering lead" for a screen reader; the heading shows them. */}
               <span>
                 <span className="sr-only">Engineering lead: </span>
@@ -264,13 +277,13 @@ function RolesSection({ members, label = "Roles" }: { members?: Member[]; label?
                 {leads == null ? (
                   "Any commenter or above can carry it"
                 ) : leads === 0 ? (
-                  <span data-testid="engineering-lead-none">Nobody named yet. Pick who carries engineering checks.</span>
+                  <span data-testid="engineering-lead-none">None yet</span>
                 ) : (
                   "People named"
                 )}
               </span>
               <InfoTip label="the engineering lead" align="start">
-                {LEAD_TIP}
+                {leads === 0 ? `Pick who carries engineering checks. ${LEAD_TIP}` : LEAD_TIP}
               </InfoTip>
             </span>
           </InspectorRow>
@@ -311,6 +324,20 @@ function tried(at?: string | null, reason?: string | null): string {
 }
 
 /**
+ * pass-f F-22: why an invite email failed, in words ("the mail service was down"), never the
+ * mail service's status code; the server's words stay in the line's title.
+ */
+function mailReason(error?: string | null): string | null {
+  if (!error) return null;
+  const code = Number(/\b([45]\d\d)\b/.exec(error)?.[1]);
+  if (code >= 500 || /unavailable|timed? ?out|timeout/i.test(error)) return "the mail service was down";
+  if (code === 401 || code === 403) return "the mail service refused Oracle";
+  if (code === 429) return "the mail service was busy";
+  if (code >= 400) return "the mail service refused the email";
+  return "the email didn't go out";
+}
+
+/**
  * An open invite's one status line, as text: only what still needs someone (access Google
  * has not granted yet, an email that failed or was not sent), when last tried and why.
  * Nothing when all went through: the chips say so.
@@ -319,13 +346,17 @@ function InviteDetail({ invite }: { invite: Invite }) {
   const access = invite.access === "pending" ? tried(invite.access_at, invite.access_error) : "";
   const s = invite.email_status;
   const email =
-    s === "failed" ? tried(invite.email_at, invite.email_error) : s === "not_sent" ? "Oracle has no sender set up: send them the sign-in link" : "";
+    s === "failed" ? tried(invite.email_at, mailReason(invite.email_error)) : s === "not_sent" ? "Oracle has no sender set up: send them the sign-in link" : "";
   if (!access && !email) return null;
   return (
     <p data-testid="invite-detail" className="basis-full text-[13px] break-words text-text2">
       {access && <span data-testid="invite-access-detail">{access}</span>}
       {access && email && " · "}
-      {email && <span data-testid="invite-email-detail">{email}</span>}
+      {email && (
+        <span data-testid="invite-email-detail" title={s === "failed" ? (invite.email_error ?? undefined) : undefined}>
+          {email}
+        </span>
+      )}
     </p>
   );
 }
@@ -422,6 +453,11 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
     manage ? unwrap(api.GET("/v1/members")) : Promise.resolve(undefined as Member[] | undefined),
   );
   const invitesQ = useQuery("invites", () => unwrap(api.GET("/v1/invites")));
+  // pass-f F-48: what Oracle could not revoke from a removed member or an invite (the Inbox's items).
+  const revokeQ = useQuery(manage ? "members:revoke-failures" : "members:revoke-failures:none", () =>
+    manage ? loadRevokeFailures() : Promise.resolve([] as RevokeFailure[]),
+  );
+  const revokeFailures = revokeQ.data ?? [];
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<Member | null>(null);
@@ -431,6 +467,8 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
   // search, and a demotion waiting on its dialog.
   const [inspecting, setInspecting] = useState<string | null>(null);
   const [find, setFind] = useState("");
+  // pass-f F-49: the Active and Removed tiles keep only those people in the list.
+  const [statusFilter, setStatusFilter] = useState<"active" | "removed" | null>(null);
   const [demoting, setDemoting] = useState<{ member: Member; role: Role; impact: Impact } | null>(null);
   const [demoteError, setDemoteError] = useState<string | null>(null);
   const inviteActs = useActed();
@@ -764,26 +802,8 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
         </Button>
       );
     }
-    if (m.id === selfId) {
-      const reason =
-        m.role === "owner" && activeOwners <= 1
-          ? "You can't remove yourself, and you are the only owner. Make someone else owner; they can remove you."
-          : "You can't remove yourself. Another owner can remove you.";
-      return (
-        <span className="inline-flex flex-col items-end gap-0.5 max-[600px]:items-start">
-          <Unavailable reason={reason} testId="remove-unavailable">
-            {(props) => (
-              <Button {...props} aria-label={`Remove ${m.email}`} className="opacity-60">
-                Remove
-              </Button>
-            )}
-          </Unavailable>
-          <span data-testid="remove-reason" title={reason} className="text-[13px] leading-4 text-text2">
-            {SELF_NOT_REMOVED}
-          </span>
-        </span>
-      );
-    }
+    // pass-f F-52: no Remove on your own row; another owner removes you.
+    if (m.id === selfId) return null;
     return (
       <Button
         aria-label={`Remove ${m.email}`}
@@ -823,8 +843,12 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
               </span>
               {personName(m) !== m.email && (
                 // Not `truncate`: on a phone the table undoes that class and wraps anywhere.
-                <span data-testid="member-email" title={m.email} className="block max-w-full overflow-hidden text-[13px] font-normal text-ellipsis whitespace-nowrap text-text2">
-                  {m.email}
+                // pass-f F-52: the whole address, breaking only after its @.
+                <span data-testid="member-email" title={m.email} className="block max-w-full text-[13px] font-normal break-words text-text2">
+                  {/* At its @ only: "admin@" then "example.com", never a lone ".com". */}
+                  {m.email.slice(0, m.email.indexOf("@") + 1)}
+                  <wbr />
+                  {m.email.slice(m.email.indexOf("@") + 1)}
                 </span>
               )}
             </button>
@@ -838,7 +862,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
                 {/* On a phone the Eng lead column hides; this chip says it instead. */}
                 {m.engineering_lead && (
                   <span className="hidden max-[600px]:contents">
-                    <Chip kind="acc">Eng lead</Chip>
+                    <Chip kind="acc">Engineering lead</Chip>
                   </span>
                 )}
               </span>
@@ -852,11 +876,11 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
       key: "lead",
       // The anchor of A1's Engineering lead step (Set up on Home).
       header: (
-        <span id="engineering-lead" data-highlight={leadStep || undefined} className={leadStep ? "rounded bg-accent-soft px-1.5 py-0.5 text-accent-ink" : undefined}>
-          Eng lead
+        <span id="engineering-lead" data-highlight={leadStep || undefined} className={`inline-block whitespace-normal ${leadStep ? "rounded bg-accent-soft px-1.5 py-0.5 text-accent-ink" : ""}`}>
+          Engineering lead
         </span>
       ),
-      width: "96px",
+      width: "112px",
       hideOnPhone: true,
       wrap: true,
       cell: (m) =>
@@ -871,7 +895,18 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
           leadBox(m)
         ),
     },
-    { key: "status", header: "Status", width: "120px", wrap: true, cell: (m) => <StatusChip m={m} /> },
+    {
+      key: "status",
+      header: "Status",
+      width: "120px",
+      wrap: true,
+      cell: (m) => (
+        <span className="flex flex-col items-start gap-1">
+          <StatusChip m={m} />
+          {removed(m) && <RevokeBadge failures={revokeFailures} email={m.email} />}
+        </span>
+      ),
+    },
     {
       key: "signin",
       header: "Last sign-in",
@@ -934,9 +969,35 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
     }, MAIL_POLL_MS);
     return () => clearTimeout(t);
   }, [sending, invites, reloadInvites]);
+  /** pass-f F-49: a count tile leads to what it counts. */
+  const statLink = (n: number | undefined, label: string, onClick: () => void) =>
+    n == null ? (
+      <Numeral value="—" />
+    ) : (
+      <button type="button" aria-label={`${label} (${n})`} onClick={onClick} className="rounded hover:underline focus-visible:outline-2">
+        <Numeral value={n} />
+      </button>
+    );
+  const showPeople = (status: "active" | "removed") => {
+    setStatusFilter(status);
+    setFind("");
+    if (inspected) setInspecting(null);
+    requestAnimationFrame(() => document.querySelector(`[data-testid="${PEOPLE}"]`)?.scrollIntoView({ block: "start" }));
+  };
+  const showSection = (testId: string) =>
+    requestAnimationFrame(() => document.querySelector(`[data-testid="${testId}"]`)?.scrollIntoView({ block: "center" }));
   // The invite just made, as the list has it now (gone once revoked).
   const latest = made ? invites?.find((i) => i.id === made.id) : undefined;
-  const outcome = latest && (
+  // pass-f F-54: "Invite sent" goes after a few seconds, or once another action starts; a link
+  // still to send stays until the next invite.
+  const sentNote = latest?.email_status === "sent";
+  useEffect(() => {
+    if (!sentNote) return;
+    const t = setTimeout(() => setMade(null), SENT_NOTE_MS);
+    return () => clearTimeout(t);
+  }, [sentNote]);
+  const sentNoteHidden = sentNote && !!(confirming || demoting);
+  const outcome = latest && !sentNoteHidden && (
     <InviteOutcome invite={latest} stalled={mailStalled} copied={copied === `made:${latest.id}`} onCopy={() => copyLink(latest, `made:${latest.id}`)} />
   );
 
@@ -970,7 +1031,8 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
         <>
           <span className="flex flex-wrap items-center gap-1.5">
             <Chip kind="acc">{ROLE_LABEL[i.role]}</Chip>
-            {i.engineering_lead && <Chip kind="acc">Eng lead</Chip>}
+            {i.engineering_lead && <Chip kind="acc">Engineering lead</Chip>}
+            <RevokeBadge failures={revokeFailures} email={i.email} />
             {i.status === "expired" ? (
               <Chip kind="warn" data-testid="invite-expiry">
                 Expired {formatDate(i.expires_at)}
@@ -1048,13 +1110,38 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
       stats={[
         ...(manage
           ? [
-              { label: "Active", value: members ? members.filter((m) => !removed(m)).length : "—", testId: "stat-active" },
-              { label: "Removed", value: members ? members.filter(removed).length : "—", testId: "stat-removed" },
+              // pass-f F-1: no "–" tiles while the list failed to load.
+              ...(membersQ.error
+                ? []
+                : [
+                    {
+                      label: "Active",
+                      figure: statLink(members?.filter((m) => !removed(m)).length, "Show active members", () => showPeople("active")),
+                      testId: "stat-active",
+                    },
+                    {
+                      label: "Removed",
+                      figure: statLink(members?.filter(removed).length, "Show removed members", () => showPeople("removed")),
+                      testId: "stat-removed",
+                    },
+                  ]),
             ]
           : []),
         // qa-settings-4: an expired invite is counted, and listed, apart from the open ones.
-        { label: "Open invites", value: openInvites?.length ?? "—", testId: "stat-open-invites" },
-        ...(expiredInvites?.length ? [{ label: "Expired", value: expiredInvites.length, testId: "stat-expired-invites" }] : []),
+        {
+          label: "Open invites",
+          figure: statLink(openInvites?.length, "Show open invites", () => showSection("open-invites")),
+          testId: "stat-open-invites",
+        },
+        ...(expiredInvites?.length
+          ? [
+              {
+                label: "Expired",
+                figure: statLink(expiredInvites.length, "Show expired invites", () => showSection("expired-invites")),
+                testId: "stat-expired-invites",
+              },
+            ]
+          : []),
       ]}
     >
       <InspectorSection>
@@ -1082,8 +1169,17 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
             </p>
           )}
           {inviteError && (
-            <p id="invite-error" role="alert" className="-mt-1.5 text-[13px] font-medium text-crit">
-              {inviteError}
+            <p id="invite-error" role="alert" className="-mt-1.5 flex flex-wrap items-center gap-x-2 text-[13px] font-medium text-crit">
+              <span className="min-w-0 break-words">{inviteError}</span>
+              {/* pass-f F-50: the refusal's own fix, where the owner adds sign-in domains. */}
+              {manage && OUTSIDE_DOMAINS.test(inviteError) && email.includes("@") && (
+                <Button
+                  variant="ghost"
+                  onClick={() => window.dispatchEvent(new CustomEvent(ADD_DOMAIN_EVENT, { detail: email.trim().split("@").pop()?.toLowerCase() }))}
+                >
+                  Add domain
+                </Button>
+              )}
             </p>
           )}
           <Field label="Name (optional)">
@@ -1143,7 +1239,8 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
           )}
           <div>
             {/* The page's one way to invite: a filled primary button, never greyed out without a reason. */}
-            <Button type="submit" variant="primary" icon="plus" disabled={pending}>
+            {/* pass-f F-1: off while the people or invites failed to load; the notice says why. */}
+            <Button type="submit" variant="primary" icon="plus" disabled={pending || !!membersQ.error || !!invitesQ.error}>
               {pending ? "Inviting…" : "Send invite"}
             </Button>
           </div>
@@ -1151,7 +1248,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
         </form>
       </InspectorSection>
       <InspectorSection label="Open invites" testId="open-invites">
-        {invitesQ.error && <Notice tone="error">{invitesQ.error}</Notice>}
+        {invitesQ.error && <LoadError what="the invites" error={invitesQ.error} onRetry={() => void invitesQ.reload()} />}
         {!invites && !invitesQ.error && <span className="block h-3 w-2/3 animate-pulse rounded bg-surface2" />}
         {openInvites?.length === 0 && <p className="text-[15px] text-text2">No open invites</p>}
         {!!openInvites?.length && (
@@ -1167,6 +1264,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
           </ul>
         </InspectorSection>
       )}
+      {manage && <RevokeFailuresSection failures={revokeFailures} onChanged={() => void revokeQ.reload()} />}
       <RolesSection members={manage ? members : undefined} />
     </Inspector>
   );
@@ -1179,7 +1277,11 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
         title="Members"
         status={
           <>
-            {manage && active != null && <Chip kind="acc">{active} active</Chip>}
+            {manage && active != null && (
+              <button type="button" aria-label={`Show active members (${active})`} onClick={() => showPeople("active")} className="rounded-full">
+                <Chip kind="acc">{active} active</Chip>
+              </button>
+            )}
             {pageTip}
           </>
         }
@@ -1206,10 +1308,17 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
         {!manage && <PeopleReadOnly />}
         {manage && leadStep && (
           <Notice testId="lead-step-hint">
-            Pick who checks feasibility: tick Eng lead for the person who speaks for engineering. Any commenter or above can be it.
+            {/* pass-f F-30: one short line; how to pick is behind the (i). */}
+            <span className="inline-flex flex-wrap items-center gap-1.5">
+              Pick an engineering lead
+              <InfoTip label="the engineering lead" align="start">
+                Tick Engineering lead for the person who speaks for engineering and checks feasibility. Any commenter or above can be it.
+              </InfoTip>
+            </span>
           </Notice>
         )}
         {manage && <Panel
+          testId={PEOPLE}
           title="People"
           count={members?.length}
           tools={
@@ -1217,6 +1326,14 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
               {leadSaved && (
                 <span role="status" data-testid="lead-saved" className="text-sm font-semibold text-pass">
                   Saved
+                </span>
+              )}
+              {statusFilter && (
+                <span data-testid="people-filter" className="inline-flex items-center gap-1">
+                  <Chip kind="line">{statusFilter === "active" ? "Active only" : "Removed only"}</Chip>
+                  <Button variant="ghost" onClick={() => setStatusFilter(null)}>
+                    Show all
+                  </Button>
                 </span>
               )}
               <FindPerson value={find} onChange={setFind} />
@@ -1251,7 +1368,9 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
               <DataTable
                 label="Members"
                 columns={columns}
-                rows={members?.filter((m) => matches(find, m.name, m.email))}
+                rows={members?.filter(
+                  (m) => matches(find, m.name, m.email) && (!statusFilter || (statusFilter === "removed") === removed(m)),
+                )}
                 loading={!members}
                 rowKey={(m) => m.id}
                 rowProps={(m) => ({ "data-testid": "member-row", "data-status": m.status, ...memberActs.rowAttrs(m.id) })}

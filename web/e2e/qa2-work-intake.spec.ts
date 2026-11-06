@@ -143,7 +143,9 @@ test("rirs-30: a brief that is gone says what may have happened and leads back t
   await login(page);
   await page.goto("/intakes/c5000000-0000-4000-8000-0000000000ff");
   const gone = page.getByTestId("intake-gone");
-  await expect(gone).toContainText("drafted into a PRD, archived, or deleted");
+  // F-30: why is in the title's (i).
+  await page.getByRole("button", { name: "About a brief that is not here" }).click();
+  await expect(page.getByRole("tooltip").filter({ hasText: "drafted into a PRD, archived, or deleted" })).toBeVisible();
   await expect(page.getByText("Intake not found")).toHaveCount(0);
   await gone.getByRole("link", { name: "Back to PRDs" }).click();
   await expect(page).toHaveURL(/\/documents$/);

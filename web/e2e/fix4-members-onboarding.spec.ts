@@ -31,7 +31,7 @@ test("qa-onboarding-8 / qa-onboarding-38 / qa-onboarding-37 / qa-onboarding-18: 
   // qa-onboarding-8: the refusal alone shows.
   await form.getByLabel("Email").fill("outside@gmail.com");
   await form.getByRole("button", { name: "Send invite" }).click();
-  await expect(form.getByRole("alert")).toContainText("outside the company's email domains");
+  await expect(form.getByRole("alert")).toContainText("outside@gmail.com is not in the company domains");
   await expect(page.getByTestId("invite-outcome")).toHaveCount(0);
   await expect(page.getByText("Invite sent to gone@example.com")).toHaveCount(0);
 

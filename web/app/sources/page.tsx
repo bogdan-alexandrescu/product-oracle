@@ -20,7 +20,7 @@ import {
   Split,
   toast,
 } from "@/components/ds";
-import { INPUT, Loading } from "@/components/ui";
+import { INPUT, LoadError, Loading } from "@/components/ui";
 import { api, type Schemas, unwrap } from "@/lib/api/client";
 import { formatDateTime, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -490,17 +490,20 @@ function SourcesSearchPage() {
               ) : undefined
             }
           >
-            {coverage.error && <Notice tone="error">{coverage.error}</Notice>}
+            {/* F-1: a list that did not load says so, with Try again, and no table under it. */}
             {tab === "company" ? (
-              <>
-                {company.error && <Notice tone="error">{company.error}</Notice>}
+              company.error ? (
+                <LoadError what="the company's coverage" error={company.error} onRetry={() => void company.reload()} />
+              ) : (
                 <CompanyTable
                   data={company.data ?? undefined}
                   loading={company.loading}
                   selected={cPicked ? companyRowKey(cPicked) : null}
                   onSelect={setCompanyPick}
                 />
-              </>
+              )
+            ) : coverage.error ? (
+              <LoadError what="your sources" error={coverage.error} onRetry={() => void coverage.reload()} />
             ) : rows && rows.length === 0 ? (
               <NoSources />
             ) : (

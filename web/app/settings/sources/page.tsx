@@ -23,6 +23,7 @@ import {
   type ChipKind,
 } from "@/components/ds";
 import { api, ApiError, type Schemas, unwrap } from "@/lib/api/client";
+import { LoadError } from "@/components/ui";
 import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { attentionMessage, needingAttention, shownStatus } from "@/lib/source-attention";
@@ -1201,9 +1202,10 @@ export default function SourceSettingsPage() {
     >
       {mayAdd && (
         <InspectorSection>
-          {kinds.error && <Notice tone="error">{kinds.error}</Notice>}
+          {kinds.error && <LoadError what="the kinds of source" error={kinds.error} onRetry={() => void kinds.reload()} />}
           {!kinds.data && !kinds.error && <span className="block h-3 w-2/3 animate-pulse rounded bg-surface2" />}
-          {kinds.data && <AddSource kinds={kinds.data} onAdded={(s) => sources.setData((prev) => [...(prev ?? []), s])} />}
+          {/* F-1: no new source under a list that did not load. */}
+          {kinds.data && !sources.error && <AddSource kinds={kinds.data} onAdded={(s) => sources.setData((prev) => [...(prev ?? []), s])} />}
         </InspectorSection>
       )}
     </Inspector>
@@ -1240,7 +1242,7 @@ export default function SourceSettingsPage() {
               Search sources
             </LinkButton>
             {mayAdd && (
-              <Button variant="primary" icon="plus" onClick={toAddSource}>
+              <Button variant="primary" icon="plus" onClick={toAddSource} disabled={!!sources.error || !!kinds.error}>
                 Add a source
               </Button>
             )}
@@ -1248,7 +1250,7 @@ export default function SourceSettingsPage() {
         }
       />
       <Split inspector={inspector}>
-        {sources.error && <Notice tone="error">{sources.error}</Notice>}
+        {sources.error && <LoadError what="your sources" error={sources.error} onRetry={() => void sources.reload()} />}
         <Panel title="My sources" count={sources.data ? list.length : undefined}>
           {sources.loading && !sources.data && (
             <div aria-busy className="flex flex-col">

@@ -26,13 +26,20 @@ const selectFits = (select: Locator) =>
     return { whole: box.width + 0.5 >= needs, inCell: box.left >= cell.left - 0.5 && box.right <= cell.right + 0.5 };
   });
 
-/** The email sits on one line, never wrapped (qa4-settings-10); if it must be cut, its title holds it whole. */
+/** pass-f F-52: the whole email shows, never cut; it wraps only after its @, and its title holds it. */
 const emailWhole = (email: Locator) =>
-  email.evaluate((el) => {
-    const range = document.createRange();
-    range.selectNodeContents(el);
-    const tops = [...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top));
-    return tops.every((t) => Math.abs(t - tops[0]) <= 1) && el.getAttribute("title") === el.textContent;
+  email.evaluate((e) => {
+    // Nothing cut: the box is as wide as its words.
+    if (e.scrollWidth > e.clientWidth + 1 || e.getAttribute("title") !== e.textContent) return false;
+    // Each part between breaks (before and after the @) stays on one line.
+    const walker = document.createTreeWalker(e, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const range = document.createRange();
+      range.selectNodeContents(n);
+      const tops = [...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top));
+      if (!tops.every((t) => Math.abs(t - tops[0]) <= 1)) return false;
+    }
+    return true;
   });
 
 /** The status cell's content stays inside the cell, so it never covers Last sign-in. */
@@ -70,7 +77,7 @@ for (const width of [1440, 1512]) {
         for (const email of ["commenter@example.com", "approver@example.com", "viewer@example.com"]) {
           expect(await selectFits(page.getByLabel(`Role for ${email}`)), email).toEqual({ whole: true, inCell: true });
         }
-        // Emails stay on one line, the whole address on hover.
+        // Emails read whole, wrapping only after the @.
         const emails = page.getByTestId("member-email");
         await expect(emails.first()).toBeVisible();
         for (const el of await emails.all()) expect(await emailWhole(el), await el.innerText()).toBe(true);
@@ -87,8 +94,11 @@ test("qa-shell-27: the Roles panel has one heading and a line for the engineerin
   await expect(panel).toBeVisible();
   await expect(panel.getByText("Roles", { exact: true })).toHaveCount(1);
   await expect(panel).not.toContainText("Members · roles");
+  // pass-f F-50: what each role can do is in the (i) by its name.
   for (const role of ["owner", "approver", "commenter", "viewer"]) {
+    await panel.getByTestId(`role-${role}`).getByRole("button", { name: /^About the .+ role$/ }).click();
     await expect(panel.getByTestId(`role-${role}`).getByTestId("role-can")).toBeVisible();
+    await page.keyboard.press("Escape");
   }
   // The settings lane's Engineering lead section (qa-settings-7) is the lead's line.
   await expect(panel.getByTestId("roles-lead")).toContainText("Engineering lead");

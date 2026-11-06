@@ -5,6 +5,7 @@ import { useState } from "react";
 import { ActedCell, SETTLING, useActed } from "@/components/account/acted";
 import { SELECT } from "@/app/settings/_components/fields";
 import { Avatar, Button, Notice, Panel } from "@/components/ds";
+import { LoadError } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import type { Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
@@ -38,6 +39,16 @@ function Requests({ roles, onInvited }: { roles: Role[]; onInvited: () => void }
   const [chosen, setChosen] = useState<Record<string, Role>>({});
   const [error, setError] = useState<string | null>(null);
   const rows = q.data;
+  if (!(canApprove || canDecline)) return null;
+  // pass-f F-1: a failed read says so with Try again rather than hiding the panel.
+  if (q.error)
+    return (
+      <Panel title="Access requests">
+        <div data-testid="access-requests" className="p-4">
+          <LoadError what="the access requests" error={q.error} onRetry={() => void q.reload()} />
+        </div>
+      </Panel>
+    );
   if (!rows?.length || !roles.length || !(canApprove || canDecline)) return null;
   const preset = (r: AccessRequest): Role => (r.default_role && roles.includes(r.default_role) ? r.default_role : roles[0]);
 
