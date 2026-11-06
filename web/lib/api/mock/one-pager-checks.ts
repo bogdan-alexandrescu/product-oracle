@@ -388,10 +388,10 @@ export function setNumber(body: string, said: string, value: string): string | n
   return m ? body.slice(0, m.index) + value + body.slice(m.index + m[0].length) : null;
 }
 
-/** one_pager_checks._fix: a numbers item's fix (its document_id filled by the read). */
-function fixOf(s: Sec, said: string, before: string, value: number): Look["fix"] {
-  if (!numberAt(s.body, said)) return null;
-  return { action: "set_section_number", target: { document_id: "", section: s.key, said }, before, value: String(value), words: `Use ${value}`, proposal: null };
+/** one_pager_checks._fix: a numbers item's fix (its document_id filled by the read); `heading`: the number is in the section's heading (part "heading"). */
+function fixOf(s: Sec, said: string, before: string, value: number, heading = false): Look["fix"] {
+  if (!numberAt(heading ? s.heading : s.body, said)) return null;
+  return { action: "set_section_number", target: { document_id: "", section: s.key, said, ...(heading ? { part: "heading" } : {}) }, before, value: String(value), words: `Use ${value}`, proposal: null };
 }
 
 function numbers(secs: Sec[]): Look[] {
@@ -402,7 +402,8 @@ function numbers(secs: Sec[]): Look[] {
     const head = plain(s.heading);
     const hm = /(?:·|\()\s*(\d+)\s+items?\b/i.exec(head);
     const shown = hm ? Number(hm[1]) : null;
-    if (shown !== null && listed && shown !== listed) looks.push({ kind: "numbers", text: `“${head}” says ${shown} items, but it lists ${listed}.`, where: [head], source_keys: [s.key] });
+    if (hm && shown !== null && listed && shown !== listed)
+      looks.push({ kind: "numbers", text: `“${head}” says ${shown} items, but it lists ${listed}.`, where: [head], source_keys: [s.key], fix: fixOf(s, head.slice(hm.index + hm[0].indexOf(hm[1]), hm.index + hm[0].length), hm[1], listed, true) });
     const target = shown ?? listed;
     if (!target) continue;
     // A count disagrees only with a list of the same things (CLD's walk B, 2026-11-01):
@@ -417,7 +418,7 @@ function numbers(secs: Sec[]): Look[] {
         const noun = m[2].toLowerCase().replace(/s$/, "").replace(/ie$/, "");
         if (hm === null && fields && !listing.includes(noun)) continue;
         const words = `${m[1]} ${m[2]}${m[3]}`.trim();
-        looks.push({ kind: "numbers", text: `“${words}” says ${n}, but “${head}” shows ${target} items.`, where: [head], source_keys: [s.key], fix: fixOf(s, words, m[1], target) });
+        looks.push({ kind: "numbers", text: `“${words}” says ${n}, but “${head}” shows ${target} items.`, where: [head], source_keys: [s.key], fix: fixOf(s, words, m[1], target, t === head) });
       }
     }
   }
