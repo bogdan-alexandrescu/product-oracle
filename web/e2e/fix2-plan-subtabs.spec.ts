@@ -148,7 +148,7 @@ test("qa-plan-46: the actions column is labelled and a withdrawal's reason sits 
   await row.getByRole("button", { name: "Withdraw" }).click();
   const dialog = page.getByTestId("withdraw-basis-dialog");
   await dialog.getByLabel("Reason").fill("The team re-estimated");
-  await dialog.getByRole("button", { name: "Withdraw date basis" }).click();
+  await dialog.getByRole("button", { name: "Withdraw date source" }).click();
   await expect(dialog).toBeHidden();
   await page.getByTestId("dates-filter").getByRole("button", { name: /^Withdrawn/ }).click();
   const reason = table.locator('[data-reason-for="ENG-412"]');
@@ -175,7 +175,7 @@ test("qa-plan-47, qa-plan-19: a filter with nothing in it reads 0 as an ordinary
   await expect(withdrawn).toBeEnabled();
   expect(Number(await withdrawn.evaluate((el) => getComputedStyle(el).opacity))).toBe(1);
   await withdrawn.click();
-  await expect(page.getByTestId("dates-table").filter({ visible: true })).toContainText("No date bases here yet.");
+  await expect(page.getByTestId("dates-table").filter({ visible: true })).toContainText("No date sources yet.");
 });
 
 /* ------------------------------------------ Outcomes ------------------------------------------ */

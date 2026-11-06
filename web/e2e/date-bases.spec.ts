@@ -82,7 +82,7 @@ test("withdraw: the impact sentence comes first; afterwards the roadmap marks th
   const dialog = page.getByTestId("withdraw-basis-dialog");
   await expect(dialog.getByTestId("withdraw-impact")).toContainText("This removes Nov 30 from:");
   await expect(dialog.getByTestId("withdraw-impact")).toContainText("place will show 'date withdrawn'");
-  const confirm = dialog.getByRole("button", { name: "Withdraw date basis" });
+  const confirm = dialog.getByRole("button", { name: "Withdraw date source" });
   await expect(confirm).toBeDisabled();
   await dialog.getByLabel("Reason").fill("The team re-estimated");
   await confirm.click();
@@ -184,7 +184,7 @@ test("plan inspector: a withdrawn date is struck through with its reason, and Re
   await row(page, "ENG-412").getByRole("button", { name: "Withdraw" }).click();
   const withdraw = page.getByTestId("withdraw-basis-dialog");
   await withdraw.getByLabel("Reason").fill("The team re-estimated");
-  await withdraw.getByRole("button", { name: "Withdraw date basis" }).click();
+  await withdraw.getByRole("button", { name: "Withdraw date source" }).click();
   await expect(withdraw).toBeHidden();
 
   line = await selectPlanItem(page, "Weekly alert digest");
@@ -263,7 +263,9 @@ test("plan inspector: an unverified date offers Verify date; the dialog picks th
   await expect(line).toContainText("Dec 15 ✓ ENG-431, verified by Avery Stone");
   await openDates(page);
   await page.getByTestId("dates-filter").getByRole("button", { name: "Verified" }).click();
-  await expect(row(page, "ENG-431")).toContainText("Item: Alerts in the team chat");
+  // The row names the item; Applies to says only what kind of thing (PR 1285 review 3).
+  await expect(row(page, "ENG-431").getByTestId("basis-title")).toHaveText("Alerts in the team chat (ENG-431)");
+  await expect(row(page, "ENG-431")).toContainText("One item");
 });
 
 test("Add a date source, One item: the PRD's roadmap items are listed by name, the draft's too", async ({ page }) => {

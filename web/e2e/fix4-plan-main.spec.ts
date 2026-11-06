@@ -41,7 +41,8 @@ test.describe("desktop", () => {
     await expect(inspector(page).getByRole("heading", { name: "Threshold alerts on spend" })).toBeVisible();
     const eng = inspector(page).getByTestId("plan-item-engineering");
     await expect(eng.getByTestId("plan-record")).toContainText("ENG-402 · In progress · no due date in the tracker");
-    await expect(eng.getByTestId("plan-record-date")).toHaveText("The roadmap shows Nov 20 ✓, the verified date (see Date), not a tracker due date.");
+    // B-25: the Date block carries the roadmap's date; Engineering does not repeat it.
+    await expect(eng.getByTestId("plan-record-date")).toHaveCount(0);
     await expect(eng).not.toContainText("· no date");
   });
 
