@@ -232,6 +232,8 @@ PER_ITEM: dict[str, Role | None] = {
     # H10: a request's replies are its filer's, an approver's or an owner's.
     "draft_request_replies": "approver",
     "edit_document_section": "approver",
+    # agenda-sheet: an owner or the decider edits, an approver proposes (meetings.edit_agenda).
+    "edit_simple_meeting_agenda": "owner",
     "edit_simple_meeting_minutes": "owner",
     "end_simple_meeting": "owner",
     "enhance_scope_requirement": "approver",

@@ -47215,6 +47215,70 @@
         "x-per-item": null
       }
     },
+    "/v1/simple/meetings/{meeting_id}/agenda": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Edit Simple Meeting Agenda",
+        "description": "agenda-sheet: one op of the Agenda sheet (oracle.simple.meetings.edit_agenda).",
+        "operationId": "edit_simple_meeting_agenda",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meeting Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimpleAgendaEditIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleMeetingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
+      }
+    },
     "/v1/simple/meetings/{meeting_id}/approve": {
       "post": {
         "tags": [
@@ -119883,11 +119947,159 @@
             "type": "array",
             "title": "Skipped",
             "default": []
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleAgendaRow"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "addable": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleAgendaItem"
+            },
+            "type": "array",
+            "title": "Addable",
+            "default": []
+          },
+          "batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch"
+          },
+          "words": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Words",
+            "default": []
+          },
+          "left_out": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Left Out",
+            "default": []
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleAgendaProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
         "title": "SimpleAgenda",
-        "description": "chat-actions: the item the meeting takes next and the items it skips."
+        "description": "chat-actions: the item the meeting takes next and the items it skips.\nagenda-sheet: the rows in order, the PRD's features not on it yet, what the last batch\nof the sheet did (for its Undo line) and an approver's waiting proposal."
+      },
+      "SimpleAgendaEditIn": {
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "add",
+              "rename",
+              "move",
+              "remove",
+              "undo",
+              "accept",
+              "withdraw"
+            ],
+            "title": "Op"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "feature_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 200.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To"
+          },
+          "batch": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch"
+          }
+        },
+        "type": "object",
+        "required": [
+          "op"
+        ],
+        "title": "SimpleAgendaEditIn",
+        "description": "agenda-sheet: one op of the Agenda sheet. ``batch`` names the sheet's opening, so\nUndo puts back the agenda as it was when that batch began."
       },
       "SimpleAgendaItem": {
         "properties": {
@@ -119907,6 +120119,112 @@
           "title"
         ],
         "title": "SimpleAgendaItem"
+      },
+      "SimpleAgendaProposal": {
+        "properties": {
+          "by": {
+            "$ref": "#/components/schemas/SimplePersonRef"
+          },
+          "decider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "words": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Words",
+            "default": []
+          },
+          "dropped": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dropped",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "by"
+        ],
+        "title": "SimpleAgendaProposal",
+        "description": "agenda-sheet: an approver's agenda changes waiting for the meeting's decider."
+      },
+      "SimpleAgendaRow": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "feature",
+              "topic"
+            ],
+            "title": "Kind"
+          },
+          "feature_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "mins": {
+            "type": "integer",
+            "title": "Mins"
+          },
+          "by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By Name"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "done",
+              "now",
+              "next",
+              "skipped"
+            ],
+            "title": "State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "mins",
+          "state"
+        ],
+        "title": "SimpleAgendaRow",
+        "description": "agenda-sheet: one row of the meeting's agenda: a feature of its PRD or a topic a\nperson typed, with its minutes; ``state`` reads the chat's next and skip."
       },
       "SimpleAppliedVersion": {
         "properties": {
@@ -123224,6 +123542,16 @@
             "type": "boolean",
             "title": "Retry Delivery",
             "default": false
+          },
+          "edit_agenda": {
+            "type": "boolean",
+            "title": "Edit Agenda",
+            "default": false
+          },
+          "propose_agenda": {
+            "type": "boolean",
+            "title": "Propose Agenda",
+            "default": false
           }
         },
         "type": "object",
@@ -123803,7 +124131,11 @@
           "agenda": {
             "$ref": "#/components/schemas/SimpleAgenda",
             "default": {
-              "skipped": []
+              "skipped": [],
+              "items": [],
+              "addable": [],
+              "words": [],
+              "left_out": []
             }
           },
           "draft_roadmap": {
