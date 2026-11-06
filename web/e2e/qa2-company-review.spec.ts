@@ -65,7 +65,7 @@ test("metrics: a wrong threshold is described by its own note", async ({ page })
   await page.goto("/company/metrics");
   await page.getByTestId("metrics-empty").filter({ visible: true }).getByRole("button", { name: "Add your first metric" }).click();
   const dialog = page.getByRole("dialog", { name: "Add metric" });
-  const threshold = dialog.getByLabel("Threshold (%)");
+  const threshold = dialog.getByLabel("Alert size (%)");
   await threshold.fill("900");
   await dialog.getByRole("button", { name: "Add metric" }).click();
   await expect(dialog.getByTestId("metric-error-threshold")).toHaveText("Write a number from 1 to 500, or leave it empty.");

@@ -56,16 +56,35 @@ export function shortDate(value: string | null | undefined): string {
 
 export { plural } from "@/lib/format";
 
-/** What a finding is about, in words: the goal, choice or item by name, else its reference. */
+/** What a finding's subject is, in a word, when its name is not known. */
+const SUBJECT_WORD: Record<Finding["subject_kind"], string> = { entity: "A goal", roadmap_item: "A roadmap item", document: "A document" };
+
+/**
+ * What a finding is about, in words: the goal, choice or item by name. pass F F-41: never its
+ * reference (a slug such as "product-strategy-team-plans"); a choice is also found by its key.
+ */
 export function subjectName(f: Finding, stack: Stack | undefined): string {
   const title = typeof f.detail?.title === "string" ? f.detail.title : null;
   if (title) return title;
   const choices = stack?.strategy?.choices ?? [];
   const goals = [...choices.flatMap((c) => c.goals), ...(stack?.unaligned.goals ?? [])];
-  const named = goals.find((g) => g.id === f.subject_id) ?? choices.find((c) => c.entity_id === f.subject_id);
+  const key = f.subject_ref.replace(/^[a-z_]+:/, "");
+  const named =
+    goals.find((g) => g.id === f.subject_id) ??
+    choices.find((c) => c.entity_id === f.subject_id) ??
+    choices.find((c) => key === c.id || key.endsWith(`-${c.id}`));
   if (named) return named.title;
   if (f.subject_kind === "document") return f.kind === "vision_review_due" ? "Vision" : "Product strategy";
-  return f.subject_ref.replace(/^[a-z_]+:/, "");
+  if (f.subject_ref.startsWith("strategy_choice:")) return "A focus choice";
+  return SUBJECT_WORD[f.subject_kind] ?? "Something";
+}
+
+/** pass F F-46: the subject's link says what it opens ("Open goal"), never "Open" alone. */
+export function subjectLinkLabel(f: Finding, stack: Stack | undefined): string {
+  if (stack?.strategy?.choices.some((c) => c.entity_id === f.subject_id)) return "Open focus choice";
+  if (f.subject_kind === "roadmap_item") return "Open item";
+  if (f.subject_kind === "document") return f.kind === "vision_review_due" ? "Open vision" : "Open strategy";
+  return "Open goal";
 }
 
 /** Where a finding's subject is opened: the goal in the baseline, the item on the Plan, the document. */

@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { Button, Chip, LinkButton, Panel } from "@/components/ds";
+import { Button, Chip, InfoTip, LinkButton, Panel } from "@/components/ds";
 import { assess, type GoalView } from "@/app/home/_goals";
 
 import { CompanyEmpty } from "../../_empty";
@@ -48,7 +49,7 @@ export function Explained({ title, children, testId }: { title: string; children
   );
 }
 
-/** What each piece is, in a line. */
+/** What each piece is, behind the empty state's (i) (pass F F-45). */
 const ABOUT: Record<DocKind, string> = {
   vision: "Where the company is headed in the next few years, and the beliefs that bet rests on.",
   strategy: "The few things the product focuses on and what it stops doing; each goal should follow from a focus choice.",
@@ -60,7 +61,10 @@ function NotApproved({ kind, doc, owner }: { kind: DocKind; doc: DocRef | null; 
   if (doc) {
     return (
       <Explained testId={`${kind}-empty`} title={`The ${name} is not approved yet`}>
-        {ABOUT[kind]} Open the draft to review it; an owner approves it.
+        Open the draft to review it.{" "}
+        <InfoTip label={`the ${name}`} align="end">
+          {ABOUT[kind]} An owner approves it.
+        </InfoTip>
       </Explained>
     );
   }
@@ -74,19 +78,47 @@ function NotApproved({ kind, doc, owner }: { kind: DocKind; doc: DocRef | null; 
         : "An owner writes it to line up the goals under it.";
   return (
     <Explained testId={`${kind}-empty`} title={`No ${name} yet`}>
-      {ABOUT[kind]} {next}
+      {next}{" "}
+      <InfoTip label={`the ${name}`} align="end">
+        {ABOUT[kind]}
+      </InfoTip>
     </Explained>
+  );
+}
+
+/** The stack's state while it is not in: loading (a skeleton) or failed (pass F F-13). */
+export type StackLoad = { loading: boolean; failed: boolean; onRetry: () => void };
+
+/** A card's body until the stack answers: a skeleton, or "Could not load the strategy" with Try again; never "not approved". */
+export function StackPending({ load, testId }: { load: StackLoad; testId: string }) {
+  if (load.failed)
+    return (
+      <div data-testid={`${testId}-failed`} className="flex flex-col items-center gap-2 px-4 py-8 text-center max-[600px]:px-3">
+        <p className="text-[15px] font-semibold text-text">Could not load the strategy</p>
+        <Button onClick={load.onRetry} disabled={load.loading}>
+          Try again
+        </Button>
+      </div>
+    );
+  return (
+    <div data-testid={`${testId}-loading`} aria-busy="true" aria-label="Loading" className="flex flex-col gap-2.5 px-4 py-4 max-[600px]:px-3">
+      <span className="h-5 w-3/4 animate-pulse rounded bg-surface2" />
+      <span className="h-3.5 w-1/2 animate-pulse rounded bg-surface2" />
+      <span className="h-3.5 w-5/6 animate-pulse rounded bg-surface2" />
+    </div>
   );
 }
 
 /** The vision: its headline, horizon and beliefs (with their status and evidence). */
 export function VisionCard({
   stack,
+  load,
   doc,
   owner,
   onDraft,
 }: {
   stack: Stack | undefined;
+  load: StackLoad;
   doc: DocRef | null;
   owner: boolean;
   onDraft: (kind: DocKind) => void;
@@ -123,6 +155,8 @@ export function VisionCard({
             ))}
           </ul>
         </div>
+      ) : !stack ? (
+        <StackPending load={load} testId="vision" />
       ) : (
         <NotApproved kind="vision" doc={doc} owner={owner} />
       )}
@@ -132,36 +166,52 @@ export function VisionCard({
 }
 
 /** A goal as a chip with its distance to go (Home's reading of the baseline). */
-function GoalChip({ goal, view }: { goal: { id: string; title: string }; view: GoalView | undefined }) {
+function GoalChip({ goal, view, onClick }: { goal: { id: string; title: string }; view: GoalView | undefined; onClick: () => void }) {
   const p = view ? assess(view) : null;
   const togo = p && (p.state === "togo" || p.state === "met") ? p.text : null;
   return (
-    <span data-testid="goal-chip" className="inline-flex max-w-full">
+    <button type="button" data-testid="goal-chip" className="inline-flex max-w-full rounded-full text-left hover:opacity-80" onClick={onClick}>
       <Chip kind="line" wrap title={view?.metric ?? undefined}>
         {goal.title}
         {togo && <span className="ml-1 font-normal text-text2">· {togo}</span>}
       </Chip>
-    </span>
+    </button>
   );
 }
 
-function FocusRow({ c, goals }: { c: Choice; goals: Map<string, GoalView> }) {
+/** A count on the card that opens the stack line it counts (pass F F-42). */
+const COUNT_LINK = "tnum text-sm text-accent-ink hover:underline";
+
+function FocusRow({ c, goals, canAddGoal, onPick }: { c: Choice; goals: Map<string, GoalView>; canAddGoal: boolean; onPick: (key: string) => void }) {
+  // The choice's first stack line: itself when no goal derives from it, else its first goal's.
+  const line = c.goals.length ? `${c.entity_id}|${c.goals[0].id}` : c.entity_id;
   return (
     <li data-testid="focus-row" className="flex min-w-0 flex-col gap-1.5 border-t border-line py-2.5">
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
         <span className="min-w-0 flex-1 font-semibold [overflow-wrap:anywhere]">{c.title}</span>
-        <span className="tnum text-sm text-text2">{plural(c.items, "item")}</span>
+        <button type="button" className={COUNT_LINK} onClick={() => onPick(line)}>
+          {plural(c.items, "item")}
+        </button>
         {c.open_findings > 0 ? (
-          <Chip kind="warn">{plural(c.open_findings, "finding")}</Chip>
+          <button type="button" onClick={() => onPick(line)}>
+            <Chip kind="warn">{plural(c.open_findings, "finding")}</Chip>
+          </button>
         ) : (
           <span className="text-sm text-text2">No drift</span>
         )}
       </div>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         {c.goals.length ? (
-          c.goals.map((g) => <GoalChip key={g.id} goal={g} view={goals.get(g.id)} />)
+          c.goals.map((g) => <GoalChip key={g.id} goal={g} view={goals.get(g.id)} onClick={() => onPick(`${c.entity_id}|${g.id}`)} />)
         ) : (
-          <span className="text-sm text-warn">No goal derives from it</span>
+          <>
+            <span className="text-sm text-warn">No goal derives from it</span>
+            {canAddGoal && (
+              <Link href="/baseline?add=goal" className="text-sm font-medium text-accent-ink hover:underline">
+                Add a goal
+              </Link>
+            )}
+          </>
         )}
       </div>
     </li>
@@ -174,13 +224,16 @@ function StopRow({ c }: { c: Choice }) {
     <li data-testid="stop-row" className="flex min-w-0 flex-col gap-1.5 border-t border-line py-2.5">
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
         <span className="min-w-0 flex-1 font-semibold [overflow-wrap:anywhere]">{c.title}</span>
-        <span
-          data-testid="stop-planned"
-          data-tone={planned > 0 ? "fail" : "pass"}
-          className={`tnum text-sm font-semibold ${planned > 0 ? "text-crit" : "text-text2"}`}
-        >
-          {planned > 0 ? `${plural(planned, "item")} still planned` : "Nothing planned"}
-        </span>
+        {planned > 0 ? (
+          // pass F F-42: the planned items are on the Plan, where they are moved or dropped.
+          <Link href="/plan" data-testid="stop-planned" data-tone="fail" className="tnum text-sm font-semibold text-crit hover:underline">
+            {plural(planned, "item")} still planned
+          </Link>
+        ) : (
+          <span data-testid="stop-planned" data-tone="pass" className="tnum text-sm font-semibold text-text2">
+            Nothing planned
+          </span>
+        )}
       </div>
       {c.features.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -198,15 +251,23 @@ function StopRow({ c }: { c: Choice }) {
 /** The product strategy: its summary, focus and stop choices, and the next review. */
 export function StrategyCard({
   stack,
+  load,
   doc,
   owner,
   goals,
+  canAddGoal,
+  onPick,
   onDraft,
 }: {
   stack: Stack | undefined;
+  load: StackLoad;
   doc: DocRef | null;
   owner: boolean;
   goals: Map<string, GoalView>;
+  /** May add a goal (the Baseline's Add goal), offered where a focus choice has none. */
+  canAddGoal: boolean;
+  /** Opens the stack line with this key (pass F F-42). */
+  onPick: (key: string) => void;
   onDraft: (kind: DocKind) => void;
 }) {
   const s = stack?.strategy ?? null;
@@ -227,7 +288,7 @@ export function StrategyCard({
             {focus.length ? (
               <ul>
                 {focus.map((c) => (
-                  <FocusRow key={c.entity_id} c={c} goals={goals} />
+                  <FocusRow key={c.entity_id} c={c} goals={goals} canAddGoal={canAddGoal} onPick={onPick} />
                 ))}
               </ul>
             ) : (
@@ -248,6 +309,8 @@ export function StrategyCard({
           </section>
           <p className="text-sm text-text2">Next review {shortDate(s.review_on)}</p>
         </div>
+      ) : !stack ? (
+        <StackPending load={load} testId="strategy" />
       ) : (
         <NotApproved kind="strategy" doc={doc} owner={owner} />
       )}

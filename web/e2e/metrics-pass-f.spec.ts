@@ -53,9 +53,9 @@ test("pass F: the metric chart reads its weeks, values and target, and lists eac
   await expect(weeks).toHaveCount(13);
   await expect(weeks.first()).toContainText("Oct 12");
   await expect(weeks.first()).toContainText("9.5%");
-  await weeks.nth(1).getByRole("button", { name: "Edit" }).click();
-  await expect(inspector.getByLabel("Week")).toHaveValue("2026-10-05");
-  await expect(inspector.getByLabel("Value")).toHaveValue("9.4");
+  await weeks.nth(1).getByRole("button", { name: "Change" }).click();
+  await expect(inspector.getByRole("combobox", { name: /^Week/ })).toHaveValue("2026-10-05");
+  await expect(inspector.getByLabel("Value", { exact: true })).toHaveValue("9.4");
 });
 
 // protects=F-46: a value that is not a number says so, a saved value is confirmed in a toast,
@@ -64,9 +64,9 @@ test("pass F: the metric chart reads its weeks, values and target, and lists eac
 test("pass F: recording says Enter a number, confirms the save, and Archive can be undone", async ({ page }) => {
   await openMetric(page, "Trial to paid rate");
   const inspector = page.getByTestId("metric-inspector");
-  await inspector.getByLabel("Value").fill("abc");
+  await inspector.getByLabel("Value", { exact: true }).fill("abc");
   await expect(inspector.getByText("Enter a number")).toBeVisible();
-  await inspector.getByLabel("Value").fill("9.6");
+  await inspector.getByLabel("Value", { exact: true }).fill("9.6");
   await inspector.getByRole("button", { name: "Record" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Saved week of Oct 12" })).toBeVisible();
   await expect(inspector.getByTestId("metric-weeks").getByRole("listitem").first()).toContainText("9.6%");
@@ -93,15 +93,16 @@ test("pass F: the Change column shows the whole change with the inspector open",
 test("pass F: the chart and the form keep explanations behind an (i), in plain words", async ({ page }) => {
   await openMetric(page, "Weekly active teams");
   const inspector = page.getByTestId("metric-inspector");
-  await expect(inspector.getByTestId("metric-chart")).not.toContainText("Shaded");
+  await expect(inspector.getByTestId("metric-chart").getByText("Shaded")).toBeHidden();
   await expect(inspector).toContainText("Unusual weeks");
   await expect(inspector).toContainText("Alert size");
   await inspector.getByRole("button", { name: "Edit" }).click();
   const form = page.getByRole("dialog", { name: "Edit metric" });
   await expect(form.getByLabel("Kind")).toContainText("Result");
   await expect(form).not.toContainText("An output is a result");
-  await expect(form).not.toContainText("A PostHog query that returns one number");
+  await expect(form.getByTestId("metric-kind-help")).toBeHidden();
+  await expect(form.getByText("A PostHog query that returns one number")).toBeHidden();
   await expect(form).not.toContainText("is a variance too");
   await expect(form.getByLabel("Alert size (%)")).toBeVisible();
-  await expect(form.getByRole("button", { name: "About the query" })).toBeVisible();
+  await expect(form.getByRole("button", { name: "About PostHog" })).toBeVisible();
 });

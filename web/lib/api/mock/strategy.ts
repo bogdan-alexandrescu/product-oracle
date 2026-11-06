@@ -153,7 +153,7 @@ export function seedStrategy(uuid: () => string, entities: GoalRow[] = [], { vis
     }),
   ];
   const doc = (slug: string, title: string, version: number) => ({ slug, title, version, approved_at: APPROVED });
-  return {
+  const db: StrategyDb = {
     findings,
     stack: {
       vision: !vision ? null : {
@@ -184,6 +184,10 @@ export function seedStrategy(uuid: () => string, entities: GoalRow[] = [], { vis
       counts: { open: 4, high: 2, waived: 1 },
     },
   };
+  // As the API: a focus choice's finding is about the choice's entity (pass F F-41).
+  const team = db.stack.strategy!.choices.find((c) => c.id === "team-plans")!;
+  Object.assign(findings[findings.length - 1], { subject_id: team.entity_id });
+  return db;
 }
 
 /**

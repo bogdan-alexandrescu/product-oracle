@@ -126,7 +126,7 @@ test("pass F: phone, a tapped stack row opens its details in a sheet", async ({ 
   const root = strategyPage(page);
   const retention = root.getByTestId("strategy-stack").getByTestId("stack-row").filter({ hasText: "Retention" });
   await expect(retention).toContainText("Goal");
-  await expect(retention).not.toContainText("—");
+  expect(await retention.innerText()).not.toContain("—");
   await retention.click();
   const sheet = page.getByTestId("stack-sheet");
   await expect(sheet).toBeVisible();
@@ -143,10 +143,12 @@ test("pass F: with no strategy, the empty states keep one short line each", asyn
   await page.goto("/company/strategy");
   const root = strategyPage(page);
   await expect(root.getByTestId("vision-empty")).toBeVisible();
-  await expect(root.getByTestId("vision-empty")).not.toContainText("Where the company is headed");
-  await expect(root.getByTestId("strategy-empty")).not.toContainText("each goal should follow from a focus choice");
-  await expect(root.getByTestId("stack-empty")).not.toContainText("under the focus choice each follows from");
+  // The reasons stay in the page for the (i), hidden until it is opened.
+  await expect(root.getByTestId("vision-empty").getByText("Where the company is headed")).toBeHidden();
+  await expect(root.getByTestId("strategy-empty").getByText("each goal should follow from a focus choice")).toBeHidden();
+  await expect(root.getByTestId("stack-empty").getByText("under the focus choice each follows from")).toBeHidden();
   await root.getByTestId("drift-list").getByTestId("finding-state").getByRole("button", { name: /Resolved/ }).click();
+  await expect(root.getByTestId("drift-empty").getByText("A finding clears once")).toBeHidden();
   await expect(root.getByTestId("drift-empty")).not.toContainText("because the goal or item now lines up");
   await expect(root.getByTestId("drift-empty").getByRole("button", { name: /About/ })).toBeVisible();
 });

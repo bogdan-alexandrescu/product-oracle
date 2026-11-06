@@ -148,7 +148,7 @@ test("13b: an approver adds an output metric linked to a goal, tests its query a
   await sheet.getByRole("button", { name: "Add metric" }).click();
   await expect(sheet).toBeHidden();
   const row = metricRow(page, "Setup completion rate");
-  await expect(row).toContainText("Output");
+  await expect(row).toContainText("Result");
   await expect(row).toContainText("PostHog");
   await expect(row.locator('[data-col="last"]')).toHaveText(/\d/);
   await expect(row.getByRole("img", { name: /^Trend / })).toBeVisible();
@@ -315,7 +315,7 @@ test("editing a metric whose goal is no longer confirmed saves, with No goal", a
   await inspector.getByRole("button", { name: "Edit" }).click();
   const sheet = page.getByRole("dialog", { name: "Edit metric" });
   await expect(sheet.getByLabel("Goal")).toHaveValue("");
-  await sheet.getByLabel("Threshold (%)").fill("15");
+  await sheet.getByLabel("Alert size (%)").fill("15");
   await sheet.getByRole("button", { name: "Save" }).click();
   await expect(sheet).toBeHidden();
   await expect(inspector).toContainText("15%");

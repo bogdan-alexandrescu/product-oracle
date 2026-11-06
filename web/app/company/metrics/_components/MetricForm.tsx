@@ -2,7 +2,7 @@
 
 import { useRef, useState, type FormEvent } from "react";
 
-import { Button, useFocusTrap } from "@/components/ds";
+import { Button, InfoTip, useFocusTrap } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { displayName } from "@/lib/names";
@@ -115,7 +115,7 @@ export function MetricForm({
     if (d === 0) out.description = "Say what the metric counts.";
     else if (d < 3) out.description = "Write at least 3 characters.";
     if (!unit.trim()) out.unit = unitPick === COUNT ? "Name what is counted, such as teams." : "Give a unit, such as % or teams.";
-    if (kind === "input" && !drives) out.drives = "Pick the output this input drives.";
+    if (kind === "input" && !drives) out.drives = "Pick the result this driver drives.";
     if (!owner) out.owner = "Pick who explains its changes.";
     if (source === "posthog" && !query.trim()) out.query = "Write the query Oracle runs each week.";
     if (threshold.trim()) {
@@ -164,7 +164,7 @@ export function MetricForm({
 
   const name = metric ? "Edit metric" : "Add metric";
   return (
-    <div data-backdrop="" className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4">
+    <div data-backdrop="" className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4">
       <div
         ref={panel}
         role="dialog"
@@ -221,7 +221,17 @@ export function MetricForm({
           </label>
           <div className="grid grid-cols-3 gap-3 max-[600px]:grid-cols-1">
             <div className={LABEL}>
-              <label htmlFor="metric-kind">Kind</label>
+              {/* pass F F-45: what Result and Driver mean sits behind the (i), not under the field. */}
+              <span className="flex items-center gap-1.5">
+                <label htmlFor="metric-kind">Kind</label>
+                <InfoTip label="result and driver" align="start">
+                  <span id="metric-kind-help" data-testid="metric-kind-help" className="font-normal">
+                    {kind === "output"
+                      ? "A result is what the company wants, such as paying customers. It can keep a goal's value up to date."
+                      : "A driver is a number the team can move directly, such as invites sent. It sits under the result it drives."}
+                  </span>
+                </InfoTip>
+              </span>
               <select
                 id="metric-kind"
                 aria-describedby="metric-kind-help"
@@ -230,8 +240,8 @@ export function MetricForm({
                 disabled={!!metric}
                 onChange={(e) => setKind(e.target.value as Metric["kind"])}
               >
-                <option value="output">Output: a result</option>
-                <option value="input">Input: a lever</option>
+                <option value="output">Result</option>
+                <option value="input">Driver</option>
               </select>
             </div>
             {/* qa4-company-39: a select like Kind and Good direction (the goal editor's units), then "Count of…" for a counted noun. */}
@@ -286,12 +296,6 @@ export function MetricForm({
               <FieldError field="unit" errors={errors} />
             </label>
           )}
-          {/* qa-company-39: Output and Input in plain words. */}
-          <p id="metric-kind-help" data-testid="metric-kind-help" className="-mt-1 text-[13px] text-text2">
-            {kind === "output"
-              ? "An output is a result the company wants, such as paying customers. It can keep a goal's value up to date."
-              : "An input is a number the team can move directly, such as invites sent. It sits under the output it drives."}
-          </p>
           {kind === "input" ? (
             <label className={LABEL}>
               <span>
@@ -308,7 +312,7 @@ export function MetricForm({
                 aria-describedby={errors.drives ? "metric-drives-error" : undefined}
                 onChange={(e) => setDrives(e.target.value)}
               >
-                <option value="">Pick the output it drives</option>
+                <option value="">Pick the result it drives</option>
                 {outputs.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.title}
@@ -382,10 +386,19 @@ export function MetricForm({
           {source === "posthog" && (
             <div className="flex flex-col gap-2">
               <div className={LABEL}>
-                <label htmlFor="metric-query">
-                  <span id="metric-query-label">Query</span>
-                  <Required />
-                </label>
+                <span className="flex items-center gap-1.5">
+                  <label htmlFor="metric-query">
+                    <span id="metric-query-label">Query</span>
+                    <Required />
+                  </label>
+                  <InfoTip label="PostHog" align="start">
+                    <span id="metric-query-help" className="font-normal">
+                      A PostHog query that returns one number for a week. To count only that week, write {"{period_start}"} and{" "}
+                      {"{period_end}"}: Oracle fills in the week&apos;s first and last moment in the Company time zone. Test shows what it
+                      reads for the last 4 weeks.
+                    </span>
+                  </InfoTip>
+                </span>
                 <textarea
                   id="metric-query"
                   data-field="query"
@@ -404,11 +417,6 @@ export function MetricForm({
                   placeholder="e.g. select count(distinct team_id) from events where timestamp between {period_start} and {period_end}"
                 />
                 <FieldError field="query" errors={errors} />
-                <span id="metric-query-help" className="text-[13px] font-normal">
-                  A PostHog query that returns one number for a week. Where it should count only that week, write {"{period_start}"} and{" "}
-                  {"{period_end}"}: Oracle fills in the week&apos;s first and last moment in the Company time zone. Test shows what it reads for
-                  the last 4 weeks.
-                </span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Button disabled={busy || !query.trim()} onClick={test} aria-describedby={!query.trim() ? "metric-test-hint" : undefined}>
@@ -434,7 +442,14 @@ export function MetricForm({
             </div>
           )}
           <div className={LABEL}>
-            <label htmlFor="metric-threshold">Threshold (%)</label>
+            <span className="flex items-center gap-1.5">
+              <label htmlFor="metric-threshold">Alert size (%)</label>
+              <InfoTip label="the alert size" align="start">
+                <span id="metric-threshold-help" className="font-normal">
+                  A week that changes by at least this share of the week before is flagged as an unusual week too.
+                </span>
+              </InfoTip>
+            </span>
             <input
               id="metric-threshold"
               aria-describedby={errors.threshold ? "metric-threshold-error metric-threshold-help" : "metric-threshold-help"}
@@ -446,9 +461,6 @@ export function MetricForm({
               onChange={(e) => setThreshold(e.target.value)}
               placeholder="Optional"
             />
-            <span id="metric-threshold-help" className="text-[13px] font-normal">
-              A week whose change is at least this share of the week before is a variance too.
-            </span>
             <FieldError field="threshold" errors={errors} />
           </div>
           {error && <ErrorNote>{error}</ErrorNote>}
