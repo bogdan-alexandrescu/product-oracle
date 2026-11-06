@@ -15,6 +15,7 @@ from oracle.auth.deps import Principal, TenantDB
 from oracle.auth.models import User
 from oracle.authz import has_role, require_role
 from oracle.simple import goal_map
+from oracle.simple.drafts import overlays_for
 from oracle.simple.goal_map import (
     AreaIn,
     AreaOrderIn,
@@ -47,7 +48,7 @@ def _can_edit(principal: Principal) -> bool:
 
 async def _done(db: TenantDB, principal: Principal) -> GoalMapOut:
     await db.commit()
-    return await goal_map.build(db, _can_edit(principal))
+    return await goal_map.build(db, _can_edit(principal), await overlays_for(db, principal))
 
 
 async def _run(db: TenantDB, principal: Principal, step) -> GoalMapOut:
@@ -66,7 +67,7 @@ async def _who(db: TenantDB, principal: Principal) -> str:
 
 @router.get("", response_model=GoalMapOut)
 async def get_goal_map(principal: Reader, db: TenantDB) -> GoalMapOut:
-    return await goal_map.build(db, _can_edit(principal))
+    return await goal_map.build(db, _can_edit(principal), await overlays_for(db, principal))
 
 
 @router.post("/areas", response_model=GoalMapOut)

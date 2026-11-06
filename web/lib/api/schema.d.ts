@@ -41516,6 +41516,28 @@ export interface components {
             /** Name */
             name: string;
         };
+        /**
+         * SimplePartRef
+         * @description feature-parts: a parent or a part, by its display code ("" when none) and name.
+         */
+        SimplePartRef: {
+            /** Id */
+            id: string;
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
+            /**
+             * Cut
+             * @default false
+             */
+            cut: boolean;
+            /**
+             * In Trash
+             * @default false
+             */
+            in_trash: boolean;
+        };
         /** SimplePersonRef */
         SimplePersonRef: {
             /**
@@ -42299,12 +42321,17 @@ export interface components {
             merged_into?: components["schemas"]["SimpleMergedInto"] | null;
             /** Parent Key */
             parent_key?: string | null;
-            part_of?: components["schemas"]["SimpleMergedInto"] | null;
+            part_of?: components["schemas"]["SimplePartRef"] | null;
+            /**
+             * Part Path
+             * @default []
+             */
+            part_path: components["schemas"]["SimplePartRef"][];
             /**
              * Parts
              * @default []
              */
-            parts: components["schemas"]["SimpleMergedInto"][];
+            parts: components["schemas"]["SimplePartRef"][];
             /**
              * Drafting
              * @description S7: Oracle's drafting job for this draft is queued or running.

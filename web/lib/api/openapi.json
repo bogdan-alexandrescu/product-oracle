@@ -123987,6 +123987,40 @@
         ],
         "title": "SimpleOwnerRef"
       },
+      "SimplePartRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "cut": {
+            "type": "boolean",
+            "title": "Cut",
+            "default": false
+          },
+          "in_trash": {
+            "type": "boolean",
+            "title": "In Trash",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "title"
+        ],
+        "title": "SimplePartRef",
+        "description": "feature-parts: a parent or a part, by its display code (\"\" when none) and name."
+      },
       "SimplePersonRef": {
         "properties": {
           "id": {
@@ -125917,16 +125951,24 @@
           "part_of": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/SimpleMergedInto"
+                "$ref": "#/components/schemas/SimplePartRef"
               },
               {
                 "type": "null"
               }
             ]
           },
+          "part_path": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePartRef"
+            },
+            "type": "array",
+            "title": "Part Path",
+            "default": []
+          },
           "parts": {
             "items": {
-              "$ref": "#/components/schemas/SimpleMergedInto"
+              "$ref": "#/components/schemas/SimplePartRef"
             },
             "type": "array",
             "title": "Parts",

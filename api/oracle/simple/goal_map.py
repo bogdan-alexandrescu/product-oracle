@@ -21,7 +21,7 @@ and the features serving them.
 import uuid
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -297,7 +297,9 @@ async def _on_map(db: AsyncSession) -> list[TrackMilestone]:
     return sorted(rows, key=lambda m: d(m))
 
 
-async def build(db: AsyncSession, can_edit: bool) -> GoalMapOut:
+async def build(
+    db: AsyncSession, can_edit: bool, overlays: dict[uuid.UUID, dict[str, Any]] | None = None
+) -> GoalMapOut:
     today = company_time.today(await company_time.company_time_zone(db))
     every = await _goals(db)
     goals = [g for g in every if not _is_guardrail(g)]
@@ -391,14 +393,24 @@ async def build(db: AsyncSession, can_edit: bool) -> GoalMapOut:
     area_by = {a.id: a for a in areas}
     links = (
         await db.execute(
-            select(MilestoneFeature, RoadmapItem.title)
+            select(
+                MilestoneFeature,
+                RoadmapItem.title,
+                RoadmapItem.merged_into,
+                RoadmapItem.roadmap_document_id,
+            )
             .join(RoadmapItem, RoadmapItem.id == MilestoneFeature.item_id)
             .order_by(RoadmapItem.position, RoadmapItem.title, MilestoneFeature.created_at)
-        )
+        )  # fmt: skip
     ).all()
     feats: dict[uuid.UUID, GmFeature] = {}
-    for link, title in links:
+    for link, title, merged, doc in links:
         if link.milestone_id not in shown:
+            continue
+        # panel-menu: a feature merged into another (as the reader's draft has it, as the
+        # roadmap reads it) is no longer one of the map's.
+        mine_ = ((overlays or {}).get(doc) or {}).get(str(link.item_id)) or {}
+        if mine_.get("merged_into", merged):
             continue
         f = feats.get(link.item_id)
         mine = GmLink(

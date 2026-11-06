@@ -1,7 +1,7 @@
 """A feature made part of another (feature-parts)
 
 Additive. ``roadmap_items`` gains ``parent_key``, nullable: the key of the item (of the same
-roadmap) the feature is part of, one level deep, set by Simple's ``set_parent`` change
+roadmap) the feature is part of (any depth, never a loop), set by Simple's ``set_parent`` change
 (oracle.simple.changes). Every existing row stays a feature of its own and an old image
 keeps writing.
 

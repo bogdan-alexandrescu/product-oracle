@@ -384,11 +384,12 @@ def _id(item: Any) -> str | None:
 
 
 def plan_items(items: list[Any]) -> list[plan_strip.PlanItem]:
-    """The plan strip's reading of a PRD's roadmap items (uncut), each with the milestone
-    record that links it, when any."""
+    """The plan strip's reading of a PRD's roadmap items (neither cut nor merged), each with
+    the milestone record that links it, when any."""
     out = []
     for i in items:
-        if i.status == "cut":
+        # panel-menu: a merged feature (any, not only a draft) is off the plan as a cut one.
+        if i.status in ("cut", "merged"):
             continue
         # plan-model: one input per slice, each in its milestone as the PRD's plan dates it.
         for sl in getattr(i, "slices", None) or []:
@@ -1429,7 +1430,7 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
             estimated=i.estimated,
         )
         for i in slice_.items
-        if i.status != "cut"
+        if i.status not in ("cut", "merged")
     ]
     plan = plan_strip.strip(plan_items(slice_.items), slice_.today)
     # A dated plan's span is the one its timeline draws (its milestones, or the dates the
