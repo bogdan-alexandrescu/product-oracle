@@ -81590,6 +81590,16 @@
               }
             ],
             "title": "Owner Id"
+          },
+          "seen": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalSeen"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -81917,6 +81927,58 @@
         "type": "object",
         "title": "GoalProgress",
         "description": "#345: a goal's progress, 0 to 1: its own measurement (\"own\") when it has one, else\nthe weighted progress of its subgoals (\"subgoals\"); null source without either."
+      },
+      "GoalSeen": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "measure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measure"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due"
+          }
+        },
+        "type": "object",
+        "title": "GoalSeen",
+        "description": "The goal's fields as the edit form read them when it opened."
       },
       "GoalSnap": {
         "properties": {

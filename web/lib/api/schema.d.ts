@@ -25939,6 +25939,7 @@ export interface components {
             due: string;
             /** Owner Id */
             owner_id?: string | null;
+            seen?: components["schemas"]["GoalSeen"] | null;
         };
         /** GoalInterviewOut */
         GoalInterviewOut: {
@@ -26051,6 +26052,20 @@ export interface components {
              * @default 0
              */
             subgoals: number;
+        };
+        /**
+         * GoalSeen
+         * @description The goal's fields as the edit form read them when it opened.
+         */
+        GoalSeen: {
+            /** Title */
+            title?: string | null;
+            /** Measure */
+            measure?: string | null;
+            /** Target */
+            target?: string | null;
+            /** Due */
+            due?: string | null;
         };
         /** GoalSnap */
         GoalSnap: {
