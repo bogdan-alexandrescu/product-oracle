@@ -48,11 +48,14 @@ export function FeaturePanel({
   phone,
   canChange,
   onClose,
+  onChanged,
 }: {
   feature: PanelFeature;
   phone: boolean;
   canChange: boolean;
   onClose: () => void;
+  /** A change was made or decided here: the page under the panel reads again. */
+  onChanged?: () => void;
 }) {
   const roadmap = useQuery("simple-roadmap:{}", () =>
     unwrap(api.GET("/v1/simple/roadmap", {})).then((d) => {
@@ -109,9 +112,10 @@ export function FeaturePanel({
         } else toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not make this change" });
       } finally {
         await reload();
+        onChanged?.();
       }
     },
-    [item, reload],
+    [item, reload, onChanged],
   );
   const onDecide = async (c: Change, how: "accept" | "decline") => {
     try {
@@ -122,6 +126,7 @@ export function FeaturePanel({
       toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not decide it" });
     }
     await reload();
+    onChanged?.();
   };
 
   const body = !data ? (

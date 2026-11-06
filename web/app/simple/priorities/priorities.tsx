@@ -322,6 +322,7 @@ export function Priorities() {
             setRowOpen(null);
             void q.reload();
           }}
+          onChanged={() => void q.reload()}
         />
       )}
       {data && !blank && tab === "value-effort" && <ValueEffort data={data} shapes={shapes} mayChange={mayChange} changed={changed} moved={moved} />}
