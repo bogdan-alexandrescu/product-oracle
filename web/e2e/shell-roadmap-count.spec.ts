@@ -97,7 +97,7 @@ test("sending a suggested feature moves the menu and the button at once, and eve
   await page.goto("/simple/roadmap");
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   await button(page).click();
-  const mine = tray(page).getByTestId("tray-suggested").getByTestId("person-suggestion").filter({ hasText: "Shared alert notes" });
+  const mine = tray(page).getByTestId("tray-suggested").getByTestId("goal-suggestion").filter({ hasText: "Shared alert notes" });
   await mine.getByRole("button", { name: "Reject" }).click();
   await page.getByRole("dialog", { name: "Reject Shared alert notes" }).getByRole("button", { name: "Reject" }).click();
   await expect(badge(page)).toHaveText(String(before.n));
