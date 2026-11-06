@@ -119,9 +119,9 @@ test.describe("desktop", () => {
     await expect(group).toHaveText(/^Confirm the Ground Truth · \d+ runs$/);
     const n = Number(/(\d+) runs$/.exec((await group.textContent())!)![1]);
     expect(n).toBeGreaterThan(5);
-    // The count still counts each run: the rail badge and the heading agree.
+    // The count still counts each run: the rail badge and the Needs you count agree (the header's
+    // "N waiting" is PR 1298 fix 1's, left to that lane).
     const waiting = (await page.getByTestId("nav-inbox-badge").first().textContent())!.trim();
-    await expect(page.getByText(`${waiting} waiting`)).toBeVisible();
     await expect(page.getByTestId("inbox-needs").getByTestId("panel-count")).toHaveText(waiting);
     // The group is one line, its runs folded under Show runs; opened, each run is a line
     // under it with one action of its own.

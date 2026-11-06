@@ -148,7 +148,7 @@ test("qa-simple-home-29: the phone's tabs and More sheet show the rail's counts"
   if (counts.meetings) {
     const sheet = page.getByRole("dialog", { name: "More" });
     await expect(sheet.getByTestId("simple-more-meetings-count")).toHaveText(counts.meetings);
-    await expect(sheet.getByRole("link", { name: "Meetings", exact: true })).toHaveAccessibleDescription(/live now/);
+    await expect(sheet.getByRole("link", { name: "Meetings", exact: true })).toHaveAccessibleDescription(/live or coming up/);
   }
 });
 

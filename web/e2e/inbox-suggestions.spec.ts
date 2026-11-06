@@ -115,6 +115,9 @@ async function inboxCount(page: Page, phone: boolean, tab: "more" | "roadmap" = 
   return t.length ? Number(t[0].trim()) : 0;
 }
 
+/** A version waiting for my approval as counted now: the rail's Inbox count; on a phone, this line's Roadmap tab count. */
+const approvalCount = (page: Page, phone: boolean) => (phone ? inboxCount(page, true, "roadmap") : shownCount(page, false));
+
 /** Home's Needs you counts of Approvals and Proposals, as shown now (0 when not shown). */
 async function homeCounts(page: Page): Promise<{ approvals: number; proposals: number }> {
   const needs = page.getByTestId("home-needs");
@@ -305,9 +308,8 @@ for (const phone of [false, true]) {
       // Read once first: Oracle's dates and goal suggestions, made as it is first read, are in the counts.
       await readRoadmap(page);
       await readRoadmap(page);
-      // On a phone, the More tab's count (the Inbox beyond what the tabs count waits there).
-      if (phone) await expect.poll(() => shownCount(page, true)).toBeGreaterThan(0);
-      const phoneBefore = phone ? await shownCount(page, true) : 0;
+      // On a phone, the Roadmap tab's count: this line's Roadmap tab counts a version waiting for my approval.
+      const phoneBefore = phone ? await inboxCount(page, true, "roadmap") : 0;
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.getByTestId("filter-roadmap").selectOption({ label: "Alerts roadmap" });
       const bar = page.locator('[data-testid="timeline-row"][data-item="alert-export"] [data-testid="timeline-bar"]').first();
@@ -330,7 +332,7 @@ for (const phone of [false, true]) {
       const covered = bars.filter((b) => b.x < box.x + box.width && box.x < b.x + b.width && b.y < box.y + box.height && box.y < b.y + b.height);
       expect(covered).toEqual([]);
       await page.setViewportSize(size);
-      if (phone) await expect.poll(() => shownCount(page, true)).toBe(phoneBefore + 1);
+      if (phone) await expect.poll(() => inboxCount(page, true, "roadmap")).toBe(phoneBefore + 1);
 
       await switchTo(page, "approver@example.com");
       const railCount = await openInboxFromRail(page, phone);
@@ -355,13 +357,13 @@ for (const phone of [false, true]) {
       await expect(page).toHaveURL(/\/simple\/roadmap\?roadmap=/);
       const approval = page.getByTestId("draft-approval");
       await expect(approval).toContainText(/Alerts roadmap version \d+ is waiting for your approval/);
-      await expect.poll(() => shownCount(page, phone)).toBeGreaterThan(0);
-      const shown = await shownCount(page, phone);
+      await expect.poll(() => approvalCount(page, phone)).toBeGreaterThan(0);
+      const shown = await approvalCount(page, phone);
       // The reviewer's approval alone does not publish it: the decider's is still to come.
       await tap(approval.getByRole("button", { name: "Approve" }));
       await expect(page.getByText("Approved: it waits for the other approvals")).toBeVisible();
       // The counts drop at once, on the page where it was approved.
-      await expect.poll(() => shownCount(page, phone)).toBe(shown - 1);
+      await expect.poll(() => approvalCount(page, phone)).toBe(shown - 1);
 
       await page.goto("/inbox");
       await expect(page.getByTestId("inbox-needs")).toBeVisible();
@@ -381,11 +383,11 @@ for (const phone of [false, true]) {
       await expect(page).toHaveURL(/\/simple\/roadmap\?roadmap=.*&draft=/);
       const decide = page.getByTestId("draft-approval");
       await expect(decide).toContainText(/Alerts roadmap version \d+ is waiting for your approval/);
-      await expect.poll(() => shownCount(page, phone)).toBeGreaterThan(0);
-      const ownerShown = await shownCount(page, phone);
+      await expect.poll(() => approvalCount(page, phone)).toBeGreaterThan(0);
+      const ownerShown = await approvalCount(page, phone);
       await tap(decide.getByRole("button", { name: "Approve" }));
       await expect(page.getByText("Approved: Alerts roadmap is published")).toBeVisible();
-      await expect.poll(() => shownCount(page, phone)).toBe(ownerShown - 1);
+      await expect.poll(() => approvalCount(page, phone)).toBe(ownerShown - 1);
 
       await page.goto("/inbox");
       await expect(page.getByTestId("inbox-needs")).toBeVisible();

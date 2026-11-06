@@ -11,7 +11,7 @@ import { invalidateWaiting, loadInbox, loadMyQuestions, markInboxSeen, waitingCh
 
 import { useAccessRequestRows } from "./_access";
 import { useActed } from "./_actions";
-import { allNeeds, NeedTable, SOURCE_COLUMNS, sourceNeeds, STATE_TABS, useFixedHere, usePerms, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
+import { allNeeds, NeedTable, SOURCE_COLUMNS, sourceNeeds, STATE_TABS, useFixedHere, usePerms, waitingCount, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
 import { useQuestionRows } from "./_questions";
 import { minutesRows } from "./_minutes";
 import { approvalRows, dateSuggestionRows, goalSuggestionRows, proposalRows } from "./_proposals";
@@ -226,12 +226,12 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
  */
 function InboxTabs({
   rows,
-  waiting,
   questionsError,
   notice,
   onTabChange,
 }: {
   rows: ReturnType<typeof allNeeds>;
+  /** The header's count; Needs you counts each run of a grouped checkpoint from the rows (waitingCount). */
   waiting: number;
   questionsError: string | null;
   notice: ReactNode;
@@ -257,7 +257,7 @@ function InboxTabs({
   // (the rail badge's count); Staged, Declined and Done are named, with their own counts.
   const live = tab === "new" || tab === "open";
   return (
-    <Panel title={live ? "Needs you" : label} count={live ? waiting : count(tab)} testId="inbox-needs">
+    <Panel title={live ? "Needs you" : label} count={live ? waitingCount(rows) : count(tab)} testId="inbox-needs">
       {/* qa-company-47: on a phone the five tabs keep one line: smaller tabs, no "0" counts. */}
       <div
         className="px-4 pt-1 max-[600px]:overflow-x-auto max-[600px]:px-2 max-[600px]:[&_[role=tab]]:px-1.5 max-[600px]:[&_[role=tablist]]:flex-nowrap"

@@ -107,12 +107,10 @@ test("a dependency the feature talk removes leaves the feature panel, and Undo p
   await expect(card.getByTestId("chat-card-summary")).toHaveText(SUMMARY);
   await tap(card.getByRole("button", { name: "Apply", exact: true }));
   await expect(card.getByTestId("chat-card-outcome")).toContainText("Applied by you");
-  await tap(panel.getByRole("tab", { name: "Details" }).or(panel.getByRole("button", { name: "Details" })).first());
+  // On a desktop the talk opens beside the details: the same panel's "Depends on" reads at once.
   await expect(row).toHaveCount(0);
-  await tap(panel.getByRole("tab", { name: "Talk to Oracle" }).or(panel.getByRole("button", { name: "Talk to Oracle" })).first());
   await tap(talk.locator('[data-testid="chat-card"][data-status="applied"]').getByRole("button", { name: "Undo" }));
   await expect(talk.locator('[data-testid="chat-card"][data-status="undone"]')).toHaveCount(1);
-  await tap(panel.getByRole("tab", { name: "Details" }).or(panel.getByRole("button", { name: "Details" })).first());
   await expect(row).toHaveCount(1);
 });
 
