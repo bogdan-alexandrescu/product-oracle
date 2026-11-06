@@ -235,6 +235,13 @@ for (const phone of [false, true]) {
       await expect(taken).not.toContainText(/D-\d+/);
       const line = taken.getByTestId("decision-taken").first();
       expect(await line.evaluate((el) => [getComputedStyle(el).textIndent, getComputedStyle(el).paddingLeft])).toEqual(["-16px", "16px"]);
+      // Round 1: on a phone the link keeps its 44 px tap size.
+      if (page.viewportSize()!.width < 600) {
+        const box = (await line.getByRole("link").boundingBox())!;
+        expect(box.height).toBeGreaterThanOrEqual(44);
+        expect(box.width).toBeGreaterThanOrEqual(44);
+        expect(await line.getByRole("link").evaluate((el) => getComputedStyle(el).minHeight)).toBe("44px");
+      }
     });
 
     test("qa4-simple-decide-32: Connect Slack is drawn as a link, not grey like its note", async ({ page }) => {

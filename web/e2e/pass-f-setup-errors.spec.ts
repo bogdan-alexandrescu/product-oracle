@@ -121,14 +121,16 @@ test.describe("Simple Home", () => {
     await expect(simpleSetup(page).getByRole("heading", { name: "Welcome: set up Oracle" })).toBeVisible();
     await page.evaluate((key) => localStorage.setItem(key, "/v1/setup"), MOCK_FAIL_KEY);
     await page.reload();
-    const failed = page.getByTestId("simple-page").getByTestId("home-setup-failed");
+    // Round 1: Simple's failure is Detailed's error note, not a grey bar with a check icon.
+    const failed = page.getByTestId("simple-page").getByTestId("load-error");
     await expect(failed).toContainText("Couldn't load Set up.");
+    await expect(failed).toHaveAttribute("role", "alert");
     await unfail(page);
     await failed.getByRole("button", { name: "Try again" }).click();
     await expect(simpleSetup(page).getByRole("heading", { name: "Welcome: set up Oracle" })).toBeVisible();
   });
 
-  test("F-27, F-28: a finished step opens too, and a hidden Set up comes back from its chip", async ({ page }) => {
+  test("F-27, F-28: a finished step opens too, and a hidden Set up comes back from Home's menu", async ({ page }) => {
     await newCompany(page);
     await login(page, ADMIN.email);
     await toSimple(page);
@@ -138,11 +140,39 @@ test.describe("Simple Home", () => {
 
     await simpleSetup(page).getByRole("button", { name: "Hide" }).click();
     await expect(simpleSetup(page)).toHaveCount(0);
-    const chip = page.getByTestId("simple-page").getByTestId("home-setup-chip");
-    await expect(chip).toHaveText("Set up 2 of 8");
-    await chip.click();
+    // The owner's pick (Nov 5): no chip in the card's place; Show Set up is in Home's menu.
+    await expect(page.getByTestId("simple-page").getByTestId("home-setup-chip")).toHaveCount(0);
+    const menu = page.getByTestId("home-greeting").getByRole("button", { name: "Home menu" });
+    await menu.click();
+    await page.getByRole("menu").getByRole("menuitem", { name: "Show Set up" }).click();
     await expect(simpleSetup(page).getByRole("heading", { name: "Welcome: set up Oracle" })).toBeVisible();
-    await expect(chip).toHaveCount(0);
+    await expect(page.getByRole("menu")).toHaveCount(0);
+    await reload(page);
+    await expect(simpleSetup(page).getByRole("heading", { name: "Welcome: set up Oracle" })).toBeVisible();
+  });
+});
+
+const reload = async (page: Page) => {
+  await page.reload();
+  await expect(page.getByTestId("simple-page").getByTestId("home-sentence")).toBeVisible();
+};
+
+test.describe("Round 1: a viewer, who has no Set up steps, is not told Set up failed to load", () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test("on Detailed and Simple Home", async ({ page }) => {
+    await newCompany(page);
+    await page.context().addInitScript(([key]) => localStorage.setItem(key, "viewer"), [MOCK_ROLE_KEY] as const);
+    await failSetup(page);
+    await login(page, ADMIN.email);
+    await page.goto("/home");
+    await expect(page.getByRole("heading", { level: 1, name: "Home" })).toBeVisible();
+    await page.waitForTimeout(1500);
+    await expect(page.locator("main")).not.toContainText("Couldn't load Set up");
+    await page.goto("/simple");
+    await expect(page.getByTestId("simple-page").getByTestId("home-sentence")).toBeVisible();
+    await page.waitForTimeout(1500);
+    await expect(page.getByTestId("simple-page")).not.toContainText("Couldn't load Set up");
   });
 });
 
@@ -173,6 +203,9 @@ test.describe("F-34: a new company has no seed decisions or features, whoever lo
     await login(page, ADMIN.email);
     await page.goto("/baseline");
     await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
+    // Round 1: the count has loaded (the old mock listed the Plan's "Threshold alerts" here).
+    await expect(page.getByTestId("cs-tabs").getByRole("tab", { name: /^Desired state/ })).toHaveText("Desired state 0");
+    await expect(page.getByTestId("cs-desired")).toHaveCount(0);
     await expect(page.locator("main")).not.toContainText("Threshold alerts");
   });
 });
@@ -199,9 +232,9 @@ test.describe("F-35: Oracle's work names a section by its name", () => {
   }
 });
 
-test("F-78: a long wait reads in days, says last update, and a step not heard from in a day says since when", async ({ page }) => {
+/** A run on Usage alerts PRD, started from the Plan, on its run page; returns its Roadmap items step. */
+async function startRun(page: Page) {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.addInitScript((key) => localStorage.setItem(key, "slow-agents"), MOCK_SCENARIO_KEY);
   await login(page);
   await page.getByRole("navigation", { name: "Oracle" }).getByRole("link", { name: "Plan", exact: true }).click();
   await page.getByTestId("plan-tabs").filter({ visible: true }).getByRole("link", { name: "Roadmap documents" }).click();
@@ -210,18 +243,53 @@ test("F-78: a long wait reads in days, says last update, and a step not heard fr
   await dialog.getByRole("button", { name: "Estimate" }).click();
   await dialog.getByRole("button", { name: "Start run" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
-  const items = page.getByTestId("segment-roadmap_items");
+  return page.getByTestId("segment-roadmap_items");
+}
+
+test("F-78: a long wait reads in days, says last update, and a step not heard from in six hours says since when", async ({ page }) => {
+  await page.addInitScript((key) => localStorage.setItem(key, "slow-agents"), MOCK_SCENARIO_KEY);
+  const items = await startRun(page);
   const progress = items.getByTestId("segment-progress");
   await page.getByRole("button", { name: "Refresh progress" }).click();
   const first = items.getByTestId("segment-agent").first();
   await expect(first.getByTestId("agent-heartbeat")).toContainText(/^last (update|proposal|activity) /);
   await expect(progress.getByTestId("segment-no-news")).toHaveCount(0);
 
-  await page.clock.fastForward(72 * 3600_000);
+  // The owner's pick (Nov 5): six hours without news, not a day.
+  await page.clock.fastForward(5 * 3600_000);
+  await expect(progress).toContainText(/checked 5h 0\dm ago/);
+  await expect(progress.getByTestId("segment-no-news")).toHaveCount(0);
+  await page.clock.fastForward(2 * 3600_000);
+  await expect(progress.getByTestId("segment-no-news")).toHaveText(/^No news since [A-Z][a-z]{2} \d{1,2}/);
+
+  await page.clock.fastForward(65 * 3600_000);
   await expect(progress).toContainText(/checked 3 days ago/);
   await expect(first.getByTestId("agent-elapsed")).toHaveText(/^3 days elapsed$/);
   await expect(progress.getByTestId("segment-no-news")).toHaveText(/^No news since [A-Z][a-z]{2} \d{1,2}/);
   await expect(progress).not.toContainText(/\d{2,}h \d{2}m/);
-  await expect(progress.getByRole("button", { name: "Refresh progress" })).toBeVisible();
-  await expect(progress.getByRole("button", { name: "Cancel run" })).toBeVisible();
+  // Round 1: the page's own Refresh progress and Cancel run are not repeated beside the warning;
+  // its (i) says where they are.
+  await expect(progress.getByRole("button", { name: "Refresh progress" })).toHaveCount(0);
+  await expect(progress.getByRole("button", { name: "Cancel run" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Refresh progress" })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Cancel run" })).toHaveCount(1);
+  await progress.getByRole("button", { name: "About no news" }).click();
+  await expect(progress.getByRole("tooltip")).toContainText("Refresh progress");
+});
+
+test("F-78, round 1: a step checked a minute ago whose agents last sent news 7 hours ago says since when", async ({ page }) => {
+  // "stuck-agents": each check reads the agents again (checked_at now), but they send nothing new.
+  await page.addInitScript((key) => localStorage.setItem(key, "stuck-agents"), MOCK_SCENARIO_KEY);
+  const items = await startRun(page);
+  const progress = items.getByTestId("segment-progress");
+  await page.getByRole("button", { name: "Refresh progress" }).click();
+  const first = items.getByTestId("segment-agent").first();
+  await expect(first.getByTestId("agent-heartbeat")).toContainText(/^last update \d+s ago/);
+  await expect(progress.getByTestId("segment-no-news")).toHaveCount(0);
+
+  await page.clock.fastForward(7 * 3600_000);
+  await page.getByRole("button", { name: "Refresh progress" }).click();
+  await expect(progress).toContainText(/checked \d+s ago/);
+  await expect(first.getByTestId("agent-heartbeat")).toContainText(/^last update 7h 0\dm ago/);
+  await expect(progress.getByTestId("segment-no-news")).toHaveText(/^No news since [A-Z][a-z]{2} \d{1,2}/);
 });
