@@ -2039,6 +2039,8 @@ class SimpleUpcomingMeeting(BaseModel):
     # What the ritual reviews when all of it was deleted for good (purged from Trash, none
     # left); Home says "Its roadmap was deleted" and links the ritual's settings.
     reviews_deleted: Literal["roadmap"] | None = None
+    # home-deleted-roadmap: when it was deleted for good (its last purge); Home shows the day.
+    reviews_deleted_at: dt.datetime | None = None
 
 
 class SimpleMeetingsOut(BaseModel):
