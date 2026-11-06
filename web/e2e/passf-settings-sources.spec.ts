@@ -212,9 +212,11 @@ test.describe("desktop", () => {
     const failed = form.getByRole("alert");
     await expect(failed).toContainText("Could not open Google Drive: it is not set up yet.");
     // The server's words sit behind the (i), not on the line.
-    await expect(failed).not.toContainText("ORACLE_GOOGLE_PICKER_APP_ID");
+    const settingNames = page.getByText("ORACLE_GOOGLE_PICKER_APP_ID", { exact: false }).filter({ visible: true });
+    await expect(settingNames).toHaveCount(0);
     await failed.getByRole("button", { name: "About why Drive did not open" }).click();
     await expect(page.getByText("Choosing files from Drive is not configured", { exact: false }).filter({ visible: true })).toBeVisible();
+    await expect(settingNames).toHaveCount(1);
 
     await failed.getByRole("button", { name: "Try again" }).click();
     await expect(form.getByRole("alert")).toHaveCount(0);
