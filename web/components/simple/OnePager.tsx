@@ -219,7 +219,8 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
         return;
       }
       // A dialog over the page (the editor's "Discard your changes?" too) takes its own Escape.
-      if (e.key === "Escape" && !document.querySelector('[role="dialog"], [role="alertdialog"], dialog[open]')) {
+      // C-8: the feature panel over the slides takes its own Escape too.
+      if (e.key === "Escape" && !document.querySelector('[role="dialog"], [role="alertdialog"], dialog[open], [data-testid="item-panel"]')) {
         setPresenting(false);
         if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
       }
@@ -465,19 +466,6 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
 
   return (
     <OpenFeatureContext.Provider value={setFeature}>
-    {feature && (
-      <FeaturePanel
-        key={`${feature.id ?? ""}|${feature.code}|${feature.name}`}
-        feature={feature}
-        phone={phone}
-        canChange={can("create_simple_change")}
-        onClose={() => {
-          setFeature(null);
-          void reloadPage();
-          void reloadPlan();
-        }}
-      />
-    )}
     <div
       ref={root}
       data-backdrop={presenting ? "" : undefined}
@@ -848,6 +836,20 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
       </div>
       )}
       </>)}
+      {/* C-8: inside the page, so it opens over the slides too (the page's siblings are inert while presenting). */}
+      {feature && (
+        <FeaturePanel
+          key={`${feature.id ?? ""}|${feature.code}|${feature.name}`}
+          feature={feature}
+          phone={phone}
+          canChange={can("create_simple_change")}
+          onClose={() => {
+            setFeature(null);
+            void reloadPage();
+            void reloadPlan();
+          }}
+        />
+      )}
     </div>
     </OpenFeatureContext.Provider>
   );

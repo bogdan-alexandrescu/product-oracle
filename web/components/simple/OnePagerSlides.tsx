@@ -54,7 +54,7 @@ export function OnePagerSlides({
       if (e.altKey || e.ctrlKey || e.metaKey) return;
       const t = e.target as HTMLElement | null;
       if (t?.closest("textarea, input, select, [contenteditable]")) return;
-      if (document.querySelector('[role="dialog"], [role="alertdialog"], dialog[open]')) return;
+      if (document.querySelector('[role="dialog"], [role="alertdialog"], dialog[open], [data-testid="item-panel"]')) return;
       const step = NEXT.has(e.key) ? 1 : BACK.has(e.key) ? -1 : e.key === "Home" ? -count : e.key === "End" ? count : 0;
       if (!step) return;
       e.preventDefault();
