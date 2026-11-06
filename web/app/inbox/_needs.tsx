@@ -100,13 +100,16 @@ function ageOf(at: string | null | undefined): string {
 /** A cost in dollars ("$53.00"), or that there is none yet. */
 const money = (v: number | null | undefined) => (v == null ? "no estimate" : formatMoney(v));
 
+// Below 1100 px the side columns shrink with the table (the var()s are set on NeedTable's section) so the item keeps its room.
+const SIDE_WRAP = "max-[1099px]:overflow-visible max-[1099px]:whitespace-normal max-[1099px]:break-words max-[1099px]:[&_.truncate]:overflow-visible max-[1099px]:[&_.truncate]:whitespace-normal max-[1099px]:[&_.truncate]:break-words";
+
 const WRAP_TWO = "[&_.truncate]:line-clamp-2 [&_.truncate]:whitespace-normal [&_.truncate]:break-words max-[600px]:[&_.truncate]:overflow-hidden!";
 
-export const NEED_COLUMNS: Column<Need>[] = [
+const BASE_COLUMNS: Column<Need>[] = [
   {
     key: "kind",
     header: "Kind",
-    width: "170px",
+    width: "var(--need-kind-w, 170px)",
     phone: "meta",
     // A child row's kind cell is empty: the left rule ties it to its parent.
     className: "max-[600px]:has-[[data-child-rule]]:hidden",
@@ -136,7 +139,7 @@ export const NEED_COLUMNS: Column<Need>[] = [
       </span>
     ),
   },
-  { key: "context", header: "For", width: "24%", phone: "meta", narrow: "hide", cell: (n) => n.context },
+  { key: "context", header: "For", width: "var(--need-ctx-w, 24%)", phone: "meta", narrow: "hide", cell: (n) => n.context },
   {
     key: "age",
     header: "Age",
@@ -158,7 +161,7 @@ export const NEED_COLUMNS: Column<Need>[] = [
     key: "act",
     header: <span className="sr-only">Action</span>,
     // Wide enough for a row's actions on one line (qa-company-9): the primary, then the rest.
-    width: "340px",
+    width: "var(--need-act-w, 340px)",
     align: "right",
     phone: "action",
     wrap: true,
@@ -169,7 +172,7 @@ export const NEED_COLUMNS: Column<Need>[] = [
     cell: (n) => (
       <span
         data-row-actions
-        className="inline-flex flex-wrap items-center justify-end gap-1.5 min-[601px]:flex-nowrap min-[601px]:[&>a]:whitespace-nowrap min-[601px]:[&>button]:whitespace-nowrap has-[[data-inbox-actions]]:flex has-[[data-inbox-actions]]:w-full has-[[data-child-actions]]:flex has-[[data-child-actions]]:w-full"
+        className="inline-flex flex-wrap items-center justify-end gap-1.5 min-[1100px]:flex-nowrap min-[601px]:[&>a]:whitespace-nowrap min-[601px]:[&>button]:whitespace-nowrap has-[[data-inbox-actions]]:flex has-[[data-inbox-actions]]:w-full has-[[data-child-actions]]:flex has-[[data-child-actions]]:w-full"
       >
         {n.action}
       </span>
@@ -177,13 +180,17 @@ export const NEED_COLUMNS: Column<Need>[] = [
   },
 ];
 
+export const NEED_COLUMNS: Column<Need>[] = BASE_COLUMNS.map((c) =>
+  c.key === "kind" || c.key === "context" ? { ...c, className: `${c.className ?? ""} ${SIDE_WRAP}` } : c,
+);
+
 /**
  * qa-company-27: on Home's narrow lines a long item or "For" wraps to a second line, then ends in an ellipsis (its title holds the rest).
  * QA pass D-8: clipped at two lines on a phone too, where DataTable lets `.truncate` overflow (else line 3 draws over the next line).
  */
 
 /** Home's narrower lines: one action each. */
-export const NEED_COLUMNS_COMPACT: Column<Need>[] = NEED_COLUMNS.map((c) =>
+export const NEED_COLUMNS_COMPACT: Column<Need>[] = BASE_COLUMNS.map((c) =>
   c.key === "kind"
     ? {
         ...c,
@@ -278,7 +285,12 @@ export function NeedTable({
       : n,
   );
   return (
-    <section aria-label={heading ? undefined : title} aria-labelledby={heading ? headingId : undefined} data-testid={testId}>
+    <section
+      aria-label={heading ? undefined : title}
+      aria-labelledby={heading ? headingId : undefined}
+      data-testid={testId}
+      className="[--need-ctx-w:24%] [--need-act-w:340px] [--need-kind-w:170px] max-[1099px]:[--need-act-w:26%] max-[1099px]:[--need-ctx-w:20%] max-[1099px]:[--need-kind-w:15%]"
+    >
       {heading && (
         <h3
           id={headingId}
