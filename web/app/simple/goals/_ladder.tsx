@@ -491,29 +491,61 @@ function short(name: string): string {
   return w.join(" ");
 }
 
-/** Under the week chips: "We are here" and each milestone's name, a row down when a neighbour is too close. */
+/** Under the week chips: "We are here" and each milestone's name, a row down when it would touch a neighbour. */
 function WeekLabels({ weeks }: { weeks: Week[] }) {
-  const last: number[] = [];
   const placed = weeks.flatMap((w, i) => {
     const text = w.today ? "We are here" : w.mark;
-    if (!text) return [];
-    const full = w.today ? undefined : w.full;
-    const lines = text.split("\n").length;
-    let r = 0;
-    while (Array.from({ length: lines }, (_, k) => last[r + k]).some((x) => x !== undefined && i - x < 3)) r++;
-    for (let k = 0; k < lines; k++) last[r + k] = i;
-    return [{ i, text, full, r, today: w.today }];
+    return text ? [{ i, text, full: w.today ? undefined : w.full, today: w.today }] : [];
   });
   const n = weeks.length;
+  // Until the labels are measured, the rows a label takes when its neighbour is under 3 weeks away,
+  // so the canvas below fits itself to the strip's height when it opens.
+  const guess: number[] = [];
+  for (const { i, text } of placed) {
+    const lines = text.split("\n").length;
+    let r = 0;
+    while (Array.from({ length: lines }, (_, k) => guess[r + k]).some((x) => x !== undefined && i - x < 3)) r++;
+    for (let k = 0; k < lines; k++) guess[r + k] = i;
+  }
+  const box = useRef<HTMLSpanElement>(null);
+  // Each label's place, from its drawn width: under its week, kept inside the strip, and a row
+  // down (as the Roadmap's milestone labels) when its box would meet one already placed.
+  const [at, setAt] = useState<{ pos: { left: number; top: number }[]; rows: number } | null>(null);
+  const key = placed.map((x) => `${x.i}:${x.text}`).join("|");
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const lay = () => {
+      const width = el.clientWidth;
+      const taken: [number, number][][] = [];
+      const pos = (Array.from(el.children) as HTMLElement[]).map((k, j) => {
+        const w = k.offsetWidth;
+        const lines = Math.max(1, Math.round(k.offsetHeight / 13));
+        const left = Math.max(0, Math.min(width - w, ((placed[j].i + 0.5) / n) * width - w / 2));
+        const free = (r: number) => Array.from({ length: lines }, (_, x) => taken[r + x] ?? []).every((row) => row.every(([a, b]) => left + w + 6 <= a || b + 6 <= left));
+        let r = 0;
+        while (!free(r)) r++;
+        for (let x = 0; x < lines; x++) (taken[r + x] ??= []).push([left, left + w]);
+        return { left, top: r * 13 };
+      });
+      const next = { pos, rows: taken.length };
+      setAt((o) => (JSON.stringify(o) === JSON.stringify(next) ? o : next));
+    };
+    lay();
+    const ro = new ResizeObserver(lay);
+    ro.observe(el);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` stands for the labels.
+  }, [key, n]);
   return (
-    <span className="relative block" style={{ height: last.length * 13 + 6 }}>
-      {placed.map(({ i, text, full, r, today }) => (
+    <span ref={box} className="relative block" style={{ height: (at?.rows ?? guess.length) * 13 + 6 }}>
+      {placed.map(({ i, text, full, today }, j) => (
         <span
           key={i}
           data-testid={today ? "ld-here" : "ld-week-mark"}
           title={full}
-          className={`absolute w-max max-w-[160px] text-[11px] leading-[13px] whitespace-pre-line ${today ? "font-semibold text-accent-ink" : "text-text2"} ${i === 0 ? "text-left" : i === n - 1 ? "text-right" : "-translate-x-1/2 text-center"}`}
-          style={{ top: r * 13, ...(i === n - 1 ? { right: 0 } : { left: i === 0 ? 0 : `${((i + 0.5) / n) * 100}%` }) }}
+          className={`absolute w-max max-w-[160px] text-[11px] leading-[13px] whitespace-pre-line ${today ? "font-semibold text-accent-ink" : "text-text2"} ${i === 0 ? "text-left" : i === n - 1 ? "text-right" : "text-center"}`}
+          style={at?.pos[j] ? { left: at.pos[j].left, top: at.pos[j].top } : { left: 0, top: 0, visibility: "hidden" }}
         >
           {text}
         </span>
@@ -1175,7 +1207,17 @@ function Canvas({ v, drag }: { v: V; drag: { setLive: (l: V["live"]) => void; se
           }}
         >
           {v.goals.map((g) => (
-            <span key={g.id} className="flex-1 self-start rounded-sm bg-surface2" style={{ height: `${Math.max(30, Math.min(100, (v.feats.filter((x) => x.goal === g.id).length + 3) * 6))}%` }} />
+            <span
+              key={g.id}
+              role="img"
+              aria-label={`Goal ${v.goals.indexOf(g) + 1}: ${g.name}`}
+              title={`Goal ${v.goals.indexOf(g) + 1}: ${g.name}`}
+              data-testid="ld-overview-goal"
+              className="grid min-h-3.5 flex-1 place-items-start justify-center self-start rounded-sm bg-surface2 text-[10px] leading-3 font-bold text-text2"
+              style={{ height: `${Math.max(30, Math.min(100, (v.feats.filter((x) => x.goal === g.id).length + 3) * 6))}%` }}
+            >
+              {v.goals.indexOf(g) + 1}
+            </span>
           ))}
           <span className="absolute rounded border-2 border-accent" style={{ left: vx, top: vy, width: Math.max(8, vw), height: Math.max(6, vh) }} />
         </button>
