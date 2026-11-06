@@ -299,16 +299,58 @@ for (const size of SIZES)
       await goal.selectOption(other);
       await tap(panel(page).getByTestId("card-goal-edit").getByRole("button", { name: "Save" }));
       await expect(toasts(page)).toContainText("Its 1 part keeps its own goal.");
-      // Cut: its part stays on the roadmap.
+      // Cut: its part stays on the roadmap, said beside Cut before Save, and again after.
       await tap(panel(page).getByRole("button", { name: "Change the status" }));
-      await panel(page).getByTestId("card-status-edit").getByLabel("Status").selectOption("cut");
-      await tap(panel(page).getByTestId("card-status-edit").getByRole("button", { name: "Save" }));
+      const status = panel(page).getByTestId("card-status-edit");
+      await expect(status.getByTestId("pick-note")).toHaveCount(0);
+      await status.getByLabel("Status").selectOption("cut");
+      await expect(status.getByTestId("pick-note")).toHaveText("Its 1 part stays on the roadmap.");
+      await tap(status.getByRole("button", { name: "Save" }));
       await expect(toasts(page)).toContainText("Its 1 part stays on the roadmap.");
-      // To Trash: said at once, and the part is still there.
+      // To Trash: asked first with the count (Cancel keeps it), said again once done.
       await menu(page, "Delete feature");
+      const ask = page.getByRole("alertdialog", { name: "Delete Alert rules engine?" });
+      await expect(ask).toContainText("Its 1 part stays on the roadmap.");
+      await tap(ask.getByRole("button", { name: "Cancel" }));
+      await expect(ask).toHaveCount(0);
+      await expect(panel(page).getByTestId("card-name")).toContainText("Alert rules engine");
+      await menu(page, "Delete feature");
+      await tap(ask.getByRole("button", { name: "Delete" }));
       await expect(toasts(page)).toContainText("Moved Alert rules engine to Trash. Its 1 part stays on the roadmap.");
       await open(page, "alert-sso");
       await expect(panel(page).getByTestId("card-part-of")).toHaveText("Part of Alert rules engine (in Trash)");
+    });
+
+    test("Delete from Priorities counts a feature's parts the list does not show", async ({ page }) => {
+      await page.context().addInitScript(([key]) => localStorage.setItem(key, "parts-tree"), [MOCK_SCENARIO_KEY] as const);
+      await login(page);
+      // Its one part cut: no longer ranked, still its part.
+      await open(page, "alert-sso");
+      await tap(panel(page).getByRole("button", { name: "Change the status" }));
+      await panel(page).getByTestId("card-status-edit").getByLabel("Status").selectOption("cut");
+      await tap(panel(page).getByTestId("card-status-edit").getByRole("button", { name: "Save" }));
+      await expect(panel(page).getByTestId("item-cut")).toBeVisible();
+      await page.goto("/simple/priorities");
+      const ranked = (key: string) => page.locator(`[data-testid="prio-row"][data-code="${key}"]`);
+      await expect(ranked("alert-sso")).toHaveCount(0);
+      await tap(ranked("alert-rules").getByRole("button", { name: /^More for / }));
+      await tap(page.getByRole("menuitem", { name: "Delete feature" }));
+      const ask = page.getByRole("alertdialog", { name: "Delete Alert rules engine?" });
+      await expect(ask).toContainText("Its 1 part stays on the roadmap.");
+      await tap(ask.getByRole("button", { name: "Cancel" }));
+      await expect(ranked("alert-rules")).toBeVisible();
+    });
+
+    test("Part of shows a feature's own parts but cannot pick them, and says why", async ({ page }) => {
+      await page.context().addInitScript(([key]) => localStorage.setItem(key, "parts-tree"), [MOCK_SCENARIO_KEY] as const);
+      await login(page);
+      await open(page, "alert-rules");
+      await menu(page, "Part of…");
+      const pick = panel(page).getByTestId("card-parent-edit").getByLabel("Part of");
+      const own = pick.locator("option", { hasText: "Alert routing by team" });
+      await expect(own).toBeDisabled();
+      await expect(own).toHaveAttribute("title", "Alert rules engine cannot be part of Alert routing by team: Alert routing by team is already one of its parts");
+      await expect(pick.locator("option", { hasText: "Mobile alert push" })).toBeEnabled();
     });
 
     test("Priorities shows a part with its parent, and a part's panel from Priorities reads its path", async ({ page }) => {
