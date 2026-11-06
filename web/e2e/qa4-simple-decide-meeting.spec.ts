@@ -235,11 +235,19 @@ for (const phone of [false, true]) {
       await expect(taken).not.toContainText(/D-\d+/);
       const line = taken.getByTestId("decision-taken").first();
       expect(await line.evaluate((el) => [getComputedStyle(el).textIndent, getComputedStyle(el).paddingLeft])).toEqual(["-16px", "16px"]);
-      // Round 1: on a phone the link keeps its 44 px tap size.
+      // Round 1: on a phone the link keeps its 44 px tap size. Round 3: the row holds the 44 px and the link
+      // is stretched over it, so a tap anywhere on the row opens that decision.
       if (page.viewportSize()!.width < 600) {
-        const box = (await line.getByRole("link").boundingBox())!;
+        expect(await line.evaluate((el) => getComputedStyle(el).minHeight)).toBe("44px");
+        const box = (await line.boundingBox())!;
         expect(box.height).toBeGreaterThanOrEqual(44);
         expect(box.width).toBeGreaterThanOrEqual(44);
+        const hit = await line.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return !!at && el.querySelector("a")!.contains(at);
+        });
+        expect(hit).toBe(true);
       }
     });
 
@@ -304,10 +312,38 @@ test.describe("F-26, round 2: a long decision on a phone", () => {
     expect(at.rects.length).toBeGreaterThan(1);
     expect(at.rects[0].left).toBe(at.left);
     for (const r of at.rects.slice(1)) expect(r.left).toBe(at.left + 16);
-    // Each line of the link is a 44 px tap.
-    for (const r of at.rects) expect(r.bottom - r.top).toBeGreaterThanOrEqual(44);
     // ' · ' and the approver's name share a line.
     expect(at.tops.dot).toBeDefined();
     expect(Math.abs(at.tops.dot - at.tops.name)).toBeLessThanOrEqual(2);
+  });
+});
+
+test.describe("F-26, round 3: every decision's tap is its own row on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("the top, middle and bottom of each line of a decision's link land on that link, and each row is 44 px tall", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "long-decision"));
+    await pastMeeting(page);
+    const taken = page.getByRole("list", { name: "Decisions taken" });
+    await expect(taken.getByRole("link", { name: /^Send the weekly alert digest/ })).toBeVisible();
+    const found = await taken.evaluate((list) =>
+      [...list.querySelectorAll<HTMLElement>('[data-testid="decision-taken"]')].map((row) => {
+        const a = row.querySelector("a")!;
+        const misses: string[] = [];
+        [...a.getClientRects()].forEach((r, i) => {
+          const x = r.left + Math.min(r.width / 2, 20);
+          for (const [where, y] of [["top", r.top + 1], ["middle", r.top + r.height / 2], ["bottom", r.bottom - 1]] as const) {
+            const hit = document.elementFromPoint(x, y);
+            if (!hit || !a.contains(hit)) misses.push(`${a.textContent} line ${i + 1} ${where}: ${hit?.textContent?.slice(0, 40) ?? "nothing"}`);
+          }
+        });
+        return { name: a.textContent, height: row.getBoundingClientRect().height, misses };
+      }),
+    );
+    expect(found.length).toBeGreaterThan(1);
+    for (const row of found) {
+      expect(row.misses, row.name ?? "").toEqual([]);
+      expect(row.height, row.name ?? "").toBeGreaterThanOrEqual(44);
+    }
   });
 });
