@@ -90,6 +90,7 @@ from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.review.models import DocumentReviewPolicy
+from oracle.roadmap import company as roadmap_company
 from oracle.roadmap.models import HORIZONS, RoadmapItem
 from oracle.simple import drafts, service
 from oracle.simple.models import (
@@ -1659,7 +1660,8 @@ async def listing(
         q = q.where(SimpleChange.by == getattr(principal, "user_id", None))
     rows = list(await db.scalars(q))
     v = await _view(db, principal, rows)
-    shown = [c for c in rows if v.sees(c)]
+    gone = await _on_replaced_prds(db, rows)
+    shown = [c for c in rows if v.sees(c) and c.id not in gone]
     names = await _names(db, {c.by for c in shown})
     return [_out(c, v, names) for c in shown]
 
@@ -1677,6 +1679,27 @@ def _subject(c: SimpleChange, questions: dict[str, Any]) -> dict[str, Any]:
         line = " ".join(str((c.before or {}).get("line") or "").split())
         return {"subject": line or None, "line_id": c.target.get("line_id")}
     return {}
+
+
+async def _on_replaced_prds(db: AsyncSession, changes: list[SimpleChange]) -> set[uuid.UUID]:
+    """simple-replaced-prds: the proposals waiting on an item of a replaced PRD, which leave
+    Simple with the item (service.load); decided ones stay as history."""
+    by_item: dict[uuid.UUID, list[uuid.UUID]] = {}
+    for c in changes:
+        if c.status != "proposed" or not c.target.get("item_id"):
+            continue
+        try:
+            by_item.setdefault(uuid.UUID(str(c.target["item_id"])), []).append(c.id)
+        except ValueError:
+            pass
+    if not by_item or not (replaced := await roadmap_company.replaced_prd_ids(db)):
+        return set()
+    items = await db.scalars(
+        select(RoadmapItem.id).where(
+            RoadmapItem.id.in_(list(by_item)), RoadmapItem.prd_document_id.in_(replaced)
+        )
+    )
+    return {cid for iid in items for cid in by_item[iid]}
 
 
 async def inbox_rows(

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { Button, confirmInPage, PageHeader, Panel } from "@/components/ds";
+import { Button, confirmInPage, InfoTip, PageHeader, Panel } from "@/components/ds";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone, zoneDateTime } from "@/lib/dates";
@@ -90,7 +90,15 @@ export function AnalyticsSettings() {
 
   return (
     <>
-      <PageHeader title="Analytics" />
+      <PageHeader
+        title="Analytics"
+        info={
+          // Visual QA ST-7: what the page is for, behind an (i).
+          <InfoTip label="analytics" align="start" side="bottom">
+            Connect PostHog here so Oracle reads your product numbers each week for the metrics on Company › Metrics.
+          </InfoTip>
+        }
+      />
       <Panel title="PostHog" testId="analytics-posthog">
         <div className="flex max-w-xl flex-col gap-3 px-4 py-3">
           <p className="text-[15px] font-semibold" data-testid="analytics-state">

@@ -5,7 +5,7 @@ import { Suspense, useMemo, useState, useSyncExternalStore } from "react";
 
 import { Button, Empty, Notice, Page, Panel, Sheet, Split } from "@/components/ds";
 import { startPrdHref } from "@/components/RequestsBehind";
-import { ErrorNote, INPUT_INLINE, Loading } from "@/components/ui";
+import { ErrorNote, INPUT_INLINE, LoadError, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -208,6 +208,9 @@ function Requests({ view }: { view: RequestsView }) {
               )}
               {themes.data && <Themes themes={themes.data} onChange={themeChanged} />}
             </Panel>
+          ) : listed.error && !listed.data ? (
+            // Visual QA X-1: a list that never loaded shows the notice alone, not a half-drawn page.
+            <LoadError what="the requests" error={listed.error} onRetry={() => void Promise.all([requests.reload(), undecided.reload()])} />
           ) : (
             <Split
               inspector={!narrow && inspector}
@@ -219,7 +222,7 @@ function Requests({ view }: { view: RequestsView }) {
               >
                 {listed.error && (
                   <div className="px-4 pt-3">
-                    <ErrorNote>{listed.error}</ErrorNote>
+                    <LoadError what="the requests" error={listed.error} onRetry={() => void Promise.all([requests.reload(), undecided.reload()])} />
                   </div>
                 )}
                 {all.length > 0 && (

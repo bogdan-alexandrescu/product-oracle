@@ -419,15 +419,23 @@ def selection(config: dict[str, Any]) -> Selection:
     date_from = _config_day(config, "date_from") or _config_date(config, "from_date")
     date_to = _config_day(config, "date_to")
     if date_from and date_to and date_to < date_from:
-        raise ConnectorConfigError("date_to must be on or after date_from")
+        raise ConnectorConfigError("the end date must be on or after the start date")
     # The start of the day after date_to in the zone (a DST day is not 24 hours).
     date_to_end = _config_day(config, "date_to", next_day=True)
     series = frozenset(_strings(config, "series", MAX_SERIES, MAX_SERIES_KEY))
     if not all(key.startswith("cal:") for key in series):
-        raise ConnectorConfigError("series takes calendar series keys (cal:...)")
+        raise ConnectorConfigError(
+            "pick calendar series from the list",
+            is_action=True,
+            cause="a series not from the calendar",
+        )
     meetings = frozenset(_strings(config, "meetings", MAX_MEETINGS, MAX_MEETING_ID))
     if mode == "selected" and not series and not meetings:
-        raise ConnectorConfigError("pick at least one series or meeting, or take all meetings")
+        raise ConnectorConfigError(
+            "pick at least one series or meeting, or take all meetings",
+            is_action=True,
+            cause="no series or meeting picked",
+        )
     labels = config.get("labels") or {}
     if not isinstance(labels, dict) or not all(
         isinstance(k, str) and isinstance(v, str) for k, v in labels.items()

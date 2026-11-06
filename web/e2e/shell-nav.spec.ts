@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "./test";
 
 import { switchTarget } from "../lib/experience-paths";
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /*
@@ -151,6 +152,28 @@ test("Simple: one Ask control, and the PRDs and One-pagers lists switch both way
   await expect(page).toHaveURL(/\/documents$/);
   await expect(page.getByTestId("hop-strip")).toBeVisible();
   await mode.getByRole("radio", { name: "Simple" }).click();
+  await expect(page).toHaveURL(/\/simple\/one-pagers$/);
+});
+
+/**
+ * simple-replaced-prds (PR 1219): Simple shows no one-pager of a replaced PRD, so the switch on
+ * its Detailed page opens One-pagers. protects=an approver marks a PRD replaced on its page and
+ * the switch then lands on One-pagers; fails_when=it opens the replaced PRD's one-pager;
+ * no_claim=the One-pagers list's own content (simple specs).
+ */
+test("the mode switch on a replaced PRD's page opens One-pagers, not its one-pager", async ({ page }) => {
+  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "one-roadmap"] as const);
+  await login(page, "approver@example.com");
+  await page.goto("/documents/user-safety");
+  await expect(page.getByRole("heading", { level: 1 }).filter({ visible: true })).toContainText("User Safety");
+  await page.getByRole("button", { name: "Replaced by" }).click();
+  const dialog = page.getByTestId("replaced-by-dialog");
+  await dialog.getByLabel("Scale").check();
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByTestId("replaced-by").filter({ visible: true })).toContainText("Replaced by Scale.");
+
+  await page.getByRole("radiogroup", { name: "Mode" }).filter({ visible: true }).getByRole("radio", { name: "Simple" }).click();
   await expect(page).toHaveURL(/\/simple\/one-pagers$/);
 });
 

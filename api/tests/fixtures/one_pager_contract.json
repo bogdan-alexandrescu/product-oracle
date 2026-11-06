@@ -1,0 +1,275 @@
+{
+  "markdown": "---\ndocument: pantry-lists\ntitle: Pantry lists PRD\ntemplate: oracle-default\ntemplate_version: \"1\"\nsnapshot: 2026-10-20T10:00Z\ncitations:\n  - id: c1\n    source: web\n    ref: https://example.com/pantry-survey\n    title: Pantry survey, fall\n    excerpt: \"Most households write the same list every week\"\n    retrieved_at: 2026-10-20T09:00Z\n  - id: c2\n    source: web\n    ref: https://example.com/list-usage\n    title: List usage, Q3\n    excerpt: \"Two lists a week per household\"\n    retrieved_at: 2026-10-20T09:10Z\n---\n\n# Pantry lists PRD {#title}\n\nHouseholds plan the week's shopping in one shared list.\n\n## Summary {#summary}\n\nWe will let a household keep one shared pantry list. It serves the repeat use goal.\n\n```notes\nOpen with how often a list is written from scratch.\n```\n\n## Problem {#problem}\n\nHouseholds write the same shopping list every week, by hand, on paper or in a chat [c:c1]. Items get missed, two people buy the same thing, and the list is lost once the trip ends. The person who shops is often not the person who knows what ran out, so they call home from the store, guess, or come back without it. Many give up and shop from memory.\n\n## Features by milestone {#brief-items}\n\n| Milestone | Feature | Goal | Outcome |\n|---|---|---|---|\n| [Beta](#milestone-beta) | [Shared list](#feature-shared-list) | Repeat use | One list for the whole household |\n|  | [Ran out button](#feature-ran-out) | Repeat use | An item goes on the list the moment it runs out |\n| [General release](#milestone-ga) | [Store order](#feature-store-order) | Faster trips | The list follows the store's aisles |\n\n## Feature detail {#feature-detail}\n\nKeep every household's list on our servers, so each member sees the same list.\n\n### Shared list {#feature-shared-list}\n\n**Story:** as a member of a household, I want one list we all edit, so nobody buys twice.\n\n**Acceptance:** an item added on one phone shows on the others within five seconds.\n\n## Success metrics {#success-metrics}\n\n- Lists made per household each week: from 2 to 5 [c:c2]\n- Trips with a missed item: 40% → 15%\n- Members who open the list in a week: from 1 to 3\n- Shoppers tell us the list saves them time.\n- Days between two trips: 7 days -> 3 days\n- Repeat lists kept for a month: from 10% to 35%\n\n## Non-goals {#non-goals}\n\n- Prices and deals from stores.\n- Lists shared outside the household.\n- <!-- Add more only if asked. -->\n\n## Risks and open questions {#risks}\n\n1. Two members edit the same item at once: the last edit wins and the other sees a note about it, which we test with five households before the beta starts and again before the general release.\n2. Too many alerts: one alert per trip, never more.\n- Pick the store order source (our own map or the store's): owner the design lead, needed by Nov 20, 2026.\n\n## Out of scope {#out-of-scope}\n\n## Sources {#sources}\n\n- Pantry survey, fall [c:c1]\n",
+  "sections": [
+    {
+      "section_key": "title",
+      "level": 1,
+      "heading": "Pantry lists PRD",
+      "body_md": "Households plan the week's shopping in one shared list.",
+      "body_text": "Households plan the week's shopping in one shared list."
+    },
+    {
+      "section_key": "summary",
+      "level": 2,
+      "heading": "Summary",
+      "body_md": "We will let a household keep one shared pantry list. It serves the repeat use goal.\n\n```notes\nOpen with how often a list is written from scratch.\n```",
+      "body_text": "We will let a household keep one shared pantry list. It serves the repeat use goal.\nOpen with how often a list is written from scratch."
+    },
+    {
+      "section_key": "problem",
+      "level": 2,
+      "heading": "Problem",
+      "body_md": "Households write the same shopping list every week, by hand, on paper or in a chat [c:c1]. Items get missed, two people buy the same thing, and the list is lost once the trip ends. The person who shops is often not the person who knows what ran out, so they call home from the store, guess, or come back without it. Many give up and shop from memory.",
+      "body_text": "Households write the same shopping list every week, by hand, on paper or in a chat. Items get missed, two people buy the same thing, and the list is lost once the trip ends. The person who shops is often not the person who knows what ran out, so they call home from the store, guess, or come back without it. Many give up and shop from memory."
+    },
+    {
+      "section_key": "brief-items",
+      "level": 2,
+      "heading": "Features by milestone",
+      "body_md": "| Milestone | Feature | Goal | Outcome |\n|---|---|---|---|\n| [Beta](#milestone-beta) | [Shared list](#feature-shared-list) | Repeat use | One list for the whole household |\n|  | [Ran out button](#feature-ran-out) | Repeat use | An item goes on the list the moment it runs out |\n| [General release](#milestone-ga) | [Store order](#feature-store-order) | Faster trips | The list follows the store's aisles |",
+      "body_text": "Milestone | Feature | Goal | Outcome\nBeta | Shared list | Repeat use | One list for the whole household\n | Ran out button | Repeat use | An item goes on the list the moment it runs out\nGeneral release | Store order | Faster trips | The list follows the store's aisles"
+    },
+    {
+      "section_key": "feature-detail",
+      "level": 2,
+      "heading": "Feature detail",
+      "body_md": "Keep every household's list on our servers, so each member sees the same list.",
+      "body_text": "Keep every household's list on our servers, so each member sees the same list."
+    },
+    {
+      "section_key": "feature-shared-list",
+      "level": 3,
+      "heading": "Shared list",
+      "body_md": "**Story:** as a member of a household, I want one list we all edit, so nobody buys twice.\n\n**Acceptance:** an item added on one phone shows on the others within five seconds.",
+      "body_text": "Story: as a member of a household, I want one list we all edit, so nobody buys twice.\nAcceptance: an item added on one phone shows on the others within five seconds."
+    },
+    {
+      "section_key": "success-metrics",
+      "level": 2,
+      "heading": "Success metrics",
+      "body_md": "- Lists made per household each week: from 2 to 5 [c:c2]\n- Trips with a missed item: 40% → 15%\n- Members who open the list in a week: from 1 to 3\n- Shoppers tell us the list saves them time.\n- Days between two trips: 7 days -> 3 days\n- Repeat lists kept for a month: from 10% to 35%",
+      "body_text": "Lists made per household each week: from 2 to 5\nTrips with a missed item: 40% → 15%\nMembers who open the list in a week: from 1 to 3\nShoppers tell us the list saves them time.\nDays between two trips: 7 days -> 3 days\nRepeat lists kept for a month: from 10% to 35%"
+    },
+    {
+      "section_key": "non-goals",
+      "level": 2,
+      "heading": "Non-goals",
+      "body_md": "- Prices and deals from stores.\n- Lists shared outside the household.\n- <!-- Add more only if asked. -->",
+      "body_text": "Prices and deals from stores.\nLists shared outside the household.\n<!-- Add more only if asked. -->"
+    },
+    {
+      "section_key": "risks",
+      "level": 2,
+      "heading": "Risks and open questions",
+      "body_md": "1. Two members edit the same item at once: the last edit wins and the other sees a note about it, which we test with five households before the beta starts and again before the general release.\n2. Too many alerts: one alert per trip, never more.\n- Pick the store order source (our own map or the store's): owner the design lead, needed by Nov 20, 2026.",
+      "body_text": "Two members edit the same item at once: the last edit wins and the other sees a note about it, which we test with five households before the beta starts and again before the general release.\nToo many alerts: one alert per trip, never more.\nPick the store order source (our own map or the store's): owner the design lead, needed by Nov 20, 2026."
+    },
+    {
+      "section_key": "out-of-scope",
+      "level": 2,
+      "heading": "Out of scope",
+      "body_md": "",
+      "body_text": ""
+    },
+    {
+      "section_key": "sources",
+      "level": 2,
+      "heading": "Sources",
+      "body_md": "- Pantry survey, fall [c:c1]",
+      "body_text": "Pantry survey, fall"
+    }
+  ],
+  "blocks": [
+    {
+      "key": "problem",
+      "title": "Problem and who has it",
+      "rules": "At most 60 words",
+      "kind": "text",
+      "lines": [
+        {
+          "id": "problem-1",
+          "text": "Households write the same shopping list every week, by hand, on paper or in a chat. Items get missed, two people buy the same thing, and the list is lost once the trip ends. The person who shops is often not the person who knows what ran out, so they call home from the store, guess, or come back…",
+          "source_keys": [
+            "problem"
+          ],
+          "full": "Households write the same shopping list every week, by hand, on paper or in a chat. Items get missed, two people buy the same thing, and the list is lost once the trip ends. The person who shops is often not the person who knows what ran out, so they call home from the store, guess, or come back without it. Many give up and shop from memory.",
+          "metric": null
+        }
+      ]
+    },
+    {
+      "key": "bets",
+      "title": "What we will build",
+      "rules": "3-5 bets",
+      "kind": "lines",
+      "lines": [
+        {
+          "id": "bets-1",
+          "text": "Beta: Shared list",
+          "source_keys": [
+            "brief-items"
+          ],
+          "full": null,
+          "metric": null
+        },
+        {
+          "id": "bets-2",
+          "text": "Ran out button: Repeat use",
+          "source_keys": [
+            "brief-items"
+          ],
+          "full": null,
+          "metric": null
+        },
+        {
+          "id": "bets-3",
+          "text": "General release: Store order",
+          "source_keys": [
+            "brief-items"
+          ],
+          "full": null,
+          "metric": null
+        },
+        {
+          "id": "bets-4",
+          "text": "Keep every household's list on our servers, so each member sees the same list.",
+          "source_keys": [
+            "feature-detail"
+          ],
+          "full": null,
+          "metric": null
+        },
+        {
+          "id": "bets-5",
+          "text": "Story: as a member of a household, I want one list we all edit, so nobody buys twice.",
+          "source_keys": [
+            "feature-shared-list"
+          ],
+          "full": null,
+          "metric": null
+        }
+      ]
+    },
+    {
+      "key": "outcomes",
+      "title": "Outcomes and how we measure them",
+      "rules": "2-4 metrics, from → to",
+      "kind": "metrics",
+      "lines": [
+        {
+          "id": "outcomes-1",
+          "text": "Lists made per household each week: from 2 to 5",
+          "source_keys": [
+            "success-metrics"
+          ],
+          "full": null,
+          "metric": {
+            "name": "Lists made per household each week",
+            "from": "2",
+            "to": "5"
+          }
+        },
+        {
+          "id": "outcomes-2",
+          "text": "Trips with a missed item: 40% → 15%",
+          "source_keys": [
+            "success-metrics"
+          ],
+          "full": null,
+          "metric": {
+            "name": "Trips with a missed item",
+            "from": "40%",
+            "to": "15%"
+          }
+        },
+        {
+          "id": "outcomes-3",
+          "text": "Members who open the list in a week: from 1 to 3",
+          "source_keys": [
+            "success-metrics"
+          ],
+          "full": null,
+          "metric": {
+            "name": "Members who open the list in a week",
+            "from": "1",
+            "to": "3"
+          }
+        },
+        {
+          "id": "outcomes-4",
+          "text": "Days between two trips: 7 days -> 3 days",
+          "source_keys": [
+            "success-metrics"
+          ],
+          "full": null,
+          "metric": {
+            "name": "Days between two trips",
+            "from": "7 days",
+            "to": "3 days"
+          }
+        }
+      ]
+    },
+    {
+      "key": "not_doing",
+      "title": "Not doing",
+      "rules": "At most 5 lines",
+      "kind": "lines",
+      "lines": [
+        {
+          "id": "not_doing-1",
+          "text": "Prices and deals from stores.",
+          "source_keys": [
+            "non-goals"
+          ],
+          "full": null,
+          "metric": null
+        },
+        {
+          "id": "not_doing-2",
+          "text": "Lists shared outside the household.",
+          "source_keys": [
+            "non-goals"
+          ],
+          "full": null,
+          "metric": null
+        }
+      ]
+    },
+    {
+      "key": "risks",
+      "title": "Risks and open decisions",
+      "rules": "At most 5",
+      "kind": "lines",
+      "lines": [
+        {
+          "id": "risks-1",
+          "text": "Two members edit the same item at once: the last edit wins and the other sees a note about it, which we test with five households before the beta starts…",
+          "source_keys": [
+            "risks"
+          ],
+          "full": "Two members edit the same item at once: the last edit wins and the other sees a note about it, which we test with five households before the beta starts and again before the general release.",
+          "metric": null
+        },
+        {
+          "id": "risks-2",
+          "text": "Too many alerts: one alert per trip, never more.",
+          "source_keys": [
+            "risks"
+          ],
+          "full": null,
+          "metric": null
+        },
+        {
+          "id": "risks-3",
+          "text": "Pick the store order source (our own map or the store's): owner the design lead, needed by Nov 20, 2026.",
+          "source_keys": [
+            "risks"
+          ],
+          "full": null,
+          "metric": null
+        }
+      ]
+    }
+  ]
+}

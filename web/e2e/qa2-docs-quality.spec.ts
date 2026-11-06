@@ -187,8 +187,10 @@ test.describe("phone", () => {
     expect(await action.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   });
 
-  // qa-docs-10; no colour changes, so light only
-  test("qa-docs-10: the one-pager's Timeline labels wrap instead of cutting the item count", async ({ page }) => {
+  // qa-docs-10; no colour changes, so light only. vqa B-14 replaced its wrapping labels: a
+  // label keeps to one line, and one cut short holds its whole words (the count too) in an (i)
+  // that opens on a tap as well as on hover.
+  test("qa-docs-10: the one-pager's Timeline labels keep to one line and never lose their item count", async ({ page }) => {
     await login(page);
     await page.goto("/simple/one-pagers");
     await expect(page.getByRole("heading", { level: 1, name: "One-pagers" })).toBeVisible();
@@ -197,25 +199,24 @@ test.describe("phone", () => {
     const strip = page.getByTestId("one-pager").getByTestId("plan-strip");
     const labels = strip.getByTestId("plan-strip-label");
     await expect(labels.first()).toBeVisible();
-    // Every label ends with its item count, in view.
+    // Every label ends with its item count.
     for (const t of await labels.allTextContents()) expect(t).toMatch(/· \d+ roadmap items?$/);
-    const cut = await labels.evaluateAll((els) =>
-      els
-        .filter((el) => {
-          const s = getComputedStyle(el);
-          return s.whiteSpace === "nowrap" || el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1;
-        })
-        .map((el) => el.textContent),
-    );
-    expect(cut).toEqual([]);
-    // Never clamped: a long milestone name wraps in full (a hover tooltip does nothing on a phone).
-    const clamped = await labels.evaluateAll((els) =>
-      els.filter((el) => {
-        const s = getComputedStyle(el);
-        return s.webkitLineClamp !== "none" || s.overflow === "hidden" || el.hasAttribute("title");
-      }).length,
-    );
-    expect(clamped).toBe(0);
+    const rows = strip.getByTestId("plan-strip-row");
+    for (let k = 0; k < (await rows.count()); k++) {
+      const label = rows.nth(k).getByTestId("plan-strip-label");
+      const { lines, cut } = await label.evaluate((el) => ({
+        lines: Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)),
+        cut: el.scrollWidth > el.clientWidth + 1,
+      }));
+      expect(lines, `row ${k + 1}'s label is one line`).toBe(1);
+      // A cut label's whole words are behind its (i).
+      const tip = rows.nth(k).getByTestId("plan-strip-label-tip");
+      if (cut) {
+        await tip.click();
+        await expect(rows.nth(k).getByRole("tooltip")).toHaveText((await label.textContent())!.replace(/\s+/g, " ").trim());
+        await page.keyboard.press("Escape");
+      } else await expect(tip).toHaveCount(0);
+    }
     // No sideways scroll on the page.
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });

@@ -91,7 +91,11 @@ def _token(credential: dict[str, Any] | None) -> str:
 
 def _parse_config(config: dict[str, Any]) -> list[str]:
     if "pages" in config:
-        raise ConnectorConfigError('use "roots" for the Notion pages and databases, not "pages"')
+        raise ConnectorConfigError(
+            'use "roots" for the Notion pages and databases, not "pages"',
+            is_action=True,
+            cause="pages saved under an old name",
+        )
     roots = config.get("roots")
     if not isinstance(roots, list) or not roots:
         raise ConnectorConfigError("allowlist at least one root page or database")

@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { InfoTip, Panel, Sheet, Split, ViewOnly } from "@/components/ds";
-import { ErrorNote } from "@/components/ui";
+import { LoadError } from "@/components/ui";
 import { goalViews } from "@/app/home/_goals";
 import { api, unwrap } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
@@ -104,59 +104,67 @@ export default function StrategyPage() {
   return (
     <div data-testid="strategy-page" className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
       <CompanyHeader status={readOnly && <ViewOnly />} />
-      {docsQ.error && <ErrorNote>{docsQ.error}</ErrorNote>}
-      <div className="grid grid-cols-2 items-stretch gap-4 max-[900px]:grid-cols-1 max-[600px]:gap-3">
-        <VisionCard stack={stack} load={load} doc={docs ? docOf("vision") : null} owner={owner && !!docs} onDraft={setDrafting} />
-        <StrategyCard
-          stack={stack}
-          load={load}
-          doc={docs ? docOf("strategy") : null}
-          owner={owner && !!docs}
-          goals={goals}
-          canAddGoal={can("confirm_entity")}
-          onPick={(key) => pick(key, true)}
-          onDraft={setDrafting}
-          open={open}
-        />
-      </div>
-      <div ref={stackPanel} className="scroll-mt-4" />
-      <Split inspector={selected && !phone ? <StackInspector stack={stack} row={selected} onWaived={waived} /> : undefined}>
-        <Panel
-          title="Strategy stack"
-          tools={
-            <InfoTip label="the strategy stack" align="end">
-              The vision and the product strategy Oracle drafts and an owner approves. Each goal should follow from a focus choice, and each
-              roadmap item from a goal; anything that does not shows up as drift. One line per goal under the focus choice it derives from, with the
-              roadmap items serving it. The last group lists the goals and items not under the strategy.
-            </InfoTip>
-          }
-        >
-          <StackTable
-            stack={stack}
-            rows={rows}
-            selected={phone ? (sheetOpen ? (selected?.key ?? null) : null) : (selected?.key ?? null)}
-            onSelect={(key) => pick(key)}
-            load={load}
-            confirmedGoals={goalsQ.data ? goalsQ.data.filter((g) => g.status === "confirmed").length : null}
-            hasStrategy={!!docs?.strategy.length}
-            canStart={owner && !!docs}
-          />
-        </Panel>
-        <DriftList
-          state={state}
-          onState={setState}
-          rows={listQ.data}
-          loading={listQ.loading}
-          error={listQ.error}
-          counts={{ open: openQ.data?.length, waived: waivedQ.data?.length, resolved: resolvedQ.data?.length }}
-          stack={stack}
-          onWaived={waived}
-        />
-      </Split>
-      {phone && (
-        <Sheet open={sheetOpen && !!selected} title="Stack line" onClose={() => setSheetOpen(false)} testId="stack-sheet">
-          {selected ? <StackInspector stack={stack} row={selected} onWaived={waived} /> : null}
-        </Sheet>
+      {(stackQ.error || docsQ.error) && (
+        <LoadError what="the strategy" error={stackQ.error ?? docsQ.error ?? ""} onRetry={() => void Promise.all([stackQ.reload(), docsQ.reload()])} />
+      )}
+      {/* Visual QA X-1: nothing half-drawn under documents that never loaded; a stack that never
+          loaded says so in each card (pass F F-13), with the drift list still there. */}
+      {!(docsQ.error && !docsQ.data) && (
+        <>
+          <div className="grid grid-cols-2 items-stretch gap-4 max-[900px]:grid-cols-1 max-[600px]:gap-3">
+            <VisionCard stack={stack} load={load} doc={docs ? docOf("vision") : null} owner={owner && !!docs} onDraft={setDrafting} />
+            <StrategyCard
+              stack={stack}
+              load={load}
+              doc={docs ? docOf("strategy") : null}
+              owner={owner && !!docs}
+              goals={goals}
+              canAddGoal={can("confirm_entity")}
+              onPick={(key) => pick(key, true)}
+              onDraft={setDrafting}
+              open={open}
+            />
+          </div>
+          <div ref={stackPanel} className="scroll-mt-4" />
+          <Split inspector={selected && !phone ? <StackInspector stack={stack} row={selected} onWaived={waived} /> : undefined}>
+            <Panel
+              title="Strategy stack"
+              tools={
+                <InfoTip label="the strategy stack" align="end">
+                  The vision and the product strategy Oracle drafts and an owner approves. Each goal should follow from a focus choice, and each
+                  roadmap item from a goal; anything that does not shows up as drift. One line per goal under the focus choice it derives from, with the
+                  roadmap items serving it. The last group lists the goals and items not under the strategy.
+                </InfoTip>
+              }
+            >
+              <StackTable
+                stack={stack}
+                rows={rows}
+                selected={phone ? (sheetOpen ? (selected?.key ?? null) : null) : (selected?.key ?? null)}
+                onSelect={(key) => pick(key)}
+                load={load}
+                confirmedGoals={goalsQ.data ? goalsQ.data.filter((g) => g.status === "confirmed").length : null}
+                hasStrategy={!!docs?.strategy.length}
+                canStart={owner && !!docs}
+              />
+            </Panel>
+            <DriftList
+              state={state}
+              onState={setState}
+              rows={listQ.data}
+              loading={listQ.loading}
+              error={listQ.error}
+              counts={{ open: openQ.data?.length, waived: waivedQ.data?.length, resolved: resolvedQ.data?.length }}
+              stack={stack}
+              onWaived={waived}
+            />
+          </Split>
+          {phone && (
+            <Sheet open={sheetOpen && !!selected} title="Stack line" onClose={() => setSheetOpen(false)} testId="stack-sheet">
+              {selected ? <StackInspector stack={stack} row={selected} onWaived={waived} /> : null}
+            </Sheet>
+          )}
+        </>
       )}
       {drafting && owner && (
         <DraftSheet

@@ -942,7 +942,11 @@ async def listing(
 ) -> list[SimpleDraftOut]:
     """The open drafts the caller may see, oldest first; with ``roadmap`` (its id or slug)
     only that roadmap's (a working draft belongs to one roadmap)."""
-    ds = await open_drafts(db)
+    from oracle.roadmap import company
+
+    # simple-replaced-prds: a replaced PRD's open draft is history, never listed in Simple.
+    replaced = await company.replaced_prd_ids(db)
+    ds = [d for d in await open_drafts(db) if d.document_id not in replaced]
     if roadmap:
         doc = await db.scalar(
             select(Document).where(

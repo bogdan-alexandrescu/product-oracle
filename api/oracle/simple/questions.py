@@ -533,7 +533,9 @@ async def _readable(db: AsyncSession, principal: Any) -> set[uuid.UUID]:
     from oracle.simple import meetings
 
     docs = await db.scalars(
-        select(Document).where(Document.kind == "prd", Document.deleted_at.is_(None))
+        select(Document).where(
+            Document.kind == "prd", Document.deleted_at.is_(None), meetings._current()
+        )
     )
     return {d.id for d in docs if await meetings._readable(db, principal, d)}
 
@@ -611,13 +613,19 @@ async def tasks_waiting(db: AsyncSession, me: uuid.UUID | None) -> list[SimpleTa
 
 
 async def page_fields(
-    db: AsyncSession, principal: Any, readable: set[uuid.UUID], only: set[uuid.UUID] | None = None
+    db: AsyncSession,
+    principal: Any,
+    readable: set[uuid.UUID],
+    only: set[uuid.UUID] | None = None,
+    replaced: set[uuid.UUID] | None = None,
 ) -> dict:
     """The Decisions page's questions: of these PRDs (the page's PRD and goal filters), and
-    of ``only`` these decisions when the page shows one meeting."""
+    of ``only`` these decisions when the page shows one meeting. A ``replaced`` PRD's open
+    questions are left out (simple-replaced-prds); its decided ones stay as history."""
     from oracle.preferences.models import UserPreference
 
-    qs = await rows(db, principal, readable, only)
+    qs = [q for q in await rows(db, principal, readable, only)
+          if not (q.status == "proposed" and q.prd.id in (replaced or ()))]  # fmt: skip
     view = None
     if principal is not None:
         view = await db.scalar(select(UserPreference.value).where(
