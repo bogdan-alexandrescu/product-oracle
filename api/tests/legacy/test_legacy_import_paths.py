@@ -27,7 +27,11 @@ V2 = fixture("legacy_prd_v2.md")
 
 # Every time an export writes, in the Company time zone and month first (e2e-pdf-export):
 # company_time.stamp ("Oct 24, 2026, 1:07 AM PDT") and moment_in_words ("Oct 24, 1:07 AM PDT").
-STAMP = re.compile(r"[A-Z][a-z]{2} \d{1,2}, (?:\d{4}, )?\d{1,2}:\d{2} [AP]M [A-Z]{2,5}")
+# Each part of a stamp is held on one line (no-break spaces, export.render.held_moment).
+_SP = r"[ \u00a0]"
+STAMP = re.compile(
+    rf"[A-Z][a-z]{{2}}{_SP}\d{{1,2}},{_SP}(?:\d{{4}},{_SP})?\d{{1,2}}:\d{{2}}{_SP}[AP]M{_SP}[A-Z]{{2,5}}"
+)
 
 
 def norm(t: str) -> str:
