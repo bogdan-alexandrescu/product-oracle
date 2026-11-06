@@ -22,6 +22,7 @@ version built from another one (a roadmap from its PRD version) says so in its b
 
 import re
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from functools import cache
@@ -1027,6 +1028,44 @@ _GOAL_LISTED = re.compile(
 # A goal's code standing alone: not inside a word, link target or path, and not already
 # followed by a bracketed name.
 _GOAL_CODE = re.compile(r"(?<![\w#/-])(G\d{1,3})(?![\w-])(?!\**\s*\()")
+# The same, or one after another code and a slash ("G1/G2"): with_goal_names checks the pair.
+_GOAL_CODE_OR_PAIRED = re.compile(r"(?<![\w#-])(G\d{1,3})(?![\w-])(?!\**\s*\()")
+
+
+# Markdown that is not prose: inline code, a link's destination (with its title), an
+# autolink or other HTML tag, an HTML comment, a link reference definition or a bare URL.
+_NOT_PROSE = re.compile(
+    r"(`+)[^`\n]*?\1(?!`)"
+    r"|\]\((?:[^()\s]|\([^()\s]*\))*(?:\s+(?:\"[^\"\n]*\"|'[^'\n]*'|\([^()\n]*\)))?\s*\)"
+    r"|<!--.*?-->"
+    r"|<[A-Za-z/!][^<>\n]*>"
+    r"|^[ \t]{0,3}\[[^\]\n]+\]:[ \t]*\S+"
+    r"|\b[A-Za-z][\w+.-]*://[^\s<>]*[^\s<>.,;:!?)\]'\"*_]"
+    r"|\bwww\.[^\s<>]*[^\s<>.,;:!?)\]'\"*_]",
+    re.M,
+)
+
+
+def in_prose(text: str, rewrite: Callable[[str], str]) -> str:
+    """``text`` with ``rewrite`` applied to its prose only: fenced code blocks and what
+    :data:`_NOT_PROSE` matches (code spans, link destinations, URLs, tags, comments) stay as
+    written, so a link or a code sample still works after a rewrite."""
+    out: list[str] = []
+    fence: str | None = None
+    for line in text.splitlines(keepends=True):
+        mark = re.match(r"[ \t]{0,3}(`{3,}|~{3,})", line)
+        if fence is None and mark:
+            fence = mark.group(1)[0] * len(mark.group(1))
+        elif fence is not None and line.strip().startswith(fence):
+            fence = None
+        elif fence is None:
+            at, parts = 0, []
+            for m in _NOT_PROSE.finditer(line):
+                parts += [rewrite(line[at : m.start()]), m.group(0)]
+                at = m.end()
+            line = "".join(parts) + rewrite(line[at:])
+        out.append(line)
+    return "".join(out)
 
 
 def goal_names(sections: list[Section]) -> dict[str, str]:
@@ -1048,14 +1087,23 @@ def with_goal_names(body: str, names: dict[str, str]) -> str:
     if not names:
         return body
 
-    def named(m: re.Match[str]) -> str:
-        code = m.group(1)
-        name = names.get(code)
-        if name is None or body[m.end() :].lstrip(" *").lower().startswith(name.lower()):
-            return m.group(0)
-        return f"{code} {name}"
+    def named(text: str) -> str:
+        out: list[str] = []
+        at = 0
+        prev_code = -1  # where the last code ended, so "G1/G2" names both
+        for m in _GOAL_CODE_OR_PAIRED.finditer(text):
+            code = m.group(1)
+            if text[m.start() - 1 : m.start()] == "/" and m.start() - 1 != prev_code:
+                continue
+            prev_code = m.end()
+            name = names.get(code)
+            if name is None or text[m.end() :].lstrip(" *").lower().startswith(name.lower()):
+                continue
+            out.append(text[at : m.end()] + f" {name}")
+            at = m.end()
+        return "".join(out) + text[at:]
 
-    return _GOAL_CODE.sub(named, body)
+    return in_prose(body, named)
 
 
 def goal_codes(sections: list[Section]) -> dict[str, str]:
@@ -1477,7 +1525,8 @@ def render_markdown(ev: ExportVersion) -> str:  # full layer only
 
 
 def _days_in_plain_words(text: str) -> str:
-    """``text``'s calendar days month first, outside code (plain spaces: a file, not a page)."""
+    """``text``'s calendar days month first, in prose only (:func:`in_prose`; plain spaces:
+    a file, not a page)."""
 
     def day(m: re.Match[str]) -> str:
         try:
@@ -1486,16 +1535,4 @@ def _days_in_plain_words(text: str) -> str:
             return m.group(0)
         return f"{company_time.calendar_day(d)}, {d.year}"
 
-    out: list[str] = []
-    fence: str | None = None
-    for line in text.splitlines(keepends=True):
-        mark = re.match(r"[ \t]{0,3}(`{3,}|~{3,})", line)
-        if fence is None and mark:
-            fence = mark.group(1)[0] * len(mark.group(1))
-        elif fence is not None and line.strip().startswith(fence):
-            fence = None
-        elif fence is None:
-            parts = re.split(r"(`[^`\n]*`)", line)
-            line = "".join(p if p.startswith("`") else _PROSE_DAY.sub(day, p) for p in parts)
-        out.append(line)
-    return "".join(out)
+    return in_prose(text, lambda p: _PROSE_DAY.sub(day, p))
