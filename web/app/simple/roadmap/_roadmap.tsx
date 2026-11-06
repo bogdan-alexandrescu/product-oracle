@@ -4,15 +4,16 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent } from "react";
 
-import { Button, clearToast, Notice, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
+import { Button, clearToast, Icon, Notice, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
 import { GoalPanel, goalRows, SuggestionCard, useGoalSuggestions, type GoalBrief, type GoalPanelStart, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
 import { DecisionNotes, LeftOutLine } from "@/components/simple/DecisionNotes";
 import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { Loading } from "@/components/ui";
 import { getBranding, logoDataUrl } from "@/lib/api/branding";
-import { reloadWaiting } from "@/lib/waiting";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { draftNext } from "@/lib/simple-home";
+import { invalidateWaiting, reloadWaiting, waitingChanged } from "@/lib/simple-waiting";
 import { CARD_CHANGED_EVENT } from "@/lib/api/simple-chat";
 import { displayZone, plainClock } from "@/lib/dates";
 import { formatDate } from "@/lib/format";
@@ -26,7 +27,7 @@ import { MsCard, MsKey, MsLayer, MsProvider, MsToast, useMilestones, type MsLane
 import { Board, boardColumns, boardLegend, HORIZONS, LEGEND_SWATCH, LegendKeys, MARK_WORDS, PM_LANE, type Horizon, type LegendEntry } from "./_board";
 import { useKeyBurst } from "./_burst";
 import { FeatureContextMenu, useFeatureDelete } from "@/components/simple/FeatureDelete";
-import { changeRowWords, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, SuggestionPopover, type Act } from "./_card";
+import { changeRowWords, FlagLine, FixButtons, FloatingCard, LooksLike, OpenItem, opWords, ProposedFixes, SuggestionPopover, type Act } from "./_card";
 import { boardPicture, chartPicture, exportView, TooLarge, zoomPicture, type Brand } from "./_export";
 import { KeyDatesEditor } from "./_keydates";
 import { Lanes, pmItem } from "./_lanes";
@@ -350,9 +351,17 @@ function barAnchor(wrap: HTMLElement | null, id: string): { left: number; top: n
 }
 
 /** The working-draft banner (D18 as amended: one shared draft per roadmap). */
-function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onReview, titleOf }: { drafts: Draft[]; inReview: number; meId: string | null; onUndo: (id: string) => void; onSubmit: (d: Draft[]) => void; onApprove: (d: Draft) => void; onReview: (prdSlug: string) => void; titleOf: (id: string | null) => string | undefined }) {
+function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onReview, titleOf, nameOf, personOf, focus }: { drafts: Draft[]; inReview: number; meId: string | null; onUndo: (id: string) => void; onSubmit: (d: Draft[]) => void; onApprove: (d: Draft[]) => void; onReview: (prdSlug: string) => void; titleOf: (id: string | null) => string | undefined; nameOf?: (id: string) => string; personOf?: (id: string) => string | undefined; focus?: string | null }) {
   const [open, setOpen] = useState(false);
   const byPrd = byPrdOrderOf(usePrdOrder());
+  // Review: Home's "Open draft to approve" (?draft=<id>) lands on that draft: in sight, its button focused, once.
+  const focused = useRef(false);
+  const onFocus = useCallback((el: HTMLElement | null) => {
+    if (!el || focused.current) return;
+    focused.current = true;
+    el.scrollIntoView({ block: "center" });
+    el.querySelector<HTMLButtonElement>("[data-step]")?.focus();
+  }, []);
   const working = drafts.filter((d) => d.status === "working" || d.status === "submitted");
   if (!working.length) {
     if (!inReview) return null;
@@ -366,38 +375,105 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onRe
   const since = working.map((d) => d.created_at).sort()[0];
   const log = working.flatMap((d) => d.change_log).sort((a, b) => (a.at < b.at ? -1 : 1));
   const last = [...log].reverse().find((c) => c.by === meId);
-  const submittable = working.filter((d) => d.status === "working" && d.can_submit && (d.changes > 0 || !!d.from_prds?.length));
+  const ready = (d: Draft) => d.status === "working" && (d.changes > 0 || !!d.from_prds?.length);
+  // roadmap-decide (owner, Nov 4: draft, shown live): the decider approves and publishes in place; others send it for review.
+  const publishable = working.filter((d) => ready(d) && d.can_publish);
+  const submittable = working.filter((d) => ready(d) && d.can_submit && !d.can_publish);
   // approved-prd-roadmap: what each approved PRD put in the draft, in the company PRD order (prd-order).
   const fromPrds = working.flatMap((d) => d.from_prds ?? []).sort((a, b) => byPrd(a.prd, b.prd));
   // walkb-roadmap review 5a: a roadmap built from a PRD and not approved yet has no approved roadmap to keep published.
   const published = working.every((d) => d.published);
+  // roadmap-decide: what happens next and who acts, with that person's button (Send for review, or the decider's Approve).
+  const next = draftNext({ ...working[0], published }, nameOf);
+  const approvable = working.filter((d) => d.status === "submitted" && d.can_approve);
+  const many = working.length > 1;
+  // Review: with several working drafts, one line each: its roadmap, its own next step, its own button.
+  const step = (d: Draft) =>
+    ready(d) && d.can_publish ? (
+      <Button variant="solid" data-step className="max-[640px]:px-2.5" data-testid="draft-publish" onClick={() => onApprove([d])}>
+        Approve and publish
+      </Button>
+    ) : ready(d) && d.can_submit ? (
+      <Button variant="solid" data-step onClick={() => onSubmit([d])}>
+        Send for review
+      </Button>
+    ) : d.status === "submitted" && d.can_approve ? (
+      <Button variant="solid" data-step data-testid="draft-approve" onClick={() => onApprove([d])}>
+        Approve
+      </Button>
+    ) : null;
+  const mine = focus ? working.find((d) => d.id === focus) : undefined;
+  // Review minor: whose draft it is, named by the draft itself, so it is right from the first paint.
+  const author = (d: Draft) => d.created_by_name ?? personOf?.(d.created_by);
   return (
-    <section data-testid="draft-banner" className="rounded-xl border border-accent-mid bg-accent-soft px-4 py-2.5 text-accent-ink">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+    <section
+      data-testid="draft-banner"
+      ref={mine && !many ? onFocus : undefined}
+      data-focused={mine && !many ? "true" : undefined}
+      className="rounded-xl border border-accent-mid bg-accent-soft px-4 py-2.5 text-accent-ink"
+    >
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 max-[640px]:gap-x-1.5">
         {/* fix4 qa-simple-roadmap-19: on a phone the sentence takes its own line(s), the three buttons a row under it. */}
         <p className="min-w-0 flex-1 text-[15px] max-[640px]:basis-full" data-testid="draft-words">
-          <b>Your working draft</b> · <span data-testid="draft-count">{changes}</span> {changes === 1 ? "change" : "changes"} since {time(since)} · {published ? "the approved roadmap stays published until review passes" : "no approved version yet: it is published once review passes"}
+          {many ? (
+            <>
+              <b>Your working drafts</b> · {working.length} roadmaps · <span data-testid="draft-count">{changes}</span> {changes === 1 ? "change" : "changes"} since {time(since)}
+            </>
+          ) : (
+            <>
+              {/* Review: another person's draft (the decider reading the owner's) names whose it is and its roadmap. */}
+              <b>{working[0].created_by === meId || !meId ? "Your working draft" : author(working[0]) ? `${author(working[0])}'s working draft of the ${working[0].document.title}` : `The working draft of the ${working[0].document.title}`}</b> · <span data-testid="draft-count">{changes}</span> {changes === 1 ? "change" : "changes"} since {time(since)} · <span data-testid="draft-next">{next.words}</span>
+            </>
+          )}
         </p>
-        <Button variant="ghost" disabled={!last} onClick={() => last && onUndo(last.id)}>
+        {/* roadmap-decide: a hair tighter on a phone, so Approve and publish keeps the row. */}
+        <Button variant="ghost" className="max-[640px]:px-1.5" disabled={!last} onClick={() => last && onUndo(last.id)}>
           Undo
         </Button>
-        <Button variant="ghost" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Button variant="ghost" className="max-[640px]:px-1.5" aria-expanded={open} onClick={() => setOpen(!open)}>
           See changes
         </Button>
-        <Button variant="solid" disabled={!submittable.length} onClick={() => onSubmit(submittable)}>
-          Send for review
-        </Button>
+        {/* Review: each draft's own next step: Approve and publish for the decider's, Send for review for the others. */}
+        {!many && publishable.length > 0 && (
+          <Button variant="solid" data-step className="max-[640px]:px-2.5" data-testid="draft-publish" onClick={() => onApprove(publishable)}>
+            Approve and publish
+          </Button>
+        )}
+        {/* Review: only while something can be sent: the decider of a draft sent already sees Approve alone. */}
+        {!many && submittable.length > 0 && (
+          <Button variant="solid" data-step onClick={() => onSubmit(submittable)}>
+            Send for review
+          </Button>
+        )}
       </div>
-      {/* inbox-meeting-proposals fix: a version sent for review that I may approve (a required reviewer, the decider). */}
-      {working
-        .filter((d) => d.status === "submitted" && d.can_approve)
-        .map((d) => (
+      {many && (
+        <ul className="mt-1.5 space-y-1.5">
+          {working.map((d) => (
+            <li
+              key={d.id}
+              data-testid="draft-line"
+              ref={d.id === focus ? onFocus : undefined}
+              data-focused={d.id === focus ? "true" : undefined}
+              className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border-t border-accent-mid pt-1.5 text-[15px] ${d.id === focus ? "bg-surface px-2 pb-1.5 ring-2 ring-accent-mid" : ""}`}
+            >
+              <span className="min-w-0 flex-1">
+                <b>{d.document.title}</b> · {d.changes} {d.changes === 1 ? "change" : "changes"} · <span data-testid="draft-next">{draftNext(d, nameOf).words}</span>
+              </span>
+              {step(d)}
+            </li>
+          ))}
+        </ul>
+      )}
+      {/* inbox-meeting-proposals fix: a version sent for review that I may approve (a required reviewer, the decider);
+          its line holds the draft's one Approve. With several drafts each line's own step is the Approve. */}
+      {!many &&
+        approvable.map((d) => (
           <p key={d.id} tabIndex={-1} className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 rounded text-sm focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-accent" data-testid="draft-approval" data-draft-id={d.id}>
             <span className="min-w-0">
               {d.document.title}
               {d.version ? ` version ${d.version}` : ""} is waiting for your approval
             </span>
-            <Button variant="solid" onClick={() => onApprove(d)}>
+            <Button variant="solid" data-step data-testid="draft-approve" onClick={() => onApprove([d])}>
               Approve
             </Button>
           </p>
@@ -436,6 +512,61 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onRe
  * it matches that version (with a link to it), or what differs, with "Apply version N again"
  * for an approver and up (the line's own can_apply).
  */
+/** roadmap-done: the items done (shipped), off the plan, kept for history in a collapsed list; each opens the item. */
+function DoneItems({ items, open, reveal, onOpen }: { items: Item[]; open: string | null; reveal?: string | null; onOpen: (item: Item) => void }) {
+  const [shown, setShown] = useState(false);
+  // A link to a done item (?item=): the list opens, then its panel opens at its row, once.
+  const revealed = useRef<string | null>(null);
+  useEffect(() => {
+    const item = items.find((i) => i.id === reveal);
+    if (!item || revealed.current === item.id) return;
+    if (!shown) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShown(true);
+      return;
+    }
+    revealed.current = item.id;
+    onOpen(item);
+  }, [items, reveal, shown, onOpen]);
+  if (!items.length) return null;
+  return (
+    <section data-testid="done-items" className="mt-3 rounded-xl border border-line bg-surface px-3 py-2">
+      <button
+        type="button"
+        data-testid="done-items-toggle"
+        aria-expanded={shown}
+        aria-controls="roadmap-done-items"
+        onClick={() => setShown((v) => !v)}
+        className="inline-flex min-h-9 items-center gap-1.5 text-[14px] font-semibold text-text2 hover:text-text"
+      >
+        <span aria-hidden className={`inline-flex transition-transform ${shown ? "" : "-rotate-90"}`}>
+          <Icon name="chevron-down" size={16} />
+        </span>
+        Done · {items.length}
+      </button>
+      {shown && (
+        <ul id="roadmap-done-items" className="mt-1 flex flex-col gap-0.5 pb-1">
+          {items.map((i) => (
+            <li key={i.id} className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+              <button
+                type="button"
+                data-testid="done-item"
+                data-bar-id={i.id}
+                aria-pressed={open === i.id}
+                onClick={() => onOpen(i)}
+                className="min-h-9 truncate text-left text-[14px] font-medium text-text underline-offset-2 hover:underline"
+              >
+                {i.title}
+              </button>
+              {i.goal && <span className="truncate text-[13px] text-text2">{i.goal.title}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function AppliedVersions({ lines, onApply }: { lines: Schemas["SimpleAppliedVersion"][]; onApply: (line: Schemas["SimpleAppliedVersion"]) => Promise<void> }) {
   const [busy, setBusy] = useState<string | null>(null);
   if (!lines.length) return null;
@@ -503,6 +634,11 @@ function DecisionTray({
   phone,
   suggestions,
   top,
+  allLinks,
+  allDates,
+  oneRoadmap,
+  waitsFor,
+  onAll,
 }: {
   items: Item[];
   byId: Map<string, Item>;
@@ -516,6 +652,15 @@ function DecisionTray({
   suggestions: GoalSuggestionsApi;
   /** Where the desktop panel starts: under the toolbar's button. */
   top: number;
+  /** Review: under a filter, the whole roadmap's broken links, and how to clear the filters. */
+  allLinks?: number;
+  /** Review: under a filter, the whole roadmap's dates to confirm (the same basis as allLinks). */
+  allDates?: number;
+  /** Review: the whole count is one chosen roadmap's ("in all"), else every roadmap the reader sees. */
+  oneRoadmap?: boolean;
+  /** Review: whom a proposed Remove the dependency waits for ("you" to that person). */
+  waitsFor?: (c: Change) => string;
+  onAll?: () => void;
 }) {
   const twins = items.filter((i) => i.can_decide && i.looks_like.length > 0);
   // qa4-simple-roadmap-14: Escape closes the drawer, focus back on its button.
@@ -560,18 +705,26 @@ function DecisionTray({
   });
   const pulled = counts.pulled;
   const others = counts.proposals;
+  const here = counts.total;
+  const whole = counts.total - counts.links - counts.dates.length + (allLinks ?? counts.links) + (allDates ?? counts.dates.length);
   const counters: [string, number][] = [
-    ["Broken links", brokenItems.length],
-    ["Dates to confirm", dateRows.length],
+    ["Broken links", allLinks ?? counts.links],
+    ["Dates to confirm", allDates ?? dateRows.length],
     ["Proposals", others.length],
     ["Pulled in", pulled.length],
   ];
   const kd = (c: Change) => (c.after.key_date ?? c.before.key_date) as { name?: string } | null | undefined;
-  const title = (c: Change) => (kd(c)?.name ? `Key date '${kd(c)!.name}'` : (byId.get(String(c.target.item_id))?.title ?? (typeof c.after.title === "string" ? c.after.title : "An item")));
+  // roadmap-decide: a change the roadmap asked of a PRD names its milestone.
+  const asked = (c: Change) => (c.op === "edit_goal_milestone" && !("milestone" in c.before) ? `PRD milestone ‘${String(c.target.name ?? "")}’` : null);
+  // milestone-rights: a goal milestone's proposal names the milestone and says change or remove.
+  const ms = (c: Change) => c.op === "edit_goal_milestone" && typeof c.target.name === "string" && !asked(c);
+  const title = (c: Change) => asked(c) ?? (ms(c) ? `Milestone '${String(c.target.name)}'` : kd(c)?.name ? `Key date '${kd(c)!.name}'` : (byId.get(String(c.target.item_id))?.title ?? (typeof c.after.title === "string" ? c.after.title : "An item")));
+  const asks = (c: Change) => (ms(c) ? ("milestone" in c.before && c.after.milestone === null ? "remove it" : "change it") : opWords(c.op).toLowerCase());
   const row = (c: Change) => (
     <li key={c.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-proposal">
       <span className="min-w-0 flex-1 text-[15px]">
-        {title(c)}: {opWords(c.op).toLowerCase()} · <span className="text-text2">{c.by_name}</span>
+        {title(c)}: {asks(c)} · <span className="text-text2">{c.by_name}</span>
+        {c.op === "remove_dependency" && waitsFor && waitsFor(c) && <span className="text-text2"> · waits for {waitsFor(c)}</span>}
         {c.from_meeting && <span className="block text-sm text-text2" data-testid="proposal-from-meeting">Asked for by the meeting {c.from_meeting.title}</span>}
       </span>
       <Button onClick={() => onDecide(c, "accept")}>Accept</Button>
@@ -597,9 +750,20 @@ function DecisionTray({
           ×
         </button>
       </div>
-      {/* #37: what the button's count is, on screen: this view's own, not the side menu's badges. */}
+      {/* roadmap-decide: what the button's count is, said in words; the broken links are the same ones Home and the side menu count. */}
       <p className="mt-1 text-sm text-text2" data-testid="tray-scope">
-        {counts.total} on this roadmap view. The side menu&apos;s Decisions and Roadmap counts cover other things, so they can differ.
+        {/* Review: under a filter, every kind on one basis: what these filters show, and the whole roadmap's. */}
+        {/* Review: "this roadmap's" only when one roadmap is chosen; else every roadmap's draft is counted. */}
+        {whole !== here ? `${here} here, ${whole} in all` : whole} to decide {oneRoadmap ? "in this roadmap's working draft" : "in your roadmaps' working drafts"}: broken links, dates to confirm, proposals and items pulled in.
+        {allLinks !== undefined && allLinks !== counts.links && (
+          <span data-testid="tray-links-here">
+            {" "}
+            {counts.links} of the {allLinks} broken {allLinks === 1 ? "link" : "links"} {counts.links === 1 ? "is" : "are"} in these filters.{" "}
+            <button type="button" onClick={onAll} className="font-semibold text-accent-ink hover:underline">
+              Clear filters
+            </button>
+          </span>
+        )}
       </p>
       <ul className="mt-3 grid grid-cols-2 gap-2 min-[420px]:grid-cols-4" data-testid="tray-counters">
         {counters.map(([label, n]) => (
@@ -815,9 +979,49 @@ export function SimpleRoadmap() {
   const startOptions = useQuery("simple-meeting-options||", () =>
     unwrap(api.GET("/v1/simple/meetings/options", { params: { query: { prd: undefined, occurrence: undefined } } })),
   );
+  // Review: the whole roadmap's broken links (the side menu's light count), whatever the filters.
+  // Review: a chosen roadmap's count is that roadmap's ("in all"), else every roadmap the reader sees ("in all your roadmaps").
+  const wholeLinks = useQuery(`simple-roadmap-waiting:${f.roadmap ?? ""}`, () =>
+    unwrap(api.GET("/v1/simple/roadmap/waiting", { params: { query: f.roadmap ? { roadmap: f.roadmap } : {} } })),
+  );
+  // Review: the people a draft's next step names (who it waits on, who reviews it after the decider).
+  // A proposed fix names whom it waits for too.
+  const asked = (proposals.data ?? []).filter((c) => c.op === "remove_dependency");
+  // Review: and whose draft it is, when it is not the reader's.
+  const draftIds = [...new Set([...(drafts.data ?? []).flatMap((d) => [...d.waiting_on, ...(d.required_reviewers ?? []), d.created_by]), ...asked.flatMap((c) => c.routed_to)])].sort();
+  const draftPeople = useQuery(
+    `people|${draftIds.join(",")}`,
+    () => (draftIds.length ? unwrap(api.GET("/v1/people", { params: { query: { ids: draftIds } } })) : Promise.resolve([] as Schemas["PersonOut"][])),
+    { keepPrevious: true },
+  );
+  // Review: whom a proposal waits for, by name; "you" to that person.
+  const myId = me?.user_id;
+  const waitsFor = useCallback(
+    (c: Change) => {
+      if (myId && c.routed_to.includes(myId)) return "you";
+      // Review minor: held ("") until every name is known, never "its decider" for a moment.
+      const who = c.routed_to.map((id) => draftPeople.data?.find((p) => p.user_id === id)?.name);
+      return who.every(Boolean) ? who.join(", ") || "its decider" : "";
+    },
+    [myId, draftPeople.data],
+  );
+  // Review: a Remove the dependency proposed already says whom it waits for, and is not offered again.
+  const proposedFix = useCallback(
+    (op: string, itemId: string, subject: string) => {
+      const c = asked.find((x) => x.op === op && String(x.target.item_id) === itemId && String(x.target.subject) === subject);
+      return c ? waitsFor(c) : null;
+    },
+    [asked, waitsFor],
+  );
+  // home-waiting-one-list: every action reloads through here, and each may change what waits
+  // on me (a date, a proposal, a broken link, a draft), so the rail and Home read again too;
+  // roadmap-decide: with the whole roadmap's light count.
   const reload = useCallback(async () => {
-    await Promise.all([roadmap.reload(), proposals.reload(), drafts.reload()]);
-  }, [roadmap, proposals, drafts]);
+    invalidateWaiting();
+    const done = Promise.all([roadmap.reload(), proposals.reload(), drafts.reload(), wholeLinks.reload()]);
+    waitingChanged();
+    await done;
+  }, [roadmap, proposals, drafts, wholeLinks]);
   // After an action that may change what waits on someone (a move, an add, an undo, a version
   // sent or applied): the page and the rail's and More's Inbox counts read again at once.
   const reloadAfter = useCallback(() => reloadWaiting(reload), [reload]);
@@ -921,7 +1125,11 @@ export function SimpleRoadmap() {
   };
 
   // The filters' choices: every PRD, goal and track seen, so narrowing keeps the others.
-  const data = roadmap.data;
+  // roadmap-done (owner, Nov 4): a done (shipped) item leaves the plan: no view draws it and no
+  // count reads it (the API checks it no more); it is kept under the Done list, which opens it.
+  const all = roadmap.data;
+  const data = useMemo(() => (all ? { ...all, items: all.items.filter((i) => i.status !== "done") } : undefined), [all]);
+  const doneItems = useMemo(() => (all?.items ?? []).filter((i) => i.status === "done"), [all]);
   // roadmap-gantt: the rows' lanes, and the plans' no-work weeks (each PRD with planned items).
   const laned = useMemo(() => (data ? oneLane(lanes(data, f.group), f.group) : null), [data, f.group]);
   // The Timeline always draws goal lanes, the same groups the goal cards count.
@@ -943,29 +1151,14 @@ export function SimpleRoadmap() {
       track: add(seen.track, data.items.flatMap((i) => (i.track ? [[i.track.id, i.track.title] as [string, string]] : []))),
     });
   }
-  const byId = useMemo(() => new Map((data?.items ?? []).map((i) => [i.id, i])), [data]);
-  // inbox-meeting-proposals fix: a link (the Inbox) opens one item's feature panel
-  // (?item=<id>), Oracle's dates for one item (?dates=<item id>) or a goal's suggestions
-  // (?suggestions=<goal id>), once, when the roadmap has loaded.
-  const itemLinked = useRef(false);
-  useEffect(() => {
-    if (itemLinked.current || !data) return;
-    const it = byId.get(params.get("item") ?? "");
-    const dated = byId.get(params.get("dates") ?? "");
-    if (!it && !dated?.suggestion) return;
-    itemLinked.current = true;
-    requestAnimationFrame(() => {
-      if (it) setCard({ id: it.id, ...barAnchor(wrap.current, it.id) });
-      else if (dated) setPop({ id: dated.id, ...barAnchor(wrap.current, dated.id) });
-    });
-  }, [data, byId, params]);
+  const byId = useMemo(() => new Map((all?.items ?? []).map((i) => [i.id, i])), [all]);
   // The Inbox's Open on a version waiting for my approval (?draft=<id>): once the roadmap and
   // its drafts are read, the banner's line for that draft comes into sight, focused, with its
   // Approve; with no such line (approved since, or not mine to approve), the banner itself.
   const draftLinked = useRef(false);
   useEffect(() => {
     const id = params.get("draft");
-    if (draftLinked.current || !id || !data || !drafts.data) return;
+    if (draftLinked.current || !id || !all || !drafts.data) return;
     draftLinked.current = true;
     requestAnimationFrame(() => {
       const line = document.querySelector<HTMLElement>(`[data-testid="draft-approval"][data-draft-id="${CSS.escape(id)}"]`);
@@ -973,7 +1166,7 @@ export function SimpleRoadmap() {
       el?.scrollIntoView({ block: "center" });
       line?.focus({ preventScroll: true });
     });
-  }, [params, data, drafts.data]);
+  }, [params, all, drafts.data]);
   const goalLinked = useRef(false);
   useEffect(() => {
     const asked = params.get("suggestions");
@@ -985,7 +1178,7 @@ export function SimpleRoadmap() {
   const titleOf = useCallback((id: string | null) => (id ? byId.get(id)?.title : undefined), [byId]);
   const canChange = can("create_simple_change");
   // build-milestones-on-roadmap: the milestones per goal, added on the time axis.
-  const ms = useMilestones({ data, phone, canChange, reload: roadmap.reload, openItem: (id) => setCard({ id, ...anchorOf(id) }) });
+  const ms = useMilestones({ data, phone, canChange, reload, openItem: (id) => setCard({ id, ...anchorOf(id) }) });
   // The items as last loaded, for a burst sent after the render that started it.
   const latest = useRef(byId);
   useEffect(() => {
@@ -994,11 +1187,14 @@ export function SimpleRoadmap() {
 
   /** One change through the engine, its toast (with Undo when it applied) and the reload; null when it failed. */
   const run = useCallback(
-    async (what: string, body: Parameters<Act>[1]): Promise<ChangeResult | null> => {
+    async (what: Parameters<Act>[0], body: Parameters<Act>[1]): Promise<ChangeResult | null> => {
       try {
         const r = await propose(body);
         const target = latest.current.get(String(body.target?.item_id ?? ""));
+        // Review minor: the message keeps clear of the flag it was acted on (its fixes and the proposed line).
+        const keys = [target?.key, latest.current.get(String(body.target?.subject ?? ""))?.key].filter(Boolean);
         toast({
+          avoid: keys.length ? keys.map((k) => `[data-testid="conflict"][data-item="${k}"]`).join(", ") : undefined,
           message: resultWords(r, what, target?.deciders),
           action: r.change.status === "applied" && r.change.can_undo ? { label: "Undo", onClick: () => void undo(r.change.id).then(reloadAfter, (e) => toast({ message: String(e.message) })) } : undefined,
         });
@@ -1096,12 +1292,39 @@ export function SimpleRoadmap() {
   );
 
   const anchorOf = (id: string) => barAnchor(wrap.current, id);
+  // Review: an item's name in a fix's line opens its feature panel, as its bar does.
+  const openCard = (id: string) => setCard({ id, ...anchorOf(id) });
+
+  // home-waiting-one-list, inbox-meeting-proposals fix: a link (a "waiting for you" row, the
+  // Inbox) opens one item's feature panel (?item=<id>) or Oracle's dates for one item
+  // (?dates=<item id>), once per link, on what waits there, its actions in view. A done item's
+  // panel opens at its row in the Done list, which opens for it (DoneItems `reveal`).
+  const linkedItem = params.get("item");
+  const linkedDates = params.get("dates");
+  const [opened, setOpened] = useState<string | null>(null);
+  const [reveal, setReveal] = useState<string | null>(null);
+  useEffect(() => {
+    const link = linkedItem ? `item:${linkedItem}` : linkedDates ? `dates:${linkedDates}` : null;
+    const it = linkedItem ? byId.get(linkedItem) : undefined;
+    const dated = !linkedItem && linkedDates ? byId.get(linkedDates) : undefined;
+    if (!link || opened === link || (!it && !dated?.suggestion)) return;
+    // Once the roadmap that holds it is read (the link is the outside system here).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOpened(link);
+    setPop(null);
+    if (it?.status === "done") return void setReveal(it.id);
+    // The bars are drawn by the next frame.
+    requestAnimationFrame(() => {
+      if (it) setCard({ id: it.id, ...anchorOf(it.id) });
+      else if (dated) setPop({ id: dated.id, ...anchorOf(dated.id) });
+    });
+  }, [linkedItem, linkedDates, opened, byId]);
 
   const onDecide = useCallback(
     async (c: Change, how: "accept" | "decline") => {
       try {
         await decide(c.id, how);
-        toast({ message: how === "accept" ? "Accepted: it is in your working draft" : "Declined" });
+        toast({ message: how === "accept" ? (c.op === "edit_goal_milestone" ? "Accepted" : "Accepted: it is in your working draft") : "Declined" });
       } catch (e) {
         toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not decide it" });
       }
@@ -1185,13 +1408,19 @@ export function SimpleRoadmap() {
   // no PRD) sees no Start review at all, once the start options say so (busy until then).
   const startsReviews = mayStartReview || (!startOptions.data && !startOptions.error);
   // fix4 qa-simple-roadmap-8: the tray's own counts (one helper), so the button and its tiles agree.
-  const waiting = decisionCounts(data.items, allProposals).total;
+  // Review: under a filter, Needs a decision counts the whole roadmap's broken links and dates to
+  // confirm, as the side menu does.
+  const counted = decisionCounts(data.items, allProposals);
+  const anyFilter = !!(f.prd || f.goal || f.track || f.from || f.to || f.roadmap);
+  const allLinks = anyFilter ? wholeLinks.data?.broken_links : undefined;
+  const allDates = anyFilter ? wholeLinks.data?.dates_to_confirm : undefined;
+  const waiting = counted.total - counted.links - counted.dates.length + (allLinks ?? counted.links) + (allDates ?? counted.dates.length);
   const qList = quarters(data.windows.now.start, data.windows.later.end);
   // qa-shell-8: a new company's roadmap has nothing on it (no item, milestone or key date, and
   // no filter narrowing it): one line on what shows here and the next step, no empty chart and
   // no review or export of nothing.
   const blank =
-    !data.items.length && !data.milestones.length && !data.key_dates?.length && !f.prd && !f.goal && !f.track && !f.from && !f.to && !data.roadmap;
+    !data.items.length && !doneItems.length && !data.milestones.length && !data.key_dates?.length && !f.prd && !f.goal && !f.track && !f.from && !f.to && !data.roadmap;
   const hasGoals = (suggestions.data?.goals.length ?? 0) > 0;
 
   // S7 quick add: where an item may go, and whether the caller's add applies there (an item
@@ -1274,13 +1503,11 @@ export function SimpleRoadmap() {
     <div className={`flex flex-wrap items-center gap-2 ${phone ? "" : "ml-auto justify-end"}`} data-testid="roadmap-actions">
       {phone && canChange && addable.length > 0 && <QuickAdd phone options={addOptions} verb={addVerb} onAdd={onAdd} target={target?.title ?? null} roadmaps={askRoadmap ? addable.map((r) => r.roadmap) : []} />}
       {decides && !blank && (
-        // #37: this counts broken links, suggestions and proposals on THIS roadmap view,
-        // not the same things the side menu's Decisions (product decisions waiting on you,
-        // everywhere) or Roadmap (proposals and drafts in your inbox) badges count; the
-        // label and title say so rather than let the three numbers look like one metric.
+        // roadmap-decide: broken links (the same ones Home and the side menu count), dates to
+        // confirm, proposals and items pulled in, in the chosen roadmap's working draft (else every roadmap's).
         <Button
           data-testid="needs-decision"
-          title="Broken dates, date suggestions and proposals on this roadmap view (not the same count as Decisions or Roadmap in the side menu)"
+          title={`Broken links, dates to confirm, proposals and items pulled in, ${f.roadmap ? "in this roadmap's working draft" : "in your roadmaps' working drafts"}`}
           onClick={() => setTray(true)}
           data-zero={waiting ? undefined : "true"}
           // fix4 qa-simple-roadmap-38: at 0 the button is muted (nothing waits), still opens the tray.
@@ -1357,6 +1584,11 @@ export function SimpleRoadmap() {
     setF({ ...NO_FILTERS, group: f.group, roadmap: f.roadmap });
     void remember({ simple_filters: { prd: "", goal: "", track: "" } }, "Could not remember these filters for next time");
   };
+  // Review: the strip's and the tray's Clear filters show every broken link (all roadmaps too).
+  const showAllLinks = () => {
+    clearFilters();
+    if (f.roadmap) setF({ ...NO_FILTERS, group: f.group });
+  };
   // D1: PRD, Goal, Track, From, To, Group by and the Gantt's scale on one line (each select as wide as its choice).
   const pickers = (
     <>
@@ -1423,7 +1655,10 @@ export function SimpleRoadmap() {
   const draftBanner = (
     <DraftBanner
       drafts={drafts.data ?? []}
+      focus={params.get("draft")}
       titleOf={titleOf}
+      nameOf={(id) => draftPeople.data?.find((p) => p.user_id === id)?.name ?? "a reviewer"}
+      personOf={(id) => draftPeople.data?.find((p) => p.user_id === id)?.name}
       onReview={(slug) => pickFilter("prd", slug)}
       inReview={data.changes_in_review ?? 0}
       meId={me?.user_id ?? null}
@@ -1445,9 +1680,23 @@ export function SimpleRoadmap() {
         // A version sent for review waits on its reviewers and decider, the sender among them when they decide.
         await reloadAfter();
       }}
-      onApprove={async (d) => {
-        const r = await api.POST("/v1/simple/drafts/{draft_id}/approve", { params: { path: { draft_id: d.id } } });
-        toast({ place: "top", message: !r.data ? `${d.document.title} could not be approved` : r.data.status === "approved" ? `Approved: ${d.document.title} is published` : "Approved: it waits for the other approvals" });
+      onApprove={async (ds) => {
+        for (const d of ds) {
+          const r = await api.POST("/v1/simple/drafts/{draft_id}/approve", { params: { path: { draft_id: d.id } } });
+          const left = r.data?.waiting_on.length ?? 0;
+          toast({
+            place: "top",
+            message: !r.data
+              ? `${d.document.title} could not be approved`
+              : r.data.status === "approved"
+                ? `Approved: ${d.document.title} is published`
+                : !r.data.decider_approved && r.data.decider
+                  ? `Approved: ${d.document.title} waits for ${r.data.decider.name} to decide`
+                  : left
+                  ? `Approved: ${d.document.title} waits for ${left} more ${left === 1 ? "reviewer" : "reviewers"}`
+                  : "Approved: it waits for the other approvals",
+          });
+        }
         // The rail's and More's counts read again at once (the approval leaves the Inbox).
         await reloadAfter();
       }}
@@ -1456,6 +1705,8 @@ export function SimpleRoadmap() {
 
   return (
     <GoalNumbers.Provider value={numbers}>
+    <ProposedFixes.Provider value={proposedFix}>
+    <OpenItem.Provider value={openCard}>
     <MsProvider value={ms!}>
     {/* A phone's page ends clear of the tab bar (#36: its filters lead the chart, not the foot). */}
     <div className="simple-mode space-y-3 px-4 py-4 max-[600px]:pb-[calc(var(--phone-tab-bar)+16px)] min-[641px]:px-6" data-testid="simple-roadmap" data-phone={phone ? "true" : "false"}>
@@ -1604,6 +1855,8 @@ export function SimpleRoadmap() {
           // above, an open item in a panel at the right (a sheet on a phone).
           <ZoomTimeline
             data={goalLaned ?? data}
+            all={allLinks}
+            onAll={showAllLinks}
             phone={phone}
             act={act}
             canChange={canChange}
@@ -1634,6 +1887,8 @@ export function SimpleRoadmap() {
                 onClose={onClose}
                 near={nearWords(it, data.key_dates ?? [])}
                 onOpen={(id) => setCard({ id, left: 0, top: 0 })}
+                onSuggestion={(how, d) => void onSuggestion(it, how, d)}
+                focus={it.id === linkedItem}
               />
             )}
           />
@@ -1642,6 +1897,8 @@ export function SimpleRoadmap() {
           {/* mk-qa4-roadmap QR3 A: the broken links sit in the panel above the chart, never over a bar. */}
           <ConflictPanel
             data={laned ?? data}
+            all={allLinks}
+            onAll={showAllLinks}
             phone={phone}
             act={act}
             canChange={canChange}
@@ -1713,7 +1970,17 @@ export function SimpleRoadmap() {
             />
           </div>
         )}
-        {format !== "timeline" && cardItem && card && (
+        <DoneItems
+          items={doneItems}
+          open={card?.id ?? null}
+          reveal={reveal}
+          onOpen={(item) => {
+            setPop(null);
+            setCard({ id: item.id, ...anchorOf(item.id) });
+          }}
+        />
+        {/* The Timeline opens its own items in its panel; a done item, off it, opens here. */}
+        {(format !== "timeline" || cardItem?.status === "done") && cardItem && card && (
           <FloatingCard
             key={cardItem.id}
             item={cardItem}
@@ -1727,6 +1994,8 @@ export function SimpleRoadmap() {
             onClose={() => setCard(null)}
             near={nearWords(cardItem, data.key_dates ?? [])}
             onOpen={(id) => setCard({ id, ...anchorOf(id) })}
+            onSuggestion={(how, d) => void onSuggestion(cardItem, how, d)}
+            focus={cardItem.id === linkedItem}
             onHorizon={format === "board" && canChange && !closedItem(cardItem) ? (h) => onHorizon(cardItem, h) : undefined}
           />
         )}
@@ -1799,6 +2068,11 @@ export function SimpleRoadmap() {
           phone={phone}
           suggestions={suggestions}
           top={trayTop}
+          allLinks={allLinks}
+          allDates={allDates}
+          oneRoadmap={!!f.roadmap}
+          waitsFor={waitsFor}
+          onAll={showAllLinks}
         />
       )}
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} start={goalStart} onClose={() => setGoalPanel(null)} />}
@@ -1806,6 +2080,8 @@ export function SimpleRoadmap() {
       <MsCard />
       <MsToast />
     </MsProvider>
+    </OpenItem.Provider>
+    </ProposedFixes.Provider>
     </GoalNumbers.Provider>
   );
 }

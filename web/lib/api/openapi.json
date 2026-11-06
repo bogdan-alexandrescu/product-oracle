@@ -22047,7 +22047,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/segments/{seq}/retry-draft-import": {
@@ -42960,6 +42961,65 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/simple/roadmap/waiting": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Simple Roadmap Waiting",
+        "description": "roadmap-decide review: the side menu's light count: the broken links of the whole\nroadmap as the caller sees it (the working draft's to who sees it), no filter; the same\nones the roadmap's strip, its Needs a decision and Home count; and the dates the caller may\nconfirm, so the side menu's count equals Needs a decision. ``roadmap`` (id or slug): one\nroadmap's alone, as the read's own filter (Needs a decision's \"in all\" of a chosen roadmap);\n404 when the caller cannot read it.",
+        "operationId": "get_simple_roadmap_waiting",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roadmap",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Roadmap"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleRoadmapWaiting"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/simple/roadmap/date-suggestions": {
       "get": {
         "tags": [
@@ -43283,7 +43343,7 @@
           "simple"
         ],
         "summary": "Create Goal Milestone",
-        "description": "Add a milestone to a goal on a roadmap: coded the next \"M<n>\" in that goal on that\nroadmap. Who may change the roadmap directly (an owner, its decider, with none its\nowner while an approver, same as a key date); a commenter is refused (403: milestones\nare not proposed here, unlike key dates).",
+        "description": "Add a milestone to a goal on a roadmap: coded the next \"M<n>\" in that goal on that\nroadmap. Who may change the roadmap directly (an owner, its decider, with none its\nowner while an approver, same as a key date); a commenter is refused (403: milestones\nare not proposed here, unlike key dates). A roadmap that is history (the company\nroadmap exists) is 409.",
         "operationId": "create_goal_milestone",
         "requestBody": {
           "content": {
@@ -43475,7 +43535,7 @@
           "simple"
         ],
         "summary": "Patch Goal Milestone",
-        "description": "Edit a milestone's name, date, goal, items it waits on or counts-when rule. A PRD's\nown milestone is read-only here: a date or counts-when edit instead proposes a change\nto the PRD's owner (``pending`` filled, the milestone unchanged) through the change\nengine (``POST /v1/simple/changes/{id}/accept|decline``); its name, goal and items are\nthe PRD's own and are 422 here.",
+        "description": "Edit a milestone's name, date, goal, items it waits on or counts-when rule. A PRD's\nown milestone is read-only here: a date or counts-when edit instead proposes a change\nto the PRD's owner (``pending`` filled, the milestone unchanged) through the change\nengine (``POST /v1/simple/changes/{id}/accept|decline``); its name, goal and items are\nthe PRD's own and are 422 here, even beside a date. A milestone of a roadmap that is\nhistory (the company roadmap exists) is 409.",
         "operationId": "patch_goal_milestone",
         "security": [
           {
@@ -49904,7 +49964,8 @@
             }
           }
         },
-        "x-min-role": "approver"
+        "x-min-role": "approver",
+        "x-per-item": "owner"
       }
     },
     "/v1/strategy/check": {
@@ -63264,6 +63325,7 @@
                   "restore",
                   "edit_title",
                   "edit_outcome",
+                  "edit_note",
                   "accept_date_suggestion",
                   "accept_risk",
                   "shift_dependents",
@@ -63296,6 +63358,7 @@
                   "set_status",
                   "set_feature",
                   "set_goal_measure",
+                  "set_goals",
                   "set_owner",
                   "set_decider",
                   "decide_question",
@@ -63306,6 +63369,7 @@
                   "delete_goal",
                   "archive_goal",
                   "unarchive_goal",
+                  "remove_dependency",
                   "restore_goal_milestone",
                   "add_track",
                   "edit_track",
@@ -63689,6 +63753,7 @@
               "restore",
               "edit_title",
               "edit_outcome",
+              "edit_note",
               "accept_date_suggestion",
               "accept_risk",
               "shift_dependents",
@@ -63721,6 +63786,7 @@
               "set_status",
               "set_feature",
               "set_goal_measure",
+              "set_goals",
               "set_owner",
               "set_decider",
               "decide_question",
@@ -63731,6 +63797,7 @@
               "delete_goal",
               "archive_goal",
               "unarchive_goal",
+              "remove_dependency",
               "restore_goal_milestone",
               "add_track",
               "edit_track",
@@ -82905,6 +82972,14 @@
             },
             "type": "array",
             "title": "Goal Ids"
+          },
+          "assumed_goal_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Assumed Goal Ids"
           }
         },
         "type": "object",
@@ -88040,6 +88115,7 @@
               "restore",
               "edit_title",
               "edit_outcome",
+              "edit_note",
               "accept_date_suggestion",
               "accept_risk",
               "shift_dependents",
@@ -88072,6 +88148,7 @@
               "set_status",
               "set_feature",
               "set_goal_measure",
+              "set_goals",
               "set_owner",
               "set_decider",
               "decide_question",
@@ -88082,6 +88159,7 @@
               "delete_goal",
               "archive_goal",
               "unarchive_goal",
+              "remove_dependency",
               "restore_goal_milestone",
               "add_track",
               "edit_track",
@@ -122914,6 +122992,7 @@
               "restore",
               "edit_title",
               "edit_outcome",
+              "edit_note",
               "accept_date_suggestion",
               "accept_risk",
               "shift_dependents",
@@ -122946,6 +123025,7 @@
               "set_status",
               "set_feature",
               "set_goal_measure",
+              "set_goals",
               "set_owner",
               "set_decider",
               "decide_question",
@@ -122956,6 +123036,7 @@
               "delete_goal",
               "archive_goal",
               "unarchive_goal",
+              "remove_dependency",
               "restore_goal_milestone",
               "add_track",
               "edit_track",
@@ -123073,6 +123154,7 @@
               "restore",
               "edit_title",
               "edit_outcome",
+              "edit_note",
               "accept_date_suggestion",
               "accept_risk",
               "shift_dependents",
@@ -123105,6 +123187,7 @@
               "set_status",
               "set_feature",
               "set_goal_measure",
+              "set_goals",
               "set_owner",
               "set_decider",
               "decide_question",
@@ -123115,6 +123198,7 @@
               "delete_goal",
               "archive_goal",
               "unarchive_goal",
+              "remove_dependency",
               "restore_goal_milestone",
               "add_track",
               "edit_track",
@@ -123833,6 +123917,14 @@
             "type": "array",
             "title": "Tasks",
             "default": []
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleWaitingItem"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
           }
         },
         "type": "object",
@@ -124122,6 +124214,17 @@
             "format": "uuid",
             "title": "Created By"
           },
+          "created_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Name"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -124134,6 +124237,16 @@
             },
             "type": "array",
             "title": "Participant Ids"
+          },
+          "decider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "changes": {
             "type": "integer",
@@ -124206,6 +124319,20 @@
           "can_approve": {
             "type": "boolean",
             "title": "Can Approve"
+          },
+          "can_publish": {
+            "type": "boolean",
+            "title": "Can Publish",
+            "default": false
+          },
+          "required_reviewers": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Required Reviewers",
+            "default": []
           },
           "change_log": {
             "items": {
@@ -124512,7 +124639,9 @@
               "enum": [
                 "shift_dependents",
                 "move_dependency",
-                "accept_risk"
+                "accept_risk",
+                "restore",
+                "remove_dependency"
               ]
             },
             "type": "array",
@@ -124556,6 +124685,14 @@
             "type": "array",
             "title": "Moves",
             "default": []
+          },
+          "dependents": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleFlagDependent"
+            },
+            "type": "array",
+            "title": "Dependents",
+            "default": []
           }
         },
         "type": "object",
@@ -124566,6 +124703,31 @@
           "state"
         ],
         "title": "SimpleFlag"
+      },
+      "SimpleFlagDependent": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SimpleFlagDependent",
+        "description": "An item not cut or done that depends on a cut item, wherever the view's filters are."
       },
       "SimpleFlow": {
         "properties": {
@@ -125043,6 +125205,11 @@
             "title": "Can Change",
             "default": false
           },
+          "can_propose": {
+            "type": "boolean",
+            "title": "Can Propose",
+            "default": false
+          },
           "carried_from": {
             "anyOf": [
               {
@@ -125245,6 +125412,28 @@
               }
             ],
             "title": "Due"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
           }
         },
         "type": "object",
@@ -126996,6 +127185,11 @@
               }
             ],
             "title": "Change Id"
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
           }
         },
         "type": "object",
@@ -128011,6 +128205,16 @@
             "title": "Lines",
             "default": []
           },
+          "company_roadmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDocRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "plan": {
             "anyOf": [
               {
@@ -128342,6 +128546,17 @@
             "title": "Short Code",
             "default": ""
           },
+          "own_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Own Key"
+          },
           "title": {
             "type": "string",
             "title": "Title"
@@ -128500,6 +128715,11 @@
           "can_reorder": {
             "type": "boolean",
             "title": "Can Reorder",
+            "default": false
+          },
+          "on_roadmap": {
+            "type": "boolean",
+            "title": "On Roadmap",
             "default": false
           },
           "applies": {
@@ -129141,6 +129361,17 @@
             ],
             "title": "Outcome"
           },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
           "horizon": {
             "type": "string",
             "enum": [
@@ -129621,6 +129852,25 @@
           "milestones"
         ],
         "title": "SimpleRoadmapOut"
+      },
+      "SimpleRoadmapWaiting": {
+        "properties": {
+          "broken_links": {
+            "type": "integer",
+            "title": "Broken Links"
+          },
+          "dates_to_confirm": {
+            "type": "integer",
+            "title": "Dates To Confirm"
+          }
+        },
+        "type": "object",
+        "required": [
+          "broken_links",
+          "dates_to_confirm"
+        ],
+        "title": "SimpleRoadmapWaiting",
+        "description": "roadmap-decide review: the light count the side menu reads: the broken links of the\nwhole roadmap as the reader sees it (the working draft's to who sees it), and the dates\nthe reader may confirm in it (Needs a decision's Dates to confirm)."
       },
       "SimpleRunGroup": {
         "properties": {
@@ -130585,6 +130835,18 @@
               }
             ],
             "title": "Reviews Deleted"
+          },
+          "reviews_deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviews Deleted At"
           }
         },
         "type": "object",
@@ -130902,6 +131164,84 @@
         ],
         "title": "SimpleWait",
         "description": "What still waits on whom (an absent required reviewer's approval, a proposal)."
+      },
+      "SimpleWaitingItem": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "run_stop",
+              "question",
+              "decision",
+              "broken_link",
+              "date",
+              "draft",
+              "proposal",
+              "goal_suggestion",
+              "goal"
+            ],
+            "title": "Kind"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "ref_id": {
+            "type": "string",
+            "title": "Ref Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "default": ""
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "href": {
+            "type": "string",
+            "title": "Href"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "op": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Op"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "key",
+          "ref_id",
+          "title",
+          "action",
+          "href"
+        ],
+        "title": "SimpleWaitingItem",
+        "description": "home-decisions-one-list: one thing waiting on the signed-in person\n(oracle.simple.waiting_list): what it is, its action in words and where it is done."
       },
       "SimpleWindow": {
         "properties": {

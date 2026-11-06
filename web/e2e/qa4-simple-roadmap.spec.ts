@@ -168,7 +168,7 @@ test.describe("desktop only", () => {
     await open(page, { scenario: "simple-home" });
     const count = page.getByTestId("simple-nav-roadmap-count");
     await expect(count).toBeVisible();
-    await expect(count).toHaveAttribute("title", /^\d+ (change or draft|changes or drafts) waiting on you$/);
+    await expect(count).toHaveAttribute("title", /^\d+ on the roadmap waiting on you: \d+ broken links?, \d+ dates? to confirm, \d+ (change or draft|changes or drafts)$/);
   });
 
   test("qa4-17: Enter with a title but no roadmap moves focus to the roadmap picker", async ({ page }) => {
@@ -221,9 +221,10 @@ test.describe("phone only", () => {
     const list = page.getByTestId("timeline-list");
     await expect(list).toBeVisible();
     for (const q of await list.getByTestId("timeline-quarter").all()) {
-      // "Q1 2027 Jan – Mar 2027 · 4 items": a plain count, the months in words.
+      // "Q1 2027 Jan – Mar 2027 · 4 items" ("1 item"): a plain count, the months in words.
       const head = q.locator("h3");
-      await expect(head).toHaveText(/^Q\d \d{4} (Jan|Apr|Jul|Oct) – (Mar|Jun|Sep|Dec) \d{4} · \d+ items/);
+      await expect(head).toHaveText(/^Q\d \d{4} (Jan|Apr|Jul|Oct) – (Mar|Jun|Sep|Dec) \d{4} · \d+ items?/);
+      await expect(head).not.toContainText("· 1 items");
       await expect(head).not.toContainText("at once");
     }
     for (const t of await list.getByTestId("timeline-row").allTextContents()) expect(t).not.toMatch(/\b[FD]-\d/);

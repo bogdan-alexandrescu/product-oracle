@@ -30,11 +30,12 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
 
       const words = page.getByTestId("draft-words");
       await expect(words).toContainText("Your working draft");
-      await expect(words).toContainText("no approved version yet");
+      // roadmap-decide: what happens next, with no approved roadmap to replace; the decider approves and publishes in place.
+      await expect(words).toContainText("version 2 is published");
       await expect(words).not.toContainText("approved roadmap");
 
-      await page.getByTestId("draft-banner").getByRole("button", { name: "Send for review" }).click();
-      const toast = page.getByRole("status").filter({ hasText: "Sent for review" });
+      await page.getByTestId("draft-banner").getByRole("button", { name: "Approve and publish" }).click();
+      const toast = page.getByRole("status").filter({ hasText: "Approved" });
       await expect(toast).toBeVisible();
       await expect(toast).not.toContainText("approved roadmap");
     });
@@ -48,7 +49,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       await page.keyboard.press("ArrowRight");
       await expect(page.getByTestId("draft-count")).toHaveText("1");
       await page.setViewportSize(viewport);
-      await expect(page.getByTestId("draft-words")).toContainText("the approved roadmap stays published until review passes");
+      await expect(page.getByTestId("draft-words")).toContainText("version 2 replaces the approved roadmap");
     });
   });
 }

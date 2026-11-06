@@ -61,6 +61,10 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
+# A test that runs past 15 minutes is stuck: its worker prints every thread's stack and exits,
+# so the run names it and goes on instead of waiting out the CI job.
+faulthandler_timeout = 900
+faulthandler_exit_on_timeout = true
 markers = [
     "timing: asserts a wall-clock limit; CI runs these alone, after the parallel run, so other workers' load does not count",
 ]

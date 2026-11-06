@@ -163,7 +163,16 @@ export function WebhookInspector({
           </div>
         </InspectorSection>
       )}
-      <InspectorSection label="Delivery log">
+      <InspectorSection
+        label={
+          <span className="inline-flex items-center gap-1">
+            Delivery log
+            <InfoTip label="the delivery log" align="start" side="bottom">
+              Times are in Company time.
+            </InfoTip>
+          </span>
+        }
+      >
         <DeliveryLog hook={hook} eventTypes={eventTypes} version={version} onChanged={delivered} />
       </InspectorSection>
 

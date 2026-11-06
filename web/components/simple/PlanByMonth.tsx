@@ -78,7 +78,8 @@ export function PlanByMonth({
   fold = false,
 }: {
   plan: PlanStrip;
-  prd: { slug: string; title: string };
+  /** The PRD the strip draws; none: the company roadmap, every PRD's items (Home). */
+  prd?: { slug: string; title: string };
   testId?: string;
   /** Home (qa-simple-home-17): the rows name their document ("Guided setup · no milestone · 4 items"). */
   named?: boolean;
@@ -94,7 +95,7 @@ export function PlanByMonth({
   const from = ms(plan.start);
   const span = ms(plan.end) + DAY - from;
   const pct = (day: string) => Math.max(0, Math.min(100, ((ms(day) - from) / span) * 100));
-  const href = `/simple/roadmap?prd=${encodeURIComponent(prd.slug)}`;
+  const href = prd ? `/simple/roadmap?prd=${encodeURIComponent(prd.slug)}` : "/simple/roadmap";
   const today = plan.today ? pct(plan.today) : null;
   const shown = plan.rows.slice(0, PLAN_ROWS);
   const more = plan.rows.length - shown.length;
@@ -151,9 +152,9 @@ export function PlanByMonth({
           const width = Math.max(1.5, pct(r.end) - left);
           // qa-simple-prd-p3-15: the one-pager names what the items are.
           const n = `${r.items} ${legend ? "roadmap " : ""}${r.items === 1 ? "item" : "items"}`;
-          const label = named ? `${prd.title} · ${r.milestone ? rowName(r) : "no milestone"} · ${n}` : `${rowName(r)} · ${n}`;
+          const label = named && prd ? `${prd.title} · ${r.milestone ? rowName(r) : "no milestone"} · ${n}` : named ? `${r.milestone ? rowName(r) : "Not in a milestone"} · ${n}` : `${rowName(r)} · ${n}`;
           const when = r.date ? calendarDay(r.date, { month: "short", day: "numeric" }) : null;
-          const rowLabel = `${label}${when ? ` · ${when}` : ""}: open the roadmap filtered to ${prd.title}`;
+          const rowLabel = `${label}${when ? ` · ${when}` : ""}: open the roadmap${prd ? ` filtered to ${prd.title}` : ""}`;
           const words = (
             <span className={`flex min-w-0 flex-col leading-tight max-[600px]:flex-row max-[600px]:flex-wrap max-[600px]:items-baseline max-[600px]:gap-x-2 ${named ? "" : "pointer-events-none relative"}`}>
               {/* qa4-simple-home-7 (Home, named): one line, an ellipsis when it does not fit, the whole label in its

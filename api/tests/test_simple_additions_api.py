@@ -12,6 +12,17 @@ Test cards (protects / fails_when / no_claim):
   then it appears); viewers get 403; an empty title is 422; undo removes the item;
   fails_when=a proposer's add writes, a viewer adds, or undo leaves the item;
   no_claim=the web's drag.
+- test_set_goals_moves_an_item_to_another_goal: protects=set_goals makes the goal an item
+  serves another (the bucket a just-added task is dragged to): applied for the owner with
+  Undo, which puts its goal back; a stale ``before``, an unknown goal or a viewer is
+  refused; fails_when=the item keeps its goal, Undo leaves it moved, or a refusal writes;
+  no_claim=the goal buckets' feature links (test_simple_goal_buckets_api.py).
+- test_accepted_set_goals_moves_the_goal_bucket_link: protects=a commenter's proposed
+  move of a planned item (one with a baseline feature) to another goal writes nothing,
+  and once the decider accepts it, the goal buckets (what the dated view places it by)
+  list the new goal as its feature's first link, and the old one is gone; the owner's own
+  move applies at once and its Undo puts the link back; fails_when=the feature stays
+  under its old goal after the accept, or Undo leaves it moved; no_claim=the web.
 - test_added_item_is_in_the_draft_only: protects=an added item is read by those who see
   the roadmap's working draft and never by others or by the published version (Detailed's
   rows are untouched); submitting the draft carries the item into the next version;
@@ -178,6 +189,69 @@ async def test_add_item_per_role(client):
     assert c["target"]["item_id"] not in await w.items(client)
     async with tenant_session(w.ctx.tenant_id) as s:
         assert await s.get(RoadmapItem, uuid.UUID(c["target"]["item_id"])) is None
+
+
+async def test_set_goals_moves_an_item_to_another_goal(client):
+    w = await World().build()
+    grow, quiet = w.goals["grow"], w.goals["quiet"]
+    item_id = (await w.add(client, "owner", "Saved carts"))["change"]["target"]["item_id"]
+
+    async def move(who, before, after, status):
+        r = await client.post(CHANGES, headers=w.as_(who), json={
+            "op": "set_goals", "target": {"item_id": item_id},
+            "before": {"goal_ids": before}, "after": {"goal_ids": after}})  # fmt: skip
+        assert r.status_code == status, r.text
+        return r.json()
+
+    await move("viewer", [grow], [quiet], 403)
+    await move("owner", [quiet], [grow], 409)
+    await move("owner", [grow], [str(uuid.uuid4())], 422)
+    c = (await move("owner", [grow], [quiet], 201))["change"]
+    assert c["status"] == "applied" and c["can_undo"]
+    item = (await w.items(client))[item_id]
+    assert item["goal"]["id"] == quiet and item["goal_ids"] == [quiet]
+    r = await client.post(f"{CHANGES}/{c['id']}/undo", headers=w.as_("owner"))
+    assert r.status_code == 201, r.text
+    item = (await w.items(client))[item_id]
+    assert item["goal"]["id"] == grow and item["goal_ids"] == [grow]
+
+
+async def test_accepted_set_goals_moves_the_goal_bucket_link(client):
+    w = await World().build()
+    grow, quiet = w.goals["grow"], w.goals["quiet"]
+    item_id = w.ids["import-a"]
+
+    async def links() -> list[str]:
+        r = await client.get("/v1/simple/goal-buckets", headers=w.as_("commenter"))
+        assert r.status_code == 200, r.text
+        f = next(x for x in r.json()["features"] if x["id"] == w.features["bulk-import"])
+        return f["goal_ids"]
+
+    assert await links() == [grow]
+    was = (await w.items(client, "commenter"))[item_id]["goal_ids"]
+    r = await client.post(CHANGES, headers=w.as_("commenter"), json={
+        "op": "set_goals", "target": {"item_id": item_id}, "before": {"goal_ids": was},
+        "after": {"goal_ids": [quiet, *[g for g in was[1:] if g != quiet]]}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    c = r.json()["change"]
+    assert c["status"] == "proposed"
+    assert await links() == [grow]
+    r = await client.post(f"{CHANGES}/{c['id']}/accept", headers=w.as_("decider"), json={})
+    assert r.status_code == 200, r.text
+    assert r.json()["change"]["status"] == "accepted"
+    assert await links() == [quiet]
+    # The owner's own move applies at once, and its Undo puts the link back.
+    was = (await w.items(client))[item_id]["goal_ids"]
+    assert was[0] == quiet
+    r = await client.post(CHANGES, headers=w.as_("owner"), json={
+        "op": "set_goals", "target": {"item_id": item_id}, "before": {"goal_ids": was},
+        "after": {"goal_ids": [grow]}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    assert r.json()["change"]["status"] == "applied"
+    assert await links() == [grow]
+    r = await client.post(f"{CHANGES}/{r.json()['change']['id']}/undo", headers=w.as_("owner"))
+    assert r.status_code == 201, r.text
+    assert await links() == [quiet]
 
 
 async def test_added_item_is_in_the_draft_only(client):

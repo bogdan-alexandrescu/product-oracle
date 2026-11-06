@@ -803,7 +803,11 @@ function RunInspector({ run }: { run: RunOut }) {
               // qa-work-25: one format, in the normal font: "$4.90 of $14.50 estimated".
               // qa-work-23: the value's weight and colour, as every other Details value.
               <span data-testid="run-cost" data-cost="small" className="tnum">
-                {run.estimate_usd == null ? (
+                {run.status === "running" && run.spent_usd === 0 && !run.segments.some((x) => x.cost_reported) ? (
+                  <>
+                    Cost not reported yet{run.estimate_usd != null && <> · {usd(run.estimate_usd)} estimated</>}
+                  </>
+                ) : run.estimate_usd == null ? (
                   costText(run)
                 ) : (
                   <>
@@ -979,7 +983,16 @@ function SegmentProgress({ segment: s }: { segment: SegmentOut }) {
             <span data-testid="segment-proposals">{plural(s.proposals_written, "proposal")} written</span> ·{" "}
           </>
         )}
-        {s.checked_at ? `checked ${since(s.checked_at)} ago` : "Not checked yet: the agents' progress shows after the next check"}
+        {s.checked_at ? (
+          `checked ${since(s.checked_at)} ago`
+        ) : (
+          <span className="inline-flex items-center gap-1.5">
+            Not checked yet
+            <InfoTip label="the progress check" side="top" align="start">
+              The agents&apos; progress shows after the next check.
+            </InfoTip>
+          </span>
+        )}
       </p>
       {s.checked_at &&
         (s.agents.length > 0 ? (
@@ -1078,7 +1091,8 @@ function SegmentItem({
   const details =
     sentReviews.length > 0 ||
     editedBy.length > 0 ||
-    s.error ||
+    (s.error && s.error !== run.error) ||
+    s.can_retry ||
     retryError ||
     s.autonomy_note ||
     s.items_check ||
@@ -1289,7 +1303,7 @@ function SegmentItem({
       </div>
       {details && (
         <div className="space-y-2.5 pr-4 pb-3 pl-[56px] text-[15px] max-[600px]:pr-3 max-[600px]:pl-[44px]">
-          {s.error && (
+          {s.error && s.error !== run.error && (
             <p className="text-crit">
               {s.status === "failed" && s.finished_at && <span data-testid="failed-at">{failedAt(s.finished_at)}. </span>}
               {s.error}

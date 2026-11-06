@@ -383,6 +383,9 @@ export interface ChartProps {
   dropTargets?: boolean;
   /** roadmap-gantt: what the rows sit under (the data's groups are already these lanes). */
   lane?: Lane;
+  /** The label column's heading when the rows are grouped by something Simple has no lane for
+   * (the Detailed Plan's Horizon grouping: "Horizon"); else the lane's own word. */
+  laneWord?: string;
   /** The plan's no-work weeks (holidays), drawn grey. */
   noWork?: { start: string; end: string; label?: string | null }[];
   /** roadmap-milestones D3: on a phone, the milestone whose end is off screen to the right ("M3"), as the chart scrolls (null: none). */
@@ -435,7 +438,7 @@ declare global {
   }
 }
 
-export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpen, onMove, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion, overlay, chartRef, dropTargets, lane = data.group, noWork = [], onOffscreen, pulled }: ChartProps) {
+export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpen, onMove, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion, overlay, chartRef, dropTargets, lane = data.group, laneWord, noWork = [], onOffscreen, pulled }: ChartProps) {
   const box = useRef<HTMLDivElement>(null);
   // build-goal-order-control: a goal lane's header leads with the goal's number.
   const numbers = useContext(GoalNumbers);
@@ -722,7 +725,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
       <div className="min-w-0 flex-none border-r border-line" style={{ width: l.labelW }} data-testid="chart-labels">
         {/* fix4 qa-simple-roadmap-34: the grouping as the Group by names it ("PRD", "Goal"), not in capitals. */}
         <div style={{ height: l.top }} className="flex items-end px-3 pb-1.5 text-xs font-semibold text-text2">
-          {LANE_WORDS[lane]}
+          {laneWord ?? LANE_WORDS[lane]}
         </div>
         {l.rows.map((r, n) =>
           r.kind === "group" ? (

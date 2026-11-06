@@ -116,13 +116,13 @@ async def test_set_depends_refuses_a_loop(client):
     # c depends on b (by its feature key): b may not depend on c.
     r = await t.post(client, "set_depends", t.b, {"depends_on": []}, {"depends_on": ["c"]})
     assert r.status_code == 422, r.text
-    assert r.json()["detail"] == "Gamma already depends on Beta"
+    assert r.json()["detail"] == "Not added, it would make a loop: Gamma already depends on Beta"
     # Through another: a depends on b; c on a would close b <- c <- a <- b? No: b on a.
     r = await t.post(client, "set_depends", t.a, {"depends_on": []}, {"depends_on": ["c"]})
     assert r.status_code == 201, r.text
     r = await t.post(client, "set_depends", t.b, {"depends_on": []}, {"depends_on": ["a"]})
     assert r.status_code == 422, r.text
-    assert r.json()["detail"] == "Alpha already depends on Beta"
+    assert r.json()["detail"] == "Not added, it would make a loop: Alpha already depends on Beta"
     items = await t.read(client)
     assert items["b"]["depends_keys"] == []
 
