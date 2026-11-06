@@ -20,7 +20,7 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.util import Emu, Inches, Pt
 
 from oracle.docs.parser import strip_citations
-from oracle.export.deck import Deck, Slide
+from oracle.export.deck import Deck, Slide, column_widths
 from oracle.export.render import _cap, days_in_words, image_label, stored_image
 
 WIDTH, HEIGHT = Inches(13.333), Inches(7.5)
@@ -283,6 +283,12 @@ def _add_body(slide, s: Slide, deck: Deck, style: dict) -> None:
         height = row_h * len(item.rows)
         shape = slide.shapes.add_table(len(item.rows), cols, MARGIN, top, width, height)
         tbl = shape.table
+        # Columns as wide as the slide's text budget reckons them (deck.column_widths): a
+        # long cell gets most of the slide, as in the HTML, so it fits the slides it fills.
+        widths = column_widths(item.rows)
+        widths += [1] * (cols - len(widths))
+        for ci, w in enumerate(widths[:cols]):
+            tbl.columns[ci].width = int(width * w / sum(widths[:cols]))
         for ri, cells in enumerate(item.rows):
             for ci in range(cols):
                 cell = tbl.cell(ri, ci)

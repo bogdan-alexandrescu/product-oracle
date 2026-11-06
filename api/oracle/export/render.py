@@ -812,9 +812,17 @@ def _safe_href(ref: str | None) -> str | None:
     return ref if urlsplit(ref).scheme in ("http", "https") else None
 
 
+def held_moment(words: str) -> str:
+    """A moment in words with its day and its time each held on one line, as on the slides:
+    "Oct 30, 2026," then "2:49 PM PDT"."""
+    day, _, time = words.rpartition(", ")
+    return f"{held_together(day)}, {held_together(time)}" if day else held_together(words)
+
+
 def _format_dt(value: datetime | None, zone: str) -> str:
-    """A moment in the Company time zone with its short name (#463)."""
-    return company_time.stamp(value, zone) if value is not None else ""
+    """A moment in the Company time zone with its short name (#463), each part held on one
+    line (:func:`held_moment`): the HTML and PDF exports and the Sources slides."""
+    return held_moment(company_time.stamp(value, zone)) if value is not None else ""
 
 
 def snapshot_in_words(snapshot: str | None, zone: str, when=None) -> str:
@@ -1236,7 +1244,7 @@ def build_themed_context(ev: ExportVersion) -> dict:
         if value is None:
             return ""
         if ev.dates_in_words:
-            return company_time.moment_in_words(value, ev.zone)
+            return held_moment(company_time.moment_in_words(value, ev.zone))
         return _format_dt(value, ev.zone)
 
     return {
@@ -1303,14 +1311,14 @@ def banner_line(ev: ExportVersion) -> str:
         f"{ev.document.title} ({ev.document.slug})",
         f"version {ev.version.number}",
         f"status {ev.status}",
-        f"imported {_format_dt(ev.version.created_at, ev.zone)}",
+        f"imported {company_time.stamp(ev.version.created_at, ev.zone)}",
     ]
     if ev.layer != "full":
         parts.insert(2, ev.layer_label.lower())
     if ev.audience_label:
         parts.insert(2, f"audience {ev.audience_label}")
     if ev.version.approved_at is not None:
-        parts.append(f"approved {_format_dt(ev.version.approved_at, ev.zone)}")
+        parts.append(f"approved {company_time.stamp(ev.version.approved_at, ev.zone)}")
     if ev.source is not None:
         parts.append(f"from {ev.source.title} ({ev.source.slug}) version {ev.source.version}")
     # "--" would end the HTML comment early.

@@ -206,8 +206,9 @@ _TABLE_SEP = re.compile(r"^\s*\|?\s*:?-{2,}")
 @dataclass
 class _Unit:
     """A piece of a slide body kept on one slide: a paragraph, a top-level list item (with
-    its sub-items), a table row, a code block; a heading goes with what follows. One longer
-    than a slide is cut into pieces that each fit (:func:`_fit`)."""
+    its sub-items), a table row; a heading goes with what follows. A paragraph, item or row
+    longer than a slide is cut into pieces that each fit. A deck shows no code
+    (:func:`code_left_out`)."""
 
     text: str
     cost: float
@@ -240,7 +241,8 @@ def _units(body: str, budget: float = SLIDE_LINES) -> list[_Unit]:
             j = i + 1
             while j < len(lines) and not _FENCE.match(lines[j]):
                 j += 1
-            units += _code_pieces(heading, lines[i : j + 1], group, budget)
+            block = lines[i : j + 1]
+            units.append(_Unit(heading + "\n".join(block), len(block) + 0.4, group, "block"))
             heading = ""
             i = j + 1
             group += 1
@@ -257,19 +259,15 @@ def _units(body: str, budget: float = SLIDE_LINES) -> list[_Unit]:
             rows = lines[i:j]
             head = rows[:2] if len(rows) > 1 and _TABLE_SEP.match(rows[1]) else []
             header = "\n".join(head)
-            cols = max(1, rows[0].strip().strip("|").count("|") + 1)
+            widths = column_widths([_cells(r) for r in rows if not _TABLE_SEP.match(r)])
             for k, row in enumerate(rows[len(head) :]):
-                longest = max(
-                    (len(c.strip()) for c in row.strip().strip("|").split("|")), default=0
-                )
-                width = max(1, LINE_CHARS // cols)
-                cost = 1.2 * max(1, -(-longest // width))
+                cost = _row_cost(_cells(row), widths)
                 lead = heading + header + "\n" if k == 0 and header else ""
                 extra = 1.2 if k == 0 and header else 0
                 if cost + extra <= budget:
                     units.append(_Unit(lead + row, cost + extra, group, "row", header))
                 else:
-                    units += _row_pieces(lead, row, extra, width, group, header, budget)
+                    units += _row_pieces(lead, row, extra, widths, group, header, budget)
                 heading = ""
             i = j
             group += 1
@@ -349,40 +347,49 @@ def _prose_pieces(heading: str, text: str, group: int, kind: str, budget: float)
     ]
 
 
-def _code_pieces(heading: str, lines: list[str], group: int, budget: float) -> list[_Unit]:
-    """A fenced code block as units: itself when it fits a slide, else cut between lines,
-    each piece fenced again."""
-    lead = 1.5 if heading else 0
-    if len(lines) + 0.4 + lead <= budget:
-        return [_Unit(heading + "\n".join(lines), len(lines) + 0.4, group, "block")]
-    opener = lines[0]
-    fence = _FENCE.match(opener).group(1)  # type: ignore[union-attr]
-    closed = len(lines) > 1 and _FENCE.match(lines[-1])
-    inner = lines[1:-1] if closed else lines[1:]
-    closer = lines[-1] if closed else fence
-    units = []
-    i = 0
-    while i < len(inner) or not units:
-        room = max(1, int(budget - 2.4 - (lead if not units else 0)))
-        part = [opener, *inner[i : i + room], closer]
-        units.append(
-            _Unit(
-                (heading if not units else "") + "\n".join(part),
-                len(part) + 0.4 + (lead if not units else 0),
-                group,
-                "block",
-            )
-        )
-        i += room
-    return units
+def _cells(row: str) -> list[str]:
+    return [c.strip() for c in row.strip().strip("|").split("|")]
+
+
+def column_widths(rows: list[list[str]], chars: int = LINE_CHARS) -> list[int]:
+    """Characters a line each column of a table is shown at, as a browser lays the table
+    out across the slide: a column whose longest cell fits its share keeps that width, the
+    rest of the line is shared by the others in proportion to their text (one long cell
+    takes most of the slide, not ``chars / columns``). The PPTX sets its columns so too."""
+    cols = max((len(r) for r in rows), default=1)
+    natural = [
+        max((len(r[c]) if c < len(r) else 0 for r in rows), default=0) + 2 for c in range(cols)
+    ]
+    widths = [0] * cols
+    left, room = set(range(cols)), chars
+    while left:
+        share = room / len(left)
+        fixed = {c for c in left if natural[c] <= share}
+        if not fixed:
+            total = sum(natural[c] for c in left)
+            for c in left:
+                widths[c] = int(room * natural[c] / total)
+            break
+        for c in fixed:
+            widths[c] = natural[c]
+            room -= natural[c]
+        left -= fixed
+    # A cell's padding takes about a character on each side.
+    return [max(1, w - 2) for w in widths]
+
+
+def _row_cost(cells: list[str], widths: list[int]) -> float:
+    lines = (-(-len(t) // widths[c]) for c, t in enumerate(cells) if c < len(widths))
+    return 1.2 * max([1, *lines])
 
 
 def _row_pieces(
-    lead: str, row: str, extra: float, width: int, group: int, header: str, budget: float
+    lead: str, row: str, extra: float, widths: list[int], group: int, header: str, budget: float
 ) -> list[_Unit]:
     """A table row longer than a slide as rows that each fit: each cell's text cut between
-    sentences (else words), its pieces in the rows in turn, the other cells left empty."""
-    cells = [c.strip() for c in row.strip().strip("|").split("|")]
+    sentences (else words) at its column's width, its pieces in the rows in turn, the other
+    cells left empty."""
+    cells = _cells(row)
 
     def cut(cell: str, room: int) -> list[str]:
         atoms = [(" " if k else "", a) for k, a in enumerate(_SENTENCE_END.split(cell))]
@@ -393,15 +400,15 @@ def _row_pieces(
     lines_first = max(1, int((budget - extra) / 1.2))
     lines_rest = max(1, int(budget / 1.2))
     # Cut for the tighter (first) row, so every piece fits wherever it lands.
-    room = min(lines_first, lines_rest) * width
-    parts = [cut(c, room) for c in cells]
+    lines = min(lines_first, lines_rest)
+    width = widths + [widths[-1]] * (len(cells) - len(widths))
+    parts = [cut(c, lines * width[i]) for i, c in enumerate(cells)]
     count = max(len(p) for p in parts)
     units = []
     for r in range(count):
         texts = [p[r] if r < len(p) else "" for p in parts]
         line = "| " + " | ".join(texts) + " |"
-        longest = max((len(t) for t in texts), default=0)
-        cost = 1.2 * max(1, -(-longest // width)) + (extra if r == 0 else 0)
+        cost = _row_cost(texts, width) + (extra if r == 0 else 0)
         units.append(_Unit((lead if r == 0 else "") + line, cost, group, "row", header))
     return units
 
@@ -438,7 +445,7 @@ def _join(page: list[_Unit]) -> str:
 def slide_pages(body: str, budget: float = SLIDE_LINES) -> list[str]:
     """``body`` as the slides it needs (E-9): itself when it fits one slide, else split
     between paragraphs, list items or table rows (a table's header on each), as evenly as
-    the pieces allow; a paragraph, item, row or code block longer than a slide is cut too."""
+    the pieces allow; a paragraph, item or row longer than a slide is cut too."""
     units = _units(body, budget)
     total = sum(u.cost for u in units)
     if total <= budget or len(units) < 2:
@@ -449,6 +456,39 @@ def slide_pages(body: str, budget: float = SLIDE_LINES) -> list[str]:
     while len(pages := _pack(units, even)) > count:
         even = min(even + 0.5, budget)
     return [_join(p) for p in pages if p]
+
+
+CODE_LINE = "Code: {n} {lines}, in the full PRD"
+_CODE_LINK = re.compile(r'<a href="[^"]*">(Code: \d+ lines?, in the full PRD)</a>')
+
+
+def code_left_out(body: str, href: str) -> str:
+    """``body`` with each fenced code block as one line, "Code: 40 lines, in the full PRD",
+    a link to ``href`` (that place in the full PRD): a deck shows no code (owner, Nov 5),
+    so a long block is never cut into continuation slides or left as a blank slide."""
+    lines = body.splitlines()
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        m = _FENCE.match(lines[i])
+        if not m:
+            out.append(lines[i])
+            i += 1
+            continue
+        j = i + 1
+        while j < len(lines) and not _FENCE.match(lines[j]):
+            j += 1
+        n = j - i - 1
+        indent = lines[i][: len(lines[i]) - len(lines[i].lstrip())]
+        text = CODE_LINE.format(n=n, lines="line" if n == 1 else "lines")
+        out.append(f"{indent}[{text}]({href})")
+        i = j + 1
+    return "\n".join(out)
+
+
+def unlink_code(html: str) -> str:
+    """The deck PDF's "Code: N lines, in the full PRD" as plain words, as in the PPTX."""
+    return _CODE_LINK.sub(r'<span class="code-left-out">\1</span>', html)
 
 
 # A goal's code and its name where the PRD names it: "**G2 (retention)**", "G2 (Retention)".
@@ -502,10 +542,16 @@ def slide_groups(front_matter: dict | None, template: str | None) -> list[list[s
     return [[k for k in g if isinstance(k, str)] for g in groups if isinstance(g, list) and g]
 
 
-def _grouped(ev: ExportVersion, brief: list[Section]) -> list[tuple[Section, str]]:
-    """Each slide's lead section and the body it shows: a section's own body, or for a
-    group (:func:`slide_groups`) the lead's body then each further section under its own
-    heading."""
+def _grouped(ev: ExportVersion, brief: list[Section]) -> list[tuple[Section, str, str]]:
+    """Each slide's lead section, its raw body (for the notes) and the body it shows: a
+    section's own body, or for a group (:func:`slide_groups`) the lead's body then each
+    further section under its own heading; each section's code as one line linking to it
+    in the full PRD (:func:`code_left_out`)."""
+
+    def shown(s: Section) -> str:
+        href = f"/documents/{ev.document.slug}/v/{ev.version.number}#{s.section_key}"
+        return code_left_out(layers.slide_body(s.body_md or ""), href)
+
     groups = slide_groups(ev.version.front_matter, ev.document.template)
     by_key = {s.section_key: s for s in brief}
     lead_of: dict[str, list[Section]] = {}
@@ -515,15 +561,16 @@ def _grouped(ev: ExportVersion, brief: list[Section]) -> list[tuple[Section, str
         if members:
             lead_of[members[0].section_key] = members
             taken.update(m.section_key for m in members)
-    out: list[tuple[Section, str]] = []
+    out: list[tuple[Section, str, str]] = []
     for s in brief:
         if s.section_key in lead_of:
             members = lead_of[s.section_key]
-            parts = [s.body_md or ""]
-            parts += [f"### {_plain_heading(m)}\n\n{m.body_md or ''}" for m in members[1:]]
-            out.append((s, "\n\n".join(parts)))
+            raw = [s.body_md or ""]
+            raw += [f"### {_plain_heading(m)}\n\n{m.body_md or ''}" for m in members[1:]]
+            parts = [shown(s)] + [f"### {_plain_heading(m)}\n\n{shown(m)}" for m in members[1:]]
+            out.append((s, "\n\n".join(raw), "\n\n".join(parts)))
         elif s.section_key not in taken:
-            out.append((s, s.body_md or ""))
+            out.append((s, s.body_md or "", shown(s)))
     return out
 
 
@@ -597,9 +644,9 @@ def build_deck(ev: ExportVersion) -> Deck:
 
     goals = goal_names(ev.all_sections)
     slides: list[Slide] = [Slide(index=1, kind="title", heading=ev.title)]
-    for s, raw in _grouped(ev, brief):
+    for s, raw, shown in _grouped(ev, brief):
         states = ev.spec_states.get(s.section_key) or []
-        whole = with_goal_names(layers.slide_body(raw), goals)
+        whole = with_goal_names(shown, goals)
         pages = slide_pages(whole, SLIDE_LINES - (2 if states else 0))
         for page, body in enumerate(pages, start=1):
             heading = days_in_words(_plain_heading(s))

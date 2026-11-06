@@ -337,7 +337,9 @@ async def test_e9_a_paragraph_longer_than_a_slide_is_whole_in_the_deck_pdf(clien
 # (the HTML deck and Present mode; the PPTX and the deck PDF show the words); it is never
 # split into continuation slides, never a blank slide. A table row with one overlong cell
 # fills its continuation slides; the document exports hold their stamps together.
-CODE = "Steps to try:\n\n```\n" + "\n".join(f"step {i} of the rollout" for i in range(1, 41)) + "\n```"
+CODE = (
+    "Steps to try:\n\n```\n" + "\n".join(f"step {i} of the rollout" for i in range(1, 41)) + "\n```"
+)
 CODE_LINE = "Code: 40 lines, in the full PRD"
 
 

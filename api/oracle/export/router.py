@@ -27,7 +27,7 @@ from oracle.auth.deps import CurrentPrincipal, Principal, TenantDB
 from oracle.authz import has_role, require_role
 from oracle.docs.schemas import Audience
 from oracle.export import offload, present
-from oracle.export.deck import build_deck, render_deck_html, theme_class
+from oracle.export.deck import build_deck, render_deck_html, theme_class, unlink_code
 from oracle.export.pdf import PdfUnavailable, html_to_pdf, overflow_headers
 from oracle.export.render import (
     ExportVersion,
@@ -136,7 +136,7 @@ def render_export(ev: ExportVersion, layer: str, fmt: str) -> str | bytes:
 
             return deck_to_pptx(deck)
         html = render_deck_html(deck)
-        return html_to_pdf(html) if fmt == "pdf" else html
+        return html_to_pdf(unlink_code(html)) if fmt == "pdf" else html
     if fmt == "md":
         return render_markdown(ev)
     html = render_html(ev)
