@@ -100,10 +100,11 @@ test("10b: a version with an unverified date shows the marker and Approve is dis
   await expect(timeline.getByRole("group", { name: "Verdict for Timeline" })).toBeVisible();
 });
 
-test("10c: Present on a board update shows its brief as 2 slides", async ({ page }) => {
-  // protects=the board update's front matter groups its six brief sections into two slides:
+test("10c: Present on a board update shows its brief as 3 slides", async ({ page }) => {
+  // protects=the board update's front matter groups its six brief sections into two groups:
   // Present shows the title slide, "Product in one line" (with Goals under it), "Timeline" (with
-  // shipped, slipped and the asks under it), then Sources and data points; fails_when=each brief
+  // shipped, slipped and the asks under it) on two slides as it holds more than one slide fits,
+  // then Sources and data points; fails_when=each brief
   // section becomes its own slide, or a group loses a section; no_claim=the PPTX export's layout.
   await login(page);
   await openUpdates(page);

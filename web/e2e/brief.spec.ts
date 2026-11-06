@@ -267,7 +267,7 @@ test("present: viewers present too; a version without a brief has nothing to pre
 
   await page.goto("/documents/checkout-redesign/v/2/present");
   await expect(page.getByTestId("present-mode")).toContainText(
-    "Version 2 of Checkout redesign PRD has no brief: export the full PRD instead.",
+    "Version 2 of Checkout redesign PRD has no brief to present: open the full PRD instead.",
   );
 });
 

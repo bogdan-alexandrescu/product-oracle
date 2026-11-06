@@ -15,7 +15,9 @@ from pptx import Presentation
 from pptx.util import Pt
 from pypdf import PdfReader
 
+from oracle.export import deck as deck_module
 from oracle.export import pptx as pptx_module
+from oracle.export import render as render_module
 from tests.test_brief import DETAIL_ONLY, DRAFT, _import, requires_pdf
 from tests.test_priorities import _token
 
@@ -185,3 +187,139 @@ async def test_e15_the_no_brief_refusal_names_the_prd_by_its_title(client, tenan
     assert resp.json()["detail"] == (
         "Version 1 of Notes has no brief: export the full PRD instead."
     )
+
+
+# Review round 2 of PR 1300: a single paragraph, list item, code block or table row longer
+# than a slide is split too (it once stayed on one slide and ran past the PPTX's footer);
+# a date never wraps between its parts; the continuation heading fits its box; Present mode's
+# no-brief message does not speak of exporting; a freeform snapshot is not doubled.
+NBSP = " "
+SENTENCES = [
+    f"Sentence {i} says the saved cart for returning buyers keeps its items for thirty days."
+    for i in range(1, 31)
+]
+ONE_PARAGRAPH = " ".join(SENTENCES)
+
+
+def _paragraph_draft() -> str:
+    return _draft().replace(RISKS, ONE_PARAGRAPH)
+
+
+def test_e9_one_paragraph_longer_than_a_slide_is_split_at_sentences():
+    budget = deck_module.SLIDE_LINES
+    pages = deck_module.slide_pages(ONE_PARAGRAPH, budget)
+    assert len(pages) >= 2
+    shown = " ".join(pages)
+    for i, sentence in enumerate(SENTENCES, start=1):
+        assert shown.count(sentence) == 1, i
+    for page in pages:
+        assert sum(u.cost for u in deck_module._units(page)) <= budget, page
+
+
+def test_e9_a_long_list_item_code_block_and_table_row_are_split():
+    budget = deck_module.SLIDE_LINES
+    item = "- " + ONE_PARAGRAPH
+    pages = deck_module.slide_pages(item, budget)
+    assert len(pages) >= 2 and pages[0].startswith("- Sentence 1 ")
+    assert all(" ".join(pages).count(s) == 1 for s in SENTENCES)
+
+    code = "```\n" + "\n".join(f"step {i}" for i in range(1, 41)) + "\n```"
+    pages = deck_module.slide_pages(code, budget)
+    assert len(pages) >= 2
+    for page in pages:
+        assert page.startswith("```\n") and page.endswith("\n```"), page
+    steps = "\n".join(pages)
+    assert all(steps.count(f"step {i}\n") == 1 for i in range(1, 41))
+
+    table = "| Feature | Outcome |\n| --- | --- |\n| Saved carts | " + ONE_PARAGRAPH + " |"
+    pages = deck_module.slide_pages(table, budget)
+    assert len(pages) >= 2
+    for page in pages:
+        assert page.startswith("| Feature | Outcome |\n| --- | --- |\n"), page
+    assert all(" ".join(pages).count(s) == 1 for s in SENTENCES)
+
+
+async def test_e9_a_paragraph_longer_than_a_slide_stays_above_the_pptx_footer(client, tenant_id):
+    h = await _token(tenant_id, "approver")
+    assert (await _import(client, h, _paragraph_draft())).status_code == 201
+    deck = (await client.get(f"{BASE}/deck", headers=h)).json()
+    risks = [s for s in deck["slides"] if s["heading"].startswith("Top risks")]
+    assert len(risks) >= 2, [s["heading"] for s in deck["slides"]]
+    shown = " ".join(_visible(s["html"]) for s in risks)
+    for i, sentence in enumerate(SENTENCES, start=1):
+        assert shown.count(sentence) == 1, i
+
+    resp = await client.get(f"{BASE}/export?layer=deck&format=pptx", headers=h)
+    prs = Presentation(io.BytesIO(resp.content))
+    pptx_text = " ".join(t for ts in _pptx_texts(resp.content) for t in ts)
+    for i, sentence in enumerate(SENTENCES, start=1):
+        assert pptx_text.count(sentence) == 1, i
+    for n, slide in enumerate(prs.slides, start=1):
+        for sh in slide.shapes:
+            if sh.top < pptx_module.FOOTER_TOP:
+                assert sh.top + sh.height <= pptx_module.FOOTER_TOP, (n, sh.name)
+
+
+def test_e11_a_date_never_wraps_between_its_parts():
+    assert render_module.days_in_words("needed by 2026-11-15.") == (
+        f"needed by Nov{NBSP}15,{NBSP}2026."
+    )
+
+
+async def test_e11_dates_on_slides_and_in_the_pptx_hold_together(client, long_doc):
+    deck = (await client.get(f"{BASE}/deck", headers=long_doc)).json()
+    html = " ".join(s["html"] for s in deck["slides"])
+    assert f"needed by Nov{NBSP}1,{NBSP}2026" in html
+    assert "Nov 1, 2026" not in html
+    assert f"Oct{NBSP}16,{NBSP}2026" in deck["as_of"]
+    assert re.search(r"Imported [A-Z][a-z]{2}\u00a0\d{1,2},\u00a0\d{4}, ", deck["banner"]), deck[
+        "banner"
+    ]
+    resp = await client.get(f"{BASE}/export?layer=deck&format=pptx", headers=long_doc)
+    pptx_text = " ".join(t for ts in _pptx_texts(resp.content) for t in ts)
+    assert f"needed by Nov{NBSP}1,{NBSP}2026" in pptx_text
+    resp = await client.get(f"{BASE}/export?layer=brief&format=html", headers=long_doc)
+    assert f"Nov{NBSP}1,{NBSP}2026" in resp.text
+
+
+def test_e6_a_freeform_snapshot_is_not_doubled():
+    for text in ("sources as of the Oct 16 pull", "Sources as of the Oct 16 pull"):
+        assert render_module.snapshot_in_words(text, "UTC") == "the Oct 16 pull"
+    assert render_module.snapshot_in_words("as of the Oct 16 pull", "UTC") == "the Oct 16 pull"
+
+
+def test_e8_a_continuation_heading_fits_its_box():
+    width = pptx_module.WIDTH - 2 * pptx_module.MARGIN
+    heading = LONG_TITLE + " (2 of 3)"
+    size, height = pptx_module.heading_fit(heading, width)
+    assert size < 28
+    assert _lines(heading, size, width) * Pt(size * 1.2) <= height
+    assert pptx_module.HEADING_TOP + height <= pptx_module.BODY_TOP
+
+
+async def test_e8_a_long_section_title_in_the_pptx_ends_above_the_body(client, tenant_id):
+    h = await _token(tenant_id, "approver")
+    md = _draft().replace("## Top risks {#top-risks}", f"## Top risks: {LONG_TITLE} {{#top-risks}}")
+    assert (await _import(client, h, md)).status_code == 201
+    resp = await client.get(f"{BASE}/export?layer=deck&format=pptx", headers=h)
+    prs = Presentation(io.BytesIO(resp.content))
+    seen = 0
+    for slide in prs.slides:
+        for sh in slide.shapes:
+            if sh.has_text_frame and sh.text_frame.text.startswith("Top risks: "):
+                seen += 1
+                size = sh.text_frame.paragraphs[0].runs[0].font.size.pt
+                text = sh.text_frame.text
+                assert _lines(text, size, sh.width) * Pt(size * 1.2) <= sh.height, text
+                assert sh.top + sh.height <= pptx_module.BODY_TOP, text
+    assert seen >= 2
+
+
+async def test_e15_present_mode_without_a_brief_does_not_say_export(client, tenant_id):
+    h = await _token(tenant_id, "approver")
+    assert (await _import(client, h, DETAIL_ONLY, "notes")).status_code == 201
+    resp = await client.get("/v1/documents/notes/versions/1/deck", headers=h)
+    assert resp.status_code == 422
+    detail = resp.json()["detail"]
+    assert "export" not in detail.lower()
+    assert detail == "Version 1 of Notes has no brief to present: open the full PRD instead."
