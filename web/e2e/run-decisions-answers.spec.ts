@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "./test";
 
+import { ENG_CHECK_RUN } from "../lib/api/mock/runs";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
@@ -49,6 +50,9 @@ test("the run page lists the answered questions under the Engineering review sto
   const section = page.getByRole("complementary", { name: "Run" }).filter({ visible: true }).getByTestId("run-decisions");
   const eng = section.getByTestId("run-decision").filter({ hasText: "Engineering review was approved by" });
   await expect(eng).toHaveCount(1);
+  // Who clicked Approve is who decided: the engineering lead signed in, never the owner.
+  await expect(eng).toContainText("Engineering review was approved by Theo Brandt");
+  await expect(eng).not.toContainText("Avery Stone");
   const answers = eng.getByRole("list", { name: "Answered at Engineering review" }).getByTestId("run-decision-answer");
   await expect(answers).toHaveCount(2);
   const when = String.raw`[A-Z][a-z]{2} \d{1,2}(, \d{4})?, \d{1,2}:\d{2} [AP]M`;
@@ -94,4 +98,24 @@ test("a card answered at the feature set shows under that stop with the feature'
     /^Bulk edit: Who edits addresses in bulk: shop staff, or the shoppers themselves\? → Staff and shoppers · /,
   );
   await expect(section).not.toContainText("bulk-edit");
+});
+
+/*
+ * Test card: protects=an answer an approved Engineering check recorded by its question's id only (no question text)
+ * still shows under that stop, with the feature's own question, as the API reads it; fails_when=the answer is
+ * dropped from the run's Decisions; no_claim=answers whose question the feature no longer has.
+ */
+test("an answer recorded by its question's id shows the feature's question", async ({ page }) => {
+  await withScenario(page, "eng-check-answered-by-id");
+  await login(page, "approver@example.com");
+  await page.goto(`/runs/${ENG_CHECK_RUN}`);
+
+  const section = page.getByRole("complementary", { name: "Run" }).filter({ visible: true }).getByTestId("run-decisions");
+  const eng = section.getByTestId("run-decision").filter({ hasText: "Engineering review was approved by Theo Brandt" });
+  await expect(eng).toHaveCount(1);
+  const answers = eng.getByRole("list", { name: "Answered at Engineering review" }).getByTestId("run-decision-answer");
+  await expect(answers).toHaveCount(1);
+  await expect(answers.nth(0)).toHaveText(
+    /^Guided setup: Does the payment sandbox take test orders without a live account\? → Yes, the sandbox takes test orders\. · Theo Brandt · Oct 17/,
+  );
 });
