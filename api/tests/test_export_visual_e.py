@@ -449,7 +449,7 @@ def test_r3_an_indented_code_block_is_one_line():
 def test_r3_every_fence_is_one_line_and_never_joins_a_paragraph():
     out = deck_module.code_left_out(MIXED, HREF)
     assert _code_lines(out) == [
-        "Code: 3 lines, in the full PRD",
+        "Code: 2 lines, in the full PRD",
         "Code: 1 line, in the full PRD",
     ], out
     assert "run the check" not in out and "make carts" not in out and "```" not in out

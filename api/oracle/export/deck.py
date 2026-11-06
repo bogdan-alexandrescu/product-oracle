@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
 
+from markdown_it import MarkdownIt
 from markupsafe import Markup, escape
 
 from oracle import company_time
@@ -462,27 +463,48 @@ CODE_LINE = "Code: {n} {lines}, in the full PRD"
 _CODE_LINK = re.compile(r'<a href="[^"]*">(Code: \d+ lines?, in the full PRD)</a>')
 
 
+# The parser the exports render with: code blocks are found as they are rendered.
+_CODE_MD = MarkdownIt("commonmark", {"html": False}).enable(["table", "strikethrough"])
+_CODE_INDENT = re.compile(r"^[ \t>]*")
+
+
+def _blank(line: str) -> bool:
+    return not line.strip(" \t>")
+
+
 def code_left_out(body: str, href: str) -> str:
-    """``body`` with each fenced code block as one line, "Code: 40 lines, in the full PRD",
-    a link to ``href`` (that place in the full PRD): a deck shows no code (owner, Nov 5),
-    so a long block is never cut into continuation slides or left as a blank slide."""
-    lines = body.splitlines()
+    """``body`` with each code block (fenced or indented, as markdown-it finds it) as one
+    line, "Code: 40 lines, in the full PRD", a link to ``href`` (that place in the full
+    PRD), in a paragraph of its own: a deck shows no code (owner, Nov 5), so a long block is
+    never cut into continuation slides or left as a blank slide. An empty block is dropped."""
+    lines = body.replace("\r\n", "\n").split("\n")
     out: list[str] = []
     i = 0
-    while i < len(lines):
-        m = _FENCE.match(lines[i])
-        if not m:
-            out.append(lines[i])
-            i += 1
+    for t in _CODE_MD.parse(body):
+        if t.type not in ("fence", "code_block") or not t.map or t.map[0] < i:
             continue
-        j = i + 1
-        while j < len(lines) and not _FENCE.match(lines[j]):
-            j += 1
-        n = j - i - 1
-        indent = lines[i][: len(lines[i]) - len(lines[i].lstrip())]
-        text = CODE_LINE.format(n=n, lines="line" if n == 1 else "lines")
-        out.append(f"{indent}[{text}]({href})")
-        i = j + 1
+        start, end = t.map
+        out += lines[i:start]
+        first = lines[start]
+        if t.type == "fence":
+            prefix = first[: first.index(t.markup)] if t.markup in first else ""
+        else:
+            prefix = _CODE_INDENT.match(first).group(0)
+            prefix = prefix[:-4] if prefix.endswith("    ") else prefix.removesuffix("\t")
+        gap = prefix.rstrip()
+        n = len(t.content.splitlines())
+        after = end < len(lines) and not _blank(lines[end])
+        if n:
+            if out and not _blank(out[-1]):
+                out.append(gap)
+            text = CODE_LINE.format(n=n, lines="line" if n == 1 else "lines")
+            out.append(f"{prefix}[{text}]({href})")
+            if after:
+                out.append(gap)
+        elif out and not _blank(out[-1]) and after:
+            out.append(gap)
+        i = end
+    out += lines[i:]
     return "\n".join(out)
 
 

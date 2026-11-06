@@ -72,7 +72,7 @@ test("every kind of code block is one line, an empty one none", async ({ page })
   const links = body.getByRole("link", { name: /^Code: \d+ lines?, in the full PRD$/ });
   await expect(links).toHaveText([
     "Code: 40 lines, in the full PRD",
-    "Code: 3 lines, in the full PRD",
+    "Code: 2 lines, in the full PRD",
     "Code: 1 line, in the full PRD",
   ]);
   for (const link of await links.all()) {
