@@ -42271,6 +42271,18 @@ export interface components {
              */
             depends_keys: string[];
             /**
+             * Depends Key Of
+             * @default {}
+             */
+            depends_key_of: {
+                [key: string]: string;
+            };
+            /**
+             * Suggested Depends
+             * @default []
+             */
+            suggested_depends: string[];
+            /**
              * Can Decide
              * @default false
              */
