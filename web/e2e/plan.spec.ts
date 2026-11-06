@@ -73,13 +73,13 @@ test("the goals band shows the same goal tags and distances to go as Home", asyn
   expect(plan.length).toBeGreaterThan(0);
 });
 
-// protects = the PRD cards' stage lines, by who looks; the waiting card first for whoever may
-// decide it; more than six PRDs end in "+N more"; fails_when = an approver is told the run
+// protects = the PRD cards' stage lines, by who looks; the cards in the company PRD order
+// (prd-order: Usage alerts first), the waiting card keeping its mark; more than six PRDs end in "+N more"; fails_when = an approver is told the run
 // waits for someone else, or a viewer that it waits for them; no_claim = the stage rules
 // (api/tests/test_plan.py test_prd_stage).
 test("PRD cards: stage lines say who the run waits for", async ({ page }) => {
   await openPlan(page);
-  await expect(page.getByTestId("plan-prd-card").first()).toContainText("Saved carts PRD");
+  await expect(page.getByTestId("plan-prd-card").first()).toContainText("Usage alerts PRD");
   await expect(card(page, "Saved carts PRD").getByTestId("plan-prd-stage")).toHaveText("Feature set · waiting for you");
   await expect(card(page, "Saved carts PRD").getByTestId("plan-prd-figure")).toHaveText("9 features");
   await expect(card(page, "Usage alerts PRD").getByTestId("plan-prd-stage")).toHaveText("Approved v1");
