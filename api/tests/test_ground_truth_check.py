@@ -12,9 +12,14 @@ Test cards (protects / fails_when / no_claim):
   the roadmap), the right fixes, counts per kind, and none on the item and feature that
   keep the rules; fails_when=a kind is missed, miscounted or a clean entry is flagged;
   no_claim=the web, which a later lane draws.
-- test_an_item_on_a_proposed_feature_is_confirmed: protects=a roadmap item linked to a
-  feature a run only proposed offers Confirm it (that feature) and Link to a feature, not
-  Add to Ground Truth; fails_when=it offers to add a feature that already exists.
+- test_only_confirmed_features_count: protects=the owner's answer (Nov 5): an item linked
+  to a feature a run proposed is "Not in the Ground Truth" with the fixes Confirm it (the
+  feature) and Link to a feature, never Add to Ground Truth; once an approver confirms the
+  feature, the flag is gone; fails_when=a proposed feature counts, or its item offers no
+  Confirm it.
+- test_each_fix_has_its_words: protects=every fix carries the button's plain words (Add to
+  Ground Truth, Link to a feature, Confirm it, Give it a code, Pick a goal, Take it off the
+  roadmap); fails_when=a fix has no words or the wrong ones.
 - test_words_carry_no_ids: protects=each flag's words are one short plain sentence with no
   id or key; fails_when=a uuid, slug or code shows in the words.
 - test_anyone_who_reads_the_roadmap_reads_it: protects=a viewer reads the check; no
@@ -149,6 +154,8 @@ async def test_each_kind_is_flagged(client):
     assert _fixes(b) == [("add_to_ground_truth", items["b"]), ("link_to_feature", items["b"])]
     # Linked to a feature a run only proposed: not in the Ground Truth yet.
     assert unlinked[items["d"]]["feature"]["id"] == feats["proposed"]
+    assert _fixes(unlinked[items["d"]]) == [("confirm_feature", feats["proposed"]),
+                                            ("link_to_feature", items["d"])]  # fmt: skip
 
     slices = _of(out, "slice_parent_missing")
     assert sorted(f["item"]["code"] for f in slices) == ["F-15a", "F-15b"]
@@ -194,12 +201,42 @@ async def test_each_kind_is_flagged(client):
     assert out["total"] == 9 == len(out["flags"])
 
 
-async def test_an_item_on_a_proposed_feature_is_confirmed(client):
+async def test_only_confirmed_features_count(client):
+    w = await world()
+    d, proposed = w["items"]["d"], w["features"]["proposed"]
+    flag = next(f for f in _of(await _check(client, w["ctx"]), "unlinked_item")
+                if f["item"]["id"] == d)  # fmt: skip
+    assert flag["words"] == "This roadmap item is not a feature in the Ground Truth."
+    assert flag["feature"] == {"id": proposed, "code": None, "name": "Import history 2"}
+    assert [x["action"] for x in flag["fixes"]] == ["confirm_feature", "link_to_feature"]
+    # An approver confirms it: the item now keeps the rules.
+    async with tenant_session(w["ctx"].tenant_id) as s:
+        (await s.get(Entity, uuid.UUID(proposed))).status = "confirmed"
+        await s.commit()
+    out = await _check(client, w["ctx"])
+    assert [f["item"]["id"] for f in _of(out, "unlinked_item")] == [w["items"]["b"]]
+    assert all((f.get("item") or {}).get("id") != d for f in out["flags"])
+
+
+FIX_WORDS = {
+    "add_to_ground_truth": "Add to Ground Truth",
+    "link_to_feature": "Link to a feature",
+    "confirm_feature": "Confirm it",
+    "give_code": "Give it a code",
+    "pick_goal": "Pick a goal",
+    "take_off_roadmap": "Take it off the roadmap",
+}
+
+
+async def test_each_fix_has_its_words(client):
     w = await world()
     out = await _check(client, w["ctx"])
-    d = next(f for f in _of(out, "unlinked_item") if f["item"]["id"] == w["items"]["d"])
-    assert _fixes(d) == [("confirm_feature", w["features"]["proposed"]),
-                         ("link_to_feature", w["items"]["d"])]  # fmt: skip
+    seen = set()
+    for f in out["flags"]:
+        for x in f["fixes"]:
+            assert x["words"] == FIX_WORDS[x["action"]], x
+            seen.add(x["action"])
+    assert seen == set(FIX_WORDS)
 
 
 async def test_words_carry_no_ids(client):

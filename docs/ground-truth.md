@@ -24,6 +24,9 @@ from.
 - People edit it in the UI. A delete goes to Trash, from where it can be restored.
 - Runs only propose changes. An approver confirms or rejects each one. Until then a run's
   entry is a proposal, not part of the Ground Truth.
+- Only confirmed features are in the Ground Truth (the owner, Nov 5). A roadmap item linked
+  to a feature a run proposed but no approver confirmed is flagged **Not in the Ground
+  Truth**, with the fixes **Confirm it** and **Link to a feature**.
 
 ## Running today
 
@@ -57,21 +60,25 @@ The owner's pick: anything that breaks these rules is **allowed but flagged**. A
 never refused for it.
 
 A flagged item shows as **Not in the Ground Truth**, with the fixes **Add to Ground Truth**
-and **Link to a feature** (or the one fix its kind needs). Home and the Ground Truth page
+and **Link to a feature** (**Confirm it** and **Link to a feature** when its feature is only
+proposed), or the one fix its kind needs. Home and the Ground Truth page
 count the flags, and each count leads to the flagged items.
 
-The Ground Truth check lists every flag. Its kinds:
+The Ground Truth check lists every flag. Its six kinds, and the fixes each offers (the
+check's `action`, with the button's words):
 
 | Kind | What it means | Fixes |
 | --- | --- | --- |
-| `unlinked_item` | A roadmap item linked to no Ground Truth feature (none, or one a run only proposed) | Add to Ground Truth (Confirm it, for one a run only proposed), Link to a feature |
+| `unlinked_item` | A roadmap item linked to no feature | Add to Ground Truth (`add_to_ground_truth`), Link to a feature (`link_to_feature`) |
+| `unlinked_item` | A roadmap item linked to a feature a run proposed but no approver confirmed | Confirm it (`confirm_feature`), Link to a feature (`link_to_feature`) |
 | `slice_parent_missing` | A slice (F-15a) whose feature is not in the Ground Truth | Add to Ground Truth, Link to a feature |
 | `prd_feature_missing` | A feature of a PRD's approved version that is not in the Ground Truth | Add to Ground Truth, Link to a feature |
-| `no_code` | A Ground Truth feature with no F-code | Give it a code |
-| `no_goal` | A Ground Truth feature that serves no goal | Pick a goal |
-| `runs_today_on_roadmap` | A feature that runs today but is still on the roadmap | Take it off the roadmap |
+| `no_code` | A Ground Truth feature with no F-code | Give it a code (`give_code`) |
+| `no_goal` | A Ground Truth feature that serves no goal | Pick a goal (`pick_goal`) |
+| `runs_today_on_roadmap` | A feature that runs today but is still on the roadmap | Take it off the roadmap (`take_off_roadmap`) |
 
-Each flag says what is wrong in one short plain sentence, with no ids.
+Each flag says what is wrong in one short plain sentence, with no ids; each fix carries its
+button's words.
 
 "The roadmap" here is what every reader is shown: the shown version of the company roadmap
 (each company-visible roadmap while there is no company roadmap), without cut, shipped,

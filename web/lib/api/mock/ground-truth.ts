@@ -33,6 +33,16 @@ const WORDS: Record<Kind, string> = {
   runs_today_on_roadmap: "This feature runs today but is still on the roadmap.",
 };
 
+/** Each fix's button, as the API's FIX_WORDS. */
+const FIX_WORDS: Record<Action, string> = {
+  add_to_ground_truth: "Add to Ground Truth",
+  link_to_feature: "Link to a feature",
+  confirm_feature: "Confirm it",
+  give_code: "Give it a code",
+  pick_goal: "Pick a goal",
+  take_off_roadmap: "Take it off the roadmap",
+};
+
 const ROADMAP_SLUG = "alerts-roadmap";
 const ROADMAP = { id: roadmapId(ROADMAP_SLUG), title: "Alerts roadmap" };
 const PRD = { id: stableUuid("ground-truth/prd/scale"), title: "Scale" };
@@ -84,7 +94,7 @@ const flag = (kind: Kind, fixes: [Action, string][], rest: Partial<Flag>): Flag 
   feature: null,
   where: { roadmap: null, prd: null },
   words: WORDS[kind],
-  fixes: fixes.map(([action, target]) => ({ action, target })),
+  fixes: fixes.map(([action, target]) => ({ action, target, words: FIX_WORDS[action] })),
   ...rest,
 });
 

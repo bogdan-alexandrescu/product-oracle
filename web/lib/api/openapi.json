@@ -82131,6 +82131,7 @@
             "enum": [
               "add_to_ground_truth",
               "link_to_feature",
+              "confirm_feature",
               "give_code",
               "pick_goal",
               "take_off_roadmap",
@@ -82141,15 +82142,20 @@
           "target": {
             "type": "string",
             "title": "Target"
+          },
+          "words": {
+            "type": "string",
+            "title": "Words"
           }
         },
         "type": "object",
         "required": [
           "action",
-          "target"
+          "target",
+          "words"
         ],
         "title": "GroundTruthFix",
-        "description": "A fix a person makes in the UI. ``target``: the item's or feature's id, or for a PRD's\nfeature or slice the PRD feature's code (with ``where.prd``)."
+        "description": "A fix a person makes in the UI. ``target``: the item's or feature's id, or for a PRD's\nfeature or slice the PRD feature's code (with ``where.prd``); for ``confirm_feature`` the\nproposed feature's id. ``words``: the button's plain words (\"Confirm it\")."
       },
       "GroundTruthFlag": {
         "properties": {
