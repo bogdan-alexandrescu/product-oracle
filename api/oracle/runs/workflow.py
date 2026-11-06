@@ -176,6 +176,11 @@ def code_name_trouble(warnings: list[str]) -> str:
         parts.append("uses codes without their names")
     if "codes_not_listed" in warnings:
         parts.append("writes three or more codes in a row instead of a list")
+    # PRD source words (oracle.docs.source_words).
+    if "source_not_named" in warnings:
+        parts.append("lists sources by key, path or tag instead of their titles")
+    if "issue_number" in warnings:
+        parts.append("names an issue by its number")
     # roadmap-draft-wording (oracle.roadmap.draft_words).
     if "queue_said_as_estimate" in warnings:
         parts.append("says an end date comes from the item's own estimate, not its place in "

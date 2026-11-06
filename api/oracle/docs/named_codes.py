@@ -17,8 +17,12 @@ from oracle.docs.schemas import VersionWarning
 
 # A code: one to three capitals, a dash, digits (F-28, REQ-4, D-12), one capital and
 # digits without a dash (G1 a goal, R1 a requirement, M1 a milestone), or one capital, a
-# dash and a capital with optional digits (G-B, G-A1: lettered goals).
-_CODE = re.compile(r"(?<![\w-])([A-Z]{1,3}-\d{1,5}|[A-Z]\d{1,4}|[A-Z]-[A-Z]\d{0,3})(?![\w-])")
+# dash and a capital with optional digits (G-B, G-A1: lettered goals); a slice's small
+# letter after the digits (F-25b) and a key result (KR 1.1, KR-2) too.
+_CODE = re.compile(
+    r"(?<![\w-])(KR[ -]?\d{1,2}(?:\.\d{1,2})?|[A-Z]{1,3}-\d{1,5}[a-z]?|[A-Z]\d{1,4}"
+    r"|[A-Z]-[A-Z]\d{0,3})(?![\w-])"
+)
 # Standards, quarters, halves and versions that look like codes and are not ones.
 _NOT_CODES = {"UTF", "SHA", "ISO", "MD", "TLS", "SSL", "RFC", "Q", "H", "V"}
 # Lettered pairs that are words, not codes ("an A-B test", "the X-Y axis").

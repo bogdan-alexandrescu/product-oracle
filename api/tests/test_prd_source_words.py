@@ -52,7 +52,7 @@ def test_the_prd_writer_is_told_to_list_sources_by_title_and_name_issues_and_cod
     for never in ("citation key", "file path", "file name", "tag"):
         assert never in words, never
     assert "issue by what it is" in words
-    assert "with its name at its first use" in words and "tables" in words
+    assert "with its name at its first use" in words and "table" in words
 
 
 def test_the_prd_template_shapes_sources_by_title_not_by_id():
@@ -73,7 +73,7 @@ def test_clean_sources_raise_nothing():
         "- Alerting design notes (GitHub, Oct 2)",
         "- Activation (G-A1): 40% of teams plan together weekly",
     )
-    assert source_words.check(parse_draft(md).sections) == []
+    assert source_words.check(parse_draft(md).sections, md) == []
 
 
 def test_a_citation_key_a_file_path_and_a_tag_in_sources_are_flagged_with_their_line():
@@ -83,7 +83,7 @@ def test_a_citation_key_a_file_path_and_a_tag_in_sources_are_flagged_with_their_
         "- [BE] Billing export plan",
         "- Calendar survey (web, as of Sep 30)",
     )
-    [warning] = source_words.check(parse_draft(md).sections)
+    [warning] = source_words.check(parse_draft(md).sections, md)
     assert warning.code == "source_not_named"
     assert warning.section_keys == ["sources"]
     message = warning.message
@@ -113,7 +113,7 @@ def test_a_code_without_its_name_in_sources_or_a_data_points_table_is_flagged():
         "- KR 1.1 rose to 40% by Oct 31",
         "- F-25b ships after the beta",
     )
-    warnings = source_words.check(parse_draft(md).sections)
+    warnings = source_words.check(parse_draft(md).sections, md)
     [warning] = warnings
     assert warning.code == "source_not_named"
     for code, text in (("G-A1", "| 40% |"), ("KR 1.1", "KR 1.1 rose"), ("F-25b", "F-25b ships")):
@@ -122,7 +122,7 @@ def test_a_code_without_its_name_in_sources_or_a_data_points_table_is_flagged():
 
 def test_an_issue_named_by_its_number_in_the_body_is_flagged_with_its_line():
     md = replace(DRAFT, "Teams miss shared deadlines.", "Teams miss shared deadlines (be#1357).")
-    [warning] = source_words.check(parse_draft(md).sections)
+    [warning] = source_words.check(parse_draft(md).sections, md)
     assert warning.code == "issue_number"
     assert warning.section_keys == ["problem"]
     assert f"Problem, line {_line_of(md, 'be#1357')}" in warning.message
@@ -139,7 +139,7 @@ def test_letter_suffixed_and_key_result_codes_need_names_in_the_body():
 
 def test_a_prd_draft_runs_the_source_check_and_sends_it_back():
     md = _sources("- c7, github: example-org/web docs/alerting.md")
-    codes = [w.code for w in draft_checks.run_warnings("prd", parse_draft(md).sections)]
+    codes = [w.code for w in draft_checks.run_warnings("prd", parse_draft(md).sections, md)]
     assert "source_not_named" in codes
     assert set(source_words.CODES) <= set(draft_checks.SENT_BACK)
     lead = workflow.code_name_trouble(["source_not_named", "issue_number"])

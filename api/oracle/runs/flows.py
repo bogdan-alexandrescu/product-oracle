@@ -408,6 +408,17 @@ DECLINED_LINE = (
     "A request the company said no to (state disqualified) is not scope unless a person "
     "reopens it; cite its decision when it comes up."
 )
+# PRD source words (oracle.docs.source_words checks the draft): what a person reads in a
+# PRD's Sources and body. Only the PRD writer's task: the roadmap's prompts are unchanged.
+PRD_SOURCE_WORDS = (
+    " In the Sources and data points section, list each source by its title in plain "
+    'words, with its kind and date ("Alerting design notes (GitHub, Oct 2)"): never a '
+    "citation key such as c7, a file path, a file name or a tag such as [BE]; a data "
+    "point names the source it came from by its title too. In the body, name an issue by "
+    'what it is ("the slow export bug"), never by its number. Write every code with its '
+    'name at its first use in each section and in every table row ("Grow activation '
+    '(G-A1)", "KR 1.1 Weekly planners"), Sources and Data points included.'
+)
 # Stated in every task that writes a draft (owner, 2026-10-20), when the task is read
 # (:meth:`SegmentDef.task_for`).
 CITATION_CONTRACT = CITATION_CONTRACT_MARK
@@ -749,7 +760,8 @@ FLOWS: dict[str, FlowDef] = {
                     + " "
                     + CITATION_CONTRACT
                     + DECISIONS_TASK
-                    + UNKNOWN_IS_WORK_DRAFT,
+                    + UNKNOWN_IS_WORK_DRAFT
+                    + PRD_SOURCE_WORDS,
                     tools=(
                         "get_prd_scope",
                         "list_entities",

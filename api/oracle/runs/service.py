@@ -5577,7 +5577,7 @@ def _check_goal_trace(
     if not missing:
         return
     imported["warnings"] = [*imported.get("warnings", []), "goal_trace_incomplete"]
-    named = ", ".join(f"{k} ({targets[k]})" for k in missing)
+    named = ", ".join(wording.named(targets[k], k) for k in missing)
     _note_art(
         art, f"The PRD's Goal trace leaves out target goal{'s' * (len(missing) > 1)}: {named}"
     )
