@@ -10,7 +10,7 @@ import { citationHref, formatDate, formatDay } from "@/lib/format";
 import { parseBlocks, plainText, type Inline } from "@/lib/markdown";
 import { mockName as displayName } from "./people";
 
-import { MOCK_SCENARIO_KEY, mockUuid, seeded, stableUuid } from "./ids";
+import { MOCK_SCENARIO_KEY, mockUuid, newCompany, seeded, stableUuid } from "./ids";
 import { addDecisionEntity, addDuplicateProposals, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, addStatusOverlapProposals, addThreeWayConflict, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, readMetricIntoGoal, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
 import { BLOCKER_NARROWED_SCENARIO, documentGate, narrowResolvedBlocker, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
@@ -6642,7 +6642,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     const mayMove = me.role === "approver" || me.role === "owner";
     // Every confirmed feature, as the API lists them: the Detailed Plan's traced features too
     // (after the Simple ones, so the seed's marks by rank stay as they are: new, nothing built).
-    const res = await routeCurrentState(db.current_state, [...rows, ...planFeatureRows()], mayMove, req, p, Date.now());
+    // A new company ("empty" scenario) has no goals or features yet (F-34).
+    const res = await routeCurrentState(db.current_state, [...rows, ...(newCompany() ? [] : planFeatureRows())], mayMove, req, p, Date.now());
     if (res) return res;
   }
   const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));

@@ -521,7 +521,7 @@ export function RunDetail({ id }: { id: string }) {
             </span>
           </Notice>
         )}
-        {run.status === "paused_overrun" && <OverrunHeld run={run} mayResume={can("resume_run")} />}
+        {run.status === "paused_overrun" && <OverrunHeld mayResume={can("resume_run")} mayCancel={mayManage("cancel_run") && WORKING.has(run.status)} />}
         {checked && (
           <Notice testId="tick-result">
             {!checked.lead && checked.text}
@@ -622,33 +622,20 @@ function limitText(run: RunOut): string | null {
 }
 
 /**
- * rirs-19: what Resume lets go on, beside it: "Spent $14.20, past its limit. Estimate $9.00,
- * limit $13.50 (150%). The PRD review is held until you resume it. …"
- * qa4-work-25: what Resume allows, in the shown numbers: "Resuming lets it spend up to $18.70 in
- * total, $4.50 more. Cancel run stops it."
+ * F-39: a run paused over budget in one short line, said to whoever reads it: an owner is told
+ * what they may do (Cancel only when they may cancel it); anyone else who can act. What Resume
+ * allows and the limit sit behind the Overrun (i) in the inspector.
  */
-function OverrunHeld({ run, mayResume }: { run: RunOut; mayResume: boolean }) {
-  const last = [...run.segments].reverse().find((s) => s.status === "succeeded");
-  const next =
-    last?.checkpoint && last.checkpoint_on && !run.checkpoints.some((c) => c.segment_seq === last.seq)
-      ? `The ${CHECKPOINT_LABEL[last.checkpoint]}`
-      : (() => {
-          const s = run.segments.find((x) => x.status === "pending");
-          return s ? `The next step, ${s.title},` : "The run";
-        })();
-  const who = mayResume ? "you resume it" : "an owner resumes it";
+function OverrunHeld({ mayResume, mayCancel }: { mayResume: boolean; mayCancel: boolean }) {
+  const next = mayResume ? (mayCancel ? "Resume or cancel it." : "Resume it to go on.") : "An owner can resume it.";
+  return <Notice testId="run-overrun-held">{`Paused: over budget. ${next}`}</Notice>;
+}
+
+/** qa4-work-25: what Resume allows, in the shown numbers: "Resuming lets it spend up to $18.70 in total, $4.50 more." */
+function resumeAllows(run: RunOut): string | null {
   // A resumed run may spend half its estimate more before it pauses again (the 1.5× rule).
-  const limit = limitText(run);
   const allowance = run.estimate_usd != null ? run.estimate_usd * 0.5 : null;
-  const more =
-    allowance != null
-      ? ` Resuming lets it spend up to ${usd(run.spent_usd + allowance)} in total, ${usd(allowance)} more. Cancel run stops it.`
-      : "";
-  return (
-    <Notice testId="run-overrun-held">
-      {`Spent ${usd(run.spent_usd)}${limit ? `, past its limit. ${limit}` : ""}. ${next} is held until ${who}.${more}`}
-    </Notice>
-  );
+  return allowance != null ? `Resuming lets it spend up to ${usd(run.spent_usd + allowance)} in total, ${usd(allowance)} more.` : null;
 }
 
 /** ``lead``: this run could not be checked, so the result leads with it (``unchecked`` first, then ``text``). */
@@ -750,6 +737,11 @@ function RunInspector({ run }: { run: RunOut }) {
               {overrun && (
                 <span className="block">
                   Spend passed {usd(run.overrun_ceiling_usd)} (1.5× the estimate). An owner resumes the run or cancels it.
+                </span>
+              )}
+              {overrun && resumeAllows(run) && (
+                <span className="block" data-testid="run-resume-allows">
+                  {resumeAllows(run)}
                 </span>
               )}
               {run.overrun_ceiling_usd != null && <span className="block">Pauses above {usd(run.overrun_ceiling_usd)}.</span>}
@@ -907,12 +899,13 @@ const CP_KIND: Record<CheckpointOut["status"], ChipKind> = {
 };
 /** A checkpoint name in full: it wraps to a second line rather than truncating. */
 const WRAP_CHIP = "h-auto! min-h-[26px] py-1 leading-4! whitespace-normal! text-left max-[600px]:max-w-[9.5rem]";
-/** "45s", "12m", "1h 05m": a duration for a running agent. */
+/** "45s", "12m", "1h 05m", "20 days" (F-78: over 48 hours in days): a duration for a running agent. */
 function duration(ms: number): string {
   const sec = Math.max(0, Math.floor(ms / 1000));
   if (sec < 60) return `${sec}s`;
   const min = Math.floor(sec / 60);
   if (min < 60) return `${min}m`;
+  if (min >= 48 * 60) return `${Math.floor(min / 1440)} days`;
   return `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, "0")}m`;
 }
 
@@ -925,8 +918,12 @@ function lastWork(a: Schemas["SegmentAgent"], since: (at: string) => string): st
   if (!at) return "no sign of work yet";
   if (a.last_work === "proposals") return `last proposal ${since(at)} ago`;
   if (a.last_work === "event") return `last activity ${since(at)} ago`;
-  return `last heartbeat ${since(at)} ago`;
+  // F-78: "last update", not "heartbeat".
+  return `last update ${since(at)} ago`;
 }
+
+/** F-78: a running step with no news for longer than this may be stuck. */
+const STALE_MS = 24 * 3600_000;
 
 /** #258: a running segment's agents as Oracle last read them, and what it has spent so far. */
 function SegmentProgress({ segment: s }: { segment: SegmentOut }) {
@@ -938,6 +935,8 @@ function SegmentProgress({ segment: s }: { segment: SegmentOut }) {
   }, []);
   const since = (at: string) => duration(now - new Date(at).getTime());
   const roleName = useRoleNames();
+  // F-78: a running step not heard from in a day may be stuck: said, with its date.
+  const quiet = !!s.checked_at && now - new Date(s.checked_at).getTime() > STALE_MS;
   return (
     <div data-testid="segment-progress" className="space-y-1 text-text2">
       <p className="tnum">
@@ -951,6 +950,11 @@ function SegmentProgress({ segment: s }: { segment: SegmentOut }) {
         )}
         {s.checked_at ? `checked ${since(s.checked_at)} ago` : "Not checked yet: the agents' progress shows after the next check"}
       </p>
+      {quiet && s.checked_at && (
+        <p data-testid="segment-no-news" className="font-semibold text-warn">
+          No news since {formatDateTime(s.checked_at)}
+        </p>
+      )}
       {s.checked_at &&
         (s.agents.length > 0 ? (
           <ul className="space-y-0.5">

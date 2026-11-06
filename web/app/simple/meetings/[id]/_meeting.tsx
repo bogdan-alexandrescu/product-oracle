@@ -910,9 +910,9 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
             <ul aria-label="Decisions taken" className="space-y-1">
               {m.meeting_decisions.map((x) => (
                 <DecidedItem key={x.id} flow={x.flow}>
-                  <span>
-                    {/* qa4-simple-decide-39: the link is named by its code and its words. */}
-                    <Link className={`${LINK} ${PHONE_TAP} inline-flex items-center max-[600px]:min-w-11`} aria-label={`${code(x)} ${x.title}`} href={code(x).startsWith("D-") ? `/simple/decisions#d-${x.number}` : `/simple/decisions?meeting=${m.id}`}>{code(x)}</Link> {x.title} · {x.approver.name}
+                  {/* F-26: the decision by its name as the link, no code; a long line hangs under it. */}
+                  <span data-testid="decision-taken" className="min-w-0 pl-4 -indent-4">
+                    <Link className={`${LINK} max-[600px]:py-2.5`} href={code(x).startsWith("D-") ? `/simple/decisions#d-${x.number}` : `/simple/decisions?meeting=${m.id}`}>{x.title}</Link> · {x.approver.name}
                   </span>
                 </DecidedItem>
               ))}
@@ -944,8 +944,8 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
                   <li>Decisions page · posted</li>
                   <li>Each attendee&apos;s Inbox · posted</li>
                   {/* dod-delivery: each attendee's email and the Slack post, with Retry when one failed. */}
-                  <li>{d.email ? <DeliveryLine meetingId={m.id} what="email" words={emailWords(d)} canRetry={!!m.can.retry_delivery} reload={reload} testId="delivery-email" /> : "Email · not sent (not picked)"}</li>
-                  <li>{d.slack ? <DeliveryLine meetingId={m.id} what="slack" words={slackWords(d)} canRetry={!!m.can.retry_delivery} reload={reload} testId="delivery-slack" /> : "Slack · not posted (not picked)"}</li>
+                  <li>{d.email ? <DeliveryLine meetingId={m.id} what="email" words={emailWords(d)} canRetry={!!m.can.retry_delivery} reload={reload} testId="delivery-email" /> : "Email · not sent (not chosen for this meeting)"}</li>
+                  <li>{d.slack ? <DeliveryLine meetingId={m.id} what="slack" words={slackWords(d)} canRetry={!!m.can.retry_delivery} reload={reload} testId="delivery-slack" /> : "Slack · not sent (not chosen for this meeting)"}</li>
                 </ul>
                 <Link className="font-semibold text-accent-ink hover:underline" href={`/simple/decisions?meeting=${m.id}`}>Open the Decisions page</Link>
               </div>

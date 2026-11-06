@@ -266,8 +266,8 @@ export function GoalsPanel({
         <div data-testid="home-goals-empty" className="flex flex-wrap items-center gap-3 px-4 py-4">
           <span className="text-[15px] font-semibold text-text2">No goals yet</span>
           <InfoTip label="building the baseline" align="start">
-            Oracle reads your sources and proposes your goals; they show here once confirmed. You can also push a
-            baseline YAML with <code>oracle push</code>.
+            Oracle reads your sources and proposes your goals; they show here once confirmed. You can also send a
+            baseline file from the command line.
           </InfoTip>
           {/* qa-onboarding-10, -37, -14, -15: one baseline action on Home. While Set up shows the
               step, its row holds it (start, or open the build under way) and the card points there;

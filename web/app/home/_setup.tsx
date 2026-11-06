@@ -183,11 +183,12 @@ export function SetupPanel({ setup, onHide, busy, mine = {} }: { setup: Schemas[
               ) : (
                 <span aria-label="To do" role="img" className="size-6 flex-none rounded-full border-2 border-line-strong" />
               )}
-              <span className="min-w-0 truncate font-semibold" title={copy.label}>
+              {/* F-29: on a phone the name and its figure wrap, never cut to "Company domai…". */}
+              <span className="min-w-0 truncate font-semibold max-[600px]:whitespace-normal max-[600px]:[overflow-wrap:anywhere]" title={copy.label}>
                 {copy.label}
               </span>
               <span className="ml-auto flex min-w-0 items-center gap-2.5 max-[600px]:gap-2">
-                <span data-testid="setup-status" title={status} className="tnum min-w-0 truncate text-[15px] text-text2">
+                <span data-testid="setup-status" title={status} className="tnum min-w-0 truncate text-[15px] text-text2 max-[600px]:whitespace-normal max-[600px]:text-right max-[600px]:[overflow-wrap:anywhere]">
                   {status}
                 </span>
                 {action && (

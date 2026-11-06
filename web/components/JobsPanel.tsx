@@ -39,7 +39,17 @@ function accountName(job: LlmJob): string {
   return job.via?.startsWith("fallback") ? "Fallback (no pool account)" : "—";
 }
 
-function summary(job: LlmJob): string | null {
+/**
+ * F-35: a section by its name ("1. Problem"), as the version's outline names it, never its key;
+ * a section the version no longer has reads by its key in words ("Goal trace").
+ */
+export type SectionName = (key: string) => string;
+export const keyWords: SectionName = (key) => {
+  const words = key.replace(/[-_]+/g, " ").trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : key;
+};
+
+function summary(job: LlmJob, name: SectionName): string | null {
   const out = job.output as Record<string, unknown> | null;
   if (!out || job.status !== "succeeded") return null;
   if (job.kind === "review_comments") {
@@ -55,10 +65,10 @@ function summary(job: LlmJob): string | null {
     const n = Array.isArray(out.sections) ? out.sections.length : 0;
     return `Draft v${(job.version_number ?? 0) + 1} ready to review · ${n} section${n === 1 ? "" : "s"}`;
   }
-  return `Revision of #${job.section_key} ready to review`;
+  return `Revision of ${name(job.section_key ?? "")} is ready to review`;
 }
 
-function JobRow({ job, onChanged }: { job: LlmJob; onChanged: () => void }) {
+function JobRow({ job, onChanged, name }: { job: LlmJob; onChanged: () => void; name: SectionName }) {
   // #370: Retry and Cancel show to whoever may call them.
   const { can } = useMe();
   const retry = (job.status === "failed" || job.status === "cancelled") && can("retry_llm_job");
@@ -83,7 +93,7 @@ function JobRow({ job, onChanged }: { job: LlmJob; onChanged: () => void }) {
       setBusy(false);
     }
   };
-  const note = summary(job);
+  const note = summary(job, name);
   return (
     <li className="border-b border-line py-3 last:border-b-0" data-testid="llm-job" data-status={job.status}>
       <div className="flex flex-wrap items-center gap-2">
@@ -92,7 +102,7 @@ function JobRow({ job, onChanged }: { job: LlmJob; onChanged: () => void }) {
           {JOB_KIND_LABEL[job.kind]}
         </span>
         {job.version_number != null && <span className="font-mono text-[13px] text-text2">v{job.version_number}</span>}
-        {job.section_key && <span className="truncate font-mono text-[13px] text-text2">#{job.section_key}</span>}
+        {job.section_key && <span className="truncate text-[13px] text-text2">{name(job.section_key)}</span>}
         <span className="tnum ml-auto text-[13px] text-text2">{formatDateTime(job.created_at)}</span>
       </div>
       {note && <p className="mt-1 text-[15px] leading-[22px] text-text">{note}</p>}
@@ -212,7 +222,7 @@ function SettingsForm({ doc }: { doc: string }) {
 }
 
 /** Oracle's work on a document (History): its switches, run-now buttons, and each job with retry and cancel. */
-export function JobsPanel({ doc, version, refreshKey = 0 }: { doc: string; version?: number; refreshKey?: number }) {
+export function JobsPanel({ doc, version, refreshKey = 0, sectionName = keyWords }: { doc: string; version?: number; refreshKey?: number; sectionName?: SectionName }) {
   const { can } = useMe();
   // #370: the switches show only to whoever may change them; the run-now buttons likewise.
   const canSettings = can("put_llm_job_settings");
@@ -254,7 +264,7 @@ export function JobsPanel({ doc, version, refreshKey = 0 }: { doc: string; versi
       {q.data && q.data.length > 0 && (
         <ol className="flex flex-col" aria-label="Oracle's work">
           {q.data.map((j) => (
-            <JobRow key={j.id} job={j} onChanged={() => void q.reload()} />
+            <JobRow key={j.id} job={j} onChanged={() => void q.reload()} name={sectionName} />
           ))}
         </ol>
       )}

@@ -239,10 +239,12 @@ export default function SimpleHome() {
   // caller's (an owner's all, a commenter's own two, a viewer's none), until each is done.
   const setupQ = useQuery(k("setup"), () => (can("get_setup") ? unwrap(api.GET("/v1/setup")) : Promise.resolve(undefined)), { keepPrevious: true });
   const setup = can("get_setup") && setupOpen(setupQ.data) && !setupQ.data.hidden ? setupQ.data : null;
-  async function hideSetup() {
+  // F-28: a hidden Set up comes back from its chip, on Simple as on Detailed.
+  const setupHidden = can("get_setup") && setupOpen(setupQ.data) && setupQ.data.hidden ? setupQ.data : null;
+  async function hideSetup(hidden = true) {
     try {
-      await unwrap(api.PATCH("/v1/me/preferences", { body: { setup_hidden: true } }));
-      toast({ message: "Set up hidden. Detailed Home keeps it behind its Set up chip." });
+      await unwrap(api.PATCH("/v1/me/preferences", { body: { setup_hidden: hidden } }));
+      if (hidden) toast({ message: "Set up hidden" });
     } catch (e) {
       toast({ message: errorMessage(e) });
     }
@@ -640,6 +642,15 @@ export default function SimpleHome() {
       {/* qa-onboarding-6: an invited member's role welcome, in Simple too (dismissed in one mode, gone in both). */}
       <SimpleWelcome show={setupQ.data?.welcome === true} onDismissed={() => void setupQ.reload()} />
       {setupFirst && setup && (can("put_setting") || !setupQ.data?.welcome) && <SetupCard setup={setup} owner={can("put_setting")} onHide={() => void hideSetup()} />}
+      {setupHidden && tiles !== undefined && tiles.length === 0 && (
+        <div className="flex">
+          <button type="button" data-testid="home-setup-chip" className="simple-button simple-button-quiet tnum" onClick={() => void hideSetup(false)}>
+            Set up {setupHidden.done} of {setupHidden.total}
+          </button>
+        </div>
+      )}
+      {/* F-8: a Set up that failed to load says so, with Try again, never vanishes. */}
+      {can("get_setup") && setupQ.error && !setupQ.data && tiles !== undefined && tiles.length === 0 && <SetupFailed error={setupQ.error} onRetry={() => void setupQ.reload()} />}
 
       <section aria-label="Goals" data-testid="home-goals">
         {canOrder && !ordering && (tiles?.length ?? 0) > 1 && (
@@ -1236,7 +1247,8 @@ function SetupCard({ setup, owner, onHide }: { setup: Schemas["SetupOut"]; owner
                 )
               }
               title={
-                !st.done && href ? (
+                // F-27: a finished step opens too, to change it, as Detailed Home's Change does.
+                href ? (
                   <Link href={href} className="text-accent-ink hover:underline">
                     {copy.label}
                   </Link>
@@ -1249,6 +1261,22 @@ function SetupCard({ setup, owner, onHide }: { setup: Schemas["SetupOut"]; owner
           );
         })}
       </ul>
+    </HomeCard>
+  );
+}
+
+/** F-8: Set up that could not be read, in its own card with Try again (the rest of Home stays). */
+function SetupFailed({ error, onRetry }: { error: string; onRetry: () => void }) {
+  return (
+    <HomeCard id="setup" icon="check" title="Set up">
+      <div role="alert" data-testid="home-setup-failed" className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-surface2 px-4 py-3">
+        <span className="simple-small">
+          Couldn&apos;t load Set up. {error}
+        </span>
+        <button type="button" onClick={onRetry} className="simple-button">
+          Try again
+        </button>
+      </div>
     </HomeCard>
   );
 }

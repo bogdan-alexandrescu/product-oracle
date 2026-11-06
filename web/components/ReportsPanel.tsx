@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { usePolling } from "@/components/JobsPanel";
+import { keyWords, usePolling, type SectionName } from "@/components/JobsPanel";
 import { Button } from "@/components/ds";
 import { FeedbackStatusChip, JobStatusChip, TabBar } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
@@ -20,12 +20,15 @@ export function ReportsPanel({
   n,
   refreshKey,
   initialTab = "resolution",
+  sectionName = keyWords,
 }: {
   doc: string;
   n: number;
   refreshKey: number;
   /** "changes" opens on What changed (where applying a next draft lands, C1e). */
   initialTab?: Tab;
+  /** F-35: a section by its name, never its key. */
+  sectionName?: SectionName;
 }) {
   const { can } = useMe();
   const canAct = can("create_llm_job");
@@ -149,7 +152,7 @@ export function ReportsPanel({
               <li key={i.feedback_id} className="border-b border-line py-2.5 last:border-b-0">
                 <div className="flex items-center gap-2">
                   <FeedbackStatusChip status={i.status as FeedbackStatus} />
-                  {i.section_key && <span className="truncate font-mono text-[13px] text-text2">#{i.section_key}</span>}
+                  {i.section_key && <span className="truncate text-[13px] text-text2">{sectionName(i.section_key)}</span>}
                 </div>
                 <p className="mt-1 text-[15px] leading-[22px] text-text">{i.summary}</p>
                 {(i.explanation || i.resolution_note) && (

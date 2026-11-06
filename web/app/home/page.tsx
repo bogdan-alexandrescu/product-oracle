@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 
 import { ClaudeOffNotice } from "@/components/ClaudeOffNotice";
 import { Chip, Empty, Icon, InfoTip, LinkButton, Notice, Page, PageHeader, Panel, Split } from "@/components/ds";
+import { LoadError } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -249,6 +250,8 @@ export default function HomePage() {
         {setupQ.data?.welcome && capsReady && (
           <WelcomePanel onDismiss={dismissWelcome} busy={welcomeBusy} setup={setupQ.data} setupShown={!!setup && !setup.hidden} />
         )}
+        {/* F-8: a Set up that failed to load says so, with Try again, never vanishes. */}
+        {setupQ.error && !setupQ.data && <LoadError what="Set up" error={setupQ.error} onRetry={() => void setupQ.reload()} />}
         {setupError && (
           <Notice tone="error" testId="home-setup-error">
             {setupError}

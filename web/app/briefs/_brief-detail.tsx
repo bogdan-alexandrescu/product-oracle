@@ -3,10 +3,10 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { Chip, Icon, Page, PageHeader, Panel, type ChipKind } from "@/components/ds";
+import { Chip, Icon, LinkButton, NotFoundPanel, Page, PageHeader, Panel, type ChipKind } from "@/components/ds";
 import { DOCS_ONLY, FRESHNESS, approachParts, readerText, sizeText } from "@/components/tech-brief";
-import { ErrorNote, Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { Loading, LoadError } from "@/components/ui";
+import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
 
@@ -175,8 +175,15 @@ function Verdict({ b }: { b: TechBrief }) {
   );
 }
 
+/** F-11: a tech brief that is not there, in the app's one not-found pattern. */
+const BRIEF_MISSING = "This tech brief doesn't exist or was deleted.";
+
 export function BriefDetail({ id }: { id: string }) {
-  const q = useQuery(`tech-brief|${id}`, () => unwrap(api.GET("/v1/tech-briefs/{artifact_version_id}", { params: { path: { artifact_version_id: id } } })));
+  const q = useQuery(`tech-brief|${id}`, () =>
+    unwrap(api.GET("/v1/tech-briefs/{artifact_version_id}", { params: { path: { artifact_version_id: id } } })).catch((e) => {
+      throw e instanceof ApiError && e.status === 404 ? new ApiError(404, BRIEF_MISSING) : e;
+    }),
+  );
   const b = q.data;
   // qa-docs-36: the PRD by its title, and the features this one depends on by theirs.
   const slug = b?.prd.slug ?? "";
@@ -193,9 +200,30 @@ export function BriefDetail({ id }: { id: string }) {
   const prdVersion = written == null ? "" : latest != null && latest !== written ? ` v${latest} · written for v${written}` : ` v${written}`;
   const approach = b ? approachParts(readerText(b.approach, b.questions)) : null;
   const fresh = b ? FRESHNESS[b.freshness] : null;
+  if (!b && q.error === BRIEF_MISSING) {
+    return (
+      <NotFoundPanel
+        title="Tech brief not found"
+        icon="doc"
+        testId="brief-not-found"
+        actions={
+          <LinkButton href="/documents" variant="primary" icon="back">
+            Back to PRDs
+          </LinkButton>
+        }
+      >
+        <p>{BRIEF_MISSING}</p>
+      </NotFoundPanel>
+    );
+  }
   return (
     <Page>
-      {q.error && <ErrorNote>{q.error}</ErrorNote>}
+      {q.error && (
+        <>
+          <PageHeader title="Tech brief" />
+          <LoadError what="the tech brief" error={q.error} onRetry={() => void q.reload()} />
+        </>
+      )}
       {!b && !q.error && <Loading />}
       {b && fresh && (
         <>

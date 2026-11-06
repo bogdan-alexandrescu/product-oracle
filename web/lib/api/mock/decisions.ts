@@ -6,6 +6,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { mockSetting } from "./connections";
+import { newCompany } from "./ids";
 
 type DecisionOut = Schemas["DecisionOut"];
 type Summary = Schemas["DecisionSummary"];
@@ -163,6 +164,8 @@ function blank(ctx: DecisionsContext, db: DecisionsDb, fields: Partial<Row> & Pi
 
 /** The mock company's judgement calls: two wait on the approver (one proposal, one review due). */
 export function seedDecisions(ctx: DecisionsContext): DecisionsDb {
+  // A new company ("empty" scenario) has no decisions yet (F-34).
+  if (newCompany()) return { decisions: [], reviews: [] };
   const db: DecisionsDb = { decisions: [], reviews: [] };
   const by = (email: string) => ctx.members.find((m) => m.email === email)!.id;
   const owner = by("admin@example.com");
