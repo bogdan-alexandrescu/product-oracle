@@ -326,6 +326,8 @@ ORACLE_KNOBS = (
     # prd-reads-working-draft: which company roadmap the run read ("Company roadmap,
     # working draft (edited Nov 5, 2026, 11:40 PM PST)"; oracle.simple.roadmap_of_record).
     "roadmap_read",
+    # The roadmap each step read, by step name ({"prd_draft": "Company roadmap v7 ..."}).
+    "roadmap_read_by",
 )
 ITEMS_FILE = "roadmap_items.yaml"
 
@@ -3050,16 +3052,20 @@ async def _roadmap_lines(
         return []
     if kind != "prd":
         return []
-    # The draft is read by its own rule (oracle.simple.drafts.sees): a member-view run reads
-    # it when the person who started the run may see it (the owner always may), else the
-    # published version; Oracle's own runs read it.
-    reader = run.created_by if hidden is not None or run.created_by is not None else True
-    record = await roadmap_of_record.read(db, reader=reader)
+    # The draft is read by its own rule (oracle.simple.drafts.sees): the run reads it when
+    # the person who started the run may see it (the owner always may), else the published
+    # version; a run nobody started (Oracle's own) has nobody who may see it, so it reads
+    # the published version.
+    record = await roadmap_of_record.read(db, reader=run.created_by)
     if record is None:
         return []
-    if (run.knobs or {}).get("roadmap_read") != record.label:
-        run.knobs = {**(run.knobs or {}), "roadmap_read": record.label}
-    return roadmap_of_record.prompt_lines(record, run.document_id)
+    # Each step keeps the roadmap it read (``roadmap_read_by``); ``roadmap_read`` is the
+    # last step's, the one the run page shows.
+    knobs = dict(run.knobs or {})
+    by_step = {**(knobs.get("roadmap_read_by") or {}), segment: record.label}
+    if knobs.get("roadmap_read") != record.label or knobs.get("roadmap_read_by") != by_step:
+        run.knobs = {**knobs, "roadmap_read": record.label, "roadmap_read_by": by_step}
+    return roadmap_of_record.prompt_lines(record, run.document_id, hidden)
 
 
 async def _carried_lines(db: AsyncSession, run: Run, segment: str) -> list[str]:

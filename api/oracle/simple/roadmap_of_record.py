@@ -38,7 +38,8 @@ from oracle.simple.models import SimpleChange, SimpleDraft
 NAME = "Company roadmap"
 NOT_IN_GROUND_TRUTH = "Not in the Ground Truth"
 # The steps of a PRD's run that decide its features and write it.
-SEGMENTS = ("feature_set", "priority", "prd_draft", "next_draft")
+# The engineering steps read it too, so their dates start from the owner's.
+SEGMENTS = ("feature_set", "eng_review", "priority", "prd_draft", "eng_dates", "next_draft")
 FLOWS = ("baseline_to_prd", "feedback_loop")
 
 
@@ -72,6 +73,8 @@ class OfRecord:
     items: list[Item]
     # Items in Trash: (key, name).
     trashed: list[tuple[str, str]]
+    # The PRD each item in Trash belongs to, by key.
+    trashed_prd: dict[str, uuid.UUID | None] = field(default_factory=dict)
 
     def under(self, prd_id: uuid.UUID | None) -> list[Item]:
         return [i for i in self.items if prd_id is not None and i.prd_id == prd_id]
@@ -196,15 +199,17 @@ async def read(db: AsyncSession, *, reader: Any = True) -> OfRecord | None:
                 new=row.id in added,
             )
         )
-    trashed = sorted((await trash_items.trashed_names(db, doc.id)).items())
-    return OfRecord(doc.id, label, use_draft, items, trashed)
+    in_trash = {key: (title, prd) for key, title, prd in await trash_items.trashed_rows(db, doc.id)}
+    trashed = sorted((key, title) for key, (title, _) in in_trash.items())
+    trashed_prd = {key: prd for key, (_, prd) in in_trash.items()}
+    return OfRecord(doc.id, label, use_draft, items, trashed, trashed_prd)
 
 
 def _name(e) -> str:
     return f"{e.code} {e.row.title}" if e.code else e.row.title
 
 
-def _line(i: Item, *, own: bool) -> str:
+def _line(i: Item, *, own: bool, unseen: frozenset[str] = frozenset()) -> str:
     bits = [f"{_day(i.start)} to {_day(i.end)}" if i.start or i.end else "no dates"]
     if i.goal:
         bits.append(f"goal: {i.goal}")
@@ -213,8 +218,9 @@ def _line(i: Item, *, own: bool) -> str:
     status = {"done": "DONE (mark it done)", "cut": "cut (not now)", "draft": "draft"}.get(i.status)
     if status:
         bits.append(status)
-    if i.depends_on:
-        bits.append("depends on " + ", ".join(i.depends_on))
+    depends_on = [n for n in i.depends_on if n not in unseen]
+    if depends_on:
+        bits.append("depends on " + ", ".join(depends_on))
     else:
         bits.append("depends on nothing")
     if i.new and not i.code:
@@ -224,10 +230,32 @@ def _line(i: Item, *, own: bool) -> str:
     return f"- {i.name} [key {i.key}]: " + "; ".join(bits)
 
 
-def prompt_lines(record: OfRecord | None, prd_id: uuid.UUID | None) -> list[str]:
-    """What a PRD's run is told of the roadmap of record (module doc)."""
+def prompt_lines(
+    record: OfRecord | None, prd_id: uuid.UUID | None, hidden: Any = None
+) -> list[str]:
+    """What a PRD's run is told of the roadmap of record (module doc). ``hidden``: what a
+    commenter may not see, for a run that reads as a member (oracle.docs.visibility.Hidden):
+    the items of a PRD it hides, or whose line names something it hides, are left out, and
+    so are their names in other items' dependencies."""
     if record is None:
         return []
+    items = record.items
+    trashed = record.trashed
+    unseen: frozenset[str] = frozenset()
+    if hidden is not None:
+        out_of_view = [
+            i
+            for i in items
+            if (i.prd_id is not None and i.prd_id in hidden.document_ids)
+            or hidden.names(_line(i, own=False))
+        ]
+        unseen = frozenset(i.name for i in out_of_view) | frozenset(i.key for i in out_of_view)
+        items = [i for i in items if i not in out_of_view]
+        trashed = [
+            (key, name)
+            for key, name in trashed
+            if record.trashed_prd.get(key) not in hidden.document_ids and not hidden.names(name)
+        ]
     source = (
         "the owner's working draft, newer than the published version: it holds the owner's "
         "edits, so it wins over the published roadmap, the approved PRD versions and any "
@@ -244,19 +272,19 @@ def prompt_lines(record: OfRecord | None, prd_id: uuid.UUID | None) -> list[str]
         "out of the plan. A new item without an F-code is flagged "
         f'"{NOT_IN_GROUND_TRUTH}" and kept, never refused.'
     ]
-    own = record.under(prd_id)
+    own = [i for i in record.under(prd_id) if i in items]
     if own:
         out.append("Items under this PRD on it:")
-        out += [_line(i, own=True) for i in own if not i.new]
+        out += [_line(i, own=True, unseen=unseen) for i in own if not i.new]
         added = [i for i in own if i.new]
         if added:
             out.append("New items added under this PRD (include them):")
-            out += [_line(i, own=True) for i in added]
-    others = [i for i in record.items if i not in own]
+            out += [_line(i, own=True, unseen=unseen) for i in added]
+    others = [i for i in items if i not in own]
     if others:
         out.append("Other items on it (for names and dependencies):")
-        out += [_line(i, own=False) for i in others]
-    if record.trashed:
+        out += [_line(i, own=False, unseen=unseen) for i in others]
+    if trashed:
         out.append("In Trash (leave out of the PRD, never bring back):")
-        out += [f"- {name} [key {key}]" for key, name in record.trashed]
+        out += [f"- {name} [key {key}]" for key, name in trashed]
     return out
