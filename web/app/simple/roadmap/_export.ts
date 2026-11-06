@@ -12,6 +12,7 @@ import { calendarDay, displayZone, zoneTime } from "@/lib/dates";
 
 import type { BoardColumn } from "./_board";
 import { brokenLinks, shortDay, spanWords } from "./_lib";
+import { ordinal } from "./_timeline";
 
 const SCALE = 2;
 const HEAD = 88;
@@ -46,6 +47,9 @@ export interface Picture {
   left?: number;
   /** E-2: the y of each row's top below the header, where a PDF page may end. */
   breaks?: number[];
+  /** The date axis's words and days (in the picture's pixels): a PDF page's column that starts
+   * mid-axis names its month and year at its left, never a label cut at its edge ("r 12"). */
+  axis?: { days: { x: number; day: string }[]; words: { x0: number; x1: number; y: number; size: number }[] };
 }
 
 /** E-7: a view too large for one canvas, even scaled down. */
@@ -145,7 +149,10 @@ function rowWords(el: HTMLElement): string {
 /** The labels (as text) and a copy of the chart's SVG beside them, with a key to the
  * numbered short bars under it. */
 export function chartPicture(svg: SVGSVGElement, labels: HTMLElement | null): Picture {
-  const labelW = labels?.offsetWidth ?? 0;
+  const lanes = labels ? [...labels.children].filter((el) => (el as HTMLElement).dataset.testid === "chart-group") : [];
+  // A goal lane's name is never cut: the names column widens to the longest (a phone's is narrow), to a limit.
+  const longest = Math.max(0, ...lanes.map((el) => widthOf(rowWords(el as HTMLElement).split(" · ")[0], 13, 600) + 14));
+  const labelW = Math.max(labels?.offsetWidth ?? 0, Math.min(LANE_NAME_MAX, longest));
   const chart = svg.cloneNode(true) as SVGSVGElement;
   chart.setAttribute("x", String(labelW));
   chart.setAttribute("y", "0");
@@ -161,15 +168,16 @@ export function chartPicture(svg: SVGSVGElement, labels: HTMLElement | null): Pi
       if (y >= head - 0.5) breaks.push(y);
       const words = rowWords(el as HTMLElement);
       if (!words) continue;
+      const lane = (el as HTMLElement).dataset.testid === "chart-group" ? ' data-testid="export-lane"' : "";
       // Two lines where one cannot hold them and the row has room: the name, then its notes.
       const [first, ...rest] = words.split(" · ");
       if (widthOf(words, 13) > labelW - 14 && rest.length && r.height >= 32) {
-        rows.push(`<text x="10" y="${y + r.height / 2 - 2}" font-size="13" fill="var(--text)">${esc(fit(first, labelW - 14, 13))}</text>`);
+        rows.push(`<text${lane} x="10" y="${y + r.height / 2 - 2}" font-size="13" fill="var(--text)">${esc(fit(first, labelW - 14, 13))}</text>`);
         rows.push(`<text x="10" y="${y + r.height / 2 + 12}" font-size="11" fill="var(--text2)">${esc(fit(rest.join(" · "), labelW - 14, 11))}</text>`);
       } else {
         // One line: smaller type before a word of it is lost.
         const size = widthOf(words, 13) <= labelW - 14 ? 13 : 11;
-        rows.push(`<text x="10" y="${y + r.height / 2 + (size === 13 ? 5 : 4)}" font-size="${size}" fill="var(--text)">${esc(fit(words, labelW - 14, size) || cut(words, 34))}</text>`);
+        rows.push(`<text${lane} x="10" y="${y + r.height / 2 + (size === 13 ? 5 : 4)}" font-size="${size}" fill="var(--text)">${esc(fit(words, labelW - 14, size) || cut(words, 34))}</text>`);
       }
     }
   }
@@ -188,8 +196,25 @@ export function chartPicture(svg: SVGSVGElement, labels: HTMLElement | null): Pi
   });
   const keyH = keyed.length ? 14 + Math.ceil(keyed.length / perRow) * KEY_ROW : 0;
   for (let k = 0; k < Math.ceil(keyed.length / perRow); k++) breaks.push(chartH + 8 + k * KEY_ROW);
-  return { body: rows.join("") + new XMLSerializer().serializeToString(chart) + key.join(""), width, height: chartH + keyH, head, breaks, left: labelW };
+  return { body: rows.join("") + new XMLSerializer().serializeToString(chart) + key.join(""), width, height: chartH + keyH, head, breaks, left: labelW, axis: axisOf(chart, labelW) };
 }
+
+/** The copied chart's axis: each tick's day and x, and each of its words' extent. */
+function axisOf(chart: SVGSVGElement, dx: number): Picture["axis"] {
+  const axis = chart.querySelector('[data-testid="chart-axis"]');
+  if (!axis) return undefined;
+  const days = [...axis.querySelectorAll<SVGGElement>("g[data-day]")].map((g) => ({ x: dx + Number(g.querySelector("line")?.getAttribute("x1") ?? 0), day: g.dataset.day ?? "" }));
+  const words = [...axis.querySelectorAll<SVGTextElement>("text")].map((t) => {
+    const size = Number(t.getAttribute("font-size") ?? 11);
+    const w = widthOf(t.textContent ?? "", size, Number(t.getAttribute("font-weight") ?? 400));
+    const x = dx + Number(t.getAttribute("x") ?? 0);
+    return t.getAttribute("text-anchor") === "end" ? { x0: x - w, x1: x, y: Number(t.getAttribute("y") ?? 0), size } : { x0: x, x1: x + w, y: Number(t.getAttribute("y") ?? 0), size };
+  });
+  return { days, words };
+}
+
+/** The widest a names column grows to keep a goal lane's name whole. */
+const LANE_NAME_MAX = 360;
 
 const MONTH_WORDS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const px = (v: string) => Number.parseFloat(v) || 0;
@@ -364,8 +389,9 @@ export function zoomPicture(scroll: HTMLElement, today: string): Picture {
   return { body: hatch + frame + grid + todayLine + rows.join("") + parts.join(""), width, height, head, breaks, left: labelW };
 }
 
-/** The board's columns, each group and card as boxes and text. */
-export function boardPicture(cols: BoardColumn[], today: string): Picture {
+/** The board's columns, each group and card as boxes and text; a cut card says its place in the
+ * return queue (`queue`: the cut items' ids in the queue's order), as the Gantt's row does. */
+export function boardPicture(cols: BoardColumn[], today: string, queue: string[] = []): Picture {
   const colW = 300;
   const gap = 12;
   const out: string[] = [];
@@ -383,8 +409,9 @@ export function boardPicture(cols: BoardColumn[], today: string): Picture {
       const fill = i.status === "cut" ? "var(--na-bg)" : est ? "url(#export-hatch)" : "var(--surface)";
       const stroke = red ? "var(--crit)" : "var(--line)";
       parts.push(`<rect x="${x + 8}" y="${y}" width="${colW - 16}" height="44" rx="8" fill="${fill}" stroke="${stroke}"${i.draft ? ' stroke-dasharray="5 3"' : ""}/>`);
-      parts.push(`<text x="${x + 16}" y="${y + 18}" font-size="13" font-weight="500" fill="var(--text)"${i.status === "cut" ? ' text-decoration="line-through"' : ""}>${esc(cut(i.title, 38))}</text>`);
-      const meta = `${spanWords(i.start.date, i.end.date, today, true)}${est ? " · estimated" : ""}${i.draft ? " · draft" : ""}`;
+      parts.push(`<text x="${x + 16}" y="${y + 18}" font-size="13" font-weight="500" fill="var(--text)"${i.status === "cut" ? ' text-decoration="line-through"' : ""}>${esc(fit(i.title, colW - 32, 13, 500))}</text>`);
+      const place = queue.indexOf(i.id);
+      const meta = `${spanWords(i.start.date, i.end.date, today, true)}${est ? " · estimated" : ""}${i.draft ? " · draft" : ""}${place >= 0 ? ` · ${ordinal(place + 1)} to return` : ""}`;
       parts.push(`<text x="${x + 16}" y="${y + 35}" font-size="11" fill="var(--text2)">${esc(meta)}</text>`);
       y += 50;
     };
@@ -506,6 +533,22 @@ const PAGE_FOOT = 22;
 /** A page's pixels per point. */
 const PAGE_PX = 2;
 
+/** Helvetica's widths (its AFM, per 1000 of the size) for the printable ASCII, then the WinAnsi
+ * extras the footer may hold: a right-aligned line is measured, never estimated. */
+const HELVETICA =
+  "278,278,355,556,556,889,667,191,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,278,278,584,584,584,556,1015,667,667,722,722,667,611,778,722,278,500,667,556,833,722,778,667,778,722,667,611,722,667,944,667,667,611,278,278,278,469,556,333,556,556,500,556,556,278,556,556,222,222,500,222,833,556,556,556,556,333,500,278,556,500,722,500,500,500,334,260,334,584"
+    .split(",")
+    .map(Number);
+const HELVETICA_MORE: Record<string, number> = { "·": 278, "–": 556, "—": 1000, "…": 1000, "’": 222, "‘": 222, "“": 333, "”": 333 };
+export function helveticaWidth(s: string, size: number): number {
+  let w = 0;
+  for (const ch of s) {
+    const c = ch.codePointAt(0)!;
+    w += HELVETICA_MORE[ch] ?? (c >= 32 && c <= 126 ? HELVETICA[c - 32] : 556);
+  }
+  return (w * size) / 1000;
+}
+
 /** A PDF string's bytes (WinAnsi, Helvetica's encoding), with ( ) \ escaped. */
 function pdfText(s: string): string {
   const win: Record<string, number> = { "’": 0x92, "‘": 0x91, "“": 0x93, "”": 0x94, "–": 0x96, "—": 0x97, "…": 0x85, "·": 0xb7 };
@@ -566,8 +609,8 @@ export function pdfOf(pages: PdfPage[]): Blob {
     const n = first + k * 3;
     const words = pg.texts
       .map(([x, y, size, t, align]) => {
-        // Helvetica's average width, about half its size: a right-aligned line ends near x.
-        const at = align === "right" ? x - t.length * size * 0.5 : x;
+        // A right-aligned line ends at x, by Helvetica's own widths.
+        const at = align === "right" ? x - helveticaWidth(t, size) : x;
         return `BT /F1 ${size} Tf 0.35 0.4 0.47 rg ${at.toFixed(1)} ${y} Td (${pdfText(t)}) Tj ET`;
       })
       .join("\n");
@@ -587,6 +630,10 @@ export function pdfOf(pages: PdfPage[]): Blob {
   push(`trailer\n<< /Size ${count} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
   return new Blob(parts as BlobPart[], { type: "application/pdf" });
 }
+
+/** Past this many pages a PDF is too long to read (or to make: the 500-item day scale is 432):
+ * a filter, then. */
+const MAX_PAGES = 100;
 
 /** Never smaller than this many points a pixel: a wider picture goes on across pages. */
 const MIN_PT = 0.45;
@@ -627,6 +674,8 @@ async function pagesOf(page: { markup: string; width: number; height: number }, 
   }
   const out: PdfPage[] = [];
   const total = rows.length * cols.length;
+  if (total > MAX_PAGES) throw new TooLarge(`The view would take more than ${MAX_PAGES} PDF pages: filter it to export it`);
+  const pageWords = (n: number) => `Page ${n + 1} of ${total}`;
   for (const [c, [x0, x1]] of cols.entries())
     for (const [r, [y0, y1]] of rows.entries()) {
       const n = c * rows.length + r;
@@ -647,6 +696,7 @@ async function pagesOf(page: { markup: string; width: number; height: number }, 
       ctx.drawImage(img, x0, 0, w, top, m + left * g, m, w * g, top * g);
       ctx.drawImage(img, 0, y0, left, bandH, m, m + top * g, left * g, bandH * g);
       ctx.drawImage(img, x0, y0, w, bandH, m + left * g, m + top * g, w * g, bandH * g);
+      if (c > 0 && pic.axis) edgeOfAxis(ctx, pic.axis, x0 - pad, (X, Y) => [m + left * g + (X + pad - x0) * g, m + (Y + HEAD) * g], g);
       ctx.strokeStyle = "#d6e0ea";
       ctx.lineWidth = PAGE_PX;
       ctx.beginPath();
@@ -659,12 +709,41 @@ async function pagesOf(page: { markup: string; width: number; height: number }, 
         h: canvas.height,
         texts: [
           [MARGIN, MARGIN + 2, 8, cut(head.brand?.disclaimer ?? "", 110), "left"],
-          [PAGE_W - MARGIN - 64, MARGIN + 2, 8, stamp(today, head.brand), "right"],
-          [PAGE_W - MARGIN - 52, MARGIN + 2, 8, `Page ${n + 1} of ${total}`, "left"],
+          [PAGE_W - MARGIN - helveticaWidth(pageWords(n), 8) - 12, MARGIN + 2, 8, stamp(today, head.brand), "right"],
+          [PAGE_W - MARGIN, MARGIN + 2, 8, pageWords(n), "right"],
         ],
       });
     }
   return out;
+}
+
+/** A page's column that starts mid-axis: the axis words its left edge cuts are cleared, and the
+ * month and year it starts in are written there ("Mar 2027"), over the axis's top row. `at`
+ * maps the picture's pixels to the page canvas's. */
+function edgeOfAxis(ctx: CanvasRenderingContext2D, axis: NonNullable<Picture["axis"]>, x: number, at: (x: number, y: number) => [number, number], g: number) {
+  const day = axis.days.filter((d) => d.x <= x + 0.5).at(-1)?.day;
+  const label = day ? `${MONTH_WORDS[Number(day.slice(5, 7)) - 1]} ${day.slice(0, 4)}` : "";
+  if (!axis.words.length) return;
+  const topY = Math.min(...axis.words.map((t) => t.y));
+  const labelW = label ? widthOf(label, 10, 600) + 6 : 0;
+  ctx.fillStyle = "#ffffff";
+  const clear = (x1: number, y: number, size: number) => {
+    const [l, t] = at(x, y - size);
+    const [r, b] = at(x1, y + 3);
+    ctx.fillRect(l, t, r - l, b - t);
+  };
+  for (const t of axis.words) {
+    // The top row gives way to the label; any other row only where a word is cut.
+    const end = Math.max(t.x0 < x && t.x1 > x ? t.x1 : x, t.y === topY && t.x0 < x + labelW ? Math.max(t.x1, x + labelW) : x);
+    if (end > x) clear(end, t.y, t.size);
+  }
+  if (!label) return;
+  clear(x + labelW, topY, 10);
+  const [lx, ly] = at(x + 3, topY);
+  ctx.fillStyle = "#3f4a5a";
+  ctx.font = `600 ${10 * g}px sans-serif`;
+  ctx.textAlign = "left";
+  ctx.fillText(label, lx, ly);
 }
 
 /** The key-date markers a picture draws, by name (ah-prd-milestones-once review: the Timeline's export draws them from the goal lanes). */

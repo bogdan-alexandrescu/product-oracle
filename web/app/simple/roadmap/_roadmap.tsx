@@ -1090,7 +1090,10 @@ export function SimpleRoadmap() {
     const labels = wrap.current?.querySelector<HTMLElement>('[data-testid="chart-labels"]') ?? null;
     if (format !== "board" && !zoomed && !svg.current) return setExporting(null);
     try {
-      const pic = format === "board" ? boardPicture(boardColumns(laned ?? data), data.today) : zoomed ? zoomPicture(zoomed, data.today) : chartPicture(svg.current!, labels);
+      const shown = laned ?? data;
+      // The return queue's order, as the Gantt numbers its rows below the line.
+      const queue = shown.groups.flatMap((g) => g.item_ids).filter((id) => shown.items.some((i) => i.id === id && closedItem(i)));
+      const pic = format === "board" ? boardPicture(boardColumns(shown), data.today, queue) : zoomed ? zoomPicture(zoomed, data.today) : chartPicture(svg.current!, labels);
       const title = `Roadmap · ${FORMAT_WORDS[format]}${format === "gantt" ? ` (${unit})` : ""}`;
       await exportView(kind, pic, { title, filters: filterWords(), brand: await brandOf() }, data.today, `roadmap-${format}`);
     } catch (e) {
@@ -1611,10 +1614,13 @@ export function SimpleRoadmap() {
           />
           </>
         )}
-        {/* The Timeline's export draws its picture from the goal lanes, laid out off screen while it saves. */}
+        {/* The Timeline's export draws its picture from the goal lanes, laid out off screen while it
+            saves, with a row naming each quarter over its months. Off screen, not hidden: the names
+            column is read as text (a hidden element has none). */}
         {format === "timeline" && exporting && (
-          <div aria-hidden className="pointer-events-none fixed top-0 left-[-20000px] w-[1400px]" style={{ visibility: "hidden" }}>
+          <div aria-hidden inert className="pointer-events-none fixed top-0 left-[-20000px] w-[1400px]">
             <Lanes
+              quarterAxis
               data={laned ?? data}
               lane={f.group}
               noWork={noWork}
