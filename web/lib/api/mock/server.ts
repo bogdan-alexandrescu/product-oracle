@@ -1004,6 +1004,30 @@ function seedRoadmapEditFixes(): Db {
   return db;
 }
 
+/**
+ * roadmap-edit-fixes round 1 "roadmap-edit-fixes-2": "simple-home", with Alert history export
+ * waiting on the Weekly alert digest by its code in lower case (f-06), Sample data import on the
+ * Setup checklist by its key and by its feature's key (both kept), the Alert rules engine done
+ * (the digest that starts before it ends is not broken), and the cut In-app tour waiting on the
+ * Setup checklist past its start (a cut item's link counts nowhere).
+ */
+function seedRoadmapEditFixes2(): Db {
+  const db = seedSimpleHomeScenario();
+  const items = db.simple_roadmap!.items;
+  const at = (key: string) => items.find((x) => x.key === key);
+  const exportItem = at("alert-export");
+  if (exportItem) exportItem.depends = ["f-06"];
+  const checklist = at("setup-checklist");
+  if (checklist) checklist.feature_key = "guided-checklist";
+  const sample = at("setup-import");
+  if (sample) sample.depends = ["setup-checklist", "guided-checklist"];
+  const rules = at("alert-rules");
+  if (rules) rules.status = "done";
+  const tour = at("setup-tour");
+  if (tour) tour.depends = ["setup-checklist"];
+  return db;
+}
+
 /** hotfix-2 "simple-dated-move": "simple-home" with Alert replay engine, dated only by engineering's end. */
 function seedSimpleDatedMove(): Db {
   const db = seedSimpleHomeScenario();
@@ -3474,6 +3498,8 @@ function load(): Db {
                 ? seedSimpleCrossPrdDates
               : scenario === "roadmap-edit-fixes"
                 ? seedRoadmapEditFixes
+              : scenario === "roadmap-edit-fixes-2"
+                ? seedRoadmapEditFixes2
               : scenario === "simple-dated-move"
                 ? seedSimpleDatedMove
               : scenario === "simple-home"
