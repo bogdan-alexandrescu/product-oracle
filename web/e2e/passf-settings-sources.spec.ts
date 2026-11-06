@@ -123,10 +123,13 @@ test.describe("desktop", () => {
     await line.getByRole("button", { name: "Map the code" }).click();
     await expect(line).toContainText("Code map: ready", { timeout: 15_000 });
     await line.getByRole("button", { name: "See the map" }).click();
-    await expect(page.getByTestId("code-map-contents")).toContainText("Parts");
-    await expect(page.getByTestId("code-map-contents")).toContainText("The application (from its README)");
-    await line.getByRole("button", { name: "Hide the map" }).click();
-    await expect(page.getByTestId("code-map-contents")).toHaveCount(0);
+    const view = page.getByRole("dialog", { name: `Code map of ${REPO}` });
+    await expect(view.getByRole("heading", { name: "Parts (1)" })).toBeVisible();
+    await expect(view.getByRole("list", { name: "Parts" })).toContainText("The application (from its README)");
+    // A docs-only map has no routes or data models: those say so rather than vanish.
+    await expect(view.getByRole("heading", { name: "API routes (0)" })).toBeVisible();
+    await view.getByRole("button", { name: "Close" }).click();
+    await expect(view).toHaveCount(0);
   });
 
   test("F-57: plain words for a sync and for pasting", async ({ page }) => {
