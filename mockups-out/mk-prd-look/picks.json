@@ -1,0 +1,345 @@
+{
+  "title": "PRD look",
+  "subtitle": "Five ways a PRD reads, section to section (invented PRD; re-snap with real PRDs on your laptop, see README)",
+  "decisions": [
+    {
+      "code": "PT1",
+      "name": "PRD look",
+      "question": "How should a PRD read, section to section?",
+      "common": "Every proposal keeps the same content, the toolbar, the version header, the review panel and every section action (⋯ menu, Edit, Refine, review bar, comments). Each works on every PRD as written, with no regeneration. Feature codes open the feature panel; citations show as chips.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Calm document",
+          "recommended": true,
+          "what": "One readable column about 720 px wide on a white sheet. Every section has a number (1, 2, 10.4, 11.7), a rule and generous space above it, and a larger heading; body text is set a size up with more line height. A contents rail on the left stays in view, lights the section being read and shows each section's review state as a dot. The review bar shows on the section being read; every other section shows only its ⋯ menu.",
+          "why": "It fixes what makes a PRD hard to read today, the lack of space and landmarks between sections, without moving anything people already know: the toolbar, the version header, the review panel and every section action stay where they are. It needs no change to the template and works on every PRD as written, and the PDF can take the same numbers and rules in a few lines.",
+          "plus": "Calm and fast to scan; numbers make sections easy to name in a review (\"see 10.4\"); the lit rail shows where you are in a 50-section PRD.",
+          "cost": "At 1440 the rail cuts long feature names short, and the review bar shows only on the section being read. Template file: no change (numbers come from the heading levels). PDF (prd.html.j2): add the section numbers and the rule and space between sections; about 20 lines of CSS.",
+          "frames": [
+            {
+              "file": "pt1-a-top-1512.html",
+              "caption": "The top of the PRD at rest, 1512 x 900"
+            },
+            {
+              "file": "pt1-a-long-1512.html",
+              "caption": "13 Milestones, mid-document: the milestone table with F- feature codes"
+            },
+            {
+              "file": "pt1-a-toc-1512.html",
+              "caption": "The contents rail with Find a section, read from 13 Milestones; 10.4 Requirements about to be picked"
+            },
+            {
+              "file": "pt1-a-landed-1512.html",
+              "caption": "Landed on 10.4 Requirements, lit in the contents"
+            },
+            {
+              "file": "pt1-a-actions-1512.html",
+              "caption": "The ⋯ menu on 10.4 Requirements open: evidence, Edit, Refine, ask, discuss, decide"
+            },
+            {
+              "file": "pt1-a-edit-1512.html",
+              "caption": "Edit the text yourself, open under the review bar of 10.4 Requirements"
+            },
+            {
+              "file": "pt1-a-hard-1512.html",
+              "caption": "12 Risks and open questions, the longest section with the widest table, at 1512 x 900"
+            },
+            {
+              "file": "pt1-a-hard-1440.html",
+              "caption": "The same section at 1440 x 900"
+            },
+            {
+              "file": "pt1-a-viewer-1512.html",
+              "caption": "10.4 Requirements as a viewer: no Approve or Edit, comments still open"
+            },
+            {
+              "file": "pt1-a-dark-1512.html",
+              "caption": "11.7 F-7 Parts used on the job, dark theme"
+            },
+            {
+              "file": "pt1-a-phone-top-390.html",
+              "caption": "Phone 390 x 844: the top of the PRD"
+            },
+            {
+              "file": "pt1-a-phone-table-390.html",
+              "caption": "Phone 390 x 844: 12 Risks and open questions with its table"
+            },
+            {
+              "file": "pt1-a-print.html",
+              "caption": "Printed, Letter portrait (the full PDF is in assets/pt1-a-print.pdf)"
+            },
+            {
+              "file": "pt1-a-cost-1440.html",
+              "caption": "Cost at 1440: the rail cuts long feature names short; only the section being read shows its review bar"
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Section cards",
+          "recommended": false,
+          "what": "Each section is a card. Its header bar carries the number, title and ⋯ menu, and a line under it the owner, review state and the version it last changed in. The review bar sits at the foot of every card. Sub-sections nest as inner cards. A Sections strip at the top stays in view and opens the contents.",
+          "plus": "Owner, state and last change are on every section without opening anything; review work reads like a list of cards to clear.",
+          "cost": "Cards take more height: fewer sections fit on a screen and a long PRD scrolls further. Template file: no change. PDF (prd.html.j2): each section boxed with a header line, which needs the owner and review state passed to the export.",
+          "frames": [
+            {
+              "file": "pt1-b-top-1512.html",
+              "caption": "The top of the PRD at rest, 1512 x 900"
+            },
+            {
+              "file": "pt1-b-long-1512.html",
+              "caption": "13 Milestones, mid-document: the milestone table with F- feature codes"
+            },
+            {
+              "file": "pt1-b-toc-1512.html",
+              "caption": "The Sections strip opened from 13 Milestones; 10.4 Requirements about to be picked"
+            },
+            {
+              "file": "pt1-b-landed-1512.html",
+              "caption": "Landed on 10.4 Requirements, lit in the contents"
+            },
+            {
+              "file": "pt1-b-actions-1512.html",
+              "caption": "The ⋯ menu on 10.4 Requirements open: evidence, Edit, Refine, ask, discuss, decide"
+            },
+            {
+              "file": "pt1-b-edit-1512.html",
+              "caption": "Edit the text yourself, open under the review bar of 10.4 Requirements"
+            },
+            {
+              "file": "pt1-b-hard-1512.html",
+              "caption": "12 Risks and open questions, the longest section with the widest table, at 1512 x 900"
+            },
+            {
+              "file": "pt1-b-hard-1440.html",
+              "caption": "The same section at 1440 x 900"
+            },
+            {
+              "file": "pt1-b-viewer-1512.html",
+              "caption": "10.4 Requirements as a viewer: no Approve or Edit, comments still open"
+            },
+            {
+              "file": "pt1-b-dark-1512.html",
+              "caption": "11.7 F-7 Parts used on the job, dark theme"
+            },
+            {
+              "file": "pt1-b-phone-top-390.html",
+              "caption": "Phone 390 x 844: the top of the PRD"
+            },
+            {
+              "file": "pt1-b-phone-table-390.html",
+              "caption": "Phone 390 x 844: 12 Risks and open questions with its table"
+            },
+            {
+              "file": "pt1-b-print.html",
+              "caption": "Printed, Letter portrait (the full PDF is in assets/pt1-b-print.pdf)"
+            },
+            {
+              "file": "pt1-b-cost-1440.html",
+              "caption": "Cost: cards take more height, so a screen holds less of the PRD"
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Summary first",
+          "recommended": false,
+          "what": "The PRD opens with a summary panel built from what the PRD already says: the goals with measure and target, the dates, the 20 features as code and name, and the review state. Below it the sections are grouped into parts (Why, What we build, When it ships, Risks and decisions, Sources) with a divider each; long sections are folded to their first lines with Show all.",
+          "plus": "A reader gets the goal, dates and features in one screen before reading on; parts make the order of a long PRD clear.",
+          "cost": "Folded sections take one more click to read in full, and the part a section belongs to has to be known. Template file: add a parts list to the front matter (like brief: today) naming which sections sit in which part. PDF (prd.html.j2): a summary page first and a divider per part; nothing folded in print.",
+          "frames": [
+            {
+              "file": "pt1-c-top-1512.html",
+              "caption": "The top of the PRD at rest, 1512 x 900"
+            },
+            {
+              "file": "pt1-c-long-1512.html",
+              "caption": "13 Milestones, mid-document: the milestone table with F- feature codes"
+            },
+            {
+              "file": "pt1-c-toc-1512.html",
+              "caption": "The Sections strip opened from 13 Milestones; 10.4 Requirements about to be picked"
+            },
+            {
+              "file": "pt1-c-landed-1512.html",
+              "caption": "Landed on 10.4 Requirements, lit in the contents"
+            },
+            {
+              "file": "pt1-c-actions-1512.html",
+              "caption": "The ⋯ menu on 10.4 Requirements open: evidence, Edit, Refine, ask, discuss, decide"
+            },
+            {
+              "file": "pt1-c-edit-1512.html",
+              "caption": "Edit the text yourself, open under the review bar of 10.4 Requirements"
+            },
+            {
+              "file": "pt1-c-hard-1512.html",
+              "caption": "12 Risks and open questions, the longest section with the widest table, at 1512 x 900"
+            },
+            {
+              "file": "pt1-c-hard-1440.html",
+              "caption": "The same section at 1440 x 900"
+            },
+            {
+              "file": "pt1-c-viewer-1512.html",
+              "caption": "10.4 Requirements as a viewer: no Approve or Edit, comments still open"
+            },
+            {
+              "file": "pt1-c-dark-1512.html",
+              "caption": "11.7 F-7 Parts used on the job, dark theme"
+            },
+            {
+              "file": "pt1-c-phone-top-390.html",
+              "caption": "Phone 390 x 844: the top of the PRD"
+            },
+            {
+              "file": "pt1-c-phone-table-390.html",
+              "caption": "Phone 390 x 844: 12 Risks and open questions with its table"
+            },
+            {
+              "file": "pt1-c-print.html",
+              "caption": "Printed, Letter portrait (the full PDF is in assets/pt1-c-print.pdf)"
+            },
+            {
+              "file": "pt1-c-cost-1440.html",
+              "caption": "Cost: long sections are folded, one more click to read each"
+            }
+          ]
+        },
+        {
+          "letter": "d",
+          "name": "Margin spec",
+          "recommended": false,
+          "what": "Each section is a row: a left margin carries its number, owner, review state and the version it changed in, and the text sits on the right, like the one-pager's margin notes. A line down the margin marks the section being read. The contents rail on the left stays in view.",
+          "plus": "Who owns a section and where it stands sit beside the text without breaking it; good for a review pass section by section.",
+          "cost": "The margin takes about 180 px: the text column is narrower and the widest table must be scrolled across at 1512 and 1440. Template file: no change. PDF (prd.html.j2): a two-column layout per section, with wide tables spanning the full page.",
+          "frames": [
+            {
+              "file": "pt1-d-top-1512.html",
+              "caption": "The top of the PRD at rest, 1512 x 900"
+            },
+            {
+              "file": "pt1-d-long-1512.html",
+              "caption": "13 Milestones, mid-document: the milestone table with F- feature codes"
+            },
+            {
+              "file": "pt1-d-toc-1512.html",
+              "caption": "The contents rail with Find a section, read from 13 Milestones; 10.4 Requirements about to be picked"
+            },
+            {
+              "file": "pt1-d-landed-1512.html",
+              "caption": "Landed on 10.4 Requirements, lit in the contents"
+            },
+            {
+              "file": "pt1-d-actions-1512.html",
+              "caption": "The ⋯ menu on 10.4 Requirements open: evidence, Edit, Refine, ask, discuss, decide"
+            },
+            {
+              "file": "pt1-d-edit-1512.html",
+              "caption": "Edit the text yourself, open under the review bar of 10.4 Requirements"
+            },
+            {
+              "file": "pt1-d-hard-1512.html",
+              "caption": "12 Risks and open questions, the longest section with the widest table, at 1512 x 900"
+            },
+            {
+              "file": "pt1-d-hard-1440.html",
+              "caption": "The same section at 1440 x 900"
+            },
+            {
+              "file": "pt1-d-viewer-1512.html",
+              "caption": "10.4 Requirements as a viewer: no Approve or Edit, comments still open"
+            },
+            {
+              "file": "pt1-d-dark-1512.html",
+              "caption": "11.7 F-7 Parts used on the job, dark theme"
+            },
+            {
+              "file": "pt1-d-phone-top-390.html",
+              "caption": "Phone 390 x 844: the top of the PRD"
+            },
+            {
+              "file": "pt1-d-phone-table-390.html",
+              "caption": "Phone 390 x 844: 12 Risks and open questions with its table"
+            },
+            {
+              "file": "pt1-d-print.html",
+              "caption": "Printed, Letter portrait (the full PDF is in assets/pt1-d-print.pdf)"
+            },
+            {
+              "file": "pt1-d-cost-1440.html",
+              "caption": "Cost at 1440: the widest table is read by scrolling across, here at its last columns"
+            }
+          ]
+        },
+        {
+          "letter": "e",
+          "name": "Printed report",
+          "recommended": false,
+          "what": "The PRD reads like the PDF: a page-wide paper sheet, a serif body, big section openers (\"Section 12\" over the title) with a heavy rule, and tables with a shaded header row. The web and the printed copy look the same.",
+          "plus": "One look on screen and on paper; reads like a formal document for people outside the team.",
+          "cost": "The sheet is narrower than the screen and the serif face is denser: the widest table wraps into tall rows, worst on a phone. Template file: no change. PDF (prd.html.j2): little to change, it already is this look; the web takes over its stylesheet.",
+          "frames": [
+            {
+              "file": "pt1-e-top-1512.html",
+              "caption": "The top of the PRD at rest, 1512 x 900"
+            },
+            {
+              "file": "pt1-e-long-1512.html",
+              "caption": "13 Milestones, mid-document: the milestone table with F- feature codes"
+            },
+            {
+              "file": "pt1-e-toc-1512.html",
+              "caption": "The Contents strip opened from 13 Milestones; 10.4 Requirements about to be picked"
+            },
+            {
+              "file": "pt1-e-landed-1512.html",
+              "caption": "Landed on 10.4 Requirements, lit in the contents"
+            },
+            {
+              "file": "pt1-e-actions-1512.html",
+              "caption": "The ⋯ menu on 10.4 Requirements open: evidence, Edit, Refine, ask, discuss, decide"
+            },
+            {
+              "file": "pt1-e-edit-1512.html",
+              "caption": "Edit the text yourself, open under the review bar of 10.4 Requirements"
+            },
+            {
+              "file": "pt1-e-hard-1512.html",
+              "caption": "12 Risks and open questions, the longest section with the widest table, at 1512 x 900"
+            },
+            {
+              "file": "pt1-e-hard-1440.html",
+              "caption": "The same section at 1440 x 900"
+            },
+            {
+              "file": "pt1-e-viewer-1512.html",
+              "caption": "10.4 Requirements as a viewer: no Approve or Edit, comments still open"
+            },
+            {
+              "file": "pt1-e-dark-1512.html",
+              "caption": "11.7 F-7 Parts used on the job, dark theme"
+            },
+            {
+              "file": "pt1-e-phone-top-390.html",
+              "caption": "Phone 390 x 844: the top of the PRD"
+            },
+            {
+              "file": "pt1-e-phone-table-390.html",
+              "caption": "Phone 390 x 844: 12 Risks and open questions with its table"
+            },
+            {
+              "file": "pt1-e-print.html",
+              "caption": "Printed, Letter portrait (the full PDF is in assets/pt1-e-print.pdf)"
+            },
+            {
+              "file": "pt1-e-cost-1440.html",
+              "caption": "Cost: the sheet is narrow, so the widest table wraps into tall rows"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

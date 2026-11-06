@@ -23,13 +23,16 @@ fs.mkdirSync(ASSETS, { recursive: true });
 
 const NOW = new Date("2026-11-06T16:00:00Z"); // the mock clock: Nov 6, 2026
 const DOC = "crew-notes"; // the mock's first PRD (MOCK_PRD_FILE's first PRD replaces its content)
-const LONG = "milestones"; // a section mid-document with a table and feature references
-const PICK = "requirements"; // the section picked from the contents
-const HARD = "risks"; // the longest section with the widest table
-const DARK = "feature-f-7"; // a feature section, in the dark theme
+// The sections each frame lands on; SNAP_LONG / SNAP_PICK / SNAP_HARD / SNAP_DARK override them, and a key
+// the PRD does not have is replaced by one picked from its sections (see pickKeys).
+let LONG = process.env.SNAP_LONG ?? "milestones"; // a section mid-document with a table and feature references
+let PICK = process.env.SNAP_PICK ?? "requirements"; // the section picked from the contents
+let HARD = process.env.SNAP_HARD ?? "risks"; // the longest section with the widest table
+let DARK = process.env.SNAP_DARK ?? "feature-f-7"; // a feature section, in the dark theme
 
 /** Every frame: [name, url query, viewport, options]. */
 function frames(o) {
+  const COST = costOf();
   const q = (extra = "") => `?pt1=${o}${extra}`;
   return [
     [`pt1-${o}-top-1512`, q(), [1512, 900]],
@@ -49,13 +52,35 @@ function frames(o) {
   ];
 }
 /** Each proposal's real cost, shown in one frame. */
-const COST = {
+const costOf = () => ({
   a: { query: `&sec=feature-f-4` }, // a section's review bar shows only once it is the current one
   b: { query: `&sec=feature-f-9` }, // cards take more height: fewer sections on a screen
   c: { query: `&sec=summary`, opts: { scrollTo: "feature-f-3" } }, // folded sections: one more click to read each
   d: { query: `&sec=${HARD}`, opts: { scrollAcross: HARD } }, // the margin takes width: the wide table is read by scrolling across
   e: { query: `&sec=${HARD}`, opts: { scrollBy: 700 } }, // the sheet is narrow: the wide table wraps tall
-};
+});
+
+/** Keeps each frame's section when the PRD has it, else picks one by shape (real PRDs name sections their own way). */
+async function pickKeys(page, url) {
+  await page.goto(`${url}?pt1=a`);
+  await page.locator("[data-pt1] section[data-section-key]").first().waitFor({ timeout: 30000 });
+  const secs = await page.locator("[data-pt1] section[data-section-key]").evaluateAll((els) =>
+    els.map((el) => ({
+      key: el.getAttribute("data-section-key"),
+      text: el.textContent?.length ?? 0,
+      cols: Math.max(0, ...[...el.querySelectorAll("table")].map((t) => t.querySelectorAll("tr:first-child > *").length)),
+      codes: (el.textContent?.match(/\bF-\d+/g) ?? []).length,
+      items: el.querySelectorAll("li").length,
+    })),
+  );
+  const has = (k) => secs.some((x) => x.key === k);
+  const by = (f) => [...secs].sort(f)[0]?.key;
+  if (!has(HARD)) HARD = by((a, b) => b.cols - a.cols || b.text - a.text);
+  if (!has(LONG)) LONG = by((a, b) => (b.cols > 0) - (a.cols > 0) || b.codes - a.codes) ?? HARD;
+  if (!has(PICK)) PICK = by((a, b) => b.items - a.items);
+  if (!has(DARK)) DARK = secs[Math.floor(secs.length / 2)]?.key ?? PICK;
+  console.log(`sections: long=${LONG} pick=${PICK} hard=${HARD} dark=${DARK}`);
+}
 
 async function versionUrl(page) {
   await page.goto(`${BASE}/documents/${DOC}`);
@@ -132,6 +157,7 @@ async function main() {
   await p0.getByRole("button", { name: "Sign in" }).click();
   await p0.waitForURL(/\/home$/, { timeout: 30000 });
   const url = await versionUrl(p0);
+  await pickKeys(p0, url);
   const state = await first.storageState();
   await first.close();
 
@@ -158,7 +184,7 @@ async function main() {
         await page.waitForTimeout(400);
       }
       if (opts.scrollTo) {
-        await page.evaluate((k) => document.querySelector(`[data-pt1-sec="${k}"]`)?.scrollIntoView({ block: "start" }), opts.scrollTo);
+        await page.evaluate((k) => (document.querySelector(`[data-pt1-sec="${k}"]`) ?? document.querySelector("[data-folded]"))?.scrollIntoView({ block: "start" }), opts.scrollTo);
         await page.waitForTimeout(500);
       }
       if (opts.scrollAcross) {
