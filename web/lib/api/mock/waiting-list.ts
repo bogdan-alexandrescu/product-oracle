@@ -62,6 +62,7 @@ export async function waitingItems(get: (path: string) => Promise<unknown>, meId
   for (const i of roadmap?.items ?? []) {
     if (!i.can_decide) continue;
     for (const f of i.flags) {
+      // qa-simple-home-3: every red flag with a fix (waiting_list._roadmap, isBrokenLink).
       if (f.state !== "red" || !f.fixes.length) continue;
       const dep = f.subject ? titles.get(f.subject) : undefined;
       out.push({
@@ -82,7 +83,8 @@ export async function waitingItems(get: (path: string) => Promise<unknown>, meId
     }
   }
   for (const d of drafts ?? []) {
-    if (!d.waiting_on.includes(meId)) continue;
+    // A required reviewer's, or the decider's whose final approval is not in yet (waiting_list._drafts).
+    if (!d.can_approve) continue;
     out.push({ kind: "draft", key: `draft:${d.id}`, ref_id: d.id, title: d.document.title, detail: "A roadmap draft waits for your approval", action: "Approve", href: `/simple/roadmap?roadmap=${d.document.id}`, at: null, op: null });
   }
   for (const c of changes ?? []) {

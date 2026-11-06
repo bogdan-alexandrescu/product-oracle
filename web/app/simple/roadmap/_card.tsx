@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { Button, SegmentedControl } from "@/components/ds";
 import { FlowDetail, FlowThumb as FlowPicture } from "@/components/simple/Flow";
@@ -29,7 +29,7 @@ import {
 
 /** What a change asks the engine, built by the page and sent through `act`. */
 export type Act = (
-  what: string,
+  what: import("./_lib").ChangeWords,
   body: Parameters<typeof import("./_lib").propose>[0],
 ) => Promise<void>;
 
@@ -37,12 +37,24 @@ const FIX_WORDS: Record<Flag["fixes"][number], string> = {
   shift_dependents: "Move the dependents",
   move_dependency: "Move the dependency",
   accept_risk: "Accept as risk",
+  restore: "Bring it back",
+  remove_dependency: "Remove the dependency",
 };
 
 /** fix4 qa-simple-roadmap-18: a reader who may not decide the item (a commenter) only
  * proposes the fix, and its button says so ("Propose: move the dependents"). */
 const fixWords = (f: Flag["fixes"][number], decides: boolean): string =>
   decides ? FIX_WORDS[f] : `Propose: ${FIX_WORDS[f][0].toLowerCase()}${FIX_WORDS[f].slice(1)}`;
+
+/** How many fixes a flag offers, a cut item's Remove the dependency counted once per dependent. */
+export const fixCount = (flag: Flag): number => flag.fixes.reduce((n, f) => n + (f === "remove_dependency" ? Math.max(1, flag.dependents?.length ?? 0) : 1), 0);
+
+/** Review: a fix proposed already and waiting on its decider: who it waits for ("Avery Stone"),
+ * or null. The roadmap page answers it from its open proposals. */
+export const ProposedFixes = createContext<(op: Flag["fixes"][number], itemId: string, subject: string) => string | null>(() => null);
+
+/** Review: opens an item's feature panel from a name in a fix's line (the page's own card), or null. */
+export const OpenItem = createContext<((itemId: string) => void) | null>(null);
 
 /** D14's one-click fixes of one flag: move the dependents, move the dependency, or accept
  * the risk with a note (the flag then stays amber). */
@@ -62,8 +74,23 @@ export function FixButtons({
   inline?: boolean;
 }) {
   const [note, setNote] = useState<string | null>(null);
+  const proposed = useContext(ProposedFixes);
+  const openItem = useContext(OpenItem);
   if (!canChange) return null;
   const dep = flag.subject ? items.get(flag.subject) : undefined;
+  // roadmap-decide: a cut item others depend on: bring it back, or a dependent drops it. Review:
+  // every live dependent the API names, one a filter hides too.
+  const live = flag.dependents ?? [];
+  const restore = () =>
+    void act(`Brought back '${item.title}'`, { op: "restore", target: { item_id: item.id }, before: { cut: true }, after: { cut: false } });
+  // Review: the API checks only that the item still depends on this one (a filter may hide its other dependencies).
+  const unlink = (n: Flag["dependents"][number]) =>
+    void act({ applied: `Removed the dependency of ‘${n.title}’ on ‘${item.title}’`, proposed: `remove the dependency of ‘${n.title}’ on ‘${item.title}’` }, {
+      op: "remove_dependency",
+      target: { item_id: n.id, subject: item.id },
+      before: {},
+      after: {},
+    });
   const fix = (kind: "shift_dependents" | "move_dependency") => {
     if (!dep) return;
     void act(
@@ -129,7 +156,7 @@ export function FixButtons({
     );
   return (
     <div
-      className={inline ? "flex gap-1.5" : "mt-1 flex flex-wrap gap-1.5"}
+      className={inline ? "flex flex-wrap gap-1.5" : "mt-1 flex flex-wrap gap-1.5"}
       data-testid="fixes"
     >
       {flag.fixes.map((f) =>
@@ -141,6 +168,34 @@ export function FixButtons({
           >
             {fixWords(f, item.can_decide)}
           </Button>
+        ) : f === "restore" ? (
+          <Button key={f} className={inline ? "!h-6 !px-2 !text-xs" : ""} onClick={restore}>
+            {fixWords(f, item.can_decide)}
+          </Button>
+        ) : f === "remove_dependency" ? (
+          live.map((n) => {
+            // Review: proposed already, it says who it waits for and is not offered again.
+            const waits = proposed(f, n.id, item.id);
+            return waits !== null ? (
+              <span key={`${f}-${n.id}`} data-testid="fix-proposed" className="self-center text-sm text-text2">
+                {/* Review: the dependent's name opens its feature panel, as other item names do. */}
+                Removing the dependency of{" "}
+                {openItem ? (
+                  <button type="button" className="font-medium text-accent-ink underline-offset-2 hover:underline" onClick={() => openItem(n.id)}>
+                    ‘{n.title}’
+                  </button>
+                ) : (
+                  `‘${n.title}’`
+                )}
+                {waits ? `: proposed, waits for ${waits}` : ": proposed"}
+              </span>
+            ) : (
+              // A long name wraps inside its button rather than run past a phone's edge.
+              <Button key={`${f}-${n.id}`} className={inline ? "!h-6 !px-2 !text-xs" : "!h-auto min-h-8 max-w-full py-1 text-left !whitespace-normal"} onClick={() => unlink(n)}>
+                {live.length > 1 ? `${fixWords(f, n.can_decide)} of ‘${n.title}’` : fixWords(f, n.can_decide)}
+              </Button>
+            );
+          })
         ) : dep ? (
           <Button
             key={f}
@@ -432,6 +487,7 @@ const OP_WORDS: Record<string, string> = {
   set_goal: "Change the goal",
   set_depends: "Change what it depends on",
   set_status: "Change the status",
+  remove_dependency: "Remove the dependency",
   set_owner: "Change the owner",
   set_goal_measure: "Change how its goal is measured",
 };
@@ -514,8 +570,10 @@ export const opWords = (op: string): string =>
  * ("Cut Alert rules engine and its dependents Weekly alert digest and Mobile alert push"). */
 export function changeRowWords(c: { op: string; titles?: string[] }, title?: string): string {
   const [first, ...rest] = c.titles ?? [];
-  // dod-actions-plan: a row names the item it changed, so Undo's next step reads from the list.
-  if (c.op !== "cut_with_dependents" || !first) return title ? `${opWords(c.op)}: ${title}` : opWords(c.op);
+  // dod-actions-plan: a row names the item it changed, so Undo's next step reads from the list;
+  // roadmap-decide: the change's own titles name it when the page does not show the item.
+  const named = title ?? first;
+  if (c.op !== "cut_with_dependents" || !first) return named ? `${opWords(c.op)}: ${named}` : opWords(c.op);
   const names = rest.length > 1 ? `${rest.slice(0, -1).join(", ")} and ${rest[rest.length - 1]}` : (rest[0] ?? "");
   return `Cut ${first} and its dependents${names ? ` ${names}` : ""}`;
 }

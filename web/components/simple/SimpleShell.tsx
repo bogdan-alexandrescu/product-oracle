@@ -13,6 +13,7 @@ import { Sheet } from "@/components/ds/Sheet";
 import { setPanelOpen, usePanelOpen } from "@/components/hop/open-state";
 import { SIMPLE_HOME, switchTarget } from "@/lib/experience";
 import { useMe } from "@/lib/me";
+import { LINK_KINDS } from "@/lib/roadmap-links";
 import { api, unwrap } from "@/lib/api/client";
 import { loadWaiting, onWaitingChanged } from "@/lib/simple-waiting";
 
@@ -47,8 +48,8 @@ function isActive(pathname: string, d: Dest): boolean {
  * The rail's yellow counts (S1 restyle, the owner's pick): only what waits on the signed-in
  * person, from the one list Home and Decisions read (home-waiting-one-list, GET
  * /v1/simple/decisions/waiting `items`), so a count always matches its page: Decisions counts
- * everything in it (its "Waiting for you"); Roadmap the roadmap's part (items with a broken
- * link, dates to confirm, proposals on my items, drafts for my approval); Meetings only a
+ * everything in it (its "Waiting for you"); Roadmap the roadmap's part (its broken links,
+ * as the roadmap counts them, dates to confirm, proposals and drafts sent to me); Meetings only a
  * meeting live now (an upcoming one waits on nobody). Read when the rail mounts, on a route
  * change and whenever something waiting changes.
  */
@@ -61,16 +62,26 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
-    loadWaiting()
-      .then((waiting) => {
+    // home-waiting-one-list: Decisions counts the one list of what waits on me. The Roadmap's
+    // count is its "Needs a decision" count; roadmap-decide: its broken links are those of the
+    // whole working draft as I see it (GET /v1/simple/roadmap/waiting, a light count), the same
+    // ones the roadmap's strip, its Needs a decision and Home count, with the dates I may confirm
+    // and the proposals and drafts waiting on me.
+    Promise.all([loadWaiting(), unwrap(api.GET("/v1/simple/roadmap/waiting")).catch(() => undefined)])
+      .then(([waiting, roadmap]) => {
         if (!alive) return;
         const items = waiting.items;
-        // The Roadmap's count is its "Needs a decision" count: the items with broken links (one
-        // per item, however many links), the dates to confirm and the proposals on my items.
-        const broken = new Set(items.filter((i) => i.kind === "broken_link").map((i) => i.ref_id));
+        // Without the light count, the strip's own rule over the list: each link between items
+        // (a dependency out of order, a cut item others depend on), not an end past its milestone.
+        const links = roadmap?.broken_links ?? items.filter((i) => i.kind === "broken_link" && LINK_KINDS.some((k) => i.key.split(":")[2] === k)).length;
+        const dates = roadmap?.dates_to_confirm ?? items.filter((i) => i.kind === "date" && !i.key.startsWith("proposal:")).length;
+        const asks = items.filter((i) => i.kind === "proposal" || i.kind === "draft" || (i.kind === "date" && i.key.startsWith("proposal:"))).length;
         setCounts({
           Decisions: items.length,
-          Roadmap: broken.size + items.filter((i) => i.kind === "date" || i.kind === "proposal").length,
+          Roadmap: links + dates + asks,
+          "Roadmap links": links,
+          "Roadmap dates": dates,
+          "Roadmap asks": asks,
         });
       })
       .catch(() => undefined);
@@ -94,9 +105,16 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
 }
 
 /** What a rail count counts, said in words (its accessible name and tooltip). */
-function countWords(label: string, n: number): string {
+function countWords(label: string, n: number, counts?: Record<string, number> | null): string {
   if (label === "Meetings") return `${n} ${n === 1 ? "meeting" : "meetings"} live now`;
-  if (label === "Roadmap") return `${n} on the roadmap waiting on you: items with broken links, dates to confirm and proposals`;
+  // roadmap-decide: Roadmap counts the broken links (as the roadmap and Home count them), the
+  // dates to confirm and the changes and drafts sent to you, and says each.
+  if (label === "Roadmap") {
+    const links = counts?.["Roadmap links"] ?? 0;
+    const dates = counts?.["Roadmap dates"] ?? 0;
+    const asks = counts?.["Roadmap asks"] ?? n - links - dates;
+    return `${n} on the roadmap waiting on you: ${links} broken ${links === 1 ? "link" : "links"}, ${dates} ${dates === 1 ? "date" : "dates"} to confirm, ${asks} ${asks === 1 ? "change or draft" : "changes or drafts"}`;
+  }
   return `${n} waiting on you`;
 }
 
@@ -260,7 +278,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
               <Icon name={d.icon} stroke={1.7} />
               <span className="min-w-0 flex-1 truncate">{d.label}</span>
               {n > 0 && (
-                <span id={`${d.testId}-count`} data-testid={`${d.testId}-count`} aria-label={countWords(d.label, n)} title={countWords(d.label, n)} className={`simple-count tnum ${d.label === "Meetings" && !counts?.["Meetings live"] ? "simple-count-quiet" : ""}`}>
+                <span id={`${d.testId}-count`} data-testid={`${d.testId}-count`} aria-label={countWords(d.label, n, counts)} title={countWords(d.label, n, counts)} className={`simple-count tnum ${d.label === "Meetings" && !counts?.["Meetings live"] ? "simple-count-quiet" : ""}`}>
                   {n}
                 </span>
               )}
@@ -330,7 +348,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
                     <Icon name={d.icon} stroke={1.7} />
                     {/* fix4 review: "One-pagers" fills a 390 px phone's fifth of the bar to the pixel; a hair tighter it is whole. */}
                     <span className="max-w-full truncate tracking-[-0.02em]">{d.label}</span>
-                    {tabBadge(`${id}-count`, n, countWords(d.label, n), quietOf(d))}
+                    {tabBadge(`${id}-count`, n, countWords(d.label, n, counts), quietOf(d))}
                   </Link>
                 );
               })}
@@ -370,7 +388,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
                         >
                           <Icon name={d.icon} />
                           {d.label}
-                          {tabBadge(id, n, countWords(d.label, n), quietOf(d))}
+                          {tabBadge(id, n, countWords(d.label, n, counts), quietOf(d))}
                         </Link>
                       </li>
                     );

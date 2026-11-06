@@ -157,6 +157,11 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             return f"moved the goal {_quoted(target.get('title')) or 'a goal'} to Trash"
         case "unarchive_goal":
             return f"restored the goal {_quoted(target.get('title')) or 'a goal'}"
+        # roadmap-decide: a cut item's fix, the dependency dropped.
+        case "remove_dependency":
+            titles = target.get("titles") or []
+            dep = _quoted(titles[1]) if len(titles) > 1 else None
+            return f"removed {x}'s dependency on {dep}" if dep else f"removed a dependency of {x}"
     return f"changed {x}"
 
 

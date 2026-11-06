@@ -29,6 +29,7 @@ import { useMe } from "@/lib/me";
 import {
   beforeAfter,
   brokenLinks,
+  draftNext,
   changeWords,
   fixChange,
   goalTiles,
@@ -291,7 +292,7 @@ export default function SimpleHome() {
     return { next: list.upcoming[0] ?? null };
   });
   const personIds = useMemo(() => {
-    const ids = new Set<string>((drafts.data ?? []).flatMap((d) => d.waiting_on));
+    const ids = new Set<string>((drafts.data ?? []).flatMap((d) => [...d.waiting_on, ...(d.required_reviewers ?? [])]));
     for (const c of changes.data ?? []) if (c.status === "proposed") c.routed_to.forEach((id) => ids.add(id));
     return [...ids].sort();
   }, [drafts.data, changes.data]);
@@ -860,16 +861,13 @@ export default function SimpleHome() {
           )}
           {myDrafts.map((draft) => (
             <p key={draft.id} data-testid="home-draft" className="flex flex-wrap items-center justify-between gap-3">
+              {/* roadmap-decide: what happens next and who acts, as the roadmap's banner says it (draftNext). */}
               <span>
-                Your working draft of <strong>{draft.document.title}</strong> has {draft.changes} {draft.changes === 1 ? "change" : "changes"}. It publishes as v
-                {(draft.base_version ?? 0) + 1} when{" "}
-                {draft.waiting_on.length
-                  ? draft.waiting_on.map((id) => nameOf(id, "a reviewer")).join(", ")
-                  : "its decider"}{" "}
-                {draft.waiting_on.length > 1 ? "approve" : "approves"}.
+                Your working draft of <strong>{draft.document.title}</strong> has {draft.changes} {draft.changes === 1 ? "change" : "changes"}.{" "}
+                {draftNext(draft, (id) => nameOf(id, "a reviewer")).words}.
               </span>
               <Link href={`/simple/roadmap?draft=${draft.id}`} className="simple-button">
-                Open draft
+                {draftNext(draft).action === "approve" || draftNext(draft).action === "publish" ? "Open draft to approve" : draftNext(draft).action === "submit" ? "Open draft to send for review" : "Open draft"}
               </Link>
             </p>
           ))}

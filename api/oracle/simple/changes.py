@@ -135,6 +135,7 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "set_goal": ("goal_id",),
     "set_depends": ("depends_on",),
     "set_status": ("status",),
+    "remove_dependency": ("depends_on",),
 }
 CONFIDENCES = ("low", "medium", "high")
 # set_status: the statuses a person sets (the others come from the tracker or a merge).
@@ -506,6 +507,10 @@ async def _names(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
 def _touched(c: SimpleChange) -> set[str]:
     if c.op in KEYED:
         return set(c.after) | set(c.before)
+    # Review: a removed dependency touches the item it depended on too (its flags, the
+    # "changed since you saw it" check's last writer, the locks).
+    if c.op == "remove_dependency" and c.target.get("subject"):
+        return {str(c.target.get("item_id")), str(c.target["subject"])}
     return {str(c.target.get("item_id"))}
 
 
@@ -628,6 +633,10 @@ async def _plan(
             raise await _conflict(db, seen, set(seen), "Changed since you saw it")
         moves = _fix_plan(op, entry, dep, by_id)
         await _lock(db, list(moves))
+        # roadmap-decide: the draft's change list names the item, then what else moved.
+        target["titles"] = [entry.row.title] + [
+            by_id[i].row.title for i in moves if i != entry.row.id and i in by_id
+        ]
         before = {str(i): read(by_id[i].row, (*DATES, "date_source"), target) for i in moves}
         after = {
             str(i): {"start_date": s.isoformat(), "end_date": e.isoformat(), "date_source": "typed"}
@@ -659,6 +668,11 @@ async def _plan(
         after = {str(e.row.id): {"cut": True} for e in cut}
         return entry, target, before, after
     fields = FIELDS[op]
+    if op == "remove_dependency":
+        # roadmap-decide review: the page may not see every stored key (a filter, a key that
+        # matches no item): only target.subject still being a dependency is checked, below,
+        # and ``before`` is the stored list.
+        body.before = read(row, fields, target)
     missing = [f for f in fields if f not in body.before]
     if missing:
         raise ChangeError(422, f"before: {', '.join(missing)} as you saw them")
@@ -762,6 +776,14 @@ async def _plan(
         after = {"position": pos}
     elif op in ("cut", "restore"):
         after = {"cut": op == "cut"}
+    elif op == "remove_dependency":
+        # roadmap-decide: the item no longer depends on ``target.subject`` (a cut item's fix).
+        dep = by_id.get(_uuid(target.get("subject"), "subject"))
+        if dep is None or dep.row.id not in entry.depends_on:
+            raise ChangeError(422, "target.subject: an item the target depends on")
+        target["subject"] = str(dep.row.id)
+        target["titles"] = [row.title, dep.row.title]
+        after = {"depends_on": [k for k in row.depends_on or [] if k != dep.row.item_key]}
     elif op == "confirm_item":
         after = {"draft": False}
     elif op == "keep_both":
@@ -1011,9 +1033,16 @@ async def _lock_change_items(db: AsyncSession, c: SimpleChange) -> None:
 
 
 async def _flags(
-    db: AsyncSession, c: SimpleChange, overlays: dict[uuid.UUID, dict[str, Any]]
+    db: AsyncSession,
+    c: SimpleChange,
+    overlays: dict[uuid.UUID, dict[str, Any]],
+    principal: Any = None,
 ) -> list[SimpleItemFlags]:
     read_ = await service.load(db, overlays)
+
+    def may(d: service.Entry) -> bool:
+        return service.can_decide(principal, d, read_.deciders)
+
     by_id = read_.by_id()
     ids: list[uuid.UUID] = []
     for k in sorted(_touched(c)):
@@ -1026,7 +1055,7 @@ async def _flags(
     return [
         SimpleItemFlags(
             item_id=i,
-            flags=service.flags_out(by_id[i]),
+            flags=service.flags_out(by_id[i], may),
         )
         for i in ids
     ]
@@ -1139,13 +1168,14 @@ async def create(
     )
     if applies:
         await _apply(db, c, after, principal, session)  # type: ignore[arg-type]
-        flags = await _flags(db, c, await drafts.overlays_for(db, principal))
+        flags = await _flags(db, c, await drafts.overlays_for(db, principal), principal)
         session.last_change_at = now  # type: ignore[union-attr]
     else:
         # As if applied, on what the proposer reads; nothing is written.
         rows = {str(e.row.id): e.row for e in read_.entries}
         copies = await drafts.copies_of(db, list(rows.values()), seen)
-        flags = await _flags(db, c, drafts.simulate(c, after, rows, seen, KEYED, write, copies))
+        overlay = drafts.simulate(c, after, rows, seen, KEYED, write, copies)
+        flags = await _flags(db, c, overlay, principal)
     db.add(c)
     await db.flush()
     await audit.record(db, principal, f"simple_change.{c.status}", "simple_change", c.id,
@@ -1229,7 +1259,7 @@ async def decide(
     c.status = "accepted" if action == "accept" else "declined"
     c.decided_by, c.decided_at, c.decision_reason = me, now, reason
     await db.flush()
-    flags = await _flags(db, c, await drafts.overlays_for(db, principal))
+    flags = await _flags(db, c, await drafts.overlays_for(db, principal), principal)
     await audit.record(db, principal, f"simple_change.{c.status}", "simple_change", c.id,
                        data={"op": c.op, "target": c.target, "reason": reason})  # fmt: skip
     await db.commit()
@@ -1328,7 +1358,7 @@ async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> Simple
     db.add(u)
     session.last_change_at = now
     await db.flush()
-    flags = await _flags(db, c, await drafts.overlays_for(db, principal))
+    flags = await _flags(db, c, await drafts.overlays_for(db, principal), principal)
     await audit.record(db, principal, "simple_change.undone", "simple_change", u.id,
                        data={"op": c.op, "target": c.target, "undoes_id": str(c.id)})  # fmt: skip
     await db.commit()
@@ -1442,7 +1472,8 @@ class _View:
         owners, decider and reviewers (#723 owner answer)."""
         # S5: a one-pager line's change is on a PRD, not a roadmap of this read.
         if (c.document_id is not None and c.document_id not in self.docs
-                and c.op not in ("edit_line", "decide_question", "name_decider")):  # fmt: skip
+                and c.op not in ("edit_line", "decide_question", "name_decider",
+                                 "edit_goal_milestone")):  # fmt: skip
             return False
         if self.me is None:
             return False

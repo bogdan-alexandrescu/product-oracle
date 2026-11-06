@@ -497,7 +497,7 @@ function meetingDrafts(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting, p: Prd): Sc
     participant_ids: [...new Set(made.map((d) => d.approver_id).filter((x): x is string => !!x))], changes: made.length,
     submitted_at: m.approved?.at ?? null, submitted_by: m.approved ? m.presenter_id : null, decider_approved: !!m.approved,
     waiting_on: m.approved?.waiting_on ?? [], approved_at: m.approved && !held(m) ? m.approved.at : null, blocked_by: m.approved?.blocked_by ?? [],
-    can_submit: false, can_resume: false, can_approve: false, change_log: [], can_withdraw: false, published: true,
+    can_submit: false, can_resume: false, can_approve: false, can_publish: false, required_reviewers: [], change_log: [], can_withdraw: false, published: true,
   }];
 }
 

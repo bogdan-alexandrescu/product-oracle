@@ -12244,6 +12244,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/roadmap/waiting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Simple Roadmap Waiting
+         * @description roadmap-decide review: the side menu's light count: the broken links of the whole
+         *     roadmap as the caller sees it (the working draft's to who sees it), no filter; the same
+         *     ones the roadmap's strip, its Needs a decision and Home count; and the dates the caller may
+         *     confirm, so the side menu's count equals Needs a decision. ``roadmap`` (id or slug): one
+         *     roadmap's alone, as the read's own filter (Needs a decision's "in all" of a chosen roadmap);
+         *     404 when the caller cannot read it.
+         */
+        get: operations["get_simple_roadmap_waiting"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/roadmap/date-suggestions": {
         parameters: {
             query?: never;
@@ -18876,7 +18901,7 @@ export interface components {
             /** Message Id */
             message_id: string | null;
             /** Op */
-            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped");
+            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped");
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -18992,7 +19017,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -27730,7 +27755,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency";
             /**
              * Status
              * @enum {string}
@@ -39874,7 +39899,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -39923,7 +39948,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -40328,6 +40353,8 @@ export interface components {
              * Format: uuid
              */
             created_by: string;
+            /** Created By Name */
+            created_by_name?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -40335,6 +40362,7 @@ export interface components {
             created_at: string;
             /** Participant Ids */
             participant_ids: string[];
+            decider?: components["schemas"]["SimplePersonRef"] | null;
             /** Changes */
             changes: number;
             /** Submitted At */
@@ -40358,6 +40386,16 @@ export interface components {
             can_resume: boolean;
             /** Can Approve */
             can_approve: boolean;
+            /**
+             * Can Publish
+             * @default false
+             */
+            can_publish: boolean;
+            /**
+             * Required Reviewers
+             * @default []
+             */
+            required_reviewers: string[];
             /**
              * Change Log
              * @default []
@@ -40502,7 +40540,7 @@ export interface components {
             /** Reason */
             reason: string;
             /** Fixes */
-            fixes: ("shift_dependents" | "move_dependency" | "accept_risk")[];
+            fixes: ("shift_dependents" | "move_dependency" | "accept_risk" | "restore" | "remove_dependency")[];
             /**
              * State
              * @enum {string}
@@ -40517,6 +40555,29 @@ export interface components {
              * @default []
              */
             moves: string[];
+            /**
+             * Dependents
+             * @default []
+             */
+            dependents: components["schemas"]["SimpleFlagDependent"][];
+        };
+        /**
+         * SimpleFlagDependent
+         * @description An item not cut or done that depends on a cut item, wherever the view's filters are.
+         */
+        SimpleFlagDependent: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
         };
         /**
          * SimpleFlow
@@ -41430,6 +41491,11 @@ export interface components {
             asked_of?: string | null;
             /** Change Id */
             change_id?: string | null;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
         };
         /**
          * SimpleMilestoneTarget
@@ -42393,6 +42459,18 @@ export interface components {
              * @default []
              */
             applied_versions: components["schemas"]["SimpleAppliedVersion"][];
+        };
+        /**
+         * SimpleRoadmapWaiting
+         * @description roadmap-decide review: the light count the side menu reads: the broken links of the
+         *     whole roadmap as the reader sees it (the working draft's to who sees it), and the dates
+         *     the reader may confirm in it (Needs a decision's Dates to confirm).
+         */
+        SimpleRoadmapWaiting: {
+            /** Broken Links */
+            broken_links: number;
+            /** Dates To Confirm */
+            dates_to_confirm: number;
         };
         /**
          * SimpleRunGroup
@@ -72111,6 +72189,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimpleRoadmapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_simple_roadmap_waiting: {
+        parameters: {
+            query?: {
+                roadmap?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleRoadmapWaiting"];
                 };
             };
             /** @description Validation Error */

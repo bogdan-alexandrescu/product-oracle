@@ -35,3 +35,14 @@ export { onWaitingChanged, waitingChanged };
 // Any page that tells the rail what waits changed (through lib/waiting) drops the one list too,
 // before the rail and Home read it again.
 if (typeof window !== "undefined") onWaitingChanged(() => (hit = null));
+
+/**
+ * After an action that changed what waits on me: the page's own `reload` and the rail's counts
+ * read again at once (roadmap-decide).
+ */
+export async function reloadWaiting(reload: () => Promise<unknown>): Promise<void> {
+  invalidateWaiting();
+  const reloaded = reload();
+  waitingChanged();
+  await reloaded;
+}
