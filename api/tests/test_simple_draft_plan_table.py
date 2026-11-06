@@ -119,3 +119,18 @@ async def test_the_banner_names_the_number_the_draft_becomes(client):
     [d] = [x for x in r.json() if x["status"] == "working"]
     assert d["base_version"] == base.number
     assert d["next_version"] == latest + 2
+
+
+async def test_a_cut_item_is_no_difference(client):
+    """An item cut in the draft is left out of the version's plan and off Simple's plan: the
+    line still says it matches (the company roadmap has an item below the line)."""
+    ctx = await make_people()
+    w = await World(ctx).build(decider=True, ops=["move_dates", "cut"])
+    await _base(ctx, w)
+    r = await w.post(client, "decider", "cut")
+    assert r.status_code == 201, r.text
+    await _approve(client, ctx, w)
+    r = await client.get(ROADMAP, headers=ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    [line] = r.json()["applied_versions"]
+    assert line["differences"] == [] and line["matches"] is True, line
