@@ -594,6 +594,12 @@ function decides(ctx: OnePagerCtx): boolean {
   return (ctx.trackOwners ?? []).includes(ctx.id) && RANK[ctx.role] >= RANK.approver;
 }
 
+/** As one_pager.may_decide: a proposal's decider is an owner (has_role on the role ladder), or
+ * whom it is routed to; a viewer, commenter or approver decides only what is routed to them. */
+function mayDecide(ctx: OnePagerCtx, c: Pick<Change, "routed_to">): boolean {
+  return !!ctx.id && (RANK[ctx.role] >= RANK.owner || c.routed_to.includes(ctx.id));
+}
+
 /** As one_pager.starts (meetings.may_start): an owner or the PRD's decider start its review. */
 function starts(ctx: OnePagerCtx): boolean {
   return ctx.role === "owner" || (!!ctx.decider && ctx.id === ctx.decider);
@@ -740,7 +746,7 @@ function liveChanges(db: OnePagerDb) {
 function out(db: OnePagerDb, ctx: OnePagerCtx, c: Change): Change {
   return {
     ...c,
-    can_decide: c.status === "proposed" && (ctx.role === "owner" || c.routed_to.includes(ctx.id)),
+    can_decide: c.status === "proposed" && mayDecide(ctx, c),
     can_undo: c.status === "applied" && c.by === ctx.id && !db.changes.some((u) => u.undoes_id === c.id),
   };
 }
@@ -754,7 +760,7 @@ function patches(c: Change): Patch[] {
 
 function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
   const sees = seesDraft(db, ctx);
-  const sees_ = (c: Change) => c.by === ctx.id || ctx.role === "owner" || c.routed_to.includes(ctx.id);
+  const sees_ = (c: Change) => c.by === ctx.id || mayDecide(ctx, c);
   // As the API: a numbers fix proposed shows on its "Needs a look" item, never as a line's note.
   const fixes = db.changes.filter((c) => c.status === "proposed" && c.op === NUMBER_OP && sees_(c));
   const proposals = db.changes.filter((c) => c.status === "proposed" && c.op === "edit_line");
@@ -772,7 +778,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
       change_id: c.id, line_id: lineId, kind, by: c.by, by_name: c.by_name, at: c.at, in_meeting: c.in_meeting,
       before: String(c.before.line ?? ""), after: String(c.after.line ?? ""), sections: patches(c),
       can_undo: kind === "proposal" ? c.by === ctx.id : c.by === ctx.id && c.session_open,
-      can_decide: kind === "proposal" && (ctx.role === "owner" || c.routed_to.includes(ctx.id)),
+      can_decide: kind === "proposal" && mayDecide(ctx, c),
       adds_feature: lineId.startsWith("bets-"), flow: onePagerFlow(flowFor(db.visuals, "change", c.id)), meeting_title: c.meeting_title ?? null,
     };
   };
@@ -814,7 +820,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
       ...x,
       fix: {
         ...f, target: { ...f.target, document_id: db.doc.id },
-        proposal: c ? { change_id: c.id, by_name: c.by_name, can_decide: ctx.role === "owner" || c.routed_to.includes(ctx.id), can_undo: c.by === ctx.id } : null,
+        proposal: c ? { change_id: c.id, by_name: c.by_name, can_decide: mayDecide(ctx, c), can_undo: c.by === ctx.id } : null,
       },
     };
   });
@@ -984,7 +990,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
   const c = db.changes.find((x) => x.id === p[3]);
   if (!c || m !== "POST") return null;
   if (p[4] === "accept" || p[4] === "decline") {
-    if (!(ctx.role === "owner" || c.routed_to.includes(ctx.id))) return json(403, { detail: "Only an owner or the PRD's decider decides this proposal" });
+    if (!mayDecide(ctx, c)) return json(403, { detail: "Only an owner or the PRD's decider decides this proposal" });
     if (c.status !== "proposed") return json(409, { detail: `This change is ${c.status} already` });
     const lineId = String(c.target.line_id);
     if (p[4] === "accept" && c.op === NUMBER_OP) {
