@@ -191,6 +191,9 @@ def for_reader(html: str) -> str:
 # G-3: a goal code ("G1") or a tracker key ("ENG-512") as the roadmap's words write it.
 _CODE = re.compile(r"(?<![\w(-])(G-?\d+|[A-Z][A-Z0-9]{1,9}-\d+)(?![\w)-])")
 
+# A name spliced into the text reads as written: no table column, link or emphasis of its own.
+_MARKDOWN = re.compile(r"[\\|*_\[\]`<>]")
+
 _GOAL_LINE = re.compile(r"^\s*[-*]\s*(G-?\d+)\b[\s.:]+(\S.*?)\s*$", re.M)
 
 
@@ -202,14 +205,17 @@ def with_names(text: str, names: dict[str, str]) -> str:
         name = names.get(m.group(1))
         if not name or name == m.group(1) or text[m.end() :].lstrip().startswith(name):
             return m.group(0)
-        return name if m.group(1) in name else f"{name} ({m.group(1)})"
+        shown = _MARKDOWN.sub(r"\\\g<0>", name)
+        return shown if m.group(1) in name else f"{shown} ({m.group(1)})"
 
     return _CODE.sub(named, text) if names else text
 
 
-async def code_names(db, texts: Sequence[str]) -> dict[str, str]:
-    """G-3: the name of each goal code and tracker key ``texts`` write: the goal's title
-    (its key, any case, with or without the dash) and the tracker issue's title."""
+async def code_names(db, texts: Sequence[str], items: Sequence[ItemView] = ()) -> dict[str, str]:
+    """G-3: the name of each goal code and tracker key ``texts`` write: the confirmed
+    goal's title (its key, any case, with or without the dash) and the tracker issue's
+    title when the version's own ``items`` carry its record (the keys the page already
+    shows through an item). A link holder reads no more than the page shows."""
     from oracle.baseline.models import Entity
     from oracle.roadmap.models import TrackerRecord
 
@@ -223,7 +229,8 @@ async def code_names(db, texts: Sequence[str]) -> dict[str, str]:
         for t in texts
         for m in _GOAL_LINE.finditer(t or "")
     }
-    refs = [c for c in codes if not re.fullmatch(r"G-?\d+", c)]
+    carried = {ref for item in items for ref, _ in item.tracker}
+    refs = [c for c in codes if c in carried]
     if refs:
         rows = await db.execute(
             select(TrackerRecord.external_ref, TrackerRecord.title).where(
@@ -234,7 +241,9 @@ async def code_names(db, texts: Sequence[str]) -> dict[str, str]:
     goals = {c.replace("-", "").lower(): c for c in codes if re.fullmatch(r"G-?\d+", c)}
     if goals:
         rows = await db.execute(
-            select(Entity.key, Entity.title).where(Entity.type == "goal", Entity.title.is_not(None))
+            select(Entity.key, Entity.title).where(
+                Entity.type == "goal", Entity.status == "confirmed", Entity.title.is_not(None)
+            )
         )
         for key, title in rows:
             code = goals.get((key or "").replace("-", "").lower())
@@ -445,7 +454,7 @@ async def render_share(ctx: ShareContext, fmt: str = "html") -> str | bytes:
         # or unconfirmed since makes a new key, so the page regroups (owner decision
         # 2026-10-26).
         # G-3: the names its codes read by are part of what it shows.
-        names = await code_names(db, [s.body_md or "" for s in ev.all_sections])
+        names = await code_names(db, [s.body_md or "" for s in ev.all_sections], ev.items)
         key = (ctx.publication_id, ctx.audience, fmt, variants.render_key(ev.items),
                tuple(sorted(names.items())))  # fmt: skip
         if key in _cache and fmt == "html":
