@@ -5,10 +5,8 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import type { CitedItem } from "./baseline";
-import { FIREFLIES_DEFAULT_ENDPOINT, mockConnectionEndpoint, mockConnectionRows, reconnectReason } from "./connections";
-import { FIREFLIES_CONNECTION_ID } from "./fireflies";
+import { mockConnectionEndpoint, mockConnectionRows, reconnectReason, SEEDED_CONNECTION } from "./connections";
 import { mockUuid, PRODUCT_CHAT_ID, seeded, seededItemId } from "./ids";
-import { MOCK_NOTION_CONNECTION_ID } from "./notion";
 
 type Source = Schemas["SourceOut"];
 // `folder`: the picked Drive folder a Google Doc came from (mock only).
@@ -24,8 +22,6 @@ interface SourcesDb {
   /** Source id -> the connection a Disconnect took from it (sources.lost_provider and
    * lost_account_id) and whose it was: that person connecting that account again links it. */
   lost?: Record<string, { provider: string; account_id: string; email?: string }>;
-  /** Connections a Disconnect deleted: no longer offered to a source. */
-  removed?: string[];
 }
 
 type Role = Schemas["Me"]["role"];
@@ -49,30 +45,6 @@ export const SOURCES_STORAGE_KEY = "po-mock-sources-v2";
  */
 export const MOCK_SYNC_SUPERSEDED_KEY = "po-mock-sync-superseded";
 
-/** A Fireflies connection's endpoint, as Settings > Connections set it (the default otherwise). */
-function withEndpoint(c: Schemas["ConnectionChoice"]): Schemas["ConnectionChoice"] {
-  if (c.id !== FIREFLIES_CONNECTION_ID) return c;
-  return { ...c, endpoint_url: mockConnectionEndpoint(c.id) ?? FIREFLIES_DEFAULT_ENDPOINT };
-}
-
-const CONNECTIONS: Record<string, Schemas["ConnectionChoice"][]> = {
-  slack: [
-    { id: "c0000000-0000-4000-8000-000000000001", account_label: "Example Co chat", status: "active" },
-    { id: "c0000000-0000-4000-8000-000000000003", account_label: "Partner workspace", status: "active" },
-  ],
-  github: [{ id: "c0000000-0000-4000-8000-000000000002", account_label: "example-org", status: "active" }],
-  notion: [{ id: MOCK_NOTION_CONNECTION_ID, account_label: "Example Notion", status: "active" }],
-  fireflies: [{ id: FIREFLIES_CONNECTION_ID, account_label: "pat@example.com", status: "active" }],
-  google: [
-    { id: "c0000000-0000-4000-8000-000000000005", account_label: "pat@example.com", status: "active", reconnect_reason: null },
-    {
-      id: "c0000000-0000-4000-8000-000000000006",
-      account_label: "old-drive@example.com",
-      status: "active",
-      reconnect_reason: "Reconnect to choose files",
-    },
-  ],
-};
 const PROVIDER: Record<Source["kind"], string | null> = {
   upload: null,
   github: "github",
@@ -157,7 +129,7 @@ function seed(): SourcesDb {
     id: PRODUCT_CHAT_ID,
     kind: "slack",
     name: "Product chat",
-    connection_id: CONNECTIONS.slack[0].id,
+    connection_id: SEEDED_CONNECTION.slack,
     // Saved with the channels' names, as the picker saves them: the row reads "#product", not an id.
     config: { channels: ["C0123PRODUCT", "C0456FEEDBACK"], labels: { C0123PRODUCT: "#product", C0456FEEDBACK: "#customer-feedback" } },
     status: "active",
@@ -177,7 +149,7 @@ function seed(): SourcesDb {
     id: "50000000-0000-4000-8000-000000000002",
     kind: "github",
     name: "Example repo",
-    connection_id: CONNECTIONS.github[0].id,
+    connection_id: SEEDED_CONNECTION.github,
     config: { repos: ["example-org/example-app"] },
     status: "error",
     last_error: "The connection was rejected: token expired",
@@ -194,7 +166,7 @@ function seed(): SourcesDb {
     id: LEGACY_ID,
     kind: "slack",
     name: "Legacy all-hands chat",
-    connection_id: CONNECTIONS.slack[0].id,
+    connection_id: SEEDED_CONNECTION.slack,
     config: { channels: Array.from({ length: 120 }, (_, i) => `C9${String(i + 1).padStart(3, "0")}LEGACY`) },
     status: "needs_attention",
     last_error: `Pick ${MAX_CHANNELS} channels or fewer, then it syncs again`,
@@ -210,7 +182,7 @@ function seed(): SourcesDb {
     id: "50000000-0000-4000-8000-000000000004",
     kind: "fireflies",
     name: "Customer calls",
-    connection_id: FIREFLIES_CONNECTION_ID,
+    connection_id: SEEDED_CONNECTION.fireflies,
     config: { from_date: "2026-09-01", title_contains: ["Customer interview"] },
     status: "active",
     last_error: null,
@@ -229,7 +201,7 @@ function seed(): SourcesDb {
     id: "50000000-0000-4000-8000-000000000005",
     kind: "google_docs",
     name: "Product docs",
-    connection_id: CONNECTIONS.google[0].id,
+    connection_id: SEEDED_CONNECTION.google,
     config: {
       docs: ["1DocPricingExample", "1DocActivationExample", "1DocInterviewsExample"],
       folders: ["1FolderSpecsExample", "1FolderVendorExample"],
@@ -280,7 +252,7 @@ function seed(): SourcesDb {
     id: "50000000-0000-4000-8000-000000000006",
     kind: "google_docs",
     name: "Drive folders",
-    connection_id: CONNECTIONS.google[1].id,
+    connection_id: SEEDED_CONNECTION.oldGoogle,
     // Picked by name, as the Drive picker saves picks (qa-settings-23: the row reads the name).
     config: { folders: ["1FolderProductExample"], names: { "1FolderProductExample": "Product planning" } },
     status: "active",
@@ -416,7 +388,6 @@ function store(db: SourcesDb) {
  * connection, each keeping the provider and account it lost. */
 export function forgetMockConnection(conn: { id: string; provider: string; account_id: string }, email?: string) {
   const db = load();
-  db.removed = [...new Set([...(db.removed ?? []), conn.id])];
   for (const s of db.sources) {
     if (s.connection_id !== conn.id) continue;
     s.connection_id = null;
@@ -434,7 +405,6 @@ const CONNECTION_REMOVED = "The connection was removed: pick another one";
  * sources that lost it are linked to the new connection. Never another account's. */
 export function relinkMockSources(conn: { id: string; provider: string; account_id: string }, email?: string) {
   const db = load();
-  db.removed = (db.removed ?? []).filter((id) => id !== conn.id);
   for (const s of db.sources) {
     const lost = db.lost?.[s.id];
     if (s.connection_id || !lost || PROVIDER[s.kind] !== conn.provider) continue;
@@ -451,14 +421,11 @@ export function relinkMockSources(conn: { id: string; provider: string; account_
   store(db);
 }
 
-/** The person's connections of `provider` a source can use (/v1/sources/kinds): the
- * Sources page's own, less those a Disconnect deleted, and those made on Settings › Connections. */
-function choicesFor(db: SourcesDb, provider: string, email?: string): Schemas["ConnectionChoice"][] {
-  const removed = new Set(db.removed ?? []);
-  const fixed = (CONNECTIONS[provider] ?? []).filter((c) => !removed.has(c.id));
-  const live = mockConnectionRows(email)
-    // The seeded Notion account is on both lists, under two ids: offered once.
-    .filter((r) => r.provider === provider && !fixed.some((c) => c.id === r.id || c.account_label === r.account_label))
+/** The person's connections of `provider` a source can use (/v1/sources/kinds): their rows in
+ * the one connections store (./connections.ts) that Settings › Connections reads too (F-60). */
+function choicesFor(provider: string, email?: string): Schemas["ConnectionChoice"][] {
+  return mockConnectionRows(email)
+    .filter((r) => r.provider === provider)
     .map((r) => ({
       id: r.id,
       account_label: r.account_label,
@@ -466,7 +433,6 @@ function choicesFor(db: SourcesDb, provider: string, email?: string): Schemas["C
       reconnect_reason: reconnectReason(r.provider, r.scopes),
       endpoint_url: provider === "fireflies" ? mockConnectionEndpoint(r.id) : null,
     }));
-  return [...fixed.map(withEndpoint), ...live];
 }
 
 /** A source's kind and repositories (the code map mock, ./engineering.ts); null when there is none. */
@@ -698,7 +664,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     if (m === "GET") return json(200, db.sources.map((s) => counted(db, s)));
     const body = (await req.json()) as Schemas["SourceCreate"];
     if (!AVAILABLE[body.kind]) return json(422, { detail: "connector not available yet" });
-    const choice = Object.values(CONNECTIONS).flat().find((c) => c.id === body.connection_id);
+    const choice = choicesFor("google", ctx.me.email).find((c) => c.id === body.connection_id);
     if (body.kind === "google_docs" && choice?.reconnect_reason && body.config?.folders) {
       return json(422, {
         detail: "Reconnect to choose files: this Google connection cannot read folders; reconnect Google to give Oracle read access to your Drive",
@@ -745,7 +711,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
         kind,
         provider: PROVIDER[kind],
         connector_available: AVAILABLE[kind],
-        connections: PROVIDER[kind] ? choicesFor(db, PROVIDER[kind]!, ctx.me.email) : [],
+        connections: PROVIDER[kind] ? choicesFor(PROVIDER[kind]!, ctx.me.email) : [],
       })),
     );
   }
@@ -784,9 +750,9 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
         const id = patch.connection_id ?? null;
         if (!provider) return json(422, { detail: "Uploads take no connection" });
         if (!id) return json(422, { detail: `A ${s.kind} source needs one of your ${provider} connections` });
-        const choice = choicesFor(db, provider, ctx.me.email).find((c) => c.id === id);
+        const choice = choicesFor(provider, ctx.me.email).find((c) => c.id === id);
         if (!choice) {
-          const other = Object.values(PROVIDER).find((p) => p && p !== provider && choicesFor(db, p, ctx.me.email).some((c) => c.id === id));
+          const other = Object.values(PROVIDER).find((p) => p && p !== provider && choicesFor(p, ctx.me.email).some((c) => c.id === id));
           if (other) return json(422, { detail: `A ${s.kind} source needs a ${provider} connection, not a ${other} one` });
           return json(404, { detail: "Connection not found" });
         }
@@ -813,7 +779,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
       if (config && reconfigured) {
         s.config = config;
         if (s.kind === "google_docs") {
-          const choice = Object.values(CONNECTIONS).flat().find((c) => c.id === s.connection_id);
+          const choice = choicesFor("google", ctx.me.email).find((c) => c.id === s.connection_id);
           s.reconnect_reason = choice?.reconnect_reason ?? null;
           // Narrowing takes effect on save (S5, owner 2026-10-20): what left the picks is
           // deleted now, and what the last sync said about what is still picked stays.

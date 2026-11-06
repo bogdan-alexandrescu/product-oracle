@@ -9,7 +9,7 @@ import type { Schemas } from "@/lib/api/client";
 
 type NotionPage = Schemas["NotionPageOut"];
 
-export const MOCK_NOTION_CONNECTION_ID = "c0000000-0000-4000-8000-000000000003";
+export const MOCK_NOTION_CONNECTION_ID = "c0000000-0000-4000-8000-000000000004";
 const PAGE_SIZE = 10;
 /** Tests set the "po-mock-scenario" localStorage key to this for small pages, a parent last. */
 export const NOTION_PAGED_SCENARIO = "notion-paged";
