@@ -9,6 +9,7 @@ import { clock, FlowPanel, meetingMoment } from "@/components/simple/FlowVisual"
 import { WithFeatureMarks } from "@/components/current-state/CurrentState";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { OpenFeatureContext, type OpenFeature } from "@/components/simple/OpenFeature";
+import { OnePagerSlides } from "@/components/simple/OnePagerSlides";
 import { FeaturePanel } from "@/app/simple/roadmap/_panel";
 import { dmy, ew, PrdPlan, TAP44, usePhone } from "@/components/simple/PrdTimeline";
 import { PrdStatus } from "@/components/simple/PrdStatus";
@@ -484,6 +485,29 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
       data-testid="one-pager"
       data-presenting={presenting ? "true" : undefined}
     >
+      {presenting && (
+        // C-8: presenting is a run of full-screen slides, not the page without its menu.
+        <OnePagerSlides
+          v={v}
+          plan={planShown ? plan : null}
+          top={showing && (
+            // build-review (QV3 a): a line over the presented slides says which it is.
+            <p data-testid="presenting-what" className="rounded-full border border-line-strong bg-surface px-3 py-1 text-[15px] font-semibold text-text2">
+              {showing === "published" ? `Showing published v${v.draft?.base_version ?? v.version}` : `Showing the working draft · ${v.draft?.changes ?? 0} ${v.draft?.changes === 1 ? "change" : "changes"} not yet approved`}
+            </p>
+          )}
+          stop={() => void stopPresenting()}
+          lineWords={(l) => (showing === "published" && publishedWords.has(l.id) ? publishedWords.get(l.id)! : l.full ? foldAtSentence(l.full, l.text) : l.text)}
+          quotes={words}
+          codes={codes}
+          sectionNames={sectionNames}
+          onPlan={(p) => {
+            if (p.status === "reading") setUpdating(true);
+            else setPlanNow(p);
+          }}
+        />
+      )}
+      {!presenting && (<>
       {draftShown && v.draft && !presenting && (
         <div role="status" aria-label="Working draft" className="simple-noprint flex flex-wrap items-center gap-3 border-b border-[var(--simple-rule)] bg-[var(--simple-edited)] px-4 py-2 text-base">
           <strong>Working draft</strong>
@@ -544,12 +568,6 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
       {/* qa-simple-prd-14/44, p3-16: the same header (title, status, version, owner, span) on both kinds. */}
       {/* qa4-simple-prd-5: presenting, the header sits over the page's own centred column. */}
       <div className={`mx-auto flex ${presenting && !planShown ? "max-w-[852px] px-4 max-[767px]:px-4" : sessionId ? "max-w-[1180px] px-0" : "max-w-[1180px] px-12 max-[767px]:px-4"} flex-col gap-5 pt-[26px] max-[767px]:gap-3.5 max-[767px]:pt-3.5 ${planShown ? "pb-12" : ""}`}>
-        {presenting && showing && (
-          // build-review (QV3 a): a line over the presented page says which it is.
-          <p data-testid="presenting-what" className="self-start rounded-full border border-line-strong bg-surface px-3 py-1 text-[15px] font-semibold text-text2">
-            {showing === "published" ? `Showing published v${v.draft?.base_version ?? v.version}` : `Showing the working draft · ${v.draft?.changes ?? 0} ${v.draft?.changes === 1 ? "change" : "changes"} not yet approved`}
-          </p>
-        )}
         <PrdHeader
           inMeeting={!!sessionId}
           v={v}
@@ -829,6 +847,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
         </aside>
       </div>
       )}
+      </>)}
     </div>
     </OpenFeatureContext.Provider>
   );
