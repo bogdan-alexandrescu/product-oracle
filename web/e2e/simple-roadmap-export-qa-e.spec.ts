@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { THEME_KEY } from "../lib/theme";
@@ -98,6 +98,54 @@ test.describe("R1: a phone's exported chart keeps every quarter label whole", ()
             // Its own place: just after its quarter's line (the last may end at the chart's edge).
             if (t.anchor !== "end") expect(t.x - t.line, `${kind}: ${t.text} sits at its line`).toBeCloseTo(3, 0);
           }
+        }
+      });
+    });
+  }
+});
+
+test.describe("A phone's Timeline export names every quarter and every goal", () => {
+  for (const width of [390, 320]) {
+    test.describe(`${width} wide`, () => {
+      test.use({ viewport: { width, height: 844 }, hasTouch: true });
+
+      test("the PNG and the PDF carry each quarter the page lists, its months, and each goal's lane by name", async ({ page }) => {
+        await open(page, { format: "timeline" });
+        await expect(page.getByTestId("timeline-quarter").first()).toBeVisible();
+        // What the phone shows: each quarter ("Q4 2026", "Oct – Dec 2026") and the goal each row serves.
+        const heads = await page.locator('[data-testid="timeline-quarter"] h3').allInnerTexts();
+        const shown = heads.map((h) => {
+          const m = /^(Q[1-4] \d{4})\s+((?:Jan|Apr|Jul|Oct) – (?:Mar|Jun|Sep|Dec) \d{4})/.exec(h.replace(/\s+/g, " ").trim());
+          expect(m, `a quarter's head: ${h}`).not.toBeNull();
+          return { label: m![1], months: m![2] };
+        });
+        expect(shown.length).toBeGreaterThan(1);
+        const rows = await page.locator('[data-testid="timeline-bar"] > span > span:nth-child(2)').allInnerTexts();
+        const goals = [...new Set(rows.map((r) => r.split(" · ").slice(1).join(" · ").trim()).filter(Boolean))];
+        expect(goals.length).toBeGreaterThan(1);
+        for (const kind of ["PNG", "PDF"] as const) {
+          await page.evaluate(() => (window.__poExports = []));
+          const { svg, bytes } = await exported(page, kind);
+          // Kept beside the test's results, to be looked at.
+          writeFileSync(test.info().outputPath(`timeline-${width}.${kind.toLowerCase()}`), bytes);
+          writeFileSync(test.info().outputPath(`timeline-${width}-${kind.toLowerCase()}.svg`), svg);
+          const quarters = await textsIn(page, svg, '[data-testid="export-quarter"]');
+          for (const q of shown) {
+            expect(quarters, `${kind}: ${q.label} on the axis`).toContain(q.label);
+            expect(quarters, `${kind}: ${q.label}'s months`).toContain(q.months);
+          }
+          // Its months too, month first.
+          const months = await textsIn(page, svg, '[data-testid="chart-axis"] [data-testid="axis-tick"]');
+          expect(months.length, `${kind}: month ticks`).toBeGreaterThan(2);
+          for (const m of months) expect(m).toMatch(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)( \d{4})?$/);
+          // A lane reads "2 Faster activation · 3 items": its number, its goal whole, its count.
+          const lanes = (await textsIn(page, svg, '[data-testid="export-lane"]')).map((l) => l.replace(/^\d+\s*/, ""));
+          for (const g of goals) expect(lanes.some((l) => l === g || l.startsWith(`${g} · `)), `${kind}: the lane ${g} is named whole`).toBe(true);
+          if (kind === "PDF") {
+            const pdf = bytes.toString("latin1");
+            expect(pdf).toContain("/MediaBox [0 0 792 612]");
+            expect(pdf).toMatch(/\(Page 1 of \d+\)/);
+          } else expect(bytes.subarray(1, 4).toString()).toBe("PNG");
         }
       });
     });
