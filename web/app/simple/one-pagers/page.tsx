@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useState } from "react";
 
+import { toast } from "@/components/ds/Toast";
 import { PrdMoveMenu } from "@/components/simple/PrdMoveMenu";
 import { NewPrdButton, NewPrdSheet, StartedRows, useCanStartPrd, useStartedPrds } from "@/components/simple/NewPrd";
 import { PrdStatus } from "@/components/simple/PrdStatus";
@@ -30,13 +31,25 @@ export default function OnePagers() {
   const canMove = can("move_document");
   const [moving, setMoving] = useState(false);
   const [moveError, setMoveError] = useState<string | null>(null);
+  // A move says what it did, with an Undo that puts every PRD's stored place back as it was.
   const move = useCallback(
-    async (doc: string, to: "up" | "down") => {
+    async (d: { slug: string; title: string }, to: "up" | "down") => {
+      const before = (q.data ?? []).map((x) => ({ document_id: x.id, position: x.position ?? null }));
       setMoving(true);
       setMoveError(null);
       try {
-        await unwrap(api.POST("/v1/documents/{doc}/move", { params: { path: { doc } }, body: { to } }));
+        await unwrap(api.POST("/v1/documents/{doc}/move", { params: { path: { doc: d.slug } }, body: { to } }));
         await q.reload();
+        toast({
+          message: `Moved ${d.title} ${to}.`,
+          action: {
+            label: "Undo",
+            onClick: () =>
+              void unwrap(api.PUT("/v1/documents/prd-order", { body: { positions: before } }))
+                .then(() => q.reload())
+                .catch(() => setMoveError("Oracle could not undo the move. Try again.")),
+          },
+        });
       } catch {
         setMoveError("Oracle could not move the PRD. Try again.");
       } finally {
@@ -52,8 +65,14 @@ export default function OnePagers() {
         title="PRDs"
         testId="simple-one-pagers"
         action={
-          // NP1: New PRD, opening the guided sheet.
+          // NP1: New PRD beside "Company order", opening the guided sheet.
           <span className="flex flex-wrap items-center gap-3">
+            {/* prd-order: the list says its order, the one company PRD order. */}
+            {rows && rows.length + mine.length > 1 ? (
+              <span className="simple-small" data-testid="one-pagers-order">
+                Company order
+              </span>
+            ) : null}
             {canStartPrd && <NewPrdButton primary onOpen={() => setNewPrd(true)} />}
           </span>
         }
@@ -87,7 +106,7 @@ export default function OnePagers() {
                 <PrdStatus d={d} />
                 <span className="simple-small ml-auto">Updated {dmy(dayIn(d.updated_at, zone))}</span>
                 {canMove && rows.length > 1 && (
-                  <PrdMoveMenu title={d.title} busy={moving} onUp={n > 0 ? () => void move(d.slug, "up") : undefined} onDown={n < rows.length - 1 ? () => void move(d.slug, "down") : undefined} />
+                  <PrdMoveMenu title={d.title} busy={moving} onUp={n > 0 ? () => void move(d, "up") : undefined} onDown={n < rows.length - 1 ? () => void move(d, "down") : undefined} />
                 )}
               </li>
             ))}

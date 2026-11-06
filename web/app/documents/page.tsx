@@ -33,6 +33,7 @@ import { formatDate, formatDateTime, plural } from "@/lib/format";
 import { docLabel } from "@/lib/labels";
 import { useArtifactsChanged } from "@/lib/artifacts";
 import { useMe } from "@/lib/me";
+import { sortPrds } from "@/lib/prd-order";
 import { NAMES_FAILED, useTemplateNames, type TemplateNames } from "@/lib/template-names";
 import { useQuery } from "@/lib/use-query";
 
@@ -42,13 +43,17 @@ const NONE = "–";
 const NO_TEMPLATE = "No template";
 const NO_THEME = "No theme";
 
-type SortKey = "title" | "status" | "latest" | "updated";
+type ColumnKey = "title" | "status" | "latest" | "updated";
+/** prd-order: "order" is the company PRD order, the list's default; a column sort is a choice. */
+type SortKey = ColumnKey | "order";
 type Sort = { key: SortKey; desc: boolean };
+const COMPANY_ORDER: Sort = { key: "order", desc: false };
 
 const STATUS_ORDER: Record<DocumentSummary["status"], number> = { draft: 0, in_review: 1, approved: 2 };
 
 /** qa-docs-41: the columns sort, each by what it shows. */
 function sortDocs(docs: DocumentSummary[], { key, desc }: Sort): DocumentSummary[] {
+  if (key === "order") return sortPrds(docs);
   const by = (a: DocumentSummary, b: DocumentSummary): number => {
     if (key === "title") return a.title.localeCompare(b.title);
     if (key === "status") return STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
@@ -59,7 +64,7 @@ function sortDocs(docs: DocumentSummary[], { key, desc }: Sort): DocumentSummary
 }
 
 /** Each column's order in words, low to high then high to low (qa-docs-41). */
-const SORT_WORDS: Record<SortKey, [string, string]> = {
+const SORT_WORDS: Record<ColumnKey, [string, string]> = {
   title: ["A to Z", "Z to A"],
   status: ["drafts first", "approved first"],
   latest: ["fewest versions first", "most versions first"],
@@ -67,10 +72,13 @@ const SORT_WORDS: Record<SortKey, [string, string]> = {
 };
 
 /** The sort menu's choices, by column then order (qa-docs-20: a phone has no column headers). */
-const SORT_LABEL: Record<SortKey, string> = { title: "Document", status: "Status", latest: "Latest", updated: "Updated" };
-const SORT_CHOICES = (Object.keys(SORT_WORDS) as SortKey[]).flatMap((k) =>
-  [false, true].map((desc) => ({ value: `${k}:${desc ? "desc" : "asc"}`, label: `${SORT_LABEL[k]}, ${SORT_WORDS[k][desc ? 1 : 0]}` })),
-);
+const SORT_LABEL: Record<ColumnKey, string> = { title: "Document", status: "Status", latest: "Latest", updated: "Updated" };
+const SORT_CHOICES = [
+  { value: "order:asc", label: "Company order" },
+  ...(Object.keys(SORT_WORDS) as ColumnKey[]).flatMap((k) =>
+    [false, true].map((desc) => ({ value: `${k}:${desc ? "desc" : "asc"}`, label: `${SORT_LABEL[k]}, ${SORT_WORDS[k][desc ? 1 : 0]}` })),
+  ),
+];
 
 /** A phone's sort: a menu above the list, as the column headers are for screen readers only there. */
 function SortMenu({ sort, onSort }: { sort: Sort; onSort: (s: Sort) => void }) {
@@ -97,10 +105,10 @@ function SortMenu({ sort, onSort }: { sort: Sort; onSort: (s: Sort) => void }) {
 }
 
 /** A sortable column's aria-sort: ascending, descending or none. */
-const ariaSort = (k: SortKey, sort: Sort): "ascending" | "descending" | "none" => (sort.key !== k ? "none" : sort.desc ? "descending" : "ascending");
+const ariaSort = (k: ColumnKey, sort: Sort): "ascending" | "descending" | "none" => (sort.key !== k ? "none" : sort.desc ? "descending" : "ascending");
 
 /** A column header that sorts its column: a second click reverses it. */
-function SortHeader({ label, k, sort, onSort }: { label: string; k: SortKey; sort: Sort; onSort: (s: Sort) => void }) {
+function SortHeader({ label, k, sort, onSort }: { label: string; k: ColumnKey; sort: Sort; onSort: (s: Sort) => void }) {
   const on = sort.key === k;
   const hint = on ? `, ${SORT_WORDS[k][sort.desc ? 1 : 0]}` : "";
   return (
@@ -332,7 +340,7 @@ export default function DocumentsPage() {
   // #370: New PRD creates an intake not linked to a PRD (the handler only asks an approver to
   // link one), so the item lets a commenter in, as in NewPrd.
   const canPropose = can("create_intake", true);
-  const [sort, setSort] = useState<Sort>({ key: "updated", desc: true });
+  const [sort, setSort] = useState<Sort>(COMPANY_ORDER);
   // qa-docs-41: In review filters the list.
   const [filter, setFilter] = useState<"all" | "in_review">("all");
   const all = q.data ?? [];
@@ -431,6 +439,17 @@ export default function DocumentsPage() {
           />
         )}
         {view === "prds" && all.length > 1 && <SortMenu sort={sort} onSort={setSort} />}
+        {/* prd-order: the list says its order; after a column sort, one click takes it back. */}
+        {view === "prds" && all.length > 1 &&
+          (sort.key === "order" ? (
+            <span data-testid="documents-order" className="text-sm text-text2 max-[600px]:hidden">
+              Company order
+            </span>
+          ) : (
+            <button type="button" className="text-sm font-medium text-accent-ink hover:underline max-[600px]:hidden" onClick={() => setSort(COMPANY_ORDER)}>
+              Back to company order
+            </button>
+          ))}
       </div>
       {view === "ideas" ? (
         <Panel>

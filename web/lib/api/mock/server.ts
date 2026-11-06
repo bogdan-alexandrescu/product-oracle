@@ -6,6 +6,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { addMonths, todayIn } from "@/lib/dates";
 import { sectionDiff } from "@/lib/diff";
+import { sortGoals } from "@/lib/goal-order";
 import { citationHref, formatDate, formatDay } from "@/lib/format";
 import { parseBlocks, plainText, type Inline } from "@/lib/markdown";
 import { mockName as displayName } from "./people";
@@ -179,7 +180,7 @@ import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStray
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, CROWDED_MILESTONES_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
-import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, goalRank, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, knowGoalMapItems, ownPrd, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapItems, routeGoalMap, type GoalMap } from "./goal-map";
@@ -4382,9 +4383,13 @@ function sectionLayer(db: Db, versionId: string, key: string): Schemas["SectionO
  * serve (none last; a tie to the goal first); then its title (case-folded, then as written); then id.
  */
 function prdOrder(db: Db): Map<string, number> {
-  // The one goal order, as Simple reads it (simpleRoute).
+  // The one goal order, as Simple reads it (simpleRoute), read here without naming it for the other routes.
   const baselineGoals = db.baseline.entities.filter((e) => e.type === "goal");
-  knowCompanyGoals([...baselineGoals, ...(db.simple_roadmap ? bucketGoalsInOrder(db.simple_roadmap, new Set(baselineGoals.map((e) => e.key))) : [])]);
+  const goals = sortGoals([...baselineGoals, ...(db.simple_roadmap ? bucketGoalsInOrder(db.simple_roadmap, new Set(baselineGoals.map((e) => e.key))) : [])]);
+  const goalRank = (key: string) => {
+    const n = goals.findIndex((g) => g.key === key);
+    return n < 0 ? Number.MAX_SAFE_INTEGER : n;
+  };
   const items = (db.simple_roadmap?.items ?? []).filter((s) => !s.trashed && s.goal);
   // Each goal's place: the one goal order, a goal it does not hold after those by key (as the roadmap's goal rows).
   const keys = [...new Set(items.map((s) => s.goal!))].sort((a, b) => goalRank(a) - goalRank(b) || a.localeCompare(b));
@@ -4411,7 +4416,8 @@ function prdOrder(db: Db): Map<string, number> {
   return new Map(prds.map(({ d }, n) => [d.id, n + 1]));
 }
 
-function documentSummary(db: Db, d: DocumentRow, ranks: Map<string, number> = prdOrder(db)): Schemas["DocumentSummary"] {
+/** A document's summary; `ranks` (prdOrder) only for the PRD list, so `order` is null elsewhere, as in the API. */
+function documentSummary(db: Db, d: DocumentRow, ranks: Map<string, number> = new Map()): Schemas["DocumentSummary"] {
   const vs = docVersions(db, d);
   const latest = vs[vs.length - 1];
   const period = d.kind === "update" ? ((latest?.front_matter.period as UpdatePeriod | undefined) ?? null) : null;
@@ -7179,7 +7185,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] !== "documents") return notFound("Route");
   if (p.length === 2) {
     const kind = q.get("kind");
-    const ranks = prdOrder(db);
+    // prd-order: only the PRD list reads (and is sorted by) the company PRD order.
+    const ranks = kind === "prd" ? prdOrder(db) : new Map<string, number>();
     const out = db.documents
       .filter((d) => canSee(me.role, d.visibility))
       .map((d) => documentSummary(db, d, ranks))
@@ -7189,6 +7196,19 @@ async function route(db: Db, req: Request): Promise<Response> {
     return json(200, out);
   }
 
+  // prd-order: an owner puts back PRDs' stored places (the One-pagers' Undo after a move).
+  if (p[2] === "prd-order" && p.length === 3 && m === "PUT") {
+    if (me.role !== "owner") return json(403, { detail: "Requires the owner role" });
+    const input = await body<Partial<Schemas["PrdOrderIn"]>>();
+    const places = input?.positions ?? [];
+    if (!places.length || places.some((x) => x.position != null && x.position < 1)) return json(422, { detail: "positions are 1 or more, or null" });
+    const rows = places.map((x) => db.documents.find((d) => d.id === x.document_id && (d.kind ?? "prd") === "prd"));
+    if (rows.some((d) => !d)) return notFound("PRD");
+    rows.forEach((d, n) => (d!.position = places[n].position ?? null));
+    const after = prdOrder(db);
+    const prds = db.documents.filter((d) => after.has(d.id) && canSee(me.role, d.visibility)).sort((a, b) => after.get(a.id)! - after.get(b.id)!);
+    return json(200, prds.map((d) => documentSummary(db, d, after)));
+  }
   const doc = findDocument(db, p[2]);
   if (!doc) return notFound("Document");
   if (p.length === 3) {
