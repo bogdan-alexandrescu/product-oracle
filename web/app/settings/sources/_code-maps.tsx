@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { Button, Chip, confirmInPage, InfoTip, Notice, type ChipKind } from "@/components/ds";
+import { Button, Chip, confirmInPage, Dialog, InfoTip, Notice, type ChipKind } from "@/components/ds";
 import { DOCS_ONLY } from "@/components/tech-brief";
 import { api, type Schemas, unwrap } from "@/lib/api/client";
 import { failedAt, formatDateTime } from "@/lib/format";
@@ -46,35 +46,68 @@ export function codeMapFailure(error: string): string {
   return error.replace(/^The code map run failed:\s*/, "").replace(/^[a-z_]+:\s+/, "");
 }
 
-/** Pass F F-38: what a map holds, read-only: its modules, APIs and data models. */
-function MapContents({ id }: { id: string }) {
+type Entry = Record<string, unknown>;
+const text = (v: unknown) => (typeof v === "string" ? v : "");
+
+/** Pass F F-38: the map's lists as people read them, each entry by its name. */
+const GROUPS: { key: string; label: string; name: (x: Entry) => string; about: (x: Entry) => string }[] = [
+  { key: "modules", label: "Parts", name: (x) => text(x.path) || text(x.id), about: (x) => text(x.summary) },
+  { key: "apis", label: "API routes", name: (x) => [text(x.method), text(x.path)].filter(Boolean).join(" ") || text(x.id), about: () => "" },
+  {
+    key: "data_models",
+    label: "Data models",
+    name: (x) => text(x.name) || text(x.id),
+    about: (x) => (Array.isArray(x.fields) ? x.fields.map(String).join(", ") : ""),
+  },
+];
+
+/**
+ * Pass F F-38 (owner's decision, Nov 5): what a map holds, read-only, in a small dialog (a
+ * sheet on a phone): its parts, API routes and data models with their counts. Whoever
+ * reads the map opens it; nothing in it changes the map.
+ */
+function CodeMapView({ id, repo, onClose }: { id: string; repo: string; onClose: () => void }) {
   const q = useQuery(`code-map|${id}`, () => unwrap(api.GET("/v1/code-maps/{code_map_id}", { params: { path: { code_map_id: id } } })));
-  if (q.error) return <Notice tone="error">{q.error}</Notice>;
-  if (!q.data) return <p className="text-sm text-text2">Loading…</p>;
-  const content = q.data.content ?? {};
-  const list = (key: string) => (Array.isArray(content[key]) ? (content[key] as Record<string, unknown>[]) : []);
-  const groups = [
-    { label: "Parts", items: list("modules").map((x) => ({ name: String(x.path ?? x.id ?? ""), about: String(x.summary ?? "") })) },
-    { label: "APIs", items: list("apis").map((x) => ({ name: String(x.path ?? x.name ?? x.id ?? ""), about: String(x.summary ?? "") })) },
-    { label: "Data models", items: list("data_models").map((x) => ({ name: String(x.name ?? x.id ?? ""), about: String(x.summary ?? "") })) },
-  ].filter((g) => g.items.length > 0);
-  if (groups.length === 0) return <p className="text-sm text-text2">Nothing mapped yet</p>;
+  const content = q.data?.content ?? null;
+  const list = (key: string): Entry[] => {
+    const v = content?.[key];
+    return Array.isArray(v) ? v.filter((x): x is Entry => !!x && typeof x === "object") : [];
+  };
+  const groups = GROUPS.map((g) => ({ ...g, items: list(g.key) }));
+  const empty = groups.every((g) => g.items.length === 0);
   return (
-    <div className="flex flex-col gap-1.5 rounded-md border border-border bg-surface2 p-2 text-sm" data-testid="code-map-contents">
-      {groups.map((g) => (
-        <div key={g.label} className="min-w-0">
-          <p className="font-semibold text-text">{g.label}</p>
-          <ul className="flex flex-col gap-0.5">
-            {g.items.map((it) => (
-              <li key={it.name} className="min-w-0 break-words text-text2">
-                <span className="font-mono text-[13px] text-text">{it.name}</span>
-                {it.about && ` · ${it.about}`}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
-    </div>
+    <Dialog title={`Code map of ${repo}`} onClose={onClose} phoneSheet scrollBody testId="code-map-view">
+      {q.error ? (
+        <Notice tone="error">{q.error}</Notice>
+      ) : !q.data ? (
+        <p className="text-sm text-text2">Loading the map…</p>
+      ) : empty ? (
+        <p className="text-sm text-text2">Nothing mapped yet</p>
+      ) : (
+        groups.map((g) => (
+          <section key={g.key} className="min-w-0">
+            <h3 className="font-semibold text-text">
+              {g.label} ({g.items.length})
+            </h3>
+            {g.items.length === 0 ? (
+              <p className="text-sm text-text2">None found</p>
+            ) : (
+              <ul aria-label={g.label} className="mt-1 flex flex-col gap-0.5 text-sm">
+                {g.items.map((it, i) => {
+                  const about = g.about(it);
+                  return (
+                    <li key={text(it.id) || i} className="min-w-0 break-words text-text2">
+                      <span className="font-mono text-[13px] text-text">{g.name(it)}</span>
+                      {about && ` · ${about}`}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        ))
+      )}
+    </Dialog>
   );
 }
 
@@ -155,8 +188,8 @@ function CodeMapLine({ repo, map, onChange, sourceId }: { repo: string; map?: Co
             </Button>
           )}
           {usable && (
-            <Button aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-              {open ? "Hide the map" : "See the map"}
+            <Button aria-haspopup="dialog" onClick={() => setOpen(true)}>
+              See the map
             </Button>
           )}
           {usable && map.mine && map.sharing === "private" && can("share_code_map") && (
@@ -177,7 +210,7 @@ function CodeMapLine({ repo, map, onChange, sourceId }: { repo: string; map?: Co
           {codeMapFailure(map.error)}
         </p>
       )}
-      {usable && open && <MapContents id={map.id} />}
+      {usable && open && <CodeMapView id={map.id} repo={repo} onClose={() => setOpen(false)} />}
       {error && <Notice tone="error">{error}</Notice>}
     </li>
   );

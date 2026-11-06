@@ -33,6 +33,8 @@ export interface EngineeringContext {
   uuid: () => string;
   /** #633 re-review, the "stored-refusals" scenario: the Claude pool refuses every code map run. */
   refuse?: boolean;
+  /** Pass F F-38, the "code-map-unreadable" scenario: reading one map's content fails. */
+  unreadable?: boolean;
 }
 
 const PRD = "checkout-redesign";
@@ -173,7 +175,61 @@ function mapOut(m: CodeMapRow, me: EngineeringContext["me"], detail: boolean): S
  */
 export const CODE_MAP_APPROVAL_SCENARIO = "code-map-approval";
 export const CODE_MAP_OVERRUN_SCENARIO = "code-map-overrun";
+/**
+ * Pass F F-38: "code-map-shared" seeds the Example repo's map ready and shared with the
+ * company, its content as an indexer writes it (parts, API routes, data models);
+ * "code-map-unreadable" seeds the same map but reading its content fails.
+ */
+export const CODE_MAP_SHARED_SCENARIO = "code-map-shared";
+export const CODE_MAP_UNREADABLE_SCENARIO = "code-map-unreadable";
+
+function sharedMap(ownerEmail: string): CodeMapRow {
+  const content = {
+    version: 1,
+    repo: "example-org/example-app",
+    commit: "9b1d4e7",
+    generated_at: "2026-10-28T09:00:00Z",
+    partial: false,
+    modules: [
+      { id: "module:checkout", path: "web/checkout", summary: "The checkout pages", depends_on: ["module:billing"] },
+      { id: "module:billing", path: "api/billing", summary: "Invoices and payments", depends_on: [] },
+    ],
+    apis: [
+      { id: "api:create-invoice", method: "POST", path: "/v1/invoices", module: "module:billing" },
+      { id: "api:list-invoices", method: "GET", path: "/v1/invoices", module: "module:billing" },
+    ],
+    data_models: [{ id: "model:invoice", name: "Invoice", module: "module:billing", fields: ["id", "total", "due_at"] }],
+    flags: [],
+    jobs: [],
+  };
+  return {
+    id: stableUuid("code-map/shared"),
+    source_id: "50000000-0000-4000-8000-000000000002",
+    repo: "example-org/example-app",
+    commit_sha: "9b1d4e7",
+    status: "ready",
+    sharing: "full",
+    shared_by: stableUuid("member/admin@example.com"),
+    shared_at: "2026-10-28T09:30:00Z",
+    partial: false,
+    as_of: "2026-10-28T09:00:00Z",
+    size_bytes: JSON.stringify(content).length,
+    counts: { modules: 2, apis: 2, data_models: 1, flags: 0, jobs: 0 },
+    run_id: stableUuid("code-map/shared/run"),
+    run_status: "succeeded",
+    error: null,
+    failed_at: null,
+    stale_at: null,
+    mine: true,
+    created_at: "2026-10-28T08:50:00Z",
+    content,
+    owner_email: ownerEmail,
+    reads: 0,
+  };
+}
+
 export function seedCodeMaps(scenario: string | null, runId: (status: string) => string | null, ownerEmail: string): CodeMapRow[] {
+  if (scenario === CODE_MAP_SHARED_SCENARIO || scenario === CODE_MAP_UNREADABLE_SCENARIO) return [sharedMap(ownerEmail)];
   const runStatus = scenario === CODE_MAP_APPROVAL_SCENARIO ? "awaiting_approval" : scenario === CODE_MAP_OVERRUN_SCENARIO ? "paused_overrun" : null;
   if (!runStatus) return [];
   return [
@@ -283,6 +339,7 @@ async function routeCodeMaps(req: Request, p: string[], q: URLSearchParams, ctx:
   const row = maps.find((m) => m.id === p[2] && visible(m));
   if (!row) return json(404, { detail: "Code map not found" });
   if (!p[3] && req.method === "GET") {
+    if (ctx.unreadable) return json(500, { detail: "The code map could not be read. Try again later." });
     advance(row, ctx);
     return json(200, mapOut(row, ctx.me, true));
   }

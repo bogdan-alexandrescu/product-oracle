@@ -51,7 +51,7 @@ import {
   type DocumentSection,
   type SubjectInfo,
 } from "./discussions";
-import { routeEngineering, seedCodeMaps, techBriefOf, type CodeMapRow } from "./engineering";
+import { CODE_MAP_UNREADABLE_SCENARIO, routeEngineering, seedCodeMaps, techBriefOf, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, queueJob, queueQualityReview, seedLlm, seedStoredRefusals, SPENT, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
@@ -6142,6 +6142,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     now,
     uuid,
     refuse: localStorage.getItem(MOCK_SCENARIO_KEY) === STORED_REFUSALS_SCENARIO,
+    unreadable: localStorage.getItem(MOCK_SCENARIO_KEY) === CODE_MAP_UNREADABLE_SCENARIO,
   });
   if (briefs) return briefs;
   // #481: the staleness actions on a spec's version are the specs mock's (./specs.ts).
