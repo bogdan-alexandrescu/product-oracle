@@ -1,3 +1,4 @@
+import re
 import uuid
 from datetime import date, datetime
 from typing import Any, Literal
@@ -42,8 +43,9 @@ ConflictStatus = Literal["open", "resolved", "logged"]
 # Public-link evidence is scored like a source of this kind.
 LinkKind = Literal["notion", "google_docs", "web"]
 
-# A slug, or a feature code as a PRD names it (F-09: Add to Ground Truth keeps it).
+# A slug, or for a feature its code as a PRD names it (F-09: Add to Ground Truth keeps it).
 KEY_PATTERN = r"^(?:[a-z0-9][a-z0-9._-]*|[A-Z]{1,3}-\d+)$"
+CODE_KEY = re.compile(r"[A-Z]{1,3}-\d+")
 
 
 class ORM(BaseModel):
@@ -66,6 +68,19 @@ class EntityCreate(BaseModel):
     origin: WriteOrigin = "user"
     run_id: uuid.UUID | None = None
     reason: str | None = None
+    # lane-gt-ui: a new feature's goal (a supports link, made with it) and the roadmap item it
+    # is (a set_feature change in the item's roadmap's working draft): Add to Ground Truth is
+    # one call. A proposal's fields may carry both; accepting it writes them.
+    serves: uuid.UUID | None = None
+    roadmap_item_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def _code_keys_are_features(self) -> "EntityCreate":
+        if CODE_KEY.fullmatch(self.key) and self.type != "feature":
+            raise ValueError("only a feature's key may be a code (F-09)")
+        if (self.serves or self.roadmap_item_id) and self.type != "feature":
+            raise ValueError("serves and roadmap_item_id are a feature's")
+        return self
 
 
 class EntityPatch(BaseModel):

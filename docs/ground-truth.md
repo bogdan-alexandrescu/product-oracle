@@ -86,6 +86,15 @@ check's `action`, with the button's words):
 Each flag says what is wrong in one short plain sentence, with no ids; each fix carries its
 button's words.
 
+**Add to Ground Truth** is one change. For a roadmap item it makes the feature and sets the
+item's own feature (`feature_id`) through a `set_feature` change in the roadmap's working
+draft, as every roadmap edit, so a published item's link rides the next version; the check
+reads an item's feature as that draft has it. For a PRD's feature or slice it keeps the
+PRD's code (F-09) and serves the goal the PRD gives it. Approvers and owners add at once (the
+item's link applies when they decide the roadmap, else it goes to its decider); a
+commenter's add is one proposal carrying the goal and the item, and accepting it writes both
+(the owner, Nov 5). **Link to a feature** is the same `set_feature` change.
+
 - One missing feature is one flag of its own: a PRD feature over two milestones is one
   `prd_feature_missing`, never also a `slice_parent_missing` per milestone. A roadmap slice
   item of a feature the PRD flags already is an `unlinked_item`, with its slice code (F-15a).

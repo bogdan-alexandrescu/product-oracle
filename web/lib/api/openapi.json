@@ -62058,6 +62058,7 @@
                   "set_goal",
                   "set_depends",
                   "set_status",
+                  "set_feature",
                   "set_goal_measure",
                   "set_owner",
                   "set_decider",
@@ -62461,6 +62462,7 @@
               "set_goal",
               "set_depends",
               "set_status",
+              "set_feature",
               "set_goal_measure",
               "set_owner",
               "set_decider",
@@ -74371,6 +74373,30 @@
               }
             ],
             "title": "Reason"
+          },
+          "serves": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Serves"
+          },
+          "roadmap_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Item Id"
           }
         },
         "type": "object",
@@ -82173,7 +82199,7 @@
           "item": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/GroundTruthItemRef"
+                "$ref": "#/components/schemas/GroundTruthRef"
               },
               {
                 "type": "null"
@@ -82245,56 +82271,6 @@
         ],
         "title": "GroundTruthFlag",
         "description": "One place that breaks the Ground Truth: allowed, flagged \"Not in the Ground Truth\"."
-      },
-      "GroundTruthItemRef": {
-        "properties": {
-          "id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
-          },
-          "code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Code"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "key": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Key"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "code",
-          "name"
-        ],
-        "title": "GroundTruthItemRef",
-        "description": "A flag's roadmap item or slice. ``key``: a roadmap item's own key, which stays across\nversions (a feature lists it in ``attrs.roadmap_items`` to link the item); none for a\nPRD's slice."
       },
       "GroundTruthOut": {
         "properties": {
@@ -86317,6 +86293,7 @@
               "set_goal",
               "set_depends",
               "set_status",
+              "set_feature",
               "set_goal_measure",
               "set_owner",
               "set_decider",
@@ -120168,6 +120145,7 @@
               "set_goal",
               "set_depends",
               "set_status",
+              "set_feature",
               "set_goal_measure",
               "set_owner",
               "set_decider",
@@ -120318,6 +120296,7 @@
               "set_goal",
               "set_depends",
               "set_status",
+              "set_feature",
               "set_goal_measure",
               "set_owner",
               "set_decider",
