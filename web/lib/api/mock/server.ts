@@ -193,7 +193,7 @@ import { knowPrdOrder } from "./prd-rank";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, knowGoalMapItems, ownPrd, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, MAP_GOALS, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
-import { goalMapIdOf, goalMapItems, routeGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
+import { goalMapIdOf, goalMapItems, routeGoalMap, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
@@ -4229,6 +4229,10 @@ function load(): Db {
     const v1 = roadmap && db.versions.find((v) => v.document_id === roadmap.id && v.number === 1);
     if (prd && v1) v1.warnings = versionWarnings(prd.title, prd.slug);
   }
+  // P-1: the goal map is seeded with the db, not on its first read, so its features (roadmap
+  // items "gm-f1", ...) are on every page from the first load, whichever page opens first.
+  db.goal_map ??= seedGoalMap(scenario);
+  if (db.simple_roadmap) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
   save(db);
   // The caller owns this object now (see `cached`).
   cached = null;
@@ -7218,6 +7222,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   db.simple_visuals ??= seedVisuals();
   db.simple_one_pager.visuals = db.simple_visuals;
   db.simple_roadmap ??= seedSimpleRoadmap();
+  // one-feature-panel: the map's features are roadmap items (their panel opens on their own item).
+  if (db.goal_map) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
   // simple-replaced-prds: the PRDs marked replaced, whose items no longer feed Simple (service.load).
   markReplaced(db, db.simple_roadmap);
   const roadmapItems = db.simple_roadmap;
@@ -7367,8 +7373,6 @@ async function route(db: Db, req: Request): Promise<Response> {
       const body = read && read.ok ? ((await read.json()) as { items: { id: string; title: string; status: string }[] }) : { items: [] };
       return body.items;
     }, () => db.baseline.entities.filter((e) => e.type === "goal"));
-    // one-feature-panel: the map's features are roadmap items (their panel opens on their own item).
-    if (db.goal_map) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
     // goal-ladder: add_item may name any confirmed goal by its id (additions._where), as Home's goals are the map's.
     if (db.goal_map) for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") MAP_GOALS[e.id] = e.title;
     if (goalMapRes) return goalMapRes;

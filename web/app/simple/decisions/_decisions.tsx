@@ -5,7 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import { Icon } from "@/components/ds/Icon";
-import { toast } from "@/components/ds/Toast";
+import { setToastPlace, toast } from "@/components/ds/Toast";
 import { FeatureFoundContext, OpenFeatureContext, type OpenFeature } from "@/components/simple/OpenFeature";
 import { usePhone } from "@/components/simple/PrdTimeline";
 import { DecisionSheetHost, editedWords, useDecisionSheet } from "@/components/simple/questions/DecisionSheet";
@@ -64,6 +64,9 @@ export function SimpleDecisions() {
     unwrap(api.GET("/v1/simple/decisions", { params: { query: { prd: prd || undefined, goal: goal || undefined, meeting: meeting || undefined } } })),
     { keepPrevious: true },
   );
+  // P-4: a message ("Decided Q5 ...") sits at the first spot clear of every control, never over the
+  // next question's buttons.
+  useEffect(() => setToastPlace("top"), []);
   // An anchor (#d-12) scrolls once its decision is drawn.
   const loaded = !!q.data;
   useEffect(() => {
@@ -185,7 +188,7 @@ export function SimpleDecisions() {
           {/* qa-simple-decide-29: plain words, no internal terms. */}
           <span>
             {d.approvals_waiting === 1 ? "1 approval for Oracle's own work waits" : `${d.approvals_waiting} approvals for Oracle's own work wait`} in your Inbox. They are not product decisions, so they are not listed or counted here.{" "}
-            <Link href="/inbox" className="font-[650] text-accent-ink hover:underline">
+            <Link href="/simple/inbox" className="font-[650] text-accent-ink hover:underline">
               Open the Inbox in Detailed
             </Link>
           </span>
