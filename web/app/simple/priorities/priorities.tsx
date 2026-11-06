@@ -2148,6 +2148,11 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
                   <span className="tabular-nums">
                     {fmt(b.weeks)} wk · <span data-testid="bucket-share">{percent[k]}%</span>
                   </span>
+                  {rights.edit(rec) && (
+                    <button type="button" aria-label={`Edit ${b.title}`} title="Edit goal" className={`${ICON_BTN} self-center`} onClick={() => setEditingGoal(rec!.id)} disabled={!!editingGoal}>
+                      ✎
+                    </button>
+                  )}
                   {rec && <span className="self-center">{acts.menu(rec, b.title, rights.edit(rec) ? () => setEditingGoal(rec.id) : undefined)}</span>}
                 </div>
                 {/* eg1-a-rest: each goal names its owner under its heading. */}

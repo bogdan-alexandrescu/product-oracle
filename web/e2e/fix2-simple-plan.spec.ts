@@ -297,7 +297,7 @@ test.describe("QA pass 2: simple-plan, Goal buckets", () => {
     const code = (await revenue.getByTestId("plan-feature").first().getAttribute("data-code"))!;
     await page.getByRole("tab", { name: "Ranked list" }).click();
     await expect(page.getByTestId("prio-subtitle")).toContainText("Nov 2 – Feb 12");
-    const r = page.getByTestId("prio-row").filter({ has: page.getByTestId("prio-code").getByText(code, { exact: true }) });
+    const r = page.getByTestId("prio-row").filter({ has: page.getByTestId("prio-own-key").getByText(code, { exact: true }) });
     await expect(r.getByTestId("prio-goal")).toHaveText("Revenue");
     await expect(page.getByTestId("prio-part-head").first()).not.toContainText("(Now)");
   });

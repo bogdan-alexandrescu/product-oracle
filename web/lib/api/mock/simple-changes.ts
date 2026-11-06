@@ -39,6 +39,7 @@ import {
   openDraft,
   GOALS,
   goalId,
+  goalIdsOf,
   itemDeciderId,
   itemOwnerId,
   namedOn,
@@ -353,6 +354,7 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
     else if (f === "draft") out[f] = !!s.draft;
     else if (f === "confidence") out[f] = s.confidence ?? null;
     else if (f === "track_id") out[f] = s.track ? stableUuid(`simple-track/${s.track}`) : null;
+    else if (f === "goal_ids") out[f] = goalIdsOf(s);
     else if (f === "goal_id") out[f] = s.goal && !goalInTrash(db, s.goal) ? stableUuid(`simple-goal/${s.goal}`) : null;
     else if (f === "prd_document_id") out[f] = ownPrd(s).id;
     else if (f === "depends_on") out[f] = [...(s.depends ?? [])];

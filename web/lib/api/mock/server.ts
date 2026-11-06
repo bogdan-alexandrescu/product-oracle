@@ -1104,6 +1104,9 @@ function seedSimplePlanScenario(datedAll = false): Db {
   const byFeature = new Map<string, ReturnType<typeof planSlices>>();
   for (const x of planSlices()) byFeature.set(x.feature_code, [...(byFeature.get(x.feature_code) ?? []), x]);
   const existing: Record<string, string> = { "F-01": "setup-checklist", "F-02": "setup-import" };
+  // The plan's own item stands for each other plan feature: the default roadmap's copy of its PRD
+  // section (F-03 Health log) is left out, so one feature has one item, as the API's plan has it.
+  rm.items = rm.items.filter((x) => !(x.section && byFeature.has(x.section.toUpperCase()) && !Object.values(existing).includes(x.key)));
   for (const [code, of] of byFeature) {
     const section = code.toLowerCase();
     const key = existing[code];
