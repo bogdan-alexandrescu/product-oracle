@@ -36,7 +36,7 @@ for (const size of SIZES) {
       await startReview(page);
       await tap(page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }));
       const row = page.locator('li[data-item="setup-checklist"]');
-      await tap(row.getByRole("button", { name: "Setup checklist" }));
+      await tap(row.getByRole("button", { name: "Setup checklist", exact: true }));
       const panel = page.getByTestId("floating-card");
       await expect(panel).toBeVisible();
       await expect(panel.getByTestId("card-name")).toContainText("Setup checklist");
