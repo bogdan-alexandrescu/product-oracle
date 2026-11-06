@@ -6,7 +6,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { setupReturn } from "@/app/settings/_nav";
 import { Button, InfoTip, KpiStrip, LinkButton, Notice, Page, PageHeader, Split, ViewOnly, type Kpi } from "@/components/ds";
 import { VagueGoalsLine } from "@/components/discuss/VagueGoalsLine";
-import { Loading } from "@/components/ui";
+import { LoadError, Loading } from "@/components/ui";
 import { startInterview, startInterviews, vagueGoals } from "@/lib/api/goal-interview";
 import { GOALS_OBSERVE, useGoalsLevel } from "@/lib/goals-autonomy";
 import { api, unwrap, type ConflictOut, type EntityOut, type ProposalOut } from "@/lib/api/client";
@@ -559,9 +559,12 @@ export default function BaselinePage() {
           )
         }
       >
-        <div className={KPI_PHONE}>
-          <KpiStrip label="Counts" items={kpis} />
-        </div>
+        {/* Visual QA X-1: no counts drawn from a graph that never loaded. */}
+        {!(graph.error && !graph.data) && (
+          <div className={KPI_PHONE}>
+            <KpiStrip label="Counts" items={kpis} />
+          </div>
+        )}
 
         {capsReady && !canWrite && (
           <Suspense fallback={null}>
@@ -602,7 +605,7 @@ export default function BaselinePage() {
           )}
           {tab === "graph" && (
             <>
-              {graph.error && <Notice tone="error">{graph.error}</Notice>}
+              {graph.error && <LoadError what="the baseline" error={graph.error} onRetry={() => void graph.reload()} />}
               {graph.loading && !graph.data && <Loading />}
               {graph.data && (
                 <GraphTab
@@ -628,7 +631,7 @@ export default function BaselinePage() {
           )}
           {tab === "items" && (
             <>
-              {graph.error && <Notice tone="error">{graph.error}</Notice>}
+              {graph.error && <LoadError what="the baseline" error={graph.error} onRetry={() => void graph.reload()} />}
               {graph.loading && !graph.data && <Loading />}
               {graph.data && (
                 <ItemsTab

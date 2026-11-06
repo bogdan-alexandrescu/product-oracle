@@ -294,6 +294,9 @@ export function enlargeDecisions(ctx: DecisionsContext, db: DecisionsDb, count: 
       }),
     );
   }
+  // Visual QA CO-1: a four-digit number, the widest the No. column is sized for.
+  const last = db.decisions[db.decisions.length - 1];
+  if (count > 0 && last) last.number = 9999;
 }
 
 /**
