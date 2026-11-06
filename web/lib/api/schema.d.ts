@@ -37386,6 +37386,31 @@ export interface components {
             delivered: boolean;
             /** Summary */
             summary: string;
+            /**
+             * Answers
+             * @default []
+             */
+            answers: components["schemas"]["RunDecisionAnswer"][];
+        };
+        /**
+         * RunDecisionAnswer
+         * @description A question answered at a decided stop: the architect's at an approved Engineering
+         *     check, or the agents' on the Questions from the agents cards of a stop approved or sent
+         *     back (``oracle.runs.stop_answers``).
+         */
+        RunDecisionAnswer: {
+            /** Question */
+            question: string;
+            /** Answer */
+            answer: string;
+            /** Feature Key */
+            feature_key?: string | null;
+            /** Feature Title */
+            feature_title?: string | null;
+            /** Answered By Name */
+            answered_by_name?: string | null;
+            /** Answered At */
+            answered_at?: string | null;
         };
         /**
          * RunDiscussion
