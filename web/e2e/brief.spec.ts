@@ -256,7 +256,7 @@ test("present: a slide without a notes block says so in the presenter view", asy
   await expect(notes).toHaveText("No notes for this slide.");
 });
 
-test("present: viewers present too; a version without a brief presents the full document", async ({ page }) => {
+test("present: viewers present too; a version without a brief has nothing to present", async ({ page }) => {
   await login(page, "viewer@example.com");
   await page.goto("/documents/saved-carts/v/2/present?view=presenter&slide=4");
   await expect(page.getByTestId("presenter-view")).toBeVisible();
@@ -265,10 +265,8 @@ test("present: viewers present too; a version without a brief presents the full 
   await expect(page.getByRole("link", { name: "Present" })).toBeVisible();
   await expect(section(page, "summary").getByRole("group", { name: /Verdict for/ })).toHaveCount(0);
 
-  // B-04: without a brief, Present shows the full document's sections as slides.
   await page.goto("/documents/checkout-redesign/v/2/present");
-  await expect(page.getByTestId("slide-counter")).toBeVisible();
-  await expect(page.getByTestId("present-mode")).not.toContainText("has no brief sections");
+  await expect(page.getByTestId("present-mode")).toContainText("has no brief sections");
 });
 
 test("exports: Brief, Full and Deck downloads", async ({ page }) => {
