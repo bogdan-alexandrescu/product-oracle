@@ -43,6 +43,8 @@ import {
   itemOwnerId,
   namedOn,
   lookalikes,
+  fileUnderCurrentPrd,
+  ofReplacedPrd,
   shiftPlan,
   ownDates,
   ownPrd,
@@ -81,6 +83,8 @@ export interface SimpleChangesCtx {
   role: Role;
   /** The company's owners (who decide proposals with no decider or roadmap owner). */
   owners: string[];
+  /** simple-replaced-prds: the slugs and ids of the PRDs marked replaced (their open drafts are never listed in Simple). */
+  replaced?: string[];
   /** Person id -> name. */
   names: Record<string, string>;
   /** Person id -> role (D-a: whether a track owner decides). */
@@ -463,6 +467,14 @@ function goalLabel(db: SimpleDb, id: unknown): string | null {
   return g?.trashed ? `${g.title} (deleted)` : null;
 }
 
+/** simple-replaced-prds (changes.listing): a proposal waiting on a replaced PRD's item leaves Simple with the item. */
+function onReplacedPrd(db: SimpleDb, c: Change): boolean {
+  if (c.status !== "proposed" || !c.target.item_id) return false;
+  const key = keyOf(db, c.target.item_id);
+  const s = key ? db.items.find((x) => x.key === key) : undefined;
+  return !!s && ofReplacedPrd(db, s);
+}
+
 function sees(db: SimpleDb, ctx: SimpleChangesCtx, c: Change): boolean {
   if (ctx.role === "owner" || c.by === ctx.id || route(db, ctx, c).includes(ctx.id)) return true;
   if ((db.drafts ?? []).some((d) => (c.draft_ids ?? []).includes(d.out.id) && seesDraft(d, ctx, db))) return true;
@@ -527,7 +539,9 @@ function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]
   const rm = asked ? readableRoadmap(asked, ctx.role) : undefined;
   if (asked && !rm && !p[3]) return json(404, { detail: "No such roadmap" });
   const open = (db.drafts ?? []).filter((d) => ["working", "submitted"].includes(d.out.status) && (!rm || d.roadmap === rm));
-  if (!p[3] && m === "GET") return json(200, open.filter((d) => seesDraft(d, ctx, db)).map((d) => draftOut(db, ctx, d)));
+  // simple-replaced-prds (as drafts.listing): a replaced PRD's open draft is history.
+  const current = (d: MockDraft) => !ctx.replaced?.some((r) => r === d.out.document.slug || r === d.out.document.id);
+  if (!p[3] && m === "GET") return json(200, open.filter((d) => current(d) && seesDraft(d, ctx, db)).map((d) => draftOut(db, ctx, d)));
   const d = (db.drafts ?? []).find((x) => x.out.id === p[3] && seesDraft(x, ctx, db));
   if (!d) return json(404, { detail: "No such draft" });
   if (!p[4] && m === "GET") return json(200, draftOut(db, ctx, d));
@@ -1092,7 +1106,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     const status = q.get("status");
     const rows = (db.changes ?? [])
       .filter((c) => (!q.get("session") || c.session_id === q.get("session")) && (!q.get("document") || c.document_id === q.get("document")) && (!status || c.status === status) && (q.get("mine") !== "true" || c.by === ctx.id))
-      .filter((c) => sees(db, ctx, c))
+      .filter((c) => sees(db, ctx, c) && !onReplacedPrd(db, c))
       .sort((a, b) => (a.at < b.at ? 1 : -1));
     return json(200, rows.map((c) => view(db, ctx, c)));
   }
@@ -1437,12 +1451,15 @@ function applyS7(db: SimpleDb, c: Change, undo = false): void {
     for (let n = 2; db.ids[key]; n++) key = `${slug(String(a.title))}-${n}`;
     const goalKey = Object.keys(GOALS).find((k) => (a.goal_ids as string[]).includes(goalId(k)));
     db.ids[key] = id;
-    db.items.push({
+    const added: SeedItem = {
       key, title: String(a.title), horizon: a.horizon as SeedItem["horizon"], roadmap, goal: goalKey,
       track: db.items.find((x) => x.roadmap === roadmap && x.track)?.track, draft: true, outcome: typeof a.outcome === "string" ? a.outcome : null,
       drafting_until: mockNowMs() + DRAFTING_MS, quarter: (a.quarter as { start: string; end: string } | undefined) ?? undefined,
       looks_like: lookalikes(db, String(a.title), roadmap),
-    });
+    };
+    // simple-replaced-prds: never filed under a replaced PRD, which Simple leaves out.
+    fileUnderCurrentPrd(db, added);
+    db.items.push(added);
     return;
   }
   const s = seed(db, keyOf(db, id)!);

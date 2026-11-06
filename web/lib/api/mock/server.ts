@@ -4111,9 +4111,12 @@ export function resetMockData() {
 
 /** A document as GET /v1/documents/{doc} returns it (DocumentOut). */
 function documentOut(db: Db, doc: DocumentRow): Schemas["DocumentOut"] {
-  // one-roadmap-many-prds: the PRDs that replace it, by name (oracle.roadmap.company.refs).
-  const replacedBy = (doc.replaced_by ?? []).flatMap((id) => db.documents.filter((x) => x.id === id).map((x) => ({ id: x.id, slug: x.slug, title: x.title })));
-  return { ...documentSummary(db, doc), versions: docVersions(db, doc).map(summary), replaced_by: replacedBy, changes_in_review: 0 };
+  return { ...documentSummary(db, doc), versions: docVersions(db, doc).map(summary), replaced_by: replacedByRefs(db, doc), changes_in_review: 0 };
+}
+
+/** one-roadmap-many-prds: the PRDs that replace `doc`, by name (oracle.roadmap.company.refs). */
+function replacedByRefs(db: Db, doc: DocumentRow | undefined): Schemas["PrdRef"][] {
+  return (doc?.replaced_by ?? []).flatMap((id) => db.documents.filter((x) => x.id === id).map((x) => ({ id: x.id, slug: x.slug, title: x.title })));
 }
 
 /**
@@ -4124,6 +4127,11 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
   const m = req.method;
   const company = () => db.documents.find((d) => d.company_roadmap && d.kind === "roadmap");
   const ref = (d: DocumentRow) => ({ id: d.id, slug: d.slug, title: d.title });
+  // simple-replaced-prds: GET /v1/simple/one-pagers, as GET /v1/documents?kind=prd without a PRD
+  // marked replaced (Simple shows the PRDs that replaced it; Detailed keeps it as history); newest first.
+  if (p[1] === "simple" && p[2] === "one-pagers" && !p[3] && m === "GET") {
+    return json(200, db.documents.filter((d) => d.kind === "prd" && !(d.replaced_by ?? []).length && canSee(me.role, d.visibility)).map((d) => documentSummary(db, d)).sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at)));
+  }
   if (p[1] === "roadmaps" && p[2] === "company" && !p[3]) {
     if (m === "GET") {
       const found = company();
@@ -4176,9 +4184,30 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
       by.push(other);
     }
     doc.replaced_by = by.map((d) => d.id);
+    if (db.simple_roadmap) markReplaced(db, db.simple_roadmap);
     return json(200, documentOut(db, doc));
   }
   return null;
+}
+
+/** simple-replaced-prds: the PRDs marked replaced, and the current PRD each went to, on Simple's roadmap. */
+function markReplaced(db: Db, simple: SimpleDb): void {
+  simple.replaced_prds = replacedPrds(db);
+  const to: NonNullable<SimpleDb["replaced_with"]> = {};
+  for (const d of db.documents.filter((x) => x.kind === "prd" && x.replaced_by?.length)) {
+    let at: DocumentRow | undefined = d;
+    for (const seen = new Set<string>(); at?.replaced_by?.length && !seen.has(at.id); ) {
+      seen.add(at.id);
+      at = db.documents.find((x) => x.id === at!.replaced_by![0]);
+    }
+    if (at && !at.replaced_by?.length) to[d.id] = to[d.slug] = { id: at.id, slug: at.slug, title: at.title };
+  }
+  simple.replaced_with = to;
+}
+
+/** simple-replaced-prds (company.replaced_prd_ids): the ids and slugs of the PRDs marked replaced. */
+function replacedPrds(db: Db): string[] {
+  return db.documents.filter((d) => d.kind === "prd" && d.replaced_by?.length).flatMap((d) => [d.id, d.slug]);
 }
 
 /** new-prd-from-replaced-prd: what a new PRD replacing an approved PRD carries, read off the
@@ -6618,6 +6647,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   db.simple_visuals ??= seedVisuals();
   db.simple_one_pager.visuals = db.simple_visuals;
   db.simple_roadmap ??= seedSimpleRoadmap();
+  // simple-replaced-prds: the PRDs marked replaced, whose items no longer feed Simple (service.load).
+  markReplaced(db, db.simple_roadmap);
   const roadmapItems = db.simple_roadmap;
   const visualsRes = await routeSimpleVisuals(
     db.simple_visuals,
@@ -6687,6 +6718,7 @@ async function route(db: Db, req: Request): Promise<Response> {
           ? planMilestones().map((m) => `${m.code} ${m.name}`)
           : undefined,
         overflowPages: localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-overflow" ? 2 : undefined,
+        replacedBy: replacedByRefs(db, db.documents.find((x) => x.kind === "prd" && (x.id === onePagerDb.doc.id || x.slug === onePagerDb.doc.slug))),
       },
       r,
       p,
@@ -6743,7 +6775,9 @@ async function route(db: Db, req: Request): Promise<Response> {
     const simpleRes = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, r, p, q);
     if (simpleRes) return simpleRes;
     const companyGoals = db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title }));
-    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash, goalBin: bin }, r, p, q);
+    // simple-replaced-prds: the PRDs marked replaced (their drafts are left out, as drafts.listing).
+    const replaced = replacedPrds(db);
+    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash, goalBin: bin, replaced }, r, p, q);
   };
   // Simple S8: review meetings, the Decisions page, and changes made through a meeting.
   // Seeded on the first meetings or Decisions read, so the other Simple screens keep their data.
@@ -6755,7 +6789,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       roadmap: db.simple_roadmap,
       onePager: db.simple_one_pager,
       rituals: ensureRituals(db, me),
-      documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title })),
+      documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title, replaced_by: replacedByRefs(db, d) })),
       // home-honest-loading: every document of a kind in Trash (trash.only_in_trash).
       onlyInTrash: (kind) =>
         !db.documents.some((d) => d.kind === kind) && (db.trash?.entries ?? []).some((e) => (e.documents as { kind?: string }[]).some((d) => d.kind === kind)),
@@ -6810,7 +6844,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         roadmap: roadmapDb,
         onePager: onePagerDb,
         rituals: ensureRituals(db, me),
-        documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title })),
+        documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title, replaced_by: replacedByRefs(db, d) })),
       });
       return { db: ensureMeetings(db, ctx), ctx };
     });

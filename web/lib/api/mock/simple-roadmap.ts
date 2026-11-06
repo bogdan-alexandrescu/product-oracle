@@ -185,6 +185,12 @@ interface SimpleDb {
   /** one-roadmap-many-prds (api/oracle/roadmap/company.feeding_ids): the company roadmap's slug;
    * while set, its items alone feed Simple and older per-PRD roadmaps' items are history. */
   company_roadmap?: string;
+  /** simple-replaced-prds (api/oracle/roadmap/company.replaced_prd_ids): the ids and slugs of the
+   * PRDs marked replaced, set by server.ts from its documents; their items no longer feed Simple. */
+  replaced_prds?: string[];
+  /** The current PRD each replaced one (by id and slug) went to: its first "Replaced by",
+   * followed while that one is replaced too (additions._home files a new item under it). */
+  replaced_with?: Record<string, Schemas["SimpleDocRef"]>;
   /** approved-roadmap-to-simple (./approved-roadmap.ts): what each roadmap's last applied version said. */
   applied?: Record<string, AppliedRecord>;
 }
@@ -1012,9 +1018,36 @@ export function canEditRoadmap(db: SimpleDb, roadmap: string, me: { id: string; 
   return [...tracks].some((t) => db.track_owners?.[t] === me.id) && RANK[me.role] >= RANK.approver;
 }
 
+/** simple-replaced-prds (service.load): an item of a replaced PRD is history, read in Detailed only. */
+export function ofReplacedPrd(db: SimpleDb, s: SeedItem): boolean {
+  const replaced = db.replaced_prds ?? [];
+  return !!replaced.length && (replaced.includes(ownPrd(s).id) || replaced.includes(ownPrd(s).slug));
+}
+
+/** additions._home: the track and PRD a feature added in Simple is filed under, in place: the
+ * roadmap's first track (by when it was made: TRACKS' order) of a current PRD, else its first
+ * track under the PRD that replaced it. A track's PRD is its first item's on the roadmap. */
+export function fileUnderCurrentPrd(db: SimpleDb, s: SeedItem): void {
+  const tracks = Object.keys(TRACKS).flatMap((t) => {
+    const first = db.items.find((x) => x.roadmap === s.roadmap && x.track === t);
+    return first ? [first] : [];
+  });
+  if (!tracks.length) return;
+  const live = tracks.find((x) => !ofReplacedPrd(db, x));
+  if (live) {
+    s.track = live.track;
+    s.prd_doc = ownPrd(live);
+    return;
+  }
+  s.track = tracks[0].track;
+  const own = ownPrd(tracks[0]);
+  const to = db.replaced_with?.[own.id] ?? db.replaced_with?.[own.slug];
+  if (to) s.prd_doc = to;
+}
+
 function visibleItems(db: SimpleDb, role: Role): SeedItem[] {
   const restricted = role === "commenter" || role === "viewer";
-  return db.items.filter((s) => !s.trashed && !offLatest(db, s) && (!db.company_roadmap || s.roadmap === db.company_roadmap) && (!restricted || ROADMAPS[s.roadmap].visibility === "company"));
+  return db.items.filter((s) => !s.trashed && !offLatest(db, s) && (!db.company_roadmap || s.roadmap === db.company_roadmap) && (!restricted || ROADMAPS[s.roadmap].visibility === "company") && !ofReplacedPrd(db, s));
 }
 
 /** plan-model (suggestions._planned): the item's dated slices in its PRD's plan; none when the plan does not place it. */
@@ -1327,20 +1360,24 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       ...(chosen ? [chosen] : readable).flatMap((slug) => appliedMilestones(db, slug)),
       // The plan's dated milestones (M1-M3), each naming the items with a slice in it.
       // roadmap-gantt: each planned PRD's own records ("simple-plan-two": two PRDs, M1-M3 each).
-      ...(db.plan ? [PLAN_PRD_SLUG, ...(db.plan.prds ?? [])] : []).flatMap((slug) =>
-        planMilestones().map((m) => ({
+      // simple-replaced-prds (service._milestone_out): a replaced PRD's items are not read, so its
+      // track has no PRD and its milestones keep their target day and counts only, no plan.
+      ...(db.plan ? [PLAN_PRD_SLUG, ...(db.plan.prds ?? [])] : []).flatMap((slug) => {
+        const inPlay = items.some((i) => i.prd?.slug === slug);
+        return planMilestones().map((m) => ({
           id: stableUuid(slug === PLAN_PRD_SLUG ? `simple-plan-milestone/${m.code}` : `simple-plan-milestone/${slug}/${m.code}`),
           track_id: stableUuid(`simple-track/${slug === PLAN_PRD_SLUG ? "onboarding" : (seeds.find((s) => ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, "-") === slug)?.track ?? "onboarding")}`),
           name: `${m.code} · ${m.name}`, date: m.end_date,
           horizon: (m.end_date <= w.now[1] ? "now" : m.end_date <= w.next[1] ? "next" : "later") as Horizon, status: "planned" as const,
           item_ids: items.filter((i) => i.prd?.slug === slug && i.milestones.includes(m.code)).map((i) => i.id),
-          start_date: m.start_date, end_date: m.end_date, effort_weeks: m.effort_weeks, done_when: m.done_when, targets: m.targets,
-        })),
-      ),
+          ...(inPlay ? { start_date: m.start_date, end_date: m.end_date, effort_weeks: m.effort_weeks, done_when: m.done_when, targets: m.targets } : UNDATED),
+        }));
+      }),
     ],
     // build-milestones-on-roadmap: the shown roadmaps' milestones per goal (a PRD's among them).
     goal_milestones: (db.goal_milestones ?? []).filter((m) => !m.deleted && (chosen ? m.roadmap === chosen : readable.includes(m.roadmap))).map((x) => milestoneOut(x, db.ids, role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)))),
-    span: db.plan ? planSpan() : null,
+    // service.build: the span of the shown items' PRDs' plans only (a replaced plan PRD's goes with its items).
+    span: db.plan && shown.some((i) => !!i.prd && (i.prd.slug === PLAN_PRD_SLUG || !!db.plan?.prds?.includes(i.prd.slug))) ? planSpan() : null,
     // A working draft belongs to one roadmap: a chosen roadmap's read carries its own only.
     changes_in_review: chosen ? (reader.hiddenBy[roadmapId(chosen)] ?? 0) : reader.hidden,
     drafts: chosen ? reader.visible.filter((d) => d.document_id === roadmapId(chosen)) : reader.visible,
@@ -1441,7 +1478,8 @@ function prdKeyDates(db: SimpleDb, slug: string, roadmap: Schemas["SimpleDocRef"
   const hidden = new Set(db.plan?.hidden ?? []);
   // roadmap-keydates review: every PRD the roadmap's items come from, each item's own (an item
   // added from another approved PRD names that one), as the API's key_date_prds reads them.
-  const prds = [...new Map(db.items.filter((s) => s.roadmap === slug && !s.draft_roadmap).map((s) => [ownPrd(s).id, ownPrd(s)])).values()];
+  // simple-replaced-prds: never a replaced PRD's (service.load drops its items, as visibleItems).
+  const prds = [...new Map(db.items.filter((s) => s.roadmap === slug && !s.draft_roadmap && !ofReplacedPrd(db, s)).map((s) => [ownPrd(s).id, ownPrd(s)])).values()];
   return prds
     .filter((p) => !hidden.has(p.slug))
     .sort((a, b) => a.title.localeCompare(b.title))
@@ -1475,7 +1513,7 @@ function json(status: number, body: unknown): Response {
 export function matchesOf(db: SimpleDb, keys: string[]): Schemas["SimpleMatch"][] {
   return keys
     .map((k) => db.items.find((x) => x.key === k))
-    .filter((x): x is SeedItem => !!x && !closed(x))
+    .filter((x): x is SeedItem => !!x && !closed(x) && !ofReplacedPrd(db, x))
     .slice(0, 2)
     // Its display code (F-06) or none, never its key, as additions.reconcile.
     .map((x) => ({ kind: "item" as const, id: db.ids[x.key], code: prdCode(x.section) ?? "", title: x.title }));
@@ -1484,11 +1522,12 @@ export function matchesOf(db: SimpleDb, keys: string[]): Schemas["SimpleMatch"][
 const WORDS = (t: string): Set<string> => new Set(t.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4));
 
 /** S7, Oracle's duplicate check (simplified): live items of the roadmap sharing a word of four
- * letters or more with the title, most shared first. */
+ * letters or more with the title, most shared first; never a replaced PRD's (additions.reconcile
+ * reads service.load). */
 export function lookalikes(db: SimpleDb, title: string, roadmap: string | null, except?: string): string[] {
   const mine = WORDS(title);
   return db.items
-    .filter((x) => x.key !== except && !closed(x) && !x.draft && (!roadmap || x.roadmap === roadmap))
+    .filter((x) => x.key !== except && !closed(x) && !x.draft && (!roadmap || x.roadmap === roadmap) && !ofReplacedPrd(db, x))
     .map((x) => ({ k: x.key, n: [...WORDS(x.title)].filter((w) => mine.has(w)).length }))
     .filter((x) => x.n > 0)
     .sort((a, b) => b.n - a.n || a.k.localeCompare(b.k))
