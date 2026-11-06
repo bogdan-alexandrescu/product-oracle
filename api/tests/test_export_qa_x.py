@@ -226,3 +226,77 @@ def test_x12_the_pptx_mark_is_a_plain_word():
     runs = [r for b in blocks.items for r in getattr(b, "runs", [])]
     marks = [r for r in runs if "unverified" in r.text]
     assert marks and all(r.text == "unverified" and not r.bold for r in marks), runs
+
+
+GOALS = {"G1": "Activation", "G2": "Retention"}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "[dash](https://example.com/d?goal=G1)",
+        "<https://example.com/d?goal=G1>",
+        "See https://example.com/d?goal=G1 for more.",
+        "[dash]: https://example.com/d?goal=G1",
+        "Run `G1` or ``G2 only``.",
+        "```\nG1 and G2\n```\n",
+        "~~~\nG1\n~~~\n",
+        '<a href="https://example.com/d?goal=G1">dash</a>',
+        "Kept in docs/G1/G2.",
+    ],
+)
+def test_x8_goal_names_leave_links_and_code_alone(text):
+    assert render_module.with_goal_names(text, GOALS) == text
+
+
+def test_x8_goal_names_name_prose_beside_links_and_each_code_of_a_pair():
+    w = render_module.with_goal_names
+    assert w("[G1 dash](https://example.com/d?goal=G1)", GOALS) == (
+        "[G1 Activation dash](https://example.com/d?goal=G1)"
+    )
+    assert w("Serves G1/G2.", GOALS) == "Serves G1 Activation/G2 Retention."
+    assert w("`G1` then G1.", GOALS) == "`G1` then G1 Activation."
+
+
+DATED_LINKS = (
+    "See [report](https://example.com/a?from=2026-01-02), "
+    "<https://example.com/b?to=2026-02-03> and https://example.com/c?on=2026-03-04. "
+    "Due 2026-11-01."
+)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "[report](https://example.com/a?from=2026-01-02)",
+        "[report]: https://example.com/a?from=2026-01-02",
+        "<https://example.com/b?to=2026-02-03>",
+        "Open https://example.com/c?on=2026-03-04 today.",
+        "<!-- checked 2026-04-05 -->",
+        "Run `2026-05-06`.",
+    ],
+)
+def test_x17_markdown_days_leave_links_comments_and_code_alone(text):
+    assert render_module._days_in_plain_words(text) == text
+
+
+async def test_x17_a_url_with_a_date_round_trips_through_export_and_import(client, prd):
+    md = _draft().replace("Shipping, payment and review on one page.", DATED_LINKS)
+    assert (await _import(client, prd, md)).status_code == 201
+    exported = (
+        await client.get("/v1/documents/checkout/versions/2/export?format=md", headers=prd)
+    ).text
+    for url in (
+        "](https://example.com/a?from=2026-01-02)",
+        "<https://example.com/b?to=2026-02-03>",
+        "https://example.com/c?on=2026-03-04.",
+    ):
+        assert url in exported, exported
+    assert "Due Nov 1, 2026." in exported
+    resp = await _import(client, prd, exported)
+    assert resp.status_code == 201, resp.text
+    v = (await client.get("/v1/documents/checkout/versions/3", headers=prd)).json()
+    body = "\n".join(s["body_md"] or "" for s in v["sections"])
+    assert "[report](https://example.com/a?from=2026-01-02)" in body
+    assert "<https://example.com/b?to=2026-02-03>" in body
+    assert "https://example.com/c?on=2026-03-04." in body
