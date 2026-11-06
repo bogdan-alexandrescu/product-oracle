@@ -1120,6 +1120,12 @@ async def submit(
     latest = await db.scalar(
         select(func.max(DocumentVersion.number)).where(DocumentVersion.document_id == document.id)
     )
+    if base is None:
+        # A draft opened on an item added in Simple (on no version yet) has no base: its
+        # changes were made on the version readers see (hotfix 2, Nov 6).
+        base = approved or await views.items_version(db, document)
+        if base is not None:
+            d.base_version_id = base.id
     # A roadmap never approved has nothing published to change under the draft: a newer
     # version a run left in review does not block it (hotfix, Nov 6).
     if base is None or (approved is not None and approved.id != base.id):
