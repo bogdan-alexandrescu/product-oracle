@@ -53,7 +53,7 @@ export const SHARING_SECTIONS: SectionSeed[] = [
   { key: "item-falcon", level: 3, heading: "Falcon alerts rework", body: "Owner: Avery Stone. Serves G1. ENG-512 tracks it. Beta by 2026-11-30." },
   { key: "item-import", level: 3, heading: "Northwind bulk import", body: "Owner: Priya Raman. Serves G2. Asked for by Northwind." },
   { key: "next", level: 2, heading: "Next", body: "Shaped, not started." },
-  { key: "item-ledger", level: 3, heading: "Billing ledger v2", body: "Owner: Avery Stone. Serves G1. Depends on Falcon alerts rework." },
+  { key: "item-ledger", level: 3, heading: "Billing ledger v2", body: "Owner: Avery Stone. Serves G1. ENG-541 tracks it. Depends on Falcon alerts rework." },
   { key: "item-partner", level: 3, heading: "Partner API beta", body: "Owner: Priya Raman. Serves G2." },
   { key: "later", level: 2, heading: "Later", body: "Ideas we keep." },
   { key: "item-ops", level: 3, heading: "Ops console cleanup", body: "Owner: Avery Stone. Kept for the support team." },
@@ -771,19 +771,26 @@ const GOAL_LINE = /^\s*[-*]\s*(G-?\d+)\b[\s.:]+(\S.*?)\s*$/gm;
 
 /**
  * G-3 (as the API's render.code_names): the name of each goal code and tracker key `texts` write: the roadmap's own
- * Goals list's words up to the measure ("- G1 Activation: 40% to 55% by Q4"), a goal entity's title by its key (any
- * case, with or without the dash) and a tracker issue's title.
+ * Goals list's words up to the measure ("- G1 Activation: 40% to 55% by Q4"), a confirmed goal entity's title by its
+ * key (any case, with or without the dash) and a tracker issue's title when the version's own `items` carry its
+ * record (the keys the page already shows through an item). A link holder reads no more than the page shows.
  */
-export function codeNames(texts: string[], goals: { key: string; title: string | null }[], records: { external_ref: string; title?: string | null }[]): Record<string, string> {
+export function codeNames(
+  texts: string[],
+  goals: { key: string; title: string | null; status?: string }[],
+  records: { external_ref: string; title?: string | null; item_key?: string | null; track_id?: string | null }[],
+  items: { item_key: string; track_id?: string | null }[] = [],
+): Record<string, string> {
   const codes = new Set(texts.flatMap((t) => [...(t ?? "").matchAll(CODE)].map((m) => m[1])));
   if (!codes.size) return {};
   const out: Record<string, string> = {};
   for (const t of texts) for (const m of (t ?? "").matchAll(GOAL_LINE)) out[m[1]] = m[2].split(/:|\s[–—-]\s/)[0].trim();
-  for (const r of records) if (codes.has(r.external_ref) && r.title) out[r.external_ref] = r.title;
+  const carried = (r: (typeof records)[number]) => !!r.item_key && items.some((i) => i.item_key === r.item_key && (i.track_id ?? null) === (r.track_id ?? null));
+  for (const r of records) if (codes.has(r.external_ref) && r.title && carried(r)) out[r.external_ref] = r.title;
   const goalCodes = new Map([...codes].filter((c) => /^G-?\d+$/.test(c)).map((c) => [c.replace("-", "").toLowerCase(), c]));
   for (const g of goals) {
     const code = goalCodes.get((g.key ?? "").replace(/-/g, "").toLowerCase());
-    if (code && g.title) out[code] = g.title;
+    if (code && g.title && g.status === "confirmed") out[code] = g.title;
   }
   return out;
 }
@@ -794,7 +801,8 @@ export function withNames(text: string, names: Record<string, string>): string {
   return text.replace(CODE, (whole, code: string, at: number) => {
     const name = names[code];
     if (!name || name === code || text.slice(at + whole.length).trimStart().startsWith(name)) return whole;
-    return name.includes(code) ? name : `${name} (${code})`;
+    const shown = name.replace(/[\\|*_[\]`<>]/g, "\\$&");
+    return name.includes(code) ? shown : `${shown} (${code})`;
   });
 }
 

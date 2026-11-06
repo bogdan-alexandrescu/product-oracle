@@ -17,14 +17,14 @@ import { expect, test, type Page } from "./test";
 const DOC = "/documents/example-labs-roadmap";
 const FRAME = 'iframe[title="Shared roadmap"]';
 
-async function openTeamLink(page: Page) {
+async function openTeamLink(page: Page, audience = "Team") {
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "sharing"));
   await login(page);
   await page.goto(DOC);
   await page.getByRole("button", { name: "Share a link", exact: true }).click();
   const sheet = page.getByRole("dialog", { name: "Share roadmap" });
-  await sheet.getByLabel("Audience").selectOption({ label: "Team" });
-  await sheet.getByLabel("Label").fill("Team, demo week");
+  await sheet.getByLabel("Audience").selectOption({ label: audience });
+  await sheet.getByLabel("Label").fill(`${audience}, demo week`);
   await sheet.getByRole("button", { name: "Create link" }).click();
   const url = await sheet.getByLabel("Link", { exact: true }).inputValue();
   const code = await sheet.getByLabel("Passcode", { exact: true }).inputValue();
@@ -46,11 +46,23 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(frame.getByText(/^Shared with you/)).toBeVisible();
       const body = frame.locator("body");
       await expect(body).toContainText("Serves Cut monthly churn to 2% (G1).");
-      await expect(body).toContainText("Alert rules engine (ENG-512) tracks it.");
-      await expect(body).toContainText("Partner sign-in tokens (ENG-530)");
+      // Issues on no item's card stay as written: the page shows no more than it already shows.
+      await expect(body).toContainText("ENG-512 tracks it.");
+      await expect(body).toContainText("Partner API beta Priya Raman ENG-530");
       const text = await body.innerText();
       expect(text).not.toMatch(/Serves G\d/);
-      expect(text).not.toMatch(/(^|[^(\w])ENG-\d+(?!\))/m);
+      expect(text).not.toContain("Alert rules engine");
+      expect(text).not.toContain("Partner sign-in tokens");
+    });
+
+    test("G-3: a tracker issue on an item reads by its title as written, with no table column or link added", async ({ page }) => {
+      const holder = await openTeamLink(page, "Engineering");
+      const frame = holder.frameLocator(FRAME);
+      await expect(frame.getByText(/^Shared with you/)).toBeVisible();
+      const body = frame.locator("body");
+      await expect(body).toContainText("Ledger entries | v2 [notes](https://example.com/notes) *draft* (ENG-541) tracks it.");
+      await expect(frame.locator('a[href="https://example.com/notes"]')).toHaveCount(0);
+      await expect(frame.locator("em")).toHaveCount(0);
     });
 
     test("G-5: every Inbox row's Open is one bordered button, and a long title wraps", async ({ page }) => {
