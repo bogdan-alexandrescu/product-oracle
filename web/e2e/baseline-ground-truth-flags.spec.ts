@@ -2,7 +2,7 @@ import { expect, test, type Page } from "./test";
 
 import { GROUND_TRUTH_FLAGS_SCENARIO } from "../lib/api/mock/ground-truth";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login, openRoadmapItem } from "./helpers";
+import { login, openRoadmapItem, signOut } from "./helpers";
 
 /**
  * The Ground Truth check on Detailed's Ground Truth page (docs/ground-truth.md; the owner,
@@ -224,9 +224,11 @@ test("a commenter's Add of a PRD's feature, once approved, serves its goal and i
   await row(page, "Guest seats").getByRole("button", { name: /Add to Ground Truth/ }).click();
   await expect(row(page, "Guest seats").getByTestId("gt-pending")).toHaveText("Sent for approval");
   // The owner approves it on the Proposals tab.
+  await signOut(page);
   await login(page);
   await page.goto("/baseline?tab=proposals");
   await page.getByTestId("proposal").filter({ hasText: "Guest seats" }).getByRole("button", { name: "Accept" }).click();
+  await expect(page.getByTestId("proposal").filter({ hasText: "Guest seats" })).toHaveCount(0);
   await page.goto("/baseline");
   await expect(page.getByTestId("gt-band")).toBeVisible();
   await expect(count(page, "prd_feature_missing")).toHaveCount(0);
