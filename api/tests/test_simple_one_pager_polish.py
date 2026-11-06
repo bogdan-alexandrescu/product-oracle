@@ -91,7 +91,10 @@ async def table_world(client):
 
 
 def nm(u: User) -> str:
-    return u.name or u.email
+    # Export QA X-15: a name, never an email ("owner@example.com" reads "Owner").
+    from oracle.members.names import display_name
+
+    return display_name(u.email, u.name)
 
 
 def texts(view: dict, key: str) -> list[str]:

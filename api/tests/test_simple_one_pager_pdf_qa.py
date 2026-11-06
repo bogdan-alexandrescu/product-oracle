@@ -14,6 +14,9 @@ Test cards (protects / fails_when / no_claim):
 - test_every_bar_code_has_its_name: protects=X-6, a bar prints the feature's name when it
   fits, else its code, and every code printed without its name is in the key with its name;
   fails_when=a code shows with no name anywhere on the timeline page; no_claim=PDF layout.
+- test_a_wide_bar_prints_its_name: protects=X-6, a bar wide enough prints "F-10 Single
+  sign-on" and the timeline needs no key; fails_when=the bar shows the bare code;
+  no_claim=font metrics.
 - test_holiday_shading_writes_each_stop_in_full: protects=X-13, the PDF engine draws the
   holiday hatching (no shorthand two-position colour stops); fails_when=a stop like
   "#d9d5cc 0 2px"; no_claim=other gradients.
@@ -119,7 +122,7 @@ def _num(style: str, prop: str) -> float:
 async def test_milestone_flags_never_overlap_or_leave_the_lanes(client):
     html = await plan_pdf(client)
     right_aligned = "translateX(-100%)" in css_rule(html, ".tl .f")
-    flags = re.findall(r"<span class='f' style='([^']*)'>([^<]*)</span>", timeline(html))
+    flags = re.findall(r"<span class='f(?: l)?' style='([^']*)'>([^<]*)</span>", timeline(html))
     day = one_pager.plan_model._day
     want = [f"{c} ends {day(date.fromisoformat(b))}" for c, _, _, b in MILESTONES]
     assert [t for _, t in flags] == want
@@ -153,13 +156,17 @@ async def test_every_bar_code_has_its_name(client):
     key = re.search(r"<div class='key'>(.*?)</div>", tl)
     keyed = key.group(1) if key else ""
     names = {c: n for c, n, _, _ in FEATURES} | {"F-04": "Pricing page words"}
-    shown = 0
+    printed = set()
     for label in labels:
         for code in re.findall(r"F-\d+[a-z]?", label):
             name = names[code[:4]]
             assert name in label or f"{code} {name}" in keyed, (code, label)
-            shown += 1
-    assert shown >= len(FEATURES)
+            printed.add(code[:4])
+    # Codes a bar folds into "+N" are in the key with their names too.
+    for code in re.findall(r"F-\d+[a-z]?", keyed):
+        assert f"{code} {names[code[:4]]}" in keyed
+        printed.add(code[:4])
+    assert printed == set(names)
 
 
 async def test_holiday_shading_writes_each_stop_in_full(client):
@@ -174,10 +181,9 @@ async def test_holiday_shading_writes_each_stop_in_full(client):
 async def test_bars_stay_inside_their_milestone_and_the_page(client):
     html = await plan_pdf(client)
     tl = timeline(html)
-    ends = {}
-    for style in re.findall(r"<span class='end' style='([^']*)'>", tl):
-        ends.setdefault(re.search(r"border-color:([^;']+)", style).group(1), _num(style, "left"))
-    tone = {c: one_pager.TONES[i % 3][1] for i, (c, *_) in enumerate(MILESTONES)}
+    # Each lane draws the milestones' end lines in order; the first lane's are M1..M6.
+    lines = re.findall(r"<span class='end' style='([^']*)'>", tl)[: len(MILESTONES)]
+    ends = {c: _num(st, "left") for (c, *_), st in zip(MILESTONES, lines, strict=True)}
     bars = re.findall(r"<span class='bar[^']*' style='([^']*)'>([^<]*)</span>", tl)
     assert bars
     for style, label in bars:
@@ -186,8 +192,7 @@ async def test_bars_stay_inside_their_milestone_and_the_page(client):
         assert left >= 0 and left + width <= 100.01, (label, left, width)
     # The one-week M6 bar (F-14) ends on M6's line, not past it.
     f14 = next(s for s, label in bars if "F-14" in label)
-    m6_line = [v for k, v in ends.items() if k == tone["M6"]]
-    assert _num(f14, "left") + _num(f14, "width") <= max(m6_line) + 0.01
+    assert _num(f14, "left") + _num(f14, "width") <= ends["M6"] + 0.01
 
 
 async def test_done_when_one_marker_owner_name_and_page_numbers(client):
@@ -204,3 +209,13 @@ async def test_done_when_one_marker_owner_name_and_page_numbers(client):
     page = re.search(r"@page\s*\{.*?\}\s*\}", html, re.S)
     assert page and 'counter(page) " of " counter(pages)' in page.group(0)
     assert '"Page "' in page.group(0)
+
+
+async def test_a_wide_bar_prints_its_name(client):
+    data = {**DATA, "milestones": DATA["milestones"][4:5], "features": [
+        {"code": "F-10", "name": "Single sign-on", "milestones": ["M5"], "effort": [4],
+         "goals": ["Revenue"]},
+    ]}  # fmt: skip
+    tl = timeline(await plan_pdf(client, data))
+    assert re.findall(r"<span class='bar[^']*'[^>]*>([^<]*)</span>", tl) == ["F-10 Single sign-on"]
+    assert "<div class='key'>" not in tl
