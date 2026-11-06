@@ -16,13 +16,15 @@ import { ChangeFailed, changedWords, decide, nearWords, propose, resultWords, se
 
 const toast = (ask: ToastAsk) => dsToast({ place: "corner", ...ask });
 
-/** Which roadmap item is the feature: its code in the plan's PRD, else its code, else its name. */
+/** Which roadmap item is the feature: its code in the plan's PRD, else its code, else its name, else its key. */
 export function itemFor(items: Item[], f: { code: string; name: string; prd?: { id: string; slug: string } | null }): Item | undefined {
   const same = (i: Item) => !!i.code && i.code.toLowerCase() === f.code.toLowerCase();
   return (
     items.find((i) => same(i) && !!f.prd && (i.prd?.id === f.prd.id || i.prd?.slug === f.prd.slug)) ??
     items.find(same) ??
-    items.find((i) => i.title === f.name)
+    items.find((i) => i.title === f.name) ??
+    // S-3: a Goal bucket feature with no ranked row is known only by its key.
+    items.find((i) => i.key === f.code)
   );
 }
 
