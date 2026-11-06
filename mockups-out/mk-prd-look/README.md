@@ -40,7 +40,9 @@ products), the mock's first PRD.
 
    The PRDs replace the mock's PRDs in the order the mock lists them (the first one is the PRD the
    frames show); extra PRDs are ignored, missing ones keep the invented content. Each keeps the mock's
-   document id, so every link works. `status` is Draft, In review or Approved.
+   document id, so every link works. `status` is Draft, In review or Approved. A section may give its
+   `level` (1 to 3; else it follows from the key), and a PRD its `citations`; without them it shows no
+   sources. A file without a `"prds"` list, or that is not JSON, stops the build.
 
 2. Build and start the mock with that file (the file is read at build time):
 

@@ -277,7 +277,7 @@ export function withRealPrd(seed: DocumentSeed, real: RealPrd | undefined): Docu
   return {
     ...seed,
     title: real.title ?? seed.title,
-    versions: [...before, { ...last, number, brief: undefined, sections, citations: real.citations ?? last.citations }],
+    versions: [...before, { ...last, number, brief: undefined, sections, citations: real.citations ?? [] }],
   };
 }
 

@@ -4,6 +4,7 @@ import type { NextConfig } from "next";
 // MOCK-HOOK (mk-prd-look): MOCK_PRD_FILE names a JSON file of real PRDs; the mock build inlines it
 // (NEXT_PUBLIC_MOCK_PRD) so the mock's PRDs read it. Mock-ups only; the file never leaves the laptop.
 const MOCK_PRD = process.env.MOCK_PRD_FILE ? readFileSync(process.env.MOCK_PRD_FILE, "utf8") : ""; // MOCK-HOOK
+if (MOCK_PRD && !Array.isArray(JSON.parse(MOCK_PRD).prds)) throw new Error(`MOCK_PRD_FILE: no "prds" list in ${process.env.MOCK_PRD_FILE}`); // MOCK-HOOK: a bad file stops the build, never shows the invented PRD
 
 // The browser talks to the API through this app (same origin), so the session
 // cookie needs no CORS. Resolved at build time in production builds.

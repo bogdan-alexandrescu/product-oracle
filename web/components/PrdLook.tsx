@@ -423,7 +423,7 @@ function Summary({
   const decisions = entries.filter((e) => e.kind === "Decision");
   const questions = entries.filter((e) => e.kind === "Open question");
   const reviewed = sections.filter((s) => s.level > 1 && s.verdict?.verdict === "approved").length;
-  const total = sections.filter((s) => s.level > 1).length;
+  const total = sections.length; // the review panel's count: every section
   const asked = sections.filter((s) => s.verdict?.verdict === "changes_requested");
   return (
     <section className="pt1-summary" aria-label="Summary" data-pt1-sec={lead?.section_key ?? "summary-panel"}>
