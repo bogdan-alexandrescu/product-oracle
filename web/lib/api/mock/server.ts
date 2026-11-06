@@ -4211,6 +4211,16 @@ function load(): Db {
     const first = db.review_v2.patches[0];
     if (first) first.rationale = "An agent's draft changed this approved section, so its approved text was kept.";
   }
+  // "inbox-commenter-rows": a commenter has a row of their own in the Inbox, a reminder to review a one-pager (as the API writes it).
+  if (scenario === "inbox-commenter-rows") {
+    const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
+    ensureReviewV2(db).notifications.push({
+      id: "n0000000-0000-4000-8000-000000000003", user_id: commenter.id, kind: "review_reminder",
+      title: "Sam Ortiz is waiting for your review of Guided setup", document_id: db.documents.find((d) => d.kind === "prd")?.id ?? null, version_number: 2, section_key: null,
+      comment_id: null, campaign_id: null, actor: `user:${db.user_id}`,
+      data: { href: "/simple/one-pagers/guided-setup", waits: "Version 2 · 3 changes" }, read_at: null, created_at: "2026-10-20T09:00:00Z",
+    });
+  }
   if (scenario === "named-codes") {
     addGoalCodes(db.baseline);
     addCodedPrd(db);

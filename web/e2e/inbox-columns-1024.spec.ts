@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "./test";
 
 import { login } from "./helpers";
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/ids";
 
 /*
  * Inbox rows at 1024 and 390 (visual QA R-6): the middle column keeps its room, so no word is cut
@@ -43,27 +44,60 @@ async function readRows(page: Page) {
         }
       }
     }
-    return { rows: rows.length, cut, split, wide: document.documentElement.scrollWidth - window.innerWidth };
+    // Text a button, link or field in the row's action cell draws over: no action control sits on a word of the row.
+    const covered: string[] = [];
+    const hits = (a: DOMRect, b: DOMRect) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
+    for (const row of rows) {
+      const act = row.querySelector<HTMLElement>("td:last-child");
+      if (!act) continue;
+      const controls = [...act.querySelectorAll<HTMLElement>("button, a[href], select, input, textarea, [role=button]")].filter((c) => c.checkVisibility() && c.getClientRects().length > 0);
+      const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode as Text;
+        if (!node.data.trim() || !node.parentElement?.checkVisibility() || node.parentElement.closest(".sr-only")) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const text = [...range.getClientRects()].filter((t) => t.width > 0 && t.height > 0);
+        for (const c of controls) {
+          if (c.contains(node)) continue;
+          const box = c.getBoundingClientRect();
+          if (text.some((t) => hits(t, box))) covered.push(`"${node.data.trim().slice(0, 30)}" under "${(c.textContent ?? "").trim().slice(0, 30)}"`);
+        }
+      }
+    }
+    return { rows: rows.length, cut, split, covered, wide: document.documentElement.scrollWidth - window.innerWidth };
   });
+}
+
+async function check(page: Page, size: { width: number }, tab: string) {
+  await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: new RegExp(`^${tab}`) }).click();
+  await expect(page.locator("[role=tabpanel] tr[data-row]").first(), `${tab}: has rows`).toBeVisible();
+  const r = await readRows(page);
+  expect(r.rows, `${tab}: rows drawn`).toBeGreaterThan(0);
+  // At 1440 a long "For" still ends in an ellipsis whose tooltip holds the rest; narrower, nothing is cut.
+  if (size.width < 1100) expect(r.cut, `${tab}: text cut`).toEqual([]);
+  expect(r.split, `${tab}: words split`).toEqual([]);
+  expect(r.covered, `${tab}: text under a button`).toEqual([]);
+  expect(r.wide, `${tab}: page wider than the window`).toBeLessThanOrEqual(0);
 }
 
 for (const [who, email] of WHO) {
   for (const size of SIZES) {
     test(`Inbox rows for ${who} at ${size.width} read whole, with no sideways scroll`, async ({ page }) => {
+      // A commenter's own row (a reminder to review a one-pager) so every person has rows on both tabs.
+      await page.addInitScript((key) => localStorage.setItem(key, "inbox-commenter-rows"), MOCK_SCENARIO_KEY);
       await page.setViewportSize(size);
       await login(page, email);
       await page.goto("/inbox");
       await expect(page.getByTestId("inbox-state-tabs")).toBeVisible();
-      if (email === "admin@example.com") await expect(page.locator("[role=tabpanel] tr[data-row]").first()).toBeVisible();
-      for (const tab of ["New", "Seen"]) {
-        await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: new RegExp(`^${tab}`) }).click();
-        const r = await readRows(page);
-        if (r.rows === 0) continue;
-        // At 1440 a long "For" still ends in an ellipsis whose tooltip holds the rest; narrower, nothing is cut.
-        if (size.width < 1100) expect(r.cut, `${tab}: text cut`).toEqual([]);
-        expect(r.split, `${tab}: words split`).toEqual([]);
-        expect(r.wide, `${tab}: page wider than the window`).toBeLessThanOrEqual(0);
-      }
+      await check(page, size, "New");
+      // What was new moves to Seen on the next visit; wait until opening the Inbox has marked it seen.
+      await expect(async () => {
+        await page.goto("/inbox");
+        await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Seen/ }).click();
+        await expect(page.locator("[role=tabpanel] tr[data-row]").first()).toBeVisible({ timeout: 3000 });
+      }).toPass({ timeout: 20_000 });
+      await check(page, size, "Seen");
     });
   }
 }
