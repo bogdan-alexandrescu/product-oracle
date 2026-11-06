@@ -89,8 +89,8 @@ function actionsOf(i: WaitingItem): Act[] {
   return [];
 }
 
-/** What kind of thing waits, in plain words. */
-const KIND: Record<WaitingItem["kind"], string> = {
+/** What kind of thing waits, in plain words (Home's proposed goals read the same). */
+export const WAITING_KIND: Record<WaitingItem["kind"], string> = {
   run_stop: "Run stop",
   question: "Decision",
   decision: "Decision",
@@ -142,12 +142,12 @@ export function WaitingRow({ item }: { item: WaitingItem }) {
   };
   if (gone) return null;
   // A broken link names its flag too: one item with two broken links is two rows.
-  const name = `${KIND[item.kind]}: ${item.title}${item.kind === "broken_link" && item.detail ? `, ${item.detail}` : ""}`;
+  const name = `${WAITING_KIND[item.kind]}: ${item.title}${item.kind === "broken_link" && item.detail ? `, ${item.detail}` : ""}`;
   return (
     <li className="flex flex-wrap items-center gap-3 border-t border-line py-3 first:border-t-0" data-testid="waiting-item" data-kind={item.kind} aria-label={name}>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="break-words">
-          <span className="text-text2">{KIND[item.kind]} · </span>
+          <span className="text-text2">{WAITING_KIND[item.kind]} · </span>
           {item.title}
         </span>
         {item.detail && <span className="simple-small break-words">{item.detail}</span>}
