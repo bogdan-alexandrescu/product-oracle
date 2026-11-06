@@ -20,6 +20,7 @@ import {
 } from "@/components/ds";
 import { api, unwrap, type DocumentSummary, type Schemas, type VersionOut } from "@/lib/api/client";
 import { plural } from "@/lib/format";
+import { useMe } from "@/lib/me";
 import { docLabel, runLabel } from "@/lib/labels";
 import { useQuery } from "@/lib/use-query";
 
@@ -244,10 +245,17 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
       : unwrap(api.GET("/v1/blockers", { params: { query: { document_id: d.id } } })).catch(() => []),
   );
   const statement = new Map((named.data ?? []).map((b) => [b.id, b.statement]));
-  const blockers: { key: string; title: string; hard: boolean }[] = failing.flatMap((i) => {
-    const each = (i.evidence_ids ?? []).flatMap((id) => (statement.has(id) ? [{ key: `${i.key}:${id}`, title: statement.get(id)!, hard: i.hard }] : []));
-    return each.length > 0 ? each : [{ key: i.key, title: i.title, hard: i.hard }];
+  // QA pass D-5: each line opens its blocker (as Publish's Resolve does); a check with no named
+  // blocker opens the PRD's Publish page, where its blocks are listed.
+  const blockerHref = (id: string) => `/baseline?tab=blockers&blocker=${encodeURIComponent(id)}`;
+  const blockers: { key: string; title: string; hard: boolean; href: string }[] = failing.flatMap((i) => {
+    const each = (i.evidence_ids ?? []).flatMap((id) =>
+      statement.has(id) ? [{ key: `${i.key}:${id}`, title: statement.get(id)!, hard: i.hard, href: blockerHref(id) }] : [],
+    );
+    return each.length > 0 ? each : [{ key: i.key, title: i.title, hard: i.hard, href: `/documents/${d.slug}/publish` }];
   });
+  const { can } = useMe();
+  const mayResolve = can("set_blocker_status", true);
 
   return (
     <Inspector
@@ -317,12 +325,15 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
           tools={<Chip kind="crit">{blockers.filter((b) => b.hard).length || blockers.length} critical</Chip>}
         >
           {blockers.map((b) => (
-            <div key={b.key} className="flex min-h-8 min-w-0 items-center py-1">
+            <div key={b.key} className="flex min-h-8 min-w-0 items-center gap-2 py-1" data-testid="inspector-blocker-row">
               {/* qa-company-25: a long blocker wraps to two lines, then ends in an ellipsis (the title holds it all). */}
               <span className="inline-flex min-w-0 items-start gap-2.5" title={b.title} data-testid="inspector-blocker">
                 <Icon name="alert" size={16} className="mt-[3px] flex-none text-crit" />
                 <span className="line-clamp-2 min-w-0 break-words">{b.title}</span>
               </span>
+              <LinkButton href={b.href} className="ml-auto flex-none" aria-label={`${mayResolve ? "Resolve" : "Open"} ${b.title}`}>
+                {mayResolve ? "Resolve" : "Open"}
+              </LinkButton>
             </div>
           ))}
         </InspectorSection>

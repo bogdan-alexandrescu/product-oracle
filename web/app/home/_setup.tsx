@@ -183,13 +183,20 @@ export function SetupPanel({ setup, onHide, busy, mine = {} }: { setup: Schemas[
               ) : (
                 <span aria-label="To do" role="img" className="size-6 flex-none rounded-full border-2 border-line-strong" />
               )}
-              <span className="min-w-0 truncate font-semibold" title={copy.label}>
-                {copy.label}
-              </span>
-              <span className="ml-auto flex min-w-0 items-center gap-2.5 max-[600px]:gap-2">
-                <span data-testid="setup-status" title={status} className="tnum min-w-0 truncate text-[15px] text-text2">
+              {/* QA pass D-6: on a phone the name sits above its status, both wrapping whole; the button stays right. */}
+              <span className="flex min-w-0 flex-1 items-center gap-2.5 max-[600px]:flex-col max-[600px]:items-start max-[600px]:gap-0">
+                <span data-testid="setup-name" className="min-w-0 truncate font-semibold max-[600px]:whitespace-normal max-[600px]:break-words" title={copy.label}>
+                  {copy.label}
+                </span>
+                <span
+                  data-testid="setup-status"
+                  title={status}
+                  className="tnum ml-auto min-w-0 truncate text-[15px] text-text2 max-[600px]:ml-0 max-[600px]:whitespace-normal max-[600px]:break-words"
+                >
                   {status}
                 </span>
+              </span>
+              <span className="flex flex-none items-center">
                 {action && (
                   // qa-onboarding-13: each button named for its step ("Open Connect tools").
                   <LinkButton
