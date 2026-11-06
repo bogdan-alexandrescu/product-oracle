@@ -76,6 +76,23 @@ for (const size of SIZES) {
       await expect(panel(page)).toBeVisible();
     });
 
+    test("a dependency that would make a loop cannot be picked, and typed is refused", async ({ page }) => {
+      await login(page);
+      await page.goto("/simple/roadmap");
+      await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+      await openRoadmapItem(page, "alert-rules");
+      await expect(panel(page)).toBeVisible();
+      await tap(panel(page).getByRole("button", { name: "Add a dependency" }));
+      // Weekly alert digest depends on Alert rules engine: it needs this one.
+      const looped = panel(page).getByLabel("Feature it depends on").locator("option", { hasText: "Weekly alert digest" });
+      await expect(looped).toBeDisabled();
+      await expect(looped).toContainText("Needs this one: it would make a loop");
+      await panel(page).getByLabel("Or another PRD's feature key").fill("F-06");
+      await tap(panel(page).getByRole("button", { name: "Save" }));
+      await expect(page.getByText(/Weekly alert digest needs Alert rules engine: it would make a loop/).first()).toBeVisible();
+      await expect(panel(page).getByTestId("card-depends")).not.toContainText("Weekly alert digest");
+    });
+
     test("a viewer is told they can read it, and Suggest a change opens the talk", async ({ page }) => {
       await openDigest(page, "viewer@example.com");
       const note = panel(page).getByTestId("card-read-only");
