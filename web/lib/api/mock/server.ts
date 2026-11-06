@@ -177,6 +177,7 @@ import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
+import { groundTruthCheck } from "./ground-truth";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, CROWDED_MILESTONES_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
@@ -518,6 +519,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * default company plus two provider revokes a removed member's disable could not make (C2);
  * "access-failures" as the default company plus a revoked invite whose access removal has kept
  * failing for over 24 hours (#245);
+ * "ground-truth-flags" as the default company whose Ground Truth check (GET /v1/baseline/check,
+ * ./ground-truth.ts) reads one flag of each kind; every other scenario reads none;
  * "alignment-report" as the default company plus two weekly alignment reports and Oracle's
  * Slack install (./reports.ts, F6);
  * "undelivered" as the default company where SwarmCloud takes no checkpoint decision until the
@@ -6261,6 +6264,10 @@ async function route(db: Db, req: Request): Promise<Response> {
     const found = fromRunCheckpoint({ ...runsContext(db), db: db.runs }, p[3]);
     if (!found) return json(404, { detail: "Run not found" });
     return json(200, { ...found, ...fromRun(db.baseline, p[3], found.actions), checkpoint: found.checkpoint });
+  }
+  // The Ground Truth check (docs/ground-truth.md): flags only, for anyone who reads the roadmap.
+  if (p[1] === "baseline" && p[2] === "check" && !p[3] && req.method === "GET") {
+    return json(200, groundTruthCheck(localStorage.getItem(MOCK_SCENARIO_KEY)));
   }
   // B6 Goals interview: its routes write discussions and proposals, so they come first.
   if (p[1] === "baseline") {

@@ -20,3 +20,5 @@
   in the UI: each count or badge leads to the items it counts, each with the action that resolves it; acting removes or
   updates the item and every count at once, on every page; a running or scheduled run that will change a PRD or
   roadmap shows on its pages live; no needed change requires the API, CLD or a hidden page.
+- The Ground Truth is defined in docs/ground-truth.md: every roadmap item and PRD feature is a Ground Truth feature
+  (or a slice of one), by code. Anything that breaks it is allowed but flagged ("Not in the Ground Truth"), never refused.

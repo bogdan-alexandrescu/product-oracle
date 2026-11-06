@@ -5032,6 +5032,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/baseline/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Check
+         * @description The Ground Truth check (docs/ground-truth.md): every roadmap item, slice and PRD
+         *     feature not in the Ground Truth, and every feature with no F-code, no goal, or running
+         *     today while still on the roadmap; each with plain words and its fixes, counted per kind.
+         *     Flags only: nothing is refused on save.
+         */
+        get: operations["get_check"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/baseline/yaml": {
         parameters: {
             query?: never;
@@ -26227,6 +26250,87 @@ export interface components {
             entities: components["schemas"]["EntityOut"][];
             /** Edges */
             edges: components["schemas"]["EdgeOut"][];
+        };
+        /** GroundTruthDoc */
+        GroundTruthDoc: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * GroundTruthFix
+         * @description A fix a person makes in the UI. ``target``: the item's or feature's id; for a PRD's
+         *     feature its code, or its name when it has none (with ``where.prd``); for a slice's Add to
+         *     Ground Truth its feature's code (F-15); for ``confirm_feature`` the proposed feature's id.
+         *     ``words``: the button's plain words ("Confirm it").
+         */
+        GroundTruthFix: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "add_to_ground_truth" | "link_to_feature" | "confirm_feature" | "give_code" | "pick_goal" | "take_off_roadmap";
+            /** Target */
+            target: string;
+            /** Words */
+            words: string;
+        };
+        /**
+         * GroundTruthFlag
+         * @description One place that breaks the Ground Truth: allowed, flagged "Not in the Ground Truth".
+         */
+        GroundTruthFlag: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "unlinked_item" | "slice_parent_missing" | "prd_feature_missing" | "no_code" | "no_goal" | "runs_today_on_roadmap";
+            item?: components["schemas"]["GroundTruthRef"] | null;
+            feature?: components["schemas"]["GroundTruthRef"] | null;
+            where: components["schemas"]["GroundTruthWhere"];
+            /** Words */
+            words: string;
+            /** Fixes */
+            fixes: components["schemas"]["GroundTruthFix"][];
+            /** Hint */
+            hint?: string | null;
+            like?: components["schemas"]["GroundTruthRef"] | null;
+        };
+        /** GroundTruthOut */
+        GroundTruthOut: {
+            /** Flags */
+            flags: components["schemas"]["GroundTruthFlag"][];
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Total */
+            total: number;
+        };
+        /**
+         * GroundTruthRef
+         * @description A roadmap item, slice or feature: its id (none for a PRD's feature or slice that is no
+         *     row of its own), its code (F-15, F-15a; none when it has no F-code) and its name.
+         */
+        GroundTruthRef: {
+            /** Id */
+            id: string | null;
+            /** Code */
+            code: string | null;
+            /** Name */
+            name: string;
+        };
+        /**
+         * GroundTruthWhere
+         * @description Where the flag shows: the roadmap and the PRD (with its title), when it has them.
+         */
+        GroundTruthWhere: {
+            roadmap?: components["schemas"]["GroundTruthDoc"] | null;
+            prd?: components["schemas"]["GroundTruthDoc"] | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -58753,6 +58857,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TraceReport"];
+                };
+            };
+        };
+    };
+    get_check: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroundTruthOut"];
                 };
             };
         };

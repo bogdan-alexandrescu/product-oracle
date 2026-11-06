@@ -17221,6 +17221,37 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/baseline/check": {
+      "get": {
+        "tags": [
+          "baseline"
+        ],
+        "summary": "Get Check",
+        "description": "The Ground Truth check (docs/ground-truth.md): every roadmap item, slice and PRD\nfeature not in the Ground Truth, and every feature with no F-code, no goal, or running\ntoday while still on the roadmap; each with plain words and its fixes, counted per kind.\nFlags only: nothing is refused on save.",
+        "operationId": "get_check",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroundTruthOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/baseline/yaml": {
       "get": {
         "tags": [
@@ -82528,6 +82559,232 @@
           "edges"
         ],
         "title": "GraphOut"
+      },
+      "GroundTruthDoc": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "GroundTruthDoc"
+      },
+      "GroundTruthFix": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "add_to_ground_truth",
+              "link_to_feature",
+              "confirm_feature",
+              "give_code",
+              "pick_goal",
+              "take_off_roadmap"
+            ],
+            "title": "Action"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "words": {
+            "type": "string",
+            "title": "Words"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "target",
+          "words"
+        ],
+        "title": "GroundTruthFix",
+        "description": "A fix a person makes in the UI. ``target``: the item's or feature's id; for a PRD's\nfeature its code, or its name when it has none (with ``where.prd``); for a slice's Add to\nGround Truth its feature's code (F-15); for ``confirm_feature`` the proposed feature's id.\n``words``: the button's plain words (\"Confirm it\")."
+      },
+      "GroundTruthFlag": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "unlinked_item",
+              "slice_parent_missing",
+              "prd_feature_missing",
+              "no_code",
+              "no_goal",
+              "runs_today_on_roadmap"
+            ],
+            "title": "Kind"
+          },
+          "item": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroundTruthRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "feature": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroundTruthRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "where": {
+            "$ref": "#/components/schemas/GroundTruthWhere"
+          },
+          "words": {
+            "type": "string",
+            "title": "Words"
+          },
+          "fixes": {
+            "items": {
+              "$ref": "#/components/schemas/GroundTruthFix"
+            },
+            "type": "array",
+            "title": "Fixes"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          },
+          "like": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroundTruthRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "where",
+          "words",
+          "fixes"
+        ],
+        "title": "GroundTruthFlag",
+        "description": "One place that breaks the Ground Truth: allowed, flagged \"Not in the Ground Truth\"."
+      },
+      "GroundTruthOut": {
+        "properties": {
+          "flags": {
+            "items": {
+              "$ref": "#/components/schemas/GroundTruthFlag"
+            },
+            "type": "array",
+            "title": "Flags"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "flags",
+          "counts",
+          "total"
+        ],
+        "title": "GroundTruthOut"
+      },
+      "GroundTruthRef": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "name"
+        ],
+        "title": "GroundTruthRef",
+        "description": "A roadmap item, slice or feature: its id (none for a PRD's feature or slice that is no\nrow of its own), its code (F-15, F-15a; none when it has no F-code) and its name."
+      },
+      "GroundTruthWhere": {
+        "properties": {
+          "roadmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroundTruthDoc"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroundTruthDoc"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "GroundTruthWhere",
+        "description": "Where the flag shows: the roadmap and the PRD (with its title), when it has them."
       },
       "HTTPValidationError": {
         "properties": {
