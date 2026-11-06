@@ -98,6 +98,16 @@ for (const scheme of ["light", "dark"] as const) {
         await expect(panel).toContainText(name);
       });
 
+      test("a roadmap feature outside the plan opens the one feature panel from Goal buckets", async ({ page }) => {
+        await setUp(page, scheme, phone);
+        await page.getByRole("tab", { name: "Goal buckets" }).click();
+        const outside = page.getByTestId("plan-outside");
+        await outside.getByRole("button", { name: "Alert rules engine", exact: true }).click();
+        const panel = page.getByRole("dialog");
+        await expect(panel).toBeVisible();
+        await expect(panel).toContainText("Alert rules engine");
+      });
+
       test("a PM-owned row gets its effort in place, then its score", async ({ page }) => {
         await setUp(page, scheme, phone);
         const pricing = rowByTitle(page, "Pricing page words");
