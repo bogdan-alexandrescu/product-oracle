@@ -86,13 +86,13 @@ test.describe("desktop", () => {
   test("S-6: Needs a decision opens each item's panel, gives the unowned draft its action, and counts what it lists", async ({ page }) => {
     await roadmap(page);
     const button = page.getByTestId("needs-decision");
-    const total = Number(/· (\d+)/.exec(await button.innerText())?.[1]);
     await button.click();
+    const suggestion = tray(page).getByTestId("tray-suggested").getByTestId("goal-suggestion");
+    await expect(suggestion.first()).toBeVisible();
     let listed = 0;
     for (const t of await tray(page).getByTestId("tray-counter").locator("b").all()) listed += Number(await t.innerText());
-    const suggested = await tray(page).getByTestId("tray-suggested").getByTestId("goal-suggestion").count();
-    expect(suggested).toBeGreaterThan(0);
-    expect(total).toBe(listed + suggested);
+    const total = listed + (await suggestion.count());
+    await expect(button).toContainText(`· ${total}`);
     await expect(tray(page).getByTestId("tray-scope")).toContainText(`${total} to decide`);
     // The unowned draft: its owner is picked in its panel.
     const flag = tray(page).getByTestId("tray-flag").filter({ hasText: "Team invite nudges" });
