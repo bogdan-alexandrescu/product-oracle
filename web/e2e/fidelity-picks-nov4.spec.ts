@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { PRIORITY_DUPLICATE_RUN, PRIORITY_NO_GOAL_RUN, PRIORITY_ROWLESS_RUN, PRIORITY_RUN, PRIORITY_STALE_GOAL_RUN } from "../lib/api/mock/runs";
+import { ENG_CHECK_RUN, PRIORITY_DUPLICATE_RUN, PRIORITY_NO_GOAL_RUN, PRIORITY_ROWLESS_RUN, PRIORITY_RUN, PRIORITY_STALE_GOAL_RUN } from "../lib/api/mock/runs";
 import { login } from "./helpers";
 
 /**
@@ -9,9 +9,12 @@ import { login } from "./helpers";
  * as a person would at the frames' viewport (1440 x 900). Test cards:
  * - EC1 b / EC2 b (mk-engcheck): protects=Send back to architect is the quiet ghost text button
  *   beside Approve; Ask the architect is one quiet link on the last question's line (or after
- *   "None for this feature."), so the Approach starts right after the questions; the list card
- *   hugs its rows; fails_when=an outlined Send back, a button under the questions, or a list card
- *   stretched to the bar with an empty band; no_claim=the decide call.
+ *   "None for this feature."), so the Approach starts right after the questions; on a desktop
+ *   the list runs down to the decision bar's top edge and scrolls inside itself (the owner's
+ *   Nov 5 decision), with no empty band between them, at 1440x900, 1512x945 and 1920x1080, as
+ *   owner, approver and viewer; fails_when=an outlined Send back, a button under the questions,
+ *   or a list that stops short of the bar (an empty band under it) or runs under it;
+ *   no_claim=the decide call.
  * - RP1 a (mk-runplan): protects=a run row's panel shows Rank | Live and Confidence | Score two by
  *   two; the count chip reads "11 ranked"; Depends on carries no orange note; approving the order
  *   puts the new features on the baseline as proposed and on live Priorities; fails_when=three
@@ -93,18 +96,33 @@ test.describe("EC1 b and EC2 b: the Engineering check", () => {
     }
   });
 
-  test("the list card hugs its rows, no empty band down to the decision bar", async ({ page }) => {
-    // Tall enough that all 9 rows fit with room to spare, whatever the font's width.
-    await page.setViewportSize({ width: 1440, height: 1400 });
-    await openCheck(page, "eng-check-shop", 9);
-    const list = page.getByRole("region", { name: "Features" });
-    const lastRow = await box(page.getByTestId("brief-row").last());
-    const card = await box(list);
-    const gap = card.y + card.height - (lastRow.y + lastRow.height);
-    expect(gap, "the card ends at its last row").toBeGreaterThanOrEqual(-1);
-    expect(gap, "the card ends at its last row").toBeLessThan(4);
-    expect((await box(bar(page))).y - (card.y + card.height), "room under the card, as drawn").toBeGreaterThan(40);
-  });
+  // The owner's Nov 5 decision: the list runs down to the bar and scrolls inside itself, short
+  // or long, so no empty band ever opens between the list and the bar.
+  for (const [role, email] of [["owner", "admin@example.com"], ["approver", "approver@example.com"], ["viewer", "viewer@example.com"]]) {
+    for (const viewport of [DESKTOP, { width: 1512, height: 945 }, { width: 1920, height: 1080 }]) {
+      test(`as ${role} at ${viewport.width}x${viewport.height} the list ends at the decision bar, no empty band under it`, async ({ page }) => {
+        await page.setViewportSize(viewport);
+        await withScenario(page, "eng-check-shop");
+        await login(page, email);
+        await page.goto(`/runs/${ENG_CHECK_RUN}`);
+        await page.getByTestId("review-screen-line").filter({ visible: true }).getByRole("link", { name: "Review" }).click();
+        await expect(page.getByTestId("brief-row")).toHaveCount(9);
+        await expect(bar(page)).toBeVisible();
+        // Both edges read in one frame, so a scroll still moving reads no gap the page never draws.
+        const toBar = () =>
+          page.evaluate(() => {
+            const l = document.querySelector('[aria-label="Features"]')!.getBoundingClientRect();
+            return Math.round(document.querySelector('[data-testid="decision-bar"]')!.getBoundingClientRect().top - l.bottom);
+          });
+        expect(await toBar(), "no empty band between the list and the bar").toBeLessThanOrEqual(1);
+        expect(await toBar(), "the list never runs under the bar").toBeGreaterThanOrEqual(-1);
+        await page.mouse.move(900, 400);
+        await page.mouse.wheel(0, 5000);
+        await expect.poll(async () => page.evaluate(() => Math.ceil(scrollY + innerHeight) >= document.documentElement.scrollHeight)).toBe(true);
+        await expect.poll(async () => Math.abs(await toBar()), { message: "the list still ends at the bar at the page's end" }).toBeLessThanOrEqual(1);
+      });
+    }
+  }
 
   test("a longer list still scrolls on its own and stops above the decision bar", async ({ page }) => {
     await openCheck(page, "eng-check-shop-15", 15);
