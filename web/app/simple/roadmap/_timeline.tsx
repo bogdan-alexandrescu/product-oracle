@@ -64,7 +64,8 @@ export interface Layout {
  * (milestone ends, key dates, track milestones, Today), then a gap: 54 px with one row of marks. */
 // fix4 qa-simple-roadmap-54: 36 px, so Today's pill and the marks sit clear of the quarters' header.
 const TICK_H = 36;
-const MARK_ROW = 16;
+// pre-demo QA S-12: a row of mark labels clears the next by a few pixels (16 left 11 px words a pixel apart).
+const MARK_ROW = 20;
 const headerHeight = (markRows: number) => TICK_H + Math.max(1, markRows) * MARK_ROW + 8;
 const AXIS_H = headerHeight(1);
 export const LONG_PRESS_MS = 450;
@@ -377,7 +378,8 @@ export interface ChartProps {
   onKeyCancel: (item: Item) => void;
   onSuggestion: (item: Item, anchor: { x: number; y: number }) => void;
   /** HTML drawn over the chart (callouts, popovers, the card), in chart pixels. */
-  overlay?: (l: Layout, sc: Scale) => ReactNode;
+  /** pre-demo QA S-12: `keepOff`, the header's mark labels (chart pixels), which the overlay's hints step past. */
+  overlay?: (l: Layout, sc: Scale, keepOff: [number, number][]) => ReactNode;
   chartRef?: (el: SVGSVGElement | null) => void;
   /** S7: quick add's drop targets (the quarter columns and the goal headers). */
   dropTargets?: boolean;
@@ -1029,7 +1031,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                 </button>
               );
             })}
-          {overlay?.(l, sc)}
+          {overlay?.(l, sc, marks.filter((m) => m.kind !== "today").map((m) => m.box))}
         </div>
       </div>
     </div>

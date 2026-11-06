@@ -133,7 +133,7 @@ test.describe("desktop", () => {
     await signIn(page, ADMIN.email, "simple-home");
     const goal = home(page).getByTestId("home-goal").first();
     await expect(goal.getByTestId("home-goal-link")).toHaveAttribute("href", /^\/simple\/(roadmap\?goal=|priorities)/);
-    await expect(home(page).getByTestId("home-goal-weight").first()).toHaveText(/^Counts for \d+% of each feature's score$/);
+    await expect(home(page).getByTestId("home-goal-weight").first()).toHaveText(/^\d+% of the score$/);
     const labels = home(page).getByTestId("home-strip-label");
     // home-waiting-one-list: the plan is the company roadmap's, every PRD's items: each row is a milestone by its name, or the items in none.
     for (const t of await labels.allTextContents()) expect(t).toMatch(/^(Not in a milestone|[^·]+) · \d+ items?$/);

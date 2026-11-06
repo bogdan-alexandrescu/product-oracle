@@ -1762,7 +1762,7 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
     const one = q.get("roadmap");
     if (one && !readableRoadmap(one, me.role)) return json(404, { detail: "No such roadmap" });
     const items = (readRoadmap(db, me.role, new URLSearchParams(one ? { roadmap: one } : {}), me)?.items ?? []).filter((i) => i.status !== "done");
-    const links = items.flatMap((i) => i.flags).filter((f) => f.state === "red" && f.fixes.length > 0 && (f.kind === "dependency_order" || f.kind === "cut_with_dependents"));
+    const links = items.flatMap((i) => i.flags).filter((f) => f.state === "red" && f.fixes.length > 0);
     return json(200, { broken_links: links.length, dates_to_confirm: items.filter((i) => !!i.suggestion?.can_decide).length });
   }
   const slugOf = (id: string) => Object.keys(ROADMAPS).find((r) => roadmapId(r) === id) ?? null;

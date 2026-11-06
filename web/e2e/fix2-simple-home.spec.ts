@@ -96,7 +96,9 @@ test("qa-simple-home-10: a goal's weight reads as its share of the score", async
   // fails_when: a goal card shows "weight 3"
   await signIn(page, EMAILS.owner);
   const weights = page.getByTestId("home-goal-weight");
-  await expect(weights.first()).toHaveText(/^Counts for \d+% of each feature's score$/);
+  // pre-demo QA S-10: the share reads in short; what it means sits behind its (i).
+  await expect(weights.first()).toHaveText(/^\d+% of the score$/);
+  await expect(page.getByRole("button", { name: "About the goal's share of the score" }).first()).toHaveAccessibleDescription(/^Counts for \d+% of each feature's score\.?$/);
   await expect(page.getByTestId("home-goals")).not.toContainText(/weight \d/);
 });
 

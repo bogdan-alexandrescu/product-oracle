@@ -63,7 +63,7 @@ for (const [device, size] of [
       const goals = home(page).getByTestId("home-goal");
       await expect(goals).toHaveCount(2);
       for (const g of await goals.all()) await expect(g.getByTestId("home-goal-path")).toHaveText(/^From .+ · now .+ · target .+$/);
-      await expect(home(page).getByTestId("home-goals-proposed")).toHaveText("1 proposed goal is not shown here until it is confirmed.");
+      await expect(home(page).getByTestId("home-goals-proposed")).toHaveText("1 proposed goal");
       for (const g of await goals.all()) await expect(g.getByTestId("goal-suggestions-open")).toBeVisible();
       const name = (await goals.nth(1).getByTestId("home-goal-link").textContent())!.trim();
       await tap(goals.nth(1).getByTestId("goal-suggestions-open"));

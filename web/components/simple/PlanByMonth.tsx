@@ -157,10 +157,10 @@ export function PlanByMonth({
           const rowLabel = `${label}${when ? ` · ${when}` : ""}: open the roadmap${prd ? ` filtered to ${prd.title}` : ""}`;
           const words = (
             <span className={`flex min-w-0 flex-col leading-tight max-[600px]:flex-row max-[600px]:flex-wrap max-[600px]:items-baseline max-[600px]:gap-x-2 ${named ? "" : "pointer-events-none relative"}`}>
-              {/* qa4-simple-home-7 (Home, named): one line, an ellipsis when it does not fit, the whole label in its
-                  tooltip; vqa B-14 (the one-pager): one line too, the whole label behind an (i) when cut. */}
+              {/* pre-demo QA S-11 (Home, named): the whole label, wrapped between words as the frame shows it, never
+                  cut; vqa B-14 (the one-pager): one line, the whole label behind an (i) when cut. */}
               {named ? (
-                <span className="max-w-full min-w-0 truncate font-semibold" title={label} data-testid={`${testId}-label`}>
+                <span className="max-w-full min-w-0 font-semibold break-words" title={label} data-testid={`${testId}-label`}>
                   {label}
                 </span>
               ) : (
