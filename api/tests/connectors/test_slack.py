@@ -272,7 +272,7 @@ SINCE_EPOCH = datetime(2025, 10, 10, tzinfo=UTC).timestamp()
 @pytest.mark.parametrize("since", ["not-a-date", 20251010, "2025-13-01"])
 async def test_validate_refuses_a_bad_since(since):
     fake = FakeSlack(BASE_ROUTES)
-    with pytest.raises(ConnectorConfigError, match="since"):
+    with pytest.raises(ConnectorConfigError, match="pick a start date"):
         await connector(fake).validate({"channels": ["C0PRODUCT"], "since": since}, CREDENTIAL)
     assert fake.calls == []
 
