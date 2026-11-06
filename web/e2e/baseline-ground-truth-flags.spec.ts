@@ -66,9 +66,10 @@ test.describe("as the owner", () => {
     await expect(page.getByTestId("gt-notice")).toContainText("Added “Export to sheets” to the Ground Truth.");
     await expect(row(page, "Export to sheets")).toHaveCount(0);
     await expect(count(page, "unlinked_item")).toContainText("2");
-    // The new feature serves no goal yet: it is flagged for one instead.
+    // The new feature (the item had no code) has no code and serves no goal yet: it is flagged for both instead.
+    await expect(count(page, "no_code")).toContainText("2");
     await expect(count(page, "no_goal")).toContainText("2");
-    await expect(total(page)).toHaveText("9");
+    await expect(total(page)).toHaveText("10");
   });
 
   test("Add to Ground Truth adds a PRD's feature with its code, and one slice's feature for both slices", async ({ page }) => {
