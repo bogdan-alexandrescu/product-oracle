@@ -117,7 +117,7 @@ test("feature × goal: a legend, Confidence and Delivery headers; goals' Review 
   await openBaseline(page);
   const ledger = page.getByRole("table", { name: "Feature × goal" });
   await expect(page.getByTestId("ledger-legend")).toHaveCount(0);
-  await expect(page.getByRole("region", { name: "Feature × goal", exact: true }).getByRole("tooltip")).toContainText("Rings: confidence, 0 to 100%");
+  await expect(page.getByRole("region", { name: "Feature × goal", exact: true }).locator('[role="tooltip"]')).toContainText("Rings: confidence, 0 to 100%");
   await expect(ledger.getByRole("columnheader", { name: "Delivery" })).toBeVisible();
   await expect(ledger.getByRole("columnheader", { name: "Confidence" })).toBeVisible();
   await expect(ledger.getByRole("columnheader", { name: "Conf." })).toHaveCount(0);

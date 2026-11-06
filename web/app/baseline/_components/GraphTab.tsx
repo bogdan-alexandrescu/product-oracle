@@ -559,7 +559,8 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
         tools={
           <>
             <InfoTip label="Feature × goal">
-              Each bar group is a feature&apos;s contribution to a goal, 0 (none) to 3 (strong). Rings show confidence, out of 100.
+              Each bar group is a feature&apos;s contribution to a goal. Bars: how much a feature moves a goal, none to strong (0 to 3).
+              Rings: confidence, 0 to 100%, from the item&apos;s evidence. A dot: no link.
             </InfoTip>
             {add("feature")}
           </>
@@ -572,10 +573,6 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
           </p>
         ) : (
           <>
-          {/* What the marks mean, in words beside them (prod-7). */}
-          <p className="border-b border-line px-4 py-2 text-sm text-text2 max-[600px]:px-3" data-testid="ledger-legend">
-            Rings: confidence, 0 to 100%, from the item&apos;s evidence. Bars: how much a feature moves a goal, none to strong. A dot: no link.
-          </p>
           <Ledger
             goals={goals}
             groups={groups}
