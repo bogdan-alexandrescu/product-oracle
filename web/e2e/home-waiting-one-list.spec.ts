@@ -233,7 +233,7 @@ for (const phone of [false, true]) {
       // No meeting is live: an upcoming meeting waits on nobody, so Meetings has no count.
       await expect(page.locator("[data-testid='simple-nav-meetings-count'], [data-testid='simple-tab-meetings-count'], [data-testid='simple-more-meetings-count']").filter({ visible: true })).toHaveCount(0);
       const roadmap = page.locator("[data-testid='simple-nav-roadmap-count'], [data-testid='simple-tab-roadmap-count']").filter({ visible: true });
-      await expect(roadmap).toHaveAttribute("title", /^\d+ on the roadmap waiting on you: items with broken links, dates to confirm and proposals$/);
+      await expect(roadmap).toHaveAttribute("title", /^\d+ on the roadmap waiting on you: \d+ broken links?, \d+ dates? to confirm, \d+ (change or draft|changes or drafts)$/);
     });
 
     test("The plan this quarter is the company roadmap's, its milestones by name", async ({ page }) => {
@@ -411,7 +411,7 @@ for (const phone of [false, true]) {
       await expect(button).toHaveText(/Needs a decision · \d+/);
       const n = Number((await button.textContent())!.replace(/\D+/g, ""));
       await expect(roadmapCount(page)).toHaveText(String(n));
-      await expect(roadmapCount(page)).toHaveAttribute("title", `${n} on the roadmap waiting on you: items with broken links, dates to confirm and proposals`);
+      await expect(roadmapCount(page)).toHaveAttribute("title", new RegExp(`^${n} on the roadmap waiting on you: \\d+ broken links?, \\d+ dates? to confirm, \\d+ (change or draft|changes or drafts)$`));
     });
 
     test("While Oracle drafts a new item Home reads again for a while, then offers Refresh", async ({ page }) => {
