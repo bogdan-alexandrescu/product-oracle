@@ -375,3 +375,33 @@ async def test_another_companys_ids_are_not_found(client, ctx):
     assert resp.status_code == 404
     async with tenant_session(ctx.tenant_id) as s:
         assert await s.scalar(select(func.count()).select_from(DocumentVersion)) >= 2
+
+
+async def test_reopen_a_waived_finding(client, ctx):
+    """protects=pass F F-41: a waived finding can be reopened by whoever may waive it; it is
+    open again with its waiver cleared, audited, and the next check keeps it open;
+    fails_when=there is no way back from a waiver, an approver reopens a goal finding, or an
+    open finding "reopens"; no_claim=the Strategy page's Reopen button (Playwright)."""
+    await _world(client, ctx)
+    rows = _by_kind(await findings(client, ctx))
+    goal = rows["goal_without_strategy"][0]["id"]
+    resp = await client.post(f"/v1/strategy/findings/{goal}/reopen", headers=ctx.as_("owner"))
+    assert resp.status_code == 409
+    await client.post(f"/v1/strategy/findings/{goal}/waive", json={"reason": "Known"},
+                      headers=ctx.as_("owner"))  # fmt: skip
+    for role in ("approver", "viewer"):
+        resp = await client.post(f"/v1/strategy/findings/{goal}/reopen", headers=ctx.as_(role))
+        assert resp.status_code == 403
+    resp = await client.post(f"/v1/strategy/findings/{goal}/reopen", headers=ctx.as_("owner"))
+    assert resp.status_code == 200, resp.text
+    out = resp.json()
+    assert out["status"] == "open"
+    assert out["waived_at"] is None and out["waived_by"] is None and out["waive_reason"] is None
+    async with tenant_session(ctx.tenant_id) as s:
+        audit = await s.scalar(
+            select(AuditEvent).where(AuditEvent.action == "strategy_finding.reopened")
+        )
+    assert audit is not None and audit.data["kind"] == "goal_without_strategy"
+    await check(client, ctx)
+    assert goal in [r["id"] for r in await findings(client, ctx)]
+    assert await findings(client, ctx, status="waived") == []
