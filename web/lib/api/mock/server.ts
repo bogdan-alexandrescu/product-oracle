@@ -21,6 +21,7 @@ import { accountRoute, liveCredentials, openTokens, passwordOk, revokeMemberToke
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { brandHeaderHtml, brandStyleHtml, emptyBranding, routeBranding, type BrandingDb } from "./branding";
 import { capabilitiesOut } from "./capabilities";
+import { daysInWords } from "./days";
 import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { carriedFor, REPLACED_PRD_SCENARIO, seedReplacedBases } from "./replaced-prd";
@@ -170,7 +171,8 @@ import { featureKeyOf, prioritiesOut } from "./simple-priorities";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
 import { runGroupsOut } from "./simple-runs";
-import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { rebuildsOut } from "./rebuilds";
+import { planSlice, prdOnePager, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
@@ -181,7 +183,7 @@ import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, CROWDED_MILESTONES_SCE
 import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, knowGoalMapItems, seedFitDateRoadmap } from "./simple-roadmap";
-import { closed, GOALS, shownDates, storedDates } from "./simple-roadmap";
+import { closed, GOALS, prdTrackOwnerIds, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapItems, routeGoalMap, type GoalMap } from "./goal-map";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -299,7 +301,7 @@ export interface Db {
   goal_map?: GoalMap;
   /** Simple S5 (#723): one PRD's one-pager, its working draft and line changes (./simple-one-pager.ts). */
   simple_one_pager?: OnePagerDb;
-  /** Every other mock PRD's own one-pager (the same invented page), by document id. */
+  /** Every other mock PRD's own one-pager (built from its own sections), by document id. */
   simple_one_pagers?: Record<string, OnePagerDb>;
   /** Simple S10 (#723): proposals' visuals, their versions and comments (./simple-visuals.ts). */
   simple_visuals?: VisualsDb;
@@ -4616,15 +4618,18 @@ function banner(doc: DocumentRow, v: VersionRow, audience?: string | null) {
 function inlineHtml(nodes: Inline[]): string {
   return nodes
     .map((n) =>
-      n.t === "text" || n.t === "code"
-        ? escapeHtml(n.v)
-        : n.t === "cite" || n.t === "img"
-          ? ""
-          : n.t === "strong"
-            ? `<strong>${inlineHtml(n.c)}</strong>`
-            : n.t === "em"
-              ? `<em>${inlineHtml(n.c)}</em>`
-              : inlineHtml(n.c),
+      // As the API's render: a day in the text reads month first ("As of Oct 2, 2026"); code keeps it as written.
+      n.t === "text"
+        ? escapeHtml(daysInWords(n.v))
+        : n.t === "code"
+          ? escapeHtml(n.v)
+          : n.t === "cite" || n.t === "img"
+            ? ""
+            : n.t === "strong"
+              ? `<strong>${inlineHtml(n.c)}</strong>`
+              : n.t === "em"
+                ? `<em>${inlineHtml(n.c)}</em>`
+                : inlineHtml(n.c),
     )
     .join("");
 }
@@ -5692,7 +5697,8 @@ function startPricing(db: Db, me: MemberRow, input: Schemas["StartDraftIn"]): Re
 
 /**
  * Simple S5: the one-pager a request is about. The seeded PRD has the seeded one; every other
- * mock PRD (matched by slug or document id) gets its own copy of the invented page, so a line
+ * mock PRD (matched by slug or document id) gets its own page, built from its own sections
+ * (vqa B-13: never the seed's invented words under its title), so a line
  * edit, a draft or Remind on one PRD never lands on another's. Drafts and changes are found by
  * their id, a new line edit by its target's document id.
  */
@@ -5709,7 +5715,10 @@ async function onePagerOf(db: Db, req: Request, p: string[]): Promise<OnePagerDb
     // one, else its latest, dated by its approval (none: never published).
     const vs = docVersions(db, d);
     const read = [...vs].reverse().find((x) => x.approved_at) ?? vs.at(-1);
-    return (others[d.id] = { ...seedOnePager(), doc: { id: d.id, slug: d.slug, title: d.title }, visuals: db.simple_visuals, flowKey: d.slug, ...(read ? { version: read.number, published_at: read.approved_at ?? null } : {}) });
+    // vqa B-13: built from that version's own sections (as the API's quick read), never the seed's words.
+    const doc = { id: d.id, slug: d.slug, title: d.title };
+    const own = read ? prdOnePager(doc, read.sections ?? [], Object.fromEntries((read.citations ?? []).map((c) => [c.cite_key, { title: c.title ?? null, excerpt: c.excerpt ?? null }]))) : { ...seedOnePager(), doc };
+    return (others[d.id] = { ...own, visuals: db.simple_visuals, flowKey: d.slug, ...(read ? { version: read.number, published_at: read.approved_at ?? null } : {}) });
   };
   if (p[1] !== "simple") return seeded;
   if (p[2] === "one-pagers") return forDoc(p[3]) ?? seeded;
@@ -6654,7 +6663,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     // build-goal-order-control: the "goal-order" scenarios' added goals name their roadmap work on every load.
     knowGoalOrderGoals(db.baseline.entities);
     // Every mock PRD has a one-pager (Definition of Done 2): another PRD than the seeded one is
-    // served the same invented page under its own slug and title, with its own draft and changes.
+    // served a page built from its own sections (vqa B-13), with its own draft and changes.
     const onePagerDb = await onePagerOf(db, r, p);
     const onePagerRes = await routeOnePager(
       onePagerDb,
@@ -6892,6 +6901,36 @@ async function route(db: Db, req: Request): Promise<Response> {
   const seenBefore = db.inbox_seen?.[me.id] ?? null;
   // E1: the ticker moves each PRD draft's derivation one step (queued -> running -> ready).
   if (p[1] === "internal" && p[2] === "tick" && m === "POST") tickDraftRoadmaps(draftCtx(db), draftDb(db));
+  // The rebuild sign (owner's pick A): the runs that will make a new version of a document.
+  if (p[1] === "rebuilds" && p.length === 2 && m === "GET") {
+    const nameOf = (id: string | null) => {
+      const mm = db.members.find((x) => x.id === id);
+      return mm ? displayName(mm.email, mm.name) : null;
+    };
+    // As the API's ask_decider: the document's decider (its review policy), else its tracks'
+    // owners, else the company's owners; the first active approver or above.
+    const decider = (documentId: string | null) => {
+      const doc = documentId ? db.documents.find((d) => d.id === documentId) : undefined;
+      const ids = doc
+        ? [db.review_v2?.policies.find((x) => x.document_id === doc.id)?.decider_id ?? null, ...(db.simple_roadmap ? prdTrackOwnerIds(db.simple_roadmap, doc.slug) : [])]
+        : [];
+      ids.push(...db.members.filter((x) => x.role === "owner").sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)).map((x) => x.id));
+      const to = ids.map((id) => db.members.find((x) => x.id === id && x.status !== "disabled" && atLeast(x.role, "approver"))).find((x) => !!x);
+      return to ? displayName(to.email, to.name) : null;
+    };
+    return json(
+      200,
+      rebuildsOut({
+        runs: db.runs?.runs ?? [],
+        documents: db.documents,
+        role: me.role,
+        versions: (id) => db.versions.filter((v) => v.document_id === id).map((v) => ({ number: v.number, approved: !!v.approved_at })),
+        name: nameOf,
+        decider,
+        now: new Date(mockNowMs()),
+      }),
+    );
+  }
   const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
   // C4: an intake's draft run that starts converts its brief (the API's drafting.on_start).
   if (runs?.ok && req.method === "POST" && p[1] === "runs" && p[3] === "start" && p.length === 4) {
