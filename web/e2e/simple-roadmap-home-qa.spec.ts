@@ -89,11 +89,16 @@ test.describe("desktop", () => {
     await button.click();
     const suggestion = tray(page).getByTestId("tray-suggested").getByTestId("goal-suggestion");
     await expect(suggestion.first()).toBeVisible();
-    let listed = 0;
-    for (const t of await tray(page).getByTestId("tray-counter").locator("b").all()) listed += Number(await t.innerText());
-    const total = listed + (await suggestion.count());
+    // Review: the suggested features have a tile of their own, so the tiles add up to the button.
+    const suggestedTile = tray(page).getByTestId("tray-counter").filter({ hasText: "Suggested features" });
+    await expect(suggestedTile.locator("b")).toHaveText(String(await suggestion.count()));
+    let total = 0;
+    for (const t of await tray(page).getByTestId("tray-counter").locator("b").all()) total += Number(await t.innerText());
     await expect(button).toContainText(`· ${total}`);
     await expect(tray(page).getByTestId("tray-scope")).toContainText(`${total} to decide`);
+    // Its tile leads to them.
+    await suggestedTile.getByRole("button").click();
+    await expect(tray(page).getByRole("heading", { name: "Suggested features" })).toBeInViewport();
     // The unowned draft: its owner is picked in its panel.
     const flag = tray(page).getByTestId("tray-flag").filter({ hasText: "Team invite nudges" });
     await expect(flag).toContainText("Draft with no owner");
@@ -105,6 +110,19 @@ test.describe("desktop", () => {
     await button.click();
     await tray(page).getByTestId("tray-broken").getByRole("button", { name: "Weekly alert digest" }).click();
     await expect(card(page)).toContainText("Weekly alert digest");
+  });
+
+  test("S-14: the Roadmap's broken links show an item's second break under its first, as Home does", async ({ page }) => {
+    await roadmap(page);
+    const group = strip(page).getByTestId("conflict-group").filter({ hasText: "Weekly alert digest" });
+    await expect(group).toHaveCount(1);
+    const breaks = group.getByTestId("conflict");
+    await expect(breaks).toHaveCount(2);
+    await expect(breaks.first()).toContainText("starts");
+    await expect(breaks.nth(1).getByTestId("conflict-why")).toBeVisible();
+    expect(await group.locator("ul").first().evaluate((el) => getComputedStyle(el).borderLeftWidth)).toBe("2px");
+    const [a, b] = [(await breaks.first().boundingBox())!, (await breaks.nth(1).boundingBox())!];
+    expect(b.y).toBeGreaterThanOrEqual(a.y + a.height - 1);
   });
 
   test("S-14, S-11, S-10: Home groups an item's breaks, shows the plan's labels whole, and keeps its explanations behind an (i)", async ({ page }) => {

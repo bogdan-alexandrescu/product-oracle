@@ -314,6 +314,57 @@ export function ConflictPanel({
   // roadmap-decide: every broken link of the working draft, a cut item others depend on
   // included: the same ones Needs a decision, Home and the side menu count.
   const list = data.items.flatMap((i) => brokenLinks(i).map((f) => ({ i, f })));
+  // Pre-demo QA S-14: an item's breaks together, in the order the first of them reads.
+  const groups: (typeof list)[] = [];
+  for (const x of list) {
+    const g = groups.find((y) => y[0].i.id === x.i.id);
+    if (g) g.push(x);
+    else groups.push([x]);
+  }
+  const one = ({ i, f }: (typeof list)[number]) => {
+    // Review: with more than the three fixes (a cut item's Remove the dependency per dependent),
+    // the fixes take their own line under the sentence, as the tray has them.
+    const stacked = phone || fixCount(f) > 3;
+    return (
+      <li
+        key={`${i.id}-${f.kind}-${f.subject}`}
+        data-testid="conflict"
+        data-item={i.key}
+        className={`flex px-3 py-2 ${stacked ? "flex-col gap-1" : "flex-wrap items-center gap-3"}`}
+      >
+        {LINK_KINDS.includes(f.kind) ? (
+          <button
+            type="button"
+            onClick={() => onShow(i.key)}
+            className={`text-left text-sm text-text hover:underline ${stacked ? "" : "min-w-[16rem] flex-1"}`}
+          >
+            {f.reason}
+          </button>
+        ) : (
+          // Pre-demo QA S-5: an end past its milestone counts here too; its feature's name
+          // shows, its sentence behind the (i) (no visible prose).
+          <span className={`flex items-center gap-1 text-sm text-text ${stacked ? "" : "min-w-[16rem] flex-1"}`}>
+            <button type="button" onClick={() => onShow(i.key)} className="text-left hover:underline">
+              {i.title}
+            </button>
+            <InfoTip label={i.title} align="start" testId="conflict-why">
+              {f.reason}
+            </InfoTip>
+          </span>
+        )}
+        <div className="max-w-full min-w-0">
+          <FixButtons
+            item={i}
+            flag={f}
+            items={byId}
+            act={act}
+            canChange={canChange}
+            inline={!stacked}
+          />
+        </div>
+      </li>
+    );
+  };
   const [shut, setShut] = useState(false);
   // Review: a filter hides some: "1 broken link here, 3 in all", with Clear filters; only
   // when the whole roadmap holds more than these filters show.
@@ -360,50 +411,16 @@ export function ConflictPanel({
       </div>
       {!shut && (
         <ul className="divide-y divide-line border-t border-line">
-          {list.map(({ i, f }) => {
-            // Review: with more than the three fixes (a cut item's Remove the dependency per dependent),
-            // the fixes take their own line under the sentence, as the tray has them.
-            const stacked = phone || fixCount(f) > 3;
-            return (
-              <li
-                key={`${i.id}-${f.kind}-${f.subject}`}
-                data-testid="conflict"
-                data-item={i.key}
-                className={`flex px-3 py-2 ${stacked ? "flex-col gap-1" : "flex-wrap items-center gap-3"}`}
-              >
-                {LINK_KINDS.includes(f.kind) ? (
-                  <button
-                    type="button"
-                    onClick={() => onShow(i.key)}
-                    className={`text-left text-sm text-text hover:underline ${stacked ? "" : "min-w-[16rem] flex-1"}`}
-                  >
-                    {f.reason}
-                  </button>
-                ) : (
-                  // Pre-demo QA S-5: an end past its milestone counts here too; its feature's name
-                  // shows, its sentence behind the (i) (no visible prose).
-                  <span className={`flex items-center gap-1 text-sm text-text ${stacked ? "" : "min-w-[16rem] flex-1"}`}>
-                    <button type="button" onClick={() => onShow(i.key)} className="text-left hover:underline">
-                      {i.title}
-                    </button>
-                    <InfoTip label={i.title} align="start" testId="conflict-why">
-                      {f.reason}
-                    </InfoTip>
-                  </span>
-                )}
-                <div className="max-w-full min-w-0">
-                  <FixButtons
-                    item={i}
-                    flag={f}
-                    items={byId}
-                    act={act}
-                    canChange={canChange}
-                    inline={!stacked}
-                  />
-                </div>
+          {groups.map((g) =>
+            g.length === 1 ? (
+              one(g[0])
+            ) : (
+              // Pre-demo QA S-14, as on Home: an item's second break sits under its first, ruled together.
+              <li key={g[0].i.id} data-testid="conflict-group" data-item={g[0].i.key} className="py-1">
+                <ul className="ml-3 divide-y divide-line border-l-2 border-crit/40">{g.map(one)}</ul>
               </li>
-            );
-          })}
+            ),
+          )}
         </ul>
       )}
     </section>

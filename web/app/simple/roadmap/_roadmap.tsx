@@ -624,7 +624,20 @@ function AppliedVersions({ lines, onApply }: { lines: Schemas["SimpleAppliedVers
   );
 }
 
-/** C's "Needs a decision" tray, summarised by B's four counters. */
+/** A tray tile's number over its label. */
+function TileWords({ n, label }: { n: number; label: string }) {
+  return (
+    <>
+      <b className={`tnum block text-xl ${n ? "" : "font-medium"}`}>{n}</b>
+      {/* #43: every tile's label sits at the same height with tight spacing, so
+       * "Dates to confirm" wrapping to two lines doesn't push its number apart from
+       * the one-line labels beside it. */}
+      <span className={`block min-h-[2lh] text-xs leading-tight [text-wrap:balance] ${n ? "text-text2" : ""}`}>{label}</span>
+    </>
+  );
+}
+
+/** C's "Needs a decision" tray, summarised by B's five counters. */
 function DecisionTray({
   items,
   byId,
@@ -722,11 +735,13 @@ function DecisionTray({
   // pre-demo QA S-6: the suggested features it lists count too, as on its button.
   const here = counts.total + suggested.length;
   const whole = here - counts.links - counts.dates.length + (allLinks ?? counts.links) + (allDates ?? counts.dates.length);
-  const counters: [string, number][] = [
-    ["Broken links", allLinks ?? counts.links],
-    ["Dates to confirm", allDates ?? dateRows.length],
-    ["Proposals", others.length],
-    ["Pulled in", pulled.length],
+  // Review: each tile leads to the items it counts, the suggested features too, so the tiles add up to the button.
+  const counters: [string, number, string][] = [
+    ["Broken links", allLinks ?? counts.links, "tray-broken-links"],
+    ["Dates to confirm", allDates ?? dateRows.length, "tray-dates"],
+    ["Proposals", others.length, "review-proposals"],
+    ["Pulled in", pulled.length, "tray-pulled"],
+    ["Suggested features", suggested.length, "tray-suggested-features"],
   ];
   const kd = (c: Change) => (c.after.key_date ?? c.before.key_date) as { name?: string } | null | undefined;
   // roadmap-decide: a change the roadmap asked of a PRD names its milestone.
@@ -780,20 +795,24 @@ function DecisionTray({
           </span>
         )}
       </p>
-      <ul className="mt-3 grid grid-cols-2 gap-2 min-[420px]:grid-cols-4" data-testid="tray-counters">
-        {counters.map(([label, n]) => (
+      <ul className="mt-3 grid grid-cols-3 gap-2 min-[420px]:grid-cols-5" data-testid="tray-counters">
+        {counters.map(([label, n, to]) => (
           // fix4 qa-simple-roadmap-38: equal tiles (each as tall as the tallest, its label on two
           // lines at most); a tile at 0 is muted, plain text, not something to press.
-          <li key={label} data-testid="tray-counter" data-zero={n === 0 ? "true" : undefined} className={`flex flex-col items-center justify-start rounded-lg px-1 py-1.5 text-center ${n ? "border border-line" : "bg-surface2 text-text-faint"}`}>
-            <b className={`tnum block text-xl ${n ? "" : "font-medium"}`}>{n}</b>
-            {/* #43: every tile's label sits at the same height with tight spacing, so
-             * "Dates to confirm" wrapping to two lines doesn't push its number apart from
-             * the one-line labels beside it. */}
-            <span className={`block min-h-[2lh] text-xs leading-tight [text-wrap:balance] ${n ? "text-text2" : ""}`}>{label}</span>
+          <li key={label} data-testid="tray-counter" data-zero={n === 0 ? "true" : undefined} className={`flex rounded-lg text-center ${n ? "border border-line" : "bg-surface2 text-text-faint"}`}>
+            {n ? (
+              <button type="button" onClick={() => document.getElementById(to)?.scrollIntoView({ block: "start" })} className="flex flex-1 flex-col items-center justify-start rounded-lg px-1 py-1.5 hover:bg-surface2">
+                <TileWords n={n} label={label} />
+              </button>
+            ) : (
+              <span className="flex flex-1 flex-col items-center justify-start px-1 py-1.5">
+                <TileWords n={n} label={label} />
+              </span>
+            )}
           </li>
         ))}
       </ul>
-      <section className="mt-4">
+      <section id="tray-broken-links" className="mt-4 scroll-mt-4">
         <h3 className="font-semibold">Broken links</h3>
         {brokenItems.length ? (
           <ul>
@@ -842,7 +861,7 @@ function DecisionTray({
           </ul>
         </section>
       )}
-      <section className="mt-4">
+      <section id="tray-dates" className="mt-4 scroll-mt-4">
         <h3 className="font-semibold">Dates to confirm</h3>
         {dateRows.length ? (
           <ul>
@@ -877,7 +896,7 @@ function DecisionTray({
         <h3 className="font-semibold">Proposals waiting</h3>
         {others.length ? <ul>{others.map(row)}</ul> : <p className="text-sm text-text2">None waiting.</p>}
       </section>
-      <section className="mt-4">
+      <section id="tray-pulled" className="mt-4 scroll-mt-4">
         <h3 className="font-semibold">Pulled in, pending a decision</h3>
         {pulled.length ? <ul>{pulled.map(row)}</ul> : <p className="text-sm text-text2">None.</p>}
       </section>
@@ -896,7 +915,7 @@ function DecisionTray({
           <p className="text-sm text-text2">None.</p>
         )}
       </section>
-      <section className="mt-4" data-testid="tray-suggested">
+      <section id="tray-suggested-features" className="mt-4 scroll-mt-4" data-testid="tray-suggested">
         <h3 className="font-semibold">Suggested features</h3>
         {(suggestions.data?.goals ?? []).some((g) => g.pending) && (
           <p role="status" className="text-sm text-accent-ink" data-testid="suggest-pending">

@@ -421,9 +421,10 @@ test("under a filter, Needs a decision says N here, M in all on one basis, and 1
   await expect(scope).toContainText("in your roadmaps' working drafts");
   await expect(scope).not.toContainText("this roadmap's working draft");
   const tiles = await tray(page).getByTestId("tray-counter").locator("b").allInnerTexts();
-  // The tiles count the whole roadmap, as the "in all" does and the button does, with the suggested features it lists (pre-demo QA S-6).
+  // The tiles count the whole roadmap, as the "in all" does and the button does, the suggested features it lists in a tile of their own (pre-demo QA S-6).
   const suggested = await tray(page).getByTestId("tray-suggested").getByTestId("goal-suggestion").count();
-  expect(tiles.reduce((n, t) => n + Number(t), 0) + suggested).toBe(Number(m![2]));
+  await expect(tray(page).getByTestId("tray-counter").filter({ hasText: "Suggested features" }).locator("b")).toHaveText(String(suggested));
+  expect(tiles.reduce((n, t) => n + Number(t), 0)).toBe(Number(m![2]));
   expect(button).toBe(Number(m![2]));
   expect(Number(m![1])).toBeLessThan(Number(m![2]));
   const here = await tray(page).getByTestId("tray-links-here").innerText();
@@ -436,13 +437,15 @@ test("the side menu's Roadmap count holds the dates to confirm: it equals Needs 
   const waiting = Number(/· (\d+)/.exec(await page.getByTestId("needs-decision").innerText())![1]);
   await page.getByTestId("needs-decision").click();
   const dates = Number(await tray(page).getByTestId("tray-counter").filter({ hasText: "Dates to confirm" }).locator("b").innerText());
-  // Pre-demo QA S-6: Needs a decision counts the goals' suggested features it lists too; the
-  // side menu's Roadmap count is its tiles (it leaves those to the Inbox).
+  // Pre-demo QA S-6: Needs a decision counts the goals' suggested features it lists too, in a
+  // tile of their own, so the tiles add up to the button. The side menu's Roadmap count is the
+  // other tiles for now (it leaves the suggested features to the Inbox until it counts them too).
   const tiles = (await tray(page).getByTestId("tray-counter").locator("b").allInnerTexts()).reduce((n, t) => n + Number(t), 0);
+  const suggested = Number(await tray(page).getByTestId("tray-counter").filter({ hasText: "Suggested features" }).locator("b").innerText());
   await tray(page).getByRole("button", { name: "Close" }).click();
   expect(dates).toBeGreaterThan(0);
-  expect(tiles).toBeLessThanOrEqual(waiting);
-  await expect.poll(async () => Number(await badge(page).innerText())).toBe(tiles);
+  expect(tiles).toBe(waiting);
+  await expect.poll(async () => Number(await badge(page).innerText())).toBe(tiles - suggested);
   await expect(badge(page)).toHaveAttribute("aria-label", new RegExp(`${dates} dates? to confirm`));
 });
 

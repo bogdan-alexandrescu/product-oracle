@@ -160,7 +160,7 @@ export function PlanByMonth({
               {/* pre-demo QA S-11 (Home, named): the whole label, wrapped between words as the frame shows it, never
                   cut; vqa B-14 (the one-pager): one line, the whole label behind an (i) when cut. */}
               {named ? (
-                <span className="max-w-full min-w-0 font-semibold [overflow-wrap:anywhere]" title={label} data-testid={`${testId}-label`}>
+                <span className="max-w-full min-w-0 font-semibold break-words" title={label} data-testid={`${testId}-label`}>
                   {label}
                 </span>
               ) : (
