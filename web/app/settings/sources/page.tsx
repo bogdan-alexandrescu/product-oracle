@@ -1122,7 +1122,7 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
         </Button>
         {reason && option?.connector_available && !(needsConnection && usable.length === 0) && (
           // Pass F F-56: why it is off behind an (i), not a sentence beside the button.
-          <InfoTip label="why Add source is off" align="start">
+          <InfoTip label="what is missing" align="start">
             <span data-testid="add-source-reason">{reason}</span>
           </InfoTip>
         )}

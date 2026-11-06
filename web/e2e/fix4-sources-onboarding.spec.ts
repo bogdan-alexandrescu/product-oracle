@@ -61,7 +61,7 @@ test.describe("desktop", () => {
     await expect(form.getByTestId("add-source-reason")).toHaveText("Pick a channel to add it");
 
     const picker = form.getByRole("group", { name: "Slack channels" });
-    await expect(picker).toContainText("whole days in the Company time zone (Pacific Time (Los Angeles))");
+    await expect(picker).toContainText("Optional · Pacific Time (Los Angeles)");
     await expect(picker).not.toContainText("America/Los_Angeles");
 
     await picker.getByRole("checkbox", { name: "#product" }).check();

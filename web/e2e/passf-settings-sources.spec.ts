@@ -111,7 +111,7 @@ test.describe("desktop", () => {
     ]) {
       await expect(main.getByText(sentence)).toBeHidden();
     }
-    await page.getByRole("button", { name: "About Refresh stale code maps" }).click();
+    await page.getByRole("button", { name: "About what a refresh costs" }).click();
     await expect(page.getByRole("tooltip")).toContainText("Each refresh costs like Map the code.");
   });
 

@@ -150,7 +150,9 @@ test("slack picker: a date range, since and until", async ({ page }) => {
   const form = await addForm(page, "slack");
   const picker = form.getByRole("group", { name: "Slack channels" });
   await picker.getByRole("checkbox", { name: "#product" }).check();
-  await expect(picker.getByText("Narrowing the range removes messages outside it when you save.")).toBeVisible();
+  await picker.getByRole("button", { name: "About the date range" }).click();
+  await expect(page.getByRole("tooltip")).toContainText("Narrowing the range removes messages outside it when you save.");
+  await page.keyboard.press("Escape");
 
   // An until before since is flagged here and refused by the API.
   await picker.getByLabel("Since").fill("2026-03-01");

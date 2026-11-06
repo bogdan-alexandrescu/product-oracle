@@ -56,7 +56,7 @@ export function CodeMapRefreshSetting() {
           htmlFor={id}
           tip={
             // Pass F F-36: the cost behind an (i), not a sentence on the page.
-            <InfoTip label="Refresh stale code maps" align="start">
+            <InfoTip label="what a refresh costs" align="start">
               <span data-testid="code-map-refresh-cost">Each refresh costs like Map the code. Less often costs less; only on demand costs nothing.</span>
             </InfoTip>
           }

@@ -39,7 +39,7 @@ for (const phone of [false, true]) {
         await expect(select).toBeVisible();
         await expect(select).toHaveValue("daily");
         // Pass F F-36: the cost sits behind the (i) beside the label.
-        await page.getByRole("button", { name: "About Refresh stale code maps" }).click();
+        await page.getByRole("button", { name: "About what a refresh costs" }).click();
         await expect(page.getByRole("tooltip")).toContainText("Each refresh costs like Map the code.");
         await page.keyboard.press("Escape");
         for (const label of ["Hourly", "Every 6 hours", "Weekly", "Only on demand"]) {

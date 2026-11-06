@@ -130,11 +130,11 @@ test.describe("dark mode", () => {
   test("F-55 (dark): the filter chips still toggle the member table", async ({ page }) => {
     await openCompany(page);
     const ct = companyTable(page);
+    await expect(ct.locator("tr[data-row]").first()).toBeVisible();
     const total = await ct.locator("tr[data-row]").count();
     const staleChip = page.getByTestId("company-stale-chip");
     await staleChip.click();
-    const staleCount = await ct.locator("tr[data-row]").count();
-    expect(staleCount).toBeLessThan(total);
+    await expect.poll(() => ct.locator("tr[data-row]").count()).toBeLessThan(total);
     await staleChip.click();
     await expect(ct.locator("tr[data-row]")).toHaveCount(total);
   });
