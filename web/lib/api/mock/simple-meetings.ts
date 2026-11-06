@@ -617,7 +617,7 @@ function agendaCtx(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting, p: Prd): Agenda
       const at = new Date().toISOString();
       t?.entries.push({
         out: {
-          id, root: { type: "agenda_item", id: c.id, slug: null, title: c.name, kind: "agenda_item" }, items: [],
+          id, root: { type: "agenda_item", id: c.id, slug: null, title: c.name, kind: "agenda_item", meeting: m.title }, items: [],
           deleted_by: ctx.me.id, deleted_by_name: nameOf(ctx, ctx.me.id), deleted_at: at, reason: null, published: false,
           purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString(),
         },

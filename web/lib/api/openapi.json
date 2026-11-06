@@ -141683,6 +141683,28 @@
               }
             ],
             "title": "Wrote"
+          },
+          "features": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Features"
+          },
+          "meeting": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meeting"
           }
         },
         "type": "object",

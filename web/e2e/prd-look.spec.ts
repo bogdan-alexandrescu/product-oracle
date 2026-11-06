@@ -160,7 +160,7 @@ for (const size of DESKTOP)
       await reminder.getByRole("menuitem", { name: "Edit the text yourself" }).click();
       const editor = reminder.getByTestId("section-editor");
       await expect(editor).toBeVisible();
-      await editor.getByLabel("Section text (markdown)").fill("One reminder email per cart, a day after it was left.");
+      await editor.getByLabel("Section text").fill("One reminder email per cart, a day after it was left.");
       await editor.getByRole("button", { name: "Save" }).click();
       await expect(page).toHaveURL(/\/v\/3#feature-reminder$/);
       await expect(section(page, "feature-reminder")).toContainText("One reminder email per cart, a day after it was left.");
