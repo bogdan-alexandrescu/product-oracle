@@ -194,15 +194,20 @@ function units(body: string, budget = SLIDE_LINES): Unit[] {
   let heading = "";
   let i = 0;
   const item = (l: string) => /^(?:[-*+]|\d{1,3}[.)])\s/.test(l);
-  const fence = (l: string) => /^\s*(```|~~~)/.test(l);
+  // What closes the fence a line opens, as CommonMark reads a fence (a backtick fence's info has no backtick); null if none.
+  const fenceClose = (l: string) => {
+    const m = /^\s*(`{3,}|~{3,})(.*)$/.exec(l);
+    return m && !(m[1][0] === "`" && m[2].includes("`")) ? new RegExp(`^\\s*${m[1][0]}{${m[1].length},}\\s*$`) : null;
+  };
   while (i < lines.length) {
     const line = lines[i];
     if (!line.trim()) {
       group++;
       i++;
-    } else if (fence(line)) {
+    } else if (fenceClose(line)) {
+      const close = fenceClose(line)!;
       let j = i + 1;
-      while (j < lines.length && !fence(lines[j])) j++;
+      while (j < lines.length && !close.test(lines[j])) j++;
       const block = lines.slice(i, j + 1);
       out.push({ text: heading + block.join("\n"), cost: block.length + 0.4, group, kind: "block", header: "" });
       heading = "";
@@ -233,7 +238,7 @@ function units(body: string, budget = SLIDE_LINES): Unit[] {
       let j = i + 1;
       const kind = item(line) ? "item" : "block";
       if (kind === "item") while (j < lines.length && lines[j].trim() && /^\s/.test(lines[j])) j++;
-      else while (j < lines.length && lines[j].trim() && !/^\s*[|#]/.test(lines[j]) && !item(lines[j]) && !fence(lines[j])) j++;
+      else while (j < lines.length && lines[j].trim() && !/^\s*[|#]/.test(lines[j]) && !item(lines[j]) && !fenceClose(lines[j])) j++;
       out.push(...prosePieces(heading, lines.slice(i, j).join("\n"), group, kind, budget));
       heading = "";
       i = j;
