@@ -400,5 +400,13 @@ export function mkRoadmapItems(): { key: string; title: string; horizon: "now" |
 }
 let mkId = ""; // MOCK-HOOK
 /** MOCK-HOOK: the PRD's document id once the mock has built it (server.ts sets it). */
+/** MOCK-HOOK: PS1 is in use in this browser (a ?ps1= address seen once); only then do the PRD's features join the mock roadmap. */
+export function ps1On(): boolean {
+  if (typeof window === "undefined") return false; // MOCK-HOOK
+  if (/[?&]ps1=[a-e](&|$)/.test(window.location.search)) localStorage.setItem("mk-ps1", "1"); // MOCK-HOOK
+  return localStorage.getItem("mk-ps1") === "1"; // MOCK-HOOK
+}
+/** MOCK-HOOK: the first PRD's address (the invented one, or MOCK_PRD_FILE's first). */
+export const mkSlug = () => withRealPrd(MK_PRD, realPrds()[0]).slug; // MOCK-HOOK
 export const mkDocId = () => mkId; // MOCK-HOOK
 export const setMkDocId = (id: string) => void (mkId = id); // MOCK-HOOK

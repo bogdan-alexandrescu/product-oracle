@@ -15,7 +15,7 @@ import { leftOut } from "./decision-notes";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { newCompany, seeded, stableUuid } from "./ids";
-import { mkGoal, mkRoadmapItems, mkSections } from "./mk-prd-look"; // MOCK-HOOK
+import { mkGoal, mkRoadmapItems, mkSections, ps1On } from "./mk-prd-look"; // MOCK-HOOK
 import { milestoneOut, routeMilestones, type MockMilestone } from "./simple-milestones";
 import { betSubject, flowFor, type VisualsDb } from "./simple-visuals";
 import type { OnePagerDb } from "./simple-one-pager";
@@ -252,11 +252,6 @@ const ROADMAPS: Record<string, { title: string; visibility: "company" | "approve
 };
 /** S7 adds Keep alerts quiet, a goal with no items yet (Oracle suggested features for it on its own). */
 export const GOALS: Record<string, string> = { "grow-retention": "Grow retention", "faster-activation": "Faster activation", "quiet-alerts": "Keep alerts quiet" };
-// MOCK-HOOK (mk-prd-look PS1): the invented PRD's roadmap and goal are known on every load, a reload of a stored roadmap too.
-const MK_ITEMS = mkRoadmapItems(); // MOCK-HOOK
-const MK_GOAL = mkGoal(mkSections().sections); // MOCK-HOOK
-if (MK_ITEMS.length) ROADMAPS["crew-notes-roadmap"] = { title: `${MK_ITEMS[0].prd_doc.title.replace(/ PRD$/, "")} roadmap`, visibility: "company", prd: MK_ITEMS[0].prd_doc.title, draft: 1 }; // MOCK-HOOK
-if (MK_GOAL) GOALS[MK_GOAL.key] = MK_GOAL.title; // MOCK-HOOK
 /** roadmap-talk's goals (the "roadmap-talk" scenario's items name them); known once such an item is seeded. */
 export const TALK_GOALS: Record<string, string> = { reliability: "Reliability", growth: "Growth", activation: "Activation", revenue: "Revenue" };
 const TALK_ITEM = "adaptive-pacing";
@@ -484,17 +479,27 @@ export function seedSimpleDeciders(people: { decider: string; approver: string; 
   return db;
 }
 
+/** MOCK-HOOK (mk-prd-look PS1): with PS1 in use, the first PRD's features on their own roadmap, under its goal (a stored roadmap too). */
+export function topUpMk(db: SimpleDb | undefined): void {
+  if (!db || !ps1On()) return; // MOCK-HOOK
+  const mk = mkRoadmapItems(); // MOCK-HOOK
+  const g = mkGoal(mkSections().sections); // MOCK-HOOK
+  if (!mk.length) return; // MOCK-HOOK
+  ROADMAPS["crew-notes-roadmap"] = { title: `${mk[0].prd_doc.title.replace(/ PRD$/, "")} roadmap`, visibility: "company", prd: mk[0].prd_doc.title, draft: 1 }; // MOCK-HOOK
+  if (g) GOALS[g.key] = g.title; // MOCK-HOOK
+  if (db.items.some((s) => s.key === mk[0].key)) return; // MOCK-HOOK
+  db.items.push(...mk); // MOCK-HOOK
+  for (const s of mk) db.ids[s.key] = stableUuid(`simple-item/${s.key}`); // MOCK-HOOK
+  if (g) db.goal_edits = { ...db.goal_edits, [g.key]: { title: g.title, metric: g.metric, target: g.target, due: g.due } }; // MOCK-HOOK
+}
+
 export function seedSimpleRoadmap(): SimpleDb {
   // A new company: no items yet, so no plan, broken links, priorities or key dates (Detailed says no goals).
   // Nor Oracle's goal suggestions (no goal is confirmed yet: none are made on its own).
   if (newCompany()) return { items: [], ids: {}, own: {}, suggestions: [], decisions: {}, key_dates: {}, goal_suggestions: [], goal_jobs: {}, auto_done: Object.keys(GOALS) };
-  // MOCK-HOOK (mk-prd-look PS1): the invented PRD's features on their own roadmap, under its goal.
-  const mk = mkRoadmapItems(); // MOCK-HOOK (read here: the PRD's id is known by now)
-  const mkG = MK_GOAL; // MOCK-HOOK
   return seeded("simple-roadmap", () => ({
-    items: [...SEED.map((s) => ({ ...s })), ...mk], // MOCK-HOOK (PS1): ...mk
-    ids: Object.fromEntries([...SEED, ...mk].map((s) => [s.key, stableUuid(`simple-item/${s.key}`)])), // MOCK-HOOK (PS1): ...mk
-    ...(mkG ? { goal_edits: { [mkG.key]: { title: mkG.title, metric: mkG.metric, target: mkG.target, due: mkG.due } } } : {}), // MOCK-HOOK
+    items: SEED.map((s) => ({ ...s })),
+    ids: Object.fromEntries(SEED.map((s) => [s.key, stableUuid(`simple-item/${s.key}`)])),
     own: {},
     suggestions: [],
     decisions: { "alert-digest": [{ number: 7, title: "Send the digest weekly or daily?" }] },

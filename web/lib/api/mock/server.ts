@@ -14,7 +14,7 @@ import { MOCK_SCENARIO_KEY, mockUuid, seeded, stableUuid } from "./ids";
 import { addDecisionEntity, addDuplicateProposals, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, addStatusOverlapProposals, addThreeWayConflict, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, readMetricIntoGoal, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
 import { BLOCKER_NARROWED_SCENARIO, documentGate, narrowResolvedBlocker, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
-import { MK_PRD, mkOnePagerBlocks, mkSections, realPrds, realStatus, setMkDocId, withRealPrd } from "./mk-prd-look"; // MOCK-HOOK
+import { MK_PRD, mkOnePagerBlocks, mkSections, mkSlug, realPrds, realStatus, setMkDocId, withRealPrd } from "./mk-prd-look"; // MOCK-HOOK
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
 import { applied, handOver, membersDetailRoute, type MembersContext, type MembersDb } from "./members";
 import type { HandOver } from "@/lib/api/members-types";
@@ -181,6 +181,7 @@ import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADM
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, CROWDED_MILESTONES_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { topUpMk } from "./simple-roadmap"; // MOCK-HOOK (PS1)
 import { applyFitDate, knowGoalMapItems, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapItems, routeGoalMap, type GoalMap } from "./goal-map";
@@ -3389,7 +3390,19 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
  */
 let cached: { raw: string; db: Db } | null = null;
 
+/** MOCK-HOOK (mk-prd-look PS1): with PS1 in use, the first PRD's features join the roadmap (its id read from the stored documents). */
+function mkTopUp(db: Db): Db {
+  const doc = db.documents?.find((d) => d.slug === mkSlug()); // MOCK-HOOK
+  if (doc) setMkDocId(doc.id); // MOCK-HOOK
+  topUpMk(db.simple_roadmap); // MOCK-HOOK
+  return db; // MOCK-HOOK
+}
+
 function load(): Db {
+  return mkTopUp(loadDb()); // MOCK-HOOK (PS1): was load's own body, now loadDb
+}
+
+function loadDb(): Db { // MOCK-HOOK (PS1): load's body, renamed
   const raw = localStorage.getItem(STORAGE_KEY);
   const hit = cached;
   cached = null;
