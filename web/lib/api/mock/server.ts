@@ -988,6 +988,22 @@ function seedSimpleCrossPrdDates(): Db {
   return db;
 }
 
+/**
+ * roadmap-edit-fixes "roadmap-edit-fixes": "simple-home", with the Setup checklist waiting on
+ * the Alert rules engine of the Usage alerts PRD by that feature's key (neither an item key
+ * nor a code), and the Welcome video's title carrying its code (F-07 Welcome video).
+ */
+function seedRoadmapEditFixes(): Db {
+  const db = seedSimpleHomeScenario();
+  const items = db.simple_roadmap!.items;
+  const rules = items.find((x) => x.key === "alert-rules");
+  if (rules) rules.feature_key = "alert-rules-engine";
+  dependOnOtherPrd(db.simple_roadmap!, "setup-checklist", "alert-rules-engine");
+  const video = items.find((x) => x.key === "setup-video");
+  if (video) video.title = "F-07 Welcome video";
+  return db;
+}
+
 /** hotfix-2 "simple-dated-move": "simple-home" with Alert replay engine, dated only by engineering's end. */
 function seedSimpleDatedMove(): Db {
   const db = seedSimpleHomeScenario();
@@ -3456,6 +3472,8 @@ function load(): Db {
                 ? seedMeetingAgendaScenario
               : scenario === "simple-cross-prd-dates"
                 ? seedSimpleCrossPrdDates
+              : scenario === "roadmap-edit-fixes"
+                ? seedRoadmapEditFixes
               : scenario === "simple-dated-move"
                 ? seedSimpleDatedMove
               : scenario === "simple-home"

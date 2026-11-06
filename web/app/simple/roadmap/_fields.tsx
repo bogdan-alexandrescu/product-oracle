@@ -206,7 +206,10 @@ export function PanelFields({
   const tracks = refs(items, (i) => i.track);
   const prds = refs(items, (i) => i.prd);
   const goals = refs(items, (i) => i.goal);
+  // roadmap-edit-fixes: the stored key the read says names it (another PRD's feature key is
+  // neither its key nor its code), else the one matching its key or code.
   const keyOf = (dep: Item) =>
+    item.depends_key_of?.[dep.id] ??
     item.depends_keys.find(
       (k) =>
         k === dep.key ||
@@ -588,6 +591,37 @@ export function PanelFields({
             </li>
           ))}
         </ul>
+        {/* roadmap-edit-fixes: Oracle's ideas of what a new item depends on: a person adds them. */}
+        {canChange &&
+          (item.suggested_depends ?? []).map((k) => {
+            const found = others.find((i) => i.key === k);
+            return (
+              <p
+                key={k}
+                className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-sm text-text2"
+                data-testid="card-depends-idea"
+              >
+                <span>
+                  Oracle suggests {found ? <Named item={found} /> : k}
+                </span>
+                <button
+                  type="button"
+                  className={LINK}
+                  aria-label={`Add ${found?.title ?? k} to what it depends on`}
+                  onClick={() =>
+                    void change(
+                      "Dependency added",
+                      "set_depends",
+                      { depends_on: item.depends_keys },
+                      { depends_on: [...item.depends_keys, k] },
+                    )
+                  }
+                >
+                  Add
+                </button>
+              </p>
+            );
+          })}
         </div>
         {canChange && (
           <AddDependency

@@ -47,6 +47,13 @@ interface SeedItem {
   end?: number;
   source?: Exclude<Dated["source"], "estimated">;
   depends?: string[];
+  /** roadmap-edit-fixes: the key of the feature it delivers, when that is no code (another
+   * PRD's item may depend on it by that key, as the API's dependency checks accept). */
+  feature_key?: string;
+  /** roadmap-edit-fixes: Oracle's ideas of what a new item depends on (keys), a person's to add. */
+  suggested_depends?: string[];
+  /** roadmap-edit-fixes: when Oracle's draft filled a field (a conflict it caused names Oracle). */
+  drafted_at?: string;
   status?: Item["status"];
   /** one-feature-panel: the status the tracker gave it, kept once its panel sets one (planned reads it again). */
   tracked?: Item["status"];
@@ -316,6 +323,43 @@ export function goalPositionOf(key: string): number | null {
 export function prdCode(section: string | null | undefined): string | null {
   const m = /^([a-z]{1,3})-(\d+)$/i.exec((section ?? "").trim());
   return m ? `${m[1].toUpperCase()}-${m[2]}` : null;
+}
+
+/** roadmap-edit-fixes (service.coded_title): an item whose title carries its code ("F-07
+ * Alpha") reads as code F-07 and name Alpha; else its code and title. */
+export function codedTitle(title: string, code: string | null): [string | null, string] {
+  const m = /^([A-Z][A-Z0-9]*-\d+[a-z]?)\s+(\S.*)$/.exec(title);
+  if (!m || (code && code !== m[1])) return [code, title];
+  return [m[1], m[2].trim()];
+}
+
+/** The item a stored dependency key names: its key, its code, else the key of its feature. */
+export function dependencyOf(items: SeedItem[], k: string): SeedItem | undefined {
+  const low = k.toLowerCase();
+  return items.find((x) => x.key === k) ?? items.find((x) => [codedTitle(x.title, prdCode(x.section))[0], x.feature_key].some((c) => !!c && c.toLowerCase() === low));
+}
+
+/** roadmap-edit-fixes (changes.loop_of): why `key` may not depend on `keys`: one already
+ * depends on it, directly or through others; null when none closes a loop. */
+export function loopOf(items: SeedItem[], key: string, keys: string[], ignore: string[] = []): string | null {
+  const named = (x: SeedItem) => { const [c, t] = codedTitle(x.title, prdCode(x.section)); return c ? `${c} ${t}` : t; };
+  const self = items.find((x) => x.key === key);
+  if (!self) return null;
+  for (const k of keys) {
+    const d = dependencyOf(items, k);
+    if (!d || d.key === key || ignore.includes(d.key)) continue;
+    const seen = new Set<string>();
+    const todo = [d.key];
+    while (todo.length) {
+      const cur = todo.pop()!;
+      if (seen.has(cur)) continue;
+      seen.add(cur);
+      if (cur === key) return `${named(d)} already depends on ${named(self)}`;
+      const x = items.find((i) => i.key === cur);
+      for (const n of x?.depends ?? []) { const y = dependencyOf(items, n); if (y && !ignore.includes(y.key)) todo.push(y.key); }
+    }
+  }
+  return null;
 }
 
 /** An item named as the API's visuals name it (subject_name): "F-06 Weekly alert digest", or its title with no code. */
@@ -1214,15 +1258,18 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   };
   // trash-features-goals: a goal in Trash is left out of every item's goal (service.load's goal_ids).
   const inTrash = (k: string) => goalInTrash(reader.full, k);
+  // roadmap-edit-fixes: a dependency names an item by its key, else by its code or feature key.
+  const depOf = (k: string) => (all.has(k) ? k : dependencyOf(seeds, k)?.key);
   const items: Item[] = seeds.map((s) => {
     const r = all.get(s.key)!.r;
+    const [code, title] = codedTitle(s.title, prdCode(s.section));
     const rm = ROADMAPS[s.roadmap];
     const sliced = slicesOf(s, rm.prd.toLowerCase().replace(/ /g, "-"));
     const suggestion = itemSuggestion(db, db.ids[s.key]);
     return {
-      id: db.ids[s.key], key: s.key, title: s.title, outcome: s.outcome ?? null, horizon: s.horizon,
+      id: db.ids[s.key], key: s.key, title, outcome: s.outcome ?? null, horizon: s.horizon,
       estimate_pending: !!s.estimate_pending,
-      code: prdCode(s.section),
+      code,
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: s.roadmap, title: rm.title },
       prd: ownPrd(s),
       goal: s.goal && !inTrash(s.goal) ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, ...roadmapGoal(reader.full, s.goal), position: goalPositionOf(s.goal) } : null,
@@ -1242,13 +1289,15 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       phases: phases(r.start.date, r.end.date, s, w[s.horizon]),
       slices: sliced,
       milestones: [...new Set(sliced.map((x) => x.milestone))],
-      depends_on: (s.depends ?? []).filter((k) => all.has(k)).map((k) => db.ids[k]),
-      needed_by: seeds.filter((x) => x.depends?.includes(s.key)).map((x) => db.ids[x.key]),
+      depends_on: [...new Set((s.depends ?? []).map(depOf).filter((k): k is string => !!k && k !== s.key))].map((k) => db.ids[k]),
+      needed_by: seeds.filter((x) => x.key !== s.key && (x.depends ?? []).some((k) => depOf(k) === s.key)).map((x) => db.ids[x.key]),
       flags: flagsOf(s, r, all, w[s.horizon]),
       owner: ownerOf(db, s, me?.names),
       // one-feature-panel: the item's own owner (set_owner's before) and its stored dependency keys.
       own_owner_id: namedOn(db, s.key, "owner_id") ?? null,
       depends_keys: s.depends ?? [],
+      depends_key_of: Object.fromEntries((s.depends ?? []).flatMap((k) => { const d = depOf(k); return d && d !== s.key ? [[db.ids[d], k]] : []; }).reverse()),
+      suggested_depends: (s.suggested_depends ?? []).filter((k) => !(s.depends ?? []).includes(k) && !loopOf(seeds, s.key, [k])),
       can_decide: decides(s),
       deciders: deciders(s),
       reasons: [
@@ -1499,14 +1548,19 @@ export function settleDrafting(db: SimpleDb): void {
   for (const s of db.items) {
     if (!s.drafting_until || s.drafting_until > now) continue;
     delete s.drafting_until;
-    s.outcome ??= `Teams get ${s.title.toLowerCase()} without asking support`;
+    // roadmap-edit-fixes: Oracle fills only what a person has not.
+    if (s.outcome == null) {
+      s.outcome = `Teams get ${s.title.toLowerCase()} without asking support`;
+      s.drafted_at = new Date(now).toISOString();
+    }
     s.flow = plainFlow({
       title: s.title,
       steps: ["Open the alerts page", `Find ${s.title.toLowerCase()}`, "Set it up in one step", "See it working"],
       screen: { title: `${s.title} settings`, regions: ["Header: what it does", "The one setting", "A preview", "Save and Cancel buttons"] },
     });
+    // roadmap-edit-fixes: its dependency ideas are suggestions a person adds, never written.
     const dep = db.items.find((x) => x.key !== s.key && x.goal && x.goal === s.goal && !closed(x) && !x.draft && x.roadmap === s.roadmap);
-    if (dep && !(s.depends ?? []).includes(dep.key)) s.depends = [...(s.depends ?? []), dep.key];
+    if (dep && !(s.depends ?? []).includes(dep.key)) s.suggested_depends = [dep.key];
     const [start, end] = s.quarter ? [s.quarter.start < iso(now) ? iso(now) : s.quarter.start, s.quarter.end] : w[s.horizon];
     const id = db.ids[s.key];
     db.suggestions = db.suggestions.filter((x) => !(x.item_id === id && x.status === "open"));
