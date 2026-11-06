@@ -57,10 +57,16 @@ for (const phone of [false, true]) {
       await readsClearly(page);
       const look = page.getByRole("region", { name: "Needs a look" });
       await expect(look).toBeVisible();
-      await expect(look.getByRole("listitem")).toHaveText([
-        `${LOOK_COUNT} In the PRD, not on this page: Not this quarter`,
-        `${LOOK_PER} In the PRD, not on this page: Targets`,
-      ]);
+      // C-15: one short line each, the numbers behind an (i), and the PRD at that section to fix it.
+      await expect(look.getByTestId("needs-look-line")).toHaveText(["Numbers disagree in “Not this quarter”", "Numbers disagree in “Targets”"]);
+      await look.getByRole("button", { name: "About Numbers disagree in “Not this quarter”" }).click();
+      await expect(look.getByText(LOOK_COUNT)).toBeVisible();
+      await look.getByRole("button", { name: "About Numbers disagree in “Not this quarter”" }).click();
+      await expect(look.getByRole("button", { name: "About Numbers disagree in “Targets”" })).toHaveAccessibleDescription(LOOK_PER);
+      const open = look.getByRole("link", { name: "Open the section" });
+      await expect(open).toHaveCount(2);
+      await expect(open.first()).toHaveAttribute("href", "/documents/guided-setup#later");
+      await expect(open.nth(1)).toHaveAttribute("href", "/documents/guided-setup#targets");
       const bet = page.locator('[data-line="bets-2"]');
       await expect(page.getByRole("group", { name: /^User flow of “Invite suggestions/ })).toHaveCount(0);
       const draw = bet.getByRole("button", { name: /^Draw the flow for “Invite suggestions/ });
