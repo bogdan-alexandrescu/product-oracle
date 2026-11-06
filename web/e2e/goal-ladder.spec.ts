@@ -410,7 +410,7 @@ test.describe("visual QA fixes (L-1 to L-8), 1440 light", () => {
     await expect(page.getByTestId("ld-refused")).toHaveCount(1);
   });
 
-  test("L-5b: a link refused for another reason shows the API's reason, not the loop words", async ({ page }) => {
+  test("L-5b: a link refused for another reason says so in plain words, not the loop words or the API's field path", async ({ page }) => {
     // protects=ld2-a-refused; fails_when=any refusal says it would make a loop; no_claim=the loop words.
     await open(page, "light");
     await page.getByTestId("ld-edit").click();
@@ -420,8 +420,9 @@ test.describe("visual QA fixes (L-1 to L-8), 1440 light", () => {
     await bare.click();
     await showBoth(page, bare, card(page, "F-45"));
     await dragBy(page, await mid(bare.getByTestId("ld-dot")), await mid(card(page, "F-45")));
-    const note = page.getByRole("status").filter({ hasText: "after.depends_on" });
-    await expect(note).toHaveText("after.depends_on: item or feature keys, never the item's own");
+    const note = page.getByRole("status").filter({ hasText: "Not added" });
+    await expect(note).toHaveText(`Not added: ${BARE} has no roadmap item yet to link to`);
+    await expect(page.getByRole("status").filter({ hasText: "after.depends_on" })).toHaveCount(0);
     await expect(page.getByRole("status").filter({ hasText: "loop" })).toHaveCount(0);
     await expect(page.getByTestId("ld-refused")).toHaveCount(0);
   });
