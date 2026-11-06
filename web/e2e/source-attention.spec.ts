@@ -25,7 +25,7 @@ test("settings › sources: a source needing attention shows why, refuses to syn
   await expect(badge).toBeVisible();
 
   // Edit opens the picker; over 100 channels it says how many to untick, and the API refuses.
-  await row.getByRole("button", { name: `Pick fewer channels in ${LEGACY}` }).click();
+  await row.getByRole("button", { name: `Edit ${LEGACY}` }).click();
   const picker = row.getByRole("group", { name: "Slack channels" });
   await expect(picker.getByTestId("picked-count")).toHaveText("120 selected");
   await expect(picker.getByTestId("too-many-channels")).toHaveText("A source takes at most 100 channels: untick 20 to save it.");
