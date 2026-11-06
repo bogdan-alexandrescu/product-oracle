@@ -46,6 +46,11 @@ It gives each feature its mark:
   matches a Ground Truth feature by its code only, never by its name.
 - A new feature a PRD proposes joins the Ground Truth, and gets its F-code, when the PRD is
   approved.
+- Add to Ground Truth makes the feature with its code as its key when no feature has it: the
+  PRD's F-09 is F-09, a slice's feature is F-15 (so every slice of it, F-15a and F-15b, is in the
+  Ground Truth by that code at once), and an item's own code (F-02, F-09 for an item F-09a). It
+  also links what was flagged (the roadmap item, or the PRD's feature). A new feature serves no
+  goal yet, so it is flagged `no_goal` until one is picked.
 
 ## Roadmaps
 
@@ -75,7 +80,7 @@ check's `action`, with the button's words):
 
 | Kind | What it means | Fixes |
 | --- | --- | --- |
-| `unlinked_item` | A roadmap item linked to no feature, whose code (or slice's feature's code) no Ground Truth feature has | Add to Ground Truth (`add_to_ground_truth`), Link to a feature (`link_to_feature`) |
+| `unlinked_item` | A roadmap item linked to no feature, whose code (or slice's feature's code) no Ground Truth feature has, and whose PRD feature is linked to none (Link to a feature) | Add to Ground Truth (`add_to_ground_truth`), Link to a feature (`link_to_feature`) |
 | `unlinked_item` | A roadmap item linked to a feature a run proposed but no approver confirmed | Confirm it (`confirm_feature`), Link to a feature (`link_to_feature`) |
 | `slice_parent_missing` | A roadmap slice item (F-15a, or an item of a PRD feature over several milestones) linked to no feature, whose feature (F-15) is not in the Ground Truth | Add to Ground Truth (adds F-15), Link to a feature (links the item) |
 | `prd_feature_missing` | A feature of a PRD's approved version whose code no Ground Truth feature has, or that has no code | Add to Ground Truth, Link to a feature |
