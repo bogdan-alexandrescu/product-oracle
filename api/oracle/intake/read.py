@@ -277,9 +277,12 @@ async def _submit_in(tenant_id: uuid.UUID, intake_id: uuid.UUID, read: dict[str,
 
 
 async def drain() -> None:
-    """Wait for the submissions under way (tests, shutdown)."""
-    while _LATER:
-        await asyncio.gather(*list(_LATER), return_exceptions=True)
+    """Wait for the submissions under way (tests, shutdown). Only the tasks not done yet: a
+    done task leaves the set in its done callback, which runs only when the loop gets a
+    turn, and gather over done tasks alone completes without giving it one (a test spun
+    there for 15 minutes)."""
+    while pending := [t for t in _LATER if not t.done()]:
+        await asyncio.gather(*pending, return_exceptions=True)
 
 
 async def submit(db: AsyncSession, read: dict[str, Any] | None) -> None:
