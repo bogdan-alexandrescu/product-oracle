@@ -2,21 +2,31 @@ import { login } from "./helpers";
 import { expect, test, type Page } from "./test";
 
 /**
- * E-14: a Board link (/s/<token>) shows each item as a card with its name, when (its own
- * dates, month first: "Oct 5 – Nov 20" or "Dec 15"; Now, Next or Later only when it has
- * none) and status (its delivery state, which every item has, its confidence beside it),
- * never a bare one-column table headed "Item"; the cards fill the column on a phone; and the
- * page says the link's end day once (in its header), light and dark. A Public link's page
- * says it once too: its footer reads "Shared <day>" alone.
- * fails_when = the "Item" header shows, a card lacks its date or status, a dated card shows
- * only its horizon, a card at 390 is narrower than the column, or the end day is said twice.
+ * E-14: a Board link (/s/<token>) shows each item as a card with its name, when (its dates
+ * as Simple reads them, month first: "Oct 5 – Nov 20" or "Dec 15", a tracker issue's date
+ * included; nothing when it has none, never the Now, Next or Later its heading names) and
+ * status (its delivery state as Simple computes it, whatever its horizon: an item in Next
+ * with an issue in progress reads "In progress", an item in Now with none "Planned"; its
+ * confidence beside it), never a bare one-column table headed "Item"; the cards fill the
+ * column on a phone; and the page says the link's end day once (in its header), light and
+ * dark. A Public link's page says it once too: its footer reads "Shared <day>" alone.
+ * fails_when = the "Item" header shows, a card's status is its horizon's label, a card's
+ * date is not its own (or an undated card repeats its horizon), a card at 390 is narrower
+ * than the column, or the end day is said twice.
  */
 
 const DOC = "/documents/example-labs-roadmap";
 const FRAME = 'iframe[title="Shared roadmap"]';
-const DAY = "[A-Z][a-z]{2} \\d{1,2}(?:, \\d{4})?";
-const WHEN = new RegExp(`^(?:Now|Next|Later|${DAY}(?: – ${DAY})?)$`);
-const STATUS = /^(?:Shipped recently|Shipped|In progress|Planned|Exploring)$/;
+// Each Board card of the "sharing" roadmap: its when and its status, exactly.
+const CARDS: Record<string, [string, string]> = {
+  // In Now, its own dates, no tracker issue: planned.
+  "Falcon alerts rework": ["Oct 5 – Nov 20", "Planned"],
+  // In Now, undated: nothing for when, not "Now".
+  "Northwind bulk import": ["", "Planned"],
+  // In Next, its tracker issue in progress and dated: in progress, by the issue's date.
+  "Billing ledger v2": ["Jan 20", "In progress"],
+  "Partner API beta": ["Dec 15", "Planned"],
+};
 
 async function openLink(page: Page, audience: "Board" | "Public", label: string) {
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "sharing"));
@@ -61,25 +71,19 @@ for (const width of [1440, 390]) {
         await expect(frame.getByText(/^Shared with you/)).toBeVisible();
         // No bare "Item" header: each item is a card.
         await expect(frame.locator("th:visible")).toHaveCount(0);
-        // Every card says when (its date, or its horizon when it has none) and its status.
+        // Every card says when (its own date, else nothing) and its delivery state.
         const cards = frame.locator(".section-wide tbody tr");
         await expect(cards.first()).toBeVisible();
-        const count = await cards.count();
-        expect(count).toBeGreaterThanOrEqual(4);
-        for (let n = 0; n < count; n++) {
-          const cells = cards.nth(n).locator("td");
-          expect((await cells.nth(1).innerText()).trim()).toMatch(WHEN);
-          expect((await cells.nth(2).innerText()).trim()).toMatch(STATUS);
+        await expect(cards).toHaveCount(Object.keys(CARDS).length);
+        for (const [name, [when, status]] of Object.entries(CARDS)) {
+          const cells = cards.filter({ hasText: name }).locator("td");
+          await expect(cells.nth(0)).toHaveText(name);
+          await expect(cells.nth(1)).toHaveText(when);
+          await expect(cells.nth(2)).toHaveText(status);
         }
         const card = cards.filter({ hasText: "Falcon alerts rework" });
-        await expect(card).toHaveCount(1);
-        // Its own dates, not the Now heading above it; its delivery state; its confidence.
-        await expect(card.locator("td").nth(1)).toHaveText("Oct 5 – Nov 20");
-        await expect(card.locator("td").nth(2)).toHaveText("In progress");
         await expect(card).toContainText("High confidence");
-        const partner = cards.filter({ hasText: "Partner API beta" });
-        await expect(partner.locator("td").nth(1)).toHaveText("Dec 15");
-        await expect(partner.locator("td").nth(2)).toHaveText("Planned");
+        await expect(cards.filter({ hasText: "Northwind bulk import" })).not.toContainText(/\b(?:Now|Next|Later)\b/);
         // A card is drawn as a card: its own border and rounded corners.
         const look = await card.evaluate((el) => {
           const s = getComputedStyle(el);
