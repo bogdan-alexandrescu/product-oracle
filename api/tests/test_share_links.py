@@ -1227,3 +1227,89 @@ def test_with_names_escapes_markdown_in_the_name():
 
     got = with_names("Serves G1.", {"G1": "a | b [x](u) *s* _t_ `c` <d> \\e"})
     assert got == "Serves a \\| b \\[x\\](u) \\*s\\* \\_t\\_ \\`c\\` \\<d\\> \\\\e (G1)."
+
+
+async def test_a_same_key_record_in_another_tracker_stays_a_code(client, ctx):
+    """protects=G-3 (re-review r1): a key is named only by the very record an item of the
+    shared version carries; fails_when=a record with the same key in another tracker, on
+    no item, gives the page its title; no_claim=the item's own record's title."""
+    from oracle.roadmap.models import TrackerRecord
+
+    await seed_roadmap(ctx, publish=True, sections=SECTIONS_WITH_CODES)
+    async with tenant_session(ctx.tenant_id) as s:
+        own = await s.scalar(select(TrackerRecord).where(TrackerRecord.external_ref == "ENG-413"))
+        own.title = None
+        s.add(
+            TrackerRecord(
+                tracker="github",
+                external_ref="ENG-413",
+                title="Secret other team issue",
+                state="todo",
+                observed_at=datetime(2026, 10, 16, tzinfo=UTC),
+            )
+        )
+        await s.commit()
+    token = token_of((await create(client, ctx, "owner", audience="engineering")).json())
+    page = await client.get(f"{PUBLIC}/{token}", headers=await opened(client, token))
+    assert page.status_code == 200, page.text
+    shown = _text(page.text)
+    assert "Secret other team issue" not in shown, shown
+    assert "ENG-413 tracks it." in shown, shown
+
+
+async def test_a_team_link_leaves_an_items_tracker_key_a_code(client, ctx):
+    """protects=G-3 (re-review r1): a team link hides the items' tracker keys, so a key
+    its words write is not named through an item; fails_when=a Team page reads the
+    issue's title; no_claim=the Engineering page, which shows the keys."""
+    from oracle.roadmap.models import TrackerRecord
+
+    await seed_roadmap(ctx, publish=True, sections=SECTIONS_WITH_CODES)
+    async with tenant_session(ctx.tenant_id) as s:
+        own = await s.scalar(select(TrackerRecord).where(TrackerRecord.external_ref == "ENG-413"))
+        own.title = "Parse uploaded files"
+        await s.commit()
+    token = token_of((await create(client, ctx, "owner", audience="team")).json())
+    page = await client.get(f"{PUBLIC}/{token}", headers=await opened(client, token))
+    assert page.status_code == 200, page.text
+    assert "Parse uploaded files" not in _text(page.text), _text(page.text)
+
+
+async def test_a_name_with_a_line_break_stays_one_plain_line(client, ctx):
+    """protects=G-3 (re-review r1): a title with line breaks and strikethrough reads on
+    one line as written; fails_when=it opens a heading, ends a table row or strikes text
+    through; no_claim=names without them."""
+    from oracle.roadmap.models import TrackerRecord
+
+    await seed_roadmap(ctx, publish=True, sections=SECTIONS_WITH_CODES)
+    async with tenant_session(ctx.tenant_id) as s:
+        own = await s.scalar(select(TrackerRecord).where(TrackerRecord.external_ref == "ENG-413"))
+        own.title = "Fix A\n\n# Big ~~s~~\r\n| x |"
+        await s.commit()
+    token = token_of((await create(client, ctx, "owner", audience="engineering")).json())
+    page = await client.get(f"{PUBLIC}/{token}", headers=await opened(client, token))
+    assert page.status_code == 200, page.text
+    assert "Fix A # Big ~~s~~ | x | (ENG-413) tracks it." in _text(page.text), page.text
+    assert "<h1" not in page.text.split("Fix A", 1)[1][:200] and "<s>" not in page.text
+    row = re.search(r"<tr>\s*<td>Bulk import</td>(.*?)</tr>", page.text, re.S)
+    assert row is not None, page.text
+    assert row.group(1).count("<td") == 1 and "# Big" in row.group(1), row.group(1)
+
+
+def test_with_names_makes_a_name_one_line_and_escapes_a_tilde():
+    """protects=G-3 (re-review r1): every whitespace run in a name is one space and a
+    tilde is escaped; fails_when=a line break or "~~" goes through."""
+    from oracle.shares.render import with_names
+
+    got = with_names("Serves G1.", {"G1": "A\n\n# Big\t ~~s~~"})
+    assert got == "Serves A # Big \\~\\~s\\~\\~ (G1)."
+
+
+def test_with_names_is_idempotent_for_a_name_holding_its_code():
+    """protects=G-3 (re-review r1): a name that already holds its code is written once;
+    fails_when=a second pass reads "Issue Issue ENG-413"."""
+    from oracle.shares.render import with_names
+
+    for name in ("Issue ENG-413", "Fix *a* ENG-413 now"):
+        names = {"ENG-413": name}
+        once = with_names("ENG-413 tracks it.", names)
+        assert with_names(once, names) == once, once

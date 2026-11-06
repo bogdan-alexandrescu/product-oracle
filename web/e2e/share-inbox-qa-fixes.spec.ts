@@ -10,7 +10,8 @@ import { expect, test, type Page } from "./test";
  * - G-6: Inbox (Detailed) > Sources that need attention: each source's action is its problem's (Reconnect opens
  *   Settings › Connections for its account; Share again and Pick fewer channels open the source), the sentence
  *   behind an (i).
- * fails_when = a code shows without its name, an Open is drawn as text, a title is cut on one line, or a
+ * fails_when = a code shows without its name, a Team link names an item's issue, a title's line break or "~~"
+ * shows as markdown, an Open is drawn as text, a title is cut on one line, or a
  * source that must reconnect offers only Edit.
  */
 
@@ -53,6 +54,9 @@ for (const scheme of ["light", "dark"] as const) {
       expect(text).not.toMatch(/Serves G\d/);
       expect(text).not.toContain("Alert rules engine");
       expect(text).not.toContain("Partner sign-in tokens");
+      // A Team link hides the items' tracker keys: an item's own issue is not named through it either.
+      await expect(body).toContainText("ENG-541 tracks it.");
+      expect(text).not.toContain("Ledger entries");
     });
 
     test("G-3: a tracker issue on an item reads by its title as written, with no table column or link added", async ({ page }) => {
@@ -60,9 +64,12 @@ for (const scheme of ["light", "dark"] as const) {
       const frame = holder.frameLocator(FRAME);
       await expect(frame.getByText(/^Shared with you/)).toBeVisible();
       const body = frame.locator("body");
-      await expect(body).toContainText("Ledger entries | v2 [notes](https://example.com/notes) *draft* (ENG-541) tracks it.");
+      // A line break and "~~" in the title read on one line as written: no heading, no strikethrough.
+      await expect(body).toContainText("Ledger entries | v2 [notes](https://example.com/notes) *draft* # Rework ~~old~~ path (ENG-541) tracks it.");
       await expect(frame.locator('a[href="https://example.com/notes"]')).toHaveCount(0);
       await expect(frame.locator("em")).toHaveCount(0);
+      await expect(frame.locator("s, del")).toHaveCount(0);
+      await expect(frame.getByRole("heading", { name: /Rework/ })).toHaveCount(0);
     });
 
     test("G-5: every Inbox row's Open is one bordered button, and a long title wraps", async ({ page }) => {
