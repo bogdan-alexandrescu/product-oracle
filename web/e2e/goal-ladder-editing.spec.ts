@@ -181,18 +181,22 @@ for (const [label, size] of [["1440", DESKTOP], ["390", PHONE]] as const) {
 
     test("an approver who is not the roadmap's decider gets no Move to Trash on a milestone", async ({ page }) => {
       // protects=a milestone's can_change (the roadmap's owner or decider, as the API's 403 checks) gates
-      // its ⋯ menu, its grip and its Delete key, not the map's can_edit: an approver turns on Edit ladder
-      // and sees no Move to Trash on a key result (their goal and feature menus stay);
+      // its ⋯ menu's Move to Trash and Move to…, its grip and its Delete key, not the map's can_edit: an approver turns on Edit ladder
+      // and sees no Move to Trash or Move to… on a key result (its gate and attach items stay);
       // fails_when=the approver is offered a Trash the API then refuses; no_claim=the decider's own menu.
       await open(page, "approver");
       await page.getByTestId("ld-edit").click();
       const kr = krCard(page, "Renewal rate at 85% for spring renewals");
       await expect(kr).toHaveCount(1);
-      await expect(kr.getByTestId("ld-more")).toHaveCount(0);
       await kr.focus();
       await page.keyboard.press("Delete");
       await expect(kr).toHaveCount(1);
-      await expect(page.getByRole("menuitem", { name: "Move to Trash", exact: true })).toHaveCount(0);
+      await kr.getByTestId("ld-more").first().click();
+      await expect(page.getByRole("menuitem", { name: "Edit the gate" })).toBeVisible();
+      for (const name of ["Move to Trash", "Move to…", "Move up", "Move down"]) {
+        await expect(page.getByRole("menuitem", { name, exact: true })).toHaveCount(0);
+      }
+      await page.keyboard.press("Escape");
       await expect(goalCard(page, "Half the support tickets per team").getByTestId("ld-more").first()).toBeVisible();
     });
 

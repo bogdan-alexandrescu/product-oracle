@@ -82929,6 +82929,10 @@
           "proposed": {
             "type": "boolean",
             "title": "Proposed"
+          },
+          "can_change": {
+            "type": "boolean",
+            "title": "Can Change"
           }
         },
         "type": "object",
@@ -82948,7 +82952,8 @@
           "days",
           "confirmed",
           "confirmed_on",
-          "proposed"
+          "proposed",
+          "can_change"
         ],
         "title": "GmMilestone"
       },

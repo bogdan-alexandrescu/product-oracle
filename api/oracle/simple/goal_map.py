@@ -56,6 +56,7 @@ from oracle.metrics.models import Metric, MetricValue
 from oracle.preferences.models import UserPreference
 from oracle.roadmap import company
 from oracle.roadmap.models import RoadmapItem, TrackMilestone
+from oracle.simple import drafts
 from oracle.simple.goal_milestones import _next_code
 from oracle.simple.models import FocusArea, MilestoneFeature
 
@@ -136,6 +137,9 @@ class GmMilestone(BaseModel):
     # When it was confirmed, in words ("Nov 2").
     confirmed_on: str | None
     proposed: bool
+    # Whether the signed-in person changes it directly (Trash, move, edit): the rule the
+    # milestone routes enforce (drafts.can_edit). Map can_edit (approver and up) is wider.
+    can_change: bool
 
 
 class GmLink(BaseModel):
@@ -579,6 +583,7 @@ async def build(db: AsyncSession, principal: Any, can_edit: bool) -> GoalMapOut:
     rows = await _on_map(db)
     on_map = {m.id for m in rows}
     ms_out = []
+    who = await drafts.who(db, {m.roadmap_id for m in rows if m.roadmap_id is not None})
     for m in rows:
         goal = by_goal.get(m.goal_id)  # type: ignore[arg-type]
         if goal is None:
@@ -605,6 +610,7 @@ async def build(db: AsyncSession, principal: Any, can_edit: bool) -> GoalMapOut:
                 confirmed=m.gate_confirmed_by,
                 confirmed_on=_short(m.gate_confirmed_on),
                 proposed=gated and m.gate_confirmed_by is None,
+                can_change=drafts.can_edit(principal, m.roadmap_id, who),  # type: ignore[arg-type]
             )
         )
     shown = {m.id for m in ms_out}

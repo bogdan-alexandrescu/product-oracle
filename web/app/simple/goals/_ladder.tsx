@@ -103,6 +103,8 @@ interface V {
   edit: boolean;
   /** Owners and approvers change it; a commenter's change is a suggestion; a viewer reads. */
   canChange: boolean;
+  /** Whether this milestone is changed directly (its own can_change), not map.can_edit. */
+  krCan: (milestone: string) => boolean;
   may: boolean;
   phone: boolean;
   places: Map<string, { x: number; y: number }>;
@@ -180,6 +182,8 @@ export function GoalLadder(props: LadderProps) {
   // The person's own pending suggestions: a suggested link shows on the card that would wait.
   const proposals = useQuery("simple-proposals", () => unwrap(api.GET("/v1/simple/changes", { params: { query: { status: "proposed" } } })));
   const canChange = map.can_edit;
+  // A milestone changes (Trash, move, drag) for the roadmap's owner or decider, not every approver.
+  const krCan = (milestone: string) => !!map.milestones.find((x) => x.id === milestone)?.can_change;
   const may = canChange || can("create_simple_change");
   const [edit, setEdit] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
@@ -503,7 +507,7 @@ export function GoalLadder(props: LadderProps) {
     moveKr: async (milestone, goal, before) => {
       const m = map.milestones.find((x) => x.id === milestone);
       if (!m) return;
-      if (!canChange) return refuse("Only owners and approvers move milestones");
+      if (!krCan(milestone)) return refuse("Only an owner or the roadmap's decider moves milestones");
       const was = new Map(map.milestones.map((x) => [x.id, x.depends[0] ?? null] as const));
       const from = krsOf(m.goal);
       const ids = krsOf(goal).filter((x) => x !== milestone);
@@ -655,7 +659,7 @@ export function GoalLadder(props: LadderProps) {
   }, [menu, arrow, sel, sheet, edit, may]);
 
   const firstLoose = goals.find((g) => feats.some((x) => x.free && x.goal === g.id));
-  const v: V = { map, goals, ms, msCode, feats, byId, sel, setSel: (id) => { setSel(id); setRefused(null); }, edit, canChange, may, phone, places, live, menu, setMenu, arrow, setArrow: (key) => setArrowAt(key ? { key, sel } : null), adding, setAdding, drop, refused, fresh, flash, flashGoal: firstLoose?.id ?? null, onOpen: props.onOpen, act };
+  const v: V = { map, goals, ms, msCode, feats, byId, sel, setSel: (id) => { setSel(id); setRefused(null); }, edit, canChange, krCan, may, phone, places, live, menu, setMenu, arrow, setArrow: (key) => setArrowAt(key ? { key, sel } : null), adding, setAdding, drop, refused, fresh, flash, flashGoal: firstLoose?.id ?? null, onOpen: props.onOpen, act };
   const drag = { setLive, setDrop };
 
   return (
@@ -972,9 +976,9 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
     <div
       data-ld-ms={m.id}
       data-testid="ld-milestone"
-      tabIndex={v.edit && v.canChange ? 0 : undefined}
+      tabIndex={v.edit && v.krCan(m.id) ? 0 : undefined}
       onKeyDown={(e) => {
-        if ((e.key === "Delete" || e.key === "Backspace") && v.edit && v.canChange && e.target === e.currentTarget) {
+        if ((e.key === "Delete" || e.key === "Backspace") && v.edit && v.krCan(m.id) && e.target === e.currentTarget) {
           e.preventDefault();
           e.stopPropagation();
           void v.act.trashKr(m.id);
@@ -984,7 +988,7 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
       className={`relative flex flex-col gap-0.5 rounded-xl border bg-surface px-2.5 py-1.5 ${live ? "rotate-1 border-accent shadow-2xl" : "border-line"} ${v.drop === `kr:${m.id}` ? "border-accent! bg-accent-soft" : ""}`}
     >
       <span className="flex items-start gap-2">
-        {v.edit && v.canChange && !v.phone && <span className="mt-0.5 cursor-grab text-text-faint" aria-hidden><Icon name="grip" size={16} /></span>}
+        {v.edit && v.krCan(m.id) && !v.phone && <span className="mt-0.5 cursor-grab text-text-faint" aria-hidden><Icon name="grip" size={16} /></span>}
         <span className="text-[14px] leading-[18px] font-semibold">
           <span className="simple-code mr-1">{v.msCode.get(m.id)}</span>
           {m.name}
@@ -1004,10 +1008,14 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
             { w: m.proposed ? "Set and confirm the gate" : "Edit the gate", on: () => { v.setMenu(null); p.onGate(m.id); } },
             { w: "Attach a feature…", on: () => { v.setMenu(null); p.onAttach(m.id, m.areas[0] ?? ""); } },
             ...(p.onPrd ? [{ w: "New PRD from it", on: () => { v.setMenu(null); p.onPrd!(m.id); } }] : []),
-            ...(at > 0 ? [{ w: "Move up", on: () => void v.act.stepKr(m.id, -1) }] : []),
-            ...(at < krs.length - 1 ? [{ w: "Move down", on: () => void v.act.stepKr(m.id, 1) }] : []),
-            { w: "Move to…", on: () => v.act.krTo(m.id) },
-            { w: "Move to Trash", on: () => void v.act.trashKr(m.id), crit: true },
+            ...(v.krCan(m.id)
+              ? [
+                  ...(at > 0 ? [{ w: "Move up", on: () => void v.act.stepKr(m.id, -1) }] : []),
+                  ...(at < krs.length - 1 ? [{ w: "Move down", on: () => void v.act.stepKr(m.id, 1) }] : []),
+                  { w: "Move to…", on: () => v.act.krTo(m.id) },
+                  { w: "Move to Trash", on: () => void v.act.trashKr(m.id), crit: true },
+                ]
+              : []),
           ]}
         />
       )}
@@ -1477,8 +1485,11 @@ function Canvas({ v, drag }: { v: V; drag: { setLive: (l: V["live"]) => void; se
     const dot = t.closest("[data-ld-dot]") as HTMLElement | null;
     const card = t.closest("[data-ld-card]") as HTMLElement | null;
     // goal-map-editing: in Edit mode a milestone or a goal card is picked up (a commenter's move is refused on the drop).
-    const kr = v.edit && v.may ? (t.closest("[data-ld-ms]") as HTMLElement | null) : null;
-    const goal = v.edit && v.may ? (t.closest("[data-ld-goal]") as HTMLElement | null) : null;
+    // A milestone its person may not change (not the roadmap's owner or decider) is not picked up: the card pans.
+    const krEl = v.edit && v.may ? (t.closest("[data-ld-ms]") as HTMLElement | null) : null;
+    const krLocked = !!krEl && !v.krCan(krEl.dataset.ldMs ?? "");
+    const kr = krLocked ? null : krEl;
+    const goal = v.edit && v.may && !krLocked ? (t.closest("[data-ld-goal]") as HTMLElement | null) : null;
     if (dot) gesture.current = { kind: "dot", from: dot.dataset.ldDot, sx: e.clientX, sy: e.clientY, vx: 0, vy: 0, moved: false };
     else if (card && canPlace) gesture.current = { kind: "card", id: card.dataset.ldCard, sx: e.clientX, sy: e.clientY, vx: 0, vy: 0, moved: false };
     else if (kr) gesture.current = { kind: "kr", id: kr.dataset.ldMs, sx: e.clientX, sy: e.clientY, vx: 0, vy: 0, moved: false };
@@ -1548,7 +1559,7 @@ function Canvas({ v, drag }: { v: V; drag: { setLive: (l: V["live"]) => void; se
       swallowClick();
       const goal = goalOfZone(t);
       if (!goal) return;
-      if (!v.canChange) return v.act.refuse("Only owners and approvers move milestones");
+      if (!v.krCan(id)) return v.act.refuse("Only an owner or the roadmap's decider moves milestones");
       // Onto another milestone card: before it when dropped on its top half, else after it.
       let before: string | null = null;
       if (t?.startsWith("kr:")) {

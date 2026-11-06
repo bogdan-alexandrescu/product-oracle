@@ -82,9 +82,16 @@ async def test_place_card_never_changes_data(client):
     after = await read(client, ctx, "approver")
     assert after == before
     mine = await read(client, ctx, "owner")
-    assert {k: v for k, v in mine.items() if k not in ("places", "can_edit")} == {
-        k: v for k, v in before.items() if k not in ("places", "can_edit")
-    }
+
+    def data(body: dict) -> dict:
+        # What each person may do (can_edit, a milestone's can_change) differs per person.
+        out = {k: v for k, v in body.items() if k not in ("places", "can_edit")}
+        out["milestones"] = [
+            {k: v for k, v in m.items() if k != "can_change"} for m in body["milestones"]
+        ]
+        return out
+
+    assert data(mine) == data(before)
 
 
 async def test_a_viewer_places_cards_for_themselves(client):

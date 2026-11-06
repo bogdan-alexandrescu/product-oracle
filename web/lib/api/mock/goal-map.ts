@@ -203,6 +203,7 @@ function ms(
     confirmed: status === "met" ? by[id.length % by.length] : null,
     confirmed_on: status === "met" ? "Nov 2" : null,
     proposed: false,
+    can_change: false,
   };
 }
 
@@ -553,9 +554,20 @@ function amount(v: number, unit: string): string {
   return `${Math.round(v * 10) / 10}`;
 }
 
+/**
+ * Who changes a roadmap's milestone directly, as the API's drafts.can_edit: an owner; the roadmap's
+ * decider; with no decider, its track owner while an approver (the mock has no track owners, so an
+ * approver reads false until a decider is set: db.goal_map_decider).
+ */
+export function mayChangeMilestone(me: { id?: string; role: string }, decider: string | null | undefined, trackOwner = false): boolean {
+  if (me.role === "owner") return true;
+  if (decider) return me.id === decider;
+  return trackOwner && me.role === "approver";
+}
+
 /** /v1/simple/goal-map and its edits; null for any other path. Edits need approver and up. */
 export async function routeGoalMap(
-  db: { goal_map?: GoalMap; goal_map_places?: Record<string, Record<string, [number, number]>> },
+  db: { goal_map?: GoalMap; goal_map_decider?: string | null; goal_map_places?: Record<string, Record<string, [number, number]>> },
   scenario: string | null,
   me: { role: string; name: string; id?: string },
   req: Request,
@@ -581,7 +593,7 @@ export async function routeGoalMap(
     const milestones = map.milestones.filter((m) => !(m as Held).trashed && goals.some((g) => g.id === m.goal)).map((m) => {
         const { trashed, ...rest } = m as Held;
         void trashed;
-        return rest;
+        return { ...rest, can_change: mayChangeMilestone(me, db.goal_map_decider) };
       });
     const on = new Set(milestones.map((m) => m.id));
     const features = map.features.filter((f) => !item(f.id)?.trashed).flatMap((f) => {
@@ -696,7 +708,7 @@ export async function routeGoalMap(
     const days = DAYS_BACK.map((i) => (g.current === null ? null : Math.round((g.current - i * 0.6) * 10) / 10));
     map.milestones.push({
       id: crypto.randomUUID(), name, goal: g.id, measure: g.measure, threshold: Number(body?.threshold), unit: g.unit, current: g.current,
-      status: g.current === null ? "not_measured" : "on_track", areas, depends: after ? [after.id] : [], month: "Nov", due: null, due_on: null, days, confirmed: null, confirmed_on: null, proposed: true,
+      status: g.current === null ? "not_measured" : "on_track", areas, depends: after ? [after.id] : [], month: "Nov", due: null, due_on: null, days, confirmed: null, confirmed_on: null, proposed: true, can_change: false,
     });
     map.milestones = ordered(map.milestones);
     return out();
@@ -756,7 +768,7 @@ type Held = GmMilestone & { trashed?: boolean };
  * change the roadmap (an owner here) does it; others get the API's 403. Null for any other id.
  */
 export async function routeLadderMilestone(
-  db: { goal_map?: GoalMap },
+  db: { goal_map?: GoalMap; goal_map_decider?: string | null },
   me: { id: string; role: string; name: string },
   req: Request,
   p: string[],
@@ -768,8 +780,8 @@ export async function routeLadderMilestone(
   const m = map.milestones.find((x) => x.id === p[4]) as Held | undefined;
   if (!m) return null;
   const out = (status = 200) =>
-    json(status, { id: m.id, roadmap_id: id("roadmap"), code: "", name: m.name, date: m.due_on ?? null, goal_id: m.goal, item_ids: [], counts_when: "", progress: "not_started", prd: null, prd_owner: null, pending: null, can_change: me.role === "owner", can_propose: false, carried_from: null });
-  if (me.role !== "owner") return json(403, { detail: "Only an owner or the roadmap's decider (with none, its owner) changes its milestones" });
+    json(status, { id: m.id, roadmap_id: id("roadmap"), code: "", name: m.name, date: m.due_on ?? null, goal_id: m.goal, item_ids: [], counts_when: "", progress: "not_started", prd: null, prd_owner: null, pending: null, can_change: mayChangeMilestone(me, db.goal_map_decider), can_propose: false, carried_from: null });
+  if (!mayChangeMilestone(me, db.goal_map_decider)) return json(403, { detail: "Only an owner or the roadmap's decider (with none, its owner) changes its milestones" });
   if (req.method === "POST" && p[5] === "restore") {
     if (!m.trashed) return json(404, { detail: "No such deleted milestone" });
     m.trashed = false;

@@ -42,7 +42,7 @@ function ms(id: string, g: string, name: string, threshold: number | null, curre
   return {
     id, name, goal: g, measure: gl.measure, threshold, unit: gl.unit, current, status, areas: [area(areaName)], depends: [],
     month: due ? MONTHS[Number(due.slice(5, 7)) - 1] : "Nov", due: due ? words(due) : null, due_on: due, days: Array.from({ length: 7 }, () => current),
-    confirmed: status === "met" ? "Dana Example" : null, confirmed_on: status === "met" ? "Nov 2" : null, proposed: false,
+    confirmed: status === "met" ? "Dana Example" : null, confirmed_on: status === "met" ? "Nov 2" : null, proposed: false, can_change: false,
   };
 }
 

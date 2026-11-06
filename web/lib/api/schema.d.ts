@@ -26430,6 +26430,8 @@ export interface components {
             confirmed_on: string | null;
             /** Proposed */
             proposed: boolean;
+            /** Can Change */
+            can_change: boolean;
         };
         /**
          * GmOffMap
