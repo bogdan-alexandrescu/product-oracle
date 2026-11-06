@@ -338,7 +338,11 @@ export function Priorities() {
           }}
         />
       )}
-      {data && !blank && tab === "value-effort" && <ValueEffort data={data} shapes={shapes} mayChange={mayChange} changed={changed} moved={moved} />}
+      {data && !blank && tab === "value-effort" && (
+        <OpenRow.Provider value={setRowOpen}>
+          <ValueEffort data={data} shapes={shapes} mayChange={mayChange} changed={changed} moved={moved} />
+        </OpenRow.Provider>
+      )}
       {data && !blank && tab === "buckets" && <Buckets data={data} suggestions={suggestions} reload={q.reload} />}
       </div>
     </div>
