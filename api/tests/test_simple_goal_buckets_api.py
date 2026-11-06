@@ -272,3 +272,27 @@ async def test_undo_takes_only_what_the_api_gave(client):
     r = await client.post(f"{URL}/undo", headers=w.as_("owner"), json=undo)
     assert r.status_code == 200, r.text
     assert [g["title"] for g in (await w.read(client))["goals"]] == ["Grow", "Quiet"]
+
+
+@pytest.mark.asyncio
+async def test_a_link_with_an_assumed_contribution_is_named(client):
+    """Review of PR 1244, round 3: a supports link whose contribution is assumed (an approved
+    order's new feature, ASSUMED_LINK) is listed in assumed_goal_ids, as the baseline
+    marks it; setting the contribution clears it."""
+    w = await World().build()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        added = await Seed(s).entity("feature", "added")
+        s.add(Edge(src_id=added.id, dst_id=uuid.UUID(w.goals["quiet"]), type="supports",
+                   status="proposed", origin="agent",
+                   attrs={"contribution": 1, "contribution_assumed": True}))  # fmt: skip
+        await s.commit()
+    by_key = {f["key"]: f for f in (await w.read(client))["features"]}
+    assert by_key["added"]["assumed_goal_ids"] == [w.goals["quiet"]]
+    assert by_key["both"]["assumed_goal_ids"] == []
+    # Dropped on its own goal: the link is kept, its contribution set (3), no longer assumed.
+    body = {"from_goal_id": w.goals["grow"], "to_goal_id": w.goals["quiet"]}
+    r = await client.post(f"{URL}/features/{added.id}/move", headers=w.as_("owner"), json=body)
+    assert r.status_code == 200, r.text
+    by_key = {f["key"]: f for f in (await w.read(client))["features"]}
+    assert by_key["added"]["assumed_goal_ids"] == []
+    assert [attrs for _, _, attrs, *_ in await _edges(w, "added")] == [{"contribution": 3}]
