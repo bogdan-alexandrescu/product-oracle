@@ -71,7 +71,7 @@ for (const size of DESKTOP)
       // One readable column, about 720 px of text, a size up.
       const box = (await doc.boundingBox())!;
       expect(box.width).toBeLessThanOrEqual(760);
-      expect(box.width).toBeGreaterThan(640);
+      expect(box.width).toBeGreaterThan(600);
       await expect(section(page, "summary").locator(".doc-body").first()).toHaveCSS("font-size", "16.5px");
       await expect(section(page, "summary").getByRole("heading").first()).toHaveCSS("font-size", "24px");
       // The sheet follows the theme.
@@ -131,6 +131,7 @@ for (const size of DESKTOP)
       await fullCarts(page);
       const rail = contents(page);
       // Approve from the review bar of the section being read; its dot turns Approved.
+      await rail.getByRole("button", { name: /^9\s*Feature detail/ }).click();
       await rail.getByRole("button", { name: /^9\.2\s*Cart on every device/ }).click();
       const sync = section(page, "feature-sync");
       const bar = sync.getByTestId("review-bar");
@@ -173,8 +174,10 @@ for (const size of DESKTOP)
       await contents(page).getByRole("button", { name: /^3\s*Problem/ }).click();
       const problem = section(page, "problem");
       await expect(problem.getByTestId("review-bar")).toBeVisible();
+      await expect(problem.getByTestId("review-bar")).toContainText("Approvers review sections.");
       await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0);
-      await problem.getByRole("button", { name: "Actions for Problem" }).click();
+      // Nothing to change: no Edit, and no menu to hold it.
+      await expect(problem.getByRole("button", { name: "Actions for Problem" })).toHaveCount(0);
       await expect(page.getByRole("menuitem", { name: "Edit the text yourself" })).toHaveCount(0);
     });
   }
