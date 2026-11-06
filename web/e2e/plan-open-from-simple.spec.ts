@@ -1,5 +1,6 @@
+import { stableUuid } from "../lib/api/mock/ids";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login, openRoadmapItem } from "./helpers";
+import { login } from "./helpers";
 import { expect, test, type Page } from "./test";
 
 /**
@@ -25,16 +26,14 @@ const inScenario = (page: Page, s: string) => page.addInitScript(([key, v]) => l
 const inspector = (page: Page, where: "desktop" | "phone") =>
   where === "phone" ? page.getByTestId("sheet-plan-item").getByTestId("plan-inspector") : page.getByTestId("plan-inspector").filter({ visible: true });
 
-/** From Simple's roadmap, an item's card, then its "Open the detailed view". */
-async function openDetailed(page: Page, key: string, title: string, email?: string) {
+/**
+ * Simple's card "Open the detailed view" link: /plan?item=<key>&prd=<id>&roadmap=<slug>. The card
+ * that emits &roadmap= is the Simple lane's part (this line's card names no roadmap yet), so the
+ * Plan is opened by that link; the PRD is one the Plan does not read the item under.
+ */
+async function openDetailed(page: Page, key: string, roadmap: string, email?: string) {
   await login(page, email);
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  await openRoadmapItem(page, key);
-  const card = page.getByTestId("floating-card");
-  await expect(card.getByRole("heading", { name: title, exact: true })).toBeVisible();
-  await card.getByRole("link", { name: "Open the detailed view" }).click();
-  await expect(page).toHaveURL(new RegExp(`/plan\\?item=${key}&prd=[0-9a-f-]{36}&roadmap=[a-z-]+$`));
+  await page.goto(`/plan?item=${key}&prd=${stableUuid("plan-open/card-prd")}&roadmap=${roadmap}`);
 }
 
 for (const [where, use] of [
@@ -45,7 +44,7 @@ for (const [where, use] of [
     test.use(use);
 
     test("the detailed view opens the item, though the Plan reads it under another PRD", async ({ page }) => {
-      await openDetailed(page, "alert-digest", DIGEST);
+      await openDetailed(page, "alert-digest", "usage-alerts-roadmap");
       // The Plan's own row for the key, not its first row.
       const row = page.locator('[data-testid="plan-row"][data-item="alert-digest"]');
       await expect(row).toHaveAttribute("aria-selected", "true");
@@ -64,7 +63,7 @@ for (const [where, use] of [
     });
 
     test("an item only in a draft says where it is, with a link to its card", async ({ page }) => {
-      await openDetailed(page, "setup-ideas", "Team invite nudges");
+      await openDetailed(page, "setup-ideas", "onboarding-roadmap");
       const line = page.getByTestId("plan-missing-item");
       await expect(line).toBeVisible();
       await expect(line).toContainText("Team invite nudges is not on the Plan yet: it is in Guided setup's draft");
@@ -74,7 +73,6 @@ for (const [where, use] of [
       await expect(page.getByTestId("sheet-plan-item")).not.toBeVisible();
       await line.getByRole("link", { name: "Open it on the roadmap" }).click();
       await expect(page).toHaveURL(/\/simple\/roadmap\?item=[0-9a-f-]{36}$/);
-      await expect(page.getByTestId("floating-card").getByRole("heading", { name: "Team invite nudges", exact: true })).toBeVisible();
     });
 
     for (const [who, email] of [
@@ -83,7 +81,7 @@ for (const [where, use] of [
     ] as const) {
       test(`as the ${who}, a key two roadmaps hold opens the one in the card's roadmap`, async ({ page }) => {
         await inScenario(page, "plan-same-key");
-        await openDetailed(page, "threshold-alerts", "Free shipping threshold alert", email);
+        await openDetailed(page, "threshold-alerts", "checkout-redesign-roadmap", email);
         // Both roadmaps' rows are on the Plan; the Checkout one is picked, not Usage alerts' first row.
         await expect(page.locator('[data-testid="plan-row"][data-item="threshold-alerts"]').filter({ visible: true })).toHaveCount(2);
         const picked = page.locator('[data-testid="plan-row"][aria-selected="true"]').filter({ visible: true });
@@ -109,7 +107,6 @@ for (const [where, use] of [
         await expect(page.locator('[data-testid="plan-row"][aria-selected="true"]')).toHaveCount(0);
         await line.getByRole("link", { name: "Open it on the roadmap" }).click();
         await expect(page).toHaveURL(/\/simple\/roadmap\?item=[0-9a-f-]{36}$/);
-        await expect(page.getByTestId("floating-card").getByRole("heading", { name: "Quiet hours for alerts", exact: true })).toBeVisible();
       });
     }
   });

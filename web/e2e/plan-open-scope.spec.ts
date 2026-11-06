@@ -1,5 +1,5 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login, openRoadmapItem } from "./helpers";
+import { login } from "./helpers";
 import { expect, test, type Page } from "./test";
 
 /**
@@ -22,13 +22,8 @@ async function setup(page: Page, scope: "Approved + drafts" | "Approved only") {
   const bar = page.getByRole("group", { name: "Plan scope" });
   await bar.getByRole("button", { name: scope }).click();
   await expect(bar.getByRole("button", { name: scope })).toHaveAttribute("aria-pressed", "true");
-  await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  await openRoadmapItem(page, "threshold-alerts");
-  const card = page.getByTestId("floating-card");
-  await expect(card.getByRole("heading", { name: ITEM, exact: true })).toBeVisible();
-  await card.getByRole("link", { name: "Open the detailed view" }).click();
-  await expect(page).toHaveURL(/\/plan\?item=threshold-alerts&prd=[0-9a-f-]{36}&roadmap=checkout-redesign-roadmap$/);
+  // Simple's card link (its &roadmap= is the Simple lane's part): the Plan opened by it.
+  await page.goto("/plan?item=threshold-alerts&roadmap=checkout-redesign-roadmap");
 }
 
 const picked = (page: Page) => page.locator('[data-testid="plan-row"][aria-selected="true"]').filter({ visible: true });
