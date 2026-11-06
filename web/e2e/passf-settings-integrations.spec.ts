@@ -163,7 +163,6 @@ test("Owner's decision (Nov 5): the webhook switch is 'Private details', and its
   await expect(sheet).not.toContainText("Include private details");
   await sheet.getByRole("button", { name: "About private details" }).click();
   await expect(page.getByText(tipText).filter({ visible: true })).toBeVisible();
-  await page.mouse.click(5, 5);
   await sheet.getByLabel("Name").fill("Team channel");
   await sheet.getByLabel("URL").fill("https://hooks.example.test/team");
   await sheet.getByRole("checkbox", { name: "All Approvals" }).check();
