@@ -54,6 +54,8 @@ export function OnePagerSlides({
       if (e.altKey || e.ctrlKey || e.metaKey) return;
       const t = e.target as HTMLElement | null;
       if (t?.closest("textarea, input, select, [contenteditable]")) return;
+      // Space on a focused button, link or other control presses it; it does not page.
+      if (e.key === " " && t?.closest("button, a, [role=button], summary")) return;
       if (document.querySelector('[role="dialog"], [role="alertdialog"], dialog[open], [data-testid="item-panel"]')) return;
       const step = NEXT.has(e.key) ? 1 : BACK.has(e.key) ? -1 : e.key === "Home" ? -count : e.key === "End" ? count : 0;
       if (!step) return;
@@ -92,7 +94,7 @@ export function OnePagerSlides({
         ) : v.plan ? (
           <div aria-label="Timeline strip" className="text-[18px]">
             <WithFeatureMarks>
-              <PlanByMonth plan={v.plan} prd={v.document} legend items={v.timeline.map((t) => ({ ...t, code: codes.get(t.id) }))} />
+              <PlanByMonth plan={v.plan} prd={v.document} legend fold items={v.timeline.map((t) => ({ ...t, code: codes.get(t.id) }))} />
             </WithFeatureMarks>
           </div>
         ) : (
