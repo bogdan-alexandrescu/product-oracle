@@ -108,13 +108,13 @@ for (const phone of [false, true]) {
       await page.goto("/simple");
       const also = page.getByTestId("home-also-waiting");
       await expect(also.getByRole("listitem", { name: "Dates to confirm: Alert routing by team" })).toBeVisible();
-      await expect(page.getByTestId("home-run-stop").first()).toContainText("Confirm the baseline");
+      await expect(page.getByTestId("home-run-stop").first()).toContainText("Confirm the Ground Truth");
 
       await nav(page, "Decisions").click();
       await expect(page).toHaveURL(/\/simple\/decisions/);
       const mine = page.getByTestId("questions-mine");
       await expect(mine).not.toContainText("Nothing waits on you");
-      await expect(mine.getByRole("listitem", { name: /^Run stop: Confirm the baseline/ }).first()).toBeVisible();
+      await expect(mine.getByRole("listitem", { name: /^Run stop: Confirm the Ground Truth/ }).first()).toBeVisible();
       await expect(mine.getByRole("listitem", { name: /^Goal suggestion: / }).first()).toBeVisible();
       const before = Number(await page.getByTestId("questions-mine-count").textContent());
       await expect(decisionsCount(page)).toHaveText(String(before));

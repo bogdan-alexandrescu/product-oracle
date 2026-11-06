@@ -29,7 +29,7 @@ _STOP_ACTION = {
     "prd_review": "Review the PRD",
     "eng_dates": "Review the dates",
     "roadmap_items": "Check the roadmap items",
-    "baseline_confirm": "Confirm the baseline",
+    "baseline_confirm": "Confirm the Ground Truth",
 }
 
 

@@ -12,6 +12,7 @@ import { MarkForItem, WithFeatureMarks } from "@/components/current-state/Curren
 import { Icon } from "@/components/ds/Icon";
 import { Button } from "@/components/ds/Button";
 import { Dialog } from "@/components/ds/Dialog";
+import { InfoTip } from "@/components/ds/InfoTip";
 import { setToastPlace, toast } from "@/components/ds/Toast";
 import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
 import { usePhone } from "@/components/simple/FlowViews";
@@ -872,11 +873,12 @@ export default function SimpleHome() {
            * rail's Decisions count is everything in the one list. Said plainly when they differ. */}
           {waiting.data && waiting.data.items.length !== decisionCount && allBesides(waiting.data.items) && (
             <p data-testid="home-summary-all" className="simple-small mt-2">
-              In all, {waiting.data.items.length} {waiting.data.items.length === 1 ? "thing waits" : "things wait"} on you: the{" "}
               <Link href="/simple/decisions" className="simple-link">
-                Decisions
+                {waiting.data.items.length} in all
               </Link>{" "}
-              count also counts {allBesides(waiting.data.items)}.
+              <InfoTip label="what waits on you" align="start">
+                In all, {waiting.data.items.length} {waiting.data.items.length === 1 ? "thing waits" : "things wait"} on you: the Decisions count also counts {allBesides(waiting.data.items)}.
+              </InfoTip>
             </p>
           )}
           {myDrafts.map((draft) => (

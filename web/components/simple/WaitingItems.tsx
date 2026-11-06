@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { InfoTip } from "@/components/ds/InfoTip";
 import { toast } from "@/components/ds/Toast";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { fixChange, OP_WORDS, type BrokenLink, type FixOp } from "@/lib/simple-home";
@@ -149,8 +150,16 @@ export function WaitingRow({ item }: { item: WaitingItem }) {
         <span className="break-words">
           <span className="text-text2">{WAITING_KIND[item.kind]} · </span>
           {item.title}
+          {/* port-AN 5: the row's why sits in its (i), so the one list stays one line a row. */}
+          {item.detail && (
+            <>
+              {" "}
+              <InfoTip label={item.title} testId="waiting-detail" align="start">
+                {item.detail}
+              </InfoTip>
+            </>
+          )}
         </span>
-        {item.detail && <span className="simple-small break-words">{item.detail}</span>}
       </div>
       <div className="flex flex-wrap gap-2 max-[600px]:w-full">
         {item.kind === "broken_link" ? (

@@ -12,7 +12,7 @@ const STOP_ACTION: Record<string, string> = {
   prd_review: "Review the PRD",
   eng_dates: "Review the dates",
   roadmap_items: "Check the roadmap items",
-  baseline_confirm: "Confirm the baseline",
+  baseline_confirm: "Confirm the Ground Truth",
 };
 
 /** "Nov 4", with the year when it is not this year's in the company's time zone ("Jan 8, 2027"). */
