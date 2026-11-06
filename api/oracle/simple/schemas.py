@@ -1259,7 +1259,8 @@ class OnePagerFix(BaseModel):
     ``words`` is its button ("Use 6")."""
 
     action: Literal["set_section_number"]
-    # {document_id, section (its key), said (the words the number is in)}.
+    # {document_id, section (its key), said (the words the number is in), part ("heading"
+    # when the number is in the section's heading; absent: its text)}.
     target: dict[str, str]
     before: str
     value: str

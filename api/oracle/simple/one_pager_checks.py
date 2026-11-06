@@ -16,7 +16,8 @@ on every read and :func:`problem_check` on the job's answer.
 - **Numbers that don't add up** (:func:`numbers`): a per-unit target times the stated units
   against a company-wide target, and a count said in words against the items listed. Each
   carries its fix (:func:`set_number`): the count set to the items listed, the company-wide
-  target to what its parts add up to.
+  target to what its parts add up to; a count in a section's heading ("Later · 8 items") is
+  set in the heading (``part`` "heading"; owner, Nov 5, 'Fix the heading too').
 
 The "Needs a look" items (:class:`Look`) are the PRD's owners' only; the page renders them
 as one list, which other checks (the Definition of Done quality checks) can join.
@@ -60,7 +61,8 @@ class Look:
     source_keys: list[str] = field(default_factory=list)
     # A "numbers" item's one-click fix (owner, Nov 5): the number ``before`` in the words
     # ``said`` of the section ``section`` set to ``value`` (oracle.simple.one_pager's
-    # set_section_number); None when the number is not in a section's text (a heading).
+    # set_section_number), ``part`` "heading" when the number is in the section's heading;
+    # None when the words are in neither.
     fix: dict[str, str] | None = None
 
 
@@ -612,10 +614,13 @@ def set_number(body: str, said: str, value: str) -> str | None:
     return None if m is None else body[: m.start()] + value + body[m.end() :]
 
 
-def _fix(sec: Section, said: str, before: str, value: float) -> dict[str, str] | None:
-    if _number_at(sec.body_md or "", said) is None:
+def _fix(
+    sec: Section, said: str, before: str, value: float, heading: bool = False
+) -> dict[str, str] | None:
+    if _number_at((sec.heading if heading else sec.body_md) or "", said) is None:
         return None
-    return {"section": sec.section_key, "said": said, "before": before, "value": _n(value)}
+    fix = {"section": sec.section_key, "said": said, "before": before, "value": _n(value)}
+    return fix | {"part": "heading"} if heading else fix
 
 
 def numbers(sections: list[Section]) -> list[Look]:
@@ -627,11 +632,12 @@ def numbers(sections: list[Section]) -> list[Look]:
         head = _plain(sec.heading or "")
         hm = _HEAD_COUNT.search(head)
         shown = int(hm.group("n")) if hm else None
-        if shown is not None and listed and shown != listed:
+        if shown is not None and hm is not None and listed and shown != listed:
             looks.append(Look(
                 "numbers",
                 f"“{head}” says {shown} items, but it lists {listed}.",
                 [head], [sec.section_key],
+                _fix(sec, head[hm.start("n"):hm.end()], hm.group("n"), listed, heading=True),
             ))  # fmt: skip
         target = shown if shown is not None else listed
         if not target:
@@ -653,7 +659,8 @@ def numbers(sections: list[Section]) -> list[Look]:
                 looks.append(Look(
                     "numbers",
                     f"“{said}” says {_n(n)}, but “{head}” shows {target} items.",
-                    [head], [sec.section_key], _fix(sec, said, m.group("n"), target),
+                    [head], [sec.section_key],
+                    _fix(sec, said, m.group("n"), target, heading=s is head),
                 ))  # fmt: skip
     looks += _per_unit(sections)
     return looks

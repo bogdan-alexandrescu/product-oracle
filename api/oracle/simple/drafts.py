@@ -1176,7 +1176,10 @@ async def _submit_sections(
         )
     )
     try:
-        markdown = one_pager.patched_markdown(base, secs, (d.overlay or {}).get("sections") or {})
+        ov = d.overlay or {}
+        markdown = one_pager.patched_markdown(
+            base, secs, ov.get("sections") or {}, ov.get("headings") or {}
+        )
     except one_pager.ChangeError as e:
         raise DraftError(e.status, e.detail) from e
     result = await docs_service.import_draft(

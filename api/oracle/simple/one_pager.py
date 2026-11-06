@@ -29,7 +29,11 @@ count set to the items listed, the company-wide target to what its parts add up 
 change engine's ``set_section_number`` op: the number in the words ``said`` of one section,
 through the same working draft, with the same rights, Undo and approval as a line edit; a
 stale ``before`` is 409 naming who changed the section. The item clears for those who see
-the draft (the numbers are checked on the drafted sections).
+the draft (the numbers are checked on the drafted sections). A count in the section's
+heading ("Later · 8 items" over six listed; owner, Nov 5, 'Fix the heading too') is set the
+same way (``target.part`` "heading"): the draft holds the new heading
+(``overlay["headings"]``: {key: heading}), the one-pager reads it, and submitting the draft
+imports it under the same section key.
 
 **Remind** (owner, 2026-10-26): on a submitted draft, the PRD's owners (company owners, its
 track owners) and its decider press Remind (:func:`remind`): each reviewer the draft waits
@@ -1145,7 +1149,8 @@ def _section_body(b: Built, d: SimpleDraft | None, key: str) -> tuple[str, str] 
     if sec is None:
         return None
     patched = ((d.overlay or {}).get("sections") or {}) if d else {}
-    return sec.heading, patched.get(key, sec.body_md)
+    heads = ((d.overlay or {}).get("headings") or {}) if d else {}
+    return heads.get(key, sec.heading), patched.get(key, sec.body_md)
 
 
 def _spans(body: str) -> tuple[list[str], bool]:
@@ -1436,9 +1441,15 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
         for c in await db.scalars(select(Citation).where(Citation.version_id == b.version.id))
     }
     patched = ((d.overlay or {}).get("sections") or {}) if sees and d else {}
+    # A heading's count fixed in the draft (owner, Nov 5): the drafted heading.
+    heads = ((d.overlay or {}).get("headings") or {}) if sees and d else {}
     checked = [
-        Section(section_key=x.section_key, heading=x.heading, body_md=patched[x.section_key])
-        if x.section_key in patched
+        Section(
+            section_key=x.section_key,
+            heading=heads.get(x.section_key, x.heading),
+            body_md=patched.get(x.section_key, x.body_md),
+        )
+        if x.section_key in patched or x.section_key in heads
         else x
         for x in b.sections
     ]
@@ -1448,9 +1459,11 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
         fix = None
         if x.fix is not None:
             f = x.fix
+            part = f.get("part", "body")
             p = next(
                 (c for c in fixes if c.target.get("section") == f["section"]
-                 and c.target.get("said") == f["said"]),
+                 and c.target.get("said") == f["said"]
+                 and c.target.get("part", "body") == part),
                 None,
             )  # fmt: skip
             fix = OnePagerFix(
@@ -1459,6 +1472,7 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
                     "document_id": str(document.id),
                     "section": f["section"],
                     "said": f["said"],
+                    **({"part": part} if part == "heading" else {}),
                 },
                 before=f["before"],
                 value=f["value"],
@@ -1527,7 +1541,9 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
     used = {k for blk in page for x in blk["lines"] for k in x["source_keys"]}
     sources = [
         OnePagerSource(
-            key=x.section_key, heading=x.heading, body=patched.get(x.section_key, x.body_md)
+            key=x.section_key,
+            heading=heads.get(x.section_key, x.heading),
+            body=patched.get(x.section_key, x.body_md),
         )  # fmt: skip
         for x in b.sections
         if x.section_key in used
@@ -1693,7 +1709,7 @@ def _write(d: SimpleDraft, b: Built, line_id: str, values: dict[str, Any]) -> No
             secs.pop(k, None)
         else:
             secs[k] = p["body"]
-    d.overlay = {"sections": secs, "lines": lines}
+    d.overlay = {**ov, "sections": secs, "lines": lines}
 
 
 async def _current(
@@ -1965,6 +1981,8 @@ async def undo(db, principal, c: SimpleChange):
 # ``said`` of one section set to ``value``, through the PRD's working draft as edit_line;
 # a one-pager line resting on the section and saying the same words is set with it, so
 # the line and its section never disagree. The same rights, Undo and approval as a line.
+# ``target.part`` "heading" (owner, Nov 5, 'Fix the heading too'): the number is in the
+# section's heading ("Later · 8 items"); the draft holds the new heading.
 
 
 def _number_values(b: Built, d: SimpleDraft | None, key: str) -> dict[str, Any]:
@@ -2008,7 +2026,7 @@ async def _number_conflict(
         409,
         SimpleChangeConflict(
             message=message,
-            current={"section": key, "body": hb[1] if hb else ""},
+            current={"section": key, "heading": hb[0] if hb else "", "body": hb[1] if hb else ""},
             changed_by=by,
             changed_at=last.at if last is not None else None,
         ).model_dump(mode="json"),
@@ -2016,10 +2034,11 @@ async def _number_conflict(
 
 
 def _write_number(d: SimpleDraft, b: Built, values: dict[str, Any]) -> None:
-    """The section and its lines, together (a value equal to the published one leaves the
-    draft)."""
+    """The section (its heading and words) and its lines, together (a value equal to the
+    published one leaves the draft)."""
     ov = dict(d.overlay or {})
     secs, lines = dict(ov.get("sections") or {}), dict(ov.get("lines") or {})
+    heads = dict(ov.get("headings") or {})
     published = _lines(b)
     for line_id, text in (values.get("lines") or {}).items():
         if text == published.get(line_id, {}).get("text"):
@@ -2032,7 +2051,14 @@ def _write_number(d: SimpleDraft, b: Built, values: dict[str, Any]) -> None:
             secs.pop(k, None)
         else:
             secs[k] = p["body"]
-    d.overlay = {"sections": secs, "lines": lines}
+        if sec is not None and p.get("heading", sec.heading) == sec.heading:
+            heads.pop(k, None)
+        elif sec is not None:
+            heads[k] = p["heading"]
+    ov = {**ov, "sections": secs, "lines": lines, "headings": heads}
+    if not heads:
+        ov.pop("headings")
+    d.overlay = ov
 
 
 async def _apply_number(db, c: SimpleChange, b: Built, values, session, undo=False) -> None:
@@ -2058,10 +2084,13 @@ async def _create_number(
     me, now = changes._me(principal), company_time.now()
     t = body.target or {}
     key, said = str(t.get("section") or ""), " ".join(str(t.get("said") or "").split())
+    part = str(t.get("part") or "body")
     old = str(body.before.get("number") or "").strip()
     new = str(body.after.get("number") or "").strip()
     if not key or not said:
         raise ChangeError(422, "target: the section and the words the number is in")
+    if part not in ("body", "heading"):
+        raise ChangeError(422, "target.part: body or heading")
     if not re.fullmatch(r"\d[\d,]*(?:\.\d+)?", new) or len(new) > 20:
         raise ChangeError(422, "after.number: a number")
     if not old:
@@ -2076,18 +2105,19 @@ async def _create_number(
     if not applies and not has_role(principal.role, "commenter"):
         raise ChangeError(403, "Viewers read the one-pager")
     before = _number_values(b, d if sees else None, key)
-    body_now = before["sections"][key]["body"]
+    cur = before["sections"][key]
     # A number other than the one its words begin with is stale, as words no longer there.
     stale = said.split()[0].lower() != old.lower()
-    patched = None if stale else one_pager_checks.set_number(body_now, said, new)
+    patched = None if stale else one_pager_checks.set_number(cur[part], said, new)
     if patched is None:
         raise await _number_conflict(
             db, b, d if sees else None, t, "This number changed since you read it"
         )
     after = {
-        "sections": {key: {"heading": before["sections"][key]["heading"], "body": patched}},
+        "sections": {key: {**cur, part: patched}},
+        # A heading's count is no line's words: the lines stay as they are.
         "lines": {
-            i: one_pager_checks.set_number(text, said, new) or text
+            i: text if part == "heading" else one_pager_checks.set_number(text, said, new) or text
             for i, text in before["lines"].items()
         },
     }
@@ -2102,6 +2132,7 @@ async def _create_number(
             "document_id": str(document.id),
             "section": key,
             "said": said,
+            **({"part": part} if part == "heading" else {}),
             "version": b.version.number,
         },
         before=before,
@@ -2139,10 +2170,27 @@ async def _create_number(
 
 
 def patched_markdown(
-    base: DocumentVersion, sections: list[Section], patched: dict[str, str]
+    base: DocumentVersion,
+    sections: list[Section],
+    patched: dict[str, str],
+    headings: dict[str, str] | None = None,
 ) -> str:
-    """The base version's markdown with each patched section's body replaced."""
+    """The base version's markdown with each patched section's body replaced, and each
+    drafted heading (``headings``: key -> heading) written over its own, its ``{#key}`` kept
+    so the section's key and links do not change."""
     md = base.markdown
+    unpatched = "Section {!r} could not be patched; open the detailed view to edit it"
+    for sec in sections:
+        head = (headings or {}).get(sec.section_key)
+        if head is None or head == sec.heading:
+            continue
+        key = re.escape(sec.section_key)
+        line = re.compile(
+            rf"^(#{{1,6}}[ \t]+){re.escape(sec.heading)}([ \t]*\{{#{key}\}}[ \t]*)$", re.M
+        )
+        md, n = line.subn(lambda m, h=head: m.group(1) + h + m.group(2), md, count=1)
+        if not n:
+            raise ChangeError(409, unpatched.format(sec.heading))
     for sec in sections:
         new = patched.get(sec.section_key)
         if new is None or new == sec.body_md:
@@ -2151,10 +2199,7 @@ def patched_markdown(
         if old and old in md:
             md = md.replace(old, new.strip("\n"), 1)
         else:
-            raise ChangeError(
-                409,
-                f"Section {sec.heading!r} could not be patched; open the detailed view to edit it",
-            )
+            raise ChangeError(409, unpatched.format(sec.heading))
     return md
 
 
