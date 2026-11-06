@@ -444,18 +444,41 @@ function mapToBlocks(sections: Sec[]): Record<string, Sec[]> {
 /** As one_pager._facts: a section's bullets, else its sentences; citations resolved, as the
  * PRD's PDF resolves them (never a raw "[c:id]" on a line). */
 function factsOf(sec: Sec): string[] {
-  const body = uncomment(resolved(sec.body));
-  const bullets = body
-    .split("\n")
-    .map((l) => FACT_BULLET.exec(l)?.[1])
-    .filter((x): x is string => !!x)
-    .map(plain)
-    .filter(Boolean);
-  if (bullets.length) return bullets;
-  return plain(body)
+  // As one_pager._facts: bullets and table body rows (one line each), else sentences.
+  const { rows, rest } = tablesOf(uncomment(resolved(sec.body)));
+  const bullets = rest.map((l) => FACT_BULLET.exec(l)?.[1]).filter((x): x is string => !!x).map((x) => unpiped(mdPlain(x)));
+  const facts = [...bullets, ...rows.map(rowLine)].filter((x) => x && !templateOnly(x));
+  if (facts.length) return facts;
+  return mdPlain(rest.join("\n"))
     .split(SENTENCE)
-    .map((s) => s.trim())
-    .filter(Boolean);
+    .map((s) => unpiped(s.trim()))
+    .filter((x) => x && !templateOnly(x));
+}
+
+/** As one_pager._MD/_plain: no "**", "_" or "`" marks, a link's words only, no footnote marks. */
+const MD = /[*_`]+|\[([^\]]*)\]\([^)]*\)|\[\^?[\w-]+\]/g;
+const mdPlain = (t: string) => plain(t.replace(MD, (_m, g: string | undefined) => g ?? ""));
+const TABLE_SEP = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/;
+const cellsOf = (row: string) => row.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "").split(/(?<!\\)\|/).map((c) => c.trim());
+const rowLine = (cells: string[]) => cells.map((c) => mdPlain(c.replace(/\\\|/g, "/")).replace(/^[\s|]+|[\s|]+$/g, "")).filter(Boolean).slice(0, 2).join(": ");
+const unpiped = (text: string) => {
+  const t = text.trim();
+  return (t.startsWith("|") || t.endsWith("|") ? (t.replace(/^[\s|]+|[\s|]+$/g, "").includes("|") ? rowLine(cellsOf(t)) : t) : t).replace(/^[\s|]+|[\s|]+$/g, "");
+};
+/** As one_pager._tables: a table's body rows; its header and separator rows are never a line. */
+function tablesOf(md: string): { rows: string[][]; rest: string[] } {
+  const lines = md.split("\n");
+  const rows: string[][] = [];
+  const rest: string[] = [];
+  for (let i = 0; i < lines.length; ) {
+    if (lines[i].includes("|") && i + 1 < lines.length && TABLE_SEP.test(lines[i + 1])) {
+      i += 2;
+      while (i < lines.length && lines[i].includes("|") && lines[i].trim()) rows.push(cellsOf(lines[i++]));
+      continue;
+    }
+    rest.push(lines[i++]);
+  }
+  return { rows, rest };
 }
 
 /** As one_pager._words/clip: a line held to its words, cut at a word boundary with "…". */
