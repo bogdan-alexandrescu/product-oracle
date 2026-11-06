@@ -65,7 +65,8 @@ function Row({ e, mayPurge, onGone }: { e: Entry; mayPurge: boolean; onGone: () 
           <ul aria-label={`Went with ${e.root.title}`} className="mt-1 flex flex-col gap-0.5 text-sm">
             {e.items.map((i) => (
               <li key={i.id} className="flex min-w-0 items-baseline gap-2">
-                <span className="flex-none text-[13px] text-text2">{itemKind(i)}</span>
+                {/* A run's title says it is a run ("The run of Oct 17 that wrote …"). */}
+                {i.type !== "run" && <span className="flex-none text-[13px] text-text2">{itemKind(i)}</span>}
                 {/* F-69: a run by the same title the delete dialog gave it. */}
                 <span className="min-w-0 break-words">{itemTitle(i, e.root.title)}</span>
               </li>

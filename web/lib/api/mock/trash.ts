@@ -339,12 +339,13 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
   // The mock has no publications: a document is "published" once a version is approved
   // and it is a PRD (enough for the second confirmation in the dialog).
   const published = docs.some((d) => d.kind === "prd" && ctx.versions.some((v) => v.document_id === d.id && v.approved_at));
+  // qa4-docs-26, F-69, as oracle.trash.service._said: a run says when it ran and what it wrote,
+  // in the delete dialog and in Trash.
+  const said = items.map((i) => {
+    const r = i.type === "run" ? runs.find((x) => x.id === i.id) : undefined;
+    return r ? { ...i, created_at: r.created_at, wrote: docs.find((d) => d.slug === r.document_slug)?.title ?? null } : i;
+  });
   if (isDependents) {
-    // qa4-docs-26, as oracle.trash.service.preview: a run says when it ran and what it wrote.
-    const said = items.map((i) => {
-      const r = i.type === "run" ? runs.find((x) => x.id === i.id) : undefined;
-      return r ? { ...i, created_at: r.created_at, wrote: docs.find((d) => d.slug === r.document_slug)?.title ?? null } : i;
-    });
     const out: Schemas["DependentsOut"] = { root, items: said, published, working_runs: working.map((r) => r.id) };
     return json(200, out);
   }
@@ -356,7 +357,7 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
   const intakeIds = new Set(intakes.map((i) => i.id));
   const entry: TrashEntryRow = {
     out: {
-      id: ctx.uuid(), root, items, deleted_by: ctx.me.id, deleted_by_name: ctx.me.email, deleted_at: now,
+      id: ctx.uuid(), root, items: said, deleted_by: ctx.me.id, deleted_by_name: ctx.me.email, deleted_at: now,
       reason: q.get("reason"), published,
       purge_after: new Date(new Date(now).getTime() + RETENTION_DAYS * DAY_MS).toISOString(),
     },
