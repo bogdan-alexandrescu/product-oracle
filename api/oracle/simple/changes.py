@@ -122,6 +122,8 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "restore": ("cut",),
     "edit_title": ("title",),
     "edit_outcome": ("outcome",),
+    # build-feature-panel (AN PR 1204): the panel's Notes row, at most 500 characters.
+    "edit_note": ("note",),
     "accept_risk": ("risk",),
     "confirm_item": ("draft",),
     "keep_both": ("kept_both",),
@@ -478,7 +480,11 @@ def current_route(
         if d is not None and d.approver_id is not None:
             return [d.approver_id]
         return list(c.routed_to or [])
-    if c.status != "proposed" or c.op in ("edit_line", *QUESTION_OPS) or c.op in KEY_DATE_OPS:
+    if (
+        c.status != "proposed"
+        or c.op in ("edit_line", "edit_goal_milestone", *QUESTION_OPS)
+        or c.op in KEY_DATE_OPS
+    ):
         return list(c.routed_to or [])
     if c.op == CUT_ALL:
         cut = cut_entries(c, by_id)
@@ -597,6 +603,44 @@ def dependents(entry: service.Entry, by_id: dict[uuid.UUID, service.Entry]) -> l
     return out
 
 
+def _seen_milestone(m: Any) -> tuple | None:
+    """A milestone as the item reads it: its name and day, None when it has neither."""
+    if not isinstance(m, dict) or not (m.get("name") or m.get("date")):
+        return None
+    return (m.get("name") or None, _iso(_day(m.get("date"), "milestone.date")))
+
+
+def _no_loop(entry: service.Entry, added: list[str], by_id: dict) -> None:
+    """build-feature-panel (AN's add_link check): 422 when a new dependency of the item
+    already waits on it, directly or through others (it would make a loop)."""
+    version = entry.row.roadmap_version_id
+    for key in added:
+        dep = next(
+            (
+                e
+                for e in by_id.values()
+                if e.row.roadmap_version_id == version
+                and (
+                    e.row.item_key == key or (e.code is not None and e.code.lower() == key.lower())
+                )
+            ),
+            None,
+        )
+        if dep is None or dep is entry:
+            continue
+        seen, queue = {dep.row.id}, deque([dep.row.id])
+        while queue:
+            cur = by_id.get(queue.popleft())
+            for nid in cur.depends_on if cur is not None else []:
+                if nid == entry.row.id:
+                    raise ChangeError(
+                        422, f"{dep.row.title} needs {entry.row.title}: it would make a loop"
+                    )
+                if nid not in seen:
+                    seen.add(nid)
+                    queue.append(nid)
+
+
 async def _plan(
     db: AsyncSession, principal: Any, body: SimpleChangeIn, read_: service.Read
 ) -> tuple[service.Entry, dict[str, Any], dict[str, Any], dict[str, Any]]:
@@ -700,6 +744,12 @@ async def _plan(
         shown = {"start_date": _iso(r.start.date), "end_date": _iso(r.end.date)}
         if seen_ != shown:
             raise await _conflict(db, shown, {str(row.id)}, lead)
+    elif op == "set_milestone" and _seen_milestone(seen_["milestone"]) == _seen_milestone(
+        current["milestone"]
+    ):
+        # build-feature-panel: the milestone as the item reads it (its name and day); the
+        # date engine's own fields (date_source, basis_ids...) are not seen by the panel.
+        pass
     elif seen_ != current:
         raise await _conflict(db, current, {str(row.id)}, lead)
     a = body.after
@@ -796,6 +846,15 @@ async def _plan(
             ):
                 raise ChangeError(422, f"after.{field}: a member of this company")
         after = {field: str(person) if person else None}
+        if after == current:
+            # build-feature-panel: e.g. its track's owner picked when it is so already.
+            raise ChangeError(422, "No change: it is so already")
+    elif op == "edit_note":
+        note = a.get("note")
+        note = str(note).strip() if note is not None else None
+        if note is not None and len(note) > NOTE_MAX:
+            raise ChangeError(422, f"after.note: at most {NOTE_MAX} characters")
+        after = {"note": note or None}
     elif op == "edit_outcome":
         outcome = a.get("outcome")
         outcome = str(outcome).strip() if outcome is not None else None
@@ -838,6 +897,7 @@ async def _plan(
         unknown = await _unknown_keys(db, added, read_)
         if unknown:
             raise ChangeError(422, f"after.depends_on: no item or feature has the key {unknown[0]}")
+        _no_loop(entry, added, by_id)
         after = {"depends_on": clean}
     else:  # accept_risk
         if target.get("flag") not in FLAG_KINDS:
@@ -1044,6 +1104,7 @@ async def create(
         additions,
         agenda,
         goal_asks,
+        goal_milestones,
         key_dates,
         one_pager,
         questions,
@@ -1066,6 +1127,8 @@ async def create(
         return await trash_items.create_change(db, principal, body)
     if body.op in goal_asks.OPS:
         return await goal_asks.create_change(db, principal, body)
+    if body.op in goal_milestones.OPS:
+        return await goal_milestones.create_change(db, principal, body)
     me, now = _me(principal), company_time.now()
     ids = [_uuid(body.target.get("item_id"), "item_id")]
     if body.op in FIXES and body.target.get("subject"):
@@ -1423,9 +1486,7 @@ class _View:
         if c.op in one_pager.OPS:
             return one_pager.may_decide(self.principal, c)
         if c.op in goal_milestones.OPS:
-            return has_role(self.principal.role, "owner") or self.me in self.owners.get(
-                c.document_id, set()
-            )
+            return goal_milestones.may_decide(self.principal, c, self)
         if c.op == "delete_goal":
             from oracle.simple import trash_items
 

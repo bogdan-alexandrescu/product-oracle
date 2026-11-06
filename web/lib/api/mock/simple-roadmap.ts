@@ -62,6 +62,8 @@ interface SeedItem {
   risks?: { flag: Flag["kind"]; note: string; subject?: string | null }[];
   /** Simple S3a's change engine (./simple-changes.ts) edits these. */
   outcome?: string | null;
+  /** build-feature-panel (AN PR 1204): the item's notes (op edit_note), the panel's Notes row. */
+  note?: string | null;
   position?: number;
   /** S4 (the floating card): the priority's rationale and the PRD section it came from. */
   why?: string;
@@ -249,6 +251,12 @@ const ROADMAPS: Record<string, { title: string; visibility: "company" | "approve
   "onboarding-roadmap": { title: "Onboarding roadmap", visibility: "company", prd: "Guided setup", draft: 2 },
   "pricing-roadmap": { title: "Pricing roadmap", visibility: "approvers", prd: "Plan changes", draft: 3 },
 };
+/**
+ * plan-open-from-simple: an item's roadmap as the API names it, by its document's slug, the one
+ * the Plan's rows carry (the Alerts roadmap is the usage-alerts-roadmap document); the picker
+ * keeps the mock's own key.
+ */
+const ROADMAP_DOC_SLUG: Record<string, string> = { "alerts-roadmap": "usage-alerts-roadmap" };
 /** S7 adds Keep alerts quiet, a goal with no items yet (Oracle suggested features for it on its own). */
 export const GOALS: Record<string, string> = { "grow-retention": "Grow retention", "faster-activation": "Faster activation", "quiet-alerts": "Keep alerts quiet" };
 /** roadmap-talk's goals (the "roadmap-talk" scenario's items name them); known once such an item is seeded. */
@@ -342,6 +350,8 @@ const METRICS: Record<string, string> = { "grow-retention": "Teams active after 
 const PLAN_GOALS: Record<string, string> = { growth: "Growth" };
 /** one-feature-panel: each goal's target and date (invented), as the goal edit reads them. */
 const TARGETS: Record<string, [string, string]> = { "grow-retention": ["70% of teams", "2027-03-31"], "faster-activation": ["2 days", "2027-02-26"], "quiet-alerts": ["Under 10% of teams", "2027-03-31"] };
+/** build-feature-panel (AN PR 1204): each goal's latest reading and unit (invented), the panel's Reading row. */
+const READINGS: Record<string, { current: number; unit: string }> = { "grow-retention": { current: 61, unit: "%" }, "faster-activation": { current: 3, unit: "days" } };
 export type RoadmapGoalFields = { title: string; metric: string | null; target: string | null; due: string | null };
 /** A goal's key from its id (the goal edit takes either kind of goal, as the API's one goal entity):
  * a roadmap goal's, or a goal bucket's of that key. */
@@ -1220,12 +1230,12 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     const sliced = slicesOf(s, rm.prd.toLowerCase().replace(/ /g, "-"));
     const suggestion = itemSuggestion(db, db.ids[s.key]);
     return {
-      id: db.ids[s.key], key: s.key, title: s.title, outcome: s.outcome ?? null, horizon: s.horizon,
+      id: db.ids[s.key], key: s.key, title: s.title, outcome: s.outcome ?? null, note: s.note ?? null, horizon: s.horizon,
       estimate_pending: !!s.estimate_pending,
       code: prdCode(s.section),
-      roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: s.roadmap, title: rm.title },
+      roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: ROADMAP_DOC_SLUG[s.roadmap] ?? s.roadmap, title: rm.title },
       prd: ownPrd(s),
-      goal: s.goal && !inTrash(s.goal) ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, ...roadmapGoal(reader.full, s.goal), position: goalPositionOf(s.goal) } : null,
+      goal: s.goal && !inTrash(s.goal) ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, ...roadmapGoal(reader.full, s.goal), position: goalPositionOf(s.goal), ...READINGS[s.goal] } : null,
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
       confidence: s.confidence ?? null,
       status: s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned"),
@@ -1285,7 +1295,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   const shown = items.filter(
     (i) =>
       (q.get("draft_roadmap") === "1" || !onDraft.has(i.id)) &&
-      (!q.get("roadmap") || i.roadmap.slug === chosen) &&
+      (!q.get("roadmap") || i.roadmap.slug === (ROADMAP_DOC_SLUG[chosen ?? ""] ?? chosen)) &&
       (!prd || i.prd?.slug === prd || i.prd?.id === prd) &&
       (!goal || i.goal?.key === goal || i.goal?.id === goal) &&
       (!track || i.track?.id === track) &&
@@ -1333,7 +1343,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       ),
     ],
     // build-milestones-on-roadmap: the shown roadmaps' milestones per goal (a PRD's among them).
-    goal_milestones: (db.goal_milestones ?? []).filter((m) => !m.deleted && (chosen ? m.roadmap === chosen : readable.includes(m.roadmap))).map((x) => milestoneOut(x, db.ids, role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)))),
+    goal_milestones: (db.goal_milestones ?? []).filter((m) => !m.deleted && (chosen ? m.roadmap === chosen : readable.includes(m.roadmap))).map((x) => milestoneOut(x, db.ids, role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)), role !== "viewer")),
     span: db.plan ? planSpan() : null,
     // A working draft belongs to one roadmap: a chosen roadmap's read carries its own only.
     changes_in_review: chosen ? (reader.hiddenBy[roadmapId(chosen)] ?? 0) : reader.hidden,

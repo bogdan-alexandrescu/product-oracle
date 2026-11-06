@@ -57,6 +57,8 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             return f"cut {x} and its dependents {names}"
         case "edit_title":
             return f"renamed {x} to {title}" if title else f"renamed {x}"
+        case "edit_note":
+            return f"changed the notes of {x}"
         case "edit_outcome":
             return f"changed the outcome of {x}"
         case "accept_risk":
@@ -146,6 +148,8 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
         # Goal milestones: a PRD's own milestone's date or counts-when rule, asked of its owner.
         case "edit_goal_milestone":
             name = _quoted(target.get("name")) or item
+            if "milestone" in before and after.get("milestone") is None:
+                return f"removed the milestone {name}" if name else "removed a milestone"
             return f"changed the milestone {name}" if name else "changed a milestone"
         # trash-features-goals: a feature deleted to Trash (oracle.simple.trash_items).
         case "delete_item":

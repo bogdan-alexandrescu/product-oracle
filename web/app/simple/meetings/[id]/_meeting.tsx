@@ -23,6 +23,7 @@ import { usePhone } from "../../priorities/priorities";
 import { DeliveryLine, emailWords, slackWords } from "../_delivery";
 import { DecidedItem, LINK, momentWords } from "../_flow";
 import { DraftDates } from "./_draft";
+import { FeaturePanel, type PanelFeature } from "../../roadmap/_panel";
 import { SimpleSelect } from "@/components/simple/meetings/SimpleSelect";
 
 // Chat actions (notes, open questions, the agenda's next and skipped items): optional until schema.d.ts carries them.
@@ -184,6 +185,8 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   const name = namer(m);
   const { me, can } = useMe();
   const phone = usePhone();
+  // build-feature-panel (AN PR 1204 review 5): a feature named on the agenda or the Roadmap step opens the one feature panel.
+  const [feature, setFeature] = useState<PanelFeature | null>(null);
   // walkc-meeting r2 (5a): an invited attendee has not joined until they press Join.
   const joined = m.attendees.some((a) => a.id === me?.user_id && a.joined);
   // qa-simple-decide-2: Approve says what it approves (the one-pager's edits in this meeting); none: no button.
@@ -251,6 +254,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   const roadmapRefresh = `${cardTick}|${m.meeting_decisions.map((d) => d.id).join()}|${m.drafts.map((d) => `${d.status}-${d.changes}`).join()}`;
   return (
     <div className="flex min-h-full flex-col">
+      {feature && <FeaturePanel key={feature.id ?? feature.name} feature={feature} phone={phone} canChange={can("create_simple_change")} onClose={() => setFeature(null)} />}
       {/* qa-simple-decide-48: on a phone the header scrolls away with the page (not sticky). */}
       <header className="sticky top-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-3 max-[600px]:static max-[600px]:gap-y-1 max-[600px]:py-2" aria-label="Meeting">
         {/* qa4-simple-decide-27: the back link and the title share one line and one baseline. */}
@@ -369,7 +373,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
           )}
         </div>
       )}
-      <AgendaStrip agenda={m.agenda} />
+      <AgendaStrip agenda={m.agenda} open={setFeature} />
       <div className="grid flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_380px]">
         {/* qa-simple-decide-49: the app has the one <main>; the stage is a section. */}
         <section aria-label="Stage" className="min-w-0">
@@ -387,7 +391,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
               />
             </MeetingClock.Provider>
           )}
-          {step === 1 && <RoadmapSlice m={m} reload={reload} refresh={roadmapRefresh} />}
+          {step === 1 && <RoadmapSlice m={m} reload={reload} refresh={roadmapRefresh} open={setFeature} />}
           {step === 2 && <DecisionsStep m={m} reload={reload} />}
         </section>
         <aside aria-label="Chat column" className="flex min-w-0 flex-col gap-4">
@@ -423,7 +427,16 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
 }
 
 /** The agenda as the meeting's chat changed it ("next: …", "skip …"): every attendee sees it. */
-function AgendaStrip({ agenda }: { agenda?: MeetingAgenda }) {
+/** A feature's name that opens its panel (build-feature-panel). */
+function FeatureName({ id, title, open, strong = false }: { id: string; title: string; open: (f: PanelFeature) => void; strong?: boolean }) {
+  return (
+    <button type="button" className="text-left hover:underline" onClick={() => open({ id, code: "", name: title })}>
+      {strong ? <strong>{title}</strong> : title}
+    </button>
+  );
+}
+
+function AgendaStrip({ agenda, open }: { agenda?: MeetingAgenda; open: (f: PanelFeature) => void }) {
   if (!agenda || (!agenda.next && agenda.skipped.length === 0)) return null;
   return (
     <div role="status" aria-label="Agenda" data-testid="agenda-strip" className="flex flex-wrap items-center gap-x-6 gap-y-1 border-b border-line px-4 py-2 text-base [overflow-wrap:anywhere]">
@@ -431,7 +444,7 @@ function AgendaStrip({ agenda }: { agenda?: MeetingAgenda }) {
         // The item taken next, with its feature's Current-state pill (the agenda names roadmap items).
         <div className="flex flex-wrap items-center gap-2">
           <p data-testid="agenda-next">
-            <span className="font-semibold">Next:</span> {agenda.next.title}
+            <span className="font-semibold">Next:</span> <FeatureName id={agenda.next.id} title={agenda.next.title} open={open} />
           </p>
           <WithFeatureMarks>
             <MarkFor itemId={agenda.next.id} />
@@ -440,7 +453,13 @@ function AgendaStrip({ agenda }: { agenda?: MeetingAgenda }) {
       )}
       {agenda.skipped.length > 0 && (
         <p data-testid="agenda-skipped" className="text-text2">
-          <span className="font-semibold">Skipped:</span> {agenda.skipped.map((x) => x.title).join(", ")}
+          <span className="font-semibold">Skipped:</span>{" "}
+          {agenda.skipped.map((x, k) => (
+            <span key={x.id}>
+              {k > 0 && ", "}
+              <FeatureName id={x.id} title={x.title} open={open} />
+            </span>
+          ))}
         </p>
       )}
     </div>
@@ -512,7 +531,7 @@ function ChangeMode({ m, busy, onSave }: { m: Meeting; busy: boolean; onSave: (b
 
 const HORIZONS = ["now", "next", "later"] as const;
 
-function RoadmapSlice({ m, reload, refresh }: { m: Meeting; reload: () => Promise<unknown>; refresh: string }) {
+function RoadmapSlice({ m, reload, refresh, open }: { m: Meeting; reload: () => Promise<unknown>; refresh: string; open: (f: PanelFeature) => void }) {
   const zone = useCompanyZone();
   const q = useQuery(`simple-meeting-roadmap|${m.prd.slug}`, () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: { prd: m.prd.slug } } })));
   // walkc-meeting r2 (5d): a card applied in the chat (or another attendee's change) shows here at once.
@@ -572,7 +591,7 @@ function RoadmapSlice({ m, reload, refresh }: { m: Meeting; reload: () => Promis
         {items.map((i) => (
           <li key={i.id} data-item={i.key} className="flex flex-wrap items-center justify-between gap-2 py-2">
             <span className="min-w-0 flex-1">
-              <strong>{i.title}</strong> · {i.status === "cut" ? "Cut" : cap(i.horizon)} · <span className="whitespace-nowrap" data-testid="roadmap-span">{dayWords(i.start.date, zone)} – {dayWords(i.end.date, zone)}</span>
+              <FeatureName id={i.id} title={i.title} open={open} strong /> · {i.status === "cut" ? "Cut" : cap(i.horizon)} · <span className="whitespace-nowrap" data-testid="roadmap-span">{dayWords(i.start.date, zone)} – {dayWords(i.end.date, zone)}</span>
             </span>
             {/* qa-simple-decide-45: a cut item comes back with Restore. */}
             {m.can.change && i.status === "cut" && (

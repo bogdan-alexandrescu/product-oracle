@@ -37,6 +37,9 @@ export function Named({ item }: { item: Pick<Item, "code" | "title"> }) {
 /** "Mar 31, 2027": a goal's date, month first. */
 const dayWords = (day: string) => calendarDay(day, { month: "short", day: "numeric", year: "numeric" });
 
+/** "61%", "3 days": a goal's reading in its unit. */
+const readingWords = (n: number, unit?: string | null) => `${n.toLocaleString("en-US")}${unit ? (unit === "%" ? "%" : ` ${unit}`) : ""}`;
+
 /** One field: its value, and (canChange) a Change button that opens its editor in place. */
 function Field({
   label,
@@ -261,6 +264,29 @@ export function PanelFields({
                 "edit_outcome",
                 { outcome: item.outcome ?? null },
                 { outcome: v || null },
+              )
+            }
+          />
+        )}
+      />
+      <Field
+        label="Notes"
+        testId="card-notes"
+        canChange={canChange}
+        value={item.note ?? <span className="text-text2">No notes yet</span>}
+        editor={(done) => (
+          <TextEdit
+            label="Notes"
+            value={item.note ?? ""}
+            multiline
+            max={500}
+            done={done}
+            save={(v) =>
+              change(
+                "Notes changed",
+                "edit_note",
+                { note: item.note ?? null },
+                { note: v || null },
               )
             }
           />
@@ -497,6 +523,18 @@ export function PanelFields({
               />
             );
           })}
+          {goal.current != null && (
+            // build-feature-panel (AN PR 1204): the goal's latest reading beside its target, read
+            // here and set on the goal ("Today 61% · target 70% by Jun 30, 2027").
+            <>
+              <dt className="text-text2">Reading</dt>
+              <dd className="min-w-0 tnum" data-testid="card-goal-reading">
+                Today {readingWords(goal.current, goal.unit)}
+                {goal.target ? ` · target ${goal.target}` : ""}
+                {goal.due ? ` by ${dayWords(goal.due)}` : ""}
+              </dd>
+            </>
+          )}
         </>
       )}
       <Field
@@ -592,6 +630,7 @@ export function PanelFields({
         {canChange && (
           <AddDependency
             item={item}
+            loops={needsMe(item, items)}
             options={others.filter((o) => !item.depends_on.includes(o.id) && !loose.some((l) => l.found?.id === o.id))}
             add={(key) =>
               change(
@@ -629,11 +668,14 @@ function TextEdit({
   multiline,
   type,
   optional,
+  max,
   save,
   done,
 }: {
   label: string;
   value: string;
+  /** build-feature-panel: the most characters the API takes; past it, Save waits and says so. */
+  max?: number;
   multiline?: boolean;
   /** "date": a day picker (YYYY-MM-DD). */
   type?: "date";
@@ -643,10 +685,12 @@ function TextEdit({
   done: () => void;
 }) {
   const [v, setV] = useState(value);
+  const over = max != null && v.trim().length > max;
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
+        if (over) return;
         done();
         if (v.trim() !== value) void save(v.trim());
       }}
@@ -670,7 +714,12 @@ function TextEdit({
           autoFocus
         />
       )}
-      <SaveCancel onCancel={done} disabled={!multiline && !optional && !v.trim()} />
+      {over && (
+        <span role="alert" data-testid="field-too-long" className="mt-1 block text-sm text-crit">
+          Keep the {label.toLowerCase()} to {max} characters
+        </span>
+      )}
+      <SaveCancel onCancel={done} disabled={over || (!multiline && !optional && !v.trim())} />
     </form>
   );
 }
@@ -689,6 +738,7 @@ export function NameEdit({
     <TextEdit
       label="Name"
       value={item.title}
+      max={200}
       done={done}
       save={(v) =>
         act("Renamed", {
@@ -755,14 +805,33 @@ function DatesEdit({
   );
 }
 
+/** build-feature-panel (AN PR 1204): the features that wait on the item, directly or through others. */
+function needsMe(item: Item, items: Map<string, Item>): Set<string> {
+  const out = new Set<string>();
+  const queue = [item.id];
+  while (queue.length) {
+    const id = queue.shift()!;
+    for (const n of items.get(id)?.needed_by ?? []) {
+      if (n !== item.id && !out.has(n)) {
+        out.add(n);
+        queue.push(n);
+      }
+    }
+  }
+  return out;
+}
+
 /** Add a dependency: a feature of the roadmap by code and name, or another PRD's feature by its key. */
 function AddDependency({
   item,
   options,
+  loops,
   add,
 }: {
   item: Item;
   options: Item[];
+  /** The features that already wait on this one (directly or through others): picked, they would make a loop. */
+  loops: Set<string>;
   add: (key: string) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
@@ -806,8 +875,9 @@ function AddDependency({
       >
         <option value="">Pick a feature</option>
         {options.map((o) => (
-          <option key={o.id} value={o.id}>
+          <option key={o.id} value={o.id} disabled={loops.has(o.id)}>
             {o.code ? `${o.code} ${o.title}` : o.title}
+            {loops.has(o.id) ? " · Needs this one: it would make a loop" : ""}
           </option>
         ))}
       </select>

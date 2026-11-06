@@ -80,6 +80,10 @@ class SimpleGoalRef(BaseModel):
     # (the panel edits how it is measured through that edit, which takes the whole goal).
     target: str | None = None
     due: dt.date | None = None
+    # build-feature-panel (AN PR 1204): the goal's latest reading and its unit (attrs.current,
+    # attrs.unit), for the panel's Reading row ("Today 61% · target 70% by Jun 30, 2027").
+    current: float | None = None
+    unit: str | None = None
 
 
 class SimpleTrackRef(BaseModel):
@@ -279,6 +283,8 @@ class SimpleRoadmapItem(BaseModel):
     code: str | None = None
     title: str
     outcome: str | None = None
+    # build-feature-panel (AN PR 1204): the item's notes (op edit_note), the panel's Notes row.
+    note: str | None = None
     horizon: Literal["now", "next", "later"]
     roadmap: SimpleDocRef
     prd: SimpleDocRef | None = None
@@ -456,6 +462,9 @@ class SimpleGoalMilestone(BaseModel):
     prd_owner: str | None = None
     pending: SimpleMilestonePending | None = None
     can_change: bool = False
+    # milestone-rights: a roadmap's own milestone the reader may not change but may propose
+    # a change to (op edit_goal_milestone, routed to who decides the roadmap).
+    can_propose: bool = False
 
 
 class SimpleGoalMilestoneIn(BaseModel):
@@ -532,6 +541,7 @@ ChangeOp = Literal[
     "restore",
     "edit_title",
     "edit_outcome",
+    "edit_note",
     "accept_date_suggestion",
     "accept_risk",
     "shift_dependents",

@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { toast as dsToast, type ToastAsk } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
-import { CARD_CHANGED_EVENT, GOAL_OPS, sendGoalChanged } from "@/lib/api/simple-chat";
+import { GOAL_OPS, sendCardChanged, sendGoalChanged } from "@/lib/api/simple-chat";
 import { useQuery } from "@/lib/use-query";
 
 import { FloatingCard, type Act } from "./_card";
@@ -61,14 +61,9 @@ export function FeaturePanel({
     }),
   );
   const proposals = useQuery("simple-proposals", () => unwrap(api.GET("/v1/simple/changes", { params: { query: { status: "proposed" } } })));
-  const reload = useCallback(async () => {
-    await Promise.all([roadmap.reload(), proposals.reload()]);
-  }, [roadmap, proposals]);
-  useEffect(() => {
-    const on = () => void reload();
-    window.addEventListener(CARD_CHANGED_EVENT, on);
-    return () => window.removeEventListener(CARD_CHANGED_EVENT, on);
-  }, [reload]);
+  // build-feature-panel (AN PR 1204 review 7): a change made here is said to the whole page
+  // (every query reads again, this panel's among them), so the page behind shows it at once.
+  const reload = useCallback(async () => sendCardChanged(), []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);

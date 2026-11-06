@@ -384,6 +384,7 @@ const OP_WORDS: Record<string, string> = {
   restore: "Restore it",
   edit_title: "Rename it",
   edit_outcome: "Change the outcome",
+  edit_note: "Change the notes",
   accept_date_suggestion: "Accept Oracle's dates",
   accept_risk: "Accept a risk",
   shift_dependents: "Move the dependents",
@@ -391,6 +392,7 @@ const OP_WORDS: Record<string, string> = {
   add_key_date: "Add a key date",
   edit_key_date: "Change a key date",
   remove_key_date: "Remove a key date",
+  edit_goal_milestone: "Change a milestone",
   add_item: "Add an item",
   merge_item: "Merge a duplicate",
   keep_both: "Keep both",
@@ -854,6 +856,15 @@ export function FloatingCard({
       <LooksLike item={item} act={act} canChange={canChange} />
       <div className={wide && !phone ? "grid grid-cols-2 gap-4" : ""}>
         <div>
+          {!canChange && (
+            // build-feature-panel (AN PR 1204): who may only read says so, with a way to suggest a change.
+            <p className="mt-2 rounded-lg bg-surface2 px-3 py-2 text-sm text-text2" data-testid="card-read-only">
+              You can read this feature. Its owner and approvers can change it.{" "}
+              <button type="button" onClick={() => setTalk(true)} className="font-medium text-accent-ink underline">
+                Suggest a change
+              </button>
+            </p>
+          )}
           <PanelFields item={item} items={items} act={act} canChange={canChange} onOpen={onOpen} />
           <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
           {item.slices.length > 0 && (
@@ -1114,7 +1125,7 @@ export function FloatingCard({
       </div>
       <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-3">
         <Link
-          href={`/plan?item=${encodeURIComponent(item.key)}${item.prd ? `&prd=${item.prd.id}` : ""}`}
+          href={`/plan?item=${encodeURIComponent(item.key)}${item.prd ? `&prd=${item.prd.id}` : ""}&roadmap=${encodeURIComponent(item.roadmap.slug)}`}
           className="inline-flex h-8 items-center rounded-lg border border-line-strong bg-surface px-3 text-[14px] leading-none font-semibold whitespace-nowrap hover:bg-surface2"
         >
           Open the detailed view

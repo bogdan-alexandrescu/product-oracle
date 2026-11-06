@@ -49,7 +49,7 @@ export function seedPrdMilestones(): MockMilestone[] {
   ];
 }
 
-export function milestoneOut(m: MockMilestone, ids: Record<string, string>, canChange: boolean): Schemas["SimpleGoalMilestone"] {
+export function milestoneOut(m: MockMilestone, ids: Record<string, string>, canChange: boolean, canPropose = false): Schemas["SimpleGoalMilestone"] {
   return {
     id: m.id,
     roadmap_id: stableUuid(`simple-doc/${m.roadmap}`),
@@ -64,7 +64,32 @@ export function milestoneOut(m: MockMilestone, ids: Record<string, string>, canC
     prd_owner: m.prd?.owner ?? null,
     pending: m.pending ?? null,
     can_change: canChange,
+    can_propose: !m.prd && !canChange && canPropose,
   };
+}
+
+/** goal_milestones: who is not drafts.can_edit is refused a write (they propose instead). */
+const NOT_YOURS = "Only an owner or the roadmap's decider (with none, its owner) changes its milestones";
+
+const GOAL_KEYS = ["grow-retention", "faster-activation", "quiet-alerts"];
+
+/** milestone-rights: a roadmap's own milestone as an edit_goal_milestone proposal holds it (goal_milestones._value). */
+export function milestoneValue(m: MockMilestone, ids: Record<string, string>): Record<string, unknown> {
+  return { name: m.name, date: m.date, goal_id: m.goal ? stableUuid(`simple-goal/${m.goal}`) : null, item_ids: m.gates.map((k) => ids[k]).filter(Boolean), counts_when: m.counts_when };
+}
+
+/** milestone-rights: an accepted edit_goal_milestone writes the milestone (null: removes it). */
+export function writeMilestone(m: MockMilestone, ids: Record<string, string>, v: Record<string, unknown> | null): void {
+  if (!v) {
+    m.deleted = true;
+    return;
+  }
+  const keyOf = (id: unknown) => Object.keys(ids).find((k) => ids[k] === id);
+  m.name = String(v.name);
+  m.date = (v.date as string | null) ?? null;
+  m.goal = v.goal_id ? (GOAL_KEYS.find((g) => stableUuid(`simple-goal/${g}`) === v.goal_id) ?? null) : null;
+  m.gates = ((v.item_ids as string[]) ?? []).map(keyOf).filter((k): k is string => !!k);
+  m.counts_when = String(v.counts_when ?? "");
 }
 
 const json = (status: number, body: unknown): Response => new Response(status === 204 ? null : JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -82,13 +107,12 @@ export async function routeMilestones(
   const list = (db.goal_milestones ??= []);
   const keyOf = (id: string) => Object.keys(db.ids).find((k) => db.ids[k] === id);
   const goalKey = (id: string | null | undefined, goals: string[]) => (id ? (goals.find((g) => stableUuid(`simple-goal/${g}`) === id) ?? null) : null);
-  const GOAL_KEYS = ["grow-retention", "faster-activation", "quiet-alerts"];
   if (me.role === "viewer" || me.role === "commenter") return json(403, { detail: "Requires the approver role" });
   if (!p[4] && req.method === "POST") {
     const b = (await req.json()) as Schemas["SimpleGoalMilestoneIn"];
     const roadmap = slugOf(b.roadmap_id);
     if (!roadmap) return json(404, { detail: "No such roadmap" });
-    if (!canEdit(roadmap)) return json(403, { detail: "Only the roadmap's owners change its milestones" });
+    if (!canEdit(roadmap)) return json(403, { detail: NOT_YOURS });
     const goal = goalKey(b.goal_id, GOAL_KEYS);
     const n = list.filter((m) => m.roadmap === roadmap && m.goal === goal && !m.prd).reduce((a, m) => Math.max(a, Number(m.code.slice(1)) || 0), 0);
     const m: MockMilestone = { id: stableUuid(`simple-gm/${roadmap}/${goal}/${list.length}/${b.name}`), roadmap, code: `M${n + 1}`, name: b.name, date: b.date, goal, gates: (b.item_ids ?? []).map(keyOf).filter((k): k is string => !!k), counts_when: b.counts_when ?? "", progress: "not_started" };
@@ -97,7 +121,7 @@ export async function routeMilestones(
   }
   const m = list.find((x) => x.id === p[4]);
   if (!m) return json(404, { detail: "No such milestone" });
-  if (!canEdit(m.roadmap)) return json(403, { detail: "Only the roadmap's owners change its milestones" });
+  if (!canEdit(m.roadmap)) return json(403, { detail: NOT_YOURS });
   if (p[5] === "restore" && req.method === "POST") {
     m.deleted = false;
     return json(200, milestoneOut(m, db.ids, true));
