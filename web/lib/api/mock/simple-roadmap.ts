@@ -174,6 +174,8 @@ interface SimpleDb {
   /** roadmap-keydates: each PRD's dated milestones as its latest approved version has them
    * (PRD slug -> milestones), read by the server before every request (prdMilestonesOf). */
   prd_milestones?: Record<string, PrdMilestone[]>;
+  /** lane-gt-ui: each baseline feature's code (F-12), by id: an item reads its feature's code (server.ts). */
+  feature_codes?: Record<string, string>;
   /** build-milestones-on-roadmap: each roadmap's milestones per goal (./simple-milestones.ts). */
   goal_milestones?: MockMilestone[];
   /** roadmap-keydates review ("roadmap-keydates-uncoded"): a track milestone record's own day
@@ -1205,7 +1207,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     return {
       id: db.ids[s.key], key: s.key, title: s.title, outcome: s.outcome ?? null, horizon: s.horizon,
       estimate_pending: !!s.estimate_pending,
-      code: prdCode(s.section),
+      // Its feature's code (F-12), else its own PRD section's, as service.load's Entry.code.
+      code: (s.feature_id && db.feature_codes?.[s.feature_id]) || prdCode(s.section),
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: s.roadmap, title: rm.title },
       prd: ownPrd(s),
       goal: s.goal && !inTrash(s.goal) ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, ...roadmapGoal(db, s.goal), position: goalPositionOf(s.goal) } : null,

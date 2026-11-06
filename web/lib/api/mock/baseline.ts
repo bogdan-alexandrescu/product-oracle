@@ -817,13 +817,14 @@ export function setEntityEffort(s: BaselineState, key: string, size: string, use
   updateEntity(s, e, { attrs: { effort } }, { origin: "user", userId, reason: `Engineering check of run ${runId}` });
 }
 
-/** A slug, or a feature code as a PRD names it (F-09), as schemas.KEY_PATTERN. */
+/** A slug, or for a feature its code as a PRD names it (F-09), as schemas.KEY_PATTERN. */
 const KEY_RE = /^(?:[a-z0-9][a-z0-9._-]*|[A-Z]{1,3}-\d+)$/;
 
 /** A person's new entity, as service.create_entity: confirmed and locked, a goal proposed (B2). */
 function createEntity(s: BaselineState, input: Schemas["EntityCreate"], userId: string): EntityRow {
   if (!input.title?.trim()) throw new MockError(422, "title must not be empty");
   if (!input.key || input.key.length > 120 || !KEY_RE.test(input.key)) throw new MockError(422, "key: lowercase letters, digits, . _ -");
+  if (/^[A-Z]/.test(input.key) && input.type !== "feature") throw new MockError(422, "only a feature's key may be a code (F-09)");
   if (s.entities.some((e) => e.type === input.type && e.key === input.key)) throw new MockError(409, `${input.type}:${input.key} already exists`);
   if (input.type === "goal" && input.status === "confirmed") {
     throw new MockError(422, "goals start proposed; confirm them with POST .../confirm");
@@ -1245,13 +1246,19 @@ export async function routeBaseline(
       const key = String(fields.key ?? "");
       if (!String(fields.title ?? "").trim()) return fail(422, "title must not be empty");
       if (!key || key.length > 120 || !KEY_RE.test(key)) return fail(422, "key: lowercase letters, digits, . _ -, or a feature code");
+      if (/^[A-Z]/.test(key) && fields.type !== "feature") return fail(422, "only a feature's key may be a code (F-09)");
+      if ((fields.serves || fields.roadmap_item_id) && fields.type !== "feature") return fail(422, "serves and roadmap_item_id are a feature's");
       if (s.entities.some((e) => e.type === fields.type && e.key === key)) return fail(409, `${String(fields.type)}:${key} already exists`);
     }
+    const payload = { op: input.op, kind: input.kind, fields, reason: input.reason ?? null, origin: "user" };
+    // service.propose: the same change still open is that proposal, never a second one.
+    const open = s.proposals.find((x) => x.status === "open" && JSON.stringify(x.payload) === JSON.stringify(payload) && (x.entity_id ?? null) === (input.entity_id ?? null));
+    if (open) return json(201, proposalOut(open));
     const p: ProposalRow = {
       id: newId(),
       entity_id: input.entity_id ?? null,
       edge_id: input.edge_id ?? null,
-      payload: { op: input.op, kind: input.kind, fields, reason: input.reason ?? null, origin: "user" },
+      payload,
       run_id: null,
       actor: `user:${caller.userId}`,
       status: "open",

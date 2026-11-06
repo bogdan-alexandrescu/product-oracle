@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { Button, Dialog, InfoTip, Notice } from "@/components/ds";
 import { api, unwrap, type GraphOut, type Schemas } from "@/lib/api/client";
 import { named } from "@/lib/codes";
-import { errorMessage } from "@/lib/use-query";
+import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { goalCodes, goalTags } from "./common";
 
@@ -28,9 +28,26 @@ const subject = (f: Flag) => f.item ?? f.feature!;
 const shown = (r: Schemas["GroundTruthRef"]) => (r.code ? `${r.code} ${r.name}` : r.name);
 /** A row's own key, to mark it waiting for approval once a fix was sent. */
 const rowKey = (f: Flag) => `${f.kind}:${subject(f).id ?? subject(f).code ?? subject(f).name}`;
-/** The roadmap item keys a feature links (attrs.roadmap_items, docs/ground-truth.md). */
-const itemsOf = (e: { attrs?: Record<string, unknown> | null }) =>
-  Array.isArray(e.attrs?.roadmap_items) ? (e.attrs.roadmap_items as unknown[]).filter((k): k is string => typeof k === "string") : [];
+/** The roadmap item a flag's Add or Link sets the feature of (unlinked items and slices). */
+const itemOf = (f: Flag) => (f.kind === "unlinked_item" || f.kind === "slice_parent_missing" ? (f.item?.id ?? null) : null);
+/** The code a PRD's feature or slice is added with (F-09, or F-15 for the slice F-15a). */
+const codeOf = (f: Flag) => f.fixes.find((x) => x.action === "add_to_ground_truth" && f.kind !== "unlinked_item")?.target ?? null;
+
+/**
+ * Whether a fix for the flag waits for approval, read from the API so it holds after a reload: an
+ * open proposal adding its feature (by the item it links, else by the PRD's code), or a roadmap
+ * change of its item (its feature, or taking it off) proposed to the roadmap's decider.
+ */
+function waitsOn(f: Flag, proposals: Schemas["ProposalOut"][], changes: Schemas["SimpleChangeOut"][]): boolean {
+  const item = itemOf(f) ?? (f.kind === "runs_today_on_roadmap" ? f.item?.id : null);
+  const code = codeOf(f);
+  const adds = proposals.some((p) => {
+    const fields = (p.payload?.fields ?? {}) as Record<string, unknown>;
+    if (p.payload?.op !== "create" || p.payload?.kind !== "entity" || fields.type !== "feature") return false;
+    return item && f.kind === "unlinked_item" ? fields.roadmap_item_id === item : !!code && fields.key === code;
+  });
+  return adds || (!!item && changes.some((c) => c.target?.item_id === item && ["set_feature", "cut"].includes(c.op)));
+}
 
 /** A key for a new feature from its name, not one the graph has (as page.tsx's addSubgoal). */
 function newKey(name: string, graph: GraphOut | undefined): string {
@@ -52,6 +69,7 @@ type Picking = { flag: Flag; what: "feature" | "goal" };
 export function GroundTruthFlags({
   check,
   graph,
+  proposals,
   canWrite,
   canPropose,
   canChangeRoadmap,
@@ -59,6 +77,8 @@ export function GroundTruthFlags({
 }: {
   check: Check;
   graph: GraphOut | undefined;
+  /** The open baseline proposals: a commenter's Add waits on its own. */
+  proposals: Schemas["ProposalOut"][] | undefined;
   /** Approvers and owners (can("confirm_entity")): add, link, confirm and pick directly. */
   canWrite: boolean;
   /** Commenters (can("create_proposal")): Add to Ground Truth sends a proposal for approvers. */
@@ -74,6 +94,10 @@ export function GroundTruthFlags({
   const [notice, setNotice] = useState<{ text: string; undo?: string } | null>(null);
   // Rows whose fix was sent for approval: no second click until the check changes.
   const [pending, setPending] = useState<Set<string>>(() => new Set());
+  // Roadmap changes proposed to a decider (an item's feature, or taking it off).
+  const proposed = useQuery("gt-proposed-changes", () => unwrap(api.GET("/v1/simple/changes", { params: { query: { status: "proposed" } } })));
+  const reloadProposed = proposed.reload;
+  const waits = (f: Flag) => pending.has(rowKey(f)) || waitsOn(f, proposals ?? [], proposed.data ?? []);
   const wait = (flag: Flag, text: string) => {
     setPending((was) => new Set(was).add(rowKey(flag)));
     return { text };
@@ -89,6 +113,7 @@ export function GroundTruthFlags({
       setNotice(await run());
       setPicking(null);
       onChanged();
+      void reloadProposed();
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -97,32 +122,26 @@ export function GroundTruthFlags({
   }
 
   /**
-   * Add to Ground Truth, in one change: a roadmap item's feature lists the item's key (so a
-   * published item is linked too); a PRD's feature or slice keeps its code (F-09) and then serves
-   * the goal its PRD gives. Approvers and owners add at once; a commenter's add is a proposal with
-   * the same link, which clears the flag once approved (the owner, Nov 5).
+   * Add to Ground Truth, in one call: the feature, the goal its PRD gives it and, for a roadmap item,
+   * the item's own feature (set in its roadmap's working draft, so a published item is linked too).
+   * A PRD's feature or slice keeps its code (F-09). Approvers and owners add at once; a commenter's
+   * add is one proposal carrying the same goal and item (the owner, Nov 5).
    */
   const add = (flag: Flag, target: string) =>
     act(async () => {
       const name = (flag.feature ?? flag.item)!.name;
-      const itemKey = flag.kind === "unlinked_item" ? flag.item?.key : null;
+      const item = flag.kind === "unlinked_item" ? flag.item?.id : null;
       // An item from a PRD section keeps its code (F-06); a PRD's feature or slice, the PRD's.
-      const code = itemKey ? flag.item?.code : target;
-      const key = code && !(graph?.entities ?? []).some((e) => e.key === code) ? code : newKey(name, graph);
-      const made = (graph?.entities ?? []).find((e) => e.type === "feature" && (itemKey ? itemsOf(e).includes(itemKey) : e.key === code));
-      if (made) return wait(flag, `“${name}” is already waiting for approval.`);
-      const fields = { type: "feature" as const, key, title: name, attrs: itemKey ? { roadmap_items: [itemKey] } : {} };
+      const code = item ? flag.item?.code : target;
+      const key = code && /^[A-Z]{1,3}-\d+$/.test(code) && !(graph?.entities ?? []).some((e) => e.key === code) ? code : newKey(name, graph);
+      const links = { ...(flag.goal?.id ? { serves: flag.goal.id } : {}), ...(item ? { roadmap_item_id: item } : {}) };
+      const fields = { type: "feature" as const, key, title: name, attrs: {}, ...links };
       if (!canWrite) {
         await unwrap(api.POST("/v1/baseline/proposals", { body: { op: "create", kind: "entity", fields } }));
         return wait(flag, `Sent “${name}” for approval.`);
       }
       const out = await unwrap(api.POST("/v1/baseline/entities", { body: { ...fields, origin: "user" } }));
       if (!out.entity) return wait(flag, `Sent “${name}” for approval.`);
-      if (flag.goal?.id) {
-        await unwrap(
-          api.POST("/v1/baseline/edges", { body: { src_id: out.entity.id, dst_id: flag.goal.id, type: "supports", attrs: { contribution: 2 }, origin: "user" } }),
-        );
-      }
       return { text: `Added “${name}” to the Ground Truth.` };
     });
 
@@ -146,15 +165,14 @@ export function GroundTruthFlags({
       return { text: "Undone." };
     });
 
-  /** Link to a feature: the feature lists the item's key, so a published item is linked too. */
+  /** Link to a feature: the item's own feature, a change in its roadmap's working draft (a published item too). */
   const pickFeature = (flag: Flag, feature: { id: string; title: string }) =>
     act(async () => {
-      const itemKey = flag.item!.key!;
-      const e = graph?.entities.find((x) => x.id === feature.id);
-      const roadmap_items = [...new Set([...(e ? itemsOf(e) : []), itemKey])];
-      const out = await unwrap(api.PATCH("/v1/baseline/entities/{entity_id}", { params: { path: { entity_id: feature.id } }, body: { attrs: { roadmap_items }, origin: "user" } }));
-      if (!out.entity || !out.applied) return wait(flag, `Sent linking “${subject(flag).name}” for approval.`);
-      return { text: `Linked “${subject(flag).name}” to “${feature.title}”.` };
+      const name = subject(flag).name;
+      const body = { op: "set_feature" as const, target: { item_id: flag.item!.id! }, before: { feature_id: flag.feature?.id ?? null }, after: { feature_id: feature.id } };
+      const { change } = await unwrap(api.POST("/v1/simple/changes", { body }));
+      if (change.status === "proposed") return wait(flag, `Sent linking “${name}” for approval.`);
+      return { text: `Linked “${name}” to “${feature.title}”.`, undo: change.can_undo ? change.id : undefined };
     });
 
   const pickGoal = (flag: Flag, target: string, goal: { id: string; name: string }) =>
@@ -167,7 +185,7 @@ export function GroundTruthFlags({
 
   /** The fixes this person can make here; a fix with no route yet (Give it a code, linking a PRD's feature) shows none. */
   function fixes(flag: Flag) {
-    if (pending.has(rowKey(flag))) return [];
+    if (waits(flag)) return [];
     return flag.fixes.flatMap((fix) => {
       const t = fix.target;
       const on = (run: () => void) => [{ action: fix.action, words: fix.words, run }];
@@ -175,7 +193,7 @@ export function GroundTruthFlags({
         case "add_to_ground_truth":
           return canWrite || canPropose ? on(() => void add(flag, t)) : [];
         case "link_to_feature":
-          return canWrite && flag.kind === "unlinked_item" && flag.item?.key ? on(() => setPicking({ flag, what: "feature" })) : [];
+          return canWrite && canChangeRoadmap && itemOf(flag) ? on(() => setPicking({ flag, what: "feature" })) : [];
         case "confirm_feature":
           return canWrite ? on(() => void confirm(flag, t)) : [];
         case "pick_goal":
@@ -240,7 +258,7 @@ export function GroundTruthFlags({
             .map((f, n) => {
               const s = subject(f);
               const row = fixes(f);
-              const waiting = pending.has(rowKey(f));
+              const waiting = waits(f);
               // One short line; the flag's sentence is behind the (i).
               const line = waiting
                 ? "Sent for approval"

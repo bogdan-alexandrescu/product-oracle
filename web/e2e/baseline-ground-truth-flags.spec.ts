@@ -169,7 +169,7 @@ for (const viewport of [DESKTOP, PHONE])
   test.describe(`as an approver who does not edit the roadmap (${viewport.width})`, () => {
     test.use({ viewport });
 
-    test("Confirm it, Pick a goal and Add go at once", async ({ page }) => {
+    test("Confirm it, Pick a goal and Add go at once; the item's link waits for its decider", async ({ page }) => {
       await page.emulateMedia({ colorScheme: "dark" });
       const start = await open(page, "approver@example.com");
       await openKind(page, "unlinked_item");
@@ -177,13 +177,15 @@ for (const viewport of [DESKTOP, PHONE])
       await expect(row(page, "Weekly digest")).toHaveCount(0);
       await row(page, "Export to sheets").getByRole("button", { name: /Add to Ground Truth/ }).click();
       await expect(page.getByTestId("gt-notice")).toContainText("Added “Export to sheets” to the Ground Truth.");
-      await expect(count(page, "unlinked_item")).toHaveCount(0);
+      // The feature is added at once; the item's link is a roadmap change its decider approves.
+      await expect(row(page, "Export to sheets").getByTestId("gt-pending")).toHaveText("Sent for approval");
+      await expect(row(page, "Export to sheets").getByRole("button", { name: /Add to Ground Truth|Link to a feature/ })).toHaveCount(0);
       await openKind(page, "no_goal");
       await row(page, "Audit log").getByRole("button", { name: /Pick a goal/ }).click();
       await page.getByTestId("gt-picker").getByRole("button").filter({ hasText: "Raise activation" }).click();
       await expect(row(page, "Audit log")).toHaveCount(0);
       // Two flags went; the new feature brings its own no-code and no-goal flags.
-      await expect(total(page)).toHaveText(String(start - 1));
+      await expect(total(page)).toHaveText(String(start));
     });
 
     test("Take it off the roadmap is sent for approval: the row waits, with no second button", async ({ page }) => {

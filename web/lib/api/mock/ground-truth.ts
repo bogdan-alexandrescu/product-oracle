@@ -108,8 +108,6 @@ const prdGoal = (baseline: BaselineState) =>
 function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
   const byId = new Map(baseline.entities.filter((e) => e.type === "feature").map((e) => [e.id, e]));
   const truth = [...byId.values()].filter((e) => e.status === "confirmed");
-  // A confirmed feature links the roadmap items whose keys it lists (attrs.roadmap_items).
-  const listed = new Set(truth.flatMap((e) => (Array.isArray(e.attrs?.roadmap_items) ? (e.attrs.roadmap_items as unknown[]) : []).filter((k): k is string => typeof k === "string")));
   const g = prdGoal(baseline);
   const goal = g ? { id: g.id, code: null, name: g.title } : null;
   const ref = (e: Entity) => ({ id: e.id, code: F_CODE.test(e.key) ? e.key : null, name: e.title });
@@ -118,11 +116,12 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
   const items = ITEMS.map(([key]) => simple.items.find((x) => x.key === key)).filter((s): s is NonNullable<typeof s> => !!s && !closed(s) && !s.trashed);
   for (const s of items) {
     const linked = byId.get(s.linked_feature ?? s.feature_id ?? "");
-    if (linked?.status === "confirmed" || listed.has(s.key)) continue;
+    // Its feature as the roadmap's working draft has it (a set_feature change: Add or Link).
+    if (linked?.status === "confirmed") continue;
     const id = simple.ids[s.key];
     out.push(
       flag("unlinked_item", [linked?.status === "proposed" ? ["confirm_feature", linked.id] : ["add_to_ground_truth", id], ["link_to_feature", id]], {
-        item: { id, code: null, name: s.title, key: s.key },
+        item: { id, code: null, name: s.title },
         feature: linked ? ref(linked) : null,
         where: both,
       }),
@@ -132,7 +131,7 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
   const codes = new Set(truth.map((e) => e.key).filter((k) => F_CODE.test(k)));
   const missing = PRD_FEATURES.filter((f) => !codes.has(f.code) && !names.has(f.name.toLowerCase()));
   for (const f of missing)
-    if (f.slice) out.push(flag("slice_parent_missing", [["add_to_ground_truth", f.code], ["link_to_feature", f.code]], { item: { id: null, code: f.slice, name: f.name, key: null }, goal, where: both }));
+    if (f.slice) out.push(flag("slice_parent_missing", [["add_to_ground_truth", f.code], ["link_to_feature", f.code]], { item: { id: null, code: f.slice, name: f.name }, goal, where: both }));
   for (const f of missing)
     if (!f.slice) out.push(flag("prd_feature_missing", [["add_to_ground_truth", f.code], ["link_to_feature", f.code]], { feature: { id: null, code: f.code, name: f.name }, goal, where: both }));
   // Every confirmed feature, as the API checks them.
@@ -141,7 +140,7 @@ function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
   for (const e of truth) if (!serving.has(e.id)) out.push(flag("no_goal", [["pick_goal", e.id]], { feature: ref(e) }));
   for (const s of items) {
     const f = byId.get(s.feature_id ?? "");
-    if (f && RUNNING.has(f.id)) out.push(flag("runs_today_on_roadmap", [["take_off_roadmap", simple.ids[s.key]]], { item: { id: simple.ids[s.key], code: null, name: s.title, key: s.key }, feature: ref(f), where: both }));
+    if (f && RUNNING.has(f.id)) out.push(flag("runs_today_on_roadmap", [["take_off_roadmap", simple.ids[s.key]]], { item: { id: simple.ids[s.key], code: null, name: s.title }, feature: ref(f), where: both }));
   }
   return out;
 }
