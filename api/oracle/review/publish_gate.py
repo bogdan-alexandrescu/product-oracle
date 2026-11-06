@@ -133,8 +133,8 @@ def dates_refusal(marks: list[doc_dates.Mark], headings: dict[str, str]) -> tupl
     listed = ", ".join(f"{doc_dates.shown(m)} ({where(m)}: {m.label})" for m in marks)
     noun = "date is" if len(marks) == 1 else "dates are"
     detail = (
-        f"{len(marks)} {noun} not backed by a confirmed schedule: {listed}. Record a date "
-        "basis for each on Plan › Dates (or ask the engineering lead to), or import a draft "
+        f"{len(marks)} {noun} not backed by a confirmed schedule: {listed}. Add a date "
+        "source for each on Plan › Dates (or ask the engineering lead to), or import a draft "
         "without them"
     )
     blocks = [

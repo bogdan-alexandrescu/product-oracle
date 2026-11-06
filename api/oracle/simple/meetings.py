@@ -98,6 +98,7 @@ from oracle.simple.schemas import (
     SimpleMinutesIn,
     SimpleOpenDecision,
     SimplePersonRef,
+    SimpleQuestionOption,
     SimpleRunGroup,
     SimpleRunStepOut,
     SimpleRunStopOut,
@@ -235,6 +236,11 @@ async def record_meeting_decision(
     if me is None:
         raise MeetingError(403, "Meeting decisions are made by people")
     clean = [_subject(s) for s in subjects or []]
+    # agenda-sheet: an agenda item decided in the meeting reads done.
+    decided = [str(s["id"]) for s in clean if s and s.get("kind") == "roadmap_item"]
+    if decided:
+        done = list(dict.fromkeys([*((m.agenda or {}).get("done") or []), *decided]))
+        m.agenda = {**(m.agenda or {}), "done": done}
     nxt = (m.agenda or {}).get("next")
     if nxt and any(s and s.get("kind") == "roadmap_item" and str(s.get("id")) == nxt
                    for s in clean):  # fmt: skip
@@ -567,7 +573,9 @@ async def _occurrence_now(
 
 
 async def _get(db: AsyncSession, principal: Any, meeting_id: uuid.UUID, lock: bool = False):
-    m = await db.get(SimpleMeeting, meeting_id, with_for_update=lock)
+    # A locked read refreshes a row the session holds already, so what the caller changes
+    # starts from the row as committed (agenda-sheet: two people's ops at once).
+    m = await db.get(SimpleMeeting, meeting_id, with_for_update=lock, populate_existing=lock)
     if m is None:
         raise MeetingError(404, "No such meeting")
     document = await db.get(Document, m.prd_document_id)
@@ -887,7 +895,7 @@ def _plain_words(message: str, headings: dict[str, str] | None = None) -> str:
     """An importer message without its raw tokens ([c:key], {#sources}, section ids)."""
     for pattern, put in _RAW:
         message = pattern.sub(lambda m, put=put: put(m, headings), message)
-    return _sentence(message)
+    return _sentence(wording.date_words(message))
 
 
 def _days(days: list[str]) -> str:
@@ -1229,10 +1237,12 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
             and has_role(principal.role, "commenter"),
             redraft=job_state == "failed" and _presenter_or_decider(principal, m, w),
             retry_delivery=m.minutes_state == "sent" and may_retry(principal, m),
+            edit_agenda=m.status == "live" and _agenda_right(principal, w) == "save",
+            propose_agenda=m.status == "live" and _agenda_right(principal, w) == "propose",
         ),
         not_approved=not_approved or [],
         notes=await _notes_out(db, m),
-        agenda=await _agenda_out(db, m),
+        agenda=await _agenda_out(db, m, document.id, w.decider),
         draft_roadmap=await meeting_draft.draft_out(db, document, m.id),
     )
 
@@ -1295,6 +1305,253 @@ async def restore_agenda(db: AsyncSession, meeting_id: uuid.UUID, agenda: dict) 
     await db.flush()
 
 
+def _agenda_right(principal: Any, w: PrdWho) -> str:
+    """agenda-sheet: an owner or the PRD's decider saves agenda changes; an approver who
+    is not the decider proposes them; everyone else reads."""
+    me = _me(principal)
+    if has_role(principal.role, "owner") or (
+        me is not None and me == w.decider and has_role(principal.role, "commenter")
+    ):
+        return "save"
+    return "propose" if has_role(principal.role, "approver") else "read"
+
+
+def _agenda_apply(a: dict, rows: list[dict], titles: dict[str, str], me: uuid.UUID,
+                  body: dict) -> dict:  # fmt: skip
+    """Apply one sheet op to ``rows`` (in place); returns its clause for the Undo line
+    (:func:`_agenda_words`)."""
+    states = dict(zip([x["id"] for x in rows], _states(a, rows), strict=True))
+
+    def find(i: str | None) -> dict:
+        x = next((x for x in rows if x["id"] == i), None)
+        if x is None:
+            raise MeetingError(404, "That item is not on the agenda")
+        return x
+
+    op = body["op"]
+    if op == "add":
+        if body.get("feature_id"):
+            f = str(body["feature_id"])
+            if f not in titles:
+                raise MeetingError(404, "That feature is not in the meeting's PRD")
+            if any(x.get("feature_id") == f for x in rows):
+                raise MeetingError(409, "That feature is on the agenda already")
+            rows.append({"id": f, "feature_id": f, "title": None, "was": titles[f],
+                         "mins": FEATURE_MINS, "by": str(me)})  # fmt: skip
+            return {"op": "add", "id": f, "name": titles[f]}
+        title = (body.get("title") or "").strip()
+        if not title:
+            raise MeetingError(422, "Give the topic a name")
+        i = str(uuid.uuid4())
+        rows.append({"id": i, "feature_id": None, "title": title, "mins": TOPIC_MINS,
+                     "by": str(me)})  # fmt: skip
+        return {"op": "add", "id": i, "name": title}
+    x = find(body.get("item_id"))
+    if states[x["id"]] in ("done", "now"):
+        raise MeetingError(409, "The current item and done ones stay where they are")
+    was = _row_name(x, titles, "the item")
+    if op == "rename":
+        title = (body.get("title") or "").strip()
+        if not title:
+            raise MeetingError(422, "Give the item a name")
+        x["title"] = title
+        return {"op": "rename", "id": x["id"], "name": was, "to": title}
+    if op == "remove":
+        # port-an-decisions: the row and where it stood, for its Trash entry's Restore.
+        at = rows.index(x)
+        rows.remove(x)
+        return {"op": "remove", "id": x["id"], "name": was, "row": dict(x), "at": at}
+    # move: never before the current item or a done one.
+    first = max(
+        (k + 1 for k, y in enumerate(rows) if states[y["id"]] in ("done", "now")), default=0
+    )
+    at = rows.index(x)
+    to = max(first, min(int(body.get("to") or 0), len(rows) - 1))
+    rows.remove(x)
+    rows.insert(to, x)
+    return {"op": "move", "id": x["id"], "name": was, "dir": "up" if to < at else "down"}
+
+
+def _row_name(x: dict, titles: dict[str, str], none: str) -> str:
+    """A row's name: its own, its feature's, else the name its feature last had here."""
+    return x.get("title") or titles.get(x.get("feature_id") or "") or x.get("was") or none
+
+
+def _agenda_words(clauses: list[dict]) -> list[str]:
+    """The batch's clauses as words; a move and a rename of one item read as one clause
+    ("moved Quiet hours up and renamed it"), named as the item was when first touched."""
+    out: list[dict] = []
+    for c in clauses:
+        same = next(
+            (o for o in out if o["id"] == c["id"] and o["op"] in ("move", "rename", "both")),
+            None,
+        ) if c["op"] in ("move", "rename") else None  # fmt: skip
+        if same is None:
+            out.append(dict(c))
+        elif c["op"] == "move":
+            same.update(op="both" if same["op"] != "move" else "move", dir=c["dir"])
+        else:
+            same.update(op="both" if same["op"] != "rename" else "rename", to=c["to"])
+    words = {
+        "add": "added {name}",
+        "remove": "removed {name}",
+        "move": "moved {name} {dir}",
+        "rename": "renamed {name} to {to}",
+        "both": "moved {name} {dir} and renamed it",
+    }
+    return [words[c["op"]].format(**c) for c in out]
+
+
+async def edit_agenda(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
+                      body: dict) -> None:  # fmt: skip
+    """agenda-sheet: one op of the Agenda sheet (add, rename, move, remove, undo; accept
+    or withdraw an approver's proposal). The meeting row is locked before it is read, so
+    two people's ops at once both land. The caller commits."""
+    m, document = await _get(db, principal, meeting_id, lock=True)
+    if m.status == "ended":
+        raise MeetingError(409, "This meeting has ended")
+    w = await prd_who(db, document)
+    right = _agenda_right(principal, w)
+    if right == "read" or not has_role(principal.role, "commenter"):
+        raise MeetingError(403, "Only an owner or the PRD's decider changes the agenda")
+    me = _me(principal)
+    a = dict(m.agenda or {})
+    features = await _agenda_features(db, document.id)
+    titles = {str(r.id): r.title for r in features}
+    rows = _rows(m, features)
+    op = body["op"]
+    prop = a.get("proposal")
+    if op == "withdraw":
+        if not prop or (prop["by"] != str(me) and right != "save"):
+            raise MeetingError(404, "No proposal to withdraw")
+        a["proposal"] = None
+    elif op == "accept":
+        if right != "save" or not prop:
+            raise MeetingError(403 if prop else 404, "Only the decider accepts the proposal")
+        # The accept is the decider's batch: their sheet named it, so their Undo line shows.
+        batch = body.get("batch") or f"accept-{uuid.uuid4()}"
+        a.update(before=[dict(x) for x in rows], batch=batch)
+        # An op whose item is gone since is left out, and the decider is told which.
+        clauses, gone, said = [], [], prop.get("said") or []
+        for k, o in enumerate(prop.get("ops") or []):
+            try:
+                clauses.append(_agenda_apply(a, rows, titles, uuid.UUID(prop["by"]), o))
+            except MeetingError:
+                gone.extend(said[k : k + 1])
+        a.update(items=rows, clauses=clauses, words=_agenda_words(clauses), proposal=None,
+                 left_out=_agenda_words(gone))  # fmt: skip
+        a["trashed"] = await _trash_removed(db, principal, m, clauses)
+    elif op == "undo":
+        if right != "save" or "before" not in a:
+            raise MeetingError(404, "Nothing to undo")
+        if body.get("batch") != a.get("batch"):
+            raise MeetingError(409, "Someone changed the agenda since")
+        a.update(items=a.pop("before"), clauses=[], words=[], left_out=[], batch=None)
+        # port-an-decisions: what the batch removed comes back, so it leaves Trash.
+        await _untrash(db, a.pop("trashed", None) or [])
+    elif right == "propose":
+        # The agenda stays as it is; the ops wait for the decider. An op of the earlier
+        # proposal whose item is gone since is dropped, and the proposal says so (its clauses
+        # read together, so a move and a rename of one item read as one).
+        mine = prop if prop and prop.get("by") == str(me) else None
+        ops, said = list((mine or {}).get("ops") or []), list((mine or {}).get("said") or [])
+        trial = [dict(x) for x in _rows(m, features)]
+        kept, clauses, gone = [], [], list((mine or {}).get("gone") or [])
+        for k, o in enumerate(ops):
+            try:
+                clauses.append(_agenda_apply(a, trial, titles, me, o))  # type: ignore[arg-type]
+                kept.append(o)
+            except MeetingError:
+                gone.extend(said[k : k + 1])
+        clauses.append(_agenda_apply(a, trial, titles, me, body))  # type: ignore[arg-type]
+        a["proposal"] = {"by": str(me), "decider": str(w.decider) if w.decider else None,
+                         "ops": [*kept, {k: v for k, v in body.items() if v is not None}],
+                         "said": clauses, "words": _agenda_words(clauses),
+                         "gone": gone, "dropped": _agenda_words(gone)}  # fmt: skip
+    else:
+        if a.get("batch") != body.get("batch") or "before" not in a:
+            a.update(before=[dict(x) for x in rows], batch=body.get("batch"), clauses=[],
+                     left_out=[], trashed=[])  # fmt: skip
+        clause = _agenda_apply(a, rows, titles, me, body)  # type: ignore[arg-type]
+        clauses = [*(a.get("clauses") or []), clause]
+        a.update(items=rows, clauses=clauses, words=_agenda_words(clauses))
+        a["trashed"] = [*(a.get("trashed") or []),
+                        *await _trash_removed(db, principal, m, [clause])]  # fmt: skip
+    m.agenda = json.loads(json.dumps(a, default=str))
+    await db.flush()
+
+
+async def _trash_removed(
+    db: AsyncSession, principal: Any, m: SimpleMeeting, clauses: list[dict]
+) -> list[str]:
+    """port-an-decisions: each agenda item the batch removed goes to Settings › Trash, its
+    row kept in the entry (the agenda is the meeting's JSON); returns the entries' ids, so
+    the batch's Undo takes them back out and the sheet offers Open Trash."""
+    from oracle.trash import service as trash
+    from oracle.trash.models import RETENTION_DAYS, TrashEntry
+
+    out: list[str] = []
+    for c in clauses:
+        if c.get("op") != "remove":
+            continue
+        at = trash.now()
+        root = {"type": "agenda_item", "id": c["id"], "slug": None, "title": c["name"],
+                "kind": "agenda_item", "meeting_id": str(m.id), "row": c["row"],
+                "at": c["at"]}  # fmt: skip
+        entry = TrashEntry(id=uuid.uuid4(), root_type="agenda_item", root_id=uuid.UUID(c["id"]),
+                           root=json.loads(json.dumps(root, default=str)), items=[],
+                           deleted_by=principal.id,
+                           deleted_by_name=await trash._actor_name(db, principal),
+                           published=False,
+                           purge_after=at + timedelta(days=RETENTION_DAYS))  # fmt: skip
+        entry.created_at = at
+        db.add(entry)
+        await audit.record(db, principal, "trash.delete", "agenda_item", entry.root_id,
+                           {"entry_id": str(entry.id), "root": root, "items": []})  # fmt: skip
+        out.append(str(entry.id))
+    await db.flush()
+    return out
+
+
+async def _untrash(db: AsyncSession, entry_ids: list[str]) -> None:
+    """An Undo of the batch that removed them: their Trash entries go (the rows are back)."""
+    from sqlalchemy import delete
+
+    from oracle.trash.models import TrashEntry
+
+    if entry_ids:
+        await db.execute(
+            delete(TrashEntry).where(TrashEntry.id.in_([uuid.UUID(i) for i in entry_ids]))
+        )
+
+
+async def restore_agenda_item(db: AsyncSession, entry: Any) -> None:
+    """port-an-decisions: Trash's Restore of a removed agenda item puts its row back where it
+    stood (never before the current item or a done one). Refused (409) when its meeting has
+    ended or is gone, or the item is on the agenda again."""
+    from oracle.trash import service as trash
+
+    root = entry.root
+    m = await db.get(SimpleMeeting, uuid.UUID(root["meeting_id"]), with_for_update=True,
+                     populate_existing=True)  # fmt: skip
+    if m is None:
+        raise trash.Conflict("Its meeting was deleted: there is no agenda to put it back on")
+    if m.status == "ended":
+        raise trash.Conflict("Its meeting has ended: the agenda is closed")
+    a = dict(m.agenda or {})
+    rows = [dict(x) for x in a.get("items") or []]
+    row = dict(root["row"])
+    if any(x["id"] == row["id"] for x in rows):
+        raise trash.Conflict(f"'{root['title']}' is on the agenda again already")
+    states = _states(a, rows)
+    first = max((k + 1 for k, st in enumerate(states) if st in ("done", "now")), default=0)
+    rows.insert(max(first, min(int(root.get("at") or 0), len(rows))), row)
+    a["items"] = rows
+    a["trashed"] = [i for i in a.get("trashed") or [] if i != str(entry.id)]
+    m.agenda = json.loads(json.dumps(a, default=str))
+    await db.flush()
+
+
 def _note_authors(ms: list[SimpleMeeting]) -> set[uuid.UUID]:
     return {uuid.UUID(n["by"]) for m in ms for n in m.notes or [] if n.get("by")}
 
@@ -1322,22 +1579,111 @@ async def _notes_out(
     ]
 
 
-async def _agenda_out(db: AsyncSession, m: SimpleMeeting) -> Any:
-    from oracle.simple.schemas import SimpleAgenda, SimpleAgendaItem
+async def _agenda_features(db: AsyncSession, document_id: uuid.UUID) -> list[RoadmapItem]:
+    """The PRD's features in roadmap order, one row per item key (its every version)."""
+    rows = await db.scalars(
+        select(RoadmapItem)
+        .where(RoadmapItem.prd_document_id == document_id)
+        .order_by(RoadmapItem.position, RoadmapItem.item_key)
+    )
+    seen: dict[str, RoadmapItem] = {}
+    for r in rows:
+        seen.setdefault(r.item_key, r)
+    return list(seen.values())
+
+
+FEATURE_MINS, TOPIC_MINS = 10, 5
+
+
+def _rows(m: SimpleMeeting, features: list[RoadmapItem]) -> list[dict]:
+    """agenda-sheet: the agenda's rows as stored; before the first edit, the PRD's
+    features in order (each row's id is its feature's id, so it stays put once stored)."""
+    a = m.agenda or {}
+    if "items" in a:
+        return [dict(x) for x in a["items"]]
+    return [{"id": str(r.id), "feature_id": str(r.id), "title": None, "was": r.title,
+             "mins": FEATURE_MINS} for r in features]  # fmt: skip
+
+
+def _states(a: dict, rows: list[dict]) -> list[str]:
+    """Rows decided in the meeting are done; the chat's skipped ones skipped; the first
+    other row is now."""
+    skipped = set(a.get("skipped") or [])
+    done = set(a.get("done") or [])
+    out, now = [], False
+    for x in rows:
+        if x.get("done") or (x.get("feature_id") or "") in done:
+            out.append("done")
+        elif x["id"] in skipped or (x.get("feature_id") or "") in skipped:
+            out.append("skipped")
+        elif not now:
+            now = True
+            out.append("now")
+        else:
+            out.append("next")
+    return out
+
+
+async def _agenda_out(
+    db: AsyncSession, m: SimpleMeeting, document_id: uuid.UUID, decider: uuid.UUID | None
+) -> Any:
+    from oracle.simple.schemas import (
+        SimpleAgenda,
+        SimpleAgendaItem,
+        SimpleAgendaProposal,
+        SimpleAgendaRow,
+    )
 
     a = m.agenda or {}
+    features = await _agenda_features(db, document_id)
     ids = [i for i in [a.get("next"), *(a.get("skipped") or [])] if i]
     rows = {
         str(r.id): r
         for r in await db.scalars(select(RoadmapItem).where(RoadmapItem.id.in_(ids)))
     } if ids else {}  # fmt: skip
+    titles = {str(r.id): r.title for r in features} | {k: r.title for k, r in rows.items()}
 
     def item(i: str | None) -> Any:
         r = rows.get(i) if i else None
         return SimpleAgendaItem(id=r.id, title=r.title) if r is not None else None
 
-    return SimpleAgenda(next=item(a.get("next")),
-                        skipped=[x for x in map(item, a.get("skipped") or []) if x])  # fmt: skip
+    stored = _rows(m, features)
+    prop = a.get("proposal")
+    people = {uuid.UUID(x["by"]) for x in stored if x.get("by")} | ({decider} if decider else set())
+    if prop:
+        people |= {uuid.UUID(i) for i in (prop["by"], prop.get("decider")) if i}
+    names = await _names(db, people)
+    on = {x.get("feature_id") for x in stored}
+    return SimpleAgenda(
+        next=item(a.get("next")),
+        skipped=[x for x in map(item, a.get("skipped") or []) if x],
+        items=[
+            SimpleAgendaRow(
+                id=x["id"],
+                kind="feature" if x.get("feature_id") else "topic",
+                feature_id=x.get("feature_id"),
+                title=_row_name(x, titles, "Untitled"),
+                mins=x.get("mins") or FEATURE_MINS,
+                by_name=names.get(uuid.UUID(x["by"])) if x.get("by") else None,
+                state=st,  # type: ignore[arg-type]
+            )
+            for x, st in zip(stored, _states(a, stored), strict=True)
+        ],
+        addable=[SimpleAgendaItem(id=r.id, title=r.title) for r in features if str(r.id) not in on],
+        batch=a.get("batch"),
+        words=list(a.get("words") or []),
+        left_out=list(a.get("left_out") or []),
+        in_trash=bool(a.get("trashed")),
+        proposal=SimpleAgendaProposal(
+            by=_ref(uuid.UUID(prop["by"]), names),
+            decider=_ref(uuid.UUID(prop["decider"]), names) if prop.get("decider") else None,
+            words=list(prop.get("words") or []),
+            dropped=list(prop.get("dropped") or []),
+        )
+        if prop
+        else None,  # fmt: skip
+        decider=_ref(decider, names) if decider else None,
+    )
 
 
 async def _draft_outs(db: AsyncSession, principal: Any, ds: list) -> list:
@@ -2336,16 +2682,26 @@ async def decided_flows(db: AsyncSession, links: list) -> dict[uuid.UUID, Simple
 # --------------------------------------------------------------------------- the page
 
 
-def _row(d: Decision, names: dict) -> SimpleDecisionRow:
+def _row(d: Decision, names: dict, principal: Any = None, edited: dict | None = None
+         ) -> SimpleDecisionRow:  # fmt: skip
+    from oracle.simple import decision_sheet
+
     chosen = next(
         (o.get("label") for o in d.options or [] if o.get("key") == d.chosen_option), None
     )
+    at, by = (edited or {}).get(str(d.id), (None, None))
     return SimpleDecisionRow(
         id=d.id, number=d.number, title=d.title, origin=d.origin, status=d.status,
         approver=_ref(d.approver_id, names) if d.approver_id else None,
         decided_at=d.decided_at, created_at=d.created_at, subjects=list(d.subjects or []),
         code=(d.prd_question or {}).get("code") if d.origin == "prd" else None,
         chosen=chosen,
+        # edit-decisions (ec1 b): the sheet's fields and rights.
+        question=d.question, context=d.context,
+        options=[SimpleQuestionOption(key=str(o.get("key")), label=str(o.get("label")))
+                 for o in d.options or []],
+        review_at=d.review_at, can=decision_sheet.can(principal, d),
+        edited_at=at, edited_by=_ref(by, names) if by else None,
     )  # fmt: skip
 
 
@@ -2437,8 +2793,14 @@ async def decisions_page(
             q = q.where(or_(*[Decision.subjects.contains([{"id": i}]) for i in match]))
         q = q.order_by(Decision.number.desc()).limit(200)
         others = [d for d in await db.scalars(q) if keep(d)]
+    from oracle.simple import decision_sheet
+
+    edited = await decision_sheet.edits(
+        db, {d.id for lst in links.values() for _, d in lst} | {d.id for d in others}
+    )
     names = await _names(db, {d.approver_id for lst in links.values() for _, d in lst}
-                         | {d.approver_id for d in others} | _note_authors(shown_ms))  # fmt: skip
+                         | {d.approver_id for d in others} | _note_authors(shown_ms)
+                         | {by for _, by in edited.values()})  # fmt: skip
     flows = await decided_flows(db, [x for m in shown_ms for x in links[m.id]])
     groups = []
     for b, m in zip(await briefs(db, shown_ms), shown_ms, strict=True):
@@ -2448,7 +2810,8 @@ async def decisions_page(
         groups.append(SimpleMeetingGroup(
             meeting=b,
             minutes=await _named(db, minutes) if minutes else None,
-            decisions=[_row(d, names).model_copy(update={"flow": flows.get(d.id)})
+            decisions=[_row(d, names, principal, edited).model_copy(
+                           update={"flow": flows.get(d.id)})
                        for _, d in links[m.id] if whole or keep(d)],
             notes=[n for n in await _notes_out(db, m, names) if n.kind in ("note", "comment")],
             delivery=await delivery_out(db, m) if m.minutes_state == "sent" else None,
@@ -2479,7 +2842,7 @@ async def decisions_page(
     return SimpleDecisionsOut(
         **await questions.page_fields(db, principal, qdocs, only, replaced),
         meetings=groups,
-        other=[_row(d, names) for d in others],
+        other=[_row(d, names, principal, edited) for d in others],
         prds=[SimpleFilterOption(id=d.slug, title=d.title)
               for d in sorted(docs.values(), key=lambda d: d.title)
               if d.id in readable and d.id not in replaced],

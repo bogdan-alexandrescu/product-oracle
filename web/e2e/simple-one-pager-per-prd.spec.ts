@@ -6,8 +6,8 @@ import { expect, test, type Page } from "./test";
  * (./lib/api/mock/server.ts), driven through the UI as an owner on desktop and phone, light
  * and dark.
  *
- * Card one-pager-per-prd: protects = a line edited on one PRD's one-pager (the invented
- * page built from each mock PRD's own sections) shows on that PRD's page only: the seeded PRD's line stays
+ * Card one-pager-per-prd: protects = a line edited on one PRD's one-pager (each mock PRD's
+ * own page, C-13) shows on that PRD's page only: the seeded PRD's line stays
  * published while another PRD's is edited, and each keeps its own wording and working-draft
  * count after both are edited, and the other PRD's one-pager opened by its document id (a
  * link that carries the id) is that PRD's, with its edit;
@@ -21,12 +21,13 @@ const SEEDED = "/simple/prds/guided-setup";
 const OTHER = "/simple/one-pagers/checkout-redesign";
 const LINE_2 = "A setup checklist that shows the next step";
 
-// vqa B-13: each PRD's one-pager is built from its own sections, so its first bet is its own.
+// vqa B-13, C-13: each PRD's one-pager is built from its own sections, so its first bet is its own.
 const OTHER_BET = "In scope: the cart summary, the shipping step and the order review page on web.";
 
-async function editLine2(page: Page, text: string, from = LINE_2) {
-  // The button names the line, cut to fit: its first words.
-  await page.getByRole("button", { name: `Edit “${from.slice(0, 20)}` }).click();
+async function editLine2(page: Page, text: string) {
+  // The first bet's Edit names the line.
+  await page.locator('[data-line="bets-1"]').hover();
+  await page.locator('[data-line="bets-1"]').getByRole("button", { name: /^Edit “/ }).click();
   await page.getByLabel("New wording for").fill(text);
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.locator('[data-line="bets-1"]')).toHaveAttribute("data-state", "edited");
@@ -47,7 +48,7 @@ for (const phone of [false, true]) {
           return db.documents.find((d) => d.slug === "checkout-redesign")!.id;
         });
         await expect(page.locator('[data-line="bets-1"]')).toContainText(OTHER_BET);
-        await editLine2(page, "A checkout checklist with saved cards", OTHER_BET);
+        await editLine2(page, "A checkout checklist with saved cards");
 
         await page.goto(SEEDED);
         await expect(page.getByRole("heading", { level: 1, name: "Guided setup" })).toBeVisible();

@@ -39381,6 +39381,74 @@
           }
         },
         "x-min-role": "commenter"
+      },
+      "delete": {
+        "tags": [
+          "requests"
+        ],
+        "summary": "Delete Request",
+        "description": "port-an-decisions: an owner deletes the request to Settings \u203a Trash (30 days, then\ngone for good); Restore there brings it back. A request others are merged into stays.",
+        "operationId": "delete_request",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reason"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/requests/{request_id}/qualify": {
@@ -44358,6 +44426,181 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/simple/decisions/{decision_id}": {
+      "delete": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Delete Simple Decision",
+        "description": "Move an open decision or PRD question to Trash (30 days, then deleted for good): who\nmay withdraw it (its decider, whoever made it, an owner); others are refused.",
+        "operationId": "delete_simple_decision",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Decision Id"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reason"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashedOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
+      },
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Simple Decision",
+        "description": "edit-decisions (ec1 b): one decision as the Decisions page lists it, with every field\nthe sheet shows and what this reader may do there (Home's and Waiting for you's\ndecision-log calls open the sheet by id). After /decisions/waiting, which it would hide.",
+        "operationId": "get_simple_decision",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Decision Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleDecisionRow"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/decisions/{decision_id}/restore": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Restore Simple Decision",
+        "description": "Put the decision or question back from Trash with every link: an owner, or whoever\ndeleted it.",
+        "operationId": "restore_simple_decision",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Decision Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
     "/v1/simple/sessions": {
       "post": {
         "tags": [
@@ -47104,6 +47347,70 @@
         },
         "x-min-role": "commenter",
         "x-per-item": null
+      }
+    },
+    "/v1/simple/meetings/{meeting_id}/agenda": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Edit Simple Meeting Agenda",
+        "description": "agenda-sheet: one op of the Agenda sheet (oracle.simple.meetings.edit_agenda).",
+        "operationId": "edit_simple_meeting_agenda",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meeting Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimpleAgendaEditIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleMeetingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/simple/meetings/{meeting_id}/approve": {
@@ -62103,7 +62410,11 @@
                   "delete_item",
                   "delete_goal",
                   "archive_goal",
-                  "unarchive_goal"
+                  "unarchive_goal",
+                  "edit_decision",
+                  "edit_question",
+                  "withdraw_decision",
+                  "add_question"
                 ]
               },
               {
@@ -62506,7 +62817,11 @@
               "delete_item",
               "delete_goal",
               "archive_goal",
-              "unarchive_goal"
+              "unarchive_goal",
+              "edit_decision",
+              "edit_question",
+              "withdraw_decision",
+              "add_question"
             ],
             "title": "Op"
           },
@@ -68469,6 +68784,18 @@
             "maxItems": 10,
             "title": "Subjects",
             "default": []
+          },
+          "review_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review At"
           }
         },
         "type": "object",
@@ -86162,7 +86489,11 @@
               "delete_item",
               "delete_goal",
               "archive_goal",
-              "unarchive_goal"
+              "unarchive_goal",
+              "edit_decision",
+              "edit_question",
+              "withdraw_decision",
+              "add_question"
             ],
             "title": "Op"
           },
@@ -120060,11 +120391,164 @@
             "type": "array",
             "title": "Skipped",
             "default": []
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleAgendaRow"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "addable": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleAgendaItem"
+            },
+            "type": "array",
+            "title": "Addable",
+            "default": []
+          },
+          "batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch"
+          },
+          "words": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Words",
+            "default": []
+          },
+          "left_out": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Left Out",
+            "default": []
+          },
+          "in_trash": {
+            "type": "boolean",
+            "title": "In Trash",
+            "default": false
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleAgendaProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
         "title": "SimpleAgenda",
-        "description": "chat-actions: the item the meeting takes next and the items it skips."
+        "description": "chat-actions: the item the meeting takes next and the items it skips.\nagenda-sheet: the rows in order, the PRD's features not on it yet, what the last batch\nof the sheet did (for its Undo line) and an approver's waiting proposal."
+      },
+      "SimpleAgendaEditIn": {
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "add",
+              "rename",
+              "move",
+              "remove",
+              "undo",
+              "accept",
+              "withdraw"
+            ],
+            "title": "Op"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "feature_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 200.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To"
+          },
+          "batch": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch"
+          }
+        },
+        "type": "object",
+        "required": [
+          "op"
+        ],
+        "title": "SimpleAgendaEditIn",
+        "description": "agenda-sheet: one op of the Agenda sheet. ``batch`` names the sheet's opening, so\nUndo puts back the agenda as it was when that batch began."
       },
       "SimpleAgendaItem": {
         "properties": {
@@ -120084,6 +120568,112 @@
           "title"
         ],
         "title": "SimpleAgendaItem"
+      },
+      "SimpleAgendaProposal": {
+        "properties": {
+          "by": {
+            "$ref": "#/components/schemas/SimplePersonRef"
+          },
+          "decider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "words": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Words",
+            "default": []
+          },
+          "dropped": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dropped",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "by"
+        ],
+        "title": "SimpleAgendaProposal",
+        "description": "agenda-sheet: an approver's agenda changes waiting for the meeting's decider."
+      },
+      "SimpleAgendaRow": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "feature",
+              "topic"
+            ],
+            "title": "Kind"
+          },
+          "feature_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "mins": {
+            "type": "integer",
+            "title": "Mins"
+          },
+          "by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By Name"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "done",
+              "now",
+              "next",
+              "skipped"
+            ],
+            "title": "State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "mins",
+          "state"
+        ],
+        "title": "SimpleAgendaRow",
+        "description": "agenda-sheet: one row of the meeting's agenda: a feature of its PRD or a topic a\nperson typed, with its minutes; ``state`` reads the chat's next and skip."
       },
       "SimpleAppliedVersion": {
         "properties": {
@@ -120299,7 +120889,11 @@
               "delete_item",
               "delete_goal",
               "archive_goal",
-              "unarchive_goal"
+              "unarchive_goal",
+              "edit_decision",
+              "edit_question",
+              "withdraw_decision",
+              "add_question"
             ],
             "title": "Op"
           },
@@ -120449,7 +121043,11 @@
               "delete_item",
               "delete_goal",
               "archive_goal",
-              "unarchive_goal"
+              "unarchive_goal",
+              "edit_decision",
+              "edit_question",
+              "withdraw_decision",
+              "add_question"
             ],
             "title": "Op"
           },
@@ -120783,6 +121381,38 @@
         "title": "SimpleDecidedRef",
         "description": "A decided decision naming the item: who decided, when, and (decided in a meeting)\nthe meeting and its minutes' page."
       },
+      "SimpleDecisionCan": {
+        "properties": {
+          "edit": {
+            "type": "boolean",
+            "title": "Edit",
+            "default": false
+          },
+          "propose": {
+            "type": "boolean",
+            "title": "Propose",
+            "default": false
+          },
+          "withdraw": {
+            "type": "boolean",
+            "title": "Withdraw",
+            "default": false
+          },
+          "delete": {
+            "type": "boolean",
+            "title": "Delete",
+            "default": false
+          },
+          "reassign": {
+            "type": "boolean",
+            "title": "Reassign",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "SimpleDecisionCan",
+        "description": "edit-decisions (ec1 b): what the reader may do on an open decision's sheet, from\nthe decision's own rights (its creator, its decider or an owner edits, withdraws and\ndeletes; owners reassign; another commenter or approver proposes an edit)."
+      },
       "SimpleDecisionIn": {
         "properties": {
           "reason": {
@@ -120903,6 +121533,80 @@
               }
             ],
             "title": "Chosen"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleQuestionOption"
+            },
+            "type": "array",
+            "title": "Options",
+            "default": []
+          },
+          "review_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review At"
+          },
+          "can": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDecisionCan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "edited_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edited At"
+          },
+          "edited_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -123287,6 +123991,16 @@
             "type": "boolean",
             "title": "Retry Delivery",
             "default": false
+          },
+          "edit_agenda": {
+            "type": "boolean",
+            "title": "Edit Agenda",
+            "default": false
+          },
+          "propose_agenda": {
+            "type": "boolean",
+            "title": "Propose Agenda",
+            "default": false
           }
         },
         "type": "object",
@@ -123866,7 +124580,12 @@
           "agenda": {
             "$ref": "#/components/schemas/SimpleAgenda",
             "default": {
-              "skipped": []
+              "skipped": [],
+              "items": [],
+              "addable": [],
+              "words": [],
+              "left_out": [],
+              "in_trash": false
             }
           },
           "draft_roadmap": {
@@ -125776,7 +126495,10 @@
             "default": {
               "decide": false,
               "propose": false,
-              "name_decider": false
+              "name_decider": false,
+              "edit": false,
+              "withdraw": false,
+              "delete": false
             }
           },
           "source": {
@@ -125800,6 +126522,28 @@
               }
             ],
             "title": "Undo Id"
+          },
+          "edited_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edited At"
+          },
+          "edited_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -125874,6 +126618,21 @@
           "name_decider": {
             "type": "boolean",
             "title": "Name Decider",
+            "default": false
+          },
+          "edit": {
+            "type": "boolean",
+            "title": "Edit",
+            "default": false
+          },
+          "withdraw": {
+            "type": "boolean",
+            "title": "Withdraw",
+            "default": false
+          },
+          "delete": {
+            "type": "boolean",
+            "title": "Delete",
             "default": false
           }
         },
@@ -137976,7 +138735,11 @@
               "intake",
               "run",
               "feature",
-              "goal"
+              "goal",
+              "decision",
+              "question",
+              "agenda_item",
+              "request"
             ],
             "title": "Type"
           },

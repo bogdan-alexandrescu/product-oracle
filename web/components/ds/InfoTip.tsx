@@ -16,6 +16,7 @@ export function InfoTip({
   hero = false,
   trigger,
   testId = "info-tip",
+  id: given,
 }: {
   /** What the tip is about; the button's name is "About <label>". */
   label: string;
@@ -28,8 +29,11 @@ export function InfoTip({
   /** What opens the tip in place of the (i), e.g. a "3 warnings" chip: the button's name is its text. */
   trigger?: ReactNode;
   testId?: string;
+  /** The tip text's id, for a control the tip explains to name in its aria-describedby. */
+  id?: string;
 }) {
-  const id = useId();
+  const own = useId();
+  const id = given ?? own;
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
   const root = useRef<HTMLSpanElement>(null);

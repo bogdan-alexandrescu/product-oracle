@@ -1,0 +1,124 @@
+import { THEME_KEY } from "../lib/theme";
+import { login } from "./helpers";
+import { expect, test, type Page } from "./test";
+
+/*
+ * The Simple roadmap's shared chart (Chart in _timeline.tsx: the Waterfall here, the Plan's
+ * Timeline too) on a phone, driven as a person does against the mock's invented data:
+ * Today stays named on the chart, and no quarter label is cut by the chart's edge, whether
+ * the chart is scrolled to its start or to its end. A desktop's chart does not move.
+ */
+
+async function open(page: Page, theme: "light" | "dark") {
+  await page.context().addInitScript(([key, t]) => localStorage.setItem(key, t), [THEME_KEY, theme] as const);
+  await login(page);
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await page.getByTestId("format-waterfall").click();
+  const chart = page.locator('[data-testid="simple-chart"][data-format="waterfall"]');
+  await expect(chart.getByTestId("axis-tick").first()).toBeVisible();
+  return chart;
+}
+
+/** Each quarter label's text and whether its box is cut by the svg's edge or by the edge of the part in view. */
+async function labels(page: Page) {
+  return page.locator('[data-testid="simple-chart"] [data-testid="chart-scroll"]').evaluate((box) => {
+    const b = box.getBoundingClientRect();
+    const view = [b.left + box.clientLeft, b.left + box.clientLeft + box.clientWidth];
+    const s = box.querySelector("svg")!.getBoundingClientRect();
+    return [...box.querySelectorAll('[data-testid="axis-tick"]')].map((t) => {
+      const r = t.getBoundingClientRect();
+      const cut = r.left < s.left - 0.5 || r.right > s.right + 0.5 || (r.left < view[0] - 0.5 && r.right > view[0] + 0.5) || (r.left < view[1] - 0.5 && r.right > view[1] + 0.5);
+      const shown = r.right > view[0] + 0.5 && r.left < view[1] - 0.5;
+      return { text: t.textContent ?? "", cut, shown };
+    });
+  });
+}
+
+for (const width of [390, 320]) {
+  for (const theme of ["light", "dark"] as const) {
+    test.describe(`${width} wide, ${theme}`, () => {
+      test.use({ viewport: { width, height: 844 }, hasTouch: true });
+
+      test("Today is named on the chart", async ({ page }) => {
+        const chart = await open(page, theme);
+        const scroll = chart.getByTestId("chart-scroll");
+
+        // Today: its line (an svg line has no width, so it is never "visible" to Playwright) and
+        // its pill, inside the part of the chart in view.
+        await expect(chart.getByTestId("today-line")).toBeAttached();
+        const pill = chart.getByTestId("today-pill");
+        await expect(pill).toBeVisible();
+        await expect(pill).toHaveText("Today");
+        const [p, v] = await Promise.all([pill.boundingBox(), scroll.boundingBox()]);
+        expect(p!.x).toBeGreaterThanOrEqual(v!.x);
+        expect(p!.x + p!.width).toBeLessThanOrEqual(v!.x + v!.width);
+      });
+
+      test("every quarter label is whole", async ({ page }) => {
+        const chart = await open(page, theme);
+        const scroll = chart.getByTestId("chart-scroll");
+
+        // Every label whole, at the start and scrolled to the end (where the last one shows).
+        for (const end of [false, true]) {
+          if (end) await scroll.evaluate((el) => (el.scrollLeft = el.scrollWidth));
+          await expect
+            .poll(async () => (await labels(page)).filter((l) => l.cut).map((l) => l.text), { message: `cut labels${end ? " at the end" : ""}` })
+            .toEqual([]);
+          const all = await labels(page);
+          for (const l of all) expect(l.text).toMatch(/^Q[1-4] (\d{4}|'\d{2})$/);
+          if (end) expect(all.at(-1)!.shown).toBe(true);
+        }
+      });
+    });
+  }
+}
+
+test.describe("1440 wide", () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test("the desktop's chart does not move", async ({ page }) => {
+    const chart = await open(page, "light");
+    const svg = chart.getByTestId("chart-svg");
+    const scroll = chart.getByTestId("chart-scroll");
+    // The chart fits its box: nothing to scroll, so no label is moved for a scroll window.
+    const [w, box] = await Promise.all([svg.evaluate((s: SVGSVGElement) => s.width.baseVal.value), scroll.evaluate((el) => el.clientWidth)]);
+    expect(w).toBeGreaterThan(0);
+    expect(w).toBeLessThanOrEqual(box + 1);
+    const ticks = await chart.locator('[data-testid="chart-axis"] > g').evaluateAll((gs) =>
+      gs.map((g) => {
+        const t = g.querySelector('[data-testid="axis-tick"]');
+        return { line: Number(g.querySelector("line")!.getAttribute("x1")), text: t?.textContent ?? "", x: Number(t?.getAttribute("x")), anchor: t?.getAttribute("text-anchor") };
+      }),
+    );
+    expect(ticks.length).toBeGreaterThan(4);
+    // Each quarter is labelled in order, from its own line (just after it), left to right.
+    ticks.forEach((t, n) => {
+      expect(t.text).toMatch(n === 0 || t.text.startsWith("Q1") ? /^Q[1-4] \d{4}$/ : /^Q[2-4] '\d{2}$/);
+      expect(t.anchor).toBe("start");
+      expect(t.x - t.line).toBeCloseTo(3, 1);
+      if (n) expect(t.line).toBeGreaterThan(ticks[n - 1].line);
+    });
+    await expect(chart.getByTestId("today-pill")).toHaveText("Today");
+    // Today's pill sits by its line, inside the chart.
+    const line = Number(await chart.getByTestId("today-line").getAttribute("x1"));
+    const pillX = Number(await chart.locator('[data-testid="today-pill"] rect').getAttribute("x"));
+    expect(Math.abs(pillX - line)).toBeLessThan(40);
+    expect(Number(await chart.getByTestId("today-line").getAttribute("y1"))).toBeGreaterThan(30);
+  });
+});
+
+test("no quarter label is cut at any width from 320 to 1680", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  const chart = await open(page, "light");
+  const scroll = chart.getByTestId("chart-scroll");
+  for (const width of [320, 360, 390, 430, 520, 600, 641, 700, 800, 900, 1024, 1280, 1440, 1680]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const end of [false, true]) {
+      await scroll.evaluate((el, e) => (el.scrollLeft = e ? el.scrollWidth : 0), end);
+      await expect
+        .poll(async () => (await labels(page)).filter((l) => l.cut).map((l) => l.text), { message: `cut labels at ${width}${end ? ", scrolled to the end" : ""}` })
+        .toEqual([]);
+    }
+  }
+});

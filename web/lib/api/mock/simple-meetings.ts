@@ -43,9 +43,12 @@
  * meeting (409 naming it).
  */
 import type { Schemas } from "@/lib/api/client";
-import { agendaOut, decidedOutsideRows, questionsCounts, questionsOfMeeting, questionsOut, questionsPrdReplaced, routeQuestionChanges, seedQuestions, waitingOut, type QuestionsDb } from "./simple-questions";
+import { agendaOut, decidedOutsideRows, findQuestion, questionsCounts, questionsOfMeeting, questionsOut, questionsPrdReplaced, routeQuestionChanges, seedQuestions, trashQuestion, waitingOut, type QuestionsDb } from "./simple-questions";
+import type { DecisionLogRow } from "./decisions";
+import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
 import { plainFlow } from "./simple-visuals";
 import { proposeOffAgenda, seedSimpleProposal } from "./simple-changes";
+import { changeSentence } from "./simple-change-words";
 import { mockNowMs } from "./clock";
 import { companyDateInWords } from "./connections";
 import { stableUuid } from "./ids";
@@ -54,6 +57,7 @@ import { publishOnePager, type OnePagerDb } from "./simple-one-pager";
 import { APPROVED_KEY, draftAct, draftRoadmapOut } from "./meeting-draft";
 import { goalRank, homeRoadmapOf, roadmapId, roadmapOut, tasksWaiting, type SimpleDb } from "./simple-roadmap";
 import type { ChatMeetings, MeetingAgenda, MeetingNote } from "./simple-chat";
+import { agendaRight, agendaRowsOut, editAgenda, restoreAgendaRow, TOPIC_MINS, type AgendaCtx, type AgendaRowDb, type AgendaSheetDb } from "./simple-meeting-agenda";
 
 export const MOCK_MEETINGS_KEY = "po-mock-simple-meetings";
 /** "minutes-later": the minutes job ends this long after End (the production walk: 14 s). */
@@ -82,6 +86,16 @@ export interface MeetingsCtx {
   chatLines?: (meetingId: string) => string[];
   /** prd-questions: the person's remembered Decisions view (preferences.simple_decisions_view). */
   view?: () => "list" | "board" | "meetings" | null;
+  /**
+   * edit-decisions: a decision-log call by id, the log's own row when the reader may read it
+   * (GET /v1/decisions/{number}), or one in Trash: the sheet reads and writes it there, never a copy (one
+   * decisions table in the API, one number per decision).
+   */
+  logRow?: (id: string) => Promise<DecisionLogRow | null>;
+  /** edit-decisions: the decision log's calls this reader may read (not in Trash): Decisions lists the open ones outside meetings (as meetings.decisions_page). */
+  logCalls?: () => DecisionLogRow[];
+  /** edit-decisions: every number the decision log holds, seeded first (one decisions table, one number sequence in the API). */
+  logNumbers?: () => number[];
   /** prd-questions: the decision log's judgement calls waiting for this person (not run approvals). */
   othersWaiting?: () => number;
   /** home-honest-loading: every document of this kind is in Trash (and there is one). */
@@ -93,8 +107,10 @@ export interface MeetingsCtx {
   documents?: () => { id: string; slug: string; title: string; replaced_by?: Schemas["PrdRef"][] }[];
   /** build-rundecide RD1 a: the runs' decided stops on the PRDs shown (./simple-runs.ts), for the Runs card. */
   runs?: (prd: string | null) => Schemas["SimpleRunGroup"][];
+  /** edit-decisions: Settings › Trash, where Delete on the sheet sends a decision or a question. */
+  trash?: () => TrashDb;
   /** runplan-r2: a meeting decision is a row of the decision log too (Company > Decisions), as the API's one decisions row. */
-  logDecision?: (d: { id: string; title: string; at: string; approver_id: string; subjects: { kind: string; id: string; ref?: string }[]; chosen: string; meeting_title: string }) => void;
+  logDecision?: (d: { id: string; number: number; title: string; at: string; approver_id: string; subjects: { kind: string; id: string; ref?: string }[]; chosen: string; meeting_title: string }) => void;
 }
 
 interface Meeting {
@@ -134,6 +150,8 @@ interface Meeting {
   /** Chat actions (./simple-chat.ts): the notes and open questions typed in its chat, and its agenda's next and skipped items. */
   notes?: MeetingNote[];
   agenda_state?: MeetingAgenda;
+  /** agenda-sheet: the agenda's rows, the sheet's batch for Undo and an approver's proposal. */
+  agenda_sheet?: AgendaSheetDb;
   /** meeting-changes-only-its-agenda (agenda.roadmap_id): the roadmap it reviews; none: every roadmap its PRD's items are on. */
   roadmap_id?: string | null;
 }
@@ -155,6 +173,14 @@ interface Decision {
   item_ids?: string[];
   /** A PRD's question decided in the meeting: its code, title and answer (the Decisions page's row, as the API's). */
   question?: { code: string; title: string; chosen: string };
+  /** edit-decisions (ec1 b): the sheet's fields, who made it, its last edit and Trash. */
+  ask?: string | null;
+  context?: string | null;
+  options?: { key: string; label: string }[];
+  review_at?: string | null;
+  created_by?: string | null;
+  edited?: { at: string; by: string } | null;
+  trashed?: boolean;
 }
 
 interface Occurrence {
@@ -176,6 +202,8 @@ export interface MeetingsDb {
   inbox_seen: Record<string, string>;
   /** prd-questions: the invented PRD's open questions (./simple-questions.ts), seeded on first read. */
   questions?: QuestionsDb;
+  /** edit-decisions: the sheet's changes to decisions (edit_decision, withdraw_decision), for Undo. */
+  sheet_changes?: { change: Change; was: Decision }[];
 }
 
 interface Prd {
@@ -216,7 +244,7 @@ function prds(ctx: MeetingsCtx): Prd[] {
   const titled = (slug: string, title: string) => docs.find((d) => d.slug === slug)?.title ?? title;
   const known: Prd[] = [
     { slug: "guided-setup", title: titled("guided-setup", "Guided setup"), id: ctx.onePager.doc.id, ids: [ctx.onePager.doc.id, stableUuid("simple-prd/onboarding-roadmap")], decider: dana?.id ?? null, reviewers: approver && !flags().includes("no-reviewers") ? [approver.id] : [] },
-    { slug: "usage-alerts", title: titled("usage-alerts", "Usage alerts"), id: stableUuid("simple-prd/alerts-roadmap"), ids: [stableUuid("simple-prd/alerts-roadmap")], decider: null, reviewers: [] },
+    { slug: "usage-alerts", title: titled("usage-alerts", "Usage alerts"), id: stableUuid("simple-prd/alerts-roadmap"), ids: [stableUuid("simple-prd/alerts-roadmap")], decider: ctx.roadmap.prd_deciders?.["usage-alerts"] ?? null, reviewers: [] },
   ];
   // qa4-simple-prd-1: the API starts a review of any PRD the reader reads, not only these two.
   const more = docs.filter((d) => !known.some((k) => k.slug === d.slug || k.ids.includes(d.id))).map((d) => ({ slug: d.slug, title: d.title, id: d.id, ids: [d.id], decider: null, reviewers: [] }));
@@ -286,8 +314,10 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
   const startedAt = iso(now - 7 * day + 3 * 3_600_000);
   const digest = item("alert-digest");
   const checklist = item("setup-checklist");
+  // edit-decisions: numbered after the decision log's seeded calls (one number sequence in the API).
+  const base = Math.max(0, ...(ctx.logNumbers?.() ?? []));
   const d = (n: number, title: string, extra: Partial<Decision>): Decision => ({
-    id: stableUuid(`simple-meeting-decision/${n}`), number: n, title, origin: "manual", status: "decided", approver_id: owner ?? null,
+    id: stableUuid(`simple-meeting-decision/${n}`), number: base + n, title, origin: "manual", status: "decided", approver_id: owner ?? null,
     at: iso(now - (10 - n) * day), subjects: [], meeting_id: null, change_ids: [], ...extra,
   });
   const db: MeetingsDb = {
@@ -297,6 +327,11 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
       d(1, "Start guided setup with the checklist", { subjects: [{ kind: "document", id: setup.id }, ...(checklist ? [{ kind: "roadmap_item", id: checklist.id, ref: checklist.key }] : [])] }),
       d(2, "Keep the free plan's alert limit at three", { subjects: [{ kind: "document", id: alerts.id }] }),
       d(3, "Should muted teams still get the weekly digest?", { origin: "oracle", status: "proposed", approver_id: null, subjects: [{ kind: "document", id: alerts.id }] }),
+      // edit-decisions (ec1 b): an open decision outside meetings with every field the sheet shows.
+      d(5, "Keep the free plan's five-seat limit", {
+        status: "proposed", at: iso(now - 2 * day), subjects: [{ kind: "document", id: alerts.id }], ask: "Keep the free plan's five-seat limit?",
+        context: "Raised in the weekly product review.", options: [{ key: "a", label: "Yes, this quarter" }, { key: "b", label: "Not now" }], review_at: iso(now + 26 * day).slice(0, 10), created_by: owner ?? null,
+      }),
       d(4, `Moved ${digest?.title ?? "Alert digest"}`, { origin: "meeting", meeting_id: past, at: iso(Date.parse(startedAt) + 20 * 60_000), subjects: [...(digest ? [{ kind: "roadmap_item", id: digest.id, ref: digest.key }] : []), { kind: "document", id: alerts.id }] }),
     ],
     meetings: [{
@@ -308,7 +343,7 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
       minutes: {
         // qa-simple-decide-6: a short prose count, never the decision's own title or a note's text.
         summary: "1 decision taken.",
-        open_questions: ["D-3: Should muted teams still get the weekly digest?"],
+        open_questions: [`D-${base + 3}: Should muted teams still get the weekly digest?`],
         action_items: commenter ? [{ title: "Draft the quiet hours copy", owner_id: commenter.id, owner_name: nameOf(ctx, commenter.id), due_date: iso(now + 7 * day).slice(0, 10) }] : [],
         // walkc-meeting r2 (5j): as meetings._waits, the wait names whom it is on.
         waits: [{ what: "Usage alerts: the working draft is not approved yet", on: approversOf(ctx, alerts).map((i) => ref(ctx, i)) }],
@@ -319,8 +354,10 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
     }],
     inbox_seen: {},
   };
-  if (checklist) (ctx.roadmap.decided_in ??= {})[checklist.id] = [decidedRef(ctx, db, db.decisions[0])];
-  if (digest) (ctx.roadmap.decided_in ??= {})[digest.id] = [decidedRef(ctx, db, db.decisions[3])];
+  // The seeded decisions by their seed's id, never by their place in the list.
+  const seededDecision = (n: number) => db.decisions.find((x) => x.id === stableUuid(`simple-meeting-decision/${n}`))!;
+  if (checklist) (ctx.roadmap.decided_in ??= {})[checklist.id] = [decidedRef(ctx, db, seededDecision(1))];
+  if (digest) (ctx.roadmap.decided_in ??= {})[digest.id] = [decidedRef(ctx, db, seededDecision(4))];
   // The demo proposal a meeting decides is seeded when a meeting starts (seedMeetingProposal), not here: Home and the
   // rail read meetings on every page, and a proposal made by that read changed what the roadmap and Home showed.
   holder.simple_meetings = db;
@@ -563,7 +600,72 @@ function settleStuck(m: Meeting) {
   else if (waited > MINUTES_SLOW_MS) m.minutes_job = "slow";
 }
 
-function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeetingOut"] & { notes: MeetingNote[]; agenda: MeetingAgenda } {
+/** agenda-sheet (meetings._agenda_out's inputs): the PRD's features, its decider, and the items decided in the meeting (done). */
+function agendaCtx(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting, p: Prd): AgendaCtx {
+  return {
+    me: ctx.me,
+    nameOf: (id) => nameOf(ctx, id),
+    features: prdItems(ctx, p).map((i) => ({ id: i.id, title: i.title })),
+    decider: p.decider,
+    skipped: (m.agenda_state?.skipped ?? []).map((x) => x.id),
+    live: m.status === "live",
+    // port-an-decisions (meetings._trash_removed): a removed item waits in Settings › Trash.
+    trash: (c) => {
+      const t = ctx.trash?.();
+      const id = crypto.randomUUID();
+      const at = new Date().toISOString();
+      t?.entries.push({
+        out: {
+          id, root: { type: "agenda_item", id: c.id, slug: null, title: c.name, kind: "agenda_item" }, items: [],
+          deleted_by: ctx.me.id, deleted_by_name: nameOf(ctx, ctx.me.id), deleted_at: at, reason: null, published: false,
+          purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString(),
+        },
+        documents: [], versions: [], runs: [], intakes: [],
+        agenda: { meeting_id: m.id, row: c.row, at: c.at ?? 0 },
+      });
+      return id;
+    },
+    untrash: (ids) => {
+      const t = ctx.trash?.();
+      if (t) t.entries = t.entries.filter((e) => !ids.includes(e.out.id));
+    },
+  };
+}
+
+/** port-an-decisions: Trash's Restore of a removed agenda item (meetings.restore_agenda_item); the
+ * refusal's words, else null. */
+export function restoreAgendaItem(ctx: MeetingsCtx, db: MeetingsDb, entry: TrashEntryRow): string | null {
+  const a = entry.agenda!;
+  const m = db.meetings.find((x) => x.id === a.meeting_id);
+  if (!m) return "Its meeting was deleted: there is no agenda to put it back on";
+  if (m.status === "ended") return "Its meeting has ended: the agenda is closed";
+  const p = prds(ctx).find((x) => x.slug === m.prd);
+  if (!p) return "Its meeting's PRD is gone";
+  return restoreAgendaRow(agendaSheet(ctx, db, m, p), agendaCtx(ctx, db, m, p), a.row as AgendaRowDb, a.at, entry.out.id, entry.out.root.title);
+}
+
+function agendaSheet(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting, p: Prd): AgendaSheetDb {
+  if (!m.agenda_sheet) {
+    m.agenda_sheet = {};
+    // "meeting-agenda-sheet": a review of Usage alerts starts mid-agenda, as the owner's picked frames draw it.
+    const mid = ctx.roadmap.agenda_midway;
+    if (mid && p.slug === "usage-alerts") {
+      const f = prdItems(ctx, p);
+      const id = (title: string) => f.find((i) => i.title === title)?.id ?? "";
+      const row = (title: string, mins = 10) => ({ id: id(title), feature_id: id(title), title: null, mins });
+      m.agenda_sheet = {
+        done: [id("Alert rules engine")],
+        items: [row("Alert rules engine"), row("Weekly alert digest", 15), row("Mobile alert push"), { id: crypto.randomUUID(), feature_id: null, title: mid.topic, mins: TOPIC_MINS, by: mid.by }, row("Alert history export")],
+      };
+      m.agenda_state = { next: null, skipped: [{ id: id("Alert history export"), title: "Alert history export" }] };
+    }
+  }
+  const done = db.decisions.filter((d) => d.meeting_id === m.id).flatMap((d) => d.subjects.filter((x) => x.kind === "roadmap_item").map((x) => x.id));
+  if (done.length) m.agenda_sheet.done = [...new Set([...(m.agenda_sheet.done ?? []), ...done])];
+  return m.agenda_sheet;
+}
+
+function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeetingOut"] & { notes: MeetingNote[]; agenda: Schemas["SimpleAgenda"] } {
   const p = prds(ctx).find((x) => x.slug === m.prd)!;
   const deciderOrOwner = ctx.me.id === p.decider || ctx.me.role === "owner";
   return {
@@ -599,10 +701,12 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
       end: presenterOrDecider(ctx, m, p) && m.minutes_state !== "sent" && RANK[ctx.me.role] >= RANK.commenter,
       redraft: m.status === "ended" && m.minutes_state === "drafting" && m.minutes_job === "failed" && presenterOrDecider(ctx, m, p),
       retry_delivery: mayRetry(ctx, m),
+      edit_agenda: m.status === "live" && agendaRight(agendaCtx(ctx, db, m, p)) === "save",
+      propose_agenda: m.status === "live" && agendaRight(agendaCtx(ctx, db, m, p)) === "propose",
     },
     not_approved: [],
     notes: m.notes ?? [],
-    agenda: m.agenda_state ?? { next: null, skipped: [] },
+    agenda: { ...(m.agenda_state ?? { next: null, skipped: [] }), ...agendaRowsOut(agendaSheet(ctx, db, m, p), agendaCtx(ctx, db, m, p)) },
     // build-runplan RP2: the run's draft roadmap of the PRD (meeting_draft.draft_out).
     draft_roadmap: draftRoadmapOut(ctx.roadmap, p.ids, approvedHere(db, m, p.ids)),
   };
@@ -729,14 +833,19 @@ function approvedHere(db: MeetingsDb, m: Meeting, prdIds: string[]): number | nu
   return d ? Number(d.chosen!.slice(APPROVED_KEY.length + 1)) : null;
 }
 
+/** edit-decisions: the next decision number, after both stores' (one number sequence in the API). */
+function nextNumber(db: MeetingsDb, ctx: MeetingsCtx): number {
+  return Math.max(0, ...db.decisions.map((d) => d.number), ...(ctx.logNumbers?.() ?? [])) + 1;
+}
+
 function record(db: MeetingsDb, ctx: MeetingsCtx, m: Meeting, title: string, subjects: Decision["subjects"], changeIds: string[], itemIds: string[] = [], chosen = "decided"): Decision {
-  const number = Math.max(0, ...db.decisions.map((d) => d.number)) + 1;
+  const number = nextNumber(db, ctx);
   const d: Decision = {
     id: crypto.randomUUID(), number, title, origin: "meeting", status: "decided", approver_id: ctx.me.id, at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))),
     subjects, meeting_id: m.id, change_ids: changeIds, item_ids: itemIds, chosen,
   };
   db.decisions.push(d);
-  ctx.logDecision?.({ id: d.id, title, at: d.at, approver_id: ctx.me.id, subjects, chosen, meeting_title: m.title });
+  ctx.logDecision?.({ id: d.id, number: d.number, title, at: d.at, approver_id: ctx.me.id, subjects, chosen, meeting_title: m.title });
   // The items and lines it names link to it (decided_in, a line's decisions), newest first.
   for (const s of subjects) {
     const row = { id: d.id, number: d.number, title: d.title };
@@ -937,7 +1046,7 @@ export function chatMeetings(open: () => { db: MeetingsDb; ctx: MeetingsCtx }): 
         d.approver_id = deciderId;
         return d.id;
       }
-      const number = Math.max(0, ...db.decisions.map((d) => d.number)) + 1;
+      const number = nextNumber(db, ctx);
       const d: Decision = {
         id: crypto.randomUUID(), number, title, origin: "chat", status: "decided", approver_id: deciderId, at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))),
         subjects: documentId ? [{ kind: "document", id: documentId }] : [], meeting_id: null, change_ids: [],
@@ -962,9 +1071,10 @@ export function chatMeetings(open: () => { db: MeetingsDb; ctx: MeetingsCtx }): 
       const to = ids.map(may).find((x) => !!x);
       return to ? { id: to.id, name: to.name } : null;
     },
-    propose(title, deciderId, documentId, id) {
-      const { db } = open();
-      const number = Math.max(0, ...db.decisions.map((d) => d.number)) + 1;
+    propose(title, deciderId, documentId, id, logNumber) {
+      const { db, ctx } = open();
+      // The decision log's number when it is the log's call (one number per decision).
+      const number = logNumber ?? nextNumber(db, ctx);
       const d: Decision = {
         // The decision log's id: its Decide or Decline (withdraw) shows here too (server.ts).
         id: id ?? crypto.randomUUID(), number, title, origin: "chat", status: "proposed", approver_id: deciderId, at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))),
@@ -1030,7 +1140,24 @@ function row(ctx: MeetingsCtx, d: Decision): Schemas["SimpleDecisionRow"] {
     id: d.id, number: d.number, title: d.question?.title ?? d.title, origin: d.question ? "prd" : d.origin, status: d.status, approver: d.approver_id ? ref(ctx, d.approver_id) : null,
     decided_at: d.status === "decided" ? d.at : null, created_at: d.at, subjects: d.subjects, flow: decidedFlow(ctx, d),
     code: d.question?.code ?? null, chosen: d.question?.chosen ?? null,
+    // edit-decisions (ec1 b): every field the sheet shows, what the reader may do there, its last edit.
+    question: d.ask ?? null, context: d.context ?? null, options: d.options ?? [], review_at: d.review_at ?? null, can: sheetCan(ctx, d),
+    edited_at: d.edited?.at ?? null, edited_by: d.edited ? ref(ctx, d.edited.by) : null,
   };
+}
+
+/** decision_sheet.may_change: its creator, its decider or an owner (an open one, never a run's). */
+function maySheet(ctx: MeetingsCtx, d: Decision): boolean {
+  if (d.status !== "proposed" || d.origin === "checkpoint" || d.question) return false;
+  return ctx.me.role === "owner" || (RANK[ctx.me.role] >= RANK.commenter && (d.approver_id === ctx.me.id || d.created_by === ctx.me.id));
+}
+
+/** decision_sheet.can: the sheet's buttons for this reader (decided ones stay as they are). */
+function sheetCan(ctx: MeetingsCtx, d: Decision): Schemas["SimpleDecisionCan"] {
+  const none = { edit: false, propose: false, withdraw: false, delete: false, reassign: false };
+  if (d.status !== "proposed" || d.origin === "checkpoint" || d.question) return none;
+  const change = maySheet(ctx, d);
+  return { edit: change, propose: !change && RANK[ctx.me.role] >= RANK.commenter, withdraw: change, delete: change, reassign: ctx.me.role === "owner" };
 }
 
 function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Response {
@@ -1055,7 +1182,7 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
   const keep = (d: Decision) => !match || d.subjects.some((s) => match!.has(s.id));
   const ms = [...db.meetings].sort((a, b) => (a.started_at < b.started_at ? 1 : -1));
   let shown = ms.filter((m) => !meetingQ || m.id === meetingQ);
-  const of = (m: Meeting) => db.decisions.filter((d) => d.meeting_id === m.id).sort(newestFirst);
+  const of = (m: Meeting) => db.decisions.filter((d) => d.meeting_id === m.id && !d.trashed).sort(newestFirst);
   if (prd) shown = shown.filter((m) => m.prd === prd.slug || of(m).some(keep));
   else if (match) shown = shown.filter((m) => of(m).some(keep));
   // The questions follow the filters too (as the API): the PRD's, the goal's PRDs', the meeting's.
@@ -1071,7 +1198,9 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
   }
   // qa-simple-decide-20 (as decisions_page): an open decision a shown meeting lists as its open question ("D-3: ...") is not listed again.
   const asked = new Set(shown.flatMap((m) => (m.minutes?.open_questions ?? []).map((x) => /^D-(\d+):/.exec(x)?.[1]).filter(Boolean)));
-  const others = meetingQ ? [] : db.decisions.filter((d) => !d.meeting_id && product(d) && keep(d) && !(d.status !== "decided" && asked.has(String(d.number)))).sort((a, b) => b.number - a.number);
+  // edit-decisions (as decisions_page, one decisions table): the decision log's open product calls are listed here too.
+  const logOpen = (ctx.logCalls?.() ?? []).filter((r) => r.status === "proposed" && r.origin !== "prd" && !db.decisions.some((x) => x.id === r.id)).map(fromLog);
+  const others = meetingQ ? [] : [...db.decisions, ...logOpen].filter((d) => !d.meeting_id && !d.trashed && product(d) && keep(d) && !(d.status !== "decided" && asked.has(String(d.number)))).sort((a, b) => b.number - a.number);
   const out: Schemas["SimpleDecisionsOut"] = {
     meetings: shown.map((m) => {
       const whole = !!prd && !goal && m.prd === prd.slug;
@@ -1217,6 +1346,13 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     m.change_mode = mode;
     m.change_people = people;
     return ok();
+  }
+  // agenda-sheet (meetings.edit_agenda): one op of the Agenda sheet.
+  if (p[4] === "agenda" && method === "POST") {
+    const b = (await body(req)) as Schemas["SimpleAgendaEditIn"];
+    const sheet = agendaSheet(ctx, db, m, prd);
+    const err = editAgenda(sheet, agendaCtx(ctx, db, m, prd), b);
+    return err ? json(err.status, { detail: err.detail }) : ok();
   }
   if (p[4] === "comments" && method === "POST") {
     const b = (await body(req)) as Partial<Schemas["SimpleMeetingCommentIn"]>;
@@ -1376,8 +1512,8 @@ function qdb(ctx: MeetingsCtx, db: MeetingsDb): QuestionsDb {
  * prd-questions: decide_question and name_decider through POST /v1/simple/changes (and their
  * undo); with a live meeting's session_id the decision lands in that meeting's minutes.
  */
-export function routeMeetingQuestions(db: MeetingsDb, ctx: MeetingsCtx, req: Request, p: string[]): Promise<Response | null> {
-  return routeQuestionChanges(ctx, qdb(ctx, db), req, p, (sessionId, title, own) => {
+export async function routeMeetingQuestions(db: MeetingsDb, ctx: MeetingsCtx, req: Request, p: string[]): Promise<Response | null> {
+  return (await routeQuestionChanges(ctx, qdb(ctx, db), req, p, (sessionId, title, own) => {
     const m = db.meetings.find((x) => x.session_id === sessionId);
     if (!m) return false;
     if (m.status !== "live") return "ended";
@@ -1386,5 +1522,247 @@ export function routeMeetingQuestions(db: MeetingsDb, ctx: MeetingsCtx, req: Req
     const d = record(db, ctx, m, title, prd ? [{ kind: "document", id: prd.id }] : [], []);
     if (own) d.question = own;
     return m.id;
+  })) ?? routeDecisionSheet(db, ctx, req, p);
+}
+
+/** decision_sheet._clean for a decision: title, question, context, options (labels) and review day. */
+function cleanDecision(after: Record<string, unknown>): Record<string, unknown> | string {
+  const outp: Record<string, unknown> = {};
+  const words = (v: unknown) => String(v ?? "").split(/\s+/).filter(Boolean).join(" ");
+  if ("title" in after) {
+    if (!words(after.title)) return "after.title: a title";
+    outp.title = words(after.title).slice(0, 200);
+  }
+  for (const k of ["question", "context"] as const) if (k in after) outp[k] = String(after[k] ?? "").trim() || null;
+  if ("options" in after) {
+    const labels = (Array.isArray(after.options) ? after.options : []).map(words).filter(Boolean);
+    if (labels.length > 6) return "after.options: at most 6";
+    outp.options = labels;
+  }
+  if ("review_at" in after) {
+    const day = after.review_at ? String(after.review_at) : null;
+    if (day && (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day < iso(mockNowMs()).slice(0, 10))) return "after.review_at: a day from today on";
+    outp.review_at = day;
+  }
+  return outp;
+}
+
+const sheetFields = (d: Decision): Record<string, unknown> => ({ title: d.title, question: d.ask ?? null, context: d.context ?? null, options: (d.options ?? []).map((o) => o.label), review_at: d.review_at ?? null });
+
+/** decision_sheet._options: an option kept where its label stays; new ones keyed after the others. */
+function withOptions(old: { key: string; label: string }[], labels: string[]) {
+  let next = old.length;
+  return labels.map((label) => old.find((o) => o.label === label) ?? { key: `o${++next}`, label });
+}
+
+/**
+ * edit-decisions (ec1 b, oracle.simple.decision_sheet): edit_decision and withdraw_decision on an
+ * open decision through POST /v1/simple/changes and their Undo; DELETE /v1/simple/decisions/{id}
+ * (a decision or a PRD's question) to Settings › Trash and POST .../restore.
+ */
+async function routeDecisionSheet(db: MeetingsDb, ctx: MeetingsCtx, req: Request, p: string[]): Promise<Response | null> {
+  const now = iso(mockNowMs());
+  // GET /v1/simple/decisions/{id} (meetings_router.get_simple_decision): one decision as its Decisions row.
+  if (req.method === "GET" && p[1] === "simple" && p[2] === "decisions" && p.length === 4 && p[3] !== "waiting") {
+    const { d } = await sheetDecision(db, ctx, p[3]);
+    return d ? json(200, row(ctx, d)) : json(404, { detail: "No such decision" });
+  }
+  if (p[1] === "simple" && p[2] === "decisions" && p.length >= 4 && p[3] !== "waiting") {
+    const trash = ctx.trash?.();
+    if (!trash) return null;
+    if (RANK[ctx.me.role] < RANK.commenter) return json(403, { detail: "Requires the commenter role" });
+    const id = p[3];
+    if (req.method === "POST" && p[4] === "restore" && p.length === 5) {
+      const entry = trash.entries.find((e) => (e.out.root.type === "decision" || e.out.root.type === "question") && e.out.root.id === id);
+      if (!entry) return json(404, { detail: "No such decision in Trash" });
+      if (!mayRestore(entry, ctx.me)) return json(403, { detail: "Only an owner, or whoever deleted it, restores this" });
+      return json(200, restoreFromTrash(trash, entry, now, { items: [], sheet: [...db.decisions, ...(db.questions?.questions ?? []), ...[await ctx.logRow?.(id)].filter((r) => !!r)] }));
+    }
+    if (req.method !== "DELETE" || p.length !== 4) return null;
+    const reason = new URL(req.url, "http://mock").searchParams.get("reason");
+    let root: Schemas["TrashEntryOut"]["root"];
+    const q = findQuestion(qdb(ctx, db), id);
+    const { d, log } = await sheetDecision(db, ctx, id);
+    if (q && !q.trashed) {
+      const r = trashQuestion(ctx, q);
+      if (r instanceof Response) return r;
+      root = r.root;
+    } else if (d && product(d)) {
+      if (d.status !== "proposed") return json(409, { detail: `D-${d.number} ${d.title} is ${d.status}; only an open one goes to Trash` });
+      if (!maySheet(ctx, d)) return json(403, { detail: "Only its decider, whoever made it or an owner deletes it" });
+      d.trashed = true;
+      if (log) toLog(log, d, now, ctx.me.id);
+      root = { type: "decision", id: d.id, slug: null, title: d.title, kind: "decision", code: `D-${d.number}` };
+    } else return json(404, { detail: "No such decision" });
+    const row: TrashEntryRow = {
+      out: {
+        id: crypto.randomUUID(), root, items: [], deleted_by: ctx.me.id, deleted_by_name: nameOf(ctx, ctx.me.id), deleted_at: now,
+        reason, published: false, purge_after: new Date(Date.parse(now) + 30 * 86_400_000).toISOString(),
+      },
+      documents: [], versions: [], runs: [], intakes: [],
+    };
+    trash.entries.push(row);
+    return json(200, { entry: entryOut(row, now, true), change: null, can_restore: true });
+  }
+  if (p[1] !== "simple" || p[2] !== "changes" || req.method !== "POST") return null;
+  const held = (db.sheet_changes ??= []);
+  const decided = held.find((x) => x.change.id === p[3]);
+  if (decided && p.length === 5 && (p[4] === "accept" || p[4] === "decline")) {
+    const why = ((await req.clone().json().catch(() => ({}))) ?? {}) as { reason?: string | null };
+    return decideSheetChange(db, ctx, decided, p[4], why.reason ?? null, now);
+  }
+  if (p.length === 5 && p[4] === "undo") {
+    const h = held.find((x) => x.change.id === p[3]);
+    if (!h) return null;
+    if (h.change.by !== ctx.me.id && ctx.me.role !== "owner") return json(403, { detail: "Only who made it undoes it" });
+    if (h.change.undone) return json(409, { detail: "Already undone" });
+    const at = db.decisions.findIndex((x) => x.id === h.was.id);
+    if (at >= 0) db.decisions[at] = { ...structuredClone(h.was), approver_id: db.decisions[at].approver_id };
+    const log = await ctx.logRow?.(h.was.id);
+    if (log) toLog(log, { ...structuredClone(h.was), approver_id: log.approver_id }, now, ctx.me.id);
+    h.change.undone = true;
+    h.change.can_undo = false;
+    return json(200, { change: { ...h.change, id: crypto.randomUUID(), status: "undone", undoes_id: h.change.id, undone: false, at: now }, flags: [] });
+  }
+  if (p.length !== 3) return null;
+  const b = ((await req.clone().json().catch(() => ({}))) ?? {}) as Schemas["SimpleChangeIn"];
+  if (b.op !== "edit_decision" && b.op !== "withdraw_decision") return null;
+  if (RANK[ctx.me.role] < RANK.commenter) return json(403, { detail: "Viewers read decisions; they do not change them" });
+  const { d, log } = await sheetDecision(db, ctx, String(b.target?.decision_id ?? ""));
+  if (!d) return json(404, { detail: "No such decision" });
+  if (d.status !== "proposed") return json(409, { detail: `D-${d.number} ${d.title} is ${d.status}; only an open one is changed` });
+  const applies = maySheet(ctx, d);
+  let before: Record<string, unknown>;
+  let after: Record<string, unknown>;
+  if (b.op === "withdraw_decision") {
+    if (!applies) return json(403, { detail: "Only its decider, whoever made it or an owner withdraws it" });
+    before = { status: "proposed" };
+    after = { status: "withdrawn" };
+  } else {
+    const clean = cleanDecision((b.after ?? {}) as Record<string, unknown>);
+    if (typeof clean === "string") return json(422, { detail: clean });
+    const cur = sheetFields(d);
+    before = Object.fromEntries(Object.keys(clean).map((k) => [k, cur[k]]));
+    after = clean;
+    if (!Object.keys(after).length || JSON.stringify(before) === JSON.stringify(after)) return json(422, { detail: "Nothing changed" });
+  }
+  const change: Change = {
+    id: crypto.randomUUID(), session_id: null, document_id: null, draft_ids: [], op: b.op, target: { decision_id: d.id, name: `D-${d.number} ${d.title}` },
+    before, after, status: applies ? "applied" : "proposed", by: ctx.me.id, by_name: nameOf(ctx, ctx.me.id), at: now,
+    decided_by: applies ? ctx.me.id : null, decided_at: applies ? now : null, reason: b.reason ?? null, decision_reason: null,
+    routed_to: applies ? [] : d.approver_id ? [d.approver_id] : owners(ctx).slice(0, 1), undoes_id: null, undone: false, can_decide: false, can_undo: applies,
+  };
+  held.push({ change, was: structuredClone(d) });
+  if (applies && b.op === "withdraw_decision") d.status = "withdrawn";
+  else if (applies) writeEdit(d, after, now, ctx.me.id);
+  if (applies && log) toLog(log, d, now, ctx.me.id);
+  return json(201, { change, flags: [] });
+}
+
+/** decision_sheet._write for edit_decision: the fields as asked, and who edited it last. */
+function writeEdit(d: Decision, after: Record<string, unknown>, now: string, by: string): void {
+  if ("title" in after) d.title = String(after.title);
+  if ("question" in after) d.ask = (after.question as string | null) ?? null;
+  if ("context" in after) d.context = (after.context as string | null) ?? null;
+  if ("options" in after) d.options = withOptions(d.options ?? [], after.options as string[]);
+  if ("review_at" in after) d.review_at = (after.review_at as string | null) ?? null;
+  d.edited = { at: now, by };
+}
+
+/**
+ * edit-decisions (as decision_sheet.may_decide_change): the decision sheet's suggestions waiting
+ * for this reader (an owner or the decision's decider), for GET /v1/simple/changes beside the
+ * change engine's (one changes table in the API: Home's and Waiting for you's Accept).
+ */
+export async function sheetProposals(db: MeetingsDb, ctx: MeetingsCtx, status: string | null): Promise<Change[]> {
+  const out: Change[] = [];
+  for (const h of db.sheet_changes ?? []) {
+    if (status && h.change.status !== status) continue;
+    const { d } = await sheetDecision(db, ctx, String(h.change.target.decision_id ?? ""));
+    const decides = ctx.me.role === "owner" || (!!d && d.approver_id === ctx.me.id);
+    if (!decides && h.change.by !== ctx.me.id) continue;
+    // As changes._target: one still waiting names its decision as it is now; its words say so (change_words).
+    const target = h.change.status === "proposed" && d ? { ...h.change.target, name: `D-${d.number} ${d.title}` } : h.change.target;
+    const c = { ...h.change, target, can_decide: h.change.status === "proposed" && decides };
+    out.push({ ...c, words: changeSentence(c, c.by_name, null, c.undone) });
+  }
+  return out;
+}
+
+/**
+ * edit-decisions (as decision_sheet.decide): Accept (applied as asked, unless the decision is no
+ * longer open or changed since: 409 "outdated") or Decline of a sheet suggestion, by its decider
+ * or an owner. null: not a sheet suggestion.
+ */
+async function decideSheetChange(db: MeetingsDb, ctx: MeetingsCtx, h: { change: Change; was: Decision }, action: "accept" | "decline", reason: string | null, now: string): Promise<Response> {
+  const c = h.change;
+  const { d, log } = await sheetDecision(db, ctx, String(c.target.decision_id ?? ""));
+  if (!(ctx.me.role === "owner" || (!!d && d.approver_id === ctx.me.id))) return json(403, { detail: "Only an owner or its decider decides this proposal" });
+  if (c.status !== "proposed") return json(409, { detail: `This change is ${c.status} already` });
+  if (action === "accept") {
+    if (!d) return json(404, { detail: "No such decision" });
+    if (d.status !== "proposed") return json(409, { detail: `outdated: D-${d.number} ${d.title} is ${d.status}` });
+    const after = c.after as Record<string, unknown>;
+    if (c.op === "edit_decision") {
+      const now_ = sheetFields(d);
+      const current = Object.fromEntries(Object.keys(after).map((k) => [k, now_[k]]));
+      const asked = Object.fromEntries(Object.keys(after).map((k) => [k, (c.before as Record<string, unknown>)[k]]));
+      if (JSON.stringify(current) !== JSON.stringify(asked)) return json(409, { detail: { message: "outdated: changed since it was proposed", current } });
+      writeEdit(d, after, now, c.by);
+    } else d.status = "withdrawn";
+    if (log) toLog(log, d, now, c.by);
+  }
+  Object.assign(c, { status: action === "accept" ? "accepted" : "declined", decided_by: ctx.me.id, decided_at: now, decision_reason: reason, can_decide: false });
+  return json(200, { change: c, flags: [] });
+}
+
+/**
+ * edit-decisions: the open product decision the sheet acts on, by id: Simple's own, else the
+ * decision log's call itself (`log`, read as a sheet decision and written back by toLog; never
+ * copied into Simple's store, so it keeps its one number).
+ */
+async function sheetDecision(db: MeetingsDb, ctx: MeetingsCtx, id: string): Promise<{ d: Decision | null; log: DecisionLogRow | null }> {
+  const log = (await ctx.logRow?.(id)) ?? null;
+  // A call in both (made or asked in Simple) reads as the log has it now: one row in the API.
+  const copy = db.decisions.find((x) => x.id === id);
+  if (copy && log) Object.assign(copy, fromLog(log), { origin: copy.origin, at: copy.at, subjects: copy.subjects, meeting_id: copy.meeting_id, change_ids: copy.change_ids });
+  const own = db.decisions.find((x) => x.id === id && !x.trashed && product(x));
+  if (own) return { d: own, log };
+  if (!log || log.trashed || log.origin === "checkpoint" || db.decisions.some((x) => x.id === id)) return { d: null, log: null };
+  return { d: fromLog(log), log };
+}
+
+/** A decision-log call as the sheet reads it (its own number, fields and last sheet edit). */
+function fromLog(r: DecisionLogRow): Decision {
+  return {
+    id: r.id, number: r.number, title: r.title, origin: r.origin, status: r.status === "proposed" || r.status === "decided" ? r.status : "withdrawn",
+    approver_id: r.approver_id ?? null, at: r.created_at, subjects: (r.subjects ?? []).map((s) => ({ kind: String(s.kind), id: String(s.id) })), meeting_id: null, change_ids: [],
+    ask: r.question ?? null, context: r.context ?? null, options: (r.options ?? []).map((o) => ({ key: o.key, label: o.label })), review_at: r.review_at ?? null,
+    created_by: r.created_by ?? null, edited: r.sheet_edited ?? null, trashed: !!r.trashed,
+  };
+}
+
+/** Writes the sheet's change back to the decision-log call: its fields, a withdrawal (or its undo), Trash. */
+function toLog(r: DecisionLogRow, d: Decision, now: string, by: string): void {
+  r.title = d.title;
+  r.question = d.ask ?? null;
+  r.context = d.context ?? null;
+  r.options = (d.options ?? []).map((o) => r.options.find((x) => x.key === o.key && x.label === o.label) ?? { key: o.key, label: o.label, summary: null, pros: [], cons: [], evidence_ids: [], cost_if_wrong: null, recommended: false });
+  r.review_at = d.review_at ?? null;
+  if (d.status === "withdrawn" && r.status === "proposed") Object.assign(r, { status: "withdrawn", withdrawn_at: now, withdrawn_by: by, withdrawn_reason: null });
+  else if (d.status === "proposed" && r.status === "withdrawn") Object.assign(r, { status: "proposed", withdrawn_at: null, withdrawn_by: null, withdrawn_reason: null });
+  r.sheet_edited = d.edited ?? null;
+  r.trashed = !!d.trashed;
+  r.updated_at = now;
+}
+
+/** edit-decisions: a decision made in Simple (POST /v1/decisions) is listed on its Decisions page too, with every field. */
+export function sheetDecisionMade(db: MeetingsDb, made: Schemas["DecisionOut"], by: string): void {
+  if (db.decisions.some((x) => x.id === made.id)) return;
+  db.decisions.push({
+    // The decision log's number (one decisions table in the API, one number per decision).
+    id: made.id, number: made.number, title: made.title, origin: "manual", status: "proposed", approver_id: made.approver_id,
+    at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))), subjects: [], meeting_id: null, change_ids: [],
+    ask: made.question ?? null, context: made.context ?? null, options: (made.options ?? []).map((o) => ({ key: o.key, label: o.label })), review_at: made.review_at ?? null, created_by: by,
   });
 }

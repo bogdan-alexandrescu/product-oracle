@@ -25,7 +25,7 @@ import { daysInWords } from "./days";
 import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { carriedFor, REPLACED_PRD_SCENARIO, seedReplacedBases } from "./replaced-prd";
-import { decidePricing, decisionInbox, enlargeDecisions, logMeetingDecision, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
+import { decidePricing, decisionInbox, enlargeDecisions, logMeetingDecision, logReadable, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionLogRow, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
 import { FIT_COMPANY_SCENARIO, FIT_SCENARIOS, fitDateGoal, routeFitDate } from "./fit-date";
 import { generalReply } from "./general-chat";
@@ -168,7 +168,7 @@ import { bucketGoalsInOrder, placeBucketGoal, placeBucketGoals, routeGoalBuckets
 import { proposeGoalDelete, routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { routeCurrentState, seedCurrentState, type CurrentStateDb } from "./currentstate";
 import { featureKeyOf, prioritiesOut } from "./simple-priorities";
-import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
+import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, restoreAgendaItem, sheetDecisionMade, sheetProposals, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
 import { runGroupsOut } from "./simple-runs";
 import { rebuildsOut } from "./rebuilds";
@@ -186,7 +186,7 @@ import { applyFitDate, knowGoalMapItems, seedFitDateRoadmap } from "./simple-roa
 import { closed, GOALS, prdTrackOwnerIds, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapItems, routeGoalMap, type GoalMap } from "./goal-map";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
-import { emptyTrash, routeTrash, type TrashDb } from "./trash";
+import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience, spansRow, type BoardItem } from "./audience";
@@ -311,6 +311,8 @@ export interface Db {
   simple_meetings?: MeetingsDb;
   /** O5 "sharing": the shared roadmap's items by version id, put into `roadmap` when it is seeded (ensureRoadmap). */
   sharing_items?: RoadmapDb["items"];
+  /** E-14: the "sharing" roadmap's tracker records, by version id (the issue Billing ledger v2 is in progress on). */
+  sharing_records?: Record<string, Schemas["TrackerRecordOut"][]>;
   /** #346: roadmap change sets and the versions they proposed (./plan-edits.ts). */
   plan_edits?: PlanEditsDb;
   /** Specs, flows and wireframes (./specs.ts); absent in data saved before CR-09. */
@@ -994,6 +996,27 @@ function seedSimpleCrossPrdDates(): Db {
 function seedSimpleDatedMove(): Db {
   const db = seedSimpleHomeScenario();
   dateSourceItem(db.simple_roadmap!);
+  return db;
+}
+
+/**
+ * agenda-sheet "meeting-agenda-sheet" scenario (mk-edit-meetings-tracks, proposal b): the
+ * default company plus Dana Whitfield (an invented approver); Priya Raman decides the Usage
+ * alerts PRD, and a review of it starts mid-agenda: Alert rules engine decided, Weekly alert
+ * digest now, Dana's topic "Quiet hours for muted teams" added, Alert history export skipped.
+ */
+function seedMeetingAgendaSheetScenario(): Db {
+  const db = seed();
+  const dana = { email: "dana.whitfield@example.com", name: "Dana Whitfield", role: "approver" as const, engineering_lead: false, created_at: "2026-09-10T09:00:00Z", id: uuid(), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0 };
+  db.members.push(dana);
+  const rm = (db.simple_roadmap = seedSimpleRoadmap());
+  rm.prd_deciders = { "usage-alerts": db.members.find((m) => m.email === "approver@example.com")!.id };
+  rm.agenda_midway = { topic: "Quiet hours for muted teams", by: dana.id };
+  // Three more features of the PRD not on the agenda yet, for the sheet's Add list as the frames draw it.
+  for (const [key, title] of [["alert-snooze", "Alert snooze"], ["alert-spend", "Spend limit alerts"], ["alert-email", "Alert email templates"]] as const) {
+    rm.items.push({ key, title, horizon: "next", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium" });
+    rm.ids[key] = stableUuid(`simple-item/${key}`);
+  }
   return db;
 }
 
@@ -2495,12 +2518,31 @@ function seedSharingRoadmap(db: Db, audience: "team" | "public") {
         locked_by: null, locked_at: null, confidence: null, run_id: null, created_at: created, updated_at: created,
       });
     }
-    return { ...i, feature: { id: f.id, type: f.type, key: f.key, title: f.title, status: f.status } };
+    // E-14: Falcon alerts rework carries a confidence and its own dates, Partner API beta an end day: a link
+    // holder's card shows them (an undated card shows no date).
+    const confidence = i.item_key === "item-falcon" ? "high" : i.confidence;
+    const dates = SHARING_DATES[i.item_key] ?? {};
+    return { ...i, ...dates, confidence, feature: { id: f.id, type: f.type, key: f.key, title: f.title, status: f.status } };
   });
   db.sharing_items = { [v.id]: items };
+  // E-14: Billing ledger v2, planned for Next, has its issue in progress (with its target day): Simple and a link
+  // holder's card read it "In progress"; Falcon alerts rework, in Now, has none, so it reads "Planned".
+  db.sharing_records = {
+    [v.id]: [{
+      id: uuid(), tracker: "linear", external_ref: "ENG-541", title: "Ledger entries", url: "https://tracker.example.com/ENG-541",
+      track_id: null, item_key: "item-ledger", state: "in_progress", raw_status: null, estimate: null, estimate_unit: null,
+      target_date: "2027-01-20", observed_at: created, recorded_by: null, created_at: created, updated_at: created,
+    }],
+  };
 }
 
 type BaselineEntity = Db["baseline"]["entities"][number];
+
+/** The "sharing" roadmap's own item dates (RoadmapItem.start_date, end_date). */
+const SHARING_DATES: Record<string, { start_date?: string; end_date: string }> = {
+  "item-falcon": { start_date: "2026-10-05", end_date: "2026-11-20" },
+  "item-partner": { end_date: "2026-12-15" },
+};
 
 /** A confirmed baseline entity the "sharing" scenario adds. */
 function baselineEntity(db: Db, type: BaselineEntity["type"], key: string, title: string, at: string): BaselineEntity {
@@ -2586,7 +2628,7 @@ function sharesContext(db: Db, me: { id: string; role: Role } | null): SharesCon
       const row = db.documents.find((d) => d.id === doc.id)!;
       const version = db.versions.find((x) => x.id === v.id)!;
       const sections = audienceSections(version.sections, audience, boardItems(db, version));
-      return exportHtml(row, { ...version, sections: linkHolder ? readerSections(sections) : sections }, db.branding, audienceLabel(audience), linkHolder);
+      return exportHtml(row, { ...version, sections: linkHolder ? readerSections(sections, boardItems(db, version)) : sections }, db.branding, audienceLabel(audience), linkHolder);
     },
   };
 }
@@ -2739,9 +2781,24 @@ function passOutcomes(db: Db) {
 }
 
 /** What the decision log mock reads: the signed-in member, the members, the runs' stops. */
+/** edit-decisions: the decision log's calls the reader may read, not in Trash (seeded first). */
+function logCalls(db: Db, me: MemberRow): DecisionLogRow[] {
+  db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+  const ctx = decisionsContext(db, me);
+  return ensureDecisions(db, ctx).decisions.filter((d) => !d.trashed && logReadable(ctx, d));
+}
+
+/** edit-decisions: every number the decision log holds (one number sequence with Simple's decisions). */
+function logNumbers(db: Db, me: MemberRow): number[] {
+  db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+  return ensureDecisions(db, decisionsContext(db, me)).decisions.map((d) => d.number);
+}
+
 function decisionsContext(db: Db, me: MemberRow): DecisionsContext {
   return {
     me: { id: me.id, email: me.email, role: me.role, status: me.status },
+    // edit-decisions: one number sequence with Simple's decisions page (one decisions table in the API).
+    otherNumbers: () => (db.simple_meetings?.decisions ?? []).map((d) => d.number),
     members: db.members.map((m) => ({ id: m.id, email: m.email, role: m.role, status: m.status })),
     runs: (db.runs?.runs ?? []) as unknown as DecisionsContext["runs"],
     documentTitle: (slug) => db.documents.find((d) => d.slug === slug)?.title ?? null,
@@ -3460,6 +3517,8 @@ function load(): Db {
                 ? seedSimpleCrossPrdDates
               : scenario === "simple-dated-move"
                 ? seedSimpleDatedMove
+              : scenario === "meeting-agenda-sheet"
+                ? seedMeetingAgendaSheetScenario
               : scenario === "simple-home"
                 ? seedSimpleHomeScenario
               : scenario === "simple-home-move"
@@ -5538,6 +5597,21 @@ function requestsContext(db: Db, userId: string, role: Role): RequestsContext {
     zone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
     intakeTitle: (id) => ensureV2(db).intakes.find((i) => i.id === id)?.title ?? null,
     trashedTitle: (id) => trashedTitle(db, id),
+    // port-an-decisions (requests.service.trash_request): the row waits in a Trash entry.
+    trash: (row, reason) => {
+      const at = now();
+      const entry: TrashEntryRow = {
+        out: {
+          id: uuid(), root: { type: "request", id: (row as { id: string }).id, slug: null, title: (row as { title: string }).title, kind: "request" }, items: [],
+          deleted_by: userId, deleted_by_name: me ? trashName(me) : null, deleted_at: at, reason, published: false,
+          purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString(),
+        },
+        documents: [], versions: [], runs: [], intakes: [],
+        request: row,
+      };
+      (db.trash ??= emptyTrash()).entries.push(entry);
+      return entryOut(entry, at, true);
+    },
     suggestionsShown: () => ["recommend", "act"].includes(levelFor((db.autonomy ??= emptyAutonomy()), "requests")),
     goals: () => db.baseline.entities.filter((e) => e.type === "goal"),
     features: () => db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected"),
@@ -5744,10 +5818,10 @@ async function onePagerOf(db: Db, req: Request, p: string[]): Promise<OnePagerDb
     // one, else its latest, dated by its approval (none: never published).
     const vs = docVersions(db, d);
     const read = [...vs].reverse().find((x) => x.approved_at) ?? vs.at(-1);
-    // vqa B-13: built from that version's own sections (as the API's quick read), never the seed's words.
-    const doc = { id: d.id, slug: d.slug, title: d.title };
-    const own = read ? prdOnePager(doc, read.sections ?? [], Object.fromEntries((read.citations ?? []).map((c) => [c.cite_key, { title: c.title ?? null, excerpt: c.excerpt ?? null }]))) : { ...seedOnePager(), doc };
-    return (others[d.id] = { ...own, visuals: db.simple_visuals, flowKey: d.slug, ...(read ? { version: read.number, published_at: read.approved_at ?? null } : {}) });
+    // C-13, vqa B-13: every PRD but the seed reads its own sections (one_pager.extract), never a copy
+    // of Guided setup's; a PRD with no version yet reads none of them (every block "missing").
+    const cites = Object.fromEntries((read?.citations ?? []).map((c) => [c.cite_key, { title: c.title ?? null, excerpt: c.excerpt ?? null }]));
+    return (others[d.id] = { ...prdOnePager({ id: d.id, slug: d.slug, title: d.title }, read?.sections ?? [], cites), visuals: db.simple_visuals, flowKey: d.slug, ...(read ? { version: read.number, published_at: read.approved_at ?? null } : {}) });
   };
   if (p[1] !== "simple") return seeded;
   if (p[2] === "one-pagers") return forDoc(p[3]) ?? seeded;
@@ -5883,8 +5957,26 @@ async function route(db: Db, req: Request): Promise<Response> {
       // New PRD (4): a PRD moved to Trash releases its requests; Restore links back the free ones.
       // TRASH_KEPT_LINKS_SCENARIO: a PRD trashed before this release kept its request links.
       onTrash: (ids) => (localStorage.getItem(MOCK_SCENARIO_KEY) === TRASH_KEPT_LINKS_SCENARIO ? undefined : releaseDocuments(ensureRequests(db), ids)),
-      simple: () => db.simple_roadmap,
+      // edit-decisions: Restore puts a decision or a PRD's question back on Simple's Decisions too.
+      simple: () => db.simple_roadmap && { ...db.simple_roadmap, sheet: [...(db.simple_meetings?.decisions ?? []), ...(db.simple_meetings?.questions?.questions ?? [])] },
       onRestore: (released) => relinkDocuments(ensureRequests(db), released as ReleasedRequest[], (id) => ensureV2(db).intakes.some((i) => i.id === id)),
+      // port-an-decisions: Restore puts a meeting's removed agenda item or a deleted request back.
+      restoreRoot: (entry) => {
+        if (entry.request !== undefined) {
+          ensureRequests(db).requests.push(entry.request as RequestsDb["requests"][number]);
+          return null;
+        }
+        if (!entry.agenda || !db.simple_meetings) return "Its meeting was deleted: there is no agenda to put it back on";
+        const mctx = {
+          me: { id: me.id, role: me.role },
+          members: db.members.filter((x) => x.status !== "disabled").map((x) => ({ id: x.id, name: displayName(x.email, x.name), role: x.role, email: x.email })),
+          roadmap: db.simple_roadmap,
+          onePager: db.simple_one_pager,
+          rituals: ensureRituals(db, me),
+          documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title })),
+        } as MeetingsCtx;
+        return restoreAgendaItem(mctx, db.simple_meetings, entry);
+      },
       uuid,
       now,
     },
@@ -6811,6 +6903,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     };
     // prd-questions: the remembered Decisions view and the judgement calls waiting for me.
     meetingsCtx.view = () => db.preferences?.[me.email]?.simple_decisions_view ?? null;
+    meetingsCtx.trash = () => (db.trash ??= emptyTrash());
     meetingsCtx.runs = (prd) => {
       db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
       const docs = db.documents.filter((d) => d.kind === "prd");
@@ -6822,7 +6915,26 @@ async function route(db: Db, req: Request): Promise<Response> {
       ensureDecisions(db, ctx);
       return decisionInbox(ctx, db.decisions!, null).filter((d) => d.counts && d.reason === "needs_decision").length;
     };
+    // The log's own row, in Trash or not, when the reader may read it (GET /v1/decisions/{number}'s check).
+    meetingsCtx.logRow = async (id) => {
+      db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+      const ctx = decisionsContext(db, me);
+      const found = ensureDecisions(db, ctx).decisions.find((d) => d.id === id);
+      return found && logReadable(ctx, found) ? found : null;
+    };
+    meetingsCtx.logCalls = () => logCalls(db, me);
+    meetingsCtx.logNumbers = () => logNumbers(db, me);
     const meetingsDb = ensureMeetings(db, meetingsCtx);
+    // edit-decisions: the decision sheet's suggestions are Simple changes too (one changes table in the API).
+    if (req.method === "GET" && p[2] === "changes" && p.length === 3 && !q.get("session") && !q.get("document")) {
+      const engineRes = await simpleRoute(req);
+      if (engineRes?.ok) {
+        const rows = (await engineRes.json()) as Schemas["SimpleChangeOut"][];
+        const sheet = (await sheetProposals(meetingsDb, meetingsCtx, q.get("status"))).filter((c) => q.get("mine") !== "true" || c.by === me.id);
+        return json(200, [...rows, ...sheet].sort((a, b) => (a.at < b.at ? 1 : -1)));
+      }
+      if (engineRes) return engineRes;
+    }
     const meetingsRes =
       (await routeMeetingQuestions(meetingsDb, meetingsCtx, req, p)) ??
       (await routeSimpleMeetings(meetingsDb, meetingsCtx, req, p, q)) ?? (await withMeeting(meetingsDb, meetingsCtx, req, p, simpleRoute));
@@ -6845,6 +6957,8 @@ async function route(db: Db, req: Request): Promise<Response> {
         onePager: onePagerDb,
         rituals: ensureRituals(db, me),
         documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title, replaced_by: replacedByRefs(db, d) })),
+        // edit-decisions: Simple's decisions are numbered after the log's (one number sequence).
+        logNumbers: () => logNumbers(db, me),
       });
       return { db: ensureMeetings(db, ctx), ctx };
     });
@@ -6855,8 +6969,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       const res = (await routeDecisions(dctx, ensureDecisions(db, dctx), post, ["v1", "decisions"], new URLSearchParams()))!;
       if (!res.ok) return null;
       const doc = b.subjects?.find((x) => x.kind === "document")?.id ?? null;
-      const id = ((await res.json()) as Schemas["DecisionOut"]).id;
-      reviews.propose(b.title, b.approver_id, doc, id);
+      const made = (await res.json()) as Schemas["DecisionOut"];
+      const id = made.id;
+      reviews.propose(b.title, b.approver_id, doc, id, made.number);
       return id;
     };
     const chatCtx = { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, proposeDecision, proposeTo: (d: string | null) => reviews.proposeTo(d),
@@ -6911,7 +7026,28 @@ async function route(db: Db, req: Request): Promise<Response> {
   // The decision log (H1): judgement calls, and a record of every run stop decided.
   const decisionsCtx = decisionsContext(db, me);
   ensureDecisions(db, decisionsCtx);
+  // edit-decisions: Reassign from Simple's sheet on a decision only Simple's store holds (one
+  // decisions table in the API): the same checks as POST /v1/decisions/{id}/reassign.
+  const simpleOnly = req.method === "POST" && p[1] === "decisions" && p[3] === "reassign" && !db.decisions!.decisions.some((d) => d.id === p[2]) ? db.simple_meetings?.decisions.find((d) => d.id === p[2]) : undefined;
+  if (simpleOnly) {
+    if (me.role !== "owner") return json(403, { detail: "Requires the owner role" });
+    if (simpleOnly.status !== "proposed" && simpleOnly.status !== "decided") return json(409, { detail: `D-${simpleOnly.number} is ${simpleOnly.status}` });
+    const b = (await req.clone().json()) as Schemas["ReassignIn"];
+    const to = decisionsCtx.members.find((x) => x.id === b.approver_id);
+    if (!to || to.status === "disabled" || !["approver", "owner"].includes(to.role)) return json(422, { detail: "The approver must be an active member with the approver role or above" });
+    simpleOnly.approver_id = b.approver_id;
+    return json(200, { id: simpleOnly.id, number: simpleOnly.number, title: simpleOnly.title, approver_id: b.approver_id });
+  }
   const decided = await routeDecisions(decisionsCtx, db.decisions!, req, p, q);
+  // edit-decisions: a decision made from Simple's sheet is listed there; Reassign shows there too.
+  if (decided?.ok && req.method === "POST" && p[1] === "decisions" && p.length === 2 && db.simple_meetings) {
+    sheetDecisionMade(db.simple_meetings, (await decided.clone().json()) as Schemas["DecisionOut"], me.id);
+  }
+  if (decided?.ok && req.method === "POST" && p[1] === "decisions" && p[3] === "reassign") {
+    const logged = (await decided.clone().json()) as Schemas["DecisionOut"];
+    const copy = db.simple_meetings?.decisions.find((d) => d.id === logged.id);
+    if (copy) copy.approver_id = logged.approver_id;
+  }
   if (decided?.ok && req.method === "POST" && p[1] === "decisions" && (p[3] === "decide" || p[3] === "withdraw")) {
     // An Ask proposal's Decide or Decline (withdraw) shows on Simple's Decisions page (one decisions row in the API).
     const logged = db.decisions!.decisions.find((d) => String(d.number) === p[2] || d.id === p[2]);
@@ -7369,12 +7505,14 @@ function applyRoadmapVersion(db: Db, doc: DocumentRow, v: VersionRow): boolean {
  */
 function boardItems(db: Db, v: VersionRow): BoardItem[] {
   const goals = new Map(db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => [e.id, e.title]));
+  const records: TrackerRecordRow[] = db.sharing_records?.[v.id] ?? db.roadmap?.records ?? [];
   return (db.roadmap?.items[v.id] ?? db.sharing_items?.[v.id] ?? []).map((i) => {
     const feature = i.feature?.id ?? db.baseline.entities.find((e) => e.type === "feature" && e.key === i.item_key)?.id;
     const served = db.baseline.edges
       .filter((e) => e.src_id === feature && e.type === "supports" && e.status === "confirmed" && goals.has(e.dst_id))
       .map((e) => goals.get(e.dst_id)!);
     const rank = (i.priority as { rank?: unknown } | undefined)?.rank;
+    const shown = delivery(i, records.filter((r) => r.item_key === i.item_key && (r.track_id ?? null) === (i.track_id ?? null)));
     return {
       key: i.item_key,
       title: i.title,
@@ -7387,8 +7525,31 @@ function boardItems(db: Db, v: VersionRow): BoardItem[] {
       no_goal: goals.size > 0 && !served.length,
       // The owner decision of 2026-10-26: grouped under the first, by title, of the goals it reaches.
       group: [...served].sort((a, b) => (a.toLowerCase() < b.toLowerCase() ? -1 : a.toLowerCase() > b.toLowerCase() ? 1 : a < b ? -1 : a > b ? 1 : 0))[0] ?? null,
+      ...shown,
     };
   });
+}
+
+type TrackerRecordRow = Schemas["TrackerRecordOut"];
+
+/**
+ * E-14 (as the API's simple.service.delivery): an item's delivery state (shipped is done; else its tracker records,
+ * cancelled ones aside: all done is done, any started is in progress, else planned) and its start and end as Simple
+ * dates it (its own dates, then its milestone's day, then its records' target days; the newest within a source),
+ * null where Simple only estimates.
+ */
+function delivery(i: { start_date?: string | null; end_date?: string | null; shipped?: unknown; milestone?: { date?: unknown } | null; updated_at?: string }, recs: TrackerRecordRow[]): Pick<BoardItem, "start" | "end" | "state"> {
+  const live = recs.filter((r) => r.state !== "cancelled");
+  const states = new Set(live.map((r) => r.state));
+  const state = i.shipped ? "done" : states.size && [...states].every((x) => x === "done") ? "done" : states.has("in_progress") || states.has("done") ? "in_progress" : "planned";
+  const milestoneDay = typeof i.milestone?.date === "string" ? i.milestone.date.slice(0, 10) : null;
+  const newest = (rows: TrackerRecordRow[]) => [...rows].sort((a, b) => (a.updated_at < b.updated_at ? 1 : a.updated_at > b.updated_at ? -1 : 0))[0];
+  const tracked = newest(live.filter((r) => r.target_date));
+  return {
+    start: i.start_date ?? null,
+    end: i.end_date ?? milestoneDay ?? tracked?.target_date ?? null,
+    state,
+  };
 }
 
 /** A version's deck and export (O5: `v` already rendered for its audience, if any). */

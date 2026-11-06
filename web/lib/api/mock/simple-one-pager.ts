@@ -56,7 +56,7 @@ export interface OnePagerCtx {
 
 const REMIND_EVERY_MS = 24 * 60 * 60 * 1000;
 
-interface Sec {
+export interface Sec {
   key: string;
   heading: string;
   body: string;
@@ -394,57 +394,97 @@ export function seedSkeletonOnePager(doc: OnePagerDb["doc"]): OnePagerDb {
 }
 
 /**
- * vqa B-13: a mock PRD's own one-pager, built from its own sections as the API's quick read
- * builds one (one_pager.mapping and one_pager.extract over the FALLBACK blocks): each block
- * takes the sections whose heading or key holds its words (narrower blocks first), and its
- * lines are their bullets and table rows, else their sentences, capped. Never another PRD's
- * words under this PRD's title.
+ * C-13: every PRD but the seed read its own sections, as api/oracle/simple/one_pager.py's
+ * `extract` does (Oracle's quick read): each block maps the PRD's own sections by heading
+ * words (MATCH order: not_doing, risks, outcomes, problem, bets; the narrower words first),
+ * then each block's lines come from those sections' bullets, or sentences for the Problem
+ * (one line, `extract`'s whole_block). A block with no matching section is `missing: true`
+ * with no lines, never a line of Guided setup's. The timeline carries no lines: the page's
+ * `slice` is the PRD's own roadmap items (none wired up here yet: `[]`, so its span and
+ * strip read "No roadmap items yet"), never SLICE's 22 invented ones.
  */
-type PrdSection = { section_key: string; level: number; heading: string; body_md: string };
-const FALLBACK_BLOCKS: { key: string; title: string; rules: string; kind: Schemas["OnePagerBlock"]["kind"]; max: number; words: number; whole?: boolean; match: string[] }[] = [
-  { key: "problem", title: "Problem and who has it", rules: "At most 60 words", kind: "text", max: 1, words: 60, whole: true, match: ["problem", "who has it", "who", "user", "customer", "why", "background", "context", "pain"] },
-  { key: "bets", title: "What we will build", rules: "3-5 bets", kind: "lines", max: 5, words: 30, match: ["build", "solution", "scope", "bet", "requirement", "feature", "proposal", "approach", "what we"] },
-  { key: "outcomes", title: "Outcomes and how we measure them", rules: "2-4 metrics, from → to", kind: "metrics", max: 4, words: 30, match: ["outcome", "metric", "success", "measure", "goal", "kpi", "impact"] },
-  { key: "not_doing", title: "Not doing", rules: "At most 5 lines", kind: "lines", max: 5, words: 30, match: ["not doing", "non-goal", "non goal", "out of scope", "won't", "not in scope"] },
-  { key: "risks", title: "Risks and open decisions", rules: "At most 5", kind: "lines", max: 5, words: 30, match: ["risk", "open question", "open decision", "decision", "assumption", "dependenc", "question"] },
-];
-const MATCH_ORDER = ["not_doing", "risks", "outcomes", "problem", "bets"];
-const BULLET = /^\s*(?:[-*+]|\d+[.)])\s+(.*\S)\s*$/;
-const TABLE_SEP = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/;
-const METRIC = /^(.*?)[:\s,-]*\s(?:from\s+)?([~<>]?[$€£]?\d[\d.,]*\s?(?:%|ms|s|x|k|m|days?|hours?|minutes?)?)\s*(?:→|->|\bto\b)\s*([~<>]?[$€£]?\d[\d.,]*\s?(?:%|ms|s|x|k|m|days?|hours?|minutes?)?)/i;
-/** one_pager._plain: markdown marks and links' targets out, footnote marks out, one space. */
-const mdPlain = (t: string) => t.replace(/[*_`]+|\[([^\]]*)\]\([^)]*\)|\[\^?[\w-]+\]/g, (_, link?: string) => link ?? "").split(/\s+/).filter(Boolean).join(" ");
-const cells = (row: string) => {
-  let r = row.trim();
-  if (r.startsWith("|")) r = r.slice(1);
-  if (r.endsWith("|") && !r.endsWith("\\|")) r = r.slice(0, -1);
-  return r.split(/(?<!\\)\|/).map((c) => c.trim());
-};
-const rowLine = (cs: string[]) => cs.map((c) => mdPlain(c.replace(/\\\|/g, "/")).replace(/^[\s|]+|[\s|]+$/g, "")).filter(Boolean).slice(0, 2).join(": ");
-
-/** one_pager._facts: a section's bullets and table body rows, else its sentences; citations resolved. */
-function facts(body: string): string[] {
-  const lines = resolved(uncomment(body)).split("\n");
-  const rows: string[][] = [];
-  const rest: string[] = [];
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].includes("|") && i + 1 < lines.length && TABLE_SEP.test(lines[i + 1])) {
-      i += 2;
-      while (i < lines.length && lines[i].includes("|") && lines[i].trim()) rows.push(cells(lines[i++]));
-      i--;
-      continue;
-    }
-    rest.push(lines[i]);
-  }
-  const listed = [
-    ...rest.flatMap((l) => (BULLET.exec(l) ? [mdPlain(BULLET.exec(l)![1])] : [])),
-    ...rows.map(rowLine),
-  ].filter((x) => x && !templateOnly(x));
-  if (listed.length) return listed;
-  return mdPlain(rest.join("\n")).split(/(?<=[.!?])\s+/).filter((x) => x && !templateOnly(x));
+interface FallbackSpec {
+  key: string;
+  title: string;
+  rules: string;
+  kind: Schemas["OnePagerBlock"]["kind"];
+  maxLines: number;
+  maxWords: number;
+  wholeBlock?: boolean;
+  words: string[];
 }
 
-/** one_pager.clip: at most `words` words and 300 characters, cut at a word with "…". */
+const FALLBACK_SPECS: FallbackSpec[] = [
+  { key: "problem", title: "Problem and who has it", rules: "At most 60 words", kind: "text", maxLines: 1, maxWords: 60, wholeBlock: true, words: ["problem", "who has it", "who", "user", "customer", "why", "background", "context", "pain"] },
+  { key: "bets", title: "What we will build", rules: "3-5 bets", kind: "lines", maxLines: 5, maxWords: 30, words: ["build", "solution", "scope", "bet", "requirement", "feature", "proposal", "approach", "what we"] },
+  { key: "outcomes", title: "Outcomes and how we measure them", rules: "2-4 metrics, from → to", kind: "metrics", maxLines: 4, maxWords: 30, words: ["outcome", "metric", "success", "measure", "goal", "kpi", "impact"] },
+  { key: "not_doing", title: "Not doing", rules: "At most 5 lines", kind: "lines", maxLines: 5, maxWords: 30, words: ["not doing", "non-goal", "non goal", "out of scope", "won't", "not in scope"] },
+  { key: "risks", title: "Risks and open decisions", rules: "At most 5", kind: "lines", maxLines: 5, maxWords: 30, words: ["risk", "open question", "open decision", "decision", "assumption", "dependenc", "question"] },
+];
+const MATCH_ORDER = ["not_doing", "risks", "outcomes", "problem", "bets"] as const;
+const FACT_BULLET = /^\s*(?:[-*+]|\d+[.)])\s+(.*\S)\s*$/;
+const SENTENCE = /(?<=[.!?])\s+/;
+
+/** As one_pager.mapping: each section to the first block (MATCH order) whose words its
+ * heading or key holds; an empty section maps nowhere. */
+function mapToBlocks(sections: Sec[]): Record<string, Sec[]> {
+  const out: Record<string, Sec[]> = { problem: [], bets: [], outcomes: [], not_doing: [], risks: [] };
+  const byKey = new Map(FALLBACK_SPECS.map((s) => [s.key, s] as const));
+  for (const sec of sections) {
+    if (!sec.body.trim()) continue;
+    const name = `${sec.heading} ${sec.key}`.toLowerCase().replace(/_/g, " ");
+    for (const k of MATCH_ORDER) {
+      if (byKey.get(k)!.words.some((w) => name.includes(w))) {
+        out[k].push(sec);
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+/** As one_pager._facts: a section's bullets, else its sentences; citations resolved, as the
+ * PRD's PDF resolves them (never a raw "[c:id]" on a line). */
+function factsOf(sec: Sec): string[] {
+  // As one_pager._facts: bullets and table body rows (one line each), else sentences.
+  const { rows, rest } = tablesOf(uncomment(resolved(sec.body)));
+  const bullets = rest.map((l) => FACT_BULLET.exec(l)?.[1]).filter((x): x is string => !!x).map((x) => unpiped(mdPlain(x)));
+  const facts = [...bullets, ...rows.map(rowLine)].filter((x) => x && !templateOnly(x));
+  if (facts.length) return facts;
+  return mdPlain(rest.join("\n"))
+    .split(SENTENCE)
+    .map((s) => unpiped(s.trim()))
+    .filter((x) => x && !templateOnly(x));
+}
+
+/** As one_pager._MD/_plain: no "**", "_" or "`" marks, a link's words only, no footnote marks. */
+const MD = /[*_`]+|\[([^\]]*)\]\([^)]*\)|\[\^?[\w-]+\]/g;
+const mdPlain = (t: string) => plain(t.replace(MD, (_m, g: string | undefined) => g ?? ""));
+const TABLE_SEP = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/;
+const cellsOf = (row: string) => row.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "").split(/(?<!\\)\|/).map((c) => c.trim());
+const rowLine = (cells: string[]) => cells.map((c) => mdPlain(c.replace(/\\\|/g, "/")).replace(/^[\s|]+|[\s|]+$/g, "")).filter(Boolean).slice(0, 2).join(": ");
+const unpiped = (text: string) => {
+  const t = text.trim();
+  return (t.startsWith("|") || t.endsWith("|") ? (t.replace(/^[\s|]+|[\s|]+$/g, "").includes("|") ? rowLine(cellsOf(t)) : t) : t).replace(/^[\s|]+|[\s|]+$/g, "");
+};
+/** As one_pager._tables: a table's body rows; its header and separator rows are never a line. */
+function tablesOf(md: string): { rows: string[][]; rest: string[] } {
+  const lines = md.split("\n");
+  const rows: string[][] = [];
+  const rest: string[] = [];
+  for (let i = 0; i < lines.length; ) {
+    if (lines[i].includes("|") && i + 1 < lines.length && TABLE_SEP.test(lines[i + 1])) {
+      i += 2;
+      while (i < lines.length && lines[i].includes("|") && lines[i].trim()) rows.push(cellsOf(lines[i++]));
+      continue;
+    }
+    rest.push(lines[i++]);
+  }
+  return { rows, rest };
+}
+
+/** As one_pager.clip: at most `words` words and 300 characters, cut at a word with "…";
+ * the whole text (at most 2000 characters) when that cuts it. */
 function clip(text: string, words: number): [string, string | undefined] {
   const t = text.split(/\s+/).filter(Boolean).join(" ");
   const w = t.split(" ");
@@ -456,52 +496,74 @@ function clip(text: string, words: number): [string, string | undefined] {
   return [shown, shown !== t ? t.slice(0, 2000) : undefined];
 }
 
-export function prdOnePager(doc: OnePagerDb["doc"], prdSections: PrdSection[], cites: Cites = {}): OnePagerDb {
-  const db = seedOnePager();
-  const own = prdSections.filter((s) => s.level > 1 && (s.body_md ?? "").trim());
-  const mapped: Record<string, PrdSection[]> = Object.fromEntries(FALLBACK_BLOCKS.map((b) => [b.key, []]));
-  for (const sec of own) {
-    const name = `${sec.heading} ${sec.section_key}`.toLowerCase().replace(/_/g, " ");
-    const k = MATCH_ORDER.find((key) => FALLBACK_BLOCKS.find((b) => b.key === key)!.match.some((w) => name.includes(w)));
-    if (k) mapped[k].push(sec);
-  }
-  const blocks: OnePagerDb["blocks"] = FALLBACK_BLOCKS.map((spec) => {
-    const secs = mapped[spec.key];
-    const lines: SeedLine[] = [];
-    if (spec.whole) {
-      let text = "";
-      let whole = "";
-      const keys: string[] = [];
-      for (const sec of secs)
-        for (const fact of facts(sec.body_md)) {
-          whole = `${whole} ${fact}`.trim();
-          if (text.split(" ").filter(Boolean).length >= spec.words) continue;
-          text = `${text} ${fact}`.trim();
-          if (!keys.includes(sec.section_key)) keys.push(sec.section_key);
-        }
-      if (text) {
-        const shown = clip(text, spec.words)[0];
-        lines.push({ id: `${spec.key}-1`, text: shown, keys, ...(shown !== whole ? { full: whole.slice(0, 2000) } : {}) });
-      }
-    } else {
-      let all = secs.flatMap((sec) => facts(sec.body_md).map((f) => [f, sec.section_key] as const));
-      if (spec.kind === "metrics") all = [...all].sort((a, b) => Number(!METRIC.test(a[0])) - Number(!METRIC.test(b[0])));
-      all.slice(0, spec.max).forEach(([fact, key], i) => {
-        const [shown, cut] = clip(fact, spec.words);
-        const m = spec.kind === "metrics" ? METRIC.exec(fact) : null;
-        lines.push({
-          id: `${spec.key}-${i + 1}`, text: shown, keys: [key], ...(cut ? { full: cut } : {}),
-          ...(m ? { metric: { name: m[1].replace(/^[\s:,-]+|[\s:,-]+$/g, "") || fact, from: m[2].trim(), to: m[3].trim() } } : {}),
-        });
-      });
+/** As extract's whole_block (the Problem): every mapped section's facts concatenated into
+ * one line, held to its word cap; the whole text kept as `full` when that cuts it. */
+function buildProblem(spec: FallbackSpec, secs: Sec[]): SeedLine | null {
+  let text = "";
+  let whole = "";
+  const keys: string[] = [];
+  for (const sec of secs) {
+    for (const fact of factsOf(sec)) {
+      whole = `${whole} ${fact}`.trim();
+      if (text.split(" ").filter(Boolean).length >= spec.maxWords) continue;
+      text = `${text} ${fact}`.trim();
+      if (!keys.includes(sec.key)) keys.push(sec.key);
     }
-    return { key: spec.key, title: spec.title, rules: spec.rules, kind: spec.kind, lines };
+  }
+  if (!text) return null;
+  const shown = clip(text, spec.maxWords)[0];
+  const line: SeedLine = { id: "problem-1", text: shown, keys };
+  if (shown !== whole) line.full = whole.slice(0, 2000);
+  return line;
+}
+
+/** As extract's other blocks: one line per fact (its section's bullets, or sentences with
+ * none), held to the block's line cap; a metrics block's "from -> to" facts come first. */
+function buildLines(spec: FallbackSpec, secs: Sec[]): SeedLine[] {
+  const raw = secs.flatMap((sec) => factsOf(sec).map((fact) => ({ fact, key: sec.key })));
+  const ordered =
+    spec.kind === "metrics"
+      ? raw.map((f, i) => ({ ...f, i, has: !!metricOf(f.fact) })).sort((a, b) => (a.has === b.has ? a.i - b.i : a.has ? -1 : 1))
+      : raw;
+  return ordered.slice(0, spec.maxLines).map(({ fact, key }, i) => {
+    const [text, cut] = clip(fact, spec.maxWords);
+    const line: SeedLine = { id: `${spec.key}-${i + 1}`, text, keys: [key], ...(cut ? { full: cut } : {}) };
+    if (spec.kind === "metrics") {
+      const m = metricOf(fact);
+      if (m) line.metric = m;
+    }
+    return line;
   });
-  db.doc = doc;
-  db.cites = cites;
-  db.sections = own.map((s) => ({ key: s.section_key, heading: s.heading, body: s.body_md }));
-  db.blocks = [...blocks, db.blocks.find((b) => b.kind === "timeline")!];
-  return db;
+}
+
+/**
+ * As one_pager.extract, read from a PRD's own published sections (never Guided setup's
+ * copied ones). `slice`: the PRD's own roadmap items, when the mock links any to it; `[]`
+ * with none, so the header's span and the strip read the PRD's own (or "No roadmap items
+ * yet"), never SLICE's. `cites`: that version's citations, as the page's sources read them.
+ */
+export function seedOnePagerFromSections(doc: OnePagerDb["doc"], sections: Sec[], slice: SliceItem[] = [], cites: Cites = {}): OnePagerDb {
+  const mapped = mapToBlocks(sections);
+  const blocks: OnePagerDb["blocks"] = FALLBACK_SPECS.map((spec) => {
+    const secs = mapped[spec.key];
+    const lines = spec.wholeBlock ? (() => { const l = buildProblem(spec, secs); return l ? [l] : []; })() : buildLines(spec, secs);
+    return { key: spec.key, title: spec.title, rules: spec.rules, kind: spec.kind, lines, missing: secs.length === 0 };
+  });
+  blocks.push({ key: "timeline", title: "Timeline", rules: "The PRD's roadmap slice", kind: "timeline", lines: [] });
+  return { doc, version: 1, sections, blocks, draft: null, changes: [], slice, cites };
+}
+
+/**
+ * vqa B-13: a mock PRD's own one-pager from a version's sections as the API reads them (its
+ * `#` title and empty sections left out), with that version's citations; never another PRD's
+ * words under this PRD's title.
+ */
+export type PrdSection = { section_key: string; level: number; heading: string; body_md: string };
+export function prdOnePager(doc: OnePagerDb["doc"], prdSections: PrdSection[], cites: Cites = {}): OnePagerDb {
+  const sections: Sec[] = prdSections
+    .filter((s) => s.level > 1 && (s.body_md ?? "").trim())
+    .map((s) => ({ key: s.section_key, heading: s.heading, body: s.body_md }));
+  return seedOnePagerFromSections(doc, sections, [], cites);
 }
 
 /**
