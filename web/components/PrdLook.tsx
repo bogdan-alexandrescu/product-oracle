@@ -213,8 +213,10 @@ function Contents({
   }, [sections]);
   const q = filter.trim().toLowerCase();
   const rows = sections.filter((s) => {
+    // A part's divider ("Full version") shows only in the opened contents, as the pt1-a frames.
+    if (s.level <= 1 && s !== lead) return !q && open;
     if (q) return s.heading.toLowerCase().includes(q);
-    if (s.level <= 1) return s === lead || !nums.get(s.section_key);
+    if (s.level <= 1) return true;
     return open || s.level <= 2 || topOf.get(s.section_key) === (current ? topOf.get(current) : "");
   });
   useEffect(() => {
