@@ -9,7 +9,7 @@ import { toast } from "@/components/ds/Toast";
 import { FeatureFoundContext, OpenFeatureContext, type OpenFeature } from "@/components/simple/OpenFeature";
 import { usePhone } from "@/components/simple/PrdTimeline";
 import { useMe } from "@/lib/me";
-import { FeaturePanel, itemFor } from "../roadmap/_panel";
+import { FeaturePanel, itemFor, useItemChanged } from "../roadmap/_panel";
 import { QuestionRow, useQuestionActions, useSourceLine, type Question } from "@/components/simple/questions/Questions";
 import { SimpleEmpty, SimplePage } from "@/components/simple/SimplePage";
 import { ErrorNote, Loading } from "@/components/ui";
@@ -107,6 +107,7 @@ export function SimpleDecisions() {
   const phone = usePhone();
   const { can } = useMe();
   const roadmap = useQuery("simple-roadmap:decisions", () => unwrap(api.GET("/v1/simple/roadmap", {})));
+  useItemChanged(() => Promise.all([q.reload(), roadmap.reload()]));
   const found = useCallback((f: Parameters<OpenFeature>[0]) => !!itemFor(roadmap.data?.items ?? [], f), [roadmap.data]);
   return (
     <SimplePage title="Decisions" lead={`${LEADS[view]} Dates are in ${zoneName(zone)}.`}>

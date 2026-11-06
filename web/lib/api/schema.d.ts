@@ -42278,6 +42278,13 @@ export interface components {
                 [key: string]: string;
             };
             /**
+             * Depends Keys Of
+             * @default {}
+             */
+            depends_keys_of: {
+                [key: string]: string[];
+            };
+            /**
              * Suggested Depends
              * @default []
              */

@@ -16,7 +16,7 @@ import { FeatureMarks, MarkFor, ShowFilter, showsAs, useFeatureMarks, type ShowK
 import { useSetParams } from "@/lib/use-set-params";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { FeaturePanel } from "../roadmap/_panel";
+import { FeaturePanel, useItemChanged } from "../roadmap/_panel";
 import { FeatureMenu, useFeatureDelete } from "@/components/simple/FeatureDelete";
 import { ArchiveDialog, ArchivedGoals, BTN, count, dayOf, DeleteArchivedDialog, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type GoalFeatures, type Note } from "./goal-buckets";
 import { useBucketDrag } from "./goal-drag";
@@ -164,6 +164,7 @@ export function Priorities() {
   const mayChange = capsReady && can("create_simple_change") && !!data?.can_change;
   // S7: Oracle's suggested features under each goal bucket (an accept adds a draft here).
   const suggestions = useGoalSuggestions(() => q.reload());
+  useItemChanged(q.reload);
   // The item just moved (dragged, re-estimated or moved with the keys) and its rank before, kept
   // until the next move or leaving the page: highlighted with "moved #a → #b".
   const [moved, setMoved] = useState<Moved | null>(null);

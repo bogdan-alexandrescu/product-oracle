@@ -21,6 +21,8 @@ import {
 } from "./_lib";
 
 const LINK = "text-sm font-semibold text-accent-ink hover:underline";
+/** roadmap-edit-fixes round 1: a dependency's x, a 24 px target of its own (a bare 16 px icon on the line's baseline was missed). */
+const REMOVE = "relative inline-flex h-6 w-6 flex-none items-center justify-center self-center rounded text-accent-ink hover:bg-surface2";
 const INPUT =
   "w-full rounded-md border border-line bg-surface px-2 py-1 text-[15px]";
 
@@ -208,13 +210,18 @@ export function PanelFields({
   const goals = refs(items, (i) => i.goal);
   // roadmap-edit-fixes: the stored key the read says names it (another PRD's feature key is
   // neither its key nor its code), else the one matching its key or code.
-  const keyOf = (dep: Item) =>
-    item.depends_key_of?.[dep.id] ??
-    item.depends_keys.find(
-      (k) =>
-        k === dep.key ||
-        (!!dep.code && k.toLowerCase() === dep.code.toLowerCase()),
-    ) ?? dep.key;
+  // roadmap-edit-fixes round 1: every stored key that names it (the read's, and its key or code
+  // in any case), so a removal drops them all and none shows again as a loose chip.
+  const keysOf = (dep: Item) =>
+    new Set(
+      item.depends_keys.filter(
+        (k) =>
+          k === item.depends_key_of?.[dep.id] ||
+          (item.depends_keys_of?.[dep.id] ?? []).includes(k) ||
+          k.toLowerCase() === dep.key.toLowerCase() ||
+          (!!dep.code && k.toLowerCase() === dep.code.toLowerCase()),
+      ),
+    );
   const shown = (id: string) => items.get(id);
   const featureButton = (i: Item) =>
     onOpen ? (
@@ -232,7 +239,7 @@ export function PanelFields({
   // A key the dependency checks did not match here (another PRD's feature key): the item the
   // roadmap read has under that key or code, else the key as typed.
   const loose = item.depends_keys
-    .filter((k) => !deps.some((d) => keyOf(d) === k))
+    .filter((k) => !deps.some((d) => keysOf(d).has(k)))
     .map((k) => ({
       k,
       found: others.find(
@@ -544,7 +551,7 @@ export function PanelFields({
               {canChange && (
                 <button
                   type="button"
-                  className={LINK}
+                  className={REMOVE}
                   aria-label={`Remove ${d.title} from what it depends on`}
                   onClick={() =>
                     void change(
@@ -553,7 +560,7 @@ export function PanelFields({
                       { depends_on: item.depends_keys },
                       {
                         depends_on: item.depends_keys.filter(
-                          (k) => k !== keyOf(d),
+                          (k) => !keysOf(d).has(k),
                         ),
                       },
                     )
@@ -574,7 +581,7 @@ export function PanelFields({
               {canChange && (
                 <button
                   type="button"
-                  className={LINK}
+                  className={REMOVE}
                   aria-label={`Remove ${found?.title ?? k} from what it depends on`}
                   onClick={() =>
                     void change(

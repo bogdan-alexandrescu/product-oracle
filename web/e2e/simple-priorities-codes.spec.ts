@@ -109,6 +109,8 @@ const CODES = {
   "setup-import": "F-12",
   "alert-export": "AHE",
   "alert-sso": "ARB",
+  // roadmap-edit-fixes round 1: F-03 Health log is a live, planned roadmap item, so it is a mark too.
+  "setup-health-log": "F-03",
   "price-tiers": "NPT",
   "setup-video": "WV",
 };

@@ -96,6 +96,7 @@ async def test_two_keys_for_one_dependency_both_go(client):
     ctx, b, c = await _world(depends_on=["b", "ledger-sync"])
     items = by_key(await get(client, ctx, "owner"))
     assert items["c"]["depends_on"] == [b]
+    assert items["c"]["depends_keys_of"] == {b: ["b", "ledger-sync"]}
     await _remove(client, ctx, items["c"], b)
     items = by_key(await get(client, ctx, "owner"))
     assert items["c"]["depends_on"] == [], items["c"]["depends_keys"]

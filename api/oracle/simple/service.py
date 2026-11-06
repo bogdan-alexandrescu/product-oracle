@@ -991,6 +991,7 @@ def item_out(
         own_owner_id=str(row.owner_id) if row.owner_id else None,
         depends_keys=list(row.depends_on or []),
         depends_key_of={str(d): k for d, k in e.depends_key_of.items()},
+        depends_keys_of={str(d): ks for d, ks in e.depends_keys_of.items()},
         can_decide=may,
         deciders=[names[i] for i in decider_ids(e, deciders) or owners or [] if i in names],
         reasons=_reasons(e),

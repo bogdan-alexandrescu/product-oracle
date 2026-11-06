@@ -10,7 +10,9 @@ import { expect, test, type BrowserContext, type Locator, type Page } from "./te
  * Every action is driven through the UI: drags, the arrow keys, the dialogs and buttons.
  */
 
-const ORACLE = ["setup-checklist", "alert-rules", "alert-digest", "alert-mobile", "setup-import", "alert-export", "alert-sso", "price-tiers", "setup-video"];
+// roadmap-edit-fixes round 1: F-03 Health log is a live, planned roadmap item (not done, cut or in
+// Trash), so Priorities lists it as the roadmap does.
+const ORACLE = ["setup-checklist", "alert-rules", "alert-digest", "alert-mobile", "setup-import", "alert-export", "alert-sso", "setup-health-log", "price-tiers", "setup-video"];
 const PHONE = { width: 390, height: 844 };
 
 const signedIn = new WeakSet<BrowserContext>();

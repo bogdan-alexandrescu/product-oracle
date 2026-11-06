@@ -318,6 +318,9 @@ class SimpleRoadmapItem(BaseModel):
     # depends_on, by item id (another PRD's feature key is neither its key nor its code);
     # and Oracle's ideas of what a new item depends on (keys), a person's to add.
     depends_key_of: dict[str, str] = {}
+    # roadmap-edit-fixes round 1: every stored key that names each item of depends_on (its key
+    # and its feature's key, say), by item id: the panel's x drops them all.
+    depends_keys_of: dict[str, list[str]] = {}
     suggested_depends: list[str] = []
     can_decide: bool = False
     deciders: list[str] = []

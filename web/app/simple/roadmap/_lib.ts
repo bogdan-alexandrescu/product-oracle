@@ -212,7 +212,8 @@ export function liveBreaks(items: Map<string, Item>, id: string, start: string, 
   const out: string[] = [];
   for (const d of it.depends_on) {
     const dep = items.get(d);
-    if (dep && dep.status !== "cut" && dep.end.date >= start) out.push(`Starts ${shortDay(start)}, but ‘${dep.title}’ it depends on ends ${shortDay(dep.end.date)}`);
+    // roadmap-edit-fixes round 1 (constraints.check): a done dependency is met whatever its dates.
+    if (dep && dep.status !== "cut" && dep.status !== "done" && dep.end.date >= start) out.push(`Starts ${shortDay(start)}, but ‘${dep.title}’ it depends on ends ${shortDay(dep.end.date)}`);
   }
   for (const n of it.needed_by) {
     const next = items.get(n);

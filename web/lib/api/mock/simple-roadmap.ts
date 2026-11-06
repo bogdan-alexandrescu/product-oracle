@@ -922,9 +922,12 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
     const risk = s.risks?.find((x) => x.flag === kind && (!x.subject || x.subject === subject));
     out.push({ kind, reason, fixes, state: risk ? "amber" : "red", subject, risk_note: risk?.note ?? null, moves: [] });
   };
-  for (const key of s.depends ?? []) {
+  for (const k of s.depends ?? []) {
+    // roadmap-edit-fixes round 1 (constraints.check): a key by code names its item; a done dependency is met whatever
+    // its dates, and a cut item's own links break nothing.
+    const key = all.has(k) ? k : (dependencyOf([...all.values()].map((x) => x.s), k)?.key ?? k);
     const dep = all.get(key);
-    if (!dep || closed(dep.s) || (dep.r.end.estimated && r.start.estimated)) continue;
+    if (!dep || key === s.key || closed(dep.s) || closed(s) || dep.s.status === "done" || (dep.r.end.estimated && r.start.estimated)) continue;
     const theirs = ownPrd(dep.s).title;
     const depPrd = theirs !== ownPrd(s).title ? prdName(theirs) : null;
     if (r.start.estimated) {
@@ -1297,6 +1300,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       own_owner_id: namedOn(db, s.key, "owner_id") ?? null,
       depends_keys: s.depends ?? [],
       depends_key_of: Object.fromEntries((s.depends ?? []).flatMap((k) => { const d = depOf(k); return d && d !== s.key ? [[db.ids[d], k]] : []; }).reverse()),
+      depends_keys_of: (s.depends ?? []).reduce<Record<string, string[]>>((o, k) => { const d = depOf(k); if (d && d !== s.key) (o[db.ids[d]] ??= []).push(k); return o; }, {}),
       suggested_depends: (s.suggested_depends ?? []).filter((k) => !(s.depends ?? []).includes(k) && !loopOf(seeds, s.key, [k])),
       can_decide: decides(s),
       deciders: deciders(s),

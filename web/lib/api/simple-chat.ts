@@ -273,6 +273,14 @@ export const GOAL_CHANGED_EVENT = "simple:goal-changed";
 /** The changes that move a goal: the item's goal, and how its goal is measured. */
 export const GOAL_OPS: readonly string[] = ["set_goal", "set_goal_measure"];
 
+/** roadmap-edit-fixes round 1: a feature panel changed an item (a dependency removed, Cut, Delete,
+ * Undo, a decision): the page around it (Priorities, Home, Decisions) reads again at once, not on close. */
+export const ITEM_CHANGED_EVENT = "simple:item-changed";
+
+export function sendItemChanged(): void {
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(ITEM_CHANGED_EVENT));
+}
+
 export function sendGoalChanged(): void {
   if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(GOAL_CHANGED_EVENT));
 }

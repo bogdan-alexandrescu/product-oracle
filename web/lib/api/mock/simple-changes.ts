@@ -48,6 +48,7 @@ import {
   ownPrd,
   prdCode,
   codedTitle,
+  dependencyOf,
   loopOf,
   ROADMAP_SLUGS,
   readerDb,
@@ -1011,7 +1012,12 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     } else if (body.op === "set_depends") {
       const keys = a.depends_on;
       if (!Array.isArray(keys) || keys.length > 50) return json(422, { detail: "after.depends_on: a list of at most 50 keys" });
-      const clean = [...new Set(keys.map((k) => String(k ?? "").trim()))];
+      let clean = [...new Set(keys.map((k) => String(k ?? "").trim()))];
+      // roadmap-edit-fixes round 1 (changes._plan): a removed key's item goes, by every key that names it.
+      const stored = seed(seen, key).depends ?? [];
+      const target = (k: string) => dependencyOf(seen.items, k)?.key;
+      const gone = new Set(stored.filter((k) => !clean.includes(k)).map(target).filter((k) => !!k));
+      clean = clean.filter((k) => !(stored.includes(k) && gone.has(target(k))));
       if (clean.some((k) => !k) || clean.includes(key)) return json(422, { detail: "after.depends_on: item or feature keys, never the item's own" });
       // changes._unknown_keys: a new key names an item (its key or code) or a feature.
       const names = new Set(seen.items.flatMap((x) => [x.key, prdCode(x.section), codedTitle(x.title, prdCode(x.section))[0], x.feature_key]).filter((k): k is string => !!k).map((k) => k.toLowerCase()));

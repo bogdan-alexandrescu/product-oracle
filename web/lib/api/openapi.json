@@ -125858,6 +125858,17 @@
             "title": "Depends Key Of",
             "default": {}
           },
+          "depends_keys_of": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Depends Keys Of",
+            "default": {}
+          },
           "suggested_depends": {
             "items": {
               "type": "string"

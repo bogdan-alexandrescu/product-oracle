@@ -17,8 +17,8 @@ import { expect, test, type Locator, type Page } from "./test";
  *   keeps it after the click or a reload.
  * - protects = a done dependency is no broken link: no callout on the roadmap, no warning in the
  *   panel; fails_when = the digest is flagged for starting before the done engine ends.
- * - protects = a cut item's link counts nowhere: Needs a decision lists no broken link for it;
- *   fails_when = In-app tour is listed.
+ * - protects = a cut item's own link counts nowhere: Needs a decision lists no broken link from
+ *   it to what it depends on; fails_when = In-app tour is listed for the Setup checklist.
  * - protects = a change made in a panel opened from Priorities shows on Priorities at once (Cut
  *   takes the row away while the panel is still open); fails_when = the row stays until the
  *   panel is closed or the page reloaded.
@@ -108,7 +108,8 @@ for (const phone of [false, true]) {
       await tap(page.getByRole("button", { name: /^Needs a decision/ }).first());
       const tray = page.getByTestId("decision-tray");
       await expect(tray).toBeVisible();
-      await expect(tray.getByTestId("tray-broken").filter({ hasText: "In-app tour" })).toHaveCount(0);
+      // Its own link to the Setup checklist counts nowhere; that the Welcome video still waits on it does (a live link).
+      await expect(tray.getByTestId("tray-broken").filter({ hasText: "In-app tour" })).not.toContainText("Setup checklist");
     });
 
     test(`a cut made in a panel opened from Priorities shows there at once (${where})`, async ({ page }) => {
