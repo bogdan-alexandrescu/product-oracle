@@ -47,9 +47,9 @@ export function WebhooksSettings() {
             {h.name}
           </span>
           {h.include_approvers_content && (
-            <span title="Sends private details" className="inline-flex flex-none text-text2" data-testid="approvers-content-lock">
+            <span title="Sends private details: what only owners and approvers can see" className="inline-flex flex-none text-text2" data-testid="approvers-content-lock">
               <Icon name="lock" size={16} />
-              <span className="sr-only">Sends private details</span>
+              <span className="sr-only">Sends private details: what only owners and approvers can see</span>
             </span>
           )}
         </span>

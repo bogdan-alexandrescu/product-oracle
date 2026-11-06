@@ -171,7 +171,7 @@ test("webhooks: an owner sees who made each, turns on owners-and-approvers conte
   await sheet.getByLabel("Name").fill("Leads channel");
   await sheet.getByLabel("URL").fill("https://hooks.example.test/leads");
   await sheet.getByRole("checkbox", { name: "All Approvals" }).check();
-  await sheet.getByRole("switch", { name: "Include private details" }).click();
+  await sheet.getByRole("switch", { name: "Private details" }).click();
   await expect(sheet.getByRole("button", { name: "Create" })).toBeDisabled();
   await sheet.getByLabel("Why").fill("The leads channel is owners and approvers only");
   await sheet.getByRole("button", { name: "Create" }).click();
@@ -207,7 +207,7 @@ test("webhooks: an approver sees only their own and gets no owners-and-approvers
   await page.getByRole("button", { name: "New webhook" }).click();
   const sheet = page.getByRole("dialog", { name: "New webhook" });
   await expect(sheet.getByRole("checkbox", { name: "A run started" })).toBeVisible();
-  await expect(sheet.getByRole("switch", { name: "Include private details" })).toHaveCount(0);
+  await expect(sheet.getByRole("switch", { name: "Private details" })).toHaveCount(0);
 });
 
 test("webhooks: a commenter does not see the Webhooks tab", async ({ page }) => {
@@ -277,7 +277,7 @@ test("webhooks: an owner edits the name, the URL and the events, and turns owner
   await edit.getByLabel("URL").fill("http://relay.example.test/leads");
   await edit.getByRole("checkbox", { name: "All Approvals" }).check();
   await edit.getByRole("checkbox", { name: "A run started" }).uncheck();
-  await edit.getByRole("switch", { name: "Include private details" }).click();
+  await edit.getByRole("switch", { name: "Private details" }).click();
   await expect(edit.getByRole("button", { name: "Save" })).toBeDisabled();
   await edit.getByLabel("Why").fill("The leads channel is owners and approvers only");
   await edit.getByRole("button", { name: "Save" }).click();
@@ -297,7 +297,7 @@ test("webhooks: an owner edits the name, the URL and the events, and turns owner
 
   // Off again, with a reason too.
   await inspector.getByRole("button", { name: "Edit" }).click();
-  await edit.getByRole("switch", { name: "Include private details" }).click();
+  await edit.getByRole("switch", { name: "Private details" }).click();
   await expect(edit.getByRole("button", { name: "Save" })).toBeDisabled();
   await edit.getByLabel("Why").fill("Moved to the approvers' own channel");
   await edit.getByRole("button", { name: "Save" }).click();
@@ -314,7 +314,7 @@ test("webhooks: an approver re-points their webhook and the owner's Inbox says s
   await inspector.getByRole("button", { name: "Edit" }).click();
   const edit = page.getByRole("dialog", { name: "Edit webhook" });
   // No owners-and-approvers switch for an approver.
-  await expect(edit.getByRole("switch", { name: "Include private details" })).toHaveCount(0);
+  await expect(edit.getByRole("switch", { name: "Private details" })).toHaveCount(0);
   await edit.getByLabel("URL").fill("https://relay.example.test/notes");
   await edit.getByRole("button", { name: "Save" }).click();
   await expect(edit).toHaveCount(0);

@@ -44,7 +44,7 @@ const LIFETIMES: { value: Lifetime; label: string }[] = [
 ];
 const lifetimeDays = (l: Lifetime) => (l === "never" ? null : (Number(l) as 30 | 90 | 365));
 /** What a password change and Sign out everywhere also revoke (AC1). */
-const REVOKES_TOO = "your personal API tokens, every app you connected and the current tokens of runs you started that are still going (those runs keep running; their next segment gets a new token)";
+const REVOKES_TOO = "your personal API tokens, every MCP client you authorized and the current tokens of runs you started that are still going (those runs keep running; their next segment gets a new token)";
 
 /**
  * A panel head's count that agrees with its table: "1 active · 2 total" when some rows
@@ -109,7 +109,7 @@ export function MyAccount() {
       }
       stats={[
         { label: "Personal tokens", value: liveTokens ?? "—", testId: "stat-tokens" },
-        { label: "Connected apps", value: liveClients ?? "—", testId: "stat-clients" },
+        { label: "MCP clients", value: liveClients ?? "—", testId: "stat-clients" },
       ]}
     >
       {account && <AccountDetails account={account} onSaved={(a) => accountQ.setData(() => a)} />}
@@ -122,8 +122,8 @@ export function MyAccount() {
         title="My account"
         info={
           <InfoTip label="your account" align="start" side="bottom">
-            How you sign in, your password, and the credentials that act as you: personal API tokens and the apps
-            you connected. Changing your password or signing out everywhere revokes them all.
+            How you sign in, your password, and the credentials that act as you: personal API tokens and the MCP clients
+            you authorized. Changing your password or signing out everywhere revokes them all.
           </InfoTip>
         }
         action={
@@ -163,8 +163,8 @@ export function MyAccount() {
             icon: "lock",
             text:
               liveClients === 1
-                ? "Your connected app loses its access."
-                : `Your ${liveClients ?? 0} connected apps lose their access.`,
+                ? "Your MCP client loses its access."
+                : `Your ${liveClients ?? 0} MCP clients lose their access.`,
           },
           {
             icon: "runs",
@@ -357,7 +357,7 @@ function PasswordPanel({ account, onChanged }: { account: Account; onChanged: ()
         {done && (
           <div className="col-span-full">
             <Notice tone="pass">
-              Password changed. Every other session was signed out; your personal API tokens, connected apps and the tokens of
+              Password changed. Every other session was signed out; your personal API tokens, MCP clients and the tokens of
               your runs still going were revoked.
             </Notice>
           </div>
@@ -640,11 +640,11 @@ function ClientsPanel({ query }: { query: ReturnType<typeof useQuery<McpClient[]
 
   return (
     <Panel
-      title="Connected apps"
+      title="MCP clients"
       count={<ActiveOfTotal rows={query.data} />}
       testId="clients-panel"
       tools={
-        <InfoTip label="Connected apps" align="end">
+        <InfoTip label="MCP clients" align="end">
           AI tools and apps you let use Oracle as you. Revoking one ends its access at once.
         </InfoTip>
       }
@@ -656,19 +656,19 @@ function ClientsPanel({ query }: { query: ReturnType<typeof useQuery<McpClient[]
       ) : (
         <div className={SETTLING}>
           <DataTable
-            label="Connected apps"
+            label="MCP clients"
             columns={columns}
             rows={rows}
             loading={!rows}
             rowKey={(c) => c.id}
             rowProps={(c) => ({ "data-testid": "my-client-row", ...acts.rowAttrs(c.id) })}
-            empty="No connected apps"
+            empty="No MCP clients"
           />
         </div>
       )}
       <ConfirmDialog
         open={!!confirming}
-        title="Revoke this connected app?"
+        title="Revoke this MCP client?"
         subject={confirming?.client_name}
         testId="revoke-client-dialog"
         confirmLabel="Revoke"

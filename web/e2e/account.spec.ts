@@ -212,7 +212,7 @@ test("my account: revoke an MCP client", async ({ page }) => {
   await expect(row).toContainText("Active");
   await expect(page.getByTestId("my-client-row").filter({ hasText: "Old notebook agent" })).toContainText("Revoked");
   await page.getByRole("button", { name: "Revoke Claude Desktop" }).click();
-  await page.getByRole("dialog", { name: "Revoke this connected app?" }).getByRole("button", { name: "Revoke" }).click();
+  await page.getByRole("dialog", { name: "Revoke this MCP client?" }).getByRole("button", { name: "Revoke" }).click();
   await expect(row).toContainText("Revoked");
 });
 
@@ -228,7 +228,7 @@ test("my account: change password", async ({ page }) => {
   await form.getByLabel("New password again").fill(fresh);
   await form.getByRole("button", { name: "Change password" }).click();
   await expect(form.getByRole("alert")).toContainText("not correct");
-  await expect(form.getByTestId("password-revokes")).toContainText("revokes your personal API tokens, every app you connected");
+  await expect(form.getByTestId("password-revokes")).toContainText("revokes your personal API tokens, every MCP client you authorized");
 
 
   await form.getByLabel("Current password").fill(ADMIN.password);
@@ -262,7 +262,7 @@ test("my account: sign out everywhere ends the session, personal tokens, MCP cli
   const dialog = page.getByRole("dialog", { name: "Sign out of every device?" });
   await expect(dialog).toContainText("this one too");
   await expect(dialog).toContainText("Your personal API token is revoked");
-  await expect(dialog).toContainText("Your connected app loses");
+  await expect(dialog).toContainText("Your MCP client loses");
   await expect(dialog).toContainText("Runs you started that are still going lose their current tokens; they keep running, and their next segment gets a new token");
   await dialog.getByRole("button", { name: "Sign out everywhere" }).click();
   await expect(page).toHaveURL(/\/login/);

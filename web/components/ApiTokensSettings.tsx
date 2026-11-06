@@ -30,7 +30,7 @@ export const KIND_LABEL: Record<TokenKind, string> = {
   personal: "Personal",
   service: "Service",
   run: "Run",
-  mcp_client: "Connected app",
+  mcp_client: "MCP client",
 };
 const KINDS: TokenKind[] = ["personal", "service", "run", "mcp_client"];
 
@@ -119,7 +119,7 @@ export const when = (iso?: string | null, never = "Never") =>
 /**
  * Where each kind is made (qa-settings-35), in plain words behind the title's (i) (pass F,
  * F-19, F-67). As the API makes them: personal tokens on My account (POST /v1/me/tokens), run
- * tokens by Oracle for each run segment, connected apps when a member approves one; no API
+ * tokens by Oracle for each run segment, MCP clients when a member approves one; no API
  * call makes a service token.
  */
 function WhereTokensComeFrom() {
@@ -137,7 +137,7 @@ function WhereTokensComeFrom() {
         <b>Run</b>: Oracle makes one for each run&apos;s agents; it ends with the run.
       </span>
       <span className="block">
-        <b>Connected app</b>: an AI tool a member let connect to Oracle. It acts as them; they manage it on{" "}
+        <b>MCP client</b>: an AI tool a member let connect to Oracle. It acts as them; they manage it on{" "}
         <Link href="/account" className={LINK}>
           My account
         </Link>
@@ -267,7 +267,7 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
     {
       key: "kind",
       header: "Kind",
-      // "Connected app" whole.
+      // "MCP client" whole.
       width: "148px",
       cell: (t) => <Chip kind="acc">{KIND_LABEL[t.kind ?? "service"]}</Chip>,
     },
@@ -405,7 +405,7 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
       </Split>
       <ConfirmDialog
         open={!!confirming}
-        title={confirming?.kind === "mcp_client" ? "Revoke this connected app?" : "Revoke this token?"}
+        title={confirming?.kind === "mcp_client" ? "Revoke this MCP client?" : "Revoke this token?"}
         subject={confirming ? `${confirming.name} · ${confirming.owner_email ?? "no one"}` : undefined}
         testId="revoke-dialog"
         confirmLabel="Revoke"

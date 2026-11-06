@@ -17,10 +17,10 @@ test("F-19, F-67: the API tokens (i) says what each kind is for in plain words, 
   await page.getByRole("button", { name: "About API tokens" }).click();
   const tip = page.getByTestId("tokens-made-where");
   await expect(tip).toContainText("Personal: a member's own key");
-  await expect(tip).toContainText("Connected app: an AI tool a member let connect to Oracle");
+  await expect(tip).toContainText("MCP client: an AI tool a member let connect to Oracle");
   for (const jargon of ["po_", "ort_", "poa_", "OAuth", "scopes"]) await expect(tip).not.toContainText(jargon);
   // The kind filter names it the same way.
-  await expect(page.getByTestId("kind-mcp_client")).toHaveText("Connected app");
+  await expect(page.getByTestId("kind-mcp_client")).toHaveText("MCP client");
 });
 
 test("F-66: the title's badges filter the tokens to the ones they count, and again shows all", async ({ page }) => {
@@ -146,6 +146,38 @@ test("F-51: My account's token parts use plain names and keep their reasons behi
   await form.getByRole("button", { name: "About what Write allows" }).click();
   await expect(form.getByTestId("write-scope-note")).toBeVisible();
   await expect(page.getByTestId("password-revokes")).toBeHidden();
-  await expect(page.getByTestId("clients-panel")).toContainText("Connected apps");
-  await expect(page.getByText("MCP client", { exact: false }).filter({ visible: true })).toHaveCount(0);
+  // Owner's decision (Nov 5): the credentials people authorize for AI tools stay "MCP clients".
+  await expect(page.getByTestId("clients-panel")).toContainText("MCP clients");
+  await expect(page.getByText("Connected app", { exact: false })).toHaveCount(0);
+});
+
+test("Owner's decision (Nov 5): the webhook switch is 'Private details', and its (i) and the lock say it is what only owners and approvers can see", async ({ page }) => {
+  await scenario(page, WEBHOOKS_SCENARIO);
+  await login(page);
+  await page.goto("/settings/webhooks");
+  const tipText = "What only owners and approvers can see in Oracle.";
+  // The New webhook switch, with its (i).
+  await page.getByRole("button", { name: "New webhook" }).click();
+  const sheet = page.getByRole("dialog", { name: "New webhook" });
+  await expect(sheet.getByRole("switch", { name: "Private details", exact: true })).toBeVisible();
+  await expect(sheet).not.toContainText("Include private details");
+  await sheet.getByRole("button", { name: "About private details" }).click();
+  await expect(page.getByText(tipText).filter({ visible: true })).toBeVisible();
+  await page.mouse.click(5, 5);
+  await sheet.getByLabel("Name").fill("Team channel");
+  await sheet.getByLabel("URL").fill("https://hooks.example.test/team");
+  await sheet.getByRole("checkbox", { name: "All Approvals" }).check();
+  await sheet.getByRole("switch", { name: "Private details", exact: true }).click();
+  await sheet.getByLabel("Why").fill("The team channel is owners and approvers only");
+  await sheet.getByRole("button", { name: "Create" }).click();
+  await page.getByRole("dialog", { name: "Webhook created" }).getByRole("button", { name: "Done" }).click();
+  // The list's lock says what it means.
+  const row = page.getByTestId("webhook-row").filter({ hasText: "Team channel" });
+  await expect(row.getByTestId("approvers-content-lock")).toHaveAttribute("title", "Sends private details: what only owners and approvers can see");
+  // The panel's row, with the same (i).
+  await row.click();
+  const inspector = page.getByTestId("webhook-inspector");
+  await expect(inspector.getByTestId("approvers-content")).toHaveText("On");
+  await inspector.getByRole("button", { name: "About private details" }).click();
+  await expect(page.getByText(tipText).filter({ visible: true })).toBeVisible();
 });
