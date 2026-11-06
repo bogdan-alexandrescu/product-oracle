@@ -1044,13 +1044,16 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       for (const k of clean.filter((k) => !(me.depends ?? []).includes(k))) {
         const dep = find(k);
         if (!dep || dep.key === key) continue;
-        const queue = [dep.key];
+        const queue: string[] = [dep.key];
         const met = new Set(queue);
         while (queue.length) {
           for (const d of find(queue.shift()!)?.depends ?? []) {
             const n = find(d)?.key;
             if (n === key) return json(422, { detail: `${dep.title} needs ${me.title}: it would make a loop` });
-            if (n && !met.has(n)) (met.add(n), queue.push(n));
+            if (n && !met.has(n)) {
+              met.add(n);
+              queue.push(n);
+            }
           }
         }
       }
