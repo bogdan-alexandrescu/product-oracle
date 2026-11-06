@@ -254,6 +254,13 @@ const BASELINE_SEGMENT: Schemas["FlowSegmentOut"] = {
 /** E1: the draft-items flow (the generated Flow literal gains it when the schema is regenerated). */
 export const DRAFT_ITEMS_FLOW: Schemas["FlowOut"]["key"] = "prd_draft_items";
 
+/**
+ * The outputs Oracle imports as a document's next version (the API's imports_draft segments);
+ * "{draft}" is the strategy draft's, named by the document it writes.
+ */
+export const DRAFT_OUTPUTS = ["prd.md", "roadmap.md", "update.md", "pricing.md", "{draft}"];
+export const importsDraft = (outputs: readonly string[]) => outputs.some((o) => DRAFT_OUTPUTS.includes(o));
+
 export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
   flows: [
     {
@@ -1606,7 +1613,8 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     s.priority_check = checkOrder(LOCAL_ORDER, scopeOf(ctx, r), goalSet(ctx));
     snapshot = proposeOrder(ctx, r, s.seq, attempt, LOCAL_ORDER, s.priority_check);
   }
-  if ((def.outputs.includes("prd.md") || def.outputs.includes("roadmap.md") || def.outputs.includes("update.md") || def.outputs.includes("pricing.md")) && r.document_slug) {
+  // The mock writes no strategy draft ("{draft}"): Company › Strategy keeps its own store.
+  if (importsDraft(def.outputs.filter((o) => o !== "{draft}")) && r.document_slug) {
     const imp = ctx.importDraft(r.document_slug, r);
     s.draft_import = { ...imp, created: true, warnings: [], error: null, problems: [], code_names: [], summary: null };
     r.document_id = imp.document_id ?? null;
@@ -1977,6 +1985,8 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     launches: [],
     // A5: access request rows are added by the server (./server.ts).
     access_requests: [],
+    // F-7: my unread webhook notices, counted by the server (./server.ts).
+    webhooks: 0,
     // Simple S8: minutes sent to me as an attendee (./simple-meetings.ts adds them).
     simple_minutes: [],
     // H10 request rows: none in the mock yet (lane 2 adds the requests-why-not scenario).

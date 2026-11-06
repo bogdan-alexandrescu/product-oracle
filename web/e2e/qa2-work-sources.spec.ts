@@ -24,10 +24,14 @@ test("rirs-38: at 1440 px the Settings tabs stay on one row, Trash not alone bel
 
 test("rirs-39: the coverage counts say what each counts, so Items, Not read and Used need not add up", async ({ page }) => {
   await openCoverage(page);
-  const note = page.getByTestId("coverage-counts-note");
-  await expect(note).toContainText("Items read: what Oracle holds from the source.");
-  await expect(note).toContainText("counted apart from the items");
-  await expect(note).toContainText("one item can be used more than once");
+  // F-56: no sentence sits loose on the page; the full word stays in one tip.
+  await expect(page.getByTestId("coverage-counts-note")).toHaveCount(0);
+  const tip = page.getByRole("button", { name: "About Coverage" }).filter({ visible: true }).first();
+  await tip.click();
+  const bubble = page.getByText("Items read: what Oracle holds from the source.", { exact: false }).filter({ visible: true }).first();
+  await expect(bubble).toBeVisible();
+  await expect(bubble).toContainText("counted apart from the items");
+  await expect(bubble).toContainText("one item can be used more than once");
   const table = page.getByTestId("coverage-table");
   await expect(table.getByRole("columnheader", { name: "Items read" })).toBeVisible();
   await expect(table.getByRole("columnheader", { name: "Not read" }).locator("[title]")).toHaveAttribute("title", /counted apart from the items/);

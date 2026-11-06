@@ -6714,6 +6714,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/rebuilds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Rebuilds
+         * @description The rebuild sign: the runs that will make a new version of a document the caller
+         *     may read (scheduled, running, waiting, stopped, or landed and not approved yet).
+         */
+        get: operations["list_rebuilds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/prd-scopes/{scope_id}": {
         parameters: {
             query?: never;
@@ -13457,6 +13478,28 @@ export interface paths {
          * @description Open a session on a working draft whose session closed: its author or the decider.
          */
         post: operations["resume_simple_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/one-pagers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Simple One Pagers
+         * @description The PRDs Simple lists (One-pagers, Home), newest first, as GET /v1/documents?kind=prd
+         *     has them but without a PRD marked replaced (simple-replaced-prds): Simple shows the PRDs
+         *     that replaced it; Detailed keeps it as history.
+         */
+        get: operations["list_simple_one_pagers"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -20218,6 +20261,18 @@ export interface components {
             slug: string;
             /** Title */
             title: string;
+        };
+        /**
+         * CompanyRoadmapRebuilds
+         * @description The company roadmap every PRD feeds: a PRD's rebuild changes it too.
+         */
+        CompanyRoadmapRebuilds: {
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Prds */
+            prds: number;
         };
         /** CompareCheckpoint */
         CompareCheckpoint: {
@@ -27810,6 +27865,11 @@ export interface components {
              * @default []
              */
             dates: components["schemas"]["InboxDateBasis"][];
+            /**
+             * Webhooks
+             * @default 0
+             */
+            webhooks: number;
             /** Total */
             total: number;
             /**
@@ -35591,6 +35651,79 @@ export interface components {
             approver_id: string;
             /** Reason */
             reason: string;
+        };
+        /**
+         * Rebuild
+         * @description The rebuild sign (owner's pick A): a run that will make a new version of a document,
+         *     as the chip beside its version pill says it (``oracle.rebuilds.service``).
+         */
+        Rebuild: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Flow
+             * @enum {string}
+             */
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest" | "discussion_research" | "intake_analysis";
+            /** Flow Title */
+            flow_title: string;
+            /** Document Slug */
+            document_slug: string;
+            /** Document Title */
+            document_title?: string | null;
+            /** Document Kind */
+            document_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing") | null;
+            /**
+             * New Document
+             * @default false
+             */
+            new_document: boolean;
+            /** Source Slug */
+            source_slug?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "scheduled" | "running" | "waiting" | "failed" | "done";
+            /** Steps */
+            steps: string[];
+            /** Step */
+            step: number;
+            /** From Version */
+            from_version?: number | null;
+            /** To Version */
+            to_version: number;
+            /** Started By */
+            started_by?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Scheduled For */
+            scheduled_for?: string | null;
+            /** Minutes Left */
+            minutes_left?: number | null;
+            /** Next Stop */
+            next_stop?: string | null;
+            /** Next Stop Who */
+            next_stop_who?: string | null;
+            /** Next Stop Action */
+            next_stop_action?: string | null;
+            /** Waits On */
+            waits_on?: string | null;
+            /** Waits On Action */
+            waits_on_action?: string | null;
+            /** Review Link */
+            review_link?: string | null;
+            /** Error */
+            error?: string | null;
+        };
+        /** RebuildsOut */
+        RebuildsOut: {
+            /** Rebuilds */
+            rebuilds: components["schemas"]["Rebuild"][];
+            company_roadmap?: components["schemas"]["CompanyRoadmapRebuilds"] | null;
         };
         /** RecommendIn */
         RecommendIn: {
@@ -44099,6 +44232,13 @@ export interface components {
              */
             created_at: string;
         };
+        /** SourceAttention */
+        SourceAttention: {
+            /** Cause */
+            cause: string;
+            /** Is Action */
+            is_action: boolean;
+        };
         /**
          * SourceCopy
          * @description What filing shared of the source item, copied onto the request.
@@ -44308,6 +44448,7 @@ export interface components {
             unavailable_items?: components["schemas"]["UnavailableItem"][];
             /** Reconnect Reason */
             reconnect_reason?: string | null;
+            attention?: components["schemas"]["SourceAttention"] | null;
         };
         /** SourcePatch */
         SourcePatch: {
@@ -46367,6 +46508,10 @@ export interface components {
             kind: "section" | "version";
             /** Document */
             document: string;
+            /** Document Title */
+            document_title?: string | null;
+            /** Section Title */
+            section_title?: string | null;
             /** Version */
             version: number;
             /** Section Key */
@@ -63034,6 +63179,26 @@ export interface operations {
             };
         };
     };
+    list_rebuilds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RebuildsOut"];
+                };
+            };
+        };
+    };
     get_prd_scope_review: {
         parameters: {
             query?: never;
@@ -75190,6 +75355,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_simple_one_pagers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSummary"][];
                 };
             };
         };

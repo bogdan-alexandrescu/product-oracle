@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { Button, Sheet } from "@/components/ds";
+import { Button, InfoTip, Sheet } from "@/components/ds";
 import { api, ApiError, unwrap } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
@@ -25,6 +25,7 @@ export function RunReviewBar({
   onDecided,
   onOpen,
   liveTick = 0,
+  approvedAs = null,
 }: {
   doc: string;
   n: number;
@@ -34,6 +35,8 @@ export function RunReviewBar({
   onOpen?: (open: boolean) => void;
   /** The page's live refresh count: each new one re-reads the bar in place, under the same key. */
   liveTick?: number;
+  /** B-18: what the version is ("PRD") when it was approved on its own; null: not approved. */
+  approvedAs?: string | null;
 }) {
   const { can } = useMe();
   const q = useQuery(
@@ -103,11 +106,21 @@ export function RunReviewBar({
       aria-label="Run review"
       className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-button border border-accent/30 bg-accent-soft px-3 py-2 text-sm text-accent-ink"
     >
-      <p className="min-w-0 flex-1 font-medium" data-testid="run-review-text">
-        Run review · {r.flow_title} · draft v{n} · {reviewed} of {total} sections reviewed
-        {hours != null && state == null && <> · {hours} h left</>}
-        {state && <b className="font-semibold"> · {state}</b>}
-      </p>
+      {/* B-18: the bar names the run's own review; which run, and that the version's own
+          approval is a separate thing, sit behind its (i). */}
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <p className="min-w-0 font-medium" data-testid="run-review-text">
+          This run&apos;s review · {reviewed} of {total} sections reviewed
+          {hours != null && state == null && <> · {hours} h left</>}
+          {state && <b className="font-semibold"> · {state}</b>}
+        </p>
+        <InfoTip label="this run's review" align="start" side="bottom" testId="run-review-about">
+          The review of draft v{n} by the {r.flow_title} run, decided here.
+          {approvedAs
+            ? ` The ${approvedAs} was approved separately; this review only ends the run's stop.`
+            : " It does not approve the version."}
+        </InfoTip>
+      </div>
       {r.status === "pending" && !deciding && (
         <span className="text-text2">
           {!r.decider_name

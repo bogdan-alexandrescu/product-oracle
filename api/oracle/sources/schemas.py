@@ -55,6 +55,14 @@ class UnavailableItem(BaseModel):
     status: Literal["unavailable", "skipped", "flagged", "limited"] = "unavailable"
 
 
+class SourceAttention(BaseModel):
+    # What is wrong, for a role that cannot edit the source: "Over 100 channels".
+    cause: str
+    # last_error is itself the fix ("Pick 100 channels or fewer, then it syncs again"),
+    # not a cause followed by "Edit this source to sync it again."
+    is_action: bool
+
+
 class SourceOut(ORM):
     id: uuid.UUID
     kind: SourceKind
@@ -82,6 +90,9 @@ class SourceOut(ORM):
     # Set when the source's connection should be signed in again, e.g. a Google
     # connection without drive.readonly: "Reconnect to choose files".
     reconnect_reason: str | None = None
+    # Set while a saved config breaks a rule (status needs_attention): what is wrong and
+    # whether last_error is itself the fix. Null otherwise.
+    attention: SourceAttention | None = None
 
 
 class ConnectionChoice(BaseModel):
@@ -296,7 +307,7 @@ class SourceCoverageDetail(SourceCoverage):
 class CompanyMember(BaseModel):
     id: uuid.UUID
     email: str
-    # The member's display name once people have one; null until then.
+    # The member's display name; null when they have none (pass F F-55: the row reads it).
     name: str | None
     role: str
 

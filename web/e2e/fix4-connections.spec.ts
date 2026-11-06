@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { login } from "./helpers";
+import { disconnectAll, login } from "./helpers";
 
 /*
  * QA fixes on Settings › Connections (qa-settings-21, -22), driven through the UI on the mock
@@ -23,6 +23,7 @@ const companySlack = (page: Page) =>
 test("qa-settings-21: Connections and Notifications agree on whether Oracle's Slack app is connected", async ({ page }) => {
   await login(page);
   await openSettings(page, "connections");
+  await disconnectAll(page, "slack");
   await expect(companySlack(page)).toContainText("Oracle's Slack app");
   await expect(companySlack(page)).toContainText("Not installed");
   await expect(companySlack(page).getByRole("link", { name: "Notifications" })).toBeVisible();
@@ -47,6 +48,7 @@ test("qa-settings-21: Connections and Notifications agree on whether Oracle's Sl
 test("qa-settings-22: Paste a token is a secondary button, not plain text", async ({ page }) => {
   await login(page);
   await openSettings(page, "connections");
+  await disconnectAll(page, "slack");
   const paste = page.getByTestId("connection-card-slack").getByRole("button", { name: "Paste a token" });
   await expect(paste).toHaveAttribute("data-variant", "secondary");
 });

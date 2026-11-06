@@ -310,3 +310,35 @@ async def test_member_detail_and_approvals(client):
         f"/v1/members/{pm.user_id}/approvals", params={"lapsed": "true"}, headers=ctx.auth
     )
     assert len(resp.json()) == 4 and all(a["lapsed_at"] for a in resp.json())
+
+
+async def test_member_approvals_name_document_and_section(client):
+    """protects: pass-f F-16, the Remove dialog's "Lapses for good" names each approval's
+    document and section by their titles, not the slug and the section key.
+    fails_when: a row has no ``document_title`` or a section row no ``section_title``.
+    no_claim: lapsed rows."""
+    from oracle.docs.models import Document, DocumentVersion, Section
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    await _approvals(client, ctx, pm)
+    async with tenant_session(ctx.tenant_id) as s:
+        title = await s.scalar(select(Document.title).where(Document.slug == DOC))
+        headings = dict(
+            (
+                await s.execute(
+                    select(Section.section_key, Section.heading)
+                    .join(DocumentVersion, DocumentVersion.id == Section.version_id)
+                    .join(Document, Document.id == DocumentVersion.document_id)
+                    .where(Document.slug == DOC, DocumentVersion.number == 1)
+                )
+            ).all()
+        )
+    rows = (await client.get(f"/v1/members/{pm.user_id}/approvals", headers=ctx.auth)).json()
+    assert len(rows) == 4
+    assert all(r["document_title"] == title for r in rows)
+    for r in rows:
+        if r["kind"] == "section":
+            assert r["section_title"] == headings[r["section_key"]]
+        else:
+            assert r["section_title"] is None

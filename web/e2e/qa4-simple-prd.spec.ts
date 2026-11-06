@@ -104,8 +104,9 @@ test.describe("desktop", () => {
     await expect(parts.first()).toBeVisible();
     // Each part (the name, the count) on one line: one line's height, never two.
     for (const h of await parts.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height))) expect(h).toBeLessThan(30);
-    await expect(strip.getByTestId("plan-strip-edge")).toHaveText("1 roadmap item with no milestone ends after Jan");
-    await expect(strip.getByTestId("plan-strip-row").filter({ hasText: "No milestone" }).getByTestId("plan-strip-ends")).toHaveText("ends after Jan");
+    // vqa B-14: the footnote and the row count the row's own items.
+    await expect(strip.getByTestId("plan-strip-edge")).toHaveText("1 of the 2 roadmap items with no milestone ends after Jan");
+    await expect(strip.getByTestId("plan-strip-row").filter({ hasText: "No milestone" }).getByTestId("plan-strip-ends")).toHaveText("1 of 2 ends after Jan");
   });
 
   test("today is the company's day, as the change times read (qa4-simple-prd-10)", async ({ page }) => {
@@ -187,11 +188,12 @@ test.describe("desktop", () => {
     await page.goto("/simple/one-pagers");
     await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Saved carts PRD", exact: true }).click();
     await expect(page.getByRole("article", { name: "One-pager" })).toBeVisible();
-    const line = page.locator('[data-line="bets-2"]');
+    // vqa B-13: Saved carts' one-pager has its own lines; its first flow is its own Version 1.
+    const line = page.locator("li", { hasText: "Beta: Save cart" }).first();
     await line.getByRole("button", { name: "Draw the flow" }).click();
-    await page.getByRole("button", { name: /^Flow for “Cart on every device/ }).click();
+    await page.getByRole("button", { name: /^Flow for “Beta: Save cart/ }).click();
     const opened = page.getByTestId("flow-detail");
-    await expect(opened).toContainText("G2 · flow");
+    await expect(opened).toContainText("Save cart · flow");
     await expect(opened).not.toContainText("Invite suggestions");
     await expect(opened.getByTestId("flow-drawn")).toContainText("Version 1 · drawn");
     await expect(opened).not.toContainText("(revised)");

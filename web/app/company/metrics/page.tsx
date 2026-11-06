@@ -4,7 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, useSyncExternalStore } from "react";
 
 import { Button, Chip, type Column, DataTable, InfoTip, PageSkeleton, Panel, Sheet, Sparkline, Split, ViewOnly } from "@/components/ds";
-import { ErrorNote } from "@/components/ui";
+import { LoadError } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
@@ -178,17 +178,18 @@ function Metrics() {
           // the tab strip for one with the button, then back once the list came back empty.
           writer &&
           rows.length > 0 && (
-            <Button variant="primary" icon="plus" onClick={() => setForm("add")}>
+            <Button variant="primary" icon="plus" disabled={!!listQ.error} onClick={() => setForm("add")}>
               Add metric
             </Button>
           )
         }
       />
-      {listQ.error && <ErrorNote>{listQ.error}</ErrorNote>}
+      {/* F-1: a list that did not load says so, with Try again, and no empty table under it. */}
+      {listQ.error && <LoadError what="the metrics" error={listQ.error} onRetry={() => void listQ.reload()} />}
       <Split inspector={!phone ? inspector : undefined}>
         <Panel
           title="Metrics"
-          count={listQ.data ? rows.length : undefined}
+          count={listQ.data && !listQ.error ? rows.length : undefined}
           tools={
             <div className="flex items-center gap-2">
               <label className="flex items-center gap-1.5 text-sm text-text2">
@@ -203,7 +204,7 @@ function Metrics() {
             </div>
           }
         >
-          {listQ.data && rows.length === 0 ? (
+          {listQ.error ? null : listQ.data && rows.length === 0 ? (
             // qa-company-16: how this page relates to the goal values on Home, and what to add.
             <CompanyEmpty
               testId="metrics-empty"

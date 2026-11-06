@@ -13,7 +13,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 
-import { mockSettingValue } from "./connections";
+import { mockConnectionProvider, mockSettingValue } from "./connections";
 
 type Meeting = Schemas["FirefliesMeetingOut"];
 
@@ -119,7 +119,8 @@ let seriesLimitedUntil: number | undefined;
 export async function routeFirefliesBrowse(p: string[], q: URLSearchParams): Promise<Response | null> {
   if (p[1] !== "connections" || p[3] !== "fireflies") return null;
   if (typeof window !== "undefined") (window.__firefliesBrowseCalls ??= []).push(`${p[4]}?${q.toString()}`);
-  if (p[2] !== FIREFLIES_CONNECTION_ID) return json(404, { detail: "Fireflies connection not found" });
+  // The seeded account, or a Fireflies account someone else connected (one list, F-60).
+  if (p[2] !== FIREFLIES_CONNECTION_ID && mockConnectionProvider(p[2]) !== "fireflies") return json(404, { detail: "Fireflies connection not found" });
   const search = (q.get("search") ?? "").trim().toLowerCase();
   if (search === "rate limit") {
     return json(

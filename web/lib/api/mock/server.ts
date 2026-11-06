@@ -21,6 +21,7 @@ import { accountRoute, liveCredentials, openTokens, passwordOk, revokeMemberToke
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
 import { brandHeaderHtml, brandStyleHtml, emptyBranding, routeBranding, type BrandingDb } from "./branding";
 import { capabilitiesOut } from "./capabilities";
+import { daysInWords } from "./days";
 import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
 import { carriedFor, REPLACED_PRD_SCENARIO, seedReplacedBases } from "./replaced-prd";
@@ -50,7 +51,7 @@ import {
   type DocumentSection,
   type SubjectInfo,
 } from "./discussions";
-import { routeEngineering, techBriefOf, type CodeMapRow } from "./engineering";
+import { CODE_MAP_EMPTY_SCENARIO, CODE_MAP_UNREADABLE_SCENARIO, routeEngineering, seedCodeMaps, techBriefOf, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { addLiveFeature, laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, queueJob, queueQualityReview, seedLlm, seedStoredRefusals, SPENT, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
@@ -176,7 +177,8 @@ import { goalSuggestionInboxRows, seedGoalSuggestions, seedHeldGoalSuggestion, s
 import { runGroupsOut } from "./simple-runs";
 import { roadmapRead } from "./roadmap-read";
 import { questionInboxRows } from "./simple-questions";
-import { onePagerInboxRows, planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedOnePagerFromSections, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb, type Sec } from "./simple-one-pager";
+import { rebuildsOut } from "./rebuilds";
+import { onePagerInboxRows, planSlice, prdOnePager, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
@@ -188,7 +190,7 @@ import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROW
 import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, knowGoalMapItems, seedFitDateRoadmap } from "./simple-roadmap";
-import { closed, GOALS, seesDraft, shownDates, storedDates } from "./simple-roadmap";
+import { closed, GOALS, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapItems, routeGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
@@ -306,7 +308,7 @@ export interface Db {
   goal_map?: GoalMap;
   /** Simple S5 (#723): one PRD's one-pager, its working draft and line changes (./simple-one-pager.ts). */
   simple_one_pager?: OnePagerDb;
-  /** Every other mock PRD's own one-pager (the same invented page), by document id. */
+  /** Every other mock PRD's own one-pager (built from its own sections), by document id. */
   simple_one_pagers?: Record<string, OnePagerDb>;
   /** Simple S10 (#723): proposals' visuals, their versions and comments (./simple-visuals.ts). */
   simple_visuals?: VisualsDb;
@@ -361,6 +363,8 @@ export interface Db {
   account?: AccountDb;
   /** Discussions (./discussions.ts, G1); seeded in the "discussions" scenario only. */
   discussions?: DiscussionsDb;
+  /** Pass F F-63, the "drive-picker-unset" scenario: the Drive picker config was refused once. */
+  picker_config_refused?: boolean;
 }
 
 type RevokeFailureRow = Schemas["InboxRevokeFailure"] & { dismissed?: boolean };
@@ -629,6 +633,10 @@ export const MOCK_SIMPLE_MODE_KEY = "po-mock-simple-mode";
 export const KEY_RENEWED_SCENARIO = "key-renewed";
 /** #561 review: things that failed on a stored Claude-pool refusal, one per surface. */
 export const STORED_REFUSALS_SCENARIO = "stored-refusals";
+/** Pass F F-63: the Drive picker config answers as the API does when it is not set up, once; Try again then opens it. */
+export const DRIVE_PICKER_UNSET_SCENARIO = "drive-picker-unset";
+/** Pass F F-61: GET /v1/sources fails, so Settings › Connections cannot tell which sources use a connection. */
+export const SOURCES_UNREADABLE_SCENARIO = "sources-unreadable";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
 export const MOCK_FAIL_KEY = "po-mock-fail";
 /** Tests set this localStorage key to "METHOD /path" to make that call's next request fail once with a 500. */
@@ -4483,9 +4491,12 @@ export function resetMockData() {
 
 /** A document as GET /v1/documents/{doc} returns it (DocumentOut). */
 function documentOut(db: Db, doc: DocumentRow): Schemas["DocumentOut"] {
-  // one-roadmap-many-prds: the PRDs that replace it, by name (oracle.roadmap.company.refs).
-  const replacedBy = (doc.replaced_by ?? []).flatMap((id) => db.documents.filter((x) => x.id === id).map((x) => ({ id: x.id, slug: x.slug, title: x.title })));
-  return { ...documentSummary(db, doc), versions: docVersions(db, doc).map(summary), replaced_by: replacedBy, changes_in_review: 0 };
+  return { ...documentSummary(db, doc), versions: docVersions(db, doc).map(summary), replaced_by: replacedByRefs(db, doc), changes_in_review: 0 };
+}
+
+/** one-roadmap-many-prds: the PRDs that replace `doc`, by name (oracle.roadmap.company.refs). */
+function replacedByRefs(db: Db, doc: DocumentRow | undefined): Schemas["PrdRef"][] {
+  return (doc?.replaced_by ?? []).flatMap((id) => db.documents.filter((x) => x.id === id).map((x) => ({ id: x.id, slug: x.slug, title: x.title })));
 }
 
 /**
@@ -4496,6 +4507,11 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
   const m = req.method;
   const company = () => db.documents.find((d) => d.company_roadmap && d.kind === "roadmap");
   const ref = (d: DocumentRow) => ({ id: d.id, slug: d.slug, title: d.title });
+  // simple-replaced-prds: GET /v1/simple/one-pagers, as GET /v1/documents?kind=prd without a PRD
+  // marked replaced (Simple shows the PRDs that replaced it; Detailed keeps it as history); newest first.
+  if (p[1] === "simple" && p[2] === "one-pagers" && !p[3] && m === "GET") {
+    return json(200, db.documents.filter((d) => d.kind === "prd" && !(d.replaced_by ?? []).length && canSee(me.role, d.visibility)).map((d) => documentSummary(db, d)).sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at)));
+  }
   if (p[1] === "roadmaps" && p[2] === "company" && !p[3]) {
     if (m === "GET") {
       const found = company();
@@ -4549,9 +4565,30 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
       by.push(other);
     }
     doc.replaced_by = by.map((d) => d.id);
+    if (db.simple_roadmap) markReplaced(db, db.simple_roadmap);
     return json(200, documentOut(db, doc));
   }
   return null;
+}
+
+/** simple-replaced-prds: the PRDs marked replaced, and the current PRD each went to, on Simple's roadmap. */
+function markReplaced(db: Db, simple: SimpleDb): void {
+  simple.replaced_prds = replacedPrds(db);
+  const to: NonNullable<SimpleDb["replaced_with"]> = {};
+  for (const d of db.documents.filter((x) => x.kind === "prd" && x.replaced_by?.length)) {
+    let at: DocumentRow | undefined = d;
+    for (const seen = new Set<string>(); at?.replaced_by?.length && !seen.has(at.id); ) {
+      seen.add(at.id);
+      at = db.documents.find((x) => x.id === at!.replaced_by![0]);
+    }
+    if (at && !at.replaced_by?.length) to[d.id] = to[d.slug] = { id: at.id, slug: at.slug, title: at.title };
+  }
+  simple.replaced_with = to;
+}
+
+/** simple-replaced-prds (company.replaced_prd_ids): the ids and slugs of the PRDs marked replaced. */
+function replacedPrds(db: Db): string[] {
+  return db.documents.filter((d) => d.kind === "prd" && d.replaced_by?.length).flatMap((d) => [d.id, d.slug]);
 }
 
 /** new-prd-from-replaced-prd: what a new PRD replacing an approved PRD carries, read off the
@@ -4991,15 +5028,18 @@ function banner(doc: DocumentRow, v: VersionRow, audience?: string | null) {
 function inlineHtml(nodes: Inline[]): string {
   return nodes
     .map((n) =>
-      n.t === "text" || n.t === "code"
-        ? escapeHtml(n.v)
-        : n.t === "cite" || n.t === "img"
-          ? ""
-          : n.t === "strong"
-            ? `<strong>${inlineHtml(n.c)}</strong>`
-            : n.t === "em"
-              ? `<em>${inlineHtml(n.c)}</em>`
-              : inlineHtml(n.c),
+      // As the API's render: a day in the text reads month first ("As of Oct 2, 2026"); code keeps it as written.
+      n.t === "text"
+        ? escapeHtml(daysInWords(n.v))
+        : n.t === "code"
+          ? escapeHtml(n.v)
+          : n.t === "cite" || n.t === "img"
+            ? ""
+            : n.t === "strong"
+              ? `<strong>${inlineHtml(n.c)}</strong>`
+              : n.t === "em"
+                ? `<em>${inlineHtml(n.c)}</em>`
+                : inlineHtml(n.c),
     )
     .join("");
 }
@@ -5304,7 +5344,7 @@ function settleInviteEmails(db: Db) {
   for (const i of db.invites) {
     if (i.email_status !== "queued" || Date.now() - Date.parse(i.email_at ?? "") < MAIL_DELAY_MS) continue;
     const resent = (db.invites_resent ??= []).includes(i.id);
-    if (fails && !resent) Object.assign(i, { email_status: "failed", email_error: "the Gmail API answered 503", email_at: now() });
+    if (fails && !resent) Object.assign(i, { email_status: "failed", email_error: "Google returned 503 (unavailable)", email_at: now() });
     else Object.assign(i, { email_status: "sent", email_error: null, email_at: now() });
   }
 }
@@ -5495,7 +5535,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
       if (!SIGN_IN_DOMAINS.includes(email.split("@")[1])) {
         // A5 (3.4): the API's outside_company_domains refusal.
         return json(422, {
-          detail: `${email} is outside the company's email domains (${SIGN_IN_DOMAINS.join(", ")}), so Google sign-in can't let them join. Add the domain under Sign-in first.`,
+          detail: `${email} is not in the company domains`,
         });
       }
       if (db.members.some((x) => x.email === email)) return json(409, { detail: `${email} is already a member` });
@@ -6085,7 +6125,8 @@ function startPricing(db: Db, me: MemberRow, input: Schemas["StartDraftIn"]): Re
 
 /**
  * Simple S5: the one-pager a request is about. The seeded PRD has the seeded one; every other
- * mock PRD (matched by slug or document id) gets its own copy of the invented page, so a line
+ * mock PRD (matched by slug or document id) gets its own page, built from its own sections
+ * (vqa B-13: never the seed's invented words under its title), so a line
  * edit, a draft or Remind on one PRD never lands on another's. Drafts and changes are found by
  * their id, a new line edit by its target's document id.
  */
@@ -6102,12 +6143,10 @@ async function onePagerOf(db: Db, req: Request, p: string[]): Promise<OnePagerDb
     // one, else its latest, dated by its approval (none: never published).
     const vs = docVersions(db, d);
     const read = [...vs].reverse().find((x) => x.approved_at) ?? vs.at(-1);
-    // C-13: every PRD but the seed reads its own sections (one_pager.extract), never a copy
+    // C-13, vqa B-13: every PRD but the seed reads its own sections (one_pager.extract), never a copy
     // of Guided setup's; a PRD with no version yet reads none of them (every block "missing").
-    const sections: Sec[] = (read?.sections ?? [])
-      .filter((s) => s.level > 1 && s.body_md.trim())
-      .map((s) => ({ key: s.section_key, heading: s.heading, body: s.body_md }));
-    return (others[d.id] = { ...seedOnePagerFromSections({ id: d.id, slug: d.slug, title: d.title }, sections), visuals: db.simple_visuals, flowKey: d.slug, ...(read ? { version: read.number, published_at: read.approved_at ?? null } : {}) });
+    const cites = Object.fromEntries((read?.citations ?? []).map((c) => [c.cite_key, { title: c.title ?? null, excerpt: c.excerpt ?? null }]));
+    return (others[d.id] = { ...prdOnePager({ id: d.id, slug: d.slug, title: d.title }, read?.sections ?? [], cites), visuals: db.simple_visuals, flowKey: d.slug, ...(read ? { version: read.number, published_at: read.approved_at ?? null } : {}) });
   };
   if (p[1] !== "simple") return seeded;
   if (p[2] === "one-pagers") return forDoc(p[3]) ?? seeded;
@@ -6212,6 +6251,16 @@ async function route(db: Db, req: Request): Promise<Response> {
   const member = db.members.find((x) => x.email === sessionOf(db));
   if (!member || member.status === "disabled") return json(401, { detail: "Not authenticated" });
   const me = withMockRole(member);
+  const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
+  if (scenario === DRIVE_PICKER_UNSET_SCENARIO && p[1] === "connections" && p[2] === "google" && p[3] === "picker-config" && !db.picker_config_refused) {
+    db.picker_config_refused = true;
+    // As oracle.connections.router.google_picker_config without its settings.
+    return json(404, {
+      detail:
+        "Choosing files from Drive is not configured: it needs Google sign-in (ORACLE_OAUTH_GOOGLE_CLIENT_ID and _SECRET), ORACLE_GOOGLE_PICKER_APP_ID and ORACLE_GOOGLE_PICKER_API_KEY",
+    });
+  }
+  if (scenario === SOURCES_UNREADABLE_SCENARIO && p[1] === "sources" && !p[2] && m === "GET") return json(500, { detail: "The sources could not be read." });
   // O5 lane 4: the company's branding and its logos (members read, owners change).
   if (p[0] === "uploads" || p[1] === "branding") {
     return (await routeBranding((db.branding ??= emptyBranding()), me.role, req, p, q)) ?? notFound("Route");
@@ -6505,7 +6554,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     const stored = mockSettingValue("company_email_domains");
     const set = (Array.isArray(stored) ? stored : []).map(String).filter((d) => !SIGN_IN_DOMAINS.includes(d));
     const rules: Schemas["SignInRulesOut"] = {
-      google_sign_in: true,
+      // The no-google-sign-in scenario: an Oracle deployed without Google sign-in in front.
+      google_sign_in: localStorage.getItem(MOCK_SCENARIO_KEY) !== "no-google-sign-in",
       new_sign_ins_off: false,
       domains: [...SIGN_IN_DOMAINS.map((domain) => ({ domain, from: "deployment" as const })), ...set.map((domain) => ({ domain, from: "settings" as const }))],
       without_invite: String(mockSettingValue("sign_in_without_invite") ?? "request") as Schemas["SignInRulesOut"]["without_invite"],
@@ -6516,11 +6566,14 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Tech briefs (./engineering.ts): every member reads.
   const briefs = await routeEngineering(req, p, q, {
     documents: db.documents,
-    maps: () => (db.code_maps ??= []),
+    maps: () =>
+      (db.code_maps ??= seedCodeMaps(localStorage.getItem(MOCK_SCENARIO_KEY), (status) => db.runs?.runs.find((r) => r.status === status)?.id ?? null, "admin@example.com")),
     me: { id: me.id, email: me.email, canWrite: atLeast(me.role, "commenter") },
     now,
     uuid,
     refuse: localStorage.getItem(MOCK_SCENARIO_KEY) === STORED_REFUSALS_SCENARIO,
+    unreadable: localStorage.getItem(MOCK_SCENARIO_KEY) === CODE_MAP_UNREADABLE_SCENARIO,
+    slowRead: localStorage.getItem(MOCK_SCENARIO_KEY) === CODE_MAP_EMPTY_SCENARIO,
   });
   if (briefs) return briefs;
   // #481: the staleness actions on a spec's version are the specs mock's (./specs.ts).
@@ -6591,12 +6644,12 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   // The baseline mock checks roles itself (commenters propose, approvers decide).
   if (p[1] === "baseline") return routeBaselineFor(db, me, req, p, q);
-  // Sources and connections belong to each user: every role manages their own.
+  // Sources and connections belong to each user: commenters and up manage their own sources (viewers read).
   if (["sources", "source-items", "snapshots", "search"].includes(p[1])) {
     return routeSources(req, p, q, {
       scenario: localStorage.getItem(MOCK_SCENARIO_KEY),
       me: { email: me.email, role: me.role },
-      members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role, disabled: x.status === "disabled" })),
+      members: db.members.map((x) => ({ id: x.id, email: x.email, name: x.name, role: x.role, disabled: x.status === "disabled" })),
       uses: () => itemUses(db),
     });
   }
@@ -7044,6 +7097,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   db.simple_visuals ??= seedVisuals();
   db.simple_one_pager.visuals = db.simple_visuals;
   db.simple_roadmap ??= seedSimpleRoadmap();
+  // simple-replaced-prds: the PRDs marked replaced, whose items no longer feed Simple (service.load).
+  markReplaced(db, db.simple_roadmap);
   const roadmapItems = db.simple_roadmap;
   const visualsRes = await routeSimpleVisuals(
     db.simple_visuals,
@@ -7106,7 +7161,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     // build-goal-order-control: the "goal-order" scenarios' added goals name their roadmap work on every load.
     knowGoalOrderGoals(db.baseline.entities);
     // Every mock PRD has a one-pager (Definition of Done 2): another PRD than the seeded one is
-    // served the same invented page under its own slug and title, with its own draft and changes.
+    // served a page built from its own sections (vqa B-13), with its own draft and changes.
     const onePagerDb = await onePagerOf(db, r, p);
     const onePagerRes = await routeOnePager(
       onePagerDb,
@@ -7130,6 +7185,7 @@ async function route(db: Db, req: Request): Promise<Response> {
           ? planMilestones().map((m) => `${m.code} ${m.name}`)
           : undefined,
         overflowPages: localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-overflow" ? 2 : undefined,
+        replacedBy: replacedByRefs(db, db.documents.find((x) => x.kind === "prd" && (x.id === onePagerDb.doc.id || x.slug === onePagerDb.doc.slug))),
       },
       r,
       p,
@@ -7196,7 +7252,9 @@ async function route(db: Db, req: Request): Promise<Response> {
     const simpleRes = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, r, p, q);
     if (simpleRes) return simpleRes;
     const companyGoals = db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title }));
-    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash, goalBin: bin, ...askFiling }, r, p, q);
+    // simple-replaced-prds: the PRDs marked replaced (their drafts are left out, as drafts.listing).
+    const replaced = replacedPrds(db);
+    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash, goalBin: bin, ...askFiling, replaced }, r, p, q);
   };
   // Simple S8: review meetings, the Decisions page, and changes made through a meeting.
   // Seeded on the first meetings or Decisions read, so the other Simple screens keep their data.
@@ -7208,7 +7266,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       roadmap: db.simple_roadmap,
       onePager: db.simple_one_pager,
       rituals: ensureRituals(db, me),
-      documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title })),
+      documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title, replaced_by: replacedByRefs(db, d) })),
       // home-honest-loading: every document of a kind in Trash (trash.only_in_trash).
       onlyInTrash: (kind) =>
         !db.documents.some((d) => d.kind === kind) && (db.trash?.entries ?? []).some((e) => (e.documents as { kind?: string }[]).some((d) => d.kind === kind)),
@@ -7283,7 +7341,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         roadmap: roadmapDb,
         onePager: onePagerDb,
         rituals: ensureRituals(db, me),
-        documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title })),
+        documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title, replaced_by: replacedByRefs(db, d) })),
         // edit-decisions: Simple's decisions are numbered after the log's (one number sequence).
         logNumbers: () => logNumbers(db, me),
       });
@@ -7405,6 +7463,36 @@ async function route(db: Db, req: Request): Promise<Response> {
   const seenBefore = db.inbox_seen?.[me.id] ?? null;
   // E1: the ticker moves each PRD draft's derivation one step (queued -> running -> ready).
   if (p[1] === "internal" && p[2] === "tick" && m === "POST") tickDraftRoadmaps(draftCtx(db), draftDb(db));
+  // The rebuild sign (owner's pick A): the runs that will make a new version of a document.
+  if (p[1] === "rebuilds" && p.length === 2 && m === "GET") {
+    const nameOf = (id: string | null) => {
+      const mm = db.members.find((x) => x.id === id);
+      return mm ? displayName(mm.email, mm.name) : null;
+    };
+    // As the API's ask_decider: the document's decider (its review policy), else its tracks'
+    // owners, else the company's owners; the first active approver or above.
+    const decider = (documentId: string | null) => {
+      const doc = documentId ? db.documents.find((d) => d.id === documentId) : undefined;
+      const ids = doc
+        ? [db.review_v2?.policies.find((x) => x.document_id === doc.id)?.decider_id ?? null, ...(db.simple_roadmap ? prdTrackOwnerIds(db.simple_roadmap, doc.slug) : [])]
+        : [];
+      ids.push(...db.members.filter((x) => x.role === "owner").sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)).map((x) => x.id));
+      const to = ids.map((id) => db.members.find((x) => x.id === id && x.status !== "disabled" && atLeast(x.role, "approver"))).find((x) => !!x);
+      return to ? displayName(to.email, to.name) : null;
+    };
+    return json(
+      200,
+      rebuildsOut({
+        runs: db.runs?.runs ?? [],
+        documents: db.documents,
+        role: me.role,
+        versions: (id) => db.versions.filter((v) => v.document_id === id).map((v) => ({ number: v.number, approved: !!v.approved_at })),
+        name: nameOf,
+        decider,
+        now: new Date(mockNowMs()),
+      }),
+    );
+  }
   const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
   // C4: an intake's draft run that starts converts its brief (the API's drafting.on_start).
   if (runs?.ok && req.method === "POST" && p[1] === "runs" && p[3] === "start" && p.length === 4) {
@@ -7478,6 +7566,12 @@ async function route(db: Db, req: Request): Promise<Response> {
     inbox.metrics = metricRows;
     inbox.total += metricCounted;
     inbox.needs_me = (inbox.needs_me ?? 0) + metricCounted;
+    // F-7: my unread webhook notices count, for the roles that can open Settings › Webhooks.
+    const webhookNotices = atLeast(me.role, "approver")
+      ? (db.review_v2?.notifications ?? []).filter((n) => n.user_id === me.id && !n.read_at && (n.kind === "webhook_paused" || n.kind === "webhook_url_changed")).length
+      : 0;
+    inbox.webhooks = webhookNotices;
+    inbox.total += webhookNotices;
     // Owners also see the provider revokes a removed member's disable could not make.
     db.revoke_failures ??= [];
     const failures = atLeast(me.role, "owner")

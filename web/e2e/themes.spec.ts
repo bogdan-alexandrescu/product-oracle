@@ -65,7 +65,6 @@ test("themes: create a new one from a copy", async ({ page }) => {
   await login(page);
   await page.goto("/settings/themes");
   await page.getByRole("link", { name: "New theme" }).click();
-  await page.getByLabel("Key").fill("company-brand");
   await page.getByLabel("Name").fill("Company brand");
   await page.getByLabel("Start from").selectOption("technical-spec");
   await page.getByRole("button", { name: "Create theme" }).click();
@@ -77,7 +76,6 @@ test("themes: create a new one from a copy", async ({ page }) => {
 test("themes: a company theme's slide CSS, with a live slide preview", async ({ page }) => {
   await login(page);
   await page.goto("/settings/themes/new");
-  await page.getByLabel("Key").fill("company-brand");
   await page.getByLabel("Name").fill("Company brand");
   await page.getByRole("button", { name: "Create theme" }).click();
   await expect(page).toHaveURL(/\/settings\/themes\/company-brand$/);

@@ -14,6 +14,7 @@ export function InfoTip({
   align = "end",
   side = "top",
   hero = false,
+  trigger,
   testId = "info-tip",
   id: given,
 }: {
@@ -25,6 +26,8 @@ export function InfoTip({
   side?: "top" | "bottom";
   /** On a dark Inspector head. */
   hero?: boolean;
+  /** What opens the tip in place of the (i), e.g. a "3 warnings" chip: the button's name is its text. */
+  trigger?: ReactNode;
   /** The (i) button's test id, where a page tells one tip from another. */
   testId?: string;
   /** The tip text's id, for a control the tip explains to name in its aria-describedby. */
@@ -113,7 +116,7 @@ export function InfoTip({
     >
       <button
         type="button"
-        aria-label={`About ${label}`}
+        aria-label={trigger ? undefined : `About ${label}`}
         aria-describedby={id}
         aria-expanded={shown}
         data-testid={testId}
@@ -122,16 +125,22 @@ export function InfoTip({
         onClick={() => setPinned((p) => !p)}
         // A 24 px hit area round the 20 px (i) (qa-company-49), 44 px on a phone (an invisible
         // pad); never stretched by a row or a touch sheet's 44 px min-height (qa-shell-21).
-        className="relative grid size-6 min-h-6! flex-none place-items-center self-center rounded-full before:absolute before:inset-0 before:rounded-full before:content-[''] max-[600px]:before:-inset-2.5"
+        className={
+          trigger
+            ? "relative inline-flex min-h-0! flex-none self-center rounded-full before:absolute before:inset-0 before:rounded-full before:content-[''] max-[600px]:before:-inset-y-2.5"
+            : "relative grid size-6 min-h-6! flex-none place-items-center self-center rounded-full before:absolute before:inset-0 before:rounded-full before:content-[''] max-[600px]:before:-inset-2.5"
+        }
       >
-        <span
-          aria-hidden
-          className={`grid size-5 place-items-center rounded-full border-[1.5px] font-serif text-[13px] leading-none font-bold italic ${
-            shown ? "border-accent bg-accent text-on-accent" : ring
-          }`}
-        >
-          i
-        </span>
+        {trigger ?? (
+          <span
+            aria-hidden
+            className={`grid size-5 place-items-center rounded-full border-[1.5px] font-serif text-[13px] leading-none font-bold italic ${
+              shown ? "border-accent bg-accent text-on-accent" : ring
+            }`}
+          >
+            i
+          </span>
+        )}
       </button>
       <span
         ref={tip}

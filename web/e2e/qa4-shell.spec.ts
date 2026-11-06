@@ -70,7 +70,7 @@ test("qa4-shell-2, 3: PRDs that fail to load show the error and Try again only, 
   await failGets(page, "/v1/documents");
   await page.goto("/documents");
   const error = page.getByTestId("load-error");
-  await expect(error).toContainText("Couldn't load your PRDs.");
+  await expect(error).toContainText("Could not load your PRDs.");
   await expect(page.getByTestId("table-empty")).toHaveCount(0);
   await expect(page.getByTestId("prds-empty")).toHaveCount(0);
   await expect(page.getByRole("group", { name: "Show" })).toHaveCount(0);
@@ -97,7 +97,7 @@ test("qa4-shell-2 review: a reload that fails after a good load keeps the PRDs u
   await dialog.getByRole("button", { name: "Move to Trash" }).click();
   await expect(dialog).toHaveCount(0);
   const error = page.getByTestId("load-error");
-  await expect(error).toContainText("Couldn't load your PRDs.");
+  await expect(error).toContainText("Could not load your PRDs.");
   await expect(page.getByTestId("document-row")).toHaveCount(rows);
   await stopFailing(page);
   await error.getByRole("button", { name: "Try again" }).click();
@@ -110,7 +110,7 @@ test("qa4-shell-2, 3, 21: Runs that fail to load show the error and Try again on
   await failGets(page, "/v1/runs");
   await page.goto("/runs");
   const error = page.getByTestId("load-error");
-  await expect(error).toContainText("Couldn't load your runs.");
+  await expect(error).toContainText("Could not load your runs.");
   await expect(page.getByTestId("runs-table")).toHaveCount(0);
   await expect(page.getByText("Nothing yet")).toHaveCount(0);
   await stopFailing(page);
@@ -123,7 +123,7 @@ test("qa4-shell-3: an Inbox that fails to load says so plainly, with Try again",
   await failGets(page, "/v1/inbox");
   await page.goto("/inbox");
   const error = page.getByTestId("load-error");
-  await expect(error).toContainText("Couldn't load your inbox.");
+  await expect(error).toContainText("Could not load your inbox.");
   await stopFailing(page);
   await error.getByRole("button", { name: "Try again" }).click();
   await expect(page.getByTestId("load-error")).toHaveCount(0);
@@ -135,7 +135,7 @@ test("qa4-shell-21: the error has the page's spacing above the next block (the I
   await page.goto("/documents");
   await page.getByRole("group", { name: "Show" }).getByRole("button", { name: /^Ideas/ }).click();
   const error = page.getByTestId("load-error");
-  await expect(error).toContainText("Couldn't load the ideas.");
+  await expect(error).toContainText("Could not load the ideas.");
   // Nothing below it pretends the list is empty.
   await expect(page.getByTestId("ideas-empty")).toHaveCount(0);
   const marginBottom = await error.evaluate((el) => getComputedStyle(el.parentElement!).marginBottom);

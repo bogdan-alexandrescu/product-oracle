@@ -262,21 +262,22 @@ async def resolve(db: AsyncSession, root_type: str, root: Any) -> Resolved:
     return out
 
 
+def _said(resolved: Resolved, row: Any) -> dict[str, Any]:
+    """An item as the delete dialog and Trash name it. qa4-docs-26, F-69: a run says when it
+    ran and which document it wrote, in both."""
+    if isinstance(row, Run):
+        titles = {d.id: d.title for d in resolved.documents}
+        return {**describe(row), "created_at": row.created_at.isoformat(),
+                "wrote": titles.get(row.document_id)}  # fmt: skip
+    return describe(row)
+
+
 def preview(resolved: Resolved) -> dict[str, Any]:
     """What the delete dialog lists."""
     rows = [r for r in resolved.rows() if r is not resolved.root]
-    titles = {d.id: d.title for d in resolved.documents}
-
-    def item(row: Any) -> dict[str, Any]:
-        # qa4-docs-26: a run says when it ran and which document it wrote.
-        if isinstance(row, Run):
-            return {**describe(row), "created_at": row.created_at,
-                    "wrote": titles.get(row.document_id)}  # fmt: skip
-        return describe(row)
-
     return {
         "root": describe(resolved.root),
-        "items": [item(r) for r in rows],
+        "items": [_said(resolved, r) for r in rows],
         "published": resolved.published,
         "working_runs": [str(r.id) for r in resolved.runs if r.status in WORKING],
     }
@@ -341,7 +342,7 @@ async def delete_root(
             # Requests it released: a restore links back the ones still free.
             "released_requests": released,
         },
-        items=[describe(r) for r in rows if r is not root],
+        items=[_said(resolved, r) for r in rows if r is not root],
         deleted_by=principal.id,
         deleted_by_name=await _actor_name(db, principal),
         reason=reason,

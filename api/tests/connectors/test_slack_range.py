@@ -51,9 +51,12 @@ def with_thread(world: SlackWorld) -> tuple[str, str]:
 @pytest.mark.parametrize(
     ("config", "match"),
     [
-        ({"until": "2025-10-01", "since": "2025-10-02"}, "until must be on or after since"),
-        ({"until": "05/10/2025"}, "until must be a date"),
-        ({"until": 20251005}, "until must be a date"),
+        (
+            {"until": "2025-10-01", "since": "2025-10-02"},
+            "the end date must be on or after the start",
+        ),
+        ({"until": "05/10/2025"}, "pick an end date from Jan 1, 2000 to Dec 31, 2100"),
+        ({"until": 20251005}, "pick an end date from"),
     ],
 )
 async def test_validate_refuses_a_bad_until(config, match):

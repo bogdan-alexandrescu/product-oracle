@@ -122,9 +122,10 @@ test("coverage: Sync now syncs the source and its row reads synced now", async (
   // no_claim=the connector's sync (API tests)
   await openCoverage(page);
   const synced = row(page, "Product chat").getByTestId("coverage-synced");
-  await expect(synced).not.toHaveText("now");
+  // F-62: the row shows a month-first date; "now" is its relative-age title tooltip.
+  await expect(synced).not.toHaveAttribute("title", "now");
   await inspector(page).getByRole("button", { name: "Sync now" }).click();
-  await expect(synced).toHaveText("now");
+  await expect(synced).toHaveAttribute("title", "now");
   await expect(inspector(page).getByRole("link", { name: "Edit picks" })).toHaveAttribute(
     "href",
     "/settings/sources#source-50000000-0000-4000-8000-000000000001",

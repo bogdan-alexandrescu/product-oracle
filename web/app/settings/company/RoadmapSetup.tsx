@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { Button, Notice, Panel } from "@/components/ds";
+import { Button, InfoTip, Notice, Panel } from "@/components/ds";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -47,7 +47,14 @@ export function ProductRoadmapPanel() {
   const found = q.data;
   return (
     <div id="product-roadmap" className="scroll-mt-4" data-testid="product-roadmap-panel">
-      <Panel title="Product roadmap">
+      <Panel
+        title="Product roadmap"
+        tools={
+          <InfoTip label="product roadmap" side="bottom">
+            The company has one roadmap, and every PRD&apos;s items go on it.
+          </InfoTip>
+        }
+      >
         <div className="flex flex-col gap-3 px-4 py-3 max-[600px]:px-3">
           {q.error && <Notice tone="error">{q.error}</Notice>}
           {found && (
@@ -56,13 +63,12 @@ export function ProductRoadmapPanel() {
               <Link href={`/documents/${found.slug}`} className="font-semibold text-accent-ink hover:underline">
                 {found.title}
               </Link>
-              . Every PRD&apos;s items go on it.
             </p>
           )}
           {found === null && (
             <>
               <p className="text-[15px]" data-testid="product-roadmap-state">
-                No product roadmap yet. The company has one roadmap, and every PRD&apos;s items go on it.
+                No product roadmap yet.
               </p>
               {can("create_company_roadmap") ? (
                 <div>
@@ -135,7 +141,15 @@ export function TeamCapacityPanel({ canChange }: { canChange: boolean }) {
   };
   return (
     <div id="team-capacity" className="scroll-mt-4" data-testid="team-capacity-panel">
-      <Panel title="Team capacity">
+      <Panel
+        title="Team capacity"
+        tools={
+          // F-30: what the team is for, in the title's (i).
+          <InfoTip label="team capacity" side="bottom">
+            One team builds every PRD&apos;s items, in order. Dates on the roadmap follow its size and focus.
+          </InfoTip>
+        }
+      >
         {settingQ.error && (
           <div className="p-4">
             <Notice tone="error">{settingQ.error}</Notice>
@@ -150,7 +164,6 @@ export function TeamCapacityPanel({ canChange }: { canChange: boolean }) {
               void save();
             }}
           >
-            <p className="px-4 pt-3 text-sm text-text2 max-[600px]:px-3">One team builds every PRD&apos;s items, in order. Dates on the roadmap follow its size and focus.</p>
             <div className={ROW}>
               <label htmlFor="team-size" className={ROW_LABEL}>
                 Team size

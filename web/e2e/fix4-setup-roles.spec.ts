@@ -73,14 +73,17 @@ for (const r of ROLES) {
     // Members: the role in words; naming the engineering lead stays with owners.
     await page.goto(OWNER_LINKS.members);
     const note = page.getByTestId("role-note");
-    await expect(note).toContainText(new RegExp(`Your role is ${r.role}\\.`, "i"));
-    await expect(note).toContainText(r.invites ? "You can invite viewers and commenters" : "Owners manage members and sign-in.");
+    // pass-f F-50: the note names the role; what it may do is in the (i).
+    await expect(note).toContainText(new RegExp(`Your role is ${r.role}`, "i"));
+    await note.getByRole("button", { name: "About your role" }).click();
+    await expect(note.getByRole("tooltip")).toContainText(r.invites ? "You can invite viewers and commenters" : "Owners manage members and sign-in.");
+    await page.keyboard.press("Escape");
     await expect(page.getByRole("checkbox", { name: /^Engineering lead: / })).toHaveCount(0);
 
     // Company: View only, and why the horizons and the time zone are not there.
     for (const link of [OWNER_LINKS.horizons, OWNER_LINKS.timezone]) {
       await page.goto(link);
-      await expect(page.getByTestId("company-owner-only")).toHaveText("Only owners set horizons and the time zone.");
+      await expect(page.getByTestId("company-owner-only")).toHaveAccessibleDescription("Only owners set horizons and the time zone.");
       await expect(page.getByTestId("view-only")).toBeVisible();
       await expect(page.getByTestId("timezone-panel")).toHaveCount(0);
       await expect(page.locator("#horizons")).toHaveCount(0);

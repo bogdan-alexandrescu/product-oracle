@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/account/ConfirmDialog";
-import { Button, Inspector, InspectorRow, InspectorSection, Sheet } from "@/components/ds";
+import { Button, InfoTip, Inspector, InspectorRow, InspectorSection, Sheet } from "@/components/ds";
 import { ErrorNote } from "@/components/ui";
 import { Field, INPUT } from "@/app/settings/_components/fields";
 import { api, unwrap } from "@/lib/api/client";
@@ -94,13 +94,22 @@ export function WebhookInspector({
         <p className="mb-2 truncate font-mono text-[13px] text-text2" title={hook.url}>
           {hook.url}
         </p>
-        <InspectorRow value={<span data-testid="secret-hint">…{hook.secret_hint}</span>}>Signing secret</InspectorRow>
+        <InspectorRow value={<span data-testid="secret-hint">…{hook.secret_hint}</span>}>Secret</InspectorRow>
         <InspectorRow value={<span className="font-normal text-text2">{formatDateTime(hook.secret_rotated_at)}</span>}>Secret made</InspectorRow>
         <InspectorRow value={hook.created_by.name}>Created by</InspectorRow>
-        {/* qa4-settings-28: the payload's version as a day, with what it means. */}
-        <InspectorRow value={<span data-testid="payload-format">{formatDate(hook.api_version)}</span>}>Payload format</InspectorRow>
-        <p className="mb-2 text-[13px] leading-[18px] text-text2">The layout of the JSON Oracle sends, named by the day it was set.</p>
-        <InspectorRow value={<span data-testid="approvers-content">{hook.include_approvers_content ? "On" : "Off"}</span>}>Owners-and-approvers content</InspectorRow>
+        {/* qa4-settings-28: the payload's version as a day; pass F, F-64: what it means is in the (i). */}
+        <InspectorRow value={<span data-testid="payload-format">{formatDate(hook.api_version)}</span>}>
+          <span className="inline-flex items-center gap-1">
+            Format version
+            <InfoTip label="the format version">The layout of what Oracle sends, named by the day it was set.</InfoTip>
+          </span>
+        </InspectorRow>
+        <InspectorRow value={<span data-testid="approvers-content">{hook.include_approvers_content ? "On" : "Off"}</span>}>
+          <span className="inline-flex items-center gap-1">
+            Private details
+            <InfoTip label="private details">What only owners and approvers can see in Oracle.</InfoTip>
+          </span>
+        </InspectorRow>
         <div className="mt-2 text-[13px] leading-[18px] text-text2">
           {hook.event_types.length} event{hook.event_types.length === 1 ? "" : "s"}:{" "}
           {hook.event_types.map((t) => labels.get(t) ?? t).join(" · ")}

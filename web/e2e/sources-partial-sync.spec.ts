@@ -12,9 +12,9 @@ test("settings › sources: a partial sync reads partly synced until a sync fini
   await form.getByLabel("Kind").selectOption("slack");
   await expect(form.getByLabel("Connection")).toHaveValue(/.+/);
   await form.getByLabel("Name").fill("Busy chat");
-  await form.getByRole("button", { name: "Paste ids" }).click();
+  await form.getByRole("button", { name: "Paste links" }).click();
   // The mock's Slack rate-limits the first sync of this channel part way through.
-  await form.getByLabel("Channel ids (one per line)").fill("C0RATELIMIT");
+  await form.getByLabel("Channel links (one per line)").fill("C0RATELIMIT");
   await form.getByRole("button", { name: "Add source" }).click();
 
   const busy = page.getByRole("listitem", { name: "Busy chat" });

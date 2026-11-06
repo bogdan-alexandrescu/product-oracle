@@ -165,18 +165,30 @@ function AudienceView({ doc, n, audience }: { doc: string; n: number; audience: 
     <Panel
       title={`Audience view · ${audienceLabel(audience)}`}
       testId="audience-view"
+      bodyClassName="p-4 max-[600px]:p-3"
       tools={audience !== "public" ? <Button onClick={pdf}>Export PDF for {audienceLabel(audience)}</Button> : undefined}
     >
       {failed && <ErrorNote>{failed}</ErrorNote>}
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
       {!q.data && !q.error && <Loading />}
       {q.data && (
-        <iframe
-          title={`Roadmap for ${audienceLabel(audience)}`}
-          sandbox="allow-popups allow-popups-to-escape-sandbox"
-          srcDoc={q.data}
-          className="h-[560px] w-full rounded-lg border border-line bg-white max-[600px]:h-[420px]"
-        />
+        // B-10: the preview stays white (it is the exported page), framed by a strong line so it
+        // reads as a page on the dark theme too, under a caption that says what it is.
+        <figure className="m-0">
+          <figcaption data-testid="audience-preview-caption" className="mb-1.5 text-[13px] font-semibold text-text2">
+            How the exported page looks
+          </figcaption>
+          <iframe
+            title={`Roadmap for ${audienceLabel(audience)}`}
+            sandbox="allow-popups allow-popups-to-escape-sandbox"
+            srcDoc={q.data}
+            data-testid="audience-preview"
+            className="block h-[560px] w-full rounded-lg border-2 border-line-strong bg-[#ffffff] max-[600px]:h-[420px]"
+            // B-10: never dimmed in dark mode; this overrides globals.css's qa4-docs-share-58 filter
+            // until that rule is removed there.
+            style={{ filter: "none" }}
+          />
+        </figure>
       )}
     </Panel>
   );

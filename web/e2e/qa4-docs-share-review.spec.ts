@@ -175,11 +175,12 @@ test("qa4-docs-share-19: opening a sheet does not shift the header sideways", as
   expect(after?.x).toBe(before?.x);
 });
 
-test("qa4-docs-share-58: in dark mode the audience preview is dimmed", async ({ page }) => {
+test("qa4-docs-share-58: in dark mode the audience preview stays the white exported page (B-10: no dimming)", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await login(page);
   await page.goto("/documents/usage-alerts-roadmap");
   const frame = page.getByTestId("audience-view").locator("iframe");
   await expect(frame).toBeVisible();
-  await expect(frame).toHaveCSS("filter", "brightness(0.8)");
+  await expect(frame).toHaveCSS("filter", "none");
+  await expect(frame).toHaveCSS("background-color", "rgb(255, 255, 255)");
 });

@@ -65,6 +65,7 @@ from oracle.preferences.router import router as preferences_router
 from oracle.pricing.router import router as pricing_router
 from oracle.priorities.router import router as priorities_router
 from oracle.quality.router import router as quality_router
+from oracle.rebuilds.router import router as rebuilds_router
 from oracle.reports.router import router as reports_router
 from oracle.requests.router import router as requests_router
 from oracle.review.router import router as review_router
@@ -275,6 +276,8 @@ def create_app() -> FastAPI:
     app.include_router(rituals_router)
     app.include_router(templates_router)
     app.include_router(runs_router)
+    # The rebuild sign: the runs that will make a new version of a document.
+    app.include_router(rebuilds_router)
     app.include_router(scope_router)
     # Product Oracle v2: thin read routes over the shared tables; lanes add writes.
     app.include_router(v2_router)

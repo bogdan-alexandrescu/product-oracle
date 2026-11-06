@@ -191,7 +191,7 @@ for (const size of SIZES) {
 
     test("QD4 cards: the delivery log is two-line cards in the side panel", async ({ page }) => {
       // protects=each delivery is a card: what happened in words with its status, then the time,
-      // HTTP code and time taken; a card opens the delivery, headed by its name; the Status and
+      // what the server answered in words (F-64: no HTTP numbers) and time taken; a card opens the delivery, headed by its name; the Status and
       // Event filters and Company time stay; fails_when=the log is a table that cuts its
       // columns; no_claim=redeliver (webhooks.spec).
       await scenario(page, WEBHOOKS_SCENARIO);
@@ -206,9 +206,9 @@ for (const size of SIZES) {
       const cards = log.getByTestId("delivery-cards").getByTestId("delivery-row");
       await expect(cards.first()).toBeVisible();
       const first = cards.first();
-      await expect(first.getByTestId("delivery-facts")).toHaveText(/^[A-Z][a-z]{2} \d{1,2}, .+ · HTTP \d{3} · \d+ ms$/);
+      await expect(first.getByTestId("delivery-facts")).toHaveText(/^[A-Z][a-z]{2} \d{1,2}, .+ · (Answered OK|Server answered with an error) · \d+ ms$/);
       await expect(first).not.toContainText(/\b[a-z]+\.[a-z_]+\b/);
-      const failed = cards.filter({ hasText: "500" }).first();
+      const failed = cards.filter({ hasText: "Server answered with an error" }).first();
       await expect(failed).toBeVisible();
       const name = (await failed.locator("span").first().locator("span").first().innerText()).trim();
       await failed.click();
@@ -219,7 +219,7 @@ for (const size of SIZES) {
     });
 
     test("QD4 fields: a new template is sections as fields, with Edit as Markdown kept", async ({ page }) => {
-      // protects=New template shows one row per section (heading, guide, In the brief), Sources
+      // protects=New template shows one row per section (heading, guide, Show in the brief), Sources
       // and data points last; the key is made from the name; a section is added; Edit as
       // Markdown shows the same template as checked text; Create template opens it;
       // fails_when=the page opens on raw Markdown or asks for a key; no_claim=changing a later version.
@@ -231,9 +231,9 @@ for (const size of SIZES) {
       await expect(sections).toHaveCount(3);
       await expect(page.getByLabel("Section 1 heading")).toHaveValue("Problem");
       await expect(page.getByTestId("template-sections")).toContainText("Sources and data points");
-      await expect(page.getByLabel("Key")).toHaveCount(0);
+      await expect(page.getByRole("textbox", { name: "Key" })).toHaveCount(0);
       await page.getByTestId("template-name").fill("Launch brief");
-      await expect(page.getByTestId("template-key")).toHaveText("Saved as launch-brief, made from the name.");
+      await expect(page.getByTestId("template-key")).toHaveText("Key: launch-brief");
       await page.getByRole("button", { name: "Add a section" }).click();
       await page.getByLabel("Section 4 heading").fill("Support readiness");
       await page.getByLabel("Section 4 guide").fill("Who answers the first questions, and with what.");

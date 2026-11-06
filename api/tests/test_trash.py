@@ -127,6 +127,19 @@ async def test_dependents_name_each_run_by_its_day_and_what_it_wrote(client, own
     assert datetime.fromisoformat(item["created_at"]) <= datetime.now(UTC)
 
 
+async def test_trash_names_each_run_as_the_delete_dialog_did(client, owner, runtime):
+    """F-69: Settings › Trash says a run's day and what it wrote, as the delete dialog did."""
+    _, auth, run = await _world(client, owner, runtime)
+    body = (await client.get(f"/v1/documents/{PRD}/dependents", headers=auth)).json()
+    said = next(d for d in body["items"] if d["id"] == run["id"])
+    resp = await client.request("DELETE", f"/v1/documents/{PRD}", headers=auth)
+    assert resp.status_code == 200, resp.text
+    [row] = (await client.get("/v1/trash", headers=auth)).json()
+    item = next(i for i in row["items"] if i["id"] == run["id"])
+    assert item["wrote"] == said["wrote"]
+    assert datetime.fromisoformat(item["created_at"]) == datetime.fromisoformat(said["created_at"])
+
+
 async def test_regenerate_estimate_names_inputs_by_title_and_version_never_slug(
     client, owner, runtime
 ):
@@ -637,6 +650,27 @@ async def test_purge_now_from_trash(client, owner):
     assert resp.status_code == 204, resp.text
     assert (await client.get("/v1/trash", headers=auth)).json() == []
     assert (await client.post(f"/v1/trash/{entry['id']}/restore", headers=auth)).status_code == 404
+
+
+async def test_only_owners_purge_and_another_company_never_finds_the_entry(client, owner):
+    """Delete for good and Empty Trash (one DELETE per entry): below owner 403, another company
+    404, and the entry stays."""
+    from tests.roadmap_helpers import other_company
+
+    tenant_id, auth = owner
+    await approved_prd(client, auth)
+    entry = (await client.request("DELETE", f"/v1/documents/{PRD}", headers=auth)).json()
+    for role in ("approver", "commenter", "viewer"):
+        headers = await as_user(tenant_id, role)
+        resp = await client.request("DELETE", f"/v1/trash/{entry['id']}", headers=headers)
+        assert resp.status_code == 403, (role, resp.text)
+    other = await other_company()
+    resp = await client.request("DELETE", f"/v1/trash/{entry['id']}", headers=other)
+    assert resp.status_code == 404, resp.text
+    # Empty Trash from the other company's side purges nothing of ours.
+    for row in (await client.get("/v1/trash", headers=other)).json():
+        await client.request("DELETE", f"/v1/trash/{row['id']}", headers=other)
+    assert [e["id"] for e in (await client.get("/v1/trash", headers=auth)).json()] == [entry["id"]]
 
 
 # --------------------------------------------------------------------------- the scan

@@ -22919,6 +22919,37 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/rebuilds": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "List Rebuilds",
+        "description": "The rebuild sign: the runs that will make a new version of a document the caller\nmay read (scheduled, running, waiting, stopped, or landed and not approved yet).",
+        "operationId": "list_rebuilds",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RebuildsOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/prd-scopes/{scope_id}": {
       "get": {
         "tags": [
@@ -46045,6 +46076,41 @@
         "x-per-item": null
       }
     },
+    "/v1/simple/one-pagers": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "List Simple One Pagers",
+        "description": "The PRDs Simple lists (One-pagers, Home), newest first, as GET /v1/documents?kind=prd\nhas them but without a PRD marked replaced (simple-replaced-prds): Simple shows the PRDs\nthat replaced it; Detailed keeps it as history.",
+        "operationId": "list_simple_one_pagers",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentSummary"
+                  },
+                  "type": "array",
+                  "title": "Response List Simple One Pagers"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/simple/one-pagers/{doc}": {
       "get": {
         "tags": [
@@ -65809,6 +65875,30 @@
           "title"
         ],
         "title": "CompanyRoadmapOut"
+      },
+      "CompanyRoadmapRebuilds": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "prds": {
+            "type": "integer",
+            "title": "Prds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "title",
+          "prds"
+        ],
+        "title": "CompanyRoadmapRebuilds",
+        "description": "The company roadmap every PRD feeds: a PRD's rebuild changes it too."
       },
       "CompareCheckpoint": {
         "properties": {
@@ -86592,6 +86682,11 @@
             "type": "array",
             "title": "Dates",
             "default": []
+          },
+          "webhooks": {
+            "type": "integer",
+            "title": "Webhooks",
+            "default": 0
           },
           "total": {
             "type": "integer",
@@ -107640,6 +107735,292 @@
           "reason"
         ],
         "title": "ReassignIn"
+      },
+      "Rebuild": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "flow": {
+            "type": "string",
+            "enum": [
+              "baseline_to_prd",
+              "feedback_loop",
+              "prd_to_roadmap",
+              "prd_to_spec",
+              "request_triage",
+              "strategy_draft",
+              "launch_kit",
+              "baseline",
+              "code_map",
+              "update_draft",
+              "prd_draft_items",
+              "ritual_summary",
+              "metrics_variance",
+              "pricing_memo",
+              "competitive_digest",
+              "discussion_research",
+              "intake_analysis"
+            ],
+            "title": "Flow"
+          },
+          "flow_title": {
+            "type": "string",
+            "title": "Flow Title"
+          },
+          "document_slug": {
+            "type": "string",
+            "title": "Document Slug"
+          },
+          "document_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Title"
+          },
+          "document_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "prd",
+                  "roadmap",
+                  "spec",
+                  "vision",
+                  "strategy",
+                  "update",
+                  "pricing"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Kind"
+          },
+          "new_document": {
+            "type": "boolean",
+            "title": "New Document",
+            "default": false
+          },
+          "source_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Slug"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "running",
+              "waiting",
+              "failed",
+              "done"
+            ],
+            "title": "State"
+          },
+          "steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "step": {
+            "type": "integer",
+            "title": "Step"
+          },
+          "from_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Version"
+          },
+          "to_version": {
+            "type": "integer",
+            "title": "To Version"
+          },
+          "started_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started By"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "scheduled_for": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduled For"
+          },
+          "minutes_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minutes Left"
+          },
+          "next_stop": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Stop"
+          },
+          "next_stop_who": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Stop Who"
+          },
+          "next_stop_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Stop Action"
+          },
+          "waits_on": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waits On"
+          },
+          "waits_on_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waits On Action"
+          },
+          "review_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Link"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "flow",
+          "flow_title",
+          "document_slug",
+          "state",
+          "steps",
+          "step",
+          "to_version"
+        ],
+        "title": "Rebuild",
+        "description": "The rebuild sign (owner's pick A): a run that will make a new version of a document,\nas the chip beside its version pill says it (``oracle.rebuilds.service``)."
+      },
+      "RebuildsOut": {
+        "properties": {
+          "rebuilds": {
+            "items": {
+              "$ref": "#/components/schemas/Rebuild"
+            },
+            "type": "array",
+            "title": "Rebuilds"
+          },
+          "company_roadmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompanyRoadmapRebuilds"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "rebuilds"
+        ],
+        "title": "RebuildsOut"
       },
       "RecommendIn": {
         "properties": {
@@ -130486,6 +130867,24 @@
         ],
         "title": "SnapshotOut"
       },
+      "SourceAttention": {
+        "properties": {
+          "cause": {
+            "type": "string",
+            "title": "Cause"
+          },
+          "is_action": {
+            "type": "boolean",
+            "title": "Is Action"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cause",
+          "is_action"
+        ],
+        "title": "SourceAttention"
+      },
       "SourceCopy": {
         "properties": {
           "item_id": {
@@ -131070,6 +131469,16 @@
               }
             ],
             "title": "Reconnect Reason"
+          },
+          "attention": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceAttention"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -137058,6 +137467,28 @@
           "document": {
             "type": "string",
             "title": "Document"
+          },
+          "document_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Title"
+          },
+          "section_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Title"
           },
           "version": {
             "type": "integer",

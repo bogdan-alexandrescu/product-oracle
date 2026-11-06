@@ -24,6 +24,7 @@ export function HomeCard({
   allLabel,
   extra,
   badge,
+  info,
   children,
 }: {
   id: string;
@@ -31,6 +32,8 @@ export function HomeCard({
   /** In the icon's place (Set up's progress ring). */
   badge?: ReactNode;
   title: string;
+  /** An (i) right after the title: what the card is for (F-30). */
+  info?: ReactNode;
   count?: number | null;
   /** Beside the count ("1 late"). */
   extra?: ReactNode;
@@ -48,7 +51,14 @@ export function HomeCard({
             <Icon name={icon} size={20} />
           </span>
         )}
-        <h2 className="simple-h2 min-w-0 flex-1">{title}</h2>
+        {info ? (
+          <span className="flex min-w-0 flex-1 items-center gap-1.5">
+            <h2 className="simple-h2 min-w-0">{title}</h2>
+            {info}
+          </span>
+        ) : (
+          <h2 className="simple-h2 min-w-0 flex-1">{title}</h2>
+        )}
         {count != null && count > 0 && (
           <span data-testid={`home-${id}-count`} className="simple-count tnum">
             {count}

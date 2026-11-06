@@ -82,7 +82,7 @@ export function ConfirmDialog({
                 <h2 id={titleId} className="font-display text-lg leading-6 font-bold tracking-heading">
                   {title}
                 </h2>
-                {subject && <p className="mt-0.5 truncate text-[15px] font-medium text-text2">{subject}</p>}
+                {subject && <p data-testid="confirm-subject" className="mt-0.5 break-words text-[15px] font-medium text-text2">{subject}</p>}
               </div>
             </div>
             {consequences.length > 0 && (

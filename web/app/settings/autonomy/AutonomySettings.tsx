@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { Button, Chip, Icon, InfoTip, Notice, PageHeader, Panel, Sheet, ViewOnly } from "@/components/ds";
+import { LoadError } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -12,11 +13,13 @@ import { Field, INPUT, TEXTAREA } from "../_components/fields";
 type Item = Schemas["AutonomyItem"];
 type Level = Item["level"];
 
+// qa-f-71: the same word everywhere a level is named, in the steps, the tooltip and the
+// change sheet ("Act", never "Act within limits").
 const LEVELS: { value: Level; label: string; title: string }[] = [
   { value: "observe", label: "Observe", title: "Observe" },
   { value: "draft", label: "Draft", title: "Draft" },
   { value: "recommend", label: "Recommend", title: "Recommend" },
-  { value: "act", label: "Act", title: "Act within limits" },
+  { value: "act", label: "Act", title: "Act" },
 ];
 const TITLE: Record<Level, string> = Object.fromEntries(LEVELS.map((l) => [l.value, l.title])) as Record<Level, string>;
 /** What each level means (H11's Settings copy). */
@@ -91,7 +94,8 @@ export function AutonomySettings() {
       />
       <div className="flex flex-col gap-4 max-[600px]:gap-3">
         {saved && <Notice tone="pass">Saved. Oracle follows this from now on.</Notice>}
-        {q.error && <Notice tone="error">{q.error}</Notice>}
+        {/* F-1: a list that did not load says so, with Try again. */}
+        {q.error && <LoadError what="the autonomy levels" error={q.error} onRetry={() => void q.reload()} />}
         {q.data &&
           GROUPS.map((g) => {
             const rows = items.filter((i) => i.group === g);
@@ -145,9 +149,8 @@ export function AutonomySettings() {
 
 function Row({ item, owner, onPick }: { item: Item; owner: boolean; onPick: (level: Level) => void }) {
   const showLimits = item.level === "act" && item.limits_summary;
-  // qa4-settings-45: why a step is locked, said in text (and tied to the locked buttons), not only in a tooltip.
+  // qa4-settings-45: why a step is locked, said in words, not only in a tooltip.
   const locked = owner ? lockedLabels(item) : null;
-  const lockedId = `autonomy-locked-${item.key}`;
   return (
     <li
       data-testid={`autonomy-row-${item.key}`}
@@ -155,6 +158,22 @@ function Row({ item, owner, onPick }: { item: Item; owner: boolean; onPick: (lev
     >
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <span className="font-semibold">{item.title}</span>
+        {/* qa-f-71: the row's sentence and (for an owner) why a step is locked sit behind the
+            name's (i), not loose on the page (I3 rule 1). */}
+        <InfoTip label={item.title} align="start">
+          <span className="block" data-testid="autonomy-sentence">
+            {item.levels[item.level]}
+          </span>
+          {locked && (
+            <span className="mt-1 flex items-start gap-1.5" data-testid="autonomy-locked">
+              <Icon name="lock" size={16} />
+              <span>
+                {locked} {locked.includes(" and ") ? "stay" : "stays"} with people
+                {item.ceiling_reason ? `: ${item.ceiling_reason}` : ""}.
+              </span>
+            </span>
+          )}
+        </InfoTip>
         {!item.wired && (
           <Chip kind="line" data-testid="autonomy-pending" title={`Takes effect when ${item.wired_by_name} ships`}>
             <span className="truncate">Takes effect when {item.wired_by_name} ships</span>
@@ -162,32 +181,24 @@ function Row({ item, owner, onPick }: { item: Item; owner: boolean; onPick: (lev
         )}
       </div>
       {owner ? (
-        <Steps item={item} onPick={onPick} describedBy={locked ? lockedId : undefined} />
+        <Steps item={item} onPick={onPick} />
       ) : (
         <Chip kind="acc" data-testid="autonomy-level">
           {LEVELS.find((l) => l.value === item.level)?.label ?? item.level}
         </Chip>
       )}
-      <p className="col-span-full flex min-w-0 flex-wrap items-center gap-x-2 text-[15px] text-text2">
-        <span data-testid="autonomy-sentence">{item.levels[item.level]}</span>
-        {showLimits && (
-          <Chip kind="acc" data-testid="autonomy-limits" title={item.limits_summary ?? undefined}>
-            <span className="truncate">{item.limits_summary}</span>
-          </Chip>
-        )}
-        {owner && item.level === "act" && limitsEditable(item) && (
-          <Button variant="ghost" onClick={() => onPick("act")}>
-            Edit limits
-          </Button>
-        )}
-      </p>
-      {locked && (
-        <p id={lockedId} data-testid="autonomy-locked" className="col-span-full flex min-w-0 items-center gap-1.5 text-sm text-text2">
-          <Icon name="lock" size={16} />
-          <span>
-            {locked} {locked.includes(" and ") ? "stay" : "stays"} with people
-            {item.ceiling_reason ? `: ${item.ceiling_reason}` : ""}.
-          </span>
+      {(showLimits || (owner && item.level === "act" && limitsEditable(item))) && (
+        <p className="col-span-full flex min-w-0 flex-wrap items-center gap-x-2 text-[15px] text-text2">
+          {showLimits && (
+            <Chip kind="acc" data-testid="autonomy-limits" title={item.limits_summary ?? undefined}>
+              <span className="truncate">{item.limits_summary}</span>
+            </Chip>
+          )}
+          {owner && item.level === "act" && limitsEditable(item) && (
+            <Button variant="ghost" onClick={() => onPick("act")}>
+              Edit limits
+            </Button>
+          )}
         </p>
       )}
     </li>
@@ -195,25 +206,37 @@ function Row({ item, owner, onPick }: { item: Item; owner: boolean; onPick: (lev
 }
 
 /*
- * The same columns on every row (qa-settings-35): a row with a locked step is no wider, so
- * every control starts and ends at the same x, right-aligned on a wide screen and full width
- * on a phone. The shares follow the labels' lengths, with room for the lock.
+ * The same columns on every row (qa-settings-35): a row with fewer steps shown is no wider, so
+ * the steps that are shown start at the same x on every row, right-aligned on a wide screen and
+ * full width on a phone. The shares follow the labels' lengths.
  */
-const STEP_COLUMNS =
-  "grid w-[400px] flex-none grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_minmax(0,1.4fr)_minmax(0,0.75fr)] max-[600px]:w-full";
+const STEP_SHARE = [1, 0.85, 1.4, 0.75];
+const STEP_TOTAL = STEP_SHARE.reduce((a, b) => a + b, 0);
 
-/** Observe · Draft · Recommend · Act: one line, steps above the ceiling locked. */
-function Steps({ item, onPick, describedBy }: { item: Item; onPick: (level: Level) => void; describedBy?: string }) {
+/**
+ * Observe · Draft · Recommend · Act: one line, steps above the ceiling left out (qa-f-71: a
+ * locked step's button is not shown at all, not shown disabled; why it is missing is said in
+ * words, behind the row's (i)). `allowed` is always every step up to the ceiling, so the
+ * steps left out are always the trailing ones and the rest keep their place in the row.
+ */
+function Steps({ item, onPick }: { item: Item; onPick: (level: Level) => void }) {
+  const shown = LEVELS.flatMap((l, i) => (item.allowed.includes(l.value) ? [i] : []));
+  // F-71: the strip ends at the last level the row allows (no empty box where a locked one was),
+  // its buttons in the same columns as every other row's.
   return (
-    <div
-      role="group"
-      aria-label={`${item.title}: level`}
-      data-testid="autonomy-steps"
-      className={`${STEP_COLUMNS} justify-self-end overflow-hidden rounded-button border border-line-strong bg-surface max-[600px]:justify-self-stretch`}
-    >
-      {LEVELS.map((l) => {
+    <div className="flex w-[400px] flex-none justify-self-end max-[600px]:w-full max-[600px]:justify-self-stretch">
+      <div
+        role="group"
+        aria-label={`${item.title}: level`}
+        data-testid="autonomy-steps"
+        className="grid overflow-hidden rounded-button border border-line-strong bg-surface"
+        style={{
+          width: `${(shown.reduce((sum, i) => sum + STEP_SHARE[i], 0) / STEP_TOTAL) * 100}%`,
+          gridTemplateColumns: shown.map((i) => `minmax(0,${STEP_SHARE[i]}fr)`).join(" "),
+        }}
+      >
+        {LEVELS.filter((l) => item.allowed.includes(l.value)).map((l) => {
         const on = item.level === l.value;
-        const locked = !item.allowed.includes(l.value);
         // The current level is already set: picking it again does nothing (Edit limits changes Act's limits).
         const idle = on;
         return (
@@ -221,19 +244,16 @@ function Steps({ item, onPick, describedBy }: { item: Item; onPick: (level: Leve
             key={l.value}
             type="button"
             aria-pressed={on}
-            disabled={locked}
-            aria-describedby={locked ? describedBy : undefined}
-            title={locked ? `Stays with people: ${item.ceiling_reason ?? "above this responsibility's ceiling"}` : undefined}
             onClick={() => !idle && onPick(l.value)}
             className={`flex h-8 min-w-0 items-center justify-center gap-1 border-r border-line px-1 text-sm font-medium whitespace-nowrap last:border-r-0 max-[600px]:gap-0.5 ${
               on ? "bg-accent text-on-accent" : "text-text hover:bg-surface2"
-            } disabled:cursor-not-allowed disabled:hover:bg-transparent ${on ? "" : "disabled:text-text2"}`}
+            }`}
           >
-            {locked && <Icon name="lock" size={16} />}
             {l.label}
           </button>
         );
       })}
+      </div>
     </div>
   );
 }

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useId, useState } from "react";
 
 import { Button, Chip, FilterChips, InfoTip, Panel } from "@/components/ds";
-import { ErrorNote, INPUT, Loading } from "@/components/ui";
+import { ErrorNote, INPUT, LoadError, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
@@ -150,6 +150,7 @@ export function DriftList({
   rows,
   loading,
   error,
+  onRetry,
   counts,
   stack,
   onWaived,
@@ -159,6 +160,7 @@ export function DriftList({
   rows: Finding[] | undefined;
   loading: boolean;
   error: string | null;
+  onRetry: () => void;
   /** How many findings each state's list holds, so a chip counts what its list shows. */
   counts: Partial<Record<FindingState, number>>;
   stack: Stack | undefined;
@@ -186,8 +188,12 @@ export function DriftList({
           onChange={onState}
         />
       </div>
-      {error && <ErrorNote>{error}</ErrorNote>}
-      {!rows && loading ? (
+      {/* F-1: a list that did not load says so, with Try again, and nothing under it. */}
+      {error ? (
+        <div className="px-4 pt-3 max-[600px]:px-3">
+          <LoadError what="the drift findings" error={error} onRetry={onRetry} />
+        </div>
+      ) : !rows && loading ? (
         <div className="px-4 py-3">
           <Loading />
         </div>

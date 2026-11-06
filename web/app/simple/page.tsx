@@ -11,6 +11,7 @@ import { SimpleWelcome } from "@/app/simple/_home/welcome";
 import { MarkForItem, WithFeatureMarks } from "@/components/current-state/CurrentState";
 import { Icon } from "@/components/ds/Icon";
 import { Button } from "@/components/ds/Button";
+import { InfoTip } from "@/components/ds/InfoTip";
 import { Dialog } from "@/components/ds/Dialog";
 import { setToastPlace, toast } from "@/components/ds/Toast";
 import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
@@ -785,25 +786,26 @@ export default function SimpleHome() {
 
       {!reads && quiet && (
         <section aria-label="Waiting for you" data-testid="home-nothing-waits" className="simple-card">
-          <p className="simple-small">
-            Nothing waits on you.{" "}
-            {/* qa4-simple-home-17: the same message as the greeting when broken links are open to proposals. */}
-            {brokenOthers > 0 ? (
-              <>
-                You can propose fixes for {brokenWords} in the plan below.{" "}
-                <a href="#broken-links" className="simple-link">
-                  Go to the broken links
-                </a>
-              </>
-            ) : (
-              <>
-                {decidesAll ? "Decisions and proposals on your items show here when they come." : "You can propose a change from the roadmap, or comment on a one-pager."}{" "}
-                <Link href="/simple/roadmap" className="simple-link">
-                  Open the roadmap
-                </Link>
-              </>
-            )}
-          </p>
+          {/* qa4-simple-home-17: the same message as the greeting when broken links are open to proposals. */}
+          {brokenOthers > 0 ? (
+            <p className="simple-small">
+              Nothing waits on you. You can propose fixes for {brokenWords} in the plan below.{" "}
+              <a href="#broken-links" className="simple-link">
+                Go to the broken links
+              </a>
+            </p>
+          ) : (
+            // F-30: one short line; what comes here is in its (i).
+            <p className="simple-small flex flex-wrap items-center gap-x-1.5 gap-y-1">
+              <span>Nothing waiting</span>
+              <InfoTip label="what waits for you" align="start">
+                {decidesAll ? "Decisions and proposals on your items show here when they come." : "You can propose a change from the roadmap, or comment on a one-pager."}
+              </InfoTip>
+              <Link href="/simple/roadmap" className="simple-link ml-1.5">
+                Open the roadmap
+              </Link>
+            </p>
+          )}
         </section>
       )}
 
@@ -1229,17 +1231,20 @@ function SetupCard({ setup, owner, onHide }: { setup: Schemas["SetupOut"]; owner
         </span>
       }
       title={owner ? "Welcome: set up Oracle" : "Set up your own tools"}
+      // F-30: how setup works sits in the title's (i), not on the card.
+      info={
+        <InfoTip label="setting up Oracle" align="start">
+          {owner
+            ? "A few steps make Oracle yours: connect your tools, pick the sources it reads, then build the Ground Truth it plans from. Each step opens where it is done."
+            : "Two steps make Oracle yours: connect your tools and pick the sources it reads for you. Each step opens where it is done."}
+        </InfoTip>
+      }
       extra={
         <span data-testid="home-setup-count" className="flex items-center gap-3 max-[600px]:basis-full max-[600px]:pl-12">
           {count}
         </span>
       }
     >
-      <p className="simple-small">
-        {owner
-          ? "A few steps make Oracle yours: connect your tools, pick the sources it reads, then build the Ground Truth it plans from. Each step opens where it is done."
-          : "Two steps make Oracle yours: connect your tools and pick the sources it reads for you. Each step opens where it is done."}
-      </p>
       <ul className="flex flex-col">
         {setup.steps.map((st) => {
           const copy = copyOf(st);

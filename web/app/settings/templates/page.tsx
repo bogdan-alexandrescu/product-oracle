@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import {
+  Button,
   Chip,
   DataTable,
   InfoTip,
@@ -11,7 +12,6 @@ import {
   InspectorRow,
   InspectorSection,
   LinkButton,
-  Notice,
   PageHeader,
   ViewOnly,
   Panel,
@@ -20,6 +20,7 @@ import {
 } from "@/components/ds";
 import { revealOnPhone } from "@/app/settings/_components/reveal";
 import { useThemeNames } from "@/components/TemplateBodyEditor";
+import { LoadError } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -172,16 +173,23 @@ export default function TemplatesPage() {
         }
         status={capsReady && !canCreate && <ViewOnly />}
         action={
-          canCreate && (
+          canCreate &&
+          // F-1: nothing to add to while the list did not load.
+          (q.error ? (
+            <Button variant="primary" icon="plus" disabled>
+              New template
+            </Button>
+          ) : (
             <LinkButton variant="primary" icon="plus" href="/settings/templates/new">
               New template
             </LinkButton>
-          )
+          ))
         }
       />
       <Split inspector={current ? <TemplateInspector t={current} themeName={themeName} /> : undefined}>
-        {q.error && <Notice tone="error">{q.error}</Notice>}
-        {lists.map(({ kind, title, rows }, i) => (
+        {/* F-1: a list that did not load says so, with Try again, and no empty tables under it. */}
+        {q.error && <LoadError what="your templates" error={q.error} onRetry={() => void q.reload()} />}
+        {!q.error && lists.map(({ kind, title, rows }, i) => (
           <Panel key={kind} title={title} count={rows?.length} tools={i === 0 ? toggle : undefined} testId={`templates-${kind}`}>
             <DataTable
               label={title}

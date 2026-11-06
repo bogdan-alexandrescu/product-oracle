@@ -317,7 +317,8 @@ function InboxTabs({
                 </>
               ) : count("staged") + count("declined") + count("done") === 0 ? (
                 // qa-shell-9: an empty Inbox says what will arrive, not only that nothing is here.
-                <>Nothing needs you yet. Decisions, approvals and questions for you will show up here. </>
+                // F-7: the sentence about what arrives is in the (i), not on the page.
+                <>Nothing needs you yet </>
               ) : (
                 <>Nothing new </>
               )

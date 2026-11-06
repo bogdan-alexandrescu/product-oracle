@@ -191,7 +191,7 @@ test.describe("on a desktop", () => {
   test("qa-company-20: a source's reason wraps rather than being cut mid-sentence", async ({ page }) => {
     await login(page);
     await openInbox(page);
-    const text = page.getByTestId("inbox-sources").getByText(/^Allowlist at most 100 channels/);
+    const text = page.getByTestId("inbox-sources").getByText(/^Pick 100 channels or fewer/);
     await expect(text).toBeVisible();
     const [overX, overY] = await text.evaluate((el) => [el.scrollWidth > el.clientWidth + 1, el.scrollHeight > el.clientHeight + 1]);
     expect(overX).toBe(false);

@@ -76,11 +76,11 @@ function Heading({ id, title, tip, children }: { id: string; title: string; tip:
         <h3 id={id} className="text-[15px] font-semibold">
           {title}
         </h3>
+        {/* Pass F F-36: what the list does, behind the (i), not paragraphs on the page. */}
         <InfoTip label={title.toLowerCase()} align="start">
-          {tip}
+          {children} {tip}
         </InfoTip>
       </span>
-      <p className="text-sm text-text2">{children}</p>
     </div>
   );
 }
@@ -165,11 +165,10 @@ function CompanyDomains() {
       </Heading>
       {/* The same list as Members › Sign-in, which says so too (qa-settings-17). */}
       <p className="text-sm text-text2" data-testid="company-domains-hint">
-        Which owners&rsquo; Drive files are read. It is the same list as Company domains in{" "}
+        Same list as{" "}
         <Link href="/settings/members" className="font-semibold text-accent-ink underline underline-offset-2">
           Members › Sign-in
         </Link>
-        , which also decides who may sign in.
       </p>
       {q.error && <Notice tone="error">{q.error}</Notice>}
       {!q.data && !q.error && <span aria-busy className="block h-3 w-1/2 animate-pulse rounded bg-surface2" />}

@@ -73,24 +73,19 @@ test("members: removing revokes the member's tokens, and Undo restores them righ
   await expect(tokenRow(page, "laptop cli")).toContainText("Revoked");
 });
 
-test("members: you cannot remove yourself or the last owner, and the control says why", async ({ page }) => {
+test("members: you cannot remove yourself, as the last owner or not", async ({ page }) => {
+  // F-52 (PR 1322): your own row has no Remove at all, rather than a disabled one.
   await login(page);
   await page.goto("/settings/members");
-  const remove = memberRow(page, "admin@example.com").getByRole("button", { name: "Remove admin@example.com" });
-  await expect(remove).toHaveAttribute("aria-disabled", "true");
-  await remove.hover();
-  await expect(page.getByRole("tooltip").filter({ hasText: "can't remove yourself" })).toBeVisible();
-  await expect(page.getByRole("tooltip").filter({ hasText: "only owner" })).toBeVisible();
-  await remove.click({ force: true });
-  await expect(page.getByRole("dialog", { name: "Remove Avery Stone?" })).toBeHidden();
+  const me = memberRow(page, "admin@example.com");
+  await expect(me).toHaveCount(1);
+  await expect(me.getByRole("button", { name: /^Remove / })).toHaveCount(0);
 
   // With a second owner you are no longer the last one, but still cannot remove yourself.
   await page.getByLabel("Role for approver@example.com").selectOption("owner");
   await expect(page.getByLabel("Role for admin@example.com")).toBeEnabled();
-  await remove.hover();
-  const tip = page.getByRole("tooltip").filter({ hasText: "can't remove yourself" });
-  await expect(tip).toBeVisible();
-  await expect(tip).not.toContainText("only owner");
+  await expect(me.getByRole("button", { name: /^Remove / })).toHaveCount(0);
+  await expect(memberRow(page, "approver@example.com").getByRole("button", { name: "Remove approver@example.com" })).toBeVisible();
 });
 
 test("api tokens: every kind, filter by kind and member, revoke with confirm", async ({ page }) => {
@@ -228,7 +223,7 @@ test("my account: change password", async ({ page }) => {
   await form.getByLabel("New password again").fill(fresh);
   await form.getByRole("button", { name: "Change password" }).click();
   await expect(form.getByRole("alert")).toContainText("not correct");
-  await expect(form).toContainText("revokes your personal API tokens, every MCP client you authorized");
+  await expect(form.getByTestId("password-revokes")).toContainText("revokes your personal API tokens, every MCP client you authorized");
 
 
   await form.getByLabel("Current password").fill(ADMIN.password);
