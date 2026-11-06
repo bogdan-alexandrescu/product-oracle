@@ -47,6 +47,9 @@ Test cards (protects / fails_when / no_claim):
   as a guardrail is left out of the goals and read in the guardrail strip (with its 7
   days) when no guardrail constraint is set; fails_when=it is a goal card or missing from
   the strip; no_claim=the web's strip.
+- test_a_merged_feature_leaves_the_map (panel-menu): protects=a published feature merged
+  into another through the feature panel (merge_item) is no longer one of the map's
+  features; fails_when=it is still listed as live; no_claim=the kept feature's links.
 """
 
 import uuid
@@ -573,3 +576,14 @@ async def test_a_guardrail_goal_is_never_a_goal_card(client):
     g = body["guardrail"]
     assert g["name"] == "Account Restrictions" and g["rule"] == "= 0 every day"
     assert g["days"] == [0] * 7 and g["held"] is True and g["current"] == 0
+
+
+async def test_a_merged_feature_leaves_the_map(client):
+    ctx, ids = await world()
+    r = await client.post("/v1/simple/changes", headers=ctx.as_("owner"), json={
+        "op": "merge_item", "target": {"item_id": ids["f1"], "into_id": ids["f2"]},
+        "before": {}, "after": {}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    assert r.json()["change"]["status"] == "applied"
+    body = await read(client, ctx)
+    assert [f["id"] for f in body["features"]] == [ids["f2"]]
