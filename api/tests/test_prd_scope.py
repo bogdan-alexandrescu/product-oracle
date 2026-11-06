@@ -108,6 +108,11 @@ BULK = """\
     confidence: 0.8
     requirements: []
 """
+# CLEAN with its new feature serving a goal: a run whose order passes the priority stop (a new
+# feature naming no goal blocks it, AN PR 1244), for the tests that go on past it.
+SERVING = CLEAN.replace(
+    BULK, BULK.replace("goals: []", "goals: [{key: activation, contribution: 1}]")
+)
 # Files whose one blocking problem the stored rows cannot show (write_scope keeps the first
 # of a duplicate key, drops a keyless feature and stores missing goals as []), and one the
 # rows show again (a requirement without text): code and message of the problem.
@@ -506,7 +511,7 @@ async def test_stop_off_fails_the_run_on_a_blocking_problem(client, owner, runti
 
 async def test_draft_reads_scope(client, owner, runtime):  # noqa: F811
     tenant_id, auth = owner
-    run = await at_feature_set(client, owner, runtime)
+    run = await at_feature_set(client, owner, runtime, text=SERVING)
     run = await decide(client, auth, run)
     # The Engineering check (on by default): verdicts staged, approved.
     await tick(client, auth)
@@ -631,7 +636,7 @@ async def test_get_prd_scope_reads_the_tokens_run_and_refuses_people(client, own
 
 async def test_get_prd_scope_falls_back_to_the_documents_approved_scope(client, owner, runtime):  # noqa: F811
     tenant_id, auth = owner
-    run = await at_feature_set(client, owner, runtime)
+    run = await at_feature_set(client, owner, runtime, text=SERVING)
     run = await decide(client, auth, run)
     # The Engineering check (on by default), then the priority order.
     for _ in range(2):
