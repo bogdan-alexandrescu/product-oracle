@@ -261,7 +261,7 @@ for (const phone of [false, true]) {
       /**
        * Card ec1-home-call: protects = a decision-log call waiting for me (D-5 Ship usage caps before
        * anomaly detection, the approver's) opens the same decision sheet from Home's title and from
-       * Decisions' Waiting for you, with its question, options and Edit; Edit saves; fails_when = the
+       * its row on Decisions (this line's Waiting for you lists PRD questions only), with its question, options and Edit; Edit saves; fails_when = the
        * title is plain or the sheet lacks its fields; no_claim = the log's own page.
        */
       test("ec1: Home's and Waiting for you's decision-log calls open the same sheet", async ({ page }) => {
@@ -279,8 +279,7 @@ for (const phone of [false, true]) {
         await expect(s).toHaveCount(0);
 
         await page.goto("/simple/decisions");
-        const call = page.getByTestId("questions-mine").getByRole("listitem", { name: "Decision: Ship usage caps before anomaly detection" });
-        await call.getByTestId("waiting-decision-open").click();
+        await outside(page, "D-5").getByTestId("decision-open").click();
         await expect(s.getByRole("heading", { name: "D-5 Ship usage caps before anomaly detection" })).toBeVisible();
         await expect(s.getByRole("button", { name: "Edit" })).toBeVisible();
       });
@@ -317,9 +316,8 @@ for (const phone of [false, true]) {
         await expect(home.filter({ hasText: "Ship usage caps before anomaly detection" })).toHaveCount(0);
 
         await page.goto("/simple/decisions");
-        const waiting = page.getByTestId("questions-mine");
-        await expect(waiting.getByRole("listitem", { name: "Decision: Ship usage caps before usage alerts" })).toBeVisible();
-        await expect(waiting.getByRole("listitem", { name: "Decision: Ship usage caps before anomaly detection" })).toHaveCount(0);
+        await expect(outside(page, "D-5")).toContainText("Ship usage caps before usage alerts");
+        await expect(region(page, "Outside meetings")).not.toContainText("Ship usage caps before anomaly detection");
         await codes();
 
         await page.goto("/simple");
@@ -333,7 +331,7 @@ for (const phone of [false, true]) {
 
         await page.goto("/simple/decisions");
         await expect(page.getByRole("heading", { level: 1, name: "Decisions" })).toBeVisible();
-        await expect(waiting.getByRole("listitem", { name: /Ship usage caps/ })).toHaveCount(0);
+        await expect(page.getByTestId("questions-mine")).not.toContainText("Ship usage caps");
         await expect(region(page, "Outside meetings")).not.toContainText("Ship usage caps");
         await codes();
       });
@@ -369,18 +367,20 @@ for (const phone of [false, true]) {
           const open = row.getByTestId("decision-open");
           if (await open.count()) expect(codes).toContain(await read(open));
         }
-        const calls = page.getByTestId("questions-mine").getByTestId("waiting-decision-open");
+        // Home's calls waiting for me open the same numbers (this line's Waiting for you lists PRD questions only).
+        await page.goto("/simple");
+        const calls = page.getByTestId("home-decision-open");
         await expect(calls.first()).toBeVisible();
         for (const call of await calls.all()) {
           const code = await read(call);
-          if (codes.includes(code)) await expect(outside(page, code)).toContainText(named.get(code)!);
+          expect(codes, `${code} is a row of Outside meetings`).toContain(code);
         }
         expect(named.get("D-5")).toBe("Ship usage caps before anomaly detection");
       });
 
       /**
        * Card ec1-outdated: protects = an approver's suggestion on D-10 Keep the free plan's five-seat
-       * limit waits for Avery Stone with Accept on Decisions' Waiting for you and Home; Avery edits
+       * limit waits for Avery Stone with Accept on Home; Avery edits
        * D-10 first, and Accept opens D-10's sheet as it is now, saying the suggestion is out of date
        * (no toast); fails_when = the refusal is only a toast, the suggestion overwrites the newer
        * edit, or the mock has no Accept for it; no_claim = Decline.
@@ -401,7 +401,8 @@ for (const phone of [false, true]) {
         await s.getByRole("button", { name: "Save" }).click();
         await expect(s).toHaveCount(0);
 
-        for (const where of ["/simple/decisions", "/simple"]) {
+        // Home's proposals (this line's Decisions lists no proposals in Waiting for you).
+        for (const where of ["/simple"]) {
           await page.goto(where);
           // Home and Waiting for you name the suggestion's decision as it is now.
           const item = (where === "/simple" ? page.getByTestId("home-proposal").filter({ hasText: "D-10" }) : page.getByTestId("waiting-item").and(page.locator('[data-kind="proposal"]'))).first();
