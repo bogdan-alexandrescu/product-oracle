@@ -2270,8 +2270,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   if (action === "segments" && p[5] === "retry" && m === "POST") {
     const s = r.segments.find((x) => x.seq === Number(p[4]));
     if (!s) return fail(404, `run ${r.id} has no segment ${p[4]}`);
-    if (!mayRetrySegment(ctx, r)) return fail(403, "Only an owner or the approver who started this run can retry it");
-    if (retrySegmentOf(r)?.seq !== s.seq) return fail(409, `run is ${r.status}, not failed at segment ${s.seq}`);
+    if (!mayRetrySegment(ctx, r)) return fail(403, "Only an owner or the approver who created the run can retry it");
+    if (retrySegmentOf(r)?.seq !== s.seq) return fail(409, "nothing to retry: only the segment a failed run stopped at can be retried");
     Object.assign(s, { status: "running", error: null, finished_at: null, started_at: ctx.now() });
     Object.assign(r, { status: "running", error: null, finished_at: null });
     return done();
