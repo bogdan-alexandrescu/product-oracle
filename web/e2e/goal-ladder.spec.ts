@@ -362,6 +362,18 @@ test.describe("visual QA fixes (L-1 to L-8), 1440 light", () => {
     await expect(page.getByTestId("gm-goal-source")).toHaveCount(0);
   });
 
+  test("compare page: flags beside the toggle, milestone status on its own line, undated work says No dates yet", async ({ page }) => {
+    // protects=ld1-d-rest, ld3-b-rest: no flag row under Updated, "2.6 of 2 · by Nov 13 · Onboarding"
+    // then the status, and "No dates yet" for work no one dated; fails_when=the extra row or the
+    // window's estimate comes back; no_claim=status words the API does not have (Backlog).
+    await open(page, "light");
+    await expect(page.getByTestId("ld-actions").getByTestId("gm-flag-unplaced")).toBeVisible();
+    const m4 = page.getByTestId("ld-milestone").filter({ hasText: "Setup time under two days" });
+    await expect(m4).toContainText("2.6 of 2 · by Nov 13 · Onboarding");
+    await expect(m4.getByTestId("ld-ms-status")).toHaveText("At risk");
+    await expect(card(page, "F-21")).toContainText("No dates yet");
+  });
+
   test("L-5: a refused loop names both cards as the frame does", async ({ page }) => {
     // protects=ld2-a-loop; fails_when=the engine's words show instead; no_claim=the Roadmap's words.
     await open(page, "light");
