@@ -20,6 +20,14 @@ Test cards (protects / fails_when / no_claim):
 - test_each_fix_has_its_words: protects=every fix carries the button's plain words (Add to
   Ground Truth, Link to a feature, Confirm it, Give it a code, Pick a goal, Take it off the
   roadmap); fails_when=a fix has no words or the wrong ones.
+- test_a_feature_that_lists_the_item_links_it: protects=Add to Ground Truth makes the
+  feature with the item's link in one change (attrs.roadmap_items: the item's key, which
+  stays across versions), so the item is no longer flagged, for a published item too; a
+  commenter's proposal carries the same link and clears the flag once an approver accepts
+  it; fails_when=the flag stays after the add, or a proposal clears it before approval.
+- test_a_prd_flag_carries_its_key_and_goal: protects=an unlinked item's ref carries its key
+  and a PRD feature's flag the goal its PRD gives, so Add makes F-09 with its code and goal
+  and raises no no_code or no_goal flag; fails_when=the added feature is flagged again.
 - test_words_carry_no_ids: protects=each flag's words are one short plain sentence with no
   id or key; fails_when=a uuid, slug or code shows in the words.
 - test_anyone_who_reads_the_roadmap_reads_it: protects=a viewer reads the check; no
@@ -207,7 +215,8 @@ async def test_only_confirmed_features_count(client):
     flag = next(f for f in _of(await _check(client, w["ctx"]), "unlinked_item")
                 if f["item"]["id"] == d)  # fmt: skip
     assert flag["words"] == "This roadmap item is not a feature in the Ground Truth."
-    assert flag["feature"] == {"id": proposed, "code": None, "name": "Import history 2"}
+    assert flag["feature"] == {"id": proposed, "code": None, "name": "Import history 2",
+                               "key": None}  # fmt: skip
     assert [x["action"] for x in flag["fixes"]] == ["confirm_feature", "link_to_feature"]
     # An approver confirms it: the item now keeps the rules.
     async with tenant_session(w["ctx"].tenant_id) as s:
@@ -237,6 +246,56 @@ async def test_each_fix_has_its_words(client):
             assert x["words"] == FIX_WORDS[x["action"]], x
             seen.add(x["action"])
     assert seen == set(FIX_WORDS)
+
+
+async def test_a_feature_that_lists_the_item_links_it(client):
+    w = await world()
+    b = w["items"]["b"]
+    flagged = lambda out: [f["item"]["id"] for f in _of(out, "unlinked_item")]  # noqa: E731
+    new = {"type": "feature", "key": "history", "title": "Import history",
+           "attrs": {"roadmap_items": ["import-b"]}}  # fmt: skip
+    # A commenter proposes it: still flagged until an approver accepts the proposal.
+    r = await client.post("/v1/baseline/proposals", headers=w["ctx"].as_("commenter"),
+                          json={"op": "create", "kind": "entity", "fields": new})  # fmt: skip
+    assert r.status_code == 201, r.text
+    assert b in flagged(await _check(client, w["ctx"]))
+    r = await client.post(f"/v1/baseline/proposals/{r.json()['id']}/accept",
+                          headers=w["ctx"].as_("approver"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert b not in flagged(await _check(client, w["ctx"]))
+
+
+async def test_an_approver_adds_a_published_item_at_once(client):
+    w = await world()
+    out = await _check(client, w["ctx"])
+    b = next(f for f in _of(out, "unlinked_item") if f["item"]["id"] == w["items"]["b"])
+    assert b["item"]["key"] == "import-b"
+    r = await client.post("/v1/baseline/entities", headers=w["ctx"].as_("approver"),
+                          json={"type": "feature", "key": "F-21", "title": "Import history",
+                                "attrs": {"roadmap_items": [b["item"]["key"]]}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    out = await _check(client, w["ctx"])
+    assert [f["item"]["id"] for f in _of(out, "unlinked_item")] == [w["items"]["d"]]
+
+
+async def test_a_prd_flag_carries_its_key_and_goal(client):
+    w = await world()
+    out = await _check(client, w["ctx"])
+    f9 = next(f for f in _of(out, "prd_feature_missing") if f["feature"]["code"] == "F-09")
+    grow = f9["goal"]
+    assert grow is not None and grow["name"] == "Grow", f9
+    h = w["ctx"].as_("approver")
+    new = {"type": "feature", "key": "F-09", "title": "Team invites"}
+    r = await client.post("/v1/baseline/entities", headers=h, json=new)
+    assert r.status_code == 201, r.text
+    fid = r.json()["entity"]["id"]
+    r = await client.post("/v1/baseline/edges", headers=h,
+                          json={"src_id": fid, "dst_id": grow["id"], "type": "supports",
+                                "attrs": {"contribution": 2}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    out = await _check(client, w["ctx"])
+    assert all(f9["feature"]["code"] != (f.get("feature") or {}).get("code") for f in out["flags"])
+    assert all((f.get("feature") or {}).get("id") != fid for f in out["flags"])
 
 
 async def test_words_carry_no_ids(client):
