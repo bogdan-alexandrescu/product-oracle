@@ -223,13 +223,16 @@ NOT_OFFERED: frozenset[str] = frozenset(
     {
         # Train AR's routes (old milestones carried over, removed tracks, the Goal map's metric
         # pick, a reopened waiver, the Ground Truth check, a feature's code given or taken back, a
-        # PRD feature linked to a Ground Truth feature): not offered until allowed by name.
+        # PRD feature linked to a Ground Truth feature, the rebuilds list, the one-pagers list): not
+        # offered until allowed by name.
         "carry_over_old_milestones",
         "drop_old_milestone",
         "get_check",
         "give_code",
         "keep_old_milestone",
         "link_prd_feature",
+        "list_rebuilds",
+        "list_simple_one_pagers",
         "list_simple_removed",
         "list_simple_tracks",
         "pick_goal_metric",
