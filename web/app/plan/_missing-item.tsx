@@ -10,10 +10,10 @@ import { prdItemRef, wantedRow } from "./_lib";
 
 type SimpleItem = Schemas["SimpleRoadmapItem"];
 
-/** Where an item off the Plan lives, as one line: "F-06 Team invite nudges is not on the Plan yet: it is in Guided setup's draft". */
+/** Where an item off the Plan lives, as one line: "F-06 Team invite nudges is not on the Plan yet: it is in the draft of Guided setup". */
 export function missingLine(i: SimpleItem): string {
   const name = i.code ? `${i.code} ${i.title}` : i.title;
-  const where = i.draft ? (i.prd ? `in ${i.prd.title}'s draft` : "in a draft") : `on the ${i.roadmap.title}`;
+  const where = i.draft ? (i.prd ? `in the draft of ${i.prd.title}` : "in a draft") : `on the ${i.roadmap.title}`;
   return `${name} is not on the Plan yet: it is ${where}`;
 }
 
@@ -21,6 +21,8 @@ export function missingLine(i: SimpleItem): string {
  * plan-open-from-simple: /plan?item=<key> (or a report's "<prd>:<key>") names an item the Plan
  * does not show (only a draft not approved yet holds it, say). One line at the top says where it
  * is, with a link to its card on the company roadmap (Simple's), never another item in its place.
+ * The link's ?item=<id> needs Simple's reader for it (AN 1b8d555db and 775ac69ed), left for the
+ * Simple port.
  * Simple's item is the one in the link's roadmap (&roadmap=<slug>), never another roadmap's, and
  * its PRD, as the Plan's row. When Approved only hides it (Approved + drafts shows it), the line
  * says so and its one action shows the drafts.
