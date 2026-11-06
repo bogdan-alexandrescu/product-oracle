@@ -725,12 +725,54 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
       status: "suggested",
     },
   ];
+  // The approver's goals interview, closed once their pick made the goal measurable: Oracle's
+  // other three versions are left proposed, and a closed discussion's changes wait on no one.
+  const interview = ctx.uuid();
+  const goal = ctx.uuid();
+  const late = "2026-10-21T08:40:00Z";
+  db.discussions.push({
+    ...db.discussions.find((x) => x.id === id)!,
+    id: interview,
+    subject_kind: "entity",
+    subject: { entity_id: goal, interview: true },
+    subject_key: `entity:${goal}`,
+    subject_label: "Weekly saved carts",
+    subject_url: "/ground-truth",
+    document_id: null,
+    title: "Make “Weekly saved carts” measurable",
+    status: "closed",
+    started_by: approver,
+    last_message_at: late,
+    created_at: late,
+    updated_at: late,
+  });
+  db.participants.push({ discussion_id: interview, user_id: approver, added_via: "started", left_at: null, last_read_at: null, created_at: late });
+  for (const [n, status] of [
+    [1, "done"],
+    [2, "proposed"],
+    [3, "proposed"],
+    [4, "proposed"],
+  ] as const)
+    db.changes.push({
+      ...change,
+      id: ctx.uuid(),
+      discussion_id: interview,
+      kind: "goal_measure",
+      label: `Make Weekly saved carts measurable: version ${n}`,
+      target: { entity_id: goal, title: "Weekly saved carts" },
+      payload: { entity_id: goal, metric: "Weekly saved carts", target: 500 * n },
+      proposed_by_kind: "oracle",
+      suggested_by: null,
+      status,
+      created_at: late,
+    });
 }
 
 /**
  * G6: my discussion rows for GET /v1/inbox, as the API derives them (oracle.discussions.inbox):
  * Invited and Mentioned rows of discussions I can read, and for approvers the changes waiting
- * on them (participants: proposed and suggested; others, of open discussions: suggested).
+ * on them (participants: proposed and suggested; others, of open discussions: suggested), in
+ * open discussions only: a closed one's card offers no action until it is reopened.
  */
 export function discussionInboxRows(db: DiscussionsDb, members: Member[], me: { id: string; role: Role }, seen: string | null): Schemas["InboxDiscussionItem"][] {
   const name = (id: string | null) => {
