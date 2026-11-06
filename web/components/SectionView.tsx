@@ -11,6 +11,7 @@ import type { CodeIndex } from "@/lib/code-index";
 import { DateMarker, MarkdownBody, unplacedMarks, type ExpandCtx, type Highlight } from "@/components/MarkdownBody";
 import { RefineSection } from "@/components/RefineSection";
 import { SectionReviewBar } from "@/components/SectionReviewBar";
+import { ownNumber, type SectionLook } from "@/components/PrdLook";
 import { LayerChip, Menu } from "@/components/review/parts";
 import { SpecStateBadge } from "@/components/ui";
 import { IGNORE_ATTR } from "@/lib/anchor";
@@ -58,6 +59,7 @@ export const SectionView = memo(function SectionView({
   onDiscuss,
   placeholder = false,
   codes,
+  look,
 }: {
   section: SectionOut;
   blocks: Block[];
@@ -98,6 +100,8 @@ export const SectionView = memo(function SectionView({
   placeholder?: boolean;
   /** #305: the codes this version names, built once per version. */
   codes?: CodeIndex;
+  /** PT1 a: the section's number, and the review bar kept out of sight off the section being read. */
+  look?: SectionLook;
 }) {
   const Heading = (`h${Math.min(section.level, 3)}` as "h1" | "h2" | "h3");
   // E1: a spec's part states; the acceptance criteria's proposed half starts at a block.
@@ -144,6 +148,7 @@ export const SectionView = memo(function SectionView({
       tabIndex={-1}
       aria-labelledby={`h-${section.section_key}`}
       data-layer={section.layer}
+      data-level={look ? section.level : undefined}
       className={`min-w-0 scroll-mt-6 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent ${
         nested ? "py-3" : "px-6 py-5 max-[600px]:px-4 max-[600px]:py-4"
       }`}
@@ -153,7 +158,9 @@ export const SectionView = memo(function SectionView({
           id={`h-${section.section_key}`}
           className={`min-w-0 ${nested ? HEADING_CLASS[3] : HEADING_CLASS[Math.min(section.level, 3)]} text-text`}
         >
-          {section.heading}
+          {look?.num && <span className="prd-num">{look.num}</span>}
+          {look?.num && " "}
+          {look?.num && ownNumber(section.heading)?.num === look.num ? ownNumber(section.heading)!.rest : section.heading}
           {dateMarks
             ?.filter((m) => m.label && m.where === "heading")
             .map((m) => <DateMarker key={m.text} mark={m} />)}
@@ -293,13 +300,15 @@ export const SectionView = memo(function SectionView({
         />
       </div>
       {!nested && (
-        <SectionReviewBar
-          heading={section.heading}
-          verdict={section.verdict}
-          readOnly={readOnly}
-          readOnlyNote={readOnlyNote}
-          onSubmit={(v, note) => onVerdict(section.section_key, v, note)}
-        />
+        <div hidden={look?.hideReview} className={look?.hideReview ? undefined : "contents"}>
+          <SectionReviewBar
+            heading={section.heading}
+            verdict={section.verdict}
+            readOnly={readOnly}
+            readOnlyNote={readOnlyNote}
+            onSubmit={(v, note) => onVerdict(section.section_key, v, note)}
+          />
+        </div>
       )}
       {!nested && tool?.kind === "evidence" && evidenceTargets && (
         <div className="mt-3" data-testid="section-evidence">

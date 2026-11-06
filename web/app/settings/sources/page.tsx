@@ -826,7 +826,7 @@ function SourceRow({
             // qa-work-46: by the name the sync or the picker saved ("#partner-launch"), never its id.
             const name = u.name ?? picked.find((f) => f.id === u.external_id)?.name ?? names[u.external_id] ?? (source.kind === "slack" ? "Unknown channel" : "Unnamed item");
             const skipped = u.status === "skipped";
-            const why = u.reason.replace(/^Skipped:\s*/, "");
+            const why = u.reason.replace(/^Skipped:\s*/, "").replace(/^./, (c) => c.toUpperCase());
             return (
               <li
                 key={u.external_id}
@@ -837,19 +837,15 @@ function SourceRow({
                 <span className="min-w-0 truncate font-medium" title={name}>
                   {name}
                 </span>
-                <span className="min-w-0 text-text2">
-                  {skipped
-                    ? `— ${why}`
-                    : source.kind === "slack"
-                      ? "— Oracle can’t read it with your account. Rejoin it in Slack, or remove it from this source."
-                      : "— Oracle can’t read it with your account. Ask for access again, or remove it from this source."}
-                </span>
+                {/* D-10: a short badge on the row; the sentence behind the (i). */}
                 <InfoTip label={`why ${name} is ${skipped ? "skipped" : "not read"}`} align="start">
                   {skipped
                     ? source.kind === "slack"
-                      ? "A channel shared in from another company is left out on purpose: only the company's own channels are read. Nothing to do."
-                      : `${u.reason}. Nothing to do.`
-                    : `${u.reason}. What was already pulled in from it is kept.`}
+                      ? `${why}. A channel shared in from another company is left out on purpose: only the company's own channels are read. Nothing to do.`
+                      : `${why}. Nothing to do.`
+                    : `${u.reason}. Oracle can’t read it with your account. ${
+                        source.kind === "slack" ? "Rejoin it in Slack" : "Ask for access again"
+                      }, or remove it from this source. What was already pulled in from it is kept.`}
                 </InfoTip>
                 {!skipped && allowlist && !editing && mayEdit && (
                   <Button onClick={() => setEditing(true)} aria-label={`Edit ${allowlist.noun} of ${source.name}`}>

@@ -1,6 +1,6 @@
 import { expect, test } from "./test";
 
-import { ADMIN, feedbackState, login, openSection, openTab, outlineRow, section, sectionStrip, selectText } from "./helpers";
+import { ADMIN, feedbackState, login, openSection, openTab, outlineRow, section, selectText } from "./helpers";
 
 test("login: rejects a wrong password, then signs in", async ({ page }) => {
   await page.goto("/documents");
@@ -31,23 +31,36 @@ test("open a version: sections in order with citation chips", async ({ page }) =
   await page.getByRole("link", { name: "Version 2" }).click();
   await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2$/);
 
-  // One section at a time: the outline lists them in order, the first unreviewed one is open.
-  const headings = page.locator("section[data-section-key] :is(h1,h2,h3)").filter({ visible: true });
+  // A PRD reads as one document: every section shows at once, numbered from its heading level.
   // The opening section, titled with the document's own title, reads as the Introduction (qa-docs-50).
-  await expect(headings).toHaveText(["Introduction"]);
-  await sectionStrip(page).getByRole("button", { name: "Unfold 5. Proposed flow" }).click();
-  await expect(sectionStrip(page).getByTestId("outline-name")).toHaveText([
+  const headings = page.locator("section[data-section-key] :is(h1,h2,h3)").filter({ visible: true });
+  await expect(headings).toHaveText([
     "Introduction",
-    "1. Goal trace",
-    "2. Problem",
-    "3. Users and jobs",
-    "4. Scope",
-    "5. Proposed flow",
+    "1 Goal trace",
+    "2 Problem",
+    "3 Users and jobs",
+    "4 Scope",
+    "5 Proposed flow",
     "5.1 Cart review",
     "5.2 Shipping step",
     "5.3 Saved addresses",
-    "6. Risks and open questions",
-    "7. Success metrics",
+    "6 Risks and open questions",
+    "7 Success metrics",
+  ]);
+  // The contents rail lists the same sections, in the same order.
+  await page.getByRole("button", { name: "Contents: find a section" }).click();
+  await expect(page.getByTestId("prd-contents").locator(".prd-toc-h")).toHaveText([
+    "Introduction",
+    "Goal trace",
+    "Problem",
+    "Users and jobs",
+    "Scope",
+    "Proposed flow",
+    "Cart review",
+    "Shipping step",
+    "Saved addresses",
+    "Risks and open questions",
+    "Success metrics",
   ]);
 
   // Hovering a chip previews source, title and excerpt.

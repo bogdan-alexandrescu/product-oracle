@@ -61,9 +61,9 @@ function NotApproved({ kind, doc, owner }: { kind: DocKind; doc: DocRef | null; 
   if (doc) {
     return (
       <Explained testId={`${kind}-empty`} title={`The ${name} is not approved yet`}>
-        Open the draft to review it.{" "}
+        {/* D-11: no visible instruction; the (i) and the card's action only. */}
         <InfoTip label={`the ${name}`} align="end">
-          {ABOUT[kind]} An owner approves it.
+          Open the draft to review it. {ABOUT[kind]} An owner approves it.
         </InfoTip>
       </Explained>
     );
@@ -78,9 +78,8 @@ function NotApproved({ kind, doc, owner }: { kind: DocKind; doc: DocRef | null; 
         : "An owner writes it to line up the goals under it.";
   return (
     <Explained testId={`${kind}-empty`} title={`No ${name} yet`}>
-      {next}{" "}
       <InfoTip label={`the ${name}`} align="end">
-        {ABOUT[kind]}
+        {next} {ABOUT[kind]}
       </InfoTip>
     </Explained>
   );

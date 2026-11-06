@@ -188,9 +188,8 @@ export function StackTable({
     // pass F F-45: one short line; what the stack holds sits behind the (i).
     return (
       <CompanyEmpty testId="stack-empty" title="Waiting for an approved product strategy">
-        {next}{" "}
         <InfoTip label="the strategy stack" align="end">
-          {goals} show here under the focus choice each follows from, with the roadmap items serving it, once an owner approves a
+          {next} {goals} show here under the focus choice each follows from, with the roadmap items serving it, once an owner approves a
           product strategy.
         </InfoTip>
       </CompanyEmpty>
