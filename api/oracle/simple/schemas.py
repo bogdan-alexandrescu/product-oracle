@@ -1009,6 +1009,8 @@ class SimplePriorityRow(BaseModel):
     applies: bool = False
     # feature-parts: the feature this one is part of, as the roadmap reads it (its part_of).
     part_of: "SimplePartRef | None" = None
+    # Its own parts, as the roadmap reads them (open or cut), whether this list shows them or not.
+    parts: "list[SimplePartRef]" = Field(default_factory=list)
     # The feature's active override as override_priority's ``before.override`` wants it.
     before_override: dict[str, Any] | None = None
 

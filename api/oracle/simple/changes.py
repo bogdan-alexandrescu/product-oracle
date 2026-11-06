@@ -884,21 +884,25 @@ async def _parent(
     named = key or row.parent_key
     same = [e for e in read_.entries if e.roadmap.id == entry.roadmap.id]
     parent = next((e for e in same if named and e.row.item_key == named), None)
+    await service.item_codes(db, [entry] + ([parent] if parent is not None else []))
     if parent is not None:
-        await service.item_codes(db, [parent])
         target["code"], target["title"] = parent.code or "", parent.row.title
     if not key:
         return None
+
+    def name(e: service.Entry) -> str:
+        return " ".join(x for x in (e.code, e.row.title) if x)
+
     if key == row.item_key:
-        raise ChangeError(422, "after.parent_key: another item, never the item itself")
+        raise ChangeError(422, f"{name(entry)} cannot be a part of itself")
     if parent is None or parent.status in ("merged", "cut"):
         raise ChangeError(422, f"after.parent_key: no open item of this roadmap has the key {key}")
     if any(a is entry for a in parent.ancestors):
         # Any depth, never a loop: a feature is never its own ancestor.
         raise ChangeError(
             422,
-            f"{row.title} cannot be part of {parent.row.title}: "
-            f"{parent.row.title} is already one of its parts",
+            f"{name(entry)} cannot be part of {name(parent)}: "
+            f"{name(parent)} is already one of its parts",
         )
     return key
 

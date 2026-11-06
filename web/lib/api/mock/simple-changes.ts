@@ -1011,11 +1011,13 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       const me = seed(seen, key);
       const live = (k: string) => seen.items.find((x) => x.key === k && !x.trashed);
       const parent = v === null ? undefined : live(v);
-      if (v === key) return json(422, { detail: "after.parent_key: another item, never the item itself" });
+      // Each feature by its code and name (F-02 Alert routing by team), as changes._parent.
+      const name = (x: { section?: string | null; title: string }) => [prdCode(x.section), x.title].filter(Boolean).join(" ");
+      if (v === key) return json(422, { detail: `${name(me)} cannot be a part of itself` });
       if (v !== null && (!parent || parent.roadmap !== me.roadmap || closed(parent))) return json(422, { detail: `after.parent_key: no open item of this roadmap has the key ${v}` });
       const up = new Set<string>();
       for (let k = parent?.parent; k && !up.has(k) && live(k); k = live(k)!.parent) up.add(k);
-      if (parent && up.has(key)) return json(422, { detail: `${me.title} cannot be part of ${parent.title}: ${parent.title} is already one of its parts` });
+      if (parent && up.has(key)) return json(422, { detail: `${name(me)} cannot be part of ${name(parent)}: ${name(parent)} is already one of its parts` });
       const named = parent ?? (me.parent ? seen.items.find((x) => x.key === me.parent) : undefined);
       if (named) Object.assign(target, { code: prdCode(named.section) ?? "", title: named.title });
       after = { parent_key: v };
