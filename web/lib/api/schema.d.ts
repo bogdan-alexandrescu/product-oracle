@@ -45446,6 +45446,10 @@ export interface components {
             kind: "section" | "version";
             /** Document */
             document: string;
+            /** Document Title */
+            document_title?: string | null;
+            /** Section Title */
+            section_title?: string | null;
             /** Version */
             version: number;
             /** Section Key */
