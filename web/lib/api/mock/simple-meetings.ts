@@ -744,7 +744,7 @@ const PROPOSAL_WORDS: Record<string, string> = {
   restore: "restore", edit_title: "rename", edit_outcome: "new outcome for", accept_risk: "accept a risk on", shift_dependents: "move the dependents of",
   move_dependency: "move the dependency of", confirm_item: "confirm", edit_line: "new wording for", add_key_date: "add the key date",
   edit_key_date: "change the key date", remove_key_date: "remove the key date", add_item: "add", merge_item: "merge",
-  keep_both: "keep beside its look-alikes:", cut_with_dependents: "cut with its dependents:",
+  keep_both: "keep beside its look-alikes:", cut_with_dependents: "cut with its dependents:", set_goals: "move to another goal:",
 };
 
 function describe(ctx: MeetingsCtx, c: Change, proposal = false): [string, Decision["subjects"]] {

@@ -53,7 +53,10 @@ interface SeedItem {
   /** item-chat-understands (RoadmapItem.shipped): its own "already shipped" mark, apart from a status its tracker gives it. */
   shipped?: { note: string; on: string } | null;
   draft?: boolean;
-  milestone?: { name: string; day: number };
+  /** Its own milestone (RoadmapItem.milestone): its day from the horizon's start, null when it has no date.
+   * build-feature-panel review 2: `engine` is what the date engine stored besides the name and
+   * day (its date_source, basis_ids...), never shown; a null name reads "Milestone". */
+  milestone?: { name: string | null; day: number | null; engine?: Record<string, unknown> };
   /** The track milestone record naming the item (its name), whatever its own text says. */
   record?: string;
   /** The roadmap item's validation gates (days from the window's start); one naming a
@@ -77,6 +80,9 @@ interface SeedItem {
   kept_both?: boolean;
   /** S7: the key of the item this draft was merged into (the draft is closed). */
   merged_into?: string;
+  /** prio-company: the key of the item whose feature this one is (an item a move on Priorities
+   * added to the company roadmap for a feature it did not hold); else its own feature. */
+  feature?: string;
   /** S7: the baseline feature (with no item) this draft was linked to by a merge. */
   // A draft merged with a baseline feature that has no item: linked to it (still a draft).
   linked_feature?: string;
@@ -377,6 +383,10 @@ export function writeRoadmapGoal(db: Pick<SimpleDb, "goal_edits" | "goal_buckets
   else (db.goal_edits ??= {})[key] = fields;
 }
 export const goalId = (key: string): string => stableUuid(`simple-goal/${key}`);
+/** The item's goal_ids as the API reads them (set_goals' before): the goal it moves most first. */
+export function goalIdsOf(s: { goal?: string; goals?: string[] }): string[] {
+  return [...new Set([...(s.goal ? [s.goal] : []), ...(s.goals ?? [])])].map(goalId);
+}
 export const roadmapId = (slug: string): string => stableUuid(`simple-doc/${slug}`);
 // A new company has no roadmap yet (qa-shell-8: oracle.simple.service reads none).
 export const ROADMAP_SLUGS = (): string[] => (newCompany() ? [] : Object.keys(ROADMAPS));
@@ -846,8 +856,8 @@ function recordOf(s: { record?: string; track?: string }): { record_id?: string;
  * every other phase keeps the 15/55/20/10 split of the bar, estimated. */
 function phases(start: string, end: string, s: SeedItem, w: [string, string]): Schemas["SimplePhase"][] {
   const named = new Map<string, string>();
-  for (const e of [...(s.milestone ? [{ phase: s.milestone.name, day: s.milestone.day }] : []), ...(s.gates ?? [])]) {
-    const word = e.phase.trim().toLowerCase();
+  for (const e of [...(s.milestone?.day != null ? [{ phase: s.milestone.name, day: s.milestone.day }] : []), ...(s.gates ?? [])]) {
+    const word = (e.phase ?? "").trim().toLowerCase();
     if (PHASES.some(([k]) => k === word)) named.set(word, addDays(w[0], e.day));
   }
   const total = span(start, end);
@@ -902,7 +912,7 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
     if (dep.r.end.date >= r.start.date)
       flag("dependency_order", dependencyLine(s.title, r.start.date, dep.s.title, dep.r.end.date, "starts", depPrd), ["shift_dependents", "move_dependency", "accept_risk"], stableUuid(`simple-item/${key}`));
   }
-  if (s.milestone) {
+  if (s.milestone?.day != null) {
     const day = addDays(w[0], s.milestone.day);
     if (r.end.date > day) flag("outside_milestone", `‘${short(s.title)}’ ends ${word(r.end.date)}, after its milestone ‘${s.milestone.name}’ (${word(day)})`, ["accept_risk"], s.milestone.name);
   }
@@ -1246,9 +1256,13 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       source: r.end.estimated ? r.start.source : r.end.source,
       estimated: r.start.estimated && r.end.estimated,
       suggestion: suggestion ? { ...suggestion, can_decide: decides(s) } : null,
-      milestone: s.milestone
+      // service._milestone: its own dated milestone (set_milestone writes it, as typed in its
+      // panel; null: cleared), else the track's record, else its own undated one.
+      milestone: s.milestone?.day != null
         ? { name: s.milestone.name, date: addDays(w[s.horizon][0], s.milestone.day), source: "item", ...recordOf(s) }
-        : s.record ? { name: s.record, date: null, source: "track", ...recordOf(s) } : null,
+        : s.milestone && !s.record
+          ? { name: s.milestone.name, date: null, source: "item" }
+          : s.record ? { name: s.record, date: null, source: "track", ...recordOf(s) } : null,
       phases: phases(r.start.date, r.end.date, s, w[s.horizon]),
       slices: sliced,
       milestones: [...new Set(sliced.map((x) => x.milestone))],
@@ -1272,7 +1286,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       merged_into: s.merged_into ? { id: db.ids[s.merged_into], code: s.merged_into, title: db.items.find((x) => x.key === s.merged_into)?.title ?? s.merged_into } : null,
       drafting: !!s.drafting_until,
       flow: s.draft ? (s.flow ?? null) : (flowFor(db.visuals, "feature", db.ids[s.key]) ?? betFlow(db, s)),
-      goal_ids: [...new Set([...(s.goal ? [s.goal] : []), ...(s.goals ?? [])])].map(goalId),
+      goal_ids: goalIdsOf(s),
       // S8: the decided decisions that changed the item (./simple-meetings.ts records them).
       decided_in: [...(db.decided_in?.[db.ids[s.key]] ?? [])],
       // walkc-roadmap-tasks: the work under the item (service._tasks).

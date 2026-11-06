@@ -1038,7 +1038,7 @@ function seedSimpleHomeOnePrdScenario(): Db {
     // An undated item would be estimated into this quarter: dated after it instead.
     if (i.start == null || i.end == null) Object.assign(i, { start: 180, end: 220, source: "typed" });
     else Object.assign(i, { start: i.start + 180, end: i.end + 180 });
-    if (i.milestone) i.milestone.day += 180;
+    if (i.milestone?.day != null) i.milestone.day += 180;
   }
   return db;
 }
@@ -1104,6 +1104,11 @@ function seedSimplePlanScenario(datedAll = false): Db {
   const byFeature = new Map<string, ReturnType<typeof planSlices>>();
   for (const x of planSlices()) byFeature.set(x.feature_code, [...(byFeature.get(x.feature_code) ?? []), x]);
   const existing: Record<string, string> = { "F-01": "setup-checklist", "F-02": "setup-import" };
+  // The plan's own item carries each other plan feature's code: the default roadmap's item of the
+  // same PRD section (F-03 Health log) keeps its name but not the code, so one code names one item.
+  for (const x of rm.items) {
+    if (x.section && byFeature.has(x.section.toUpperCase()) && !Object.values(existing).includes(x.key)) Object.assign(x, { section: undefined, heading: undefined });
+  }
   for (const [code, of] of byFeature) {
     const section = code.toLowerCase();
     const key = existing[code];

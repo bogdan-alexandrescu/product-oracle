@@ -361,6 +361,7 @@ export const OP_WORDS: Record<string, string> = {
   remove_key_date: "Remove a key date",
   edit_goal_milestone: "Change a milestone",
   set_milestone: "Set a milestone",
+  set_goals: "Move to another goal",
   add_feature_ask: "File a feature ask",
   set_owner: "Change the owner",
   set_decider: "Change the decider",
@@ -410,6 +411,7 @@ const DONE_WORDS: Record<string, string> = {
   merge_item: "Merged",
   keep_both: "Kept beside its look-alike:",
   set_milestone: "Milestone set for",
+  set_goals: "Moved to another goal:",
   add_feature_ask: "Feature ask filed:",
 };
 

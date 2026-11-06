@@ -119,6 +119,8 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             if m is None and "milestone" in after:
                 return f"cleared the milestone of {x}"
             return f"set the milestone of {x} to {name}" if name else f"set the milestone of {x}"
+        case "set_goals":
+            return f"moved {x} to another goal"
         case "add_feature_ask":
             return f"filed the feature ask {title}" if title else "filed a feature ask"
         case "set_owner":

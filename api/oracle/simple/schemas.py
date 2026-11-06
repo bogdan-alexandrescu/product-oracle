@@ -585,6 +585,8 @@ ChangeOp = Literal[
     "set_status",
     # one-feature-panel: how the goal the item serves is measured (its target and date).
     "set_goal_measure",
+    # goal-buckets-tasks: the goals an item serves (into the working draft).
+    "set_goals",
     # chat-actions: the item's own owner and decider (into the working draft).
     "set_owner",
     "set_decider",
@@ -962,6 +964,9 @@ class SimplePriorityRow(BaseModel):
     # reader, unique in the company (a digit added on a clash, in the features' creation
     # order). oracle.simple.priorities.short_codes.
     short_code: str = ""
+    # prio-company (Nov 4): the feature's own code (F-12, or its PRD's F-06) shown beside its
+    # name; None when it has none (never letters made up from its name).
+    own_key: str | None = None
     title: str
     goal: SimplePriorityGoal | None = None
     milestone: str | None = None
@@ -992,6 +997,9 @@ class SimplePriorityRow(BaseModel):
     # rest outside the plan).
     in_plan: bool = False
     can_reorder: bool = False
+    # prio-company (Nov 4): the feature has an item on the company roadmap (else on every
+    # roadmap while there is no company roadmap); false: an owner's move adds it there.
+    on_roadmap: bool = False
     # The caller's change applies (else it is proposed).
     applies: bool = False
     # The feature's active override as override_priority's ``before.override`` wants it.
@@ -1197,6 +1205,8 @@ class SimplePrioritiesOut(BaseModel):
     # Roadmap-plus: the line drawn, and the lines offered (Pick a date aside).
     line: SimpleLine | None = None
     lines: list[SimpleLine] = []
+    # prio-company (Nov 4): the one roadmap priorities moves; None while there is none.
+    company_roadmap: "SimpleDocRef | None" = None
     # plan-charts: the plan "this quarter" is (Goal buckets by milestone); none with no
     # dated plan.
     plan: SimplePlanOut | None = None

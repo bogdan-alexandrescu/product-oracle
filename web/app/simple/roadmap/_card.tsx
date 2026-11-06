@@ -404,6 +404,7 @@ const OP_WORDS: Record<string, string> = {
   set_goal: "Change the goal",
   set_depends: "Change what it depends on",
   set_status: "Change the status",
+  set_goals: "Move it to another goal",
   set_owner: "Change the owner",
   set_goal_measure: "Change how its goal is measured",
 };

@@ -84,7 +84,7 @@ test.describe("fix4-simple-plan review: Priorities", () => {
     await setUp(page, { email: COMMENTER });
     await open(page);
     const rank = await rowByTitle(page, "Setup checklist").getByTestId("prio-rank").textContent();
-    await page.getByRole("button", { name: "Drag Setup checklist (SC) to reorder" }).focus();
+    await page.getByRole("button", { name: "Drag Setup checklist to reorder" }).focus();
     await page.keyboard.press("ArrowDown");
     const dialog = page.getByRole("dialog", { name: /Why move Setup checklist/ });
     await dialog.getByLabel(/Reason/).fill("Setup first");
