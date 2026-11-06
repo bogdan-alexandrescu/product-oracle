@@ -134,6 +134,15 @@ def quoted(name: str | None, fallback: str) -> str:
     return f'"{name}"' if name else fallback
 
 
+def named(title: str | None, code: str | None) -> str:
+    """A goal or feature as the app names it: its name with its code beside it
+    ("Grow activation (G-C)"); the code alone when it has no other name."""
+    title, code = (title or "").strip(), (code or "").strip()
+    if not title or title == code:
+        return code or title
+    return f"{title} ({code})" if code else title
+
+
 def listed(names: Sequence[str]) -> str:
     """``"A"``, ``"A" and "B"``, ``"A", "B" and "C"``."""
     if len(names) <= 1:
