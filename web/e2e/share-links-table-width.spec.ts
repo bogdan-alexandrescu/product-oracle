@@ -93,6 +93,21 @@ for (const who of [
             }));
             expect(m.s).toBeLessThanOrEqual(m.c + 1);
           }
+          // Every action button sits whole inside its cell.
+          const buttons = table.getByRole("row").getByRole("button");
+          for (let i = 0, k = await buttons.count(); i < k; i++) {
+            const b = buttons.nth(i);
+            if (!(await b.isVisible())) continue;
+            const fit = await b.evaluate((el) => {
+              const cell = el.closest("td")!.getBoundingClientRect();
+              const r = el.getBoundingClientRect();
+              return {
+                inside: r.left >= cell.left - 1 && r.right <= cell.right + 1,
+                text: el.textContent,
+              };
+            });
+            expect(fit.inside, `button "${fit.text}" is cut off`).toBe(true);
+          }
           const page_ = await page.evaluate(() => ({
             s: document.documentElement.scrollWidth,
             w: window.innerWidth,
