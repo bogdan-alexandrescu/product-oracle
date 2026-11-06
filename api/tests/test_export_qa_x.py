@@ -208,3 +208,21 @@ async def test_x17_the_markdown_export_is_plain_markdown(client, prd):
     # The import needs the front matter and the section ids (oracle.docs.parser), so the
     # file still imports: they stay.
     assert md.startswith("---\n") and "{#summary}" in md
+
+
+async def test_x8_x9_the_pptx_names_goals_and_sources_by_title(client, prd):
+    from tests.test_export_visual_e import _pptx_texts
+
+    resp = await client.get(f"{BASE}/export?layer=deck&format=pptx", headers=prd)
+    texts = " ".join(t for ts in _pptx_texts(resp.content) for t in ts)
+    assert "G2 Retention" in texts and not BARE_G2.search(texts)
+    assert "Drop-off thread" in texts and "slack" not in texts and "notion" not in texts
+
+
+def test_x12_the_pptx_mark_is_a_plain_word():
+    from oracle.export import pptx as pptx_module
+
+    blocks = pptx_module.parse_blocks("Beta on Nov 20, 2026 **[unverified]**.")
+    runs = [r for b in blocks.items for r in getattr(b, "runs", [])]
+    marks = [r for r in runs if "unverified" in r.text]
+    assert marks and all(r.text == "unverified" and not r.bold for r in marks), runs
