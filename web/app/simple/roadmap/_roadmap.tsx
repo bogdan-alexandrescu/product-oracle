@@ -703,7 +703,9 @@ function DecisionTray({
     ["Pulled in", pulled.length],
   ];
   const kd = (c: Change) => (c.after.key_date ?? c.before.key_date) as { name?: string } | null | undefined;
-  const title = (c: Change) => (kd(c)?.name ? `Key date '${kd(c)!.name}'` : (byId.get(String(c.target.item_id))?.title ?? (typeof c.after.title === "string" ? c.after.title : "An item")));
+  // roadmap-decide: a change the roadmap asked of a PRD names its milestone.
+  const asked = (c: Change) => (c.op === "edit_goal_milestone" && !("milestone" in c.before) ? `PRD milestone ‘${String(c.target.name ?? "")}’` : null);
+  const title = (c: Change) => asked(c) ?? (kd(c)?.name ? `Key date '${kd(c)!.name}'` : (byId.get(String(c.target.item_id))?.title ?? (typeof c.after.title === "string" ? c.after.title : "An item")));
   const row = (c: Change) => (
     <li key={c.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-proposal">
       <span className="min-w-0 flex-1 text-[15px]">

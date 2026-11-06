@@ -69,13 +69,15 @@ test("an item marked done leaves every view, its broken links and every count, a
   // The feature panel: a desktop's talk is beside the details, a phone's behind its tab.
   const talkTab = card.getByRole("tab", { name: "Talk to Oracle" });
   if (await talkTab.isVisible()) await talkTab.click();
+  // This line's feature panel (PR 1297) opens its talk from its Talk to Oracle button on a desktop.
+  else await card.getByRole("button", { name: "Talk to Oracle" }).click();
   const talk = card.getByTestId("item-talk");
   await talk.getByRole("textbox", { name: "Message Oracle" }).fill("This is completed, it has shipped already");
   await talk.getByRole("button", { name: "Send" }).click();
   const ship = talk.getByTestId("chat-card").filter({ hasText: "Mark as already shipped" });
   await ship.getByRole("button", { name: "Apply" }).click();
   await expect(ship).toHaveAttribute("data-status", "applied");
-  await expect(card.getByTestId("fp-status")).toHaveText("Done");
+  await expect(card.getByTestId("card-status")).toHaveText("Done");
   await page.keyboard.press("Escape");
 
   // Off the timeline, its links gone and every count down by them.
@@ -92,7 +94,7 @@ test("an item marked done leaves every view, its broken links and every count, a
   await done.getByTestId("done-items-toggle").click();
   await expect(done.getByTestId("done-item")).toHaveText(["Alert rules engine"]);
   await done.getByTestId("done-item").click();
-  await expect(page.getByTestId("floating-card").getByTestId("fp-status")).toHaveText("Done");
+  await expect(page.getByTestId("floating-card").getByTestId("card-status")).toHaveText("Done");
   await page.keyboard.press("Escape");
 
   // fix 1, minor 4: a link to the done item (?item=, as from Home or the Inbox) opens its panel
@@ -100,7 +102,7 @@ test("an item marked done leaves every view, its broken links and every count, a
   const id = (await done.getByTestId("done-item").getAttribute("data-bar-id"))!;
   await page.goto(`/simple/roadmap?item=${id}`);
   const linked = page.getByTestId("floating-card");
-  await expect(linked.getByTestId("fp-status")).toHaveText("Done");
+  await expect(linked.getByTestId("card-status")).toHaveText("Done");
   await expect(linked).toHaveAttribute("aria-label", "Alert rules engine");
   await expect(doneList(page).getByTestId("done-item")).toHaveAttribute("aria-pressed", "true");
   await page.keyboard.press("Escape");
