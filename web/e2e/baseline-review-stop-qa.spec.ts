@@ -25,7 +25,7 @@ async function open(page: Page, run: string, scenario = "baseline-review") {
   await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, scenario] as const);
   await login(page);
   await page.goto(`/baseline?run=${run}`);
-  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
 }
 
 async function box(l: Locator) {
@@ -68,7 +68,7 @@ for (const view of VIEWS) {
       }
       const b = bar(page);
       await expect(b).toBeVisible();
-      const approve = b.getByRole("button", { name: "Approve baseline" });
+      const approve = b.getByRole("button", { name: "Approve the Ground Truth" });
       await expect(approve).toBeVisible();
       expect(await fits(approve)).toBe(true);
       const gate = b.getByTestId("bar-gate");

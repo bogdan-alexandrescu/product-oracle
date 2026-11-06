@@ -72,7 +72,7 @@ test("a run that failed at its PRD draft: Retry runs that step again, the steps 
   await login(page);
   const id = await seedFailedRun(page);
   await page.goto(`/runs/${id}`);
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
   await expect(status(page)).toHaveText("Failed");
 
   const prd = page.getByTestId("segment-prd_draft");
