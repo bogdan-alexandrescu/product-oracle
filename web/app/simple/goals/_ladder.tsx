@@ -267,7 +267,9 @@ export function GoalLadder(props: LadderProps) {
       const m = map.milestones.find((x) => x.id === milestone);
       if (!m || !title.trim()) return;
       try {
-        const r = await propose({ op: "add_item", target: { roadmap_id: null, where: { kind: "goal", value: m.goal } }, before: {}, after: { title: title.trim() } });
+        // On the roadmap its milestone's work is on (else Oracle picks one the person may edit).
+        const roadmap = feats.find((x) => x.f.milestones.includes(milestone) && x.item)?.item?.roadmap?.id ?? null;
+        const r = await propose({ op: "add_item", target: { roadmap_id: roadmap, where: { kind: "goal", value: m.goal } }, before: {}, after: { title: title.trim() } });
         const id = r.change.status === "applied" ? (r.change.target as { item_id?: string }).item_id : undefined;
         if (id && canChange) {
           const next = await unwrap(api.POST("/v1/simple/goal-map/links", { body: { feature: id, milestone, area: m.areas[0] ?? map.areas[0]?.id ?? "", expected: "", confidence: "medium" } }));
@@ -378,7 +380,7 @@ function periods(map: GoalMap, ms: GmMilestone[], code: Map<string, string>): { 
     for (let w = from, n = 1; w < to; w = addDays(w, 7), n++) {
       const end = addDays(w, 7);
       const due = ms.filter((m) => m.due_on && m.due_on >= w && m.due_on < end);
-      out.push({ n, from: w, today: today >= w && today < end, mark: due.map((m) => `${code.get(m.id)} ${m.name.split(" ").slice(0, 4).join(" ")}`).join("\n") });
+      out.push({ n, from: w, today: today >= w && today < end, mark: due.map((m) => `${code.get(m.id)} ${short(m.name)}`).join("\n") });
     }
     return out;
   };
@@ -417,6 +419,15 @@ function PeriodStrip({ v }: { v: V }) {
       })}
     </div>
   );
+}
+
+/** A milestone's first few words for the week strip, never ending on a small word ("by", "at", "without"...). */
+function short(name: string): string {
+  const w: string[] = [];
+  for (const x of name.split(" ")) if ([...w, x].join(" ").length <= 26) w.push(x);
+  else break;
+  while (w.length > 2 && /^(by|at|for|to|of|in|inside|without|under|one|a|the|and|every|down|weekly|baseline|new)$/i.test(w[w.length - 1])) w.pop();
+  return w.join(" ");
 }
 
 /** Under the week chips: "We are here" and each milestone's name, a row down when a neighbour is too close. */
@@ -619,7 +630,7 @@ function FeatureCard({ x, v, ms, compact }: { x: LdFeature; v: V; ms?: string; c
       {ms && f.milestones.length > 1 && <span className="text-[12px] leading-4 text-text2">Also serves {f.milestones.filter((m) => m !== ms).map((m) => v.msCode.get(m)).join(", ")}</span>}
       {/* the edge dot a dependency is drawn from (while editing, on the picked card) */}
       {handles && isSel && !v.phone && (
-        <span data-ld-dot={f.id} data-testid="ld-dot" title="Drag onto the card that waits on this one" className="absolute top-1/2 -right-[9px] h-4 w-4 -translate-y-1/2 cursor-crosshair rounded-full border-2 border-surface bg-accent" />
+        <span data-ld-dot={f.id} data-testid="ld-dot" title="Drag onto the card that waits on this one" className="absolute top-1/2 -right-[9px] z-30 h-4 w-4 -translate-y-1/2 cursor-crosshair rounded-full border-2 border-surface bg-accent" />
       )}
       {menu && (
         <MenuList
@@ -898,10 +909,18 @@ function Canvas({ v, drag }: { v: V; drag: { setLive: (l: V["live"]) => void; se
   };
   const canPlace = v.may;
 
+  /** Swallows the click that may follow a drag's release; when none comes, the next real click still lands. */
+  const swallowClick = () => {
+    const stop = (c: MouseEvent) => c.stopPropagation();
+    window.addEventListener("click", stop, { capture: true, once: true });
+    setTimeout(() => window.removeEventListener("click", stop, { capture: true }), 0);
+  };
   const target = (cx: number, cy: number, self: string): string | null => {
     for (const el of document.elementsFromPoint(cx, cy)) {
       const card = (el as HTMLElement).closest?.("[data-ld-card]") as HTMLElement | null;
-      if (card && card.dataset.ldCard !== self) return `card:${card.dataset.ldCard}`;
+      // The card being dragged sits under the pointer: look through it.
+      if (card?.dataset.ldCard === self) continue;
+      if (card) return `card:${card.dataset.ldCard}`;
       const g = (el as HTMLElement).closest?.("[data-ld-group]") as HTMLElement | null;
       if (g) return `ms:${g.dataset.ldGroup}`;
       const goal = (el as HTMLElement).closest?.("[data-ld-goal]") as HTMLElement | null;
@@ -967,13 +986,13 @@ function Canvas({ v, drag }: { v: V; drag: { setLive: (l: V["live"]) => void; se
       const at = v.places.get(id);
       void v.act.place(id, Math.round((at?.x ?? 0) + dx), Math.round((at?.y ?? 0) + dy));
       // The click after a drag would pick the card: swallow it.
-      window.addEventListener("click", (c) => c.stopPropagation(), { capture: true, once: true });
+      swallowClick();
     }
     if (g.kind === "dot") {
       setDrawing(null);
       const t = target(e.clientX, e.clientY, g.from!);
       if (t?.startsWith("card:")) void v.act.link(t.slice(5), g.from!);
-      window.addEventListener("click", (c) => c.stopPropagation(), { capture: true, once: true });
+      swallowClick();
     }
   };
   const wheel = (e: RWheelEvent<HTMLDivElement>) => {

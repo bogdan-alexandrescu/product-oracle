@@ -42,22 +42,37 @@ async function dragBy(page: Page, from: { x: number; y: number }, to: { x: numbe
   for (let i = 1; i <= 8; i++) await page.mouse.move(from.x + ((to.x - from.x) * i) / 8, from.y + ((to.y - from.y) * i) / 8);
   await page.mouse.up();
 }
-/** Pans the canvas (dragging its empty right side) until the card is in view, as a person does. */
+/** Scrolls the page until the whole canvas is on screen. */
+const inView = (page: Page) => page.getByTestId("ld-canvas").evaluate((el) => el.scrollIntoView({ block: "nearest" }));
+/** The part of the canvas on screen, above where toasts show. */
+async function area(page: Page) {
+  const c = (await page.getByTestId("ld-canvas").boundingBox())!;
+  const top = Math.max(c.y, 0);
+  return { x: c.x, y: top, width: c.width, height: Math.min(c.y + c.height, page.viewportSize()!.height - 100) - top };
+}
+/** Scrolls the canvas (the wheel or a trackpad over it) so its cards move dy down. */
+async function pan(page: Page, dy: number) {
+  const canvas = await area(page);
+  await page.mouse.move(canvas.x + canvas.width - 30, canvas.y + canvas.height / 2);
+  await page.mouse.wheel(0, -dy);
+  await page.waitForTimeout(50);
+}
+/** Pans the canvas until the card is in view, as a person does. */
 async function reveal(page: Page, loc: ReturnType<Page["locator"]>) {
-  const canvas = (await page.getByTestId("ld-canvas").boundingBox())!;
-  for (let i = 0; i < 6; i++) {
+  await inView(page);
+  const canvas = await area(page);
+  for (let i = 0; i < 12; i++) {
     const b = (await loc.boundingBox())!;
     const dy = b.y + b.height / 2 - (canvas.y + canvas.height / 2);
     if (b.y >= canvas.y && b.y + b.height <= canvas.y + canvas.height) return;
-    const at = { x: canvas.x + canvas.width - 30, y: canvas.y + canvas.height / 2 };
-    const step = Math.max(-canvas.height / 2 + 20, Math.min(canvas.height / 2 - 20, -dy));
-    await dragBy(page, at, { x: at.x, y: at.y + step });
+    await pan(page, -dy);
   }
 }
 /** Zooms out until both cards fit in the canvas, then pans them into view. */
 async function showBoth(page: Page, a: ReturnType<Page["locator"]>, b: ReturnType<Page["locator"]>) {
-  const canvas = (await page.getByTestId("ld-canvas").boundingBox())!;
-  for (let i = 0; i < 6; i++) {
+  await inView(page);
+  const canvas = await area(page);
+  for (let i = 0; i < 12; i++) {
     const [A, B] = [(await a.boundingBox())!, (await b.boundingBox())!];
     const top = Math.min(A.y, B.y);
     const bottom = Math.max(A.y + A.height, B.y + B.height);
@@ -66,10 +81,13 @@ async function showBoth(page: Page, a: ReturnType<Page["locator"]>, b: ReturnTyp
       await page.getByRole("button", { name: "Zoom out" }).click();
       continue;
     }
-    const at = { x: canvas.x + canvas.width - 30, y: canvas.y + canvas.height / 2 };
-    const dy = canvas.y + canvas.height / 2 - (top + bottom) / 2;
-    await dragBy(page, at, { x: at.x, y: at.y + Math.max(-canvas.height / 2 + 20, Math.min(canvas.height / 2 - 20, dy)) });
+    await pan(page, canvas.y + canvas.height / 2 - (top + bottom) / 2);
   }
+}
+/** The middle of an element already in view. */
+async function mid(loc: ReturnType<Page["locator"]>) {
+  const b = (await loc.boundingBox())!;
+  return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
 }
 async function centre(page: Page, loc: ReturnType<Page["locator"]>) {
   if (page.viewportSize()!.width > 600) await reveal(page, loc);
@@ -124,7 +142,7 @@ for (const scheme of ["light", "dark"] as const) {
         await expect(page.getByRole("status").filter({ hasText: "no longer waits on" })).toContainText("F-03 Renewal health score shown to account owners each Monday no longer waits on F-02");
         await expect(card(page, "F-03").getByTestId("ld-counts")).toHaveText("3→");
         await shot(page, `ld2-a-unlinked-${width}-${scheme}`);
-        await page.getByRole("button", { name: "Undo" }).click();
+        await page.getByTestId("toasts").getByRole("button", { name: "Undo" }).click();
         await expect(card(page, "F-03").getByTestId("ld-counts")).toHaveText("←13→");
       });
 
@@ -173,7 +191,7 @@ for (const scheme of ["light", "dark"] as const) {
         await card(page, "F-34").click();
         const dot = card(page, "F-34").getByTestId("ld-dot");
         await showBoth(page, card(page, "F-34"), card(page, "F-24"));
-        await dragBy(page, await centre(page, dot), await centre(page, card(page, "F-24")));
+        await dragBy(page, await mid(dot), await mid(card(page, "F-24")));
         await expect(page.getByRole("status").filter({ hasText: "now waits on" })).toContainText("F-24");
         await expect(page.getByRole("status").filter({ hasText: "now waits on" })).toContainText("now waits on F-34");
         await shot(page, `ld2-a-linked-${width}-${scheme}`);
@@ -181,7 +199,7 @@ for (const scheme of ["light", "dark"] as const) {
         await reveal(page, card(page, "F-04"));
         await card(page, "F-04").click();
         await showBoth(page, card(page, "F-04"), card(page, "F-02"));
-        await dragBy(page, await centre(page, card(page, "F-04").getByTestId("ld-dot")), await centre(page, card(page, "F-02")));
+        await dragBy(page, await mid(card(page, "F-04").getByTestId("ld-dot")), await mid(card(page, "F-02")));
         await expect(page.getByRole("status").filter({ hasText: "loop" })).toContainText(/Not added, it would make a loop: F-04 Saved views that follow a person across projects and devices already waits on F-02 Activity events pipeline/);
         await expect(page.getByTestId("ld-refused")).toHaveCount(1);
         await shot(page, `ld2-a-loop-${width}-${scheme}`);
@@ -189,24 +207,24 @@ for (const scheme of ["light", "dark"] as const) {
 
       test("Edit ladder: drag a feature to another milestone; menu Delete to Trash and Restore; + Add a feature", async ({ page }) => {
         // protects=ld3-b-drag, ld3-b-moved, ld3-b-menu, ld3-b-deleted, ld3-b-add, ld3-b-added:
-        // dropped on M6's work, F-15 serves M6 (links/move) with Undo; Delete (to Trash) takes it
+        // dropped on M6's work, F-21 (last under M5) serves M6 (links/move) with Undo; Delete (to Trash) takes it
         // off the ladder and Settings › Trash restores it; + Add feature names one under M5;
         // fails_when=the drop only places the card, Delete removes it for good, or the new
         // feature is not under M5; no_claim=reorder within a list.
         await open(page, scheme);
         await page.getByTestId("ld-edit").click();
         const m6 = page.locator('[data-ld-group]').filter({ hasText: "M6 Setup time one day for new teams" }).first();
-        await showBoth(page, card(page, "F-15"), m6.locator("span").first());
-        await dragBy(page, await centre(page, card(page, "F-15")), await centre(page, m6.locator("span").first()));
-        await expect(page.getByRole("status").filter({ hasText: "Moved F-15" })).toContainText("to M6 Setup time one day for new teams");
-        await expect(m6.getByTestId("ld-feature").filter({ hasText: "F-15" })).toHaveCount(1);
+        await showBoth(page, card(page, "F-21"), m6.locator("span").first());
+        await dragBy(page, await mid(card(page, "F-21")), await mid(m6.locator("span").first()));
+        await expect(page.getByRole("status").filter({ hasText: "Moved F-21" })).toContainText("to M6 Setup time one day for new teams");
+        await expect(m6.getByTestId("ld-feature").filter({ hasText: "F-21" })).toHaveCount(1);
         await shot(page, `ld3-b-moved-${width}-${scheme}`);
-        await card(page, "F-15").getByTestId("ld-more").click();
+        await card(page, "F-21").getByTestId("ld-more").click();
         await expect(page.getByTestId("ld-feature-menu").getByRole("menuitem")).toHaveText(["Open", "Move to…", "Move up", "Move down", "Waits on…", "Delete (to Trash)"]);
         await shot(page, `ld3-b-menu-${width}-${scheme}`);
         await page.getByRole("menuitem", { name: "Delete (to Trash)" }).click();
-        await expect(page.getByRole("status").filter({ hasText: "to Trash" })).toContainText("Moved F-15");
-        await expect(card(page, "F-15")).toHaveCount(0);
+        await expect(page.getByRole("status").filter({ hasText: "to Trash" })).toContainText("Moved F-21");
+        await expect(card(page, "F-21")).toHaveCount(0);
         await shot(page, `ld3-b-deleted-${width}-${scheme}`);
         const m5 = page.locator('[data-ld-group]').filter({ hasText: "M5 Imports finish without help" }).first();
         await m5.getByTestId("ld-add-feature").click();
@@ -216,10 +234,11 @@ for (const scheme of ["light", "dark"] as const) {
         await expect(m5.getByTestId("ld-feature").filter({ hasText: "Import from calendar tools with every date kept" })).toHaveCount(1);
         await shot(page, `ld3-b-added-${width}-${scheme}`);
         await page.goto("/settings/trash");
-        const row = page.getByRole("listitem").filter({ hasText: "Invite the whole team" }).or(page.getByRole("row").filter({ hasText: "Invite the whole team" })).first();
+        const row = page.getByRole("listitem").filter({ hasText: "Undo a whole import" }).or(page.getByRole("row").filter({ hasText: "Undo a whole import" })).first();
         await row.getByRole("button", { name: /Restore/ }).click();
+        await expect(page.getByRole("status").filter({ hasText: "Restored" })).toContainText("Undo a whole import");
         await page.goto("/simple/goals");
-        await expect(card(page, "F-15")).toBeVisible();
+        await expect(card(page, "F-21")).toBeVisible();
       });
 
       test("a commenter suggests; a viewer reads", async ({ page, browser }) => {
@@ -236,7 +255,7 @@ for (const scheme of ["light", "dark"] as const) {
         await reveal(page, card(page, "F-34"));
         await card(page, "F-34").click();
         await showBoth(page, card(page, "F-34"), card(page, "F-24"));
-        await dragBy(page, await centre(page, card(page, "F-34").getByTestId("ld-dot")), await centre(page, card(page, "F-24")));
+        await dragBy(page, await mid(card(page, "F-34").getByTestId("ld-dot")), await mid(card(page, "F-24")));
         await expect(page.getByRole("status").filter({ hasText: "Suggested" })).toContainText("Suggested: F-24");
         await expect(card(page, "F-24").getByTestId("ld-counts")).not.toContainText("←2");
         await shot(page, `ld2-a-commenter-${width}-${scheme}`);

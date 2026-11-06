@@ -266,6 +266,8 @@ export function knowTalkGoals(db: { items: { key: string }[]; plan?: unknown }):
   }
 }
 const GOALS_KNOWN: Record<string, boolean> = {};
+/** Confirmed Baseline goals a scenario adds by their own ids (goal-ladder's), id to title: add_item may name them. */
+export const MAP_GOALS: Record<string, string> = {};
 
 /**
  * build-goal-order-control: the "goal-order" scenarios' added goals (server.ts seeds them), named

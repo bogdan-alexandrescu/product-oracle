@@ -38,6 +38,7 @@ import {
   draftChanges,
   openDraft,
   GOALS,
+  MAP_GOALS,
   goalId,
   itemDeciderId,
   itemOwnerId,
@@ -1349,7 +1350,7 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
     let quarter: { start: string; end: string } | null = null;
     if (where?.kind === "goal") {
       goal = Object.keys(GOALS).find((k) => goalId(k) === value || k === value);
-      if (!goal) return json(422, { detail: "target.where.value: a goal's id" });
+      if (!goal && !(value in MAP_GOALS)) return json(422, { detail: "target.where.value: a goal's id" });
     } else if (where?.kind === "horizon") {
       if (!["now", "next", "later"].includes(value)) return json(422, { detail: "target.where.value: now, next or later" });
       horizon = value as SeedItem["horizon"];
@@ -1365,7 +1366,7 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
     roadmap ??= (goal ? db.items.find((x) => x.goal === goal && !closed(x) && visible.includes(x.roadmap))?.roadmap : undefined) ?? visible.find((r) => canEditRoadmap(db, r, ctx)) ?? visible[0];
     target.roadmap_id = roadmapId(roadmap);
     target.item_id = crypto.randomUUID();
-    const after: Values = { title, horizon, goal_ids: goal ? [goalId(goal)] : [], ...(quarter ? { quarter } : {}) };
+    const after: Values = { title, horizon, goal_ids: goal ? [goalId(goal)] : value in MAP_GOALS ? [value] : [], ...(quarter ? { quarter } : {}) };
     if (typeof a.outcome === "string" && a.outcome.trim()) after.outcome = a.outcome.trim();
     return { target, before: {}, after, roadmap, applies: canEditRoadmap(db, roadmap, ctx) };
   }
