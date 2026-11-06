@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import {
+  Button,
   Chip,
   DataTable,
   InfoTip,
@@ -11,7 +12,6 @@ import {
   InspectorRow,
   InspectorSection,
   LinkButton,
-  Notice,
   PageHeader,
   ViewOnly,
   Panel,
@@ -20,6 +20,7 @@ import {
 } from "@/components/ds";
 import { revealOnPhone } from "@/app/settings/_components/reveal";
 import { ThemePreview } from "@/components/ThemePreview";
+import { LoadError } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -179,46 +180,55 @@ export default function ThemesPage() {
         }
         status={capsReady && !canCreate && <ViewOnly />}
         action={
-          canCreate && (
+          canCreate &&
+          // F-1: nothing to add to while the list did not load.
+          (q.error ? (
+            <Button variant="primary" icon="plus" disabled>
+              New theme
+            </Button>
+          ) : (
             <LinkButton variant="primary" icon="plus" href="/settings/themes/new">
               New theme
             </LinkButton>
-          )
+          ))
         }
       />
       <Split inspector={current ? <ThemeInspector t={current} /> : undefined}>
-        {q.error && <Notice tone="error">{q.error}</Notice>}
-        <Panel
-          title="All themes"
-          count={themes?.length}
-          tools={
-            <label className="inline-flex items-center gap-2 text-sm text-text2">
-              <input
-                type="checkbox"
-                className="size-4 accent-[var(--accent)]"
-                checked={showArchived}
-                onChange={(e) => setShowArchived(e.target.checked)}
-              />
-              Show archived
-            </label>
-          }
-        >
-          <DataTable
-            label="Themes"
-            columns={COLUMNS}
-            rows={themes}
-            loading={q.loading}
-            rowKey={(t) => t.key}
-            group={(t) => GROUP_LABEL[t.kind]}
-            selected={current?.key}
-            onSelect={(k) => {
-              setSelected(k);
-              revealOnPhone("theme-inspector");
-            }}
-            rowProps={(t) => ({ "data-testid": `theme-row-${t.key}` })}
-            empty="No themes yet"
-          />
-        </Panel>
+        {/* F-1: a list that did not load says so, with Try again, and no empty table under it. */}
+        {q.error && <LoadError what="your themes" error={q.error} onRetry={() => void q.reload()} />}
+        {!q.error && (
+          <Panel
+            title="All themes"
+            count={themes?.length}
+            tools={
+              <label className="inline-flex items-center gap-2 text-sm text-text2">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-[var(--accent)]"
+                  checked={showArchived}
+                  onChange={(e) => setShowArchived(e.target.checked)}
+                />
+                Show archived
+              </label>
+            }
+          >
+            <DataTable
+              label="Themes"
+              columns={COLUMNS}
+              rows={themes}
+              loading={q.loading}
+              rowKey={(t) => t.key}
+              group={(t) => GROUP_LABEL[t.kind]}
+              selected={current?.key}
+              onSelect={(k) => {
+                setSelected(k);
+                revealOnPhone("theme-inspector");
+              }}
+              rowProps={(t) => ({ "data-testid": `theme-row-${t.key}` })}
+              empty="No themes yet"
+            />
+          </Panel>
+        )}
       </Split>
     </>
   );

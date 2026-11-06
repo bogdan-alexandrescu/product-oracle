@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { Button, Chip, Icon, InfoTip, Notice, PageHeader, Panel, Sheet, ViewOnly } from "@/components/ds";
+import { LoadError } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -91,7 +92,8 @@ export function AutonomySettings() {
       />
       <div className="flex flex-col gap-4 max-[600px]:gap-3">
         {saved && <Notice tone="pass">Saved. Oracle follows this from now on.</Notice>}
-        {q.error && <Notice tone="error">{q.error}</Notice>}
+        {/* F-1: a list that did not load says so, with Try again. */}
+        {q.error && <LoadError what="the autonomy levels" error={q.error} onRetry={() => void q.reload()} />}
         {q.data &&
           GROUPS.map((g) => {
             const rows = items.filter((i) => i.group === g);

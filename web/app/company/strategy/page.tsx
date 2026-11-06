@@ -112,6 +112,7 @@ export default function StrategyPage() {
               rows={listQ.data}
               loading={listQ.loading}
               error={listQ.error}
+              onRetry={() => void Promise.all([openQ.reload(), waivedQ.reload(), resolvedQ.reload()])}
               counts={{ open: openQ.data?.length, waived: waivedQ.data?.length, resolved: resolvedQ.data?.length }}
               stack={stack}
               onWaived={waived}

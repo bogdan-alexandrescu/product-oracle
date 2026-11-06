@@ -15,12 +15,12 @@ import {
   type Column,
   DataTable,
   InfoTip,
-  Notice,
   PageHeader,
   Panel,
   SegmentedControl,
   Split,
 } from "@/components/ds";
+import { LoadError } from "@/components/ui";
 import { api, unwrap, type ApiToken, type TokenKind } from "@/lib/api/client";
 import { formatDate, formatDateTime, formatDay } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -343,7 +343,7 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
         }
         status={
           <>
-            {active != null && (
+            {active != null && !tokensQ.error && (
               <Chip kind="pass" data-testid="active-count">
                 {active} active
               </Chip>
@@ -361,7 +361,7 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
       <Split>
         <Panel
           title="Tokens"
-          count={rows?.length}
+          count={tokensQ.error ? undefined : rows?.length}
           tools={
             <div className="flex flex-wrap items-end gap-2">
               <Field label="Member" htmlFor="token-member">
@@ -389,7 +389,7 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
           </div>
           {tokensQ.error ? (
             <div className="p-4">
-              <Notice tone="error">{tokensQ.error}</Notice>
+              <LoadError what="the API tokens" error={tokensQ.error} onRetry={() => void tokensQ.reload()} />
             </div>
           ) : (
             <div className={SETTLING}>

@@ -3,7 +3,8 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
-import { Button, type Column, DataTable, Icon, InfoTip, Notice, PageHeader, Panel, Split } from "@/components/ds";
+import { Button, type Column, DataTable, Icon, InfoTip, PageHeader, Panel, Split } from "@/components/ds";
+import { LoadError } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -93,7 +94,8 @@ export function WebhooksSettings() {
         }
         action={
           can("create_webhook") && (
-            <Button variant="primary" icon="plus" onClick={() => setCreating(true)}>
+            // F-1: no new webhook while the list or its event types did not load.
+            <Button variant="primary" icon="plus" disabled={!!hooksQ.error || !!typesQ.error} onClick={() => setCreating(true)}>
               New webhook
             </Button>
           )
@@ -119,10 +121,13 @@ export function WebhooksSettings() {
           )
         }
       >
-        <Panel title="Webhooks" count={hooks?.length}>
+        {typesQ.error && !hooksQ.error && (
+          <LoadError what="the kinds of event" error={typesQ.error} onRetry={() => void typesQ.reload()} />
+        )}
+        <Panel title="Webhooks" count={hooksQ.error ? undefined : hooks?.length}>
           {hooksQ.error ? (
             <div className="p-4">
-              <Notice tone="error">{hooksQ.error}</Notice>
+              <LoadError what="your webhooks" error={hooksQ.error} onRetry={() => void hooksQ.reload()} />
             </div>
           ) : (
             <DataTable

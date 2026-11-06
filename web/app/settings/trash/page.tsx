@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { entryText, itemKind } from "@/components/ArtifactMenu";
 import { Button, Chip, Empty, InfoTip, Notice, PageHeader, Panel, toast } from "@/components/ds";
+import { LoadError } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { artifactsChanged } from "@/lib/artifacts";
 import { formatDateTime } from "@/lib/format";
@@ -89,9 +90,14 @@ export default function TrashPage() {
       {!loading && !sees ? (
         <Notice>Only owners delete and restore artifacts.</Notice>
       ) : (
-        <Panel title="Deleted" count={q.data?.length}>
-          {q.error && <Notice tone="error">{q.error}</Notice>}
-          {q.data && q.data.length === 0 && (
+        <Panel title="Deleted" count={q.error ? undefined : q.data?.length}>
+          {/* F-1: a list that did not load says so, with Try again, and nothing under it. */}
+          {q.error && (
+            <div className="p-4">
+              <LoadError what="the trash" error={q.error} onRetry={() => void q.reload()} />
+            </div>
+          )}
+          {!q.error && q.data && q.data.length === 0 && (
             <Empty testId="trash-empty">
               <span className="inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
                 Trash is empty.
@@ -112,7 +118,7 @@ export default function TrashPage() {
               </span>
             </Empty>
           )}
-          {q.data && q.data.length > 0 && (
+          {!q.error && q.data && q.data.length > 0 && (
             <ul className="divide-y divide-line">
               {q.data.map((e) => (
                 <Row key={e.id} e={e} onRestored={() => q.setData((rows) => rows?.filter((r) => r.id !== e.id))} />

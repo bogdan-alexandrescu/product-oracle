@@ -35,6 +35,7 @@ import {
   type InspectorStat,
 } from "@/components/ds";
 import { ClaudeOffNotice, limitWord } from "@/components/ClaudeOffNotice";
+import { LoadError } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatPercent, inWords } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -119,8 +120,9 @@ export function ClaudeAccounts() {
           ) : null
         }
       />
-      {q.error && <Notice tone="error">{q.error}</Notice>}
-      {q.loading && !q.data && (
+      {/* F-1: a list that did not load says so, with Try again (no Add account under it). */}
+      {q.error && <LoadError what="your Claude accounts" error={q.error} onRetry={() => void q.reload()} />}
+      {q.loading && !q.data && !q.error && (
         <Panel title="Accounts">
           <DataTable<Account>
             label="Subscription accounts"
@@ -823,7 +825,7 @@ function HoldingNow({ account, now, zone }: { account: Account; now: number; zon
   if (q.error)
     return (
       <div className="mt-2">
-        <Notice tone="error">{q.error}</Notice>
+        <LoadError what="who holds it" error={q.error} onRetry={() => void q.reload()} />
       </div>
     );
   const b = q.data!;
@@ -862,7 +864,7 @@ function HoldingHistory({ account, now, zone }: { account: Account; now: number;
   if (q.error)
     return (
       <div className="mt-2">
-        <Notice tone="error">{q.error}</Notice>
+        <LoadError what="its history" error={q.error} onRetry={() => void q.reload()} />
       </div>
     );
   const h = q.data!;

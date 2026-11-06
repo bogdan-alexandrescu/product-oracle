@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 
-import { Button, Notice, Sheet } from "@/components/ds";
-import { ErrorNote } from "@/components/ui";
+import { Button, Sheet } from "@/components/ds";
+import { ErrorNote, LoadError } from "@/components/ui";
 import { Field, SELECT_FIELD } from "@/app/settings/_components/fields";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
@@ -65,7 +65,7 @@ export function DeliveryLog({ hook, eventTypes, version, onChanged }: { hook: We
       </div>
       <p className="text-[13px] leading-[18px] text-text2">Times are in Company time.</p>
       {q.error ? (
-        <Notice tone="error">{q.error}</Notice>
+        <LoadError what="the deliveries" error={q.error} onRetry={() => void q.reload()} />
       ) : (
         <ul aria-label="Delivery log" data-testid="delivery-cards" className="flex flex-col divide-y divide-line rounded-lg border border-line">
           {!rows ? (
