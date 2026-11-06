@@ -1573,7 +1573,8 @@ async def read(
         return OnePagerFixed(
             change_id=c.id,
             words=f"Fixed: set to {c.after.get('number') or ''} in “{heading}”",
-            can_undo=c.by == me
+            can_undo=c.status == "applied"
+            and c.by == me
             and s is not None
             and s.closed_at is None
             and (s.last_change_at or s.started_at) > now - IDLE,
