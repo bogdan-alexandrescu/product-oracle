@@ -66,18 +66,21 @@ const SUBJECT_WORD: Record<Finding["subject_kind"], string> = { entity: "A goal"
 
 /**
  * What a finding is about, in words: the goal, choice or item by name. pass F F-41: never its
- * reference (a slug such as "product-strategy-team-plans"); a choice is also found by its key.
+ * reference (a slug such as "product-strategy-team-plans"); a choice is also found by its whole key.
  */
 export function subjectName(f: Finding, stack: Stack | undefined): string {
   const title = typeof f.detail?.title === "string" ? f.detail.title : null;
   if (title) return title;
   const choices = stack?.strategy?.choices ?? [];
   const goals = [...choices.flatMap((c) => c.goals), ...(stack?.unaligned.goals ?? [])];
+  // A choice's key is the strategy document's slug and its id ("product-strategy-team-plans"),
+  // matched whole: "plans" is not "team-plans".
   const key = f.subject_ref.replace(/^[a-z_]+:/, "");
+  const slug = stack?.strategy?.document.slug;
   const named =
     goals.find((g) => g.id === f.subject_id) ??
     choices.find((c) => c.entity_id === f.subject_id) ??
-    choices.find((c) => key === c.id || key.endsWith(`-${c.id}`));
+    choices.find((c) => key === c.id || (slug != null && key === `${slug}-${c.id}`));
   if (named) return named.title;
   if (f.subject_kind === "document") return f.kind === "vision_review_due" ? "Vision" : "Product strategy";
   if (f.subject_ref.startsWith("strategy_choice:")) return "A focus choice";

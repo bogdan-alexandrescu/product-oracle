@@ -125,6 +125,7 @@ export function seedStrategy(uuid: () => string, entities: GoalRow[] = [], { vis
   const retention = node("retention", "Retention");
   const reports = node("custom-reports", "Custom report builder");
   const items = [uuid(), uuid(), uuid()];
+  const reportsChoice = uuid();
   const findings = [
     finding(uuid(), { subject_id: retention.id, subject_ref: "goal:retention" }),
     finding(uuid(), {
@@ -141,7 +142,7 @@ export function seedStrategy(uuid: () => string, entities: GoalRow[] = [], { vis
         subject_kind: "roadmap_item",
         subject_id: id,
         subject_ref: i === 0 ? "report-export" : "report-scheduling",
-        detail: { horizon: i === 0 ? "now" : "next", title: i === 0 ? "Report export" : "Report scheduling", draft: false },
+        detail: { horizon: i === 0 ? "now" : "next", title: i === 0 ? "Report export" : "Report scheduling", draft: false, choice_ids: [reportsChoice] },
       }),
     ),
     finding(uuid(), {
@@ -174,7 +175,7 @@ export function seedStrategy(uuid: () => string, entities: GoalRow[] = [], { vis
         choices: [
           { entity_id: uuid(), id: "self-serve", title: "Self-serve onboarding", stance: "focus", goals: [{ ...activation, items: 3 }, { ...conversion, items: 2 }], features: [], items: 4, open_findings: 0 },
           { entity_id: uuid(), id: "team-plans", title: "Team plans", stance: "focus", goals: [], features: [], items: 1, open_findings: 0 },
-          { entity_id: uuid(), id: "custom-reports", title: "Custom report builder", stance: "stop", goals: [], features: [reports], items: 2, open_findings: 2 },
+          { entity_id: reportsChoice, id: "custom-reports", title: "Custom report builder", stance: "stop", goals: [], features: [reports], items: 2, open_findings: 2 },
         ],
       },
       unaligned: {

@@ -64,8 +64,16 @@ export function stackRows(stack: Stack | undefined, open: Finding[]): StackRow[]
   return rows;
 }
 
-// pass F F-44: on a phone an empty cell shows nothing, not a bare dash.
-const dash = <span className="text-text2 max-[600px]:hidden">—</span>;
+// pass F F-44: on a phone an empty cell shows nothing, not a bare dash, and its label goes with
+// it: the cell is hidden whole (data-empty).
+const dash = (
+  <span data-empty className="text-text2">
+    —
+  </span>
+);
+const EMPTY_ON_PHONE = "max-[600px]:has-[[data-empty]]:hidden";
+/** On a phone only: the cell is dropped (its value is the row's title there). */
+const phoneOnlyEmpty = <span data-empty hidden />;
 
 /**
  * The strategy stack (B1 Split): the vision, each focus choice, the goals derived from it
@@ -101,7 +109,22 @@ export function StackTable({
       header: "Focus choice",
       phone: "title",
       wrap: true,
-      cell: (r) => <span data-col="choice">{r.choice ? <span className="font-medium">{r.choice.title}</span> : dash}</span>,
+      cell: (r) => (
+        <span data-col="choice">
+          {r.choice ? (
+            <span className="font-medium">{r.choice.title}</span>
+          ) : (
+            // A line with no choice is titled on a phone with its goal or item, not a blank line.
+            <>
+              <span className="text-text2 max-[600px]:hidden">—</span>
+              <span className="hidden font-medium max-[600px]:inline">
+                {r.goal?.title ?? r.item?.title}
+                {r.item?.draft && <span className="ml-1 font-normal text-text2">(draft)</span>}
+              </span>
+            </>
+          )}
+        </span>
+      ),
     },
     {
       key: "goal",
@@ -109,9 +132,11 @@ export function StackTable({
       phone: "meta",
       phoneLabel: "Goal",
       wrap: true,
+      className: EMPTY_ON_PHONE,
       cell: (r) => (
         <span data-col="goal">
           {r.goal ? r.goal.title : r.choice ? <span className="text-warn">No goal</span> : dash}
+          {r.goal && !r.choice && phoneOnlyEmpty}
         </span>
       ),
     },
@@ -122,12 +147,14 @@ export function StackTable({
       phone: "meta",
       phoneLabel: "Roadmap items",
       wrap: true,
+      className: EMPTY_ON_PHONE,
       cell: (r) => (
         <span data-col="items" className="tnum">
           {r.item ? (
             <>
               {r.item.title}
               {r.item.draft && <span className="ml-1 text-text2">(draft)</span>}
+              {phoneOnlyEmpty}
             </>
           ) : r.items != null ? (
             plural(r.items, "item")

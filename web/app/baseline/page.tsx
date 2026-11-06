@@ -85,12 +85,19 @@ function BuildRefusedFromUrl() {
   return <Notice testId="build-refused">Approvers and owners build the baseline.</Notice>;
 }
 
-/** ?add=goal opens Add goal (Company › Strategy's Add a goal, pass F F-42). */
+/** ?add=goal opens Add goal (Company › Strategy's Add a goal, pass F F-42), once: the address drops it, so closing Add goal leaves no ?add behind. */
 function AddFromUrl({ onAdd }: { onAdd: (kind: AddKind) => void }) {
-  const add = useSearchParams().get("add");
+  const params = useSearchParams();
+  const router = useRouter();
+  const add = params.get("add");
   useEffect(() => {
-    if (add === "goal") onAdd("goal");
-  }, [add, onAdd]);
+    if (add !== "goal") return;
+    onAdd("goal");
+    const next = new URLSearchParams(params.toString());
+    next.delete("add");
+    const rest = next.toString();
+    router.replace(rest ? `/baseline?${rest}` : "/baseline", { scroll: false });
+  }, [add, onAdd, params, router]);
   return null;
 }
 

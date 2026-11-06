@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { Button, Chip, InfoTip, LinkButton, Panel } from "@/components/ds";
 import { assess, type GoalView } from "@/app/home/_goals";
 
 import { CompanyEmpty } from "../../_empty";
-import { BELIEF, DOC, plural, shortDate, type Choice, type DocKind, type DocRef, type Stack } from "./lib";
+import { BELIEF, DOC, findingsAbout, plural, shortDate, subjectName, type Choice, type DocKind, type DocRef, type Finding, type Stack } from "./lib";
 
 /** The card's footer of document buttons: Open, and for owners New (none yet) or Draft next version; none when neither. */
 function DocButtons({
@@ -218,23 +218,51 @@ function FocusRow({ c, goals, canAddGoal, onPick }: { c: Choice; goals: Map<stri
   );
 }
 
-function StopRow({ c }: { c: Choice }) {
+function StopRow({ c, open }: { c: Choice; open: Finding[] }) {
   const planned = c.items;
+  const [shown, setShown] = useState(false);
+  // The planned items, by their findings (each names the stop choices it is planned against).
+  const items = findingsAbout(open, c.entity_id).filter((f) => f.kind === "stopped_but_planned" && f.subject_kind === "roadmap_item");
   return (
     <li data-testid="stop-row" className="flex min-w-0 flex-col gap-1.5 border-t border-line py-2.5">
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
         <span className="min-w-0 flex-1 font-semibold [overflow-wrap:anywhere]">{c.title}</span>
         {planned > 0 ? (
-          // pass F F-42: the planned items are on the Plan, where they are moved or dropped.
-          <Link href="/plan" data-testid="stop-planned" data-tone="fail" className="tnum text-sm font-semibold text-crit hover:underline">
+          // pass F F-42: the count opens the items it counts, each on the Plan, where it is moved or dropped.
+          <button
+            type="button"
+            data-testid="stop-planned"
+            data-tone="fail"
+            aria-expanded={shown}
+            onClick={() => setShown((v) => !v)}
+            className="tnum cursor-pointer text-sm font-semibold text-crit hover:underline"
+          >
             {plural(planned, "item")} still planned
-          </Link>
+          </button>
         ) : (
           <span data-testid="stop-planned" data-tone="pass" className="tnum text-sm font-semibold text-text2">
             Nothing planned
           </span>
         )}
       </div>
+      {shown && planned > 0 && (
+        <ul data-testid="stop-items" className="flex flex-col gap-1 text-sm">
+          {items.map((f) => (
+            <li key={f.id}>
+              <Link href={`/plan?item=${encodeURIComponent(f.subject_ref)}`} className="font-medium text-accent-ink hover:underline [overflow-wrap:anywhere]">
+                {subjectName(f, undefined)}
+              </Link>
+            </li>
+          ))}
+          {items.length < planned && (
+            <li>
+              <Link href="/plan" className="font-medium text-accent-ink hover:underline">
+                {items.length ? "The rest on the Plan" : "Open the Plan"}
+              </Link>
+            </li>
+          )}
+        </ul>
+      )}
       {c.features.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {c.features.map((f) => (
@@ -258,6 +286,7 @@ export function StrategyCard({
   canAddGoal,
   onPick,
   onDraft,
+  open,
 }: {
   stack: Stack | undefined;
   load: StackLoad;
@@ -269,6 +298,8 @@ export function StrategyCard({
   /** Opens the stack line with this key (pass F F-42). */
   onPick: (key: string) => void;
   onDraft: (kind: DocKind) => void;
+  /** The open findings: a stop choice's planned items are named by theirs. */
+  open: Finding[];
 }) {
   const s = stack?.strategy ?? null;
   const focus = s?.choices.filter((c) => c.stance === "focus") ?? [];
@@ -300,7 +331,7 @@ export function StrategyCard({
             {stop.length ? (
               <ul>
                 {stop.map((c) => (
-                  <StopRow key={c.entity_id} c={c} />
+                  <StopRow key={c.entity_id} c={c} open={open} />
                 ))}
               </ul>
             ) : (

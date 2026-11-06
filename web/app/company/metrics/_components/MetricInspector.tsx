@@ -119,10 +119,13 @@ export function MetricInspector({
                 run(async () => {
                   await unwrap(api.POST("/v1/metrics/{metric_id}/archive", path));
                   // pass F F-46: Archive acts at once, so the toast offers the way back.
-                  toast({
-                    message: `Archived ${metric.title}`,
-                    action: { label: "Undo", onClick: () => void unwrap(api.POST("/v1/metrics/{metric_id}/restore", path)).then(onChanged) },
-                  });
+                  // A restore that fails says so, with Undo again (the toast is gone from the panel).
+                  const undo = { label: "Undo", onClick: () => void restore() };
+                  const restore = () =>
+                    unwrap(api.POST("/v1/metrics/{metric_id}/restore", path)).then(onChanged, () =>
+                      toast({ message: `Could not restore ${metric.title}`, action: undo }),
+                    );
+                  toast({ message: `Archived ${metric.title}`, action: undo });
                 })
               }
             >

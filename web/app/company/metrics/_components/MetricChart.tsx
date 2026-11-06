@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
 
 import { InfoTip } from "@/components/ds";
 
@@ -17,9 +17,11 @@ const round = (v: number) => Math.round(v * 100) / 100;
 
 /**
  * A metric's weekly values (up to 52 weeks): dates on the x axis (first, middle and last
- * week), the lowest and highest value on the y axis, the linked goal's target as a line, the
- * last 6 weeks shaded, a dashed line where its definition changed, and the normal range band
- * (the week before ± 2 × the typical change). Each week reads its value on hover or focus.
+ * week), the chart's top and bottom on the y axis (the range it draws: every week, the band and
+ * the target), the linked goal's target as a line, the last 6 weeks shaded, a dashed line where
+ * its definition changed, and the normal range band (the week before ± 2 × the typical change).
+ * Each week reads its value on hover; the chart is one tab stop, moved week by week with the
+ * arrow keys (Home and End for the first and last week).
  */
 export function MetricChart({ metric, target = null }: { metric: MetricDetail; target?: number | null }) {
   const [active, setActive] = useState<number | null>(null);
@@ -60,12 +62,37 @@ export function MetricChart({ metric, target = null }: { metric: MetricDetail; t
   const step = values.length > 1 ? (right - LEFT) / (values.length - 1) : right - LEFT;
   const shown = active != null ? values[active] : null;
   const anchor = (i: number) => (i === 0 ? "start" : i === values.length - 1 ? "end" : "middle");
+  const weekLabel = (v: (typeof values)[number]) => `Week of ${weekText(v.week_start)}: ${valueText(v.value, metric.unit)}`;
+  const onKey = (e: KeyboardEvent<SVGSVGElement>) => {
+    const at = active ?? values.length - 1;
+    const to =
+      e.key === "ArrowLeft" || e.key === "ArrowDown"
+        ? at - 1
+        : e.key === "ArrowRight" || e.key === "ArrowUp"
+          ? at + 1
+          : e.key === "Home"
+            ? 0
+            : e.key === "End"
+              ? values.length - 1
+              : null;
+    if (to == null) return;
+    e.preventDefault();
+    setActive(Math.min(Math.max(to, 0), values.length - 1));
+  };
   return (
     <figure className="flex flex-col gap-1" data-testid="metric-chart">
       <svg
         viewBox={`0 0 ${W} ${H}`}
-        className="h-auto w-full overflow-visible"
-        role="group"
+        className="h-auto w-full overflow-visible rounded-sm outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent"
+        role="slider"
+        tabIndex={0}
+        aria-valuemin={0}
+        aria-valuemax={values.length - 1}
+        aria-valuenow={active ?? values.length - 1}
+        aria-valuetext={weekLabel(values[active ?? values.length - 1])}
+        onFocus={() => setActive((a) => a ?? values.length - 1)}
+        onBlur={() => setActive(null)}
+        onKeyDown={onKey}
         aria-label={`${values.length} weekly values from the week of ${weekText(first.week_start)} to the week of ${weekText(last.week_start)}, last ${valueText(last.value, metric.unit)}`}
         onMouseLeave={() => setActive(null)}
       >
@@ -106,18 +133,12 @@ export function MetricChart({ metric, target = null }: { metric: MetricDetail; t
         {values.map((v, i) => (
           <rect
             key={v.week_start}
-            role="button"
-            tabIndex={0}
-            aria-label={`Week of ${weekText(v.week_start)}: ${valueText(v.value, metric.unit)}`}
             x={x(i) - step / 2}
             y={0}
             width={step}
             height={bottom}
             fill="transparent"
-            className="outline-none"
             onMouseEnter={() => setActive(i)}
-            onFocus={() => setActive(i)}
-            onBlur={() => setActive(null)}
           />
         ))}
         {shown && active != null && (
@@ -149,7 +170,8 @@ export function MetricChart({ metric, target = null }: { metric: MetricDetail; t
           One point per week.{target != null && ` The dashed green line is the goal's target, ${valueText(target, metric.unit)}.`}
           {shaded && " Shaded: the last 6 weeks."}
           {band && " The band is the normal range."}
-          {changes.length > 0 && " Dashed: the definition changed."} Point at a week or tab to it to read its value.
+          {changes.length > 0 && " Dashed: the definition changed."} The numbers on the left are the chart&apos;s top and bottom. Point at a
+          week, or tab to the chart and use the arrow keys, to read its value.
         </InfoTip>
       </figcaption>
     </figure>

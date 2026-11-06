@@ -116,6 +116,7 @@ export default function StrategyPage() {
           canAddGoal={can("confirm_entity")}
           onPick={(key) => pick(key, true)}
           onDraft={setDrafting}
+          open={open}
         />
       </div>
       <div ref={stackPanel} className="scroll-mt-4" />
