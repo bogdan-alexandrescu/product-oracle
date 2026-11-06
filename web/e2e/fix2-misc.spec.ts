@@ -150,14 +150,14 @@ test("analytics: the PostHog form says where to find each value and why Save wai
   const form = page.getByTestId("analytics-posthog");
   await expect(form.getByText("Project ID", { exact: true })).toBeVisible();
   await expect(form).not.toContainText("Project id");
-  await form.getByRole("button", { name: "About the project ID" }).click();
+  await form.getByRole("button", { name: "About where to find the project" }).click();
   await expect(form.getByRole("tooltip").filter({ hasText: "Find it in PostHog › Project settings." })).toBeVisible();
-  await form.getByRole("button", { name: "About the project ID" }).click();
-  await form.getByRole("button", { name: "About the personal API key" }).click();
+  await form.getByRole("button", { name: "About where to find the project" }).click();
+  await form.getByRole("button", { name: "About making a key" }).click();
   await expect(
     form.getByRole("tooltip").filter({ hasText: "Make one in PostHog › Account settings › Personal API keys." }),
   ).toBeVisible();
-  await form.getByRole("button", { name: "About the personal API key" }).click();
+  await form.getByRole("button", { name: "About making a key" }).click();
   const save = form.getByRole("button", { name: "Save" });
   await expect(save).toHaveAttribute("data-variant", "primary");
   await expect(save).toBeDisabled();

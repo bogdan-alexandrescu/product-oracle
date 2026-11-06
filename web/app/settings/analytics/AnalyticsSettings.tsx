@@ -122,7 +122,7 @@ export function AnalyticsSettings() {
           {a.last_error && <ErrorNote>{a.last_error}</ErrorNote>}
           <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
             Host
-            <select className={INPUT} value={hostChoice} onChange={(e) => setHost(e.target.value)}>
+            <select aria-label="Host" className={INPUT} value={hostChoice} onChange={(e) => setHost(e.target.value)}>
               <option value="us">US</option>
               <option value="eu">EU</option>
               <option value="own">Your own server</option>
@@ -130,7 +130,7 @@ export function AnalyticsSettings() {
           </label>
           {hostChoice === "own" && (
             <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
-              Own host address
+              Server address
               <input className={INPUT} value={ownValue} placeholder="https://posthog.example.com" onChange={(e) => setOwnHost(e.target.value)} />
             </label>
           )}
@@ -139,14 +139,14 @@ export function AnalyticsSettings() {
           <div className="flex flex-col gap-1">
             <span className="flex items-center gap-1.5 text-sm font-semibold text-text2">
               <label htmlFor="posthog-project">Project ID</label>
-              <InfoTip label="the project ID">Find it in PostHog › Project settings.</InfoTip>
+              <InfoTip label="where to find the project">Find it in PostHog › Project settings.</InfoTip>
             </span>
             <input id="posthog-project" className={INPUT} value={projectValue} inputMode="numeric" onChange={(e) => setProject(e.target.value)} />
           </div>
           <div className="flex flex-col gap-1">
             <span className="flex items-center gap-1.5 text-sm font-semibold text-text2">
               <label htmlFor="posthog-key">Personal API key</label>
-              <InfoTip label="the personal API key">Make one in PostHog › Account settings › Personal API keys.</InfoTip>
+              <InfoTip label="making a key">Make one in PostHog › Account settings › Personal API keys.</InfoTip>
             </span>
             <input
               id="posthog-key"

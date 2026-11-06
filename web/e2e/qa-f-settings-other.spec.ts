@@ -1,6 +1,5 @@
 import { expect, test, type Page } from "./test";
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /*
@@ -11,9 +10,9 @@ import { login } from "./helpers";
  */
 
 const PHONE = { width: 390, height: 844 };
-const PRD = "Usage alerts PRD";
+const PRD = "Checkout redesign PRD";
 
-/** Deletes the run-review scenario's Usage alerts PRD from PRDs; returns how the dialog named its run. */
+/** Deletes Checkout redesign PRD from PRDs; returns how the dialog named its first run. */
 async function deletePrd(page: Page): Promise<string> {
   await page.goto("/documents");
   const row = page.getByTestId("document-row").filter({ hasText: PRD });
@@ -23,6 +22,9 @@ async function deletePrd(page: Page): Promise<string> {
   const run = dialog.getByTestId("delete-run").first();
   await expect(run).toHaveText(/^The run of [A-Z][a-z]{2} \d{1,2} that wrote /);
   const runText = (await run.textContent())!.trim();
+  // A published PRD asks once more.
+  const external = dialog.getByLabel("Delete it here; the external copy stays where it is");
+  if (await external.isVisible()) await external.check();
   await dialog.getByRole("button", { name: "Move to Trash" }).click();
   await expect(dialog).toHaveCount(0);
   return runText;
@@ -51,7 +53,6 @@ for (const phone of [false, true]) {
     });
 
     test("F-68, F-69: Trash names a run as the delete dialog did, restores naming every item, deletes for good", async ({ page }) => {
-      await page.addInitScript(([k, s]) => localStorage.setItem(k, s), [MOCK_SCENARIO_KEY, "run-review"] as const);
       await login(page);
       const runText = await deletePrd(page);
 
@@ -73,7 +74,7 @@ for (const phone of [false, true]) {
       await deletePrd(page);
       await page.goto("/settings/trash");
       await entry.getByRole("button", { name: `Delete ${PRD} for good` }).click();
-      const ask = page.getByRole("dialog");
+      const ask = page.getByRole("alertdialog");
       await expect(ask).toContainText("This cannot be undone.");
       await ask.getByRole("button", { name: "Delete for good" }).click();
       await expect(entry).toHaveCount(0);
@@ -91,7 +92,7 @@ for (const phone of [false, true]) {
       await page.goto("/settings/trash");
       await expect(page.getByTestId("trash-entry").first()).toBeVisible();
       await page.getByRole("button", { name: "Empty Trash" }).click();
-      await page.getByRole("dialog").getByRole("button", { name: "Empty Trash" }).click();
+      await page.getByRole("alertdialog").getByRole("button", { name: "Empty Trash" }).click();
       await expect(page.getByTestId("trash-empty")).toBeVisible();
       await page.reload();
       await expect(page.getByTestId("trash-empty")).toBeVisible();

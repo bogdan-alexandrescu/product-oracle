@@ -28,14 +28,14 @@ test("analytics: the page's and each field's explanation sit behind an (i)", asy
   );
   await panelAbout.click();
 
-  const projectAbout = form.getByRole("button", { name: "About the project ID" });
+  const projectAbout = form.getByRole("button", { name: "About where to find the project" });
   const projectTip = form.locator('[role="tooltip"]').filter({ hasText: "Find it in PostHog" });
   await expect(projectTip).toBeHidden();
   await projectAbout.click();
   await expect(projectTip).toHaveText("Find it in PostHog › Project settings.");
   await projectAbout.click();
 
-  const keyAbout = form.getByRole("button", { name: "About the personal API key" });
+  const keyAbout = form.getByRole("button", { name: "About making a key" });
   const keyTip = form.locator('[role="tooltip"]').filter({ hasText: "Make one in PostHog" });
   await expect(keyTip).toBeHidden();
   await keyAbout.click();
@@ -57,13 +57,13 @@ test("analytics: the host options are US, EU and Your own server; Your own serve
   await expect(select.locator("option")).toHaveText(["US", "EU", "Your own server"]);
   // Nothing is saved; this is the frontend's own default, not an API one (see file header).
   await expect(select).toHaveValue("eu");
-  await expect(page.getByLabel("Own host address")).toHaveCount(0);
+  await expect(page.getByLabel("Server address")).toHaveCount(0);
 
   await select.selectOption({ label: "Your own server" });
-  const address = page.getByLabel("Own host address");
+  const address = page.getByLabel("Server address");
   await expect(address).toBeVisible();
   await address.fill("https://posthog.example.com");
 
   await select.selectOption({ label: "US" });
-  await expect(page.getByLabel("Own host address")).toHaveCount(0);
+  await expect(page.getByLabel("Server address")).toHaveCount(0);
 });

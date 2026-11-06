@@ -341,7 +341,7 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
             {inRows && rows ? (
               <div className="flex flex-col gap-3">
                 <Field label="Theme">
-                  <select className={SELECT_FIELD} value={rows.theme} onChange={(e) => updateRows({ theme: e.target.value })}>
+                  <select aria-label="Theme" className={SELECT_FIELD} value={rows.theme} onChange={(e) => updateRows({ theme: e.target.value })}>
                     {(themeOptions.length ? themeOptions : [{ key: rows.theme, name: themeName(rows.theme) }]).map((th) => (
                       <option key={th.key} value={th.key}>
                         {th.name}
