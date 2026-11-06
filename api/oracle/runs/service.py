@@ -325,6 +325,11 @@ ORACLE_KNOBS = (
     "draft_items_reused",
     # #482: a Regenerate's note to the agents (oracle.trash.regenerate).
     "regenerate_note",
+    # prd-reads-working-draft: which company roadmap the run read ("Company roadmap,
+    # working draft (edited Nov 5, 2026, 11:40 PM PST)"; oracle.simple.roadmap_of_record).
+    "roadmap_read",
+    # The roadmap each step read, by step name ({"prd_draft": "Company roadmap v7 ..."}).
+    "roadmap_read_by",
 )
 ITEMS_FILE = "roadmap_items.yaml"
 
@@ -724,6 +729,7 @@ def _summary(
         source=refs.sources.get(source_id) if source_id else None,
         template=run.knobs.get("template"),
         theme=run.knobs.get("theme"),
+        roadmap_read=run.knobs.get("roadmap_read"),
         estimate_usd=_usd(run.estimate_usd),
         spent_usd=float(run.spent_usd or 0),
         created_by=run.created_by,
@@ -3044,6 +3050,7 @@ async def _prompt_context(
                 else []
             ),
             *await eng_dates.prompt_lines(db, run, segment.name),
+            *await _roadmap_lines(db, run, segment.name, kind, hidden),
             *_regenerate_note(run, hidden),
             *await _carried_lines(db, run, segment.name),
         ],
@@ -3059,6 +3066,34 @@ async def _prompt_context(
         if (reused := run.knobs.get("reuse_baseline")) and segment.name != "baseline"
         else None,
     )
+
+
+async def _roadmap_lines(
+    db: AsyncSession, run: Run, segment: str, kind: str | None, hidden: Any
+) -> list[str]:
+    """prd-reads-working-draft: a PRD's run follows the company roadmap of record (its
+    working draft when newer than the published version; oracle.simple.roadmap_of_record)
+    and keeps the words saying which one it read (``roadmap_read``, the run page's)."""
+    from oracle.simple import roadmap_of_record
+
+    if run.flow not in roadmap_of_record.FLOWS or segment not in roadmap_of_record.SEGMENTS:
+        return []
+    if kind != "prd":
+        return []
+    # The draft is read by its own rule (oracle.simple.drafts.sees): the run reads it when
+    # the person who started the run may see it (the owner always may), else the published
+    # version; a run nobody started (Oracle's own) has nobody who may see it, so it reads
+    # the published version.
+    record = await roadmap_of_record.read(db, reader=run.created_by)
+    if record is None:
+        return []
+    # Each step keeps the roadmap it read (``roadmap_read_by``); ``roadmap_read`` is the
+    # last step's, the one the run page shows.
+    knobs = dict(run.knobs or {})
+    by_step = {**(knobs.get("roadmap_read_by") or {}), segment: record.label}
+    if knobs.get("roadmap_read") != record.label or knobs.get("roadmap_read_by") != by_step:
+        run.knobs = {**knobs, "roadmap_read": record.label, "roadmap_read_by": by_step}
+    return roadmap_of_record.prompt_lines(record, run.document_id, hidden)
 
 
 async def _carried_lines(db: AsyncSession, run: Run, segment: str) -> list[str]:

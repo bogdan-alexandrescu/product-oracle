@@ -1015,6 +1015,10 @@ class RunSummary(BaseModel):
     source: VersionSource | None = None
     template: str | None = None
     theme: str | None = None
+    # prd-reads-working-draft: the company roadmap a PRD's run read, in words ("Company
+    # roadmap, working draft (edited Nov 5, 2026, 11:40 PM PST)" or "Company roadmap v7
+    # (published Nov 4)"); None before it read one, and on other runs.
+    roadmap_read: str | None = None
     estimate_usd: float | None = None
     spent_usd: float
     created_by: uuid.UUID | None = None

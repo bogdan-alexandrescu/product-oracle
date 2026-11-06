@@ -153,6 +153,31 @@ async def trashed_keys(db: AsyncSession, roadmap_document_id: Any) -> set[str]:
     return set(await db.scalars(stmt))
 
 
+async def trashed_names(db: AsyncSession, roadmap_document_id: Any) -> dict[str, str]:
+    """prd-reads-working-draft: the roadmap's features in Trash, key -> title (a PRD's run
+    is told to leave them out, oracle.simple.roadmap_of_record)."""
+    return {key: title for key, title, _ in await trashed_rows(db, roadmap_document_id)}
+
+
+async def trashed_rows(
+    db: AsyncSession, roadmap_document_id: Any
+) -> list[tuple[str, str, uuid.UUID | None]]:
+    """The roadmap's features in Trash as (key, title, the PRD they belong to), oldest first
+    (a member-view run leaves out those of a PRD a commenter may not see)."""
+    if roadmap_document_id is None:
+        return []
+    stmt = (
+        select(RoadmapItem.item_key, RoadmapItem.title, RoadmapItem.prd_document_id)
+        .where(
+            RoadmapItem.roadmap_document_id == roadmap_document_id,
+            RoadmapItem.deleted_at.is_not(None),
+        )
+        .order_by(RoadmapItem.deleted_at)
+        .execution_options(**ALL)
+    )
+    return [(k, t, p) for k, t, p in (await db.execute(stmt)).all()]
+
+
 async def _feature_rows(db: AsyncSession, row: RoadmapItem) -> list[RoadmapItem]:
     """The item and its rows on the roadmap's other versions and drafts (same key), so no
     version the reader may see shows it while it is in Trash."""

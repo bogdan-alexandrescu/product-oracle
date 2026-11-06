@@ -38033,6 +38033,8 @@ export interface components {
             template?: string | null;
             /** Theme */
             theme?: string | null;
+            /** Roadmap Read */
+            roadmap_read?: string | null;
             /** Estimate Usd */
             estimate_usd?: number | null;
             /** Spent Usd */
@@ -38306,6 +38308,8 @@ export interface components {
             template?: string | null;
             /** Theme */
             theme?: string | null;
+            /** Roadmap Read */
+            roadmap_read?: string | null;
             /** Estimate Usd */
             estimate_usd?: number | null;
             /** Spent Usd */
