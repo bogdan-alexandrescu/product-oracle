@@ -1475,6 +1475,9 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
             and the review panel; each column sticks and scrolls inside itself. */}
         {onDocument && calm && version && (
           <PrdLook
+            doc={doc}
+            n={n}
+            view={view}
             sections={shownSections}
             current={openKey}
             onRead={read}

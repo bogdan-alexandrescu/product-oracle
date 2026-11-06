@@ -150,6 +150,11 @@ export async function openSection(page: Page, key: string): Promise<Locator> {
   else await page.evaluate((k) => (window.location.hash = k), key);
   const s = section(page, key);
   await expect(s).toBeVisible();
+  // A PRD reads as one document (PT1 a): wait until the page has scrolled to the section and lit it.
+  if (await page.getByTestId("prd-look").filter({ visible: true }).count()) {
+    await expect(page.locator(`[data-prd-sec="${key}"]`).filter({ visible: true })).toHaveAttribute("data-current", "");
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  }
   return s;
 }
 

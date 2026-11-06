@@ -38,7 +38,7 @@ const bars = (page: Page) => page.getByTestId("review-bar").filter({ visible: tr
 /** Scrolls with the mouse wheel until the section's top passes the reading line. */
 async function scrollTo(page: Page, key: string) {
   const el = page.locator(`[data-prd-sec="${key}"]`);
-  await page.mouse.move(700, 500);
+  await page.mouse.move(Math.min(700, page.viewportSize()!.width / 2), 500);
   for (let i = 0; i < 80; i++) {
     const top = (await el.boundingBox())!.y;
     if (top < 120) break;
@@ -80,7 +80,7 @@ for (const size of DESKTOP)
       if (theme === "dark") expect(r).toBeLessThan(80);
       else expect(r).toBeGreaterThan(200);
       // The contents number the same way and show each section's review state.
-      await expect(contents(page).getByRole("button", { name: /^10\s*Milestones/ })).toBeVisible();
+      await expect(contents(page).getByRole("link", { name: /^10\s*Milestones/ })).toBeVisible();
       await expect(contents(page).getByRole("img", { name: "Not reviewed" }).first()).toBeVisible();
     });
 
@@ -110,7 +110,7 @@ for (const size of DESKTOP)
       // The rail stays in view while the page scrolls.
       await expect(rail).toBeInViewport();
 
-      await rail.getByRole("button", { name: /^7\s*Billing/ }).click();
+      await rail.getByRole("link", { name: /^7\s*Billing/ }).click();
       await expect(lit(page)).toHaveText(/^7\s*Billing/);
       await expect(section(page, "ch-7").getByRole("heading").first()).toBeInViewport();
       const top = (await section(page, "ch-7").boundingBox())!.y;
@@ -118,10 +118,10 @@ for (const size of DESKTOP)
       await expect(section(page, "ch-7").getByTestId("review-bar")).toBeVisible();
       await expect(bars(page)).toHaveCount(1);
       // The picked chapter opens its parts in the rail; Find a section reaches any of them.
-      await expect(rail.getByRole("button", { name: /^7\.3\s*Invoices/ })).toBeVisible();
+      await expect(rail.getByRole("link", { name: /^7\.3\s*Invoices/ })).toBeVisible();
       await rail.getByRole("button", { name: "Contents: find a section" }).click();
       await rail.getByLabel("Find a section").fill("Quiet hours");
-      await rail.getByRole("button", { name: /^8\.4\s*Quiet hours/ }).click();
+      await rail.getByRole("link", { name: /^8\.4\s*Quiet hours/ }).click();
       await expect(lit(page)).toHaveText(/^8\.4\s*Quiet hours/);
       await expect(section(page, "8-4-quiet-hours").getByTestId("review-bar")).toBeVisible();
     });
@@ -131,17 +131,17 @@ for (const size of DESKTOP)
       await fullCarts(page);
       const rail = contents(page);
       // Approve from the review bar of the section being read; its dot turns Approved.
-      await rail.getByRole("button", { name: /^9\s*Feature detail/ }).click();
-      await rail.getByRole("button", { name: /^9\.2\s*Cart on every device/ }).click();
+      await rail.getByRole("link", { name: /^9\s*Feature detail/ }).click();
+      await rail.getByRole("link", { name: /^9\.2\s*Cart on every device/ }).click();
       const sync = section(page, "feature-sync");
       const bar = sync.getByTestId("review-bar");
       await bar.getByRole("button", { name: "Approve" }).click();
       await bar.getByTestId("verdict-submit").click();
       await expect(bar.getByTestId("verdict-state")).toContainText("Approved");
-      await expect(rail.getByRole("button", { name: /^9\.2\s*Cart on every device/ }).getByRole("img", { name: "Approved" })).toBeVisible();
+      await expect(rail.getByRole("link", { name: /^9\.2\s*Cart on every device/ }).getByRole("img", { name: "Approved" })).toBeVisible();
 
       // Comment on a selection in another section.
-      await rail.getByRole("button", { name: /^6\s*Non-goals/ }).click();
+      await rail.getByRole("link", { name: /^6\s*Non-goals/ }).click();
       const commentButton = page.getByRole("button", { name: /^Comment(\s+c)?$/ });
       await expect(async () => {
         await selectText(page, "non-goals", "Sharing a cart with someone else");
@@ -171,7 +171,7 @@ for (const size of DESKTOP)
       await page.addInitScript(([key, role]) => localStorage.setItem(key, role), [MOCK_ROLE_KEY, "viewer"] as const);
       await open(page, CARTS, size, theme);
       await fullCarts(page);
-      await contents(page).getByRole("button", { name: /^3\s*Problem/ }).click();
+      await contents(page).getByRole("link", { name: /^3\s*Problem/ }).click();
       const problem = section(page, "problem");
       await expect(problem.getByTestId("review-bar")).toBeVisible();
       await expect(problem.getByTestId("review-bar")).toContainText("Approvers review sections.");

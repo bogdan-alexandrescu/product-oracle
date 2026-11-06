@@ -7,9 +7,10 @@
  * every other section shows only its ⋯ menu. Numbers come from the heading levels, so every
  * PRD reads so as written.
  */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 
 import type { SectionOut } from "@/lib/api/client";
+import { sectionHref } from "@/lib/section-link";
 
 import "./PrdLook.css";
 
@@ -44,12 +45,21 @@ const STATUS: Record<string, { label: string; kind: "pass" | "warn" | "crit" | "
   rejected: { label: "Rejected", kind: "crit" },
   none: { label: "Not reviewed", kind: "na" },
 };
-const statusOf = (s: SectionOut) => STATUS[s.verdict && !s.verdict.lapsed_at ? s.verdict.verdict : "none"];
+const LAPSED = { label: "Approval lapsed", kind: "warn" } as const;
+const statusOf = (s: SectionOut) => (s.verdict?.lapsed_at ? LAPSED : STATUS[s.verdict ? s.verdict.verdict : "none"]);
+
+/** A plain click on a link: the page handles it (a modified click opens a tab as usual). */
+const plainClick = (e: MouseEvent) => e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
+
+const SCROLL_KEYS = new Set(["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End", " "]);
 
 /** The section whose top has passed this line from the window's top is the one being read. */
 const READ_LINE = 140;
 
 export function PrdLook({
+  doc,
+  n,
+  view,
   sections,
   nodes,
   children,
@@ -57,6 +67,10 @@ export function PrdLook({
   onRead,
   onPick,
 }: {
+  doc: string;
+  n: number;
+  /** Brief or Full: which sections are shown. */
+  view: string;
   sections: SectionOut[];
   /** Each section as the page draws it (SectionView with every action and its SectionLook), in order. */
   nodes: ReactNode[];
@@ -89,7 +103,17 @@ export function PrdLook({
 
   useEffect(() => {
     let frame = 0;
+    // Only the reader's own scrolling moves the lit section, never a page that grows or shifts as it loads.
+    let movedAt = 0;
+    const moved = () => (movedAt = performance.now());
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (SCROLL_KEYS.has(e.key) && !t?.closest("input, textarea, select, [contenteditable]")) moved();
+    };
+    // A press on the page's scrollbar lands on the root element.
+    const onPress = (e: PointerEvent) => e.target === document.documentElement && moved();
     const onScroll = () => {
+      if (performance.now() - movedAt > 1500) return;
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         const root = rootRef.current;
@@ -100,15 +124,27 @@ export function PrdLook({
           else break;
         }
         at ??= root.querySelector<HTMLElement>("[data-prd-sec]")?.dataset.prdSec ?? null;
+        // The last sections never reach the line: one picked below it stays lit while its top is in the upper half.
+        const kept = read.current ? root.querySelector<HTMLElement>(`[data-prd-sec="${CSS.escape(read.current)}"]`) : null;
+        const keptTop = kept?.getBoundingClientRect().top ?? -1;
+        if (keptTop > READ_LINE && keptTop < window.innerHeight / 2) return;
         if (at && at !== read.current) {
           read.current = at;
           onRead(at);
         }
       });
     };
+    window.addEventListener("wheel", moved, { passive: true });
+    window.addEventListener("touchmove", moved, { passive: true });
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("pointerdown", onPress);
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       cancelAnimationFrame(frame);
+      window.removeEventListener("wheel", moved);
+      window.removeEventListener("touchmove", moved);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerdown", onPress);
       window.removeEventListener("scroll", onScroll);
     };
   }, [onRead]);
@@ -118,10 +154,10 @@ export function PrdLook({
   return (
     <div ref={rootRef} className="prd-look" data-testid="prd-look">
       <aside className="prd-rail">
-        <Contents sections={sections} nums={nums} current={current} onPick={onPick} lead={lead} />
+        <Contents doc={doc} n={n} sections={sections} nums={nums} current={current} onPick={onPick} lead={lead} />
       </aside>
       <div className="prd-main">
-        <article aria-label="Document" className="prd-doc" data-testid="document-sections" data-open={current ?? undefined}>
+        <article aria-label="Document" className="prd-doc" data-testid="document-sections" data-view={view} data-open={current ?? undefined}>
           {sections.map((s, i) => {
             const isCurrent = s.section_key === current;
             if (s.level <= 1 && s !== lead)
@@ -146,12 +182,16 @@ export function PrdLook({
 }
 
 function Contents({
+  doc,
+  n,
   sections,
   nums,
   current,
   onPick,
   lead,
 }: {
+  doc: string;
+  n: number;
   sections: SectionOut[];
   nums: Map<string, string>;
   current: string | null;
@@ -210,10 +250,13 @@ function Contents({
           const own = ownNumber(s.heading);
           return (
             <li key={s.id} data-level={s.level}>
-              <button
-                type="button"
+              <a
+                href={sectionHref(doc, n, s.section_key)}
+                data-outline-key={s.section_key}
                 aria-current={s.section_key === current ? "location" : undefined}
-                onClick={() => {
+                onClick={(e) => {
+                  if (!plainClick(e)) return;
+                  e.preventDefault();
                   close();
                   onPick(s.section_key);
                 }}
@@ -223,7 +266,7 @@ function Contents({
                 <span className="prd-toc-n tnum">{nums.get(s.section_key) ?? ""}</span>
                 <span className="prd-toc-h">{own && nums.get(s.section_key) === own.num ? own.rest : s.heading}</span>
                 {s.level > 1 && <span className={`prd-dot prd-dot-${status.kind}`} title={status.label} aria-label={status.label} role="img" />}
-              </button>
+              </a>
             </li>
           );
         })}
