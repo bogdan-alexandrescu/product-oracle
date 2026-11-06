@@ -245,7 +245,7 @@ export default function SimpleHome() {
   async function hideSetup(hidden = true) {
     try {
       await unwrap(api.PATCH("/v1/me/preferences", { body: { setup_hidden: hidden } }));
-      if (hidden) toast({ message: "Set up hidden. Show it again from Home's ⋯ menu." });
+      if (hidden) toast({ message: "Set up hidden", action: { label: "Show", onClick: () => void hideSetup(false) } });
     } catch (e) {
       toast({ message: errorMessage(e) });
     }
@@ -1266,7 +1266,7 @@ function SetupCard({ setup, owner, onHide }: { setup: Schemas["SetupOut"]; owner
   );
 }
 
-/** Home's ⋯ menu: Show Set up while it is hidden. Escape or a click outside closes it. */
+/** Home's menu (the more icon): Show Set up while it is hidden. Escape or a click outside closes it. */
 function HomeMenu({ onShowSetup }: { onShowSetup: () => void }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -1291,9 +1291,9 @@ function HomeMenu({ onShowSetup }: { onShowSetup: () => void }) {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="grid h-8 w-8 place-items-center rounded-lg text-[16px] text-text2 hover:bg-surface2 max-[600px]:h-11 max-[600px]:w-11"
+        className="grid h-8 w-8 place-items-center rounded-lg text-text2 hover:bg-surface2 max-[600px]:h-11 max-[600px]:w-11"
       >
-        ⋯
+        <Icon name="more" size={18} />
       </button>
       {open && (
         <div role="menu" className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-line bg-surface p-1 shadow-tip">

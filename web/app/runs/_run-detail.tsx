@@ -928,11 +928,12 @@ function lastWork(a: Schemas["SegmentAgent"], since: (at: string) => string): st
 const STALE_MS = 6 * 3600_000;
 
 /**
- * F-78: when the step last sent news: its newest agent's last sign of work (else when that agent
- * started), never the check's own time, which each tick resets. With no agent, when it started.
+ * F-78: when the step last sent news: its newest agent's last sign of work (the API's last_work_at:
+ * its heartbeat, the runtime's last event or a proposal it wrote), else when that agent started;
+ * never the check's own time, which each tick resets. With no agent, when the step started.
  */
 function lastNews(s: SegmentOut): string | null {
-  const times = s.agents.map((a) => a.last_work_at ?? a.heartbeat_at ?? a.started_at).filter((at): at is string => !!at);
+  const times = s.agents.map((a) => a.last_work_at ?? a.started_at).filter((at): at is string => !!at);
   if (times.length === 0) return s.started_at ?? null;
   return times.reduce((a, b) => (new Date(b).getTime() > new Date(a).getTime() ? b : a));
 }

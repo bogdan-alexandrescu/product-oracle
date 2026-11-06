@@ -910,9 +910,12 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
             <ul aria-label="Decisions taken" className="space-y-1">
               {m.meeting_decisions.map((x) => (
                 <DecidedItem key={x.id} flow={x.flow}>
-                  {/* F-26: the decision by its name as the link, no code; a long line hangs under it. */}
+                  {/* F-26: the decision by its name as the link, no code; a long line hangs under it.
+                      Round 2: on a phone the inline link's padding makes each of its lines a 44 px tap
+                      (inline, so the hang holds); ' · ' stays with the approver's name. */}
                   <span data-testid="decision-taken" className="min-w-0 pl-4 -indent-4">
-                    <Link className={`${LINK} ${PHONE_TAP} max-[600px]:inline-flex max-[600px]:min-w-11 max-[600px]:items-center max-[600px]:indent-0`} href={code(x).startsWith("D-") ? `/simple/decisions#d-${x.number}` : `/simple/decisions?meeting=${m.id}`}>{x.title}</Link> · {x.approver.name}
+                    <Link className={`${LINK} max-[600px]:py-3`} href={code(x).startsWith("D-") ? `/simple/decisions#d-${x.number}` : `/simple/decisions?meeting=${m.id}`}>{x.title}</Link>{" "}
+                    <span className="whitespace-nowrap">· {x.approver.name}</span>
                   </span>
                 </DecidedItem>
               ))}
