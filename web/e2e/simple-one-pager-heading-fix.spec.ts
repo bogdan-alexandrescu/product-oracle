@@ -74,15 +74,16 @@ for (const phone of [false, true]) {
         await page.getByRole("link", { name: "Open in Detailed" }).click();
         await page.getByRole("link", { name: "Open latest (v4)" }).click();
         await expect(page).toHaveURL(/\/documents\/guided-setup\/v\/4/);
-        // Its contents (the outline; on a phone, the Sections list) name the new heading under
-        // the same section link, and the section opens with it.
-        if (phone) await page.getByRole("button", { name: "Section 1 of 12" }).click();
-        const contents = phone ? page.getByRole("dialog", { name: "Sections" }) : page.getByRole("navigation", { name: "Outline" });
-        const entry = contents.getByRole("link", { name: "Later · 6 items, Not reviewed" });
+        // Its contents (on a phone, the Sections sheet) name the new heading under the same
+        // section link, and the section opens with it.
+        if (phone) await page.getByTestId("phone-sections").click();
+        const contents = phone ? page.getByTestId("sheet-sections") : page.getByRole("navigation", { name: "Contents" }).filter({ visible: true });
+        const entry = contents.locator('a[data-outline-key="later"]');
         await expect(entry).toHaveAttribute("href", "/documents/guided-setup/v/4#later");
+        await expect(entry).toContainText("Later · 6 items");
         await expect(contents.getByText("Later · 8 items")).toHaveCount(0);
         await entry.click();
-        await expect(page.getByRole("region", { name: "Later · 6 items" }).getByRole("heading", { name: "Later · 6 items" })).toBeVisible();
+        await expect(page.locator('[data-prd-sec="later"]').getByRole("heading", { name: "Later · 6 items" })).toBeVisible();
       });
 
       test(`an approver proposes the heading fix and the owner accepts it (${where})`, async ({ page }) => {
