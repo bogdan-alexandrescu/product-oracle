@@ -216,6 +216,9 @@ PER_ITEM: dict[str, Role | None] = {
     # H9: only the pricing owner, one owner (oracle.pricing.decide).
     "decide_pricing_memo": None,
     "decline_simple_change": "owner",
+    # trash-features-goals: below approver a goal's delete is proposed to the owners
+    # (trash_items._may_delete_goal), so the web offers Ask to delete.
+    "delete_bucket_goal": "approver",
     "delete_checkpoint_action": "owner",
     "delete_discussion_message": None,
     "delete_goal_milestone": "owner",
@@ -281,7 +284,12 @@ PER_ITEM: dict[str, Role | None] = {
     "request_simple_visual": "owner",
     "research_discussion_message": "approver",
     "resolve_discussion_change": "approver",
+    # trash-features-goals (owner's answer, Nov 5): an owner, or whoever deleted the feature
+    # or goal (oracle.trash.service.may_restore; the entry's can_restore).
+    "restore_bucket_goal": "owner",
     "restore_goal_milestone": "owner",
+    "restore_simple_item": "owner",
+    "restore_trash_entry": "owner",
     "resume_simple_draft": None,
     "retry_discussion_reply": "approver",
     "retry_draft_import": "owner",

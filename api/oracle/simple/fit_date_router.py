@@ -280,6 +280,12 @@ def _replans(text: str) -> list[str]:
     return out
 
 
+def _slice_pw(pw: float) -> float:
+    """A slice or a split's first slice: half its whole weeks, never more than the item itself
+    (a slice never grows it)."""
+    return min(math.ceil(pw) / 2, pw)
+
+
 def build_plan(
     text: str, view: plan.View, milestone: str, today: dt.date, scale: float = 1.0
 ) -> fd.Plan | None:
@@ -311,12 +317,12 @@ def build_plan(
             # Never under a tenth of its own effort, rounded to a tenth of a week like every
             # size here; a small item keeps 0.1 (or its whole size, if less).
             pw = max(round(pw * scale, 1), round(pw * 0.1, 1), min(pw, 0.1))
-        lever = _lever(sl, asked_goal)
+        # A must-include item is only ever measured as a move (fit_date.answer), never cut.
+        lever = "move" if kind == "must-include" else _lever(sl, asked_goal)
         items.append(fd.Item(
             id=sl.code, title=sl.name, pw=pw, milestone=sl.milestone, guard=guard,
             must=kind == "must-include", lever=lever,
-            # Half its whole weeks, never more than the item itself (a slice never grows it).
-            slice_pw=min(math.ceil(pw) / 2, pw) if lever in ("slice", "split") else None,
+            slice_pw=_slice_pw(pw) if lever in ("slice", "split") else None,
         ))  # fmt: skip
     start = min((m.start_date for m in view.milestones if m.start_date), default=today)
     focus_raise = round(focus + 0.1, 2) if focus <= 0.9 else None

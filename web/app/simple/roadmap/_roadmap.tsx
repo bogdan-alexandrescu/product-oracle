@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent } from "react";
 
 import { Button, clearToast, Notice, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
 import { GoalPanel, goalRows, SuggestionCard, useGoalSuggestions, type GoalBrief, type GoalPanelStart, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
@@ -23,7 +23,7 @@ import { QuickAdd } from "./_add";
 import { MsCard, MsKey, MsLayer, MsProvider, MsToast, useMilestones, type MsLane, type MsRow } from "./_milestones";
 import { Board, boardColumns, boardLegend, HORIZONS, LEGEND_SWATCH, LegendKeys, MARK_WORDS, PM_LANE, type Horizon, type LegendEntry } from "./_board";
 import { useKeyBurst } from "./_burst";
-import { FitRoadmap, useFitGoals } from "@/components/simple/FitDate";
+import { FeatureContextMenu, useFeatureDelete } from "@/components/simple/FeatureDelete";
 import { changeRowWords, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, SuggestionPopover, type Act } from "./_card";
 import { boardPicture, chartPicture, exportView, type Brand } from "./_export";
 import { KeyDatesEditor } from "./_keydates";
@@ -955,6 +955,20 @@ export function SimpleRoadmap() {
     },
     [run],
   );
+  // trash-features-goals: a Gantt or Timeline row's context menu (a right-click, or the menu
+  // key on a focused bar) offers Delete feature to who decides on it (its own can_decide).
+  const [rowMenu, setRowMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const removeFeature = useFeatureDelete(reload, toast, (id) => setCard((c) => (c?.id === id ? null : c)));
+  const onRowMenu = (e: ReactMouseEvent) => {
+    const el = (e.target as Element).closest("[data-bar-id],[data-item-id]");
+    const it = el ? byId.get(el.getAttribute("data-bar-id") ?? el.getAttribute("data-item-id") ?? "") : undefined;
+    if (!el || !it?.can_decide) return;
+    e.preventDefault();
+    const r = el.getBoundingClientRect();
+    // The menu key fires it with no pointer: the menu opens under the row.
+    setRowMenu(e.clientX || e.clientY ? { id: it.id, x: e.clientX, y: e.clientY } : { id: it.id, x: r.left, y: r.bottom });
+  };
+  const rowMenuItem = rowMenu ? byId.get(rowMenu.id) : undefined;
 
   // A move (a drag, or the keyboard's burst) is one change; what is stored after it is the
   // next burst's `before` (#723 S4 re-review: no 409 on one's own earlier move).
@@ -1083,15 +1097,9 @@ export function SimpleRoadmap() {
     }
   };
 
-  // The goal Bring a date in leads the page with (FD1 a): its PRD names the page when no roadmap is picked.
-  const fitGoals = useFitGoals();
-
   if (roadmap.error && !data) return <Notice tone="error">{roadmap.error}</Notice>;
   if (!data) return <Loading />;
 
-  // With no one roadmap or PRD picked, the page leads with a PRD's goal (Bring a date in, FD1 a): the
-  // chip beside Roadmap names that PRD (fd1-a-rest), not "All roadmaps".
-  const scopePrd = data.roadmap || f.prd ? null : ((fitGoals.data ?? [])[0]?.prd.title ?? null);
   const cardItem = card ? byId.get(card.id) : undefined;
   const popItem = pop ? byId.get(pop.id) : undefined;
   const allProposals = proposals.data ?? [];
@@ -1165,6 +1173,9 @@ export function SimpleRoadmap() {
       // fix4 qa-simple-roadmap-21: who decides, and where the proposal shows.
       else toast({ message: `Proposed ${title} (${w.label}): it waits for ${deciderWords(undefined)} in Needs a decision` });
       await reload();
+      // one-feature-panel: the added item opens its panel, to fill in the rest.
+      const added = c.status === "applied" ? c.target.item_id : null;
+      if (typeof added === "string") setCard({ id: added, ...anchorOf(added) });
       return true;
     } catch (e) {
       toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not add it" });
@@ -1372,11 +1383,11 @@ export function SimpleRoadmap() {
       <header className={`relative flex flex-wrap items-center ${phone ? "gap-2" : "gap-3"}`}>
         {/* A phone's header bar names the page (D3): the H1 is for screen readers there. */}
         <h1 className={phone ? "sr-only" : "text-2xl font-semibold"}>Roadmap</h1>
-        {data.roadmap || scopePrd ? (
+        {data.roadmap ? (
           // walkb-roadmap review 5f: a long name (a PRD's) wraps inside the page, never cut off; a
           // one-line chip stays a pill (its radius is over half its height).
           <span data-testid="roadmap-scope" className="max-w-full rounded-2xl bg-accent-soft px-3 py-0.5 text-[15px] font-semibold break-words text-accent-ink">
-            {data.roadmap?.title ?? scopePrd}
+            {data.roadmap.title}
           </span>
         ) : (
           readable.length > 1 && (
@@ -1407,17 +1418,6 @@ export function SimpleRoadmap() {
         {!phone && actions}
         {keyDates && <KeyDatesEditor key={data.roadmap?.id ?? "all"} data={data} act={act} mayChange={canChange} phone={phone} onClose={() => setKeyDates(false)} />}
       </header>
-      {/* Bring a date in (FD1 a): the goal's target and its date on today's plan, its milestones; each item opens its card. */}
-      <FitRoadmap
-        roadmapId={data.roadmap?.id ?? null}
-        itemOf={(title) => data.items.find((x) => x.title === title.replace(/ \((first slice|no longer holds [^)]*|to [^)]*)\)$/, ""))?.id ?? null}
-        onItem={(id) => {
-          const it = byId.get(id);
-          if (!it) return;
-          setPop(null);
-          setCard({ id: it.id, ...anchorOf(it.id) });
-        }}
-      />
       <p role="status" aria-live="polite" className="sr-only" data-testid="key-pending">
         {said}
       </p>
@@ -1475,7 +1475,17 @@ export function SimpleRoadmap() {
           )}
         </p>
       )}
-      <div ref={wrap} className={blank ? "hidden" : "relative"}>
+      <div ref={wrap} className={blank ? "hidden" : "relative"} onContextMenu={onRowMenu}>
+        {rowMenu && rowMenuItem && (
+          <FeatureContextMenu
+            at={rowMenu}
+            title={rowMenuItem.title}
+            onClose={() => setRowMenu(null)}
+            onDelete={() => {
+              void removeFeature(rowMenuItem);
+            }}
+          />
+        )}
         {linked.length ? (
           <div data-testid="filters-gone" className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-line-strong bg-surface px-4 py-3">
             <p className="text-[15px] font-semibold">
@@ -1544,6 +1554,7 @@ export function SimpleRoadmap() {
                 onDecide={(c, how) => void onDecide(c, how)}
                 onClose={onClose}
                 near={nearWords(it, data.key_dates ?? [])}
+                onOpen={(id) => setCard({ id, left: 0, top: 0 })}
               />
             )}
           />
@@ -1633,6 +1644,7 @@ export function SimpleRoadmap() {
             onDecide={(c, how) => void onDecide(c, how)}
             onClose={() => setCard(null)}
             near={nearWords(cardItem, data.key_dates ?? [])}
+            onOpen={(id) => setCard({ id, ...anchorOf(id) })}
             onHorizon={format === "board" && canChange && !closedItem(cardItem) ? (h) => onHorizon(cardItem, h) : undefined}
           />
         )}

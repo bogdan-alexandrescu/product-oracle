@@ -3594,6 +3594,59 @@ export const ROADMAP_REVIEW_RUN_ATTEMPT2: { run: RunOut; artifacts: Record<strin
   },
 };
 
+/** The seeded roadmap review run whose attempt 2 also changed Webhooks' dependencies unasked (seedRoadmapDepsChanged in e2e/helpers.ts). */
+export const ROADMAP_DEPS_CHANGED_RUN_ID = "7a11c0de-0000-4000-8000-0000000000dc";
+
+const DEPS_FROM = ["slack-alerts", "budget-caps"];
+const DEPS_TO = ["slack-alerts", "usage-export"];
+
+/**
+ * Attempt 2's twin where the agents also swapped Webhooks' dependency on Budget caps for one on
+ * Usage export without being asked: its Unrequested change offers Revert, the one edit that adds
+ * a dependency back ({add: [budget-caps], remove: [usage-export]}), as oracle.runs.reasons._revert.
+ */
+function roadmapDepsChangedRun(): RunOut {
+  const run = JSON.parse(JSON.stringify(roadmapAttempt2Run()).replaceAll("0000000d6", "0000000dc")) as RunOut;
+  run.id = ROADMAP_DEPS_CHANGED_RUN_ID;
+  run.document_slug = "usage-alerts-roadmap-7";
+  const [items] = run.segments;
+  const check = items.items_check!;
+  const unrequested: ItemReason = {
+    item: "webhooks",
+    item_title: "Webhooks",
+    code: "unrequested_change",
+    severity: "confirm",
+    label: "Unrequested change",
+    text: `Changed without being asked: dependencies ${DEPS_FROM.join(", ")} → ${DEPS_TO.join(", ")}`,
+    data: { field: "depends_on", from: DEPS_FROM, to: DEPS_TO },
+    fixes: [accept("webhooks"), fix("Revert", "edit", "webhooks", "depends_on", { add: ["budget-caps"], remove: ["usage-export"] })],
+  };
+  const reasons = [...check.reasons];
+  reasons.splice(reasons.findLastIndex((r) => r.item === "webhooks") + 1, 0, unrequested);
+  const resolution = check.resolution!;
+  items.items_check = {
+    ...withReasons({ items: check.items, by_horizon: check.by_horizon, problems: check.problems }, reasons, check.base),
+    resolution: {
+      ...resolution,
+      counts: { ...resolution.counts, unrequested: 2 },
+      unrequested: [...resolution.unrequested, { id: "webhooks", field: "depends_on", from: DEPS_FROM, to: DEPS_TO }],
+    },
+    diff: { ...check.diff!, items: [...check.diff!.items, { id: "webhooks", changes: [{ field: "depends_on", from: DEPS_FROM, to: DEPS_TO }] }] },
+  };
+  const cp = run.checkpoints[run.checkpoints.length - 1];
+  cp.payload = { ...cp.payload, items_check: items.items_check };
+  refresh(run);
+  return run;
+}
+
+export const ROADMAP_DEPS_CHANGED_RUN: { run: RunOut; artifacts: Record<string, string> } = {
+  run: roadmapDepsChangedRun(),
+  artifacts: {
+    [`${ROADMAP_DEPS_CHANGED_RUN_ID}|1|roadmap_items.yaml`]: REVIEW_ITEMS_2.replace("prd_section: alerts-webhooks,", `prd_section: alerts-webhooks, depends_on: [${DEPS_TO.join(", ")}],`),
+    [`${ROADMAP_DEPS_CHANGED_RUN_ID}|1|roadmap_items.yaml|1`]: REVIEW_ITEMS.replace("prd_section: alerts-webhooks,", `prd_section: alerts-webhooks, depends_on: [${DEPS_FROM.join(", ")}],`),
+  },
+};
+
 /** The roadmap review run and its file, as e2e/helpers.ts seedRoadmapReview adds them to the mock's data. */
 export const ROADMAP_REVIEW_RUN: { run: RunOut; artifacts: Record<string, string> } = {
   run: roadmapReviewRun(),
@@ -4279,6 +4332,10 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
       created_by: who,
       updated_by: who,
       updated_at: ctx.now(),
+      // As the API's keep_origin: Undo of part of it keeps where it came from (a discussion's change).
+      ...(a.keep_origin && existing?.discussion_id
+        ? { origin: existing.origin, discussion_id: existing.discussion_id, discussion_change_id: existing.discussion_change_id, from_private: existing.from_private }
+        : {}),
     };
     if (a.kind === "question" && ctx.ask) {
       // C2: asked through the questions store; a changed question withdraws the one before.

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 
 import { Button, Sheet, toast } from "@/components/ds";
 import { FlowThumb } from "@/components/simple/Flow";
@@ -17,7 +17,8 @@ import { useSetParams } from "@/lib/use-set-params";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { FeaturePanel } from "../roadmap/_panel";
-import { ArchiveDialog, BTN, count, dayOf, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type Note } from "./goal-buckets";
+import { FeatureMenu, useFeatureDelete } from "@/components/simple/FeatureDelete";
+import { ArchiveDialog, ArchivedGoals, BTN, count, dayOf, DeleteArchivedDialog, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type GoalFeatures, type Note } from "./goal-buckets";
 import { useBucketDrag } from "./goal-drag";
 import { CodeTag, featureCount, goalLabel, PlanBucketsHead, planFeatures, planGoals, planSpan } from "./plan-buckets";
 
@@ -90,6 +91,9 @@ async function send(body: ChangeIn): Promise<Sent> {
     return { ok: false, status: 0, message: errorMessage(e), pushback: false };
   }
 }
+
+/** one-feature-panel: a ranked row's name opens the feature's panel (the roadmap's). */
+const OpenRow = createContext<((r: Row) => void) | null>(null);
 
 export function Priorities() {
   const params = useSearchParams();
@@ -207,6 +211,9 @@ export function Priorities() {
   // step, with no line or comparison to pick over nothing.
   const blank = !!data && !data.rows.length && !data.drafts.length && !data.proposals.length;
   const hasGoals = (suggestions.data?.goals.length ?? 0) > 0;
+  const [rowOpen, setRowOpen] = useState<Row | null>(null);
+  // A feature deleted from its row closes its panel, if open.
+  const removeFeature = useFeatureDelete(q.reload, undefined, (id) => setRowOpen((r) => (r?.item_id === id ? null : r)));
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 text-[length:var(--simple-text)] leading-[var(--simple-leading)] text-text" data-testid="simple-priorities">
@@ -300,11 +307,25 @@ export function Priorities() {
       )}
       {data && !blank && tab === "ranked" && (
         <FeatureMarks.Provider value={marks}>
-          <Ranked data={shownData ?? data} phone={phone} compare={compare} mayChange={mayChange} changed={changed} moved={moved} />
+          <OpenRow.Provider value={setRowOpen}>
+            <Ranked data={shownData ?? data} phone={phone} compare={compare} mayChange={mayChange} changed={changed} moved={moved} onDelete={removeFeature} />
+          </OpenRow.Provider>
         </FeatureMarks.Provider>
       )}
+      {rowOpen && (
+        <FeaturePanel
+          key={rowOpen.feature_id}
+          feature={{ id: rowOpen.item_id ?? null, code: rowOpen.code, name: rowOpen.title }}
+          phone={phone}
+          canChange={can("create_simple_change")}
+          onClose={() => {
+            setRowOpen(null);
+            void q.reload();
+          }}
+        />
+      )}
       {data && !blank && tab === "value-effort" && <ValueEffort data={data} shapes={shapes} mayChange={mayChange} changed={changed} moved={moved} />}
-      {data && !blank && tab === "buckets" && <Buckets data={data} suggestions={suggestions} />}
+      {data && !blank && tab === "buckets" && <Buckets data={data} suggestions={suggestions} reload={q.reload} />}
       </div>
     </div>
   );
@@ -371,7 +392,7 @@ const SHOW_NOTE: Record<ShowKind, (n: number) => string> = {
   exists: (n) => `${n} features that run today.`,
 };
 
-function Ranked({ data, phone, compare, mayChange, changed, moved }: { data: Out; phone: boolean; compare: boolean; mayChange: boolean; changed: Changed; moved: Moved | null }) {
+function Ranked({ data, phone, compare, mayChange, changed, moved, onDelete }: { data: Out; phone: boolean; compare: boolean; mayChange: boolean; changed: Changed; moved: Moved | null; onDelete: (f: { id: string; title: string }) => void }) {
   const [side, setSide] = useState<"yours" | "oracle">("yours");
   // A goal's list (from a Home goal card) leaves out the features not ranked yet.
   const goalOn = !!useSearchParams().get("goal");
@@ -380,7 +401,7 @@ function Ranked({ data, phone, compare, mayChange, changed, moved }: { data: Out
   const backToHandle = (featureId: string) =>
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-handle="${featureId}"]`)?.focus());
   // qa4-simple-plan-6: beside Oracle's order (half the width) each card's details take a line of their own.
-  const list = <YourList data={data} half={compare && !phone} mayChange={mayChange} onMove={(row, position) => setMove({ row, position })} changed={changed} moved={moved} />;
+  const list = <YourList data={data} half={compare && !phone} mayChange={mayChange} onMove={(row, position) => setMove({ row, position })} changed={changed} moved={moved} onDelete={onDelete} />;
   return (
     <>
       {compare && phone && (
@@ -431,10 +452,11 @@ function Ranked({ data, phone, compare, mayChange, changed, moved }: { data: Out
   );
 }
 
-function YourList({ data, half = false, mayChange, onMove, changed, moved }: { data: Out; half?: boolean; mayChange: boolean; onMove: (row: Row, position: number) => void; changed: Changed; moved: Moved | null }) {
+function YourList({ data, half = false, mayChange, onMove, changed, moved, onDelete }: { data: Out; half?: boolean; mayChange: boolean; onMove: (row: Row, position: number) => void; changed: Changed; moved: Moved | null; onDelete: (f: { id: string; title: string }) => void }) {
   // A Home goal card opens the list for its goal (?goal=<its key>&name=<its name>): a row's own goal
   // by key, so two goals with one name keep apart; a row known only from the plan, by name.
   const params = useSearchParams();
+  const open = useContext(OpenRow);
   const goal = params.get("goal");
   const goalName = params.get("name") ?? goal;
   const rows = byLine(data).filter((r) => !goal || (r.goal ? r.goal.key === goal : goalOfRow(data)(r) === goalName));
@@ -586,7 +608,13 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
               {/* The Current-state pill sits right after the title (cs2-b, the owner's later pick), never pushed
                   to the far right; the title and its pill wrap as one group, so every title starts at one x. */}
               <span className="flex min-w-[12rem] flex-1 flex-wrap items-center gap-x-2 gap-y-1" data-testid="prio-name">
-                <span className="min-w-0 font-medium" data-testid="prio-title">{r.title}</span>
+                {open ? (
+                  <button type="button" className="min-w-0 text-left font-medium hover:underline" data-testid="prio-title" onClick={() => open(r)}>
+                    {r.title}
+                  </button>
+                ) : (
+                  <span className="min-w-0 font-medium" data-testid="prio-title">{r.title}</span>
+                )}
                 <MarkFor featureId={r.feature_id} />
               </span>
               {/* walkb-priorities: no ml-auto, so details that wrap under the title start at the left on every row. */}
@@ -612,6 +640,8 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
                 {/* qa-simple-plan-3: value · confidence · weeks · score, in the order of the score's formula; no bar. */}
                 <Numbers r={r} />
               </span>
+              {/* trash-features-goals: Delete feature (to Trash, Undo) for who decides on it. */}
+              {mayChange && r.applies && r.item_id && <FeatureMenu title={nameOf(r)} onDelete={() => onDelete({ id: r.item_id!, title: r.title })} />}
             </div>
             {/* qa4-simple-plan-25: Oracle's rank and the move sit in a slot of their own under the row, so the row keeps its layout. */}
             {((r.oracle_rank != null && r.oracle_rank !== r.rank) || words) && (
@@ -1831,11 +1861,28 @@ function LineDivider({ data, compact = false }: { data: Out; compact?: boolean }
 
 // --------------------------------------------------------------------------- goal buckets
 
-function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestionsApi }) {
-  const { can } = useMe();
-  const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
+function Buckets({ data, suggestions, reload }: { data: Out; suggestions: GoalSuggestionsApi; reload: () => Promise<unknown> }) {
   // plan-charts: with a dated plan, where each goal's work lands milestone by milestone.
   if (data.plan?.milestones.length && data.plan.span) return <PlanBuckets data={data} plan={data.plan} suggestions={suggestions} />;
+  return <UndatedBuckets data={data} suggestions={suggestions} reload={reload} />;
+}
+
+const sameGoal = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions: GoalSuggestionsApi; reload: () => Promise<unknown> }) {
+  const { can } = useMe();
+  const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
+  // EG1 a without a dated plan: each goal's ⋯ (Edit goal, Move up and down, Archive, Delete, or
+  // the asks), its owner, its form in place, the note with Undo and the Archived goals fold.
+  const bucketsQ = useGoalBuckets();
+  const gb = bucketsQ.data;
+  const [note, setNote] = useState<Note | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const writes = useBucketWrites(async () => void (await Promise.all([bucketsQ.reload(), reload()])), setNote, setError);
+  const rights = useBucketRights(gb);
+  const [editingGoal, setEditingGoal] = useState<string | null>(null);
+  const year = data.today.slice(0, 4);
+  const goalOf = (b: Bucket) => (b.no_goal ? undefined : gb?.goals.find((g) => sameGoal(g.title, b.title)));
   // An empty "No goal" bucket warns about nothing: it is left out.
   const buckets: Bucket[] = data.buckets.filter((b) => !(b.no_goal && b.weeks === 0 && b.codes.length === 0));
   const percent = sharePercents(buckets.map((b) => b.weeks));
@@ -1843,8 +1890,11 @@ function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestion
   const rowOf = new Map(data.rows.map((r) => [r.code, r]));
   // qa4-simple-plan-2: milestones or key dates on the roadmap (the Line's) are not a dated plan; never say there are no dates.
   const dated = (data.lines ?? []).some((l) => l.kind === "milestone" || l.kind === "key_date");
+  // A goal's features as Archive counts them: its bucket's.
+  const featuresOf: GoalFeatures = (title) => (buckets.find((b) => !b.no_goal && sameGoal(b.title, title))?.codes ?? []).map((c) => ({ code: c, name: rowOf.get(c)?.title ?? c, slices: [] }));
+  const acts = useGoalActs({ gb, plan: null, featuresOf, writes, rights });
   return (
-    <section aria-label="Goal buckets">
+    <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
       <p className="mb-3 text-text2" data-testid="buckets-intro">
         {dated
           ? "Grouped by goal for this quarter; the milestones and key dates are on the Ranked list's Line."
@@ -1870,15 +1920,48 @@ function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestion
           )}
         </div>
       </figure>
+      {note && <UndoNote id={note.id} clear='[data-testid="goal-bucket"] h3' onUndo={undoOf(note, writes)}>{note.text}</UndoNote>}
+      {error && (
+        <p role="alert" className="mt-3 text-[15px] text-warn">
+          {error}
+        </p>
+      )}
       <ul className="mt-3 grid gap-[var(--simple-gap)] sm:grid-cols-2">
-        {buckets.map((b, k) => (
-          <li key={b.key} data-testid="goal-bucket" data-key={b.key} className={`rounded-[var(--simple-card-radius)] border bg-surface p-3 ${b.no_goal ? "border-warn" : "border-line"}`}>
-            <div className="flex items-baseline justify-between gap-2">
-              <h3 className="font-semibold">{b.title}</h3>
-              <span className="tabular-nums">
-                {fmt(b.weeks)} wk · <span data-testid="bucket-share">{percent[k]}%</span>
-              </span>
-            </div>
+        {buckets.map((b, k) => {
+          const rec = goalOf(b);
+          return (
+          <li key={b.key} data-testid="goal-bucket" data-key={b.key} data-goal-id={rec?.id} className={`rounded-[var(--simple-card-radius)] border bg-surface p-3 ${b.no_goal ? "border-warn" : "border-line"}`}>
+            {rec && editingGoal === rec.id ? (
+              <GoalForm
+                start={{ title: rec.title, measure: rec.measure ?? "", target: rec.target ?? "", due: dayOf(rec.due, year), owner: rec.owner_id ?? null }}
+                goal={rec}
+                order={rec.order}
+                title="Edit goal"
+                year={year}
+                onCancel={() => setEditingGoal(null)}
+                onSave={async (f, seen) => {
+                  if (await writes.edit(rec, f, year, seen)) setEditingGoal(null);
+                }}
+              />
+            ) : (
+              <>
+                <div className="flex items-baseline justify-between gap-2">
+                  <h3 className="min-w-0 flex-1 font-semibold">{b.title}</h3>
+                  <span className="tabular-nums">
+                    {fmt(b.weeks)} wk · <span data-testid="bucket-share">{percent[k]}%</span>
+                  </span>
+                  {rec && <span className="self-center">{acts.menu(rec, b.title, rights.edit(rec) ? () => setEditingGoal(rec.id) : undefined)}</span>}
+                </div>
+                {/* eg1-a-rest: each goal names its owner under its heading. */}
+                {rec?.owner_name && (
+                  <p className="mt-0.5">
+                    <span data-testid="goal-owner" className="text-[14px] text-text2">
+                      Owner: <b className="font-[650] text-text">{rec.owner_name}</b>
+                    </span>
+                  </p>
+                )}
+              </>
+            )}
             <div className="mt-2 h-3 overflow-hidden rounded-full bg-surface2">
               <div className={`h-full ${b.no_goal ? "bg-warn" : "bg-accent"}`} style={{ width: `${b.share * 100}%` }} />
             </div>
@@ -1888,7 +1971,7 @@ function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestion
                 {b.codes.map((c) => {
                   const r = rowOf.get(c);
                   return (
-                    <li key={c} className="flex items-center gap-1.5">
+                    <li key={c} data-code={r?.short_code || c} className="flex items-center gap-1.5">
                       {r && <CodeChip r={r} />}
                       <span>{r?.title ?? c}</span>
                     </li>
@@ -1904,8 +1987,11 @@ function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestion
               </div>
             )}
           </li>
-        ))}
+          );
+        })}
+        {acts.fold(year)}
       </ul>
+      {acts.dialogs}
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
     </section>
   );
@@ -1947,7 +2033,6 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
   const noGoal = plan.slices.some((x) => !x.goal);
   const [panel, setPanel] = useState<{ goal: GoalBrief; start?: GoalPanelStart } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
-  const [archiving, setArchiving] = useState<string | null>(null);
   const [note, setNote] = useState<Note | null>(null);
   const noteSlot = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1972,15 +2057,27 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
   const outside = data.buckets
     .map((b) => ({ b, rows: b.codes.map((c) => rowOf.get(c)).filter((r): r is Row => !!r && !r.in_plan) }))
     .filter((x) => x.rows.length > 0);
-  const archivedGoal = gb?.goals.find((g) => g.id === archiving);
   // A feature's name opens the Simple item panel, as the roadmap does.
   const phone = usePhone();
+  const acts = useGoalActs({
+    gb,
+    plan,
+    featuresOf: (t) => planFeatures(plan, t),
+    writes,
+    rights,
+    // gb2-a-result: the archived bucket is gone, so on a wider screen the page scrolls back to the
+    // note's own place above the buckets, where it covers no goal's title. A phone's note is fixed
+    // above the bottom bar: the page stays, any title it covers lifted clear.
+    onArchived: () => {
+      if (!phone && (noteSlot.current?.getBoundingClientRect().top ?? 0) < 0) noteSlot.current?.scrollIntoView({ block: "start" });
+    },
+  });
   const [opened, setOpened] = useState<{ code: string; name: string } | null>(null);
   return (
     <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
       <PlanBucketsHead plan={plan} codeOf={codeOf} />
       <div ref={noteSlot} className="scroll-mt-4" />
-      {note && <UndoNote id={note.id} clear='[data-testid="plan-goal"] h3' onUndo={note.undo ? () => void writes.undo(note.undo!) : undefined}>{note.text}</UndoNote>}
+      {note && <UndoNote id={note.id} clear='[data-testid="plan-goal"] h3' onUndo={undoOf(note, writes)}>{note.text}</UndoNote>}
       {error && (
         <p role="alert" className="mt-3 text-[15px] text-warn">
           {error}
@@ -2011,13 +2108,14 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
             >
               {rec && editing === rec.id ? (
                 <GoalForm
-                  start={{ title: rec.title, measure: rec.measure ?? "", target: rec.target ?? "", due: dayOf(rec.due, year) }}
+                  start={{ title: rec.title, measure: rec.measure ?? "", target: rec.target ?? "", due: dayOf(rec.due, year), owner: rec.owner_id ?? null }}
+                  goal={rec}
                   order={rec.order}
                   title="Edit goal"
                   year={year}
                   onCancel={() => setEditing(null)}
-                  onSave={async (f) => {
-                    if (await writes.edit(rec, f, year)) setEditing(null);
+                  onSave={async (f, seen) => {
+                    if (await writes.edit(rec, f, year, seen)) setEditing(null);
                   }}
                 />
               ) : (
@@ -2034,7 +2132,7 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
                         ✎
                       </button>
                     )}
-                    {rights.edit(rec) && rights.archive && <GoalMenu title={g} archive onEdit={() => setEditing(rec!.id)} onArchive={() => setArchiving(rec!.id)} />}
+                    {rec && acts.menu(rec, g, rights.edit(rec) ? () => setEditing(rec.id) : undefined)}
                   </div>
                   {rec && (
                     <p data-testid="goal-measure" className={`mt-0.5 text-[15px] leading-5 text-text2 ${rec ? "pl-8" : ""}`}>
@@ -2045,6 +2143,13 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
                           {rec.measure}: <b className="font-[650] text-text">{rec.target}</b> by {dayOf(rec.due, year)}
                         </>
                       )}
+                    </p>
+                  )}
+                  {rec?.owner_name && (
+                    <p className="mt-0.5 pl-8">
+                      <span data-testid="goal-owner" className="text-[14px] text-text2">
+                        Owner: <b className="font-[650] text-text">{rec.owner_name}</b>
+                      </span>
                     </p>
                   )}
                 </>
@@ -2108,6 +2213,7 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
               </button>
             </li>
           ))}
+        {acts.fold(year)}
         {noGoal && (
           <li data-testid="plan-goal" data-goal="" className="rounded-[var(--simple-card-radius)] border border-warn bg-surface p-4">
             <div className="flex flex-wrap items-baseline gap-x-2">
@@ -2145,39 +2251,119 @@ function PlanBuckets({ data, plan: read, suggestions }: { data: Out; plan: Schem
       {drag.edge}
       {drag.ghost}
       {opened && <FeaturePanel key={opened.code} feature={{ ...opened, prd: plan.prd }} phone={phone} canChange={can("create_simple_change")} onClose={() => setOpened(null)} />}
-      {archivedGoal && gb && (
-        <ArchiveDialog
-          goal={archivedGoal}
-          plan={plan}
-          gb={gb}
-          onClose={() => setArchiving(null)}
-          onArchive={async (to) => {
-            if (!(await writes.archive(archivedGoal, to, archiveWords(plan, gb, archivedGoal, to)))) return;
-            setArchiving(null);
-            // gb2-a-result: the archived bucket is gone, so on a wider screen the page scrolls back
-            // to the note's own place above the buckets, where it covers no goal's title. A phone's
-            // note is fixed above the bottom bar: the page stays, any title it covers lifted clear.
-            if (!phone && (noteSlot.current?.getBoundingClientRect().top ?? 0) < 0) noteSlot.current?.scrollIntoView({ block: "start" });
-          }}
-        />
-      )}
+      {acts.dialogs}
       {panel && <GoalPanel key={`${panel.goal.key}:${panel.start ?? ""}`} goal={panel.goal} start={panel.start} api={suggestions} onClose={() => setPanel(null)} />}
     </section>
   );
 }
 
+/** What the note's Undo does: a goal back from Trash with its links, a goal's move, or a bucket write's Undo. */
+function undoOf(note: Note, writes: ReturnType<typeof useBucketWrites>): (() => void) | undefined {
+  if (note.restore) return () => void writes.restore(note.restore!);
+  if (note.order) return () => void writes.unorder(note.order!);
+  if (note.undo) return () => void writes.undo(note.undo!);
+  return undefined;
+}
+
+/**
+ * EG1 a, with a dated plan or without: a goal's ⋯ menu (Archive goal, Delete goal, or the asks
+ * for who may not), the Archived goals fold (Restore and Delete, or Ask to restore), and the
+ * questions each asks first.
+ */
+function useGoalActs({ gb, plan, featuresOf, writes, rights, onArchived }: { gb: Schemas["GoalBucketsOut"] | undefined; plan: Schemas["SimplePlanOut"] | null; featuresOf: GoalFeatures; writes: ReturnType<typeof useBucketWrites>; rights: ReturnType<typeof useBucketRights>; onArchived?: () => void }) {
+  const [archiving, setArchiving] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [archOpen, setArchOpen] = useState(false);
+  const [delArchived, setDelArchived] = useState<Schemas["ArchivedGoal"] | null>(null);
+  const archivedGoal = gb?.goals.find((g) => g.id === archiving);
+  const deletedGoal = gb?.goals.find((g) => g.id === deleting);
+  const asksTo = gb?.asks_to ?? [];
+  const trashed = (words: string) => `${words} It is in Settings > Trash for 30 days.`;
+  return {
+    menu: (rec: Schemas["GoalBucketGoal"], title: string, onEdit?: () => void) => {
+      // Move up and Move down, in the goal order the goal buckets list (none on the first or the last goal).
+      const live = gb?.goals ?? [];
+      const at = live.findIndex((g) => g.id === rec.id);
+      const by = (d: -1 | 1) => (rights.order(rec) && at >= 0 && live[at + d] ? () => void writes.reorder(live, rec.id, d) : undefined);
+      return <GoalMenu title={title} archive={rights.archiveAct} del={rights.deleteAct} onEdit={onEdit} onUp={by(-1)} onDown={by(1)} onArchive={() => setArchiving(rec.id)} onDelete={() => setDeleting(rec.id)} />;
+    },
+    fold: (year: string) =>
+      gb && (
+        <ArchivedGoals
+          gb={gb}
+          year={year}
+          open={archOpen}
+          onToggle={setArchOpen}
+          restore={rights.unarchiveAct}
+          del={rights.deleteAct}
+          onRestore={(g) => void (rights.unarchiveAct === "ask" ? writes.ask("unarchive_goal", g, null, asksTo) : writes.unarchive(g))}
+          onDelete={setDelArchived}
+        />
+      ),
+    dialogs: (
+      <>
+        {deletedGoal && gb && (
+          <ArchiveDialog
+            goal={deletedGoal}
+            plan={plan}
+            featuresOf={featuresOf}
+            gb={gb}
+            kind="delete"
+            ask={rights.deleteAct === "ask" ? asksTo : null}
+            onClose={() => setDeleting(null)}
+            onArchive={async (to) => {
+              const done = rights.deleteAct === "ask" ? await writes.ask("delete_goal", deletedGoal, to, asksTo) : await writes.remove(deletedGoal, to, trashed(archiveWords(featuresOf, gb, deletedGoal, to, "Deleted")));
+              if (done) setDeleting(null);
+            }}
+          />
+        )}
+        {delArchived && (
+          <DeleteArchivedDialog
+            goal={delArchived}
+            onClose={() => setDelArchived(null)}
+            onDelete={async () => {
+              if (await writes.remove(delArchived, null, trashed(`Deleted ${delArchived.title}.`))) setDelArchived(null);
+            }}
+          />
+        )}
+        {archivedGoal && gb && (
+          <ArchiveDialog
+            goal={archivedGoal}
+            plan={plan}
+            featuresOf={featuresOf}
+            gb={gb}
+            ask={rights.archiveAct === "ask" ? asksTo : null}
+            onClose={() => setArchiving(null)}
+            onArchive={async (to) => {
+              if (rights.archiveAct === "ask") {
+                if (await writes.ask("archive_goal", archivedGoal, to, asksTo)) setArchiving(null);
+                return;
+              }
+              if (!(await writes.archive(archivedGoal, to, archiveWords(featuresOf, gb, archivedGoal, to)))) return;
+              setArchiving(null);
+              // eg1-a-result: the archived goal tops the opened Archived goals fold.
+              setArchOpen(true);
+              onArchived?.();
+            }}
+          />
+        )}
+      </>
+    ),
+  };
+}
+
 const ICON_BTN = "inline-flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-transparent text-[16px] text-text hover:border-line-strong hover:bg-surface2 disabled:opacity-40";
 
 /** GB2 a's note: "Archived Grow shop partners. 1 feature moved to Faster first ride, 1 to the other goal it serves." */
-function archiveWords(plan: Schemas["SimplePlanOut"], gb: Schemas["GoalBucketsOut"], goal: Schemas["GoalBucketGoal"], to: string | null): string {
-  const list = planFeatures(plan, goal.title);
+function archiveWords(listOf: GoalFeatures, gb: Schemas["GoalBucketsOut"], goal: Schemas["GoalBucketGoal"], to: string | null, verb = "Archived"): string {
+  const list = listOf(goal.title);
   const own = list.filter((f) => (featureOf(gb, f.code, f.name)?.goal_ids ?? []).some((g) => g !== goal.id)).length;
   const rest = list.length - own;
   const toTitle = gb.goals.find((g) => g.id === to)?.title;
   const feats = (n: number) => `${n} ${n === 1 ? "feature" : "features"}`;
   const ownWords = own ? `${own} to the other goal ${own === 1 ? "it serves" : "each serves"}` : "";
-  if (!list.length) return `Archived ${goal.title}. It held no features.`;
-  if (!rest) return `Archived ${goal.title}. ${feats(own)} moved to the other goal ${own === 1 ? "it serves" : "each serves"}.`;
+  if (!list.length) return `${verb} ${goal.title}. It held no features.`;
+  if (!rest) return `${verb} ${goal.title}. ${feats(own)} moved to the other goal ${own === 1 ? "it serves" : "each serves"}.`;
   const restWords = toTitle ? `${feats(rest)} moved to ${toTitle}` : `${feats(rest)} ${rest === 1 ? "is" : "are"} under No goal now`;
-  return `Archived ${goal.title}. ${restWords}${ownWords ? `, ${ownWords}` : ""}.`;
+  return `${verb} ${goal.title}. ${restWords}${ownWords ? `, ${ownWords}` : ""}.`;
 }

@@ -3,11 +3,11 @@
 // buckets) opens the same panel the Timeline does, with the same card, so the feature can be
 // read and changed where it is listed.
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { toast as dsToast, type ToastAsk } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
-import { CARD_CHANGED_EVENT } from "@/lib/api/simple-chat";
+import { CARD_CHANGED_EVENT, GOAL_OPS, sendGoalChanged } from "@/lib/api/simple-chat";
 import { useQuery } from "@/lib/use-query";
 
 import { FloatingCard, type Act } from "./_card";
@@ -25,6 +25,23 @@ export function itemFor(items: Item[], f: { code: string; name: string; prd?: { 
   );
 }
 
+/** What opens the panel: a roadmap item's id when the page has it, else its code, PRD and name. */
+export type PanelFeature = { id?: string | null; code: string; name: string; prd?: { id: string; slug: string } | null };
+
+/**
+ * The item a panel shows: the one it moved to (a dependency), else the one it showed first (kept
+ * after a rename), else the item of the feature's id when its name is the card's, else the item
+ * with its code, then its name. Never another feature's item under a wrong id.
+ */
+export function usePanelItem(items: Item[], feature: PanelFeature, opened: string | null): Item | undefined {
+  const [pinned, setPinned] = useState<string | null>(null);
+  const byId = (id?: string | null) => (id ? items.find((i) => i.id === id) : undefined);
+  const own = byId(feature.id);
+  const found = byId(opened) ?? byId(pinned) ?? (own && own.title === feature.name ? own : undefined) ?? itemFor(items, feature);
+  if (found && !opened && !pinned) setPinned(found.id);
+  return found;
+}
+
 /** The feature's item panel (a side panel; a phone's bottom sheet), as the roadmap opens it. */
 export function FeaturePanel({
   feature,
@@ -32,7 +49,7 @@ export function FeaturePanel({
   canChange,
   onClose,
 }: {
-  feature: { code: string; name: string; prd?: { id: string; slug: string } | null };
+  feature: PanelFeature;
   phone: boolean;
   canChange: boolean;
   onClose: () => void;
@@ -60,15 +77,31 @@ export function FeaturePanel({
 
   const data = roadmap.data;
   const items = data?.items ?? [];
-  const item = itemFor(items, feature);
+  // one-feature-panel: a dependency (or a feature that needs this one) opens in its place.
+  const [opened, setOpened] = useState<string | null>(null);
+  const item = usePanelItem(items, feature, opened);
   const act: Act = useCallback(
     async (what, body) => {
       try {
         const r = await propose(body);
         toast({
           message: resultWords(r, what, item?.deciders),
-          action: r.change.status === "applied" && r.change.can_undo ? { label: "Undo", onClick: () => void undo(r.change.id).then(reload, (e) => toast({ message: String(e.message) })) } : undefined,
+          action:
+            r.change.status === "applied" && r.change.can_undo
+              ? {
+                  label: "Undo",
+                  onClick: () =>
+                    void undo(r.change.id).then(
+                      () => {
+                        if (GOAL_OPS.includes(body.op)) sendGoalChanged();
+                        return reload();
+                      },
+                      (e) => toast({ message: String(e.message) }),
+                    ),
+                }
+              : undefined,
         });
+        if (r.change.status === "applied" && GOAL_OPS.includes(body.op)) sendGoalChanged();
       } catch (e) {
         if (e instanceof ChangeFailed && e.status === 409) {
           const changed = changedWords(e.changed);
@@ -84,6 +117,7 @@ export function FeaturePanel({
     try {
       await decide(c.id, how);
       toast({ message: how === "accept" ? "Accepted: it is in your working draft" : "Declined" });
+      if (how === "accept" && GOAL_OPS.includes(c.op)) sendGoalChanged();
     } catch (e) {
       toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not decide it" });
     }
@@ -113,6 +147,7 @@ export function FeaturePanel({
       onDecide={(c, how) => void onDecide(c, how)}
       onClose={onClose}
       near={nearWords(item, data.key_dates ?? [])}
+      onOpen={setOpened}
     />
   );
   if (phone && item) return <div data-testid="item-panel" aria-label={item.title} className="contents">{body}</div>;

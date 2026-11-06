@@ -133,10 +133,13 @@ test("webhooks and trash: their empty states explain themselves", async ({ page 
   await page.goto("/settings");
   await page.getByTestId("nav-trash").filter({ visible: true }).click();
   await expect(page).toHaveURL(/\/settings\/trash$/);
+  // One short line and where to delete from; the 30 days and who restores sit behind its (i).
   const trash = page.getByTestId("trash-empty");
   await expect(trash).toContainText("Trash is empty.");
-  await expect(trash).toContainText("wait here for 30 days");
-  await expect(trash).toContainText("gone for good");
+  await expect(trash.getByRole("link", { name: "Open Documents" })).toHaveAttribute("href", "/documents");
+  await trash.getByRole("button", { name: "About deleted items" }).click();
+  await expect(trash.getByRole("tooltip")).toContainText("waits here for 30 days");
+  await expect(trash.getByRole("tooltip")).toContainText("gone for good");
 });
 
 // qa-settings-46: Project ID with where to find it, the key's hint, and why Save waits.

@@ -6,10 +6,16 @@ links, the same records Baseline edits.
   measure, target and date) and each feature's goal links, the one it moves most first.
 - ``POST /v1/simple/goal-buckets/goals``: approver and up; a new goal (measure, target
   and date all needed). ``PATCH .../goals/{id}``: the same people; edit one.
+  With ``seen`` (the name, measure, target and date as the form read them), a goal
+  changed since is refused with 409.
 - ``POST .../goals/{id}/archive``: archive a goal; features that serve another goal too
   keep it (now first), the rest go to ``to_goal_id`` or are left with no goal.
 - ``POST .../features/{id}/move``: the feature's first goal link becomes ``to_goal_id``;
   its link to ``from_goal_id`` is dropped.
+- ``POST .../goals/{id}/unarchive``: approver and up; an archived goal (``archived``)
+  back in the buckets, with Undo. A goal's ``owner_id`` is a member, saved in its form
+  (edit-goals-prds EG1); who may not archive or delete a goal asks ``asks_to`` through
+  the change engine (oracle.simple.goal_asks).
 - ``POST .../undo``: puts back the goals and links a write's ``undo`` names, each link
   whole (its id, attrs, status, origin and created_at). The ``undo`` is signed: one the
   API did not give is refused.
@@ -27,7 +33,9 @@ from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import company_time
 from oracle.auth.deps import TenantDB
+from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.baseline.goal_order import goal_position, sort_goals
 from oracle.baseline.models import Edge, Entity
@@ -48,6 +56,15 @@ class GoalBucketGoal(BaseModel):
     target: str | None = None
     due: date | None = None
     can_edit: bool = False
+    owner_id: uuid.UUID | None = None
+    owner_name: str | None = None
+
+
+class ArchivedGoal(BaseModel):
+    id: uuid.UUID
+    title: str
+    owner_name: str | None = None
+    archived_at: datetime | None = None
 
 
 class GoalBucketFeature(BaseModel):
@@ -62,6 +79,19 @@ class GoalBucketsOut(BaseModel):
     can_edit: bool
     goals: list[GoalBucketGoal]
     features: list[GoalBucketFeature]
+    # Archived goals, newest first: Restore puts one back.
+    archived: list[ArchivedGoal] = Field(default_factory=list)
+    # Who an Ask to archive or delete a goal goes to: the company's owners, by name.
+    asks_to: list[str] = Field(default_factory=list)
+
+
+class GoalSeen(BaseModel):
+    """The goal's fields as the edit form read them when it opened."""
+
+    title: str | None = None
+    measure: str | None = None
+    target: str | None = None
+    due: date | None = None
 
 
 class GoalIn(BaseModel):
@@ -69,6 +99,13 @@ class GoalIn(BaseModel):
     measure: Line
     target: Line
     due: date
+    # A member; left out, the owner stays as it was; null clears it.
+    owner_id: uuid.UUID | None = None
+    # The goal as the form read it (edit only): a goal changed since is refused with 409.
+    seen: GoalSeen | None = None
+
+
+GOAL_CHANGED = "This goal changed since you opened it. Look again and save."
 
 
 class GoalLinkSnap(BaseModel):
@@ -144,8 +181,27 @@ async def _goals(db: AsyncSession) -> list[Entity]:
     return sort_goals(list(rows))
 
 
-def _goal_out(g: Entity, order: int, edits: bool) -> GoalBucketGoal:
+def _owner_id(attrs: dict[str, Any]) -> uuid.UUID | None:
+    try:
+        return uuid.UUID(str(attrs["owner"])) if attrs.get("owner") else None
+    except ValueError:
+        return None
+
+
+async def _names(db: AsyncSession, ids: set[uuid.UUID | None]) -> dict[uuid.UUID, str]:
+    ids_ = {i for i in ids if i is not None}
+    if not ids_:
+        return {}
+    return {
+        u.id: u.name or u.email for u in await db.scalars(select(User).where(User.id.in_(ids_)))
+    }
+
+
+def _goal_out(
+    g: Entity, order: int, edits: bool, names: dict[uuid.UUID, str] | None = None
+) -> GoalBucketGoal:
     attrs = g.attrs or {}
+    owner = _owner_id(attrs)
     return GoalBucketGoal(
         id=g.id,
         title=g.title,
@@ -154,7 +210,13 @@ def _goal_out(g: Entity, order: int, edits: bool) -> GoalBucketGoal:
         target=_target(attrs),
         due=_due(attrs),
         can_edit=edits,
+        owner_id=owner,
+        owner_name=(names or {}).get(owner) if owner else None,
     )
+
+
+async def _goal_full(db: AsyncSession, g: Entity, order: int) -> GoalBucketGoal:
+    return _goal_out(g, order, True, await _names(db, {_owner_id(g.attrs or {})}))
 
 
 async def _links(db: AsyncSession, feature_ids: list[uuid.UUID] | None = None) -> list[Edge]:
@@ -257,15 +319,39 @@ def _slug(title: str) -> str:
     return f"{base}-{uuid.uuid4().hex[:6]}"
 
 
+async def _check_owner(db: AsyncSession, body: GoalIn) -> None:
+    if body.owner_id is None:
+        return
+    u = await db.get(User, body.owner_id)
+    if u is None or u.disabled_at is not None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Pick a member as its owner")
+
+
 def _fields(g: Entity, body: GoalIn) -> None:
     g.title = body.title
     attrs = dict(g.attrs or {})
     attrs.update({"metric": body.measure, "due": body.due.isoformat()})
+    if "owner_id" in body.model_fields_set:
+        if body.owner_id is None:
+            attrs.pop("owner", None)
+        else:
+            attrs["owner"] = str(body.owner_id)
     if body.target != _target(attrs):
         # A new target is kept as typed; one left as it was keeps Baseline's number and unit.
         attrs["target_text"] = body.target
         attrs.pop("target", None)
     g.attrs = attrs
+
+
+def _changed_since(g: Entity, seen: GoalSeen) -> bool:
+    """Whether the goal's name, measure, target or date differ from what the form read."""
+
+    def norm(v: Any) -> Any:
+        return (" ".join(v.split()) or None) if isinstance(v, str) else v
+
+    now = _goal_out(g, 1, True)
+    fields = ("title", "measure", "target", "due")
+    return any(norm(getattr(now, f)) != norm(getattr(seen, f)) for f in fields)
 
 
 def _goal_snap(g: Entity) -> GoalSnap:
@@ -281,9 +367,28 @@ async def list_goal_buckets(principal: Reader, db: TenantDB) -> GoalBucketsOut:
     live_features = select(Entity).where(Entity.type == "feature", Entity.status != "rejected")
     features = list(await db.scalars(live_features))
     edges = await _links(db)
+    from oracle.simple.changes import _company_owners
+
+    archived = list(await db.scalars(
+        select(Entity).where(Entity.type == "goal", Entity.status == "rejected")
+    ))  # fmt: skip
+    archived.sort(key=_archived_at, reverse=True)
+    deciders = await _company_owners(db)
+    owners = {_owner_id(g.attrs or {}) for g in [*goals, *archived]}
+    names = await _names(db, {*owners, *deciders})
     return GoalBucketsOut(
         can_edit=edits,
-        goals=[_goal_out(g, i + 1, edits) for i, g in enumerate(goals)],
+        goals=[_goal_out(g, i + 1, edits, names) for i, g in enumerate(goals)],
+        archived=[
+            ArchivedGoal(
+                id=g.id,
+                title=g.title,
+                owner_name=names.get(_owner_id(g.attrs or {})),
+                archived_at=_archived_at(g),
+            )  # fmt: skip
+            for g in archived
+        ],
+        asks_to=[names[i] for i in deciders if i in names],
         features=[
             GoalBucketFeature(
                 id=f.id,
@@ -296,6 +401,13 @@ async def list_goal_buckets(principal: Reader, db: TenantDB) -> GoalBucketsOut:
     )
 
 
+def _archived_at(g: Entity) -> datetime:
+    try:
+        return datetime.fromisoformat(str((g.attrs or {})["archived_at"]))
+    except (KeyError, ValueError):
+        return g.updated_at
+
+
 @router.post("/goals", response_model=GoalBucketWrite, status_code=201, name="create_bucket_goal")
 async def create_bucket_goal(body: GoalIn, principal: Approver, db: TenantDB) -> GoalBucketWrite:
     """A new goal, after the others."""
@@ -303,10 +415,11 @@ async def create_bucket_goal(body: GoalIn, principal: Approver, db: TenantDB) ->
     last = max([goal_position(g.attrs) or i + 1 for i, g in enumerate(goals)], default=0)
     g = Entity(type="goal", key=_slug(body.title), title=body.title, status="confirmed",
                origin="user", attrs={"position": last + 1})  # fmt: skip
+    await _check_owner(db, body)
     _fields(g, body)
     db.add(g)
     await db.flush()
-    out = _goal_out(g, last + 1, True)
+    out = await _goal_full(db, g, last + 1)
     await db.commit()
     undo = _signed(principal.tenant_id, GoalBucketsUndo(added_goal_id=g.id))
     return GoalBucketWrite(goal=out, undo=undo)
@@ -318,13 +431,40 @@ async def update_bucket_goal(
 ) -> GoalBucketWrite:
     """Edit a goal's name, measure, target and date (its order stays Baseline's)."""
     g = await _entity(db, goal_id, "goal")
+    if body.seen is not None and _changed_since(g, body.seen):
+        raise HTTPException(status.HTTP_409_CONFLICT, GOAL_CHANGED)
     undo = GoalBucketsUndo(goals=[_goal_snap(g)])
+    await _check_owner(db, body)
     _fields(g, body)
     await db.flush()
     order = next((i + 1 for i, x in enumerate(await _goals(db)) if x.id == g.id), 1)
-    out = _goal_out(g, order, True)
+    out = await _goal_full(db, g, order)
     await db.commit()
     return GoalBucketWrite(goal=out, undo=_signed(principal.tenant_id, undo))
+
+
+async def move_off(db: AsyncSession, g: Entity, to_goal_id: uuid.UUID | None) -> list[FeatureSnap]:
+    """Move the goal's features off it (Archive, and a delete to Trash): those that serve
+    another goal too keep it (now first), the rest go to ``to_goal_id`` or to no goal.
+    The links as they were, for Undo."""
+    held = sorted({e.src_id for e in await _links(db) if e.dst_id == g.id})
+    before = await _snap(db, held)
+    for snap in before:
+        await _set_links(db, snap.feature_id, moved_off_links(snap, g.id, to_goal_id))
+    return before
+
+
+def moved_off_links(
+    snap: FeatureSnap, goal_id: uuid.UUID, to_goal_id: uuid.UUID | None
+) -> list[GoalLinkSnap]:
+    """The feature's links once :func:`move_off` took them off ``goal_id``."""
+    first_here = bool(snap.links) and snap.links[0].goal_id == goal_id
+    rest = [lk for lk in snap.links if lk.goal_id != goal_id]
+    if first_here and rest:
+        return [GoalLinkSnap(goal_id=rest[0].goal_id, contribution=TOP), *rest[1:]]
+    if first_here and to_goal_id is not None:
+        return [GoalLinkSnap(goal_id=to_goal_id, contribution=TOP)]
+    return rest
 
 
 @router.post("/goals/{goal_id}/archive", response_model=GoalBucketWrite, name="archive_bucket_goal")
@@ -332,25 +472,53 @@ async def archive_bucket_goal(
     goal_id: uuid.UUID, body: ArchiveIn, principal: Approver, db: TenantDB
 ) -> GoalBucketWrite:
     """Archive a goal and move its features' links in one step."""
-    g = await _entity(db, goal_id, "goal")
-    if body.to_goal_id is not None:
-        to = await _entity(db, body.to_goal_id, "goal")
-        if to.id == g.id or to.status == "rejected":
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Pick another goal")
-    held = sorted({e.src_id for e in await _links(db) if e.dst_id == g.id})
-    before = await _snap(db, held)
-    undo = GoalBucketsUndo(goals=[_goal_snap(g)], features=before)
-    for snap in before:
-        first_here = bool(snap.links) and snap.links[0].goal_id == g.id
-        rest = [lk for lk in snap.links if lk.goal_id != g.id]
-        if first_here and rest:
-            rest = [GoalLinkSnap(goal_id=rest[0].goal_id, contribution=TOP), *rest[1:]]
-        elif first_here and body.to_goal_id is not None:
-            rest = [GoalLinkSnap(goal_id=body.to_goal_id, contribution=TOP)]
-        await _set_links(db, snap.feature_id, rest)
-    g.status = "rejected"
+    undo = await archive(db, goal_id, body.to_goal_id)
     await db.commit()
     return GoalBucketWrite(undo=_signed(principal.tenant_id, undo))
+
+
+async def archive(
+    db: AsyncSession, goal_id: uuid.UUID, to_goal_id: uuid.UUID | None
+) -> GoalBucketsUndo:
+    """Archive the goal, its features moved off it (also an accepted Ask to archive)."""
+    g = await _entity(db, goal_id, "goal")
+    if g.status == "rejected":
+        raise HTTPException(status.HTTP_409_CONFLICT, f"{g.title} is archived already")
+    if to_goal_id is not None:
+        to = await _entity(db, to_goal_id, "goal")
+        if to.id == g.id or to.status == "rejected":
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Pick another goal")
+    undo = GoalBucketsUndo(goals=[_goal_snap(g)], features=await move_off(db, g, to_goal_id))
+    g.status = "rejected"
+    g.attrs = {**(g.attrs or {}), "archived_at": company_time.now().isoformat()}
+    await db.flush()
+    return undo
+
+
+@router.post(
+    "/goals/{goal_id}/unarchive", response_model=GoalBucketWrite, name="unarchive_bucket_goal"
+)
+async def unarchive_bucket_goal(
+    goal_id: uuid.UUID, principal: Approver, db: TenantDB
+) -> GoalBucketWrite:
+    """Restore an archived goal to the buckets (its features stay where Archive moved them)."""
+    g = await _entity(db, goal_id, "goal")
+    undo = await unarchive(db, g)
+    order = next((i + 1 for i, x in enumerate(await _goals(db)) if x.id == g.id), 1)
+    out = await _goal_full(db, g, order)
+    await db.commit()
+    return GoalBucketWrite(goal=out, undo=_signed(principal.tenant_id, undo))
+
+
+async def unarchive(db: AsyncSession, g: Entity) -> GoalBucketsUndo:
+    """Put an archived goal back in the buckets (Restore, and an accepted ask)."""
+    if g.status != "rejected":
+        raise HTTPException(status.HTTP_409_CONFLICT, f"{g.title} is not archived")
+    undo = GoalBucketsUndo(goals=[_goal_snap(g)])
+    g.status = "confirmed"
+    g.attrs = {k: v for k, v in (g.attrs or {}).items() if k != "archived_at"}
+    await db.flush()
+    return undo
 
 
 @router.post(

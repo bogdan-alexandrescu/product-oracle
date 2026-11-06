@@ -2,13 +2,14 @@
 
 /**
  * Simple Goal map (build-goal-map), drawn to the owner's pick "Ladder by area lanes": the
- * goals on top as cards joined by arrows, the guardrail strip every milestone must hold,
+ * goals on top as cards side by side in priority order (nothing joins them: no goal comes
+ * before or after another), the guardrail strip every milestone must hold (never a goal card),
  * then one grid with the areas as rows in the owner's order and the milestones as columns
  * in steps, each gate with its reading, status and 7 days of proof; each feature a card in
  * the cell of its area under the milestone it serves (drawn once; its other places point to
  * it). A phone shows the milestones one by one. Every feature opens Simple's item panel.
  */
-import { useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
 import { Icon } from "@/components/ds/Icon";
 import { NewPrdSheet, useCanStartPrd } from "@/components/simple/NewPrd";
@@ -17,6 +18,9 @@ import type { GmArea, GmFeature, GmGoal, GmLift, GmMilestone, GmStatus, GoalMap 
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { FeaturePanel } from "./_panel";
+
+/** one-feature-panel: each feature's code (its roadmap item's), shown before its name. */
+const Codes = createContext<Map<string, string>>(new Map());
 
 type Edit = "propose" | "goal" | "attach" | "prd" | "area" | "gate" | null;
 
@@ -142,6 +146,7 @@ function FeatureCard({ f: all, milestone, area, tight, also, fresh, serves = "Al
   // In a milestone's cell: what it is expected to do for that milestone, and what it did.
   const link = all.links.find((l) => l.milestone === milestone);
   const f = link ? { ...all, expected: link.expected, confidence: link.confidence, measured: link.measured, lift: link.lift } : all;
+  const code = useContext(Codes).get(all.id);
   return (
     <div
       role="button"
@@ -158,7 +163,10 @@ function FeatureCard({ f: all, milestone, area, tight, also, fresh, serves = "Al
       data-feature={f.id}
       data-fresh={fresh ? "1" : undefined}
       className={`flex cursor-pointer flex-col gap-1 rounded-xl border border-line bg-surface hover:border-line-strong ${tight ? "px-2.5 py-1.5" : "px-3 py-2"} ${f.lift === "not_helping" ? "border-crit/50" : ""} ${fresh ? "border-accent! ring-2 ring-accent/40" : ""}`}>
-      <span className={`font-semibold ${tight ? "text-[16px] leading-6" : ""}`}>{f.name}</span>
+      <span className={`font-semibold ${tight ? "text-[16px] leading-6" : ""}`}>
+        {code && <span className="simple-code mr-1.5">{code}</span>}
+        {f.name}
+      </span>
       <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <LiftPill l={f.lift} />
         <span className="simple-small text-[14px]! leading-5">
@@ -294,6 +302,9 @@ export function GoalMapPage() {
   const [panel, setPanel] = useState<GmFeature | null>(null);
   const [prd, setPrd] = useState<{ name: string; problem: string } | null>(null);
   const map = q.data;
+  // Read after the map: its features are roadmap items once the map is read.
+  const roadmap = useQuery(`simple-roadmap:goal-map-codes:${map ? 1 : 0}`, () => (map ? unwrap(api.GET("/v1/simple/roadmap", { params: { query: {} } })) : Promise.resolve(null)));
+  const codes = useMemo(() => new Map((roadmap.data?.items ?? []).flatMap((i) => (i.code ? [[i.id, i.code] as [string, string]] : []))), [roadmap.data]);
 
   if (!map) return <div className="simple-page" role="status">{q.error ? errorMessage(q.error) : "Loading the goal map…"}</div>;
 
@@ -393,6 +404,7 @@ export function GoalMapPage() {
   const ctx: Ctx = { map, open, moveArea, onOpen: setPanel, week: weekOf(map.today) };
 
   return (
+    <Codes.Provider value={codes}>
     <div className="simple-page" data-testid="gm-page" style={{ maxWidth: "none" }}>
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1">
@@ -422,7 +434,7 @@ export function GoalMapPage() {
       {edit && draft && (
         <Editor map={map} edit={edit} draft={draft} setDraft={setDraft} goal={map.goals.find((g) => g.id === goalId) ?? map.goals[0]} onClose={close} onSave={() => void save()} />
       )}
-      {panel && <FeaturePanel id={panel.id} name={panel.name} onClose={() => setPanel(null)} />}
+      {panel && <FeaturePanel id={panel.id} code={codes.get(panel.id)} name={panel.name} onClose={() => setPanel(null)} />}
       {prd && (
         <NewPrdSheet
           prefill={prd}
@@ -434,6 +446,7 @@ export function GoalMapPage() {
         />
       )}
     </div>
+    </Codes.Provider>
   );
 }
 
@@ -671,7 +684,7 @@ function Editor({ map, edit, draft, setDraft, goal, onClose, onSave }: { map: Go
 
 /* ---------- Shared pieces of the proposals ---------- */
 
-function GoalCard({ g, onEdit, goals, canEdit }: { g: GmGoal; onEdit: () => void; goals: GmGoal[]; canEdit: boolean }) {
+function GoalCard({ g, onEdit, canEdit }: { g: GmGoal; onEdit: () => void; canEdit: boolean }) {
   return (
     <div data-testid="gm-goal" data-goal={g.id} className="simple-card flex-1 gap-1.5! px-4! py-3!">
       <span className="flex items-start justify-between gap-2">
@@ -686,10 +699,8 @@ function GoalCard({ g, onEdit, goals, canEdit }: { g: GmGoal; onEdit: () => void
         </span>
       </span>
       <Bar current={g.current} target={g.target} status={g.status} />
-      <span className="simple-small text-[14px]! leading-5">
-        {g.builds_on.length ? `Builds on ${goals.find((x) => x.id === g.builds_on[0])?.name.toLowerCase()}: ` : ""}
-        {g.math}
-      </span>
+      {/* Only the goal's own math: no goal is said to build on another. */}
+      <span className="simple-small text-[14px]! leading-5">{g.math}</span>
     </div>
   );
 }
@@ -697,15 +708,12 @@ function GoalCard({ g, onEdit, goals, canEdit }: { g: GmGoal; onEdit: () => void
 /** The goal cards' widths as the picked frame draws them: the last (the top goal) widest. */
 const GOAL_GROW = [1.04, 1, 1.3];
 
-function Goals({ map, open, arrows = true }: Ctx & { arrows?: boolean }) {
+function Goals({ map, open }: Ctx) {
   return (
-    <div className="flex items-stretch gap-2 max-[600px]:flex-col">
+    <div className="flex items-stretch gap-2 max-[600px]:flex-col" data-testid="gm-goals">
       {map.goals.map((g, i) => (
         <div key={g.id} className="flex flex-1 items-stretch gap-2 max-[600px]:flex-col" style={{ flexGrow: GOAL_GROW[i] ?? 1 }}>
-          <GoalCard g={g} goals={map.goals} canEdit={map.can_edit} onEdit={() => open("goal", g.id)} />
-          {arrows && i < map.goals.length - 1 && (
-            <span className="self-center text-[24px] font-bold text-text-faint max-[600px]:rotate-90" aria-label="builds on">→</span>
-          )}
+          <GoalCard g={g} canEdit={map.can_edit} onEdit={() => open("goal", g.id)} />
         </div>
       ))}
     </div>

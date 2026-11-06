@@ -1,29 +1,220 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { THEME_KEY } from "../lib/theme";
 import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { expect, test, type Locator, type Page } from "./test";
 
 /*
  * The owner (Nov 4): "on the roadmap we also need to see the next 3 months not just the next
  * 6. add a button for that". The Timeline's Show control leads with 3 months: the next three
  * months from today, weeks marked; 6 months stays the default. Driven against the mock's
  * invented data, with the mock clock pinned at Oct 22, 2026.
+ *
+ * The review's follow-ups (Nov 5): a week mark reads without a hover (each month's first one
+ * names its month: "Nov 9", then "16"), a month that starts on a Monday draws only its month
+ * line, a milestone's label stays clear of the names column when the chart is scrolled, in
+ * light and dark; a phone keeps the list by quarter and has no Show control.
+ *
+ * The next review (Nov 5): two milestones two weeks apart (the "approved-roadmap" scenario's
+ * invented "Trail beta · Jan 15" and "Trail launch · Jan 29") never draw one label over the other,
+ * scrolled or not, at every zoom: the earlier one gives way. No label, no "+ Milestone" hint and no
+ * milestone line sits over the names column, and the hint stays inside the chart.
  */
 
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
+const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 
-async function open(page: Page) {
+async function open(page: Page, scheme: "light" | "dark" = "light", scenario = "") {
+  const trails = scenario === "approved-roadmap";
   await page.context().addInitScript(
-    ([key, themeKey]) => {
-      localStorage.setItem(key, "");
-      localStorage.setItem(themeKey, "light");
+    ([key, themeKey, theme, value]) => {
+      localStorage.setItem(key, value);
+      localStorage.setItem(themeKey, theme);
     },
-    [MOCK_SCENARIO_KEY, THEME_KEY] as const,
+    [MOCK_SCENARIO_KEY, THEME_KEY, scheme, scenario] as const,
   );
+  await page.emulateMedia({ colorScheme: scheme });
   await login(page);
-  await page.goto("/simple/roadmap");
+  if (trails) {
+    // Approving the roadmap Example trails' version 3 in Detailed puts its milestones on Simple.
+    await page.goto("/documents/example-trails/v/3");
+    await page.getByTestId("approve-version").filter({ visible: true }).click();
+    await page.getByRole("group", { name: "Confirm approval" }).filter({ visible: true }).getByRole("button", { name: "Confirm" }).click();
+    await expect(page.getByText(/✓ Approved Oct 22, 2026/).filter({ visible: true }).first()).toBeVisible();
+  }
+  await page.goto(trails ? "/simple/roadmap?roadmap=example-trails" : "/simple/roadmap");
   await expect(page.getByTestId("zoom-timeline")).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", scheme);
 }
+
+/** The week marks whose left edge sits inside the chart's view, in order, as they read. */
+async function weeksInView(page: Page) {
+  const head = (await page.getByTestId("timeline-names-head").boundingBox())!;
+  const view = (await page.getByTestId("timeline-scroll").boundingBox())!;
+  const out: string[] = [];
+  for (const w of await page.getByTestId("timeline-week").all()) {
+    const b = await w.boundingBox();
+    if (b && b.x >= head.x + head.width - 1 && b.x < view.x + view.width) out.push((await w.innerText()).trim());
+  }
+  return out;
+}
+
+/** Slides the chart sideways with the mouse wheel, as a person would, by about `dx` pixels. */
+async function slide(page: Page, dx: number) {
+  const view = (await page.getByTestId("timeline-scroll").boundingBox())!;
+  await page.mouse.move(view.x + view.width / 2, view.y + 200);
+  const sl = () => page.getByTestId("timeline-scroll").evaluate((el) => el.scrollLeft);
+  const from = await sl();
+  await page.mouse.wheel(dx, 0);
+  await expect.poll(sl).not.toBe(from);
+  return (await sl()) - from;
+}
+
+/** Each check, in light and in dark, at 1440 wide. */
+function readsWhole(scheme: "light" | "dark") {
+  test(`${scheme}: at 3 months each month's first week mark names its month, and no mark touches a month`, async ({ page }) => {
+    await open(page, scheme);
+    await page.getByTestId("zoom-3m").click();
+    // Today is Oct 22: the marks run Oct 26, then Nov 9 (Nov 2 gives way to "Nov"), 16, 23, then
+    // Dec 7 (Nov 30 gives way to "Dec")...
+    await expect.poll(() => weeksInView(page)).toEqual(expect.arrayContaining(["Oct 26", "Nov 9", "16", "23", "Dec 7", "14"]));
+    const words = await weeksInView(page);
+    // A bare day only ever follows its month's named mark.
+    expect(words[0]).toMatch(/^[A-Z][a-z]{2} \d{1,2}$/);
+    const boxes = async (id: string) => (await Promise.all((await page.getByTestId(id).all()).map((l) => l.boundingBox()))).filter((b) => b !== null);
+    const months = await boxes("timeline-month");
+    for (const w of await boxes("timeline-week"))
+      for (const m of months) expect(w.x + w.width <= m.x - 2 || m.x + m.width <= w.x - 2, "a week mark touches a month's name").toBe(true);
+  });
+
+  test(`${scheme}: a month that starts on a Monday draws only its month line`, async ({ page }) => {
+    await open(page, scheme);
+    await page.getByTestId("zoom-3m").click();
+    // Feb 1 and Mar 1, 2027 are Mondays: slide the chart along to them.
+    const feb = page.getByTestId("timeline-month").filter({ hasText: /^Feb$/ }).first();
+    const right = async () => {
+      const v = (await page.getByTestId("timeline-scroll").boundingBox())!;
+      return v.x + v.width;
+    };
+    for (let n = 0; n < 12 && (await feb.boundingBox())!.x > (await right()) - 200; n++) await slide(page, 400);
+    await expect(feb).toBeInViewport();
+    for (const day of ["2027-02-01", "2027-03-01"]) {
+      await expect(page.locator(`[data-testid="timeline-month-line"][data-day="${day}"]`)).toHaveCount(1);
+      await expect(page.locator(`[data-testid="timeline-week-line"][data-day="${day}"]`)).toHaveCount(0);
+    }
+    // The other Mondays keep their week line.
+    await expect(page.locator('[data-testid="timeline-week-line"][data-day="2027-02-08"]')).toHaveCount(1);
+    await expect(page.locator('[data-testid="timeline-week-line"][data-day="2027-03-08"]')).toHaveCount(1);
+  });
+
+  test(`${scheme}: a milestone's label stays clear of the names column at every zoom`, async ({ page }) => {
+    await open(page, scheme);
+    const head = page.getByTestId("timeline-names-head");
+    const label = page.getByTestId("timeline-milestone").filter({ hasText: "Beta · Nov 30" });
+    // The label reads whole: all of it between the names column and the chart's right edge.
+    const clear = async () => {
+      const h = (await head.boundingBox())!;
+      const v = (await page.getByTestId("timeline-scroll").boundingBox())!;
+      const b = (await label.boundingBox())!;
+      expect(b.x, "the label starts right of the names column").toBeGreaterThanOrEqual(h.x + h.width);
+      expect(b.x + b.width).toBeLessThanOrEqual(v.x + v.width);
+      await expect(label).toHaveText("◆ Beta · Nov 30");
+      // The "+ Milestone" hint on the axis keeps off it.
+      const hint = page.getByTestId("ms-add-hint");
+      if (await hint.isVisible()) {
+        const k = (await hint.boundingBox())!;
+        expect(k.x + k.width <= b.x || b.x + b.width <= k.x, "the + Milestone hint covers the label").toBe(true);
+      }
+    };
+    for (const z of ["3m", "6m", "1y", "all"]) {
+      await page.getByTestId(`zoom-${z}`).click();
+      await expect(label).toBeVisible();
+      await clear();
+      if (z === "all") continue;
+      // Slide the chart until the milestone's line sits just left of the names column.
+      const h = (await head.boundingBox())!;
+      const line = (await label.boundingBox())!.x - 4;
+      const moved = await slide(page, line - (h.x + h.width) + 20);
+      expect(line - moved).toBeLessThan(h.x + h.width);
+      await expect(label).toBeVisible();
+      await clear();
+    }
+  });
+}
+
+/** The approved-roadmap scenario's milestones, at every zoom, scrolled and not. */
+function milestonesApart(scheme: "light" | "dark") {
+  test(`${scheme}: two milestones two weeks apart never overlap, and keep off the names column`, async ({ page }) => {
+    await open(page, scheme, "approved-roadmap");
+    await expect(page.getByTestId("timeline-milestone").filter({ hasText: "Trail launch · Jan 29" })).toBeVisible();
+    const box = async (l: Locator) => (await l.isVisible()) ? await l.boundingBox() : null;
+    const check = async (where: string) => {
+      const h = (await page.getByTestId("timeline-names-head").boundingBox())!;
+      const v = (await page.getByTestId("timeline-scroll").boundingBox())!;
+      const edge = h.x + h.width;
+      const labels = (await Promise.all((await page.getByTestId("timeline-milestone").all()).map(box))).filter((b) => b !== null);
+      for (const [n, a] of labels.entries()) {
+        expect(a.x, `${where}: a milestone's label is over the names column`).toBeGreaterThanOrEqual(edge);
+        for (const b of labels.slice(n + 1))
+          expect(a.x + a.width <= b.x || b.x + b.width <= a.x, `${where}: two milestone labels overlap`).toBe(true);
+      }
+      const hint = await box(page.getByTestId("ms-add-hint"));
+      if (hint) {
+        expect(hint.x, `${where}: the + Milestone hint is over the names column`).toBeGreaterThanOrEqual(edge);
+        expect(hint.x + hint.width, `${where}: the + Milestone hint runs past the chart`).toBeLessThanOrEqual(v.x + v.width);
+        for (const a of labels) expect(hint.x + hint.width <= a.x || a.x + a.width <= hint.x, `${where}: the + Milestone hint covers a label`).toBe(true);
+      }
+      for (const l of await page.getByTestId("timeline-milestone-line").all()) {
+        const b = await l.boundingBox();
+        if (b) expect(b.x, `${where}: a milestone's line shows inside the names column`).toBeGreaterThanOrEqual(edge - 1);
+      }
+    };
+    // How far to slide, a step at a time, till both lines are well behind the names column.
+    const steps: Record<string, number> = { "3m": 13, "6m": 7, "1y": 4 };
+    for (const z of ["3m", "6m", "1y", "all"]) {
+      await page.getByTestId(`zoom-${z}`).click();
+      await expect(page.getByTestId(`zoom-${z}`)).toHaveAttribute("aria-pressed", "true");
+      await check(`${z}, unscrolled`);
+      const atEnd = () => page.getByTestId("timeline-scroll").evaluate((el) => el.scrollLeft + el.clientWidth >= el.scrollWidth - 1);
+      for (let n = 0; n < (steps[z] ?? 0) && !(await atEnd()); n++) {
+        await slide(page, 120);
+        await check(`${z}, slid ${n + 1}`);
+      }
+    }
+  });
+}
+
+test.describe("desktop, light", () => {
+  test.use(DESKTOP);
+  readsWhole("light");
+  milestonesApart("light");
+});
+
+test.describe("desktop, dark", () => {
+  test.use(DESKTOP);
+  readsWhole("dark");
+  milestonesApart("dark");
+
+  test("dark: 3 months shows Oct to Jan with weeks marked", async ({ page }) => {
+    await open(page, "dark");
+    await page.getByRole("button", { name: "3 months", exact: true }).click();
+    await expect(page.getByTestId("zoom-3m")).toHaveAttribute("aria-pressed", "true");
+    await expect.poll(() => monthsInView(page)).toEqual(["Oct 2026", "Nov", "Dec", "Jan 2027"]);
+    await expect(page.getByTestId("timeline-week").first()).toBeVisible();
+  });
+});
+
+test.describe("phone", () => {
+  test.use(PHONE);
+
+  for (const scheme of ["light", "dark"] as const)
+    test(`${scheme}: a phone keeps the list by quarter, with no Show control`, async ({ page }) => {
+      await open(page, scheme);
+      await expect(page.getByTestId("timeline-quarter").first()).toBeVisible();
+      await expect(page.getByRole("group", { name: "Show" })).toHaveCount(0);
+      await expect(page.getByTestId("zoom-3m")).toHaveCount(0);
+      await expect(page.getByTestId("timeline-scroll")).toHaveCount(0);
+    });
+});
 
 /** The month labels whose left edge sits inside the chart's view, in order. */
 async function monthsInView(page: Page) {

@@ -190,14 +190,14 @@ for (const v of VIEWS) {
       };
       const shown = await holds();
       if (!v.phone) expect(shown.length, "a desktop bar names its milestones").toBeGreaterThan(0);
-      // At the default text width a desktop reads as the picked frames: five labels at 1366,
-      // and at 1440 (the frames' rule still) Growth's short M1 segment stays blank.
-      if (!v.phone && !process.env.E2E_TEXT_SPACING) {
-        expect(shown).toHaveLength(5);
+      // The rule holds at 1440 too, whatever width the text draws (normal, wider, narrower):
+      // no count of labels, which follows the system's text, only that each shown label fits its
+      // bar with the frames' margin and each hidden one would not.
+      if (!v.phone) {
         await page.setViewportSize({ width: 1440, height: 900 });
-        await expect(async () => void (await holds())).toPass();
-        await expect(head.locator('[data-testid="goal-bar"][data-goal="Growth"] [data-milestone="M1"]').getByTestId("goal-bar-label")).toHaveCount(0);
+        await expect(async () => expect((await holds()).length, "a desktop bar names its milestones at 1440").toBeGreaterThan(0)).toPass();
         await page.setViewportSize({ width: 1366, height: 820 });
+        await expect(async () => void (await holds())).toPass();
       }
       // Every label on a milestone colour reads at AA (4.5:1), light and dark.
       expect(await contrasts(head.getByTestId("goal-bar-label"))).toEqual([]);

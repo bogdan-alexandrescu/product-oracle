@@ -364,6 +364,11 @@ export const OP_WORDS: Record<string, string> = {
   set_decider: "Change the decider",
   decide_question: "Decide a question",
   name_decider: "Name who decides",
+  // trash-features-goals and the goal asks (edit-goals-prds EG1 a).
+  delete_item: "Move to Trash",
+  delete_goal: "Move the goal to Trash",
+  archive_goal: "Archive the goal",
+  unarchive_goal: "Restore the goal",
 };
 /** A change's words; one the list does not name yet reads "Change", never its code. */
 export const opWords = (op: string): string => OP_WORDS[op] ?? "Change";

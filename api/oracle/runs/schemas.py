@@ -1658,6 +1658,9 @@ class ActionIn(BaseModel):
     # The reason codes (D2) this action answers.
     answers: list[str] = Field(default=[], max_length=20)
     note: str | None = Field(default=None, max_length=2000)
+    # Undo of part of the action already in the slot (one dependency of a joined removal):
+    # it keeps where it came from, so a discussion's change stays staged or suggested.
+    keep_origin: bool | None = None
 
 
 class DraftNoteIn(BaseModel):

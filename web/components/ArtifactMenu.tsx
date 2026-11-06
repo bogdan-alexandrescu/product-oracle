@@ -32,6 +32,9 @@ const KIND_LABEL: Record<string, string> = {
   vision: "Vision",
   strategy: "Strategy",
   intake: "Brief",
+  // trash-features-goals: a roadmap feature and a goal in Settings › Trash.
+  feature: "Feature",
+  goal: "Goal",
 };
 
 export function itemKind(i: TrashItem): string {

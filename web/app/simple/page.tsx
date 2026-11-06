@@ -13,13 +13,14 @@ import { Icon } from "@/components/ds/Icon";
 import { Button } from "@/components/ds/Button";
 import { Dialog } from "@/components/ds/Dialog";
 import { setToastPlace, toast } from "@/components/ds/Toast";
-import { FitHomeCard } from "@/components/simple/FitDate";
 import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
 import { usePhone } from "@/components/simple/FlowViews";
 import { GoalNum, GoalOrderEdit } from "@/components/simple/GoalOrder";
 import { meetingMoment } from "@/components/simple/FlowVisual";
 import { NewPrdButton, NewPrdSheet, StartedCard, useCanStartPrd, useStartedPrds } from "@/components/simple/NewPrd";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
+import { Named } from "./roadmap/_fields";
+import { FeaturePanel } from "./roadmap/_panel";
 import { QuestionRow, useQuestionActions, type Question } from "@/components/simple/questions/Questions";
 import { SimplePage } from "@/components/simple/SimplePage";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -131,6 +132,8 @@ export default function SimpleHome() {
   const { me, can, capsReady } = useMe();
   const zone = useCompanyZone();
   const [stamp, setStamp] = useState(0);
+  // one-feature-panel: a feature named on Home opens its panel (the roadmap's).
+  const [opened, setOpened] = useState<Schemas["SimpleRoadmapItem"] | null>(null);
   // S9: "Walk me through it" turns Home into a guided pass; Done returns here.
   const [walking, setWalking] = useState(false);
   // qa4-simple-home-10: Done gives the focus back to "Walk me through it".
@@ -258,7 +261,12 @@ export default function SimpleHome() {
   const reads = !proposes;
   const myId = me?.user_id ?? "";
 
-  const toDecide = useMemo(() => (changes.data ?? []).filter((c) => c.status === "proposed" && c.can_decide), [changes.data]);
+  // A goal's ask (Ask to archive, delete or restore) names no roadmap item, so the roadmap's
+  // proposals tray behind "more" cannot list it: it comes first here.
+  const toDecide = useMemo(() => {
+    const rows = (changes.data ?? []).filter((c) => c.status === "proposed" && c.can_decide);
+    return [...rows.filter((c) => typeof c.target.goal_id === "string"), ...rows.filter((c) => typeof c.target.goal_id !== "string")];
+  }, [changes.data]);
   const mine = useMemo(() => (changes.data ?? []).filter((c) => c.status === "proposed" && c.by === myId), [changes.data, myId]);
   const broken = useMemo(() => brokenLinks(roadmap.data), [roadmap.data]);
   const waitingItems = useMemo(() => {
@@ -407,7 +415,7 @@ export default function SimpleHome() {
       key={c.id}
       testId="home-proposal"
       lead={<Avatar name={c.by_name} />}
-      title={`${opWords(c.op)}: ${itemTitle(c.target.item_id)}${typeof c.after.title === "string" && NEW_FLOW_OPS.has(c.op) ? ` · ${c.after.title}` : ""}`}
+      title={`${opWords(c.op)}: ${typeof c.target.goal_id === "string" && typeof c.target.title === "string" ? c.target.title : itemTitle(c.target.item_id)}${typeof c.after.title === "string" && NEW_FLOW_OPS.has(c.op) ? ` · ${c.after.title}` : ""}`}
       meta={`${c.by === myId ? "You" : c.by_name} · ${formatInZone(c.at, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}${c.reason ? ` · ${c.reason}` : ""}`}
       change={NEW_FLOW_OPS.has(c.op) ? null : beforeAfter(c)}
       thumb={NEW_FLOW_OPS.has(c.op)}
@@ -531,6 +539,18 @@ export default function SimpleHome() {
 
   return (
     <SimplePage title="Home">
+      {opened && (
+        <FeaturePanel
+          key={opened.id}
+          feature={{ id: opened.id, code: opened.code ?? "", name: opened.title, prd: opened.prd }}
+          phone={phone}
+          canChange={can("create_simple_change")}
+          onClose={() => {
+            setOpened(null);
+            void roadmap.reload();
+          }}
+        />
+      )}
       {newPrd && <NewPrdSheet onClose={closeNewPrd} onStarted={() => void started.reload()} />}
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
       {confirming && (
@@ -616,8 +636,6 @@ export default function SimpleHome() {
 
       {!walking && (
       <>
-      {/* Bring a date in (FD3 a): an approved re-plan's milestone on its date, and what moved. */}
-      <FitHomeCard />
       <StartedCard started={started.data ?? []} />
       {/* qa-onboarding-6: an invited member's role welcome, in Simple too (dismissed in one mode, gone in both). */}
       <SimpleWelcome show={setupQ.data?.welcome === true} onDismissed={() => void setupQ.reload()} />
@@ -1003,7 +1021,9 @@ export default function SimpleHome() {
                         lead={<RowIcon name="alert" />}
                         title={
                           <>
-                            <span className="text-crit">{links[0].item.title}</span>
+                            <button type="button" className="text-left text-crit hover:underline" onClick={() => setOpened(links[0].item)}>
+                              <Named item={links[0].item} />
+                            </button>
                             {/* qa4-simple-home-7: the plan draws one PRD; with links on several roadmaps each item says its own. */}
                             {brokenRoadmaps.length > 1 && (
                               <span data-testid="home-broken-roadmap" className="font-normal text-text2">
@@ -1058,9 +1078,9 @@ export default function SimpleHome() {
                         testId="home-milestone-row"
                         lead={<RowIcon name="roadmap" />}
                         title={
-                          <Link href={i.prd ? `/simple/roadmap?prd=${encodeURIComponent(i.prd.slug)}` : `/simple/roadmap?roadmap=${encodeURIComponent(i.roadmap.id)}`} className="hover:underline">
-                            {i.title}
-                          </Link>
+                          <button type="button" className="text-left hover:underline" onClick={() => setOpened(i)}>
+                            <Named item={i} />
+                          </button>
                         }
                         meta={`${m.name} · ${i.outcome ?? i.roadmap.title}`}
                       />

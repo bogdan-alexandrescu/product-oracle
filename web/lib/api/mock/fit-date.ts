@@ -16,6 +16,7 @@ import type { Schemas } from "@/lib/api/client";
 import { MOCK_NOW } from "./clock";
 import * as fd from "./fit-date-engine";
 import { PLAN_HARD_TARGET, PLAN_TARGET } from "./fit-date-engine";
+import plan from "./fit-date-plan.json";
 
 export { round1 } from "./fit-date-engine";
 import { stableUuid } from "./ids";
@@ -31,10 +32,12 @@ export const FIT_COMPANY_SCENARIO = "fit-date-company-roadmap";
 export const FIT_SCENARIOS = ["fit-date", "fit-date-hard", "fit-date-hard-no-goal", "fit-date-foreign-draft", FIT_COMPANY_SCENARIO] as const;
 const isHard = (scenario: string | null) => scenario === "fit-date-hard" || scenario === "fit-date-hard-no-goal";
 
-// The Baseline goal the M2 gate counts toward: the PRD's milestone target names 40.
+// The Baseline goal the M2 gate counts toward: the PRD's milestone target names 40. Its start and
+// the PRD's target are fit-date-plan.json's goal, the values the API test scales the plan by.
 export const FIT_GOAL_ID = stableUuid("fit-date/goal");
 const GOAL_TITLE = "40 replied threads per agent per day";
-const PLAN_TARGET_VALUE = 40;
+const PLAN_TARGET_VALUE = plan.goal.plan_target;
+const GOAL_START = plan.goal.start;
 // The goal's own due date (invented): the smaller-goal sheet opens with it.
 const GOAL_DUE = "2027-03-31";
 type GoalRow = { id: string; type: string; title: string; status: string; attrs?: Record<string, unknown> | null };
@@ -45,7 +48,7 @@ export function fitDateGoal<T extends GoalRow>(scenario: string | null, template
   return {
     ...template, id: FIT_GOAL_ID, key: "replied-threads", type: "goal", title: GOAL_TITLE, body: null, status: "confirmed",
     locked: false, locked_by: null, locked_at: null,
-    attrs: { metric: "replied threads per agent per day", unit: "threads", comparison: "at_least", start: 20, target: PLAN_TARGET_VALUE, horizon: "short", due: GOAL_DUE },
+    attrs: { metric: "replied threads per agent per day", unit: "threads", comparison: "at_least", start: GOAL_START, target: PLAN_TARGET_VALUE, horizon: "short", due: GOAL_DUE },
   };
 }
 

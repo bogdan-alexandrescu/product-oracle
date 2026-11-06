@@ -14,9 +14,15 @@ a column pointing at documents is followed here or exempt there with its reason.
 Lists, direct reads (a 404), the Inbox, Home, Plan and the agents' MCP reads all go
 through here; a new read path cannot forget it.
 
-Only oracle.trash reads trashed rows, with the :data:`INCLUDE_TRASHED` execution option
-(Trash itself, restore and the purge). tests/test_trash.py scans the code for reads that
-would get around this (raw SQL or Core reads of these tables).
+trash-features-goals: a roadmap feature (:class:`~oracle.roadmap.models.RoadmapItem`)
+and a goal (:class:`~oracle.baseline.models.Entity`) in Trash are left out the same way,
+with a feature's date suggestions, tasks and action items, and a goal's edges and
+measurements.
+
+Only oracle.trash (and oracle.simple.trash_items) reads trashed rows, with the
+:data:`INCLUDE_TRASHED` execution option (Trash itself, restore and the purge).
+tests/test_trash.py scans the code for reads that would get around this (raw SQL or Core
+reads of these tables).
 """
 
 from collections.abc import Callable
@@ -38,6 +44,7 @@ def _trashed(table: Table) -> Any:
 
 def _children() -> dict[type, list[tuple[str, Table]]]:
     """Mapped class -> (column holding the parent's id, the parent's table)."""
+    from oracle.baseline.models import Edge, Entity, GoalMeasurement
     from oracle.discussions.models import Discussion
     from oracle.docs.models import Document, DocumentVersion
     from oracle.jobs.models import LlmJob, LlmSuggestion
@@ -67,6 +74,7 @@ def _children() -> dict[type, list[tuple[str, Table]]]:
     from oracle.runs.scope_models import PrdScope
     from oracle.shares.models import ShareLink
     from oracle.simple.models import (
+        RoadmapDateSuggestion,
         RoadmapItemTask,
         RoadmapKeyDate,
         SimpleActionItem,
@@ -92,6 +100,8 @@ def _children() -> dict[type, list[tuple[str, Table]]]:
     )
 
     docs, runs, intakes = Document.__table__, Run.__table__, ProductIntake.__table__
+    # trash-features-goals: a feature (roadmap item) or goal in Trash.
+    items, entities = RoadmapItem.__table__, Entity.__table__
     return {
         DocumentVersion: [("document_id", docs)],
         FeedbackItem: [("document_id", docs)],
@@ -133,8 +143,13 @@ def _children() -> dict[type, list[tuple[str, Table]]]:
         SimpleDraft: [("document_id", docs)],
         SimpleSessionDraft: [("document_id", docs)],
         SimpleOnePager: [("document_id", docs)],
-        RoadmapItemTask: [("roadmap_document_id", docs)],
-        SimpleActionItem: [("roadmap_document_id", docs)],
+        RoadmapItemTask: [("roadmap_document_id", docs), ("item_id", items)],
+        SimpleActionItem: [("roadmap_document_id", docs), ("item_id", items)],
+        # trash-features-goals: a feature's date suggestions leave with it; a goal's links
+        # and measurements with the goal (its features were moved off it first).
+        RoadmapDateSuggestion: [("item_id", items)],
+        Edge: [("src_id", entities), ("dst_id", entities)],
+        GoalMeasurement: [("entity_id", entities)],
         # Simple's key dates (roadmap-plus), visuals (S10) and review meetings (S8).
         RoadmapKeyDate: [("roadmap_document_id", docs)],
         SimpleVisual: [("document_id", docs)],
@@ -198,15 +213,20 @@ def criteria() -> dict[type, Callable[[Any], ColumnElement[bool]]]:
     """Mapped class -> a function of the class, or of an alias of it, giving the clause that
     keeps only its live rows. Built once; no bound values, so the statement cache works."""
     if not _CRITERIA:
+        from oracle.baseline.models import Entity
         from oracle.decisions.models import Decision
         from oracle.docs.models import Document
+        from oracle.roadmap.models import RoadmapItem
         from oracle.runs.models import Run
         from oracle.v2.models import ArtifactRequest, ProductIntake, StakeholderQuestion
 
-        for entity in (Document, ProductIntake, Run):
+        for entity in (Document, ProductIntake, Run, Entity):
             _CRITERIA[entity] = lambda cls: cls.deleted_at.is_(None)
         for entity, parents in _children().items():
             _CRITERIA[entity] = _live_parents(parents)
+        # A roadmap item: its roadmap not in Trash, and the item itself not either.
+        parent = _CRITERIA[RoadmapItem]
+        _CRITERIA[RoadmapItem] = lambda cls: and_(parent(cls), cls.deleted_at.is_(None))
         request = _CRITERIA[ArtifactRequest]
         _CRITERIA[ArtifactRequest] = lambda cls: and_(request(cls), _spec_document_live(cls))
         asked = _CRITERIA[StakeholderQuestion]

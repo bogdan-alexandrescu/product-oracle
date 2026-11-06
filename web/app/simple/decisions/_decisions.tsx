@@ -2,10 +2,14 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import { Icon } from "@/components/ds/Icon";
 import { toast } from "@/components/ds/Toast";
+import { FeatureFoundContext, OpenFeatureContext, type OpenFeature } from "@/components/simple/OpenFeature";
+import { usePhone } from "@/components/simple/PrdTimeline";
+import { useMe } from "@/lib/me";
+import { FeaturePanel, itemFor } from "../roadmap/_panel";
 import { QuestionRow, useQuestionActions, useSourceLine, type Question } from "@/components/simple/questions/Questions";
 import { SimpleEmpty, SimplePage } from "@/components/simple/SimplePage";
 import { ErrorNote, Loading } from "@/components/ui";
@@ -98,8 +102,19 @@ export function SimpleDecisions() {
   // qa-simple-decide-20: the API leaves out an open decision a shown meeting lists as its open question.
   const other = d?.other ?? [];
   const zone = useCompanyZone();
+  // one-feature-panel: a feature a decision blocks opens its panel here.
+  const [feature, setFeature] = useState<Parameters<OpenFeature>[0] | null>(null);
+  const phone = usePhone();
+  const { can } = useMe();
+  const roadmap = useQuery("simple-roadmap:decisions", () => unwrap(api.GET("/v1/simple/roadmap", {})));
+  const found = useCallback((f: Parameters<OpenFeature>[0]) => !!itemFor(roadmap.data?.items ?? [], f), [roadmap.data]);
   return (
     <SimplePage title="Decisions" lead={`${LEADS[view]} Dates are in ${zoneName(zone)}.`}>
+      <OpenFeatureContext.Provider value={setFeature}>
+      <FeatureFoundContext.Provider value={found}>
+      {feature && (
+        <FeaturePanel key={`${feature.code}|${feature.name}`} feature={feature} phone={phone} canChange={can("create_simple_change")} onClose={() => setFeature(null)} />
+      )}
       <div className="flex flex-wrap items-end justify-between gap-3">
         {/* qa4-simple-decide-35: the filters wrap among themselves, so the view switch keeps its place beside them when Ask Oracle narrows the page. */}
         <div className="flex min-w-0 flex-1 flex-wrap gap-3 max-[600px]:w-full" role="group" aria-label="Filters">
@@ -157,6 +172,8 @@ export function SimpleDecisions() {
           </span>
         </p>
       )}
+      </FeatureFoundContext.Provider>
+      </OpenFeatureContext.Provider>
     </SimplePage>
   );
 }

@@ -5,7 +5,7 @@
  * a feature: its details, dependencies both ways, dates, goal and how it is measured, each
  * editable there through the change engine, as on Simple Roadmap.
  */
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 
 import { toast as dsToast, type ToastAsk } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
@@ -13,7 +13,8 @@ import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 import { FloatingCard, type Act } from "../roadmap/_card";
-import { ChangeFailed, decide, propose, resultWords, type Change } from "../roadmap/_lib";
+import { usePanelItem } from "../roadmap/_panel";
+import { ChangeFailed, changedWords, decide, propose, resultWords, undo, type Change } from "../roadmap/_lib";
 
 const toast = (ask: ToastAsk) => dsToast({ place: "corner", ...ask });
 
@@ -30,7 +31,7 @@ function usePhone(): boolean {
   );
 }
 
-export function FeaturePanel({ id, name, onClose }: { id: string; name: string; onClose: () => void }) {
+export function FeaturePanel({ id, code, name, onClose }: { id: string; code?: string; name: string; onClose: () => void }) {
   const { can } = useMe();
   const phone = usePhone();
   const roadmap = useQuery("simple-roadmap:goal-map", () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: {} } })));
@@ -39,19 +40,28 @@ export function FeaturePanel({ id, name, onClose }: { id: string; name: string; 
     await Promise.all([roadmap.reload(), proposals.reload()]);
   }, [roadmap, proposals]);
   const byId = useMemo(() => new Map((roadmap.data?.items ?? []).map((i) => [i.id, i])), [roadmap.data]);
-  const item = byId.get(id);
+  // one-feature-panel: a dependency (or a feature that needs this one) opens in its place.
+  const [opened, setOpened] = useState<string | null>(null);
+  // one-feature-panel: the card's own item (its name checked; else its code, then its name).
+  const item = usePanelItem(roadmap.data?.items ?? [], { id, code: code ?? "", name }, opened);
   const act: Act = useCallback(
     async (what, body) => {
       try {
         const r = await propose(body);
-        toast({ message: resultWords(r, what, item?.deciders) });
+        toast({
+          message: resultWords(r, what, item?.deciders),
+          action: r.change.status === "applied" && r.change.can_undo ? { label: "Undo", onClick: () => void undo(r.change.id).then(reload, (e) => toast({ message: String(e.message) })) } : undefined,
+        });
       } catch (e) {
-        toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not make this change" });
+        if (e instanceof ChangeFailed && e.status === 409) {
+          const changed = changedWords(e.changed);
+          toast({ message: `${e.message}${changed.length ? ` (its ${changed.join(" and ")})` : ""}. Reload to see the latest, then try again.` });
+        } else toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not make this change" });
       } finally {
         await reload();
       }
     },
-    [reload, item?.deciders],
+    [reload, item],
   );
   const onDecide = useCallback(
     async (c: Change, how: "accept" | "decline") => {
@@ -91,6 +101,7 @@ export function FeaturePanel({ id, name, onClose }: { id: string; name: string; 
           canChange={can("create_simple_change")}
           onDecide={(c, how) => void onDecide(c, how)}
           onClose={onClose}
+          onOpen={setOpened}
         />
       </div>
     </div>

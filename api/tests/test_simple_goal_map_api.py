@@ -40,6 +40,13 @@ Test cards (protects / fails_when / no_claim):
 - test_only_the_company_roadmap_feeds_the_map (train review): protects=while the company
   roadmap exists the map shows only its goal milestones and a new one lands on it;
   fails_when=an older roadmap's milestones show or the proposal lands on the oldest roadmap.
+- test_goals_come_in_priority_order (goal-map-no-arrows): protects=the goal cards follow the
+  one goal order (attrs.position), not what each goal builds on; fails_when=a goal that
+  builds on another is put after it against its priority; no_claim=the web's cards.
+- test_a_guardrail_goal_is_never_a_goal_card (goal-map-no-arrows): protects=a goal marked
+  as a guardrail is left out of the goals and read in the guardrail strip (with its 7
+  days) when no guardrail constraint is set; fails_when=it is a goal card or missing from
+  the strip; no_claim=the web's strip.
 """
 
 import uuid
@@ -50,7 +57,7 @@ import pytest
 from sqlalchemy import event, func, select
 
 from oracle import company_time
-from oracle.baseline.models import GoalMeasurement
+from oracle.baseline.models import Entity, GoalMeasurement
 from oracle.docs.models import Document
 from oracle.roadmap.models import TrackMilestone
 from oracle.simple import goal_map
@@ -76,7 +83,7 @@ async def world() -> tuple[Ctx, dict[str, str]]:
         seed = Seed(s)
         signups = await seed.entity(
             "goal", "signups", metric="sign-ups per rep per day", target=40, unit="",
-            math="Each rep's daily sign-ups",
+            math="Each rep's daily sign-ups", position=1,
             target_history=[
                 {"date": "Oct 30, 2026", "text": "Target 30 → 40", "by": "Ann Example"}
             ],
@@ -84,10 +91,11 @@ async def world() -> tuple[Ctx, dict[str, str]]:
         conv = await seed.entity(
             "goal", "conversions", metric="paid conversions per rep per day", target=10,
             unit="", math="Sign-ups per rep × conversion rate", builds_on=[str(signups.id)],
+            position=2,
         )  # fmt: skip
         revenue = await seed.entity(
             "goal", "revenue", metric="revenue per day", target=20000, unit="$",
-            math="Reps × conversions per rep × value", builds_on=[str(conv.id)],
+            math="Reps × conversions per rep × value", builds_on=[str(conv.id)], position=3,
         )  # fmt: skip
         guard = await seed.entity(
             "constraint", "customer-complaints", guardrail=True, rule="= 0 every day"
@@ -527,3 +535,41 @@ async def test_only_the_company_roadmap_feeds_the_map(client):
         row = await s.get(TrackMilestone, uuid.UUID(m["id"]))
         assert str(row.roadmap_id) == company_id and row.code == "M1"
     assert [m["name"] for m in (await read(client, ctx))["milestones"]] == ["35 sign-ups per rep"]
+
+
+async def test_goals_come_in_priority_order(client):
+    ctx, ids = await world()
+    async with tenant_session(ctx.tenant_id) as s:
+        for key, place in (("revenue", 1), ("signups", 2), ("conv", 3)):
+            g = await s.get(Entity, uuid.UUID(ids[key]))
+            g.attrs = {**g.attrs, "position": place}
+        await s.commit()
+    body = await read(client, ctx)
+    assert [g["id"] for g in body["goals"]] == [ids["revenue"], ids["signups"], ids["conv"]]
+
+
+async def test_a_guardrail_goal_is_never_a_goal_card(client):
+    ctx, ids = await world()
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        held = await seed.entity(
+            "goal", "account-restrictions", metric="account restrictions", target=0, unit="",
+            comparison="at_most", guardrail=True,
+        )  # fmt: skip
+        for i in range(7):
+            on = TODAY - timedelta(days=6 - i)
+            s.add(GoalMeasurement(entity_id=held.id, measured_on=on, value=Decimal(0)))
+        await s.commit()
+    body = await read(client, ctx)
+    assert [g["id"] for g in body["goals"]] == [ids["signups"], ids["conv"], ids["revenue"]]
+    assert body["guardrail"]["name"] == "Customer Complaints"
+    # With no guardrail constraint, the strip reads the guardrail goal; still no card.
+    async with tenant_session(ctx.tenant_id) as s:
+        for c in (await s.scalars(select(Entity).where(Entity.type == "constraint"))).all():
+            c.attrs = {**c.attrs, "guardrail": False}
+        await s.commit()
+    body = await read(client, ctx)
+    assert str(held.id) not in [g["id"] for g in body["goals"]]
+    g = body["guardrail"]
+    assert g["name"] == "Account Restrictions" and g["rule"] == "= 0 every day"
+    assert g["days"] == [0] * 7 and g["held"] is True and g["current"] == 0
