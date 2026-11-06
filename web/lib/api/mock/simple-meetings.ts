@@ -54,6 +54,7 @@ import { publishOnePager, type OnePagerDb } from "./simple-one-pager";
 import { APPROVED_KEY, draftAct, draftRoadmapOut } from "./meeting-draft";
 import { goalRank, homeRoadmapOf, roadmapId, roadmapOut, tasksWaiting, type SimpleDb } from "./simple-roadmap";
 import type { ChatMeetings, MeetingAgenda, MeetingNote } from "./simple-chat";
+import { madeOrder } from "./made-order";
 
 export const MOCK_MEETINGS_KEY = "po-mock-simple-meetings";
 /** "minutes-later": the minutes job ends this long after End (the production walk: 14 s). */
@@ -480,7 +481,7 @@ function proposals(ctx: MeetingsCtx, p: Prd): Change[] {
   const ids = new Set(prdItems(ctx, p).map((i) => i.id));
   const roadmap = (ctx.roadmap.changes ?? []).filter((c) => c.status === "proposed" && ids.has(String(c.target.item_id)));
   const lines = p.slug === ctx.onePager.doc.slug ? ctx.onePager.changes.filter((c) => c.status === "proposed") : [];
-  return [...roadmap, ...lines].filter((c) => sees(ctx, c)).sort((a, b) => (a.at < b.at ? -1 : 1)).map((c) => bare(ctx, c));
+  return madeOrder([...roadmap, ...lines], (c) => [c.at]).filter((c) => sees(ctx, c)).map((c) => bare(ctx, c));
 }
 
 /** The decider approved, and something still holds publishing (drafts.holds). */

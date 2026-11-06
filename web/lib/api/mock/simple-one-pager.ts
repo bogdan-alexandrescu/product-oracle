@@ -30,6 +30,7 @@ import { draftDecisionNotes, leftOut } from "./decision-notes";
 import { stableUuid } from "./ids";
 import { annotate, resolved, setNumber, type Cites } from "./one-pager-checks";
 import { betSubject, flowFor, onePagerFlow, requestVisual, type VisualsDb } from "./simple-visuals";
+import { madeOrder } from "./made-order";
 
 type Role = Schemas["Me"]["role"];
 type Change = Schemas["SimpleChangeOut"];
@@ -740,7 +741,7 @@ export function publishOnePager(db: OnePagerDb) {
 
 function liveChanges(db: OnePagerDb) {
   const undone = new Set(db.changes.filter((c) => c.status === "undone").map((c) => c.undoes_id));
-  return db.changes.filter((c) => (c.status === "applied" || c.status === "accepted") && !undone.has(c.id));
+  return madeOrder(db.changes, (c) => [c.at]).filter((c) => (c.status === "applied" || c.status === "accepted") && !undone.has(c.id));
 }
 
 function out(db: OnePagerDb, ctx: OnePagerCtx, c: Change): Change {
@@ -762,8 +763,10 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
   const sees = seesDraft(db, ctx);
   const sees_ = (c: Change) => c.by === ctx.id || mayDecide(ctx, c);
   // As the API: a numbers fix proposed shows on its "Needs a look" item, never as a line's note.
-  const fixes = db.changes.filter((c) => c.status === "proposed" && c.op === NUMBER_OP && sees_(c));
-  const proposals = db.changes.filter((c) => c.status === "proposed" && c.op === "edit_line");
+  // As one_pager.py: changes by when, a tie in the order they were made (seq), never by id.
+  const made = madeOrder(db.changes, (c) => [c.at]);
+  const fixes = made.filter((c) => c.status === "proposed" && c.op === NUMBER_OP && sees_(c));
+  const proposals = made.filter((c) => c.status === "proposed" && c.op === "edit_line");
   const shown = proposals.filter(sees_);
   const live = sees ? liveChanges(db).filter((c) => c.status !== "undone" && c.op === "edit_line") : [];
   // As the API's OnePagerOut.fixed: the draft's number fixes, each with its Undo while it can be undone.
