@@ -152,6 +152,23 @@ test.describe("A phone's Timeline export names every quarter and every goal", ()
   }
 });
 
+test.describe("A phone's Gantt export names each goal lane whole", () => {
+  test.use({ viewport: { width: 320, height: 844 }, hasTouch: true });
+
+  test("each lane's goal reads whole in the PNG and the PDF", async ({ page }) => {
+    await open(page, { format: "gantt" });
+    const groups = page.locator('[data-testid="chart-labels"] > [data-testid="chart-group"]');
+    await expect(groups.first()).toBeVisible();
+    const names = await groups.evaluateAll((els) => els.map((el) => (el.querySelector("span[title]")?.getAttribute("title") ?? "").trim()).filter(Boolean));
+    expect(names.length).toBeGreaterThan(1);
+    for (const kind of ["PNG", "PDF"] as const) {
+      const { svg } = await exported(page, kind);
+      const lanes = (await textsIn(page, svg, '[data-testid="export-lane"]')).map((l) => l.replace(/^\d+\s*/, ""));
+      for (const n of names) expect(lanes.some((l) => l === n || l.startsWith(`${n} · `)), `${kind}: ${n} whole`).toBe(true);
+    }
+  });
+});
+
 test.describe("desktop", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
@@ -226,6 +243,21 @@ test.describe("desktop", () => {
     const { svg } = await exported(page, "PNG");
     const texts = await textsIn(page, svg, "text");
     expect(texts).toContain(`${title} · ${note}`);
+  });
+
+  test("a cut card in the Now / Next / Later export keeps its place in the return queue", async ({ page }) => {
+    await open(page, { format: "gantt" });
+    const row = page.locator('[data-testid="chart-labels"] > *').filter({ has: page.getByTestId("return-place") }).first();
+    await expect(row).toBeVisible();
+    const title = (await row.getByTestId("label-title").innerText()).trim();
+    const note = (await row.getByTestId("return-place").innerText()).trim();
+    await page.getByTestId("format-board").click();
+    await expect(page.getByTestId("board")).toBeVisible();
+    const { svg } = await exported(page, "PNG");
+    const texts = await textsIn(page, svg, "text");
+    const at = texts.indexOf(title);
+    expect(at, `the card ${title}`).toBeGreaterThanOrEqual(0);
+    expect(texts[at + 1]).toMatch(new RegExp(` · ${note}$`));
   });
 
   test("E-3: the Gantt's week axis names the year on its first tick and each January, page and export", async ({ page }) => {
@@ -313,5 +345,15 @@ test.describe("500 items", () => {
     expect(pdf).not.toContain("/DCTDecode");
     expect(pdf).toContain(`(Page 1 of ${pages.length})`);
     expect(pdf).toContain(`(Page ${pages.length} of ${pages.length})`);
+    // The footer's last line ends at the right margin, measured in Helvetica (Page n of N).
+    const at = Number(/BT \/F1 8 Tf [\d. ]+rg ([\d.]+) \d+ Td \(Page 1 of /.exec(pdf)?.[1]);
+    expect(at).toBeGreaterThan(700);
+    expect(at).toBeLessThan(740);
+
+    // The day scale would take hundreds of pages: it says so, and to filter it.
+    await page.getByTestId("unit-day").click();
+    await page.getByRole("button", { name: "Export PDF" }).click();
+    await expect(page.getByText("The view would take more than 200 PDF pages: filter it to export it")).toBeVisible({ timeout: 90_000 });
+    await expect(page.getByRole("button", { name: "Export PDF" })).toBeEnabled();
   });
 });

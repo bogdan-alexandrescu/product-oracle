@@ -633,7 +633,7 @@ export function pdfOf(pages: PdfPage[]): Blob {
 
 /** Past this many pages a PDF is too long to read (or to make: the 500-item day scale is 432):
  * a filter, then. */
-const MAX_PAGES = 100;
+const MAX_PAGES = 200;
 
 /** Never smaller than this many points a pixel: a wider picture goes on across pages. */
 const MIN_PT = 0.45;
