@@ -266,6 +266,47 @@ async def test_key_date_prds_follow_the_prd_order():
         assert [d.slug for d in got[rm.id]] == ["banana", "apple", "cherry"]
 
 
+async def test_key_date_prds_read_the_order_once_for_all_roadmaps():
+    """protects=key_date_prds computing the company PRD order once (not per roadmap, each run
+    re-reading the goals and items: the default Roadmap read slowed ~40%); fails_when=the
+    statements it runs grow with the number of roadmaps; no_claim=wall time."""
+    from types import SimpleNamespace
+
+    from sqlalchemy import event
+
+    from oracle.db import get_engine
+    from oracle.simple.key_dates import key_date_prds
+
+    ctx = await make_ctx()
+    prds = await seed(ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        extra = [await Seed(s).doc(f"roadmap-{n}", "roadmap") for n in range(3)]
+        await s.commit()
+        docs = {d.id: d for d in await s.scalars(select(Document))}
+        rms = [d for d in docs.values() if d.kind == "roadmap"]
+        assert len(rms) == 1 + len(extra)
+        statements: list[str] = []
+
+        def count(conn, cursor, statement, *args):
+            statements.append(statement)
+
+        async def reads(roadmaps) -> int:
+            entries = [SimpleNamespace(roadmap=r, prd=docs[prds[k].id]) for r in roadmaps
+                       for k in ("apple", "cherry", "banana")]  # fmt: skip
+            statements.clear()
+            engine = get_engine().sync_engine
+            event.listen(engine, "before_cursor_execute", count)
+            try:
+                got = await key_date_prds(s, None, docs, entries)
+            finally:
+                event.remove(engine, "before_cursor_execute", count)
+            assert all([d.slug for d in got[r.id]] == ["banana", "apple", "cherry"] for r in roadmaps)
+            return len(statements)
+
+        one = await reads(rms[:1])
+        assert await reads(rms) == one
+
+
 async def test_the_drafts_from_prds_follow_the_prd_order():
     """protects=a roadmap draft's from_prds (prd_roadmap.sources_out) in the company PRD
     order; fails_when=by title."""
