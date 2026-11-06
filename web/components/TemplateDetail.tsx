@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import {
   Button,
@@ -20,16 +20,22 @@ import {
   Split,
 } from "@/components/ds";
 import { GrowingTextarea } from "@/app/settings/_components/GrowingTextarea";
-import { Field, INPUT, SELECT } from "@/app/settings/_components/fields";
+import { Field, INPUT, SELECT, SELECT_FIELD } from "@/app/settings/_components/fields";
 import { FormActions } from "@/app/settings/_components/FormActions";
 import {
+  CheckStatus,
   ProblemList,
+  SectionRows,
   TemplateBodyEditor,
   WarningList,
+  parseTemplateSections,
   sectionNames,
   sectionTitles,
+  serializeTemplateSections,
   useTemplateCheck,
   useThemeNames,
+  useThemeOptions,
+  type ParsedTemplate,
 } from "@/components/TemplateBodyEditor";
 import { LoadError, Loading } from "@/components/ui";
 import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
@@ -66,6 +72,11 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
   const canEdit = can("update_template");
   const [viewed, setViewed] = useState<number | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
+  // qa-F-75: the next version, edited as rows; set once the stored body is read into rows, or
+  // the Markdown is read back into rows under "Back to rows". null while rows show the stored
+  // body untouched (or the body cannot be shown as rows at all).
+  const [rowState, setRowState] = useState<ParsedTemplate | null>(null);
+  const [markdownMode, setMarkdownMode] = useState(false);
   const [name, setName] = useState<string | null>(null);
   const [description, setDescription] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -74,9 +85,41 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
   const [problems, setProblems] = useState<Problem[]>([]);
 
   const latest = t?.versions[t.versions.length - 1];
-  const body = draft ?? latest?.body ?? "";
+  // The stored body read into rows, when it is simple enough (qa-F-75); null falls back to
+  // the Markdown editor with no toggle.
+  const parsed = useMemo(() => parseTemplateSections(latest?.body ?? ""), [latest?.body]);
+  const inRows = parsed != null && !markdownMode;
+  const rows = rowState ?? parsed;
+  const body = rowState ? serializeTemplateSections(rowState) : draft ?? latest?.body ?? "";
   const live = useTemplateCheck(body, !!t);
   const themeName = useThemeNames();
+  const themeOptions = useThemeOptions();
+
+  function updateRows(patch: Partial<Pick<ParsedTemplate, "theme" | "secs">>) {
+    setRowState({ ...(rowState ?? parsed!), ...patch });
+  }
+
+  /** The toggle between rows and Markdown (qa-F-75): switching to Markdown keeps any row
+   * edits; switching back re-reads the current Markdown into rows, when it still parses. */
+  function toggleMarkdown() {
+    if (!markdownMode) {
+      if (rowState) {
+        setDraft(serializeTemplateSections(rowState));
+        setRowState(null);
+      }
+      setMarkdownMode(true);
+      return;
+    }
+    const reparsed = parseTemplateSections(body);
+    if (!reparsed) {
+      setError("This can't be shown as rows yet: fix the headings and sections first.");
+      return;
+    }
+    setError(null);
+    setRowState(reparsed);
+    setDraft(null);
+    setMarkdownMode(false);
+  }
 
   // qa4-shell-4: a template that is not there gets the app's one not-found page.
   if (q.error === TEMPLATE_MISSING) {
@@ -143,6 +186,8 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
       () => unwrapProblems(api.PATCH("/v1/templates/{key}", { params: { path: { key } }, body: { body } })),
       (next) => {
         setDraft(null);
+        setRowState(null);
+        setMarkdownMode(false);
         setViewed(null);
         return `Saved as version ${next.latest_version}.`;
       },
@@ -177,7 +222,7 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
     );
 
   const kindLabel = t.kind === "prd" ? "PRD" : "Roadmap";
-  const dirty = draft !== null && draft !== latest.body;
+  const dirty = body !== latest.body;
   const shownTitles = sectionTitles(shown.body);
   // qa-settings-28: why the main action is disabled, said next to it.
   const saveReason =
@@ -282,8 +327,34 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
           </div>
         )}
         {canEdit && (
-          <Panel title="Next version" bodyClassName="p-4 max-[600px]:p-3">
-            <TemplateBodyEditor value={body} onChange={setDraft} label="Template body" live={live} />
+          <Panel
+            title="Next version"
+            tools={
+              parsed && (
+                <Button variant="ghost" onClick={toggleMarkdown} data-testid="toggle-markdown">
+                  {inRows ? "Edit as Markdown" : "Back to rows"}
+                </Button>
+              )
+            }
+            bodyClassName="p-4 max-[600px]:p-3"
+          >
+            {inRows && rows ? (
+              <div className="flex flex-col gap-3">
+                <Field label="Theme">
+                  <select className={SELECT_FIELD} value={rows.theme} onChange={(e) => updateRows({ theme: e.target.value })}>
+                    {(themeOptions.length ? themeOptions : [{ key: rows.theme, name: themeName(rows.theme) }]).map((th) => (
+                      <option key={th.key} value={th.key}>
+                        {th.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <SectionRows secs={rows.secs} onChange={(secs) => updateRows({ secs })} />
+                <CheckStatus live={live} value={body} />
+              </div>
+            ) : (
+              <TemplateBodyEditor value={body} onChange={setDraft} label="Template body" live={live} />
+            )}
             <FormActions id="version-save-reason" reason={saveReason} sticky className="mt-3">
               <Button
                 variant="primary"
@@ -295,7 +366,13 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
                 {busy === "version" ? "Saving…" : "Save as new version"}
               </Button>
               {dirty && (
-                <Button variant="ghost" onClick={() => setDraft(null)}>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setDraft(null);
+                    setRowState(null);
+                  }}
+                >
                   Discard changes
                 </Button>
               )}
@@ -308,7 +385,23 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
           tools={
             <>
               {canEdit && shown.version !== latest.version && (
-                <Button variant="ghost" onClick={() => setDraft(shown.body)}>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    // qa-F-75: show the copied version as rows when it parses that way, so the
+                    // rows and the body being saved never disagree.
+                    const reparsed = parseTemplateSections(shown.body);
+                    if (reparsed) {
+                      setRowState(reparsed);
+                      setDraft(null);
+                      setMarkdownMode(false);
+                    } else {
+                      setDraft(shown.body);
+                      setRowState(null);
+                      setMarkdownMode(true);
+                    }
+                  }}
+                >
                   Copy into editor
                 </Button>
               )}
