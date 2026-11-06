@@ -383,7 +383,7 @@ def test_prose_dates_read_month_first_in_exports():
         "Raise completion from 61% to 70% by 2027-01-29 (G1). Beta 2026-11-30; "
         "see launch-2026-11-30 and `2026-12-01`.",
         {},
-    )
+    ).replace("\u00a0", " ")  # a date's parts are held together by no-break spaces (E-11)
     assert "by Jan 29, 2027 (G1)" in html and "Beta Nov 30, 2026;" in html
     assert "launch-2026-11-30" in html and "<code>2026-12-01</code>" in html
     assert "2027-01-29" not in html
@@ -401,6 +401,7 @@ def test_prose_dates_read_month_first_in_themed_exports_and_decks():
         _themed_markdown(True).render(text, {"numbers": {}}),
         str(_render_md(text, set())),
     ):
+        html = html.replace("\u00a0", " ")  # no-break spaces hold a date together (E-11)
         assert "by Jan 29, 2027 (G1)" in html
         assert "launch-2026-11-30" in html and "<code>2026-12-01</code>" in html
         assert "2027-01-29" not in html
