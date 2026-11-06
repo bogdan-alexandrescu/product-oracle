@@ -331,6 +331,10 @@ const DECK_CSS = `
 .deck .slide-subtitle { color: var(--color-muted); font-size: 19px; margin: 0; }
 .deck .slide-source { color: var(--color-muted); font-size: 16px; margin: 8px 0 0; }
 .deck .slide-body p, .deck .slide-body ul, .deck .slide-body ol { margin: 0 0 12px; }
+.deck .slide-dense { font-size: 17px; }
+.deck .slide-dense .slide-title { font-size: 28px; margin-bottom: 14px; }
+.deck .slide-dense .slide-body table { font-size: 14px; }
+.deck .slide-dense .slide-body th, .deck .slide-dense .slide-body td { padding: 4px 8px; }
 .deck .slide-body table { border-collapse: collapse; width: 100%; font-size: 17px; }
 .deck .slide-body th, .deck .slide-body td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--color-rule); }
 .deck .slide-body th { color: var(--color-muted); font-size: 14px; text-transform: uppercase; }
@@ -420,7 +424,8 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
         ? `<span class="detail-ref" data-section-ref="${esc(key)}">${inner}</span><button type="button" class="expand" data-expand="${esc(key)}" aria-label="Expand ${esc(inner.replace(/<[^>]+>/g, ""))}">Expand</button>`
         : inner;
   const plainLinks = (_key: string, inner: string) => inner;
-  type Raw = Omit<Schemas["SlideOut"], "html"> & { inner: string };
+  // dense: the smaller type of a long or continued slide (export/deck.py DENSE_CHARS, DENSE_ROWS).
+  type Raw = Omit<Schemas["SlideOut"], "html"> & { inner: string; dense?: boolean };
   const raw: Raw[] = [
     {
       index: 1,
@@ -460,6 +465,7 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
       heading,
       section_key: s.section_key,
       ...(states.length ? { state: states[0].label } : {}),
+      dense: pages.length > 1 || body.length > 520 || body.split("\n|").length - 1 > 6,
       notes: p === 0 && notes.length ? daysInWords(notes.join("\n\n")) : null,
       expand: [...new Set(linked(body))]
         .filter((k) => detail.has(k))
@@ -500,12 +506,12 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
     theme_name: "Clean document",
     theme_class: "theme-clean-document",
     css: DECK_CSS,
-    slides: raw.map(({ inner, ...s }) => ({
+    slides: raw.map(({ inner, dense, ...s }) => ({
       ...s,
       expand: s.expand ?? [],
       notes: s.notes ?? null,
       section_key: s.section_key ?? null,
-      html: `<section class="slide slide--${s.kind}" data-slide="${s.index}"${s.section_key ? ` data-section-key="${esc(s.section_key)}"` : ""} aria-label="Slide ${s.index} of ${total}: ${esc(s.heading)}"><div class="slide-inner">${inner}</div><footer class="slide-footer"><span class="slide-banner">${esc(banner)}</span><span class="slide-number">${s.index} / ${total}</span></footer></section>`,
+      html: `<section class="slide slide--${s.kind}${dense ? " slide-dense" : ""}" data-slide="${s.index}"${s.section_key ? ` data-section-key="${esc(s.section_key)}"` : ""} aria-label="Slide ${s.index} of ${total}: ${esc(s.heading)}"><div class="slide-inner">${inner}</div><footer class="slide-footer"><span class="slide-banner">${esc(banner)}</span><span class="slide-number">${s.index} / ${total}</span></footer></section>`,
     })),
   };
 }
