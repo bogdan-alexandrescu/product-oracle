@@ -227,7 +227,10 @@ test("Approve ends 'ready: review it' on the Detailed page", async ({ page }) =>
   await page.goto(`/documents/${slug}/publish`);
   await page.getByTestId("publish-button").click();
   await page.getByRole("dialog").getByRole("button", { name: /^Publish/ }).click();
-  await expect(page.getByTestId("publish-inspector").getByText(`Version v${v} approved with its evidence`)).toBeVisible();
+  // The header's chip is the API's answer (the inspector's "On publish" list shows before it):
+  // leaving before it lands would cut the approve off.
+  await expect(page.getByTestId("published-chip")).toHaveText(`Published v${v}`);
+  await expect(page.getByText("Approved", { exact: true }).first()).toBeVisible();
   await page.goto(`/documents/${slug}`);
   await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
   // Give the sign its read (the mock answers in a few ms), then: nothing.
