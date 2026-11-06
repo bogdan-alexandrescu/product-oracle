@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Locator, type Page } from "./test";
 
 import { login, openSection } from "./helpers";
 
@@ -17,6 +17,20 @@ import { login, openSection } from "./helpers";
  * approvers stage; fails_when=Stage is enabled on a locked section or for a commenter, a second
  * card shows, or Stage does nothing; no_claim=the staging list itself (G4).
  */
+
+
+/** D-4: at phone width, Stage is off with no reason line in the row; a tap on the (i) beside it
+ * shows the reason, and Stage names that text in its aria-describedby. */
+async function expectWhyNot(page: Page, row: Locator, reason: string) {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(row.getByTestId("change-why-not")).toHaveCount(0);
+  await expect(row.getByText(reason)).toBeHidden();
+  await row.getByRole("button", { name: "About why you cannot stage" }).click();
+  const tip = row.getByRole("tooltip");
+  await expect(tip).toBeVisible();
+  await expect(tip).toHaveText(reason);
+  await expect(row.getByRole("button", { name: "Stage" })).toHaveAttribute("aria-describedby", (await tip.getAttribute("id"))!);
+}
 
 const DOC = "/documents/checkout-redesign/v/2";
 const DOC_HOME = "/documents/checkout-redesign";
@@ -127,11 +141,8 @@ test("a change Oracle proposes on a locked section shows Stage disabled with the
   await expect(change.getByTestId("change-by")).toHaveText("Proposed by Oracle");
   const stage = change.getByRole("button", { name: "Stage" });
   await expect(stage).toBeDisabled();
-  // D-4: the reason is a visible line under the buttons, on a phone too, not only a tooltip.
-  const why = change.getByTestId("change-why-not");
-  await expect(why).toBeVisible();
-  await expect(why).toHaveText("Section 1. Behaviour is approved and locked");
-  await expect(stage).toHaveAttribute("aria-describedby", (await why.getAttribute("id"))!);
+  // D-4: the reason is behind an (i) beside Stage that opens on a tap at phone width, not a line in the row.
+  await expectWhyNot(page, change, "Section 1. Behaviour is approved and locked");
 });
 
 // c6 through G3's card: a commenter cannot stage, sees why, and suggests the change instead.
@@ -147,11 +158,8 @@ test("a commenter cannot stage in the panel, sees why, and suggests the change",
   await expect(change.getByTestId("change-label")).toContainText("Change problem");
   const stage = change.getByRole("button", { name: "Stage" });
   await expect(stage).toBeDisabled();
-  // D-4: the reason shows as a line a phone can read, and Stage names it for a screen reader.
-  const why = change.getByTestId("change-why-not");
-  await expect(why).toBeVisible();
-  await expect(why).toHaveText("Approvers stage changes. You can suggest it.");
-  await expect(stage).toHaveAttribute("aria-describedby", (await why.getAttribute("id"))!);
+  // D-4: the reason is behind an (i) beside Stage that opens on a tap at phone width; Stage names it for a screen reader.
+  await expectWhyNot(page, change, "Approvers stage changes. You can suggest it.");
   await change.getByRole("button", { name: "Suggest" }).click();
   await expect(change.getByTestId("change-by")).toHaveText("Suggested by Theo Brandt");
   await expect(change.getByRole("button", { name: "Suggest" })).toHaveCount(0);

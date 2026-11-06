@@ -85,8 +85,16 @@ test("a commenter cannot stage, sees why, and suggests the change", async ({ pag
   const row = change(page, EDIT);
   const stage = row.getByRole("button", { name: "Stage" });
   await expect(stage).toBeDisabled();
-  // QA pass D-4: the reason is a visible line, not only a tooltip.
-  await expect(row.getByTestId("change-why-not")).toHaveText(STAGE_WHY_NOT);
+  // QA pass D-4: no reason line in the row; at phone width a tap on the (i) beside Stage shows
+  // it, and Stage names the tip's text for a screen reader.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(row.getByTestId("change-why-not")).toHaveCount(0);
+  await expect(row.getByText(STAGE_WHY_NOT)).toBeHidden();
+  await row.getByRole("button", { name: "About why you cannot stage" }).click();
+  const tip = row.getByRole("tooltip");
+  await expect(tip).toBeVisible();
+  await expect(tip).toHaveText(STAGE_WHY_NOT);
+  await expect(stage).toHaveAttribute("aria-describedby", (await tip.getAttribute("id"))!);
   await expect(row.getByRole("button", { name: "Edit" })).toBeVisible();
   await row.getByRole("button", { name: "Suggest" }).click();
   await expect(row.getByTestId("change-by")).toHaveText("Suggested by Theo Brandt");

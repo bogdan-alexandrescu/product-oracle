@@ -19,6 +19,8 @@ import { login } from "./helpers";
  *   either is cut mid-word.
  * - D-7: protects=a failed setup load shows Try again where Set up goes, for a role that sees
  *   Set up; fails_when=the card just goes missing. no_claim=the API's setup steps.
+ * - D-8: protects=on a phone a Needs you item cut at two lines is clipped there; fails_when=its
+ *   third line draws over the "Oracle asks" line below.
  */
 
 async function openHome(page: Page, role?: "viewer" | "commenter" | "approver") {
@@ -107,6 +109,14 @@ test("D-2: the Approvals chip opens the Inbox on approvals only", async ({ page 
   await expect(page.getByTestId("inbox-kind")).toContainText("Approvals");
   await expect(page.getByTestId("inbox-feedback")).toHaveCount(0);
   await expect(page.getByTestId("inbox-decisions")).toHaveCount(0);
+  // The header counts that kind only, and what is not that kind (sources to fix) is hidden.
+  await expect(page.getByText(/^\d+ waiting$/)).toHaveText("3 waiting");
+  await expect(page.getByTestId("inbox-sources")).toHaveCount(0);
+  // Show all brings the full count and the sources back.
+  await page.getByTestId("inbox-kind").getByRole("link", { name: "Show all" }).click();
+  await expect(page).toHaveURL(/\/inbox$/);
+  await expect(page.getByTestId("inbox-sources")).toBeVisible();
+  await expect(page.getByText(/^\d+ waiting$/)).not.toHaveText("3 waiting");
 });
 
 test.describe("at 1440", () => {
@@ -179,6 +189,20 @@ test.describe("at 1440", () => {
 
 test.describe("on a phone", () => {
   test.use({ viewport: { width: 390, height: 844 } });
+
+  test("D-8: a Needs you item cut at two lines draws nothing over the line below it", async ({ page }) => {
+    await openHome(page);
+    const table = page.getByTestId("home-needs-table");
+    await expect(table).toBeVisible();
+    const clamped = await table.locator(".truncate").evaluateAll((els) =>
+      els
+        .filter((el) => getComputedStyle(el).webkitLineClamp === "2" && el.scrollHeight > el.clientHeight + 1)
+        .map((el) => ({ text: (el.textContent ?? "").slice(0, 40), overflow: getComputedStyle(el).overflowY })),
+    );
+    // The mock has an item long enough to be cut on a phone; what is cut is clipped, not drawn on.
+    expect(clamped.length).toBeGreaterThan(0);
+    expect(clamped.filter((c) => c.overflow !== "hidden")).toEqual([]);
+  });
 
   for (const theme of ["light", "dark"]) {
     test(`D-6: Set up rows stack the name above the status, whole, the button on the right (${theme})`, async ({ page }) => {
