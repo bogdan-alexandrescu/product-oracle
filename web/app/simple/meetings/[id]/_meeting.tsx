@@ -912,7 +912,7 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
                 <DecidedItem key={x.id} flow={x.flow}>
                   {/* F-26: the decision by its name as the link, no code; a long line hangs under it. */}
                   <span data-testid="decision-taken" className="min-w-0 pl-4 -indent-4">
-                    <Link className={`${LINK} max-[600px]:py-2.5`} href={code(x).startsWith("D-") ? `/simple/decisions#d-${x.number}` : `/simple/decisions?meeting=${m.id}`}>{x.title}</Link> · {x.approver.name}
+                    <Link className={`${LINK} ${PHONE_TAP} max-[600px]:inline-flex max-[600px]:min-w-11 max-[600px]:items-center max-[600px]:indent-0`} href={code(x).startsWith("D-") ? `/simple/decisions#d-${x.number}` : `/simple/decisions?meeting=${m.id}`}>{x.title}</Link> · {x.approver.name}
                   </span>
                 </DecidedItem>
               ))}

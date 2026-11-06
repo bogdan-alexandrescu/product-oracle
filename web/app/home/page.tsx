@@ -250,8 +250,9 @@ export default function HomePage() {
         {setupQ.data?.welcome && capsReady && (
           <WelcomePanel onDismiss={dismissWelcome} busy={welcomeBusy} setup={setupQ.data} setupShown={!!setup && !setup.hidden} />
         )}
-        {/* F-8: a Set up that failed to load says so, with Try again, never vanishes. */}
-        {setupQ.error && !setupQ.data && <LoadError what="Set up" error={setupQ.error} onRetry={() => void setupQ.reload()} />}
+        {/* F-8: a Set up that failed to load says so, with Try again, never vanishes. A viewer has
+            no Set up steps (they cannot add sources), so is not told. */}
+        {can("create_source") && setupQ.error && !setupQ.data && <LoadError what="Set up" error={setupQ.error} onRetry={() => void setupQ.reload()} />}
         {setupError && (
           <Notice tone="error" testId="home-setup-error">
             {setupError}

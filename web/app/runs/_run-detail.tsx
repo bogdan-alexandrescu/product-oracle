@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Fragment, useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { DeleteDialog, DeleteMenu } from "@/components/ArtifactMenu";
@@ -304,22 +304,6 @@ export function RunDetail({ id }: { id: string }) {
       return out;
     });
   }
-  // F-78: a step with no news offers both ways on beside it.
-  const quietActions = (
-    <>
-      {can("tick") && open && (
-        <Button disabled={busy} onClick={refreshProgress}>
-          Refresh progress
-        </Button>
-      )}
-      {mayCancel && (
-        <Button variant="danger" disabled={busy} onClick={() => void cancelRun()}>
-          Cancel run
-        </Button>
-      )}
-    </>
-  );
-
   return (
     <Page>
       <LinkedDiscussion />
@@ -546,7 +530,7 @@ export function RunDetail({ id }: { id: string }) {
             </span>
           </Notice>
         )}
-        {run.status === "paused_overrun" && <OverrunHeld mayResume={can("resume_run")} mayCancel={mayManage("cancel_run") && WORKING.has(run.status)} />}
+        {run.status === "paused_overrun" && <OverrunHeld mayResume={can("resume_run")} mayCancel={mayCancel} />}
         {checked && (
           <Notice testId="tick-result">
             {!checked.lead && checked.text}
@@ -618,7 +602,6 @@ export function RunDetail({ id }: { id: string }) {
                   onDecide={decide}
                   onRetryImport={retryImport}
                   onDraftChanged={() => void reload()}
-                  quietActions={quietActions}
                 />
               </Fragment>
             ))}
@@ -941,11 +924,21 @@ function lastWork(a: Schemas["SegmentAgent"], since: (at: string) => string): st
   return `last update ${since(at)} ago`;
 }
 
-/** F-78: a running step with no news for longer than this may be stuck. */
-const STALE_MS = 24 * 3600_000;
+/** F-78: a running step with no news for longer than this may be stuck (the owner's pick, Nov 5: six hours). */
+const STALE_MS = 6 * 3600_000;
+
+/**
+ * F-78: when the step last sent news: its newest agent's last sign of work (else when that agent
+ * started), never the check's own time, which each tick resets. With no agent, when it started.
+ */
+function lastNews(s: SegmentOut): string | null {
+  const times = s.agents.map((a) => a.last_work_at ?? a.heartbeat_at ?? a.started_at).filter((at): at is string => !!at);
+  if (times.length === 0) return s.started_at ?? null;
+  return times.reduce((a, b) => (new Date(b).getTime() > new Date(a).getTime() ? b : a));
+}
 
 /** #258: a running segment's agents as Oracle last read them, and what it has spent so far. */
-function SegmentProgress({ segment: s, quietActions }: { segment: SegmentOut; quietActions?: ReactNode }) {
+function SegmentProgress({ segment: s }: { segment: SegmentOut }) {
   // The elapsed times count on between reads.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -954,8 +947,9 @@ function SegmentProgress({ segment: s, quietActions }: { segment: SegmentOut; qu
   }, []);
   const since = (at: string) => duration(now - new Date(at).getTime());
   const roleName = useRoleNames();
-  // F-78: a running step not heard from in a day may be stuck: said, with its date.
-  const quiet = !!s.checked_at && now - new Date(s.checked_at).getTime() > STALE_MS;
+  // F-78: a running step not heard from in six hours may be stuck: said, with its date.
+  const news = s.checked_at ? lastNews(s) : null;
+  const quiet = !!news && now - new Date(news).getTime() > STALE_MS;
   return (
     <div data-testid="segment-progress" className="space-y-1 text-text2">
       <p className="tnum">
@@ -969,12 +963,15 @@ function SegmentProgress({ segment: s, quietActions }: { segment: SegmentOut; qu
         )}
         {s.checked_at ? `checked ${since(s.checked_at)} ago` : "Not checked yet: the agents' progress shows after the next check"}
       </p>
-      {quiet && s.checked_at && (
-        <div className="flex flex-wrap items-center gap-2">
+      {quiet && news && (
+        <div className="flex items-center gap-1.5">
           <p data-testid="segment-no-news" className="font-semibold text-warn">
-            No news since {formatDateTime(s.checked_at)}
+            No news since {formatDateTime(news)}
           </p>
-          {quietActions}
+          {/* Round 1: the page's own Refresh progress and Cancel run, named, not repeated here. */}
+          <InfoTip label="no news" align="start">
+            The agents have sent nothing for over six hours, so this step may be stuck. Refresh progress above asks again; Cancel run stops it.
+          </InfoTip>
         </div>
       )}
       {s.checked_at &&
@@ -1009,7 +1006,6 @@ function SegmentItem({
   onDecide,
   onRetryImport,
   onDraftChanged,
-  quietActions,
 }: {
   run: RunOut;
   segment: SegmentOut;
@@ -1020,7 +1016,6 @@ function SegmentItem({
   /** D7: the shared draft changed, so the checkpoint's Approve words may have (the run re-read). */
   onDraftChanged: () => void;
   /** F-78: Refresh progress and Cancel run, beside a running step's "No news since". */
-  quietActions?: ReactNode;
 }) {
   const kind = s.checkpoint;
   const { me, can } = useMe();
@@ -1279,7 +1274,7 @@ function SegmentItem({
               <QueueWaitNote wait={s.queue_wait} testId="segment-queue-wait" />
             </p>
           )}
-          {s.status === "running" && <SegmentProgress segment={s} quietActions={quietActions} />}
+          {s.status === "running" && <SegmentProgress segment={s} />}
           {s.autonomy_note && (
             // H11: the baseline's level changed this segment's merge.
             <p data-testid="autonomy-note" className="text-text2">
