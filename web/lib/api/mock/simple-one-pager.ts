@@ -51,6 +51,8 @@ export interface OnePagerCtx {
   planPages?: string[];
   /** e2e-pdf-export ("one-pager-overflow"): the pages the one-pager runs to past its one (the API lays it out). */
   overflowPages?: number;
+  /** S-9 ("one-pager-pdf-down"): the API cannot make PDFs (its 503, export.pdf.PdfUnavailable). */
+  pdfDown?: boolean;
   /** simple-replaced-prds: the PRDs that replaced this one, when it is marked replaced (its read, PDF and Remind are a 404 naming them). */
   replacedBy?: Schemas["PrdRef"][];
 }
@@ -935,6 +937,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     if (p[3] !== db.doc.slug && p[3] !== db.doc.id) return json(404, { detail: "No such PRD" });
     if (ctx.replacedBy?.length) return replaced();
     if (p[4] === "pdf") {
+      if (ctx.pdfDown) return json(503, { detail: "PDF export is unavailable: WeasyPrint cannot load its system libraries (install Pango, see api/Dockerfile): cannot load library 'libpango-1.0-0'" });
       const over = !ctx.planPages?.length && ctx.overflowPages ? ctx.overflowPages : 0;
       const pages = ctx.planPages?.length ? ["The timeline", ...ctx.planPages] : over ? Array.from({ length: over }, (_, i) => `Page ${i + 1}`) : ["One page"];
       // The page's lines as the read resolves them (the API's PDF renders one_pager.read).
