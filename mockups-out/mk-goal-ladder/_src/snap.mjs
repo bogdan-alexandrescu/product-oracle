@@ -42,7 +42,8 @@ for (const fr of FRAMES) {
   const { html, urls } = await page.evaluate(([vp]) => {
     let css = "";
     for (const s of document.styleSheets) {
-      try { for (const r of s.cssRules) css += r.cssText + "\n"; } catch { /* cross-origin */ }
+      // font urls made absolute against their own stylesheet, so they can be fetched and copied
+      try { for (const r of s.cssRules) css += r.cssText.replace(/url\(["']?([^"')]+)["']?\)/g, (_, u) => `url("${new URL(u, s.href ?? location.href).href}")`) + "\n"; } catch { /* cross-origin */ }
     }
     const urls = [...css.matchAll(/url\(["']?([^"')]+\.(?:woff2?|ttf|otf))["']?\)/g)].map((m) => m[1]);
     const doc = document.documentElement.cloneNode(true);
@@ -77,7 +78,7 @@ for (const j of fonts) {
   const [u, file] = JSON.parse(j);
   const dest = path.join(OUT, "assets", file);
   if (fs.existsSync(dest)) continue;
-  const r = await fetch(new URL(u, BASE));
+  const r = await fetch(u);
   if (r.ok) fs.writeFileSync(dest, Buffer.from(await r.arrayBuffer()));
 }
 await browser.close();

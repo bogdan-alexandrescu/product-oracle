@@ -17,14 +17,19 @@ export const FRAMES = [
   { file: "ld1-b-rest", url: R + "ld1=b", caption: "Roadmap, Ladder format beside Timeline and Gantt: columns grouped by period like the board, each period with its week chips; a goal has a column in every period it has a milestone due" },
   { file: "ld1-b-scrolled", url: R + "ld1=b", hscroll: 520, caption: "Scrolled right into Q1 2027: Goal 1 again with M2 and M3; the one labelled arrow says its M1 baseline sets the M2 target" },
   { file: "ld1-b-rest-1512", url: R + "ld1=b", size: W, scroll: 420, caption: "Hard case at 1512: nine goal columns and a No dates yet column make the page about 2,400 wide; it scrolls sideways at every width" },
+  { file: "ld1-b-viewer", url: R + "ld1=b&as=viewer", caption: "A viewer on the Ladder format: Read only, no Edit ladder" },
+  { file: "ld1-b-commenter", url: R + "ld1=b&as=commenter&edit=1&st=moved", hscroll: 520, scroll: 300, caption: "A commenter: the button reads Suggest changes; a move becomes a suggestion for an approver" },
   // LD1 c: the Goal map's grid with the ladder top and arrows
   { file: "ld1-c-rest", url: M + "ld1=c&ld2=b", caption: "The Goal map's grid as built, areas by milestones, with the goal cards and period strip on top and every dependency drawn as an arrow" },
   { file: "ld1-c-rest-1512", url: M + "ld1=c&ld2=b", size: W, scroll: 480, caption: "Hard case at 1512: twelve milestone columns at 200 wide each; the grid scrolls sideways and the arrows cross the areas" },
   { file: "ld1-c-select", url: M + "ld1=c&ld2=a&sel=f3", scroll: 480, caption: "F-03 picked in the grid: its arrows lit, the rest dimmed" },
+  { file: "ld1-c-viewer", url: M + "ld1=c&ld2=b&as=viewer", caption: "A viewer: the grid with its arrows, Read only" },
   // LD1 d: a pan and zoom canvas
   { file: "ld1-d-rest", url: M + "ld1=d", caption: "A canvas like the board: the same ladder at 72%, zoom, Fit, Tidy up and a small overview; cards can be dragged anywhere" },
   { file: "ld1-d-rest-1512", url: M + "ld1=d", size: W, caption: "Hard case at 1512: at a zoom that fits the four goals, feature names are 10 pt and the work behind them is below the canvas edge" },
 
+  { file: "ld1-d-placed", url: M + "ld1=d&st=placed", caption: "F-15 dragged by hand onto Goal 4's column: the canvas now shows it where its goal and milestone do not put it, for everyone, until Tidy up puts it back" },
+  { file: "ld1-d-viewer", url: M + "ld1=d&as=viewer", caption: "A viewer can pan and zoom but not move cards" },
   // LD2 a: arrows only for the picked card, counts on each card
   { file: "ld2-a-rest", url: M + "ld1=a&ld2=a", scrollSel: F3, caption: "At rest: no arrows; each card counts what it waits on (←) and what waits on it (→)" },
   { file: "ld2-a-select", url: M + "ld1=a&ld2=a&sel=f3", scrollSel: F3, caption: "F-03 Renewal health score picked: what it waits on and what waits on it lit, across goals too; the rest dimmed" },
@@ -38,12 +43,14 @@ export const FRAMES = [
   { file: "ld2-b-rest", url: M + "ld1=a&ld2=b", scrollSel: F3, caption: "Every dependency drawn as a thin arrow, all the time" },
   { file: "ld2-b-select", url: M + "ld1=a&ld2=b&sel=f3", scrollSel: F3, caption: "F-03 picked: its arrows lit on top of the rest" },
   { file: "ld2-b-rest-1512", url: M + "ld1=a&ld2=b", size: W, scrollSel: '[data-ld-card="f22"]', caption: "Hard case at 1512: 55 arrows over 65 cards; arrows inside one column bow out over the next column's cards" },
+  { file: "ld2-b-viewer", url: M + "ld1=a&ld2=b&as=viewer", scrollSel: F3, caption: "A viewer sees every arrow; nothing to drag" },
   // LD2 c: chips, no arrows
   { file: "ld2-c-rest", url: M + "ld1=a&ld2=c", scrollSel: F3, caption: "No arrows: each card lists what it waits on as chips with the feature's code and name" },
   { file: "ld2-c-pick", url: M + "ld1=a&ld2=c&edit=1&st=pick", scrollSel: F24, caption: "Editing: + Waits on on F-24 opens a picker; typing 'report' finds F-34 Cross-team reports" },
   { file: "ld2-c-linked", url: M + "ld1=a&ld2=c&edit=1&st=linked", scrollSel: F24, caption: "Picked: F-24 shows Waits on F-34, with Undo; × on a chip removes it" },
   { file: "ld2-c-viewer", url: M + "ld1=a&ld2=c&as=viewer", scrollSel: F24, caption: "A viewer reads the chips; no × and no + Waits on" },
 
+  { file: "ld2-c-commenter", url: M + "ld1=a&ld2=c&edit=1&st=linked&as=commenter", scrollSel: F24, caption: "A commenter picks F-34 the same way: F-24 shows Suggested: wait on F-34, sent to an approver" },
   // LD3 b: an Edit toggle
   { file: "ld3-b-rest", url: M + "ld1=a&ld3=b", scrollSel: F15, caption: "At rest the ladder is clean: no handles, no + slots; Edit ladder in the header" },
   { file: "ld3-b-edit", url: M + "ld1=a&ld3=b&edit=1", scrollSel: F15, caption: "Edit ladder on: grips, ⋯ menus on goals, milestones and features, + Add at each level, each milestone's work a drop zone; the button reads Done" },
@@ -62,8 +69,12 @@ export const FRAMES = [
   { file: "ld3-a-drag", url: M + "ld1=a&ld3=a&st=drag", scrollSel: '[data-ld-group="m6"]', caption: "The same drag of F-15 to M6, with no mode to turn on first" },
   { file: "ld3-a-moved", url: M + "ld1=a&ld3=a&st=moved", scrollSel: '[data-ld-group="m6"]', caption: "Dropped, with Undo" },
   { file: "ld3-a-rest-1512", url: M + "ld1=a&ld3=a", size: W, scrollSel: '[data-ld-card="f22"]', caption: "Hard case at 1512: the handles on all 65 cards and 12 + slots stay on the scoreboard for every reading" },
+  { file: "ld3-a-commenter", url: M + "ld1=a&ld3=a&st=moved&as=commenter", scrollSel: F15, caption: "A commenter's drag: F-15 stays, marked Suggested: move to M6" },
+  { file: "ld3-a-viewer", url: M + "ld1=a&ld3=a&as=viewer", scrollSel: F15, caption: "A viewer: no handles, Read only" },
   // LD3 c: menu and keyboard first
   { file: "ld3-c-menu", url: M + "ld1=a&ld3=c&st=menu", scrollSel: F15, caption: "Each card's ⋯ menu with keys: Move to… (M), Move up and down (Alt ↑ ↓), Delete (Del)" },
   { file: "ld3-c-moveto", url: M + "ld1=a&ld3=c&st=moveto", scrollSel: F15, caption: "Move to… lists every goal's milestones; M6 picked" },
   { file: "ld3-c-moved", url: M + "ld1=a&ld3=c&st=moved", scrollSel: '[data-ld-group="m6"]', caption: "Moved to M6, with Undo" },
+  { file: "ld3-c-commenter", url: M + "ld1=a&ld3=c&st=moved&as=commenter", scrollSel: F15, caption: "A commenter's Move to… makes a suggestion: F-15 stays under M4, marked Suggested: move to M6, sent to an approver" },
+  { file: "ld3-c-phone", url: M + "ld1=a&ld3=c&st=menu", size: P, caption: "Phone: the same Move to… sheet" },
 ];

@@ -649,7 +649,9 @@ function Row({ a, v }: { a: string; v: V }) {
 function Canvas({ v }: { v: V }) {
   return (
     <div className="relative h-[calc(100vh-250px)] min-h-[520px] overflow-hidden rounded-2xl border border-line" style={{ backgroundImage: "radial-gradient(var(--color-line) 1px, transparent 1px)", backgroundSize: "18px 18px" }}>
-      <div className="absolute top-3 left-4 right-4" style={{ transform: "translate(8px, 4px)" }}>
+      {/* a card dragged off its place by hand (it no longer sits where the ladder puts it) */}
+      {v.st === "placed" && <style>{`[data-ld-canvas] [data-ld-card="f15"] { transform: translate(880px, -120px); box-shadow: 0 8px 24px rgb(0 0 0 / .18); border-color: var(--accent); z-index: 20 }`}</style>}
+      <div data-ld-canvas className="absolute top-3 left-4 right-4" style={{ transform: "translate(8px, 4px)" }}>
         <GoalColumns v={v} scale={0.72} />
       </div>
       <div className="absolute right-3 bottom-3 z-20 flex items-center gap-1 rounded-full border border-line bg-surface px-1.5 py-1 text-[14px] font-semibold shadow">

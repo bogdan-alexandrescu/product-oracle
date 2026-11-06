@@ -58,6 +58,14 @@
             {
               "file": "frames/ld1-b-rest-1512.html",
               "caption": "Hard case at 1512: nine goal columns and a No dates yet column make the page about 2,400 wide; it scrolls sideways at every width"
+            },
+            {
+              "file": "frames/ld1-b-viewer.html",
+              "caption": "A viewer on the Ladder format: Read only, no Edit ladder"
+            },
+            {
+              "file": "frames/ld1-b-commenter.html",
+              "caption": "A commenter: the button reads Suggest changes; a move becomes a suggestion for an approver"
             }
           ]
         },
@@ -80,6 +88,10 @@
             {
               "file": "frames/ld1-c-select.html",
               "caption": "F-03 picked in the grid: its arrows lit, the rest dimmed"
+            },
+            {
+              "file": "frames/ld1-c-viewer.html",
+              "caption": "A viewer: the grid with its arrows, Read only"
             }
           ]
         },
@@ -98,6 +110,14 @@
             {
               "file": "frames/ld1-d-rest-1512.html",
               "caption": "Hard case at 1512: at a zoom that fits the four goals, feature names are 10 pt and the work behind them is below the canvas edge"
+            },
+            {
+              "file": "frames/ld1-d-placed.html",
+              "caption": "F-15 dragged by hand onto Goal 4's column: the canvas now shows it where its goal and milestone do not put it, for everyone, until Tidy up puts it back"
+            },
+            {
+              "file": "frames/ld1-d-viewer.html",
+              "caption": "A viewer can pan and zoom but not move cards"
             }
           ]
         }
@@ -171,6 +191,10 @@
             {
               "file": "frames/ld2-b-rest-1512.html",
               "caption": "Hard case at 1512: 55 arrows over 65 cards; arrows inside one column bow out over the next column's cards"
+            },
+            {
+              "file": "frames/ld2-b-viewer.html",
+              "caption": "A viewer sees every arrow; nothing to drag"
             }
           ]
         },
@@ -197,6 +221,10 @@
             {
               "file": "frames/ld2-c-viewer.html",
               "caption": "A viewer reads the chips; no × and no + Waits on"
+            },
+            {
+              "file": "frames/ld2-c-commenter.html",
+              "caption": "A commenter picks F-34 the same way: F-24 shows Suggested: wait on F-34, sent to an approver"
             }
           ]
         }
@@ -290,6 +318,14 @@
             {
               "file": "frames/ld3-a-rest-1512.html",
               "caption": "Hard case at 1512: the handles on all 65 cards and 12 + slots stay on the scoreboard for every reading"
+            },
+            {
+              "file": "frames/ld3-a-commenter.html",
+              "caption": "A commenter's drag: F-15 stays, marked Suggested: move to M6"
+            },
+            {
+              "file": "frames/ld3-a-viewer.html",
+              "caption": "A viewer: no handles, Read only"
             }
           ]
         },
@@ -312,6 +348,14 @@
             {
               "file": "frames/ld3-c-moved.html",
               "caption": "Moved to M6, with Undo"
+            },
+            {
+              "file": "frames/ld3-c-commenter.html",
+              "caption": "A commenter's Move to… makes a suggestion: F-15 stays under M4, marked Suggested: move to M6, sent to an approver"
+            },
+            {
+              "file": "frames/ld3-c-phone.html",
+              "caption": "Phone: the same Move to… sheet"
             }
           ]
         }
