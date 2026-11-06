@@ -41,6 +41,23 @@ test("F-66: the title's badges filter the tokens to the ones they count, and aga
   await expect(tokenRows(page)).toHaveCount(all);
 });
 
+test("F-66: a pressed badge stays shown at 0 when the kind changes, so the filter can be turned off", async ({ page }) => {
+  await login(page);
+  await page.goto("/settings/api-tokens");
+  const expired = page.getByTestId("expired-count");
+  await expect(expired).toHaveText("1 expired");
+  await expired.click();
+  await expect(tokenRows(page)).toHaveCount(1);
+  // Service tokens have no expired one: the list is empty and says why, and the pressed badge stays.
+  await page.getByTestId("kind-service").click();
+  await expect(page.getByText("No expired tokens")).toBeVisible();
+  await expect(expired).toHaveText("0 expired");
+  await expect(expired).toHaveAttribute("aria-pressed", "true");
+  await expired.click();
+  await expect(expired).toHaveCount(0);
+  await expect(tokenRows(page).first()).toBeVisible();
+});
+
 test("F-67: a long token name wraps in the Name column instead of being cut", async ({ page }) => {
   await login(page);
   await page.goto("/settings/api-tokens");
@@ -103,7 +120,12 @@ test("F-25: a viewer's Inbox lists no webhook rows they could not open", async (
   await scenario(page, WEBHOOKS_SCENARIO);
   await page.addInitScript(([key]) => localStorage.setItem(key, "viewer"), [MOCK_ROLE_KEY]);
   await login(page);
+  // The API sends a member their own webhook notices whatever their role (here the seeded
+  // owner's, signed in as a viewer): the Inbox, not the API, leaves them out.
+  const notices = page.waitForResponse((r) => r.url().endsWith("/v1/me/notifications") && r.request().method() === "GET");
   await page.goto("/inbox");
+  const sent = (await (await notices).json()) as { kind: string }[];
+  expect(sent.filter((n) => n.kind === "webhook_paused").length).toBeGreaterThan(0);
   await expect(page.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible();
   await expect(page.getByText("Webhook Deploy notifier paused")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Open" }).filter({ hasText: "Open" }).and(page.locator('[href^="/settings/webhooks"]'))).toHaveCount(0);
