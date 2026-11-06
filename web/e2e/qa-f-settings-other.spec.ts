@@ -38,8 +38,9 @@ async function deleteDoc(page: Page, title: string) {
   await page.getByTestId("document-row").filter({ hasText: title }).getByRole("button", { name: `Actions for ${title}` }).click();
   await page.getByRole("menuitem", { name: "Delete…" }).click();
   const dialog = page.getByRole("dialog", { name: `Delete ${title}` });
-  await expect(dialog.getByRole("button", { name: "Move to Trash", disabled: false })).toBeVisible();
   const external = dialog.getByLabel("Delete it here; the external copy stays where it is");
+  // The dialog reads what goes with it first: then it can go, or asks once more.
+  await expect(external.or(dialog.getByRole("button", { name: "Move to Trash", disabled: false }))).toBeVisible();
   if (await external.isVisible()) await external.check();
   await dialog.getByRole("button", { name: "Move to Trash" }).click();
   await expect(dialog).toHaveCount(0);
@@ -188,7 +189,7 @@ for (const phone of [false, true]) {
 
 test("F-68: Empty Trash names up to three entries, then counts them", async ({ page }) => {
   await login(page);
-  const names = [PRD, "Visit reminders", "Team workspaces PRD"];
+  const names = [PRD, "Visit reminders", "Saved carts PRD"];
   for (const title of names) await deleteDoc(page, title);
   await page.goto("/settings/trash");
   await expect(page.getByTestId("trash-entry")).toHaveCount(3);
@@ -196,17 +197,17 @@ test("F-68: Empty Trash names up to three entries, then counts them", async ({ p
   let ask = page.getByRole("alertdialog");
   // Three entries: each by its name, "A, B and C", newest first.
   await expect(ask).toContainText(`Everything here goes for good: ${names[2]}, ${names[1]} and ${names[0]}`);
-  await ask.getByRole("button", { name: "Cancel" }).click();
+  await ask.getByRole("button", { name: "Back" }).click();
   await expect(ask).toHaveCount(0);
 
-  await deleteDoc(page, "Saved carts PRD");
+  await deleteDoc(page, "Clinic outreach PRD");
   await page.goto("/settings/trash");
   await expect(page.getByTestId("trash-entry")).toHaveCount(4);
   await page.getByRole("button", { name: "Empty Trash" }).click();
   ask = page.getByRole("alertdialog");
   // More than three: a count of the entries, not a long list.
   await expect(ask).toContainText(/Everything here goes for good: 4 deleted items[,.]/);
-  for (const title of [...names, "Saved carts PRD"]) await expect(ask).not.toContainText(title);
+  for (const title of [...names, "Clinic outreach PRD"]) await expect(ask).not.toContainText(title);
 });
 
 test("Trash: a commenter and a viewer never see Delete for good or Empty Trash", async ({ page }) => {
@@ -220,7 +221,8 @@ test("Trash: a commenter and a viewer never see Delete for good or Empty Trash",
     await login(page, email);
     await page.goto("/settings/trash");
     await expect(page.getByRole("heading", { level: 1, name: "Trash" })).toBeVisible();
-    await expect(page.getByTestId("trash-empty").or(page.getByText("Only owners delete and restore artifacts."))).toBeVisible();
+    // A commenter's Trash holds only what they deleted (nothing); a viewer's is not theirs to open.
+    await expect(email.startsWith("commenter") ? page.getByTestId("trash-empty") : page.getByText("Not available for your role")).toBeVisible();
     await expect(page.getByRole("button", { name: /for good$/ })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Empty Trash" })).toHaveCount(0);
   }
