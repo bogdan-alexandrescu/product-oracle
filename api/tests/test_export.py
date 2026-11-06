@@ -197,12 +197,13 @@ async def test_html_citations_are_numbered_sources_in_the_appendix(client, fx):
         "#product thread on drop-off</a>"
     ) in src1
     assert "Most users abandon at the shipping step" in src1
-    assert "slack" in src1 and "retrieved Oct 16, 2026, 6:10 AM PDT" in _text(src1)
+    # X-9: a source reads by its title, never its kind or raw ref.
+    assert "slack" not in _text(src1) and "retrieved Oct 16, 2026, 6:10 AM PDT" in _text(src1)
 
     # A non-http(s) ref is shown as text, never as a link.
     src3 = appendix[appendix.index('id="src-3"') : appendix.index('id="src-4"')]
     assert 'href="javascript' not in html
-    assert "Carrier API notes" in src3 and "javascript:alert(1)" in src3
+    assert "Carrier API notes" in src3 and "javascript:alert(1)" not in src3
     assert "Unused source" in appendix[appendix.index('id="src-4"') :]
 
 
