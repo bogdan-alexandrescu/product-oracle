@@ -41,7 +41,11 @@ for (const p of PAGES) {
   for (const theme of ["light", "dark", "system-dark"] as const) {
     test(`${p.name} version: printing leaves out the app, in light colours (${theme})`, async ({ page }) => {
       await open(page, p.url, theme);
+      // A PRD says on screen which part it shows (Brief or Full); that note is not part of the document.
+      const note = page.getByTestId("view-note");
+      if (p.name === "PRD") await expect(note).toBeVisible();
       await page.emulateMedia({ media: "print", colorScheme: theme === "system-dark" ? "dark" : "light" });
+      if (p.name === "PRD") await expect(note).toBeHidden();
       for (const id of CHROME) {
         await expect(page.getByTestId(id), id).toBeHidden();
       }
@@ -105,3 +109,32 @@ for (const p of PAGES) {
     }
   });
 }
+
+// A Letter sheet's printable width (page margins taken off) is about 720 px.
+test("roadmap version: the Items tab prints whole, names wrapping between words", async ({ page }) => {
+  await page.setViewportSize({ width: 720, height: 1056 });
+  await login(page);
+  await page.goto("/documents/usage-alerts-roadmap/v/1/items");
+  const table = page.getByTestId("roadmap-items-table");
+  await expect(table).toBeVisible();
+  await page.emulateMedia({ media: "print" });
+  for (const id of ["app-nav", "version-toolbar", "version-tabs"]) await expect(page.getByTestId(id), id).toBeHidden();
+  const names = table.locator('td[data-phone="title"]');
+  await expect(names).toHaveCount(2);
+  const cut = await names.evaluateAll((cells) => cells.filter((c) => c.scrollWidth > c.clientWidth).map((c) => c.textContent));
+  expect(cut, "item names cut off").toEqual([]);
+  // Each name has room for its longest word, and the table stays inside the sheet.
+  for (const name of ["Behaviour", "Success"]) {
+    const w = await names.filter({ hasText: name }).evaluate((c, text) => {
+      const r = document.createRange();
+      r.selectNodeContents(c);
+      return { cell: c.clientWidth, text: r.getBoundingClientRect().width, label: text };
+    }, name);
+    expect(w.cell, name).toBeGreaterThanOrEqual(w.text - 1);
+  }
+  const t = (await table.locator("table").boundingBox())!;
+  expect(t.x + t.width).toBeLessThanOrEqual(720 + 1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.emulateMedia({ media: "screen" });
+  await expect(page.getByTestId("app-nav")).toBeVisible();
+});

@@ -1570,4 +1570,17 @@ code .date-mark {
   }
   article[aria-label="Document"] :is(th, td) { overflow-wrap: anywhere; }
   article[aria-label="Document"] pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+  /* A roadmap version's Items tab is not inside the Document article: its fixed column widths
+     leave the Item column a sliver on paper, so the columns share the sheet and cells wrap. */
+  [data-testid="roadmap-items-table"] { overflow: visible; }
+  [data-testid="roadmap-items-table"] table { table-layout: auto; }
+  [data-testid="roadmap-items-table"] col { width: auto !important; }
+  [data-testid="roadmap-items-table"] td {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+  [data-testid="roadmap-items-table"] tr { break-inside: avoid; }
+  [data-testid="roadmap-items-table"] thead { display: table-header-group; }
 }
