@@ -81520,6 +81520,18 @@
             ],
             "title": "Due"
           },
+          "due_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due On"
+          },
           "days": {
             "items": {
               "anyOf": [
@@ -82254,6 +82266,11 @@
             "type": "string",
             "title": "Today"
           },
+          "today_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Today On"
+          },
           "reps": {
             "anyOf": [
               {
@@ -82300,6 +82317,7 @@
           "unplaced",
           "off_map",
           "today",
+          "today_on",
           "reps",
           "approver",
           "can_edit"

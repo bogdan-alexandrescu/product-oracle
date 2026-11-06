@@ -25932,6 +25932,8 @@ export interface components {
             month: string;
             /** Due */
             due: string | null;
+            /** Due On */
+            due_on?: string | null;
             /** Days */
             days: (number | null)[];
             /** Confirmed */
@@ -26191,6 +26193,11 @@ export interface components {
             off_map: components["schemas"]["GmOffMap"][];
             /** Today */
             today: string;
+            /**
+             * Today On
+             * Format: date
+             */
+            today_on: string;
             /** Reps */
             reps: number | null;
             /** Approver */

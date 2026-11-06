@@ -1,7 +1,7 @@
 /**
  * Simple Goal map (build-goal-map): GET /v1/simple/goal-map and its edits (POST /areas,
  * PUT /areas/order, PATCH /goals/{id}, POST /milestones, PATCH /milestones/{id}, POST
- * /links), as the API
+ * /links; goal-ladder: POST /links/move, POST /place-card, DELETE /places), as the API
  * (api/oracle/simple/goal_map.py). Invented data: three goals, a guardrail, four areas,
  * seven gated milestones and twelve features. The "goal-map-hard" scenario
  * (MOCK_SCENARIO_KEY) gives the hard case: 5 areas, 12 milestones, 40 features, one
@@ -18,6 +18,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { FIT_COMPANY_SCENARIO } from "./fit-date";
+import { LADDER_SCENARIO, ladderMap } from "./goal-ladder";
 import { stableUuid } from "./ids";
 import { COMPANY_SLUG } from "./one-roadmap";
 
@@ -40,6 +41,8 @@ const READ_ON = "Nov 1";
 
 /** The mock's ids: stable UUIDs, as the API's. */
 const id = (k: string) => stableUuid(`goal-map/${k}`);
+/** The API id the mock gives a short name (goal-ladder's goals are Baseline goals with it). */
+export const goalMapIdOf = id;
 /**
  * one-feature-panel: each feature is its own Simple roadmap item ("gm-f1", ...), as the API's map
  * reads the roadmap's items, so its item panel opens on it (server.ts adds the items: goalMapItems).
@@ -52,7 +55,7 @@ const fid = (k: string) => {
   return uid;
 };
 // Known before any map is seeded (a map read back from storage names them too).
-for (let n = 1; n <= 60; n++) fid(`f${n}`);
+for (let n = 1; n <= 70; n++) fid(`f${n}`);
 /** The roadmap items the map's features are: key, id, name and the PRD section that gives its code (F-101, ...). */
 export const goalMapItems = (map: GoalMap): { key: string; id: string; title: string; section: string }[] =>
   map.features.flatMap((f) => {
@@ -125,7 +128,17 @@ const FIFTH: GmArea = { id: "reps", name: "More reps", lever: "Number of reps" }
 const GUARDRAIL: GmGuardrail = { name: "Customer complaints", rule: "= 0 every day", current: 0, days: [0, 0, 0, 0, 0, 0, 0], held: true };
 
 const APPROVER = "Dana Whitlock";
+/** The map's today ("Nov 3") as a date, as the API's today_on. */
+const TODAY_ON = "2026-11-03";
 const by = ["Priya Okafor", "Marco Lindqvist", "Dana Whitlock", "Sam Ferreira"];
+
+/** goal-ladder: a milestone's due date itself (the last day of its month), as the API's due_on. */
+function dueOn(month: string): string {
+  const i = MONTH_NAMES.indexOf(month);
+  const year = i >= 9 ? 2026 : 2027;
+  return new Date(Date.UTC(year, i + 1, 0)).toISOString().slice(0, 10);
+}
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function ms(
   id: string,
@@ -159,6 +172,7 @@ function ms(
     depends,
     month,
     due: `${month} ${({ Oct: 31, Nov: 30, Dec: 31, Jan: 31, Feb: 28 } as Record<string, number>)[month] ?? 30}`,
+    due_on: dueOn(month),
     days,
     confirmed: status === "met" ? by[id.length % by.length] : null,
     confirmed_on: status === "met" ? "Nov 2" : null,
@@ -284,7 +298,7 @@ function hard(): GoalMap {
       lift !== "not_measured" || i % 2 === 0,
     );
   });
-  return { goals, areas, guardrail: GUARDRAIL, milestones, features: [...FEATURES.map((f) => ({ ...f, links: f.links.map((l) => ({ ...l })) })), ...more], gaps: [], unplaced: [], off_map: [], today: "Nov 3", reps: 9, approver: APPROVER, can_edit: true };
+  return { goals, areas, guardrail: GUARDRAIL, milestones, features: [...FEATURES.map((f) => ({ ...f, links: f.links.map((l) => ({ ...l })) })), ...more], gaps: [], unplaced: [], off_map: [], today: "Nov 3", today_on: TODAY_ON, reps: 9, approver: APPROVER, can_edit: true, places: [] };
 }
 
 function plain(): GoalMap {
@@ -298,9 +312,11 @@ function plain(): GoalMap {
     unplaced: [],
     off_map: [],
     today: "Nov 3",
+    today_on: TODAY_ON,
     reps: 10,
     approver: APPROVER,
     can_edit: true,
+    places: [],
   };
 }
 
@@ -398,7 +414,7 @@ function seedReadings(map: GoalMap): void {
 
 export function seedGoalMap(scenario: string | null): GoalMap {
   const map =
-    scenario === "goal-map-hard" ? hard() : scenario === "goal-map-no-gate" ? noGate() : scenario === "goal-map-guardrail-goal" ? guardrailGoal() : scenario === FIT_COMPANY_SCENARIO ? companyRoadmap() : scenario === SCOREBOARD_SCENARIO ? scoreboard() : plain();
+    scenario === "goal-map-hard" ? hard() : scenario === "goal-map-no-gate" ? noGate() : scenario === "goal-map-guardrail-goal" ? guardrailGoal() : scenario === FIT_COMPANY_SCENARIO ? companyRoadmap() : scenario === SCOREBOARD_SCENARIO ? scoreboard() : scenario === LADDER_SCENARIO ? ladderMap() : plain();
   seedReadings(map);
   return withIds(map);
 }
@@ -503,13 +519,13 @@ function amount(v: number, unit: string): string {
 
 /** /v1/simple/goal-map and its edits; null for any other path. Edits need approver and up. */
 export async function routeGoalMap(
-  db: { goal_map?: GoalMap },
+  db: { goal_map?: GoalMap; goal_map_places?: Record<string, Record<string, [number, number]>> },
   scenario: string | null,
-  me: { role: string; name: string },
+  me: { role: string; name: string; id?: string },
   req: Request,
   p: string[],
   /** A Simple roadmap item by id (any item can be attached, not only those on the map). */
-  item: (id: string) => { title: string } | null = () => null,
+  item: (id: string) => { title: string; trashed?: boolean } | null = () => null,
   /** The Simple roadmap's items as the reader sees them (the unplaced features). */
   items: () => Promise<{ id: string; title: string; status: string }[]> = async () => [],
   /** The Baseline goals (the goals left off the map; the map's own goal names). */
@@ -518,10 +534,42 @@ export async function routeGoalMap(
   if (p[1] !== "simple" || p[2] !== "goal-map") return null;
   const map = (db.goal_map ??= seedGoalMap(scenario));
   const canEdit = me.role === "owner" || me.role === "approver";
-  const out = async () => json(200, finish({ ...map, can_edit: canEdit }, await items(), baseline()));
+  // goal-ladder place_card: each person's own places of cards, only for features on the map.
+  const mine = ((db.goal_map_places ??= {})[me.id ?? me.name] ??= {});
+  // trash-features-goals: a feature in Trash is off the map (and so is its place).
+  const shown = () => map.features.filter((f) => !item(f.id)?.trashed);
+  const places = () => Object.entries(mine).flatMap(([feature, [x, y]]) => (shown().some((f) => f.id === feature) ? [{ feature, x, y }] : []));
+  const out = async () => json(200, { ...finish({ ...map, features: shown(), can_edit: canEdit }, await items(), baseline()), places: places() });
   if (req.method === "GET" && !p[3]) return out();
-  if (!canEdit) return json(403, { detail: "Only owners and approvers can change the goal map" });
   const body = JSON.parse((await req.text()) || "null");
+  if (req.method === "POST" && p[3] === "place-card") {
+    // Viewers too: a place is the person's own view and never changes data.
+    if (!shown().some((f) => f.id === body?.feature)) return json(404, { detail: "No such feature on the map" });
+    if (body.x == null || body.y == null) delete mine[body.feature];
+    else mine[body.feature] = [Number(body.x), Number(body.y)];
+    return out();
+  }
+  if (req.method === "DELETE" && p[3] === "places") {
+    for (const k of Object.keys(mine)) delete mine[k];
+    return out();
+  }
+  if (!canEdit) return json(403, { detail: "Only owners and approvers can change the goal map" });
+  if (req.method === "POST" && p[3] === "links" && p[4] === "move") {
+    // goal-ladder: a feature's link moved to another milestone (onto one it serves: the old link goes).
+    const f = map.features.find((x) => x.id === body?.feature);
+    const to = map.milestones.find((x) => x.id === body?.to_milestone);
+    if (!f || !to || !f.milestones.includes(body?.from_milestone)) return json(404, { detail: "No such feature or milestone" });
+    if (body.from_milestone !== to.id) {
+      if (f.milestones.includes(to.id)) {
+        f.milestones = f.milestones.filter((m) => m !== body.from_milestone);
+        f.links = f.links.filter((l) => l.milestone !== body.from_milestone);
+      } else {
+        f.milestones = f.milestones.map((m) => (m === body.from_milestone ? to.id : m));
+        f.links = f.links.map((l) => (l.milestone === body.from_milestone ? { ...l, milestone: to.id } : l));
+      }
+    }
+    return out();
+  }
   if (req.method === "POST" && p[3] === "areas" && !p[4]) {
     const name = String(body?.name ?? "").trim();
     if (!name) return json(422, { detail: "Name the area" });
@@ -586,7 +634,7 @@ export async function routeGoalMap(
     const days = DAYS_BACK.map((i) => (g.current === null ? null : Math.round((g.current - i * 0.6) * 10) / 10));
     map.milestones.push({
       id: crypto.randomUUID(), name, goal: g.id, measure: g.measure, threshold: Number(body?.threshold), unit: g.unit, current: g.current,
-      status: g.current === null ? "not_measured" : "on_track", areas, depends: after ? [after.id] : [], month: "Nov", due: null, days, confirmed: null, confirmed_on: null, proposed: true,
+      status: g.current === null ? "not_measured" : "on_track", areas, depends: after ? [after.id] : [], month: "Nov", due: null, due_on: null, days, confirmed: null, confirmed_on: null, proposed: true,
     });
     map.milestones = ordered(map.milestones);
     return out();

@@ -128,6 +128,8 @@ class GmMilestone(BaseModel):
     month: str
     # The due date in words ("Oct 31"), when the milestone has one.
     due: str | None
+    # goal-ladder: the due date itself, for the week strip (the words carry no year).
+    due_on: date | None = None
     days: list[float | None]
     confirmed: str | None
     # When it was confirmed, in words ("Nov 2").
@@ -205,6 +207,8 @@ class GoalMapOut(BaseModel):
     unplaced: list[GmUnplaced]
     off_map: list[GmOffMap]
     today: str
+    # goal-ladder: today's date itself, for the week strip.
+    today_on: date
     reps: int | None
     # Who a proposed milestone is sent to for approval (the first owner by name).
     approver: str | None
@@ -584,6 +588,7 @@ async def build(db: AsyncSession, principal: Any, can_edit: bool) -> GoalMapOut:
                 # Undated (a proposal, say): this month, until it gets a date.
                 month=company_time.calendar_month(m.target_date or today),
                 due=_short(m.target_date),
+                due_on=m.target_date,
                 days=list(days),
                 confirmed=m.gate_confirmed_by,
                 confirmed_on=_short(m.gate_confirmed_on),
@@ -675,6 +680,7 @@ async def build(db: AsyncSession, principal: Any, can_edit: bool) -> GoalMapOut:
             if not _is_guardrail(g)
         ],
         today=company_time.calendar_day(today),
+        today_on=today,
         reps=reps,
         approver=owner.name if owner else None,
         can_edit=can_edit,
