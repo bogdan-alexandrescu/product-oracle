@@ -29,6 +29,7 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.docs.models import Document
 from oracle.members.names import display_name
+from oracle.roadmap import company
 from oracle.roadmap.models import TrackMilestone
 from oracle.simple import drafts
 from oracle.simple.models import SimpleChange
@@ -254,10 +255,18 @@ async def _roadmap_or_404(db: AsyncSession, roadmap_id: uuid.UUID) -> Document:
     return doc
 
 
+async def _not_history(db: AsyncSession, roadmap_id: uuid.UUID) -> None:
+    """While the company roadmap exists an older per-PRD roadmap is history
+    (oracle.roadmap.company.feeding_ids): its milestones are not added to or changed."""
+    if not await company.feeding_ids(db, [roadmap_id]):
+        raise _error(status.HTTP_409_CONFLICT, "That roadmap is history")
+
+
 async def create(
     db: AsyncSession, principal: Any, body: SimpleGoalMilestoneIn
 ) -> SimpleGoalMilestone:
     roadmap = await _roadmap_or_404(db, body.roadmap_id)
+    await _not_history(db, body.roadmap_id)
     w = await drafts.who(db, {body.roadmap_id})
     if not drafts.can_edit(principal, body.roadmap_id, w):
         raise _error(status.HTTP_403_FORBIDDEN,
@@ -292,6 +301,7 @@ async def patch(
         raise _error(status.HTTP_404_NOT_FOUND, "No such milestone")
     fields = body.model_fields_set
     roadmap = await db.get(Document, row.roadmap_id)
+    await _not_history(db, row.roadmap_id)
     if row.origin_prd_id is not None:
         return await _propose_prd_change(db, principal, row, roadmap, body, fields)
     w = await drafts.who(db, {row.roadmap_id})
@@ -323,7 +333,7 @@ async def _propose_prd_change(
     body: SimpleGoalMilestonePatch,
     fields: set[str],
 ) -> SimpleGoalMilestone:
-    if not (fields & {"date", "counts_when"}):
+    if fields & {"name", "goal_id", "item_ids"} or not (fields & {"date", "counts_when"}):
         raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY,
                      "A PRD's milestone: only date and counts_when may be proposed "
                      "(name, goal and items are the roadmap's own)")  # fmt: skip

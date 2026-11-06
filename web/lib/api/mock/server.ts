@@ -4199,7 +4199,8 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
             .map((s) => {
               const { start, end } = shownDates(rm, s.key);
               const days = Math.max(1, (Date.parse(end) - Date.parse(start)) / 86_400_000 + 1);
-              return { key: s.key, title: s.title, prd: s.prd_doc ?? null, milestone: null, effort_weeks: Math.round((days / 7) * 10) / 10, start, end };
+              // As company_router: the item's own milestone's name (RoadmapItem.milestone), not a track's.
+              return { key: s.key, title: s.title, prd: s.prd_doc ?? null, milestone: s.milestone?.name ?? null, effort_weeks: Math.round((days / 7) * 10) / 10, start, end };
             })
             .filter((i) => !prd || (i.prd && (i.prd.slug === prd || i.prd.id === prd)))
         : [];

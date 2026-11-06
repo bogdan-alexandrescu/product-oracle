@@ -85,6 +85,9 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
   const goalTitle = (id: string | null) => goals.find((g) => g.id === id)?.title ?? "No goal";
   const nextCode = (goal: string | null) => `M${list.filter((m) => m.goal_id === goal && !m.prd).reduce((a, m) => Math.max(a, Number(m.code.slice(1)) || 0), 0) + 1}`;
   const roadmapOf = (goal: string | null) => data.roadmap?.id ?? data.items.find((i) => i.goal?.id === goal)?.roadmap.id ?? data.items[0]?.roadmap.id;
+  // A milestone is added only where the reader's change applies (POST answers 403 elsewhere).
+  const applies = new Set((data.key_date_roadmaps ?? []).filter((r) => r.applies).map((r) => r.roadmap.id));
+  const canAddTo = (goal: string | null) => applies.has(roadmapOf(goal) ?? "");
   const lateOf = (ids: string[], date: string) => ids.filter((id) => (items.get(id)?.end.date ?? "") > date).length;
   const fresh = (date: string, goal: string | null, second = false): Draft => ({ id: null, code: nextCode(goal), name: "", date, goal_id: goal, item_ids: [], counts_when: RULES[0], second, prd: false });
   const done = async (t: Toast) => {
@@ -113,7 +116,7 @@ export function useMilestones({ data, phone, canChange, reload, openItem }: { da
     moving,
     toast,
     phone,
-    canAdd: canChange,
+    canAdd: canChange && [null, ...goals.map((g) => g.id)].some(canAddTo),
     goals,
     items,
     today: data.today,
@@ -403,7 +406,7 @@ export function MsLayer(props: MsLayerProps) {
   }
   // A drag on a diamond moves it; a click (no move) opens it.
   const grab = (m: GoalMilestone) => (e: ReactPointerEvent) => {
-    if (!ms.canAdd || !m.can_change) return;
+    if (!m.can_change) return;
     e.preventDefault();
     e.stopPropagation();
     const layer = e.currentTarget.closest<HTMLElement>("[data-testid=ms-layer]")!;
