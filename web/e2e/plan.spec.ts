@@ -126,16 +126,16 @@ test("roadmap table: grouped by horizon, goal or PRD; draft items are dashed Pro
   await expect(state("Alert rules API")).toHaveAttribute("data-dashed", "true");
   await expect(state("Usage dashboard")).toHaveText("Proposed · changed");
   await expect(state("Spend forecast for the month")).toHaveText("Proposed · Next → Now");
-  await expect(state("Daily alert digest email")).toHaveText("At risk");
+  await expect(state("Weekly alert digest")).toHaveText("At risk");
   await expect(state("Threshold alerts on spend")).toHaveText("On track");
   await expect(row(page, "Budgets per team")).toContainText("Dropped in draft 2");
   await expect(page.getByTestId("plan-legend")).toHaveText("Dashed: proposed by a draft, not approved");
   // Engineering and Next, as the rules word them.
   await expect(row(page, "Threshold alerts on spend").getByTestId("plan-engineering")).toHaveText("ENG-402 · Nov 20 ✓");
-  await expect(row(page, "Daily alert digest email").getByTestId("plan-engineering")).toHaveText("ENG-405 · slipped 9 d");
+  await expect(row(page, "Weekly alert digest").getByTestId("plan-engineering")).toHaveText("ENG-405 · slipped 9 d");
   await expect(row(page, "Alerts in the team chat").getByTestId("plan-engineering")).toHaveText("ENG-431 · unverified");
   await expect(row(page, "Budgets per team").getByTestId("plan-engineering")).toHaveText("—");
-  await expect(row(page, "Daily alert digest email").getByTestId("plan-next")).toHaveText("Owners decide on the slip");
+  await expect(row(page, "Weekly alert digest").getByTestId("plan-next")).toHaveText("Owners decide on the slip");
   await expect(row(page, "Alert rules API").getByTestId("plan-next").getByRole("link", { name: "Review the PRD" })).toHaveAttribute(
     "href",
     "/documents/usage-alerts/v/1",
@@ -187,8 +187,8 @@ test("selecting a row opens the inspector with its links", async ({ page }) => {
   await expect(inspector).toContainText("Item");
   await expect(inspector).not.toContainText("· selected");
   await expect(inspector).toContainText(await rows(page).first().getByTestId("plan-title").innerText());
-  await row(page, "Daily alert digest email").click();
-  await expect(inspector.getByRole("heading", { name: "Daily alert digest email" })).toBeVisible();
+  await row(page, "Weekly alert digest").click();
+  await expect(inspector.getByRole("heading", { name: "Weekly alert digest" })).toBeVisible();
   await expect(inspector.getByRole("link", { name: "Open in PRD" })).toHaveAttribute("href", "/documents/usage-alerts/v/1#behaviour");
   await expect(inspector.getByRole("link", { name: "Open in roadmap" })).toHaveAttribute(
     "href",
@@ -251,7 +251,7 @@ test("phone: rows are cards, a tap opens the sheet, no sideways scroll", async (
   await page.goto("/plan");
   await expect(rows(page).first()).toBeVisible();
   await expect(groups(page)).toHaveText(["Now · 5", "Next · 1", "Later · 1"]);
-  const first = row(page, "Daily alert digest email");
+  const first = row(page, "Weekly alert digest");
   // A card: the state chip beside the title, PRD, goal, engineering and Next below it.
   const [title, chip] = await Promise.all([first.getByTestId("plan-title").boundingBox(), first.getByTestId("plan-state").boundingBox()]);
   expect(chip!.y).toBeLessThan(title!.y + title!.height);

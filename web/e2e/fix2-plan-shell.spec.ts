@@ -127,7 +127,7 @@ test.describe("desktop", () => {
     await expect(eng).toHaveText("ENG-402 · Nov 20 ✓");
     // One line: no "ENG-402 · Nov" then "20 ✓".
     expect((await box(eng)).height).toBeLessThanOrEqual(24);
-    const next = row(page, "Daily alert digest email").getByTestId("plan-next");
+    const next = row(page, "Weekly alert digest").getByTestId("plan-next");
     // fix4 qa-plan-29: who decides reads in one sentence.
     await expect(next).toHaveText("Owners decide on the slip");
     const review = row(page, "Alert rules API").getByTestId("plan-next").getByRole("link", { name: "Review the PRD" });

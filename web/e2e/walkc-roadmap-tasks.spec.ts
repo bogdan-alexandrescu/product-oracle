@@ -182,7 +182,7 @@ for (const where of ["desktop", "phone"] as const) {
     await expect(minutes).toHaveAttribute("href", /^\/simple\/meetings\/[0-9a-f-]+$/);
     const href = await minutes.getAttribute("href");
     await page.goto("/plan");
-    const row = page.getByTestId("plan-row").filter({ visible: true }).filter({ hasText: "Daily alert digest email" });
+    const row = page.getByTestId("plan-row").filter({ visible: true }).filter({ hasText: "Weekly alert digest" });
     await row.getByTestId("plan-title").click();
     const panel = page.getByTestId(phone ? "sheet-plan-item" : "plan-inspector").filter({ visible: true });
     const list = panel.getByTestId("plan-decided");
