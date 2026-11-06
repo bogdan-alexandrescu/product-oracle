@@ -140,6 +140,8 @@ test("a deleted feature and goal are listed in Settings › Trash and restored f
 
   await page.getByRole("button", { name: `Restore ${feature.title}` }).click();
   await expect(featureRow).toHaveCount(0);
+  // The note names the feature as its row did, code first.
+  await expect(page.getByRole("status").filter({ hasText: "Restored" })).toContainText(`Restored ${feature.code} ${feature.title}`);
   await page.getByRole("button", { name: `Restore ${goal.title}` }).click();
   await expect(goalRow).toHaveCount(0);
 

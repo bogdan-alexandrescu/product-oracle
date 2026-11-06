@@ -67,9 +67,13 @@ test("analytics: the host options are US, EU and Your own server; Your own serve
   await select.selectOption({ label: "Your own server" });
   const address = page.getByLabel("Server address");
   await expect(address).toBeVisible();
+  // Your own server with no address yet: Save still waits, and says for what.
+  await expect(page.getByRole("button", { name: "Save" })).toBeDisabled();
+  await expect(page.getByTestId("analytics-save-why")).toHaveText("Add the server address to save.");
   await address.fill("https://posthog.example.com");
 
   await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
+  await expect(page.getByTestId("analytics-save-why")).toHaveCount(0);
 
   await select.selectOption({ label: "US" });
   await expect(page.getByLabel("Server address")).toHaveCount(0);

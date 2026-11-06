@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { login } from "./helpers";
+import { login, signOut } from "./helpers";
 
 /*
  * Visual QA pass F, Settings: a wrong Settings URL keeps the Settings tabs (F-32); Trash deletes
@@ -27,7 +27,22 @@ async function deletePrd(page: Page): Promise<string> {
   if (await external.isVisible()) await external.check();
   await dialog.getByRole("button", { name: "Move to Trash" }).click();
   await expect(dialog).toHaveCount(0);
+  // The toast names the PRD and counts what went with it (its spec, brief and run), never lists them.
+  await expect(page.getByRole("status").getByText(`Moved to Trash: ${PRD} and 3 items that went with it`, { exact: true })).toBeVisible();
   return runText;
+}
+
+/** Deletes a document from PRDs by its title, through its Actions menu. */
+async function deleteDoc(page: Page, title: string) {
+  await page.goto("/documents");
+  await page.getByTestId("document-row").filter({ hasText: title }).getByRole("button", { name: `Actions for ${title}` }).click();
+  await page.getByRole("menuitem", { name: "Delete…" }).click();
+  const dialog = page.getByRole("dialog", { name: `Delete ${title}` });
+  await expect(dialog.getByRole("button", { name: "Move to Trash", disabled: false })).toBeVisible();
+  const external = dialog.getByLabel("Delete it here; the external copy stays where it is");
+  if (await external.isVisible()) await external.check();
+  await dialog.getByRole("button", { name: "Move to Trash" }).click();
+  await expect(dialog).toHaveCount(0);
 }
 
 for (const phone of [false, true]) {
@@ -170,3 +185,43 @@ for (const phone of [false, true]) {
     });
   });
 }
+
+test("F-68: Empty Trash names up to three entries, then counts them", async ({ page }) => {
+  await login(page);
+  const names = [PRD, "Visit reminders", "Team workspaces PRD"];
+  for (const title of names) await deleteDoc(page, title);
+  await page.goto("/settings/trash");
+  await expect(page.getByTestId("trash-entry")).toHaveCount(3);
+  await page.getByRole("button", { name: "Empty Trash" }).click();
+  let ask = page.getByRole("alertdialog");
+  // Three entries: each by its name, "A, B and C", newest first.
+  await expect(ask).toContainText(`Everything here goes for good: ${names[2]}, ${names[1]} and ${names[0]}`);
+  await ask.getByRole("button", { name: "Cancel" }).click();
+  await expect(ask).toHaveCount(0);
+
+  await deleteDoc(page, "Saved carts PRD");
+  await page.goto("/settings/trash");
+  await expect(page.getByTestId("trash-entry")).toHaveCount(4);
+  await page.getByRole("button", { name: "Empty Trash" }).click();
+  ask = page.getByRole("alertdialog");
+  // More than three: a count of the entries, not a long list.
+  await expect(ask).toContainText(/Everything here goes for good: 4 deleted items[,.]/);
+  for (const title of [...names, "Saved carts PRD"]) await expect(ask).not.toContainText(title);
+});
+
+test("Trash: a commenter and a viewer never see Delete for good or Empty Trash", async ({ page }) => {
+  // Something is in Trash: an owner's deleted PRD.
+  await login(page);
+  await deletePrd(page);
+  await page.goto("/settings/trash");
+  await expect(page.getByRole("button", { name: "Empty Trash" })).toBeVisible();
+  for (const email of ["commenter@example.com", "viewer@example.com"]) {
+    await signOut(page);
+    await login(page, email);
+    await page.goto("/settings/trash");
+    await expect(page.getByRole("heading", { level: 1, name: "Trash" })).toBeVisible();
+    await expect(page.getByTestId("trash-empty").or(page.getByText("Only owners delete and restore artifacts."))).toBeVisible();
+    await expect(page.getByRole("button", { name: /for good$/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Empty Trash" })).toHaveCount(0);
+  }
+});
