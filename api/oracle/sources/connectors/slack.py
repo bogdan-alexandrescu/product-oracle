@@ -62,6 +62,7 @@ from typing import Any
 
 import httpx
 
+from oracle.company_time import calendar_day_with_year
 from oracle.sources.base import (
     ORACLE_SLACK_USERS,
     ZONE_KEY,
@@ -204,16 +205,12 @@ def _day(config: dict[str, Any], key: str) -> date | None:
     if day is None or not FIRST_DAY <= day <= LAST_DAY:
         label = "a start date" if key == "since" else "an end date"
         raise ConnectorConfigError(
-            f"pick {label} from {_shown(FIRST_DAY)} to {_shown(LAST_DAY)}",
+            f"pick {label} from {calendar_day_with_year(FIRST_DAY)}"
+            f" to {calendar_day_with_year(LAST_DAY)}",
             is_action=True,
             cause=f"the {label.split(' ', 1)[1]} is out of range",
         )
     return day
-
-
-def _shown(day: date) -> str:
-    """A day as people read it: "Jan 1, 2000"."""
-    return f"{day:%b} {day.day}, {day.year}"
 
 
 def _midnight(day: date, config: dict[str, Any]) -> float:
