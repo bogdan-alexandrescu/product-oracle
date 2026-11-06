@@ -48640,6 +48640,59 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/strategy/findings/{finding_id}/reopen": {
+      "post": {
+        "tags": [
+          "strategy"
+        ],
+        "summary": "Reopen Strategy Finding",
+        "description": "Reopen a waived finding (whoever may waive it): it is open again and its waiver is\ncleared, so the next check keeps it open until its subject lines up.",
+        "operationId": "reopen_strategy_finding",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "finding_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Finding Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StrategyFindingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
     "/v1/strategy/check": {
       "post": {
         "tags": [

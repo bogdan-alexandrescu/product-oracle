@@ -14327,6 +14327,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/strategy/findings/{finding_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen Strategy Finding
+         * @description Reopen a waived finding (whoever may waive it): it is open again and its waiver is
+         *     cleared, so the next check keeps it open until its subject lines up.
+         */
+        post: operations["reopen_strategy_finding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/strategy/check": {
         parameters: {
             query?: never;
@@ -75477,6 +75498,37 @@ export interface operations {
                 "application/json": components["schemas"]["WaiveIn"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StrategyFindingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_strategy_finding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                finding_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
