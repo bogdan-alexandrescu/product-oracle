@@ -249,18 +249,16 @@ export default function HomePage() {
         {setupQ.data?.welcome && capsReady && (
           <WelcomePanel onDismiss={dismissWelcome} busy={welcomeBusy} setup={setupQ.data} setupShown={!!setup && !setup.hidden} />
         )}
-        {/* F-8: a Set up that failed to load says so, with Try again, never vanishes. A viewer has
-            no Set up steps (they cannot add sources), so is not told. */}
-        {can("create_source") && setupQ.error && !setupQ.data && <LoadError what="Set up" error={setupQ.error} onRetry={() => void setupQ.reload()} />}
         {setupError && (
           <Notice tone="error" testId="home-setup-error">
             {setupError}
           </Notice>
         )}
-        {/* QA pass D-7: Set up is a commenter's and up (the API's setup roles); a failed load says so in its place. */}
+        {/* QA pass D-7, F-8: Set up is a commenter's and up (the API's setup roles); a failed load says so in its
+            place, with Try again, never vanishes; a viewer is not told. One note, named as Simple's ("Set up"). */}
         {setupQ.error && capsReady && can("create_comment") && (
           <div data-testid="home-setup-load-error">
-            <LoadError what="your setup checklist" error={setupQ.error} onRetry={() => void setupQ.reload()} />
+            <LoadError what="Set up" error={setupQ.error} onRetry={() => void setupQ.reload()} />
           </div>
         )}
         {setup && !setup.hidden && (
