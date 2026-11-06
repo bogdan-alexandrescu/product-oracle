@@ -28,6 +28,7 @@ import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 import { sectionHref } from "@/lib/section-link";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { stripRawTokens } from "@/lib/raw-tokens";
+import { LeadCode, leadRest, PrdContents, PrdWhole, usePrdSections } from "@/components/simple/SimplePrd";
 
 type View = Schemas["OnePagerOut"];
 type Line = Schemas["OnePagerLine"];
@@ -293,6 +294,9 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   // C-15: a code in Needs a look reads with the roadmap's name for it, when the roadmap has one.
   const codeNames = new Map((codesQ.data?.items ?? []).flatMap((i) => (i.code ? [[i.code, i.title] as const] : [])));
 
+  // PS1 a "Calm page": the whole PRD the page is built from, read under it; its codes for the lines.
+  const prd = usePrdSections(q.data?.document.slug ?? null, q.data?.version ?? 0);
+
   if (q.loading && !q.data) return <div className="px-6 py-8"><Loading /></div>;
   if (q.error || !q.data) {
     // A missing PRD's address is the app's not-found pattern (qa-shell-11): its title, one
@@ -488,7 +492,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
     <div
       ref={root}
       data-backdrop={presenting ? "" : undefined}
-      className={`min-h-screen ${presenting ? "bg-[var(--simple-desk)]" : ""} text-[length:var(--simple-body)] text-text ${presenting ? "fixed inset-0 z-50 overflow-auto" : ""}`}
+      className={`simple-calm min-h-screen ${presenting ? "bg-[var(--simple-desk)]" : ""} text-[length:var(--simple-body)] text-text ${presenting ? "fixed inset-0 z-50 overflow-auto" : ""}`}
       data-testid="one-pager"
       data-presenting={presenting ? "true" : undefined}
     >
@@ -633,12 +637,12 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
           Remind sends here can read and decide them. */}
       {/* qa4-simple-decide-26/27: in a meeting the stage pads the page once; the card, its title and actions share one left edge. */}
       {(!planShown || linesShown || sessionId || !!v.draft || v.changes_in_review > 0 || v.notes.length > 0) && (
-      <div className={`mx-auto grid gap-6 py-6 ${sessionId ? "px-0" : "px-4"} max-w-[1180px] md:grid-cols-[minmax(0,820px)_var(--simple-margin)]`} data-testid="one-pager-columns">
+      <div className={`mx-auto grid gap-6 py-6 ${!sessionId ? "simple-calm-cols" : ""} ${sessionId ? "px-0" : "px-4"} max-w-[1180px] md:grid-cols-[minmax(0,820px)_var(--simple-margin)]`} data-testid="one-pager-columns">
         <article aria-label="One-pager" className={`rounded-md border border-[var(--simple-rule)] bg-[var(--simple-paper)] ${sessionId ? "px-4" : "px-6"} py-8 shadow-sm md:col-start-1 md:px-12`}>
           {prdLooks.length > 0 && <NeedsALook items={prdLooks} blocks={v.blocks} sections={v.sections} doc={v.document.slug} version={v.version} codeNames={codeNames} />}
           {v.blocks.filter((b) => !(planShown && b.kind === "timeline")).map((b) => (
             // qa4-simple-prd-21: the first section starts at the card's own top padding.
-            <section key={b.key} aria-label={b.title} className="mt-5 first:mt-0">
+            <section key={b.key} id={`op-${b.key}`} aria-label={b.title} className="mt-5 first:mt-0">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-text-faint">{b.title}</h2>
               {b.kind === "timeline" ? (
                 <div className="mt-2" aria-label="Timeline strip">
@@ -694,9 +698,11 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
                           <div className="relative flex items-start gap-2">
                             {/* qa-simple-prd-p3-25: on a desktop the Edit's room is kept, so pointing at a line never rewraps it. */}
                             <span className={`min-w-0 flex-1 ${v.can_edit || v.can_propose ? (v.can_edit ? "md:pr-10" : "md:pr-36") : ""}`}>
+                              {/* PS1 a: a line that starts with a feature code shows the code as a chip that opens its panel. */}
+                              {!l.metric && <LeadCode text={l.full ?? l.text} codes={prd.codes} prd={v.document} />}
                               <button type="button" className="text-left" aria-expanded={open === l.id} onClick={() => { if (!firstTap.current) setOpen(open === l.id ? null : l.id); }} data-testid="one-pager-line-text">
-                                {b.kind === "lines" || b.kind === "metrics" ? "• " : ""}
-                                {l.metric ? (<><span>{l.metric.name}: </span><strong className="tabular-nums">{l.metric.from || "—"} → {l.metric.to}</strong></>) : l.full ? (whole.has(l.id) ? l.full : foldAtSentence(l.full, l.text)) : l.text}
+                                {(b.kind === "lines" || b.kind === "metrics") && (l.metric || leadRest(l.full ?? l.text, prd.codes) === (l.full ?? l.text)) ? "• " : ""}
+                                {l.metric ? (<><span>{l.metric.name}: </span><strong className="tabular-nums">{l.metric.from || "—"} → {l.metric.to}</strong></>) : leadRest(l.full ? (whole.has(l.id) ? l.full : foldAtSentence(l.full, l.text)) : l.text, prd.codes)}
                               </button>
                               {l.full && !l.metric && foldAtSentence(l.full, l.text) !== l.full && (
                                 <button
@@ -872,6 +878,8 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
               <p className="mt-1 text-base text-text2">No changes yet. An edit or a proposed wording shows here beside its line.</p>
             ))}
         </aside>
+        {!sessionId && <PrdWhole prd={prd} doc={v.document} />}
+        {!sessionId && <PrdContents prd={prd} blocks={v.blocks.filter((b) => !(planShown && b.kind === "timeline"))} />}
       </div>
       )}
       </>)}

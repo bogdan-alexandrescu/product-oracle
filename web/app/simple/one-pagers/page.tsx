@@ -16,6 +16,8 @@ import { useMe } from "@/lib/me";
 import { sortPrds } from "@/lib/prd-order";
 import { useQuery } from "@/lib/use-query";
 
+import "@/components/simple/SimplePrd.css";
+
 /** One-pagers (#723 S1): the PRDs I may read (the API lists only those), each opening its one-pager. */
 export default function OnePagers() {
   const q = useQuery("simple|one-pagers", () => unwrap(api.GET("/v1/simple/one-pagers")));
@@ -91,7 +93,7 @@ export default function OnePagers() {
           // qa-simple-prd-42: the status sits beside its title, rows are ruled, each says when it changed.
           // qa-simple-prd-p3-29: the whole row opens the one-pager, as its hover says: the title's
           // link stretches over the row (one link still, its name the title).
-          <ul className="flex flex-col">
+          <ul className="simple-calm-list flex flex-col">
             {moveError && (
               <li role="alert" className="simple-small py-2 text-warn">
                 {moveError}

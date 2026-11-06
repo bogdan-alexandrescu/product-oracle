@@ -501,6 +501,8 @@ const SEED: SeedItem[] = [
   { key: "setup-ideas", title: "Team invite nudges", horizon: "next", roadmap: "onboarding-roadmap", goal: "faster-activation", draft: true },
   // one-feature-panel: the Guided setup PRD's F-03 (the feature its decisions block), on its roadmap as the API has it.
   { key: "setup-health-log", title: "Health log", horizon: "later", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "low", section: "f-03", heading: "F-03 Health log" },
+  // PS1 a "Calm page": the Guided setup PRD's F-26 (its risks name it), on its roadmap as the API has it.
+  { key: "setup-calendar", title: "Calendar invites", horizon: "next", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "medium", start: 50, end: 80, source: "typed", depends: ["setup-checklist"], section: "f-26", heading: "F-26 Calendar invites" },
   { key: "price-tiers", title: "New plan tiers", horizon: "next", roadmap: "pricing-roadmap", confidence: "medium" },
 ];
 
