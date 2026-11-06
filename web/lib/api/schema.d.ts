@@ -14517,9 +14517,9 @@ export interface paths {
          *     the caller sees: each row's Oracle rank, goal, horizon, goal value (a person's estimate
          *     or the goals'), effort, score, the dependency it waits for, the override that placed it
          *     and whether the caller's change applies or is proposed; the open priority and estimate
-         *     proposals, the draft items with what they may merge into, and this quarter's
-         *     engineer-weeks per goal. ``line``: where the line is drawn (Now, a key date, a dated
-         *     milestone or a day; see the module).
+         *     proposals, the draft items with what they may merge into, the items no row holds, and
+         *     this quarter's engineer-weeks per goal. ``line``: where the line is drawn (Now, a key
+         *     date, a dated milestone or a day; see the module).
          */
         get: operations["get_simple_priorities"];
         put?: never;
@@ -43179,6 +43179,11 @@ export interface components {
             proposals: components["schemas"]["SimplePriorityProposal"][];
             /** Drafts */
             drafts: components["schemas"]["SimplePriorityDraft"][];
+            /**
+             * Unranked
+             * @default []
+             */
+            unranked: components["schemas"]["SimplePriorityUnranked"][];
             /** Buckets */
             buckets: components["schemas"]["SimpleGoalBucket"][];
             /** Weeks Total */
@@ -43403,6 +43408,24 @@ export interface components {
             before_override?: {
                 [key: string]: unknown;
             } | null;
+        };
+        /**
+         * SimplePriorityUnranked
+         * @description prio-unranked: a live, non-draft roadmap item with no ranked feature (none, or one the
+         *     ranking leaves out): listed under the ranked rows, with no score and no rank.
+         */
+        SimplePriorityUnranked: {
+            /**
+             * Item Id
+             * Format: uuid
+             */
+            item_id: string;
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
+            goal?: components["schemas"]["SimplePriorityGoal"] | null;
+            roadmap: components["schemas"]["SimpleDocRef"];
         };
         /** SimpleQuarter */
         SimpleQuarter: {

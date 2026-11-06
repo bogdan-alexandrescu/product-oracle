@@ -119,8 +119,10 @@ async function send(body: ChangeIn): Promise<Sent> {
   }
 }
 
+/** What opens the feature panel: a ranked row, or an item with no ranked feature (prio-unranked). */
+type Opened = Pick<Row, "feature_id" | "item_id" | "code" | "title">;
 /** one-feature-panel: a ranked row's name opens the feature's panel (the roadmap's). */
-const OpenRow = createContext<((r: Row) => void) | null>(null);
+const OpenRow = createContext<((r: Opened) => void) | null>(null);
 
 export function Priorities() {
   const params = useSearchParams();
@@ -186,7 +188,7 @@ export function Priorities() {
     }
     return c;
   }, [data, marks]);
-  const shownData = data && show && marks ? { ...data, rows: data.rows.filter((r) => { const f = marks.get(r.feature_id); return !!f && showsAs(f.mark) === show; }) } : null;
+  const shownData = data && show && marks ? { ...data, rows: data.rows.filter((r) => { const f = marks.get(r.feature_id); return !!f && showsAs(f.mark) === show; }), unranked: [] } : null;
   // Roles through can() and the rows' own fields: the API says who applies and who proposes.
   const mayChange = capsReady && can("create_simple_change") && !!data?.can_change;
   // S7: Oracle's suggested features under each goal bucket (an accept adds a draft here).
@@ -237,9 +239,9 @@ export function Priorities() {
   const shapes = goalShapes(data?.rows ?? []);
   // qa-shell-8: a new company has no feature to rank: one line on what shows here and the next
   // step, with no line or comparison to pick over nothing.
-  const blank = !!data && !data.rows.length && !data.drafts.length && !data.proposals.length;
+  const blank = !!data && !data.rows.length && !data.unranked.length && !data.drafts.length && !data.proposals.length;
   const hasGoals = (suggestions.data?.goals.length ?? 0) > 0;
-  const [rowOpen, setRowOpen] = useState<Row | null>(null);
+  const [rowOpen, setRowOpen] = useState<Opened | null>(null);
   // A feature deleted from its row closes its panel, if open.
   const removeFeature = useFeatureDelete(q.reload, undefined, (id) => setRowOpen((r) => (r?.item_id === id ? null : r)));
 
@@ -471,6 +473,7 @@ function Ranked({ data, phone, compare, mayChange, changed, moved, onDelete }: {
       ) : (
         list
       )}
+      {data.unranked.length > 0 && !goalOn && <Unranked items={data.unranked} />}
       {data.drafts.length > 0 && !goalOn && <Drafts drafts={data.drafts} proposals={data.proposals} mayChange={mayChange} changed={changed} />}
       {move && (
         <MoveDialog
@@ -735,6 +738,44 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
       })}
     </ol>
     </>
+  );
+}
+
+/**
+ * prio-unranked: the live roadmap items with no ranked feature, under the ranked rows in a row's
+ * look, muted: no rank, no score, nothing to drag; a click (or Enter) opens the one feature panel.
+ */
+function Unranked({ items }: { items: Out["unranked"] }) {
+  const open = useContext(OpenRow);
+  return (
+    <section aria-labelledby="prio-unranked-head" data-testid="prio-unranked" className="mt-4">
+      <h2 id="prio-unranked-head" className="mb-2 flex items-center gap-1.5 text-[length:var(--simple-small)] font-semibold text-text2">
+        No ranked feature
+        <InfoTip label="No ranked feature" align="start">
+          These roadmap items have no ranked feature yet, so they have no rank or score. Link each to a Ground Truth feature and it ranks.
+        </InfoTip>
+      </h2>
+      <ul className="flex flex-col gap-[var(--simple-gap)]">
+        {items.map((u) => (
+          <li key={u.item_id} data-testid="prio-unranked-row" data-code={u.code} className="rounded-[var(--simple-card-radius)] border border-line bg-surface2 p-3 text-text2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {/* The rank's column, empty: an unranked item has no rank. */}
+              <span aria-hidden className="w-8" />
+              <span className="flex min-w-[12rem] flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+                {open ? (
+                  <button type="button" className="min-w-0 text-left font-medium hover:underline" onClick={() => open({ feature_id: u.item_id, item_id: u.item_id, code: u.code, title: u.title })}>
+                    {u.title}
+                  </button>
+                ) : (
+                  <span className="min-w-0 font-medium">{u.title}</span>
+                )}
+              </span>
+              <span className="text-[length:var(--simple-small)]">{u.goal?.title ?? "No goal"}</span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
