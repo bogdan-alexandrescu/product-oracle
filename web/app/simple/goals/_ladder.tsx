@@ -498,6 +498,15 @@ function WeekLabels({ weeks }: { weeks: Week[] }) {
     return text ? [{ i, text, full: w.today ? undefined : w.full, today: w.today }] : [];
   });
   const n = weeks.length;
+  // Until the labels are measured, the rows a label takes when its neighbour is under 3 weeks away,
+  // so the canvas below fits itself to the strip's height when it opens.
+  const guess: number[] = [];
+  for (const { i, text } of placed) {
+    const lines = text.split("\n").length;
+    let r = 0;
+    while (Array.from({ length: lines }, (_, k) => guess[r + k]).some((x) => x !== undefined && i - x < 3)) r++;
+    for (let k = 0; k < lines; k++) guess[r + k] = i;
+  }
   const box = useRef<HTMLSpanElement>(null);
   // Each label's place, from its drawn width: under its week, kept inside the strip, and a row
   // down (as the Roadmap's milestone labels) when its box would meet one already placed.
@@ -529,7 +538,7 @@ function WeekLabels({ weeks }: { weeks: Week[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` stands for the labels.
   }, [key, n]);
   return (
-    <span ref={box} className="relative block" style={{ height: (at?.rows ?? 1) * 13 + 6 }}>
+    <span ref={box} className="relative block" style={{ height: (at?.rows ?? guess.length) * 13 + 6 }}>
       {placed.map(({ i, text, full, today }, j) => (
         <span
           key={i}
