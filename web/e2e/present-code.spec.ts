@@ -46,3 +46,41 @@ test("a code block is one line linking to the full PRD, never blank slides", asy
   await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2#s-problem$/);
   await expect(page.locator("#s-problem")).toBeVisible();
 });
+
+// Round 3, again: every code block is found as CommonMark finds it (the mock's "code-kinds"
+// scenario): an indented block, a four-backtick fence holding a ``` line and a one-line fence
+// are each one line; an empty fence shows nothing; the line is never part of a paragraph.
+test("every kind of code block is one line, an empty one none", async ({ page }) => {
+  await page.addInitScript(([key]) => localStorage.setItem(key, "code-kinds"), [MOCK_SCENARIO_KEY] as const);
+  await login(page);
+  await page.goto(SLIDE);
+  const counter = page.getByTestId("slide-counter");
+  await expect(counter).toHaveText(/^1 \/ \d+$/);
+  const total = Number((await counter.innerText()).split("/")[1]);
+  let problem = 0;
+  for (let n = 2; n <= total; n++) {
+    await page.getByRole("button", { name: "Next slide" }).click();
+    await expect(counter).toHaveText(`${n} / ${total}`);
+    const title = await current(page).locator(".slide-title").innerText();
+    expect(title).not.toMatch(/^Problem \(/);
+    if (title === "Problem") problem = n;
+  }
+  expect(problem).toBeGreaterThan(0);
+  await page.goto(`${SLIDE}?slide=${problem}`);
+  const body = current(page).locator(".slide-body");
+  await expect(body).toContainText("After the steps.");
+  const links = body.getByRole("link", { name: /^Code: \d+ lines?, in the full PRD$/ });
+  await expect(links).toHaveText([
+    "Code: 40 lines, in the full PRD",
+    "Code: 3 lines, in the full PRD",
+    "Code: 1 line, in the full PRD",
+  ]);
+  for (const link of await links.all()) {
+    await expect(link).toHaveAttribute("href", /^https?:\/\/[^/]+\/documents\/saved-carts\/v\/2#s-problem$/);
+  }
+  for (const code of ["step 7 of the rollout", "run the check", "make carts", "```", "Code: 0"]) {
+    await expect(body).not.toContainText(code);
+  }
+  await expect(body.locator("p", { hasText: "One command:" })).toHaveText("One command:");
+  await expect(body.locator("p", { hasText: "Nothing to run:" })).toHaveText("Nothing to run:");
+});

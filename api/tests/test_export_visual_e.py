@@ -422,3 +422,56 @@ def test_r3_document_stamps_hold_together():
     assert render_module._format_dt(at, "America/Los_Angeles") == (
         f"Oct{NBSP}30,{NBSP}2026, 2:49{NBSP}PM{NBSP}PDT"
     )
+
+
+# PR 1300 review round 3, again: every code block is found as CommonMark finds it, not only
+# ``` / ~~~ fences: an indented block, a longer fence holding a ``` line, a one-line block
+# ("Code: 1 line"); an empty block is dropped, and the line never joins a paragraph.
+INDENTED = "Steps to try:\n\n" + "\n".join(f"    step {i} of the rollout" for i in range(1, 41))
+MIXED = (
+    "The check, fenced with four backticks:\n\n````\n```\nrun the check\n````\n\n"
+    "One command:\n~~~\nmake carts\n~~~\nNothing to run:\n\n```\n```\n\nAfter the steps."
+)
+HREF = "/documents/checkout/v/1#top-risks"
+
+
+def _code_lines(text: str) -> list[str]:
+    return re.findall(r"Code: \d+ lines?, in the full PRD", text)
+
+
+def test_r3_an_indented_code_block_is_one_line():
+    out = deck_module.code_left_out(INDENTED, HREF)
+    assert _code_lines(out) == [CODE_LINE], out
+    assert "step 7 of the rollout" not in out
+    assert deck_module.slide_pages(out) == [out]
+
+
+def test_r3_every_fence_is_one_line_and_never_joins_a_paragraph():
+    out = deck_module.code_left_out(MIXED, HREF)
+    assert _code_lines(out) == [
+        "Code: 3 lines, in the full PRD",
+        "Code: 1 line, in the full PRD",
+    ], out
+    assert "run the check" not in out and "make carts" not in out and "```" not in out
+    assert "Code: 0" not in out
+    html = render_module._markdown().render(out)
+    paragraphs = re.findall(r"<p>(.*?)</p>", html, re.S)
+    assert "One command:" in paragraphs, html
+    assert "Nothing to run:" in paragraphs and "After the steps." in paragraphs, html
+    assert (
+        '<a href="/documents/checkout/v/1#top-risks">Code: 1 line, in the full PRD</a>'
+        in paragraphs
+    )
+
+
+async def test_r3_an_indented_code_block_is_one_line_on_its_slide(client, tenant_id):
+    h = await _token(tenant_id, "approver")
+    assert (await _import(client, h, _draft().replace(RISKS, INDENTED))).status_code == 201
+    deck = (await client.get(f"{BASE}/deck", headers=h)).json()
+    headings = [s["heading"] for s in deck["slides"]]
+    assert "Top risks" in headings and not any(x.startswith("Top risks (") for x in headings)
+    _no_code(" ".join(_visible(s["html"]) for s in deck["slides"]))
+    risks = next(s for s in deck["slides"] if s["heading"] == "Top risks")
+    assert re.search(
+        r'<a href="[^"]*/documents/checkout/v/1#s-top-risks">' + CODE_LINE, risks["html"]
+    )

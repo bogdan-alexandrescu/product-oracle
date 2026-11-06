@@ -3756,6 +3756,20 @@ function load(): Db {
       problem.body_text = problem.body_md;
     }
   }
+  // PR 1300 review round 3, again: every kind of code block (export/deck.py code_left_out): an
+  // indented one, a four-backtick fence holding a ``` line, a one-line fence right after a
+  // paragraph line and an empty fence.
+  if (scenario === "code-kinds") {
+    const carts = db.documents.find((d) => d.slug === "saved-carts");
+    const problem = carts && docVersions(db, carts).find((v) => v.number === 2)?.sections.find((s) => s.section_key === "problem");
+    if (problem) {
+      problem.body_md =
+        "Steps to try:\n\n" + Array.from({ length: 40 }, (_, i) => `    step ${i + 1} of the rollout`).join("\n") +
+        "\n\nThe check, fenced with four backticks:\n\n````\n```\nrun the check\n````\n\n" +
+        "One command:\n~~~\nmake carts\n~~~\nNothing to run:\n\n```\n```\n\nAfter the steps.";
+      problem.body_text = problem.body_md;
+    }
+  }
   if (scenario === BLOCKER_NARROWED_SCENARIO) narrowResolvedBlocker(ensureBlockers(db), ensureV2(db));
   // #347 "held-section-gone": a second held rewrite, of a section the latest version no longer has.
   if (scenario === "held-section-gone") {
