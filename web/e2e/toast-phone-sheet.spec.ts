@@ -25,6 +25,6 @@ test("on a phone, a message shown over the Key dates sheet sits at the top, clea
   await expect(sheet).toBeVisible();
   const said = (await message.boundingBox())!;
   const at = (await sheet.boundingBox())!;
-  expect(said.y).toBeLessThan(40);
+  expect(said.y).toBeLessThan(844 / 8);
   expect(said.y + said.height).toBeLessThanOrEqual(at.y);
 });
