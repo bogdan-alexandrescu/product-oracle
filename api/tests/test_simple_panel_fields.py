@@ -24,6 +24,9 @@ Test cards (protects / fails_when / no_claim):
   stale ``before`` is 409 "changed by", a commenter's is a proposal an owner accepts, a goal
   with no target or date still takes a measure); fails_when=the measure is written over a
   change the caller did not see, or a commenter's lands; no_claim=the goal bucket page.
+- test_goal_measure_conflict_names_the_last_in_one_instant: protects=two people set a
+  goal's measure in the same instant; a stale change then names the later one, in the order
+  made; fails_when=it names the first (a tie kept in storage order); no_claim=priorities.
 - test_panel_depends_keys_must_name_something: protects=``set_depends`` takes an item's key
   or a feature's key and refuses (422) a key nothing has; fails_when=a typo is stored as a
   dependency; no_claim=dependencies across companies.
@@ -279,6 +282,27 @@ async def test_panel_goal_measure_change(client):
     assert r.status_code == 422, r.text
     r = await post({"measure": "Payers", "target": None, "due": None}, {"measure": " "})
     assert r.status_code == 422, r.text
+
+
+async def test_goal_measure_conflict_names_the_last_in_one_instant(client):
+    p = await Panel().build(await make_people())
+    goal = (await p.read(client))["a"]["goal"]
+    seen = {"measure": goal["metric"], "target": goal["target"], "due": goal["due"]}
+    first = {"measure": "Monthly payers", "target": "800 payers", "due": "2027-06-30"}
+    second = {"measure": "Weekly payers", "target": "900 payers", "due": "2027-06-30"}
+
+    async def post(before, after, who):
+        body = {"op": "set_goal_measure", "target": {"item_id": p.a, "goal_id": goal["id"]},
+                "before": before, "after": after}  # fmt: skip
+        return await client.post(CHANGES, json=body, headers=p.ctx.as_(who))
+
+    # The clock is pinned: the owner, then the decider, set the measure in one instant.
+    assert (await post(seen, first, "owner")).status_code == 201
+    assert (await post(first, second, "decider")).status_code == 201
+    stale = await post(seen, {"measure": "Daily payers", "target": None, "due": None}, "owner")
+    assert stale.status_code == 409, stale.text
+    assert stale.json()["detail"]["changed_by"]["id"] == str(p.ctx.users["decider"].id)
+    assert "changed by Dee Cider" in stale.json()["detail"]["message"]
 
 
 async def test_panel_depends_keys_must_name_something(client):
