@@ -1,12 +1,13 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { login, openRoadmapItem } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /*
  * prd-order, fix round 2 (the re-review): after an owner moves a PRD on Simple › One-pagers,
  * every other list of PRDs a person reads follows the new company order: Simple › Decisions'
  * PRD filter, the Start-a-review PRD select, Simple › Roadmap's Group by PRD lanes, New run's
- * document picker, Decisions' link-a-document picker and Home's In flight PRDs in review.
+ * document picker, Decisions' link-a-document picker, Home's In flight PRDs in review, the
+ * Roadmap card's PRD picker and the PRDs under Roadmap's Key dates.
  * Driven through the UI on the mock (invented data).
  *
  * - protects = each list in the company PRD order after a move; fails_when = a list by title,
@@ -114,5 +115,33 @@ test.describe("every list of PRDs follows a move on One-pagers", () => {
     const got = (await prds.allInnerTexts()).map((t) => t.split("\n")[0].trim());
     expect(got).toEqual(order.filter((t) => got.includes(t)));
     expect(got).toEqual([TEAM, "Checkout redesign PRD", "Clinic outreach PRD"]);
+  });
+
+  test("the Roadmap card's PRD picker", async ({ page }) => {
+    await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "roadmap-keydates-two-prds"] as const);
+    await login(page);
+    const before = await onePagers(page);
+    const order = await moveUp(page, "Team templates", before.indexOf("Team templates") - before.indexOf("Guided setup"));
+    expect(order.indexOf("Team templates")).toBeLessThan(order.indexOf("Guided setup"));
+    await page.goto("/simple/roadmap?roadmap=onboarding-roadmap");
+    await openRoadmapItem(page, "setup-checklist");
+    const card = page.getByTestId("floating-card");
+    await card.getByRole("button", { name: "Change the prd" }).click();
+    await inOrder(card.getByTestId("card-prd-edit").getByLabel("PRD").locator("option"), order, 2);
+    await expect(card.getByTestId("card-prd-edit").getByLabel("PRD").locator("option")).toHaveText(["Team templates", "Guided setup"]);
+  });
+
+  test("Roadmap's Key dates list the PRDs' milestones of one day in the company order", async ({ page }) => {
+    // Both PRDs end "M1 · Prove it" on the same day, so only the PRD order tells the rows apart.
+    await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "roadmap-keydates-tied-prds"] as const);
+    await login(page);
+    const before = await onePagers(page);
+    const order = await moveUp(page, "Team templates", before.indexOf("Team templates") - before.indexOf("Guided setup"));
+    expect(order.indexOf("Team templates")).toBeLessThan(order.indexOf("Guided setup"));
+    await page.goto("/simple/roadmap?roadmap=onboarding-roadmap");
+    await page.getByTestId("key-dates-open").click();
+    const rows = page.getByTestId("key-dates-editor").locator('[data-testid="key-date-row"][data-name="M1 · Prove it"]');
+    await expect(rows).toHaveCount(2);
+    await expect(rows.getByTestId("key-date-where")).toHaveText(["Change it in the PRD, Team templates", "Change it in the PRD, Guided setup"]);
   });
 });

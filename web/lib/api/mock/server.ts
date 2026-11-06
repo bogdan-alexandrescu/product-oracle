@@ -1243,6 +1243,20 @@ function seedRoadmapKeyDatesTwoPrdsScenario(): Db {
 }
 
 /**
+ * prd-order, the "roadmap-keydates-tied-prds" scenario: "roadmap-keydates-two-prds" whose Team
+ * templates milestone is also "M1 · Prove it", ending the same day as Guided setup's. Key dates
+ * sort by day then name, so only the PRD order tells the two rows apart. Invented data.
+ */
+function seedRoadmapKeyDatesTiedPrdsScenario(): Db {
+  const db = seedRoadmapKeyDatesTwoPrdsScenario();
+  const doc = db.documents.find((d) => d.slug === "team-templates")!;
+  const v = db.versions.find((x) => x.document_id === doc.id)!;
+  const sec = v.sections.find((x) => x.heading === "Milestones")!;
+  sec.body_md = `| Milestone | Name | Start | End |\n| --- | --- | --- | --- |\n| M1 | Prove it | 2026-11-02 | ${KEYDATES_PRD_DAYS.m1} |`;
+  return db;
+}
+
+/**
  * timeline-overlap B2, the "simple-plan-lanes" scenario: "simple-plan" whose onboarding roadmap
  * holds only the plan's work, as the owner's picked frame draws it (every piece planned, nothing
  * broken or waiting): the cut tour, the welcome video and the draft nudges gone, the checklist's
@@ -3578,6 +3592,8 @@ function load(): Db {
                 ? seedRoadmapKeyDatesUncodedScenario
               : scenario === "roadmap-keydates-two-prds"
                 ? seedRoadmapKeyDatesTwoPrdsScenario
+              : scenario === "roadmap-keydates-tied-prds"
+                ? seedRoadmapKeyDatesTiedPrdsScenario
               : scenario === "simple-plan-lanes"
                 ? seedSimplePlanLanesScenario
               : scenario === "simple-plan-two"

@@ -1776,6 +1776,7 @@ export function approvedPrdToDraft(
 /** approved-prd-roadmap: how many items each approved PRD put in the draft; key_dates is always 0
  * (ah-prd-milestones-once: its milestones are read-only from the PRD), as the API's sources_out. */
 export function draftPrds(d: MockDraft): Schemas["SimpleDraftPrd"][] {
+  const byRank = byPrdRank(prdRanker());
   return Object.values(d.prds ?? {})
     .map((x) => ({
       prd: x.prd,
@@ -1783,5 +1784,5 @@ export function draftPrds(d: MockDraft): Schemas["SimpleDraftPrd"][] {
       items: x.keys.length,
       key_dates: 0,
     }))
-    .sort((a, b) => a.prd.title.localeCompare(b.prd.title));
+    .sort((a, b) => byRank(a.prd, b.prd));
 }

@@ -20,6 +20,7 @@ import { turnedOff } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 
 import type { LlmContext } from "./llm-jobs";
+import { prdRanker } from "./prd-rank";
 import { jobOut } from "./refusal";
 
 type Job = Schemas["LlmJobOut"];
@@ -783,5 +784,8 @@ export function inboxStates(ctx: LlmContext, seen: string | null) {
       },
     ];
   });
+  // prd-order (as the API's staged_rows): PRDs in the company PRD order, other documents after them by title.
+  const rank = prdRanker();
+  stagedRows.sort((a, b) => rank({ id: a.document_id, slug: a.slug }) - rank({ id: b.document_id, slug: b.slug }) || a.title.toLowerCase().localeCompare(b.title.toLowerCase()));
   return { items, counts, staged: stagedRows, needs_me: counts.new + counts.open };
 }
