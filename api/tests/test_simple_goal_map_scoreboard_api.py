@@ -20,6 +20,17 @@ Test cards (protects / fails_when / no_claim):
 - test_gaps_and_unplaced_features: protects=a gated area cell with no feature is a gap and a
   confirmed roadmap feature linked to no gate is unplaced; attaching it removes both;
   fails_when=the counts do not move with the attach; no_claim=the web's drawer.
+- test_each_reading_says_its_day: protects=a measured goal says the day of its latest
+  reading (month first); a goal with no reading has none; fails_when=a reading names its
+  source but not its day.
+- test_goals_left_off_the_map: protects=a confirmed goal with no number to aim at is named
+  in ``off_map`` (Home's Goal map link lands on it), a guardrail goal and a proposed goal
+  are not; fails_when=a Home goal opens the map at the top with nothing said.
+- test_unplaced_reads_as_the_reader: protects=the features serving no gate are the Simple
+  roadmap as the signed-in person reads it: a working draft's rename shows to its author,
+  never to a viewer; fails_when=a viewer reads a draft's names or an author misses them.
+- test_pick_an_unknown_metric_is_404: protects=a metric that does not exist answers 404
+  (the mock answers the same).
 - test_lift_says_why: protects=a shipped feature's link reads its goal before and after it
   shipped and whether it helped; a link whose goal has no reading is not measured;
   fails_when=Helping is shown without the readings behind it.
@@ -34,6 +45,7 @@ import pytest
 from oracle.baseline.models import Entity
 from oracle.metrics.models import Metric, MetricValue
 from oracle.roadmap.models import RoadmapItem
+from oracle.simple.models import SimpleDraft
 from oracle.tenancy import tenant_session
 from tests.test_simple_goal_map_api import URL, clock, read, world  # noqa: F401
 
@@ -164,3 +176,58 @@ async def test_lift_says_why(client):
     f2 = {x["milestone"]: x for x in feats[ids["f2"]]["links"]}
     assert f2[ids["m3"]]["lift"] == "not_measured" and f2[ids["m3"]]["before"] is None
     assert f2[ids["m2"]]["shipped_on"] is None and f2[ids["m2"]]["after"] is None
+
+
+async def test_each_reading_says_its_day(client):
+    ctx, ids = await world()
+    goals = {g["id"]: g for g in (await read(client, ctx, "viewer"))["goals"]}
+    assert goals[ids["signups"]]["read_on"] == "Nov 3"
+    assert goals[ids["revenue"]]["read_on"] is None
+
+
+async def test_goals_left_off_the_map(client):
+    ctx, ids = await world()
+    async with tenant_session(ctx.tenant_id) as s:
+        loose = Entity(type="goal", key="raise-activation", title="Raise activation",
+                       status="confirmed", origin="user", attrs={"target_text": "up 10%"})  # fmt: skip
+        s.add(loose)
+        s.add(Entity(type="goal", key="maybe", title="Maybe later", status="proposed",
+                     origin="user", attrs={"target_text": "some"}))  # fmt: skip
+        s.add(Entity(type="goal", key="calm", title="Calm accounts", status="confirmed",
+                     origin="user", attrs={"guardrail": True, "target_text": "none"}))  # fmt: skip
+        await s.commit()
+    body = await read(client, ctx, "viewer")
+    assert body["off_map"] == [
+        {"id": str(loose.id), "key": "raise-activation", "name": "Raise activation"}
+    ]
+    assert ids["signups"] not in [g["id"] for g in body["off_map"]]
+
+
+async def test_unplaced_reads_as_the_reader(client):
+    ctx, ids = await world()
+    async with tenant_session(ctx.tenant_id) as s:
+        from oracle.simple import drafts
+
+        f3 = await s.get(RoadmapItem, uuid.UUID(ids["f3"]))
+        changed = drafts.overlaid(f3, drafts.snapshot(f3))
+        changed.title = "Rep leaderboard, renamed"
+        owner = ctx.users["owner"].id
+        s.add(SimpleDraft(document_id=f3.roadmap_document_id,
+                          base_version_id=f3.roadmap_version_id, status="working",
+                          overlay={str(f3.id): drafts.snapshot(changed)},
+                          created_by=owner, participant_ids=[owner]))  # fmt: skip
+        await s.commit()
+    mine = await read(client, ctx, "owner")
+    assert mine["unplaced"] == [{"id": ids["f3"], "name": "Rep leaderboard, renamed"}]
+    theirs = await read(client, ctx, "viewer")
+    assert theirs["unplaced"] == [{"id": ids["f3"], "name": "Rep leaderboard"}]
+
+
+async def test_pick_an_unknown_metric_is_404(client):
+    ctx, ids = await world()
+    r = await client.post(
+        f"{URL}/goals/{ids['revenue']}/metric",
+        json={"metric": str(uuid.uuid4())},
+        headers=ctx.as_("approver"),
+    )
+    assert r.status_code == 404, r.text
