@@ -38,6 +38,8 @@ from typing import Annotated
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, status
 
 from oracle.auth.deps import Principal, TenantDB
+from oracle.docs import service as docs
+from oracle.docs.schemas import DocumentSummary
 from oracle.export.pdf import PdfUnavailable, html_to_pdf, overflow_headers
 from oracle.simple import changes, drafts, one_pager
 from oracle.simple.router import _people
@@ -308,6 +310,17 @@ async def resume_simple_draft(
 # --------------------------------------------------------------------------- S5 one-pagers
 
 
+@router.get("/one-pagers", response_model=list[DocumentSummary], name="list_simple_one_pagers")
+async def list_simple_one_pagers(principal: Reader, db: TenantDB) -> list[DocumentSummary]:
+    """The PRDs Simple lists (One-pagers, Home), newest first, as GET /v1/documents?kind=prd
+    has them but without a PRD marked replaced (simple-replaced-prds): Simple shows the PRDs
+    that replaced it; Detailed keeps it as history."""
+    from oracle.roadmap import company
+
+    replaced = await company.replaced_prd_ids(db)
+    return [d for d in await docs.list_documents(db, "prd") if d.id not in replaced]
+
+
 @router.get("/one-pagers/{doc}", response_model=OnePagerOut, name="get_simple_one_pager")
 async def get_simple_one_pager(doc: str, principal: Reader, db: TenantDB) -> OnePagerOut:
     """A PRD's one-pager (slug or id): its published version's blocks, each line with its
@@ -315,7 +328,7 @@ async def get_simple_one_pager(doc: str, principal: Reader, db: TenantDB) -> One
     hashes; to those who see the PRD's working draft, its edited lines and the margin
     notes (changes, proposals). Lines change through POST /v1/simple/changes
     (``edit_line``)."""
-    return await _run(db, one_pager.read(db, principal, doc))
+    return await _run(db, one_pager.read(db, principal, doc, current=True))
 
 
 @router.post("/one-pagers/{doc}/remind", response_model=OnePagerRemindOut,

@@ -45348,6 +45348,41 @@
         "x-per-item": null
       }
     },
+    "/v1/simple/one-pagers": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "List Simple One Pagers",
+        "description": "The PRDs Simple lists (One-pagers, Home), newest first, as GET /v1/documents?kind=prd\nhas them but without a PRD marked replaced (simple-replaced-prds): Simple shows the PRDs\nthat replaced it; Detailed keeps it as history.",
+        "operationId": "list_simple_one_pagers",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentSummary"
+                  },
+                  "type": "array",
+                  "title": "Response List Simple One Pagers"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/simple/one-pagers/{doc}": {
       "get": {
         "tags": [
