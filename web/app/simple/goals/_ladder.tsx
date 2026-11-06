@@ -21,6 +21,7 @@ import { InfoTip } from "@/components/ds/InfoTip";
 import { toast } from "@/components/ds/Toast";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import type { GmFeature, GmGoal, GmMilestone, GmStatus, GoalMap } from "@/lib/api/mock/goal-map";
+import { formatCount } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
@@ -42,7 +43,7 @@ const START_ZOOM = 0.72;
 
 function num(v: number | null, unit: string): string {
   if (v === null) return "—";
-  const n = Number.isInteger(v) ? String(v) : String(Math.round(v * 10) / 10);
+  const n = formatCount(Math.round(v * 10) / 10);
   if (unit === "%") return `${n}%`;
   if (unit === "$") return `$${n}`;
   return unit ? `${n} ${v === 1 && unit.endsWith("s") ? unit.slice(0, -1) : unit}` : n;
@@ -249,10 +250,18 @@ export function GoalLadder(props: LadderProps) {
         setSel(waiter);
       } catch (e) {
         // A loop is refused (422); the drawn arrow stays red until the next pick, and the words
-        // name both cards: the one drawn from already waits on the one drawn onto.
-        if (e instanceof ChangeFailed && e.status === 422) {
+        // name both cards: the one drawn from already waits on the one drawn onto. Any other
+        // refusal gets one plain line, never the API's field path.
+        const said = e instanceof ChangeFailed && e.status === 422 ? e.message : "";
+        if (said.startsWith("Not added, it would make a loop:")) {
           setRefused([on, waiter]);
           toast({ message: `Not added, it would make a loop: ${named(on)} already waits on ${named(waiter)}` });
+        } else if (said.startsWith("after.depends_on: item or feature keys")) {
+          toast({ message: `Not added: ${byId.get(on)?.f.name ?? "this feature"} has no roadmap item yet to link to` });
+        } else if (said.startsWith("after.depends_on: no item or feature has the key")) {
+          toast({ message: "Not added: no feature has that key" });
+        } else if (said) {
+          toast({ message: "Not added. Try again or pick another feature." });
         } else failed(e);
       }
     },
@@ -415,7 +424,7 @@ function Btn({ children, onClick, primary, testId, small, label }: { children: R
 
 /* ---------- the week strip: the rest of this quarter and the next, today and each milestone's week ---------- */
 
-interface Week { n: number; from: string; today: boolean; mark: string }
+interface Week { n: number; from: string; today: boolean; mark: string; full: string }
 
 function periods(map: GoalMap, ms: GmMilestone[], code: Map<string, string>): { id: string; name: string; weeks: Week[] }[] {
   const today = map.today_on;
@@ -432,7 +441,7 @@ function periods(map: GoalMap, ms: GmMilestone[], code: Map<string, string>): { 
     for (let w = from, n = 1; w < to; w = addDays(w, 7), n++) {
       const end = addDays(w, 7);
       const due = ms.filter((m) => m.due_on && m.due_on >= w && m.due_on < end);
-      out.push({ n, from: w, today: today >= w && today < end, mark: due.map((m) => `${code.get(m.id)} ${short(m.name)}`).join("\n") });
+      out.push({ n, from: w, today: today >= w && today < end, mark: due.map((m) => `${code.get(m.id)} ${short(m.name)}`).join("\n"), full: due.map((m) => `${code.get(m.id)} ${m.name}`).join("\n") });
     }
     return out;
   };
@@ -478,7 +487,7 @@ function short(name: string): string {
   const w: string[] = [];
   for (const x of name.split(" ")) if ([...w, x].join(" ").length <= 26) w.push(x);
   else break;
-  while (w.length > 2 && /^(by|at|for|to|of|in|inside|without|under|one|a|the|and|every|down|weekly|baseline|new)$/i.test(w[w.length - 1])) w.pop();
+  while (w.length > 2 && /^(by|at|for|to|of|in|inside|without|under|one|a|the|and|every|down|weekly|baseline|new|per|with|from|on|than|over|into|or|up|each)$/i.test(w[w.length - 1])) w.pop();
   return w.join(" ");
 }
 
@@ -488,19 +497,21 @@ function WeekLabels({ weeks }: { weeks: Week[] }) {
   const placed = weeks.flatMap((w, i) => {
     const text = w.today ? "We are here" : w.mark;
     if (!text) return [];
+    const full = w.today ? undefined : w.full;
     const lines = text.split("\n").length;
     let r = 0;
     while (Array.from({ length: lines }, (_, k) => last[r + k]).some((x) => x !== undefined && i - x < 3)) r++;
     for (let k = 0; k < lines; k++) last[r + k] = i;
-    return [{ i, text, r, today: w.today }];
+    return [{ i, text, full, r, today: w.today }];
   });
   const n = weeks.length;
   return (
     <span className="relative block" style={{ height: last.length * 13 + 6 }}>
-      {placed.map(({ i, text, r, today }) => (
+      {placed.map(({ i, text, full, r, today }) => (
         <span
           key={i}
           data-testid={today ? "ld-here" : "ld-week-mark"}
+          title={full}
           className={`absolute w-max max-w-[160px] text-[11px] leading-[13px] whitespace-pre-line ${today ? "font-semibold text-accent-ink" : "text-text2"} ${i === 0 ? "text-left" : i === n - 1 ? "text-right" : "-translate-x-1/2 text-center"}`}
           style={{ top: r * 13, ...(i === n - 1 ? { right: 0 } : { left: i === 0 ? 0 : `${((i + 0.5) / n) * 100}%` }) }}
         >
@@ -598,10 +609,14 @@ function GoalCard({ g, i, v }: { g: GmGoal; i: number; v: V }) {
       </span>
       <span className="text-[16px] leading-5 font-semibold">{g.name}</span>
       <span className="text-[13px] leading-[18px] text-text2">{g.math}</span>
-      <span className="flex items-baseline gap-2 text-[14px]">
-        <b className="text-[16px]">{num(g.current, g.unit)}</b> of {num(g.target, g.unit)}
-        <Source g={g} />
-        <span className={`ml-auto font-semibold ${KR[g.status]}`}>{KR_WORD[g.status]}</span>
+      <span data-testid="ld-goal-measure" className="flex flex-wrap items-baseline gap-x-2 text-[14px]">
+        <span className="inline-flex items-baseline gap-2 whitespace-nowrap">
+          <span data-testid="ld-goal-numbers" className="leading-5 whitespace-nowrap">
+            <b className="text-[16px]">{num(g.current, g.unit)}</b> of {num(g.target, g.unit)}
+          </span>
+          <Source g={g} />
+        </span>
+        <span data-testid="ld-goal-status" className={`ml-auto leading-5 font-semibold whitespace-nowrap ${KR[g.status]}`}>{KR_WORD[g.status]}</span>
       </span>
       <Reading g={g} canEdit={v.canChange} onPick={p.onMetric} />
       {draws.length > 0 && <span className="text-[12px] leading-4 text-text2">Draws on: {draws.join(", ")}</span>}
@@ -989,12 +1004,27 @@ function Canvas({ v, drag }: { v: V; drag: { setLive: (l: V["live"]) => void; se
       setSize({ w: el.clientWidth, h: el.clientHeight, cw: root.current?.offsetWidth ?? 1, ch: root.current?.offsetHeight ?? 1 });
     };
     fit();
+    // Opened below the fold, the canvas's own wheel-pan would hold the page still: scroll it into view once.
+    el.scrollIntoView({ block: "nearest" });
     const ro = new ResizeObserver(fit);
     ro.observe(el);
     if (root.current) ro.observe(root.current);
     return () => ro.disconnect();
   }, []);
 
+  // A picked card stays in view: panned in by the least it needs, with its arrows' room around it.
+  useEffect(() => {
+    const el = box.current;
+    const card = v.sel ? el?.querySelector<HTMLElement>(`[data-ld-card="${CSS.escape(v.sel)}"]`) : null;
+    if (!el || !card) return;
+    const b = el.getBoundingClientRect();
+    const c = card.getBoundingClientRect();
+    const pad = 16;
+    const dx = c.left < b.left + pad ? b.left + pad - c.left : c.right > b.right - pad ? b.right - pad - c.right : 0;
+    const dy = c.top < b.top + pad ? b.top + pad - c.top : c.bottom > b.bottom - pad ? b.bottom - pad - c.bottom : 0;
+    if (dx || dy) setView((o) => ({ ...o, x: o.x + dx, y: o.y + dy }));
+    // Only when the pick changes, not on each pan.
+  }, [v.sel]);
   const zoomTo = (z: number, cx = size.w / 2, cy = size.h / 2) =>
     setView((o) => {
       const nz = Math.min(1.5, Math.max(0.3, Math.round(z * 100) / 100));
@@ -1153,7 +1183,7 @@ function Canvas({ v, drag }: { v: V; drag: { setLive: (l: V["live"]) => void; se
       <div
         ref={box}
         data-testid="ld-canvas"
-        className={`relative h-[560px] touch-none overflow-hidden rounded-2xl border border-line cursor-grab active:cursor-grabbing`}
+        className={`relative h-[560px] scroll-mb-4 touch-none overflow-hidden rounded-2xl border border-line cursor-grab active:cursor-grabbing`}
         style={{ backgroundImage: "radial-gradient(var(--color-line) 1px, transparent 1px)", backgroundSize: "18px 18px" }}
         onPointerDown={down}
         onPointerMove={move}

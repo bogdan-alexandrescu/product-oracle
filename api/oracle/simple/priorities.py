@@ -11,7 +11,8 @@ rows: the open ``override_priority`` and ``estimate_feature`` proposals the call
 (each with its item's feature, so one on a feature's other item shows under its row) and
 the ``confirm_item``, ``merge_item`` (S7's Merge; train T's was a ``cut`` with a note) and
 ``cut`` proposals on draft items, the visible
-draft items with the items they may merge into, and this quarter's engineer-weeks per goal.
+draft items with the items they may merge into, the live non-draft items no row holds
+(``unranked``: no feature, or one not ranked) and this quarter's engineer-weeks per goal.
 
 **The line** (roadmap-plus): above the line is this quarter's plan (the Now horizon) by
 default; ``?line=`` draws it at a day instead: ``key_date:<id>`` (a roadmap's key date),
@@ -62,6 +63,7 @@ from oracle.simple.schemas import (
     SimplePriorityOverride,
     SimplePriorityProposal,
     SimplePriorityRow,
+    SimplePriorityUnranked,
     SimpleQuarter,
 )
 from oracle.trash.filter import INCLUDE_TRASHED
@@ -275,6 +277,41 @@ def _drafts(read_: service.Read, principal: Any) -> list[SimplePriorityDraft]:
                     for o in cands
                 ],
             )  # fmt: skip
+        )
+    return out
+
+
+def _unranked(read_: service.Read, ranked: set[str]) -> list[SimplePriorityUnranked]:
+    """prio-unranked: the live, non-draft items whose feature no row holds (no feature, or one
+    the ranking leaves out), by horizon, then position, then key."""
+
+    def key(e: service.Entry) -> tuple:
+        h = e.row.horizon
+        return (
+            HORIZONS.index(h) if h in HORIZONS else len(HORIZONS),
+            e.row.position,
+            e.row.item_key,
+        )
+
+    out = []
+    for e in sorted(read_.entries, key=key):
+        if e.status in ("cut", "merged") or e.row.draft:
+            continue
+        if e.row.feature_id is not None and str(e.row.feature_id) in ranked:
+            continue
+        goal = e.goal
+        out.append(
+            SimplePriorityUnranked(
+                item_id=e.row.id,
+                code=e.row.item_key,
+                title=e.row.title,
+                goal=SimplePriorityGoal(
+                    key=goal.key, title=goal.title, position=goal_position(goal.attrs)
+                )
+                if goal
+                else None,
+                roadmap=service._ref(e.roadmap),  # type: ignore[arg-type]
+            )
         )
     return out
 
@@ -742,6 +779,7 @@ async def build(
         rows=rows,
         proposals=await _proposals(db, principal, read_.by_id()),
         drafts=_drafts(read_, principal),
+        unranked=_unranked(read_, {f.entity_id for f in features}),
         buckets=buckets,
         weeks_total=total,
         can_change=can_change,
@@ -763,7 +801,7 @@ async def get_simple_priorities(
     the caller sees: each row's Oracle rank, goal, horizon, goal value (a person's estimate
     or the goals'), effort, score, the dependency it waits for, the override that placed it
     and whether the caller's change applies or is proposed; the open priority and estimate
-    proposals, the draft items with what they may merge into, and this quarter's
-    engineer-weeks per goal. ``line``: where the line is drawn (Now, a key date, a dated
-    milestone or a day; see the module)."""
+    proposals, the draft items with what they may merge into, the items no row holds, and
+    this quarter's engineer-weeks per goal. ``line``: where the line is drawn (Now, a key
+    date, a dated milestone or a day; see the module)."""
     return await build(db, principal, line)

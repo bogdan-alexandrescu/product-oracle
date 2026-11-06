@@ -17,7 +17,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from oracle import readiness
+from oracle import readiness, wording
 from oracle.quality import text
 from oracle.quality.inputs import QualityInputs, for_context
 from oracle.quality.schemas import CriterionInfo, PolicyRequirement, ThirdPartyOperation
@@ -172,9 +172,14 @@ def goal_alignment(q: QualityInputs) -> CheckOutcome:
                 else "not ranked"
             )
             if "serves_no_goal" in row.flags:
-                orphan.append(f"{f.key} serves no confirmed goal and sinks: {where}")
+                orphan.append(
+                    f"{wording.named(f.title, f.key)} serves no confirmed goal and sinks: {where}"
+                )
             elif any(link.contribution < 1 for link in row.goals):
-                weak.append(f"{f.key} has a goal link with no stated contribution ({where})")
+                weak.append(
+                    f"{wording.named(f.title, f.key)} has a goal link with no stated "
+                    f"contribution ({where})"
+                )
         if orphan:
             status = "critical"
             reasons += orphan
@@ -182,17 +187,22 @@ def goal_alignment(q: QualityInputs) -> CheckOutcome:
             status = _worst(status, "warning")
             reasons += weak
         if status == "pass":
-            served = sorted({g.key for f in features for g in by_id[f.id].goals} if by_id else [])
+            served = sorted(
+                {wording.named(g.title, g.key) for f in features for g in by_id[f.id].goals}
+                if by_id
+                else []
+            )
             reasons.append(
-                f"Every linked feature ({len(features)}) serves a confirmed goal "
-                f"({', '.join(served)})"
+                f"Every linked feature ({len(features)}) serves a confirmed goal: "
+                f"{', '.join(served)}"
             )
     elif goals:
         confirmed = [g for g in goals if g.status == "confirmed"]
         evidence += [g.id for g in goals]
         if confirmed:
             reasons.append(
-                f"The PRD is traced to confirmed goal(s): {', '.join(g.key for g in confirmed)}"
+                "The PRD is traced to confirmed goal(s): "
+                + ", ".join(wording.named(g.title, g.key) for g in confirmed)
             )
         else:
             status = "warning"
@@ -228,7 +238,7 @@ def evidence_provenance(q: QualityInputs) -> CheckOutcome:
     material = [c for c in open_conflicts if c.material]
     if material:
         status = "critical"
-        names = {e.id: e.key for e in q.entities.values()}
+        names = {e.id: wording.named(e.title, e.key) for e in q.entities.values()}
         reasons.append(
             "Open material conflict(s) between sources: "
             + "; ".join(f"{names.get(c.entity_id, 'an item')} {c.field}" for c in material)
@@ -437,7 +447,7 @@ def scope_testability(q: QualityInputs) -> CheckOutcome:
         status = _worst(status, "warning")
         reasons.append(
             "Requirement(s) with no acceptance criterion verifying them: "
-            + ", ".join(r.key for r in unverified)
+            + ", ".join(wording.named(r.title, r.key) for r in unverified)
         )
     if not non_goals and not q.closed_gaps("non_goals"):
         status = _worst(status, "warning")
@@ -651,14 +661,16 @@ def security_policy(q: QualityInputs) -> CheckOutcome:
         reasons.append(
             "Critical requirement(s) failed: "
             + "; ".join(
-                f"{e.key} ({p.area}) failed" + (f": {text.quote(p.note, 60)}" if p.note else "")
+                f"{wording.named(e.title, e.key)}, {p.area}, failed"
+                + (f": {text.quote(p.note, 60)}" if p.note else "")
                 for e, p in failed
             )
         )
     if unverified:
         status = _worst(status, "warning")
         reasons.append(
-            "Critical requirement(s) not verified yet: " + ", ".join(e.key for e, _ in unverified)
+            "Critical requirement(s) not verified yet: "
+            + ", ".join(wording.named(e.title, e.key) for e, _ in unverified)
         )
     if gaps:
         status = _worst(status, "warning")

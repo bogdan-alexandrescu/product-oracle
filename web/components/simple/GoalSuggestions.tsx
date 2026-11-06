@@ -557,7 +557,7 @@ export function GoalSuggestionList({ goal, api: a, onChat, start }: { goal: Goal
           </div>
           {formOpen && (
             <SuggestForm goal={state?.goal ?? goal} decider={state?.decider_name ?? null} decides={!!state?.can_decide} open onOpen={() => setFormOpen(true)} focus={start === "form"} onSent={async () => {
-              await a.reload();
+              await reloadWaiting(a.reload);
               setTab("people");
               setFormOpen(false);
             }} />

@@ -203,7 +203,8 @@ export function InboxActions({
   const canStage =
     !compact && primary !== "Accept" && primary !== "Merge" && (f.suggestion_kind !== "section_text" || f.suggestion_status === "dismissed");
   // qa-company-29: one rule on every row: the first action is the bordered one, the rest are
-  // text. With no suggestion to act on, Stage for agents leads, else Open; Decline never does.
+  // text, but Open, bordered on every row (G-5). With no suggestion to act on, Stage for agents
+  // leads, else Open; Decline never does.
   const lead: "primary" | "stage" | "open" = primary ? "primary" : canStage ? "stage" : "open";
   const stage = canStage && (
     <Button
@@ -221,7 +222,7 @@ export function InboxActions({
     </Button>
   );
   const openLink = (
-    <LinkButton variant={lead === "open" ? "secondary" : "ghost"} href={href} aria-label={`Open ${f.summary}`}>
+    <LinkButton href={href} aria-label={`Open ${f.summary}`}>
       Open
     </LinkButton>
   );

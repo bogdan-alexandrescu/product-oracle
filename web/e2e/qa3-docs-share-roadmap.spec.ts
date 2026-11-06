@@ -84,6 +84,7 @@ test.describe("desktop", () => {
       0,
     );
     const hint = page.getByTestId("sharing-hint");
+    await expect(hint).toBeVisible();
     await expect(hint).toContainText("Share a link sends");
     await expect(hint).toContainText("Check public text is where");
     // Template and theme share one pill on a roadmap.

@@ -191,9 +191,9 @@ import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROW
 import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { knowPrdOrder } from "./prd-rank";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
-import { applyFitDate, knowGoalMapItems, ownPrd, seedFitDateRoadmap } from "./simple-roadmap";
+import { applyFitDate, knowGoalMapItems, ownPrd, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, MAP_GOALS, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
-import { goalMapIdOf, goalMapItems, routeGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
+import { goalMapGoals, goalMapIdOf, goalMapItems, routeGoalMap, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
@@ -205,6 +205,7 @@ import {
   draftPublicTexts,
   emptyShares,
   readerSections,
+  codeNames,
   routePublicShares,
   routeShares,
   seedShares,
@@ -2789,10 +2790,17 @@ function seedSharingRoadmap(db: Db, audience: "team" | "public") {
   // holder's card read it "In progress"; Falcon alerts rework, in Now, has none, so it reads "Planned".
   db.sharing_records = {
     [v.id]: [{
-      id: uuid(), tracker: "linear", external_ref: "ENG-541", title: "Ledger entries", url: "https://tracker.example.com/ENG-541",
+      id: uuid(), tracker: "linear", external_ref: "ENG-541", title: "# Ledger entries | v2 [notes](https://example.com/notes) *draft*\n\u0085# Rework ~~old~~ path\u200b \ufeffAT&amp;T &#35; x", url: "https://tracker.example.com/ENG-541",
       track_id: null, item_key: "item-ledger", state: "in_progress", raw_status: null, estimate: null, estimate_unit: null,
       target_date: "2027-01-20", observed_at: created, recorded_by: null, created_at: created, updated_at: created,
-    }],
+    },
+    // G-3: the issues the roadmap's words name by key (Falcon alerts rework's and Partner API beta's dependency), on
+    // no item's card, so a link holder reads each by its title.
+    ...[["ENG-512", "Alert rules engine"], ["ENG-530", "Partner sign-in tokens"]].map(([ref, title]) => ({
+      id: uuid(), tracker: "linear" as const, external_ref: ref, title, url: `https://tracker.example.com/${ref}`,
+      track_id: null, item_key: null, state: "todo" as const, raw_status: null, estimate: null, estimate_unit: null,
+      target_date: null, observed_at: created, recorded_by: null, created_at: created, updated_at: created,
+    }))],
   };
 }
 
@@ -2888,7 +2896,11 @@ function sharesContext(db: Db, me: { id: string; role: Role } | null): SharesCon
       const row = db.documents.find((d) => d.id === doc.id)!;
       const version = db.versions.find((x) => x.id === v.id)!;
       const sections = audienceSections(version.sections, audience, boardItems(db, version));
-      return exportHtml(row, { ...version, sections: linkHolder ? readerSections(sections, boardItems(db, version)) : sections }, db.branding, audienceLabel(audience), linkHolder);
+      // G-3: each goal and tracker code reads beside its name (as the API's render.code_names).
+      const names = linkHolder
+        ? codeNames(version.sections.map((s) => s.body_md), db.baseline.entities.filter((e) => e.type === "goal"), [...(db.sharing_records?.[version.id] ?? []), ...(db.roadmap?.records ?? [])], db.roadmap?.items[version.id] ?? db.sharing_items?.[version.id] ?? [], AUDIENCES.find((a) => a.key === audience)?.item_fields)
+        : {};
+      return exportHtml(row, { ...version, sections: linkHolder ? readerSections(sections, boardItems(db, version), names) : sections }, db.branding, audienceLabel(audience), linkHolder);
     },
   };
 }
@@ -4260,6 +4272,14 @@ function load(): Db {
     const v1 = roadmap && db.versions.find((v) => v.document_id === roadmap.id && v.number === 1);
     if (prd && v1) v1.warnings = versionWarnings(prd.title, prd.slug);
   }
+  // P-1: the goal map is seeded with the db, not on its first read, so its features (roadmap
+  // items "gm-f1", ...) are on every page from the first load, whichever page opens first.
+  // A new company ("empty") has no features on its map yet; the 500-item company ("simple-500",
+  // dod-perf) has its own 500 items and none of the default company's map features.
+  db.goal_map ??= scenario === "empty" || scenario === "simple-500" ? { ...seedGoalMap(scenario), features: [] } : seedGoalMap(scenario);
+  if (db.simple_roadmap) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
+  // pre-demo QA P-6 with P-1: the panel reads the goal each map feature serves from the first load too.
+  if (db.simple_roadmap) db.simple_roadmap.map_goals = goalMapGoals(db.goal_map, db.baseline.entities.filter((e) => e.type === "goal"));
   save(db);
   // The caller owns this object now (see `cached`).
   cached = null;
@@ -5198,7 +5218,18 @@ function inlineHtml(nodes: Inline[]): string {
 
 /** A section's markdown as the API's export renders it (qa-docs-15): paragraphs, lists and real tables, never pipe text. */
 function bodyHtml(md: string): string {
-  return parseBlocks(md.replace(/[ \t]*\[c:[\w.:-]+\]/g, ""))
+  // As the API's markdown: a backslash before any ASCII punctuation makes that character plain text (no table column,
+  // link, emphasis, strikethrough, heading, list, quote or entity). Parked as private-use characters while the text is
+  // parsed, then put back.
+  const ESCAPABLE = "\\!\"#$%&'()*+,-./:;<=>?@[]^_`{|}~";
+  const parked = md
+    .replace(/[ \t]*\[c:[\w.:-]+\]/g, "")
+    .replace(/\\([!-/:-@[-`{-~])/g, (_, c: string) => String.fromCharCode(0xe000 + ESCAPABLE.indexOf(c)));
+  return bodyBlocks(parked).replace(/[\ue000-\ue020]/g, (c) => escapeHtml(ESCAPABLE[c.charCodeAt(0) - 0xe000]));
+}
+
+function bodyBlocks(md: string): string {
+  return parseBlocks(md)
     .map((b) => {
       switch (b.t) {
         case "p":
@@ -7253,6 +7284,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   db.simple_visuals ??= seedVisuals();
   db.simple_one_pager.visuals = db.simple_visuals;
   db.simple_roadmap ??= seedSimpleRoadmap();
+  // one-feature-panel: the map's features are roadmap items (their panel opens on their own item).
+  if (db.goal_map) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
   // simple-replaced-prds: the PRDs marked replaced, whose items no longer feed Simple (service.load).
   markReplaced(db, db.simple_roadmap);
   const roadmapItems = db.simple_roadmap;
@@ -7418,6 +7451,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     }, () => db.baseline.entities.filter((e) => e.type === "goal"));
     // one-feature-panel: the map's features are roadmap items (their panel opens on their own item).
     if (db.goal_map) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
+    // pre-demo QA P-6: the panel reads the goal each feature serves on the map (one link, service._ladder_goals).
+    if (db.goal_map && db.simple_roadmap) db.simple_roadmap.map_goals = goalMapGoals(db.goal_map, db.baseline.entities.filter((e) => e.type === "goal"));
     // goal-ladder: add_item may name any confirmed goal by its id (additions._where), as Home's goals are the map's.
     if (db.goal_map) for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") MAP_GOALS[e.id] = e.title;
     if (goalMapRes) return goalMapRes;
@@ -7830,6 +7865,14 @@ async function route(db: Db, req: Request): Promise<Response> {
     return json(200, prds.map((d) => documentSummary(db, d, after)));
   }
   const doc = findDocument(db, p[2]);
+  // simple-prd-calm-page: the seeded one-pager's PRD, which the mock keeps only as its one-pager,
+  // reads as the API's version of it: the sections the page is built from (the whole PRD under it).
+  const op = db.simple_one_pager;
+  if (!doc && op && (op.doc.slug === p[2] || op.doc.id === p[2]) && p[3] === "versions" && Number(p[4]) === op.version && !p[5] && m === "GET") {
+    const row = { id: op.doc.id, slug: op.doc.slug, title: op.doc.title, kind: "prd" } as DocumentRow;
+    const sections = op.sections.map((x) => ({ key: x.key, level: 2, heading: x.heading, body: x.body }));
+    return json(200, versionOut(db, buildVersion(row, { number: op.version, created_at: "2026-10-20T09:00:00Z", sections, citations: [] })));
+  }
   if (!doc) return notFound("Document");
   if (p.length === 3) {
     return json(200, documentOut(db, doc));
@@ -8340,6 +8383,10 @@ export async function mockFetch(req: Request): Promise<Response> {
   const next = queue.then(async () => {
     const db = load();
     const marks = db.webhooks?.hooks.length ? runMarks(db.runs?.runs) : null;
+    // simple-roadmap-500-paint: the roadmap and its waiting counts read the 500 items once while
+    // the roadmap's data is the same; every other call reads afresh.
+    const roadmapRead = req.method === "GET" && (url.pathname === "/v1/simple/roadmap" || url.pathname === "/v1/simple/roadmap/waiting");
+    roadmapReadsAt(roadmapRead);
     let res = await route(db, req);
     // home-waiting-one-list: the waiting list's items, read from the routes each kind lives on.
     if (req.method === "GET" && url.pathname === "/v1/simple/decisions/waiting" && res.ok) res = await withWaitingItems(db, req, res);

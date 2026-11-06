@@ -1512,7 +1512,7 @@ async def _trash_removed(
             continue
         at = trash.now()
         root = {"type": "agenda_item", "id": c["id"], "slug": None, "title": c["name"],
-                "kind": "agenda_item", "meeting_id": str(m.id), "row": c["row"],
+                "kind": "agenda_item", "meeting_id": str(m.id), "meeting": m.title, "row": c["row"],
                 "at": c["at"]}  # fmt: skip
         entry = TrashEntry(id=uuid.uuid4(), root_type="agenda_item", root_id=uuid.UUID(c["id"]),
                            root=json.loads(json.dumps(root, default=str)), items=[],

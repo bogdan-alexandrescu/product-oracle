@@ -83,7 +83,9 @@ for (const size of SIZES) {
     test("the intro and the chips read as the frames do", async ({ page }) => {
       await open(page, size.viewport);
       // mk-goalbuckets: the intro, then the plan's quarter.
-      await expect(page.getByTestId("prio-subtitle")).toHaveText("Where the engineer-weeks go, goal by goal. Q4 2026.");
+      await expect(page.getByTestId("prio-subtitle")).toHaveText("Q4 2026");
+      // Demo 9: the intro is behind the (i).
+      await expect(page.locator("#prio-about-text")).toHaveText("Where the engineer-weeks go, goal by goal.");
       // gb1-a-result, gb3: a feature that serves several goals shows "+1 goal" beside its name.
       await expect(bucket(page, "Reliability").locator('[data-code="F-06"]').getByTestId("also-goals")).toHaveText("+1 goal");
       await expect(bucket(page, "Growth").locator('[data-code="F-05"]').getByTestId("also-goals")).toHaveText("+1 goal");

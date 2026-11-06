@@ -37,6 +37,10 @@ class TrashItem(BaseModel):
     # qa4-docs-26: a run in the delete dialog, in words: when it ran and what it wrote.
     created_at: datetime | None = None
     wrote: str | None = None
+    # G-4: what Restore brings back with it: a goal's features (those that served it when it
+    # was deleted) and a removed agenda item's meeting, by its title.
+    features: int | None = None
+    meeting: str | None = None
 
 
 class DependentsOut(BaseModel):

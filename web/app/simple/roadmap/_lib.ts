@@ -4,7 +4,6 @@
  */
 import { api, type Schemas } from "@/lib/api/client";
 import { calendarDay, displayZone, todayIn } from "@/lib/dates";
-import { LINK_KINDS } from "@/lib/roadmap-links";
 
 export type Roadmap = Schemas["SimpleRoadmapOut"];
 export type Item = Schemas["SimpleRoadmapItem"];
@@ -183,16 +182,17 @@ export function shownDates(i: Item): { start_date: string | null; end_date: stri
 /** The flags drawn red (not accepted as a risk). */
 export const broken = (i: Item): Flag[] => i.flags.filter((f) => f.state === "red");
 
-/** The red flags that are a broken link between items (LINK_KINDS). */
-export const brokenLinks = (i: Item): Flag[] => broken(i).filter((f) => LINK_KINDS.includes(f.kind));
+/** The red flags that are a broken link: each with a one-click fix (an end past its milestone too),
+ * as Home, the side menu and GET /v1/simple/roadmap/waiting count them (pre-demo QA S-5). */
+export const brokenLinks = (i: Item): Flag[] => broken(i).filter((f) => f.fixes.length > 0);
 
 /** fix4 qa-simple-roadmap-8: what "Needs a decision" counts, read by its toolbar button and its
  * panel's tiles alike (one number): broken links, dates to confirm, proposals, pulled in.
  * roadmap-decide: `links` counts every broken link of the working draft as the reader sees it,
  * whoever decides it (its fixes say Propose for the others): the same number as the strip over
- * the chart and the side menu (GET /v1/simple/roadmap/waiting). Home and Decisions count every
- * red flag with a fix (web/lib/simple-home.ts isBrokenLink); here an end past its milestone or a
- * blocker due late is under Other flags. */
+ * the chart, Home and the side menu (GET /v1/simple/roadmap/waiting; web/lib/simple-home.ts
+ * isBrokenLink): every red flag with a fix. A flag with none (a draft with no owner) is under
+ * Other flags. */
 export function decisionCounts(items: Item[], proposals: Change[]): { broken: Item[]; links: number; dates: Item[]; proposals: Change[]; pulled: Change[]; total: number } {
   const mine = proposals.filter((c) => c.can_decide);
   const linked = items.filter((i) => brokenLinks(i).length > 0);

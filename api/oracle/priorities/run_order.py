@@ -347,7 +347,7 @@ def _check_new_goals(out: OrderCheck, row: dict[str, Any], known: Known) -> None
     for goal in unknown:
         out.add(
             "unknown_goal",
-            f"{title} names the goal {goal}, which is not a goal in the baseline: "
+            f"{title} names the goal {goal}, which is not a goal of the Ground Truth: "
             "the run must name one that is",
             key,
         )
@@ -690,8 +690,8 @@ async def stale_goals(db: AsyncSession, snapshot: PrioritySnapshot) -> list[dict
                 continue
             if found is None:
                 message = (
-                    f"{row.get('title') or key} names the goal {goal}, which is not a goal in "
-                    "the baseline: the run must name one that is"
+                    f"{row.get('title') or key} names the goal {goal}, which is not a goal of "
+                    "the Ground Truth: the run must name one that is"
                 )
             else:
                 message = (

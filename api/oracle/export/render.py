@@ -298,6 +298,7 @@ async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
     )
     tracks = {r.track_id for r in rows if r.track_id is not None}
     issues: dict[tuple, list[tuple[str, str | None]]] = {}
+    titles: dict[tuple, dict[str, str]] = {}
     if tracks:
         records = await db.scalars(
             select(TrackerRecord)
@@ -308,6 +309,8 @@ async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
             issues.setdefault((rec.track_id, rec.item_key), []).append(
                 (rec.external_ref, _safe_href(rec.url) if rec.url else None)
             )
+            if rec.title:
+                titles.setdefault((rec.track_id, rec.item_key), {})[rec.external_ref] = rec.title
     # Each item's feature-to-goal link, as a launch's tier reads it (oracle.launches.tiers),
     # loaded once for the version: serving no confirmed goal is never read from the
     # card's words. With no confirmed goal in the tenant nothing is measured against one,
@@ -339,6 +342,7 @@ async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
                 milestone=dict(r.milestone) if r.milestone else None,
                 economics=dict(r.economics or {}),
                 tracker=issues.get((r.track_id, r.item_key), []),
+                tracker_titles=titles.get((r.track_id, r.item_key), {}),
                 goals=[goal_title] if goal_title else [],
                 no_goal=goal_of is not None and goal == "none",
                 group=group_of.get(r.item_key),

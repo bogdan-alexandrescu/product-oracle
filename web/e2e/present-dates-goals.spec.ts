@@ -45,9 +45,9 @@ test("E-11, E-12: every slide's dates read month first; the items table names it
       );
       const goals = current(page).locator("tbody tr td:nth-child(3)");
       await expect(goals).toHaveText([
-        "G2 Retention",
-        "G2 Retention",
-        "G2 Retention",
+        "Retention",
+        "Retention",
+        "Retention",
       ]);
     }
     if (n === 9) {

@@ -52,7 +52,7 @@ from oracle.roadmap.models import (
     TrackMilestone,
 )
 from oracle.simple import approved_roadmap, constraints, dates, plan_strip
-from oracle.simple.models import RoadmapDateSuggestion, SimpleVisual
+from oracle.simple.models import MilestoneFeature, RoadmapDateSuggestion, SimpleVisual
 from oracle.simple.schemas import (
     DateSuggestionOut,
     SimpleDate,
@@ -209,12 +209,10 @@ def flags_out(e: Entry, may: Any = None) -> list[SimpleFlag]:
     ]
 
 
-LINK_KINDS = ("dependency_order", "cut_with_dependents")
-
-
 async def waiting(db: AsyncSession, principal: Any, roadmap: str | None = None) -> tuple[int, int]:
     """The broken links and the dates to confirm of the whole roadmap as ``principal`` reads
-    it: a red dependency out of order or a cut item others depend on, with a fix; an open date
+    it: every red flag with a one-click fix (an end past its milestone too, as Home and the
+    side menu's waiting list count them, pre-demo QA S-5); an open date
     suggestion the reader may decide; done items left out (the read without the rest of
     :func:`build`). ``roadmap`` (id or slug): that roadmap's alone, as :func:`build` narrows
     it; 404 when the reader cannot read it."""
@@ -236,9 +234,7 @@ async def waiting(db: AsyncSession, principal: Any, roadmap: str | None = None) 
     live = [
         e for e in read.entries if e.status != "done" and (chosen is None or e.roadmap.id == chosen)
     ]
-    links = sum(
-        1 for e in live for f in e.flags if f.state == "red" and f.fixes and f.kind in LINK_KINDS
-    )
+    links = sum(1 for e in live for f in e.flags if f.state == "red" and f.fixes)
     dates = sum(
         1 for e in live if e.suggestion is not None and can_decide(principal, e, read.deciders)
     )
@@ -424,6 +420,7 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
         else:
             bases_by_ref[(b.prd_document_id, b.tracker_key)].append(b)
     goals = await _goals(db, {r.feature_id for r in rows if r.feature_id})
+    ladder = await _ladder_goals(db, {r.id for r in rows})
     effort = await efforts(db, rows)
     # S7: the goals items are linked to directly (dropped on, suggested for).
     linked = {
@@ -486,6 +483,7 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 # one-feature-panel: a goal the item is linked to directly (set in its
                 # panel, dropped on, suggested for) wins over its feature's.
                 goal=next((linked[g] for g in row.goal_ids or [] if g in linked), None)
+                or ladder.get(row.id)
                 or (goals.get(row.feature_id) if row.feature_id else None),
                 goal_ids=[g for g in row.goal_ids or [] if g in linked],
                 window=window,
@@ -750,6 +748,31 @@ async def _goals(db: AsyncSession, features: set[uuid.UUID]) -> dict[uuid.UUID, 
     ).all()
     for edge_src, goal in sorted(found, key=lambda row: goal_sort_key(row[1])):
         out.setdefault(edge_src, goal)
+    return out
+
+
+async def _ladder_goals(db: AsyncSession, items: set[uuid.UUID]) -> dict[uuid.UUID, Entity]:
+    """Item id -> the goal it serves on the Goal map and its ladder (pre-demo QA P-6): the goal
+    of a goal milestone it is linked to (MilestoneFeature), the first in the one goal order."""
+    out: dict[uuid.UUID, Entity] = {}
+    if not items:
+        return out
+    found = (
+        await db.execute(
+            select(MilestoneFeature.item_id, Entity)
+            .join(TrackMilestone, TrackMilestone.id == MilestoneFeature.milestone_id)
+            .join(Entity, Entity.id == TrackMilestone.goal_id)
+            .where(
+                MilestoneFeature.item_id.in_(items),
+                TrackMilestone.deleted_at.is_(None),
+                TrackMilestone.status != "dropped",
+                Entity.type == "goal",
+                Entity.status == "confirmed",
+            )
+        )
+    ).all()
+    for item_id, goal in sorted(found, key=lambda row: goal_sort_key(row[1])):
+        out.setdefault(item_id, goal)
     return out
 
 

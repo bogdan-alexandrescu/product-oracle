@@ -181,6 +181,8 @@ interface SimpleDb {
   goal_buckets?: import("./goal-buckets").GoalBucketsDb;
   /** one-feature-panel: a roadmap goal edited through the goal edit (goal key -> its fields). */
   goal_edits?: Record<string, RoadmapGoalFields>;
+  /** pre-demo QA P-6: item id -> the goal it serves on the Goal map (service._ladder_goals), read when the item has no goal of its own. */
+  map_goals?: Record<string, Schemas["SimpleGoalRef"]>;
   goal_jobs?: Record<string, { until: number; job_id: string; origin: "auto" | "on_demand" }>;
   auto_done?: string[];
   /** S7: the seeds a merge changed, as they were (change id -> seeds), for its undo. */
@@ -501,6 +503,8 @@ const SEED: SeedItem[] = [
   { key: "setup-ideas", title: "Team invite nudges", horizon: "next", roadmap: "onboarding-roadmap", goal: "faster-activation", draft: true },
   // one-feature-panel: the Guided setup PRD's F-03 (the feature its decisions block), on its roadmap as the API has it.
   { key: "setup-health-log", title: "Health log", horizon: "later", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "low", section: "f-03", heading: "F-03 Health log" },
+  // PS1 a "Calm page": the Guided setup PRD's F-26 (its risks name it), on its roadmap as the API has it.
+  { key: "setup-calendar", title: "Calendar invites", horizon: "next", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "medium", start: 50, end: 80, source: "typed", depends: ["setup-checklist"], section: "f-26", heading: "F-26 Calendar invites" },
   { key: "price-tiers", title: "New plan tiers", horizon: "next", roadmap: "pricing-roadmap", confidence: "medium" },
 ];
 
@@ -1355,7 +1359,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       code: (s.feature_id && db.feature_codes?.[s.feature_id]) || code,
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: ROADMAP_DOC_SLUG[s.roadmap] ?? s.roadmap, title: rm.title },
       prd: ownPrd(s),
-      goal: s.goal && !inTrash(s.goal) ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, ...roadmapGoal(reader.full, s.goal), position: goalPositionOf(s.goal), ...READINGS[s.goal] } : null,
+      goal: s.goal && !inTrash(s.goal) ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, ...roadmapGoal(reader.full, s.goal), position: goalPositionOf(s.goal), ...READINGS[s.goal] } : (reader.full.map_goals?.[db.ids[s.key]] ?? null),
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
       confidence: s.confidence ?? null,
       status: s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned"),
@@ -1719,6 +1723,27 @@ export function dateSuggestionInboxRows(db: SimpleDb | undefined, me: { id: stri
   return out;
 }
 
+/** simple-roadmap-500-paint: what GET /v1/simple/roadmap and GET /v1/simple/roadmap/waiting
+ * read, by reader and query, while the roadmap's own data is the same (mockFetch turns this on
+ * for those two reads only). The mock answers on the page's own thread, one call at a time, so
+ * building the same 500 items again for the waiting counts held up drawing them. */
+let readsOn = false;
+let reads: { stored: string; out: Map<string, Schemas["SimpleRoadmapOut"] | null> } = { stored: "", out: new Map() };
+export function roadmapReadsAt(on: boolean): void {
+  readsOn = on;
+}
+function readRoadmap(db: SimpleDb, role: Role, q: URLSearchParams, me: Who): Schemas["SimpleRoadmapOut"] | null {
+  if (!readsOn) return roadmapOut(db, role, q, me);
+  const stored = JSON.stringify(db);
+  if (stored !== reads.stored) reads = { stored, out: new Map() };
+  const key = new URLSearchParams(q);
+  if (!key.get("group")) key.set("group", "goal");
+  key.sort();
+  const at = `${role}|${me.id}|${companyToday()}|${key}`;
+  if (!reads.out.has(at)) reads.out.set(at, roadmapOut(db, role, q, me));
+  return reads.out.get(at) ?? null;
+}
+
 /** /v1/simple/roadmap and its date suggestions (api/oracle/simple/router.py). */
 export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   if (p[1] !== "simple" || p[2] !== "roadmap") return null;
@@ -1728,7 +1753,7 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
   settleDrafting(db);
   if (!p[3] && m === "GET") {
     if (q.get("roadmap") && !readableRoadmap(q.get("roadmap"), me.role)) return json(404, { detail: "No such roadmap" });
-    const out = roadmapOut(db, me.role, q, me);
+    const out = readRoadmap(db, me.role, q, me);
     return out ? json(200, out) : json(422, { detail: "group: goal, track or prd" });
   }
   if (p[3] === "waiting" && !p[4] && m === "GET") {
@@ -1736,8 +1761,8 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
     // the dates the reader may confirm, no filter but ``roadmap`` (one roadmap's; 404 when unread).
     const one = q.get("roadmap");
     if (one && !readableRoadmap(one, me.role)) return json(404, { detail: "No such roadmap" });
-    const items = (roadmapOut(db, me.role, new URLSearchParams(one ? { roadmap: one } : {}), me)?.items ?? []).filter((i) => i.status !== "done");
-    const links = items.flatMap((i) => i.flags).filter((f) => f.state === "red" && f.fixes.length > 0 && (f.kind === "dependency_order" || f.kind === "cut_with_dependents"));
+    const items = (readRoadmap(db, me.role, new URLSearchParams(one ? { roadmap: one } : {}), me)?.items ?? []).filter((i) => i.status !== "done");
+    const links = items.flatMap((i) => i.flags).filter((f) => f.state === "red" && f.fixes.length > 0);
     return json(200, { broken_links: links.length, dates_to_confirm: items.filter((i) => !!i.suggestion?.can_decide).length });
   }
   const slugOf = (id: string) => Object.keys(ROADMAPS).find((r) => roadmapId(r) === id) ?? null;

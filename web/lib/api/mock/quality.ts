@@ -64,7 +64,7 @@ type Rule = [Status, string, string[], string[]?];
 /** The fixed synthetic evaluation every version shows in mock mode (but the ones below). */
 const RULES: Record<string, Rule> = {
   problem_clarity: ["pass", "The problem names its users and its pain is backed by 2 pieces of evidence.", ["problem"]],
-  goal_alignment: ["pass", "Every linked feature (1) serves a confirmed goal (activation).", ["goal-trace"]],
+  goal_alignment: ["pass", "Every linked feature (1) serves a confirmed goal: Raise activation (g.activation).", ["goal-trace"]],
   evidence_provenance: ["warning", "1 piece of evidence is stale.", []],
   alternatives_tradeoffs: ["warning", "No alternatives considered: no section and no blocker with two options.", []],
   blocker_feasibility: ["pass", "No blocker is recorded; the risks section states the constraints.", ["risks"]],
@@ -82,7 +82,7 @@ const PASS = (rationale: string): Rule => ["pass", rationale, []];
 const RULES_BY_SLUG: Record<string, Record<string, Rule>> = {
   "online-deposits": {
     problem_clarity: PASS("The problem names its users and its pain is backed by the no-show count."),
-    goal_alignment: ["warning", "The goals section cites G4, still proposed.", ["problem"]],
+    goal_alignment: ["warning", "The PRD's goals are proposed, not confirmed", ["problem"]],
     evidence_provenance: PASS("Evidence is fresh and confident."),
     alternatives_tradeoffs: PASS("Two refund approaches are compared."),
     blocker_feasibility: ["critical", "The same-day refund blocker has no workable mitigation or experiment.", ["risks"]],

@@ -35,8 +35,9 @@ export const SIMPLE_DESTINATIONS: Dest[] = [
   { label: "Priorities", href: "/simple/priorities", icon: "priorities", testId: "simple-nav-priorities" },
   { label: "Meetings", href: "/simple/meetings", icon: "clock", testId: "simple-nav-meetings" },
   { label: "Decisions", href: "/simple/decisions", icon: "flag", testId: "simple-nav-decisions" },
-  // inbox-meeting-proposals owner: the one Inbox (Detailed's too), with every proposal waiting on me.
-  { label: "Inbox", href: "/inbox", icon: "inbox", testId: "simple-nav-inbox" },
+  // inbox-meeting-proposals owner: the one Inbox (Detailed's too), with every proposal waiting on me;
+  // S-7: in Simple's shell, so the person stays in Simple.
+  { label: "Inbox", href: "/simple/inbox", icon: "inbox", testId: "simple-nav-inbox" },
 ];
 
 /** Phone tab bar: Home, One-pagers, Roadmap, Decisions, More (Detailed's pattern). */
@@ -52,7 +53,7 @@ function isActive(pathname: string, d: Dest): boolean {
  * person, from the one list Home and Decisions read (home-waiting-one-list, GET
  * /v1/simple/decisions/waiting `items`), so a count always matches its page: Decisions counts
  * everything in it (its "Waiting for you"); Roadmap the roadmap's part (its broken links,
- * as the roadmap counts them, dates to confirm, proposals and drafts sent to me); Meetings only a
+ * as the roadmap counts them, dates to confirm, suggested features, proposals and drafts sent to me); Meetings only a
  * meeting live now (an upcoming one waits on nobody).
  * Inbox counts what waits on me as /inbox's "N waiting" does (lib/waiting,
  * inbox-meeting-proposals); what of it the Roadmap tab does not count already (Oracle's dates,
@@ -78,26 +79,31 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
       unwrap(api.GET("/v1/simple/roadmap/waiting")).catch(() => undefined),
       loadInbox(),
       loadMyQuestions().catch(() => []),
+      unwrap(api.GET("/v1/simple/goal-suggestions", { params: { query: { status: "open" } } })).catch(() => undefined),
     ])
-      .then(([waiting, roadmap, inbox, questions]) => {
+      .then(([waiting, roadmap, inbox, questions, goalSuggestions]) => {
         if (!alive) return;
         const items = waiting.items;
         // Without the light count, the strip's own rule over the list: each link between items
         // (a dependency out of order, a cut item others depend on), not an end past its milestone.
         const links = roadmap?.broken_links ?? items.filter((i) => i.kind === "broken_link" && LINK_KINDS.some((k) => i.key.split(":")[2] === k)).length;
         const dates = roadmap?.dates_to_confirm ?? items.filter((i) => i.kind === "date" && !i.key.startsWith("proposal:")).length;
+        // The suggested features Needs a decision lists and counts (the same read and filter as its panel).
+        const suggested = (goalSuggestions?.suggestions ?? []).filter((s) => s.can_accept || s.can_reject).length;
         const asks = items.filter((i) => i.kind === "proposal" || i.kind === "draft" || (i.kind === "date" && i.key.startsWith("proposal:"))).length;
         // inbox-meeting-proposals fix: the Inbox's part the Roadmap tab counts too (a proposal on a
         // PRD question or a one-pager line is not the roadmap's).
         const inboxRoadmap =
           inbox.simple_proposals.filter((x) => !["decide_question", "name_decider", "edit_line"].includes(x.op)).length +
-          inbox.simple_approvals.length;
+          inbox.simple_approvals.length +
+          inbox.simple_goal_suggestions.length;
         const all = waitingCount(inbox, questions);
         setCounts({
           Decisions: items.length,
-          Roadmap: links + dates + asks,
+          Roadmap: links + dates + suggested + asks,
           "Roadmap links": links,
           "Roadmap dates": dates,
+          "Roadmap suggested": suggested,
           "Roadmap asks": asks,
           Inbox: all,
           // What waits in the Inbox beyond what the tabs count (More sums it).
@@ -132,8 +138,10 @@ function countWords(label: string, n: number, counts?: Record<string, number> | 
   if (label === "Roadmap") {
     const links = counts?.["Roadmap links"] ?? 0;
     const dates = counts?.["Roadmap dates"] ?? 0;
-    const asks = counts?.["Roadmap asks"] ?? n - links - dates;
-    return `${n} on the roadmap waiting on you: ${links} broken ${links === 1 ? "link" : "links"}, ${dates} ${dates === 1 ? "date" : "dates"} to confirm, ${asks} ${asks === 1 ? "change or draft" : "changes or drafts"}`;
+    const suggested = counts?.["Roadmap suggested"] ?? 0;
+    const asks = counts?.["Roadmap asks"] ?? n - links - dates - suggested;
+    const features = suggested ? `${suggested} suggested ${suggested === 1 ? "feature" : "features"}, ` : "";
+    return `${n} on the roadmap waiting on you: ${links} broken ${links === 1 ? "link" : "links"}, ${dates} ${dates === 1 ? "date" : "dates"} to confirm, ${features}${asks} ${asks === 1 ? "change or draft" : "changes or drafts"}`;
   }
   return `${n} waiting on you`;
 }

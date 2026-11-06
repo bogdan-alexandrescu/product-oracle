@@ -42,7 +42,7 @@ for (const path of ["/v1/runs", "/v1/documents"]) {
     await openHome(page);
     const flight = page.getByTestId("home-in-flight");
     const error = flight.getByTestId("load-error");
-    await expect(error).toContainText("Couldn't load what's in flight.");
+    await expect(error).toContainText("Could not load what's in flight.");
     await expect(flight.getByTestId("home-in-flight-empty")).toHaveCount(0);
     await expect(flight.getByTestId("home-in-flight-table")).toHaveCount(0);
     await expect(flight).not.toContainText("Nothing in flight");
@@ -155,9 +155,9 @@ test.describe("at 1440", () => {
     const blocker = page.getByTestId("home-inspector").getByTestId("inspector-blocker-row").first();
     await expect(blocker).toBeVisible();
     const resolve = blocker.getByRole("link", { name: /^Resolve/ });
-    await expect(resolve).toHaveAttribute("href", /^\/baseline\?tab=blockers&blocker=/);
+    await expect(resolve).toHaveAttribute("href", /^\/ground-truth\?tab=blockers&blocker=/);
     await resolve.click();
-    await expect(page).toHaveURL(/\/baseline\?tab=blockers&blocker=/);
+    await expect(page).toHaveURL(/\/ground-truth\?tab=blockers&blocker=/);
   });
 
   test("D-5: a viewer's blocker row says Open", async ({ page }) => {
@@ -165,14 +165,14 @@ test.describe("at 1440", () => {
     const blocker = page.getByTestId("home-inspector").getByTestId("inspector-blocker-row").first();
     await expect(blocker).toBeVisible();
     await expect(blocker.getByRole("link", { name: /^Resolve/ })).toHaveCount(0);
-    await expect(blocker.getByRole("link", { name: /^Open/ })).toHaveAttribute("href", /^\/baseline\?tab=blockers&blocker=/);
+    await expect(blocker.getByRole("link", { name: /^Open/ })).toHaveAttribute("href", /^\/ground-truth\?tab=blockers&blocker=/);
   });
 
   test("D-7: a failed setup load shows Try again where Set up goes", async ({ page }) => {
     await failing(page, "/v1/setup");
     await openHome(page);
     const error = page.getByTestId("home-setup-load-error");
-    await expect(error).toContainText("Couldn't load your setup checklist.");
+    await expect(error).toContainText("Could not load your setup checklist.");
     await stopFailing(page);
     await error.getByRole("button", { name: "Try again" }).click();
     await expect(page.getByTestId("home-setup")).toBeVisible();

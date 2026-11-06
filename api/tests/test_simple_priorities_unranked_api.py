@@ -1,0 +1,43 @@
+"""prio-unranked: the priorities read lists the live, non-draft roadmap items that have no
+ranked feature (``unranked``), so Simple Priorities shows them under the ranked rows. Against
+Postgres; the world is tests.test_simple_priorities_api's (pay-6 has no feature, pay-5 is a
+draft, pay-7 is ledger's second item). Each test's card is its docstring.
+"""
+
+from sqlalchemy import select
+
+from oracle.roadmap.models import RoadmapItem
+from oracle.tenancy import tenant_session
+from tests.test_simple_changes_api import clock, make_people  # noqa: F401
+from tests.test_simple_priorities_api import World
+
+
+async def test_unranked_lists_items_with_no_ranked_feature(client):
+    """protects=an item with no feature (pay-6) is listed in ``unranked`` with its id, code,
+    title and roadmap; a draft (pay-5) and an item whose feature is ranked (pay-7, ledger's
+    later item) are not; fails_when=``unranked`` is missing, lists a draft or a ranked
+    feature's item; no_claim=the web's look."""
+    ctx = await make_people()
+    w = await World(ctx).build()
+    out = await w.read(client)
+    un = out["unranked"]
+    assert [u["code"] for u in un] == ["pay-6"]
+    assert un[0]["item_id"] == w.ids["pay-6"]
+    assert un[0]["title"]
+    assert un[0]["roadmap"]["slug"] == "payments"
+    assert "pay-6" not in {r["code"] for r in out["rows"]}
+
+
+async def test_unranked_item_moves_up_once_its_feature_ranks(client):
+    """protects=an item that gains a ranked feature leaves ``unranked`` and is that feature's
+    row; fails_when=it stays unranked or shows twice; no_claim=the rank it takes."""
+    ctx = await make_people()
+    w = await World(ctx).build()
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "pay-6"))
+        row.feature_id = w.ids["insights"]
+        await s.commit()
+    out = await w.read(client)
+    assert out["unranked"] == []
+    rows = {r["feature_id"]: r for r in out["rows"]}
+    assert rows[w.ids["insights"]]["item_id"] == w.ids["pay-6"]

@@ -38,7 +38,7 @@ export function useReminderRows(seenBefore: string | null | undefined): StatedNe
         counted: false,
         group: "reminders",
         action: (
-          <LinkButton variant={done ? "ghost" : undefined} href={href} onClick={() => void (done ? undefined : read(n).catch(() => undefined))}>
+          <LinkButton href={href} onClick={() => void (done ? undefined : read(n).catch(() => undefined))}>
             Open
           </LinkButton>
         ),
