@@ -8,7 +8,7 @@ import { login } from "./helpers";
  * The Ground Truth check on Detailed's Ground Truth page (docs/ground-truth.md; the owner,
  * Nov 5: allowed but flagged). The "ground-truth-flags" scenario: Export to sheets (a roadmap
  * item on no feature), Weekly digest (on a feature a run only proposed), the slice F-15a Usage
- * report, the PRD's F-09 Team invites, Smart search (no code), F-02 Audit log (no goal) and
+ * report, the PRD's F-09 Guest seats, Smart search (no code), F-02 Audit log (no goal) and
  * F-03 Night alerts (runs today, still on the roadmap). Each fix is made as a person makes it.
  */
 
@@ -47,7 +47,7 @@ for (const viewport of [DESKTOP, PHONE])
       await expect(row(page, "Export to sheets").getByRole("button", { name: /Add to Ground Truth/ })).toBeVisible();
       await expect(row(page, "Weekly digest").getByRole("button", { name: /Confirm it/ })).toBeVisible();
       await openKind(page, "prd_feature_missing");
-      await expect(row(page, "Team invites")).toContainText("F-09");
+      await expect(row(page, "Guest seats")).toContainText("F-09");
       // Nothing runs past the screen's edge.
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     });
@@ -68,7 +68,7 @@ test.describe("as the owner", () => {
   test("Add to Ground Truth adds a PRD's feature, and its slice's", async ({ page }) => {
     await open(page);
     await openKind(page, "prd_feature_missing");
-    await row(page, "Team invites").getByRole("button", { name: /Add to Ground Truth/ }).click();
+    await row(page, "Guest seats").getByRole("button", { name: /Add to Ground Truth/ }).click();
     await expect(count(page, "prd_feature_missing")).toHaveCount(0);
     await openKind(page, "slice_parent_missing");
     await row(page, "Usage report").getByRole("button", { name: /Add to Ground Truth/ }).click();
@@ -96,6 +96,7 @@ test.describe("as the owner", () => {
     await expect(page.getByTestId("gt-notice")).toContainText("Confirmed “Weekly digest”.");
     await expect(row(page, "Weekly digest")).toHaveCount(0);
     await expect(count(page, "unlinked_item")).toContainText("1");
+    await expect(total(page)).toHaveText("6");
   });
 
   test("Pick a goal links the feature to a goal", async ({ page }) => {

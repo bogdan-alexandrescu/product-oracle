@@ -47,18 +47,18 @@ const FEATURES: [string, string, Entity["status"], boolean][] = [
   ["F-03", "Night alerts", "confirmed", true],
   ["F-11", "Sheets export", "confirmed", true],
   ["F-12", "Digest emails", "confirmed", true],
-  ["weekly-digest", "Weekly digest", "proposed", true],
+  ["F-14", "Weekly digest", "proposed", true],
 ];
 /** Running today (Current state's proof), as feature_states would say. */
 const RUNNING = new Set([featureId("F-03")]);
 /** The scenario's roadmap items: key, title, the feature it is, a draft. */
 const ITEMS: [string, string, string | null, boolean][] = [
   ["gt-export-to-sheets", "Export to sheets", null, true],
-  ["gt-weekly-digest", "Weekly digest", featureId("weekly-digest"), true],
+  ["gt-weekly-digest", "Weekly digest", featureId("F-14"), true],
   ["gt-night-alerts", "Night alerts", featureId("F-03"), false],
 ];
 /** The PRD Scale's approved plan: its features not in the Ground Truth (F-15 spans two milestones: slice F-15a). */
-const PRD_FEATURES = [{ code: "F-09", name: "Team invites", slice: null }, { code: "F-15", name: "Usage report", slice: "F-15a" }];
+const PRD_FEATURES = [{ code: "F-09", name: "Guest seats", slice: null }, { code: "F-15", name: "Usage report", slice: "F-15a" }];
 
 /** Adds the scenario's features (to the baseline) and items (to the Alerts roadmap). */
 export function seedGroundTruth(baseline: BaselineState, simple: SimpleDb): void {

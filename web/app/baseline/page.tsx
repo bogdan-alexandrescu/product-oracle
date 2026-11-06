@@ -26,6 +26,7 @@ import { FromRunBand, FromRunTab, RowActions, WhyCard } from "./_components/From
 import { fillNotice } from "./_components/goal-fields";
 import type { Stepper } from "./_components/GoalInterview";
 import { GraphTab } from "./_components/GraphTab";
+import { GroundTruthFlags } from "./_components/GroundTruthFlags";
 import { ItemsTab } from "./_components/ItemsTab";
 import { cardsOf, fieldName, noChange, ProposalsTab, type FromFilter } from "./_components/ProposalsTab";
 import { Tabs, type TabItem } from "./_components/Tabs";
@@ -151,6 +152,8 @@ export default function BaselinePage() {
   const trace = useQuery("baseline-trace", () => unwrap(api.GET("/v1/baseline/trace")));
   const conflicts = useQuery("baseline-conflicts", () => unwrap(api.GET("/v1/baseline/conflicts")));
   const blockers = useQuery("baseline-blockers", () => unwrap(api.GET("/v1/blockers")));
+  // The Ground Truth check (docs/ground-truth.md): its flags, counted per kind, each with its fixes.
+  const check = useQuery("baseline-check", () => unwrap(api.GET("/v1/baseline/check")));
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("graph");
   const [from, setFrom] = useState<FromFilter>("");
@@ -214,13 +217,14 @@ export default function BaselinePage() {
   const { reload: reloadProposals } = proposals;
   const { reload: reloadFiltered } = filtered;
   const { reload: reloadBlockers } = blockers;
+  const { reload: reloadCheck } = check;
   // B6: the vague goals (the Goals panel's Interview vague goals), read only, nothing started.
   const vague = useQuery("baseline-vague", vagueGoals);
   const { reload: reloadVague } = vague;
   const { reload: reloadFromRun } = fromRun;
   const refresh = useCallback(() => {
-    void Promise.all([reloadGraph(), reloadTrace(), reloadConflicts(), reloadProposals(), reloadFiltered(), reloadBlockers(), reloadVague(), reloadFromRun()]);
-  }, [reloadGraph, reloadTrace, reloadConflicts, reloadProposals, reloadFiltered, reloadBlockers, reloadVague, reloadFromRun]);
+    void Promise.all([reloadGraph(), reloadTrace(), reloadConflicts(), reloadProposals(), reloadFiltered(), reloadBlockers(), reloadVague(), reloadFromRun(), reloadCheck()]);
+  }, [reloadGraph, reloadTrace, reloadConflicts, reloadProposals, reloadFiltered, reloadBlockers, reloadVague, reloadFromRun, reloadCheck]);
   // B6: the goal whose interview the drawer's Discuss view shows, and the stepper over the vague goals.
   const [discuss, setDiscuss] = useState<{ entityId: string; discussionId: string } | null>(null);
   const [steps, setSteps] = useState<{ ids: string[]; at: number } | null>(null);
@@ -514,6 +518,19 @@ export default function BaselinePage() {
 
       <p className="-mt-2 mb-3 max-w-[760px] text-[14px] text-text2">What the product should become: goals, areas of focus, milestones and the planned features.</p>
       <StateTabs view="desired" desired={states.data?.desired ?? null} running={states.data?.running ?? null} />
+      {check.data && (
+        <GroundTruthFlags
+          check={check.data}
+          graph={graph.data}
+          canWrite={canWrite}
+          canPropose={canComment}
+          canChangeRoadmap={can("create_simple_change")}
+          onChanged={() => {
+            refresh();
+            stateChanged();
+          }}
+        />
+      )}
       {states.data && <ReadyBand data={states.data} onChanged={stateChanged} />}
       {states.data && <DesiredList data={states.data} />}
       <div className="mt-6" />
