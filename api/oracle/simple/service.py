@@ -94,6 +94,9 @@ class Entry:
     milestone: SimpleItemMilestone | None
     depends_on: list[uuid.UUID] = field(default_factory=list)
     needed_by: list[uuid.UUID] = field(default_factory=list)
+    # roadmap-edit-fixes: the stored key that names each dependency (another PRD's feature
+    # key is neither the item's key nor its code), so a removal sends that key.
+    depends_key_of: dict[uuid.UUID, str] = field(default_factory=dict)
     blockers: list[constraints.Blocker] = field(default_factory=list)
     suggestion: RoadmapDateSuggestion | None = None
     # plan-model review: the span of all the item's open slice suggestions (what Accept
@@ -470,6 +473,7 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                     dep = entry_of[d.id]
                     if dep is not e and d.id not in e.depends_on:
                         e.depends_on.append(d.id)
+                        e.depends_key_of[d.id] = k
                         dep.needed_by.append(e.row.id)
     # walkb-roadmap: an estimated start never comes before what the item depends on.
     moved = dates.after_dependencies(
@@ -835,6 +839,17 @@ def prd_section_label(section_key: str, heading: str | None, name: str = "") -> 
 _LEADING_CODE = re.compile(r"^[A-Z][A-Z0-9]*-\d+[a-z]?\s+")
 
 
+def coded_title(title: str, code: str | None) -> tuple[str | None, str]:
+    """roadmap-edit-fixes: (code, name) of an item whose stored title carries its code
+    ("F-07 Alpha": F-07, Alpha), so the panel shows and renames the name alone; else
+    (``code``, the title)."""
+    m = _LEADING_CODE.match(title or "")
+    lead = m.group(0).strip() if m else None
+    if lead is None or (code and code != lead) or not title[m.end() :].strip():  # type: ignore[union-attr]
+        return code, title
+    return lead, title[m.end() :].strip()  # type: ignore[union-attr]
+
+
 def prd_provenance(e: Entry) -> str | None:
     """The card's "Why" line naming where the item came from: "From <PRD> (draft 5):
     Sign-up flow." (the PRD, its draft and the section's words). The card names an item by its
@@ -904,11 +919,12 @@ def item_out(
     row, r = e.row, e.resolved
     names = names or {}
     may = can_decide(principal, e, deciders) if principal is not None else False
+    code, title = coded_title(row.title, e.code or _prd_code(row.prd_section_key))
     return SimpleRoadmapItem(
         id=row.id,
         key=row.item_key,
-        code=e.code or _prd_code(row.prd_section_key),
-        title=row.title,
+        code=code,
+        title=title,
         outcome=row.outcome,
         horizon=row.horizon,  # type: ignore[arg-type]
         roadmap=_ref(e.roadmap),  # type: ignore[arg-type]
@@ -950,6 +966,7 @@ def item_out(
         else None,
         own_owner_id=str(row.owner_id) if row.owner_id else None,
         depends_keys=list(row.depends_on or []),
+        depends_key_of={str(d): k for d, k in e.depends_key_of.items()},
         can_decide=may,
         deciders=[names[i] for i in decider_ids(e, deciders) or owners or [] if i in names],
         reasons=_reasons(e),

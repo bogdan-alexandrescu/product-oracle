@@ -620,6 +620,38 @@ async def _drafting(db: AsyncSession, ids: list[str]) -> set[str]:
     )
 
 
+async def _dependency_ideas(
+    db: AsyncSession, read_: service.Read, shown: list[service.Entry]
+) -> dict[uuid.UUID, list[str]]:
+    """roadmap-edit-fixes: Oracle's ideas of what each new item depends on (its drafting
+    job's ``depends_on``), a person's to add: those it does not depend on yet, never one that
+    would close a loop."""
+    if not shown:
+        return {}
+    wanted = {str(e.row.id): e for e in shown}
+    by_id = read_.by_id()
+    out: dict[uuid.UUID, list[str]] = {}
+    for item_id, keys in (
+        await db.execute(
+            select(LlmJob.input["item_id"].astext, LlmJob.output["depends_on"])
+            .where(LlmJob.kind == "item_draft", LlmJob.input["item_id"].astext.in_(wanted))
+            .order_by(LlmJob.created_at)
+        )
+    ).all():
+        e = wanted[item_id]
+        have = set(e.row.depends_on or [])
+        ok = [
+            k
+            for k in (keys if isinstance(keys, list) else [])
+            if isinstance(k, str)
+            and k not in have
+            and k != e.row.item_key
+            and await changes.loop_of(db, by_id, e, [k]) is None
+        ]
+        out[e.row.id] = ok
+    return out
+
+
 async def item_extras(
     db: AsyncSession, read_: service.Read, shown: list[service.Entry]
 ) -> dict[uuid.UUID, dict[str, Any]]:
@@ -631,9 +663,12 @@ async def item_extras(
         return out
     features = await _features(db) if drafts_ else []
     running = await _drafting(db, [str(e.row.id) for e in drafts_])
+    ideas = await _dependency_ideas(db, read_, drafts_)
     by_key = {(e.roadmap.id, e.row.item_key): e for e in read_.entries}
     for e in drafts_:
         x: dict[str, Any] = {"drafting": str(e.row.id) in running}
+        if ideas.get(e.row.id):
+            x["suggested_depends"] = ideas[e.row.id]
         if not e.row.kept_both and not e.row.merged_into and e.status == "draft":
             x["looks_like"] = reconcile(e.row.title, read_.entries, features, e.row.id,
                                         e.roadmap.id)  # fmt: skip
@@ -653,8 +688,14 @@ async def item_extras(
 
 
 async def run_item_draft(s: AsyncSession, job: LlmJob, ask) -> dict[str, Any]:
-    """The ``item_draft`` job: one call; fills what a person has not."""
-    row = await s.get(RoadmapItem, uuid.UUID(str(job.input.get("item_id"))), with_for_update=True)
+    """The ``item_draft`` job: one call; fills what a person has not.
+
+    roadmap-edit-fixes: nothing is locked while Oracle is asked (a person keeps editing);
+    after, the item and its draft are read again and only fields still empty are filled, so
+    a person's value always wins. Its dependency ideas are suggestions (``depends_on`` of
+    the job's output, read as ``suggested_depends``), never written; ``at``: when it filled
+    (a conflict it caused names Oracle, oracle.simple.changes._last_writer)."""
+    row = await s.get(RoadmapItem, uuid.UUID(str(job.input.get("item_id"))))
     if row is None or not row.draft or row.merged_into:
         return {"drafted": False}
     d = await s.get(SimpleDraft, row.simple_draft_id) if row.simple_draft_id else None
@@ -691,6 +732,14 @@ async def run_item_draft(s: AsyncSession, job: LlmJob, ask) -> dict[str, Any]:
         checks = quality.item_draft(answer, goals)
     if checks:
         return {"drafted": False, "checks": quality.said(checks)}
+    # What a person saved while Oracle was asked.
+    row = await s.get(RoadmapItem, row.id, with_for_update=True, populate_existing=True)
+    if row is None or not row.draft or row.merged_into:
+        return {"drafted": False}
+    if d is not None:
+        d = await s.get(SimpleDraft, d.id, with_for_update=True, populate_existing=True)
+    ov = (d.overlay or {}).get(str(row.id)) if d is not None else None
+    cur = drafts.overlaid(row, ov)
     values: dict[str, Any] = {}
     outcome = answer.get("outcome")
     if not cur.outcome and isinstance(outcome, str) and outcome.strip():
@@ -701,15 +750,19 @@ async def run_item_draft(s: AsyncSession, job: LlmJob, ask) -> dict[str, Any]:
         values["feature_id"] = str(feature.id)
     known = {k for k, _ in keys}
     deps = [k for k in answer.get("depends_on") or [] if isinstance(k, str) and k in known]
-    if deps and not cur.depends_on:
-        values["depends_on"] = list(dict.fromkeys(deps))
-    for f, v in values.items():
-        setattr(row, f, drafts._typed(f, v))
-    if ov is not None and values:
-        d.overlay = {**(d.overlay or {}), str(row.id): {**ov, **values}}  # type: ignore[union-attr]
+    if ov is not None:
+        if values:
+            d.overlay = {**(d.overlay or {}), str(row.id): {**ov, **values}}  # type: ignore[union-attr]
+    else:
+        for f, v in values.items():
+            setattr(row, f, drafts._typed(f, v))
     suggested = await _date_suggestion(s, cur, answer, quarter)
     await s.flush()
-    return {"drafted": True, "filled": sorted(values), "dates": suggested}
+    out: dict[str, Any] = {"drafted": True, "filled": sorted(values), "dates": suggested}
+    out["depends_on"] = list(dict.fromkeys(deps))
+    if values:
+        out["at"] = company_time.now().isoformat()
+    return out
 
 
 async def _date_suggestion(s: AsyncSession, cur: RoadmapItem, answer: dict, quarter: Any) -> bool:

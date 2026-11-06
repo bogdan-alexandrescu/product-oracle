@@ -111,6 +111,8 @@ TITLE_MAX = 200
 OUTCOME_MAX = 1000
 NOTE_MAX = 500
 WITHDRAWN = "Withdrawn by the person who proposed it"
+# roadmap-edit-fixes: who a change of Oracle's own (its draft of a new item) is by.
+ORACLE = "Oracle"
 DATES = ("start_date", "end_date")
 # Each single-item op's key fields: ``before`` must name them all.
 FIELDS: dict[str, tuple[str, ...]] = {
@@ -525,6 +527,20 @@ async def _last_writer(db: AsyncSession, item_ids: set[str]) -> tuple[Any, Any]:
         who = c.decided_by if c.status == "accepted" and c.decided_by else c.by
         if best is None or at > best[0]:
             best = (at, who)
+    # roadmap-edit-fixes: Oracle's draft of a new item (oracle.simple.additions) fills its
+    # empty fields after the add: when that came last, Oracle changed it, not the person.
+    from oracle.jobs.models import LlmJob
+
+    for out in await db.scalars(
+        select(LlmJob.output).where(
+            LlmJob.kind == "item_draft", LlmJob.input["item_id"].astext.in_(list(item_ids))
+        )
+    ):
+        at = (out or {}).get("at")
+        if (out or {}).get("filled") and isinstance(at, str):
+            when = datetime.fromisoformat(at)
+            if best is None or when >= best[0]:
+                return {"id": None, "name": ORACLE}, when
     if best is None:
         return None, None
     names = await _names(db, {best[1]})
@@ -700,6 +716,11 @@ async def _plan(
         shown = {"start_date": _iso(r.start.date), "end_date": _iso(r.end.date)}
         if seen_ != shown:
             raise await _conflict(db, shown, {str(row.id)}, lead)
+    elif op == "edit_title" and seen_ != current:
+        # roadmap-edit-fixes: the read shows a title's code apart from its name.
+        shown = {"title": service.coded_title(row.title, _code_of(entry))[1]}
+        if seen_ != shown:
+            raise await _conflict(db, current, {str(row.id)}, lead)
     elif seen_ != current:
         raise await _conflict(db, current, {str(row.id)}, lead)
     a = body.after
@@ -770,6 +791,10 @@ async def _plan(
         title = " ".join(str(a.get("title") or "").split())
         if not title or len(title) > TITLE_MAX:
             raise ChangeError(422, f"after.title: 1 to {TITLE_MAX} characters")
+        # roadmap-edit-fixes: a rename changes the name only; a code the title carries stays.
+        code, name = service.coded_title(row.title, _code_of(entry))
+        if name != row.title and code and service.coded_title(title, None)[0] is None:
+            title = f"{code} {title}"[:TITLE_MAX]
         after = {"title": title}
     elif op == "set_milestone":
         m = a.get("milestone")
@@ -815,6 +840,12 @@ async def _plan(
             raise ChangeError(422, f"after.{field}: {what}")
         after = {field: str(ref) if ref else None}
         stored = STORED[op]
+        # roadmap-edit-fixes: a track is one PRD's (oracle.roadmap.models.ProductTrack), so
+        # an item moved to another PRD moves to that PRD's track on its roadmap.
+        track = await _track_of_prd(db, ref, row.roadmap_document_id) if op == "set_prd" else None
+        if track is not None and track != row.track_id:
+            after["track_id"] = str(track)
+            stored = ("prd_document_id", "track_id")
     elif op == "set_goal":
         from oracle.baseline.models import Entity
 
@@ -838,6 +869,8 @@ async def _plan(
         unknown = await _unknown_keys(db, added, read_)
         if unknown:
             raise ChangeError(422, f"after.depends_on: no item or feature has the key {unknown[0]}")
+        if loop := await loop_of(db, read_.by_id(), entry, added):
+            raise ChangeError(422, loop)
         after = {"depends_on": clean}
     else:  # accept_risk
         if target.get("flag") not in FLAG_KINDS:
@@ -856,6 +889,69 @@ async def _plan(
             }
         }
     return entry, target, read(row, stored, target), after
+
+
+def _code_of(e: Any) -> str | None:
+    return e.code or service._prd_code(e.row.prd_section_key)
+
+
+def _named(e: Any) -> str:
+    """An item as a person reads it: its code, then its name ("F-19 Usage alerts")."""
+    code, name = service.coded_title(e.row.title, _code_of(e))
+    return f"{code} {name}" if code else name
+
+
+async def loop_of(
+    db: AsyncSession,
+    by_id: dict[uuid.UUID, Any],
+    entry: Any,
+    keys: list[str],
+    ignore: set[uuid.UUID] | None = None,
+) -> str | None:
+    """roadmap-edit-fixes: the reason ``entry`` may not depend on ``keys`` (item keys,
+    codes or feature keys, as set_depends stores them): one of them already depends on it,
+    directly or through others ("F-19 Usage alerts already depends on Alert rules"); None
+    when no key closes a loop. ``ignore``: items left out (a merged draft)."""
+    from oracle.roadmap import company
+
+    if not keys:
+        return None
+    ignore = ignore or set()
+    feature_keys = await company.feature_keys_of(db, [e.row for e in by_id.values()])
+    wanted = {k.lower() for k in keys}
+    for d in by_id.values():
+        names = {d.row.item_key, _code_of(d), feature_keys.get(d.row.id)}
+        if d is entry or d.row.id in ignore or not wanted & {n.lower() for n in names if n}:
+            continue
+        # Does d wait on entry, through what it depends on?
+        seen: set[uuid.UUID] = set()
+        todo = [d.row.id]
+        while todo:
+            cur = todo.pop()
+            if cur in seen:
+                continue
+            seen.add(cur)
+            if cur == entry.row.id:
+                return f"{_named(d)} already depends on {_named(entry)}"
+            nxt = by_id.get(cur)
+            if nxt is not None:
+                todo += [x for x in nxt.depends_on if x not in ignore]
+    return None
+
+
+async def _track_of_prd(
+    db: AsyncSession, prd: uuid.UUID | None, roadmap: uuid.UUID | None
+) -> uuid.UUID | None:
+    from oracle.roadmap.models import ProductTrack
+
+    if prd is None:
+        return None
+    return await db.scalar(
+        select(ProductTrack.id)
+        .where(ProductTrack.prd_document_id == prd)
+        .order_by((ProductTrack.roadmap_document_id == roadmap).desc(), ProductTrack.created_at)
+        .limit(1)
+    )
 
 
 async def _unknown_keys(db: AsyncSession, keys: list[str], read_: service.Read) -> list[str]:
@@ -917,6 +1013,8 @@ async def _merge_plan(
         goals += [str(g) for g in row.goal_ids or [] if str(g) not in goals]
         deps = [k for k in kept.row.depends_on or [] if k != dk]
         deps += [k for k in row.depends_on or [] if k not in deps and k not in (kk, dk)]
+        if loop := await loop_of(db, by_id, kept, deps, ignore={entry.row.id}):
+            raise ChangeError(422, loop)
         note = f"Merged from {dk} {row.title}" + (f": {row.note}" if row.note else "")
         after[str(kept.row.id)] = {
             "goal_ids": goals,

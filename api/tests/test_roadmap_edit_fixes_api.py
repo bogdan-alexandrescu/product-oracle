@@ -207,10 +207,9 @@ async def test_oracle_draft_never_overwrites_a_person(client):
         "op": "set_depends", "target": {"item_id": other}, "before": {"depends_on": []},
         "after": {"depends_on": [key]}})  # fmt: skip
     assert r.status_code == 201, r.text
-    assert other not in [i for i in (await w.items(client))[iid]["suggested_depends"]] and all(
-        k != (await w.items(client))[other]["key"]
-        for k in (await w.items(client))[iid]["suggested_depends"]
-    )
+    items = await w.items(client)
+    assert items[other]["depends_keys"] == [key]
+    assert items[other]["key"] not in items[iid]["suggested_depends"]
 
 
 async def test_conflict_after_oracle_names_oracle(client):

@@ -236,13 +236,14 @@ async def test_drafting_job_fills_the_draft(client):
         assert job.input["item_id"] == iid
         out = await additions.run_item_draft(s, job, ask)
         assert out["drafted"] is True
-        job.status = "succeeded"
+        job.status, job.output = "succeeded", out
         await s.commit()
     assert seen["title"] == "Import from files"
     assert {f["key"] for f in seen["features"]} >= {"bulk-import", "audit-log"}
     item = (await w.items(client))[iid]
     assert item["outcome"] == "Admins bring their data in one step."
-    assert item["depends_on"] == [w.ids["import-a"]]
+    # roadmap-edit-fixes: Oracle's dependency ideas are suggestions a person adds.
+    assert item["depends_on"] == [] and item["suggested_depends"] == ["import-a"]
     assert item["suggestion"] is not None
     s0, s1 = item["suggestion"]["start_date"], item["suggestion"]["end_date"]
     assert "2026-10-01" <= s0 <= s1 <= "2026-12-31"
@@ -290,6 +291,10 @@ async def test_merge_item_per_role(client):
         # Oracle's drafting gave it a dependency; another draft depends on it.
         row = await s.get(RoadmapItem, uuid.UUID(draft))
         row.depends_on = ["import-b"]
+        # roadmap-edit-fixes: import-b no longer waits on import-a, so import-a may take it
+        # (a merge that closes a loop is refused).
+        b = await s.get(RoadmapItem, uuid.UUID(w.ids["import-b"]))
+        b.depends_on = []
         await s.commit()
     c2 = (await w.add(client, "owner", "Import reports"))["change"]
     dependent = c2["target"]["item_id"]
