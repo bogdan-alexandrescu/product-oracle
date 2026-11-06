@@ -51,6 +51,11 @@ It gives each feature its mark:
   Ground Truth by that code at once), and an item's own code (F-02, F-09 for an item F-09a). It
   also links what was flagged (the roadmap item, or the PRD's feature). A new feature serves no
   goal yet, so it is flagged `no_goal` until one is picked.
+- A code key (F-09, a slice F-15a) is a feature's only, stored the one way it is read (F-9 and
+  F-009 are F-09; a slice keeps its letter), and once: the API refuses a new feature keyed by a
+  code another feature has, whether by its key, through its published roadmap item's PRD
+  section (a feature on the section f-40 reads F-40), or as a code it was given and gave back
+  ("Another feature already has the code F-09.").
 
 ## Roadmaps
 
