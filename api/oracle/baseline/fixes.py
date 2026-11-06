@@ -66,6 +66,24 @@ async def _codes(db: AsyncSession) -> dict[uuid.UUID, str]:
     return {i: c for i, k in rows if F_CODE.fullmatch(c := short.get(k, ""))}
 
 
+def canonical_code(key: str) -> str | None:
+    """A code-shaped feature key as the check reads it (F-9 and F-009 read F-09; a slice keeps
+    its letter: F-9a reads F-09a), None for a key that is no code."""
+    from oracle.baseline.check import _code
+
+    m = re.fullmatch(r"(.+?)([a-j]?)", key.strip())
+    code = _code(m[1]) if m and WHOLE_CODE.fullmatch(m[1]) else None
+    return f"{code}{m[2]}" if code and m else None
+
+
+async def code_taken(db: AsyncSession, code: str) -> bool:
+    """Whether some feature has ``code`` (read one way, :func:`canonical_code`): as its code
+    the check reads (its key, or its published roadmap item's PRD section), or as a code it
+    had before, an alias never given again (:func:`next_code`)."""
+    had = set((await _codes(db)).values()) | set(await former_keys(db))
+    return code in {canonical_code(c) or c for c in had}
+
+
 async def code_of(db: AsyncSession, feature: Entity) -> str | None:
     return (await _codes(db)).get(feature.id)
 

@@ -1332,6 +1332,14 @@ async def create_entity(
 ) -> WriteResult:
     if type_ not in ENTITY_TYPES:
         raise InvalidError(f"type must be one of {', '.join(ENTITY_TYPES)}")
+    if type_ == "feature":
+        from oracle.baseline import fixes
+
+        # A code key is stored as the check reads it (F-9 is F-09), and is one feature's.
+        if (code := fixes.canonical_code(key)) is not None:
+            key = code
+            if await fixes.code_taken(db, code):
+                raise ConflictError(f"Another feature already has the code {code}.")
     if await find_entity(db, type_, key) is not None:
         raise ConflictError(f"{type_}:{key} already exists")
     await check_parent(db, type_, parent_id)
