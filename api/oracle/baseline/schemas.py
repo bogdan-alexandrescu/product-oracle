@@ -667,9 +667,10 @@ class GroundTruthWhere(BaseModel):
 
 
 class GroundTruthFix(BaseModel):
-    """A fix a person makes in the UI. ``target``: the item's or feature's id, or for a PRD's
-    feature or slice the PRD feature's code (with ``where.prd``); for ``confirm_feature`` the
-    proposed feature's id. ``words``: the button's plain words ("Confirm it")."""
+    """A fix a person makes in the UI. ``target``: the item's or feature's id; for a PRD's
+    feature its code, or its name when it has none (with ``where.prd``); for a slice's Add to
+    Ground Truth its feature's code (F-15); for ``confirm_feature`` the proposed feature's id.
+    ``words``: the button's plain words ("Confirm it")."""
 
     action: CheckAction
     target: str
@@ -686,6 +687,10 @@ class GroundTruthFlag(BaseModel):
     # One short plain sentence, no ids.
     words: str
     fixes: list[GroundTruthFix]
+    # A PRD's feature: the Ground Truth feature with the same name but another code, to link
+    # to ("Same name as F-05 Bulk import."); never a match by itself.
+    hint: str | None = None
+    like: GroundTruthRef | None = None
 
 
 class GroundTruthOut(BaseModel):
