@@ -77,9 +77,9 @@ for (const phone of [false, true]) {
           expect(await home.evaluate((el) => getComputedStyle(el).fontSize)).toBe("18px");
           // A yellow count only where something waits on me (home-waiting-one-list): on the Roadmap the
           // broken links (roadmap-decide: as the roadmap counts them), the dates to confirm and the
-          // commenter's three proposals on my items, each said in its title.
-          await expect(page.getByTestId("simple-nav-roadmap-count")).toHaveText("9");
-          await expect(page.getByTestId("simple-nav-roadmap-count")).toHaveAttribute("title", /^9 on the roadmap waiting on you: .*, 3 changes or drafts$/);
+          // commenter's three proposals on my items, each said in its title (10 in this line's mock: one more date to confirm).
+          await expect(page.getByTestId("simple-nav-roadmap-count")).toHaveText("10");
+          await expect(page.getByTestId("simple-nav-roadmap-count")).toHaveAttribute("title", /^10 on the roadmap waiting on you: .*, 3 changes or drafts$/);
           await expect(page.getByTestId("simple-nav-one-pagers-count")).toHaveCount(0);
           await expect(page.getByTestId("simple-nav-priorities-count")).toHaveCount(0);
           await expect(page.getByTestId("simple-person")).toContainText(/owner/i);
