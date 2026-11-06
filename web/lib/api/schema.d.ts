@@ -5032,6 +5032,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/baseline/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Check
+         * @description The Ground Truth check (docs/ground-truth.md): every roadmap item, slice and PRD
+         *     feature not in the Ground Truth, and every feature with no F-code, no goal, or running
+         *     today while still on the roadmap; each with plain words and its fixes, counted per kind.
+         *     Flags only: nothing is refused on save.
+         */
+        get: operations["get_check"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/baseline/yaml": {
         parameters: {
             query?: never;
@@ -12816,6 +12839,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/goal-map/goals/{goal_id}/metric": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pick Goal Metric
+         * @description Pick the metric that gives the goal its readings: its weekly values become the
+         *     goal's readings at once; the goal's old metric lets go.
+         */
+        post: operations["pick_goal_metric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/fit-date": {
         parameters: {
             query?: never;
@@ -14495,6 +14539,27 @@ export interface paths {
          *     stays waived until its subject changes again.
          */
         post: operations["waive_strategy_finding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/strategy/findings/{finding_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen Strategy Finding
+         * @description Reopen a waived finding (whoever may waive it): it is open again and its waiver is
+         *     cleared, so the next check keeps it open until its subject lines up.
+         */
+        post: operations["reopen_strategy_finding"];
         delete?: never;
         options?: never;
         head?: never;
@@ -19050,7 +19115,7 @@ export interface components {
             /** Message Id */
             message_id: string | null;
             /** Op */
-            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped");
+            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped" | "api_action");
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -19142,6 +19207,8 @@ export interface components {
             asks_with_dependents_outside: boolean;
             /** Elsewhere */
             elsewhere?: string | null;
+            /** Replaced By */
+            replaced_by?: string | null;
         };
         /** ChatChoiceOut */
         ChatChoiceOut: {
@@ -24485,6 +24552,13 @@ export interface components {
             flags: {
                 [key: string]: string[];
             };
+            /**
+             * Titles
+             * @default {}
+             */
+            titles: {
+                [key: string]: string;
+            };
         };
         /**
          * FeatureSetProblem
@@ -25755,6 +25829,11 @@ export interface components {
             item_title?: string | null;
             /** Code */
             code: string;
+            /**
+             * Ref
+             * @default
+             */
+            ref: string;
             /** Label */
             label: string;
             /** Waivable */
@@ -25866,6 +25945,20 @@ export interface components {
             /** Links */
             links: components["schemas"]["GmLink"][];
         };
+        /**
+         * GmGap
+         * @description A gated area of a milestone with no feature in its cell (area None: a milestone
+         *     with no area and no feature).
+         */
+        GmGap: {
+            /**
+             * Milestone
+             * Format: uuid
+             */
+            milestone: string;
+            /** Area */
+            area: string | null;
+        };
         /** GmGoal */
         GmGoal: {
             /**
@@ -25894,6 +25987,13 @@ export interface components {
             builds_on: string[];
             /** History */
             history: components["schemas"]["GmHistory"][];
+            metric: components["schemas"]["GmMetricRef"] | null;
+            /** Missing */
+            missing: ("metric" | "values") | null;
+            /** Choices */
+            choices: components["schemas"]["GmMetricChoice"][];
+            /** Read On */
+            read_on?: string | null;
         };
         /** GmGuardrail */
         GmGuardrail: {
@@ -25941,6 +26041,34 @@ export interface components {
              * @enum {string}
              */
             lift: "helping" | "not_helping" | "not_measured";
+            /** Shipped On */
+            shipped_on: string | null;
+            /** Before */
+            before: number | null;
+            /** After */
+            after: number | null;
+        };
+        /** GmMetricChoice */
+        GmMetricChoice: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Last */
+            last: number | null;
+        };
+        /** GmMetricRef */
+        GmMetricRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
         };
         /** GmMilestone */
         GmMilestone: {
@@ -25985,6 +26113,34 @@ export interface components {
             confirmed_on: string | null;
             /** Proposed */
             proposed: boolean;
+        };
+        /**
+         * GmOffMap
+         * @description A confirmed goal left off the map: it has no number to aim at yet.
+         */
+        GmOffMap: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * GmUnplaced
+         * @description A feature of the Simple roadmap serving no milestone of the map.
+         */
+        GmUnplaced: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
         };
         /** GoalBucketFeature */
         GoalBucketFeature: {
@@ -26184,6 +26340,12 @@ export interface components {
             milestones: components["schemas"]["GmMilestone"][];
             /** Features */
             features: components["schemas"]["GmFeature"][];
+            /** Gaps */
+            gaps: components["schemas"]["GmGap"][];
+            /** Unplaced */
+            unplaced: components["schemas"]["GmUnplaced"][];
+            /** Off Map */
+            off_map: components["schemas"]["GmOffMap"][];
             /** Today */
             today: string;
             /** Reps */
@@ -26295,6 +26457,87 @@ export interface components {
             entities: components["schemas"]["EntityOut"][];
             /** Edges */
             edges: components["schemas"]["EdgeOut"][];
+        };
+        /** GroundTruthDoc */
+        GroundTruthDoc: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * GroundTruthFix
+         * @description A fix a person makes in the UI. ``target``: the item's or feature's id; for a PRD's
+         *     feature its code, or its name when it has none (with ``where.prd``); for a slice's Add to
+         *     Ground Truth its feature's code (F-15); for ``confirm_feature`` the proposed feature's id.
+         *     ``words``: the button's plain words ("Confirm it").
+         */
+        GroundTruthFix: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "add_to_ground_truth" | "link_to_feature" | "confirm_feature" | "give_code" | "pick_goal" | "take_off_roadmap";
+            /** Target */
+            target: string;
+            /** Words */
+            words: string;
+        };
+        /**
+         * GroundTruthFlag
+         * @description One place that breaks the Ground Truth: allowed, flagged "Not in the Ground Truth".
+         */
+        GroundTruthFlag: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "unlinked_item" | "slice_parent_missing" | "prd_feature_missing" | "no_code" | "no_goal" | "runs_today_on_roadmap";
+            item?: components["schemas"]["GroundTruthRef"] | null;
+            feature?: components["schemas"]["GroundTruthRef"] | null;
+            where: components["schemas"]["GroundTruthWhere"];
+            /** Words */
+            words: string;
+            /** Fixes */
+            fixes: components["schemas"]["GroundTruthFix"][];
+            /** Hint */
+            hint?: string | null;
+            like?: components["schemas"]["GroundTruthRef"] | null;
+        };
+        /** GroundTruthOut */
+        GroundTruthOut: {
+            /** Flags */
+            flags: components["schemas"]["GroundTruthFlag"][];
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Total */
+            total: number;
+        };
+        /**
+         * GroundTruthRef
+         * @description A roadmap item, slice or feature: its id (none for a PRD's feature or slice that is no
+         *     row of its own), its code (F-15, F-15a; none when it has no F-code) and its name.
+         */
+        GroundTruthRef: {
+            /** Id */
+            id: string | null;
+            /** Code */
+            code: string | null;
+            /** Name */
+            name: string;
+        };
+        /**
+         * GroundTruthWhere
+         * @description Where the flag shows: the roadmap and the PRD (with its title), when it has them.
+         */
+        GroundTruthWhere: {
+            roadmap?: components["schemas"]["GroundTruthDoc"] | null;
+            prd?: components["schemas"]["GroundTruthDoc"] | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -27581,6 +27824,16 @@ export interface components {
              */
             simple_approvals: components["schemas"]["InboxSimpleApproval"][];
             /**
+             * Simple Date Suggestions
+             * @default []
+             */
+            simple_date_suggestions: components["schemas"]["InboxSimpleDateSuggestion"][];
+            /**
+             * Simple Goal Suggestions
+             * @default []
+             */
+            simple_goal_suggestions: components["schemas"]["InboxSimpleGoalSuggestion"][];
+            /**
              * Simple Minutes
              * @default []
              */
@@ -27881,6 +28134,8 @@ export interface components {
             version: number | null;
             /** Submitted By */
             submitted_by: string | null;
+            /** Submitted By Name */
+            submitted_by_name?: string | null;
             /** Submitted At */
             submitted_at: string | null;
             /** Decider Approved */
@@ -27944,6 +28199,104 @@ export interface components {
              */
             state: "new" | "open" | "done";
             from_meeting?: components["schemas"]["SimpleChangeMeeting"] | null;
+            /** Asked */
+            asked?: string | null;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
+            /**
+             * From Ask
+             * @default false
+             */
+            from_ask: boolean;
+            /** Subject */
+            subject?: string | null;
+            /** Question Id */
+            question_id?: string | null;
+            /** Line Id */
+            line_id?: string | null;
+        };
+        /**
+         * InboxSimpleDateSuggestion
+         * @description inbox-meeting-proposals fix: Oracle's open date suggestion on an item I may decide
+         *     (``simple_date_suggestions``, counted in ``total``): one row per item, its slices'
+         *     span; decided on the item's roadmap.
+         */
+        InboxSimpleDateSuggestion: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Item Id
+             * Format: uuid
+             */
+            item_id: string;
+            /** Item Title */
+            item_title: string;
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Basis */
+            basis: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "new" | "open";
+        };
+        /**
+         * InboxSimpleGoalSuggestion
+         * @description inbox-meeting-proposals fix: an open feature suggested for a goal whose suggestions
+         *     I decide (``simple_goal_suggestions``, counted in ``total``).
+         */
+        InboxSimpleGoalSuggestion: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            goal: components["schemas"]["SimpleGoalBrief"];
+            /** Title */
+            title: string;
+            /** Outcome */
+            outcome: string;
+            /** From Oracle */
+            from_oracle: boolean;
+            /** Proposed By Name */
+            proposed_by_name?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "new" | "open";
         };
         /**
          * InboxSimpleMinutes
@@ -30867,6 +31220,14 @@ export interface components {
             query?: string | null;
             /** Threshold Pct */
             threshold_pct?: number | null;
+        };
+        /** MetricPickIn */
+        MetricPickIn: {
+            /**
+             * Metric
+             * Format: uuid
+             */
+            metric: string;
         };
         /** MetricTestOut */
         MetricTestOut: {
@@ -37548,6 +37909,31 @@ export interface components {
             delivered: boolean;
             /** Summary */
             summary: string;
+            /**
+             * Answers
+             * @default []
+             */
+            answers: components["schemas"]["RunDecisionAnswer"][];
+        };
+        /**
+         * RunDecisionAnswer
+         * @description A question answered at a decided stop: the architect's at an approved Engineering
+         *     check, or the agents' on the Questions from the agents cards of a stop approved or sent
+         *     back (``oracle.runs.stop_answers``).
+         */
+        RunDecisionAnswer: {
+            /** Question */
+            question: string;
+            /** Answer */
+            answer: string;
+            /** Feature Key */
+            feature_key?: string | null;
+            /** Feature Title */
+            feature_title?: string | null;
+            /** Answered By Name */
+            answered_by_name?: string | null;
+            /** Answered At */
+            answered_at?: string | null;
         };
         /**
          * RunDiscussion
@@ -38446,6 +38832,11 @@ export interface components {
         ScopeReason: {
             /** Code */
             code: string;
+            /**
+             * Ref
+             * @default
+             */
+            ref: string;
             /**
              * Severity
              * @enum {string}
@@ -58986,6 +59377,26 @@ export interface operations {
             };
         };
     };
+    get_check: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroundTruthOut"];
+                };
+            };
+        };
+    };
     export_yaml: {
         parameters: {
             query?: never;
@@ -73597,6 +74008,41 @@ export interface operations {
             };
         };
     };
+    pick_goal_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricPickIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_fit_dates: {
         parameters: {
             query?: never;
@@ -76311,6 +76757,37 @@ export interface operations {
                 "application/json": components["schemas"]["WaiveIn"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StrategyFindingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_strategy_finding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                finding_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

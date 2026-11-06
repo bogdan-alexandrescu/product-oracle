@@ -432,9 +432,10 @@ async def test_meeting_change_mode_decides_who_applies(client, meetings, mode):
     ctx = await make_people()
     w = await World(ctx).build()
     mid = _meeting(ctx, meetings, mode, ("decider",) if mode == "named" else ())
-    lines = {"owner": "rename Alert export to Alert export A",
-             "decider": "rename Alert digest to Alert digest B",
-             "commenter": "rename Partner API to Partner API C"}  # fmt: skip
+    # chat-latest-card: acting on a card replaces every earlier one, so the owner's is last.
+    lines = {"decider": "rename Alert digest to Alert digest B",
+             "commenter": "rename Partner API to Partner API C",
+             "owner": "rename Alert export to Alert export A"}  # fmt: skip
     cards = {}
     for who, line in lines.items():
         cards[who] = (await say(client, ctx, "owner", line, mid))["cards"][0]["id"]

@@ -327,12 +327,36 @@ def test_unverified_date_reads_in_full():
         "blocking",
         "Date unverified",
     )
-    assert r["text"] == "No verified estimate, capacity or commitment supports 2026-11-30."
+    # Month first, as the review screen reads it; the data keeps the machine's ISO day.
+    assert r["text"] == "No verified estimate, capacity or commitment supports Nov 30, 2026."
+    assert r["data"] == {"date": "2026-11-30"}
     # Record basis waits for the date bases form: only Remove date for now.
     assert r["fixes"] == [
         {"label": "Remove date",
          "action": {"kind": "edit", "item": "a", "field": "milestone_date", "value": None}},
     ]  # fmt: skip
+
+
+def test_a_milestone_moment_reads_as_its_calendar_day_month_first():
+    body = """\
+  - {id: a, title: A, outcome: o, horizon: now, prd_section: s-1,
+     milestone: {name: Beta, date: 2027-02-03T09:30:00, date_source: a hunch}}
+"""
+    items, problems = check(FILE.format(items=body), date_bases=[])
+    reason = next(r for r in reasons_for(items, problems, ctx()) if r["code"] == "unverified_date")
+    assert reason["text"].endswith("supports Feb 3, 2027.")
+    assert "2027-02-03" not in reason["text"]
+
+
+def test_a_milestone_date_given_as_a_quoted_string_reads_month_first():
+    body = """\
+  - {id: a, title: A, outcome: o, horizon: now, prd_section: s-1,
+     milestone: {name: Beta, date: "2026-11-30", date_source: a hunch}}
+"""
+    items, problems = check(FILE.format(items=body), date_bases=[])
+    reason = next(r for r in reasons_for(items, problems, ctx()) if r["code"] == "unverified_date")
+    assert reason["text"].endswith("supports Nov 30, 2026.")
+    assert "2026-11-30" not in reason["text"]
 
 
 def test_file_problems_are_not_reasons_and_are_counted():

@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 
-import { Chip, DataTable, Inspector, InspectorRow, InspectorSection, type Column } from "@/components/ds";
+import { Chip, DataTable, InfoTip, Inspector, InspectorRow, InspectorSection, type Column } from "@/components/ds";
 
 import { CompanyEmpty } from "../../_empty";
+import { StackPending, type StackLoad } from "./Cards";
 import { FindingRow } from "./DriftList";
 import { findingsAbout, plural, type Choice, type Finding, type Stack } from "./lib";
 
@@ -63,7 +64,16 @@ export function stackRows(stack: Stack | undefined, open: Finding[]): StackRow[]
   return rows;
 }
 
-const dash = <span className="text-text2">—</span>;
+// pass F F-44: on a phone an empty cell shows nothing, not a bare dash, and its label goes with
+// it: the cell is hidden whole (data-empty).
+const dash = (
+  <span data-empty className="text-text2">
+    —
+  </span>
+);
+const EMPTY_ON_PHONE = "max-[600px]:has-[[data-empty]]:hidden";
+/** On a phone only: the cell is dropped (its value is the row's title there). */
+const phoneOnlyEmpty = <span data-empty hidden />;
 
 /**
  * The strategy stack (B1 Split): the vision, each focus choice, the goals derived from it
@@ -77,8 +87,11 @@ export function StackTable({
   confirmedGoals = null,
   hasStrategy = false,
   canStart = false,
+  load,
 }: {
   stack: Stack | undefined;
+  /** The stack's loading or failed state (pass F F-13: no grey bars forever after a failure). */
+  load?: StackLoad;
   rows: StackRow[];
   selected: string | null;
   onSelect: (key: string) => void;
@@ -96,16 +109,34 @@ export function StackTable({
       header: "Focus choice",
       phone: "title",
       wrap: true,
-      cell: (r) => <span data-col="choice">{r.choice ? <span className="font-medium">{r.choice.title}</span> : dash}</span>,
+      cell: (r) => (
+        <span data-col="choice">
+          {r.choice ? (
+            <span className="font-medium">{r.choice.title}</span>
+          ) : (
+            // A line with no choice is titled on a phone with its goal or item, not a blank line.
+            <>
+              <span className="text-text2 max-[600px]:hidden">—</span>
+              <span className="hidden font-medium max-[600px]:inline">
+                {r.goal?.title ?? r.item?.title}
+                {r.item?.draft && <span className="ml-1 font-normal text-text2">(draft)</span>}
+              </span>
+            </>
+          )}
+        </span>
+      ),
     },
     {
       key: "goal",
       header: "Goal",
       phone: "meta",
+      phoneLabel: "Goal",
       wrap: true,
+      className: EMPTY_ON_PHONE,
       cell: (r) => (
         <span data-col="goal">
           {r.goal ? r.goal.title : r.choice ? <span className="text-warn">No goal</span> : dash}
+          {r.goal && !r.choice && phoneOnlyEmpty}
         </span>
       ),
     },
@@ -114,13 +145,16 @@ export function StackTable({
       header: "Roadmap items",
       width: "160px",
       phone: "meta",
+      phoneLabel: "Roadmap items",
       wrap: true,
+      className: EMPTY_ON_PHONE,
       cell: (r) => (
         <span data-col="items" className="tnum">
           {r.item ? (
             <>
               {r.item.title}
               {r.item.draft && <span className="ml-1 text-text2">(draft)</span>}
+              {phoneOnlyEmpty}
             </>
           ) : r.items != null ? (
             plural(r.items, "item")
@@ -146,18 +180,23 @@ export function StackTable({
   if (stack && rows.length === 0) {
     const goals = confirmedGoals ? `The ${plural(confirmedGoals, "confirmed goal")}` : "The confirmed goals";
     const next = hasStrategy
-      ? "Open the product strategy draft to review it; an owner approves it."
+      ? "Open the product strategy draft to review it."
       : canStart
-        ? "Start one on the Product strategy card above to line them up."
+        ? "Start one on the Product strategy card above."
         : "An owner writes it.";
     // One New product strategy, on its card (qa-company-20): the empty stack points to it.
+    // pass F F-45: one short line; what the stack holds sits behind the (i).
     return (
       <CompanyEmpty testId="stack-empty" title="Waiting for an approved product strategy">
-        {goals} show here under the focus choice each follows from, with the roadmap items serving it, once a product strategy is
-        approved. {next}
+        {next}{" "}
+        <InfoTip label="the strategy stack" align="end">
+          {goals} show here under the focus choice each follows from, with the roadmap items serving it, once an owner approves a
+          product strategy.
+        </InfoTip>
       </CompanyEmpty>
     );
   }
+  if (!stack && load?.failed) return <StackPending load={load} testId="stack" />;
   return (
     <DataTable
       label="Strategy stack"
@@ -197,9 +236,13 @@ export function StackInspector({ stack, row, onWaived }: { stack: Stack | undefi
       title={<span className="[overflow-wrap:anywhere]">{title}</span>}
     >
       <InspectorSection label="Chain">
-        <InspectorRow value={stack?.vision ? `v${stack.vision.document.version}` : undefined}>
-          {stack?.vision?.headline ?? "No approved vision"}
-        </InspectorRow>
+        {/* pass F F-43: the vision line wraps (two lines at most), not cut after a few words. */}
+        <div className="flex min-h-8 items-start gap-2.5 py-1">
+          <span data-testid="chain-vision" className="line-clamp-2 min-w-0 flex-1 [overflow-wrap:anywhere]">
+            {stack?.vision?.headline ?? "No approved vision"}
+          </span>
+          {stack?.vision && <span className="tnum flex-none font-semibold">v{stack.vision.document.version}</span>}
+        </div>
         <InspectorRow>
           {row.choice && doc ? (
             <Link href={`/documents/${doc.slug}/v/${doc.version}#choice-${row.choice.id}`} className="text-accent-ink hover:underline">

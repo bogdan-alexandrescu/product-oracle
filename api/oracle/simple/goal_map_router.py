@@ -3,7 +3,8 @@
 - ``GET /v1/simple/goal-map``: viewer and up; ``can_edit`` says whether they may edit.
 - ``POST /areas``, ``PUT /areas/order``, ``PATCH /goals/{id}``, ``POST /milestones``
   (propose one), ``PATCH /milestones/{id}`` (set its threshold, confirm it), ``POST /links``
-  (attach a feature to a cell): approver and up; each answers the map as it now reads.
+  (attach a feature to a cell), ``POST /goals/{id}/metric`` (pick the metric that gives
+  the goal its readings): approver and up; each answers the map as it now reads.
 """
 
 import uuid
@@ -11,6 +12,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.auth.models import User
 from oracle.authz import has_role, require_role
@@ -22,6 +24,7 @@ from oracle.simple.goal_map import (
     GateIn,
     GoalMapOut,
     GoalTargetIn,
+    MetricPickIn,
     ProposeIn,
 )
 
@@ -47,7 +50,7 @@ def _can_edit(principal: Principal) -> bool:
 
 async def _done(db: TenantDB, principal: Principal) -> GoalMapOut:
     await db.commit()
-    return await goal_map.build(db, _can_edit(principal))
+    return await goal_map.build(db, principal, _can_edit(principal))
 
 
 async def _run(db: TenantDB, principal: Principal, step) -> GoalMapOut:
@@ -66,7 +69,7 @@ async def _who(db: TenantDB, principal: Principal) -> str:
 
 @router.get("", response_model=GoalMapOut)
 async def get_goal_map(principal: Reader, db: TenantDB) -> GoalMapOut:
-    return await goal_map.build(db, _can_edit(principal))
+    return await goal_map.build(db, principal, _can_edit(principal))
 
 
 @router.post("/areas", response_model=GoalMapOut)
@@ -104,3 +107,19 @@ async def set_gate(
 @router.post("/links", response_model=GoalMapOut)
 async def attach_feature(body: AttachIn, principal: Approver, db: TenantDB) -> GoalMapOut:
     return await _run(db, principal, goal_map.attach(db, body))
+
+
+@router.post("/goals/{goal_id}/metric", response_model=GoalMapOut)
+async def pick_goal_metric(
+    goal_id: uuid.UUID, body: MetricPickIn, principal: Approver, db: TenantDB
+) -> GoalMapOut:
+    """Pick the metric that gives the goal its readings: its weekly values become the
+    goal's readings at once; the goal's old metric lets go."""
+    try:
+        metric = await goal_map.pick_metric(db, goal_id, body.metric)
+    except goal_map.GoalMapError as e:
+        await db.rollback()
+        raise HTTPException(e.status, e.detail) from e
+    await audit.record(db, principal, "metric.updated", "metric", metric.id,
+                       {"fields": ["goal_id"], "goal_id": str(goal_id)})  # fmt: skip
+    return await _done(db, principal)

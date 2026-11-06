@@ -80,6 +80,8 @@ export type ChatCard = {
   /** walkc-meeting review: who "Propose: cut it and its dependents" asks, by every item it cuts. */
   asks_with_dependents?: string[];
   asks_with_dependents_outside?: boolean;
+  /** chat-latest-card: the newer card in the chat that replaced this one (an open card no longer acts; an applied one keeps its Undo). */
+  replaced_by?: string | null;
 };
 
 export type ChangeWords = { before: string; after: string };

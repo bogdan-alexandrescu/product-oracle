@@ -11,7 +11,7 @@ import { parseBlocks, plainText, type Inline } from "@/lib/markdown";
 import { mockName as displayName } from "./people";
 
 import { MOCK_SCENARIO_KEY, mockUuid, seeded, stableUuid } from "./ids";
-import { addDecisionEntity, addDuplicateProposals, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, addStatusOverlapProposals, addThreeWayConflict, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, readMetricIntoGoal, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
+import { acceptNewFeatures, addDecisionEntity, addDuplicateProposals, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, addStatusOverlapProposals, addThreeWayConflict, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, readMetricIntoGoal, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
 import { BLOCKER_NARROWED_SCENARIO, documentGate, narrowResolvedBlocker, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
@@ -52,7 +52,7 @@ import {
 } from "./discussions";
 import { routeEngineering, techBriefOf, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
-import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
+import { addLiveFeature, laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
 import { llmJobsRoute, onFeedback, queueJob, queueQualityReview, seedLlm, seedStoredRefusals, SPENT, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
 import { draftRefusal, emptyAutonomy, inboxActions, levelFor, limitsFor, oracleDid, routeAutonomy, seedLaunchDid, seedOracleDid, seedRequestDid, seedRitualDid, type AutonomyDb } from "./autonomy";
@@ -76,6 +76,7 @@ import {
   routeRuns,
   scopeStop,
   seedEngCheckRun,
+  seedEngCheckAnsweredByIdRun,
   seedEngCheckUnmappedRun,
   shopBriefsCheck,
   briefsCheckOf,
@@ -108,7 +109,9 @@ import { addDigest, addMetricsReview, ritualInbox, routeRituals, seedRituals, ty
 import { emptyMetrics, metricInbox, openVariances, reviewBlocks, routeMetrics, seedMetrics, type MetricsContext, type MetricsDb } from "./metrics";
 import { digestBlocks, emptyMarket, routeMarket, seedMarket, type MarketDb } from "./market";
 import {
+  addFeatureAskRequest,
   addInterviewRequest,
+  dropFeatureAskRequest,
   behindBriefRefusal,
   relinkDocuments,
   releaseDocuments,
@@ -164,26 +167,28 @@ import {
   type PricingDb,
 } from "./pricing";
 import { bucketGoalsInOrder, placeBucketGoal, placeBucketGoals, routeGoalBuckets, seedGoalBuckets, seedGoalBucketsHard, seedGoalBucketsWith } from "./goal-buckets";
-import { proposeGoalDelete, routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
+import { proposeGoalDelete, routeSimpleChanges, seedFeatureAskProposal, seedSimpleProposal, simpleInboxRows, type SimpleChangesCtx } from "./simple-changes";
 import { routeCurrentState, seedCurrentState, type CurrentStateDb } from "./currentstate";
 import { featureKeyOf, prioritiesOut } from "./simple-priorities";
 import { restoreTrack, routeRemoved } from "./simple-removed";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, restoreAgendaItem, sheetDecisionMade, sheetProposals, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
-import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
+import { goalSuggestionInboxRows, seedGoalSuggestions, seedHeldGoalSuggestion, seedPersonGoalSuggestion } from "./simple-suggestions";
 import { runGroupsOut } from "./simple-runs";
-import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedOnePagerFromSections, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb, type Sec } from "./simple-one-pager";
+import { questionInboxRows } from "./simple-questions";
+import { onePagerInboxRows, planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedOnePagerFromSections, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb, type Sec } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
+import { groundTruthCheck } from "./ground-truth";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
-import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, knowGoalMapItems, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, shownDates, storedDates } from "./simple-roadmap";
-import { goalMapItems, routeGoalMap, type GoalMap } from "./goal-map";
+import { goalMapItems, routeGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -518,6 +523,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * default company plus two provider revokes a removed member's disable could not make (C2);
  * "access-failures" as the default company plus a revoked invite whose access removal has kept
  * failing for over 24 hours (#245);
+ * "ground-truth-flags" as the default company whose Ground Truth check (GET /v1/baseline/check,
+ * ./ground-truth.ts) reads one flag of each kind; every other scenario reads none;
  * "alignment-report" as the default company plus two weekly alignment reports and Oracle's
  * Slack install (./reports.ts, F6);
  * "undelivered" as the default company where SwarmCloud takes no checkpoint decision until the
@@ -549,6 +556,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * Now to Next, keep Success metrics and add Spend limits (Now) (E3b);
  * "feature-set" as the default company plus a run waiting at a feature set with a blocking
  * problem (C6, saved-addresses);
+ * "feature-set-two" as "feature-set" with a second blocking problem of the same code on the same
+ * feature (each waived on its own, with its own reason);
  * "scope-review" as the default company plus three runs at their feature set (C7: attempt 1
  * with three rows that need a person, attempt 2, and a held console approval);
  * "scope-review-kept" as "scope-review" with the held run's Bulk edit also new and a likely
@@ -1011,6 +1020,53 @@ function seedSimpleCrossPrdDates(): Db {
 function seedSimpleDatedMove(): Db {
   const db = seedSimpleHomeScenario();
   dateSourceItem(db.simple_roadmap!);
+  return db;
+}
+
+/**
+ * inbox-meeting-proposals "meeting-agenda-owner" scenario: "meeting-agenda" with the onboarding
+ * roadmap decided by approver@example.com, so a review of Usage alerts that cuts the Welcome
+ * video sends the proposal to that person's Inbox, not the owner's who runs the meeting.
+ */
+function seedMeetingAgendaOwnerScenario(): Db {
+  const db = seedMeetingAgendaScenario();
+  const approver = db.members.find((m) => m.email === "approver@example.com")!;
+  db.simple_roadmap!.deciders = { ...(db.simple_roadmap!.deciders ?? {}), "onboarding-roadmap": approver.id };
+  return db;
+}
+
+/**
+ * inbox-meeting-proposals fix "inbox-reviewer" scenario: "meeting-agenda-owner" with
+ * approver@example.com a required reviewer of the Alerts roadmap, so a draft of it sent for
+ * review waits in that person's Inbox; and commenter@example.com's feature ask Bulk export,
+ * on no roadmap, and their new name for Weekly alert digest, both waiting on the owners.
+ */
+function seedInboxReviewerScenario(): Db {
+  const db = seedMeetingAgendaOwnerScenario();
+  const approver = db.members.find((m) => m.email === "approver@example.com")!;
+  db.simple_roadmap!.reviewers = { "alerts-roadmap": [approver.id] };
+  // A teammate's feature ask on no roadmap waits on the owners (decided in its Inbox row, then filed in Requests).
+  const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
+  const owners = db.members.filter((m) => m.role === "owner").map((m) => m.id);
+  seedFeatureAskProposal(db.simple_roadmap!, { id: commenter.id, name: commenter.name ?? commenter.email, owners }, "Bulk export", "2026-10-26T15:00:00Z");
+  // And their new name for an item on the Alerts roadmap (decided in Needs a decision there).
+  const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
+  seedSimpleProposal(db.simple_roadmap!, { id: commenter.id, name: commenter.name ?? commenter.email, owners, roles }, "edit_title", "alert-digest", { title: "Weekly alert digest" }, { title: "Weekly alert digest for leads" }, "2026-10-26T14:00:00Z");
+  return db;
+}
+
+/**
+ * inbox-meeting-proposals fix "inbox-unknown-proposer" scenario: "inbox-reviewer" plus a
+ * feature suggested for Keep alerts quiet by someone whose account is no longer there (no
+ * member has their id), so the API sends no name for them. Invented data.
+ */
+export const INBOX_UNKNOWN_PROPOSER_SCENARIO = "inbox-unknown-proposer";
+function seedInboxUnknownProposerScenario(): Db {
+  const db = seedInboxReviewerScenario();
+  db.simple_roadmap!.goal_suggestions = [
+    ...seedGoalSuggestions(),
+    seedPersonGoalSuggestion("quiet-alerts", "Snooze digest", "People pause the alert digest for a day", stableUuid("mock-user/gone-teammate")),
+  ];
   return db;
 }
 
@@ -1954,6 +2010,18 @@ function seedEngDates(): Db {
   return db;
 }
 
+/**
+ * "eng-check-answered-by-id" scenario: as "eng-check", its Engineering check approved by the
+ * engineering lead (Theo Brandt) with an answer recorded by its question's id only.
+ */
+function seedEngCheckAnsweredById(): Db {
+  const db = seed();
+  const lead = db.members.find((x) => x.email === "commenter@example.com")!;
+  lead.engineering_lead = true;
+  seeded("eng-check-answered-by-id", () => seedEngCheckAnsweredByIdRun(db.runs!, runsContext(db), lead.id));
+  return db;
+}
+
 /** "eng-check-unmapped" scenario: the "eng-check" run whose briefs cite ids of a repository with no code map. */
 function seedEngCheckUnmapped(): Db {
   const db = seed();
@@ -2100,9 +2168,9 @@ function seedRunReviewDecider(): Db {
 }
 
 /** The default seed plus a run waiting at its feature set with a blocking problem (C6, ./runs.ts). */
-function seedFeatureSet(): Db {
+function seedFeatureSet(twoOfOne = false): Db {
   const db = seed();
-  seeded("feature-set", () => seedFeatureSetRun(db.runs!, runsContext(db)));
+  seeded(twoOfOne ? "feature-set-two" : "feature-set", () => seedFeatureSetRun(db.runs!, runsContext(db), twoOfOne));
   return db;
 }
 
@@ -3293,6 +3361,13 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     draftRefusal: (flow, kind) => draftRefusal((db.autonomy ??= emptyAutonomy()), flow, kind),
     members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role, name: x.name })),
     scopeApproved: (scope, by) => scopeToBaseline(db, scope, by),
+    // C8 RP1: an approved order's new features join the baseline as proposed, and the live ranking.
+    acceptNewFeatures: (snap, by, scope) => {
+      acceptNewFeatures(db.baseline, snap.run_id, snap.ranking, by, scope);
+      addLiveFeature(db, snap.ranking);
+    },
+    goalKeys: () => db.baseline.entities.filter((e) => e.type === "goal" && e.status !== "rejected").map((e) => e.key),
+    goalTitle: (key) => db.baseline.entities.find((e) => e.type === "goal" && e.key === key)?.title,
     ask: (q) => {
       const at = now();
       const id = uuid();
@@ -3527,7 +3602,9 @@ function load(): Db {
         : scenario === "big-prd"
           ? seedBigPrd
           : scenario === "feature-set" || scenario === "run-discussions" || scenario === "discussion-change-kinds"
-            ? seedFeatureSet
+            ? () => seedFeatureSet()
+          : scenario === "feature-set-two"
+            ? () => seedFeatureSet(true)
           : scenario === "baseline-review" || scenario === "baseline-review-console"
             ? () => seedBaselineReview(scenario === "baseline-review-console")
           : scenario === "simple-waits"
@@ -3540,6 +3617,8 @@ function load(): Db {
             ? seedEngCheck
           : scenario === "run-decisions" || scenario === "run-decisions-many"
             ? () => seedRunDecisionsScenario(scenario === "run-decisions-many")
+          : scenario === "eng-check-answered-by-id"
+            ? seedEngCheckAnsweredById
           : scenario === "eng-check-no-lead"
             ? seedEngCheckNoLead
           : scenario === "eng-check-unmapped"
@@ -3608,6 +3687,12 @@ function load(): Db {
                 ? seedPlanTimelineScenario
               : scenario === REPORT_DRAFT_ITEM_SCENARIO
                 ? seedReportDraftItemScenario
+              : scenario === "inbox-reviewer"
+                ? seedInboxReviewerScenario
+              : scenario === INBOX_UNKNOWN_PROPOSER_SCENARIO
+                ? seedInboxUnknownProposerScenario
+              : scenario === "meeting-agenda-owner"
+                ? seedMeetingAgendaOwnerScenario
               : scenario === "meeting-agenda-sheet"
                 ? seedMeetingAgendaSheetScenario
               : scenario === "simple-home"
@@ -3763,6 +3848,18 @@ function load(): Db {
                     seedFitDateRoadmap((db.simple_roadmap ??= seedSimpleRoadmap()), company);
                     const goal = fitDateGoal(scenario, db.baseline.entities.find((e) => e.type === "goal")!);
                     if (goal) db.baseline.entities.push(goal);
+                    return db;
+                  }
+              : scenario === SCOREBOARD_SCENARIO
+                ? () => {
+                    // goal-map-scoreboard: Home's goals are the map's (one store, the same ids), and
+                    // early churn is confirmed with no number to aim at (left off the map).
+                    const db = seed();
+                    const template = db.baseline.entities.find((e) => e.type === "goal")!;
+                    for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") e.status = "proposed";
+                    for (const g of scoreboardGoals()) db.baseline.entities.push({ ...template, ...g, status: "confirmed", body: null, locked: false, locked_by: null, locked_at: null });
+                    const churn = db.baseline.entities.find((e) => e.type === "goal" && e.title === SCOREBOARD.offMap);
+                    if (churn) churn.status = "confirmed";
                     return db;
                   }
               : scenario === APPROVED_ROADMAP_SCENARIO
@@ -4313,7 +4410,8 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
             .map((s) => {
               const { start, end } = shownDates(rm, s.key);
               const days = Math.max(1, (Date.parse(end) - Date.parse(start)) / 86_400_000 + 1);
-              return { key: s.key, title: s.title, prd: s.prd_doc ?? null, milestone: null, effort_weeks: Math.round((days / 7) * 10) / 10, start, end };
+              // As company_router: the item's own milestone's name (RoadmapItem.milestone), not a track's.
+              return { key: s.key, title: s.title, prd: s.prd_doc ?? null, milestone: s.milestone?.name ?? null, effort_weeks: Math.round((days / 7) * 10) / 10, start, end };
             })
             .filter((i) => !prd || (i.prd && (i.prd.slug === prd || i.prd.id === prd)))
         : [];
@@ -6334,8 +6432,12 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "baseline" && p[2] === "from-run" && p[3] && req.method === "GET") {
     db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
     const found = fromRunCheckpoint({ ...runsContext(db), db: db.runs }, p[3]);
-    if (!found) return json(404, { detail: `run ${p[3]} not found` });
+    if (!found) return json(404, { detail: "Run not found" });
     return json(200, { ...found, ...fromRun(db.baseline, p[3], found.actions), checkpoint: found.checkpoint });
+  }
+  // The Ground Truth check (docs/ground-truth.md): flags only, for anyone who reads the roadmap.
+  if (p[1] === "baseline" && p[2] === "check" && !p[3] && req.method === "GET") {
+    return json(200, groundTruthCheck(localStorage.getItem(MOCK_SCENARIO_KEY)));
   }
   // B6 Goals interview: its routes write discussions and proposals, so they come first.
   if (p[1] === "baseline") {
@@ -6845,6 +6947,15 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (res) return res;
   }
   const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));
+  // S9: a feature ask applied from Simple is a request in Requests (targets.py add_feature_ask).
+  const askFiling: Pick<SimpleChangesCtx, "fileAsk" | "dropAsk"> = {
+    fileAsk: (input) => {
+      // With no one named (not a customer's), asked by the teammate who filed it (targets.py _create).
+      const filer = input.requester_name === null && ["unknown", "team"].includes(input.requester_kind) ? db.members.find((x) => x.id === input.filed_by) : undefined;
+      addFeatureAskRequest(ensureRequests(db), filer ? { ...input, requester_name: filer.name ?? filer.email, requester_kind: "team" } : input);
+    },
+    dropAsk: (id) => dropFeatureAskRequest(ensureRequests(db), id),
+  };
   const simpleRoute = async (r: Request): Promise<Response | null> => {
     // goal-order: Simple's goals follow the baseline's one goal order (and the place Move up or Move
     // down stored on a bucket goal the baseline does not hold).
@@ -6931,14 +7042,19 @@ async function route(db: Db, req: Request): Promise<Response> {
     const goalMapRes = await routeGoalMap(db, localStorage.getItem(MOCK_SCENARIO_KEY), { role: me.role, name: simpleNames[me.id] ?? "You" }, r, p, (itemId) => {
       const key = db.simple_roadmap && Object.keys(db.simple_roadmap.ids).find((k) => db.simple_roadmap!.ids[k] === itemId);
       return db.simple_roadmap?.items.find((i) => i.key === key) ?? null;
-    });
+    }, async () => {
+      // goal-map-scoreboard: the Simple roadmap as this reader reads it (goal_map._unplaced reads service.load).
+      const read = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, new Request("http://mock/v1/simple/roadmap"), ["v1", "simple", "roadmap"], new URLSearchParams());
+      const body = read && read.ok ? ((await read.json()) as { items: { id: string; title: string; status: string }[] }) : { items: [] };
+      return body.items;
+    }, () => db.baseline.entities.filter((e) => e.type === "goal"));
     // one-feature-panel: the map's features are roadmap items (their panel opens on their own item).
     if (db.goal_map) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
     if (goalMapRes) return goalMapRes;
     const simpleRes = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, r, p, q);
     if (simpleRes) return simpleRes;
     const companyGoals = db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title }));
-    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash, goalBin: bin }, r, p, q);
+    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash, goalBin: bin, ...askFiling }, r, p, q);
   };
   // Simple S8: review meetings, the Decisions page, and changes made through a meeting.
   // Seeded on the first meetings or Decisions read, so the other Simple screens keep their data.
@@ -7043,7 +7159,14 @@ async function route(db: Db, req: Request): Promise<Response> {
       reviews.propose(b.title, b.approver_id, doc, id, made.number);
       return id;
     };
-    const chatCtx = { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, proposeDecision, proposeTo: (d: string | null) => reviews.proposeTo(d),
+    const chatCtx = { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, proposeDecision, ...askFiling, proposeTo: (d: string | null) => reviews.proposeTo(d),
+      // ask_actions.slack_reach: whether Slack sends a pinged person the message (connected, and their review-requested ping on).
+      slackReach: (id: string): "on" | "off" | "none" => {
+        const install = ensureReports(db, db.user_id, reportLive(db, me)).integration;
+        if (!install || install.status !== "active") return "none";
+        const email = db.members.find((x) => x.id === id)?.email ?? "";
+        return { ...SLACK_PINGS, ...(db.preferences?.[email]?.slack_pings ?? {}) }.review_requested ? "on" : "off";
+      },
       ownsDiscussion: (id: string) => !!(db.discussions ??= emptyDiscussions()).discussions.find((d) => d.id === id && d.origin === "panel" && d.started_by === me.id),
       // Recent chats: a chat whose first line went to Oracle's Ask is named by that line, in its Ask chat.
       askQuestion: (id: string) =>
@@ -7162,12 +7285,33 @@ async function route(db: Db, req: Request): Promise<Response> {
     inbox.total += launchRows.filter((r) => r.counted).length;
     // Simple S3a: proposals waiting for me count; decisions on mine are shown.
     const simpleRows = simpleInboxRows(db.simple_roadmap, me.id, seenBefore, {
+      role: me.role,
       owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
       roles: Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role])),
+      names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
     });
+    // inbox-meeting-proposals fix: proposals on a PRD question or a one-pager line, as the API's one list.
+    const questionRows = db.simple_meetings?.questions
+      ? questionInboxRows({ me: { id: me.id, role: me.role }, members: db.members.filter((x) => x.status !== "disabled").map((x) => ({ id: x.id, name: displayName(x.email, x.name), role: x.role, email: x.email })) }, db.simple_meetings.questions, seenBefore)
+      : { proposals: [], decisions: [] };
+    const onePagerRows = onePagerInboxRows([...(db.simple_one_pager ? [db.simple_one_pager] : []), ...Object.values(db.simple_one_pagers ?? {})], { id: me.id, role: me.role }, seenBefore);
+    const newest = (a: Schemas["InboxSimpleChange"], b: Schemas["InboxSimpleChange"]) => ((b.decided_at ?? b.at) > (a.decided_at ?? a.at) ? 1 : -1);
+    simpleRows.simple_proposals = [...simpleRows.simple_proposals, ...questionRows.proposals, ...onePagerRows.proposals];
+    simpleRows.simple_decisions = [...simpleRows.simple_decisions, ...questionRows.decisions, ...onePagerRows.decisions].sort(newest);
     Object.assign(inbox, simpleRows);
-    inbox.total += simpleRows.simple_proposals.length;
-    inbox.needs_me = (inbox.needs_me ?? 0) + simpleRows.simple_proposals.length;
+    // inbox-meeting-proposals fix: Oracle's open date suggestions and goals' open suggestions I may decide.
+    const simpleCtx = {
+      id: me.id, role: me.role,
+      owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
+      roles: Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role])),
+      names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
+      companyGoals: db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title })),
+    };
+    inbox.simple_date_suggestions = dateSuggestionInboxRows(db.simple_roadmap, simpleCtx, seenBefore);
+    inbox.simple_goal_suggestions = goalSuggestionInboxRows(db.simple_roadmap, simpleCtx, seenBefore);
+    const simpleCounted = simpleRows.simple_proposals.length + simpleRows.simple_approvals.length + inbox.simple_date_suggestions.length + inbox.simple_goal_suggestions.length;
+    inbox.total += simpleCounted;
+    inbox.needs_me = (inbox.needs_me ?? 0) + simpleCounted;
     // Simple S8: minutes sent to me as an attendee (shown, not counted).
     inbox.simple_minutes = meetingInboxRows(db.simple_meetings, me.id, seenBefore);
     // Ritual rows (H2): Pre-read ready until opened, Record notes after the end, failed to prepare.

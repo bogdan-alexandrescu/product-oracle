@@ -136,7 +136,12 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
         case "set_goal":
             return f"changed the goal of {x}"
         case "set_depends":
-            return f"changed what {x} depends on"
+            # ask-oracle-actions: a dependency added or removed in the feature talk names it.
+            dep = target.get("dependency")
+            gone = len(after.get("depends_on") or []) < len(before.get("depends_on") or [])
+            if not dep:
+                return f"changed what {x} depends on"
+            return f"{x} no longer depends on {dep}" if gone else f"{x} now depends on {dep}"
         case "set_goal_measure":
             return f"changed how the goal of {x} is measured"
         case "set_status":

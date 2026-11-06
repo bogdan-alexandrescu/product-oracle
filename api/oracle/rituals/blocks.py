@@ -57,7 +57,7 @@ TITLES = {
     "changelog_drafts": "Changelog drafts",
     "update_draft": "Update draft",
     "metrics_table": "Metrics",
-    "variances": "Variances",
+    "variances": "Unusual weeks",
 }
 # Features that moved this many ranks between the last two snapshots.
 PRIORITY_MOVE = 3

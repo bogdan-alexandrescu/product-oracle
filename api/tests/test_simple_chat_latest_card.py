@@ -1,0 +1,384 @@
+"""Simple chat-latest-card (the owner, Nov 4): in a chat only the latest card acts.
+
+Once a card in a chat is applied or declined, every earlier card in it is replaced; among
+the open cards only the newest per topic (the item or other target it changes) is
+actionable. The API refuses a replaced card and Apply all applies only active cards.
+Against Postgres; the worlds are test_simple_chat_api's and test_simple_chat_join's.
+
+Test cards (protects / fails_when / no_claim):
+
+- test_two_cards_on_one_item_only_the_newest_acts: protects=an older open card on the
+  same item reads replaced_by the newer one, may nothing, and its Apply and Discard are
+  409 with a plain message; the newer one applies; fails_when=the older card applies or
+  still offers Apply; no_claim=the web's link (Playwright).
+- test_cards_on_two_items_each_stay_active: protects=a chat about two items keeps one
+  active card per item; fails_when=a card on another item replaces it.
+- test_acting_on_a_card_replaces_every_earlier_card: protects=applying (or discarding) a
+  card replaces every earlier card in the chat, whatever its item, and leaves later ones
+  active; an applied earlier card keeps its Undo; the state is read again the same
+  (a reload); fails_when=an earlier card still applies or an applied one loses Undo.
+- test_meeting_chat_follows_the_same_rule: protects=the meeting chat replaces as the Ask
+  panel does; fails_when=a meeting's older card applies.
+- test_apply_all_applies_only_active_cards: protects=Apply all on a reply whose card on one
+  item a newer card replaced applies only its other card; fails_when=Apply all applies the
+  replaced card.
+"""
+
+from __future__ import annotations
+
+from oracle.simple import card_order
+from tests.test_simple_chat_api import (
+    CARDS,
+    World,
+    _meeting,
+    card_as,
+    make_people,
+    meetings,  # noqa: F401
+    say,
+)
+from tests.test_simple_chat_join import ASK, act, actions, last, post, read
+from tests.test_simple_meetings_api import get, start, world
+
+
+async def test_two_cards_on_one_item_only_the_newest_acts(client):
+    ctx = await make_people()
+    w = await World(ctx).build()
+    old = (await say(client, ctx, "owner", "move Ledger v2 to Q2"))["cards"][0]
+    new = (await say(client, ctx, "owner", "move Ledger v2 to March 3"))["cards"][0]
+    old = await card_as(client, ctx, "owner", old["id"])
+    assert old["replaced_by"] == new["id"]
+    assert old["may"] is None and old["status"] == "open"
+    assert new["replaced_by"] is None and new["may"] == "apply"
+    for verb in ("apply", "discard"):
+        r = await client.post(f"{CARDS}/{old['id']}/{verb}", headers=ctx.as_("owner"))
+        assert r.status_code == 409, r.text
+        assert r.json()["detail"] == card_order.REPLACED
+    r = await client.post(f"{CARDS}/{new['id']}/apply", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    assert str((await w.item("Ledger v2")).start_date) == "2027-03-03"
+
+
+async def test_cards_on_two_items_each_stay_active(client):
+    ctx = await make_people()
+    await World(ctx).build()
+    a1 = (await say(client, ctx, "owner", "rename Alert digest to Alert digest A"))["cards"][0]
+    b1 = (await say(client, ctx, "owner", "rename Alert export to Alert export A"))["cards"][0]
+    a2 = (await say(client, ctx, "owner", "rename Alert digest to Alert digest B"))["cards"][0]
+    b2 = (await say(client, ctx, "owner", "rename Alert export to Alert export B"))["cards"][0]
+    got = {k: await card_as(client, ctx, "owner", c["id"]) for k, c in
+           {"a1": a1, "b1": b1, "a2": a2, "b2": b2}.items()}  # fmt: skip
+    assert got["a1"]["replaced_by"] == a2["id"] and got["b1"]["replaced_by"] == b2["id"]
+    assert got["a2"]["replaced_by"] is None and got["b2"]["replaced_by"] is None
+    assert [got[k]["may"] for k in ("a1", "b1", "a2", "b2")] == [None, None, "apply", "apply"]
+
+
+async def test_acting_on_a_card_replaces_every_earlier_card(client):
+    ctx = await make_people()
+    w = await World(ctx).build()
+    a = (await say(client, ctx, "owner", "rename Alert digest to Alert digest A"))["cards"][0]
+    b = (await say(client, ctx, "owner", "rename Alert export to Alert export A"))["cards"][0]
+    c = (await say(client, ctx, "owner", "rename Partner API to Partner API A"))["cards"][0]
+    r = await client.post(f"{CARDS}/{b['id']}/apply", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    # Read again (a reload): the earlier card is replaced by the applied one, the later stays.
+    ga, gb, gc = [await card_as(client, ctx, "owner", x["id"]) for x in (a, b, c)]
+    assert ga["replaced_by"] == b["id"] and ga["may"] is None
+    assert gb["replaced_by"] is None and gb["can_undo"] is True
+    assert gc["replaced_by"] is None and gc["may"] == "apply"
+    r = await client.post(f"{CARDS}/{a['id']}/apply", headers=ctx.as_("owner"))
+    assert r.status_code == 409 and r.json()["detail"] == card_order.REPLACED
+    assert (await w.item("Alert digest")).title == "Alert digest"
+    # Discarding the newest replaces the applied one before it; it keeps its Undo.
+    r = await client.post(f"{CARDS}/{c['id']}/discard", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    gb = await card_as(client, ctx, "owner", b["id"])
+    assert gb["replaced_by"] == c["id"] and gb["status"] == "applied" and gb["can_undo"] is True
+    r = await client.post(f"{CARDS}/{b['id']}/undo", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    assert (await w.item("Alert export")).title == "Alert export"
+
+
+async def test_meeting_chat_follows_the_same_rule(client, meetings):  # noqa: F811
+    ctx = await make_people()
+    await World(ctx).build()
+    mid = _meeting(ctx, meetings, "everyone")
+    old = (await say(client, ctx, "owner", "cut Alert export", mid))["cards"][0]
+    new = (await say(client, ctx, "decider", "rename Alert export to Alert export B", mid))[
+        "cards"
+    ][0]
+    got = await card_as(client, ctx, "decider", old["id"], mid)
+    assert got["replaced_by"] == new["id"] and got["may"] is None
+    r = await client.post(f"{CARDS}/{old['id']}/apply", headers=ctx.as_("owner"))
+    assert r.status_code == 409 and r.json()["detail"] == card_order.REPLACED
+    assert meetings.decisions == []
+
+
+async def test_apply_all_applies_only_active_cards(client):
+    w = await world()
+    mid = (await start(client, w))["id"]
+    a, b = str(w.ids["move_dates-a"]), str(w.ids["move_dates-b"])
+    await post(client, w, "decider", "push A and B to next quarter", mid)
+    assert await read(w, actions(act("move_dates", item=a, when="next quarter"),
+                                 act("move_dates", item=b, when="next quarter"))) == 1  # fmt: skip
+    first = await last(client, w, "decider", mid)
+    assert [c["item_id"] for c in first["cards"]] == [a, b]
+    await post(client, w, "decider", "push A to Q3 instead", mid)
+    assert await read(w, actions(act("move_dates", item=a, when="Q3"))) == 1
+    newer = await last(client, w, "decider", mid)
+    assert newer["cards"] and newer["cards"][0]["item_id"] == a
+    r = await client.post(f"{ASK}/{first['id']}/apply-all", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["applied"] == [first["cards"][1]["id"]] and out["stopped"] is None
+    msgs = {m["id"]: m for m in out["thread"]["messages"]}
+    left = msgs[first["id"]]["cards"][0]
+    assert left["status"] == "open" and left["replaced_by"] == newer["cards"][0]["id"]
+
+
+# Fix round 1 (review major): a card that makes a new record (a note, a question, a
+# decision, a suggestion) is its own topic; only a card its builder marks a redo of an
+# earlier open draft (the person asked to change that draft) replaces it.
+#
+# - test_two_notes_in_a_meeting_both_stay_active: protects=two different notes (and two
+#   different open questions) in one meeting chat both stay active and both apply;
+#   fails_when=the meeting makes them one topic (the older reads replaced, 409 on Apply).
+# - test_two_decisions_both_stay_active: protects=two different decisions in a meeting,
+#   and two on the Ask panel's page, stay active; fails_when=the meeting or page makes
+#   them one topic.
+# - test_two_suggestions_for_one_goal_both_stay_active: protects=two different features
+#   suggested for one goal stay active; fails_when=the goal makes them one topic.
+# - test_drafts_sharing_most_words_are_different_records (fix round 2): protects=two drafts
+#   of one op that share most words (March vs April, Postgres vs Redis, Dana vs Lee) stay
+#   active; only a line answering with "no, ..." replaces the earlier draft of its op;
+#   fails_when=word overlap makes them one topic, or "no, ..." leaves both active.
+# - test_make_it_april_instead_replaces_the_march_draft (fix round 2): protects=the reader
+#   marks "make it April instead" a redo of the March card (redo_of), which replaces it; a
+#   redo_of naming another op's card is ignored; fails_when=both stay active, or a wrong
+#   redo_of replaces a card.
+# - test_concurrent_apply_of_an_older_and_a_newer_card: protects=the chat is locked for
+#   the check and the apply: while a newer card applies, an older card's Apply waits and
+#   then gets the replaced message; fails_when=both apply.
+
+
+async def _active(client, w, who: str, cards: list[dict], mid=None) -> list:
+    got = [await card_as(client, w.ctx, who, c["id"], mid) for c in cards]
+    return [(g["replaced_by"], g["may"]) for g in got]
+
+
+async def test_two_notes_in_a_meeting_both_stay_active(client):
+    from tests.test_simple_chat_actions import one_card
+
+    w = await world()
+    mid = (await start(client, w))["id"]
+    a = await one_card(client, w, "decider", "note: the budget is approved", mid)
+    b = await one_card(client, w, "decider", "note: we hire a designer next month", mid)
+    q1 = await one_card(client, w, "decider", "open question: who writes the tour?", mid)
+    q2 = await one_card(client, w, "decider", "open question: when does the pilot start?", mid)
+    assert await _active(client, w, "decider", [a, b, q1, q2], mid) == [(None, "apply")] * 4
+    for c in (a, b):
+        r = await client.post(f"{CARDS}/{c['id']}/apply", headers=w.ctx.as_("decider"))
+        assert r.status_code == 200, r.text
+    texts = [n["text"] for n in (await get(client, w, mid, "decider"))["notes"]]
+    assert texts == ["the budget is approved", "we hire a designer next month"]
+
+
+async def test_two_decisions_both_stay_active(client):
+    from tests.test_simple_chat_actions import one_card
+
+    w = await world()
+    mid = (await start(client, w))["id"]
+    a = await one_card(client, w, "decider", "decided: the budget is approved", mid)
+    b = await one_card(client, w, "decider", "decided: we hire a designer next month", mid)
+    assert await _active(client, w, "decider", [a, b], mid) == [(None, "apply")] * 2
+    r = await client.post(f"{CARDS}/{a['id']}/apply", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    assert await _active(client, w, "decider", [b], mid) == [(None, "apply")]
+
+
+async def test_two_suggestions_for_one_goal_both_stay_active(client):
+    from tests.test_simple_additions_api import World as Goals
+    from tests.test_simple_additions_api import _say
+
+    w = await Goals().build()
+    a = await _say(client, w, "commenter", "suggest a feature for grow: Search across notes")
+    b = await _say(client, w, "commenter", "suggest a feature for grow: Export to a sheet")
+    a, b = a["cards"][0], b["cards"][0]
+    assert a["op"] == b["op"] == "suggest_feature"
+    assert await _active(client, w, "commenter", [a, b]) == [(None, "apply")] * 2
+    r = await client.post(f"{CARDS}/{a['id']}/apply", headers=w.as_("commenter"))
+    assert r.status_code == 200, r.text
+
+
+async def test_drafts_sharing_most_words_are_different_records(client):
+    from tests.test_simple_chat_actions import one_card
+
+    w = await world()
+    mid = (await start(client, w))["id"]
+    pairs = [
+        ("decided: we launch billing in March", "decided: we launch billing in April"),
+        ("note: Use Postgres for the events store", "note: Use Redis for the events store"),
+        ("note: Ask Dana about the pricing page", "note: Ask Lee about the pricing page"),
+    ]
+    for one, two in pairs:
+        a = await one_card(client, w, "decider", one, mid)
+        b = await one_card(client, w, "decider", two, mid)
+        got = await _active(client, w, "decider", [a, b], mid)
+        assert got == [(None, "apply")] * 2, (one, two)
+    # The person's line answering a card with "no, ..." asks to change that draft.
+    a = await one_card(client, w, "decider", "note: the budget is approved", mid)
+    b = await one_card(client, w, "decider", "no, note: the budget is approved for the spring", mid)
+    got = await _active(client, w, "decider", [a, b], mid)
+    assert got == [(b["id"], None), (None, "apply")]
+    r = await client.post(f"{CARDS}/{a['id']}/apply", headers=w.ctx.as_("decider"))
+    assert r.status_code == 409 and r.json()["detail"] == card_order.REPLACED
+    # Another op is another record, whatever the line says.
+    q = await one_card(client, w, "decider", "no, open question: is the budget approved?", mid)
+    assert await _active(client, w, "decider", [b, q], mid) == [(None, "apply")] * 2
+
+
+async def test_make_it_april_instead_replaces_the_march_draft(client):
+    from tests.test_simple_chat_actions import one_card
+
+    w = await world()
+    mid = (await start(client, w))["id"]
+    march = await one_card(client, w, "decider", "decided: we launch billing in March", mid)
+    seen: list = []
+    await post(client, w, "decider", "make it April instead", mid)
+    redo = act("record_decision", text="We launch billing in April")
+    assert await read(w, actions({**redo, "redo_of": march["id"]}), seen) == 1
+    # The reader is shown the open drafts it may redo.
+    assert [c["id"] for c in seen[0]["cards"]] == [march["id"]]
+    [april] = (await last(client, w, "decider", mid))["cards"]
+    got = await _active(client, w, "decider", [march, april], mid)
+    assert got == [(april["id"], None), (None, "apply")]
+    r = await client.post(f"{CARDS}/{march['id']}/apply", headers=w.ctx.as_("decider"))
+    assert r.status_code == 409 and r.json()["detail"] == card_order.REPLACED
+    # A redo_of naming a card of another op (or no card in the chat) is ignored.
+    await post(client, w, "decider", "and a note about it", mid)
+    note = act("minutes_note", text="Billing needs a launch note")
+    assert await read(w, actions({**note, "redo_of": april["id"]})) == 1
+    [n] = (await last(client, w, "decider", mid))["cards"]
+    assert await _active(client, w, "decider", [april, n], mid) == [(None, "apply")] * 2
+
+
+async def test_concurrent_apply_of_an_older_and_a_newer_card(client, monkeypatch):
+    import asyncio
+
+    from oracle.simple import changes
+
+    ctx = await make_people()
+    w = await World(ctx).build()
+    a = (await say(client, ctx, "owner", "rename Alert digest to Alert digest A"))["cards"][0]
+    b = (await say(client, ctx, "owner", "rename Alert export to Alert export B"))["cards"][0]
+    real = changes.create
+
+    async def slow(db, principal, body, **kw):
+        # The newer card's change is slow: its transaction is open while the older applies.
+        if (body.after or {}).get("title") == "Alert export B":
+            await asyncio.sleep(0.6)
+        return await real(db, principal, body, **kw)
+
+    monkeypatch.setattr(changes, "create", slow)
+    newer = asyncio.create_task(client.post(f"{CARDS}/{b['id']}/apply", headers=ctx.as_("owner")))
+    await asyncio.sleep(0.2)
+    older = await client.post(f"{CARDS}/{a['id']}/apply", headers=ctx.as_("owner"))
+    newer = await newer
+    assert newer.status_code == 200, newer.text
+    assert older.status_code == 409, older.text
+    assert older.json()["detail"] == card_order.REPLACED
+    assert (await w.item("Alert digest")).title == "Alert digest"
+
+
+# - test_a_retry_on_a_closed_session_checks_replaced_again (fix round 2): protects=Apply in
+#   a meeting whose session is closed rolls back (releasing the chat's lock) and retries;
+#   the replaced check runs again after the lock is taken again, so a newer card acted on
+#   meanwhile refuses the older; fails_when=the retry applies the older card.
+
+
+async def test_a_retry_on_a_closed_session_checks_replaced_again(client, meetings, monkeypatch):  # noqa: F811
+    import uuid
+
+    from sqlalchemy import update
+
+    from oracle.simple import changes
+    from oracle.simple.changes import ChangeError
+    from oracle.simple.models import SimpleChatCard
+    from oracle.tenancy import tenant_session
+
+    ctx = await make_people()
+    w = await World(ctx).build()
+    mid = _meeting(ctx, meetings, "everyone")
+    meetings.rules[mid].session_id = uuid.uuid4()
+    old = (await say(client, ctx, "owner", "rename Alert digest to Alert digest A", mid))["cards"]
+    new = (await say(client, ctx, "owner", "rename Alert export to Alert export B", mid))["cards"]
+    real = changes.create
+
+    async def closed(db, principal, body, **kw):
+        if body.session_id is not None:
+            # While the chat's lock is let go, the newer card is acted on elsewhere.
+            async with tenant_session(ctx.tenant_id) as s:
+                await s.execute(update(SimpleChatCard).where(SimpleChatCard.id == new[0]["id"])
+                                .values(status="discarded"))  # fmt: skip
+                await s.commit()
+            raise ChangeError(409, "That session is closed")
+        return await real(db, principal, body, **kw)
+
+    monkeypatch.setattr(changes, "create", closed)
+    r = await client.post(f"{CARDS}/{old[0]['id']}/apply", headers=ctx.as_("owner"))
+    assert r.status_code == 409 and r.json()["detail"] == card_order.REPLACED, r.text
+    assert (await w.item("Alert digest")).title == "Alert digest"
+
+
+# Fix round 3 (review minors):
+# - test_only_a_short_change_request_ending_instead_is_a_redo: protects=a line ending in
+#   "instead" is a redo only as a short change request with no record prefix ("make it
+#   April instead", "April instead"), and the line read is the person's own words;
+#   "note: we use Redis instead" is a new note of its own whose text keeps "instead";
+#   fails_when=it replaces the earlier note, or the note's text drops "instead".
+# - test_no_after_a_plain_answer_starts_a_new_card: protects="no, ..." redoes only the draft
+#   of the reply right before it; after a plain answer in between it is a new card;
+#   fails_when=it replaces the draft of an older reply.
+
+
+def test_redo_line_reads_only_a_short_change_request_ending_instead():
+    assert card_order.redo_line("make it April instead") == "make it April instead"
+    assert card_order.redo_line("April instead.") == "April instead."
+    assert card_order.redo_line("no, note: the budget is approved") == (
+        "note: the budget is approved"
+    )
+    for line in (
+        "note: we use Redis instead",
+        "decided: we launch billing in April instead",
+        "open question: do we use Redis instead",
+        "we should spend the whole next quarter on the export pipeline instead",
+    ):
+        assert card_order.redo_line(line) is None, line
+
+
+async def test_only_a_short_change_request_ending_instead_is_a_redo(client):
+    from tests.test_simple_chat_actions import one_card
+
+    w = await world()
+    mid = (await start(client, w))["id"]
+    a = await one_card(client, w, "decider", "note: the export runs nightly", mid)
+    b = await one_card(client, w, "decider", "note: we use Redis instead", mid)
+    assert await _active(client, w, "decider", [a, b], mid) == [(None, "apply")] * 2
+    r = await client.post(f"{CARDS}/{b['id']}/apply", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    texts = [n["text"] for n in (await get(client, w, mid, "decider"))["notes"]]
+    assert texts == ["we use Redis instead"]
+
+
+async def test_no_after_a_plain_answer_starts_a_new_card(client):
+    from tests.test_simple_chat_actions import one_card
+
+    w = await world()
+    mid = (await start(client, w))["id"]
+    a = await one_card(client, w, "decider", "note: the budget is approved", mid)
+    await post(client, w, "decider", "when does the pilot start?", mid)
+    plain = {"actions": [], "clarify": None, "answer": "The pilot starts in the spring."}
+    assert await read(w, plain) == 1
+    m = await last(client, w, "decider", mid)
+    assert m["cards"] == [] and m["kind"] != "cards", m
+    b = await one_card(client, w, "decider", "no, note: the budget is approved for the spring", mid)
+    assert await _active(client, w, "decider", [a, b], mid) == [(None, "apply")] * 2

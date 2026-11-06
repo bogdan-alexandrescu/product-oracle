@@ -1555,7 +1555,8 @@ async def gate_inputs(db: AsyncSession, blocker_ids: list[uuid.UUID]) -> GateInp
 
 
 def _name(entity: Entity) -> str:
-    return f"'{entity.title}' ({entity.key})"
+    """The blocker as a person reads it in a gate reason: its statement, never its key."""
+    return f"'{entity.title}'"
 
 
 def _date(value: Any) -> datetime | None:

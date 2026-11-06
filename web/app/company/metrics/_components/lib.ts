@@ -7,7 +7,7 @@ export type Metric = Schemas["MetricOut"];
 export type MetricDetail = Schemas["MetricDetail"];
 export type Variance = Schemas["VarianceOut"];
 
-export const KIND_LABEL: Record<Metric["kind"], string> = { output: "Output", input: "Input" };
+export const KIND_LABEL: Record<Metric["kind"], string> = { output: "Result", input: "Driver" };
 export const SOURCE_LABEL: Record<Metric["source"], string> = { posthog: "PostHog", manual: "By hand", api: "By API" };
 export const DIRECTION_LABEL: Record<Metric["direction"], string> = { up: "Up is good", down: "Down is good" };
 export const STATUS_LABEL: Record<Metric["status"], string> = { active: "Active", paused: "Paused", error: "Not read", archived: "Archived" };

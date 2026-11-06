@@ -10,8 +10,8 @@
 The downgrade drops them, deletes track entries left in Trash and puts the root type
 check back.
 
-Revision ID: 0116_removed_tracks
-Revises: 0115_goal_milestone_carried
+Revision ID: 0117_removed_tracks
+Revises: 0116_goal_milestone_carried
 """
 
 from collections.abc import Sequence
@@ -19,8 +19,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0116_removed_tracks"
-down_revision: str | None = "0115_goal_milestone_carried"
+revision: str = "0117_removed_tracks"
+down_revision: str | None = "0116_goal_milestone_carried"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

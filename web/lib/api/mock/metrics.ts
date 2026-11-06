@@ -153,7 +153,7 @@ export function reviewBlocks(ctx: MetricsContext, db: MetricsDb, occurrenceId: s
     });
   return [
     { key: "metrics_table", title: "Metrics", as_of: asOf, rows: table },
-    { key: "variances", title: "Variances", as_of: asOf, rows: variances },
+    { key: "variances", title: "Unusual weeks", as_of: asOf, rows: variances },
   ];
 }
 
@@ -273,17 +273,17 @@ function invalid(ctx: MetricsContext, db: MetricsDb, f: Partial<Create>, self: s
   const d = f.description?.trim() ?? "";
   if (d.length < 3 || d.length > 200) return "What it counts is 3 to 200 characters";
   if (!f.unit?.trim()) return "Give the metric a unit";
-  if (f.kind === "input" && !f.drives_metric_id) return "An input drives an output: pick the output it drives";
-  if (f.kind === "output" && f.drives_metric_id) return "An output drives no other metric";
-  if (f.drives_metric_id && !db.metrics.some((m) => m.id === f.drives_metric_id && m.kind === "output")) return "An input drives an output metric";
-  if (f.kind === "input" && f.goal_id) return "Only an output links to a goal";
+  if (f.kind === "input" && !f.drives_metric_id) return "A driver needs the result it drives";
+  if (f.kind === "output" && f.drives_metric_id) return "A result drives no other metric";
+  if (f.drives_metric_id && !db.metrics.some((m) => m.id === f.drives_metric_id && m.kind === "output")) return "A driver drives a result, never another driver";
+  if (f.kind === "input" && f.goal_id) return "Only a result links a goal";
   if (f.goal_id) {
     const goal = ctx.goals().find((g) => g.id === f.goal_id && g.confirmed);
     if (!goal) return "Link a confirmed goal";
     if ((goal.unit ?? "") !== f.unit) return `The metric's unit must match the goal's unit (${goal.unit ?? "none"})`;
     if (db.metrics.some((m) => m.id !== self && m.status !== "archived" && m.goal_id === f.goal_id)) return "Another metric reads this goal";
   }
-  if (f.threshold_pct != null && (f.threshold_pct < 1 || f.threshold_pct > 500)) return "The threshold is 1 to 500 %";
+  if (f.threshold_pct != null && (f.threshold_pct < 1 || f.threshold_pct > 500)) return "The alert size is 1 to 500 %";
   if (f.query && f.query.length > MAX_QUERY) return "The query is at most 4,000 characters";
   if (f.source === "posthog" && !f.query?.trim()) return "A PostHog metric needs its query";
   return null;
@@ -438,17 +438,17 @@ export async function routeMetrics(ctx: MetricsContext, db: MetricsDb, req: Requ
     );
   }
   const v = db.variances.find((y) => y.id === p[2]);
-  if (!v) return fail(404, "Variance not found");
+  if (!v) return fail(404, "Unusual week not found");
   const x = db.metrics.find((y) => y.id === v.metric_id)!;
   if (p.length !== 4 || m !== "POST") return fail(404, "Route not found");
   const input = await body<{ explanation?: string; find_out_by?: string; reason?: string; lock_version?: number | null }>();
-  if (input.lock_version != null && input.lock_version !== v.lock_version) return fail(409, "Someone answered this variance; reload to see it");
+  if (input.lock_version != null && input.lock_version !== v.lock_version) return fail(409, "The unusual week changed since you opened it; reload it");
   if (p[3] === "noise") {
     if (!approver) return notApprover();
     if (!input.reason?.trim()) return fail(422, "Say why it is noise");
     Object.assign(v, { status: "noise", noise_reason: input.reason.trim(), explained_by: ctx.me.id });
   } else {
-    if (!(approver || x.owner_id === ctx.me.id)) return fail(403, "Only the metric's owner or an approver explains its variances");
+    if (!(approver || x.owner_id === ctx.me.id)) return fail(403, "Only the metric's owner or an approver does this");
     if (p[3] === "explain") {
       const text = input.explanation?.trim() ?? "";
       if (text.length < 10 || text.length > 1000) return fail(422, "An explanation is 10 to 1,000 characters");
