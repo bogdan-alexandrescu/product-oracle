@@ -42,7 +42,8 @@ _DROPS = (
     ("variance", "not readable"),
     ("ref", "not readable by the run"),
 )
-_PLURAL = {"variance": "variances", "ref": "refs"}
+# What a person reads on the run page: a variance is an unusual week (owner, Nov 5).
+_WORDS = {"variance": ("unusual week", "unusual weeks"), "ref": ("ref", "refs")}
 
 
 async def prompt_lines(db: AsyncSession, occ: RitualOccurrence) -> list[str]:
@@ -118,7 +119,7 @@ def _notes(drops: Counter[tuple[str, str]]) -> list[str]:
     for what, why in _DROPS:
         n = drops[(what, why)]
         if n:
-            out.append(f"{n} {what if n == 1 else _PLURAL[what]} dropped ({why})")
+            out.append(f"{n} {_WORDS[what][n != 1]} dropped ({why})")
     return out
 
 

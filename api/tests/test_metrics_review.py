@@ -296,7 +296,7 @@ async def test_explain_with_oracle_starts_one_variance_run(client, ctx, when):
             seg = await s.scalar(select(RunSegment).where(RunSegment.run_id == run.id))
             notes = seg.artifacts["import"]["notes"]
         assert "1 ref dropped (not readable by the run)" in notes
-        assert "1 variance dropped (not in this review)" in notes
+        assert "1 unusual week dropped (not in this review)" in notes
     finally:
         set_runtime(None)
 
@@ -528,3 +528,70 @@ async def test_pull_failed_inbox_row(client, ctx, when, fake_posthog):
     assert all(m["reason"] != "pull_failed"
                for m in (await _inbox(client, ctx, "owner"))["metrics"])  # fmt: skip
     assert KEY not in str(rows)
+
+
+# protects=the owner's metric words everywhere (Nov 5, 'Everywhere'): the weekly review's
+# block, its pre-read.md export, Explain with Oracle's 409 and the answer errors say
+# "unusual week", never "variance"; fails_when=any of them still says Variances or
+# variance; no_claim=the web's own words (metric-words.spec.ts).
+async def test_review_says_unusual_week(client, ctx, when):
+    occ = await _review_ready(client, ctx)
+    block = _block(occ, "variances")
+    assert block["title"] == "Unusual weeks"
+    md = await client.get(f"/v1/ritual-occurrences/{occ['id']}/pre-read.md",
+                          headers=ctx.as_("viewer"))  # fmt: skip
+    assert "## Unusual weeks" in md.text and "Variances" not in md.text
+    (var,) = block["rows"]
+    url = f"{V}/{var['variance_id']}"
+    resp = await client.post(f"{url}/noise", json={"reason": "Holiday", "lock_version": 99},
+                             headers=ctx.as_("approver"))  # fmt: skip
+    assert resp.json()["detail"] == "The unusual week changed since you opened it; reload it"
+    resp = await client.post(f"{url}/noise", json={"reason": "Holiday"},
+                             headers=ctx.as_("approver"))  # fmt: skip
+    assert resp.status_code == 200, resp.text
+    resp = await client.post(f"{url}/unknown", json={"find_out_by": "2026-10-30"},
+                             headers=ctx.as_("approver"))  # fmt: skip
+    assert resp.json()["detail"] == "This unusual week is already answered"
+    resp = await client.post(f"{V}/{uuid.uuid4()}/noise", json={"reason": "Holiday"},
+                             headers=ctx.as_("approver"))  # fmt: skip
+    assert resp.json()["detail"] == "Unusual week not found"
+    resp = await client.post(f"/v1/ritual-occurrences/{occ['id']}/summary",
+                             headers=ctx.as_("approver"))  # fmt: skip
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "This review has no open unusual week to explain"
+
+
+# protects=the explain run's import notes and its title read "unusual week"; fails_when=
+# they say variance; no_claim=the run page's layout.
+def test_explain_run_says_unusual_week():
+    from collections import Counter
+
+    from oracle.metrics import explain
+
+    notes = explain._notes(Counter({("variance", "not in this review"): 2,
+                                    ("variance", "not readable"): 1}))  # fmt: skip
+    assert notes == ["2 unusual weeks dropped (not in this review)",
+                     "1 unusual week dropped (not readable)"]  # fmt: skip
+    flow = flows.FLOWS["metrics_variance"]
+    assert flow.title == "Unusual week explanations"
+    assert "variance" not in flow.description.lower()
+    assert [s.title for s in flow.segments] == ["Unusual week explanations"]
+
+
+# protects=a metric's kind errors say Result and Driver, never output and input;
+# fails_when=a create is refused in the old words; no_claim=the form (PR 1316's).
+async def test_kind_errors_say_result_and_driver(client, ctx):
+    resp = await metrics_helpers.create(client, ctx, kind="input")
+    assert resp.json()["detail"] == "A driver needs the result it drives"
+    result = (await metrics_helpers.create(client, ctx)).json()
+    resp = await metrics_helpers.create(client, ctx, title="Invites", kind="input",
+                                        drives_metric_id=result["id"],
+                                        goal_id=str(uuid.uuid4()))  # fmt: skip
+    assert resp.json()["detail"] == "Only a result links a goal"
+    driver = (await metrics_helpers.create(client, ctx, title="Invites", kind="input",
+                                           drives_metric_id=result["id"])).json()  # fmt: skip
+    resp = await metrics_helpers.create(client, ctx, title="Seats", kind="input",
+                                        drives_metric_id=driver["id"])  # fmt: skip
+    assert resp.json()["detail"] == "A driver drives a result, never another driver"
+    resp = await metrics_helpers.create(client, ctx, title="Seats", drives_metric_id=result["id"])
+    assert resp.json()["detail"] == "A result drives no other metric"
