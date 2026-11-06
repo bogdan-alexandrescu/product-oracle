@@ -44,8 +44,10 @@ for (const { who, email } of PEOPLE) {
         await open(page, "/ground-truth", email);
         const band = page.getByTestId("cs3-ready");
         const words = band.getByTestId("cs3-ready-words");
-        await expect(words).toHaveText("2 ready to move");
-        await expect(band).not.toContainText(":");
+        await expect(words.locator("b")).toHaveText("2 ready to move");
+        // What a person sees (the (i)'s words are hidden until it opens).
+        expect(await words.innerText()).toMatch(/^2 ready to move\s*i?$/);
+        expect(await band.innerText()).not.toContain(":");
         // The count and its words sit on one line.
         const bold = (await words.locator("b").boundingBox())!;
         const run = (await words.boundingBox())!;
@@ -61,8 +63,9 @@ for (const { who, email } of PEOPLE) {
       await open(page, "/ground-truth", email);
       const band = page.getByTestId("cs3-ready");
       await expect(band).toBeVisible();
-      await expect(band).not.toContainText("shipped, with proof");
-      await expect(band).not.toContainText("your yes");
+      const seen = await band.innerText();
+      expect(seen).not.toMatch(/shipped, with proof/i);
+      expect(seen).not.toContain("your yes");
       if (who === "owner") await tipSays(page, "Ready to move", "Each one needs your yes.");
       else {
         await band.getByRole("button", { name: "About Ready to move" }).click();
