@@ -33,7 +33,8 @@ function Row({ e, onRestored }: { e: Entry; onRestored: () => void }) {
       <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-baseline gap-x-2">
           <span className="text-[13px] font-semibold text-text2">{itemKind(e.root)}</span>
-          <span className="min-w-0 font-semibold break-words">{e.root.title}</span>
+          {/* A feature's code before its name ("F-26 Alert rules engine"), as the roadmap reads it. */}
+          <span className="min-w-0 font-semibold break-words">{e.root.code ? `${e.root.code} ${e.root.title}` : e.root.title}</span>
           {e.published && <Chip kind="warn">Was published</Chip>}
         </p>
         {e.items.length > 0 && (
@@ -56,19 +57,23 @@ function Row({ e, onRestored }: { e: Entry; onRestored: () => void }) {
         <Chip kind={e.days_left <= 3 ? "warn" : "line"}>
           {e.days_left} {e.days_left === 1 ? "day" : "days"} left
         </Chip>
-        <Button aria-label={`Restore ${e.root.title}`} disabled={busy} onClick={restore}>
-          Restore
-        </Button>
+        {e.can_restore && (
+          <Button aria-label={`Restore ${e.root.title}`} disabled={busy} onClick={restore}>
+            Restore
+          </Button>
+        )}
       </div>
     </li>
   );
 }
 
-/** Settings › Trash (#482, owners): each delete with what went with it, Restore and days left. */
+/** Settings › Trash (#482): each delete with what went with it, Restore and days left. Owners see
+ * everything; others the features and goals they deleted, which they restore themselves (its
+ * can_restore). */
 export default function TrashPage() {
   const { can, loading } = useMe();
-  const owner = can("list_trash");
-  const q = useQuery(owner ? "trash" : "trash|none", () => (owner ? unwrap(api.GET("/v1/trash")) : Promise.resolve([] as Entry[])));
+  const sees = can("list_trash");
+  const q = useQuery(sees ? "trash" : "trash|none", () => (sees ? unwrap(api.GET("/v1/trash")) : Promise.resolve([] as Entry[])));
   return (
     <>
       <PageHeader
@@ -80,7 +85,7 @@ export default function TrashPage() {
           </InfoTip>
         }
       />
-      {!loading && !owner ? (
+      {!loading && !sees ? (
         <Notice>Only owners delete and restore artifacts.</Notice>
       ) : (
         <Panel title="Deleted" count={q.data?.length}>
@@ -88,7 +93,8 @@ export default function TrashPage() {
           {q.data && q.data.length === 0 && (
             <Empty testId="trash-empty">
               Trash is empty. Deleted documents, requests and runs wait here for 30 days, with everything that went with
-              them. Until then an owner can restore them; after that they are gone for good.
+              them. Until then an owner, or whoever deleted a feature or goal, can restore them; after that they are
+              gone for good.
             </Empty>
           )}
           {q.data && q.data.length > 0 && (

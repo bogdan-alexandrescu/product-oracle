@@ -114,6 +114,10 @@ class Entry:
     # The item's code as every reader reads it (its feature's code, F-12 or the PRD's
     # F-06; else its own PRD section's): Home, the card's "Looks like" and "Merged into".
     code: str | None = None
+    # trash-features-goals: the item's goal_ids less a goal in Trash (None: row.goal_ids).
+    goal_ids: list[uuid.UUID] | None = None
+    # one-feature-panel: who the owner shown is (the item's own, else its track's).
+    owner_id: uuid.UUID | None = None
 
 
 @dataclass
@@ -428,8 +432,11 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 roadmap=roadmap,
                 prd=prd,
                 track=track,
-                goal=(goals.get(row.feature_id) if row.feature_id else None)
-                or next((linked[g] for g in row.goal_ids or [] if g in linked), None),
+                # one-feature-panel: a goal the item is linked to directly (set in its
+                # panel, dropped on, suggested for) wins over its feature's.
+                goal=next((linked[g] for g in row.goal_ids or [] if g in linked), None)
+                or (goals.get(row.feature_id) if row.feature_id else None),
+                goal_ids=[g for g in row.goal_ids or [] if g in linked],
                 window=window,
                 resolved=dates.resolve(cands, window, effort.get(row.id)),
                 status=_status(row, recs, cut.get(roadmap.id, set())),
@@ -441,6 +448,9 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 owner_name=people[row.owner_id][1]
                 if row.owner_id in people
                 else (owner_names.get(track.id) if track is not None else None),
+                owner_id=row.owner_id
+                if row.owner_id in people
+                else (track.owner_id if track is not None else None),
             )
         )
     await _prd_headings(db, entries)
@@ -909,6 +919,8 @@ def item_out(
             title=e.goal.title,
             metric=_metric(e.goal),
             position=goal_position(e.goal.attrs),
+            target=_goal_target(e.goal),
+            due=_goal_due(e.goal),
         )
         if e.goal
         else None,
@@ -933,14 +945,16 @@ def item_out(
         depends_on=e.depends_on,
         needed_by=e.needed_by,
         flags=flags_out(e),
-        owner=SimpleOwnerRef(id=e.track.owner_id, name=e.owner_name)  # type: ignore[arg-type]
-        if e.track is not None and e.track.owner_id is not None and e.owner_name
+        owner=SimpleOwnerRef(id=e.owner_id, name=e.owner_name)
+        if e.owner_id is not None and e.owner_name
         else None,
+        own_owner_id=str(row.owner_id) if row.owner_id else None,
+        depends_keys=list(row.depends_on or []),
         can_decide=may,
         deciders=[names[i] for i in decider_ids(e, deciders) or owners or [] if i in names],
         reasons=_reasons(e),
         open_decisions=(decisions or {}).get(row.id, []),
-        goal_ids=[str(g) for g in row.goal_ids or []],
+        goal_ids=[str(g) for g in (row.goal_ids if e.goal_ids is None else e.goal_ids) or []],
         **(extra or {}).get(row.id, {}),
         decided_in=(decided or {}).get(row.id, []),
     )
@@ -1054,6 +1068,20 @@ def _milestone_out(m: TrackMilestone, keyed: dict, ids: set, view: Any) -> Simpl
         out.effort_weeks, out.done_when, out.targets = pm.effort_weeks, pm.done_when, pm.targets
         out.date = out.date or pm.end_date
     return out
+
+
+def _goal_target(goal: Entity) -> str | None:
+    """one-feature-panel: the goal's target as the goal bucket edit reads it."""
+    from oracle.simple.goal_buckets import _target  # goal_buckets imports the router
+
+    return _target(goal.attrs or {})
+
+
+def _goal_due(goal: Entity) -> date | None:
+    """one-feature-panel: the goal's date as the goal bucket edit reads it."""
+    from oracle.simple.goal_buckets import _due
+
+    return _due(goal.attrs or {})
 
 
 def _metric(goal: Entity) -> str | None:

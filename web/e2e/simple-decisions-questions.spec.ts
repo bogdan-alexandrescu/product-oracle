@@ -56,7 +56,7 @@ for (const phone of [false, true]) {
         await expect(first).toContainText("Q5 Reminder default time");
         await expect(first.getByTestId("question-due")).toHaveText("Late · due Fri Oct 16");
         await expect(first.getByTestId("question-due")).toHaveAttribute("data-late", "true");
-        await expect(first).toContainText("Blocks Health log, first milestone");
+        await expect(first).toContainText("Blocks F-03 Health log, first milestone");
         await expect(first).toContainText("Recommended in Guided setup: 9:00 in each person's zone");
         await expect(mine.getByTestId("question-row").nth(1).getByTestId("question-due")).toHaveText("Due Mon Oct 26");
         await mine.getByRole("button", { name: "Show 4 more" }).click();

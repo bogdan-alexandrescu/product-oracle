@@ -15,12 +15,10 @@ import { formatDay } from "@/lib/format";
 import { useScreenSubject } from "@/lib/screen-subject";
 
 import { HORIZONS, type Horizon } from "./_board";
+import { NameEdit, PanelFields } from "./_fields";
 import {
-  confidenceWord,
   milestoneInk,
   shortDay,
-  datesFrom,
-  statusWord,
   storedDates,
   type Change,
   type Flag,
@@ -379,13 +377,6 @@ export function SuggestionPopover({
   );
 }
 
-function names(ids: string[], items: Map<string, Item>, empty = "Nothing"): string {
-  const t = ids.map((id) => items.get(id)?.title).filter(Boolean);
-  // fix4 qa-simple-roadmap-42: empty values read like "No owner yet", capitalised.
-  // qa4-simple-roadmap-42: "Nothing" / "None", not "No other items".
-  return t.length ? t.join(", ") : empty;
-}
-
 const OP_WORDS: Record<string, string> = {
   move_dates: "Move the dates",
   change_horizon: "Change the horizon",
@@ -405,6 +396,13 @@ const OP_WORDS: Record<string, string> = {
   keep_both: "Keep both",
   confirm_item: "Confirm the draft",
   cut_with_dependents: "Cut it and its dependents",
+  set_confidence: "Change the confidence",
+  set_track: "Change the track",
+  set_prd: "Change the PRD",
+  set_goal: "Change the goal",
+  set_depends: "Change what it depends on",
+  set_status: "Change the status",
+  set_owner: "Change the owner",
 };
 
 /** S7: a draft's likely duplicates, "Looks like <code> <title>", with Merge and Keep both
@@ -601,7 +599,10 @@ export function FloatingCard({
   onClose,
   onHorizon,
   near,
+  onOpen,
 }: {
+  /** one-feature-panel: opens another feature's own panel (what it depends on, what needs it). */
+  onOpen?: (id: string) => void;
   /** Roadmap-plus: the key dates the item ends within 2 weeks of, in words (none: no line). */
   near?: string | null;
   item: Item;
@@ -664,11 +665,6 @@ export function FloatingCard({
     ref.current?.focus({ preventScroll: true });
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
-  // The card's dates carry the year when it is not this one, as the Timeline's bar does.
-  const span = yearSpan(item.start.date, item.end.date);
-  const dates = item.estimated
-    ? `${span} · Estimated by Oracle (the ${item.horizon} window)`
-    : `${span} · ${datesFrom(item)}`;
   const beside = talk && !phone;
   const talkRight = useTalkPlace(beside);
   // A widened card (a proposal's flow) keeps inside the roadmap, not the 380 px card's left.
@@ -698,19 +694,31 @@ export function FloatingCard({
         ? style
         : { ...style, left };
 
+  const [renaming, setRenaming] = useState(false);
+  const [menu, setMenu] = useState(false);
   const head = (
     <div className="flex items-start gap-2">
-      <h2 className="min-w-0 flex-1 text-[18px] leading-6 font-semibold break-words">
-        {item.title}
-        {item.draft && item.status !== "merged" && (
-          <span
-            className="ml-2 inline-block rounded-full bg-na-bg px-2 align-middle text-xs font-normal text-na"
-            data-testid="draft-tag"
-          >
-            Draft
-          </span>
+      {/* BGD (Nov 4): the code chip before the name; the heading itself is the name. */}
+      <div className="min-w-0 flex-1 text-[18px] leading-6 font-semibold break-words" data-testid="card-name">
+        {renaming ? (
+          <NameEdit item={item} act={act} done={() => setRenaming(false)} />
+        ) : (
+          <>
+            {item.code && <span className="simple-code mr-1.5">{item.code}</span>}
+            <h2 className="inline">
+              {item.title}
+              {item.draft && item.status !== "merged" && (
+                <span
+                  className="ml-2 inline-block rounded-full bg-na-bg px-2 align-middle text-xs font-normal text-na"
+                  data-testid="draft-tag"
+                >
+                  Draft
+                </span>
+              )}
+            </h2>
+          </>
         )}
-      </h2>
+      </div>
       {beside && (
         <button
           type="button"
@@ -719,6 +727,35 @@ export function FloatingCard({
         >
           Hide the talk
         </button>
+      )}
+      {canChange && (
+        <div className="relative flex-none">
+          <button
+            type="button"
+            aria-label="More actions"
+            aria-expanded={menu}
+            onClick={() => setMenu(!menu)}
+            className="grid h-7 w-7 place-items-center rounded-md text-text2 hover:bg-surface2"
+          >
+            ⋯
+          </button>
+          {menu && (
+            <div role="menu" className="absolute right-0 z-50 mt-1 w-40 rounded-lg border border-line bg-surface p-1 shadow-tip">
+              <button
+                type="button"
+                role="menuitem"
+                className="block w-full rounded-md px-2 py-1 text-left text-[15px] hover:bg-surface2"
+                onClick={() => {
+                  setMenu(false);
+                  setRenaming(true);
+                }}
+              >
+                Rename
+              </button>
+              {/* The next round's Delete (to Trash) goes here. */}
+            </div>
+          )}
+        </div>
       )}
       <button
         type="button"
@@ -816,21 +853,9 @@ export function FloatingCard({
       )}
       <LooksLike item={item} act={act} canChange={canChange} />
       <div className={wide && !phone ? "grid grid-cols-2 gap-4" : ""}>
-        <dl className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
-          <dt className="text-text2">Outcome</dt>
-          <dd data-testid="card-outcome">
-            {item.outcome ?? (
-              <span className="text-text2">Not written yet</span>
-            )}
-          </dd>
-          <dt className="text-text2">Owner</dt>
-          <dd data-testid="card-owner">
-            {item.owner?.name ?? (
-              <span className="text-text2">No owner yet</span>
-            )}
-          </dd>
-          <dt className="text-text2">Dates</dt>
-          <dd data-testid="card-dates">{dates}</dd>
+        <div>
+          <PanelFields item={item} items={items} act={act} canChange={canChange} onOpen={onOpen} />
+          <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
           {item.slices.length > 0 && (
             <>
               <dt className="text-text2">Milestone</dt>
@@ -900,15 +925,8 @@ export function FloatingCard({
               </dd>
             </>
           )}
-          <dt className="text-text2">Status</dt>
-          <dd data-testid="card-status">{statusWord(item.status)}</dd>
-          <dt className="text-text2">Confidence</dt>
-          <dd data-testid="card-confidence">{item.confidence ? confidenceWord(item.confidence) : "Not rated"}</dd>
-          <dt className="text-text2">Depends on</dt>
-          <dd data-testid="card-depends">{names(item.depends_on, items)}</dd>
-          <dt className="text-text2">Needed by</dt>
-          <dd data-testid="card-needed">{names(item.needed_by, items, "None")}</dd>
-        </dl>
+          </dl>
+        </div>
         <div>
           {flags.length > 0 && (
             <section className="mt-3 space-y-1" data-testid="card-flags">

@@ -127,6 +127,9 @@ for (const [where, use] of [
         await quickAdd(page, phone, "Referral rewards", "Next", "Add");
         await expect(toastWith(page, "Added Referral rewards as a draft")).toBeVisible();
         await expect(boardCard(page, "referral-rewards")).toHaveCount(1);
+        // one-feature-panel: the added item opens its panel; closing it gives the page back.
+        await expect(page.getByTestId("floating-card")).toContainText("Referral rewards");
+        await page.getByTestId("floating-card").getByRole("button", { name: "Close" }).first().click();
 
         await page.getByTestId("key-dates-open").click();
         await expect(editor(page).getByTestId("key-dates-of")).toHaveText(" · Onboarding roadmap");
@@ -169,6 +172,9 @@ for (const [where, use] of [
         await quickAdd(page, phone, "Partner badges", "Later", "Add", "Onboarding roadmap");
         await expect(toastWith(page, "Added Partner badges as a draft")).toBeVisible();
         await expect(boardCard(page, "partner-badges")).toHaveCount(1);
+        // one-feature-panel: the added item opens its panel; closing it gives the page back.
+        await expect(page.getByTestId("floating-card")).toContainText("Partner badges");
+        await page.getByTestId("floating-card").getByRole("button", { name: "Close" }).first().click();
 
         await page.getByTestId("key-dates-open").click();
         await expect(kdRow(group(page, "Alerts roadmap"), "Customer conference")).toBeVisible();

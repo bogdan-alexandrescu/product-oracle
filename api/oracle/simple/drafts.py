@@ -110,8 +110,13 @@ FIELDS = (
     "decider_id",
     # Bring a date in: a resized item's date waits on a new estimate.
     "estimate_pending",
+    # one-feature-panel: set_confidence, set_track, set_prd, set_status.
+    "confidence",
+    "track_id",
+    "prd_document_id",
+    "shipped",
 )
-UUID_FIELDS = ("feature_id", "owner_id", "decider_id")
+UUID_FIELDS = ("feature_id", "owner_id", "decider_id", "track_id", "prd_document_id")
 DATES = ("start_date", "end_date")
 # Blockers of review_problems that the approval itself resolves.
 APPROVAL_CODES = ("version_not_approved", "mandatory_reviewer_pending")
@@ -287,7 +292,9 @@ def fold(row: RoadmapItem, copy: RoadmapItem, overlay: dict[str, Any]) -> Roadma
 
 async def drop_added(db: AsyncSession, d: SimpleDraft) -> None:
     """S7: an approved draft's added items live on in its version: their draft rows go,
-    their date suggestions move to the published copies (same key, the draft's version)."""
+    their date suggestions move to the published copies (same key, the draft's version).
+    A row in Trash is left as it is: Restore puts it in the roadmap's open draft
+    (oracle.simple.trash_items._onto_current); only the purge deletes it."""
     added = {
         r.item_key: r.id
         for r in await db.scalars(
@@ -312,7 +319,9 @@ async def drop_added(db: AsyncSession, d: SimpleDraft) -> None:
             )
     await db.execute(
         delete(RoadmapItem).where(
-            RoadmapItem.simple_draft_id == d.id, RoadmapItem.roadmap_version_id.is_(None)
+            RoadmapItem.simple_draft_id == d.id,
+            RoadmapItem.roadmap_version_id.is_(None),
+            RoadmapItem.deleted_at.is_(None),
         )
     )
 
@@ -972,6 +981,12 @@ OP_WORDS = {
     "merge_item": "Merged",
     "keep_both": "Kept beside its look-alikes:",
     "cut_with_dependents": "Cut with its dependents:",
+    "set_confidence": "New confidence for",
+    "set_track": "New track for",
+    "set_prd": "New PRD for",
+    "set_goal": "New goal for",
+    "set_depends": "New dependencies for",
+    "set_status": "New status for",
 }
 
 

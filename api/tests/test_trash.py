@@ -425,9 +425,12 @@ async def test_only_owners_delete_restore_and_see_trash(client, owner, runtime):
         headers = await as_user(tenant_id, role)
         resp = await client.request("DELETE", f"/v1/documents/{PRD}", headers=headers)
         assert resp.status_code == 403, (role, resp.text)
-        assert (await client.get("/v1/trash", headers=headers)).status_code == 403
+    viewer = await as_user(tenant_id, "viewer")
+    assert (await client.get("/v1/trash", headers=viewer)).status_code == 403
     entry = (await client.request("DELETE", f"/v1/documents/{PRD}", headers=auth)).json()
     approver = await as_user(tenant_id, "approver")
+    # trash-features-goals: below owner, Trash lists only the features and goals one deleted.
+    assert (await client.get("/v1/trash", headers=approver)).json() == []
     resp = await client.post(f"/v1/trash/{entry['id']}/restore", headers=approver)
     assert resp.status_code == 403
     resp = await client.post(f"/v1/documents/{PRD}/restore", headers=approver)

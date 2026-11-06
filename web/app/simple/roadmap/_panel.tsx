@@ -3,7 +3,7 @@
 // buckets) opens the same panel the Timeline does, with the same card, so the feature can be
 // read and changed where it is listed.
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { toast as dsToast, type ToastAsk } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
@@ -25,6 +25,9 @@ export function itemFor(items: Item[], f: { code: string; name: string; prd?: { 
   );
 }
 
+/** What opens the panel: a roadmap item's id when the page has it, else its code, PRD and name. */
+export type PanelFeature = { id?: string | null; code: string; name: string; prd?: { id: string; slug: string } | null };
+
 /** The feature's item panel (a side panel; a phone's bottom sheet), as the roadmap opens it. */
 export function FeaturePanel({
   feature,
@@ -32,7 +35,7 @@ export function FeaturePanel({
   canChange,
   onClose,
 }: {
-  feature: { code: string; name: string; prd?: { id: string; slug: string } | null };
+  feature: PanelFeature;
   phone: boolean;
   canChange: boolean;
   onClose: () => void;
@@ -60,7 +63,9 @@ export function FeaturePanel({
 
   const data = roadmap.data;
   const items = data?.items ?? [];
-  const item = itemFor(items, feature);
+  // one-feature-panel: a dependency (or a feature that needs this one) opens in its place.
+  const [opened, setOpened] = useState<string | null>(null);
+  const item = (opened ? items.find((i) => i.id === opened) : undefined) ?? (feature.id ? items.find((i) => i.id === feature.id) : undefined) ?? itemFor(items, feature);
   const act: Act = useCallback(
     async (what, body) => {
       try {
@@ -113,6 +118,7 @@ export function FeaturePanel({
       onDecide={(c, how) => void onDecide(c, how)}
       onClose={onClose}
       near={nearWords(item, data.key_dates ?? [])}
+      onOpen={setOpened}
     />
   );
   if (phone && item) return <div data-testid="item-panel" aria-label={item.title} className="contents">{body}</div>;

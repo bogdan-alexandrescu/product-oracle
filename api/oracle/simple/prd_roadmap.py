@@ -297,6 +297,10 @@ async def on_prd_approved(
             )
         )
     )
+    from oracle.simple import trash_items
+
+    # A feature in Trash keeps its key: a new one never takes it.
+    taken |= await trash_items.trashed_keys(db, doc)
     position = await db.scalar(
         select(func.max(RoadmapItem.position)).where(
             (RoadmapItem.roadmap_version_id == d.base_version_id)

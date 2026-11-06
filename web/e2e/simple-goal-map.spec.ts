@@ -1,10 +1,11 @@
+import { GUARDRAIL_GOAL } from "../lib/api/mock/goal-map";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN, login } from "./helpers";
 import { expect, test, type Page } from "./test";
 
 /*
  * Simple Goal map (build-goal-map), the owner's pick "Ladder by area lanes", driven through the
- * UI against the mock (invented data): three goals joined by arrows, the guardrail, milestones
+ * UI against the mock (invented data): three goals side by side with no arrows, the guardrail, milestones
  * by area with their 7 days of proof, features drawn once; adding and reordering an area,
  * editing a goal (its history kept), proposing a milestone, attaching a feature, starting a New
  * PRD from a milestone and opening a feature's item panel. Desktop (1440x900) and phone (390x844).
@@ -46,7 +47,8 @@ test.describe("desktop", () => {
     await expect(goals.nth(0)).toContainText("On track");
     await expect(goals.nth(1)).toContainText("At risk");
     await expect(goals.nth(2)).toContainText("$11.2k");
-    await expect(goals.nth(2)).toContainText("Builds on paid conversions per rep per day");
+    await expect(goals.nth(2)).toContainText("Reps × conversions per rep × value");
+    await expect(goals.nth(2)).not.toContainText("Builds on");
     await expect(page.getByTestId("gm-guardrail")).toContainText("Guardrail: Customer complaints = 0 every day");
     await expect(page.getByTestId("gm-guardrail")).toContainText("0 today · held 7 of 7 days");
     await expect(page.getByTestId("gm-ladder")).toContainText("3 of 7 steps shown at a time");
@@ -289,7 +291,7 @@ test.describe("desktop", () => {
 
   test("the ladder's head and goal cards as the frame: the step hint on its own line, the top goal widest", async ({ page }) => {
     // protects=the review's frame match: title and subtitle on one line, the step hint below them;
-    // the first goal's title wraps and the third card is the widest; fails_when=the hint shares the
+    // the third card is the widest; fails_when=the hint shares the
     // title's line or the cards are sized otherwise; no_claim=colours.
     await open(page);
     const head = ladder(page).getByTestId("gm-ladder-head");
@@ -302,8 +304,6 @@ test.describe("desktop", () => {
     const w = await Promise.all([0, 1, 2].map(async (i) => (await cards.nth(i).boundingBox())!.width));
     expect(w[2]).toBeGreaterThan(w[1]);
     expect(w[2]).toBeGreaterThan(w[0]);
-    const title = (await cards.nth(0).getByText("Sign-ups per rep per day").boundingBox())!;
-    expect(title.height).toBeGreaterThan(30);
   });
 
   test("starts a New PRD from a milestone: Simple's New PRD form opens prefilled", async ({ page }) => {
@@ -403,3 +403,55 @@ test.describe("phone", () => {
     await expect(page.getByTestId("gm-add-area")).toBeHidden();
   });
 });
+
+/*
+ * goal-map-no-arrows (BGD, Nov 5): the goal cards sit side by side in priority order with nothing
+ * between them that reads as an order or a dependency, and a goal marked as a guardrail is never a
+ * card: it shows only in the guardrail strip under them. Mock "goal-map-guardrail-goal" (the goals'
+ * priorities and a guardrail goal, as the API reads them). 1440 and 390, light and dark.
+ */
+for (const [name, size] of [["desktop", DESKTOP], ["phone", PHONE]] as const) {
+  for (const theme of ["light", "dark"] as const) {
+    test.describe(`${name} ${theme}: goal cards`, () => {
+      test.use(size);
+
+      test("no arrow between the goal cards; the guardrail goal only in its strip", async ({ page }) => {
+        // protects=the goal cards in priority order with no arrow or "builds on" between them, the
+        // guardrail goal in its strip under them and never a card; fails_when=an arrow or "Builds on"
+        // shows, the cards keep the builds-on order, or the guardrail goal is a card;
+        // no_claim=the API's order (test_simple_goal_map_api).
+        await page.context().addInitScript((t) => localStorage.setItem("oracle-theme", t), theme);
+        await page.context().addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, "goal-map-guardrail-goal"] as const);
+        await login(page, ADMIN.email);
+        await page.goto("/simple/goals");
+        await expect(page.getByTestId("gm-page")).toBeVisible();
+        await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+        const goals = page.getByTestId("gm-goals");
+        const cards = page.getByTestId("gm-goal");
+        await expect(cards).toHaveCount(3);
+        await expect(cards.nth(0)).toContainText("Revenue per day");
+        await expect(cards.nth(1)).toContainText("Sign-ups per rep per day");
+        await expect(cards.nth(2)).toContainText("Paid conversions per rep per day");
+        await expect(goals).not.toContainText("→");
+        await expect(goals).not.toContainText("Builds on");
+        await expect(goals.getByLabel("builds on")).toHaveCount(0);
+        await expect(goals).not.toContainText(GUARDRAIL_GOAL);
+        const strip = page.getByTestId("gm-guardrail");
+        await expect(strip).toContainText(`Guardrail: ${GUARDRAIL_GOAL} = 0 every day`);
+        await expect(strip).toContainText("0 today · held 7 of 7 days");
+        const [g, r] = [(await goals.boundingBox())!, (await strip.boundingBox())!];
+        expect(r.y).toBeGreaterThanOrEqual(g.y + g.height - 1);
+        // Side by side on a desktop (one row); stacked on a phone, each the page's width.
+        const boxes = await Promise.all([0, 1, 2].map(async (i) => (await cards.nth(i).boundingBox())!));
+        if (name === "desktop") {
+          expect(boxes.map((b) => Math.round(b.y))).toEqual(Array(3).fill(Math.round(boxes[0].y)));
+          expect(boxes[1].x).toBeGreaterThan(boxes[0].x + boxes[0].width - 1);
+          expect(boxes[2].x).toBeGreaterThan(boxes[1].x + boxes[1].width - 1);
+        } else {
+          expect(boxes[1].y).toBeGreaterThan(boxes[0].y + boxes[0].height - 1);
+          expect(boxes[2].y).toBeGreaterThan(boxes[1].y + boxes[1].height - 1);
+        }
+      });
+    });
+  }
+}

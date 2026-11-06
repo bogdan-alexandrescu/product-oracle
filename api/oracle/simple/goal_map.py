@@ -2,11 +2,13 @@
 owner's order, the gated milestones (track_milestones, the records Simple Roadmap draws)
 and the features serving them.
 
-- Goals: confirmed ``goal`` entities with a numeric ``target`` attr; today's reading is
-  their latest ``goal_measurements`` row. ``attrs``: ``metric``, ``unit`` ("$" or ""),
-  ``math``, ``builds_on`` (goal ids) and ``target_history`` (newest first).
-- The guardrail: a confirmed ``constraint`` entity with ``attrs.guardrail``; its last 7
-  days are its measurements.
+- Goals: confirmed ``goal`` entities with a numeric ``target`` attr, in the one goal order
+  (oracle.baseline.goal_order: their priority, never what one builds on); today's reading
+  is their latest ``goal_measurements`` row. ``attrs``: ``metric``, ``unit`` ("$" or ""),
+  ``math``, ``builds_on`` (goal ids) and ``target_history`` (newest first). A goal marked
+  ``attrs.guardrail`` is never one of them.
+- The guardrail: a confirmed ``constraint`` entity with ``attrs.guardrail``, else the first
+  guardrail goal; its last 7 days are its measurements.
 - A milestone's gate reads its goal (``goal_id``): the reading and the 7 days are the goal's
   measurements, never a stored copy. Its status: not measured yet without a reading; met
   when the 7 days all hold the threshold; missed when due before today and not met; else
@@ -29,6 +31,8 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from oracle import company_time
 from oracle.auth.models import User
+from oracle.baseline.goal_order import sort_goals
+from oracle.baseline.goals import COMPARISONS, meets
 from oracle.baseline.models import Entity, GoalMeasurement
 from oracle.docs.models import Document
 from oracle.roadmap import company
@@ -246,32 +250,21 @@ async def _readings(db: AsyncSession, ids: list[uuid.UUID], today: date) -> dict
     return out
 
 
-def _order_goals(goals: list[Entity]) -> list[Entity]:
-    """What a goal builds on comes first; else by title."""
-    by = {g.id: g for g in goals}
-    done: list[Entity] = []
-    seen: set[uuid.UUID] = set()
+# A guardrail goal's rule reads its comparison as a sign ("≤ 5 every day").
+_SIGN = {"at_least": "≥", "above": ">", "at_most": "≤", "below": "<"}
 
-    def visit(g: Entity) -> None:
-        if g.id in seen:
-            return
-        seen.add(g.id)
-        for b in (g.attrs or {}).get("builds_on") or []:
-            dep = by.get(uuid.UUID(str(b)))
-            if dep is not None:
-                visit(dep)
-        done.append(g)
 
-    for g in sorted(goals, key=lambda x: x.title):
-        visit(g)
-    return done
+def _is_guardrail(e: Entity) -> bool:
+    return bool((e.attrs or {}).get("guardrail"))
 
 
 async def _goals(db: AsyncSession) -> list[Entity]:
+    """The measurable goals in the one goal order, guardrail goals too (build() leaves them
+    out of the goal cards)."""
     rows = (
         await db.scalars(select(Entity).where(Entity.type == "goal", Entity.status == "confirmed"))
     ).all()
-    return _order_goals([g for g in rows if isinstance((g.attrs or {}).get("target"), int | float)])
+    return sort_goals(g for g in rows if isinstance((g.attrs or {}).get("target"), int | float))
 
 
 async def _on_map(db: AsyncSession) -> list[TrackMilestone]:
@@ -306,7 +299,8 @@ async def _on_map(db: AsyncSession) -> list[TrackMilestone]:
 
 async def build(db: AsyncSession, can_edit: bool) -> GoalMapOut:
     today = company_time.today(await company_time.company_time_zone(db))
-    goals = await _goals(db)
+    every = await _goals(db)
+    goals = [g for g in every if not _is_guardrail(g)]
     guard = next(
         (
             e
@@ -317,10 +311,10 @@ async def build(db: AsyncSession, can_edit: bool) -> GoalMapOut:
                     .order_by(Entity.created_at)
                 )
             ).all()
-            if (e.attrs or {}).get("guardrail")
+            if _is_guardrail(e)
         ),
         None,
-    )
+    ) or next((g for g in every if _is_guardrail(g)), None)
     reads = await _readings(db, [g.id for g in goals] + ([guard.id] if guard else []), today)
     goal_reads = {g.id: reads[g.id] for g in goals}
     goal_out = []
@@ -345,13 +339,20 @@ async def build(db: AsyncSession, can_edit: bool) -> GoalMapOut:
     guardrail = None
     if guard is not None:
         days, current = reads[guard.id]
-        guardrail = GmGuardrail(
-            name=guard.title,
-            rule=(guard.attrs or {}).get("rule") or "= 0 every day",
-            current=current,
-            days=days,
-            held=all(v == 0 for v in days),
-        )
+        a = guard.attrs or {}
+        if guard.type == "goal":
+            # A guardrail goal holds while each day meets its own target.
+            target, comparison = float(a["target"]), a.get("comparison")
+            comparison = comparison if comparison in COMPARISONS else "at_most"
+            rule = a.get("rule") or (
+                "= 0 every day"
+                if target == 0 and comparison == "at_most"
+                else f"{_SIGN[comparison]} {amount(target, a.get('unit') or '')} every day"
+            )
+            held = all(v is not None and meets(v, comparison, target) for v in days)
+        else:
+            rule, held = a.get("rule") or "= 0 every day", all(v == 0 for v in days)
+        guardrail = GmGuardrail(name=guard.title, rule=rule, current=current, days=days, held=held)
     areas = (
         await db.scalars(select(FocusArea).order_by(FocusArea.position, FocusArea.created_at))
     ).all()
