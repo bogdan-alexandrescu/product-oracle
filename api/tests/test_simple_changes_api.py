@@ -49,18 +49,19 @@ Test cards (protects / fails_when / no_claim):
   no tool; no_claim=MCP scopes for runs (Simple is not for runs).
 """
 
+import uuid
 from datetime import date, timedelta
 from typing import Any
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update
 
 from oracle import company_time
 from oracle.auth.models import User
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple import drafts, suggestions
-from oracle.simple.models import RoadmapDateSuggestion
+from oracle.simple.models import RoadmapDateSuggestion, SimpleChange
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
 from tests.test_simple_roadmap_api import NOW, Seed
@@ -354,6 +355,34 @@ async def test_proposal_accept_decline_and_outdated(client):
     assert r.status_code == 409, r.text
     assert r.json()["detail"]["message"].startswith("outdated: changed by Dee Cider")
     assert (await w.item("move_dates-a")).start_date == date(2026, 10, 2)
+
+
+async def test_changes_made_in_the_same_instant_list_in_the_order_made(client):
+    # Two proposals made in the same instant (the clock is frozen) list newest first in the
+    # order they were made, not by their random ids: the later one is given the larger id
+    # here, so a list that falls back to the id (or to nothing) shows them the wrong way.
+    ctx = await make_people()
+    w = await World(ctx).build(decider=True, ops=["edit_title", "move_dates"])
+    one = (await w.post(client, "commenter", "edit_title")).json()["change"]
+    two = (await w.post(client, "commenter", "move_dates")).json()["change"]
+    first, second = uuid.UUID(int=1), uuid.UUID(int=2**128 - 1)
+    async with tenant_session(ctx.tenant_id) as s:
+        for old, new in ((one["id"], first), (two["id"], second)):
+            await s.execute(
+                update(SimpleChange).where(SimpleChange.id == old).values(id=new, at=NOW)
+            )
+        await s.commit()
+    made = [str(second), str(first)]
+    rows = (await client.get(CHANGES, headers=ctx.as_("owner"))).json()
+    assert [c["id"] for c in rows] == made
+    inbox = (await client.get("/v1/inbox", headers=ctx.as_("decider"))).json()
+    assert [p["id"] for p in inbox["simple_proposals"]] == made
+    # Both decided in the same instant: the commenter's decisions list the same way.
+    for c in (first, second):
+        r = await client.post(f"{CHANGES}/{c}/decline", json={}, headers=ctx.as_("decider"))
+        assert r.status_code == 200, r.text
+    mine = (await client.get("/v1/inbox", headers=ctx.as_("commenter"))).json()
+    assert [d["id"] for d in mine["simple_decisions"]] == made
 
 
 async def test_constraint_flags_returned(client):
