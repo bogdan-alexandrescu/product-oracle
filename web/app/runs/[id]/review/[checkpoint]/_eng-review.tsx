@@ -230,7 +230,7 @@ export function EngReview({
           ref={listRef}
           aria-label="Features"
           data-testid="brief-list"
-          className={`sticky top-4 max-h-[calc(100dvh_-_var(--bar-h,72px)_-_var(--list-top,16px))] min-w-0 overflow-y-auto overscroll-contain rounded-panel border border-line bg-surface max-[900px]:static max-[900px]:max-h-none ${
+          className={`sticky top-4 h-[calc(100dvh_-_var(--bar-h,72px)_-_var(--list-top,16px))] min-w-0 overflow-y-auto overscroll-contain rounded-panel border border-line bg-surface max-[900px]:static max-[900px]:h-auto ${
             reading ? "max-[900px]:hidden" : ""
           }`}
         >
