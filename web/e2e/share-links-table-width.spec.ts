@@ -7,7 +7,11 @@ import { login } from "./helpers";
  * 1440 and 390, light and dark, and the page never scrolls sideways.
  */
 
-const DOC = "/documents/usage-alerts-roadmap";
+// The Usage alerts roadmap has no links (an empty table); the Platform roadmap's seeded links give rows.
+const DOCS = [
+  { name: "no links", path: "/documents/usage-alerts-roadmap" },
+  { name: "with links", path: "/documents/example-labs-roadmap" },
+];
 
 const SIZES = [
   { name: "1024", width: 1024, height: 800 },
@@ -15,14 +19,21 @@ const SIZES = [
   { name: "390", width: 390, height: 844 },
 ];
 
-async function openTable(page: Page, email: string, width: number, height: number, theme: string) {
+async function openTable(
+  page: Page,
+  doc: string,
+  email: string,
+  width: number,
+  height: number,
+  theme: string,
+) {
   await page.setViewportSize({ width, height });
   await page.addInitScript((t) => {
     localStorage.setItem("po-mock-scenario", "sharing");
     localStorage.setItem("oracle-theme", t);
   }, theme);
   await login(page, email);
-  await page.goto(DOC);
+  await page.goto(doc);
   await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
   const table = page.getByTestId("share-links");
   await table.scrollIntoViewIfNeeded();
@@ -34,37 +45,60 @@ for (const who of [
   { role: "approver", email: "approver@example.com" },
   { role: "owner", email: "admin@example.com" },
 ]) {
-  for (const size of SIZES) {
-    for (const theme of ["light", "dark"]) {
-      test(`the Share links table reads whole for the ${who.role}, ${size.name} wide, ${theme}`, async ({ page }) => {
-        const table = await openTable(page, who.email, size.width, size.height, theme);
-        // A phone hides the header row (screen readers only), so check it where it shows.
-        const headers = table.getByRole("columnheader");
-        const count = await headers.count();
-        expect(count).toBeGreaterThan(1);
-        const label = headers.filter({ hasText: /^Label$/ });
-        await expect(label).toHaveCount(1);
-        for (let i = 0; i < count; i++) {
-          const h = headers.nth(i);
-          if (!(await h.isVisible())) continue;
-          const m = await h.evaluate((el) => ({ s: el.scrollWidth, c: el.clientWidth, t: el.textContent }));
-          expect(m.s, `header "${m.t}" is clipped`).toBeLessThanOrEqual(m.c);
-        }
-        if (size.width > 600) {
-          const box = await label.boundingBox();
-          expect(box!.width, "Label column has room for its word").toBeGreaterThanOrEqual(60);
-        }
-        const cells = table.getByRole("cell");
-        const n = await cells.count();
-        for (let i = 0; i < n; i++) {
-          const c = cells.nth(i);
-          if (!(await c.isVisible())) continue;
-          const m = await c.evaluate((el) => ({ s: el.scrollWidth, c: el.clientWidth }));
-          expect(m.s).toBeLessThanOrEqual(m.c + 1);
-        }
-        const page_ = await page.evaluate(() => ({ s: document.documentElement.scrollWidth, w: window.innerWidth }));
-        expect(page_.s).toBeLessThanOrEqual(page_.w);
-      });
+  for (const doc of DOCS)
+    for (const size of SIZES) {
+      for (const theme of ["light", "dark"]) {
+        test(`the Share links table (${doc.name}) reads whole for the ${who.role}, ${size.name} wide, ${theme}`, async ({
+          page,
+        }) => {
+          const table = await openTable(
+            page,
+            doc.path,
+            who.email,
+            size.width,
+            size.height,
+            theme,
+          );
+          // A phone hides the header row (screen readers only), so check it where it shows.
+          const headers = table.getByRole("columnheader");
+          const count = await headers.count();
+          expect(count).toBeGreaterThan(1);
+          const label = headers.filter({ hasText: /^Label$/ });
+          await expect(label).toHaveCount(1);
+          for (let i = 0; i < count; i++) {
+            const h = headers.nth(i);
+            if (!(await h.isVisible())) continue;
+            const m = await h.evaluate((el) => ({
+              s: el.scrollWidth,
+              c: el.clientWidth,
+              t: el.textContent,
+            }));
+            expect(m.s, `header "${m.t}" is clipped`).toBeLessThanOrEqual(m.c);
+          }
+          if (size.width > 600) {
+            const box = await label.boundingBox();
+            expect(
+              box!.width,
+              "Label column has room for its word",
+            ).toBeGreaterThanOrEqual(60);
+          }
+          const cells = table.getByRole("cell");
+          const n = await cells.count();
+          for (let i = 0; i < n; i++) {
+            const c = cells.nth(i);
+            if (!(await c.isVisible())) continue;
+            const m = await c.evaluate((el) => ({
+              s: el.scrollWidth,
+              c: el.clientWidth,
+            }));
+            expect(m.s).toBeLessThanOrEqual(m.c + 1);
+          }
+          const page_ = await page.evaluate(() => ({
+            s: document.documentElement.scrollWidth,
+            w: window.innerWidth,
+          }));
+          expect(page_.s).toBeLessThanOrEqual(page_.w);
+        });
+      }
     }
-  }
 }
