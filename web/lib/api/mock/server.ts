@@ -14,7 +14,7 @@ import { MOCK_SCENARIO_KEY, mockUuid, seeded, stableUuid } from "./ids";
 import { addDecisionEntity, addDuplicateProposals, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, addStatusOverlapProposals, addThreeWayConflict, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, readMetricIntoGoal, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
 import { BLOCKER_NARROWED_SCENARIO, documentGate, narrowResolvedBlocker, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
-import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
+import { BIG_PRD, BIG_PRD_COMMENTS, BIG_STRATEGY, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
 import { applied, handOver, membersDetailRoute, type MembersContext, type MembersDb } from "./members";
 import type { HandOver } from "@/lib/api/members-types";
 import { accountRoute, liveCredentials, openTokens, passwordOk, revokeMemberTokens, seedAccount, type AccountDb } from "./account";
@@ -2183,29 +2183,34 @@ function addCodedPrd(db: Db) {
 /** The default seed plus one PRD of 100+ sections in nested chapters (./big-prd.ts). */
 function seedBigPrd(): Db {
   const db = seed();
-  const row: DocumentRow = {
-    id: uuid(),
-    slug: BIG_PRD.slug,
-    title: BIG_PRD.title,
-    status: "in_review",
-    kind: "prd",
-    template: BIG_PRD.template ?? null,
-    template_version: BIG_PRD.template_version ?? null,
-    theme: null,
-    created_at: BIG_PRD.versions[0].created_at,
-    updated_at: BIG_PRD.versions[0].created_at,
-  };
-  db.documents.push(row);
-  const v = buildVersion(row, BIG_PRD.versions[0]);
-  db.versions.push(v);
   const at = "2026-10-19T10:00:00Z";
-  for (const [key, r] of Object.entries(BIG_PRD_REVIEWS)) addReview(db, v, key, r, { created_at: at });
-  const comments = BIG_PRD_COMMENTS.map(([key, exact, text], i) => {
-    const plain = v.sections.find((s) => s.section_key === key)!.body_text;
-    const start = plain.indexOf(exact);
-    const anchor = { exact, prefix: plain.slice(Math.max(0, start - 32), start), suffix: plain.slice(start + exact.length, start + exact.length + 32) };
-    return addComment(db, v, { section_key: key, anchor, body: text }, { created_at: `2026-10-19T11:${String(10 + i).padStart(2, "0")}:00Z` });
+  // The same reviews and comments on the PRD and on the strategy document made of its outline.
+  const docs = [BIG_PRD, BIG_STRATEGY].map((seedDoc) => {
+    const row: DocumentRow = {
+      id: uuid(),
+      slug: seedDoc.slug,
+      title: seedDoc.title,
+      status: "in_review",
+      kind: seedDoc.kind ?? "prd",
+      template: seedDoc.template ?? null,
+      template_version: seedDoc.template_version ?? null,
+      theme: null,
+      created_at: seedDoc.versions[0].created_at,
+      updated_at: seedDoc.versions[0].created_at,
+    };
+    db.documents.push(row);
+    const v = buildVersion(row, seedDoc.versions[0]);
+    db.versions.push(v);
+    for (const [key, r] of Object.entries(BIG_PRD_REVIEWS)) addReview(db, v, key, r, { created_at: at });
+    const comments = BIG_PRD_COMMENTS.map(([key, exact, text], i) => {
+      const plain = v.sections.find((s) => s.section_key === key)!.body_text;
+      const start = plain.indexOf(exact);
+      const anchor = { exact, prefix: plain.slice(Math.max(0, start - 32), start), suffix: plain.slice(start + exact.length, start + exact.length + 32) };
+      return addComment(db, v, { section_key: key, anchor, body: text }, { created_at: `2026-10-19T11:${String(10 + i).padStart(2, "0")}:00Z` });
+    });
+    return { row, comments };
   });
+  const { row, comments } = docs[0];
   const llm = (db.llm ??= { jobs: [], suggestions: [], disabled: {} });
   for (const s of BIG_PRD_SUGGESTIONS) {
     const c = comments.find((x) => x.body === s.comment)!;

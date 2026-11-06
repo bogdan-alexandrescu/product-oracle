@@ -45,6 +45,32 @@ test("sections: the contents and the hash pick the current section; back / forwa
   await expect(section(page, "s-5-3")).toBeVisible();
 });
 
+test("sections: ] [ j k and Shift+Arrow step to the next and previous section", async ({ page }) => {
+  await login(page);
+  await page.goto("/documents/checkout-redesign/v/2#users");
+  await expect(stripItem(page, "users")).toHaveAttribute("aria-current", "location");
+  // Keys act on the page, not in a field.
+  await page.locator("body").click({ position: { x: 700, y: 30 } });
+
+  await page.keyboard.press("]");
+  await expect(page).toHaveURL(/#scope$/);
+  await expect(stripItem(page, "scope")).toHaveAttribute("aria-current", "location");
+  await page.keyboard.press("[");
+  await expect(page).toHaveURL(/#users$/);
+  await expect(stripItem(page, "users")).toHaveAttribute("aria-current", "location");
+  await page.keyboard.press("j");
+  await expect(page).toHaveURL(/#scope$/);
+  await expect(stripItem(page, "scope")).toHaveAttribute("aria-current", "location");
+  await page.keyboard.press("k");
+  await expect(page).toHaveURL(/#users$/);
+  await page.keyboard.press("Shift+ArrowRight");
+  await expect(page).toHaveURL(/#scope$/);
+  await expect(section(page, "scope")).toBeVisible();
+  await page.keyboard.press("Shift+ArrowLeft");
+  await expect(page).toHaveURL(/#users$/);
+  await expect(stripItem(page, "users")).toHaveAttribute("aria-current", "location");
+});
+
 test("sections: one review bar on screen; evidence and refine sit in the ⋯ menu", async ({ page }) => {
   await login(page);
   await page.goto("/documents/checkout-redesign/v/2");
