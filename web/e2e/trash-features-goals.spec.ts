@@ -226,9 +226,11 @@ async function moveBar(page: Page, key: string) {
   await expect(count).not.toHaveText(before ?? "");
 }
 
-async function sendForReview(page: Page) {
-  await page.getByTestId("draft-banner").getByRole("button", { name: "Send for review" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Sent for review" })).toBeVisible();
+/** The owner sends the draft on: with no named decider, their Approve and publish (roadmap-decide),
+ * after which it waits in review on the roadmap's required reviewer. */
+async function ownerApproves(page: Page) {
+  await page.getByTestId("draft-banner").getByRole("button", { name: "Approve and publish" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Approved: Alerts roadmap waits for 1 more reviewer" })).toBeVisible();
 }
 
 type RoadmapItem = Item & { key: string; roadmap: { slug: string } };
@@ -252,7 +254,7 @@ test("a feature deleted before the roadmap's next version is published comes bac
   await moveBar(page, other.key);
   const roadmap = page.getByTestId("simple-roadmap");
   await expect(roadmap).not.toContainText(feature.title);
-  await sendForReview(page);
+  await ownerApproves(page);
   // The required reviewer's approval on Home publishes the next version, made without the
   // feature in Trash.
   await approveOnHome(page);
@@ -304,7 +306,7 @@ test("a feature added in the draft and restored while the draft is in review sta
   await moveBar(page, other.key);
   const roadmap = page.getByTestId("simple-roadmap");
   await expect(roadmap).not.toContainText(title);
-  await sendForReview(page);
+  await ownerApproves(page);
 
   await page.goto("/settings/trash");
   const row = page.getByTestId("trash-entry").filter({ hasText: title });
@@ -369,7 +371,7 @@ test("a feature added in the draft and restored after the draft was approved wit
   await moveBar(page, other.key);
   const roadmap = page.getByTestId("simple-roadmap");
   await expect(roadmap).not.toContainText(title);
-  await sendForReview(page);
+  await ownerApproves(page);
   await approveOnHome(page);
   await signOut(page);
   await login(page);
@@ -398,7 +400,7 @@ test("a feature added in the draft and restored after the draft was approved wit
   await login(page);
   await page.goto("/simple/roadmap");
   await expect(page.getByTestId("simple-chart")).toBeVisible();
-  await sendForReview(page);
+  await ownerApproves(page);
   await approveOnHome(page);
   await signOut(page);
   await login(page, "vic.moss@example.com");
@@ -452,14 +454,14 @@ for (const then of ["working", "in review"] as const) {
 
     // Its draft sent and approved on Home while the feature is in Trash.
     await moveBar(page, first.key);
-    await sendForReview(page);
+    await ownerApproves(page);
     await approveOnHome(page);
     await signOut(page);
     await login(page);
 
     // The roadmap's next draft: another bar moved, and maybe sent for review.
     await moveBar(page, second.key);
-    if (then === "in review") await sendForReview(page);
+    if (then === "in review") await ownerApproves(page);
 
     await page.goto("/settings/trash");
     const row = page.getByTestId("trash-entry").filter({ hasText: title });
@@ -471,7 +473,7 @@ for (const then of ["working", "in review"] as const) {
     await expect(page.getByTestId("simple-chart")).toBeVisible();
     await expect(rows).toHaveCount(1);
     // Still one draft to send (when it was working), with the feature in it.
-    if (then === "working") await sendForReview(page);
+    if (then === "working") await ownerApproves(page);
 
     // A viewer reads the published roadmap: it is not there.
     await signOut(page);
