@@ -385,7 +385,16 @@ function numberAt(body: string, said: string): RegExpExecArray | null {
 /** one_pager_checks.set_number: `body` with the number of `said` set to `value`; null when it holds no such words. */
 export function setNumber(body: string, said: string, value: string): string | null {
   const m = numberAt(body, said);
-  return m ? body.slice(0, m.index) + value + body.slice(m.index + m[0].length) : null;
+  return m ? body.slice(0, m.index) + asWritten(m[0], value) + body.slice(m.index + m[0].length) : null;
+}
+
+/** one_pager_checks._as_written: a count in words stays in words ("Eight" -> "Six", its case kept); a numeral, or a value with no word for it, as a numeral. */
+function asWritten(old: string, value: string): string {
+  if (/^\d+$/.test(old) || !WORDS.includes(old.toLowerCase())) return value;
+  const word = WORDS[Number(value)];
+  if (!/^\d+$/.test(value) || !word) return value;
+  if (old === old.toUpperCase()) return word.toUpperCase();
+  return old[0] === old[0].toUpperCase() ? word[0].toUpperCase() + word.slice(1) : word;
 }
 
 /** one_pager_checks._fix: a numbers item's fix (its document_id filled by the read); `heading`: the number is in the section's heading (part "heading"). */

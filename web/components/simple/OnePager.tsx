@@ -189,7 +189,6 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   // 2026-10-30: the bets whose flow was asked for here ("Draw the flow"): their flow row shows while Oracle draws.
   const [asked, setAsked] = useState<Set<string>>(new Set());
   // set_section_number (owner, Nov 5): the number a "Needs a look" fix just set, with its Undo.
-  const [fixed, setFixed] = useState<{ change_id: string; words: string } | null>(null);
   const [presenting, setPresenting] = useState(false);
   // build-review (QV3 a): with a working draft, what Present shows: the published version or the draft.
   const [showing, setShowing] = useState<"draft" | "published" | null>(null);
@@ -378,21 +377,16 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   const undo = (n: Note) =>
     act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/undo", { params: { path: { change_id: n.change_id } } })), true);
   // A numbers item's one-click fix: who changes the PRD applies it (Undo), approvers and commenters propose it.
+  // The draft's fixes are listed from the read (v.fixed), so a reload keeps each with its Undo.
   const fixLook = (x: Schemas["OnePagerLook"]) =>
-    act(async () => {
+    act(() => {
       const f = x.fix!;
-      const r = await unwrap(api.POST("/v1/simple/changes", {
+      return unwrap(api.POST("/v1/simple/changes", {
         body: { session_id: sessionId ?? null, op: f.action, target: f.target, before: { number: f.before }, after: { number: f.value } },
       }));
-      // A heading's count (owner, Nov 5, 'Fix the heading too'): the status names the new heading.
-      const heading = f.target.part === "heading" ? (r.change.after as { sections?: Record<string, { heading?: string }> }).sections?.[f.target.section]?.heading : undefined;
-      setFixed(r.change.status === "applied" ? { change_id: r.change.id, words: heading ? `Set to ${f.value}: “${heading}”` : `Set to ${f.value}` } : null);
     });
   const lookChange = (changeId: string, action: "accept" | "decline" | "undo") =>
-    act(async () => {
-      await unwrap(api.POST(`/v1/simple/changes/{change_id}/${action}`, { params: { path: { change_id: changeId } }, body: action !== "undo" && sessionId ? { session_id: sessionId } : {} }));
-      if (action === "undo") setFixed(null);
-    });
+    act(() => unwrap(api.POST(`/v1/simple/changes/{change_id}/${action}`, { params: { path: { change_id: changeId } }, body: action !== "undo" && sessionId ? { session_id: sessionId } : {} })));
 
   async function exportPdf() {
     setError(null);
@@ -667,10 +661,10 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
       {(!planShown || linesShown || sessionId || !!v.draft || v.changes_in_review > 0 || v.notes.length > 0) && (
       <div className={`mx-auto grid gap-6 py-6 ${!sessionId ? "simple-calm-cols" : ""} ${sessionId ? "px-0" : "px-4"} max-w-[1180px] md:grid-cols-[minmax(0,820px)_var(--simple-margin)]`} data-testid="one-pager-columns">
         <article aria-label="One-pager" className={`rounded-md border border-[var(--simple-rule)] bg-[var(--simple-paper)] ${sessionId ? "px-4" : "px-6"} py-8 shadow-sm md:col-start-1 md:px-12`}>
-          {(prdLooks.length > 0 || fixed) && (
+          {(prdLooks.length > 0 || v.fixed.length > 0) && (
             <NeedsALook
               items={prdLooks} blocks={v.blocks} sections={v.sections} doc={v.document.slug} version={v.version} codeNames={codeNames}
-              fixes={{ can: v.can_edit || v.can_propose, busy, fixed, fix: fixLook, change: lookChange }}
+              fixes={{ can: v.can_edit || v.can_propose, busy, fixed: v.fixed, fix: fixLook, change: lookChange }}
             />
           )}
           {v.blocks.filter((b) => !(planShown && b.kind === "timeline")).map((b) => (
@@ -1168,8 +1162,8 @@ interface LookFixes {
   /** Who may change or propose a PRD line (the page's can_edit or can_propose). */
   can: boolean;
   busy: boolean;
-  /** The fix just applied, with its Undo. */
-  fixed: { change_id: string; words: string } | null;
+  /** The working draft's number fixes ("Fixed: set to 6 in “Later · 6 items”"), each with its Undo while it can be undone. */
+  fixed: Schemas["OnePagerFixed"][];
   fix: (x: Schemas["OnePagerLook"]) => void;
   change: (changeId: string, action: "accept" | "decline" | "undo") => void;
 }
@@ -1234,14 +1228,16 @@ export function NeedsALook({ items, blocks = [], sections = [], doc, version, co
             </li>
           );
         })}
-        {fixes?.fixed && (
-          <li data-testid="needs-look-fixed" className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span role="status">{fixes.fixed.words}</span>
-            <button type="button" className={LOOK_ACTION} disabled={fixes.busy} onClick={() => fixes.change(fixes.fixed!.change_id, "undo")}>
-              Undo
-            </button>
+        {fixes?.fixed.map((f) => (
+          <li key={f.change_id} data-testid="needs-look-fixed" className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span role="status">{f.words}</span>
+            {f.can_undo && (
+              <button type="button" className={LOOK_ACTION} disabled={fixes.busy} onClick={() => fixes.change(f.change_id, "undo")}>
+                Undo
+              </button>
+            )}
           </li>
-        )}
+        ))}
       </ul>
     </section>
   );
