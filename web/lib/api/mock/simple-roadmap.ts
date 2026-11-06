@@ -75,8 +75,8 @@ interface SeedItem {
   kept_both?: boolean;
   /** S7: the key of the item this draft was merged into (the draft is closed). */
   merged_into?: string;
-  /** S7: the baseline feature (with no item) this draft was linked to by a merge. */
-  // A draft merged with a baseline feature that has no item: linked to it (still a draft).
+  /** S7: the Ground Truth feature (with no item) this draft was linked to by a merge. */
+  // A draft merged with a Ground Truth feature that has no item: linked to it (still a draft).
   linked_feature?: string;
   /** S7: Oracle's drafting job runs until this mock time (ms); the item is "drafting" until then. */
   drafting_until?: number;
@@ -90,7 +90,7 @@ interface SeedItem {
   draft_roadmap?: boolean;
   /** approved-prd-roadmap: an item an approved PRD put in the draft names that PRD. */
   from_prd?: { slug: string; title: string };
-  /** The Baseline feature it is (RoadmapItem.feature_id): an approved PRD's item matches by it. */
+  /** The Ground Truth feature it is (RoadmapItem.feature_id): an approved PRD's item matches by it. */
   feature_id?: string | null;
   /** approved-prd-roadmap: its dates as the PRD has them (ISO days; no start: end-only). */
   dates?: { start: string | null; end: string; source: "engineering" | "accepted" };
@@ -269,7 +269,7 @@ const GOALS_KNOWN: Record<string, boolean> = {};
 
 /**
  * build-goal-order-control: the "goal-order" scenarios' added goals (server.ts seeds them), named
- * while the baseline holds them confirmed so their roadmap work names its goal. As knowManyPlans,
+ * while the Ground Truth holds them confirmed so their roadmap work names its goal. As knowManyPlans,
  * once another scenario's data loads the ones it added are taken out again. Invented data.
  */
 const GOAL_ORDER_GOALS: Record<string, string> = {
@@ -293,9 +293,9 @@ export function knowGoalOrderGoals(entities: { key: string; status: string }[]):
 }
 
 /**
- * goal-order: the company's goals (the baseline's), so Simple's goal refs, groups, buckets and
+ * goal-order: the company's goals (the Ground Truth's), so Simple's goal refs, groups, buckets and
  * goal cards follow the one goal order (lib/goal-order.ts). server.ts names them before every
- * Simple route; a goal the baseline does not hold comes after those it does, by key.
+ * Simple route; a goal the Ground Truth does not hold comes after those it does, by key.
  */
 let companyGoals: (OrderedGoal & { key: string })[] = [];
 export function knowCompanyGoals(goals: (OrderedGoal & { key: string })[]): void {
