@@ -154,3 +154,25 @@ async def test_panel_reads_the_goals_reading_and_the_notes(client):
     assert r.status_code == 201, r.text
     it = await item_of(client, ctx, "decider", a)
     assert it["note"] == "Skip quiet teams."
+
+
+async def test_a_dependency_that_would_make_a_loop_is_refused(client):
+    """build-feature-panel (AN's add_link loop check, on this line's ``set_depends``):
+    protects=a new dependency that already waits on the item, directly or through others, is
+    refused (422 "loop") and nothing is written; one that makes no loop is taken;
+    fails_when=a loop is written; no_claim=links across roadmaps."""
+    ctx = await make_people()
+    w = await World(ctx).build(decider=True, ops=["fp"])
+    a, u = w.ids["fp-a"], w.ids["fp-u"]
+    # fp-b already depends on fp-a: fp-a depending on fp-b would make a loop.
+    r = await post(client, ctx, "decider", "set_depends", {"item_id": a}, {"depends_on": []},
+                   {"depends_on": ["fp-b"]})  # fmt: skip
+    assert r.status_code == 422 and "loop" in r.text, r.text
+    assert (await w.item("fp-a")).depends_on in ([], None)
+    # Through another: fp-u on fp-b is fine; then fp-a on fp-u loops (fp-u > fp-b > fp-a).
+    r = await post(client, ctx, "decider", "set_depends", {"item_id": u}, {"depends_on": []},
+                   {"depends_on": ["fp-b"]})  # fmt: skip
+    assert r.status_code == 201, r.text
+    r = await post(client, ctx, "decider", "set_depends", {"item_id": a}, {"depends_on": []},
+                   {"depends_on": ["fp-u"]})  # fmt: skip
+    assert r.status_code == 422 and "loop" in r.text, r.text
