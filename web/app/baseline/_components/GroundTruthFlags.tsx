@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { Button, Dialog, InfoTip, Notice } from "@/components/ds";
+import { Button, Chip, CodeChip, Dialog, InfoTip, Notice } from "@/components/ds";
 import { api, unwrap, type GraphOut, type Schemas } from "@/lib/api/client";
 import { named } from "@/lib/codes";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -340,26 +340,30 @@ export function GroundTruthFlags({
               const s = subject(f);
               const row = fixes(f);
               const waiting = waits(f);
-              // One short line; the flag's sentence is behind the (i).
-              const line = waiting
+              // One short line; the flag's sentence is behind the (i). A feature a run proposed
+              // waits for its yes: the status a chip, the feature its name with its code (D-12).
+              const unconfirmed = !waiting && f.item && f.feature && f.fixes.some((x) => x.action === "confirm_feature") ? f.feature : null;
+              const line = waiting || unconfirmed
                 ? null
-                : f.item && f.feature && f.fixes.some((x) => x.action === "confirm_feature")
-                  ? `Waiting to be confirmed: ${shown(f.feature)}`
-                  : f.where.prd && !f.item?.id
+                : f.where.prd && !f.item?.id
                     ? `PRD ${f.where.prd.title}`
                     : (f.where.roadmap?.title ?? null);
               return (
                 <li key={`${s.id ?? s.code ?? s.name}-${n}`} data-testid="gt-row" className="flex flex-wrap items-center justify-between gap-2 py-2">
                   <span className="min-w-0">
                     <span className="flex items-center gap-1 text-[14px] text-text">
-                      {s.code && <span className="mr-0.5 font-mono text-[13px] text-text2">{s.code}</span>}
-                      {s.name}
+                      {s.code ? <CodeChip kind="feature" entityId={f.item ? null : s.id} entityKey={s.code} title={s.name} /> : s.name}
                       <InfoTip label={s.name}>{f.words}</InfoTip>
                     </span>
                     {waiting ? (
                       <Link href={asks(f) ? "/baseline?tab=proposals" : "/simple/roadmap"} data-testid="gt-pending" className="block text-[13px] text-accent-ink underline">
                         Waiting for an approver
                       </Link>
+                    ) : unconfirmed ? (
+                      <span className="mt-1 flex flex-wrap items-center gap-1.5" data-testid="gt-unconfirmed">
+                        <Chip kind="warn">Waiting to be confirmed</Chip>
+                        <CodeChip kind="feature" entityId={unconfirmed.id} entityKey={unconfirmed.code} title={unconfirmed.name} />
+                      </span>
                     ) : (
                       line && <span className="block text-[13px] text-text2">{line}</span>
                     )}

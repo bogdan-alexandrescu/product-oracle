@@ -136,7 +136,7 @@ for (const size of ["desktop", "phone"] as const) {
       await open(page, "/ground-truth");
       const band = page.getByTestId("cs3-ready");
       await expect(band).toContainText("2 ready to move");
-      const names = await band.locator("button").allTextContents();
+      const names = await band.getByTestId("cs3-ready-chip").allTextContents();
       expect(names).toHaveLength(2);
       // Not yet: it stays still to build, out of the band.
       await band.getByRole("button", { name: names[1] }).click();
