@@ -16,6 +16,18 @@ test.use({ viewport: { width: 1512, height: 900 } });
 
 type Counts = { q1: string[]; ranked: string[]; inbox: string };
 
+/** What `read` returns once it reads the same three times running, 300 ms apart (the page has settled). */
+async function settled<T>(read: () => Promise<T>): Promise<T> {
+  let last = JSON.stringify(await read());
+  for (let same = 0, tries = 0; same < 2 && tries < 40; tries++) {
+    await new Promise((r) => setTimeout(r, 300));
+    const now = JSON.stringify(await read());
+    same = now === last ? same + 1 : 0;
+    last = now;
+  }
+  return JSON.parse(last) as T;
+}
+
 async function goalMap(page: Page) {
   await page.goto("/simple/goals");
   await expect(page.getByTestId("gm-guardrail")).toBeVisible();
@@ -27,15 +39,15 @@ async function counts(page: Page): Promise<Counts> {
   // The Roadmap's Q1 2027: its timeline rows, from Q1 2027 to Q1 2027 (the items, by their names).
   await page.getByTestId("filter-from").selectOption({ label: "Q1 2027" });
   await page.getByTestId("filter-to").selectOption({ label: "Q1 2027" });
-  await expect(page.getByTestId("timeline-row").first()).toBeVisible();
-  const q1 = [...new Set(await page.getByTestId("timeline-row").evaluateAll((rows) => rows.map((r) => r.getAttribute("data-item") ?? "")))].sort();
+  await expect(page.getByTestId("filter-to")).toHaveValue(/./);
+  const q1 = await settled(async () => [...new Set(await page.getByTestId("timeline-row").evaluateAll((rows) => rows.map((r) => r.getAttribute("data-item") ?? "")))].sort());
   await page.goto("/simple/priorities");
   await expect(page.getByTestId("prio-row").first()).toBeVisible();
   // Priorities' ranked list, by the features' names.
-  const ranked = (await page.getByTestId("prio-row").getByTestId("prio-title").allTextContents()).map((t) => t.trim());
+  const ranked = await settled(async () => (await page.getByTestId("prio-row").getByTestId("prio-title").allTextContents()).map((t) => t.trim()));
   const inbox = page.getByTestId("simple-nav").getByTestId("simple-nav-inbox-count");
   await expect(inbox).toBeVisible();
-  return { q1, ranked, inbox: (await inbox.textContent())!.trim() };
+  return { q1, ranked, inbox: await settled(async () => (await inbox.textContent())!.trim()) };
 }
 
 test.describe("P-1: the mock's counts do not depend on which page opens first", () => {
