@@ -29,13 +29,13 @@ Test cards (protects / fails_when / no_claim):
   loop is stored; no_claim=dates through dependencies.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 from sqlalchemy import select
 
 from oracle import company_time
-from oracle.roadmap.models import RoadmapItem
+from oracle.roadmap.models import RoadmapItem, TrackMilestone
 from oracle.simple.models import MilestoneFeature
 from oracle.tenancy import tenant_session
 from tests.test_simple_changes_api import make_people
@@ -192,3 +192,18 @@ async def test_set_depends_refuses_a_loop(client):
     name = lambda i: f"{i['code'] or i['key']} {i['title']}"  # noqa: E731
     assert f"{name(b)} already waits on {name(a)}" in words
     assert (await p.read(client))["a"]["depends_keys"] == []
+
+
+async def test_the_week_strip_reads_dates(client):
+    """goal-ladder: the week strip places today and each milestone's week from dates (the
+    words "Nov 3" carry no year): ``today_on`` and each milestone's ``due_on``."""
+    ctx, ids = await world()
+    async with tenant_session(ctx.tenant_id) as s:
+        m = await s.get(TrackMilestone, ids["m2"])
+        m.target_date = date(2027, 1, 15)
+        await s.commit()
+    body = await read(client, ctx, "viewer")
+    assert body["today_on"] == "2026-11-03"
+    ms = {m["id"]: m for m in body["milestones"]}
+    assert ms[ids["m2"]]["due_on"] == "2027-01-15" and ms[ids["m2"]]["due"] == "Jan 15"
+    assert ms[ids["m1"]]["due_on"] is None
