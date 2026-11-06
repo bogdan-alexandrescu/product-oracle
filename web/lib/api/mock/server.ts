@@ -182,7 +182,7 @@ import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, knowGoalMapItems, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, shownDates, storedDates } from "./simple-roadmap";
-import { goalMapItems, routeGoalMap, type GoalMap } from "./goal-map";
+import { goalMapItems, routeGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -3613,6 +3613,18 @@ function load(): Db {
                     if (goal) db.baseline.entities.push(goal);
                     return db;
                   }
+              : scenario === SCOREBOARD_SCENARIO
+                ? () => {
+                    // goal-map-scoreboard: Home's goals are the map's (one store, the same ids), and
+                    // early churn is confirmed with no number to aim at (left off the map).
+                    const db = seed();
+                    const template = db.baseline.entities.find((e) => e.type === "goal")!;
+                    for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") e.status = "proposed";
+                    for (const g of scoreboardGoals()) db.baseline.entities.push({ ...template, ...g, status: "confirmed", body: null, locked: false, locked_by: null, locked_at: null });
+                    const churn = db.baseline.entities.find((e) => e.type === "goal" && e.title === SCOREBOARD.offMap);
+                    if (churn) churn.status = "confirmed";
+                    return db;
+                  }
               : scenario === APPROVED_ROADMAP_SCENARIO
                 ? () => seedApprovedRoadmapScenario()
               : scenario === CROWDED_MILESTONES_SCENARIO
@@ -6732,7 +6744,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       const read = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, new Request("http://mock/v1/simple/roadmap"), ["v1", "simple", "roadmap"], new URLSearchParams());
       const body = read && read.ok ? ((await read.json()) as { items: { id: string; title: string; status: string }[] }) : { items: [] };
       return body.items;
-    });
+    }, () => db.baseline.entities.filter((e) => e.type === "goal"));
     // one-feature-panel: the map's features are roadmap items (their panel opens on their own item).
     if (db.goal_map) knowGoalMapItems(db.simple_roadmap, goalMapItems(db.goal_map));
     if (goalMapRes) return goalMapRes;

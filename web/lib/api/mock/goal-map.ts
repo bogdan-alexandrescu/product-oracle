@@ -34,7 +34,9 @@ export type GmMetricChoice = Schemas["GmMetricChoice"];
 
 export const SCOREBOARD_SCENARIO = "goal-map-scoreboard";
 /** The scoreboard scenario's names, for its specs. */
-export const SCOREBOARD = { measured: "Weekly sign-ups", empty: "Paid conversions", pick: "Daily revenue", gap: "6 paid conversions per rep" } as const;
+export const SCOREBOARD = { measured: "Weekly sign-ups", empty: "Paid conversions", pick: "Daily revenue", gap: "6 paid conversions per rep", offMap: "Cut early churn" } as const;
+/** The day a metric's weekly value lands on as the goal's reading (the week's last day). */
+const READ_ON = "Nov 1";
 
 /** The mock's ids: stable UUIDs, as the API's. */
 const id = (k: string) => stableUuid(`goal-map/${k}`);
@@ -76,6 +78,7 @@ const GOALS: GmGoal[] = [
     metric: { id: "metric-signups", title: "Weekly sign-ups" },
     missing: null,
     choices: [],
+    read_on: READ_ON,
   },
   {
     id: "conversions",
@@ -91,6 +94,7 @@ const GOALS: GmGoal[] = [
     metric: { id: "metric-conversions", title: "Paid conversions" },
     missing: null,
     choices: [],
+    read_on: READ_ON,
   },
   {
     id: "revenue",
@@ -106,6 +110,7 @@ const GOALS: GmGoal[] = [
     metric: { id: "metric-revenue", title: "Daily revenue" },
     missing: null,
     choices: [],
+    read_on: READ_ON,
   },
 ];
 
@@ -279,7 +284,7 @@ function hard(): GoalMap {
       lift !== "not_measured" || i % 2 === 0,
     );
   });
-  return { goals, areas, guardrail: GUARDRAIL, milestones, features: [...FEATURES.map((f) => ({ ...f, links: f.links.map((l) => ({ ...l })) })), ...more], gaps: [], unplaced: [], today: "Nov 3", reps: 9, approver: APPROVER, can_edit: true };
+  return { goals, areas, guardrail: GUARDRAIL, milestones, features: [...FEATURES.map((f) => ({ ...f, links: f.links.map((l) => ({ ...l })) })), ...more], gaps: [], unplaced: [], off_map: [], today: "Nov 3", reps: 9, approver: APPROVER, can_edit: true };
 }
 
 function plain(): GoalMap {
@@ -291,6 +296,7 @@ function plain(): GoalMap {
     features: FEATURES.map((f) => ({ ...f, links: f.links.map((l) => ({ ...l })) })),
     gaps: [],
     unplaced: [],
+    off_map: [],
     today: "Nov 3",
     reps: 10,
     approver: APPROVER,
@@ -399,10 +405,30 @@ export function seedGoalMap(scenario: string | null): GoalMap {
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-/** As the API reads them (goal_map.build): each goal's missing, each link's lift from its readings, the gaps and the unplaced features. */
-function finish(map: GoalMap, items: { id: string; title: string; status: string }[]): GoalMap {
+/** A Baseline goal as the map reads it (goal_map._goals): one store, the same ids. */
+export type BaselineGoal = { id: string; key: string; title: string; status: string; attrs: Record<string, unknown> };
+
+/**
+ * The scoreboard's goals as Baseline goals (the API reads the same Entity rows): the map's three,
+ * same ids, each with its number to aim at.
+ */
+export function scoreboardGoals(): BaselineGoal[] {
+  return GOALS.map((g, i) => ({ id: id(g.id), key: `g.${g.id}`, title: g.name, status: "confirmed", attrs: { metric: g.measure, target: g.target, unit: g.unit, math: g.math, position: i + 1 } }));
+}
+
+/** As the API reads them (goal_map.build): each goal's missing, each link's lift from its readings, the gaps, the unplaced features and the goals left off the map. */
+function finish(map: GoalMap, items: { id: string; title: string; status: string }[], baseline: BaselineGoal[]): GoalMap {
   const goalOf = (m: string) => map.goals.find((g) => g.id === map.milestones.find((x) => x.id === m)?.goal);
-  for (const g of map.goals) g.missing = g.current !== null ? null : g.metric ? "values" : "metric";
+  for (const g of map.goals) {
+    g.missing = g.current !== null ? null : g.metric ? "values" : "metric";
+    if (g.current === null) g.read_on = null;
+    // One store: a goal that is a Baseline goal reads its name from it.
+    const e = baseline.find((x) => x.id === g.id);
+    if (e) {
+      g.name = e.title;
+      if (typeof e.attrs.target === "number") g.target = e.attrs.target;
+    }
+  }
   for (const f of map.features) {
     for (const l of f.links) {
       const c = goalOf(l.milestone)?.current ?? null;
@@ -419,7 +445,12 @@ function finish(map: GoalMap, items: { id: string; title: string; status: string
   }
   const placed = new Set(map.features.map((f) => f.id));
   const unplaced = items.filter((i) => !["draft", "cut", "merged"].includes(i.status) && !placed.has(i.id)).map((i) => ({ id: i.id, name: i.title }));
-  return { ...map, gaps, unplaced };
+  const onMap = new Set(map.goals.map((g) => g.id));
+  // Confirmed goals with no number to aim at, never a guardrail (goal_map.build's off_map).
+  const off_map = baseline
+    .filter((e) => e.status === "confirmed" && !onMap.has(e.id) && typeof e.attrs.target !== "number" && !e.attrs.guardrail)
+    .map((e) => ({ id: e.id, key: e.key, name: e.title }));
+  return { ...map, gaps, unplaced, off_map };
 }
 
 function goalStatus(current: number | null, target: number): GmStatus {
@@ -481,11 +512,13 @@ export async function routeGoalMap(
   item: (id: string) => { title: string } | null = () => null,
   /** The Simple roadmap's items as the reader sees them (the unplaced features). */
   items: () => Promise<{ id: string; title: string; status: string }[]> = async () => [],
+  /** The Baseline goals (the goals left off the map; the map's own goal names). */
+  baseline: () => BaselineGoal[] = () => [],
 ): Promise<Response | null> {
   if (p[1] !== "simple" || p[2] !== "goal-map") return null;
   const map = (db.goal_map ??= seedGoalMap(scenario));
   const canEdit = me.role === "owner" || me.role === "approver";
-  const out = async () => json(200, finish({ ...map, can_edit: canEdit }, await items()));
+  const out = async () => json(200, finish({ ...map, can_edit: canEdit }, await items(), baseline()));
   if (req.method === "GET" && !p[3]) return out();
   if (!canEdit) return json(403, { detail: "Only owners and approvers can change the goal map" });
   const body = JSON.parse((await req.text()) || "null");
@@ -506,6 +539,9 @@ export async function routeGoalMap(
     const g = map.goals.find((x) => x.id === p[4]);
     if (!g) return json(404, { detail: "No such goal" });
     const c = g.choices.find((x) => x.id === body?.metric);
+    // A metric the company does not have: 404, as the API (goal_map.pick_metric).
+    const known = map.goals.some((x) => x.metric?.id === body?.metric || x.choices.some((y) => y.id === body?.metric));
+    if (!known) return json(404, { detail: "No such metric" });
     if (!c) return json(422, { detail: "Pick an output metric in the goal's unit" });
     // The goal's old metric lets go: it can be picked again.
     const old = g.metric ? [{ ...g.metric, last: null }] : [];
@@ -515,6 +551,7 @@ export async function routeGoalMap(
     if (c.last !== null) {
       // Its weekly value becomes the goal's reading (on the week's last day, Nov 1).
       g.current = c.last;
+      g.read_on = READ_ON;
       g.status = goalStatus(c.last, g.target);
       for (const m of map.milestones.filter((x) => x.goal === g.id)) {
         Object.assign(m, { current: c.last, days: [null, null, null, null, c.last, null, null] });
@@ -530,6 +567,9 @@ export async function routeGoalMap(
     if (!(t > 0)) return json(422, { detail: "The target must be above 0" });
     g.history = [{ date: DAY_WORDS, text: `Target ${amount(g.target, g.unit)} → ${amount(t, g.unit)}`, by: me.name }, ...g.history];
     g.target = t;
+    // One store: the Baseline goal's number moves with it.
+    const e = baseline().find((x) => x.id === g.id);
+    if (e) e.attrs = { ...e.attrs, target: t };
     return out();
   }
   if (req.method === "POST" && p[3] === "milestones") {

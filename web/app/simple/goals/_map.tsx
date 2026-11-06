@@ -112,7 +112,7 @@ function Bar({ current, target, status }: { current: number | null; target: numb
   const pct = current === null ? 0 : Math.min(100, Math.round((current / target) * 100));
   const tone = status === "missed" ? "bg-crit" : status === "at_risk" ? "bg-warn" : status === "met" ? "bg-pass" : "bg-accent";
   return (
-    <span className="block h-2 w-full overflow-hidden rounded-full bg-surface2" aria-hidden>
+    <span data-testid="gm-bar" className="block h-2 w-full overflow-hidden rounded-full bg-surface2" aria-hidden>
       <span className={`block h-full rounded-full ${tone}`} style={{ width: `${pct}%` }} />
     </span>
   );
@@ -178,6 +178,7 @@ function Reading({ g, canEdit, onPick, gate }: { g: GmGoal; canEdit: boolean; on
   return (
     <span data-testid={gate ? "gm-gate-source" : "gm-goal-source"} className="simple-small text-[14px]! leading-5">
       {g.metric ? `From ${g.metric.title}` : "Typed in by hand"}
+      {g.read_on ? ` · ${g.read_on}` : ""}
     </span>
   );
 }
@@ -228,7 +229,7 @@ function FeatureCard({ f: all, milestone, area, tight, also, fresh, serves = "Al
         {link ? <LiftWhy l={link} unit={unit} name={f.name} /> : <LiftPill l={f.lift} />}
         <span className="simple-small text-[14px]! leading-5">
           {area ? `${area} · ` : ""}{f.expected ? `Expects ${lower(f.expected)}` : "No expected lift yet"} ({f.confidence.toLowerCase()} confidence)
-          {f.measured ? ` · measured ${f.measured}` : f.released ? " · out, no reading yet" : " · not out yet"}
+          {f.measured && f.lift !== "not_measured" ? ` · measured ${f.measured}` : f.released ? " · out, no reading yet" : " · not out yet"}
         </span>
       </span>
       {!!also?.length && (
@@ -371,9 +372,13 @@ export function GoalMapPage() {
   const asked = params.get("goal");
   const askedName = params.get("name");
   const picked = map?.goals.find((g) => g.id === asked)?.id ?? map?.goals.find((g) => !!askedName && g.name.toLowerCase() === askedName.toLowerCase())?.id ?? null;
+  // A goal left off the map (no number to aim at): a line names it and why, never the top in silence.
+  const off = map && asked && !picked ? (map.off_map.find((g) => g.id === asked) ?? (askedName ? { id: asked, key: asked, name: askedName } : null)) : null;
+  const offId = off?.id ?? null;
   useEffect(() => {
     if (picked) reveal(`[data-goal="${picked}"]`, "start");
-  }, [picked]);
+    else if (offId) reveal(`[data-testid="gm-off-map"]`, "start");
+  }, [picked, offId]);
 
   if (!map) return <div className="simple-page" role="status">{q.error ? errorMessage(q.error) : "Loading the goal map…"}</div>;
 
@@ -492,6 +497,16 @@ export function GoalMapPage() {
           <h1 className="simple-h1 max-[600px]:sr-only">Goal map</h1>
           <p className="simple-small">Goals, areas, milestones and features. Updated daily · {map.today}.</p>
           <Flags map={map} open={open} />
+          {off && (
+            <p data-testid="gm-off-map" className="simple-small flex flex-wrap items-center gap-x-2 rounded-xl border border-line px-3 py-1.5">
+              <span>
+                Not on the map yet: <b className="font-semibold text-text">{off.name}</b> has no number to aim at.
+              </span>
+              <Link href={`/simple/priorities?goal=${encodeURIComponent(off.key)}&name=${encodeURIComponent(off.name)}`} className="font-semibold text-accent-ink hover:underline">
+                Open the goal
+              </Link>
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {map.can_edit && (
@@ -805,6 +820,11 @@ function FlagDrawer({ map, kind, onClose, open, onOpen }: { map: GoalMap; kind: 
   if (kind === "gaps")
     return (
       <Drawer title="Gate areas with no feature" onClose={onClose} testId="gm-flag-list">
+        {!map.can_edit && map.approver && (
+          <p data-testid="gm-gap-who" className="simple-small">
+            Ask {map.approver} to place a feature.
+          </p>
+        )}
         <ul className="flex flex-col gap-1.5">
           {map.gaps.map((g) => {
             const m = map.milestones.find((x) => x.id === g.milestone);
@@ -892,13 +912,23 @@ function GoalCard({ g, onEdit, canEdit, onPick, picked }: { g: GmGoal; onEdit: (
         <StatusPill s={g.status} />
       </span>
       <span className="flex items-baseline gap-2">
-        <span className="simple-number text-[26px]! leading-8!">{num(g.current, g.unit)}</span>
-        <span className="text-text2">of {num(g.target, g.unit)} a day</span>
+        {/* Not measured: the words stand where the number goes, the target beside them, no empty bar. */}
+        {g.current === null ? (
+          <>
+            <span data-testid="gm-goal-value" className="text-[18px] font-semibold leading-8 text-na">Not measured yet</span>
+            <span data-testid="gm-goal-target" className="text-text2">Target {num(g.target, g.unit)} a day</span>
+          </>
+        ) : (
+          <>
+            <span data-testid="gm-goal-value" className="simple-number text-[26px]! leading-8!">{num(g.current, g.unit)}</span>
+            <span data-testid="gm-goal-target" className="text-text2">of {num(g.target, g.unit)} a day</span>
+          </>
+        )}
         <span className="ml-auto">
           {canEdit && <Btn small testId="gm-edit-goal" onClick={onEdit}>Edit</Btn>}
         </span>
       </span>
-      <Bar current={g.current} target={g.target} status={g.status} />
+      {g.current !== null && <Bar current={g.current} target={g.target} status={g.status} />}
       {/* Only the goal's own math: no goal is said to build on another. */}
       <span className="simple-small text-[14px]! leading-5">{g.math}</span>
       {g.missing && <span data-testid="gm-goal-missing" className="simple-small text-[14px]! leading-5">{readingLine(g)}</span>}
@@ -926,6 +956,17 @@ function sortMs(map: GoalMap): GmMilestone[] {
   const d = depth(map.milestones);
   const order = ["Oct", "Nov", "Dec", "Jan", "Feb"];
   return [...map.milestones].sort((a, b) => d[a.id] - d[b.id] || order.indexOf(a.month) - order.indexOf(b.month) || a.goal.localeCompare(b.goal) || (a.threshold ?? 0) - (b.threshold ?? 0));
+}
+
+/** A gate's reading against its threshold; not measured: the words in the number's place, then the target. */
+function gateLine(m: GmMilestone, map: GoalMap): string {
+  const reading =
+    m.current === null
+      ? `Not measured yet · ${m.threshold === null ? "no gate yet" : `Target ${num(m.threshold, m.unit)}`}`
+      : m.threshold === null
+        ? `${num(m.current, m.unit)} now · no gate yet`
+        : `${num(m.current, m.unit)} of ${num(m.threshold, m.unit)}`;
+  return `${reading} · ${afterWords(m, map)}`;
 }
 
 function afterWords(m: GmMilestone, map: GoalMap): string {
@@ -982,8 +1023,8 @@ function Ladder(ctx: Ctx) {
                     ) : (
                       <span className="text-[17px] font-semibold leading-6">{m.name}</span>
                     )}
-                    <span className="text-[16px] leading-6 text-text2">
-                      {m.threshold === null ? `${num(m.current, m.unit)} now · no gate yet` : `${num(m.current, m.unit)} of ${num(m.threshold, m.unit)}`} · {afterWords(m, map)}
+                    <span data-testid="gm-gate-reading" className="text-[16px] leading-6 text-text2">
+                      {gateLine(m, map)}
                     </span>
                     <Proof m={m} compact week={ctx.week} goal={goalOf(map, m)} />
                     {goalOf(map, m) && <Reading g={goalOf(map, m)!} canEdit={map.can_edit} onPick={(id) => open("metric", id)} gate />}
@@ -1052,8 +1093,8 @@ function LadderPhone({ map, ms, home, onOpen, week, open }: Ctx & { ms: GmMilest
             <span className="font-semibold">{m.name}</span>
             <StatusPill s={m.status} />
           </span>
-          <span className="simple-small">
-            {m.threshold === null ? `${num(m.current, m.unit)} now · no gate yet` : `${num(m.current, m.unit)} of ${num(m.threshold, m.unit)}`} · {afterWords(m, map)}
+          <span data-testid="gm-gate-reading" className="simple-small">
+            {gateLine(m, map)}
           </span>
           <Proof m={m} compact week={week} goal={goalOf(map, m)} />
           {goalOf(map, m) && <Reading g={goalOf(map, m)!} canEdit={map.can_edit} onPick={(id) => open("metric", id)} gate />}
