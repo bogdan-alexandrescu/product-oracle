@@ -580,7 +580,8 @@ export function revokeNeeds(failures: RevokeFailure[], busy: string | null, act:
       kind: "Couldn't revoke",
       item: (
         <>
-          <span className="truncate" title={f.title}>
+          {/* pass-f F-48: the whole title, wrapping between words, never cut mid-word. */}
+          <span className="min-w-0 break-words" title={f.title}>
             {f.title}
           </span>
           <InfoTip label="this revoke" align="start">

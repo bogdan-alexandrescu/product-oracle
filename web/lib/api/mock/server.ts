@@ -4963,7 +4963,7 @@ function settleInviteEmails(db: Db) {
   for (const i of db.invites) {
     if (i.email_status !== "queued" || Date.now() - Date.parse(i.email_at ?? "") < MAIL_DELAY_MS) continue;
     const resent = (db.invites_resent ??= []).includes(i.id);
-    if (fails && !resent) Object.assign(i, { email_status: "failed", email_error: "the Gmail API answered 503", email_at: now() });
+    if (fails && !resent) Object.assign(i, { email_status: "failed", email_error: "Google returned 503 (unavailable)", email_at: now() });
     else Object.assign(i, { email_status: "sent", email_error: null, email_at: now() });
   }
 }
@@ -5154,7 +5154,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
       if (!SIGN_IN_DOMAINS.includes(email.split("@")[1])) {
         // A5 (3.4): the API's outside_company_domains refusal.
         return json(422, {
-          detail: `${email} is outside the company's email domains (${SIGN_IN_DOMAINS.join(", ")}), so Google sign-in can't let them join. Add the domain under Sign-in first.`,
+          detail: `${email} is not in the company domains`,
         });
       }
       if (db.members.some((x) => x.email === email)) return json(409, { detail: `${email} is already a member` });

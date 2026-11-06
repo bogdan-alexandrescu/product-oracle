@@ -66,6 +66,8 @@ const empty = (): Holding => ({ held: {}, section_approvals: 0, version_approval
 const approval = (who: string, at: string, section_key: string | null): Schemas["TokenApprovalOut"] => ({
   kind: section_key ? "section" : "version",
   document: "usage-alerts",
+  document_title: "Usage alerts",
+  section_title: section_key ? section_key.charAt(0).toUpperCase() + section_key.slice(1) : null,
   version: 4,
   section_key,
   approver_id: who,

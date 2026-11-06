@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import { Field, INPUT, SELECT } from "@/app/settings/_components/fields";
@@ -23,6 +22,8 @@ const RULES: { value: Rule; label: string; line: string }[] = [
 ];
 const ROLE_WORD = { owner: "Owner", approver: "Approver", commenter: "Commenter", viewer: "Viewer" } as const;
 const DOMAINS_KEY = "company_email_domains";
+/** pass-f F-50: the invite form's Add domain asks this panel to add a domain (its detail). */
+export const ADD_DOMAIN_EVENT = "po-add-sign-in-domain";
 
 const writeSetting = (key: string, value: unknown) =>
   unwrap(api.PUT("/v1/settings/{key}", { params: { path: { key } }, body: { value } }));
@@ -52,6 +53,22 @@ export function SignInRules() {
   const [saved, setSaved] = useState<string | null>(null);
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => void (savedTimer.current && clearTimeout(savedTimer.current)), []);
+  // pass-f F-50: an invite refused for its domain offers Add domain, which opens the list here with it.
+  useEffect(() => {
+    const onAdd = (e: Event) => {
+      const domain = (e as CustomEvent<string>).detail;
+      setEditing(true);
+      setText(domain);
+      setError(null);
+      requestAnimationFrame(() => {
+        const input = document.getElementById(inputId) as HTMLInputElement | null;
+        input?.scrollIntoView({ block: "center" });
+        input?.focus();
+      });
+    };
+    window.addEventListener(ADD_DOMAIN_EVENT, onAdd);
+    return () => window.removeEventListener(ADD_DOMAIN_EVENT, onAdd);
+  }, [inputId]);
   const rules = q.data;
   const off = !!rules && (!rules.google_sign_in || rules.new_sign_ins_off);
 
@@ -108,19 +125,17 @@ export function SignInRules() {
             <section aria-label="Company domains" className="flex flex-col gap-2">
               <span className="flex flex-wrap items-center gap-2">
                 <h3 className={H3}>Company domains</h3>
+                {/* qa-settings-17: Sources › Google Drive shows the same list as "Company email domains";
+                    pass-f F-50: why it matters is behind the (i), not on the page. */}
+                <InfoTip label="company domains" align="start">
+                  <span data-testid="sign-in-domains-hint">
+                    Who may sign in from Google. It is the same list as Company email domains in Settings › Sources, where
+                    it also decides which Google Drive docs Oracle reads: docs in picked folders owned outside these domains
+                    are skipped.
+                  </span>
+                </InfoTip>
                 {saved === DOMAINS_KEY && <Saved />}
               </span>
-              {/* qa-settings-17: Sources › Google Drive shows the same list as "Company email domains". */}
-              <p data-testid="sign-in-domains-hint" className="text-sm text-text2">
-                Who may sign in from Google. It is the same list as Company email domains in{" "}
-                <Link
-                  href="/settings/sources#company-domains"
-                  className="font-semibold text-accent-ink hover:underline max-[600px]:inline-flex max-[600px]:min-h-11 max-[600px]:items-center"
-                >
-                  Settings › Sources
-                </Link>
-                , where it also decides which Google Drive docs Oracle reads.
-              </p>
               <ul aria-label="Company domains" className="flex flex-wrap gap-1.5">
                 {rules.domains.map((d) => (
                   <li key={d.domain} aria-label={d.domain} data-testid="sign-in-domain" data-from={d.from}>
@@ -178,9 +193,6 @@ export function SignInRules() {
                   <Button variant="ghost" className="h-9" onClick={() => setEditing(false)}>
                     Done
                   </Button>
-                  <p className="basis-full text-sm text-text2">
-                    Docs in picked Drive folders owned outside these domains are skipped (Settings › Sources).
-                  </p>
                 </form>
               )}
             </section>
@@ -192,6 +204,9 @@ export function SignInRules() {
             <section aria-label="Without an invite" className="flex flex-col gap-2">
               <span className="flex flex-wrap items-center gap-2">
                 <h3 className={H3}>Without an invite</h3>
+                <InfoTip label="without an invite" align="start">
+                  <span data-testid="sign-in-rule-line">{RULES.find((r) => r.value === rules.without_invite)?.line}</span>
+                </InfoTip>
                 {saved === "sign_in_without_invite" && <Saved />}
               </span>
               {/* On a phone the three choices wrap onto rows of their own. */}
@@ -203,12 +218,19 @@ export function SignInRules() {
                   onChange={(v) => void save("sign_in_without_invite", v)}
                 />
               </div>
-              <p data-testid="sign-in-rule-line" className="text-sm text-text2">
-                {RULES.find((r) => r.value === rules.without_invite)?.line}
-              </p>
             </section>
             <section className="flex flex-col gap-2">
-              <Field label="Default role" className="max-w-56">
+              <Field
+                label={
+                  <span className="inline-flex items-center gap-1.5">
+                    Default role
+                    <InfoTip label="the default role" align="start">
+                      The role an approved request starts with, and the role of anyone who joins at once.
+                    </InfoTip>
+                  </span>
+                }
+                className="max-w-56"
+              >
                 <select
                   aria-label="Default role"
                   value={rules.default_role === "viewer" || rules.default_role === "commenter" ? rules.default_role : ""}
@@ -222,7 +244,6 @@ export function SignInRules() {
                 </select>
               </Field>
               {saved === "iap_default_role" && <Saved />}
-              <p className="text-sm text-text2">The role an approved request starts with, and the role of anyone who joins at once.</p>
               {(rules.default_role === "approver" || rules.default_role === "owner") && (
                 <Notice tone="warn">
                   Anyone from these domains starts as {rules.default_role}. Choose Viewer or Commenter.
