@@ -1,7 +1,7 @@
 {
   "owner": {
     "/account": 118,
-    "/baseline": 11,
+    "/baseline": 0,
     "/briefs/[id]": 8,
     "/company/decisions": 44,
     "/company/market": 33,
@@ -68,7 +68,7 @@
     "/settings/webhooks": 13,
     "/simple": 81,
     "/simple/decisions": 60,
-    "/simple/goals": 30,
+    "/simple/goals": 22,
     "/simple/meetings": 61,
     "/simple/meetings/[id]": 24,
     "/simple/meetings/[id]/chat": 9,
@@ -81,7 +81,7 @@
   },
   "viewer": {
     "/account": 120,
-    "/baseline": 11,
+    "/baseline": 0,
     "/briefs/[id]": 8,
     "/company/decisions": 44,
     "/company/market": 33,
@@ -148,7 +148,7 @@
     "/settings/webhooks": 8,
     "/simple": 63,
     "/simple/decisions": 46,
-    "/simple/goals": 30,
+    "/simple/goals": 22,
     "/simple/meetings": 75,
     "/simple/meetings/[id]": 24,
     "/simple/meetings/[id]/chat": 10,

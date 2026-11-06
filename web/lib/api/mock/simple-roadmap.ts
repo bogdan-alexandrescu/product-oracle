@@ -1719,6 +1719,27 @@ export function dateSuggestionInboxRows(db: SimpleDb | undefined, me: { id: stri
   return out;
 }
 
+/** simple-roadmap-500-paint: what GET /v1/simple/roadmap and GET /v1/simple/roadmap/waiting
+ * read, by reader and query, while the roadmap's own data is the same (mockFetch turns this on
+ * for those two reads only). The mock answers on the page's own thread, one call at a time, so
+ * building the same 500 items again for the waiting counts held up drawing them. */
+let readsOn = false;
+let reads: { stored: string; out: Map<string, Schemas["SimpleRoadmapOut"] | null> } = { stored: "", out: new Map() };
+export function roadmapReadsAt(on: boolean): void {
+  readsOn = on;
+}
+function readRoadmap(db: SimpleDb, role: Role, q: URLSearchParams, me: Who): Schemas["SimpleRoadmapOut"] | null {
+  if (!readsOn) return roadmapOut(db, role, q, me);
+  const stored = JSON.stringify(db);
+  if (stored !== reads.stored) reads = { stored, out: new Map() };
+  const key = new URLSearchParams(q);
+  if (!key.get("group")) key.set("group", "goal");
+  key.sort();
+  const at = `${role}|${me.id}|${companyToday()}|${key}`;
+  if (!reads.out.has(at)) reads.out.set(at, roadmapOut(db, role, q, me));
+  return reads.out.get(at) ?? null;
+}
+
 /** /v1/simple/roadmap and its date suggestions (api/oracle/simple/router.py). */
 export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   if (p[1] !== "simple" || p[2] !== "roadmap") return null;
@@ -1728,7 +1749,7 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
   settleDrafting(db);
   if (!p[3] && m === "GET") {
     if (q.get("roadmap") && !readableRoadmap(q.get("roadmap"), me.role)) return json(404, { detail: "No such roadmap" });
-    const out = roadmapOut(db, me.role, q, me);
+    const out = readRoadmap(db, me.role, q, me);
     return out ? json(200, out) : json(422, { detail: "group: goal, track or prd" });
   }
   if (p[3] === "waiting" && !p[4] && m === "GET") {
@@ -1736,7 +1757,7 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
     // the dates the reader may confirm, no filter but ``roadmap`` (one roadmap's; 404 when unread).
     const one = q.get("roadmap");
     if (one && !readableRoadmap(one, me.role)) return json(404, { detail: "No such roadmap" });
-    const items = (roadmapOut(db, me.role, new URLSearchParams(one ? { roadmap: one } : {}), me)?.items ?? []).filter((i) => i.status !== "done");
+    const items = (readRoadmap(db, me.role, new URLSearchParams(one ? { roadmap: one } : {}), me)?.items ?? []).filter((i) => i.status !== "done");
     const links = items.flatMap((i) => i.flags).filter((f) => f.state === "red" && f.fixes.length > 0 && (f.kind === "dependency_order" || f.kind === "cut_with_dependents"));
     return json(200, { broken_links: links.length, dates_to_confirm: items.filter((i) => !!i.suggestion?.can_decide).length });
   }

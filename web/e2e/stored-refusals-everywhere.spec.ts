@@ -26,15 +26,15 @@ test.beforeEach(async ({ page }) => {
   await login(page);
 });
 
-test("a failed run and its segment say when they failed, the refusal in the past", async ({ page }) => {
+test("a failed run says when it failed once, the refusal in the past", async ({ page }) => {
   await page.goto("/runs");
   await page.locator('[data-testid="run-row"][data-document="checkout-redesign"]').filter({ hasText: "Failed" }).getByRole("link").first().click();
 
   const notes = page.getByTestId("failed-at");
-  await expect(notes).toHaveCount(2);
-  await expect(notes).toHaveText([`${FAILED}.`, `${FAILED}.`]);
-  // The run's note, then the segment's: when, then what was so.
-  await expect(page.getByText(THEN)).toHaveCount(2);
+  // The run's banner says when, then what was so; the segment row does not repeat it.
+  await expect(notes).toHaveCount(1);
+  await expect(notes).toHaveText(`${FAILED}.`);
+  await expect(page.getByText(THEN)).toHaveCount(1);
   await noCurrentRefusal(page);
 });
 
