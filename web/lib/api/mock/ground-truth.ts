@@ -96,6 +96,8 @@ const flag = (kind: Kind, fixes: [Action, string][], rest: Partial<Flag>): Flag 
   where: { roadmap: null, prd: null },
   words: WORDS[kind],
   fixes: fixes.map(([action, target]) => ({ action, target, words: FIX_WORDS[action] })),
+  hint: null,
+  like: null,
   ...rest,
 });
 
