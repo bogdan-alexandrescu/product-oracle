@@ -996,6 +996,9 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       const names = new Set(seen.items.flatMap((x) => [x.key, prdCode(x.section)]).filter((k): k is string => !!k).map((k) => k.toLowerCase()));
       const unknown = clean.find((k) => !(seen.items.find((x) => x.key === key)?.depends ?? []).includes(k) && !names.has(k.toLowerCase()));
       if (unknown) return json(422, { detail: `after.depends_on: no item or feature has the key ${unknown}` });
+      // changes._loop (goal-ladder): a new key whose item already waits on this one is refused.
+      const loop = dependsLoop(seen.items, key, clean.filter((k) => !(seen.items.find((x) => x.key === key)?.depends ?? []).includes(k)));
+      if (loop) return json(422, { detail: loop });
       after = { depends_on: clean };
     } else if (body.op === "set_status") {
       if (!["planned", "done", "cut"].includes(String(a.status))) return json(422, { detail: "after.status: planned, done or cut" });
@@ -1036,6 +1039,33 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
 }
 
 /** /v1/simple/sessions and /v1/simple/changes (api/oracle/simple/changes_router.py). */
+/** changes._loop: the reason a new dependency is refused (the item it names already waits on
+ * this one, directly or through others), naming both by code and name; null when no loop. */
+function dependsLoop(items: SimpleDb["items"], key: string, added: string[]): string | null {
+  const keyOf = (x: SimpleDb["items"][number]) => [x.key, prdCode(x.section)].filter((k): k is string => !!k).map((k) => k.toLowerCase());
+  const byKey = new Map(items.flatMap((x) => keyOf(x).map((k) => [k, x] as const)));
+  const me = items.find((x) => x.key === key);
+  if (!me) return null;
+  const mine = new Set(keyOf(me));
+  const named = (x: SimpleDb["items"][number]) => `${prdCode(x.section) ?? x.key} ${x.title}`;
+  for (const k of added) {
+    const start = byKey.get(k.toLowerCase());
+    const seen = new Set<string>();
+    const todo = start ? [start] : [];
+    while (todo.length) {
+      const e = todo.pop()!;
+      if (seen.has(e.key)) continue;
+      seen.add(e.key);
+      for (const d of e.depends ?? []) {
+        if (mine.has(d.toLowerCase())) return `Not added, it would make a loop: ${named(start!)} already waits on ${named(me)}`;
+        const next = byKey.get(d.toLowerCase());
+        if (next) todo.push(next);
+      }
+    }
+  }
+  return null;
+}
+
 export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   if (p[1] !== "simple" || !["sessions", "changes", "drafts", "roadmap", "priorities", "goal-suggestions", "goals"].includes(p[2] ?? "")) return null;
   const m = req.method;
