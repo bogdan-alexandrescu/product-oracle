@@ -110,8 +110,10 @@ async def test_simple_reads_product_decisions_never_run_approvals(client):
     async with tenant_session(w.ctx.tenant_id) as s:
         prd = await s.scalar(select(Document).where(Document.slug == PRD))
         owner = w.ctx.users["owner"].id
-        for title, origin in (("Should refunds wait for the ledger?", "oracle"),
-                              ("Approve the plan · Build the Ground Truth", "checkpoint")):  # fmt: skip
+        for title, origin in (
+            ("Should refunds wait for the ledger?", "oracle"),
+            ("Approve the plan · Build the Ground Truth", "checkpoint"),
+        ):
             await _decision(s, title, origin, str(prd.id), owner)
         await s.commit()
     r = await client.get("/v1/simple/decisions", headers=w.ctx.as_("viewer"))
