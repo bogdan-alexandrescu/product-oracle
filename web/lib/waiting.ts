@@ -85,3 +85,31 @@ export async function reloadWaiting(reload: () => Promise<unknown>): Promise<voi
   waitingChanged();
   await reloaded;
 }
+
+/**
+ * QA pass D-2: the kinds Home's Needs you counts by, each a set of the Inbox's groups (NeedGroup,
+ * app/inbox/_needs). Every counted row falls in one kind (Other holds the rest), so the chips add
+ * up to the total; `/inbox?kind=<id>` shows that kind only.
+ */
+export const NEED_KINDS = [
+  { id: "approvals", label: "Approvals", groups: ["checkpoints", "approvals", "roadmap-approvals", "overruns"] },
+  { id: "runs", label: "Runs", groups: ["lookups", "imports", "tracks", "deliveries", "revising", "searches"] },
+  { id: "access", label: "Access", groups: ["revoke-failures", "access-failures", "access-requests", "share-revocations"] },
+  { id: "reviews", label: "Reviews", groups: ["feedback", "discussions"] },
+  { id: "decisions", label: "Decisions", groups: ["decisions"] },
+  { id: "questions", label: "Questions", groups: ["questions"] },
+  // Proposals on my items, Oracle's dates and goal suggestions (a roadmap version waiting for my
+  // approval is an approval).
+  { id: "proposals", label: "Proposals", groups: ["proposals"] },
+  { id: "other", label: "Other", groups: [] as string[] },
+] as const;
+
+export type NeedKind = (typeof NEED_KINDS)[number]["id"];
+
+/** The kind a row of this Inbox group is counted under. */
+export function needKind(group: string): NeedKind {
+  return NEED_KINDS.find((k) => (k.groups as readonly string[]).includes(group))?.id ?? "other";
+}
+
+/** A `?kind=` value, if it names a kind. */
+export const asNeedKind = (v: string | null | undefined): NeedKind | null => NEED_KINDS.find((k) => k.id === v)?.id ?? null;

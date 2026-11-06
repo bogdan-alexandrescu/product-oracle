@@ -57,7 +57,7 @@ CHANGED = "This change changed since you loaded it; look again"
 NOT_OPEN = "This change was already handled"
 MADE_PRIVATE = "The finding was made private"
 LOCKED = "Section {section} is approved and locked"
-RECORDERS = "Engineering leads and approvers record date bases"
+RECORDERS = "Engineering leads and approvers add date sources"
 NOT_FOUND = "Change not found"
 CHOOSE_APPROVER = "Choose who decides it"
 KEEP_REASON = "Say why you apply it anyway"
@@ -1201,10 +1201,10 @@ async def record(
             tracker_key=p.get("tracker_key"),
         )  # fmt: skip
     except ValidationError as e:
-        raise DiscussionError(422, f"The date basis does not read: {e.errors()[0]['msg']}") from e
+        raise DiscussionError(422, f"The date source does not read: {e.errors()[0]['msg']}") from e
     prd = await db.get(Document, uuid.UUID(body.prd))
     if prd is None or prd.kind != "prd":
-        raise DiscussionError(422, "The date basis names no PRD")
+        raise DiscussionError(422, "The date source names no PRD")
     row = ScheduleBasis(
         kind=body.kind, reference=body.reference.strip(), supports_date=body.supports_date,
         detail=body.detail, prd_document_id=prd.id, item_key=body.item_key,

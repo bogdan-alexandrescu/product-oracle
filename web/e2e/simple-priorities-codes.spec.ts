@@ -111,6 +111,8 @@ const CODES = {
   "alert-sso": "ARB",
   "price-tiers": "NPT",
   "setup-video": "WV",
+  // F-03 Health log: the Guided setup PRD's feature on the onboarding roadmap (no code of its own, its section's).
+  "setup-health-log": "F-03",
 };
 
 test.describe("desktop", () => {

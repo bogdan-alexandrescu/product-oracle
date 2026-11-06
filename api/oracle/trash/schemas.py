@@ -5,7 +5,19 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 # trash-features-goals: a roadmap feature or a goal, too (oracle.simple.trash_items).
-TrashItemType = Literal["document", "intake", "run", "feature", "goal"]
+# edit-decisions: an open decision or a PRD question (oracle.simple.decision_sheet).
+# port-an-decisions: a meeting's agenda item or a request.
+TrashItemType = Literal[
+    "document",
+    "intake",
+    "run",
+    "feature",
+    "goal",
+    "decision",
+    "question",
+    "agenda_item",
+    "request",
+]
 
 
 class TrashItem(BaseModel):

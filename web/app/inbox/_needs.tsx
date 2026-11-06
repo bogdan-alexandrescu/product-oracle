@@ -172,8 +172,11 @@ export const NEED_COLUMNS: Column<Need>[] = [
   },
 ];
 
-/** qa-company-27: on Home's narrow lines a long item or "For" wraps to a second line, then ends in an ellipsis (its title holds the rest). */
-const WRAP_TWO = "[&_.truncate]:line-clamp-2 [&_.truncate]:whitespace-normal [&_.truncate]:break-words";
+/**
+ * qa-company-27: on Home's narrow lines a long item or "For" wraps to a second line, then ends in an ellipsis (its title holds the rest).
+ * QA pass D-8: clipped at two lines on a phone too, where DataTable lets `.truncate` overflow (else line 3 draws over the next line).
+ */
+const WRAP_TWO = "[&_.truncate]:line-clamp-2 [&_.truncate]:whitespace-normal [&_.truncate]:break-words max-[600px]:[&_.truncate]:overflow-hidden!";
 
 /** Home's narrower lines: one action each. */
 export const NEED_COLUMNS_COMPACT: Column<Need>[] = NEED_COLUMNS.map((c) =>

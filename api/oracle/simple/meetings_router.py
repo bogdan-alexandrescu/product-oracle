@@ -8,6 +8,8 @@ people: a run's token is refused (the ``simple`` area is in no run-token scope).
 - ``POST .../join``: commenter and up joins a live meeting.
 - ``PATCH .../rules``: the presenter's change mode and who is absent.
 - ``POST .../comments``: a comment, recorded as a meeting decision.
+- ``POST .../agenda`` (agenda-sheet): add, rename, move, remove an agenda item and Undo;
+  an owner or the PRD's decider saves, an approver proposes (accept, withdraw), 403 else.
 - ``POST .../approve``: the PRD's decider (or an owner) approves the meeting's drafts.
 - ``POST .../end``: the presenter, the decider or an owner; Oracle drafts the minutes.
 - ``PUT .../minutes``: edit them before sending; ``POST .../send``: Decisions and Inbox
@@ -28,9 +30,12 @@ from typing import Annotated
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
 from oracle.auth.deps import Principal, TenantDB
+from oracle.decisions.models import Decision
 from oracle.simple import meeting_draft, meetings
 from oracle.simple.router import _people
 from oracle.simple.schemas import (
+    SimpleAgendaEditIn,
+    SimpleDecisionRow,
     SimpleDecisionsOut,
     SimpleDecisionsWaitingOut,
     SimpleDraftDatesIn,
@@ -132,6 +137,17 @@ async def comment_in_simple_meeting(
     meeting_id: uuid.UUID, body: SimpleMeetingCommentIn, principal: Commenter, db: TenantDB
 ) -> SimpleMeetingOut:
     await _run(db, meetings.comment(db, principal, meeting_id, body.text, body.subjects))
+    await db.commit()
+    return await _out(db, principal, meeting_id)
+
+
+@router.post("/meetings/{meeting_id}/agenda", response_model=SimpleMeetingOut,
+             name="edit_simple_meeting_agenda")  # fmt: skip
+async def edit_simple_meeting_agenda(
+    meeting_id: uuid.UUID, body: SimpleAgendaEditIn, principal: Commenter, db: TenantDB
+) -> SimpleMeetingOut:
+    """agenda-sheet: one op of the Agenda sheet (oracle.simple.meetings.edit_agenda)."""
+    await _run(db, meetings.edit_agenda(db, principal, meeting_id, body.model_dump()))
     await db.commit()
     return await _out(db, principal, meeting_id)
 
@@ -287,3 +303,41 @@ async def get_simple_decisions_waiting(
     out = await _run(db, questions.waiting(db, principal))
     await db.commit()
     return out
+
+
+async def _question_shown(db: TenantDB, principal: Principal, d: Decision) -> bool:
+    """A PRD's question as the Decisions page lists it: its PRD is not deleted and the
+    reader reads it; an open one of a replaced PRD is left out (simple-replaced-prds)."""
+    from oracle.docs.models import Document
+
+    ref = (d.prd_question or {}).get("document_id")
+    doc = await db.get(Document, uuid.UUID(str(ref))) if ref else None
+    if (
+        doc is None
+        or doc.deleted_at is not None
+        or not await meetings._readable(db, principal, doc)
+    ):
+        return False
+    return not (doc.replaced_by and d.status == "proposed")
+
+
+@router.get(
+    "/decisions/{decision_id}", response_model=SimpleDecisionRow, name="get_simple_decision"
+)  # fmt: skip
+async def get_simple_decision(
+    decision_id: uuid.UUID, principal: Reader, db: TenantDB
+) -> SimpleDecisionRow:
+    """edit-decisions (ec1 b): one decision as the Decisions page lists it, with every field
+    the sheet shows and what this reader may do there (Home's and Waiting for you's
+    decision-log calls open the sheet by id). After /decisions/waiting, which it would hide."""
+    from oracle.simple import decision_sheet
+
+    d = await db.get(Decision, decision_id)
+    if d is None or d.origin == "checkpoint" or d.deleted_at is not None:
+        raise HTTPException(404, "No such decision")
+    if d.origin == "prd" and not await _question_shown(db, principal, d):
+        raise HTTPException(404, "No such decision")
+    edited = await decision_sheet.edits(db, {d.id})
+    by = {b for _, b in edited.values()}
+    names = await meetings._names(db, ({d.approver_id} if d.approver_id else set()) | by)
+    return meetings._row(d, names, principal, edited)

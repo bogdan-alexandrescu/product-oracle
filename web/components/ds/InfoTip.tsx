@@ -15,6 +15,7 @@ export function InfoTip({
   side = "top",
   hero = false,
   testId = "info-tip",
+  id: given,
 }: {
   /** What the tip is about; the button's name is "About <label>". */
   label: string;
@@ -26,8 +27,11 @@ export function InfoTip({
   hero?: boolean;
   /** The (i) button's test id, where a page tells one tip from another. */
   testId?: string;
+  /** The tip text's id, for a control the tip explains to name in its aria-describedby. */
+  id?: string;
 }) {
-  const id = useId();
+  const own = useId();
+  const id = given ?? own;
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
   const root = useRef<HTMLSpanElement>(null);

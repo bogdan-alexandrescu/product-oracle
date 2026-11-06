@@ -42,6 +42,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from oracle.db import Base, TenantScoped
 from oracle.docs.models import _in
+from oracle.trash.models import Trashable, trashed_index
 from oracle.v2.models import _fk, _json, _lock_version, _updated_at, _uuids
 
 # ``in_app``: filed with New request on the Requests screen (#329, migration 0025).
@@ -120,7 +121,7 @@ class RequestTheme(TenantScoped, Base):
     __mapper_args__ = {"version_id_col": lock_version}
 
 
-class ProductRequest(TenantScoped, Base):
+class ProductRequest(Trashable, TenantScoped, Base):
     __tablename__ = "product_requests"
     __table_args__ = (
         CheckConstraint(_in("channel", CHANNELS), name="channel"),
@@ -135,6 +136,8 @@ class ProductRequest(TenantScoped, Base):
         ),
         CheckConstraint("merged_into_id IS NULL OR merged_into_id <> id", name="not_self"),
         Index("ix_product_requests_state", "tenant_id", "state", text("created_at DESC")),
+        # port-an-decisions: a request an owner deleted to Trash (DELETE /v1/requests/{id}).
+        trashed_index("product_requests"),
     )
 
     title: Mapped[str] = mapped_column(Text, nullable=False)

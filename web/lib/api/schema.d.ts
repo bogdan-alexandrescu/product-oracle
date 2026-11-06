@@ -11333,7 +11333,12 @@ export interface paths {
         get: operations["get_request"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Request
+         * @description port-an-decisions: an owner deletes the request to Settings › Trash (30 days, then
+         *     gone for good); Restore there brings it back. A request others are merged into stays.
+         */
+        delete: operations["delete_request"];
         options?: never;
         head?: never;
         /**
@@ -12910,6 +12915,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/decisions/{decision_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Simple Decision
+         * @description edit-decisions (ec1 b): one decision as the Decisions page lists it, with every field
+         *     the sheet shows and what this reader may do there (Home's and Waiting for you's
+         *     decision-log calls open the sheet by id). After /decisions/waiting, which it would hide.
+         */
+        get: operations["get_simple_decision"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Simple Decision
+         * @description Move an open decision or PRD question to Trash (30 days, then deleted for good): who
+         *     may withdraw it (its decider, whoever made it, an owner); others are refused.
+         */
+        delete: operations["delete_simple_decision"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/decisions/{decision_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Simple Decision
+         * @description Put the decision or question back from Trash with every link: an owner, or whoever
+         *     deleted it.
+         */
+        post: operations["restore_simple_decision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/sessions": {
         parameters: {
             query?: never;
@@ -13805,6 +13858,26 @@ export interface paths {
         put?: never;
         /** Comment In Simple Meeting */
         post: operations["comment_in_simple_meeting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/meetings/{meeting_id}/agenda": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Edit Simple Meeting Agenda
+         * @description agenda-sheet: one op of the Agenda sheet (oracle.simple.meetings.edit_agenda).
+         */
+        post: operations["edit_simple_meeting_agenda"];
         delete?: never;
         options?: never;
         head?: never;
@@ -18876,7 +18949,7 @@ export interface components {
             /** Message Id */
             message_id: string | null;
             /** Op */
-            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped" | "api_action");
+            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped" | "api_action");
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -18994,7 +19067,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -21207,6 +21280,8 @@ export interface components {
              * @default []
              */
             subjects: components["schemas"]["Subject"][];
+            /** Review At */
+            review_at?: string | null;
         };
         /**
          * DecisionEntityRef
@@ -27744,7 +27819,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
             /**
              * Status
              * @enum {string}
@@ -39877,6 +39952,8 @@ export interface components {
         /**
          * SimpleAgenda
          * @description chat-actions: the item the meeting takes next and the items it skips.
+         *     agenda-sheet: the rows in order, the PRD's features not on it yet, what the last batch
+         *     of the sheet did (for its Undo line) and an approver's waiting proposal.
          */
         SimpleAgenda: {
             next?: components["schemas"]["SimpleAgendaItem"] | null;
@@ -39885,6 +39962,57 @@ export interface components {
              * @default []
              */
             skipped: components["schemas"]["SimpleAgendaItem"][];
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["SimpleAgendaRow"][];
+            /**
+             * Addable
+             * @default []
+             */
+            addable: components["schemas"]["SimpleAgendaItem"][];
+            /** Batch */
+            batch?: string | null;
+            /**
+             * Words
+             * @default []
+             */
+            words: string[];
+            /**
+             * Left Out
+             * @default []
+             */
+            left_out: string[];
+            /**
+             * In Trash
+             * @default false
+             */
+            in_trash: boolean;
+            proposal?: components["schemas"]["SimpleAgendaProposal"] | null;
+            decider?: components["schemas"]["SimplePersonRef"] | null;
+        };
+        /**
+         * SimpleAgendaEditIn
+         * @description agenda-sheet: one op of the Agenda sheet. ``batch`` names the sheet's opening, so
+         *     Undo puts back the agenda as it was when that batch began.
+         */
+        SimpleAgendaEditIn: {
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "add" | "rename" | "move" | "remove" | "undo" | "accept" | "withdraw";
+            /** Item Id */
+            item_id?: string | null;
+            /** Feature Id */
+            feature_id?: string | null;
+            /** Title */
+            title?: string | null;
+            /** To */
+            to?: number | null;
+            /** Batch */
+            batch?: string | null;
         };
         /** SimpleAgendaItem */
         SimpleAgendaItem: {
@@ -39895,6 +40023,51 @@ export interface components {
             id: string;
             /** Title */
             title: string;
+        };
+        /**
+         * SimpleAgendaProposal
+         * @description agenda-sheet: an approver's agenda changes waiting for the meeting's decider.
+         */
+        SimpleAgendaProposal: {
+            by: components["schemas"]["SimplePersonRef"];
+            decider?: components["schemas"]["SimplePersonRef"] | null;
+            /**
+             * Words
+             * @default []
+             */
+            words: string[];
+            /**
+             * Dropped
+             * @default []
+             */
+            dropped: string[];
+        };
+        /**
+         * SimpleAgendaRow
+         * @description agenda-sheet: one row of the meeting's agenda: a feature of its PRD or a topic a
+         *     person typed, with its minutes; ``state`` reads the chat's next and skip.
+         */
+        SimpleAgendaRow: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "feature" | "topic";
+            /** Feature Id */
+            feature_id?: string | null;
+            /** Title */
+            title: string;
+            /** Mins */
+            mins: number;
+            /** By Name */
+            by_name?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "done" | "now" | "next" | "skipped";
         };
         /**
          * SimpleAppliedVersion
@@ -39986,7 +40159,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -40035,7 +40208,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_goal_measure" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -40158,6 +40331,39 @@ export interface components {
             /** Minutes Url */
             minutes_url?: string | null;
         };
+        /**
+         * SimpleDecisionCan
+         * @description edit-decisions (ec1 b): what the reader may do on an open decision's sheet, from
+         *     the decision's own rights (its creator, its decider or an owner edits, withdraws and
+         *     deletes; owners reassign; another commenter or approver proposes an edit).
+         */
+        SimpleDecisionCan: {
+            /**
+             * Edit
+             * @default false
+             */
+            edit: boolean;
+            /**
+             * Propose
+             * @default false
+             */
+            propose: boolean;
+            /**
+             * Withdraw
+             * @default false
+             */
+            withdraw: boolean;
+            /**
+             * Delete
+             * @default false
+             */
+            delete: boolean;
+            /**
+             * Reassign
+             * @default false
+             */
+            reassign: boolean;
+        };
         /** SimpleDecisionIn */
         SimpleDecisionIn: {
             /** Reason */
@@ -40200,6 +40406,21 @@ export interface components {
             code?: string | null;
             /** Chosen */
             chosen?: string | null;
+            /** Question */
+            question?: string | null;
+            /** Context */
+            context?: string | null;
+            /**
+             * Options
+             * @default []
+             */
+            options: components["schemas"]["SimpleQuestionOption"][];
+            /** Review At */
+            review_at?: string | null;
+            can?: components["schemas"]["SimpleDecisionCan"] | null;
+            /** Edited At */
+            edited_at?: string | null;
+            edited_by?: components["schemas"]["SimplePersonRef"] | null;
         };
         /**
          * SimpleDecisionsOut
@@ -41203,6 +41424,16 @@ export interface components {
              * @default false
              */
             retry_delivery: boolean;
+            /**
+             * Edit Agenda
+             * @default false
+             */
+            edit_agenda: boolean;
+            /**
+             * Propose Agenda
+             * @default false
+             */
+            propose_agenda: boolean;
         };
         /** SimpleMeetingCommentIn */
         SimpleMeetingCommentIn: {
@@ -41434,7 +41665,12 @@ export interface components {
             notes: components["schemas"]["SimpleMeetingNote"][];
             /**
              * @default {
-             *       "skipped": []
+             *       "skipped": [],
+             *       "items": [],
+             *       "addable": [],
+             *       "words": [],
+             *       "left_out": [],
+             *       "in_trash": false
              *     }
              */
             agenda: components["schemas"]["SimpleAgenda"];
@@ -42218,13 +42454,19 @@ export interface components {
              * @default {
              *       "decide": false,
              *       "propose": false,
-             *       "name_decider": false
+             *       "name_decider": false,
+             *       "edit": false,
+             *       "withdraw": false,
+             *       "delete": false
              *     }
              */
             can: components["schemas"]["SimpleQuestionCan"];
             source?: components["schemas"]["SimpleQuestionSource"] | null;
             /** Undo Id */
             undo_id?: string | null;
+            /** Edited At */
+            edited_at?: string | null;
+            edited_by?: components["schemas"]["SimplePersonRef"] | null;
         };
         /**
          * SimpleQuestionBlocks
@@ -42260,6 +42502,21 @@ export interface components {
              * @default false
              */
             name_decider: boolean;
+            /**
+             * Edit
+             * @default false
+             */
+            edit: boolean;
+            /**
+             * Withdraw
+             * @default false
+             */
+            withdraw: boolean;
+            /**
+             * Delete
+             * @default false
+             */
+            delete: boolean;
         };
         /** SimpleQuestionFeature */
         SimpleQuestionFeature: {
@@ -46511,7 +46768,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "document" | "intake" | "run" | "feature" | "goal";
+            type: "document" | "intake" | "run" | "feature" | "goal" | "decision" | "question" | "agenda_item" | "request";
             /**
              * Id
              * Format: uuid
@@ -70392,6 +70649,39 @@ export interface operations {
             };
         };
     };
+    delete_request: {
+        parameters: {
+            query?: {
+                reason?: string | null;
+            };
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_request: {
         parameters: {
             query?: never;
@@ -73298,6 +73588,101 @@ export interface operations {
             };
         };
     };
+    get_simple_decision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                decision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleDecisionRow"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_simple_decision: {
+        parameters: {
+            query?: {
+                reason?: string | null;
+            };
+            header?: never;
+            path: {
+                decision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_simple_decision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                decision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEntryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_simple_session: {
         parameters: {
             query?: never;
@@ -74761,6 +75146,41 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleMeetingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_simple_meeting_agenda: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meeting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleAgendaEditIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

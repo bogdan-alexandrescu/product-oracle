@@ -182,7 +182,8 @@ interface Meeting {
 /** The meeting's live notes and open questions (SimpleMeetingOut.notes). */
 export type MeetingNote = Schemas["SimpleMeetingNote"];
 /** The meeting's agenda changes (SimpleMeetingOut.agenda). */
-export type MeetingAgenda = Schemas["SimpleAgenda"];
+/** The chat's part of the agenda (its next and skipped items); the rows are the sheet's (./simple-meeting-agenda.ts). */
+export type MeetingAgenda = Pick<Schemas["SimpleAgenda"], "next" | "skipped">;
 
 /**
  * S8's review meetings as the chat reads and writes them (server.ts builds it over
@@ -204,7 +205,7 @@ export interface ChatMeetings {
   /** Who confirms a commenter's decision on Ask: the document's decider, else an owner (an approver or above). */
   proposeTo(documentId: string | null): { id: string; name: string } | null;
   /** A commenter's decision on Ask, open on the Decisions page for `deciderId`. */
-  propose(title: string, deciderId: string, documentId: string | null, id?: string): string;
+  propose(title: string, deciderId: string, documentId: string | null, id?: string, logNumber?: number): string;
 }
 
 export interface ChatDb {

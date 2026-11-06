@@ -127,14 +127,14 @@ for (const phone of [false, true]) {
         await expect(pre).toBeVisible();
         await expect(pre).toContainText("Weekly goals check-in");
         const decision = pre.getByTestId("pre-read-decision").filter({ hasText: "Should muted teams still get the weekly digest?" });
-        await expect(decision).toContainText("D-3");
+        await expect(decision).toContainText("D-8");
         await expect(pre).not.toContainText("Run stop");
         await expect(pre).not.toContainText("_");
         if (phone) expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(PHONE.width);
         // The decision opens on Simple's Decisions page, at its row.
-        await decision.getByRole("link", { name: "D-3" }).click();
-        await expect(page).toHaveURL(/\/simple\/decisions#d-3$/);
-        await expect(page.locator("#d-3")).toContainText("Should muted teams still get the weekly digest?");
+        await decision.getByRole("link", { name: "D-8" }).click();
+        await expect(page).toHaveURL(/\/simple\/decisions#d-8$/);
+        await expect(page.locator("#d-8")).toContainText("Should muted teams still get the weekly digest?");
       });
     });
   }

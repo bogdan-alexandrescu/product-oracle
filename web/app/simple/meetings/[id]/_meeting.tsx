@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { MarkFor, WithFeatureMarks } from "@/components/current-state/CurrentState";
 import { Button, confirmInPage, toast } from "@/components/ds";
 import { setToastPlace } from "@/components/ds/Toast";
 import { MeetingChat } from "@/components/simple/chat/MeetingChat";
@@ -12,7 +11,7 @@ import { OnePager } from "@/components/simple/OnePager";
 import { QuestionRow, sourceName, useQuestionActions } from "@/components/simple/questions/Questions";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import type { MeetingAgenda, MeetingNote } from "@/lib/api/simple-chat";
+import type { MeetingNote } from "@/lib/api/simple-chat";
 import { calendarDay, todayIn, useCompanyZone } from "@/lib/dates";
 import { zoneName } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -24,9 +23,12 @@ import { DeliveryLine, emailWords, slackWords } from "../_delivery";
 import { DecidedItem, LINK, momentWords } from "../_flow";
 import { DraftDates } from "./_draft";
 import { SimpleSelect } from "@/components/simple/meetings/SimpleSelect";
+import { AgendaSheet } from "@/components/simple/meetings/AgendaSheet";
+import { OpenFeatureContext, type OpenFeature } from "@/components/simple/OpenFeature";
+import { FeaturePanel } from "../../roadmap/_panel";
 
-// Chat actions (notes, open questions, the agenda's next and skipped items): optional until schema.d.ts carries them.
-type Meeting = Schemas["SimpleMeetingOut"] & { notes?: MeetingNote[]; agenda?: MeetingAgenda };
+// Chat actions (notes, open questions): optional until schema.d.ts carries them.
+type Meeting = Schemas["SimpleMeetingOut"] & { notes?: MeetingNote[] };
 type Mode = Meeting["change_mode"];
 
 const STEPS = ["One-pager", "Roadmap", "Decisions"] as const;
@@ -184,6 +186,8 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   const name = namer(m);
   const { me, can } = useMe();
   const phone = usePhone();
+  // The agenda's feature names open the one feature panel.
+  const [feature, setFeature] = useState<Parameters<OpenFeature>[0] | null>(null);
   // walkc-meeting r2 (5a): an invited attendee has not joined until they press Join.
   const joined = m.attendees.some((a) => a.id === me?.user_id && a.joined);
   // qa-simple-decide-2: Approve says what it approves (the one-pager's edits in this meeting); none: no button.
@@ -369,7 +373,13 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
           )}
         </div>
       )}
-      <AgendaStrip agenda={m.agenda} />
+      {/* agenda-sheet: Now, Next, Item n of N and the Agenda sheet (mk-edit-meetings-tracks, b). */}
+      {(m.agenda.items ?? []).length > 0 && (
+        <OpenFeatureContext.Provider value={setFeature}>
+          <AgendaSheet meetingId={m.id} agenda={m.agenda} can={m.can} phone={phone} reload={reload} />
+        </OpenFeatureContext.Provider>
+      )}
+      {feature && <FeaturePanel key={`${feature.id}|${feature.name}`} feature={feature} phone={phone} canChange={can("create_simple_change")} onClose={() => setFeature(null)} />}
       <div className="grid flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_380px]">
         {/* qa-simple-decide-49: the app has the one <main>; the stage is a section. */}
         <section aria-label="Stage" className="min-w-0">
@@ -418,31 +428,6 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
           </section>
         </aside>
       </div>
-    </div>
-  );
-}
-
-/** The agenda as the meeting's chat changed it ("next: …", "skip …"): every attendee sees it. */
-function AgendaStrip({ agenda }: { agenda?: MeetingAgenda }) {
-  if (!agenda || (!agenda.next && agenda.skipped.length === 0)) return null;
-  return (
-    <div role="status" aria-label="Agenda" data-testid="agenda-strip" className="flex flex-wrap items-center gap-x-6 gap-y-1 border-b border-line px-4 py-2 text-base [overflow-wrap:anywhere]">
-      {agenda.next && (
-        // The item taken next, with its feature's Current-state pill (the agenda names roadmap items).
-        <div className="flex flex-wrap items-center gap-2">
-          <p data-testid="agenda-next">
-            <span className="font-semibold">Next:</span> {agenda.next.title}
-          </p>
-          <WithFeatureMarks>
-            <MarkFor itemId={agenda.next.id} />
-          </WithFeatureMarks>
-        </div>
-      )}
-      {agenda.skipped.length > 0 && (
-        <p data-testid="agenda-skipped" className="text-text2">
-          <span className="font-semibold">Skipped:</span> {agenda.skipped.map((x) => x.title).join(", ")}
-        </p>
-      )}
     </div>
   );
 }

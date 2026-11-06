@@ -205,7 +205,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
         aria-label="Simple"
         aria-busy="true"
         data-testid="simple-nav-skeleton"
-        className="sticky top-0 z-40 col-start-1 row-start-1 flex h-dvh w-[var(--simple-rail-width)] flex-col gap-1 bg-rail px-4 py-5 [border-right:var(--simple-rail-border)] max-[600px]:hidden"
+        className="sticky top-0 z-40 col-start-1 row-start-1 flex h-dvh w-[var(--simple-rail-width)] flex-col gap-1 bg-rail px-4 py-5 [border-right:var(--simple-rail-border)] max-[600px]:hidden simple-noprint"
       >
         <span className="mb-4 flex flex-none items-center gap-2.5 rounded-xl px-2">
           <Mark size={32} tone="current" className="block text-accent-ink" />
@@ -250,14 +250,14 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
   return (
     <>
       {/* qa-simple-home-6: from 1200 px the open Ask panel sits beside the page (it keeps the shell's third column), not over it. */}
-      {askOpen && me && !/\/present\/?$/.test(pathname) && <span aria-hidden data-testid="simple-ask-room" className="col-start-3 row-start-1 hidden w-[400px] min-[1200px]:block" />}
+      {askOpen && me && !/\/present\/?$/.test(pathname) && <span aria-hidden data-testid="simple-ask-room" className="simple-noprint col-start-3 row-start-1 hidden w-[400px] min-[1200px]:block" />}
       {/* fix4 qa-simple-roadmap-46: the rail's colour runs the page's full height (the sticky rail is one
        * screen tall), and the rail sits under a page's dimmed backdrop (z-35) like the page. */}
-      <span aria-hidden data-testid="simple-nav-underlay" className="col-start-1 row-start-1 self-stretch bg-rail [border-right:var(--simple-rail-border)] max-[600px]:hidden" />
+      <span aria-hidden data-testid="simple-nav-underlay" className="col-start-1 row-start-1 self-stretch bg-rail [border-right:var(--simple-rail-border)] max-[600px]:hidden simple-noprint" />
       <nav
         aria-label="Simple"
         data-testid="simple-nav"
-        className="sticky top-0 z-30 col-start-1 row-start-1 flex h-dvh w-[var(--simple-rail-width)] flex-col gap-1 bg-rail px-4 py-5 [--focus-ring:var(--accent)] [border-right:var(--simple-rail-border)] max-[600px]:hidden"
+        className="sticky top-0 z-30 col-start-1 row-start-1 flex h-dvh w-[var(--simple-rail-width)] flex-col gap-1 bg-rail px-4 py-5 [--focus-ring:var(--accent)] [border-right:var(--simple-rail-border)] max-[600px]:hidden simple-noprint"
       >
         <Link href={SIMPLE_HOME} aria-label="Product Oracle" data-testid="simple-nav-brand" className="mb-4 flex flex-none items-center gap-2.5 rounded-xl px-2">
           <Mark size={32} tone="current" className="block text-accent-ink" />
@@ -329,7 +329,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
             <nav
               aria-label="Simple"
               data-testid="simple-tab-bar"
-              className="fixed inset-x-0 bottom-0 z-[39] hidden h-[var(--phone-tab-bar)] grid-cols-5 bg-rail-foot px-1.5 [--focus-ring:var(--rail-bar)] [border-top:var(--simple-rail-border)] pt-1.5 pb-2 max-[600px]:grid"
+              className="simple-noprint fixed inset-x-0 bottom-0 z-[39] hidden h-[var(--phone-tab-bar)] grid-cols-5 bg-rail-foot px-1.5 [--focus-ring:var(--rail-bar)] [border-top:var(--simple-rail-border)] pt-1.5 pb-2 max-[600px]:grid"
             >
               {tabDests.map((d) => {
                 const active = isActive(pathname, d) && !more;

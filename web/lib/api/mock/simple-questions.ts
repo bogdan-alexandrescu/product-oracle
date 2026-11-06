@@ -33,8 +33,8 @@ interface Q {
   title: string;
   /** Who decides: "owner" (the first owner), "approver" (approver@example.com) or none. */
   decider: string | null;
-  /** Due, in days from the mock's today. */
-  due: number;
+  /** Due, in days from the mock's today (edit-decisions: a question added in Simple has none yet). */
+  due: number | null;
   milestone: "M1" | "M2" | "M3";
   feature: [string, string];
   recommendation: string | null;
@@ -46,12 +46,19 @@ interface Q {
   pending?: { change_id: string; by: string; answer: string } | null;
   /** The meeting it was decided in. */
   meeting_id?: string | null;
+  /** edit-decisions (eq2 b): withdrawn from the sheet (the "not now"), kept in the PRD's history. */
+  withdrawn?: boolean;
+  /** edit-decisions: in Settings › Trash (`id`, its decision id, is how Restore finds it). */
+  trashed?: boolean;
+  id?: string;
+  /** edit-decisions: the last edit made from the sheet, who and when. */
+  edited?: { at: string; by: string } | null;
 }
 
 interface QChange {
   change: Change;
-  /** The question as it was before an applied change (for Undo). */
-  was: Q;
+  /** The question as it was before an applied change (for Undo; null: it was added by it). */
+  was: Q | null;
 }
 
 export interface QuestionsDb {
@@ -115,31 +122,37 @@ const nameOf = (ctx: QuestionsCtx, id: string | null | undefined) => ctx.members
 const ref = (ctx: QuestionsCtx, id: string) => ({ id, name: nameOf(ctx, id) });
 const owners = (ctx: QuestionsCtx) => ctx.members.filter((m) => m.role === "owner").map((m) => m.id);
 const decided = (q: Q) => !!q.chosen;
+/** edit-decisions: open (not decided, not withdrawn). */
+const open = (q: Q) => !decided(q) && !q.withdrawn;
+const idOf = (q: Q) => stableUuid(`simple-question/${q.n}`);
+/** edit-decisions: the questions every read shows (one in Trash is left out). */
+const live = (db: QuestionsDb) => db.questions.filter((q) => !q.trashed);
 
 /** Owners and the decider apply; approvers and commenters propose; viewers read. */
+/** edit-decisions (eq2 b): the same people edit, withdraw and delete it from the sheet. */
 function canOf(ctx: QuestionsCtx, q: Q): Schemas["SimpleQuestionCan"] {
-  if (decided(q)) return { decide: false, propose: false, name_decider: false };
+  if (!open(q)) return { decide: false, propose: false, name_decider: false, edit: false, withdraw: false, delete: false };
   const applies = ctx.me.role === "owner" || (q.decider === ctx.me.id && RANK[ctx.me.role] >= RANK.approver);
-  return { decide: applies, propose: !applies && RANK[ctx.me.role] >= RANK.commenter, name_decider: applies };
+  return { decide: applies, propose: !applies && RANK[ctx.me.role] >= RANK.commenter, name_decider: applies, edit: applies, withdraw: applies, delete: applies };
 }
 
 function out(ctx: QuestionsCtx, q: Q): Question {
-  const due = todayStart() + q.due * DAY;
-  const late = !decided(q) && q.due < 0;
+  const due = q.due == null ? null : todayStart() + q.due * DAY;
+  const late = open(q) && q.due != null && q.due < 0;
   const missing = decided(q) ? null : !q.decider ? "decider" : !q.recommendation ? "recommendation" : null;
   const chosenLabel = q.chosen === "recommended" ? q.recommendation : q.chosen;
   return {
-    id: stableUuid(`simple-question/${q.n}`),
+    id: idOf(q),
     number: 100 + q.n,
     code: `Q${q.n}`,
     title: q.title,
-    status: decided(q) ? "decided" : "proposed",
+    status: decided(q) ? "decided" : q.withdrawn ? "withdrawn" : "proposed",
     column: decided(q) ? "decided" : missing ? "needs_input" : "recommended",
     prd: QUESTIONS_PRD,
     decider: q.decider ? ref(ctx, q.decider) : null,
     missing,
-    due_on: new Date(due).toISOString().slice(0, 10),
-    due_label: decided(q) ? null : `${late ? "Late · due" : "Due"} ${dayWords(due)}`,
+    due_on: due == null ? null : new Date(due).toISOString().slice(0, 10),
+    due_label: !open(q) || due == null ? null : `${late ? "Late · due" : "Due"} ${dayWords(due)}`,
     late,
     blocks: {
       milestone: q.milestone,
@@ -155,21 +168,24 @@ function out(ctx: QuestionsCtx, q: Q): Question {
     // qa-simple-decide-7: decided_at is a real moment (unlike a due day), so its day reads
     // the company's zone (America/Los_Angeles), not UTC, as the API's company_time.day does.
     decided_label: decided(q) && q.decided_at ? `Decided ${q.in_prd ? "in the PRD " : ""}on ${companyDateInWords(q.decided_at)} by ${nameOf(ctx, q.decided_by)}` : null,
-    waiting_for_me: !decided(q) && !!q.decider && q.decider === ctx.me.id && RANK[ctx.me.role] >= RANK.approver,
+    waiting_for_me: open(q) && !!q.decider && q.decider === ctx.me.id && RANK[ctx.me.role] >= RANK.approver,
     pending: q.pending ? { change_id: q.pending.change_id, by: ref(ctx, q.pending.by), answer: q.pending.answer } : null,
     can: canOf(ctx, q),
     source: { version: SOURCE_VERSION, read_at: iso(todayStart() - DAY + 9 * 3_600_000) },
     undo_id: null,
+    edited_at: q.edited?.at ?? null,
+    edited_by: q.edited ? ref(ctx, q.edited.by) : null,
   };
 }
 
 /** Open first, soonest due first; decided after, newest first (as the API). */
 export function questionsOut(ctx: QuestionsCtx, db: QuestionsDb, prd?: string | null): Question[] {
   if (prd && prd !== QUESTIONS_PRD.slug && prd !== QUESTIONS_PRD.id) return [];
-  const all = db.questions.map((q) => [q, out(ctx, q)] as const);
-  const open = all.filter(([q]) => !decided(q)).sort(([a], [b]) => a.due - b.due || a.n - b.n);
+  const all = live(db).map((q) => [q, out(ctx, q)] as const);
+  // edit-decisions: one with no due day yet comes after the dated ones.
+  const waiting = all.filter(([q]) => !decided(q)).sort(([a], [b]) => (a.due ?? 1e9) - (b.due ?? 1e9) || a.n - b.n);
   const done = all.filter(([q]) => decided(q)).sort(([a], [b]) => (b.decided_at ?? "").localeCompare(a.decided_at ?? ""));
-  return [...open, ...done].map(([, o]) => o);
+  return [...waiting, ...done].map(([, o]) => o);
 }
 
 /** The ids of the questions decided in this meeting (the Decisions page's meeting filter). */
@@ -193,14 +209,14 @@ export function questionsCounts(ctx: QuestionsCtx, db: QuestionsDb, shown?: Ques
 /** The decided questions taken outside meetings, as the Decisions page's "Outside meetings" rows (with their code and answer). */
 export function decidedOutsideRows(ctx: QuestionsCtx, db: QuestionsDb, shown: Question[]): Schemas["SimpleDecisionRow"][] {
   const ids = new Set(shown.map((q) => q.id));
-  return db.questions
+  return live(db)
     .filter((q) => decided(q) && !q.meeting_id && ids.has(stableUuid(`simple-question/${q.n}`)))
     .map((q) => {
       const o = out(ctx, q);
       return {
         id: o.id, number: o.number, title: o.title, origin: "prd", status: "decided", approver: q.decider ? ref(ctx, q.decider) : null,
         decided_at: o.decided_at ?? null, created_at: o.decided_at ?? iso(todayStart()), subjects: [{ kind: "document", id: QUESTIONS_PRD.id }],
-        code: o.code, chosen: o.chosen,
+        code: o.code, chosen: o.chosen, options: [],
       };
     })
     .sort((a, b) => b.number - a.number);
@@ -256,8 +272,11 @@ export async function routeQuestionChanges(
     if (!held) return null;
     if (held.change.by !== ctx.me.id && ctx.me.role !== "owner") return json(403, { detail: "Only who made it undoes it" });
     if (held.change.status !== "applied" || held.change.undone) return json(409, { detail: "Already undone" });
-    const at = db.questions.findIndex((q) => q.n === held.was.n);
-    db.questions[at] = structuredClone(held.was);
+    const was = held.was;
+    const at = db.questions.findIndex((q) => q.n === (was?.n ?? Number(held.change.after.n)));
+    // edit-decisions: an added question's Undo takes it off the PRD again.
+    if (was) db.questions[at] = structuredClone(was);
+    else if (at >= 0) db.questions.splice(at, 1);
     held.change.undone = true;
     held.change.can_undo = false;
     const undo: Change = { ...held.change, id: crypto.randomUUID(), status: "undone", undoes_id: held.change.id, undone: false, at: iso(mockNowMs()) };
@@ -289,6 +308,7 @@ export async function routeQuestionChanges(
   }
   if (p.length !== 3) return null;
   const b = await readBody(req);
+  if (SHEET_OPS.has(String(b.op))) return sheetChange(ctx, db, b);
   if (b.op !== "decide_question" && b.op !== "name_decider") return null;
   if (RANK[ctx.me.role] < RANK.commenter) return json(403, { detail: "Requires the commenter role" });
   const target = (b.target ?? {}) as Record<string, unknown>;
@@ -374,9 +394,116 @@ export function questionInboxRows(ctx: QuestionsCtx, db: QuestionsDb, seen: stri
   for (const { change: c } of db.changes) {
     const q = of(c);
     if (!q) continue;
-    // As the API's current_route: the question's decider now takes it; a decided question leaves nothing to decide.
-    if (c.status === "proposed" && !decided(q) && (q.decider ? [q.decider] : c.routed_to).includes(me)) proposals.push(row(c, q, c.at));
+    // As the API's current_route: the question's decider now takes it; a decided or withdrawn question leaves nothing to decide.
+    if (c.status === "proposed" && open(q) && (q.decider ? [q.decider] : c.routed_to).includes(me)) proposals.push(row(c, q, c.at));
     if (c.by === me && (c.status === "accepted" || c.status === "declined")) decisions.push(row(c, q, c.decided_at, !seen || (c.decided_at ?? "") > seen ? undefined : "done"));
   }
   return { proposals, decisions };
+}
+
+/** edit-decisions (eq2 b): the sheet's ops on a PRD's question (oracle.simple.decision_sheet). */
+const SHEET_OPS = new Set(["edit_question", "withdraw_decision", "add_question"]);
+/** decision_sheet.LIMITS and MAX_OPTIONS. */
+const MAX_ANSWERS = 6;
+
+/** decision_sheet._clean for a question: a title, a recommendation and the other answers. */
+function cleanQuestion(after: Record<string, unknown>, adding: boolean): Record<string, unknown> | string {
+  const outp: Record<string, unknown> = {};
+  const words = (v: unknown) => String(v ?? "").split(/\s+/).filter(Boolean).join(" ");
+  if ("title" in after || adding) {
+    const t = words(after.title);
+    if (!t) return "after.title: the question";
+    outp.title = t.slice(0, 200);
+  }
+  if ("recommendation" in after) outp.recommendation = words(after.recommendation).slice(0, 500) || null;
+  if ("alternatives" in after) {
+    const labels = (Array.isArray(after.alternatives) ? after.alternatives : []).map(words).filter(Boolean);
+    if (labels.length > MAX_ANSWERS) return `after.alternatives: at most ${MAX_ANSWERS}`;
+    outp.alternatives = labels;
+  }
+  return outp;
+}
+
+/** A question's sheet fields as they are now (decision_sheet.fields). */
+const fieldsOf = (q: Q) => ({ title: q.title, recommendation: q.recommendation, alternatives: [...q.alternatives] });
+
+/** The question as it is in its PRD now (and in Trash too, for Delete and Restore). */
+export function findQuestion(db: QuestionsDb, id: string): Q | undefined {
+  return db.questions.find((x) => idOf(x) === id);
+}
+
+/** DELETE /v1/simple/decisions/{id} for a question: who may withdraw it moves it to Trash. */
+export function trashQuestion(ctx: QuestionsCtx, q: Q): { root: Schemas["TrashEntryOut"]["root"] } | Response {
+  if (!open(q)) return json(409, { detail: `Q${q.n} ${q.title} is ${decided(q) ? "decided" : "withdrawn"}; only an open one goes to Trash` });
+  if (!canOf(ctx, q).delete) return json(403, { detail: "Only its decider, whoever made it or an owner deletes it" });
+  q.trashed = true;
+  q.id = idOf(q);
+  return { root: { type: "question", id: idOf(q), slug: null, title: q.title, kind: "question", code: `Q${q.n}` } };
+}
+
+/** null: not a question (Simple's decisions mock answers). */
+function sheetChange(ctx: QuestionsCtx, db: QuestionsDb, b: Record<string, unknown>): Response | null {
+  if (RANK[ctx.me.role] < RANK.commenter) return json(403, { detail: "Viewers read decisions; they do not change them" });
+  const target = (b.target ?? {}) as Record<string, unknown>;
+  const after = (b.after ?? {}) as Record<string, unknown>;
+  const now = iso(mockNowMs());
+  const base = (q: Q | null, applies: boolean, routed: string[]): Change => ({
+    id: crypto.randomUUID(), session_id: null, document_id: QUESTIONS_PRD.id, draft_ids: [], op: String(b.op) as Change["op"],
+    target: q ? { decision_id: idOf(q), name: `Q${q.n} ${q.title}` } : { document_id: QUESTIONS_PRD.id, name: QUESTIONS_PRD.title },
+    before: {}, after: {}, status: applies ? "applied" : "proposed", by: ctx.me.id, by_name: nameOf(ctx, ctx.me.id), at: now,
+    decided_by: applies ? ctx.me.id : null, decided_at: applies ? now : null, reason: typeof b.reason === "string" ? b.reason : null, decision_reason: null,
+    routed_to: routed, undoes_id: null, undone: false, can_decide: false, can_undo: applies && !noUndo(),
+  });
+  if (b.op === "add_question") {
+    // As decision_sheet._prd: the PRD by its id or by the slug Decisions' PRD list gives.
+    if (target.document_id !== QUESTIONS_PRD.id && target.document_id !== QUESTIONS_PRD.slug) return json(404, { detail: "No such PRD" });
+    const clean = cleanQuestion(after, true);
+    if (typeof clean === "string") return json(422, { detail: clean });
+    // As _ask: an owner (the PRD's decider) adds it at once; anyone else proposes it to them.
+    const applies = ctx.me.role === "owner";
+    const change = base(null, applies, applies ? [] : owners(ctx).slice(0, 1));
+    change.after = clean;
+    if (applies) {
+      const n = Math.max(0, ...db.questions.map((x) => x.n)) + 1;
+      const first = db.questions.find((x) => x.n === 1);
+      db.questions.push({
+        n, title: String(clean.title), decider: null, due: null, milestone: first?.milestone ?? "M1", feature: first?.feature ?? ["F-01", "Sign in"],
+        recommendation: (clean.recommendation as string | null | undefined) ?? null, alternatives: (clean.alternatives as string[] | undefined) ?? [], edited: null,
+      });
+      change.target = { ...change.target, decision_id: stableUuid(`simple-question/${n}`) };
+      change.after = { ...clean, n };
+    }
+    db.changes.push({ change, was: null });
+    return json(201, { change, flags: [] });
+  }
+  const q = typeof target.decision_id === "string" ? findQuestion(db, target.decision_id) : undefined;
+  if (!q || q.trashed) return b.op === "edit_question" ? json(404, { detail: "No such question" }) : null;
+  if (!open(q)) return json(409, { detail: `Q${q.n} ${q.title} is ${decided(q) ? "decided" : "withdrawn"}; only an open one is changed` });
+  const can = canOf(ctx, q);
+  const was = structuredClone(q);
+  if (b.op === "withdraw_decision") {
+    if (!can.withdraw) return json(403, { detail: "Only its decider, whoever made it or an owner withdraws it" });
+    const change = base(q, true, []);
+    change.before = { status: "proposed" };
+    change.after = { status: "withdrawn" };
+    q.withdrawn = true;
+    db.changes.push({ change, was });
+    return json(201, { change, flags: [] });
+  }
+  const clean = cleanQuestion(after, false);
+  if (typeof clean === "string") return json(422, { detail: clean });
+  const now_ = fieldsOf(q) as Record<string, unknown>;
+  const before = Object.fromEntries(Object.keys(clean).map((k) => [k, now_[k]]));
+  if (!Object.keys(clean).length || JSON.stringify(before) === JSON.stringify(clean)) return json(422, { detail: "Nothing changed" });
+  const change = base(q, can.edit, can.edit ? [] : q.decider ? [q.decider] : owners(ctx).slice(0, 1));
+  change.before = before;
+  change.after = clean;
+  if (can.edit) {
+    if ("title" in clean) q.title = String(clean.title);
+    if ("recommendation" in clean) q.recommendation = (clean.recommendation as string | null) ?? null;
+    if ("alternatives" in clean) q.alternatives = clean.alternatives as string[];
+    q.edited = { at: now, by: ctx.me.id };
+  }
+  db.changes.push({ change, was });
+  return json(201, { change, flags: [] });
 }
