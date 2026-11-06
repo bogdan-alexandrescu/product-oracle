@@ -2848,7 +2848,7 @@ pre .date-mark, code .date-mark { font-family: var(--font-sans,inherit); }
   body:has([data-pt1]) { background: rgb(255, 255, 255) !important; }
 }
 @page { size: letter; margin: 0.6in; }
-:is([data-pt1="b"], [data-pt1="c"], [data-pt1="d"]) .pt1-sec > section [data-testid="verdict-state"] > :first-child:not([data-testid="verdict-pending"]) { display: none; }
+:is([data-pt1="b"], [data-pt1="c"], [data-pt1="d"]) .pt1-sec > section:has(.pt1-meta) [data-testid="verdict-state"] > :first-child:not([data-testid="verdict-pending"]) { display: none; }
 
 [data-pt1] .pt1-toc-row[data-mockup-hover] { background: var(--surface2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-strong); }</style>
 <script>(function(){var t=new URLSearchParams(location.search).get("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;addEventListener("load",function(){document.querySelectorAll("[data-mockup-scroll]").forEach(function(e){var p=e.getAttribute("data-mockup-scroll").split(",");e.scrollLeft=+p[0];e.scrollTop=+p[1]});scrollTo(0,6219);var a=document.querySelector("[data-mockup-top]");if(a)scrollBy(0,a.getBoundingClientRect().top-Number(a.getAttribute("data-mockup-top")))})})()</script>
