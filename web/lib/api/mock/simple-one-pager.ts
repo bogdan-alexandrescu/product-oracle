@@ -11,6 +11,10 @@
  * margin notes; everyone else the published lines and a `changes_in_review` count. Undo
  * works for the change's author while its session is open.
  *
+ * Fixing a number (owner, Nov 5): each "Needs a look" numbers item carries its fix, the
+ * `set_section_number` op (the number in one section's words set, through the same draft,
+ * rights, Undo and approval as a line edit), as the API's one_pager._create_number.
+ *
  * Submit and Remind (owner, 2026-10-26): an owner submits the draft (POST
  * /v1/simple/drafts/{id}/submit): it waits on the PRD's required reviewers (`ctx.reviewers`).
  * Remind (POST /v1/simple/one-pagers/{doc}/remind, owners and the decider) writes each
