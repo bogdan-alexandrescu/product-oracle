@@ -5521,6 +5521,9 @@ function ensureV2(db: Db): V2Db {
 /** The decision log, seeded on first use (the requests mock records a no in it, H10). */
 function ensureDecisions(db: Db, ctx: DecisionsContext): DecisionsDb {
   db.decisions ??= seeded("decisions", () => {
+    // A new company ("empty" scenario): no decisions yet, so Simple's Decisions (which lists the
+    // log's open calls) and the log say "No decisions yet".
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === "empty") return { decisions: [], reviews: [] };
     const log = seedDecisions(ctx);
     if (localStorage.getItem(MOCK_SCENARIO_KEY) === "large") enlargeDecisions(ctx, log, 250);
     if (localStorage.getItem(MOCK_SCENARIO_KEY) === "pricing") seedPricingDecisions(db, ctx, log);

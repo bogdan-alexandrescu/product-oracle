@@ -103,16 +103,19 @@ test.describe("keyboard", () => {
     await page.goto("/simple/decisions?view=meetings");
     await expect(page.getByTestId("meeting-group").first()).toBeVisible();
     await page.getByTestId("decisions-view-meetings").focus();
-    // Every stop inside a meeting or under Outside meetings, page position in order.
+    // Every stop inside a meeting or under Outside meetings, page position in order: one pass down
+    // the page, until focus leaves it (Tab then wraps round to the top, which is no jump back up).
     const seen: { where: string; y: number }[] = [];
     for (let i = 0; i < 60; i++) {
       await page.keyboard.press("Tab");
       const at = await page.evaluate(() => {
         const el = document.activeElement as HTMLElement | null;
-        const g = el?.closest('[data-testid="meeting-group"], section[aria-label="Outside meetings"]');
-        if (!el || !g) return null;
+        if (!el?.closest("main")) return "left";
+        const g = el.closest('[data-testid="meeting-group"], section[aria-label="Outside meetings"]');
+        if (!g) return null;
         return { where: g.getAttribute("aria-label") ?? "", y: el.getBoundingClientRect().top + window.scrollY };
       });
+      if (at === "left") break;
       if (at) seen.push(at);
     }
     expect(seen.map((s) => s.where)).toContain("Review: Usage alerts");
