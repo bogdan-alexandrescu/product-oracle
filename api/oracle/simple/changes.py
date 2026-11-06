@@ -478,7 +478,11 @@ def current_route(
         if d is not None and d.approver_id is not None:
             return [d.approver_id]
         return list(c.routed_to or [])
-    if c.status != "proposed" or c.op in ("edit_line", *QUESTION_OPS) or c.op in KEY_DATE_OPS:
+    if (
+        c.status != "proposed"
+        or c.op in ("edit_line", "set_section_number", *QUESTION_OPS)
+        or c.op in KEY_DATE_OPS
+    ):
         return list(c.routed_to or [])
     if c.op == CUT_ALL:
         cut = cut_entries(c, by_id)
@@ -1442,7 +1446,8 @@ class _View:
         owners, decider and reviewers (#723 owner answer)."""
         # S5: a one-pager line's change is on a PRD, not a roadmap of this read.
         if (c.document_id is not None and c.document_id not in self.docs
-                and c.op not in ("edit_line", "decide_question", "name_decider")):  # fmt: skip
+                and c.op not in ("edit_line", "set_section_number", "decide_question",
+                              "name_decider")):  # fmt: skip
             return False
         if self.me is None:
             return False

@@ -14,7 +14,9 @@ on every read and :func:`problem_check` on the job's answer.
 - **Footnotes**: a mark (†, ‡, §, a trailing *) stays only with its note (``footnotes``); a
   mark with no note in the PRD is dropped.
 - **Numbers that don't add up** (:func:`numbers`): a per-unit target times the stated units
-  against a company-wide target, and a count said in words against the items listed.
+  against a company-wide target, and a count said in words against the items listed. Each
+  carries its fix (:func:`set_number`): the count set to the items listed, the company-wide
+  target to what its parts add up to.
 
 The "Needs a look" items (:class:`Look`) are the PRD's owners' only; the page renders them
 as one list, which other checks (the Definition of Done quality checks) can join.
@@ -56,6 +58,10 @@ class Look:
     text: str
     where: list[str] = field(default_factory=list)
     source_keys: list[str] = field(default_factory=list)
+    # A "numbers" item's one-click fix (owner, Nov 5): the number ``before`` in the words
+    # ``said`` of the section ``section`` set to ``value`` (oracle.simple.one_pager's
+    # set_section_number); None when the number is not in a section's text (a heading).
+    fix: dict[str, str] | None = None
 
 
 # A citation an older quick read cut ("time [c…", "time [c:c"): only at the line's end.
@@ -591,6 +597,27 @@ def _sentences(sec: Section) -> list[str]:
     return out + bullets + [" · ".join(r) for r in rows]
 
 
+def _number_at(body: str, said: str) -> re.Match[str] | None:
+    """The first number in ``body`` that reads ``said`` (its first word the number, the
+    words after it in order, any markup or spaces between)."""
+    first, *rest = said.split()
+    after = "".join(rf"[\W_]+{re.escape(w)}" for w in rest)
+    return re.search(rf"(?<![\w.,]){re.escape(first)}(?![\w])(?={after}(?!\w))", body or "", re.I)
+
+
+def set_number(body: str, said: str, value: str) -> str | None:
+    """``body`` with the number of ``said`` set to ``value``; None when it holds no such
+    words (changed since)."""
+    m = _number_at(body, said)
+    return None if m is None else body[: m.start()] + value + body[m.end() :]
+
+
+def _fix(sec: Section, said: str, before: str, value: float) -> dict[str, str] | None:
+    if _number_at(sec.body_md or "", said) is None:
+        return None
+    return {"section": sec.section_key, "said": said, "before": before, "value": _n(value)}
+
+
 def numbers(sections: list[Section]) -> list[Look]:
     """The PRD's own numbers that disagree, each naming both numbers and where they are."""
     looks: list[Look] = []
@@ -626,7 +653,7 @@ def numbers(sections: list[Section]) -> list[Look]:
                 looks.append(Look(
                     "numbers",
                     f"“{said}” says {_n(n)}, but “{head}” shows {target} items.",
-                    [head], [sec.section_key],
+                    [head], [sec.section_key], _fix(sec, said, m.group("n"), target),
                 ))  # fmt: skip
     looks += _per_unit(sections)
     return looks
@@ -667,6 +694,7 @@ def _per_unit(sections: list[Section]) -> list[Look]:
                     f"{_n(per * count[0])}, but the company-wide target says {_n(total)}.",
                     list(dict.fromkeys(_plain(x.heading or "") for x in (sec, count[1], tsec))),
                     list(dict.fromkeys(x.section_key for x in (sec, count[1], tsec))),
+                    _fix(tsec, t.group(0), t.group("n"), per * count[0]),
                 ))  # fmt: skip
                 break
     return looks
@@ -705,11 +733,17 @@ def whole_word(cut: str, said: str) -> str:
 # --------------------------------------------------------------------------- the read
 
 
-def annotate(blocks: list[Any], sections: list[Section], cites: Cites | None = None) -> list[Look]:
+def annotate(
+    blocks: list[Any],
+    sections: list[Section],
+    cites: Cites | None = None,
+    checked: list[Any] | None = None,
+) -> list[Look]:
     """One call from the one-pager's read: fills each block's and line's clear-reading
     fields in place (``who``; each line's codes with names, its footnotes; each outcome's
     ``measure`` and ``measure_source``, its citations resolved by ``cites``) and returns the
-    "Needs a look" items."""
+    "Needs a look" items; the numbers are those of ``checked`` when given (the sections as
+    the reader's working draft has them, so a fixed number clears)."""
     names = glossary(sections)
     notes = footnote_notes(sections)
     found = measures(sections, cites)
@@ -748,4 +782,4 @@ def annotate(blocks: list[Any], sections: list[Section], cites: Cites | None = N
         looks.append(Look(
             "code", f"{code} has no name in the PRD.", [heads.get(k, k) for k in keys], keys
         ))  # fmt: skip
-    return looks + numbers(sections)
+    return looks + numbers(sections if checked is None else checked)
