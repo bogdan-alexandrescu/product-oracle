@@ -165,8 +165,9 @@ test.describe("as the owner", () => {
     await openKind(page, "slice_parent_missing");
     await row(page, "Usage report").getByRole("button", { name: /Link to a feature/ }).click();
     const picker = page.getByTestId("gt-picker");
-    await picker.getByRole("searchbox", { name: "Find a feature" }).fill("Sheets");
-    await picker.getByRole("button").filter({ hasText: "F-11 Sheets export" }).click();
+    await picker.getByLabel("Find a feature").fill("Sheets");
+    await picker.getByRole("button", { name: "F-11 Sheets export" }).click();
+    await expect(picker).toHaveCount(0);
     await expect(page.getByTestId("gt-notice")).toContainText("Linked “Usage report” to “Sheets export”.");
     await expect(row(page, "Usage report")).toHaveCount(0);
     await expect(count(page, "slice_parent_missing")).toContainText("1");
