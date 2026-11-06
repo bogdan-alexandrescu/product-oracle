@@ -309,6 +309,8 @@ export interface Db {
   simple_meetings?: MeetingsDb;
   /** O5 "sharing": the shared roadmap's items by version id, put into `roadmap` when it is seeded (ensureRoadmap). */
   sharing_items?: RoadmapDb["items"];
+  /** E-14: the "sharing" roadmap's tracker records, by version id (the issue Billing ledger v2 is in progress on). */
+  sharing_records?: Record<string, Schemas["TrackerRecordOut"][]>;
   /** #346: roadmap change sets and the versions they proposed (./plan-edits.ts). */
   plan_edits?: PlanEditsDb;
   /** Specs, flows and wireframes (./specs.ts); absent in data saved before CR-09. */
@@ -2493,12 +2495,31 @@ function seedSharingRoadmap(db: Db, audience: "team" | "public") {
         locked_by: null, locked_at: null, confidence: null, run_id: null, created_at: created, updated_at: created,
       });
     }
-    return { ...i, feature: { id: f.id, type: f.type, key: f.key, title: f.title, status: f.status } };
+    // E-14: Falcon alerts rework carries a confidence and its own dates, Partner API beta an end day: a link
+    // holder's card shows them (an undated card shows no date).
+    const confidence = i.item_key === "item-falcon" ? "high" : i.confidence;
+    const dates = SHARING_DATES[i.item_key] ?? {};
+    return { ...i, ...dates, confidence, feature: { id: f.id, type: f.type, key: f.key, title: f.title, status: f.status } };
   });
   db.sharing_items = { [v.id]: items };
+  // E-14: Billing ledger v2, planned for Next, has its issue in progress (with its target day): Simple and a link
+  // holder's card read it "In progress"; Falcon alerts rework, in Now, has none, so it reads "Planned".
+  db.sharing_records = {
+    [v.id]: [{
+      id: uuid(), tracker: "linear", external_ref: "ENG-541", title: "Ledger entries", url: "https://tracker.example.com/ENG-541",
+      track_id: null, item_key: "item-ledger", state: "in_progress", raw_status: null, estimate: null, estimate_unit: null,
+      target_date: "2027-01-20", observed_at: created, recorded_by: null, created_at: created, updated_at: created,
+    }],
+  };
 }
 
 type BaselineEntity = Db["baseline"]["entities"][number];
+
+/** The "sharing" roadmap's own item dates (RoadmapItem.start_date, end_date). */
+const SHARING_DATES: Record<string, { start_date?: string; end_date: string }> = {
+  "item-falcon": { start_date: "2026-10-05", end_date: "2026-11-20" },
+  "item-partner": { end_date: "2026-12-15" },
+};
 
 /** A confirmed baseline entity the "sharing" scenario adds. */
 function baselineEntity(db: Db, type: BaselineEntity["type"], key: string, title: string, at: string): BaselineEntity {
@@ -2584,7 +2605,7 @@ function sharesContext(db: Db, me: { id: string; role: Role } | null): SharesCon
       const row = db.documents.find((d) => d.id === doc.id)!;
       const version = db.versions.find((x) => x.id === v.id)!;
       const sections = audienceSections(version.sections, audience, boardItems(db, version));
-      return exportHtml(row, { ...version, sections: linkHolder ? readerSections(sections) : sections }, db.branding, audienceLabel(audience), linkHolder);
+      return exportHtml(row, { ...version, sections: linkHolder ? readerSections(sections, boardItems(db, version)) : sections }, db.branding, audienceLabel(audience), linkHolder);
     },
   };
 }
@@ -7296,12 +7317,14 @@ function applyRoadmapVersion(db: Db, doc: DocumentRow, v: VersionRow): boolean {
  */
 function boardItems(db: Db, v: VersionRow): BoardItem[] {
   const goals = new Map(db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => [e.id, e.title]));
+  const records: TrackerRecordRow[] = db.sharing_records?.[v.id] ?? db.roadmap?.records ?? [];
   return (db.roadmap?.items[v.id] ?? db.sharing_items?.[v.id] ?? []).map((i) => {
     const feature = i.feature?.id ?? db.baseline.entities.find((e) => e.type === "feature" && e.key === i.item_key)?.id;
     const served = db.baseline.edges
       .filter((e) => e.src_id === feature && e.type === "supports" && e.status === "confirmed" && goals.has(e.dst_id))
       .map((e) => goals.get(e.dst_id)!);
     const rank = (i.priority as { rank?: unknown } | undefined)?.rank;
+    const shown = delivery(i, records.filter((r) => r.item_key === i.item_key && (r.track_id ?? null) === (i.track_id ?? null)));
     return {
       key: i.item_key,
       title: i.title,
@@ -7314,8 +7337,31 @@ function boardItems(db: Db, v: VersionRow): BoardItem[] {
       no_goal: goals.size > 0 && !served.length,
       // The owner decision of 2026-10-26: grouped under the first, by title, of the goals it reaches.
       group: [...served].sort((a, b) => (a.toLowerCase() < b.toLowerCase() ? -1 : a.toLowerCase() > b.toLowerCase() ? 1 : a < b ? -1 : a > b ? 1 : 0))[0] ?? null,
+      ...shown,
     };
   });
+}
+
+type TrackerRecordRow = Schemas["TrackerRecordOut"];
+
+/**
+ * E-14 (as the API's simple.service.delivery): an item's delivery state (shipped is done; else its tracker records,
+ * cancelled ones aside: all done is done, any started is in progress, else planned) and its start and end as Simple
+ * dates it (its own dates, then its milestone's day, then its records' target days; the newest within a source),
+ * null where Simple only estimates.
+ */
+function delivery(i: { start_date?: string | null; end_date?: string | null; shipped?: unknown; milestone?: { date?: unknown } | null; updated_at?: string }, recs: TrackerRecordRow[]): Pick<BoardItem, "start" | "end" | "state"> {
+  const live = recs.filter((r) => r.state !== "cancelled");
+  const states = new Set(live.map((r) => r.state));
+  const state = i.shipped ? "done" : states.size && [...states].every((x) => x === "done") ? "done" : states.has("in_progress") || states.has("done") ? "in_progress" : "planned";
+  const milestoneDay = typeof i.milestone?.date === "string" ? i.milestone.date.slice(0, 10) : null;
+  const newest = (rows: TrackerRecordRow[]) => [...rows].sort((a, b) => (a.updated_at < b.updated_at ? 1 : a.updated_at > b.updated_at ? -1 : 0))[0];
+  const tracked = newest(live.filter((r) => r.target_date));
+  return {
+    start: i.start_date ?? null,
+    end: i.end_date ?? milestoneDay ?? tracked?.target_date ?? null,
+    state,
+  };
 }
 
 /** A version's deck and export (O5: `v` already rendered for its audience, if any). */

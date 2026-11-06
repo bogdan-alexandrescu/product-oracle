@@ -11,6 +11,7 @@ log, and revocation on a member's disable or demotion and on a trash. Invented d
 
 import re
 import uuid
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -319,7 +320,8 @@ async def test_the_right_passcode_opens_the_page_with_a_cookie_on_the_links_path
     assert OWNER_MARK not in page.text and REVENUE_MARK not in page.text
     assert "[c:" not in page.text and "<script" not in page.text.lower()
     assert "<!--" not in page.text
-    assert "expires" in body_text.lower()
+    # E-14: when the link ends is the header's (the status's expires_on), not the page's.
+    assert "expires" not in body_text.lower()
     status = await client.get(f"{PUBLIC}/{token}/status", headers={"Cookie": cookie_of(resp)})
     got = status.json()
     # qa-docs-71: the page's header names the roadmap, who shared it and when the link ends.
@@ -570,7 +572,8 @@ async def test_a_public_link_needs_the_check_and_shows_only_the_public_page(clie
     assert "Import your accounts in one go" in page.text
     for marker in MARKERS:
         assert marker not in page.text, marker
-    assert "expires" in page.text
+    # E-14: the page's header says when the link ends; its footer says when it was shared.
+    assert "expires" not in page.text and "Shared " in page.text
     resp = await client.put(
         f"/v1/roadmaps/{SLUG}/public-texts/csv-parser",
         json={"title": "Every spreadsheet column, understood", "description": "Changed.",
@@ -951,6 +954,7 @@ def test_a_link_holder_reads_no_left_out_line_no_empty_or_repeated_column():
         "| Bulk import | Faster setup |  | Grow activation |",
     ])  # fmt: skip
     got = reader_body(table, "now-group-1")
+    # Without the items nothing is known of a card's dates or state: no column for them.
     assert got.split("\n")[0] == "| Item | Outcome |"
     assert "| CSV parser |  |" in got and "| Bulk import | Faster setup |" in got
     assert "Confidence" not in got and "Grow activation" not in got
@@ -960,6 +964,100 @@ def test_a_link_holder_reads_no_left_out_line_no_empty_or_repeated_column():
     assert reader_body(note, "now") == ""
     assert reader_body(f"{note}\n\nWe ship in order.", "roadmap") == "We ship in order."
     assert "left out" not in reader_body("2 items serve no confirmed goal and are left out.", "x")
+
+
+def test_a_link_holder_reads_each_item_with_when_and_status():
+    """protects=E-14 (fix rounds 1, 2): a link holder's goal group lists each item with its
+    name, when (its dates as Simple reads them, month first: "Oct 5 – Nov 20" or "Nov 20";
+    nothing when it has none, never the horizon its heading already names), status (its
+    delivery state, as Simple computes it: "Planned", "In progress", "Shipped", whatever its
+    horizon) and its confidence in words; each row is read as the item it is (Board's group,
+    by key), so two items of one title keep their own dates; fails_when=a card's status is
+    its horizon's label ("Exploring" in Later), an undated card repeats "Later", or two
+    items of one title share one item's dates; no_claim=the company's own audience view."""
+    from datetime import date
+
+    from oracle.roadmap.variants import ItemView
+    from oracle.shares.render import reader_body
+
+    table = "\n".join([
+        "| Item | Outcome | Confidence | Goal |",
+        "|---|---|---|---|",
+        "| CSV parser |  | high | Grow activation |",
+        "| Bulk import |  |  | Grow activation |",
+        "| Audit log |  |  | Grow activation |",
+        "| Year end close |  |  | Grow activation |",
+        "| Year end close |  |  | Grow activation |",
+    ])  # fmt: skip
+    items = [
+        ItemView("csv", "CSV parser", None, "later", 0, "high",
+                 start=date(2026, 10, 5), end=date(2026, 11, 20), state="in_progress"),
+        ItemView("bulk", "Bulk import", None, "later", 1, end=date(2026, 11, 20), state="done"),
+        ItemView("audit", "Audit log", None, "later", 2),
+        ItemView("close", "Year end close", None, "later", 3,
+                 start=date(2026, 12, 1), end=date(2027, 2, 3)),
+        ItemView("close-eu", "Year end close", None, "later", 4, end=date(2027, 3, 9)),
+        # In Now, so not a row of Later's group.
+        ItemView("other", "Audit log", None, "now", 5, end=date(2026, 10, 9)),
+    ]  # fmt: skip
+    got = reader_body(table, "later-group-1", items).split("\n")
+    assert got[0] == "| Item | When | Status | Confidence |"
+    assert got[2:] == [
+        "| CSV parser | Oct 5 – Nov 20 | In progress | High confidence |",
+        "| Bulk import | Nov 20 | Shipped |  |",
+        "| Audit log |  | Planned |  |",
+        "| Year end close | Dec 1, 2026 – Feb 3, 2027 | Planned |  |",
+        "| Year end close | Mar 9 | Planned |  |",
+    ]
+    # Without the items (an older caller) nothing is made up: no horizon word, no state.
+    bare = reader_body(table, "next-group-1").split("\n")
+    assert bare[0] == "| Item | Confidence |"
+    assert bare[2] == "| CSV parser | High confidence |"
+    # A group none of whose items is dated has no When column, not a horizon word.
+    one = "\n".join(table.split("\n")[:2] + ["| Audit log |  |  | Grow activation |"])
+    alone = reader_body(one, "now-group-1", [ItemView("undated", "Audit log", None, "now", 0)])
+    assert alone.split("\n")[0] == "| Item | Status |"
+    assert alone.split("\n")[2] == "| Audit log | Planned |"
+
+
+async def test_a_cards_state_and_date_come_from_its_tracker_records(ctx):
+    """protects=E-14 (fix round 2): the items a link holder's cards read carry each item's
+    delivery state as Simple computes it (shipped, else its tracker records: all done is
+    done, any started is in progress, else planned) and its dated end from its tracker
+    record when it has no own date, and the render's key holds the state; fails_when=an
+    item in Next with an in-progress issue reads planned, an item in Now with none reads in
+    progress, or a tracker date is not the card's; no_claim=Simple's own pages."""
+    from datetime import date
+
+    from oracle.export import render
+    from oracle.roadmap import variants
+    from oracle.roadmap.models import RoadmapItem, TrackerRecord
+
+    await seed_roadmap(ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        csv = await s.scalar(select(TrackerRecord).where(TrackerRecord.item_key == "csv-parser"))
+        await s.delete(csv)
+        track_id = csv.track_id
+        s.add(
+            TrackerRecord(
+                tracker="linear", external_ref="ENG-414", title="Issue ENG-414",
+                track_id=track_id, item_key="confetti", state="in_progress",
+                target_date=date(2027, 1, 20), observed_at=datetime(2026, 10, 16, tzinfo=UTC),
+            )
+        )  # fmt: skip
+        stickers = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "stickers"))
+        stickers.shipped = True
+        await s.commit()
+    async with tenant_session(ctx.tenant_id) as s:
+        ev = await render.load_export_version(s, SLUG, 1)
+        await render.load_audience(s, ev)
+    got = {i.key: (i.horizon, i.state, i.end) for i in ev.items}
+    assert got["csv-parser"] == ("now", "planned", None)
+    assert got["bulk-import"][:2] == ("now", "in_progress")
+    assert got["confetti"] == ("next", "in_progress", date(2027, 1, 20))
+    assert got["stickers"][:2] == ("later", "done")
+    key = variants.render_key(ev.items)
+    assert key != variants.render_key([replace(i, state="planned") for i in ev.items])
 
 
 def test_a_link_holder_reads_no_per_item_no_goal_flag():
@@ -999,5 +1097,6 @@ async def test_the_footer_ends_on_the_headers_day_in_its_words(client, ctx):
     footer = re.search(r'<footer class="share-footer"[^>]*>(.*?)</footer>', page.text, re.S)
     assert footer is not None, page.text
     text = footer.group(1)
-    assert f"link expires {got['expires_on']}" in text, text
-    assert re.search(r" on [A-Z][a-z]{2} \d{1,2}, \d{4} · ", text), text
+    # E-14: the page's header says when the link ends; the footer does not say it again.
+    assert "expires" not in text and got["expires_on"] not in text, text
+    assert re.search(r" on [A-Z][a-z]{2} \d{1,2}, \d{4}$", text.strip()), text
