@@ -319,3 +319,29 @@ async def test_a_realistic_writer_session_stays_under_budget(tenant_id):
         ),
     }
     assert sum(sizes.values()) < 150_000, sizes
+
+
+def test_a_whole_section_comes_back_uncut():
+    # Review r1 (a): the writer is told to read section=work; a long work item is a
+    # requirement, so it is never cut.
+    data = summary_with_work(3, 0)
+    data["work"][1]["requirement"] = "Example long requirement. " * 200
+    data["features"][0]["title"] = "f" * 5_000
+    for name in ("work", "features", "goals"):
+        assert compact.summary_view(data, name, 0, 100)[name] == data[name]
+    data["items"][:] = [{"id": 1, "text": "z" * 5_000}]
+    assert len(compact.summary_view(data, "items", 0, 100)["items"][0]["text"]) < 5_000
+
+
+async def test_the_tool_descriptions_say_what_comes_back(tenant_id):
+    # Review r1 (2): people's MCP clients read what list_entities and get_intake_summary
+    # now return, and where the full REST answer is.
+    token = await api_token(tenant_id, "owner")
+    async with mcp_client(token) as c:
+        tools = {t.name: t.description or "" for t in (await c.list_tools()).tools}
+    entities, summary = tools["list_entities"], tools["get_intake_summary"]
+    assert "50" in entities and "without their bodies" in entities
+    assert "list_entities_op" in entities and "full REST answer" in entities
+    assert "64 KB" in summary and "outline" in summary
+    assert "work, features and goals" in summary and "whole" in summary
+    assert "get_intake_summary_op" in summary and "full REST answer" in summary

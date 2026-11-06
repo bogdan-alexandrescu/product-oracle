@@ -835,7 +835,7 @@ async def test_a_failed_segment_fails_the_run(client, owner, runtime):
     assert run["status"] == "failed"
     assert run["segments"][0]["status"] == "failed"
     # The runtime's own words stay in the logs; the run page says it in plain words.
-    assert run["error"] == "Baseline proposal: The researcher stopped. Retry this step."
+    assert run["error"] == "Baseline proposal: The researcher stopped."
     async with tenant_session(tenant_id) as s:
         assert all(t.revoked_at for t in await s.scalars(select(RunToken)))
 

@@ -20,7 +20,7 @@ def test_plain_failure_words():
     )
     # Any other runtime text stays in the logs, never on the run page.
     assert workflow.plain_failure("agent crashed at /srv/example/run.py", "analyst") == (
-        "The analyst stopped. Retry this step."
+        "The analyst stopped."
     )
     assert workflow.plain_failure(None, None) == "The agents stopped and gave no reason."
 
