@@ -48,6 +48,11 @@ export function canWaive(f: Finding, can: ReturnType<typeof useMe>["can"]): bool
   return can("waive_strategy_finding", f.kind === "outside_strategy");
 }
 
+/** Whether the signed-in member may reopen a waived finding: whoever may waive it (pass F F-41). */
+export function canReopen(f: Finding, can: ReturnType<typeof useMe>["can"]): boolean {
+  return f.status === "waived" && can("waive_strategy_finding", f.kind === "outside_strategy");
+}
+
 /** "Oct 1, 2027" from an ISO date or time: the shared format (qa-company-22), never "1 Sept 2027". */
 export function shortDate(value: string | null | undefined): string {
   if (!value) return "—";

@@ -10,7 +10,7 @@ import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
 import { CompanyEmpty } from "../../_empty";
-import { FINDING_LABEL, FINDING_STATES, canWaive, shortDate, subjectHref, subjectLinkLabel, subjectName, type Finding, type FindingState, type Stack } from "./lib";
+import { FINDING_LABEL, FINDING_STATES, canReopen, canWaive, shortDate, subjectHref, subjectLinkLabel, subjectName, type Finding, type FindingState, type Stack } from "./lib";
 
 /** Waive a finding with a reason (the reason is required, as the API); Plan items use it too. */
 export function WaiveForm({ finding, onWaived, onCancel }: { finding: Pick<Finding, "id">; onWaived: (f: Finding) => void; onCancel: () => void }) {
@@ -80,6 +80,18 @@ export function FindingRow({
 }) {
   const { can } = useMe();
   const [waiving, setWaiving] = useState(false);
+  const [reopening, setReopening] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function reopen() {
+    setReopening(true);
+    setError(null);
+    try {
+      onWaived(await unwrap(api.POST("/v1/strategy/findings/{finding_id}/reopen", { params: { path: { finding_id: f.id } } })));
+    } catch (e) {
+      setError(errorMessage(e));
+      setReopening(false);
+    }
+  }
   const href = subjectHref(f, stack);
   const draft = f.detail?.draft === true;
   return (
@@ -112,6 +124,12 @@ export function FindingRow({
             Waive
           </Button>
         )}
+        {/* pass F F-41: a waiver can be taken back. */}
+        {canReopen(f, can) && (
+          <Button variant="ghost" disabled={reopening} onClick={reopen}>
+            {reopening ? "Reopening…" : "Reopen"}
+          </Button>
+        )}
       </div>
       {f.status === "waived" && f.waive_reason && (
         <p className="mt-1 text-sm text-text2">
@@ -119,6 +137,7 @@ export function FindingRow({
         </p>
       )}
       {f.status === "resolved" && <p className="mt-1 text-sm text-text2">Resolved {shortDate(f.resolved_at)}</p>}
+      {error && <ErrorNote>{error}</ErrorNote>}
       {waiving && <WaiveForm finding={f} onCancel={() => setWaiving(false)} onWaived={onWaived} />}
     </li>
   );

@@ -60,8 +60,9 @@ test("pass F: a failed stack says it could not load, and Try again brings the vi
   await expect(root.getByTestId("drift-list").getByTestId("finding-row").filter({ hasText: "Retention" })).toHaveCount(1);
 });
 
-// protects=F-41: a waived finding names the focus choice ("Team plans"), never its slug;
-// fails_when="product-strategy-team-plans" shows; no_claim=reopening a waived finding (asked of the owner).
+// protects=F-41: a waived finding names the focus choice ("Team plans"), never its slug, and
+// it can be reopened; fails_when="product-strategy-team-plans" shows or there is no way back
+// from a waiver; no_claim=the API's role check (pytest).
 test("pass F: a waived finding names the focus choice, not its slug", async ({ page }) => {
   await withStrategy(page);
   await login(page);
@@ -71,6 +72,10 @@ test("pass F: a waived finding names the focus choice, not its slug", async ({ p
   const row = drift.getByTestId("finding-row").filter({ hasText: "Focus without a goal" });
   await expect(row.getByTestId("finding-subject")).toHaveText("Team plans");
   await expect(drift).not.toContainText("product-strategy-team-plans");
+  await row.getByRole("button", { name: "Reopen" }).click();
+  await expect(drift.getByTestId("drift-empty")).toContainText("Nothing waived");
+  await drift.getByTestId("finding-state").getByRole("button", { name: /Open/ }).click();
+  await expect(drift.getByTestId("finding-row").filter({ hasText: "Team plans" })).toHaveCount(1);
 });
 
 // protects=F-42: the Product strategy card's counts and goal pills open their stack line, and

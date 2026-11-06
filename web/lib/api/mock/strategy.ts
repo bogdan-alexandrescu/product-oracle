@@ -219,7 +219,7 @@ export function inboxStrategy(db: StrategyDb | undefined, role: Role): Schemas["
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
-/** /v1/strategy/*: the stack, findings, waive (owners; approvers for outside_strategy) and check. */
+/** /v1/strategy/*: the stack, findings, waive and reopen (owners; approvers for outside_strategy) and check. */
 export async function routeStrategy(db: StrategyDb | undefined, req: Request, p: string[], q: URLSearchParams, role: Role) {
   if (p[1] !== "strategy") return null;
   const empty: StrategyDb = db ?? {
@@ -252,6 +252,15 @@ export async function routeStrategy(db: StrategyDb | undefined, req: Request, p:
     if (!reason) return json(422, { detail: "a waiver needs a reason" });
     if (f.status !== "open") return json(409, { detail: `The finding is ${f.status}` });
     Object.assign(f, { status: "waived", waived_at: new Date().toISOString(), waive_reason: reason });
+    return json(200, f);
+  }
+  if (p[2] === "findings" && p[4] === "reopen" && req.method === "POST") {
+    const f = empty.findings.find((x) => x.id === p[3]);
+    if (!f) return json(404, { detail: "Finding not found" });
+    const needed = f.kind === "outside_strategy" ? ["approver", "owner"] : ["owner"];
+    if (!needed.includes(role)) return json(403, { detail: `Requires the ${needed[0]} role` });
+    if (f.status !== "waived") return json(409, { detail: `The finding is ${f.status}` });
+    Object.assign(f, { status: "open", waived_by: null, waived_at: null, waive_reason: null });
     return json(200, f);
   }
   if (p[2] === "check" && req.method === "POST") {
