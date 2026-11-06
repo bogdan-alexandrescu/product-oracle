@@ -43449,6 +43449,8 @@ export interface components {
              */
             applies: boolean;
             part_of?: components["schemas"]["SimplePartRef"] | null;
+            /** Parts */
+            parts?: components["schemas"]["SimplePartRef"][];
             /** Before Override */
             before_override?: {
                 [key: string]: unknown;

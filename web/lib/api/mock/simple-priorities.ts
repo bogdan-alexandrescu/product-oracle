@@ -462,6 +462,8 @@ export function prioritiesOut(
       applies: mine ? decides(i.id) : ctx.role === "owner",
       // feature-parts: the feature it is part of, as the roadmap reads it.
       part_of: mine ? (i.part_of ?? null) : null,
+      // Its own parts, as the roadmap reads them, whether the list shows them or not.
+      parts: mine ? (i.parts ?? []) : [],
       before_override: (stored(db, i.id).override as Record<string, unknown> | undefined) ?? null,
     };
   });

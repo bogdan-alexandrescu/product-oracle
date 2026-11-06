@@ -117,14 +117,18 @@ function Pick({
   options,
   save,
   done,
+  note,
 }: {
   label: string;
   value: string;
   options: { value: string; label: string }[];
   save: (v: string) => Promise<void>;
   done: () => void;
+  /** What the picked value does beyond itself, shown before Save (panel-menu: a cut feature's parts). */
+  note?: (v: string) => string | undefined;
 }) {
   const [v, setV] = useState(value);
+  const said = note?.(v);
   return (
     <form
       onSubmit={(e) => {
@@ -146,6 +150,11 @@ function Pick({
           </option>
         ))}
       </select>
+      {said && (
+        <p className="mt-1 text-sm text-text2" data-testid="pick-note">
+          {said}
+        </p>
+      )}
       <SaveCancel onCancel={done} />
     </form>
   );
@@ -362,6 +371,7 @@ export function PanelFields({
               { value: "done", label: "Done" },
               { value: "cut", label: "Cut" },
             ]}
+            note={(v) => (v === "cut" && item.status !== "cut" ? parts("stay") : undefined)}
             save={(v) =>
               change(
                 "Status changed",

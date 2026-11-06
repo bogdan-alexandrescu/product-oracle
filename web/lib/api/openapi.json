@@ -128845,6 +128845,13 @@
               }
             ]
           },
+          "parts": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePartRef"
+            },
+            "type": "array",
+            "title": "Parts"
+          },
           "before_override": {
             "anyOf": [
               {

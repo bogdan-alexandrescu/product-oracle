@@ -551,13 +551,12 @@ function PartsList({ parts, items, onOpen, seen }: { parts: Item["parts"]; items
  */
 function PickFeature({ kind, item, items, act, done }: { kind: "merge" | "parent"; item: Item; items: Map<string, Item>; act: Act; done: () => void }) {
   const merge = kind === "merge";
-  // Any open feature of the roadmap; for Part of, never one of its own parts at any depth (a
-  // feature is never its own ancestor).
-  const options = [...items.values()].filter(
-    (i) => i.id !== item.id && i.roadmap.id === item.roadmap.id && !closedItem(i) && (merge || !i.part_path.some((p) => p.id === item.id)),
-  );
+  // Any open feature of the roadmap; for Part of, one of its own parts at any depth is shown
+  // but cannot be picked (a feature is never its own ancestor), with the API's words.
+  const options = [...items.values()].filter((i) => i.id !== item.id && i.roadmap.id === item.roadmap.id && !closedItem(i));
   const [to, setTo] = useState(merge ? "" : (item.part_of?.id ?? ""));
   const name = (i: Item) => [i.code, i.title].filter(Boolean).join(" ");
+  const loop = (i: Item) => (!merge && i.part_path.some((p) => p.id === item.id) ? `${name(item)} cannot be part of ${name(i)}: ${name(i)} is already one of its parts` : undefined);
   const picked = to ? items.get(to) : undefined;
   const same = !merge && to === (item.part_of?.id ?? "");
   const verb = merge ? "Merge" : "Save";
@@ -593,7 +592,7 @@ function PickFeature({ kind, item, items, act, done }: { kind: "merge" | "parent
       >
         <option value="">{merge ? "Pick a feature" : "Not a part of another feature"}</option>
         {options.map((i) => (
-          <option key={i.id} value={i.id}>
+          <option key={i.id} value={i.id} disabled={!!loop(i)} title={loop(i)}>
             {name(i)}
           </option>
         ))}

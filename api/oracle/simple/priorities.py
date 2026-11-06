@@ -758,6 +758,7 @@ async def build(
                 on_roadmap=e is not None,
                 applies=service.can_decide(principal, e, read_.deciders) if e else owner,
                 part_of=extras.get(e.row.id, {}).get("part_of") if e is not None else None,
+                parts=extras.get(e.row.id, {}).get("parts", []) if e is not None else [],
                 before_override=targets._snap(by_feature.get(f.entity_id)),
             )
         )
