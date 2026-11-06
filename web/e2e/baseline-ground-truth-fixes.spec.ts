@@ -9,8 +9,8 @@ import { login, signOut } from "./helpers";
  * The two Ground Truth fixes that had no route (the owner's follow-up, Nov 5), on Detailed's
  * Ground Truth page in the "ground-truth-flags" scenario: Give it a code (Smart search, no code:
  * the next F-number, F-21, past the roadmap's item from a PRD's F-20 section) and Link to a
- * feature for the PRD's F-09 Guest seats and the slice
- * F-15a Usage report. Approvers and owners fix at once, with Undo; a commenter's fix goes to an
+ * feature for the PRD's F-09 Guest seats and the roadmap's slice item F-15a Usage report (an
+ * item link, a roadmap change). Approvers and owners fix at once, with Undo; a commenter's fix goes to an
  * approver, who accepts it on the Proposals tab, and shows on its flag as waiting until then,
  * also after a reload; viewers read the flags with no fixes.
  */
@@ -84,11 +84,19 @@ for (const [viewport, who] of [
       await notice(page).getByRole("button", { name: "Undo" }).click();
       await expect(count(page, "prd_feature_missing")).toContainText("1");
       await expect(total(page)).toHaveText("7");
+      // The slice is a roadmap item (F-15a): linking it is a roadmap change, which an approver
+      // who does not edit the roadmap sends for approval.
       await openKind(page, "slice_parent_missing");
       await linkTo(page, "Usage report", "Sheets", "F-11 Sheets export");
-      await expect(notice(page)).toContainText("Linked “Usage report” to “Sheets export”.");
-      await expect(count(page, "slice_parent_missing")).toHaveCount(0);
-      await expect(total(page)).toHaveText("6");
+      if (who) {
+        await expect(notice(page)).toContainText("Sent linking “Usage report” to “Sheets export” for approval.");
+        await expect(count(page, "slice_parent_missing")).toContainText("1");
+        await expect(total(page)).toHaveText("7");
+      } else {
+        await expect(notice(page)).toContainText("Linked “Usage report” to “Sheets export”.");
+        await expect(count(page, "slice_parent_missing")).toHaveCount(0);
+        await expect(total(page)).toHaveText("6");
+      }
       expect(await fits(page)).toBe(true);
     });
 

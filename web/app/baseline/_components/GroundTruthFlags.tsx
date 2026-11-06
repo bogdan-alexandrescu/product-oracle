@@ -38,15 +38,8 @@ const FIX_LABEL: Record<Action, string> = {
 const subject = (f: Flag) => f.item ?? f.feature!;
 const shown = (r: Schemas["GroundTruthRef"]) => (r.code ? `${r.code} ${r.name}` : r.name);
 
-/** A PRD feature's code (F-09, F-15), the target of its Add to Ground Truth. */
-const CODE = /^[A-Z]{1,3}-\d+$/;
-
-/**
- * A key for a new feature: the PRD feature's code when the fix names one (the check matches a
- * PRD's feature by code only), else from its name, not one the graph has (as page.tsx's addSubgoal).
- */
-function newKey(name: string, graph: GraphOut | undefined, code?: string): string {
-  if (code && CODE.test(code) && !(graph?.entities ?? []).some((e) => e.key === code)) return code;
+/** A key for a new feature from its name, not one the graph has (as page.tsx's addSubgoal). */
+function newKey(name: string, graph: GraphOut | undefined): string {
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "feature";
   const taken = new Set((graph?.entities ?? []).map((e) => e.key));
   let key = slug;
@@ -121,21 +114,24 @@ export function GroundTruthFlags({
     }
   }
 
-  /** S7's merge_item: the roadmap item becomes the feature's item. */
-  const linkItem = (itemId: string, featureId: string) =>
-    unwrap(api.POST("/v1/simple/changes", { body: { op: "merge_item", target: { item_id: itemId, feature_id: featureId }, before: {}, after: {} } }));
+  /** S7's merge_item: the roadmap item becomes the feature's item (a proposal for one who does not edit the roadmap). */
+  const linkItem = async (itemId: string, featureId: string) =>
+    (await unwrap(api.POST("/v1/simple/changes", { body: { op: "merge_item", target: { item_id: itemId, feature_id: featureId }, before: {}, after: {} } }))).change;
 
   const add = (flag: Flag, target: string) =>
     act(async () => {
       const name = (flag.feature ?? flag.item)!.name;
-      const key = newKey(name, graph, target);
+      const key = newKey(name, graph);
       if (!canWrite) {
         await unwrap(api.POST("/v1/baseline/proposals", { body: { op: "create", kind: "entity", fields: { type: "feature", key, title: name } } }));
         return { text: `Proposed “${name}” for the Ground Truth.` };
       }
       const out = await unwrap(api.POST("/v1/baseline/entities", { body: { type: "feature", key, title: name, attrs: {}, origin: "user" } }));
       if (!out.entity) return { text: `Proposed “${name}” for the Ground Truth.` };
-      if (flag.kind === "unlinked_item") await linkItem(target, out.entity.id);
+      // The check reads a PRD's feature by code only: the new feature is linked to what was
+      // flagged, the roadmap item (an unlinked item, a slice item) or the PRD's feature.
+      if (flag.item?.id) await linkItem(flag.item.id, out.entity.id);
+      else if (flag.where.prd) await unwrap(api.POST("/v1/baseline/prd-links", { body: { prd_document_id: flag.where.prd.id, code: target, feature_id: out.entity.id } }));
       return { text: `Added “${name}” to the Ground Truth.` };
     });
 
@@ -185,7 +181,8 @@ export function GroundTruthFlags({
 
   const pickFeature = (flag: Flag, target: string, feature: { id: string; title: string }) =>
     act(async () => {
-      await linkItem(target, feature.id);
+      const change = await linkItem(target, feature.id);
+      if (change.status === "proposed") return { text: `Sent linking “${subject(flag).name}” to “${feature.title}” for approval.` };
       return { text: `Linked “${subject(flag).name}” to “${feature.title}”.` };
     });
 
