@@ -37,14 +37,18 @@ from oracle.export.render import (
     _themed_markdown,
     absolute_doc_links,
     brand_dark,
+    date_marks,
     days_in_words,
+    goal_names,
     held_together,
     section_body_html,
     snapshot_in_words,
     sources_keys,
     token_vars,
     unlink_missing,
+    with_goal_names,
 )
+from oracle.roadmap import variants
 from oracle.templates import validation
 from oracle.templates.models import Theme
 
@@ -533,36 +537,6 @@ def unlink_code(html: str) -> str:
     return _CODE_LINK.sub(r'<span class="code-left-out">\1</span>', html)
 
 
-# A goal's code and its name where the PRD names it: "**G2 (retention)**", "G2 (Retention)".
-_GOAL_NAMED = re.compile(r"\b(G\d{1,3})\b\**\s*\(([A-Za-z][^()\n]{0,40})\)")
-_GOAL_CELL = re.compile(r"(?<=\|)([ \t]*)(G\d{1,3})([ \t]*)(?=\|)")
-
-
-def goal_names(sections: list[Section]) -> dict[str, str]:
-    """Each goal code the version names, with its name ("G2" -> "Retention"): what the Goal
-    trace says, read once for the deck."""
-    out: dict[str, str] = {}
-    for s in sections:
-        for m in _GOAL_NAMED.finditer(f"{s.heading}\n{s.body_md or ''}"):
-            name = m.group(2).strip()
-            out.setdefault(m.group(1), name[:1].upper() + name[1:])
-    return out
-
-
-def with_goal_names(body: str, names: dict[str, str]) -> str:
-    """A table cell holding only a goal's code shows its name too ("G2 Retention", E-12)."""
-    if not names:
-        return body
-    return _GOAL_CELL.sub(
-        lambda m: (
-            f"{m.group(1)}{m.group(2)} {names[m.group(2)]}{m.group(3)}"
-            if m.group(2) in names
-            else m.group(0)
-        ),
-        body,
-    )
-
-
 def _state_kind(state) -> str:
     return "added" if state.added else ("decided" if state.decided else "proposed")
 
@@ -603,6 +577,21 @@ def _grouped(ev: ExportVersion, brief: list[Section]) -> list[tuple[Section, str
         if members:
             lead_of[members[0].section_key] = members
             taken.update(m.section_key for m in members)
+    # X-16: a horizon's goal groups (Board's and Team's tables) share its slide, so its
+    # note never stands alone with the table on the next slide.
+    for s in brief:
+        if s.section_key in taken or s.section_key not in variants.HORIZON_SECTIONS:
+            continue
+        rows = [
+            m
+            for m in brief
+            if m.section_key.startswith(f"{s.section_key}-group-")
+            and variants.spans_row(m.section_key)
+            and m.section_key not in taken
+        ]
+        if rows:
+            lead_of[s.section_key] = [s, *rows]
+            taken.update(m.section_key for m in lead_of[s.section_key])
     out: list[tuple[Section, str, str]] = []
     for s in brief:
         if s.section_key in lead_of:
@@ -664,8 +653,10 @@ def _section_slide(
         section_key=s.section_key,
         notes=days_in_words(notes) if notes else None,
         body_html=Markup(
-            section_body_html(
-                ev, s.section_key, body, lambda text: str(_render_md(text, on_slides))
+            date_marks(
+                section_body_html(
+                    ev, s.section_key, body, lambda text: str(_render_md(text, on_slides))
+                )
             )
         ),
         expand=expand,

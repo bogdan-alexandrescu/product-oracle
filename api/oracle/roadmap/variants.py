@@ -54,7 +54,7 @@ refused (:class:`PublicNotReady`).
 
 import re
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from typing import Any, Literal
 
@@ -236,6 +236,24 @@ def goal_names(item: ItemView, variant: Variant) -> list[str]:
     if variant.group_by == "goal" and item.group is not None:
         return [item.group]
     return item.goals
+
+
+def with_goal_codes(items: list[ItemView], sections: list[Section]) -> list[ItemView]:
+    """``items`` with each goal the version gives a code named by code and name ("G1
+    Activation", X-8), so a rebuilt row, card or group heading reads as the written text's
+    goals do. Board reads none of the written text and keeps the goal's name alone."""
+    from oracle.export.render import goal_codes
+
+    codes = goal_codes(sections)
+    if not codes:
+        return items
+
+    def coded(name: str | None) -> str | None:
+        if name is None or name.casefold() not in codes:
+            return name
+        return f"{codes[name.casefold()]} {name}"
+
+    return [replace(i, goals=[coded(g) or g for g in i.goals], group=coded(i.group)) for i in items]
 
 
 def goal_groups(items: list[ItemView]) -> list[tuple[str, list[ItemView]]]:
@@ -917,7 +935,10 @@ def _table(
                 if row and not (named and named_codes.only_codes(row[n])):
                     cells.append(_keep_links(row[n], known))
                 elif row and len(named_codes.codes_in(row[n])) == 1:
-                    cells.append(_cell(f"{row[n].strip()} {named}"))
+                    code = row[n].strip()
+                    # The goal already carries its code when the version names it (X-8).
+                    coded = named if named.startswith(f"{code} ") else f"{code} {named}"
+                    cells.append(_cell(coded))
                 else:
                     cells.append(_cell(named))
             elif n == outcome_col:
@@ -990,6 +1011,7 @@ def rebuild(
     every = cards if cards is not None else sections
     if audience == "board":
         return _board(sections, items, every)
+    items = with_goal_codes(items, every)
     hidden = set(variant.hidden_sections) | hide
     by_key = {i.key: i for i in items}
     shown, left_out = _shown(items, variant)

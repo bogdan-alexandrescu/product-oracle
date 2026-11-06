@@ -29,16 +29,14 @@
 </style>
 </head>
 <body class="{{ body_class }}">
-{% if running_header %}
 <div class="doc-strings" aria-hidden="true">
-  <span class="doc-strings-title">{{ header_title or title }}</span>
-  {% if not link_holder %}
+  <span class="doc-strings-title">{{ footer_title }}</span>
+  {%- if not link_holder %}
   <span class="doc-strings-version">Version {{ number }}{% if number < latest_number %} of {{ latest_number }}{% endif %}</span>
   <span class="doc-strings-status">{{ status | replace("_", " ") | capitalize }}</span>
-  {% endif %}
+  {%- endif %}
   <span class="doc-strings-asof">As of {{ as_of }}</span>
 </div>
-{% endif %}
 <header class="doc-header status-{{ status }}{% if running_header %} doc-header--running{% endif %}" role="note" aria-label="Version">
   {{ brand_header }}
   <div class="header-line">
@@ -59,7 +57,7 @@
   </div>
   {% if status_header %}
   <table class="status-table">
-    <tr><th scope="row">Document</th><td>{{ slug }} ({{ kind | upper }})</td></tr>
+    <tr><th scope="row">Document</th><td>{{ title }}</td></tr>
     {% if template %}<tr><th scope="row">Template</th><td>{{ template_name or template }}{% if template_version %} v{{ template_version }}{% endif %}</td></tr>{% endif %}
     {% if snapshot %}<tr><th scope="row">Sources as of</th><td>{{ snapshot }}</td></tr>{% endif %}
     <tr><th scope="row">Theme</th><td>{{ theme_name }}</td></tr>
@@ -68,7 +66,7 @@
   {% if legend %}
   <div class="legend" aria-label="Legend">
     <span>Confidence: ●●● high · ●●○ medium · ●○○ low</span>
-    <span>G1, G2 … goal codes</span>
+    {% if legend_codes %}<span>G1, G2 … goal codes</span>{% endif %}
     <span>after: X = depends on X</span>
     <span>⚑ serves no confirmed goal</span>
   </div>
@@ -141,10 +139,8 @@
       <span class="src-title">
         {%- if f.href %}<a href="{{ f.href }}">{{ f.title }}</a>{% else %}{{ f.title }}{% endif -%}
       </span>
-      <span class="src-kind">{{ f.source }}</span>
       {% if f.retrieved_at %}<span class="src-retrieved">retrieved {{ f.retrieved_at }}</span>{% endif %}
       {% if f.excerpt %}<blockquote class="src-excerpt">{{ f.excerpt }}</blockquote>{% endif %}
-      <span class="src-ref">{{ f.ref }}</span>
     </li>
   {% endfor %}
   </ol>
@@ -162,10 +158,8 @@
       <span class="src-title">
         {%- if f.href %}<a href="{{ f.href }}">{{ f.title }}</a>{% else %}{{ f.title }}{% endif -%}
       </span>
-      <span class="src-kind">{{ f.source }}</span>
       {% if f.retrieved_at %}<span class="src-retrieved">retrieved {{ f.retrieved_at }}</span>{% endif %}
       {% if f.excerpt %}<blockquote class="src-excerpt">{{ f.excerpt }}</blockquote>{% endif %}
-      <span class="src-ref">{{ f.ref }}</span>
     </li>
   {% endfor %}
   </ol>
