@@ -47,6 +47,27 @@ async function roadmapPanelName(page: Page, key: string) {
   return page.getByTestId("floating-card").getByTestId("card-name");
 }
 
+/** The item's panel from the Roadmap's Gantt: its bar, opened from the keyboard. */
+async function ganttPanelName(page: Page, key: string) {
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await page.getByTestId("format-gantt").click();
+  const bar = page.locator(`g[data-testid="bar"][data-item="${key}"]`).first();
+  await bar.scrollIntoViewIfNeeded();
+  await bar.focus();
+  await page.keyboard.press("Enter");
+  return page.getByTestId("floating-card").getByTestId("card-name");
+}
+
+/** The feature's panel from Priorities: its name, clicked where it is listed. */
+async function prioritiesPanelName(page: Page, name: string) {
+  await page.goto("/simple/priorities");
+  const button = page.getByRole("button", { name, exact: true }).first();
+  await button.scrollIntoViewIfNeeded();
+  await button.click();
+  return page.getByTestId("item-panel").getByTestId("floating-card").getByTestId("card-name");
+}
+
 for (const viewport of [DESKTOP, PHONE])
   for (const colorScheme of ["light", "dark"] as const)
     test(`the flags band counts each kind and opens its items (${viewport.width}, ${colorScheme})`, async ({ page }) => {
@@ -134,6 +155,27 @@ test.describe("as the owner", () => {
     await expect(total(page)).toHaveText("8");
     // The published item is linked through the roadmap's draft: its panel shows the feature.
     await expect(await roadmapPanelName(page, "gt-export-to-sheets")).toHaveText(/^F-11\s*Export to sheets/);
+    // The one feature panel shows it too, from the Gantt and from Priorities.
+    await expect(await ganttPanelName(page, "gt-export-to-sheets")).toHaveText(/^F-11\s*Export to sheets/);
+    await expect(await prioritiesPanelName(page, "Export to sheets")).toHaveText(/^F-11\s*Export to sheets/);
+  });
+
+  test("Link to a feature links a slice: its flag goes, its other slice stays", async ({ page }) => {
+    await open(page);
+    await openKind(page, "slice_parent_missing");
+    await row(page, "Usage report").getByRole("button", { name: /Link to a feature/ }).click();
+    const picker = page.getByTestId("gt-picker");
+    await picker.getByRole("searchbox", { name: "Find a feature" }).fill("Sheets");
+    await picker.getByRole("button").filter({ hasText: "F-11 Sheets export" }).click();
+    await expect(page.getByTestId("gt-notice")).toContainText("Linked “Usage report” to “Sheets export”.");
+    await expect(row(page, "Usage report")).toHaveCount(0);
+    await expect(count(page, "slice_parent_missing")).toContainText("1");
+    await expect(row(page, "Usage chart")).toContainText("F-15b");
+    await expect(total(page)).toHaveText("8");
+    // After a reload too: the link is the item's own, in its roadmap's draft.
+    await page.reload();
+    await expect(count(page, "slice_parent_missing")).toContainText("1");
+    await expect(await roadmapPanelName(page, "gt-usage-report")).toHaveText(/^F-11\s*Usage report/);
   });
 
   test("Confirm it confirms the feature a run proposed", async ({ page }) => {

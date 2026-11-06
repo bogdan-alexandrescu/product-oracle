@@ -70,6 +70,15 @@ Test cards (protects / fails_when / no_claim):
 - test_an_item_on_a_proposed_feature_is_confirmed: protects=a roadmap item linked to a
   feature a run only proposed offers Confirm it (that feature) and Link to a feature, not
   Add to Ground Truth; fails_when=it offers to add a feature that already exists.
+- test_entity_create_keeps_codes_and_links_to_features: protects=only a feature's key may be
+  an F-code and only a feature carries serves or roadmap_item_id, said in words; fails_when=a
+  goal is made with a code key, a goal or a link.
+- test_a_proposal_carries_the_link_and_goal_of_a_feature_only: protects=submit_proposal refuses
+  serves on a goal and a malformed item id, and stores the item's id as an id, so the same ask is
+  one proposal; fails_when=a goal proposal carries a link or the same ask makes two.
+- test_an_add_while_the_roadmaps_draft_waits_says_why: protects=Add to Ground Truth on an item
+  whose roadmap has a draft waiting for approval is a 409 that says so, and makes nothing;
+  fails_when=a 500, a bare "No such roadmap item", or a feature left without its link.
 - test_words_carry_no_ids: protects=each flag's words are one short plain sentence with no
   id or key; fails_when=a uuid, slug or code shows in the words.
 - test_anyone_who_reads_the_roadmap_reads_it: protects=a viewer reads the check; no
@@ -698,3 +707,83 @@ async def test_an_unlinked_item_still_saves(client):
     out = await _check(client, w.ctx)
     names = [f["item"]["name"] for f in _of(out, "unlinked_item")]
     assert "Guided setup" in names
+
+
+async def test_entity_create_keeps_codes_and_links_to_features(client):
+    w = await world()
+    h = w["ctx"].as_("owner")
+    goal = {"type": "goal", "key": "F-30", "title": "Keep teams"}
+    r = await client.post("/v1/baseline/entities", headers=h, json=goal)
+    assert r.status_code == 422 and "Only a feature's key can be a feature code." in r.text, r.text
+    bad = {
+        "type": "goal",
+        "key": "keep-teams",
+        "title": "Keep teams",
+        "serves": w["features"]["grow"],
+    }
+    r = await client.post("/v1/baseline/entities", headers=h, json=bad)
+    assert r.status_code == 422, r.text
+    assert "Only a feature serves a goal or is a roadmap item." in r.text, r.text
+    r = await client.post("/v1/baseline/entities", headers=h,
+                          json={"type": "goal", "key": "keep-teams", "title": "Keep teams",
+                                "roadmap_item_id": w["items"]["b"]})  # fmt: skip
+    assert r.status_code == 422, r.text
+    async with tenant_session(w["ctx"].tenant_id) as s:
+        assert (
+            await s.scalar(select(Entity.id).where(Entity.key.in_(("F-30", "keep-teams")))) is None
+        )
+
+
+async def test_a_proposal_carries_the_link_and_goal_of_a_feature_only(client):
+    w = await world()
+    h = w["ctx"].as_("commenter")
+    goal = {
+        "type": "goal",
+        "key": "keep-teams",
+        "title": "Keep teams",
+        "serves": w["features"]["grow"],
+    }
+    r = await client.post("/v1/baseline/proposals", headers=h,
+                          json={"op": "create", "kind": "entity", "fields": goal})  # fmt: skip
+    assert r.status_code == 422, r.text
+    assert "Only a feature serves a goal or is a roadmap item." in r.text, r.text
+    bad = {"type": "feature", "key": "F-21", "title": "Import history", "roadmap_item_id": "nope"}
+    r = await client.post("/v1/baseline/proposals", headers=h,
+                          json={"op": "create", "kind": "entity", "fields": bad})  # fmt: skip
+    assert r.status_code == 422, r.text
+    # The item's id is stored as an id: the same ask in another spelling is the same proposal.
+    b = w["items"]["b"]
+    fields = {"type": "feature", "key": "F-21", "title": "Import history", "roadmap_item_id": b}
+    one = await client.post("/v1/baseline/proposals", headers=h,
+                            json={"op": "create", "kind": "entity", "fields": fields})  # fmt: skip
+    two = await client.post("/v1/baseline/proposals", headers=h,
+                            json={"op": "create", "kind": "entity",
+                                  "fields": {**fields, "roadmap_item_id": b.upper()}})  # fmt: skip
+    assert one.status_code == two.status_code == 201, two.text
+    assert one.json()["id"] == two.json()["id"]
+    assert one.json()["payload"]["fields"]["roadmap_item_id"] == b
+
+
+async def test_an_add_while_the_roadmaps_draft_waits_says_why(client):
+    w = await world()
+    h = w["ctx"].as_("owner")
+    # A change to another item opens the roadmap's draft; it is sent for approval.
+    f2 = w["features"]["F-02"]
+    body = {"op": "set_feature", "target": {"item_id": w["items"]["b"]},
+            "before": {"feature_id": None}, "after": {"feature_id": f2}}  # fmt: skip
+    r = await client.post("/v1/simple/changes", headers=h, json=body)
+    assert r.status_code in (200, 201), r.text
+    drafts = (await client.get("/v1/simple/drafts", headers=h)).json()
+    d = next(x for x in drafts if x["status"] == "working")
+    r = await client.post(f"/v1/simple/drafts/{d['id']}/submit", headers=h)
+    assert r.status_code == 200, r.text
+    r = await client.post("/v1/baseline/entities", headers=h,
+                          json={"type": "feature", "key": "F-21", "title": "Import history 2",
+                                "roadmap_item_id": w["items"]["d"]})  # fmt: skip
+    assert r.status_code == 409, r.text
+    detail = r.json()["detail"]
+    assert "waiting for approval" in detail and "Import history 2" in detail, detail
+    assert "No such roadmap item" not in detail
+    # Nothing is half made: no feature without its link.
+    async with tenant_session(w["ctx"].tenant_id) as s:
+        assert await s.scalar(select(Entity.id).where(Entity.key == "F-21")) is None
