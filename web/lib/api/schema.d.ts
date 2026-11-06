@@ -26148,7 +26148,7 @@ export interface components {
              * Action
              * @enum {string}
              */
-            action: "add_to_ground_truth" | "link_to_feature" | "give_code" | "pick_goal" | "take_off_roadmap";
+            action: "add_to_ground_truth" | "link_to_feature" | "give_code" | "pick_goal" | "take_off_roadmap" | "confirm_feature";
             /** Target */
             target: string;
         };

@@ -64,7 +64,7 @@ The Ground Truth check lists every flag. Its kinds:
 
 | Kind | What it means | Fixes |
 | --- | --- | --- |
-| `unlinked_item` | A roadmap item linked to no Ground Truth feature (none, or one a run only proposed) | Add to Ground Truth, Link to a feature |
+| `unlinked_item` | A roadmap item linked to no Ground Truth feature (none, or one a run only proposed) | Add to Ground Truth (Confirm it, for one a run only proposed), Link to a feature |
 | `slice_parent_missing` | A slice (F-15a) whose feature is not in the Ground Truth | Add to Ground Truth, Link to a feature |
 | `prd_feature_missing` | A feature of a PRD's approved version that is not in the Ground Truth | Add to Ground Truth, Link to a feature |
 | `no_code` | A Ground Truth feature with no F-code | Give it a code |

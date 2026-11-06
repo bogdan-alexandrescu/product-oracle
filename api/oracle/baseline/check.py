@@ -7,7 +7,7 @@ Truth entries by code. Anything that breaks this is allowed (no save is refused)
 here, each flag with one plain sentence and the fixes a person can make in the UI:
 
 - ``unlinked_item``: a roadmap item linked to no Ground Truth feature (none, or one a run
-  only proposed);
+  only proposed: then Confirm it, ``confirm_feature``, not Add to Ground Truth);
 - ``slice_parent_missing``: a slice (F-15a) of a PRD feature not in the Ground Truth;
 - ``prd_feature_missing``: a feature of a PRD's approved version not in the Ground Truth;
 - ``no_code``: a Ground Truth feature with no F-code;
@@ -178,9 +178,15 @@ async def run(db: AsyncSession) -> GroundTruthOut:
             continue
         linked = by_id.get(i.feature_id) if i.feature_id is not None else None
         target = str(i.id)
+        # Linked to a feature a run only proposed: confirming it is the fix, not adding another.
+        first = (
+            ("confirm_feature", str(linked.id))
+            if linked is not None and linked.status == "proposed"
+            else ("add_to_ground_truth", target)
+        )
         flag(
             "unlinked_item",
-            [("add_to_ground_truth", target), ("link_to_feature", target)],
+            [first, ("link_to_feature", target)],
             item=GroundTruthRef(id=i.id, code=prd_code(i.prd_section_key), name=i.title),
             feature=ref(linked) if linked is not None else None,
             where=GroundTruthWhere(

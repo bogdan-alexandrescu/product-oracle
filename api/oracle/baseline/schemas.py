@@ -636,7 +636,8 @@ CheckKind = Literal[
 ]
 CHECK_KINDS: tuple[str, ...] = CheckKind.__args__  # type: ignore[attr-defined]
 CheckAction = Literal[
-    "add_to_ground_truth", "link_to_feature", "give_code", "pick_goal", "take_off_roadmap"
+    "add_to_ground_truth", "link_to_feature", "give_code", "pick_goal", "take_off_roadmap",
+    "confirm_feature"
 ]
 
 

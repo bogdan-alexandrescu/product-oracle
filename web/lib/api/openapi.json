@@ -82133,7 +82133,8 @@
               "link_to_feature",
               "give_code",
               "pick_goal",
-              "take_off_roadmap"
+              "take_off_roadmap",
+              "confirm_feature"
             ],
             "title": "Action"
           },
