@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { BuildRoadmapButton } from "@/components/BuildRoadmap";
 import { LinkIssueDialog } from "@/components/LinkIssueDialog";
@@ -16,7 +16,8 @@ import { GoalsPanel } from "../home/_goals-panel";
 import { useGoals } from "../home/_use-goals";
 import { approvedRoadmaps, draftOnlyRoadmaps, EditPlanButton, PlanChanges, roadmapName, useRoadmapDocs } from "./_edit-plan";
 import { PlanInspector } from "./_inspector";
-import type { PlanItem } from "./_lib";
+import { wantedRow, type PlanItem } from "./_lib";
+import { MissingItem } from "./_missing-item";
 import { PrdCards } from "./_prd-cards";
 import { grouped, PlanTable, type GroupBy } from "./_table";
 import { MilestoneEditor, TrackPanel, useTracks, type MilestonePick } from "./_tracks";
@@ -107,6 +108,8 @@ export default function PlanPage() {
   // Read on each render: a client navigation updates the URL after the first one.
   const wanted = useSyncExternalStore(noSubscribe, () => new URLSearchParams(window.location.search).get("item"), () => null);
   const wantedPrd = useSyncExternalStore(noSubscribe, () => new URLSearchParams(window.location.search).get("prd"), () => null);
+  // &roadmap=<slug> (Simple's card): keys are unique only per roadmap, so it picks among those.
+  const wantedRoadmap = useSyncExternalStore(noSubscribe, () => new URLSearchParams(window.location.search).get("roadmap"), () => null);
   const [picked, setPicked] = useState<string | null>(null);
   const [sheet, setSheet] = useState(false);
   const [opened, setOpened] = useState<Schemas["ChangeSetOut"] | null>(null);
@@ -120,7 +123,21 @@ export default function PlanPage() {
   const data = q.data;
   const prdOrder = useMemo(() => (data?.prds ?? []).map((p) => p.document.slug), [data]);
   const ordered = data ? grouped(data.items, by, tags, prdOrder).rows : [];
-  const item = ordered.find((i) => i.id === picked) ?? (picked == null ? ordered.find((i) => i.key === wanted && (!wantedPrd || i.prd?.id === wantedPrd)) : undefined) ?? ordered[0] ?? null;
+  // plan-open-from-simple: an item asked for and not found is never stood in for by the first row.
+  const wantedItem = wanted == null ? undefined : wantedRow(ordered, wanted, wantedPrd, wantedRoadmap);
+  const fallback = wanted == null || picked != null ? ordered[0] : undefined;
+  const item = ordered.find((i) => i.id === picked) ?? (picked == null ? wantedItem : undefined) ?? fallback ?? null;
+  // Once per link: the asked-for row scrolls into view, and on a phone its sheet opens.
+  const landing = wantedItem && tracksKnown ? wantedItem.id : null;
+  const landed = useRef<string | null>(null);
+  useEffect(() => {
+    const at = `${wanted}|${wantedPrd}|${wantedRoadmap}`;
+    if (!landing || landed.current === at) return;
+    landed.current = at;
+    document.querySelector(`[data-testid="plan-row"][data-id="${landing}"]`)?.scrollIntoView({ block: "center" });
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (window.matchMedia("(max-width: 600px)").matches) setSheet(true);
+  }, [landing, wanted, wantedPrd, wantedRoadmap]);
   const onSelect = useCallback((id: string) => {
     setPicked(id);
     setMilestone(null);
@@ -214,6 +231,9 @@ export default function PlanPage() {
       />
       <div className="flex flex-col gap-4 max-[600px]:gap-3">
         {q.error && <Notice tone="error">{q.error}</Notice>}
+        {data && wanted != null && !wantedItem && (
+          <MissingItem wanted={wanted} prdId={wantedPrd} roadmap={wantedRoadmap} scope={scope} onShowDrafts={() => setScope("all")} />
+        )}
         <GoalsBand canImport={canBaseline} />
         <PrdCards prds={data?.prds} canWrite={canWrite} tracks={tracks.data} />
         {roadmaps.map((r) => (

@@ -102,7 +102,7 @@ import { liveReply, routeLive } from "./live";
 import { sourceBrowseRoute } from "./source-browse";
 import { DRAFT_NEW_ITEMS_SCENARIO, itemsChangedSince, routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
 import { BEFORE_DRAFTING, LATE_ANSWER_WITHHELD, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type IntakeContext, type SubjectLookup } from "./intake";
-import { ensureReports, inboxReports, REPORT_PRD_MOVED_SCENARIO, reportsRoute, type LiveTracks, type ReportsDb } from "./reports";
+import { ensureReports, inboxReports, REPORT_DRAFT_ITEM, REPORT_DRAFT_ITEM_SCENARIO, REPORT_PRD_MOVED_SCENARIO, reportsRoute, type LiveTracks, type ReportsDb } from "./reports";
 import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
 import { addDigest, addMetricsReview, ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
 import { emptyMetrics, metricInbox, openVariances, reviewBlocks, routeMetrics, seedMetrics, type MetricsContext, type MetricsDb } from "./metrics";
@@ -145,7 +145,7 @@ import {
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
 import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, seedStoredRefusalDraft, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
-import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, NOT_CLAIMS_LINE, NOT_CLAIMS_SCENARIO, SHARED_DATE_SCENARIO, TWO_WAY_DATES_SCENARIO, TWO_WAY_GA, VERSION_WARNINGS_SCENARIO, dateMarks, dateWarnings, versionWarnings, inboxTracks, planEntityTitle, planFeatureRows, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, PLAN_SAME_KEY_SCENARIO, SAME_KEY_ITEM, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, NOT_CLAIMS_LINE, NOT_CLAIMS_SCENARIO, SHARED_DATE_SCENARIO, TWO_WAY_DATES_SCENARIO, TWO_WAY_GA, VERSION_WARNINGS_SCENARIO, dateMarks, dateWarnings, versionWarnings, inboxTracks, planEntityTitle, planFeatureRows, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecPerson, type SpecsDb } from "./specs";
 import { inboxStrategy, planDrift, routeStrategy, seedNoStrategy, seedPlanDrift, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { seedImpact } from "./impact";
@@ -1402,6 +1402,50 @@ function seedApprovedRoadmapScenario(crowded = false): Db {
     roadmap.status = "approved";
     applyRoadmapVersion(db, roadmap, db.versions.find((v) => v.document_id === roadmap.id && v.number === 3)!);
   }
+  return db;
+}
+
+/**
+ * plan-open-from-simple "report-draft-item" (./reports.ts): "alignment-report" with Quiet hours
+ * for alerts, which the week of Oct 12 names, only in a Usage alerts draft on Simple.
+ */
+function seedReportDraftItemScenario(): Db {
+  const db = seed();
+  const rm = seedSimpleRoadmap();
+  rm.items.push({ key: REPORT_DRAFT_ITEM.key, title: REPORT_DRAFT_ITEM.title, horizon: "next", roadmap: "alerts-roadmap", track: "alerts", draft: true });
+  rm.ids[REPORT_DRAFT_ITEM.key] = stableUuid(`simple-item/${REPORT_DRAFT_ITEM.key}`);
+  db.simple_roadmap = rm;
+  return db;
+}
+
+/**
+ * plan-open-from-simple "plan-same-key" (./roadmap.ts): the default company plus the Checkout
+ * redesign roadmap, built from Checkout redesign (v1 approved, draft 2 from PRD v2), on Simple
+ * with Free shipping threshold alert, whose key Usage alerts' roadmap holds for another item.
+ * Usage alerts' roadmap v1 is approved, so its item stays on the Plan with Approved only while
+ * the Checkout one, only in draft 2, does not.
+ */
+function seedPlanSameKeyScenario(): Db {
+  const db = seed();
+  const alerts = db.documents.find((d) => d.slug === "usage-alerts-roadmap")!;
+  db.versions.find((v) => v.document_id === alerts.id && v.number === 1)!.approved_at ??= "2026-10-05T09:00:00Z";
+  alerts.status = "approved";
+  const prd = db.documents.find((d) => d.slug === "checkout-redesign")!;
+  const at = "2026-10-20T09:00:00Z";
+  const roadmap: DocumentRow = { id: uuid(), slug: "checkout-redesign-roadmap", title: "Checkout redesign roadmap", status: "in_review", kind: "roadmap", template: null, template_version: null, theme: null, created_at: at, updated_at: at };
+  db.documents.push(roadmap);
+  for (const n of [1, 2] as const) {
+    const pv = db.versions.find((v) => v.document_id === prd.id && v.number === n)!;
+    const v = buildVersion(roadmap, { number: n, created_at: at, sections: [{ key: "summary", level: 2, heading: "Summary", body: "A clearer checkout, one page at a time." }], citations: [] });
+    if (n === 1) v.approved_at = at;
+    v.source = versionSource(prd, pv);
+    db.versions.push(v);
+  }
+  const rm = seedSimpleRoadmap();
+  (rm.extra_roadmaps ??= {})[roadmap.slug] = { title: roadmap.title, prd: "Checkout redesign", track: "checkout", track_title: "Checkout redesign track" };
+  rm.items.push({ key: SAME_KEY_ITEM.key, title: SAME_KEY_ITEM.title, horizon: "now", roadmap: roadmap.slug, track: "checkout", confidence: "medium", start: 10, end: 40, source: "typed" });
+  rm.ids[SAME_KEY_ITEM.key] = stableUuid(`simple-item/${SAME_KEY_ITEM.key}`);
+  db.simple_roadmap = rm;
   return db;
 }
 
@@ -3458,6 +3502,10 @@ function load(): Db {
                 ? seedSimpleCrossPrdDates
               : scenario === "simple-dated-move"
                 ? seedSimpleDatedMove
+              : scenario === PLAN_SAME_KEY_SCENARIO
+                ? seedPlanSameKeyScenario
+              : scenario === REPORT_DRAFT_ITEM_SCENARIO
+                ? seedReportDraftItemScenario
               : scenario === "simple-home"
                 ? seedSimpleHomeScenario
               : scenario === "simple-home-move"
