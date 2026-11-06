@@ -9,7 +9,7 @@ import { ADMIN, clearName } from "./helpers";
  * - qa4-simple-home-4: each goal card has Suggestions, and it opens the drawer.
  * - qa4-simple-home-5, -28: a broken link names its item once; one Move the dependents per move.
  * - qa4-simple-home-6: the goal cards read the same way; a proposed goal is said to be hidden.
- * - qa4-simple-home-7: the plan's row label keeps one line.
+ * - qa4-simple-home-7: the plan's row label is never cut; it wraps between words.
  * - qa4-simple-home-11: the toast after a fix sits clear of the rail and names the item once.
  * - qa4-simple-home-12: every working draft is listed with its own count.
  * - qa4-simple-home-16: others are never told unsent changes are "in review".
@@ -134,16 +134,45 @@ test("qa4-simple-home-12, -11: every working draft has its own line; the fix's t
   for (const name of words.match(/‘[^’]+’/g) ?? []) expect(words).not.toContain(`${name.slice(1, -1)} ${name}`);
 });
 
-test("qa4-simple-home-7: the plan's row label keeps one line with Ask Oracle open at 1440", async ({ page }) => {
-  // fails_when: "Guided setup · no milestone · 4 items" wraps onto two lines
+test("qa4-simple-home-7: the plan's row label is never cut with Ask Oracle open at 1440", async ({ page }) => {
+  // fails_when: a row label is cut (ellipsis, clipped text), a word is split across lines, or it takes more than two lines
   await signIn(page, ADMIN.email, { width: 1440, height: 900 });
   await page.getByTestId("simple-ask").filter({ visible: true }).first().click();
   await expect(page.getByTestId("hop-panel").filter({ visible: true })).toBeVisible();
   const labels = home(page).getByTestId("home-strip-label");
   await expect(labels.first()).toBeVisible();
   for (const l of await labels.all()) {
-    expect(await linesOf(l)).toBe(1);
-    await expect(l).toHaveAttribute("title", /.+ · .+/);
+    const m = await l.evaluate((el) => {
+      const words: number[] = [];
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        const text = n.textContent ?? "";
+        for (const w of text.matchAll(/\S+/g)) {
+          const r = document.createRange();
+          r.setStart(n, w.index!);
+          r.setEnd(n, w.index! + w[0].length);
+          words.push(r.getClientRects().length);
+        }
+      }
+      return {
+        scrollWidth: el.scrollWidth,
+        clientWidth: el.clientWidth,
+        textOverflow: getComputedStyle(el).textOverflow,
+        text: el.textContent ?? "",
+        title: el.getAttribute("title") ?? "",
+        lines: Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)),
+        words,
+      };
+    });
+    expect(m.scrollWidth).toBeLessThanOrEqual(m.clientWidth + 1);
+    expect(m.textOverflow).not.toBe("ellipsis");
+    expect(m.words.length).toBeGreaterThan(1);
+    expect(m.words.every((n) => n === 1)).toBe(true);
+    expect(m.lines).toBeLessThanOrEqual(2);
+    expect(m.title).toMatch(/.+ · .+/);
+    expect(m.text.replace(/\s+/g, " ").trim()).toBe(m.title);
+    await expect(l).toBeVisible();
+    await expect(l).toHaveText(m.title);
   }
 });
 
