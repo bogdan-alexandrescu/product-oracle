@@ -16,10 +16,12 @@ const PAGES = [
   { name: "PRD", url: "/documents/saved-carts/v/2" },
 ];
 
-const CHROME = ["app-nav", "hop-dock", "version-toolbar", "outline-rail", "section-switcher", "review-panel-column"];
+const CHROME = ["app-nav", "version-tabs", "hop-dock", "version-toolbar", "outline-rail", "section-switcher", "review-panel-column"];
 
+// A transparent box shows the white sheet.
 function luminance(rgb: string): number {
   const m = rgb.match(/[\d.]+/g)!.map(Number);
+  if (m.length === 4 && m[3] === 0) return 255;
   return (m[0] * 299 + m[1] * 587 + m[2] * 114) / 1000;
 }
 
@@ -45,6 +47,11 @@ for (const p of PAGES) {
       }
       await expect(page.getByTestId("doc-header").locator("[data-page-action]")).toBeHidden();
       await expect(page.getByTestId("phone-bar")).toBeHidden();
+      // Nor the section's own buttons: its review bar, its actions menu, its feedback button.
+      await expect(page.getByTestId("review-bar").filter({ visible: true })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /^Actions for / })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /^(Expand|Collapse) / })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /^Open feedback on this section/ })).toHaveCount(0);
 
       // The document is there, from the left edge to the right one (inside the page's own margin).
       const article = page.getByRole("article", { name: "Document" });
