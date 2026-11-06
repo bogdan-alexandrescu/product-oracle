@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "./test";
 
 import { MOCK_DENY_KEY, MOCK_ROLE_KEY } from "../lib/api/mock/server";
-import { login, openSection, openTab, outlineRow, sectionStrip } from "./helpers";
+import { login, openSection, openTab, outlineRow } from "./helpers";
 
 // QA pass 3, docs lane: the version page /documents/<doc>/v/<n> (Saved carts v2, a PRD with a
 // brief; Clinic outreach v5, a PRD without one; the early shipping cost technical brief) and a
@@ -89,23 +89,22 @@ test.describe("desktop", () => {
     await expect(page.getByText("This version was written without a brief, so it has no Brief view and no Present.")).toBeVisible();
   });
 
-  test("qa-docs-73: the outline's counts follow the filter; Full shows its sections, counts in the app font", async ({ page }) => {
+  test("qa-docs-73: the contents list follows the filter; Full shows its sections", async ({ page }) => {
     await openVersion(page, CARTS);
-    const rail = sectionStrip(page);
-    await rail.getByTestId("outline-filter").fill("zzz");
-    await expect(rail.getByTestId("chip-all")).toHaveText(/All\s*0/);
-    await expect(rail.getByTestId("chip-review")).toHaveText(/To review\s*0/);
-    await expect(rail.getByTestId("outline-empty")).toContainText("No sections match");
-    await rail.getByTestId("outline-filter").fill("");
-    await expect(rail.getByTestId("chip-all")).toHaveText(/All\s*[1-9]/);
+    // PT1 a: the outline rail (its chips, "no match" message and fold counts) is gone on a
+    // PRD; the contents rail's own "Find a section" box narrows the same rows.
+    const nav = page.getByTestId("prd-contents");
+    await nav.getByRole("button", { name: "Contents: find a section" }).click();
+    const find = nav.getByLabel("Find a section");
+    await find.fill("zzz");
+    await expect(nav.locator("a[data-outline-key]")).toHaveCount(0);
+    await find.fill("");
+    await expect(nav.locator("a[data-outline-key]").first()).toBeVisible();
 
     await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Full" }).click();
-    // Both chapters open: the sections are in the outline, not only "Introduction 0/9".
+    // Both chapters' sections are in the contents, not only the current one's.
     await expect(outlineRow(page, "summary")).toBeVisible();
     await expect(outlineRow(page, "milestones")).toBeVisible();
-    const folded = rail.getByTestId("outline-folded-count").first();
-    await expect(folded).toBeVisible();
-    expect(await folded.evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i);
   });
 
   test("qa-docs-74: the review buttons say the action; one hint; the state shows the choice", async ({ page }) => {

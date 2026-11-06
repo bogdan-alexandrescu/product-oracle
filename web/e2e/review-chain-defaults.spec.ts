@@ -12,7 +12,7 @@ import { login, openSection, outlineRow } from "./helpers";
 const DB_KEY = "po-mock-db-v2";
 const DOC = "/documents/checkout-redesign/v/1";
 
-test("outline rail: a lapsed approval shows Lapsed, never a check, as the section view does", async ({ page }) => {
+test("contents: a lapsed approval's dot reads Approval lapsed, never Approved, as the section view does", async ({ page }) => {
   await login(page);
   // goal-trace's approval on v1 lapses (its approver was removed). Edited as the document page
   // loads, before its first call: edited on Home, a Home call still landing could save over it.
@@ -27,10 +27,10 @@ test("outline rail: a lapsed approval shows Lapsed, never a check, as the sectio
     localStorage.setItem(key, JSON.stringify(db));
   }, DB_KEY);
   await page.goto(DOC);
-  const mark = outlineRow(page, "goal-trace").getByTestId("status-mark");
-  await expect(mark).toHaveAttribute("data-state", "lapsed");
-  await expect(mark.locator('path[d^="M4.8 8.2"]')).toHaveCount(0);
-  await expect(outlineRow(page, "goal-trace")).toHaveAttribute("aria-label", /, Lapsed/);
+  const dot = outlineRow(page, "goal-trace").locator(".prd-dot");
+  await expect(dot).toHaveAttribute("aria-label", "Approval lapsed");
+  await expect(dot).not.toHaveClass(/prd-dot-pass/);
+  await expect(outlineRow(page, "goal-trace")).toHaveAccessibleName(/Approval lapsed$/);
   // The section view says the same.
   const bar = (await openSection(page, "goal-trace")).getByTestId("review-bar");
   await expect(bar.getByTestId("verdict-lapsed")).toHaveText("Lapsed");

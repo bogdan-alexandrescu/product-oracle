@@ -42,7 +42,8 @@ for (const size of SIZES) {
       await login(page);
       await page.goto("/documents/checkout-redesign/v/2");
       await expect(page.getByTestId("document-sections")).toBeVisible();
-      const layout = page.getByTestId("prd-layout");
+      // PT1 a: the PRD page has no outer "prd-layout" grid any more; "prd-look" is its layout now.
+      const layout = page.getByTestId("prd-look");
       // Where the page's panels sit in the document (scroll aside).
       const place = () => layout.evaluate((el) => {
         const r = el.getBoundingClientRect();

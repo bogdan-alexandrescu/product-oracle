@@ -68,7 +68,8 @@ for (const device of ["desktop", "phone"] as const) {
       await expect(barText(page)).toContainText("1 of 3 sections reviewed", { timeout: 15_000 });
       await expect(note).toHaveValue("Name the team that owns the alert.");
       await expect(note).toBeFocused();
-      await expect(page.locator("section[data-section-key]").filter({ visible: true })).toHaveAttribute("data-section-key", "title");
+      // Every section stays in view on a PRD page now; Title is still the current one.
+      await expect(page.locator('[data-prd-sec="title"]').filter({ visible: true })).toHaveAttribute("data-current", "");
       await page.getByRole("button", { name: "Cancel" }).filter({ visible: true }).first().click();
       await expect((await openSection(page, "behaviour")).getByTestId("verdict-state")).toContainText("Approved");
     });
