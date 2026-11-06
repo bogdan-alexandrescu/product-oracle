@@ -244,10 +244,16 @@ def criteria() -> dict[type, Callable[[Any], ColumnElement[bool]]]:
     return _CRITERIA
 
 
+_BY_TABLE: dict[Any, Callable[[Any], ColumnElement[bool]]] = {}
+
+
 def _live(cls: Any) -> ColumnElement[bool]:
     """The live-rows clause for ``cls``: a mapped class, or the alias a join used, so the
-    clause names the alias's own columns."""
-    return next(fn for entity, fn in criteria().items() if entity.__table__ is cls.__table__)(cls)
+    clause names the alias's own columns. Found by its table in one lookup (every SELECT
+    asks once per filtered class)."""
+    if not _BY_TABLE:
+        _BY_TABLE.update({entity.__table__: fn for entity, fn in criteria().items()})
+    return _BY_TABLE[cls.__table__](cls)
 
 
 @event.listens_for(TenantSession, "do_orm_execute")
