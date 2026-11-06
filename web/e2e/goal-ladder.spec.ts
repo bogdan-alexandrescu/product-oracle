@@ -200,7 +200,7 @@ for (const scheme of ["light", "dark"] as const) {
         await card(page, "F-04").click();
         await showBoth(page, card(page, "F-04"), card(page, "F-02"));
         await dragBy(page, await mid(card(page, "F-04").getByTestId("ld-dot")), await mid(card(page, "F-02")));
-        await expect(page.getByRole("status").filter({ hasText: "already depends on" })).toContainText(/F-04 Saved views that follow a person across projects and devices already depends on F-02 Activity events pipeline/);
+        await expect(page.getByRole("status").filter({ hasText: "loop" })).toContainText(/F-04 Saved views that follow a person across projects and devices already waits on F-02 Activity events pipeline/);
         await expect(page.getByTestId("ld-refused")).toHaveCount(1);
         await shot(page, `ld2-a-loop-${width}-${scheme}`);
       });
@@ -300,3 +300,128 @@ for (const scheme of ["light", "dark"] as const) {
     });
   });
 }
+
+/** The opacity a person sees on an element: its own times every ancestor's. */
+const seenOpacity = (loc: ReturnType<Page["locator"]>) =>
+  loc.evaluate((el) => {
+    let o = 1;
+    for (let e: Element | null = el; e; e = e.parentElement) o *= Number(getComputedStyle(e).opacity);
+    return o;
+  });
+
+test.describe("visual QA fixes (L-1 to L-8), 1440 light", () => {
+  test.use({ viewport: SIZES[1440] });
+
+  test("L-1: a feature's menu is solid while another card is picked", async ({ page }) => {
+    // protects=ld3-b-menu: the ⋯ menu of a card the pick dims is drawn solid and its card is not
+    // dimmed; fails_when=the menu fades with its dimmed card; no_claim=menu position.
+    await open(page, "light");
+    await page.getByTestId("ld-edit").click();
+    await reveal(page, card(page, "F-03"));
+    await card(page, "F-03").click();
+    await card(page, "F-01").getByTestId("ld-more").click();
+    const menu = page.getByTestId("ld-feature-menu");
+    await expect(menu).toBeVisible();
+    expect(await seenOpacity(menu)).toBe(1);
+    expect(await seenOpacity(card(page, "F-01").locator(".simple-code"))).toBe(1);
+  });
+
+  test("L-2: the feature panel names the goal and milestone the ladder places it under", async ({ page }) => {
+    // protects=ld1-d-rest + one feature panel: F-03 under M1 of Goal 1 opens with that goal and
+    // milestone; fails_when=the panel says No goal yet; no_claim=changing the goal from there.
+    await open(page, "light");
+    await reveal(page, card(page, "F-03"));
+    await card(page, "F-03").click();
+    await card(page, "F-03").getByTestId("ld-open").click();
+    const panel = page.getByTestId("gm-feature-panel");
+    await expect(panel.getByTestId("card-goal")).toContainText("Teams stay past their first year");
+    await expect(panel).toContainText("M1 Weekly active teams baseline set");
+  });
+
+  test("L-3: a commenter's suggested link shows on the card, and Undo takes it back", async ({ page }) => {
+    // protects=ld2-a-commenter: the amber "Suggested: wait on F-34 …" line under F-24's dates
+    // and Undo in the toast; fails_when=no mark on the card or no Undo; no_claim=the approver's side.
+    await open(page, "light", "commenter");
+    await page.getByTestId("ld-edit").click();
+    await reveal(page, card(page, "F-34"));
+    await card(page, "F-34").click();
+    await showBoth(page, card(page, "F-34"), card(page, "F-24"));
+    await dragBy(page, await mid(card(page, "F-34").getByTestId("ld-dot")), await mid(card(page, "F-24")));
+    await expect(page.getByRole("status").filter({ hasText: "Suggested" })).toContainText("Suggested: F-24");
+    await expect(card(page, "F-24").getByTestId("ld-suggested")).toHaveText("Suggested: wait on F-34 Cross-team reports for leaders of many departments");
+    await page.getByTestId("toasts").getByRole("button", { name: "Undo" }).click();
+    await expect(card(page, "F-24").getByTestId("ld-suggested")).toHaveCount(0);
+  });
+
+  test("L-4: the guardrail strip and goal cards carry only the frame's words", async ({ page }) => {
+    // protects=ld1-d-rest, ld1-d-viewer: "Guardrail: … · Held N of 7 days" and goal cards without
+    // the reading's source line; fails_when=the extra prose comes back; no_claim=the reading itself.
+    await open(page, "light", "viewer");
+    await expect(page.getByTestId("gm-guardrail")).toHaveText("Guardrail: Pages load in under 2 seconds for 95% of viewsHeld 7 of 7 days");
+    await expect(page.getByTestId("gm-goal-source")).toHaveCount(0);
+  });
+
+  test("L-5: a refused loop names both cards as the frame does", async ({ page }) => {
+    // protects=ld2-a-loop; fails_when=the engine's words show instead; no_claim=the Roadmap's words.
+    await open(page, "light");
+    await page.getByTestId("ld-edit").click();
+    await reveal(page, card(page, "F-04"));
+    await card(page, "F-04").click();
+    await showBoth(page, card(page, "F-04"), card(page, "F-02"));
+    await dragBy(page, await mid(card(page, "F-04").getByTestId("ld-dot")), await mid(card(page, "F-02")));
+    await expect(page.getByRole("status").filter({ hasText: "loop" })).toHaveText(
+      "Not added, it would make a loop: F-04 Saved views that follow a person across projects and devices already waits on F-02 Activity events pipeline with daily rollups for every workspace",
+    );
+    await expect(page.getByTestId("ld-refused")).toHaveCount(1);
+  });
+
+  test("L-7: Escape lets go of the menu, then the arrow, then the card", async ({ page }) => {
+    // protects=ld2-a-arrow, ld3-b-menu; fails_when=Escape does nothing or drops all at once.
+    await open(page, "light");
+    await page.getByTestId("ld-edit").click();
+    await reveal(page, card(page, "F-03"));
+    await card(page, "F-03").click();
+    await page.locator('[data-testid="ld-arrow-hit"]').first().dispatchEvent("click");
+    await expect(page.getByTestId("ld-arrow-pop")).toBeVisible();
+    await card(page, "F-03").getByTestId("ld-more").click();
+    await expect(page.getByTestId("ld-feature-menu")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("ld-feature-menu")).toHaveCount(0);
+    await expect(page.getByTestId("ld-arrow-pop")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("ld-arrow-pop")).toHaveCount(0);
+    await expect(page.getByTestId("ld-arrow")).toHaveCount(4);
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("ld-arrow")).toHaveCount(0);
+  });
+
+  test("L-8: picked arrows are 3 px on screen at any zoom; Fit stays at 85% or more", async ({ page }) => {
+    // protects=ld2-a-select; fails_when=arrows thin out with the zoom or Fit goes below 85%.
+    await open(page, "light");
+    await reveal(page, card(page, "F-03"));
+    await card(page, "F-03").click();
+    const width = async () => Number(await page.getByTestId("ld-arrow").first().getAttribute("stroke-width"));
+    const zoom = async () => Number((await page.getByTestId("ld-zoom-level").textContent())!.replace("%", "")) / 100;
+    expect((await width()) * (await zoom())).toBeCloseTo(3, 1);
+    await page.getByTestId("ld-fit").click();
+    expect(await zoom()).toBeGreaterThanOrEqual(0.85);
+    expect((await width()) * (await zoom())).toBeCloseTo(3, 1);
+  });
+});
+
+test.describe("visual QA fixes, phone light", () => {
+  test.use(PHONE);
+
+  test("L-6: the guardrail is one line under the goal picker and the goal card starts high", async ({ page }) => {
+    // protects=ld1-a-phone; fails_when=the strip wraps above the picker and pushes the ladder
+    // down; no_claim=the exact line break.
+    await open(page, "light");
+    const line = page.getByTestId("ld-phone-guardrail");
+    await expect(line).toContainText("Guardrail: Pages load in under 2 seconds");
+    const tabs = (await page.getByRole("tablist").boundingBox())!;
+    const g = (await line.boundingBox())!;
+    expect(g.y).toBeGreaterThan(tabs.y);
+    expect(g.height).toBeLessThan(30);
+    expect((await page.getByTestId("ld-goal").boundingBox())!.y).toBeLessThan(360);
+  });
+});
