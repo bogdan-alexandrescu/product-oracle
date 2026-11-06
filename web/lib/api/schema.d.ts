@@ -40699,6 +40699,11 @@ export interface components {
              * @default false
              */
             can_change: boolean;
+            /**
+             * Can Propose
+             * @default false
+             */
+            can_propose: boolean;
         };
         /** SimpleGoalMilestoneIn */
         SimpleGoalMilestoneIn: {

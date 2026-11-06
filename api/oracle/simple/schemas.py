@@ -456,6 +456,9 @@ class SimpleGoalMilestone(BaseModel):
     prd_owner: str | None = None
     pending: SimpleMilestonePending | None = None
     can_change: bool = False
+    # milestone-rights: a roadmap's own milestone the reader may not change but may propose
+    # a change to (op edit_goal_milestone, routed to who decides the roadmap).
+    can_propose: bool = False
 
 
 class SimpleGoalMilestoneIn(BaseModel):
