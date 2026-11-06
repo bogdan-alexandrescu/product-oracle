@@ -298,5 +298,6 @@ test("a phone's Roadmap quarter with one item says 1 item", async ({ page }) => 
   await page.goto("/simple/roadmap?roadmap=onboarding-roadmap");
   const quarters = page.getByTestId("timeline-list").getByTestId("timeline-quarter");
   await expect(quarters.filter({ hasText: "Q1 2027" }).locator("h3")).toHaveText(/· 1 item$/);
-  await expect(quarters.filter({ hasText: "Q3 2027" }).locator("h3")).toHaveText(/· 2 items$/);
+  // This line's data has more than one item in Q3 2027 (AN's had 2): a count above one says "items".
+  await expect(quarters.filter({ hasText: "Q3 2027" }).locator("h3")).toHaveText(/· ([2-9]|\d{2,}) items$/);
 });
