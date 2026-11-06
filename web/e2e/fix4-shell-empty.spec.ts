@@ -36,9 +36,9 @@ test("qa-shell-9, 10, 30: the owner of a new company walks every empty page and 
 
   // Inbox: what will arrive, not only that nothing is here.
   await open(page, "nav-inbox", "Inbox");
-  await expect(page.getByTestId("inbox-tab-empty")).toContainText(
-    "Nothing needs you yet. Decisions, approvals and questions for you will show up here.",
-  );
+  // Pass F, F-7: the sentence about what arrives is behind the (i).
+  await expect(page.getByTestId("inbox-tab-empty")).toContainText("Nothing needs you yet");
+  await expect(page.getByTestId("inbox-tab-empty")).not.toContainText("will show up here");
 
   // PRDs: the next step, with the button the owner has.
   await open(page, "nav-prds", "PRDs");

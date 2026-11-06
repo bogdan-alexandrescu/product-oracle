@@ -20,11 +20,13 @@ async function openTokens(page: Page) {
 
 test("qa-settings-35: the page says where each kind of token is made, with a link to My account", async ({ page }) => {
   await openTokens(page);
+  // Pass F, F-67: the kinds are behind the title's (i), not a panel on the page.
+  await page.getByRole("button", { name: "About API tokens" }).click();
   const where = page.getByTestId("tokens-made-where");
-  await expect(where).toContainText("Personal: each member makes their own on My account › Personal API tokens");
+  await expect(where).toContainText("Each member makes theirs on My account › Personal API tokens");
   await expect(where).toContainText("Run: Oracle makes one for each run's agents");
-  await expect(where).toContainText("MCP client:");
-  await expect(where).toContainText("Service: Oracle has no way to make one");
+  await expect(where).toContainText("Connected app:");
+  await expect(where).toContainText("Oracle has no way to make one");
   await where.getByRole("link", { name: "My account › Personal API tokens" }).click();
   await expect(page).toHaveURL(/\/account$/);
   await expect(page.getByRole("heading", { level: 1, name: "My account" })).toBeVisible();

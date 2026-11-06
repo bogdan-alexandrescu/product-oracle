@@ -1558,6 +1558,9 @@ class InboxOut(BaseModel):
     # Engineering leads, and owners while no lead is named (F3 Date bases): proposed
     # schedule bases to verify or reject, each in ``total``.
     dates: list[InboxDateBasis] = []
+    # F-7: my unread webhook notices (paused, address changed), approvers and owners; in
+    # ``total``.
+    webhooks: int = 0
     total: int
     # Approvers and owners: feedback in every state, newest first (declined and done
     # capped to the most recent), the counts per state, and the staged rows.

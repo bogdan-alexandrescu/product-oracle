@@ -11645,6 +11645,9 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     from oracle.simple.meetings import inbox_rows as simple_minutes_rows
 
     simple_minutes = await simple_minutes_rows(db, principal, seen)
+    # F-7: my unread webhook notices (paused, address changed) are counted Inbox rows, for
+    # the roles that can open Settings › Webhooks.
+    webhook_notices = await _unread_webhook_notices(db, principal)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()
@@ -11694,7 +11697,9 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         + sum(1 for r in discussions if r.state in ("new", "open"))
         # A track is one row, its open alerts its children (#514: as a checkpoint's items).
         + sum(1 for t in track_groups if t.counts.new + t.counts.open > 0)
+        + webhook_notices
         + counted,
+        webhooks=webhook_notices,
         tracks=track_groups,
         launches=launch_rows,
         rituals=rituals,
@@ -11714,6 +11719,30 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         simple_approvals=simple_approvals,
         simple_minutes=simple_minutes,
     )
+
+
+WEBHOOK_NOTICE_KINDS = ("webhook_paused", "webhook_url_changed")
+
+
+async def _unread_webhook_notices(db: AsyncSession, principal: Principal) -> int:
+    """How many of my webhook notices are unread (F-7); none for a role that cannot open
+    Settings › Webhooks."""
+    from oracle.authz import has_role
+    from oracle.review.models import Notification
+
+    if principal.user_id is None or not has_role(principal.role, "approver"):
+        return 0
+    return (
+        await db.scalar(
+            select(func.count())
+            .select_from(Notification)
+            .where(
+                Notification.user_id == principal.user_id,
+                Notification.kind.in_(WEBHOOK_NOTICE_KINDS),
+                Notification.read_at.is_(None),
+            )
+        )
+    ) or 0
 
 
 async def _access_requests(db: AsyncSession, principal: Principal) -> list[InboxAccessRequest]:
