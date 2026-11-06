@@ -86,8 +86,8 @@ export interface MeetingsCtx {
   othersWaiting?: () => number;
   /** home-honest-loading: every document of this kind is in Trash (and there is one). */
   onlyInTrash?: (kind: string) => boolean;
-  /** home-deleted-roadmap: no document of this kind is left, live or in Trash, and one was purged. */
-  deletedForGood?: (kind: string) => boolean;
+  /** home-deleted-roadmap: when the last of this kind was purged, when none is left, live or in Trash; else null. */
+  deletedForGood?: (kind: string) => string | null;
   /** qa4-simple-prd-1: every PRD document (as the API's start options list each readable PRD by its own title). */
   documents?: () => { id: string; slug: string; title: string }[];
   /** build-rundecide RD1 a: the runs' decided stops on the PRDs shown (./simple-runs.ts), for the Runs card. */
@@ -497,7 +497,7 @@ function meetingDrafts(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting, p: Prd): Sc
     participant_ids: [...new Set(made.map((d) => d.approver_id).filter((x): x is string => !!x))], changes: made.length,
     submitted_at: m.approved?.at ?? null, submitted_by: m.approved ? m.presenter_id : null, decider_approved: !!m.approved,
     waiting_on: m.approved?.waiting_on ?? [], approved_at: m.approved && !held(m) ? m.approved.at : null, blocked_by: m.approved?.blocked_by ?? [],
-    can_submit: false, can_resume: false, can_approve: false, change_log: [], can_withdraw: false, published: true,
+    can_submit: false, can_resume: false, can_approve: false, can_publish: false, required_reviewers: [], change_log: [], can_withdraw: false, published: true,
   }];
 }
 
@@ -644,11 +644,12 @@ function upcoming(ctx: MeetingsCtx, db: MeetingsDb, only?: string): Schemas["Sim
   // home-honest-loading: a ritual whose roadmaps are all in Trash says so (meetings.REVIEWS).
   const kindOf = new Map(rituals.map((r) => [r.id, r.kind]));
   const inTrash = ctx.onlyInTrash?.("roadmap") ?? false;
-  const deleted = ctx.deletedForGood?.("roadmap") ?? false;
+  const deleted = ctx.deletedForGood?.("roadmap") ?? null;
   for (const row of rows) {
     const reviewsRoadmap = kindOf.get(row.ritual_id) === "roadmap_refresh";
     row.reviews_in_trash = inTrash && reviewsRoadmap ? "roadmap" : null;
     row.reviews_deleted = deleted && reviewsRoadmap ? "roadmap" : null;
+    row.reviews_deleted_at = reviewsRoadmap ? deleted : null;
   }
   return rows.sort((a, b) => a.due_at.localeCompare(b.due_at)).slice(0, 20);
 }

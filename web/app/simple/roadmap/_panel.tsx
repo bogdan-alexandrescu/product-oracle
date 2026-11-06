@@ -9,9 +9,10 @@ import { toast as dsToast, type ToastAsk } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
 import { GOAL_OPS, sendCardChanged, sendGoalChanged } from "@/lib/api/simple-chat";
 import { useQuery } from "@/lib/use-query";
+import { invalidateWaiting, waitingChanged } from "@/lib/simple-waiting";
 
 import { FloatingCard, type Act } from "./_card";
-import { ChangeFailed, changedWords, decide, nearWords, propose, resultWords, setRoadmapToday, undo, type Change, type Item } from "./_lib";
+import { ChangeFailed, changedWords, decide, nearWords, propose, resultWords, setRoadmapToday, suggestion, undo, type Change, type Item } from "./_lib";
 
 const toast = (ask: ToastAsk) => dsToast({ place: "corner", ...ask });
 
@@ -62,8 +63,13 @@ export function FeaturePanel({
   );
   const proposals = useQuery("simple-proposals", () => unwrap(api.GET("/v1/simple/changes", { params: { query: { status: "proposed" } } })));
   // build-feature-panel (AN PR 1204 review 7): a change made here is said to the whole page
-  // (every query reads again, this panel's among them), so the page behind shows it at once.
-  const reload = useCallback(async () => sendCardChanged(), []);
+  // (every query reads again, this panel's among them), so the page behind shows it at once;
+  // home-waiting-one-list: it may change what waits on me, so the one list is read afresh too.
+  const reload = useCallback(async () => {
+    invalidateWaiting();
+    sendCardChanged();
+    waitingChanged();
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -108,6 +114,16 @@ export function FeaturePanel({
     },
     [item, reload],
   );
+  const onSuggestion = async (how: "accept" | "edit" | "dismiss", dates?: { start_date: string; end_date: string }) => {
+    if (!item?.suggestion) return;
+    try {
+      await suggestion(item.suggestion.id, how, dates);
+      toast({ message: how === "dismiss" ? "Dismissed Oracle's dates" : item.suggestion.can_decide ? "Dates accepted in your working draft" : "Dates proposed: they wait in Needs a decision" });
+    } catch (e) {
+      toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not do that" });
+    }
+    await reload();
+  };
   const onDecide = async (c: Change, how: "accept" | "decline") => {
     try {
       await decide(c.id, how);
@@ -143,6 +159,7 @@ export function FeaturePanel({
       onClose={onClose}
       near={nearWords(item, data.key_dates ?? [])}
       onOpen={setOpened}
+      onSuggestion={(how, dates) => void onSuggestion(how, dates)}
     />
   );
   if (phone && item) return <div data-testid="item-panel" aria-label={item.title} className="contents">{body}</div>;

@@ -304,7 +304,16 @@ async def test_every_op_returns_the_checker_flags(client, op):
     shown = item_flags((await client.get(ROADMAP, headers=w.ctx.as_("decider"))).json())
     for item_id, flags in applied.items():
         assert flags == shown[item_id], (op, item_id)
-    assert proposed == applied, op
+    # roadmap-decide review: a cut flag's dependents say whether the reader decides each.
+    assert _unviewed(proposed) == _unviewed(applied), op
+
+
+def _unviewed(by_item: dict) -> dict:
+    """The flags without what depends on who reads them (each dependent's can_decide)."""
+    return {
+        i: [{**f, "dependents": [{**d, "can_decide": None} for d in f["dependents"]]} for f in fs]
+        for i, fs in by_item.items()
+    }
 
 
 @pytest.mark.parametrize("op", ALL)

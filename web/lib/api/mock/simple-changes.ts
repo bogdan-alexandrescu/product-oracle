@@ -27,7 +27,7 @@ import { mockNowMs } from "./clock";
 import { draftDecisionNotes } from "./decision-notes";
 import { stableUuid } from "./ids";
 import { changeSentence } from "./simple-change-words";
-import { milestoneValue, writeMilestone } from "./simple-milestones";
+import { decidesAsk, milestoneValue, writeMilestone } from "./simple-milestones";
 import { addToCompany, featureItem, featureKeyOf, priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
 import { archiveGoal, goalBucketsDb, trashGoal, unarchiveGoal, type GoalBucketsTrash } from "./goal-buckets";
 import {
@@ -168,6 +168,8 @@ const FIELDS: Record<string, string[]> = {
   set_status: ["status"],
   // goal-buckets-tasks: the goals an item serves (changes.py set_goals).
   set_goals: ["goal_ids"],
+  // roadmap-decide: a dependent no longer depends on a cut item (changes.py remove_dependency).
+  remove_dependency: ["depends_on"],
 };
 const FIXES = ["shift_dependents", "move_dependency"];
 /** fix5-cut-dependents: the item and everything waiting on it, cut as one change (changes.py CUT_ALL). */
@@ -260,11 +262,16 @@ const slugOf = (id: unknown): string | undefined => ROADMAP_SLUGS().find((r) => 
 
 /** Whether the caller applies (or accepts) this change: a key date's by the roadmap's rule
  * (drafts.can_edit), an add_item's by its roadmap's editors, else the item's deciders. */
-function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target"> & Partial<Pick<Change, "routed_to" | "after">>): boolean {
+function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target"> & Partial<Pick<Change, "routed_to" | "after" | "before">>): boolean {
   // Review major (changes.decides_all): a cut with its dependents needs rights on every item it cuts.
   if (c.op === CUT_ALL && c.after) return Object.keys(c.after).every((id) => decides(db, ctx, id));
   // A goal ask is decided by the owners it is sent to (goal_asks.may_decide).
   if (GOAL_ASK_OPS.includes(c.op)) return ctx.role === "owner";
+  // roadmap-decide: a change asked of a PRD's milestone (before.date) is the PRD owner's (or a company owner's).
+  if (c.op === "edit_goal_milestone" && c.before && !("milestone" in c.before)) {
+    const m = (db.goal_milestones ?? []).find((x) => x.id === c.target.milestone_id);
+    return !!m && decidesAsk(m, { role: ctx.role, name: ctx.names[ctx.id] });
+  }
   if (KEY_DATE_OPS.includes(c.op) || c.op === MILESTONE_OP) {
     const rm = roadmapOfDoc(db, c.target.document_id);
     return ctx.role === "owner" || (c.routed_to ?? []).includes(ctx.id) || (!!rm && canEditRoadmap(db, rm, ctx));
@@ -410,7 +417,10 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
 }
 
 function touched(c: Pick<Change, "op" | "target" | "after" | "before">): string[] {
-  return KEYED.includes(c.op) ? [...new Set([...Object.keys(c.after), ...Object.keys(c.before)])] : [String(c.target.item_id)];
+  if (KEYED.includes(c.op)) return [...new Set([...Object.keys(c.after), ...Object.keys(c.before)])];
+  // Review: a removed dependency touches the item it depended on too (changes.py _touched).
+  if (c.op === "remove_dependency" && c.target.subject) return [String(c.target.item_id), String(c.target.subject)];
+  return [String(c.target.item_id)];
 }
 
 function idle(s: Session): boolean {
@@ -514,20 +524,39 @@ function changeLog(db: SimpleDb, id: string): Schemas["SimpleDraftChange"][] {
     .sort((a, b) => (a.at < b.at ? -1 : 1))
     .map((c) => {
       const kind = (db.sessions ?? []).find((x) => x.id === c.session_id)?.kind ?? null;
-      const titles = c.op === CUT_ALL ? ((c.target.titles as string[] | undefined) ?? []) : [];
+      // roadmap-decide: every line names its item (a fix: then what else moved).
+      const named = (c.target.titles as string[] | undefined) ?? [];
+      const own = c.target.item_id ? keyOf(db, String(c.target.item_id)) : undefined;
+      const titles = named.length ? named : own ? [seed(db, own).title] : c.target.name ? [String(c.target.name)] : [];
       return { id: c.id, op: c.op, item_id: (c.target.item_id as string) ?? null, by: c.by, by_name: c.by_name, at: c.at, session_kind: kind, in_meeting: kind === "meeting", titles };
     });
+}
+
+/** drafts._approver_of: the draft's final approval is the roadmap's decider's; with none, an editor's (an owner's, its track owner's). */
+function approverOf(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "id" | "role">, d: MockDraft): boolean {
+  const decider = db.deciders?.[d.roadmap];
+  return decider ? decider === ctx.id : canEditRoadmap(db, d.roadmap, ctx);
 }
 
 function draftOut(db: SimpleDb, ctx: SimpleChangesCtx, d: MockDraft): Schemas["SimpleDraftOut"] {
   const edits = canEditRoadmap(db, d.roadmap, ctx);
   const decider = db.deciders?.[d.roadmap];
+  const approver = approverOf(db, ctx, d);
   return {
     ...d.out, changes: draftChanges(db, d.out.id), change_log: changeLog(db, d.out.id), from_prds: draftPrds(d),
+    // roadmap-decide review (drafts.outs): the author and the roadmap's set decider, by name.
+    created_by_name: ctx.names[d.out.created_by] ?? null,
+    decider: decider ? { id: decider, name: ctx.names[decider] ?? "its decider" } : null,
     can_submit: d.out.status === "working" && edits,
     can_resume: d.out.status === "working" && (d.out.created_by === ctx.id || decider === ctx.id),
-    can_approve: d.out.status === "submitted" && edits,
-    can_withdraw: d.out.status === "submitted" && (d.out.created_by === ctx.id || edits),
+    // Review: a decider who approved already waits on the required reviewers, not on themself;
+    // an owner who sent a roadmap someone else decides does not approve it (drafts._approver_of).
+    can_approve: d.out.status === "submitted" && ((approver && !d.out.decider_approved) || d.out.waiting_on.includes(ctx.id)),
+    // roadmap-decide (drafts.outs): the decider's Approve and publish on a working draft (with no decider, an owner's).
+    can_publish: d.out.status === "working" && approver && edits,
+    // roadmap-decide review: who still reviews a working draft after the decider's approval.
+    required_reviewers: d.out.status === "working" ? (db.reviewers?.[d.roadmap] ?? []).filter((r) => r !== ctx.id) : [],
+    can_withdraw: d.out.status === "submitted" && (d.out.created_by === ctx.id || approver),
     published: !(db.unapproved ?? []).includes(d.roadmap),
     // decisions-reversed-or-trashed: notes on decisions it cited that were reversed since.
     decision_notes: [...(d.out.decision_notes ?? []), ...draftDecisionNotes()],
@@ -556,14 +585,27 @@ function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]
     return json(200, draftOut(db, ctx, d));
   }
   if (p[4] === "approve") {
+    // roadmap-decide (drafts.approve): the decider's approval of a working draft sends it first.
+    if (d.out.status === "working") {
+      // Review minor 6: one rule (can_publish) for the button and the endpoint.
+      if (!draftOut(db, ctx, d).can_publish) return json(403, { detail: "Only the roadmap's decider approves and publishes this draft" });
+      if (!draftChanges(db, d.out.id) && !draftPrds(d).length) return json(422, { detail: "Nothing to submit: the draft has no changes" });
+      // As submit (drafts._in_review): it waits on the roadmap's required reviewers.
+      const waiting = (db.reviewers?.[d.roadmap] ?? []).filter((r) => r !== ctx.id);
+      Object.assign(d.out, { status: "submitted", version: (d.out.base_version ?? 1) + 1, submitted_at: now, submitted_by: ctx.id, waiting_on: waiting });
+    }
     if (d.out.status !== "submitted") return json(409, { detail: `This draft is ${d.out.status}: only a submitted draft is approved` });
-    const waited = d.out.waiting_on.includes(ctx.id);
-    if (!canEditRoadmap(db, d.roadmap, ctx) && !waited) return json(403, { detail: "Only the decider and the required reviewers approve this draft" });
-    // drafts._approve: a required reviewer's approval, the decider's (an editor's here); the
-    // version is approved once the decider's is in and no reviewer is still waited on.
-    d.out.waiting_on = d.out.waiting_on.filter((i) => i !== ctx.id);
-    if (canEditRoadmap(db, d.roadmap, ctx)) d.out.decider_approved = true;
-    if (!d.out.decider_approved || d.out.waiting_on.length) return json(200, draftOut(db, ctx, d));
+    // As drafts._approve: the decider (with none, an editor), a required reviewer (one who approved
+    // already may approve again: nothing changes) or anyone it waits on.
+    const approver = approverOf(db, ctx, d);
+    const reviewer = d.out.waiting_on.includes(ctx.id) || (db.reviewers?.[d.roadmap] ?? []).includes(ctx.id);
+    if (!reviewer && !approver) return json(403, { detail: "Only the decider and the required reviewers approve this draft" });
+    // A required reviewer's approval takes them off waiting_on; the decider's (or an owner's) is
+    // the decider's. As drafts._settle: published once the decider approved and no one is left.
+    const waiting = d.out.waiting_on.filter((r) => r !== ctx.id);
+    const deciderApproved = d.out.decider_approved || approver;
+    Object.assign(d.out, { decider_approved: deciderApproved, waiting_on: waiting });
+    if (!deciderApproved || waiting.length) return json(200, draftOut(db, ctx, d));
     Object.assign(d.out, { status: "approved", approved_at: now });
     // trash-features-goals review 4: the version is made without the features in Trash.
     const without = db.items.filter((s) => s.trashed && s.roadmap === d.roadmap).map((s) => s.key);
@@ -572,7 +614,7 @@ function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]
   }
   if (p[4] === "withdraw") {
     // S3b-1: back to working, its changes kept; the version is withdrawn (never approved).
-    if (d.out.created_by !== ctx.id && !canEditRoadmap(db, d.roadmap, ctx)) return json(403, { detail: "Only the draft's author or the roadmap's decider withdraws it" });
+    if (d.out.created_by !== ctx.id && !approverOf(db, ctx, d)) return json(403, { detail: "Only the draft's author or the roadmap's decider withdraws it" });
     if (d.out.status !== "submitted") return json(409, { detail: `This draft is ${d.out.status}: only a submitted draft is withdrawn` });
     Object.assign(d.out, { status: "working", version: null, submitted_at: null, submitted_by: null, decider_approved: false, waiting_on: [] });
     return json(200, draftOut(db, ctx, d));
@@ -1020,6 +1062,9 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     }
     if (Object.keys(stale).length) return conflict(db, ctx, stale, Object.keys(stale), "Changed since you saw it");
     const moves = fixPlan(seen, body.op, String(target.item_id), dep);
+    // roadmap-decide: the draft's change list names the item, then what else moved.
+    const titleOf = (id: string) => seed(seen, keyOf(db, id)!).title;
+    target.titles = [titleOf(String(target.item_id)), ...Object.keys(moves).filter((id) => id !== target.item_id).map(titleOf)];
     before = Object.fromEntries(Object.keys(moves).map((id) => [id, read(seen, keyOf(db, id)!, ["start_date", "end_date", "date_source"], target)]));
     after = Object.fromEntries(Object.entries(moves).map(([id, [s, e]]) => [id, { start_date: s, end_date: e, date_source: "typed" }]));
   } else if (body.op === CUT_ALL) {
@@ -1040,6 +1085,8 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     after = Object.fromEntries(cut.map((i) => [i.id, { cut: true }]));
   } else {
     const fields = FIELDS[body.op];
+    // roadmap-decide review (changes.py): the page may not see every stored key; only the subject is checked.
+    if (body.op === "remove_dependency") body.before = read(seen, key, fields, target);
     const missing = fields.filter((f) => !(f in body.before));
     if (missing.length) return json(422, { detail: `before: ${missing.join(", ")} as you saw them` });
     const now_ = read(seen, key, fields, target);
@@ -1082,7 +1129,13 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       after = { horizon: a.horizon };
     } else if (body.op === "reorder") after = { position: Number(a.position) };
     else if (body.op === "cut" || body.op === "restore") after = { cut: body.op === "cut" };
-    else if (body.op === "confirm_item") {
+    else if (body.op === "remove_dependency") {
+      const depKey = keyOf(db, String(target.subject ?? ""));
+      const own = seed(seen, key);
+      if (!depKey || !(own.depends ?? []).includes(depKey)) return json(422, { detail: "target.subject: an item the target depends on" });
+      target.titles = [own.title, seed(seen, depKey).title];
+      after = { depends_on: (own.depends ?? []).filter((k) => k !== depKey) };
+    } else if (body.op === "confirm_item") {
       if (!seed(seen, key).draft) return json(422, { detail: "Only a draft item is confirmed" });
       after = { draft: false };
     }
@@ -1314,6 +1367,11 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     c.draft_ids = drafts;
     session.last_change_at = now;
     applyS7(db, c);
+  } else if (c.op === "edit_goal_milestone") {
+    // roadmap-decide: accepting writes the PRD milestone's date and rule; either way it waits no more.
+    const m = (db.goal_milestones ?? []).find((x) => x.id === c.target.milestone_id);
+    if (m && p[4] === "accept") Object.assign(m, { date: (c.after.date as string | null) ?? m.date, counts_when: (c.after.counts_when as string | null) ?? m.counts_when });
+    if (m) m.pending = null;
   } else if (p[4] === "decline" && c.op === "add_item") reopenSuggestion(db, c);
   else if (p[4] === "accept" && GOAL_ASK_OPS.includes(c.op)) {
     const err = applyGoalAsk(db, ctx, c);
@@ -1431,6 +1489,9 @@ export function simpleInboxRows(
 const S7_OPS: string[] = ["add_item", "merge_item", "keep_both"];
 /** How long Oracle's drafting job of a quick-added draft runs in the mock (ms of the mock clock). */
 export const DRAFTING_MS = 2_500;
+/** Tests set this localStorage key to hold Oracle's drafting longer (ms of the mock clock). */
+export const MOCK_DRAFTING_MS_KEY = "po-mock-drafting-ms";
+const draftingMs = () => Number(globalThis.localStorage?.getItem(MOCK_DRAFTING_MS_KEY)) || DRAFTING_MS;
 
 /** The change as intoDrafts reads it: an add_item names an item of its roadmap (the new one may not exist yet). */
 function anchored(db: SimpleDb, c: Change): Change {
@@ -1602,7 +1663,7 @@ function applyS7(db: SimpleDb, c: Change, undo = false): void {
     db.items.push({
       key, title: String(a.title), horizon: a.horizon as SeedItem["horizon"], roadmap, goal: goalKey,
       track: db.items.find((x) => x.roadmap === roadmap && x.track)?.track, draft: true, outcome: typeof a.outcome === "string" ? a.outcome : null,
-      drafting_until: mockNowMs() + DRAFTING_MS, quarter: (a.quarter as { start: string; end: string } | undefined) ?? undefined,
+      drafting_until: mockNowMs() + draftingMs(), quarter: (a.quarter as { start: string; end: string } | undefined) ?? undefined,
       ...(a.milestone ? { milestone: { name: String((a.milestone as Values).name), day: dayIn(a.horizon as SeedItem["horizon"], (a.milestone as Values).date) } } : {}),
       looks_like: lookalikes(db, String(a.title), roadmap),
     });

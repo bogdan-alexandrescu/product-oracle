@@ -2076,7 +2076,8 @@ def _flag_fixes(
 
 def broken_links(e: service.Entry) -> list[constraints.Flag]:
     """The item's broken links, as Home counts them (web/lib/simple-home.ts brokenLinks):
-    its red flags that have a one-click fix (a draft without an owner has none)."""
+    its red flags that have a one-click fix (qa-simple-home-3: an end past its milestone too; a
+    draft without an owner has none)."""
     return [f for f in e.flags if f.state == "red" and f.fixes]
 
 
@@ -2143,7 +2144,13 @@ async def cards_out(
             ae = by_id.get(e.row.id)
             if ae is not None:
                 flags = [
-                    SimpleItemFlags(item_id=i, flags=service.flags_out(by_id[i]))
+                    SimpleItemFlags(
+                        item_id=i,
+                        flags=service.flags_out(
+                            by_id[i],
+                            lambda d, w=after.deciders: service.can_decide(principal, d, w),
+                        ),
+                    )
                     for i in (ae.row.id, *ae.needed_by)
                     if i in by_id and by_id[i].flags
                 ]

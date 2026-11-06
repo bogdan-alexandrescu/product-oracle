@@ -49,7 +49,11 @@ export function seedPrdMilestones(): MockMilestone[] {
   ];
 }
 
-export function milestoneOut(m: MockMilestone, ids: Record<string, string>, canChange: boolean, canPropose = false): Schemas["SimpleGoalMilestone"] {
+/** roadmap-decide: whether the reader decides a change asked of the milestone's PRD (its owner, or a company owner). */
+export const decidesAsk = (m: Pick<MockMilestone, "prd">, me: { role: string; name?: string } | undefined): boolean =>
+  !!m.prd && !!me && (me.role === "owner" || me.name === m.prd.owner);
+
+export function milestoneOut(m: MockMilestone, ids: Record<string, string>, canChange: boolean, canPropose = false, me?: { role: string; name?: string }): Schemas["SimpleGoalMilestone"] {
   return {
     id: m.id,
     roadmap_id: stableUuid(`simple-doc/${m.roadmap}`),
@@ -62,7 +66,7 @@ export function milestoneOut(m: MockMilestone, ids: Record<string, string>, canC
     progress: m.progress,
     prd: m.prd ? { id: stableUuid(`simple-doc/${m.prd.slug}`), slug: m.prd.slug, title: m.prd.title } : null,
     prd_owner: m.prd?.owner ?? null,
-    pending: m.pending ?? null,
+    pending: m.pending ? { ...m.pending, can_decide: decidesAsk(m, me) } : null,
     can_change: canChange,
     can_propose: !m.prd && !canChange && canPropose,
   };
@@ -96,8 +100,8 @@ const json = (status: number, body: unknown): Response => new Response(status ==
 
 /** POST/PATCH/DELETE /v1/simple/roadmap/milestones[/{id}[/restore]], as oracle.simple.router. */
 export async function routeMilestones(
-  db: { goal_milestones?: MockMilestone[]; ids: Record<string, string> },
-  me: { role: string; name?: string },
+  db: { goal_milestones?: MockMilestone[]; ids: Record<string, string>; changes?: Schemas["SimpleChangeOut"][] },
+  me: { id?: string; role: string; name?: string; names?: Record<string, string> },
   req: Request,
   p: string[],
   slugOf: (id: string) => string | null,
@@ -135,8 +139,22 @@ export async function routeMilestones(
     const b = (await req.json()) as Schemas["SimpleGoalMilestonePatch"];
     if (m.prd) {
       // A change to the PRD's milestone asks its owner (a proposed change to the PRD); it stays put.
-      m.pending = b.date === m.date && !b.counts_when ? null : { date: b.date ?? m.date, counts_when: b.counts_when ?? null, asked_of: m.prd.owner, change_id: stableUuid(`simple-gm-change/${m.id}/${b.date}`) };
-      return json(200, milestoneOut(m, db.ids, true));
+      m.pending = b.date === m.date && !b.counts_when ? null : { date: b.date ?? m.date, counts_when: b.counts_when ?? null, asked_of: m.prd.owner, change_id: stableUuid(`simple-gm-change/${m.id}/${b.date}`), can_decide: false };
+      // roadmap-decide: the ask is a proposed change on the PRD (goal_milestones.create), the PRD owner's to decide.
+      if (m.pending) {
+        const changes = (db.changes ??= []);
+        const id = m.pending.change_id!;
+        for (const c of changes) if (c.op === "edit_goal_milestone" && c.status === "proposed" && c.target.milestone_id === m.id) c.status = "declined";
+        changes.push({
+          id, session_id: null, document_id: stableUuid(`simple-doc/${m.prd.slug}`), op: "edit_goal_milestone", draft_ids: [],
+          target: { milestone_id: m.id, roadmap_id: stableUuid(`simple-doc/${m.roadmap}`), name: m.name },
+          before: { date: m.date, counts_when: m.counts_when }, after: { date: m.pending.date, counts_when: m.pending.counts_when ?? m.counts_when },
+          status: "proposed", by: me.id ?? "", by_name: (me.id && me.names?.[me.id]) || me.name || "someone", at: new Date().toISOString(),
+          decided_by: null, decided_at: null, reason: null, decision_reason: null, routed_to: [], undoes_id: null, undone: false,
+          can_decide: false, can_undo: false, words: "", from_meeting: null, off_agenda: false,
+        } as unknown as Schemas["SimpleChangeOut"]);
+      }
+      return json(200, milestoneOut(m, db.ids, true, false, me));
     }
     if (b.name != null) m.name = b.name;
     if (b.date != null) m.date = b.date;
