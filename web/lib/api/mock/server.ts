@@ -7499,7 +7499,9 @@ export async function mockFetch(req: Request): Promise<Response> {
   (globalThis as { __poMockFetch?: typeof mockFetch }).__poMockFetch ??= mockFetch;
   log.push(`${req.method} ${url.pathname}${url.search}`);
   await new Promise((r) => setTimeout(r, LATENCY_MS));
-  if (req.method === "GET" && url.pathname === localStorage.getItem(MOCK_FAIL_KEY)) {
+  // A path fails every GET of it; a path with its query ("/v1/documents?kind=prd") only that one.
+  const failing = localStorage.getItem(MOCK_FAIL_KEY);
+  if (req.method === "GET" && (url.pathname === failing || `${url.pathname}${url.search}` === failing)) {
     return new Response(JSON.stringify({ detail: "Mock failure" }), { status: 500, headers: { "content-type": "application/json" } });
   }
   if (localStorage.getItem(MOCK_FAIL_ONCE_KEY) === `${req.method} ${url.pathname}`) {
