@@ -818,7 +818,7 @@ async def _logs(db: AsyncSession, ds: list[SimpleDraft]) -> dict[uuid.UUID, list
         await db.scalars(
             select(SimpleChange)
             .where(SimpleChange.draft_ids.overlap(ids), SimpleChange.status.in_(COUNTED))
-            .order_by(SimpleChange.at, SimpleChange.id)
+            .order_by(SimpleChange.at, SimpleChange.seq)
         )
     )
     if not rows:
@@ -996,7 +996,7 @@ async def _live_changes(db: AsyncSession, d: SimpleDraft) -> list[SimpleChange]:
         await db.scalars(
             select(SimpleChange)
             .where(SimpleChange.draft_ids.contains([d.id]), SimpleChange.status.in_(COUNTED))
-            .order_by(SimpleChange.at, SimpleChange.id)
+            .order_by(SimpleChange.at, SimpleChange.seq)
         )
     )
     undone = (
