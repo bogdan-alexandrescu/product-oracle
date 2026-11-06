@@ -160,6 +160,47 @@ def test_no_template_says_an_old_name():
     assert not found, "\n".join(found)
 
 
+#: A Jinja tag, expression or comment: code, not words a person reads.
+JINJA = re.compile(r"\{\{.*?\}\}|\{%.*?%\}|\{#.*?#\}", re.S)
+
+
+def _markup_old_names(root: Path) -> list[str]:
+    """Every line of every Jinja and HTML template under ``root`` (the PDF, deck and public
+    roadmap exports, the members' invite emails) that says an old name, its tags aside."""
+    found = []
+    for path in sorted(root.rglob("*")):
+        if path.suffix not in (".j2", ".html"):
+            continue
+        # A tag over several lines keeps its line breaks, so each line keeps its number.
+        text = JINJA.sub(lambda m: "{}" + "\n" * m.group(0).count("\n"), path.read_text())
+        for n, line in enumerate(text.splitlines(), 1):
+            if _left(line):
+                found.append(f"{path.relative_to(root.parent)}:{n}: {line.strip()[:120]}")
+    return found
+
+
+def test_no_export_or_email_template_says_an_old_name():
+    assert not _markup_old_names(ORACLE), "\n".join(_markup_old_names(ORACLE))
+
+
+def test_the_template_check_reads_every_j2_and_html(tmp_path):
+    """fails_when=the check skips the exports' or the emails' templates."""
+    root = tmp_path / "oracle"
+    (root / "export" / "templates").mkdir(parents=True)
+    (root / "members").mkdir()
+    (root / "export" / "templates" / "deck.html.j2").write_text(
+        "<h1>{{ title }}</h1>\n<p>Read from the Baseline.</p>\n<p>{{ item.baseline }}</p>\n"
+    )
+    (root / "members" / "invite-email.html").write_text(
+        '<p>Change it in Baseline</p>\n<p class="baseline-row">{# the baseline #}</p>\n'
+    )
+    found = _markup_old_names(root)
+    assert [f.split(": ", 1)[0] for f in found] == [
+        "oracle/export/templates/deck.html.j2:2",
+        "oracle/members/invite-email.html:1",
+    ], found
+
+
 def test_no_job_prompt_oracle_runs_says_an_old_name():
     found = []
     for name in prompting.CURRENT.values():
@@ -202,6 +243,10 @@ def test_the_check_catches_the_old_names_and_spares_the_ids():
         "Approve a baseline",
         "Change it in Baseline",
         "the feature is in its baseline now",
+        "Oracle reads the goal groups from the baseline.",
+        "It is read from the baseline",
+        "reachable from the baseline (a blocker)",
+        "Confirm the baseline.",
     ):
         assert _left(said), said
     for label in ("Baseline", "Current state", "Desired state"):
@@ -216,6 +261,9 @@ def test_the_check_catches_the_old_names_and_spares_the_ids():
         "Measurable outcomes with a baseline, a target and a time frame.",
         "each with a metric, baseline, target and time frame",
         "an {} prediction must be {} its baseline",
+        "an increase prediction must be above its baseline",
+        "a metric with a baseline).",
+        "Measurable outcomes with a baseline and a target.",
     ):
         assert not _left(kept), kept
     for kept in ("baseline", "baseline_confirm", r"^\s*baseline\s+(?P<type>[a-z_]+)"):

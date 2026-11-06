@@ -73,6 +73,19 @@ def test_every_op_has_a_plain_sentence():
     )
 
 
+def test_a_goal_sentence_names_the_goal():
+    """fails_when=a goal moved to Trash, archived or restored reads "the goal a goal": the
+    sentence names the goal, by its title or else the item's name, as a feature's does."""
+    for op, verb in (("delete_goal", "moved"), ("archive_goal", "archived"),
+                     ("unarchive_goal", "restored")):  # fmt: skip
+        tail = " to Trash" if op == "delete_goal" else ""
+        said = change_words.phrase(op, {"title": "Faster checkout"}, {}, {}, None)
+        assert said == f"{verb} the goal “Faster checkout”{tail}", said
+        said = change_words.phrase(op, {}, {}, {}, "Faster checkout")
+        assert said == f"{verb} the goal Faster checkout{tail}", said
+        assert change_words.phrase(op, {}, {}, {}, None) == f"{verb} a goal{tail}", op
+
+
 async def test_change_list_says_an_undone_estimate_in_words(client):
     ctx = await make_people()
     w = await PriorityWorld(ctx).build()
