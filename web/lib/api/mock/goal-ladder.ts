@@ -142,7 +142,7 @@ export function ladderMap(): GoalMap {
     return [{ id: `f${i + 1}`, name, area: area(a), milestones, lever: a, expected: "", confidence: "Medium" as const, released: false, measured: null, lift: "not_measured" as const, links: milestones.map(link) }];
   });
   return {
-    goals: GOALS.map(({ position: _, ...g }) => ({ ...g })),
+    goals: GOALS.map(({ position, ...g }) => (void position, { ...g })),
     areas: AREAS.map((a) => ({ id: area(a), name: a, lever: a })),
     guardrail: { name: "Pages load in under 2 seconds", rule: "for 95% of views", current: 0, days: [0, 0, 0, 0, 0, 0, 0], held: true },
     milestones: MILESTONES.map((m) => ({ ...m })),
