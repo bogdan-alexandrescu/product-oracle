@@ -21,15 +21,34 @@ Test cards (protects / fails_when / no_claim):
   a viewer changes the PRD.
 - test_another_company_cannot_fix: protects=tenant scope: another company's owner is 404
   and nothing is written; fails_when=the op reaches another company's PRD.
+
+A count in a section's HEADING (owner, Nov 5, 'Fix the heading too'), on the invented PRD
+"later-list" ("Later · 8 items" over six listed):
+
+- test_heading_count_gets_its_fix: protects=the heading item carries "Use 6" (``part``
+  "heading"); the owner's fix puts the new heading in the draft (``overlay["headings"]``),
+  the section's words and key unchanged, and the item clears; the one-pager names the new
+  heading; fails_when=the heading item has no fix, or the fix writes the body.
+- test_stale_heading_is_refused: protects=a heading that no longer says the number is 409
+  "Changed by <name>"; fails_when=it applies twice.
+- test_undo_puts_the_heading_back: protects=Undo takes the heading out of the draft and the
+  item comes back; fails_when=the draft keeps the new heading.
+- test_heading_fix_as_a_proposal: protects=an approver's fix is a proposal that writes
+  nothing until the owner accepts it; fails_when=the proposal writes the heading.
+- test_submitted_draft_imports_the_heading: protects=submitting the draft imports the next
+  version with the new heading under the same section key, its list as it was;
+  fails_when=the import drops the heading or changes the key.
 """
 
 from sqlalchemy import select
 
+from oracle.docs.models import DocumentVersion, Section
 from oracle.simple.models import SimpleChange, SimpleDraft
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
 from tests.test_simple_one_pager_api import (
     CHANGES,
+    MD,
     clock,  # noqa: F401 - the autouse clock
     get,
 )
@@ -159,3 +178,142 @@ async def test_another_company_cannot_fix(client):
     assert r.status_code == 404, r.text
     async with tenant_session(ctx.tenant_id) as s:
         assert list(await s.scalars(select(SimpleChange))) == []
+
+
+# --------------------------------------------------------------------------- a heading's count
+
+HEAD_DOC = "later-list"
+HEAD_PRD = """---
+title: Later list
+---
+
+## Problem {#problem}
+
+Teams wait too long for their first invite.
+
+## What we will build {#build}
+
+- A faster invite
+- An invite link
+
+## Later · 8 items {#later}
+
+- Invite by QR code
+- Invite from chat
+- Team templates
+- Seat limits
+- Guest invites
+- Invite analytics
+"""
+HEAD = "“Later · 8 items” says 8 items, but it lists 6."
+
+
+async def head_world(client):
+    ctx = await make_ctx()
+    r = await client.post(f"/v1/documents/{HEAD_DOC}/versions", content=HEAD_PRD.encode(),
+                          headers=MD | ctx.as_("owner"))  # fmt: skip
+    assert r.status_code in (200, 201), r.text
+    return ctx
+
+
+async def test_heading_count_gets_its_fix(client):
+    ctx = await head_world(client)
+    view = await get(client, ctx, "owner", HEAD_DOC)
+    item = look(view, HEAD)
+    assert item["fix"] == {
+        "action": "set_section_number",
+        "target": {
+            "document_id": view["document"]["id"],
+            "section": "later",
+            "said": "8 items",
+            "part": "heading",
+        },
+        "before": "8",
+        "value": "6",
+        "words": "Use 6",
+        "proposal": None,
+    }
+    r = await fix(client, ctx, "owner", item["fix"])
+    assert r.status_code == 201, r.text
+    c = r.json()["change"]
+    assert c["status"] == "applied"
+    assert c["before"]["sections"]["later"]["heading"] == "Later · 8 items"
+    assert c["after"]["sections"]["later"]["heading"] == "Later · 6 items"
+    assert c["after"]["sections"]["later"]["body"] == c["before"]["sections"]["later"]["body"]
+    async with tenant_session(ctx.tenant_id) as s:
+        [d] = list(await s.scalars(select(SimpleDraft)))
+        assert d.overlay["headings"] == {"later": "Later · 6 items"}
+        assert "later" not in (d.overlay.get("sections") or {})
+    mine = await get(client, ctx, "owner", HEAD_DOC)
+    assert look(mine, HEAD) is None
+    assert not [x for x in mine["needs_look"] if x["kind"] == "numbers"]
+    assert {x["key"]: x["heading"] for x in mine["sections"]}.get("later") in (
+        None,
+        "Later · 6 items",
+    )
+
+
+async def test_stale_heading_is_refused(client):
+    ctx = await head_world(client)
+    f = look(await get(client, ctx, "owner", HEAD_DOC), HEAD)["fix"]
+    assert (await fix(client, ctx, "owner", f)).status_code == 201
+    again = await fix(client, ctx, "owner", f)
+    assert again.status_code == 409, again.text
+    detail = again.json()["detail"]
+    assert detail["message"] == f"Changed by {detail['changed_by']['name']}"
+    assert detail["changed_by"]["id"] == str(ctx.users["owner"].id)
+    async with tenant_session(ctx.tenant_id) as s:
+        assert [c.op for c in await s.scalars(select(SimpleChange))] == ["set_section_number"]
+
+
+async def test_undo_puts_the_heading_back(client):
+    ctx = await head_world(client)
+    f = look(await get(client, ctx, "owner", HEAD_DOC), HEAD)["fix"]
+    r = await fix(client, ctx, "owner", f)
+    assert r.status_code == 201, r.text
+    u = await client.post(f"{CHANGES}/{r.json()['change']['id']}/undo", headers=ctx.as_("owner"))
+    assert u.status_code in (200, 201), u.text
+    back = look(await get(client, ctx, "owner", HEAD_DOC), HEAD)
+    assert back is not None and back["fix"]["words"] == "Use 6"
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.scalar(select(SimpleDraft))
+        assert "later" not in (d.overlay.get("headings") or {})
+
+
+async def test_heading_fix_as_a_proposal(client):
+    ctx = await head_world(client)
+    f = look(await get(client, ctx, "owner", HEAD_DOC), HEAD)["fix"]
+    r = await fix(client, ctx, "approver", f)
+    assert r.status_code == 201, r.text
+    prop = r.json()["change"]
+    assert prop["status"] == "proposed"
+    assert prop["after"]["sections"]["later"]["heading"] == "Later · 6 items"
+    async with tenant_session(ctx.tenant_id) as s:
+        assert await s.scalar(select(SimpleDraft)) is None
+    owner = look(await get(client, ctx, "owner", HEAD_DOC), HEAD)
+    assert owner["fix"]["proposal"]["change_id"] == prop["id"]
+    acc = await client.post(f"{CHANGES}/{prop['id']}/accept", headers=ctx.as_("owner"))
+    assert acc.status_code == 200, acc.text
+    assert look(await get(client, ctx, "owner", HEAD_DOC), HEAD) is None
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.scalar(select(SimpleDraft))
+        assert d.overlay["headings"] == {"later": "Later · 6 items"}
+
+
+async def test_submitted_draft_imports_the_heading(client):
+    ctx = await head_world(client)
+    f = look(await get(client, ctx, "owner", HEAD_DOC), HEAD)["fix"]
+    assert (await fix(client, ctx, "owner", f)).status_code == 201
+    draft_id = (await get(client, ctx, "owner", HEAD_DOC))["draft"]["id"]
+    sub = await client.post(f"/v1/simple/drafts/{draft_id}/submit", headers=ctx.as_("owner"))
+    assert sub.status_code == 200, sub.text
+    assert sub.json()["version"] == 2
+    async with tenant_session(ctx.tenant_id) as s:
+        v2 = await s.scalar(select(DocumentVersion).where(DocumentVersion.number == 2))
+        assert "## Later · 6 items {#later}" in v2.markdown
+        assert "8 items" not in v2.markdown
+        later = await s.scalar(
+            select(Section).where(Section.version_id == v2.id, Section.section_key == "later")
+        )
+        assert later.heading == "Later · 6 items"
+        assert later.body_md.startswith("- Invite by QR code")
