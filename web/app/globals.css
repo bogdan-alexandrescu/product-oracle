@@ -26,6 +26,9 @@
   --on-accent: #ffffff;
   --accent-ink: #075985;
   --accent-soft: #e5f3fc;
+  /* pre-demo QA P-10: the feature panel's selected tab (Details | Talk to Oracle). */
+  --panel-tab-on: var(--surface);
+  --panel-tab-on-ink: var(--text);
   --accent-mid: #b6daf2;
   --hero: #0c1a2e;
   --hero-2: #173052;
@@ -84,6 +87,8 @@
     --on-accent: #06101e;
     --accent-ink: #b9e3fc;
     --accent-soft: #10294a;
+    --panel-tab-on: #1f4a7a;
+    --panel-tab-on-ink: #ffffff;
     --accent-mid: #1f4a7a;
     --hero: #11233b;
     --hero-2: #1a3352;
@@ -122,6 +127,8 @@
   --on-accent: #06101e;
   --accent-ink: #b9e3fc;
   --accent-soft: #10294a;
+  --panel-tab-on: #1f4a7a;
+  --panel-tab-on-ink: #ffffff;
   --accent-mid: #1f4a7a;
   --hero: #11233b;
   --hero-2: #1a3352;
@@ -219,6 +226,11 @@
   --simple-canvas: var(--bg);
   --simple-card: var(--surface);
   --simple-radius: 14px;
+}
+/* pre-demo QA P-10: the feature panel's selected tab stands out in dark too (its tokens above). */
+.panel-tabs [role="tab"][aria-selected="true"] {
+  background: var(--panel-tab-on);
+  color: var(--panel-tab-on-ink);
 }
 .simple-mode {
   font-size: var(--simple-body);
