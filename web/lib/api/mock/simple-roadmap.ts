@@ -93,6 +93,8 @@ interface SeedItem {
   /** prio-company: the key of the item whose feature this one is (an item a move on Priorities
    * added to the company roadmap for a feature it did not hold); else its own feature. */
   feature?: string;
+  /** feature-parts: the key of the feature it is a part of (RoadmapItem.parent_key). */
+  parent?: string;
   /** S7: the Ground Truth feature (with no item) this draft was linked to by a merge. */
   // A draft merged with a Ground Truth feature that has no item: linked to it (still a draft).
   linked_feature?: string;
@@ -1003,6 +1005,8 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
     const key = all.has(k) ? k : (dependencyOf([...all.values()].map((x) => x.s), k)?.key ?? k);
     const dep = all.get(key);
     if (!dep || key === s.key || closed(dep.s) || closed(s) || dep.s.status === "done" || doneItem(dep.s) || (dep.r.end.estimated && r.start.estimated)) continue;
+    // feature-parts: a part is never a broken link against its parent (constraints.check).
+    if (s.parent === key || dep.s.parent === s.key) continue;
     const theirs = ownPrd(dep.s).title;
     const depPrd = theirs !== ownPrd(s).title ? prdName(theirs) : null;
     if (r.start.estimated) {
@@ -1361,6 +1365,15 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   const seeds = visibleItems(db, role);
   const all = new Map(seeds.map((s) => [s.key, { s, r: resolve(db, s, w[s.horizon]) }]));
   afterDependencies(all);
+  // feature-parts (service.load): a part with no dates of its own reads its parent's.
+  for (const x of all.values()) {
+    const parent = x.s.parent ? all.get(x.s.parent) : undefined;
+    if (parent && x.r.start.estimated && x.r.end.estimated) x.r = parent.r;
+  }
+  const ref = (k: string) => {
+    const x = db.items.find((y) => y.key === k);
+    return { id: db.ids[k], code: (x && prdCode(x.section)) ?? k, title: x?.title ?? k };
+  };
   // The plan-model lane: the plan PRD's items whose code is a plan feature carry its slices.
   const slices = db.plan ? planSlices() : [];
   const slicesOf = (s: SeedItem, prdSlug: string) => {
@@ -1425,7 +1438,11 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       ].slice(0, 3),
       open_decisions: (db.decisions?.[s.key] ?? []).map((d) => ({ id: stableUuid(`simple-decision/${d.number}`), number: d.number, title: d.title })),
       looks_like: s.draft && !s.kept_both && !closed(s) ? matchesOf(db, s.looks_like ?? []) : [],
-      merged_into: s.merged_into ? { id: db.ids[s.merged_into], code: s.merged_into, title: db.items.find((x) => x.key === s.merged_into)?.title ?? s.merged_into } : null,
+      merged_into: s.merged_into ? ref(s.merged_into) : null,
+      // feature-parts: the feature it is a part of (set_parent's before is its key) and its open parts.
+      parent_key: s.parent ?? null,
+      part_of: s.parent && all.has(s.parent) ? ref(s.parent) : null,
+      parts: seeds.filter((x) => x.parent === s.key && !closed(x)).map((x) => ref(x.key)),
       drafting: !!s.drafting_until,
       flow: s.draft ? (s.flow ?? null) : (flowFor(db.visuals, "feature", db.ids[s.key]) ?? betFlow(db, s)),
       goal_ids: goalIdsOf(s),

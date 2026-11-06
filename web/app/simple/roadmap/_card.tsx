@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { Button, SegmentedControl } from "@/components/ds";
+import { Button, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
+import { useFeatureDelete } from "@/components/simple/FeatureDelete";
 import { FlowDetail, FlowThumb as FlowPicture } from "@/components/simple/Flow";
 import { FlowPanel, type FlowSubject } from "@/components/simple/FlowVisual";
 import { Icon, ICONS, Tabs } from "@/components/simple/FlowViews";
 import { flagKey } from "@/components/simple/chat/ChatCard";
 import { ItemTalk } from "@/components/simple/chat/ItemTalk";
-import { askThread, itemTalkPage, type ChatCard } from "@/lib/api/simple-chat";
+import { askThread, itemTalkPage, sendCardChanged, type ChatCard } from "@/lib/api/simple-chat";
 import { DecidedWho } from "@/components/simple/DecidedWho";
 import { formatDay } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -18,6 +19,7 @@ import { useScreenSubject } from "@/lib/screen-subject";
 import { HORIZONS, type Horizon } from "./_board";
 import { NameEdit, PanelFields } from "./_fields";
 import {
+  closedItem,
   milestoneInk,
   shortDay,
   storedDates,
@@ -479,7 +481,7 @@ const OP_WORDS: Record<string, string> = {
   remove_key_date: "Remove a key date",
   edit_goal_milestone: "Change a milestone",
   add_item: "Add an item",
-  merge_item: "Merge a duplicate",
+  merge_item: "Merge it into another",
   keep_both: "Keep both",
   confirm_item: "Confirm the draft",
   cut_with_dependents: "Cut it and its dependents",
@@ -488,12 +490,96 @@ const OP_WORDS: Record<string, string> = {
   set_prd: "Change the PRD",
   set_goal: "Change the goal",
   set_depends: "Change what it depends on",
+  set_parent: "Change what it is part of",
   set_status: "Change the status",
   set_goals: "Move it to another goal",
   remove_dependency: "Remove the dependency",
   set_owner: "Change the owner",
   set_goal_measure: "Change how its goal is measured",
 };
+
+const cornerToast = (ask: ToastAsk) => dsToast({ place: "corner", ...ask });
+
+type FeatureRef = { id: string; code: string; title: string };
+
+/** A feature named by its code and name; opens its own panel when the page can. */
+function FeatureLink({ f, onOpen }: { f: FeatureRef; onOpen?: (id: string) => void }) {
+  const words = (
+    <>
+      {f.code && <span className="simple-code mr-1">{f.code}</span>}
+      {f.title}
+    </>
+  );
+  return onOpen && f.id ? (
+    <button type="button" className="font-semibold text-accent-ink hover:underline" onClick={() => onOpen(f.id)}>
+      {words}
+    </button>
+  ) : (
+    <b className="font-semibold text-text">{words}</b>
+  );
+}
+
+/**
+ * panel-menu: Merge into… (merge_item: this feature closes into the one picked, which takes its
+ * dependencies and dependents) or Part of… (set_parent: it sits under the one picked). Another
+ * open feature of the same roadmap, by code and name; who may not decide proposes it.
+ */
+function PickFeature({ kind, item, items, act, done }: { kind: "merge" | "parent"; item: Item; items: Map<string, Item>; act: Act; done: () => void }) {
+  const merge = kind === "merge";
+  const options = [...items.values()].filter(
+    (i) => i.id !== item.id && i.roadmap.id === item.roadmap.id && !closedItem(i) && (merge || (!i.part_of && !item.parts.length)),
+  );
+  const [to, setTo] = useState(merge ? "" : (item.part_of?.id ?? ""));
+  const name = (i: Item) => [i.code, i.title].filter(Boolean).join(" ");
+  const picked = to ? items.get(to) : undefined;
+  const same = !merge && to === (item.part_of?.id ?? "");
+  const verb = merge ? "Merge" : "Save";
+  return (
+    <form
+      className="mt-2 flex flex-wrap items-center gap-2"
+      data-testid={merge ? "card-merge-edit" : "card-parent-edit"}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (merge && picked) {
+          void act(`Merged '${item.title}' into ${name(picked)}`, {
+            op: "merge_item",
+            target: { item_id: item.id, into_id: picked.id },
+            before: {},
+            after: {},
+          });
+        } else if (!merge && !same) {
+          void act(picked ? `Made '${item.title}' part of ${name(picked)}` : `Took '${item.title}' out of ${item.part_of ? `${item.part_of.code} ${item.part_of.title}`.trim() : "its feature"}`, {
+            op: "set_parent",
+            target: { item_id: item.id },
+            before: { parent_key: item.parent_key ?? null },
+            after: { parent_key: picked?.key ?? null },
+          });
+        }
+        done();
+      }}
+    >
+      <select
+        aria-label={merge ? "Merge into" : "Part of"}
+        value={to}
+        onChange={(e) => setTo(e.target.value)}
+        className="h-8 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-2 text-sm"
+      >
+        <option value="">{merge ? "Pick a feature" : "Not a part of another feature"}</option>
+        {options.map((i) => (
+          <option key={i.id} value={i.id}>
+            {name(i)}
+          </option>
+        ))}
+      </select>
+      <Button type="submit" variant="solid" disabled={merge ? !picked : same}>
+        {item.can_decide ? verb : `Propose: ${verb.toLowerCase()}`}
+      </Button>
+      <Button variant="ghost" onClick={done}>
+        Cancel
+      </Button>
+    </form>
+  );
+}
 
 /** S7: a draft's likely duplicates, "Looks like <code> <title>", with Merge and Keep both
  * (merge_item, keep_both through the change engine: editors apply, others propose). */
@@ -801,6 +887,23 @@ export function FloatingCard({
 
   const [renaming, setRenaming] = useState(false);
   const [menu, setMenu] = useState(false);
+  // panel-menu: Merge into… or Part of…, picked from the menu, open under the heading.
+  const [pick, setPick] = useState<"merge" | "parent" | null>(null);
+  // panel-menu: Delete to Trash, as a row's Delete; in Trash, the panel closes.
+  const remove = useFeatureDelete(async () => sendCardChanged(), cornerToast, () => onClose());
+  const menuItem = (label: string, run: () => void, warn = false) => (
+    <button
+      type="button"
+      role="menuitem"
+      className={`block w-full rounded-md px-2 py-1 text-left text-[15px] hover:bg-surface2 ${warn ? "text-warn" : ""}`}
+      onClick={() => {
+        setMenu(false);
+        run();
+      }}
+    >
+      {label}
+    </button>
+  );
   const head = (
     <div className="flex items-start gap-2">
       {/* BGD (Nov 4): the code chip before the name; the heading itself is the name. */}
@@ -845,18 +948,11 @@ export function FloatingCard({
             ⋯
           </button>
           {menu && (
-            <div role="menu" className="absolute right-0 z-50 mt-1 w-40 rounded-lg border border-line bg-surface p-1 shadow-tip">
-              <button
-                type="button"
-                role="menuitem"
-                className="block w-full rounded-md px-2 py-1 text-left text-[15px] hover:bg-surface2"
-                onClick={() => {
-                  setMenu(false);
-                  setRenaming(true);
-                }}
-              >
-                Rename
-              </button>
+            <div role="menu" className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-line bg-surface p-1 shadow-tip">
+              {menuItem("Rename", () => setRenaming(true))}
+              {!closedItem(item) && menuItem("Part of…", () => setPick("parent"))}
+              {!closedItem(item) && menuItem("Merge into…", () => setPick("merge"))}
+              {menuItem("Delete feature", () => void remove({ id: item.id, title: item.title }), true)}
             </div>
           )}
         </div>
@@ -950,10 +1046,28 @@ export function FloatingCard({
           Cut: it sits below the line, out of the plan
         </p>
       )}
+      {pick && <PickFeature key={pick} kind={pick} item={item} items={items} act={act} done={() => setPick(null)} />}
       {item.merged_into && (
         <p className="mt-1 text-sm text-text2" data-testid="item-merged">
-          Merged into {item.merged_into.title}
+          Merged into <FeatureLink f={item.merged_into} onOpen={onOpen} />
         </p>
+      )}
+      {item.part_of && (
+        <p className="mt-1 text-sm text-text2" data-testid="card-part-of">
+          Part of <FeatureLink f={item.part_of} onOpen={onOpen} />
+        </p>
+      )}
+      {item.parts.length > 0 && (
+        <div className="mt-1 text-sm" data-testid="card-parts">
+          <span className="text-text2">Parts</span>
+          <ul className="mt-0.5 space-y-0.5">
+            {item.parts.map((x) => (
+              <li key={x.id} data-testid="card-part">
+                <FeatureLink f={x} onOpen={onOpen} />
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       <LooksLike item={item} act={act} canChange={canChange} />
       <div className={wide && !phone ? "grid grid-cols-2 gap-4" : ""}>

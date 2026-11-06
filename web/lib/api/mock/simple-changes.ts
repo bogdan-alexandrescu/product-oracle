@@ -184,6 +184,8 @@ const FIELDS: Record<string, string[]> = {
   set_goals: ["goal_ids"],
   // roadmap-decide: a dependent no longer depends on a cut item (changes.py remove_dependency).
   remove_dependency: ["depends_on"],
+  // feature-parts: the key of the feature it is a part of (changes.py set_parent).
+  set_parent: ["parent_key"],
 };
 const FIXES = ["shift_dependents", "move_dependency"];
 /** fix5-cut-dependents: the item and everything waiting on it, cut as one change (changes.py CUT_ALL). */
@@ -384,6 +386,7 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
     else if (f === "goal_id") out[f] = s.goal && !goalInTrash(db, s.goal) ? stableUuid(`simple-goal/${s.goal}`) : s.map_goal && mapGoalRef(db, s.map_goal) ? s.map_goal : null;
     else if (f === "prd_document_id") out[f] = ownPrd(s).id;
     else if (f === "depends_on") out[f] = [...(s.depends ?? [])];
+    else if (f === "parent_key") out[f] = s.parent ?? null;
     else if (f === "status") out[f] = s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned");
     else if (f === "risk") out[f] = (s.risks ?? []).find((r) => r.flag === target.flag && (r.subject ?? null) === (target.subject ?? null)) ?? null;
   }
@@ -424,6 +427,7 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
     if (x) s.prd_doc = ownPrd(x);
   }
   if ("depends_on" in values) s.depends = [...((values.depends_on as string[]) ?? [])];
+  if ("parent_key" in values) s.parent = (values.parent_key as string | null) ?? undefined;
   if ("status" in values) {
     // changes.py set_status: planned is the tracker's status again (a shipped mark from elsewhere stays).
     if (s.tracked === undefined) s.tracked = !s.status || s.status === "cut" || s.status === "draft" ? "planned" : s.status;
@@ -1263,6 +1267,18 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     } else if (body.op === "set_status") {
       if (!["planned", "done", "cut"].includes(String(a.status))) return json(422, { detail: "after.status: planned, done or cut" });
       after = { status: a.status };
+    } else if (body.op === "set_parent") {
+      // changes.py set_parent: an open item of the same roadmap, one level only.
+      const v = a.parent_key == null ? null : String(a.parent_key);
+      const me = seed(seen, key);
+      const parent = v === null ? undefined : seen.items.find((x) => x.key === v);
+      if (v === key) return json(422, { detail: "after.parent_key: another item, never the item itself" });
+      if (v !== null && (!parent || parent.roadmap !== me.roadmap || closed(parent))) return json(422, { detail: `after.parent_key: no open item of this roadmap has the key ${v}` });
+      if (parent?.parent) return json(422, { detail: "after.parent_key: that item is a part itself (one level only)" });
+      if (v !== null && seen.items.some((x) => x.parent === key && !closed(x))) return json(422, { detail: "This item has parts of its own, so it is never a part" });
+      const named = parent ?? (me.parent ? seen.items.find((x) => x.key === me.parent) : undefined);
+      if (named) Object.assign(target, { code: prdCode(named.section) ?? named.key, title: named.title });
+      after = { parent_key: v };
     }
     else if (body.op === "set_goals") {
       // A goal by its id: the roadmap's, or the goal buckets' of the same name (as add_item reads it).
@@ -1685,7 +1701,8 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
   const key = keyOf(db, target.item_id);
   if (!key) return json(404, { detail: "No such roadmap item" });
   const s = seed(db, key);
-  if (!s.draft || closed(s)) return json(422, { detail: "target.item_id: an open draft item" });
+  // panel-menu: any open item merges into another (changes._merge_plan); keep both and a feature link stay a draft's.
+  if (closed(s) || (!s.draft && !(body.op === "merge_item" && target.into_id))) return json(422, { detail: body.op === "merge_item" && !target.into_id ? "Only a draft item is linked to a feature" : "target.item_id: an open draft item" });
   const applies = canDecideItem(db, s, ctx);
   if (body.op === "keep_both") {
     if (!!s.kept_both !== !!body.before?.kept_both) return conflict(db, ctx, { kept_both: !!s.kept_both }, [String(target.item_id)], "Changed since you saw it");
@@ -1698,7 +1715,8 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
     // roadmap-edit-fixes (changes._merge_plan): the kept item never takes a dependency that waits on it.
     const loop = loopOf(db.items, kept.key, (s.depends ?? []).filter((d) => d !== kept.key), [s.key]);
     if (loop) return json(422, { detail: loop });
-    return { target, before: { status: "draft" }, after: { status: "merged", merged_into: { id: target.into_id, code: kept.key, title: kept.title } }, roadmap: s.roadmap, applies };
+    Object.assign(target, { code: prdCode(kept.section) ?? kept.key, title: kept.title });
+    return { target, before: { status: s.draft ? "draft" : (s.status ?? "planned") }, after: { status: "merged", merged_into: { id: target.into_id, code: prdCode(kept.section) ?? kept.key, title: kept.title } }, roadmap: s.roadmap, applies };
   }
   if (typeof target.feature_id === "string" && target.feature_id) {
     // As the API: the draft becomes the feature's item (linked, kept beside look-alikes), still a draft.
@@ -1744,7 +1762,7 @@ function validS7(db: SimpleDb, c: Change): boolean {
   if (c.op === "add_item") return !keyOf(db, c.target.item_id) && !!slugOf(c.target.roadmap_id);
   const key = keyOf(db, c.target.item_id);
   const s = key ? seed(db, key) : undefined;
-  if (!s || !s.draft || closed(s)) return false;
+  if (!s || closed(s) || (!s.draft && !(c.op === "merge_item" && c.target.into_id))) return false;
   if (c.op === "keep_both") return !s.kept_both;
   if (!c.target.into_id) return true;
   const into = keyOf(db, c.target.into_id);
@@ -1809,7 +1827,9 @@ function applyS7(db: SimpleDb, c: Change, undo = false): void {
   }
   const intoKey = c.target.into_id ? keyOf(db, c.target.into_id) : undefined;
   const dependents = db.items.filter((x) => x.depends?.includes(s.key));
-  snaps[c.id] = structuredClone([s, ...(intoKey ? [seed(db, intoKey)] : []), ...dependents.filter((x) => x.key !== intoKey)]);
+  // feature-parts: its parts move to the kept item (the kept item, if one, is a part no more).
+  const parts = db.items.filter((x) => x.parent === s.key && !dependents.includes(x));
+  snaps[c.id] = structuredClone([s, ...(intoKey ? [seed(db, intoKey)] : []), ...[...dependents, ...parts].filter((x) => x.key !== intoKey)]);
   if (!intoKey) {
     s.linked_feature = String(c.target.feature_id);
     s.kept_both = true;
@@ -1822,5 +1842,7 @@ function applyS7(db: SimpleDb, c: Change, undo = false): void {
   if (deps.length) kept.depends = [...(kept.depends ?? []), ...deps];
   for (const d of dependents) d.depends = [...new Set(d.depends!.map((k) => (k === s.key ? kept.key : k)))].filter((k) => k !== d.key);
   kept.notes = [...(kept.notes ?? []), `Merged ${s.title} (${s.key}) into it.`];
+  for (const x of db.items) if (x.parent === s.key) x.parent = x.key === kept.key ? undefined : kept.key;
+  s.parent = undefined;
   s.merged_into = kept.key;
 }

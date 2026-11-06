@@ -156,7 +156,16 @@ function oneLane(data: Roadmap, group: Lane): Roadmap {
     return own.length ? [{ ...g, item_ids: own }] : [];
   });
   if (pm.length) groups.push({ key: PM_LANE, title: "PM-owned", item_ids: pm });
-  return { ...data, groups };
+  // feature-parts: a live part sits right under its live parent, in its parent's group.
+  const parentOf = (id: string) => {
+    const i = byId.get(id)!;
+    const p = i.part_of?.id ? byId.get(i.part_of.id) : undefined;
+    return p && !closedItem(p) && !closedItem(i) && seen.has(p.id) ? p.id : null;
+  };
+  const placed = groups
+    .map((g) => ({ ...g, item_ids: g.item_ids.filter((id) => !parentOf(id)).flatMap((id) => [id, ...[...seen].filter((x) => parentOf(x) === id)]) }))
+    .filter((g) => g.item_ids.length);
+  return { ...data, groups: placed };
 }
 
 const TODAY_ENTRY: LegendEntry = { key: "today", swatch: <i aria-hidden className="inline-block h-3.5 w-0.5 flex-none bg-crit" />, words: "Today" };
