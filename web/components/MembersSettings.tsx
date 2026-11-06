@@ -990,11 +990,11 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
   const sentNote = latest?.email_status === "sent";
   useEffect(() => {
     if (!sentNote) return;
-    if (confirming || demoting) return setMade(null);
     const t = setTimeout(() => setMade(null), SENT_NOTE_MS);
     return () => clearTimeout(t);
-  }, [sentNote, confirming, demoting]);
-  const outcome = latest && (
+  }, [sentNote]);
+  const sentNoteHidden = sentNote && !!(confirming || demoting);
+  const outcome = latest && !sentNoteHidden && (
     <InviteOutcome invite={latest} stalled={mailStalled} copied={copied === `made:${latest.id}`} onCopy={() => copyLink(latest, `made:${latest.id}`)} />
   );
 
