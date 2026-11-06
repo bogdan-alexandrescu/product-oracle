@@ -525,6 +525,7 @@ export default function BaselinePage() {
           canWrite={canWrite}
           canPropose={canComment}
           canChangeRoadmap={can("create_simple_change")}
+          pending={proposals.data}
           onChanged={() => {
             refresh();
             stateChanged();

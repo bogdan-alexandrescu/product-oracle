@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { Button, Dialog, InfoTip, Notice } from "@/components/ds";
@@ -46,6 +47,19 @@ function newKey(name: string, graph: GraphOut | undefined): string {
   return key;
 }
 
+/** A commenter's fix proposal (oracle.baseline.fixes.propose): its payload's fix. */
+type FixAsked = { action?: string; prd_document_id?: string; code?: string };
+
+/** Whether an open proposal already asks for this flag's fix: Give it a code for its feature, or the link of its PRD's feature. */
+function asked(open: Schemas["ProposalOut"][] | undefined, flag: Flag, action: Action, target: string): boolean {
+  return (open ?? []).some((p) => {
+    const fix = (p.payload as { fix?: FixAsked }).fix;
+    if (p.status !== "open" || !fix) return false;
+    if (action === "give_code") return fix.action === "give_code" && p.entity_id === target;
+    return action === "link_to_feature" && fix.action === "link_prd_feature" && fix.prd_document_id === flag.where.prd?.id && fix.code === target;
+  });
+}
+
 type Picking = { flag: Flag; what: "feature" | "goal" };
 /** What a fix did, in words, and how to undo it when it can be. */
 type Done = { text: string; undo?: () => Promise<unknown> };
@@ -62,10 +76,13 @@ export function GroundTruthFlags({
   canWrite,
   canPropose,
   canChangeRoadmap,
+  pending,
   onChanged,
 }: {
   check: Check;
   graph: GraphOut | undefined;
+  /** The open proposals: a fix a commenter asked for shows on its flag as waiting for an approver. */
+  pending: Schemas["ProposalOut"][] | undefined;
   /** Approvers and owners (can("confirm_entity")): add, link, confirm and pick directly. */
   canWrite: boolean;
   /** Commenters (can("create_proposal")): Add to Ground Truth, Give it a code and linking a PRD's feature send a proposal for approvers. */
@@ -173,10 +190,14 @@ export function GroundTruthFlags({
       return { text: `“${subject(flag).name}” now serves “${goal.name}”.` };
     });
 
-  /** The fixes this person can make here. */
+  /** The fixes asked for and waiting for an approver (an approver can still make them here). */
+  const waiting = (flag: Flag) => flag.fixes.some((fix) => asked(pending, flag, fix.action, fix.target));
+
+  /** The fixes this person can make here: a commenter asks once. */
   function fixes(flag: Flag) {
     return flag.fixes.flatMap((fix) => {
       const t = fix.target;
+      if (!canWrite && asked(pending, flag, fix.action, t)) return [];
       const on = (run: () => void) => [{ action: fix.action, run }];
       switch (fix.action) {
         case "add_to_ground_truth":
@@ -258,6 +279,11 @@ export function GroundTruthFlags({
                       {s.name}
                     </span>
                     <span className="block text-[13px] text-text2">{f.words}</span>
+                    {waiting(f) && (
+                      <Link href="/baseline?tab=proposals" data-testid="gt-pending" className="block text-[13px] text-accent-ink underline">
+                        Waiting for an approver
+                      </Link>
+                    )}
                   </span>
                   {row.length > 0 && (
                     <span className="flex flex-wrap gap-2">

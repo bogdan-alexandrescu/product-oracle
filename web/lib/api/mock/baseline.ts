@@ -45,6 +45,8 @@ export interface BaselineState {
   prdLinks?: Record<string, Record<string, string>>;
   /** Give it a code (./ground-truth.ts): the key each feature had before its code was given, for Undo. */
   codeFrom?: Record<string, string>;
+  /** Every code Give it a code gave (an undone one stays an alias of its feature: never given again). */
+  codesGiven?: string[];
 }
 
 type FieldChange = { entity_id: string; field: string; before: unknown; after: unknown; at: string };

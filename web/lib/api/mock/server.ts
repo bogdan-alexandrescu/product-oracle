@@ -6155,7 +6155,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   // The check's fixes with routes of their own (Give it a code, Link to a feature), and accepting a commenter's.
   if (p[1] === "baseline") {
-    const fixed = await routeGroundTruthFixes(db.baseline, me, req, p, q);
+    const fixed = await routeGroundTruthFixes(db.baseline, db.simple_roadmap, me, req, p, q);
     if (fixed) return fixed;
   }
   // B6 Goals interview: its routes write discussions and proposals, so they come first.

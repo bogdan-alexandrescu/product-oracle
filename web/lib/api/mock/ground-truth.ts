@@ -146,18 +146,23 @@ const fail = (status: number, detail: string) => json(status, { detail });
 const WHOLE = /^[A-Z]{1,3}-\d+$/;
 const ANY_CODE = /^[A-Z]{1,3}-\d+[a-j]?$/;
 
-/** The next code for a feature, as oracle.baseline.fixes.next_code: its feature's number and the next letter for a slice, else the highest F-number + 1. */
-function nextCode(baseline: BaselineState, e: Entity): string | Response {
+/**
+ * The next code for a feature, as oracle.baseline.fixes.next_code: its feature's number and the next letter for a slice,
+ * else the highest F-number + 1 over every feature's code, a code once given (never given again), the PRD's codes and
+ * every roadmap item's PRD section (prd_section_key).
+ */
+function nextCode(baseline: BaselineState, simple: SimpleDb | undefined, e: Entity): string | Response {
   if (e.status !== "confirmed") return fail(409, "This feature is not in the Ground Truth yet.");
   if (ANY_CODE.test(e.key)) return fail(409, "This feature already has a code.");
-  const keys = new Set(baseline.entities.filter((x) => x.type === "feature").map((x) => x.key));
+  const keys = new Set([...baseline.entities.filter((x) => x.type === "feature").map((x) => x.key), ...(baseline.codesGiven ?? [])]);
   const parent = e.parent_id ? baseline.entities.find((x) => x.id === e.parent_id && x.type === "feature") : undefined;
   if (parent) {
     if (!WHOLE.test(parent.key)) return fail(409, "Give its feature a code first.");
     const letter = [..."abcdefghij"].find((l) => !keys.has(`${parent.key}${l}`));
     return letter ? `${parent.key}${letter}` : fail(409, "This feature has no slice letter left.");
   }
-  const numbers = [...keys, ...PRD_FEATURES.map((f) => f.code)].map((k) => /^F-(\d+)/.exec(k)).filter((m) => !!m).map((m) => Number(m![1]));
+  const sections = (simple?.items ?? []).map((x) => (x.section ?? "").trim().toUpperCase());
+  const numbers = [...keys, ...PRD_FEATURES.map((f) => f.code), ...sections].map((k) => /^F-(\d+)(?:\.\d+)?[A-J]?$/i.exec(k)).filter((m) => !!m).map((m) => Number(m![1]));
   return `F-${String(Math.max(0, ...numbers) + 1).padStart(2, "0")}`;
 }
 
@@ -180,10 +185,11 @@ function propose(baseline: BaselineState, userId: string, feature: Entity, fix: 
   return p;
 }
 
-function giveCode(baseline: BaselineState, e: Entity): string | Response {
-  const code = nextCode(baseline, e);
+function giveCode(baseline: BaselineState, simple: SimpleDb | undefined, e: Entity): string | Response {
+  const code = nextCode(baseline, simple, e);
   if (typeof code !== "string") return code;
   (baseline.codeFrom ??= {})[e.id] = e.key;
+  (baseline.codesGiven ??= []).push(code);
   e.key = code;
   return code;
 }
@@ -206,7 +212,7 @@ function link(baseline: BaselineState, prd: string, code: string, featureId: str
  * /v1/baseline/prd-links (Link to a feature for a PRD's feature or slice, Undo), and accepting a
  * commenter's fix proposal. Approvers and owners act at once; a commenter's fix is a proposal. Null for any other route.
  */
-export async function routeGroundTruthFixes(baseline: BaselineState, me: { id: string; role: Role }, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
+export async function routeGroundTruthFixes(baseline: BaselineState, simple: SimpleDb | undefined, me: { id: string; role: Role }, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   const m = req.method;
   const ref = (e: Entity) => ({ id: e.id, code: ANY_CODE.test(e.key) ? e.key : null, name: e.title });
   const out = (e: Entity, rest: { status: "done" | "proposed"; code?: string | null; proposal_id?: string | null }) =>
@@ -224,10 +230,10 @@ export async function routeGroundTruthFixes(baseline: BaselineState, me: { id: s
       delete baseline.codeFrom![e.id];
       return out(e, { status: "done" });
     }
-    const code = nextCode(baseline, e);
+    const code = nextCode(baseline, simple, e);
     if (typeof code !== "string") return code;
     if (!atLeast(me.role, "approver")) return out(e, { status: "proposed", proposal_id: propose(baseline, me.id, e, { action: "give_code" }).id });
-    giveCode(baseline, e);
+    giveCode(baseline, simple, e);
     return out(e, { status: "done", code });
   }
   if (p[2] === "prd-links" && !p[3] && (m === "POST" || m === "DELETE")) {
@@ -262,7 +268,7 @@ export async function routeGroundTruthFixes(baseline: BaselineState, me: { id: s
     if (prop.status !== "open") return fail(409, `Proposal is already ${prop.status}`);
     const e = baseline.entities.find((x) => x.id === prop.entity_id);
     if (!e) return fail(404, "No such feature");
-    const done = fix.action === "give_code" ? giveCode(baseline, e) : link(baseline, fix.prd_document_id, fix.code, e.id);
+    const done = fix.action === "give_code" ? giveCode(baseline, simple, e) : link(baseline, fix.prd_document_id, fix.code, e.id);
     if (done instanceof Response) return done;
     return null; // the baseline's route accepts it (no field to change) and serves its ProposalOut.
   }
