@@ -59,24 +59,23 @@ test("branding: an owner uploads a dark logo and the preview says which logo eac
   const card = page.getByTestId("branding-panel");
   await card.getByLabel("Logo", { exact: true }).setInputFiles({ name: "logo.png", mimeType: "image/png", buffer: png(160, 40, 0x33) });
   await expect(card.getByTestId("brand-logo-size")).toHaveText("160 × 40 px");
+  // F-70: which logo each theme takes is in the card's (i), not a list on the page.
+  const tip = card.getByRole("button", { name: "About branding" });
   const note = card.getByTestId("brand-theme-note");
-  await expect(note).toHaveText("With no dark logo, every export and deck uses the logo.");
-  await expect(card.getByTestId("brand-theme-logos")).toHaveCount(0);
+  await expect(note).toBeHidden();
+  await expect(tip).toHaveAccessibleDescription(/With no dark logo, every export and deck uses the logo\./);
 
   await card.getByLabel("Dark logo", { exact: true }).setInputFiles({ name: "dark.png", mimeType: "image/png", buffer: png(160, 40, 0xf0) });
   await expect(card.getByRole("button", { name: "Remove dark logo" })).toBeVisible();
-  await expect(note).toHaveText("Exports and decks use the dark logo on a dark background and the logo on a light one.");
-  const rows = card.getByTestId("brand-theme-logos").getByRole("listitem");
-  await expect(rows).toHaveCount(BUILT_IN.length);
-  for (const [i, name] of BUILT_IN.entries()) {
-    await expect(rows.nth(i)).toHaveText(`${name}: light background, uses the logo`);
-  }
+  // The built-in themes all have a light background: no list of identical lines, no theme named.
+  await expect(tip).toHaveAccessibleDescription(/Every theme has a light background, so exports and decks use the logo\./);
+  await expect(card.getByText("light background, uses the logo")).toHaveCount(0);
+  for (const name of BUILT_IN) await expect(tip).not.toHaveAccessibleDescription(new RegExp(name));
 
   // It sticks after a reload.
   await page.reload();
-  await expect(card.getByTestId("brand-theme-logos").getByRole("listitem")).toHaveCount(BUILT_IN.length);
+  await expect(tip).toHaveAccessibleDescription(/Every theme has a light background/);
 
   await card.getByRole("button", { name: "Remove dark logo" }).click();
-  await expect(note).toHaveText("With no dark logo, every export and deck uses the logo.");
-  await expect(card.getByTestId("brand-theme-logos")).toHaveCount(0);
+  await expect(tip).toHaveAccessibleDescription(/With no dark logo, every export and deck uses the logo\./);
 });

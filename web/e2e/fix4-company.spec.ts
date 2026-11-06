@@ -68,7 +68,9 @@ test("qa-settings-13: every section enables Save only after a change, with the h
 
   // Horizons: the defaults are confirmed by Save; once stored, Save waits for a change.
   const horizons = page.locator("#horizons");
-  await expect(horizons.getByTestId("horizons-save-reason")).toHaveText("Save keeps the default horizons.");
+  // F-70: with the defaults, what Save does is in the (i), not a line beside it.
+  await expect(horizons.getByTestId("horizons-save-reason")).toHaveCount(0);
+  await expect(horizons.getByRole("button", { name: "About horizons" })).toHaveAccessibleDescription(/Save keeps the defaults\./);
   await horizons.getByLabel("Now").selectOption("2");
   await expect(horizons.getByTestId("horizons-save-reason")).toHaveCount(0);
   await horizons.getByRole("button", { name: "Save" }).click();

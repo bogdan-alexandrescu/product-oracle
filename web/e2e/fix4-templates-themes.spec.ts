@@ -104,9 +104,8 @@ test.describe("desktop", () => {
     action = page.getByRole("button", { name: "Create theme" });
     await expect(action).toBeDisabled();
     await expect(header().getByRole("button", { name: "Create theme" })).toHaveCount(0);
-    await expect(page.getByTestId("create-theme-reason")).toHaveText("Enter a key to create the theme.");
+    await expect(page.getByTestId("create-theme-reason")).toHaveText("Enter a name to create the theme.");
     expect((await action.boundingBox())!.y).toBeGreaterThan((await page.getByLabel("Start from").boundingBox())!.y);
-    await page.getByLabel("Key").fill("company-brand");
     await page.getByLabel("Name").fill("Company brand");
     await expect(action).toBeEnabled();
     await expect(page.getByTestId("create-theme-reason")).toHaveCount(0);

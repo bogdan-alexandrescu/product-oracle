@@ -80,7 +80,7 @@ for (const r of ROLES) {
     // Company: View only, and why the horizons and the time zone are not there.
     for (const link of [OWNER_LINKS.horizons, OWNER_LINKS.timezone]) {
       await page.goto(link);
-      await expect(page.getByTestId("company-owner-only")).toHaveText("Only owners set horizons and the time zone.");
+      await expect(page.getByTestId("company-owner-only")).toHaveAccessibleDescription("Only owners set horizons and the time zone.");
       await expect(page.getByTestId("view-only")).toBeVisible();
       await expect(page.getByTestId("timezone-panel")).toHaveCount(0);
       await expect(page.locator("#horizons")).toHaveCount(0);

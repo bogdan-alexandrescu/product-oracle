@@ -22,23 +22,24 @@ test("qa-settings-10: a new template's key is made from its name, and says so", 
   await expect(key).toHaveText("Key: launch-brief");
 });
 
-test("qa-settings-10, qa-settings-34: a new theme's key is checked; a taken key is said under the field", async ({ page }) => {
+test("qa-settings-10, qa-settings-34, F-76: a new theme's key is made from its name; a taken key is said under the name", async ({ page }) => {
   await login(page);
   await page.goto("/settings/themes/new");
-  const key = page.getByLabel("Key");
-  const hint = page.getByTestId("theme-key-hint");
-  await key.fill("a");
-  expect(await key.evaluate((el) => (el as HTMLInputElement).validity.patternMismatch)).toBe(true);
-  await expect(hint).toHaveText("A key needs at least 2 characters: lowercase letters, digits and hyphens.");
+  // F-76: no Key field to get wrong; the key is shown, made from the name.
+  await expect(page.getByLabel("Key")).toHaveCount(0);
+  const key = page.getByTestId("theme-key");
+  await expect(key).toHaveText("Key: —");
+  await page.getByLabel("Name").fill("a");
+  await expect(page.getByTestId("create-theme-reason")).toHaveText("Make the name at least two letters or digits long.");
 
-  await key.fill("clean-document");
-  await page.getByLabel("Name").fill("Another clean one");
+  await page.getByLabel("Name").fill("Clean document");
+  await expect(key).toHaveText("Key: clean-document");
   await page.getByRole("button", { name: "Create theme" }).click();
-  await expect(hint).toHaveText("A theme with key clean-document already exists. Archived themes keep their keys.");
-  await expect(key).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByTestId("theme-key-error")).toHaveText("A theme with key clean-document already exists. Archived themes keep their keys.");
   // Typing again clears it.
-  await key.fill("clean-document-2");
-  await expect(hint).toHaveText("Lowercase letters, digits and hyphens, starting with a letter or digit. It cannot change later.");
+  await page.getByLabel("Name").fill("Clean document 2");
+  await expect(page.getByTestId("theme-key-error")).toHaveCount(0);
+  await expect(key).toHaveText("Key: clean-document-2");
 });
 
 test("qa-settings-34: template problems read as sentences; a taken key is said under the name", async ({ page }) => {
