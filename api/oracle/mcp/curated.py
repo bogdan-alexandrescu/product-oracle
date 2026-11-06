@@ -175,7 +175,7 @@ _LIST_ENTITIES_SCHEMA = {
             "description": "Only these entities, by id or key: e.g. the entity_id (or key) of "
             "each feature and requirement in this PRD's scope (get_prd_scope; its own id is "
             "the scope row's, not the entity's). A new one (entity_id null) is not in the "
-            "baseline: its scope row holds what there is",
+            "Ground Truth: its scope row holds what there is",
         },
         "keys": {"type": "array", "items": {"type": "string"}, "description": "Only these keys"},
         "type": {
