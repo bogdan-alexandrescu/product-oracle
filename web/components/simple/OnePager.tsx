@@ -185,6 +185,8 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   const [whole, setWhole] = useState<Set<string>>(new Set());
   // 2026-10-30: the bets whose flow was asked for here ("Draw the flow"): their flow row shows while Oracle draws.
   const [asked, setAsked] = useState<Set<string>>(new Set());
+  // set_section_number (owner, Nov 5): the number a "Needs a look" fix just set, with its Undo.
+  const [fixed, setFixed] = useState<{ change_id: string; words: string } | null>(null);
   const [presenting, setPresenting] = useState(false);
   // build-review (QV3 a): with a working draft, what Present shows: the published version or the draft.
   const [showing, setShowing] = useState<"draft" | "published" | null>(null);
@@ -352,6 +354,20 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
     act(() => unwrap(api.POST("/v1/simple/one-pagers/{doc}/remind", { params: { path: { doc } } })));
   const undo = (n: Note) =>
     act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/undo", { params: { path: { change_id: n.change_id } } })));
+  // A numbers item's one-click fix: who changes the PRD applies it (Undo), approvers and commenters propose it.
+  const fixLook = (x: Schemas["OnePagerLook"]) =>
+    act(async () => {
+      const f = x.fix!;
+      const r = await unwrap(api.POST("/v1/simple/changes", {
+        body: { session_id: sessionId ?? null, op: f.action, target: f.target, before: { number: f.before }, after: { number: f.value } },
+      }));
+      setFixed(r.change.status === "applied" ? { change_id: r.change.id, words: `Set to ${f.value}` } : null);
+    });
+  const lookChange = (changeId: string, action: "accept" | "decline" | "undo") =>
+    act(async () => {
+      await unwrap(api.POST(`/v1/simple/changes/{change_id}/${action}`, { params: { path: { change_id: changeId } }, body: action !== "undo" && sessionId ? { session_id: sessionId } : {} }));
+      if (action === "undo") setFixed(null);
+    });
 
   async function exportPdf() {
     setError(null);
@@ -609,7 +625,12 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
       {(!planShown || linesShown || sessionId || !!v.draft || v.changes_in_review > 0 || v.notes.length > 0) && (
       <div className={`mx-auto grid gap-6 py-6 ${sessionId && !presenting ? "px-0" : "px-4"} ${presenting ? "max-w-[852px]" : "max-w-[1180px] md:grid-cols-[minmax(0,820px)_var(--simple-margin)]"}`} data-testid="one-pager-columns">
         <article aria-label="One-pager" className={`rounded-md border border-[var(--simple-rule)] bg-[var(--simple-paper)] ${sessionId && !presenting ? "px-4" : "px-6"} py-8 shadow-sm md:col-start-1 md:px-12`}>
-          {prdLooks.length > 0 && !presenting && <NeedsALook items={prdLooks} blocks={v.blocks} sections={v.sections} doc={v.document.slug} />}
+          {(prdLooks.length > 0 || fixed) && !presenting && (
+            <NeedsALook
+              items={prdLooks} blocks={v.blocks} sections={v.sections} doc={v.document.slug}
+              fixes={{ can: v.can_edit || v.can_propose, busy, fixed, fix: fixLook, change: lookChange }}
+            />
+          )}
           {v.blocks.filter((b) => !(planShown && b.kind === "timeline")).map((b) => (
             // qa4-simple-prd-21: the first section starts at the card's own top padding.
             <section key={b.key} aria-label={b.title} className="mt-5 first:mt-0">
@@ -1083,7 +1104,17 @@ function MarginNote({
  * "Needs a look" (2026-10-30): a quiet note for the PRD's owners (the API sends the items to
  * them only) naming what to look at and where. One list any of the one-pager's checks can add to.
  */
-export function NeedsALook({ items, blocks = [], sections = [], doc }: { items: Schemas["OnePagerLook"][]; blocks?: View["blocks"]; sections?: View["sections"]; doc?: string }) {
+interface LookFixes {
+  /** Who may change or propose a PRD line (the page's can_edit or can_propose). */
+  can: boolean;
+  busy: boolean;
+  /** The fix just applied, with its Undo. */
+  fixed: { change_id: string; words: string } | null;
+  fix: (x: Schemas["OnePagerLook"]) => void;
+  change: (changeId: string, action: "accept" | "decline" | "undo") => void;
+}
+
+export function NeedsALook({ items, blocks = [], sections = [], doc, fixes }: { items: Schemas["OnePagerLook"][]; blocks?: View["blocks"]; sections?: View["sections"]; doc?: string; fixes?: LookFixes }) {
   // qa4-simple-prd-11: each item names the page's own section (not the PRD's heading) and takes
   // the reader to the first line it concerns.
   const at = (x: Schemas["OnePagerLook"]) => {
@@ -1123,6 +1154,7 @@ export function NeedsALook({ items, blocks = [], sections = [], doc }: { items: 
                   In: {w.names.join(", ")}
                 </button>
               )}
+              {x.fix && fixes && <LookFix fix={x.fix} fixes={fixes} onFix={() => fixes.fix(x)} />}
               {doc && key && (
                 <Link className="font-semibold text-accent-ink underline max-md:inline-flex max-md:min-h-11 max-md:items-center" data-testid="needs-look-open" href={`/documents/${doc}#${key}`}>
                   Open the section
@@ -1131,7 +1163,44 @@ export function NeedsALook({ items, blocks = [], sections = [], doc }: { items: 
             </li>
           );
         })}
+        {fixes?.fixed && (
+          <li data-testid="needs-look-fixed" className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span role="status">{fixes.fixed.words}</span>
+            <button type="button" className={LOOK_ACTION} disabled={fixes.busy} onClick={() => fixes.change(fixes.fixed!.change_id, "undo")}>
+              Undo
+            </button>
+          </li>
+        )}
       </ul>
     </section>
+  );
+}
+
+const LOOK_ACTION = "font-semibold text-accent-ink underline disabled:opacity-60 max-md:inline-flex max-md:min-h-11 max-md:items-center";
+
+/** A numbers item's fix: its button ("Use 6"), or the open proposal of it with Accept and Decline for whom it waits on, Withdraw for its author. */
+function LookFix({ fix, fixes, onFix }: { fix: Schemas["OnePagerFix"]; fixes: LookFixes; onFix: () => void }) {
+  const p = fix.proposal;
+  if (p) {
+    return (
+      <>
+        <span data-testid="needs-look-proposal" className="text-text-faint">{p.can_decide ? `${p.by_name} proposes ${fix.value}` : "Waiting for approval"}</span>
+        {p.can_decide && (
+          <>
+            <button type="button" className={LOOK_ACTION} disabled={fixes.busy} onClick={() => fixes.change(p.change_id, "accept")}>Accept</button>
+            <button type="button" className={LOOK_ACTION} disabled={fixes.busy} onClick={() => fixes.change(p.change_id, "decline")}>Decline</button>
+          </>
+        )}
+        {p.can_undo && (
+          <button type="button" className={LOOK_ACTION} disabled={fixes.busy} onClick={() => fixes.change(p.change_id, "undo")}>Withdraw</button>
+        )}
+      </>
+    );
+  }
+  if (!fixes.can) return null;
+  return (
+    <button type="button" className={LOOK_ACTION} data-testid="needs-look-fix" disabled={fixes.busy} onClick={onFix}>
+      {fix.words}
+    </button>
   );
 }
