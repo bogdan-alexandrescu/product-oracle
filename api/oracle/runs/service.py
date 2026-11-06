@@ -2921,6 +2921,15 @@ async def _prompt_context(
             if files:
                 prior_files.append((s.seq, _flow(run).segment(s.name).title, sorted(files)))
     prior_files += list(planned or [])
+    run_items = None
+    if (
+        run.flow == "prd_to_roadmap"
+        and segment.name == "roadmap_draft"
+        and (items_text := prior.get(ITEMS_FILE))
+    ):
+        # roadmap-plan-tables: the checkpoint's check of the file (kept by
+        # oracle.runs.roadmap), not a second parse in the prompt.
+        run_items = (await items_check(db, run, items_text)).items
     # A person sent the segment back (D5): it starts from its previous files and the
     # problems Oracle's check found in them. A runtime retry has no change request.
     previous = (segment.artifacts or {}).get("previous") if change_request else None
@@ -2990,6 +2999,7 @@ async def _prompt_context(
         low_confidence=await _low_threshold(db),
         depth=knobs.depth,
         prior_outputs=prior,
+        run_items=run_items,
         reviewer_notes=notes,
         feedback=feedback,
         staged=chosen,
@@ -4743,12 +4753,14 @@ async def _plan_table_problems(
     the items file the roadmap_items segment wrote and the source PRD's verified bases."""
     from oracle.runs import plan_tables
 
-    items = None
+    text = None
     for seg in await db.scalars(
         select(RunSegment).where(RunSegment.run_id == run.id).order_by(RunSegment.seq)
     ):
         files = (seg.artifacts or {}).get("files") or {}
-        items = files.get(plan_tables.ITEMS_FILE, items)
+        text = files.get(plan_tables.ITEMS_FILE, text)
+    # The checkpoint's check of the file (kept by oracle.runs.roadmap): never parsed again.
+    items = (await items_check(db, run, text)).items if text else None
     source = await db.get(DocumentVersion, source_id) if source_id else None
     bases = await schedule.verified_bases(db, source.document_id if source else None)
     # one-roadmap-many-prds: the other PRDs' items on the company roadmap are in the tables too.

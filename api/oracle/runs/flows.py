@@ -1652,6 +1652,9 @@ class PromptContext:
     depth: str = "standard"
     # Earlier segments' outputs, re-sent because a workflow cannot wait for a person.
     prior_outputs: dict[str, str] = field(default_factory=dict)
+    # roadmap-plan-tables: the items of the earlier roadmap_items.yaml as its check read
+    # them (oracle.runs.roadmap.check_items_async, kept per text): the prompt never parses it.
+    run_items: list[dict[str, Any]] | None = None
     # Notes from checkpoint approvals and requested changes.
     reviewer_notes: list[str] = field(default_factory=list)
     # Feedback for the feedback loop: id, section, summary (and, for a staged text
@@ -1935,10 +1938,9 @@ def step_prompt(
         from oracle.roadmap import company
         from oracle.runs import plan_tables
 
-        items = ctx.prior_outputs.get(plan_tables.ITEMS_FILE)
-        queued = company.with_run_items(ctx.source.company_queue, items)
+        queued = company.with_run_items(ctx.source.company_queue, ctx.run_items)
         plan = plan_tables.engineering_plan(
-            items,
+            ctx.run_items,
             ctx.source.schedule_bases,
             others=queued,
         )

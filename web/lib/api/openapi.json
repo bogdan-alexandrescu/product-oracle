@@ -42739,7 +42739,7 @@
           "simple"
         ],
         "summary": "Create Goal Milestone",
-        "description": "Add a milestone to a goal on a roadmap: coded the next \"M<n>\" in that goal on that\nroadmap. Who may change the roadmap directly (an owner, its decider, with none its\nowner while an approver, same as a key date); a commenter is refused (403: milestones\nare not proposed here, unlike key dates).",
+        "description": "Add a milestone to a goal on a roadmap: coded the next \"M<n>\" in that goal on that\nroadmap. Who may change the roadmap directly (an owner, its decider, with none its\nowner while an approver, same as a key date); a commenter is refused (403: milestones\nare not proposed here, unlike key dates). A roadmap that is history (the company\nroadmap exists) is 409.",
         "operationId": "create_goal_milestone",
         "requestBody": {
           "content": {
@@ -42791,7 +42791,7 @@
           "simple"
         ],
         "summary": "Patch Goal Milestone",
-        "description": "Edit a milestone's name, date, goal, items it waits on or counts-when rule. A PRD's\nown milestone is read-only here: a date or counts-when edit instead proposes a change\nto the PRD's owner (``pending`` filled, the milestone unchanged) through the change\nengine (``POST /v1/simple/changes/{id}/accept|decline``); its name, goal and items are\nthe PRD's own and are 422 here.",
+        "description": "Edit a milestone's name, date, goal, items it waits on or counts-when rule. A PRD's\nown milestone is read-only here: a date or counts-when edit instead proposes a change\nto the PRD's owner (``pending`` filled, the milestone unchanged) through the change\nengine (``POST /v1/simple/changes/{id}/accept|decline``); its name, goal and items are\nthe PRD's own and are 422 here, even beside a date. A milestone of a roadmap that is\nhistory (the company roadmap exists) is 409.",
         "operationId": "patch_goal_milestone",
         "security": [
           {
