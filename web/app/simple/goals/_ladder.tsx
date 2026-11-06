@@ -12,13 +12,25 @@
  * person's canvas (place_card) and dragging the background pans; in Edit mode, dropping a
  * feature on a milestone's work (or a goal) moves it there, and dropping it on empty canvas
  * only places it. Tidy up never changes data. A phone shows one goal at a time: no canvas.
+ *
+ * goal-map-editing (the owner's ask of Nov 6): every feature is on the ladder; one serving a
+ * goal but no milestone sits under its goal ("Not on a key result"), one serving no goal in a
+ * last "No goal" column, and the header's badge leads to them. In Edit mode a feature dropped
+ * on a milestone links there, on another goal's column (or its group) serves that goal, on
+ * "Not on a key result" lets go of its milestones; a milestone moves within its goal or to
+ * another; a goal column moves in the one goal order. The ⋯ menus (and Move to…) do the same by
+ * keyboard, and Move to Trash (or the Delete key) sends a feature, milestone or goal to
+ * Settings › Trash. Each change has a toast with Undo; a commenter's becomes a suggestion where
+ * the change engine takes one, and a move they may not make says why and snaps back.
  */
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type PointerEvent as RPointerEvent, type RefObject, type WheelEvent as RWheelEvent } from "react";
 
 import Link from "next/link";
 import { Icon } from "@/components/ds/Icon";
+import { confirmInPage } from "@/components/ds/ConfirmDialog";
 import { InfoTip } from "@/components/ds/InfoTip";
 import { toast } from "@/components/ds/Toast";
+import { storeGoalOrder } from "@/components/simple/GoalOrder";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import type { GmFeature, GmGoal, GmMilestone, GmStatus, GoalMap } from "@/lib/api/mock/goal-map";
 import { formatCount } from "@/lib/format";
@@ -75,6 +87,8 @@ interface LdFeature {
   wanted: string[];
   /** What this person suggested it wait on, not yet decided. */
   suggested: string[];
+  /** goal-map-editing: on no milestone (the map's unplaced), under its goal or in No goal. */
+  free: boolean;
 }
 
 interface V {
@@ -89,6 +103,8 @@ interface V {
   edit: boolean;
   /** Owners and approvers change it; a commenter's change is a suggestion; a viewer reads. */
   canChange: boolean;
+  /** Whether this milestone is changed directly (its own can_change), not map.can_edit. */
+  krCan: (milestone: string) => boolean;
   may: boolean;
   phone: boolean;
   places: Map<string, { x: number; y: number }>;
@@ -103,6 +119,9 @@ interface V {
   drop: string | null;
   refused: [string, string] | null;
   fresh: string | null;
+  /** The badge's lead: the groups of features on no milestone, highlighted, and the goal of the first (null: No goal). */
+  flash: boolean;
+  flashGoal: string | null;
   onOpen: (f: GmFeature) => void;
   act: Acts;
 }
@@ -118,6 +137,18 @@ interface Acts {
   tidy: () => Promise<void>;
   moveTo: (feature: string) => void;
   waitsOn: (feature: string) => void;
+  /** goal-map-editing: a feature dropped on "ms:<id>", "free:<goal|none>", "goal:<id>" or "col:<id>". */
+  dropFeature: (feature: string, target: string) => Promise<void>;
+  /** A milestone into a goal, before another of its milestones (null: last). */
+  moveKr: (milestone: string, goal: string, before: string | null) => Promise<void>;
+  stepKr: (milestone: string, dir: -1 | 1) => Promise<void>;
+  krTo: (milestone: string) => void;
+  /** A goal to its place in the one goal order (0: first). */
+  orderGoal: (goal: string, to: number) => Promise<void>;
+  trashGoal: (goal: string) => Promise<void>;
+  trashKr: (milestone: string) => Promise<void>;
+  /** A move the reader may not make: why, and the card snaps back. */
+  refuse: (why: string) => void;
 }
 
 export interface LadderProps {
@@ -151,12 +182,15 @@ export function GoalLadder(props: LadderProps) {
   // The person's own pending suggestions: a suggested link shows on the card that would wait.
   const proposals = useQuery("simple-proposals", () => unwrap(api.GET("/v1/simple/changes", { params: { query: { status: "proposed" } } })));
   const canChange = map.can_edit;
+  // A milestone changes (Trash, move, drag) for the roadmap's owner or decider, not every approver.
+  const krCan = (milestone: string) => !!map.milestones.find((x) => x.id === milestone)?.can_change;
   const may = canChange || can("create_simple_change");
   const [edit, setEdit] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
   const [menu, setMenu] = useState<string | null>(null);
   const [adding, setAdding] = useState<string | null>(null);
-  const [sheet, setSheet] = useState<{ kind: "move" | "waits"; feature: string } | null>(null);
+  const [sheet, setSheet] = useState<{ kind: "move" | "waits" | "kr"; feature: string } | null>(null);
+  const [flash, setFlash] = useState(false);
   const [live, setLive] = useState<V["live"]>(null);
   const [drop, setDrop] = useState<string | null>(null);
   const [refused, setRefused] = useState<[string, string] | null>(null);
@@ -169,11 +203,16 @@ export function GoalLadder(props: LadderProps) {
   const ms = useMemo(() => goals.flatMap((g) => map.milestones.filter((m) => m.goal === g.id)), [goals, map.milestones]);
   const msCode = useMemo(() => new Map(ms.map((m, i) => [m.id, `M${i + 1}`])), [ms]);
   const feats = useMemo(() => {
-    const on = new Set(map.features.map((f) => f.id));
+    // goal-map-editing: the features on no milestone are cards too, under the goal their item serves.
+    const loose: GmFeature[] = map.unplaced.map((u) => ({ id: u.id, name: u.name, area: null, milestones: [], lever: "", expected: "", confidence: "Medium", released: false, measured: null, lift: "not_measured", links: [] }));
+    const on = new Set([...map.features, ...loose].map((f) => f.id));
     const goalOf = new Map(map.milestones.map((m) => [m.id, m.goal]));
-    const base = map.features.map((f) => {
+    const mapGoals = new Set(map.goals.map((g) => g.id));
+    const freeGoal = new Map(map.unplaced.map((u) => [u.id, u.goal && mapGoals.has(u.goal) ? u.goal : null]));
+    const base: LdFeature[] = [...map.features, ...loose].map((f) => {
       const item = items.get(f.id);
-      return { f, item, code: item?.code ?? "", goal: goalOf.get(f.milestones[0]) ?? null, waits: (item?.depends_on ?? []).filter((d) => on.has(d)), wanted: [] as string[], suggested: [] as string[] };
+      const free = !f.milestones.length;
+      return { f, item, code: item?.code ?? "", goal: free ? (freeGoal.get(f.id) ?? null) : (goalOf.get(f.milestones[0]) ?? null), waits: (item?.depends_on ?? []).filter((d) => on.has(d)), wanted: [] as string[], suggested: [] as string[], free };
     });
     const by = new Map(base.map((x) => [x.f.id, x]));
     for (const x of base) for (const d of x.waits) by.get(d)?.wanted.push(x.f.id);
@@ -219,6 +258,49 @@ export function GoalLadder(props: LadderProps) {
     });
   };
   const dependsKey = (x: LdFeature | undefined) => x?.item?.key ?? x?.code ?? "";
+  const goalName = (id: string | null) => {
+    const i = goals.findIndex((g) => g.id === id);
+    return i < 0 ? "No goal" : `Goal ${i + 1} ${goals[i].name}`;
+  };
+  const krName = (id: string) => `${msCode.get(id) ?? ""} ${map.milestones.find((m) => m.id === id)?.name ?? ""}`.trim();
+  const refuse = (why: string) => toast({ message: why });
+  /** goal-map-editing: a link onto a milestone, filed under its first area (as + Add feature). */
+  const attachLink = (feature: string, milestone: string, area?: string | null, expected = "", confidence: "high" | "medium" | "low" = "medium") => {
+    const m = map.milestones.find((x) => x.id === milestone);
+    return unwrap(api.POST("/v1/simple/goal-map/links", { body: { feature, milestone, area: area ?? m?.areas[0] ?? map.areas[0]?.id ?? "", expected, confidence } }));
+  };
+  const detachLink = (feature: string, milestone: string) => unwrap(api.POST("/v1/simple/goal-map/links/detach", { body: { feature, milestone } }));
+  /** A milestone's goal's milestones, in the ladder's order. */
+  const krsOf = (goal: string) => map.milestones.filter((m) => m.goal === goal).map((m) => m.id);
+  const afterOf = (m: GoalMap, id: string) => m.milestones.find((x) => x.id === id)?.depends[0] ?? null;
+  /**
+   * A goal's milestones in `ids`' order: each comes after the one before it (the map orders them by
+   * what each comes after), the first keeping what it came after outside the goal. Written first to
+   * last, so no step makes a loop.
+   */
+  const chain = async (ids: string[], first: string | null): Promise<GoalMap | null> => {
+    let next: GoalMap | null = null;
+    for (let i = 0; i < ids.length; i++) {
+      const want = i === 0 ? first : ids[i - 1];
+      if (afterOf(next ?? map, ids[i]) === want) continue;
+      next = await unwrap(api.PATCH("/v1/simple/goal-map/milestones/{milestone_id}", { params: { path: { milestone_id: ids[i] } }, body: { after: want, confirm: false } }));
+    }
+    return next;
+  };
+  /** Puts back what each milestone came after, as `was` read. */
+  const putBack = async (was: Map<string, string | null>, ids: string[]) => {
+    let at: GoalMap = map;
+    for (const id of ids) {
+      const want = was.get(id) ?? null;
+      if (afterOf(at, id) !== want) at = await unwrap(api.PATCH("/v1/simple/goal-map/milestones/{milestone_id}", { params: { path: { milestone_id: id } }, body: { after: want, confirm: false } }));
+    }
+  };
+  const setGoal = (x: LdFeature, goal: string | null, where: string) =>
+    change(
+      { op: "set_goal", target: { item_id: x.f.id }, before: { goal_id: x.item?.goal?.id ?? null }, after: { goal_id: goal } },
+      `Moved ${named(x.f.id)} to ${where}`,
+      `move ${named(x.f.id)} to ${where}`,
+    );
 
   const act: Acts = {
     move: async (feature, from, to) => {
@@ -353,6 +435,180 @@ export function GoalLadder(props: LadderProps) {
       setMenu(null);
       setSheet({ kind: "waits", feature });
     },
+    krTo: (milestone) => {
+      setMenu(null);
+      setSheet({ kind: "kr", feature: milestone });
+    },
+    refuse,
+    dropFeature: async (feature, t) => {
+      const x = byId.get(feature);
+      if (!x) return;
+      const [kind, ref] = [t.slice(0, t.indexOf(":")), t.slice(t.indexOf(":") + 1)];
+      if (kind === "ms") {
+        const m = map.milestones.find((y) => y.id === ref);
+        if (!m || x.f.milestones.includes(ref)) return;
+        if (canChange) {
+          if (x.free) {
+            try {
+              const next = await attachLink(feature, ref);
+              props.setMap(next);
+              setFresh(feature);
+              toast({ message: `Moved ${named(feature)} to ${krName(ref)}`, action: { label: "Undo", onClick: () => void detachLink(feature, ref).then(props.setMap, failed) } });
+            } catch (e) {
+              failed(e);
+            }
+          } else await act.move(feature, x.f.milestones[0], ref);
+          return;
+        }
+        // A commenter: the goal the milestone serves, as a suggestion; within its own goal, none.
+        if (m.goal !== x.goal) await act.dropFeature(feature, `free:${m.goal}`);
+        else refuse("Only owners and approvers put a feature on a milestone");
+        return;
+      }
+      const goal = ref === "none" ? null : ref;
+      // Onto its own goal's card or column: nothing moves (a drop on "Not on a key result" lets go).
+      if (kind !== "free" && goal === x.goal) return;
+      if (x.free && goal === x.goal) return;
+      const where = kind === "free" && goal ? `Not on a key result in ${goalName(goal)}` : goalName(goal);
+      if (!canChange) {
+        if (goal === x.goal) return refuse("Only owners and approvers take a feature off a milestone");
+        try {
+          await setGoal(x, goal, goalName(goal));
+        } catch (e) {
+          failed(e);
+        }
+        return;
+      }
+      const links = x.f.links;
+      try {
+        for (const l of links) props.setMap(await detachLink(feature, l.milestone));
+        // Off its milestones it serves its item's own goal: set it when that is not the one dropped on.
+        const read = await unwrap(api.GET("/v1/simple/roadmap", { params: { query: {} } }));
+        const now = read.items.find((i) => i.id === feature)?.goal?.id ?? null;
+        const c = now !== goal ? (await propose({ op: "set_goal", target: { item_id: feature }, before: { goal_id: now }, after: { goal_id: goal } })).change : null;
+        await reload();
+        setFresh(feature);
+        toast({
+          message: `Moved ${named(feature)} to ${where}`,
+          action: {
+            label: "Undo",
+            onClick: () =>
+              void (async () => {
+                if (c?.status === "applied" && c.can_undo) await undo(c.id);
+                for (const l of links) props.setMap(await attachLink(feature, l.milestone, x.f.area, l.expected, l.confidence.toLowerCase() as "high" | "medium" | "low"));
+              })().then(reload, failed),
+          },
+        });
+      } catch (e) {
+        failed(e);
+        await reload();
+      }
+    },
+    moveKr: async (milestone, goal, before) => {
+      const m = map.milestones.find((x) => x.id === milestone);
+      if (!m) return;
+      if (!krCan(milestone)) return refuse("Only an owner or the roadmap's decider moves milestones");
+      const was = new Map(map.milestones.map((x) => [x.id, x.depends[0] ?? null] as const));
+      const from = krsOf(m.goal);
+      const ids = krsOf(goal).filter((x) => x !== milestone);
+      const at = before ? ids.indexOf(before) : -1;
+      ids.splice(at < 0 ? ids.length : at, 0, milestone);
+      if (goal === m.goal && ids.join() === from.join()) return;
+      const name = krName(milestone);
+      const a0 = was.get(ids[0]) ?? null;
+      const first = ids[0] !== milestone && a0 && !ids.includes(a0) ? a0 : null;
+      try {
+        if (goal !== m.goal) await unwrap(api.PATCH("/v1/simple/roadmap/milestones/{milestone_id}", { params: { path: { milestone_id: milestone } }, body: { goal_id: goal } }));
+        await chain(ids, first);
+        await reload();
+        setMenu(null);
+        toast({
+          message: goal === m.goal ? `Moved ${name}` : `Moved ${name} to ${goalName(goal)}`,
+          action: {
+            label: "Undo",
+            onClick: () =>
+              void (async () => {
+                if (goal !== m.goal) await unwrap(api.PATCH("/v1/simple/roadmap/milestones/{milestone_id}", { params: { path: { milestone_id: milestone } }, body: { goal_id: m.goal } }));
+                await putBack(was, [...from, ...ids.filter((x) => !from.includes(x))]);
+              })().then(reload, failed),
+          },
+        });
+      } catch (e) {
+        failed(e);
+        await reload();
+      }
+    },
+    stepKr: async (milestone, dir) => {
+      const m = map.milestones.find((x) => x.id === milestone);
+      if (!m) return;
+      const ids = krsOf(m.goal);
+      const i = ids.indexOf(milestone);
+      const other = ids[i + dir];
+      if (!other) return;
+      // Down: before the one after the next (none: last).
+      await act.moveKr(milestone, m.goal, dir < 0 ? other : (ids[i + 2] ?? null));
+    },
+    orderGoal: async (goal, to) => {
+      setMenu(null);
+      if (!canChange) return refuse("Only owners and approvers change the goal order");
+      const was = goals.map((g) => g.id);
+      const next = was.filter((x) => x !== goal);
+      next.splice(Math.max(0, Math.min(to, next.length)), 0, goal);
+      if (next.join() === was.join()) return;
+      try {
+        await storeGoalOrder(next, new Map(was.map((id, i) => [id, i + 1] as const)));
+        await reload();
+        toast({ message: "Goal order saved", action: { label: "Undo", onClick: () => void storeGoalOrder(was, new Map(next.map((id, i) => [id, i + 1] as const))).then(reload, failed) } });
+      } catch (e) {
+        failed(e);
+        await reload();
+      }
+    },
+    trashGoal: async (goal) => {
+      setMenu(null);
+      const g = goals.find((x) => x.id === goal);
+      if (!g) return;
+      const name = goalName(goal);
+      const krs = krsOf(goal);
+      const fs = feats.filter((x) => x.goal === goal).length;
+      const ok = await confirmInPage({
+        action: "Move to Trash",
+        title: `Move ${name} to Trash?`,
+        message: `${krs.length} ${krs.length === 1 ? "milestone goes" : "milestones go"} with it, and its ${fs} ${fs === 1 ? "feature moves" : "features move"} to No goal. Restore puts them back.`,
+        destructive: true,
+      });
+      if (!ok) return;
+      try {
+        const out = await unwrap(api.DELETE("/v1/simple/goal-buckets/goals/{goal_id}", { params: { path: { goal_id: goal } } }));
+        await reload();
+        if (out.change)
+          toast({
+            message: `Suggested: move ${name} to Trash.${map.approver ? ` Sent to ${map.approver}.` : ""}`,
+            action: { label: "Undo", onClick: () => void unwrap(api.POST("/v1/simple/changes/{change_id}/withdraw", { params: { path: { change_id: out.change!.id } } })).then(reload, failed) },
+          });
+        else
+          toast({
+            message: `Moved ${name} to Trash`,
+            action: out.can_restore ? { label: "Undo", onClick: () => void unwrap(api.POST("/v1/simple/goal-buckets/goals/{goal_id}/restore", { params: { path: { goal_id: goal } } })).then(reload, failed) } : undefined,
+          });
+      } catch (e) {
+        failed(e);
+      }
+    },
+    trashKr: async (milestone) => {
+      setMenu(null);
+      const name = krName(milestone);
+      try {
+        await unwrap(api.DELETE("/v1/simple/roadmap/milestones/{milestone_id}", { params: { path: { milestone_id: milestone } } }));
+        await reload();
+        toast({
+          message: `Moved ${name} to Trash`,
+          action: { label: "Undo", onClick: () => void unwrap(api.POST("/v1/simple/roadmap/milestones/{milestone_id}/restore", { params: { path: { milestone_id: milestone } } })).then(reload, failed) },
+        });
+      } catch (e) {
+        failed(e);
+      }
+    },
   };
 
   useEffect(() => {
@@ -364,9 +620,31 @@ export function GoalLadder(props: LadderProps) {
     return () => window.removeEventListener("pointerdown", close);
   }, [menu]);
 
+  // goal-map-editing: the header's badge leads to the features on no milestone, highlighted a while.
+  useEffect(() => {
+    let off: ReturnType<typeof setTimeout> | undefined;
+    const show = () => {
+      setFlash(true);
+      clearTimeout(off);
+      off = setTimeout(() => setFlash(false), 4000);
+    };
+    window.addEventListener("ld-show-loose", show);
+    return () => {
+      window.removeEventListener("ld-show-loose", show);
+      clearTimeout(off);
+    };
+  }, []);
+
   // Escape lets go, in order: an open menu, a picked arrow and its pop-up, then the picked card.
+  // goal-map-editing: Delete (or Backspace) moves the picked card to Trash while editing.
   useEffect(() => {
     const esc = (e: KeyboardEvent) => {
+      const typing = (e.target as HTMLElement | null)?.closest?.("input, textarea, select, [contenteditable]");
+      if ((e.key === "Delete" || e.key === "Backspace") && edit && may && sel && !sheet && !typing) {
+        e.preventDefault();
+        void act.remove(sel);
+        return;
+      }
       if (e.key !== "Escape" || sheet) return;
       if (menu) setMenu(null);
       else if (arrow) setArrowAt(null);
@@ -377,9 +655,11 @@ export function GoalLadder(props: LadderProps) {
     };
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);
-  }, [menu, arrow, sel, sheet]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `act` is rebuilt each render; `sel` and `edit` stand for it.
+  }, [menu, arrow, sel, sheet, edit, may]);
 
-  const v: V = { map, goals, ms, msCode, feats, byId, sel, setSel: (id) => { setSel(id); setRefused(null); }, edit, canChange, may, phone, places, live, menu, setMenu, arrow, setArrow: (key) => setArrowAt(key ? { key, sel } : null), adding, setAdding, drop, refused, fresh, onOpen: props.onOpen, act };
+  const firstLoose = goals.find((g) => feats.some((x) => x.free && x.goal === g.id));
+  const v: V = { map, goals, ms, msCode, feats, byId, sel, setSel: (id) => { setSel(id); setRefused(null); }, edit, canChange, krCan, may, phone, places, live, menu, setMenu, arrow, setArrow: (key) => setArrowAt(key ? { key, sel } : null), adding, setAdding, drop, refused, fresh, flash, flashGoal: firstLoose?.id ?? null, onOpen: props.onOpen, act };
   const drag = { setLive, setDrop };
 
   return (
@@ -628,16 +908,29 @@ function GoalCard({ g, i, v }: { g: GmGoal; i: number; v: V }) {
   const now = v.ms.some((m) => m.goal === g.id && m.due_on && m.due_on <= addDays(v.map.today_on, 14));
   const draws = [...new Set(v.ms.filter((m) => m.goal === g.id).flatMap((m) => m.areas))].map((a) => v.map.areas.find((x) => x.id === a)?.name).filter(Boolean);
   const key = `goal:${g.id}`;
+  const live = v.live?.id === g.id ? v.live : null;
   return (
     <div
       data-ld-goal={g.id}
       data-goal={g.id}
       data-testid="ld-goal"
-      className={`relative flex flex-col gap-0.5 rounded-2xl border bg-surface px-3 py-2 ${p.picked === g.id ? "ring-4 ring-accent/40" : ""} ${now || p.picked === g.id ? "border-2 border-accent" : "border-line"}`}
+      tabIndex={v.edit && v.may ? 0 : undefined}
+      onKeyDown={(e) => {
+        if ((e.key === "Delete" || e.key === "Backspace") && v.edit && v.may && e.target === e.currentTarget) {
+          e.preventDefault();
+          e.stopPropagation();
+          void v.act.trashGoal(g.id);
+        }
+      }}
+      style={live ? { transform: `translate(${live.dx}px, ${live.dy}px)`, zIndex: 40 } : v.menu === key ? { zIndex: 40 } : undefined}
+      className={`relative flex flex-col gap-0.5 rounded-2xl border bg-surface px-3 py-2 ${p.picked === g.id ? "ring-4 ring-accent/40" : ""} ${now || p.picked === g.id ? "border-2 border-accent" : "border-line"} ${live ? "rotate-1 shadow-2xl" : ""} ${v.drop === `goal:${g.id}` ? "border-accent! bg-accent-soft" : ""}`}
     >
       <span className="flex items-start justify-between gap-2">
-        <span className="text-[13px] font-bold tracking-wide text-text2 uppercase">Goal {i + 1}</span>
-        {v.edit && v.canChange && <More label={`More for ${g.name}`} open={v.menu === key} onClick={() => v.setMenu(v.menu === key ? null : key)} />}
+        <span className="flex items-center gap-1 text-[13px] font-bold tracking-wide text-text2 uppercase">
+          {v.edit && v.canChange && !v.phone && <span className="cursor-grab text-text-faint" aria-hidden><Icon name="grip" size={16} /></span>}
+          Goal {i + 1}
+        </span>
+        {v.edit && v.may && <More label={`More for ${g.name}`} open={v.menu === key} onClick={() => v.setMenu(v.menu === key ? null : key)} />}
       </span>
       <span className="text-[16px] leading-5 font-semibold">{g.name}</span>
       <span className="text-[13px] leading-[18px] text-text2">{g.math}</span>
@@ -656,8 +949,15 @@ function GoalCard({ g, i, v }: { g: GmGoal; i: number; v: V }) {
         <MenuList
           testId="ld-goal-menu"
           items={[
-            { w: "Change the target", on: () => { v.setMenu(null); p.onGoal(g.id); } },
-            { w: "Pick its metric", on: () => { v.setMenu(null); p.onMetric(g.id); } },
+            ...(v.canChange
+              ? [
+                  { w: "Change the target", on: () => { v.setMenu(null); p.onGoal(g.id); } },
+                  { w: "Pick its metric", on: () => { v.setMenu(null); p.onMetric(g.id); } },
+                  ...(i > 0 ? [{ w: "Move left", on: () => void v.act.orderGoal(g.id, i - 1) }] : []),
+                  ...(i < v.goals.length - 1 ? [{ w: "Move right", on: () => void v.act.orderGoal(g.id, i + 1) }] : []),
+                ]
+              : []),
+            { w: "Move to Trash", on: () => void v.act.trashGoal(g.id), crit: true },
           ]}
         />
       )}
@@ -669,9 +969,26 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
   const p = useLadderProps();
   const key = `ms:${m.id}`;
   const area = v.map.areas.find((a) => a.id === m.areas[0])?.name;
+  const live = v.live?.id === m.id ? v.live : null;
+  const krs = v.ms.filter((x) => x.goal === m.goal);
+  const at = krs.findIndex((x) => x.id === m.id);
   return (
-    <div data-ld-ms={m.id} data-testid="ld-milestone" className="relative flex flex-col gap-0.5 rounded-xl border border-line bg-surface px-2.5 py-1.5">
+    <div
+      data-ld-ms={m.id}
+      data-testid="ld-milestone"
+      tabIndex={v.edit && v.krCan(m.id) ? 0 : undefined}
+      onKeyDown={(e) => {
+        if ((e.key === "Delete" || e.key === "Backspace") && v.edit && v.krCan(m.id) && e.target === e.currentTarget) {
+          e.preventDefault();
+          e.stopPropagation();
+          void v.act.trashKr(m.id);
+        }
+      }}
+      style={live ? { transform: `translate(${live.dx}px, ${live.dy}px)`, zIndex: 40 } : v.menu === key ? { zIndex: 40 } : undefined}
+      className={`relative flex flex-col gap-0.5 rounded-xl border bg-surface px-2.5 py-1.5 ${live ? "rotate-1 border-accent shadow-2xl" : "border-line"} ${v.drop === `kr:${m.id}` ? "border-accent! bg-accent-soft" : ""}`}
+    >
       <span className="flex items-start gap-2">
+        {v.edit && v.krCan(m.id) && !v.phone && <span className="mt-0.5 cursor-grab text-text-faint" aria-hidden><Icon name="grip" size={16} /></span>}
         <span className="text-[14px] leading-[18px] font-semibold">
           <span className="simple-code mr-1">{v.msCode.get(m.id)}</span>
           {m.name}
@@ -691,6 +1008,14 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
             { w: m.proposed ? "Set and confirm the gate" : "Edit the gate", on: () => { v.setMenu(null); p.onGate(m.id); } },
             { w: "Attach a feature…", on: () => { v.setMenu(null); p.onAttach(m.id, m.areas[0] ?? ""); } },
             ...(p.onPrd ? [{ w: "New PRD from it", on: () => { v.setMenu(null); p.onPrd!(m.id); } }] : []),
+            ...(v.krCan(m.id)
+              ? [
+                  ...(at > 0 ? [{ w: "Move up", on: () => void v.act.stepKr(m.id, -1) }] : []),
+                  ...(at < krs.length - 1 ? [{ w: "Move down", on: () => void v.act.stepKr(m.id, 1) }] : []),
+                  { w: "Move to…", on: () => v.act.krTo(m.id) },
+                  { w: "Move to Trash", on: () => void v.act.trashKr(m.id), crit: true },
+                ]
+              : []),
           ]}
         />
       )}
@@ -731,6 +1056,12 @@ function FeatureCard({ x, v, ms, compact }: { x: LdFeature; v: V; ms?: string; c
         if (e.key === " ") {
           e.preventDefault();
           v.setSel(isSel ? null : f.id);
+        }
+        // goal-map-editing: Delete moves it to Trash while editing (the picked card's, from anywhere).
+        if ((e.key === "Delete" || e.key === "Backspace") && v.edit && v.may && !isSel) {
+          e.preventDefault();
+          e.stopPropagation();
+          void v.act.remove(f.id);
         }
       }}
       style={dx || dy ? { transform: `translate(${dx}px, ${dy}px)`, zIndex: menu ? 40 : 20, ...(place && !live ? { boxShadow: "0 8px 24px rgb(0 0 0 / .18)" } : {}) } : menu ? { zIndex: 40 } : undefined}
@@ -780,11 +1111,10 @@ function FeatureCard({ x, v, ms, compact }: { x: LdFeature; v: V; ms?: string; c
           testId="ld-feature-menu"
           items={[
             { w: "Open", on: () => { v.setMenu(null); v.onOpen(f); } },
-            ...(v.canChange ? [{ w: "Move to…", on: () => v.act.moveTo(f.id) }] : []),
-            { w: "Move up", on: () => void v.act.step(f.id, -1) },
-            { w: "Move down", on: () => void v.act.step(f.id, 1) },
+            { w: "Move to…", on: () => v.act.moveTo(f.id) },
+            ...(x.free ? [] : [{ w: "Move up", on: () => void v.act.step(f.id, -1) }, { w: "Move down", on: () => void v.act.step(f.id, 1) }]),
             { w: "Waits on…", on: () => v.act.waitsOn(f.id) },
-            { w: "Delete (to Trash)", on: () => void v.act.remove(f.id), crit: true },
+            { w: "Move to Trash", on: () => void v.act.remove(f.id), crit: true },
           ]}
         />
       )}
@@ -825,11 +1155,13 @@ function AddFeature({ m, v }: { m: GmMilestone; v: V }) {
 function Columns({ v }: { v: V }) {
   const p = useLadderProps();
   const noGoal = v.feats.filter((x) => !x.goal);
+  // goal-map-editing: a last column for the features serving no goal (a drop zone while editing).
+  const cols = v.goals.length + (noGoal.length > 0 || (v.edit && v.may) ? 1 : 0);
   return (
-    <div className="flex flex-col gap-3" style={{ width: v.goals.length * COL + (v.goals.length - 1) * GAP }}>
-      <div className="grid items-start" style={{ gridTemplateColumns: `repeat(${v.goals.length}, ${COL}px)`, gap: GAP }}>
+    <div className="flex flex-col gap-3" style={{ width: cols * COL + (cols - 1) * GAP }}>
+      <div className="grid items-start" style={{ gridTemplateColumns: `repeat(${cols}, ${COL}px)`, gap: GAP }}>
         {v.goals.map((g, i) => (
-          <div key={g.id} className="flex min-w-0 flex-col items-stretch" data-testid="ld-column">
+          <div key={g.id} className={`flex min-w-0 flex-col items-stretch rounded-2xl ${v.drop === `col:${g.id}` ? "outline-2 outline-offset-4 outline-accent" : ""}`} data-testid="ld-column" data-ld-column={g.id}>
             <GoalCard g={g} i={i} v={v} />
             <Stem />
             <div className="flex flex-col gap-1.5 rounded-2xl bg-accent-soft/50 p-2">
@@ -846,16 +1178,40 @@ function Columns({ v }: { v: V }) {
               <span className="text-[12px] font-bold tracking-wide text-text2 uppercase">Work behind it</span>
               {v.ms.filter((m) => m.goal === g.id).map((m) => <Group key={m.id} m={m} v={v} />)}
             </div>
+            <Loose v={v} goal={g.id} />
           </div>
         ))}
+        {cols > v.goals.length && <Loose v={v} goal={null} />}
       </div>
-      {noGoal.length > 0 && (
-        <div className="flex flex-col gap-1.5 rounded-2xl border border-dashed border-line-strong p-2">
-          <span className="text-[12px] font-bold tracking-wide text-text2 uppercase">No goal yet · {noGoal.length}</span>
-          <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${v.goals.length}, minmax(0, 1fr))` }}>{noGoal.map((x) => <FeatureCard key={x.f.id} x={x} v={v} />)}</div>
-        </div>
-      )}
     </div>
+  );
+}
+
+/**
+ * goal-map-editing: the features on no milestone: under their goal ("Not on a key result"), or in
+ * the last column ("No goal"). Drawn while it holds any, and while editing as a drop zone.
+ */
+function Loose({ v, goal }: { v: V; goal: string | null }) {
+  const fs = v.feats.filter((x) => (goal ? x.free && x.goal === goal : !x.goal));
+  const key = `free:${goal ?? "none"}`;
+  if (goal && !fs.length && !(v.edit && v.may)) return null;
+  return (
+    <>
+      {goal && <Stem />}
+      <div
+        data-ld-free={goal ?? "none"}
+        data-testid={goal ? "ld-free" : "ld-nogoal"}
+        data-goal={goal ?? undefined}
+        data-count={fs.length}
+        data-flash={v.flash && fs.length ? "1" : undefined}
+        className={`flex flex-col gap-1.5 rounded-2xl border border-dashed p-2 transition-shadow ${v.drop === key ? "border-accent bg-accent-soft" : "border-line-strong"} ${v.flash && fs.length ? "ring-4 ring-accent/50" : ""}`}
+      >
+        <span className="text-[12px] font-bold tracking-wide text-text2 uppercase">
+          {goal ? "Not on a key result" : "No goal"} · {fs.length}
+        </span>
+        {fs.map((x) => <FeatureCard key={x.f.id} x={x} v={v} />)}
+      </div>
+    </>
   );
 }
 
@@ -1026,7 +1382,7 @@ function Canvas({ v, drag }: { v: V; drag: { setLive: (l: V["live"]) => void; se
   const [view, setView] = useState({ x: 16, y: 12, z: START_ZOOM });
   const [size, setSize] = useState({ w: 0, h: 0, cw: 1, ch: 1 });
   const [drawing, setDrawing] = useState<{ from: string; x: number; y: number } | null>(null);
-  const gesture = useRef<{ kind: "pan" | "card" | "dot"; id?: string; from?: string; sx: number; sy: number; vx: number; vy: number; moved: boolean } | null>(null);
+  const gesture = useRef<{ kind: "pan" | "card" | "dot" | "kr" | "goal"; id?: string; from?: string; sx: number; sy: number; vx: number; vy: number; moved: boolean } | null>(null);
 
   useLayoutEffect(() => {
     const el = box.current;
@@ -1043,6 +1399,17 @@ function Canvas({ v, drag }: { v: V; drag: { setLive: (l: V["live"]) => void; se
     if (root.current) ro.observe(root.current);
     return () => ro.disconnect();
   }, []);
+
+  // goal-map-editing: the badge's lead pans the first group of features on no milestone into view.
+  useEffect(() => {
+    const el = box.current;
+    const group = v.flash ? el?.querySelector<HTMLElement>("[data-ld-free][data-flash]") : null;
+    if (!el || !group) return;
+    el.scrollIntoView({ block: "nearest" });
+    const b = el.getBoundingClientRect();
+    const c = group.getBoundingClientRect();
+    setView((o) => ({ ...o, x: o.x + (b.left + 24 - c.left), y: o.y + (b.top + 24 - c.top) }));
+  }, [v.flash]);
 
   // A picked card stays in view: panned in by the least it needs, with its arrows' room around it.
   useEffect(() => {
@@ -1075,19 +1442,41 @@ function Canvas({ v, drag }: { v: V; drag: { setLive: (l: V["live"]) => void; se
     window.addEventListener("click", stop, { capture: true, once: true });
     setTimeout(() => window.removeEventListener("click", stop, { capture: true }), 0);
   };
-  const target = (cx: number, cy: number, self: string): string | null => {
+  /**
+   * What is under the pointer, looking through the card being dragged: a card ("card:<id>", for
+   * the dot's arrow), a milestone card ("kr:<id>"), a milestone's work ("ms:<id>"), a group of
+   * features on no milestone ("free:<goal|none>"), a goal card ("goal:<id>") or a goal's column
+   * ("col:<id>"). `cards`: a card counts as itself; else as the zone it sits in.
+   */
+  const target = (cx: number, cy: number, self: string, cards = true): string | null => {
     for (const el of document.elementsFromPoint(cx, cy)) {
-      const card = (el as HTMLElement).closest?.("[data-ld-card]") as HTMLElement | null;
+      const h = el as HTMLElement;
+      const card = h.closest?.("[data-ld-card]") as HTMLElement | null;
+      const kr = h.closest?.("[data-ld-ms]") as HTMLElement | null;
+      const goal = h.closest?.("[data-ld-goal]") as HTMLElement | null;
       // The card being dragged sits under the pointer: look through it.
-      if (card?.dataset.ldCard === self) continue;
-      if (card) return `card:${card.dataset.ldCard}`;
-      const g = (el as HTMLElement).closest?.("[data-ld-group]") as HTMLElement | null;
+      if (card?.dataset.ldCard === self || kr?.dataset.ldMs === self || goal?.dataset.ldGoal === self) continue;
+      if (card && cards) return `card:${card.dataset.ldCard}`;
+      if (kr) return `kr:${kr.dataset.ldMs}`;
+      const g = h.closest?.("[data-ld-group]") as HTMLElement | null;
       if (g) return `ms:${g.dataset.ldGroup}`;
-      const goal = (el as HTMLElement).closest?.("[data-ld-goal]") as HTMLElement | null;
+      const free = h.closest?.("[data-ld-free]") as HTMLElement | null;
+      if (free) return `free:${free.dataset.ldFree}`;
       if (goal) return `goal:${goal.dataset.ldGoal}`;
+      const col = h.closest?.("[data-ld-column]") as HTMLElement | null;
+      if (col) return `col:${col.dataset.ldColumn}`;
     }
     return null;
   };
+  /** The goal a zone belongs to (a milestone's, a group's, a goal card's or column's). */
+  const goalOfZone = (t: string | null): string | null => {
+    if (!t) return null;
+    const ref = t.slice(t.indexOf(":") + 1);
+    if (t.startsWith("kr:") || t.startsWith("ms:")) return v.map.milestones.find((m) => m.id === ref)?.goal ?? null;
+    return ref === "none" ? null : ref;
+  };
+  /** A feature's drop zone in Edit mode: a milestone card counts as its work. */
+  const featureZone = (t: string | null) => (t?.startsWith("kr:") ? `ms:${t.slice(3)}` : t);
 
   const down = (e: RPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
@@ -1095,8 +1484,16 @@ function Canvas({ v, drag }: { v: V; drag: { setLive: (l: V["live"]) => void; se
     if (t.closest("button, input, form, [data-ld-menu], a")) return;
     const dot = t.closest("[data-ld-dot]") as HTMLElement | null;
     const card = t.closest("[data-ld-card]") as HTMLElement | null;
+    // goal-map-editing: in Edit mode a milestone or a goal card is picked up (a commenter's move is refused on the drop).
+    // A milestone its person may not change (not the roadmap's owner or decider) is not picked up: the card pans.
+    const krEl = v.edit && v.may ? (t.closest("[data-ld-ms]") as HTMLElement | null) : null;
+    const krLocked = !!krEl && !v.krCan(krEl.dataset.ldMs ?? "");
+    const kr = krLocked ? null : krEl;
+    const goal = v.edit && v.may && !krLocked ? (t.closest("[data-ld-goal]") as HTMLElement | null) : null;
     if (dot) gesture.current = { kind: "dot", from: dot.dataset.ldDot, sx: e.clientX, sy: e.clientY, vx: 0, vy: 0, moved: false };
     else if (card && canPlace) gesture.current = { kind: "card", id: card.dataset.ldCard, sx: e.clientX, sy: e.clientY, vx: 0, vy: 0, moved: false };
+    else if (kr) gesture.current = { kind: "kr", id: kr.dataset.ldMs, sx: e.clientX, sy: e.clientY, vx: 0, vy: 0, moved: false };
+    else if (goal) gesture.current = { kind: "goal", id: goal.dataset.ldGoal, sx: e.clientX, sy: e.clientY, vx: 0, vy: 0, moved: false };
     else if (!card) gesture.current = { kind: "pan", sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y, moved: false };
     else return;
   };
@@ -1112,8 +1509,13 @@ function Canvas({ v, drag }: { v: V; drag: { setLive: (l: V["live"]) => void; se
     if (g.kind === "pan") setView((o) => ({ ...o, x: g.vx + dx, y: g.vy + dy }));
     if (g.kind === "card") {
       drag.setLive({ id: g.id!, dx: dx / view.z, dy: dy / view.z });
-      const t = v.edit ? target(e.clientX, e.clientY, g.id!) : null;
-      drag.setDrop(t?.startsWith("ms:") || t?.startsWith("goal:") ? t : null);
+      const t = v.edit ? featureZone(target(e.clientX, e.clientY, g.id!, false)) : null;
+      drag.setDrop(t);
+    }
+    if (g.kind === "kr" || g.kind === "goal") {
+      drag.setLive({ id: g.id!, dx: dx / view.z, dy: dy / view.z });
+      const t = target(e.clientX, e.clientY, g.id!, false);
+      drag.setDrop(g.kind === "goal" ? (goalOfZone(t) ? `col:${goalOfZone(t)}` : null) : t);
     }
     if (g.kind === "dot") {
       setDrawing({ from: g.from!, x: e.clientX, y: e.clientY });
@@ -1134,19 +1536,50 @@ function Canvas({ v, drag }: { v: V; drag: { setLive: (l: V["live"]) => void; se
     if (g.kind === "card") {
       const id = g.id!;
       const x = v.byId.get(id);
-      const t = v.edit ? target(e.clientX, e.clientY, id) : null;
+      const t = v.edit ? featureZone(target(e.clientX, e.clientY, id, false)) : null;
       drag.setLive(null);
-      const from = x?.f.milestones[0];
-      const to = t?.startsWith("ms:") ? t.slice(3) : t?.startsWith("goal:") ? v.ms.find((m) => m.goal === t.slice(5))?.id : undefined;
-      // Edit mode: dropped on a milestone's work (or a goal), it moves there (owners and approvers).
-      if (to && from && v.canChange) {
-        if (to !== from) void v.act.move(id, from, to);
+      swallowClick();
+      // Edit mode: dropped on a milestone's work, a goal or its column, or a group, it moves there
+      // (a commenter's becomes a suggestion, or says why and snaps back). On its own goal's card or
+      // column it is only placed, as on empty canvas.
+      const own = !!t && (t.startsWith("col:") || t.startsWith("goal:")) && goalOfZone(t) === x?.goal;
+      if (t && !own && v.may) {
+        void v.act.dropFeature(id, t);
         return;
       }
+      // A card on no milestone has no place on the canvas: it snaps back.
+      if (!x || x.free) return;
       const at = v.places.get(id);
       void v.act.place(id, Math.round((at?.x ?? 0) + dx), Math.round((at?.y ?? 0) + dy));
-      // The click after a drag would pick the card: swallow it.
+    }
+    if (g.kind === "kr") {
+      const id = g.id!;
+      const t = target(e.clientX, e.clientY, id, false);
+      drag.setLive(null);
       swallowClick();
+      const goal = goalOfZone(t);
+      if (!goal) return;
+      if (!v.krCan(id)) return v.act.refuse("Only an owner or the roadmap's decider moves milestones");
+      // Onto another milestone card: before it when dropped on its top half, else after it.
+      let before: string | null = null;
+      if (t?.startsWith("kr:")) {
+        const on = t.slice(3);
+        const el = document.querySelector(`[data-ld-ms="${CSS.escape(on)}"]`);
+        const r = el?.getBoundingClientRect();
+        const krs = v.ms.filter((m) => m.goal === goal && m.id !== id).map((m) => m.id);
+        before = r && e.clientY < r.top + r.height / 2 ? on : (krs[krs.indexOf(on) + 1] ?? null);
+      }
+      void v.act.moveKr(id, goal, before);
+    }
+    if (g.kind === "goal") {
+      const id = g.id!;
+      const t = target(e.clientX, e.clientY, id, false);
+      drag.setLive(null);
+      swallowClick();
+      const goal = goalOfZone(t);
+      if (!goal || goal === id) return;
+      if (!v.canChange) return v.act.refuse("Only owners and approvers change the goal order");
+      void v.act.orderGoal(id, v.goals.findIndex((x) => x.id === goal));
     }
     if (g.kind === "dot") {
       setDrawing(null);
@@ -1255,6 +1688,25 @@ function Phone({ v }: { v: V }) {
   const p = useLadderProps();
   const first = Math.max(0, v.goals.findIndex((g) => g.id === p.picked));
   const [gi, setGi] = useState(first);
+  // goal-map-editing: a last tab for the features serving no goal; the badge opens the first group's tab.
+  const noGoal = v.feats.some((x) => !x.goal) || (v.edit && v.may);
+  const { goals, flashGoal } = v;
+  useEffect(() => {
+    const show = () => {
+      const at = goals.findIndex((x) => x.id === flashGoal);
+      setGi(at < 0 ? goals.length : at);
+      requestAnimationFrame(() => document.querySelector("[data-ld-free][data-flash]")?.scrollIntoView({ block: "center" }));
+    };
+    window.addEventListener("ld-show-loose", show);
+    return () => window.removeEventListener("ld-show-loose", show);
+  }, [goals, flashGoal]);
+  if (noGoal && gi >= v.goals.length)
+    return (
+      <div className="flex flex-col gap-2" data-testid="ld-phone">
+        <Tabs v={v} gi={gi} setGi={setGi} noGoal />
+        <Loose v={v} goal={null} />
+      </div>
+    );
   const g = v.goals[Math.min(gi, v.goals.length - 1)];
   // The shown goal's next milestone.
   const next = v.ms.filter((m) => m.goal === g?.id && m.due_on && m.due_on >= v.map.today_on).sort((a, b) => a.due_on!.localeCompare(b.due_on!))[0];
@@ -1267,13 +1719,7 @@ function Phone({ v }: { v: V }) {
         <b>We are here: week of {day(monday)}</b>
         {next && <> · next: {v.msCode.get(next.id)} {next.name}, {day(next.due_on)}</>}
       </span>
-      <div className="flex gap-1.5 overflow-x-auto pb-1" role="tablist">
-        {v.goals.map((x, i) => (
-          <button type="button" role="tab" aria-selected={i === gi} key={x.id} onClick={() => setGi(i)} className={`shrink-0 rounded-full border px-3 py-1 text-[14px] font-semibold ${i === gi ? "border-accent bg-accent text-on-accent" : "border-line bg-surface"}`}>
-            Goal {i + 1}
-          </button>
-        ))}
-      </div>
+      <Tabs v={v} gi={Math.min(gi, v.goals.length - 1)} setGi={setGi} noGoal={noGoal} />
       {/* The guardrail as one line under the goal picker (ld1-a-phone). */}
       {v.map.guardrail && (
         <span data-testid="ld-phone-guardrail" className="truncate text-[13px] leading-5 text-text2" title={`Guardrail: ${v.map.guardrail.name} ${v.map.guardrail.rule}`}>
@@ -1281,7 +1727,7 @@ function Phone({ v }: { v: V }) {
           Guardrail: {v.map.guardrail.name} {v.map.guardrail.rule} · <b className={v.map.guardrail.held ? "text-pass" : "text-crit"}>Held {v.map.guardrail.days.filter((d) => d === 0).length} of 7 days</b>
         </span>
       )}
-      <GoalCard g={g} i={gi} v={v} />
+      <GoalCard g={g} i={Math.min(gi, v.goals.length - 1)} v={v} />
       {v.ms.filter((m) => m.goal === g.id).map((m) => (
         <div key={m.id} className="flex flex-col gap-1.5 rounded-2xl bg-surface2 p-2" data-ld-group={m.id} data-testid="ld-group">
           <MilestoneCard m={m} v={v} />
@@ -1294,47 +1740,85 @@ function Phone({ v }: { v: V }) {
           + Add milestone
         </button>
       )}
+      <Loose v={v} goal={g.id} />
+    </div>
+  );
+}
+
+/** The phone's goal picker, and No goal last when any feature serves none. */
+function Tabs({ v, gi, setGi, noGoal }: { v: V; gi: number; setGi: (i: number) => void; noGoal: boolean }) {
+  const tab = (on: boolean) => `shrink-0 rounded-full border px-3 py-1 text-[14px] font-semibold ${on ? "border-accent bg-accent text-on-accent" : "border-line bg-surface"}`;
+  return (
+    <div className="flex gap-1.5 overflow-x-auto pb-1" role="tablist">
+      {v.goals.map((x, i) => (
+        <button type="button" role="tab" aria-selected={i === gi} key={x.id} onClick={() => setGi(i)} className={tab(i === gi)}>
+          Goal {i + 1}
+        </button>
+      ))}
+      {noGoal && (
+        <button type="button" role="tab" aria-selected={gi >= v.goals.length} onClick={() => setGi(v.goals.length)} className={tab(gi >= v.goals.length)}>
+          No goal
+        </button>
+      )}
     </div>
   );
 }
 
 /* ---------- Move to… and Waits on…: a sheet on a phone, a dialog on a desktop ---------- */
 
-function Sheet({ v, sheet, onClose }: { v: V; sheet: { kind: "move" | "waits"; feature: string }; onClose: () => void }) {
+function Sheet({ v, sheet, onClose }: { v: V; sheet: { kind: "move" | "waits" | "kr"; feature: string }; onClose: () => void }) {
   const x = v.byId.get(sheet.feature);
-  const from = x?.f.milestones[0] ?? "";
+  const kr = sheet.kind === "kr" ? v.map.milestones.find((m) => m.id === sheet.feature) : undefined;
+  // goal-map-editing: a feature's place: a milestone ("ms:<id>"), a goal's "Not on a key result" ("free:<goal>") or No goal ("free:none").
+  const from = x ? (x.free ? `free:${x.goal ?? "none"}` : `ms:${x.f.milestones[0]}`) : `goal:${kr?.goal ?? ""}`;
   const [to, setTo] = useState(from);
   const [q, setQ] = useState("");
-  if (!x) return null;
-  const hits = v.feats.filter((y) => y.f.id !== x.f.id && !x.waits.includes(y.f.id) && `${y.code} ${y.f.name}`.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 8);
+  if (!x && !kr) return null;
+  const hits = x ? v.feats.filter((y) => y.f.id !== x.f.id && !x.waits.includes(y.f.id) && `${y.code} ${y.f.name}`.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 8) : [];
+  const radio = (value: string, label: ReactNode, key: string) => (
+    <label key={key} className={`flex items-center gap-2 rounded-lg px-2 py-0.5 text-[14px] leading-[18px] ${value === to ? "bg-accent-soft font-semibold text-accent-ink" : ""}`}>
+      <input type="radio" name="ld-move" checked={value === to} onChange={() => setTo(value)} />
+      {label}
+      {value === from ? " (now)" : ""}
+    </label>
+  );
+  const title = kr ? `Move ${v.msCode.get(kr.id) ?? ""}` : sheet.kind === "move" ? `Move ${x!.code}` : `${x!.code} waits on`;
   return (
     <div className={`fixed inset-0 z-50 bg-black/30 ${v.phone ? "flex flex-col justify-end" : "grid place-items-center"}`} onClick={onClose}>
       <div
         role="dialog"
-        aria-label={sheet.kind === "move" ? `Move ${x.code}` : `${x.code} waits on`}
-        data-testid={sheet.kind === "move" ? "ld-move-sheet" : "ld-waits-sheet"}
+        aria-label={title}
+        data-testid={kr ? "ld-ms-move-sheet" : sheet.kind === "move" ? "ld-move-sheet" : "ld-waits-sheet"}
         onClick={(e) => e.stopPropagation()}
         className={v.phone ? "flex max-h-[80vh] flex-col gap-2 rounded-t-2xl border-t border-line bg-surface p-4 shadow-2xl" : "flex max-h-[80vh] w-[440px] flex-col gap-2 rounded-2xl border border-line bg-surface p-4 shadow-2xl"}
       >
         <b className="text-[16px]">
-          {sheet.kind === "move" ? "Move " : ""}
-          <span className="simple-code">{x.code}</span> {x.f.name}
-          {sheet.kind === "waits" ? " waits on" : ""}
+          {kr ? (
+            <>
+              Move <span className="simple-code">{v.msCode.get(kr.id)}</span> {kr.name}
+            </>
+          ) : (
+            <>
+              {sheet.kind === "move" ? "Move " : ""}
+              <span className="simple-code">{x!.code}</span> {x!.f.name}
+              {sheet.kind === "waits" ? " waits on" : ""}
+            </>
+          )}
         </b>
-        {sheet.kind === "move" ? (
+        {kr ? (
+          <div className="flex min-h-0 flex-col gap-0.5 overflow-y-auto">
+            {v.goals.map((g, i) => radio(`goal:${g.id}`, <>Goal {i + 1} · {g.name}</>, g.id))}
+          </div>
+        ) : sheet.kind === "move" ? (
           <div className="flex min-h-0 flex-col gap-2 overflow-y-auto">
             {v.goals.map((g, i) => (
               <div key={g.id} className="flex flex-col gap-0.5">
                 <span className="text-[12px] font-bold tracking-wide text-text2 uppercase">Goal {i + 1} · {g.name}</span>
-                {v.ms.filter((m) => m.goal === g.id).map((m) => (
-                  <label key={m.id} className={`flex items-center gap-2 rounded-lg px-2 py-0.5 text-[14px] leading-[18px] ${m.id === to ? "bg-accent-soft font-semibold text-accent-ink" : ""}`}>
-                    <input type="radio" name="ld-move" checked={m.id === to} onChange={() => setTo(m.id)} />
-                    <span className="simple-code">{v.msCode.get(m.id)}</span> {m.name}
-                    {m.id === from ? " (now)" : ""}
-                  </label>
-                ))}
+                {v.ms.filter((m) => m.goal === g.id).map((m) => radio(`ms:${m.id}`, <><span className="simple-code">{v.msCode.get(m.id)}</span> {m.name}</>, m.id))}
+                {radio(`free:${g.id}`, "Not on a key result", `free:${g.id}`)}
               </div>
             ))}
+            {radio("free:none", "No goal", "free:none")}
           </div>
         ) : (
           <div className="flex min-h-0 flex-col gap-1 overflow-y-auto">
@@ -1346,7 +1830,7 @@ function Sheet({ v, sheet, onClose }: { v: V; sheet: { kind: "move" | "waits"; f
                 className="rounded-lg px-2 py-1 text-left text-[13px] leading-[17px] hover:bg-surface2"
                 onClick={() => {
                   onClose();
-                  void v.act.link(x.f.id, y.f.id);
+                  void v.act.link(x!.f.id, y.f.id);
                 }}
               >
                 <span className="simple-code mr-1">{y.code}</span>
@@ -1357,13 +1841,15 @@ function Sheet({ v, sheet, onClose }: { v: V; sheet: { kind: "move" | "waits"; f
         )}
         <span className="flex justify-end gap-2 border-t border-line pt-2">
           <Btn onClick={onClose}>Cancel</Btn>
-          {sheet.kind === "move" && (
+          {(kr || sheet.kind === "move") && (
             <Btn
               primary
               testId="ld-move-go"
               onClick={() => {
                 onClose();
-                void v.act.move(x.f.id, from, to);
+                if (to === from) return;
+                if (kr) void v.act.moveKr(kr.id, to.slice(5), null);
+                else void v.act.dropFeature(x!.f.id, to);
               }}
             >
               Move

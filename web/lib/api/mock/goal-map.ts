@@ -12,10 +12,15 @@
  * scoreboard's cases: sign-ups measured by its metric, conversions tied to a metric with no
  * value yet, revenue with no metric (Daily revenue to pick), and one gate with no feature.
  * Read as the API does (finish): each goal's missing, the gaps, the unplaced roadmap features
- * and each link's lift from the reading before and after it shipped. Invented people,
- * products and numbers only.
+ * (each with the goal its item serves) and each link's lift from the reading before and after
+ * it shipped. goal-map-editing: POST /links/detach, the goals in the one goal order (their
+ * Baseline position), a goal in Trash off the map, and the map's milestones as Simple
+ * Roadmap's own (PATCH, DELETE to Trash and restore under /v1/simple/roadmap/milestones,
+ * routeLadderMilestone). Invented people, products and numbers only.
  */
 import type { Schemas } from "@/lib/api/client";
+
+import type { TrashDb, TrashEntryRow } from "./trash";
 
 import { FIT_COMPANY_SCENARIO } from "./fit-date";
 import { LADDER_SCENARIO, ladderMap } from "./goal-ladder";
@@ -198,6 +203,7 @@ function ms(
     confirmed: status === "met" ? by[id.length % by.length] : null,
     confirmed_on: status === "met" ? "Nov 2" : null,
     proposed: false,
+    can_change: false,
   };
 }
 
@@ -453,8 +459,17 @@ export function scoreboardGoals(): BaselineGoal[] {
   return GOALS.map((g, i) => ({ id: id(g.id), key: `g.${g.id}`, title: g.name, status: "confirmed", attrs: { metric: g.measure, target: g.target, unit: g.unit, math: g.math, position: i + 1 } }));
 }
 
+/** The one goal order (goal_order.goal_sort_key): a Baseline position first, by position; the rest after, as they were. */
+function inGoalOrder(goals: GmGoal[], baseline: BaselineGoal[]): GmGoal[] {
+  const pos = (g: GmGoal) => {
+    const v = baseline.find((x) => x.id === g.id)?.attrs.position;
+    return typeof v === "number" && v >= 1 ? v : Infinity;
+  };
+  return goals.map((g, i) => ({ g, i })).sort((a, b) => pos(a.g) - pos(b.g) || a.i - b.i).map((x) => x.g);
+}
+
 /** As the API reads them (goal_map.build): each goal's missing, each link's lift from its readings, the gaps, the unplaced features and the goals left off the map. */
-function finish(map: GoalMap, items: { id: string; title: string; status: string }[], baseline: BaselineGoal[]): GoalMap {
+function finish(map: GoalMap, items: { id: string; title: string; status: string; goal?: { id: string } | null }[], baseline: BaselineGoal[]): GoalMap {
   const goalOf = (m: string) => map.goals.find((g) => g.id === map.milestones.find((x) => x.id === m)?.goal);
   for (const g of map.goals) {
     g.missing = g.current !== null ? null : g.metric ? "values" : "metric";
@@ -481,13 +496,14 @@ function finish(map: GoalMap, items: { id: string; title: string; status: string
     else if (!cells.size) gaps.push({ milestone: m.id, area: null });
   }
   const placed = new Set(map.features.map((f) => f.id));
-  const unplaced = items.filter((i) => !["draft", "cut", "merged"].includes(i.status) && !placed.has(i.id)).map((i) => ({ id: i.id, name: i.title }));
+  // goal-map-editing: each with the goal its item serves (goal_map._unplaced).
+  const unplaced = items.filter((i) => !["draft", "cut", "merged"].includes(i.status) && !placed.has(i.id)).map((i) => ({ id: i.id, name: i.title, goal: i.goal?.id ?? null }));
   const onMap = new Set(map.goals.map((g) => g.id));
   // Confirmed goals with no number to aim at, never a guardrail (goal_map.build's off_map).
   const off_map = baseline
     .filter((e) => e.status === "confirmed" && !onMap.has(e.id) && typeof e.attrs.target !== "number" && !e.attrs.guardrail)
     .map((e) => ({ id: e.id, key: e.key, name: e.title }));
-  return { ...map, gaps, unplaced, off_map };
+  return { ...map, goals: inGoalOrder(map.goals, baseline), gaps, unplaced, off_map };
 }
 
 function goalStatus(current: number | null, target: number): GmStatus {
@@ -538,9 +554,20 @@ function amount(v: number, unit: string): string {
   return `${Math.round(v * 10) / 10}`;
 }
 
+/**
+ * Who changes a roadmap's milestone directly, as the API's drafts.can_edit: an owner; the roadmap's
+ * decider; with no decider, its track owner while an approver (the mock has no track owners, so an
+ * approver reads false until a decider is set: db.goal_map_decider).
+ */
+export function mayChangeMilestone(me: { id?: string; role: string }, decider: string | null | undefined, trackOwner = false): boolean {
+  if (me.role === "owner") return true;
+  if (decider) return me.id === decider;
+  return trackOwner && me.role === "approver";
+}
+
 /** /v1/simple/goal-map and its edits; null for any other path. Edits need approver and up. */
 export async function routeGoalMap(
-  db: { goal_map?: GoalMap; goal_map_places?: Record<string, Record<string, [number, number]>> },
+  db: { goal_map?: GoalMap; goal_map_decider?: string | null; goal_map_places?: Record<string, Record<string, [number, number]>> },
   scenario: string | null,
   me: { role: string; name: string; id?: string },
   req: Request,
@@ -551,16 +578,33 @@ export async function routeGoalMap(
   items: () => Promise<{ id: string; title: string; status: string }[]> = async () => [],
   /** The Baseline goals (the goals left off the map; the map's own goal names). */
   baseline: () => BaselineGoal[] = () => [],
+  /** goal-map-editing: whether a goal is in Trash (its milestones and their links leave the map). */
+  goalTrashed: (id: string) => boolean = () => false,
 ): Promise<Response | null> {
   if (p[1] !== "simple" || p[2] !== "goal-map") return null;
   const map = (db.goal_map ??= seedGoalMap(scenario));
   const canEdit = me.role === "owner" || me.role === "approver";
   // goal-ladder place_card: each person's own places of cards, only for features on the map.
   const mine = ((db.goal_map_places ??= {})[me.id ?? me.name] ??= {});
-  // trash-features-goals: a feature in Trash is off the map (and so is its place).
-  const shown = () => map.features.filter((f) => !item(f.id)?.trashed);
+  // trash-features-goals: a feature in Trash is off the map (and so is its place); goal-map-editing:
+  // so is a goal in Trash, a milestone in Trash or of such a goal, and a link to one of them.
+  const live = () => {
+    const goals = map.goals.filter((g) => !goalTrashed(g.id));
+    const milestones = map.milestones.filter((m) => !(m as Held).trashed && goals.some((g) => g.id === m.goal)).map((m) => {
+        const { trashed, ...rest } = m as Held;
+        void trashed;
+        return { ...rest, can_change: mayChangeMilestone(me, db.goal_map_decider) };
+      });
+    const on = new Set(milestones.map((m) => m.id));
+    const features = map.features.filter((f) => !item(f.id)?.trashed).flatMap((f) => {
+      const links = f.links.filter((l) => on.has(l.milestone));
+      return links.length ? [{ ...f, milestones: f.milestones.filter((m) => on.has(m)), links }] : [];
+    });
+    return { goals, milestones, features };
+  };
+  const shown = () => live().features;
   const places = () => Object.entries(mine).flatMap(([feature, [x, y]]) => (shown().some((f) => f.id === feature) ? [{ feature, x, y }] : []));
-  const out = async () => json(200, { ...finish({ ...map, features: shown(), can_edit: canEdit }, await items(), baseline()), places: places() });
+  const out = async () => json(200, { ...finish({ ...map, ...live(), can_edit: canEdit }, await items(), baseline()), places: places() });
   if (req.method === "GET" && !p[3]) return out();
   const body = JSON.parse((await req.text()) || "null");
   if (req.method === "POST" && p[3] === "place-card") {
@@ -589,6 +633,15 @@ export async function routeGoalMap(
         f.links = f.links.map((l) => (l.milestone === body.from_milestone ? { ...l, milestone: to.id } : l));
       }
     }
+    return out();
+  }
+  if (req.method === "POST" && p[3] === "links" && p[4] === "detach") {
+    // goal-map-editing: the feature no longer serves the milestone (goal_map.detach).
+    const f = map.features.find((x) => x.id === body?.feature);
+    if (!f || !f.milestones.includes(body?.milestone)) return json(404, { detail: "No such feature on that milestone" });
+    f.milestones = f.milestones.filter((m) => m !== body.milestone);
+    f.links = f.links.filter((l) => l.milestone !== body.milestone);
+    if (!f.milestones.length) map.features = map.features.filter((x) => x !== f);
     return out();
   }
   if (req.method === "POST" && p[3] === "areas" && !p[4]) {
@@ -655,7 +708,7 @@ export async function routeGoalMap(
     const days = DAYS_BACK.map((i) => (g.current === null ? null : Math.round((g.current - i * 0.6) * 10) / 10));
     map.milestones.push({
       id: crypto.randomUUID(), name, goal: g.id, measure: g.measure, threshold: Number(body?.threshold), unit: g.unit, current: g.current,
-      status: g.current === null ? "not_measured" : "on_track", areas, depends: after ? [after.id] : [], month: "Nov", due: null, due_on: null, days, confirmed: null, confirmed_on: null, proposed: true,
+      status: g.current === null ? "not_measured" : "on_track", areas, depends: after ? [after.id] : [], month: "Nov", due: null, due_on: null, days, confirmed: null, confirmed_on: null, proposed: true, can_change: false,
     });
     map.milestones = ordered(map.milestones);
     return out();
@@ -703,6 +756,66 @@ export async function routeGoalMap(
     return out();
   }
   return json(404, { detail: "Not found" });
+}
+
+/** A map milestone as the db keeps it: `trashed` while it is in Settings › Trash. */
+type Held = GmMilestone & { trashed?: boolean };
+
+/**
+ * goal-map-editing: the map's milestones are Simple Roadmap's own goal milestones (one record in
+ * the API, track_milestones): PATCH (its goal, name or date), DELETE to Settings › Trash and
+ * POST .../restore under /v1/simple/roadmap/milestones/{id}, as goal_milestones.py. Who may
+ * change the roadmap (an owner here) does it; others get the API's 403. Null for any other id.
+ */
+export async function routeLadderMilestone(
+  db: { goal_map?: GoalMap; goal_map_decider?: string | null },
+  me: { id: string; role: string; name: string },
+  req: Request,
+  p: string[],
+  trash: TrashDb,
+  now: () => string,
+): Promise<Response | null> {
+  if (p[1] !== "simple" || p[2] !== "roadmap" || p[3] !== "milestones" || !p[4] || !db.goal_map) return null;
+  const map = db.goal_map;
+  const m = map.milestones.find((x) => x.id === p[4]) as Held | undefined;
+  if (!m) return null;
+  const out = (status = 200) =>
+    json(status, { id: m.id, roadmap_id: id("roadmap"), code: "", name: m.name, date: m.due_on ?? null, goal_id: m.goal, item_ids: [], counts_when: "", progress: "not_started", prd: null, prd_owner: null, pending: null, can_change: mayChangeMilestone(me, db.goal_map_decider), can_propose: false, carried_from: null });
+  if (!mayChangeMilestone(me, db.goal_map_decider)) return json(403, { detail: "Only an owner or the roadmap's decider (with none, its owner) changes its milestones" });
+  if (req.method === "POST" && p[5] === "restore") {
+    if (!m.trashed) return json(404, { detail: "No such deleted milestone" });
+    m.trashed = false;
+    trash.entries = trash.entries.filter((e) => !(e.out.root.type === "milestone" && e.out.root.id === m.id));
+    return out();
+  }
+  if (m.trashed || p[5]) return json(404, { detail: "No such milestone" });
+  if (req.method === "DELETE") {
+    m.trashed = true;
+    const at = now();
+    const row: TrashEntryRow = {
+      out: {
+        id: crypto.randomUUID(),
+        root: { type: "milestone", id: m.id, slug: null, title: m.name, kind: "Milestone", code: null, features: null, meeting: null },
+        items: [], deleted_by: me.id, deleted_by_name: me.name, deleted_at: at, reason: null,
+        published: false, purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString(),
+      },
+      documents: [], versions: [], runs: [], intakes: [],
+    };
+    trash.entries.push(row);
+    return new Response(null, { status: 204 });
+  }
+  if (req.method === "PATCH") {
+    const body = JSON.parse((await req.text()) || "{}") as { goal_id?: string | null; name?: string; date?: string | null };
+    if ("goal_id" in body) {
+      const g = map.goals.find((x) => x.id === body.goal_id);
+      if (!g) return json(422, { detail: "goal_id: a goal" });
+      Object.assign(m, { goal: g.id, measure: g.measure, unit: g.unit });
+    }
+    if (body.name) m.name = body.name;
+    if ("date" in body) m.due_on = body.date ?? null;
+    return out();
+  }
+  return json(405, { detail: "Method not allowed" });
 }
 
 /** Days back from today for a new milestone's 7 readings, oldest first. */

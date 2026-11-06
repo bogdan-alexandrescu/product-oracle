@@ -41,6 +41,8 @@ interface SeedItem {
   horizon: Horizon;
   roadmap: string;
   goal?: string;
+  /** goal-map-editing: its goal named by a confirmed goal's id (goal-ladder's goals have no key here). */
+  map_goal?: string;
   track?: string;
   confidence?: "low" | "medium" | "high";
   /** Days from the window's start; with `source`. */
@@ -310,6 +312,14 @@ export function knowTalkGoals(db: { items: { key: string }[]; plan?: unknown }):
 const GOALS_KNOWN: Record<string, boolean> = {};
 /** Confirmed Baseline goals a scenario adds by their own ids (goal-ladder's), id to title: add_item may name them. */
 export const MAP_GOALS: Record<string, string> = {};
+/**
+ * goal-map-editing: an item's own goal named by a confirmed goal's id (goal-ladder's), as the API's
+ * goal_ids; none while that goal is in Trash or unknown (service.load leaves it out).
+ */
+export function mapGoalRef(db: Pick<SimpleDb, "goal_buckets">, id: string): Schemas["SimpleGoalRef"] | null {
+  if (!(id in MAP_GOALS) || db.goal_buckets?.goals.some((g) => g.id === id && g.trashed)) return null;
+  return { id, key: id, title: MAP_GOALS[id], metric: null, position: null, target: null, due: null, current: null, unit: null };
+}
 
 /**
  * build-goal-order-control: the "goal-order" scenarios' added goals (server.ts seeds them), named
@@ -1359,7 +1369,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       code: (s.feature_id && db.feature_codes?.[s.feature_id]) || code,
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: ROADMAP_DOC_SLUG[s.roadmap] ?? s.roadmap, title: rm.title },
       prd: ownPrd(s),
-      goal: s.goal && !inTrash(s.goal) ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, ...roadmapGoal(reader.full, s.goal), position: goalPositionOf(s.goal), ...READINGS[s.goal] } : (reader.full.map_goals?.[db.ids[s.key]] ?? null),
+      goal: s.goal && !inTrash(s.goal) ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, ...roadmapGoal(reader.full, s.goal), position: goalPositionOf(s.goal), ...READINGS[s.goal] } : s.map_goal ? mapGoalRef(reader.full, s.map_goal) : (reader.full.map_goals?.[db.ids[s.key]] ?? null),
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
       confidence: s.confidence ?? null,
       status: s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned"),

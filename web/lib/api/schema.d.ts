@@ -13030,6 +13030,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/goal-map/links/detach": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Detach Feature Link
+         * @description goal-map-editing: a feature no longer serves the milestone (Edit ladder).
+         */
+        post: operations["detach_feature_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/goal-map/place-card": {
         parameters: {
             query?: never;
@@ -22428,6 +22448,23 @@ export interface components {
             event: components["schemas"]["DesignReviewEventOut"];
             version: components["schemas"]["ArtifactVersionOut"];
         };
+        /**
+         * DetachIn
+         * @description goal-map-editing: a feature let go of one milestone (dropped on "Not on a key
+         *     result" or "No goal").
+         */
+        DetachIn: {
+            /**
+             * Feature
+             * Format: uuid
+             */
+            feature: string;
+            /**
+             * Milestone
+             * Format: uuid
+             */
+            milestone: string;
+        };
         /** DiffLine */
         DiffLine: {
             /**
@@ -26393,6 +26430,8 @@ export interface components {
             confirmed_on: string | null;
             /** Proposed */
             proposed: boolean;
+            /** Can Change */
+            can_change: boolean;
         };
         /**
          * GmOffMap
@@ -26427,7 +26466,8 @@ export interface components {
         };
         /**
          * GmUnplaced
-         * @description A feature of the Simple roadmap serving no milestone of the map.
+         * @description A feature of the Simple roadmap serving no milestone of the map, with the goal its
+         *     item serves (goal-map-editing: the ladder draws it under that goal, else in No goal).
          */
         GmUnplaced: {
             /**
@@ -26437,6 +26477,8 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            /** Goal */
+            goal?: string | null;
         };
         /** GoalBucketFeature */
         GoalBucketFeature: {
@@ -48003,7 +48045,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "document" | "intake" | "run" | "feature" | "goal" | "decision" | "question" | "agenda_item" | "request" | "track";
+            type: "document" | "intake" | "run" | "feature" | "goal" | "decision" | "question" | "agenda_item" | "request" | "track" | "milestone";
             /**
              * Id
              * Format: uuid
@@ -74994,6 +75036,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MoveLinkIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detach_feature_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DetachIn"];
             };
         };
         responses: {
