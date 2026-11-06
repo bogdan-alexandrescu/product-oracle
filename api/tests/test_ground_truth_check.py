@@ -42,14 +42,21 @@ Test cards (protects / fails_when / no_claim):
 - test_each_fix_has_its_words: protects=every fix carries the button's plain words (Add to
   Ground Truth, Link to a feature, Confirm it, Give it a code, Pick a goal, Take it off the
   roadmap); fails_when=a fix has no words or the wrong ones.
-- test_a_feature_that_lists_the_item_links_it: protects=Add to Ground Truth makes the
-  feature with the item's link in one change (attrs.roadmap_items: the item's key, which
-  stays across versions), so the item is no longer flagged, for a published item too; a
-  commenter's proposal carries the same link and clears the flag once an approver accepts
-  it; fails_when=the flag stays after the add, or a proposal clears it before approval.
-- test_a_prd_flag_carries_its_key_and_goal: protects=an unlinked item's ref carries its key
-  and a PRD feature's flag the goal its PRD gives, so Add makes F-09 with its code and goal
-  and raises no no_code or no_goal flag; fails_when=the added feature is flagged again.
+- test_an_add_links_a_published_item_through_its_draft: protects=Add to Ground Truth is one
+  call that makes the feature, its goal and the item's link (feature_id, a set_feature
+  change in the roadmap's working draft, so a published item's link rides the next
+  version), and the flag clears at once; fails_when=the item stays flagged, its published
+  row is written, or the goal is a second call.
+- test_link_to_a_feature_is_a_change_in_the_draft: protects=set_feature links an item to a
+  feature through the draft; a non-feature is 422; fails_when=the link needs the API's
+  attrs, or any id is taken.
+- test_a_commenters_add_is_one_proposal_with_its_link_and_goal: protects=a commenter's Add
+  is one proposal (sent twice, the same one) carrying the item's link and the goal; once
+  accepted the flag clears and the feature serves the goal; fails_when=a second proposal is
+  made, or the accepted feature is flagged Serves no goal.
+- test_a_prd_flag_carries_its_goal: protects=a PRD feature's flag carries the goal its PRD
+  gives, and a commenter's Add with it, once approved, raises no flag; fails_when=the added
+  F-09 serves no goal.
 - test_words_carry_no_ids: protects=each flag's words are one short plain sentence with no
   id or key; fails_when=a uuid, slug or code shows in the words.
 - test_anyone_who_reads_the_roadmap_reads_it: protects=a viewer reads the check; no
@@ -72,6 +79,7 @@ from oracle import company_time
 from oracle.baseline.models import Edge, Entity
 from oracle.currentstate.models import FeatureState
 from oracle.docs.models import DocumentVersion
+from oracle.roadmap.models import RoadmapItem
 from oracle.simple.models import SimpleDraft, SimplePrdPlan
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
@@ -468,54 +476,103 @@ async def test_each_fix_has_its_words(client):
     assert seen == set(FIX_WORDS)
 
 
-async def test_a_feature_that_lists_the_item_links_it(client):
+async def _linked_in_draft(w: dict, item: str) -> tuple:
+    """The item's published feature_id and the one its roadmap's working draft gives it."""
+    async with tenant_session(w["ctx"].tenant_id) as s:
+        row = await s.get(RoadmapItem, uuid.UUID(item))
+        d = await s.scalar(
+            select(SimpleDraft).where(
+                SimpleDraft.document_id == row.roadmap_document_id,
+                SimpleDraft.status.in_(("working", "submitted")),
+            )
+        )
+        overlay = ((d.overlay or {}) if d else {}).get(item) or {}
+        return row.feature_id, overlay.get("feature_id")
+
+
+async def _serves(w: dict, feature_id: str) -> list[str]:
+    async with tenant_session(w["ctx"].tenant_id) as s:
+        q = select(Edge.dst_id).where(Edge.src_id == uuid.UUID(feature_id), Edge.type == "supports")
+        return [str(x) for x in await s.scalars(q)]
+
+
+async def test_an_add_links_a_published_item_through_its_draft(client):
     w = await world()
     b = w["items"]["b"]
     flagged = lambda out: [f["item"]["id"] for f in _of(out, "unlinked_item")]  # noqa: E731
-    new = {"type": "feature", "key": "history", "title": "Import history",
-           "attrs": {"roadmap_items": ["import-b"]}}  # fmt: skip
-    # A commenter proposes it: still flagged until an approver accepts the proposal.
-    r = await client.post("/v1/baseline/proposals", headers=w["ctx"].as_("commenter"),
-                          json={"op": "create", "kind": "entity", "fields": new})  # fmt: skip
-    assert r.status_code == 201, r.text
     assert b in flagged(await _check(client, w["ctx"]))
-    r = await client.post(f"/v1/baseline/proposals/{r.json()['id']}/accept",
-                          headers=w["ctx"].as_("approver"))  # fmt: skip
-    assert r.status_code == 200, r.text
-    assert b not in flagged(await _check(client, w["ctx"]))
-
-
-async def test_an_approver_adds_a_published_item_at_once(client):
-    w = await world()
-    out = await _check(client, w["ctx"])
-    b = next(f for f in _of(out, "unlinked_item") if f["item"]["id"] == w["items"]["b"])
-    assert b["item"]["key"] == "import-b"
-    r = await client.post("/v1/baseline/entities", headers=w["ctx"].as_("approver"),
+    r = await client.post("/v1/baseline/entities", headers=w["ctx"].as_("owner"),
                           json={"type": "feature", "key": "F-21", "title": "Import history",
-                                "attrs": {"roadmap_items": [b["item"]["key"]]}})  # fmt: skip
+                                "serves": w["features"]["grow"], "roadmap_item_id": b})  # fmt: skip
     assert r.status_code == 201, r.text
+    fid = r.json()["entity"]["id"]
+    # One call: the feature, its goal and the item's link, in the roadmap's working draft.
+    assert await _serves(w, fid) == [w["features"]["grow"]]
+    assert await _linked_in_draft(w, b) == (None, fid)
     out = await _check(client, w["ctx"])
-    assert [f["item"]["id"] for f in _of(out, "unlinked_item")] == [w["items"]["d"]]
+    assert b not in flagged(out)
+    assert all((f.get("feature") or {}).get("id") != fid for f in out["flags"])
 
 
-async def test_a_prd_flag_carries_its_key_and_goal(client):
+async def test_link_to_a_feature_is_a_change_in_the_draft(client):
+    w = await world()
+    b, f2 = w["items"]["b"], w["features"]["F-02"]
+    body = {"op": "set_feature", "target": {"item_id": b}, "before": {"feature_id": None},
+            "after": {"feature_id": f2}}  # fmt: skip
+    r = await client.post("/v1/simple/changes", headers=w["ctx"].as_("owner"), json=body)
+    assert r.status_code in (200, 201), r.text
+    assert r.json()["change"]["status"] == "applied"
+    assert await _linked_in_draft(w, b) == (None, f2)
+    out = await _check(client, w["ctx"])
+    assert b not in [f["item"]["id"] for f in _of(out, "unlinked_item")]
+    # A feature listing the item's key no longer links it: only feature_id does.
+    bad = {**body, "after": {"feature_id": w["items"]["a"]}}
+    r = await client.post("/v1/simple/changes", headers=w["ctx"].as_("owner"),
+                          json={**bad, "target": {"item_id": w["items"]["d"]},
+                                "before": {"feature_id": w["features"]["proposed"]}})  # fmt: skip
+    assert r.status_code == 422, r.text
+
+
+async def test_a_commenters_add_is_one_proposal_with_its_link_and_goal(client):
+    w = await world()
+    b = w["items"]["b"]
+    flagged = lambda out: [f["item"]["id"] for f in _of(out, "unlinked_item")]  # noqa: E731
+    fields = {"type": "feature", "key": "F-21", "title": "Import history",
+              "serves": w["features"]["grow"], "roadmap_item_id": b}  # fmt: skip
+    body = {"op": "create", "kind": "entity", "fields": fields}
+    h = w["ctx"].as_("commenter")
+    one = await client.post("/v1/baseline/proposals", headers=h, json=body)
+    two = await client.post("/v1/baseline/proposals", headers=h, json=body)
+    assert one.status_code == two.status_code == 201, one.text
+    assert one.json()["id"] == two.json()["id"]
+    assert b in flagged(await _check(client, w["ctx"]))
+    r = await client.post(f"/v1/baseline/proposals/{one.json()['id']}/accept",
+                          headers=w["ctx"].as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    out = await _check(client, w["ctx"])
+    assert b not in flagged(out)
+    async with tenant_session(w["ctx"].tenant_id) as s:
+        fid = str(await s.scalar(select(Entity.id).where(Entity.key == "F-21")))
+    assert await _serves(w, fid) == [w["features"]["grow"]]
+    assert all((f.get("feature") or {}).get("id") != fid for f in out["flags"])
+
+
+async def test_a_prd_flag_carries_its_goal(client):
     w = await world()
     out = await _check(client, w["ctx"])
     f9 = next(f for f in _of(out, "prd_feature_missing") if f["feature"]["code"] == "F-09")
     grow = f9["goal"]
     assert grow is not None and grow["name"] == "Grow", f9
-    h = w["ctx"].as_("approver")
-    new = {"type": "feature", "key": "F-09", "title": "Team invites"}
-    r = await client.post("/v1/baseline/entities", headers=h, json=new)
+    # A commenter's Add for a PRD's feature carries its goal; approving it writes both.
+    fields = {"type": "feature", "key": "F-09", "title": "Team invites", "serves": grow["id"]}
+    r = await client.post("/v1/baseline/proposals", headers=w["ctx"].as_("commenter"),
+                          json={"op": "create", "kind": "entity", "fields": fields})  # fmt: skip
     assert r.status_code == 201, r.text
-    fid = r.json()["entity"]["id"]
-    r = await client.post("/v1/baseline/edges", headers=h,
-                          json={"src_id": fid, "dst_id": grow["id"], "type": "supports",
-                                "attrs": {"contribution": 2}})  # fmt: skip
-    assert r.status_code == 201, r.text
+    r = await client.post(f"/v1/baseline/proposals/{r.json()['id']}/accept",
+                          headers=w["ctx"].as_("approver"))  # fmt: skip
+    assert r.status_code == 200, r.text
     out = await _check(client, w["ctx"])
-    assert all(f9["feature"]["code"] != (f.get("feature") or {}).get("code") for f in out["flags"])
-    assert all((f.get("feature") or {}).get("id") != fid for f in out["flags"])
+    assert all("F-09" != (f.get("feature") or {}).get("code") for f in out["flags"]), out
 
 
 async def test_words_carry_no_ids(client):

@@ -655,14 +655,6 @@ class GroundTruthRef(BaseModel):
     name: str
 
 
-class GroundTruthItemRef(GroundTruthRef):
-    """A flag's roadmap item or slice. ``key``: a roadmap item's own key, which stays across
-    versions (a feature lists it in ``attrs.roadmap_items`` to link the item); none for a
-    PRD's slice."""
-
-    key: str | None = None
-
-
 class GroundTruthDoc(BaseModel):
     id: uuid.UUID
     title: str
@@ -690,7 +682,7 @@ class GroundTruthFlag(BaseModel):
     """One place that breaks the Ground Truth: allowed, flagged "Not in the Ground Truth"."""
 
     kind: CheckKind
-    item: GroundTruthItemRef | None = None
+    item: GroundTruthRef | None = None
     feature: GroundTruthRef | None = None
     # A PRD's feature or slice: the goal its PRD gives it (the feature's own, else the
     # plan's one goal), for Add to Ground Truth to serve; none when it gives none.

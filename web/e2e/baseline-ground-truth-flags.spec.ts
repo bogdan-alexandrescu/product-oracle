@@ -1,8 +1,8 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test";
 
 import { GROUND_TRUTH_FLAGS_SCENARIO } from "../lib/api/mock/ground-truth";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { login, openRoadmapItem } from "./helpers";
 
 /**
  * The Ground Truth check on Detailed's Ground Truth page (docs/ground-truth.md; the owner,
@@ -10,9 +10,10 @@ import { login } from "./helpers";
  * item on no feature), Weekly digest (on a feature a run only proposed), the slice F-15a Usage
  * report, the PRD's F-09 Guest seats, Smart search (no code), F-02 Audit log (no goal) and
  * F-03 Night alerts (runs today, still on the roadmap), and the mock's other confirmed features
- * with no code or goal. Export to sheets is published: Add and Link link it from the feature's
- * side, at once. Each fix is made as a person makes it; a fix sent for approval leaves its row
- * waiting, with no second button.
+ * with no code or goal. Export to sheets is published: Add and Link set its feature through the
+ * roadmap's working draft (a change, so its link rides the next version) and its panel on the
+ * Roadmap shows the feature. Each fix is made as a person makes it; a fix sent for approval
+ * leaves its row waiting, with no second button, after a reload too.
  */
 
 const DESKTOP = { width: 1440, height: 900 };
@@ -36,6 +37,14 @@ async function openKind(page: Page, kind: string) {
 }
 
 const row = (page: Page, name: string) => page.getByTestId("gt-row").filter({ hasText: name });
+
+/** The item's panel on the Simple Roadmap: its name, after the code of the feature it is. */
+async function roadmapPanelName(page: Page, key: string) {
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await openRoadmapItem(page, key);
+  return page.getByTestId("floating-card").getByTestId("card-name");
+}
 
 for (const viewport of [DESKTOP, PHONE])
   for (const colorScheme of ["light", "dark"] as const)
@@ -107,6 +116,8 @@ test.describe("as the owner", () => {
     await expect(page.getByTestId("gt-notice")).toContainText("Linked “Export to sheets” to “Sheets export”.");
     await expect(row(page, "Export to sheets")).toHaveCount(0);
     await expect(total(page)).toHaveText(String(start - 1));
+    // The published item is linked through the roadmap's draft: its panel shows the feature.
+    await expect(await roadmapPanelName(page, "gt-export-to-sheets")).toHaveText(/^F-11\s*Export to sheets/);
   });
 
   test("Confirm it confirms the feature a run proposed", async ({ page }) => {
@@ -187,7 +198,7 @@ for (const viewport of [DESKTOP, PHONE])
   });
 
 for (const viewport of [DESKTOP, PHONE])
-  test(`a commenter's Add is sent for approval, with the item's link; the row waits (${viewport.width})`, async ({ page }) => {
+  test(`a commenter's Add is sent for approval, with the item's link; the row waits, after a reload too (${viewport.width})`, async ({ page }) => {
     await page.setViewportSize(viewport);
     const start = await open(page, "commenter@example.com");
     await openKind(page, "unlinked_item");
@@ -197,7 +208,31 @@ for (const viewport of [DESKTOP, PHONE])
     await expect(row(page, "Export to sheets").getByTestId("gt-pending")).toHaveText("Sent for approval");
     await expect(row(page, "Export to sheets").getByRole("button")).toHaveCount(1); // its (i) only
     await expect(total(page)).toHaveText(String(start));
+    // After a reload the row still waits: the open proposal is read back, never made twice.
+    await page.reload();
+    await openKind(page, "unlinked_item");
+    await expect(row(page, "Export to sheets").getByTestId("gt-pending")).toHaveText("Sent for approval");
+    await expect(row(page, "Export to sheets").getByRole("button", { name: /Add to Ground Truth/ })).toHaveCount(0);
   });
+
+test("a commenter's Add of a PRD's feature, once approved, serves its goal and its flag clears", async ({ page }) => {
+  await page.setViewportSize(DESKTOP);
+  const start = await open(page, "commenter@example.com");
+  await openKind(page, "prd_feature_missing");
+  await row(page, "Guest seats").getByRole("button", { name: /Add to Ground Truth/ }).click();
+  await expect(row(page, "Guest seats").getByTestId("gt-pending")).toHaveText("Sent for approval");
+  // The owner approves it on the Proposals tab.
+  await login(page);
+  await page.goto("/baseline?tab=proposals");
+  await page.getByTestId("proposal").filter({ hasText: "Guest seats" }).getByRole("button", { name: "Accept" }).click();
+  await page.goto("/baseline");
+  await expect(page.getByTestId("gt-band")).toBeVisible();
+  await expect(count(page, "prd_feature_missing")).toHaveCount(0);
+  // F-09 kept its code and serves the PRD's goal: no flag of its own.
+  await expect(total(page)).toHaveText(String(start - 1));
+  await openKind(page, "no_goal");
+  await expect(row(page, "Guest seats")).toHaveCount(0);
+});
 
 for (const viewport of [DESKTOP, PHONE])
   test(`a viewer reads the flags with no fixes (${viewport.width})`, async ({ page }) => {
