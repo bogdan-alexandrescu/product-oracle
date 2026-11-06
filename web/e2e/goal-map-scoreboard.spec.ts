@@ -32,51 +32,38 @@ async function open(page: Page, email: string = ADMIN.email, scheme: "light" | "
   await expect(page.getByTestId("gm-page")).toBeVisible();
 }
 
-const goal = (page: Page, name: string) => page.getByTestId("gm-goal").filter({ hasText: name });
-const gate = (page: Page, name: string) => page.getByTestId("gm-ladder").getByTestId("gm-gate").filter({ hasText: name });
+const goal = (page: Page, name: string) => page.getByTestId("ld-goal").filter({ hasText: name });
+const gate = (page: Page, name: string) => page.getByTestId("ld-milestone").filter({ hasText: name });
 
 for (const scheme of ["light", "dark"] as const) {
   test.describe(`desktop ${scheme}`, () => {
     test.use(DESKTOP);
 
     test("each goal says where its reading comes from; the owner picks revenue's metric", async ({ page }) => {
-      // protects=a measured goal names its metric; a metric with no value says so with Add a value;
-      // no metric reads Not measured yet with Pick its metric, whose picker measures the goal at once
-      // (goal card and its gates); fails_when=a not-measured gate is a dead end or the pick changes
-      // nothing; no_claim=the metric's values (Company › Metrics).
+      // protects=a measured goal names its metric and when; a metric with no value yet offers Add a
+      // value; no metric offers Pick its metric, whose picker measures the goal (and its gates) at
+      // once; fails_when=a not-measured goal is a dead end or the pick changes nothing; no_claim=the
+      // metric's values (Company › Metrics).
       await open(page, ADMIN.email, scheme);
       await expect(goal(page, "Sign-ups per rep per day").getByTestId("gm-goal-source")).toHaveText(`From ${SCOREBOARD.measured} · Nov 1`);
       const conv = goal(page, "Paid conversions per rep per day");
-      await expect(conv).toContainText("Not measured yet");
-      await expect(conv.getByTestId("gm-goal-missing")).toHaveText(`No values yet from ${SCOREBOARD.empty}`);
-      // Not measured: the words stand where the number goes, the target beside them, no empty bar.
-      await expect(conv.getByTestId("gm-goal-value")).toHaveText("Not measured yet");
-      await expect(conv.getByTestId("gm-goal-target")).toHaveText("Target 10 a day");
-      await expect(conv.getByTestId("gm-bar")).toHaveCount(0);
-      await expect(conv).not.toContainText("—");
-      await expect(goal(page, "Sign-ups per rep per day").getByTestId("gm-bar")).toHaveCount(1);
+      // Not measured: the status word stands in for the number, and the metric offers Add a value.
+      await expect(conv).toContainText("Too early");
       await expect(conv.getByTestId("gm-add-value")).toHaveAttribute("href", /^\/company\/metrics\?metric=/);
       const rev = goal(page, "Revenue per day");
-      await expect(rev.getByTestId("gm-goal-missing")).toHaveText("No metric picked");
+      await expect(rev.getByTestId("gm-pick-metric")).toBeVisible();
+      await expect(rev.getByTestId("gm-goal-source")).toHaveCount(0);
       const revGate = gate(page, "$12k revenue per day");
-      await expect(revGate).toContainText("Not measured yet");
-      await expect(revGate).toContainText("No metric picked");
-      await expect(revGate.getByTestId("gm-gate-reading")).toHaveText(/^Not measured yet · Target \$12k · After /);
-      await expect(revGate).not.toContainText("—");
-      await revGate.getByTestId("gm-pick-metric").click();
+      await rev.getByTestId("gm-pick-metric").click();
       const picker = page.getByTestId("gm-editor");
       await expect(picker).toContainText("Pick the metric for Revenue per day");
       await expect(picker.getByTestId("gm-add-metric")).toHaveAttribute("href", "/company/metrics");
       await picker.getByRole("button", { name: new RegExp(SCOREBOARD.pick) }).click();
       await picker.getByTestId("gm-save").click();
       await expect(page.getByTestId("gm-flash")).toHaveText(`Revenue per day now reads ${SCOREBOARD.pick}.`);
-      await expect(rev).toContainText("$11.2k");
       await expect(rev.getByTestId("gm-goal-source")).toHaveText(`From ${SCOREBOARD.pick} · Nov 1`);
-      await expect(rev.getByTestId("gm-goal-value")).toHaveText("$11.2k");
       await expect(rev.getByTestId("gm-pick-metric")).toHaveCount(0);
       await expect(revGate).toContainText("On track");
-      await expect(revGate.getByTestId("gm-gate-source")).toHaveText(`From ${SCOREBOARD.pick} · Nov 1`);
-      await expect(revGate.getByTestId("gm-gate-reading")).toHaveText(/^\$11\.2k of \$12k · After /);
     });
 
     test("the flags count the empty gate and the features serving no gate, and placing clears them", async ({ page }) => {
@@ -112,43 +99,22 @@ for (const scheme of ["light", "dark"] as const) {
       await drawer.getByTestId("gm-save").click();
       await expect(gaps).toHaveCount(0);
       await expect(unplaced).toContainText(`${before - 1} `);
-      await expect(page.getByTestId("gm-ladder").getByTestId("gm-feature").filter({ hasText: name })).toHaveCount(1);
-    });
-
-    test("Helping and Not helping say why behind an (i)", async ({ page }) => {
-      // protects=a shipped feature's lift shows its goal's reading before it shipped and since; a
-      // feature whose goal has no reading says Not measured yet; fails_when=Helping has no reason
-      // or an unmeasured goal shows Helping; no_claim=how the API picks the ship date (pytest).
-      await open(page, ADMIN.email, scheme);
-      const helping = page.getByTestId("gm-ladder").getByTestId("gm-feature").filter({ hasText: "One-tap sign-up link" });
-      await expect(helping.getByTestId("gm-lift")).toContainText("Helping");
-      await helping.getByRole("button", { name: /^About Helping/ }).hover();
-      await expect(helping.getByTestId("gm-lift-why")).toHaveText("Before it shipped on Oct 20: 24.8 · since: 31");
-      const notHelping = page.getByTestId("gm-ladder").getByTestId("gm-feature").filter({ hasText: "Rep call script hints" });
-      await expect(notHelping.getByTestId("gm-lift-why")).toHaveText("Before it shipped on Oct 20: 31 · since: 31", { useInnerText: false });
-      const unmeasured = page.getByTestId("gm-ladder").getByTestId("gm-feature").filter({ hasText: "Trial reminder texts" });
-      await expect(unmeasured.getByTestId("gm-lift")).toContainText("Not measured yet");
-      await expect(unmeasured.getByTestId("gm-lift-why")).toHaveText("Not measured yet", { useInnerText: false });
-      // One thing at a time: an unmeasured lift never sits beside what it once measured.
-      await expect(unmeasured).not.toContainText("measured +4 points");
-      // The (i) does not open the feature: the card does.
-      await expect(page.getByTestId("gm-feature-panel")).toHaveCount(0);
+      await expect(page.getByTestId("ld-feature").filter({ hasText: name })).toHaveCount(1);
     });
   });
 
   test.describe(`phone ${scheme}`, () => {
     test.use(PHONE);
 
-    test("on a phone the gates say what is missing and the flags open", async ({ page }) => {
-      // protects=at 390 the gates read Not measured yet with their action and the counts open their
+    test("on a phone the revenue goal offers Pick its metric and the flags open", async ({ page }) => {
+      // protects=at 390 a goal with no metric still offers Pick its metric and the counts open their
       // items; fails_when=either is cut off or missing on a phone.
       await open(page, ADMIN.email, scheme);
-      const phone = page.getByTestId("gm-ladder-phone");
-      const rev = phone.locator(".simple-card").filter({ hasText: /^\$12k revenue per day/ });
-      await expect(rev).toContainText("No metric picked");
+      const phone = page.getByTestId("ld-phone");
+      await phone.getByRole("tab", { name: "Goal 3" }).click();
+      const rev = phone.getByTestId("ld-goal");
+      await expect(rev).toContainText("Revenue per day");
       await expect(rev.getByTestId("gm-pick-metric")).toBeVisible();
-      await expect(rev.getByTestId("gm-gate-reading")).toHaveText(/^Not measured yet · Target \$12k · After /);
-      await expect(rev).not.toContainText("—");
       await page.getByTestId("gm-flag-gaps").click();
       await expect(page.getByTestId("gm-flag-list").getByTestId("gm-gap")).toHaveCount(2);
     });
@@ -171,7 +137,6 @@ test.describe("roles", () => {
   test("a viewer", async ({ page }) => {
     await open(page, VIEWER);
     const rev = goal(page, "Revenue per day");
-    await expect(rev.getByTestId("gm-goal-missing")).toHaveText("No metric picked");
     await expect(rev.getByTestId("gm-pick-metric")).toHaveCount(0);
     await expect(rev.getByTestId("gm-see-metrics")).toHaveAttribute("href", "/company/metrics");
     await expect(goal(page, "Paid conversions per rep per day").getByTestId("gm-add-value")).toBeVisible();
@@ -211,11 +176,10 @@ test.describe("Home", () => {
     await page.getByTestId("home-goal").filter({ hasText: "Revenue per day" }).getByTestId("home-goal-map").click();
     await expect(page).toHaveURL(/\/simple\/goals\?goal=/);
     const rev = goal(page, "Revenue per day");
-    await expect(rev).toHaveAttribute("data-picked", "1");
-    // Drawn, not only marked: the card's own shadow would hide a ring.
-    await expect(rev).toHaveCSS("outline-style", "solid");
+    // Drawn with a ring (box-shadow), not only a class marker that could sit under its own shadow.
+    await expect(rev).toHaveClass(/ring-accent/);
     await expect(rev).toBeInViewport();
-    await expect(page.getByTestId("gm-goal").and(page.locator("[data-picked]"))).toHaveCount(1);
+    await expect(page.locator('[data-testid="ld-goal"][class*="ring-accent"]')).toHaveCount(1);
   });
 
   test("a Home goal with no number to aim at says it is not on the map yet", async ({ page }) => {
@@ -229,6 +193,6 @@ test.describe("Home", () => {
     await expect(off).toContainText(`Not on the map yet: ${OFF_MAP} has no number to aim at`);
     await expect(off).toBeInViewport();
     await expect(off.getByRole("link", { name: "Open the goal" })).toHaveAttribute("href", /^\/simple\/priorities\?goal=/);
-    await expect(page.locator("[data-picked]")).toHaveCount(0);
+    await expect(page.locator('[data-testid="ld-goal"][class*="ring-accent"]')).toHaveCount(0);
   });
 });

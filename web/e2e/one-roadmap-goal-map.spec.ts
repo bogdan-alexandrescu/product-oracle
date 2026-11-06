@@ -31,11 +31,12 @@ test.describe("desktop", () => {
     await page.getByTestId("simple-nav-goals").first().click();
     const map = page.getByTestId("gm-page");
     await expect(map).toBeVisible();
-    await expect(page.getByTestId("gm-ladder")).toContainText("25 sign-ups per rep");
+    await expect(page.getByTestId("ld-milestone").filter({ hasText: "25 sign-ups per rep" })).toHaveCount(1);
     await expect(map).not.toContainText("15 sign-ups per rep");
     await expect(map).not.toContainText("$8k revenue per day");
 
-    await page.getByTestId("gm-propose").click();
+    await page.getByTestId("ld-edit").click();
+    await page.getByTestId("ld-column").nth(0).getByTestId("ld-add-milestone").click();
     const ed = page.getByTestId("gm-editor");
     await ed.getByLabel("Name").fill("40 sign-ups per rep");
     await ed.getByLabel("Met when the reading is at least").fill("40");
@@ -45,7 +46,7 @@ test.describe("desktop", () => {
     await ed.getByLabel("Comes after").selectOption({ label: "25 sign-ups per rep" });
     await ed.getByTestId("gm-save").click();
     await expect(page.getByTestId("gm-flash")).toContainText("Proposed: 40 sign-ups per rep.");
-    await expect(page.locator('[data-testid="gm-gate"][data-proposed="1"]')).toContainText("40 sign-ups per rep");
+    await expect(page.getByTestId("ld-milestone").filter({ hasText: "40 sign-ups per rep" })).toContainText("Proposed");
     await expect(map).not.toContainText("15 sign-ups per rep");
   });
 });

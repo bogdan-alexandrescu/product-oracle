@@ -296,6 +296,7 @@ export function GoalMapPage() {
         onOpen={setPanel}
         onAddMilestone={(goal) => open("propose", goal)}
         onGate={(m) => open("gate", undefined, m)}
+        onAttach={(m, area) => open("attach", undefined, m, area)}
         onGoal={(goal) => open("goal", goal)}
         onMetric={(goal) => open("metric", goal)}
         onPrd={canPrd ? (m) => open("prd", undefined, m) : null}

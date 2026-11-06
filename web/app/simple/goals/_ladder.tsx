@@ -118,6 +118,8 @@ export interface LadderProps {
   /** The goal map's own edits (+ Add milestone, the gate, the goal's target and metric, a PRD). */
   onAddMilestone: (goal: string) => void;
   onGate: (milestone: string) => void;
+  /** Attach a roadmap feature already made to a milestone (the map's attach drawer). */
+  onAttach: (milestone: string, area: string) => void;
   onGoal: (goal: string) => void;
   onMetric: (goal: string) => void;
   onPrd: ((milestone: string) => void) | null;
@@ -581,6 +583,7 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
           testId="ld-ms-menu"
           items={[
             { w: m.proposed ? "Set and confirm the gate" : "Edit the gate", on: () => { v.setMenu(null); p.onGate(m.id); } },
+            { w: "Attach a feature…", on: () => { v.setMenu(null); p.onAttach(m.id, m.areas[0] ?? ""); } },
             ...(p.onPrd ? [{ w: "New PRD from it", on: () => { v.setMenu(null); p.onPrd!(m.id); } }] : []),
           ]}
         />
