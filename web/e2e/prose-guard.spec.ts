@@ -19,8 +19,9 @@
  *   chat and meeting messages, and anything else a person wrote, marked in the app with
  *   [data-user-content] (see USER_CONTENT below for the other selectors that mean the same).
  * - The text left is joined per block (a run of inline text up to its nearest non-inline
- *   ancestor) with a space between text nodes, so "9" and "decisions" in two spans read as
- *   two words, whitespace squeezed, and split into sentences after ". ", "! " or "? ".
+ *   ancestor), with a space where one element's text meets another's, so "<b>9</b>decisions"
+ *   reads as two words (text nodes side by side in one element, as React renders "comment{s}",
+ *   join as they are), whitespace squeezed, and split into sentences after ". ", "! " or "? ".
  * - A sentence is prose when it has 8 or more words; a word is a run of non-space characters
  *   with at least one letter (so dates and numbers do not count: "Oct 30, 2026, 2:49 PM"
  *   is two words, "Oct" and "PM").
@@ -248,6 +249,7 @@ function countProse(page: Page): Promise<Count> {
   return page.evaluate(
     ({ skip, minWords }) => {
       const blocks = new Map<Element, string[]>();
+      const last = new Map<Element, Node>();
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       for (let n = walker.nextNode(); n; n = walker.nextNode()) {
         const text = n.nodeValue ?? "";
@@ -260,8 +262,10 @@ function countProse(page: Page): Promise<Count> {
         let block: Element = el;
         while (block.parentElement && /^(inline|contents)$/.test(getComputedStyle(block).display)) block = block.parentElement;
         const parts = blocks.get(block) ?? [];
-        parts.push(text.trim());
+        if (parts.length && last.get(block) === n.previousSibling) parts[parts.length - 1] += text;
+        else parts.push(text);
         blocks.set(block, parts);
+        last.set(block, n);
       }
       const sentences: string[] = [];
       let words = 0;

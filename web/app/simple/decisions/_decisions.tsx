@@ -404,7 +404,7 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
         <div>
           <h3 className="text-[18px] leading-[26px] font-[650]">Action items</h3>
           <ul className="list-disc pl-5">
-            {minutes.action_items.map((a, i) => <li key={i}>{a.title} · {a.owner_name ?? "no owner"}{a.due_date ? ` · by ${calendarDay(a.due_date, { weekday: "short" })} ${calendarDay(a.due_date)}` : ""}</li>)}
+            {minutes.action_items.map((a, i) => <li key={i}><span data-user-content>{a.title}</span> · {a.owner_name ?? "no owner"}{a.due_date ? ` · by ${calendarDay(a.due_date, { weekday: "short" })} ${calendarDay(a.due_date)}` : ""}</li>)}
           </ul>
         </div>
       )}
@@ -421,7 +421,7 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
           <div key={kind}>
             <h3 className="text-[18px] leading-[26px] font-[650]">{kind === "note" ? "Notes" : "Comments"}</h3>
             <ul className="list-disc pl-5 [overflow-wrap:anywhere]" data-testid={`meeting-group-${kind}s`}>
-              {notes.map((n) => <li key={n.id}>{n.text} · {n.by_name}</li>)}
+              {notes.map((n) => <li key={n.id}><span data-user-content>{n.text}</span> · {n.by_name}</li>)}
             </ul>
           </div>
         );
