@@ -70,11 +70,6 @@ _ISSUE = re.compile(
 _CODE_OR_TARGET = re.compile(r"`[^`\n]{0,300}`|\]\([^)\s]{0,300}\)")
 
 
-def _plain(heading: str) -> str:
-    """A heading without its {#id}."""
-    return re.sub(r"\s*\{#[^}]*\}\s*$", "", heading).strip()
-
-
 def _start(s: ParsedSection, file_lines: list[str] | None) -> int:
     """The 1-based line in the whole file of the body's first line: the parser strips the
     blank lines after the heading, so they are skipped in the file (one assumed without
@@ -193,7 +188,7 @@ def check(sections: Iterable[ParsedSection], markdown: str | None = None) -> lis
             ]
             if rows:
                 found[s.section_key] = sorted(rows, key=lambda r: r[0])
-                headings[s.section_key] = _plain(s.heading) or s.section_key
+                headings[s.section_key] = named_codes.plain_heading(s.heading) or s.section_key
             continue
         lines = [
             (n, m.group(0).strip())
@@ -202,7 +197,7 @@ def check(sections: Iterable[ParsedSection], markdown: str | None = None) -> lis
         ]
         if lines:
             issues[s.section_key] = lines
-            headings[s.section_key] = _plain(s.heading) or s.section_key
+            headings[s.section_key] = named_codes.plain_heading(s.heading) or s.section_key
     warnings: list[VersionWarning] = []
     if found:
         warnings.append(
