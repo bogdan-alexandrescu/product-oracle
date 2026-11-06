@@ -44,7 +44,7 @@ test.describe("desktop (1440)", () => {
     await tip.click();
     const bubble = page.getByText("Counts only.", { exact: false }).filter({ visible: true }).first();
     await expect(bubble).toBeVisible();
-    await expect(bubble).toContainText("never their names or what they hold");
+    await expect(bubble).toContainText("never their sources' names or what they hold");
     await expect(bubble).not.toContainText("S5");
     await expect(bubble).not.toContainText("S6");
     await expect(bubble).not.toContainText("(");
@@ -56,6 +56,7 @@ test.describe("desktop (1440)", () => {
     await expect(ct.getByRole("columnheader", { name: "Member" })).toBeVisible();
     await expect(ct.getByRole("columnheader", { name: "Kind", exact: true })).toHaveCount(0);
 
+    await expect(ct.locator("tr[data-row]").first()).toBeVisible();
     const total = await ct.locator("tr[data-row]").count();
     const membersChip = page.getByTestId("company-members-chip");
     const staleChip = page.getByTestId("company-stale-chip");
@@ -67,10 +68,9 @@ test.describe("desktop (1440)", () => {
     await expect(ct.locator("tr[data-row]")).toHaveCount(0);
     await expect(ct.locator("tr[data-group]")).toHaveCount(1);
     const onlyGroup = ct.locator("tr[data-group]");
+    // The member by name, the email beside it (the API sends the member's display name).
+    await expect(onlyGroup).toContainText("Theo Brandt");
     await expect(onlyGroup).toContainText("commenter@example.com");
-    // No name field for Company coverage (the API/mock never sends one): the email alone, not a fake name.
-    await expect(onlyGroup).not.toContainText("null");
-    await expect(onlyGroup).not.toContainText("undefined");
 
     // Pressing the same chip again clears the filter.
     await membersChip.click();

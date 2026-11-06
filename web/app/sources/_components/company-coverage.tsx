@@ -52,8 +52,8 @@ export function companyRows(data: CompanyCoverage | undefined): CompanyRow[] {
 export function CountsOnlyTip() {
   return (
     <InfoTip label="Company" align="end">
-      Counts only. You see how many sources each member connected and how fresh they are, never their names or what
-      they hold.
+      Counts only. You see how many sources each member connected and how fresh they are, never their sources&apos; names
+      or what they hold.
     </InfoTip>
   );
 }

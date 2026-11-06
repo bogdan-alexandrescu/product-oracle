@@ -6200,7 +6200,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     return routeSources(req, p, q, {
       scenario: localStorage.getItem(MOCK_SCENARIO_KEY),
       me: { email: me.email, role: me.role },
-      members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role, disabled: x.status === "disabled" })),
+      members: db.members.map((x) => ({ id: x.id, email: x.email, name: x.name, role: x.role, disabled: x.status === "disabled" })),
       uses: () => itemUses(db),
     });
   }
