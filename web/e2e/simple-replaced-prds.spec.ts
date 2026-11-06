@@ -174,7 +174,10 @@ test("a replaced PRD's past meeting keeps its decisions", async ({ page }) => {
   await page.goto("/simple/priorities?tab=buckets");
   const buckets = page.getByRole("region", { name: "Goal buckets" });
   // Guided setup's plan goes with its items (priorities.plan_in_play): the buckets read without a plan.
-  await expect(buckets.getByText(/^Grouped by goal for this quarter/)).toBeVisible();
+  // Demo 9: Goal buckets' intro is behind the page's (i), as Value / effort's is.
+  await page.getByTestId("prio-about").click();
+  await expect(page.getByTestId("buckets-intro")).toHaveText(/^\s*Grouped by goal for this quarter/);
+  await page.keyboard.press("Escape");
   for (const title of GONE) await expect(buckets.getByText(title, { exact: true })).toHaveCount(0);
   // Round 6: with no work this quarter the tab says so in words, never "0 wk in all" over an empty chart.
   await expect(buckets.getByText("Nothing planned this quarter.")).toBeVisible();

@@ -888,11 +888,15 @@ export function itemOfOtherPrd(db: SimpleDb, key: string, roadmap: string): void
   if (s) s.prd_doc = itemPrd({ ...s, roadmap });
 }
 
-/** one-feature-panel: the Goal map's features as roadmap items (once the map is read), each its own. */
+/**
+ * one-feature-panel: the Goal map's features as roadmap items, each its own. With a company
+ * roadmap they are on it, as the map holds only the milestones of roadmaps that feed it
+ * (goal_map._on_map: company.feeding_ids).
+ */
 export function knowGoalMapItems(db: SimpleDb | undefined, items: { key: string; id: string; title: string; section: string }[]): void {
   for (const it of items) {
     if (!db || db.ids[it.key]) continue;
-    db.items.push({ key: it.key, title: it.title, horizon: "next", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", section: it.section, heading: `${it.section.toUpperCase()} ${it.title}` });
+    db.items.push({ key: it.key, title: it.title, horizon: "next", roadmap: db.company_roadmap ?? "onboarding-roadmap", track: "onboarding", confidence: "medium", section: it.section, heading: `${it.section.toUpperCase()} ${it.title}` });
     db.ids[it.key] = it.id;
   }
 }
