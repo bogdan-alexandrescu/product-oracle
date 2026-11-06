@@ -1,7 +1,7 @@
 {
   "owner": {
     "/account": 118,
-    "/baseline": 25,
+    "/baseline": 11,
     "/briefs/[id]": 8,
     "/company/decisions": 44,
     "/company/market": 33,
@@ -81,7 +81,7 @@
   },
   "viewer": {
     "/account": 120,
-    "/baseline": 25,
+    "/baseline": 11,
     "/briefs/[id]": 8,
     "/company/decisions": 44,
     "/company/market": 33,
