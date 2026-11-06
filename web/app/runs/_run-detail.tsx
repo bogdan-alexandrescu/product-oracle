@@ -286,6 +286,16 @@ export function RunDetail({ id }: { id: string }) {
   // Imports a segment's refused draft again (the review still waits for a person).
   const retryImport = (seq: number) =>
     act(() => unwrap(api.POST("/v1/runs/{run_id}/segments/{seq}/retry-draft-import", { params: { path: { run_id: id, seq } } })));
+  // A failed run runs again from the segment it stopped at; a refusal is said at that segment.
+  const retrySegment = (seq: number, onError: (message: string) => void) =>
+    act(
+      () => unwrap(api.POST("/v1/runs/{run_id}/segments/{seq}/retry", { params: { path: { run_id: id, seq } } })),
+      async (e) => {
+        onError(errorMessage(e));
+        void reload();
+        return true;
+      },
+    );
   // A segment reused from earlier (skipped as reused) counts as done, as the API's progress counts it.
   const done = run.segments.filter((s) => s.status === "succeeded" || s.status === "skipped").length;
   const decideCp = run.checkpoints.find((c) => c.status === "pending" && c.can_decide);
@@ -433,6 +443,12 @@ export function RunDetail({ id }: { id: string }) {
           <ErrorNote>
             {run.status === "failed" && run.finished_at && <span data-testid="failed-at">{failedAt(run.finished_at)}. </span>}
             {run.error}
+            {/* As the API: a failed run over its ceiling is not retried. */}
+            {run.status === "failed" && run.overrun_ceiling_usd != null && run.spent_usd > run.overrun_ceiling_usd && (
+              <span className="block" data-testid="budget-stopped">
+                This run stopped at its budget; start it again with a new estimate.
+              </span>
+            )}
           </ErrorNote>
         )}
         {run.stuck && (
@@ -603,6 +619,7 @@ export function RunDetail({ id }: { id: string }) {
                   busy={busy}
                   onDecide={decide}
                   onRetryImport={retryImport}
+                  onRetrySegment={retrySegment}
                   onDraftChanged={() => void reload()}
                 />
               </Fragment>
@@ -995,6 +1012,7 @@ function SegmentItem({
   busy,
   onDecide,
   onRetryImport,
+  onRetrySegment,
   onDraftChanged,
 }: {
   run: RunOut;
@@ -1003,6 +1021,8 @@ function SegmentItem({
   busy: boolean;
   onDecide: Decide;
   onRetryImport: (seq: number) => void;
+  /** Runs a failed run again from this segment (shown when the segment's can_retry is set). */
+  onRetrySegment: (seq: number, onError: (message: string) => void) => Promise<void>;
   /** D7: the shared draft changed, so the checkpoint's Approve words may have (the run re-read). */
   onDraftChanged: () => void;
 }) {
@@ -1018,6 +1038,17 @@ function SegmentItem({
   const draft = useDraft(run.id, waitingCp?.id ?? null);
   const shared = draft.review && draft.review.checkpoint_id === waitingCp?.id ? draft.review : null;
   const [draftError, setDraftError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
+  const retry = async () => {
+    setRetrying(true);
+    setRetryError(null);
+    try {
+      await onRetrySegment(s.seq, setRetryError);
+    } finally {
+      setRetrying(false);
+    }
+  };
   // D7: Approve's words and what needs the agents are the checkpoint's: re-read the run when
   // the draft moves on from the revision first read (a staged edit, another reviewer's).
   const seenRevision = useRef<string | null>(null);
@@ -1048,6 +1079,7 @@ function SegmentItem({
     sentReviews.length > 0 ||
     editedBy.length > 0 ||
     s.error ||
+    retryError ||
     s.autonomy_note ||
     s.items_check ||
     s.feature_set_check ||
@@ -1263,6 +1295,15 @@ function SegmentItem({
               {s.error}
             </p>
           )}
+          {s.can_retry && (
+            <div className="space-y-1.5" data-testid="segment-retry">
+              <p className="text-text2">Retry this step. It runs again from here; the steps before it stay approved.</p>
+              <Button disabled={busy} onClick={() => void retry()}>
+                {retrying ? "Retrying…" : "Retry"}
+              </Button>
+            </div>
+          )}
+          {retryError && <ErrorNote>{retryError}</ErrorNote>}
           {s.queue_wait && (
             <p>
               <QueueWaitNote wait={s.queue_wait} testId="segment-queue-wait" />

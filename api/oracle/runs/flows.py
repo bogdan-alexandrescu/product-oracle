@@ -43,6 +43,8 @@ MCP_TOOLS = {
     "search": "full-text search over the sources you may read, ranked by relevance x "
     "confidence, each hit with its confidence and low_confidence flag",
     "get_source_item": "one source item at the run's pinned snapshot, with its confidence",
+    "list_entities": "Ground Truth entities a page at a time, without bodies unless asked; filter "
+    "by ids (this PRD's scope entity_ids or keys), keys, type, status or q, choose fields",
     "get_baseline": "the Ground Truth graph: goals, products, features, edges, evidence",
     "trace_feature": "features traced to goals; those serving no confirmed goal flagged",
     "get_document": "a document (PRD or roadmap) and its versions, with their provenance",
@@ -155,7 +157,8 @@ UNKNOWN_IS_WORK = (
     "and the ref to cite."
 )
 UNKNOWN_IS_WORK_DRAFT = (
-    " Each item get_intake_summary lists under work (an answer saying something is "
+    " Read get_intake_summary with section=work whole (page with offset until "
+    "next_offset is null). Each item it lists under work (an answer saying something is "
     "unknown and finding it out is part of this work) is a requirement in the PRD, worded "
     "as its requirement and cited to its answer (a citation whose ref is its cite_ref), "
     "and, when it gates a date, a milestone or an early discovery item with its own "
@@ -284,6 +287,9 @@ class SegmentDef:
     # F4 lane B: the segment starts only once the approved PRD version's draft roadmap
     # items (E1) are ready; Oracle waits for them, asks for them, or skips it.
     waits_for_draft_items: bool = False
+    # Nov 6: the PRD flow's long segments are told how to keep their session small
+    # (:data:`CONTEXT_ROOM`); other flows' prompts are unchanged.
+    context_room: bool = False
     # H7: a role's own depth, whatever the run's (the digest's writer runs at quick).
     role_depths: dict[str, str] = field(default_factory=dict, hash=False)
     # H7: tools only one role gets, on top of ``tools`` (the digest researcher's web tools).
@@ -651,6 +657,7 @@ FLOWS: dict[str, FlowDef] = {
                     scopes=(*READ, "write:proposals"),
                     outputs=("feature_set.yaml", "design.md"),
                     checkpoint="feature_set",
+                    context_room=True,
                     task="From the confirmed Ground Truth, propose the feature set for the next "
                     "version: each feature traces to a confirmed goal or is flagged as "
                     "serving none; list depends_on and blocks edges. Every included feature "
@@ -684,6 +691,7 @@ FLOWS: dict[str, FlowDef] = {
                     outputs=(BRIEFS_FILE,),
                     checkpoint="eng_review",
                     skip_when_off=True,
+                    context_room=True,
                     task=TECH_BRIEF_TASK,
                     tools=(
                         "get_baseline",
@@ -730,6 +738,7 @@ FLOWS: dict[str, FlowDef] = {
                     outputs=("prd.md",),
                     checkpoint="prd_review",
                     imports_draft=True,
+                    context_room=True,
                     task="Write the PRD for the features and requirements the approved PRD "
                     "scope includes (get_prd_scope), and nothing it excludes or defers, in "
                     "the approved priority order, as prd.md: "
@@ -743,7 +752,7 @@ FLOWS: dict[str, FlowDef] = {
                     + UNKNOWN_IS_WORK_DRAFT,
                     tools=(
                         "get_prd_scope",
-                        "get_baseline",
+                        "list_entities",
                         "get_strategy_stack",
                         "get_document",
                         "search",
@@ -762,6 +771,7 @@ FLOWS: dict[str, FlowDef] = {
                     checkpoint="eng_dates",
                     skip_when_off=True,
                     waits_for_draft_items=True,
+                    context_room=True,
                     task=ENG_DATES_TASK,
                     tools=(
                         "get_baseline",
@@ -1792,6 +1802,47 @@ def discussion_lines(ctx: PromptContext) -> list[str]:
     return lines if len(lines) > 1 else []
 
 
+# Nov 6: a PRD writer that read every entity, whole intake summaries and whole earlier
+# files went past SwarmCloud's 200,000-token session and its step failed. The PRD flow's
+# long segments (SegmentDef.context_room) tell their reading and writing roles to keep
+# their session small; the sentences on entities and on prd.md go only to a segment with
+# list_entities, or one that writes prd.md.
+LONG_ROLES = frozenset({"writer", "analyst", "researcher", "critic", "architect"})
+CONTEXT_ROOM = (
+    "Keep your session small: it has a hard limit of 200,000 tokens, and past it your "
+    "step fails. Read get_intake_summary's work, features and goals whole (section=work "
+    "and so on), its other sections only when you need them. Search returns snippets; read "
+    "a whole item only when you cite it. Write any large read (a previous PRD version, a "
+    "long earlier file, many search hits) to a file in your working folder and grep it "
+    "instead of keeping it in your context; read long files a page at a time (offset)."
+)
+CONTEXT_ROOM_ENTITIES = (
+    "Fetch only this PRD's entities: read the scope first (get_prd_scope), then "
+    "list_entities with ids=[the entity_id of each feature and requirement in the scope; "
+    "a scope row's own id is not the entity's] and only the fields you need (body only "
+    "when you need it; page with offset). A feature or requirement whose entity_id is null "
+    "is new, not in the Ground Truth yet: write it from its scope row (title, text, "
+    "acceptance) and do not look for it elsewhere. Never read the whole Ground Truth or every "
+    "entity."
+)
+CONTEXT_ROOM_PRD = (
+    "Write prd.md section by section: append each section to the file as you finish it, "
+    "never the whole draft in one go."
+)
+
+
+def context_room_lines(segment: SegmentDef, role: str, kind: str) -> list[str]:
+    """The rules that keep a long role's session small, for a ``context_room`` segment."""
+    if not segment.context_room or role not in LONG_ROLES:
+        return []
+    lines = [CONTEXT_ROOM]
+    if "list_entities" in segment.tools:
+        lines.append(CONTEXT_ROOM_ENTITIES)
+    if "prd.md" in segment.outputs_for(kind):
+        lines.append(CONTEXT_ROOM_PRD)
+    return ["", " ".join(lines)]
+
+
 def step_prompt(
     flow: FlowDef,
     segment: SegmentDef,
@@ -1823,7 +1874,8 @@ def step_prompt(
             "Before you write, read every source the brief was pinned to (search and "
             "get_source_item; an uploaded document whole or by its relevant sections) and "
             "the Ground Truth features it names with their descriptions and evidence "
-            "(get_baseline), and cite them. Never say something is not described or "
+            + ("(list_entities)" if segment.context_room else "(get_baseline)")
+            + ", and cite them. Never say something is not described or "
             "missing when one of them describes it.",
             *(
                 [
@@ -1879,6 +1931,8 @@ def step_prompt(
         )
     lines += [f"- {t}: {MCP_TOOLS[t]}" for t in segment.tools]
     lines += [f"- {t}: {MCP_TOOLS[t]}" for t in segment.role_tools.get(role, ())]
+    if ctx.mcp_reachable:
+        lines += context_room_lines(segment, role, ctx.kind)
     if "get_autonomy" in segment.tools:
         # H11: the server enforces the levels; the agent is told so it does not waste work.
         lines.append(AUTONOMY_SENTENCE)

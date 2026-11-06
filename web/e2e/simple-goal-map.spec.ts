@@ -49,7 +49,7 @@ test.describe("desktop", () => {
     await expect(goals.nth(1)).toContainText("At risk");
     await expect(goals.nth(2)).toContainText("Reps × conversions per rep × value");
     await expect(page.getByTestId("gm-guardrail")).toContainText("Guardrail: Customer complaints = 0 every day");
-    await expect(page.getByTestId("gm-guardrail")).toContainText("0 today · held 7 of 7 days");
+    await expect(page.getByTestId("gm-guardrail")).toContainText("Held 7 of 7 days");
     const card = page.getByTestId("ld-feature").filter({ hasText: "Guided first week" });
     await expect(card).toHaveCount(1);
     await expect(card).toContainText("Also serves");
@@ -330,7 +330,7 @@ for (const theme of ["light", "dark"] as const) {
       for (let i = 0; i < 3; i++) await expect(cards.nth(i)).not.toContainText(GUARDRAIL_GOAL);
       const strip = page.getByTestId("gm-guardrail");
       await expect(strip).toContainText(`Guardrail: ${GUARDRAIL_GOAL} = 0 every day`);
-      await expect(strip).toContainText("0 today · held 7 of 7 days");
+      await expect(strip).toContainText("Held 7 of 7 days");
       // Side by side on a desktop, one row, in priority order.
       const boxes = await Promise.all([0, 1, 2].map(async (i) => (await cards.nth(i).boundingBox())!));
       expect(boxes.map((b) => Math.round(b.y))).toEqual(Array(3).fill(Math.round(boxes[0].y)));

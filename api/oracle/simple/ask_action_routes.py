@@ -241,6 +241,7 @@ NOT_OFFERED: frozenset[str] = frozenset(
         "pick_goal_metric",
         "place_card",
         "reopen_strategy_finding",
+        "retry_segment",
         "restore_prd_order",
         "take_code_back",
         "tidy_up",

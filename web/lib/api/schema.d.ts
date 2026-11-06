@@ -6406,6 +6406,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/runs/{run_id}/segments/{seq}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Segment
+         * @description Retry a failed run from the segment it stopped at (``segments[].can_retry``; why it
+         *     stopped is ``segments[].error``): that segment is submitted again with the run's
+         *     approved inputs; the segments and approved stops before it are kept, not run again.
+         *     An owner or the approver who created the run. 409 when the run is not failed at that
+         *     segment. Audited.
+         */
+        post: operations["retry_segment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs/{run_id}/segments/{seq}/retry-draft-import": {
         parameters: {
             query?: never;
@@ -40393,6 +40417,11 @@ export interface components {
              * @default false
              */
             can_retry_draft_import: boolean;
+            /**
+             * Can Retry
+             * @default false
+             */
+            can_retry: boolean;
             /** Draft Retry Refused */
             draft_retry_refused?: string | null;
             items_check?: components["schemas"]["ItemsCheck"] | null;
@@ -63074,6 +63103,38 @@ export interface operations {
             header?: never;
             path: {
                 run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_segment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                seq: number;
             };
             cookie?: never;
         };

@@ -1173,6 +1173,7 @@ def _segment_out(
     zone: str = company_time.DEFAULT_ZONE,
     draft_retry_refused: str | None = None,
     proposals: tuple[int, datetime | None] = (0, None),
+    can_retry: bool = False,
 ) -> SegmentOut:
     sdef = _flow(run).segment(segment.name)
     art = segment.artifacts or {}
@@ -1202,6 +1203,7 @@ def _segment_out(
         reused=art.get("reused") if segment.status == "skipped" else None,
         note=art.get("note") if segment.status == "skipped" or art.get("reused_items") else None,
         can_retry_draft_import=can_retry_draft_import,
+        can_retry=can_retry,
         draft_retry_refused=draft_retry_refused,
         items_check=ItemsCheck(**check) if check else None,
         previous_attempt=PreviousAttempt(
@@ -1453,6 +1455,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     snapshot = await db.get(Snapshot, run.snapshot_id) if run.snapshot_id else None
     waiting = next((c for c in checkpoints if c.status == "pending"), None)
     retries = _draft_retries(run, segments, checkpoints, kind, principal)
+    failed_seq = _retryable_seq(run, segments) if principal and _manages(principal, run) else None
     version = _run_version(segments, checkpoints)
     proposed = await _proposals_since(db, run, segments)
     runtime = get_runtime()
@@ -1509,6 +1512,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
                 zone=refs.zone,
                 draft_retry_refused=_retry_refused(run, s, version),
                 proposals=proposed if s.status == "running" else (0, None),
+                can_retry=s.seq == failed_seq,
             )  # fmt: skip
             for s in segments
         ],
@@ -6323,9 +6327,13 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
             await revoke_run_tokens(db, run.id)
         else:
             running.status = "failed" if status.state == "failed" else "cancelled"
-            running.error = status.error or f"the workflow ended {status.state}"
+            running.error = (
+                _failed_why(run, running, status)
+                if status.state == "failed"
+                else status.error or f"the workflow ended {status.state}"
+            )
             _set_art(running, art)
-            await _finish(db, run, "failed", f"{running.name}: {running.error}")
+            await _finish(db, run, "failed", f"{_title(run, running)}: {running.error}")
             await audit.record(db, None, "run.failed", "run", run.id, {"segment": running.name})
             await db.commit()
             return
@@ -7341,7 +7349,11 @@ async def _tick_workflow(
                 return
             error = f"the workflow ended before '{current.name}' wrote its files"
         else:
-            fallback = f"the workflow ended {status.state}: {status.error or 'no reason given'}"
+            fallback = (
+                _failed_why(run, current, status)
+                if status.state == "failed"
+                else f"the workflow ended {status.state}: {status.error or 'no reason given'}"
+            )
             error = workflow.advice(status.error_code, fallback)
             waited = (
                 _queued_expiry(run, wf, status)
@@ -7357,8 +7369,37 @@ async def _tick_workflow(
             current.status = "failed" if status.state != "cancelled" else "cancelled"
             current.error = error
             current.finished_at = _now()
-        await _finish(db, run, "failed", f"{current.name if current else 'workflow'}: {error}")
+        await _finish(db, run, "failed", f"{_title(run, current)}: {error}")
         await audit.record(db, None, "run.failed", "run", run.id, {"workflow": wf["id"]})
+
+
+def _title(run: Run, segment: RunSegment | None) -> str:
+    """A segment's name as people read it (PRD draft), for the run's error."""
+    if segment is None:
+        return "The workflow"
+    try:
+        return _flow(run).segment(segment.name).title
+    except (KeyError, StopIteration):
+        return segment.name
+
+
+def _failed_why(run: Run, segment: RunSegment | None, status: WorkflowStatus) -> str:
+    """Why a failed workflow's step stopped, in plain words (Nov 6: "the workflow ended
+    failed: claude-code exited 1:" told no one anything): the failed step's role and the
+    cause read from its task's last error, else the workflow's."""
+    step = next((st for st in status.steps if st.state in ("FAILED", "DEAD_LETTERED")), None)
+    role = step.role if step is not None and step.role else None
+    if role is None and step is not None:
+        role = step.step_id.rsplit("-", 1)[-1]
+    if role not in flows.ROLES and segment is not None:
+        try:
+            role = _flow(run).segment(segment.name).roles[0]
+        except (KeyError, StopIteration, IndexError):
+            role = None
+    title = flows.ROLES[role].title.lower() if role in flows.ROLES else None
+    raw = (step.error if step else None) or status.error
+    log.warning("run %s step %s failed: %s", run.id, step.step_id if step else None, raw)
+    return workflow.plain_failure(raw, title)
 
 
 def _queued_expiry(run: Run, wf: dict[str, Any], status: WorkflowStatus) -> float | None:
@@ -11089,6 +11130,61 @@ async def stop_run(
         )
     await _finish(db, run, "cancelled", state="cancelled", done=done)
     await audit.record(db, principal, "run.cancelled", "run", run.id, data or {})
+
+
+# A failed run whose spend is over its ceiling: running a step again would only pause it.
+BUDGET_STOPPED = "This run stopped at its budget; start it again with a new estimate"
+
+
+def _retryable_seq(run: Run, segments: list[RunSegment]) -> int | None:
+    """The segment a failed run can be retried from: the one that failed (its stop's
+    approvals before it kept), while no workflow of the run is still attached and its
+    spend is within its ceiling."""
+    if run.status != "failed" or _live(run) is not None or _overrun(run) is not None:
+        return None
+    failed = [s for s in segments if s.status == "failed"]
+    return failed[-1].seq if failed else None
+
+
+async def retry_segment(
+    db: AsyncSession, principal: Principal, run_id: uuid.UUID, seq: int
+) -> None:
+    """Retry a failed run from the segment that failed: that segment is queued again with
+    the run's approved inputs (its snapshot, knobs and the checkpoints decided before it);
+    the segments before it are not run again. An owner or the approver who created the
+    run, as for Retry and Cancel. Audited; the caller commits nothing (this commits)."""
+    from oracle.review import publish
+
+    await publish.gate_lock(db, shared=True)
+    run = await _get_run(db, run_id, lock=True)
+    if not await _may_manage(db, principal, run):
+        raise Forbidden("Only an owner or the approver who created the run can retry it")
+    segments = await _segments(db, run.id, fresh=True)
+    segment = next((s for s in segments if s.seq == seq), None)
+    if segment is None:
+        raise NotFound("Segment not found")
+    if run.status == "failed" and _overrun(run) is not None:
+        raise RunError(BUDGET_STOPPED)
+    if _retryable_seq(run, segments) != seq:
+        raise RunError("nothing to retry: only the segment a failed run stopped at can be retried")
+    was = segment.error
+    art = _art(segment)
+    _note_art(art, f"Retried by a person after it failed: {was or 'no reason given'}")
+    _set_art(segment, art)
+    segment.error = None
+    segment.finished_at = None
+    run.error = None
+    run.finished_at = None
+    if _flow(run).stores_draft_items:
+        from oracle.roadmap import draft_items
+
+        # Its draft roadmap runs again with it: no stale failure, and no Derive meanwhile.
+        await draft_items.run_retried(db, run)
+    await _submit(db, run, segment, segments)
+    await audit.record(
+        db, principal, "run.segment_retried", "run", run.id, {"seq": seq, "error": was}
+    )
+    await db.commit()
 
 
 async def retry(db: AsyncSession, principal: Principal, run_id: uuid.UUID) -> None:
