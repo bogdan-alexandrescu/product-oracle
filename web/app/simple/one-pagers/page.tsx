@@ -31,6 +31,10 @@ export default function OnePagers() {
   const rows = q.data ? sortPrds(q.data) : null;
   const { can } = useMe();
   const canMove = can("move_document");
+  // V-8: the help line names only what this reader can do here.
+  const canWord = can("create_simple_change");
+  const canReview = can("start_simple_meeting");
+  const lead = `Open a PRD to read it on one page${canWord && canReview ? ", change its wording or start a review" : canWord ? " or change its wording" : canReview ? " or start a review" : ""}.`;
   const [moving, setMoving] = useState(false);
   const [moveError, setMoveError] = useState<string | null>(null);
   // A move says what it did, with an Undo that puts every PRD's stored place back as it was.
@@ -62,7 +66,7 @@ export default function OnePagers() {
   );
   return (
     // qa4-simple-prd-25: a help line, saying what a person can do here.
-    <SimplePage title="One-pagers" lead="Open a PRD to read it on one page, change its wording or start a review.">
+    <SimplePage title="One-pagers" lead={lead}>
       <SimpleSection
         title="PRDs"
         testId="simple-one-pagers"
