@@ -286,6 +286,10 @@ export type BoardItem = {
   no_goal: boolean;
   /** The goal it is grouped under: the first by title of the confirmed goals its feature reaches; null for "No goal". */
   group: string | null;
+  /** E-14 (as the API's ItemView): its own dates (start, end; else its milestone's day as the end) and whether it shipped. */
+  start?: string | null;
+  end?: string | null;
+  shipped?: boolean;
 };
 
 export const NO_GOAL_GROUP = "No goal";

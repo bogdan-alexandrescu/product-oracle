@@ -1304,6 +1304,9 @@ code .date-mark {
   [data-mode="simple"] [data-testid="hop-dock"] { display: none !important; }
   [data-mode="simple"] main#main { grid-column: 1 / -1; }
   [data-mode="simple"] .simple-page { max-width: none; }
+  /* A one-pager prints in one column across the sheet (landscape or no margins included):
+     no 820 px text column beside its margin notes, which do not print. */
+  [data-testid="one-pager-columns"] { grid-template-columns: minmax(0, 1fr) !important; max-width: none !important; }
 }
 
 /* roadmap-talk: a bar a chat card just changed pulses in Oracle's accent (both themes follow the tokens). */

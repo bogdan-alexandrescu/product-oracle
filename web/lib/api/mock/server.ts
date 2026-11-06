@@ -2493,14 +2493,22 @@ function seedSharingRoadmap(db: Db, audience: "team" | "public") {
         locked_by: null, locked_at: null, confidence: null, run_id: null, created_at: created, updated_at: created,
       });
     }
-    // E-14: Falcon alerts rework carries a confidence, the status a link holder's card shows.
+    // E-14: Falcon alerts rework carries a confidence and its own dates, Partner API beta an end day: a link
+    // holder's card shows them (the others show their horizon).
     const confidence = i.item_key === "item-falcon" ? "high" : i.confidence;
-    return { ...i, confidence, feature: { id: f.id, type: f.type, key: f.key, title: f.title, status: f.status } };
+    const dates = SHARING_DATES[i.item_key] ?? {};
+    return { ...i, ...dates, confidence, feature: { id: f.id, type: f.type, key: f.key, title: f.title, status: f.status } };
   });
   db.sharing_items = { [v.id]: items };
 }
 
 type BaselineEntity = Db["baseline"]["entities"][number];
+
+/** The "sharing" roadmap's own item dates (RoadmapItem.start_date, end_date). */
+const SHARING_DATES: Record<string, { start_date?: string; end_date: string }> = {
+  "item-falcon": { start_date: "2026-10-05", end_date: "2026-11-20" },
+  "item-partner": { end_date: "2026-12-15" },
+};
 
 /** A confirmed baseline entity the "sharing" scenario adds. */
 function baselineEntity(db: Db, type: BaselineEntity["type"], key: string, title: string, at: string): BaselineEntity {
@@ -2586,7 +2594,7 @@ function sharesContext(db: Db, me: { id: string; role: Role } | null): SharesCon
       const row = db.documents.find((d) => d.id === doc.id)!;
       const version = db.versions.find((x) => x.id === v.id)!;
       const sections = audienceSections(version.sections, audience, boardItems(db, version));
-      return exportHtml(row, { ...version, sections: linkHolder ? readerSections(sections) : sections }, db.branding, audienceLabel(audience), linkHolder);
+      return exportHtml(row, { ...version, sections: linkHolder ? readerSections(sections, boardItems(db, version)) : sections }, db.branding, audienceLabel(audience), linkHolder);
     },
   };
 }
@@ -7302,6 +7310,9 @@ function boardItems(db: Db, v: VersionRow): BoardItem[] {
       .filter((e) => e.src_id === feature && e.type === "supports" && e.status === "confirmed" && goals.has(e.dst_id))
       .map((e) => goals.get(e.dst_id)!);
     const rank = (i.priority as { rank?: unknown } | undefined)?.rank;
+    // E-14: the item's own dates and shipped mark (RoadmapItem.start_date, end_date, shipped; the API's ItemView).
+    const own = i as typeof i & { start_date?: string | null; end_date?: string | null; shipped?: unknown };
+    const milestoneDay = typeof i.milestone?.date === "string" ? i.milestone.date.slice(0, 10) : null;
     return {
       key: i.item_key,
       title: i.title,
@@ -7314,6 +7325,9 @@ function boardItems(db: Db, v: VersionRow): BoardItem[] {
       no_goal: goals.size > 0 && !served.length,
       // The owner decision of 2026-10-26: grouped under the first, by title, of the goals it reaches.
       group: [...served].sort((a, b) => (a.toLowerCase() < b.toLowerCase() ? -1 : a.toLowerCase() > b.toLowerCase() ? 1 : a < b ? -1 : a > b ? 1 : 0))[0] ?? null,
+      start: own.start_date ?? null,
+      end: own.end_date ?? milestoneDay,
+      shipped: !!own.shipped,
     };
   });
 }

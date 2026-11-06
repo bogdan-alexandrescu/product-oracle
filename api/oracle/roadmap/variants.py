@@ -207,13 +207,22 @@ class ItemView:
     # commitment; oracle.roadmap.schedule), or None: a capacity date is the item's place
     # in the team's queue, not how long the item takes (roadmap-draft-wording).
     date_kind: str | None = None
+    # E-14: its own dates (Simple's start and end, else its milestone's day as the end) and
+    # whether it shipped: a link holder's card says when and its delivery state.
+    start: date | None = None
+    end: date | None = None
+    shipped: bool = False
 
 
 def render_key(items: list[ItemView]) -> tuple:
-    """What of the items a rendering reads from the baseline at render time (each one's
-    group, goal and flag): part of a cached render's key, so a goal renamed or
-    unconfirmed after the roadmap was written changes the next render."""
-    return tuple((i.key, i.group, i.group_rank, tuple(i.goals), i.no_goal) for i in items)
+    """What of the items a rendering reads at render time: from the baseline each one's
+    group, goal and flag, and for a link holder's cards its dates and whether it shipped
+    (E-14). Part of a cached render's key, so a goal renamed or unconfirmed after the
+    roadmap was written changes the next render."""
+    return tuple(
+        (i.key, i.group, i.group_rank, tuple(i.goals), i.no_goal, i.start, i.end, i.shipped)
+        for i in items
+    )
 
 
 def goal_names(item: ItemView, variant: Variant) -> list[str]:

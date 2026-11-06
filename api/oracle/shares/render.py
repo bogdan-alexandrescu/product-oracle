@@ -26,8 +26,9 @@ import re
 import urllib.parse
 import uuid
 from collections import OrderedDict
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import date, datetime
 from types import SimpleNamespace
 
 from sqlalchemy import select
@@ -39,7 +40,9 @@ from oracle.export import offload
 from oracle.export.pdf import html_to_pdf
 from oracle.review.models import DocumentPublication
 from oracle.roadmap import public, variants
+from oracle.roadmap.doc_dates import shown_day
 from oracle.roadmap.models import RoadmapPublicCheck
+from oracle.roadmap.variants import ItemView
 from oracle.tenancy import tenant_session
 
 UPDATING = "This page is being updated"
@@ -185,15 +188,16 @@ def for_reader(html: str) -> str:
     return style + html
 
 
-def reader_body(body_md: str, section_key: str) -> str:
+def reader_body(body_md: str, section_key: str, items: Sequence[ItemView] = ()) -> str:
     """A section's text as a link holder reads it (qa-docs-12, qa-docs-13): no left-out
     line (the company's note on what it left out) nor an item's no-goal flag, and in each
     table no column every row leaves empty and, under a goal group's heading, no Goal
-    column (it repeats the heading). The first column always stays."""
+    column (it repeats the heading). The first column always stays. A goal group's rows
+    read ``items`` (by title) for each card's dates and delivery state (E-14)."""
     from oracle.roadmap import variants
 
     group = variants.spans_row(section_key)
-    when = variants.HORIZON_SECTIONS.get(section_key.split("-group-")[0]) if group else None
+    when = section_key.split("-group-")[0] if group else None
     lines = [
         ln
         for ln in (body_md or "").split("\n")
@@ -214,7 +218,7 @@ def reader_body(body_md: str, section_key: str) -> str:
         head = variants._split_row(lines[i])
         rows = [variants._split_row(ln) + [""] * len(head) for ln in lines[i + 2 : end]]
         if when:
-            head, rows = _with_when(head, rows, when)
+            head, rows = _with_when(head, rows, when, items)
         keep = [
             n
             for n, name in enumerate(head)
@@ -231,24 +235,45 @@ def reader_body(body_md: str, section_key: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip("\n")
 
 
-def _with_when(head: list[str], rows: list[list[str]], when: str):
+def _with_when(head: list[str], rows: list[list[str]], horizon: str, items: Sequence[ItemView]):
     """E-14: a goal group's item table as a link holder reads it: each item's name, when
-    (its horizon) and status (its confidence, in words: "High confidence"), then the other
-    columns; the reader styles draw each row as a card."""
+    (its own dates, month first: "Oct 5 – Nov 20" or "Nov 20"; its horizon only when it has
+    none), status (its delivery state: "In progress", "Planned"), its confidence in words
+    ("High confidence"), then the other columns; the reader styles draw each row as a
+    card."""
     names = [h.strip("* ").lower() for h in head]
-    status = names.index("confidence") if "confidence" in names else None
-    rest = [n for n in range(1, len(head)) if n != status]
-    out_head = [head[0], "When", "Status"] + [head[n] for n in rest]
+    sure = names.index("confidence") if "confidence" in names else None
+    rest = [n for n in range(1, len(head)) if n != sure]
+    out_head = [head[0], "When", "Status", "Confidence"] + [head[n] for n in rest]
+    by_title = {i.title.strip().lower(): i for i in items}
 
     def words(cell: str) -> str:
         cell = cell.strip()
         return f"{cell[:1].upper()}{cell[1:]} confidence" if cell else ""
 
-    out_rows = [
-        [r[0], when, words(r[status]) if status is not None else ""] + [r[n] for n in rest]
-        for r in rows
-    ]
-    return out_head, out_rows
+    def card(row: list[str]) -> list[str]:
+        item = by_title.get(variants._plain(row[0]).lstrip())
+        when = _dates(item.start, item.end) if item else None
+        stage = public.STAGE_LABELS.get(public.HORIZON_STAGE.get(horizon, ""), "")
+        return [
+            row[0],
+            when or variants.HORIZON_SECTIONS.get(horizon, horizon),
+            "Shipped" if item and item.shipped else stage,
+            words(row[sure]) if sure is not None else "",
+        ] + [row[n] for n in rest]
+
+    return out_head, [card(r) for r in rows]
+
+
+def _dates(start: date | None, end: date | None) -> str | None:
+    """An item's dates, month first ("Oct 5 – Nov 20", "Nov 20"); the year only when
+    the two fall in different years."""
+    if start and end and start < end:
+        if start.year != end.year:
+            return f"{shown_day(start)} – {shown_day(end)}"
+        return f"{start:%b} {start.day} – {end:%b} {end.day}"
+    day = end or start
+    return f"{day:%b} {day.day}" if day else None
 
 
 def _with_footer(html: str, footer: str) -> str:
@@ -269,7 +294,7 @@ def _for_link_holder(ev):
         for s in sections:
             if s.section_key in appendix:
                 continue
-            s.body_md = reader_body(strip_citations(s.body_md or ""), s.section_key)
+            s.body_md = reader_body(strip_citations(s.body_md or ""), s.section_key, ev.items)
             s.citation_keys = []
             out.append(s)
         return out
@@ -294,7 +319,9 @@ def _render_audience(ev, fmt: str) -> str | bytes:
 
 
 def _render_public(pg: public.PublicPage, fmt: str, shared_on: str, expires_on: str):
-    html = _COMMENT.sub("", public.render_public(pg, shared_on=shared_on, expires_on=expires_on))
+    # E-14: the page's header says when the link ends, so only the PDF (no header) says it.
+    ends = expires_on if fmt == "pdf" else None
+    html = _COMMENT.sub("", public.render_public(pg, shared_on=shared_on, expires_on=ends))
     return html_to_pdf(html) if fmt == "pdf" else html
 
 

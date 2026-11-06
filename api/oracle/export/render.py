@@ -326,8 +326,18 @@ async def load_audience(db: AsyncSession, ev: ExportVersion) -> None:
                 group=group_of.get(r.item_key),
                 group_rank=rank_of.get(r.item_key),
                 date_kind=kinds.get(r.id),
+                start=r.start_date,
+                end=r.end_date or _iso_day((r.milestone or {}).get("date")),
+                shipped=bool(r.shipped),
             )
         )
+
+
+def _iso_day(value: Any) -> date | None:
+    try:
+        return date.fromisoformat(str(value)[:10]) if value else None
+    except ValueError:
+        return None
 
 
 async def _date_kinds(db: AsyncSession, rows: list[Any]) -> dict[uuid.UUID, str]:

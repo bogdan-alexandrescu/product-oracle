@@ -13,7 +13,7 @@ import type { Schemas } from "@/lib/api/client";
 import { formatInZone } from "@/lib/dates";
 import { mockName as personName } from "./people";
 
-import { NO_GOAL_FLAG } from "./audience";
+import { NO_GOAL_FLAG, type BoardItem } from "./audience";
 import type { SectionSeed } from "./fixtures";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
@@ -764,9 +764,9 @@ const joinRow = (cells: string[]) => `| ${cells.join(" | ")} |`;
  * left-out line nor an item's no-goal flag, and in each table no column every row leaves empty and, under a goal group's heading, no Goal
  * column (it repeats the heading). The first column always stays.
  */
-export function readerBody(md: string, sectionKey: string): string {
+export function readerBody(md: string, sectionKey: string, items: BoardItem[] = []): string {
   const group = GROUP_KEY.test(sectionKey);
-  const when = group ? HORIZON_WORDS[sectionKey.split("-group-")[0]] : undefined;
+  const when = group ? sectionKey.split("-group-")[0] : undefined;
   const lines = (md ?? "").split("\n").filter((l) => !LEFT_OUT.test(l.trim()) && l.trim() !== NO_GOAL_FLAG);
   const out: string[] = [];
   for (let i = 0; i < lines.length; ) {
@@ -781,7 +781,7 @@ export function readerBody(md: string, sectionKey: string): string {
     while (end < lines.length && lines[end].trim().startsWith("|")) end += 1;
     let rows = lines.slice(i + 2, end).map((l) => [...splitRow(l), ...cols.map(() => "")]);
     let head = cols;
-    if (when) [head, rows] = withWhen(cols, rows, when);
+    if (when) [head, rows] = withWhen(cols, rows, when, items);
     const keep = head
       .map((name, n) => ({ name: name.replace(/^[*\s]+|[*\s]+$/g, "").toLowerCase(), n }))
       .filter(({ name, n }) => n === 0 || (!(group && (name === "goal" || name === "goals")) && rows.some((r) => r[n].trim())))
@@ -796,24 +796,45 @@ const HORIZON_WORDS: Record<string, string> = { now: "Now", next: "Next", later:
 
 /**
  * E-14 (as the API's render._with_when): a goal group's item table as a link holder reads it: each item's name,
- * when (its horizon) and status (its confidence, in words: "High confidence"), then the other columns; the
- * reader styles draw each row as a card.
+ * when (its own dates, month first: "Oct 5 – Nov 20" or "Nov 20"; its horizon only when it has none), status (its
+ * delivery state: "In progress", "Planned"), its confidence in words ("High confidence"), then the other columns;
+ * the reader styles draw each row as a card.
  */
-function withWhen(head: string[], rows: string[][], when: string): [string[], string[][]] {
+function withWhen(head: string[], rows: string[][], horizon: string, items: BoardItem[]): [string[], string[][]] {
   const names = head.map((h) => h.replace(/^[*\s]+|[*\s]+$/g, "").toLowerCase());
-  const status = names.indexOf("confidence");
-  const rest = head.map((_, n) => n).filter((n) => n > 0 && n !== status);
+  const sure = names.indexOf("confidence");
+  const rest = head.map((_, n) => n).filter((n) => n > 0 && n !== sure);
   const words = (cell: string) => (cell.trim() ? `${cell.trim()[0].toUpperCase()}${cell.trim().slice(1)} confidence` : "");
+  const byTitle = new Map(items.map((i) => [i.title.trim().toLowerCase(), i]));
+  const stage = COLUMNS.find(([key]) => key === HORIZON_STAGE[horizon])?.[1] ?? "";
   return [
-    [head[0], "When", "Status", ...rest.map((n) => head[n])],
-    rows.map((r) => [r[0], when, status >= 0 ? words(r[status]) : "", ...rest.map((n) => r[n])]),
+    [head[0], "When", "Status", "Confidence", ...rest.map((n) => head[n])],
+    rows.map((r) => {
+      const item = byTitle.get(r[0].replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace("\u2691", "").trim().toLowerCase());
+      const when = item ? itemDates(item.start ?? null, item.end ?? null) : null;
+      return [r[0], when ?? HORIZON_WORDS[horizon] ?? horizon, item?.shipped ? "Shipped" : stage, sure >= 0 ? words(r[sure]) : "", ...rest.map((n) => r[n])];
+    }),
   ];
 }
 
+/** An item's dates, month first ("Oct 5 – Nov 20", "Nov 20"); the year only when the two fall in different years (as the API's render._dates). */
+function itemDates(start: string | null, end: string | null): string | null {
+  const parse = (d: string) => new Date(`${d.slice(0, 10)}T00:00:00Z`);
+  const md = (d: Date) => `${d.toLocaleString("en-US", { month: "short", timeZone: "UTC" })} ${d.getUTCDate()}`;
+  const s = start ? parse(start) : null;
+  const e = end ? parse(end) : null;
+  if (s && e && s < e) {
+    if (s.getUTCFullYear() !== e.getUTCFullYear()) return `${md(s)}, ${s.getUTCFullYear()} – ${md(e)}, ${e.getUTCFullYear()}`;
+    return `${md(s)} – ${md(e)}`;
+  }
+  const day = e ?? s;
+  return day ? md(day) : null;
+}
+
 /** An audience rendering's sections as a link holder reads them (`readerBody`). */
-export function readerSections<S extends { section_key: string; body_md: string; body_text: string }>(sections: S[]): S[] {
+export function readerSections<S extends { section_key: string; body_md: string; body_text: string }>(sections: S[], items: BoardItem[] = []): S[] {
   return sections.map((s) => {
-    const body = readerBody(s.body_md, s.section_key);
+    const body = readerBody(s.body_md, s.section_key, items);
     return body === s.body_md ? s : { ...s, body_md: body, body_text: body };
   });
 }
@@ -929,7 +950,8 @@ function showPage(ctx: SharesContext, link: LinkRow, kind: "page"): Response {
   let content: string;
   if (link.audience === "public") {
     if (!publicChecked(ctx, doc, pub!)) content = page(UPDATING, `<p>${UPDATING}.</p>`);
-    else content = forReader(renderPublic(review(ctx, doc, v), `Shared ${day(link.created_at, zone)} · expires ${day(link.expires_at, zone)}`));
+    // E-14: the page's header says when the link ends; only the PDF (no header) says it too.
+    else content = forReader(renderPublic(review(ctx, doc, v), `Shared ${day(link.created_at, zone)}`));
   } else {
     content = forReader(ctx.renderAudience(doc, v, link.audience, true).replace("</body>", `<footer class="share-footer">${esc(footer)}</footer></body>`));
   }
