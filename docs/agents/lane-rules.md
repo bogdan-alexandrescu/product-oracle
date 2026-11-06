@@ -38,6 +38,9 @@ docs/agents/lane-rules.md"; the product rules are in .claude/rules/oracle-produc
   libraries or fonts, which you may unpack under `$TMPDIR` and point to with
   `LD_LIBRARY_PATH` and `FONTCONFIG_FILE`), say plainly which specs you could not run;
   CLD runs them locally.
+- A lane that adds prose must hide it (an InfoTip, a tick whose tooltip says why, a link) or
+  the prose guard fails: `web/e2e/prose-guard.spec.ts` counts each page's visible prose
+  against `web/e2e/prose-ceilings.json`; ceilings only go down (`npm run prose:ratchet`).
 - Roles in the web go through `can()` or an item's own `can_*` field only.
 - No company or customer data in code, tests or the PR.
 - Never use pkill, killall or kill on a pattern; kill by PID.
