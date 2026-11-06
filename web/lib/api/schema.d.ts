@@ -12744,6 +12744,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/goal-map/goals/{goal_id}/metric": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pick Goal Metric
+         * @description Pick the metric that gives the goal its readings: its weekly values become the
+         *     goal's readings at once; the goal's old metric lets go.
+         */
+        post: operations["pick_goal_metric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/fit-date": {
         parameters: {
             query?: never;
@@ -25690,6 +25711,20 @@ export interface components {
             /** Links */
             links: components["schemas"]["GmLink"][];
         };
+        /**
+         * GmGap
+         * @description A gated area of a milestone with no feature in its cell (area None: a milestone
+         *     with no area and no feature).
+         */
+        GmGap: {
+            /**
+             * Milestone
+             * Format: uuid
+             */
+            milestone: string;
+            /** Area */
+            area: string | null;
+        };
         /** GmGoal */
         GmGoal: {
             /**
@@ -25718,6 +25753,11 @@ export interface components {
             builds_on: string[];
             /** History */
             history: components["schemas"]["GmHistory"][];
+            metric: components["schemas"]["GmMetricRef"] | null;
+            /** Missing */
+            missing: ("metric" | "values") | null;
+            /** Choices */
+            choices: components["schemas"]["GmMetricChoice"][];
         };
         /** GmGuardrail */
         GmGuardrail: {
@@ -25765,6 +25805,34 @@ export interface components {
              * @enum {string}
              */
             lift: "helping" | "not_helping" | "not_measured";
+            /** Shipped On */
+            shipped_on: string | null;
+            /** Before */
+            before: number | null;
+            /** After */
+            after: number | null;
+        };
+        /** GmMetricChoice */
+        GmMetricChoice: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Last */
+            last: number | null;
+        };
+        /** GmMetricRef */
+        GmMetricRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
         };
         /** GmMilestone */
         GmMilestone: {
@@ -25809,6 +25877,19 @@ export interface components {
             confirmed_on: string | null;
             /** Proposed */
             proposed: boolean;
+        };
+        /**
+         * GmUnplaced
+         * @description A feature of the Simple roadmap serving no milestone of the map.
+         */
+        GmUnplaced: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
         };
         /** GoalBucketFeature */
         GoalBucketFeature: {
@@ -26008,6 +26089,10 @@ export interface components {
             milestones: components["schemas"]["GmMilestone"][];
             /** Features */
             features: components["schemas"]["GmFeature"][];
+            /** Gaps */
+            gaps: components["schemas"]["GmGap"][];
+            /** Unplaced */
+            unplaced: components["schemas"]["GmUnplaced"][];
             /** Today */
             today: string;
             /** Reps */
@@ -30691,6 +30776,14 @@ export interface components {
             query?: string | null;
             /** Threshold Pct */
             threshold_pct?: number | null;
+        };
+        /** MetricPickIn */
+        MetricPickIn: {
+            /**
+             * Metric
+             * Format: uuid
+             */
+            metric: string;
         };
         /** MetricTestOut */
         MetricTestOut: {
@@ -72910,6 +73003,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AttachIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pick_goal_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricPickIn"];
             };
         };
         responses: {

@@ -31,6 +31,7 @@ from decimal import Decimal
 
 import pytest
 
+from oracle.baseline.models import Entity
 from oracle.metrics.models import Metric, MetricValue
 from oracle.roadmap.models import RoadmapItem
 from oracle.tenancy import tenant_session
@@ -94,9 +95,15 @@ async def test_choices_are_the_outputs_that_fit(client):
 
 
 async def test_pick_a_metric_measures_the_goal(client):
+    """Revenue in a unit the goals catalog knows (USD): the goal's reading is written through
+    the catalog's writer, as a metric's weekly value writes it."""
     ctx, ids = await world()
-    old = await metric(ctx, "Weekly revenue", "$", ids["revenue"])
-    daily = await metric(ctx, "Daily revenue", "$")
+    async with tenant_session(ctx.tenant_id) as s:
+        rev = await s.get(Entity, uuid.UUID(ids["revenue"]))
+        rev.attrs = {**rev.attrs, "unit": "USD", "comparison": "at_least"}
+        await s.commit()
+    old = await metric(ctx, "Weekly revenue", "USD", ids["revenue"])
+    daily = await metric(ctx, "Daily revenue", "USD")
     await values(ctx, daily, 9000, 11500)
     wrong = await metric(ctx, "Sign-ups", "")
     h = ctx.as_("approver")

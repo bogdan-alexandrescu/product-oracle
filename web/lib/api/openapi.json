@@ -43867,6 +43867,69 @@
         "x-min-role": "approver"
       }
     },
+    "/v1/simple/goal-map/goals/{goal_id}/metric": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Pick Goal Metric",
+        "description": "Pick the metric that gives the goal its readings: its weekly values become the\ngoal's readings at once; the goal's old metric lets go.",
+        "operationId": "pick_goal_metric",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetricPickIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalMapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
     "/v1/simple/fit-date": {
       "get": {
         "tags": [
@@ -80869,6 +80932,34 @@
         ],
         "title": "GmFeature"
       },
+      "GmGap": {
+        "properties": {
+          "milestone": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Milestone"
+          },
+          "area": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area"
+          }
+        },
+        "type": "object",
+        "required": [
+          "milestone",
+          "area"
+        ],
+        "title": "GmGap",
+        "description": "A gated area of a milestone with no feature in its cell (area None: a milestone\nwith no area and no feature)."
+      },
       "GmGoal": {
         "properties": {
           "id": {
@@ -80933,6 +81024,38 @@
             },
             "type": "array",
             "title": "History"
+          },
+          "metric": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GmMetricRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "missing": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "metric",
+                  "values"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Missing"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/GmMetricChoice"
+            },
+            "type": "array",
+            "title": "Choices"
           }
         },
         "type": "object",
@@ -80946,7 +81069,10 @@
           "status",
           "math",
           "builds_on",
-          "history"
+          "history",
+          "metric",
+          "missing",
+          "choices"
         ],
         "title": "GmGoal"
       },
@@ -81062,6 +81188,39 @@
               "not_measured"
             ],
             "title": "Lift"
+          },
+          "shipped_on": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shipped On"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "after": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
           }
         },
         "type": "object",
@@ -81070,10 +81229,63 @@
           "expected",
           "confidence",
           "measured",
-          "lift"
+          "lift",
+          "shipped_on",
+          "before",
+          "after"
         ],
         "title": "GmLink",
         "description": "What a feature is expected to do for one milestone, and what it did."
+      },
+      "GmMetricChoice": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "last": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "last"
+        ],
+        "title": "GmMetricChoice"
+      },
+      "GmMetricRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "GmMetricRef"
       },
       "GmMilestone": {
         "properties": {
@@ -81225,6 +81437,26 @@
           "proposed"
         ],
         "title": "GmMilestone"
+      },
+      "GmUnplaced": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "GmUnplaced",
+        "description": "A feature of the Simple roadmap serving no milestone of the map."
       },
       "GoalBucketFeature": {
         "properties": {
@@ -81803,6 +82035,20 @@
             "type": "array",
             "title": "Features"
           },
+          "gaps": {
+            "items": {
+              "$ref": "#/components/schemas/GmGap"
+            },
+            "type": "array",
+            "title": "Gaps"
+          },
+          "unplaced": {
+            "items": {
+              "$ref": "#/components/schemas/GmUnplaced"
+            },
+            "type": "array",
+            "title": "Unplaced"
+          },
           "today": {
             "type": "string",
             "title": "Today"
@@ -81841,6 +82087,8 @@
           "guardrail",
           "milestones",
           "features",
+          "gaps",
+          "unplaced",
           "today",
           "reps",
           "approver",
@@ -94461,6 +94709,20 @@
           "lock_version"
         ],
         "title": "MetricPatch"
+      },
+      "MetricPickIn": {
+        "properties": {
+          "metric": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Metric"
+          }
+        },
+        "type": "object",
+        "required": [
+          "metric"
+        ],
+        "title": "MetricPickIn"
       },
       "MetricTestOut": {
         "properties": {
