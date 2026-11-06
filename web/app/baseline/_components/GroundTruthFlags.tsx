@@ -12,7 +12,6 @@ import { goalCodes, goalTags } from "./common";
 type Check = Schemas["GroundTruthOut"];
 type Flag = Schemas["GroundTruthFlag"];
 type Kind = Flag["kind"];
-type Action = Schemas["GroundTruthFix"]["action"];
 
 /** docs/ground-truth.md's kinds, in the check's order: the count's name and, behind its (i), why. */
 const KINDS: { kind: Kind; label: string; why: string }[] = [
@@ -24,18 +23,14 @@ const KINDS: { kind: Kind; label: string; why: string }[] = [
   { kind: "runs_today_on_roadmap", label: "Runs today, still on the roadmap", why: "Features that run today, with proof, but are still on the roadmap." },
 ];
 
-const FIX_LABEL: Record<Action, string> = {
-  add_to_ground_truth: "Add to Ground Truth",
-  link_to_feature: "Link to a feature",
-  give_code: "Give it a code",
-  pick_goal: "Pick a goal",
-  confirm_feature: "Confirm it",
-  take_off_roadmap: "Take it off the roadmap",
-};
-
 /** What the row is: the item (or slice) when there is one, else the feature. */
 const subject = (f: Flag) => f.item ?? f.feature!;
 const shown = (r: Schemas["GroundTruthRef"]) => (r.code ? `${r.code} ${r.name}` : r.name);
+/** A row's own key, to mark it waiting for approval once a fix was sent. */
+const rowKey = (f: Flag) => `${f.kind}:${subject(f).id ?? subject(f).code ?? subject(f).name}`;
+/** The roadmap item keys a feature links (attrs.roadmap_items, docs/ground-truth.md). */
+const itemsOf = (e: { attrs?: Record<string, unknown> | null }) =>
+  Array.isArray(e.attrs?.roadmap_items) ? (e.attrs.roadmap_items as unknown[]).filter((k): k is string => typeof k === "string") : [];
 
 /** A key for a new feature from its name, not one the graph has (as page.tsx's addSubgoal). */
 function newKey(name: string, graph: GraphOut | undefined): string {
@@ -77,6 +72,12 @@ export function GroundTruthFlags({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ text: string; undo?: string } | null>(null);
+  // Rows whose fix was sent for approval: no second click until the check changes.
+  const [pending, setPending] = useState<Set<string>>(() => new Set());
+  const wait = (flag: Flag, text: string) => {
+    setPending((was) => new Set(was).add(rowKey(flag)));
+    return { text };
+  };
   const counts = KINDS.filter((k) => (check.counts[k.kind] ?? 0) > 0);
   const shownKind = open && (check.counts[open] ?? 0) > 0 ? open : null;
 
@@ -95,21 +96,33 @@ export function GroundTruthFlags({
     }
   }
 
-  /** S7's merge_item: the roadmap item becomes the feature's item. */
-  const linkItem = (itemId: string, featureId: string) =>
-    unwrap(api.POST("/v1/simple/changes", { body: { op: "merge_item", target: { item_id: itemId, feature_id: featureId }, before: {}, after: {} } }));
-
+  /**
+   * Add to Ground Truth, in one change: a roadmap item's feature lists the item's key (so a
+   * published item is linked too); a PRD's feature or slice keeps its code (F-09) and then serves
+   * the goal its PRD gives. Approvers and owners add at once; a commenter's add is a proposal with
+   * the same link, which clears the flag once approved (the owner, Nov 5).
+   */
   const add = (flag: Flag, target: string) =>
     act(async () => {
       const name = (flag.feature ?? flag.item)!.name;
-      const key = newKey(name, graph);
+      const itemKey = flag.kind === "unlinked_item" ? flag.item?.key : null;
+      // An item from a PRD section keeps its code (F-06); a PRD's feature or slice, the PRD's.
+      const code = itemKey ? flag.item?.code : target;
+      const key = code && !(graph?.entities ?? []).some((e) => e.key === code) ? code : newKey(name, graph);
+      const made = (graph?.entities ?? []).find((e) => e.type === "feature" && (itemKey ? itemsOf(e).includes(itemKey) : e.key === code));
+      if (made) return wait(flag, `“${name}” is already waiting for approval.`);
+      const fields = { type: "feature" as const, key, title: name, attrs: itemKey ? { roadmap_items: [itemKey] } : {} };
       if (!canWrite) {
-        await unwrap(api.POST("/v1/baseline/proposals", { body: { op: "create", kind: "entity", fields: { type: "feature", key, title: name } } }));
-        return { text: `Proposed “${name}” for the Ground Truth.` };
+        await unwrap(api.POST("/v1/baseline/proposals", { body: { op: "create", kind: "entity", fields } }));
+        return wait(flag, `Sent “${name}” for approval.`);
       }
-      const out = await unwrap(api.POST("/v1/baseline/entities", { body: { type: "feature", key, title: name, attrs: {}, origin: "user" } }));
-      if (!out.entity) return { text: `Proposed “${name}” for the Ground Truth.` };
-      if (flag.kind === "unlinked_item") await linkItem(target, out.entity.id);
+      const out = await unwrap(api.POST("/v1/baseline/entities", { body: { ...fields, origin: "user" } }));
+      if (!out.entity) return wait(flag, `Sent “${name}” for approval.`);
+      if (flag.goal?.id) {
+        await unwrap(
+          api.POST("/v1/baseline/edges", { body: { src_id: out.entity.id, dst_id: flag.goal.id, type: "supports", attrs: { contribution: 2 }, origin: "user" } }),
+        );
+      }
       return { text: `Added “${name}” to the Ground Truth.` };
     });
 
@@ -123,7 +136,7 @@ export function GroundTruthFlags({
     act(async () => {
       const name = subject(flag).name;
       const { change } = await unwrap(api.POST("/v1/simple/changes", { body: { op: "cut", target: { item_id: target }, before: { cut: false }, after: {} } }));
-      if (change.status === "proposed") return { text: `Sent “${name}” off the roadmap for approval.` };
+      if (change.status === "proposed") return wait(flag, `Sent “${name}” off the roadmap for approval.`);
       return { text: `Took “${name}” off the roadmap.`, undo: change.can_undo ? change.id : undefined };
     });
 
@@ -133,9 +146,14 @@ export function GroundTruthFlags({
       return { text: "Undone." };
     });
 
-  const pickFeature = (flag: Flag, target: string, feature: { id: string; title: string }) =>
+  /** Link to a feature: the feature lists the item's key, so a published item is linked too. */
+  const pickFeature = (flag: Flag, feature: { id: string; title: string }) =>
     act(async () => {
-      await linkItem(target, feature.id);
+      const itemKey = flag.item!.key!;
+      const e = graph?.entities.find((x) => x.id === feature.id);
+      const roadmap_items = [...new Set([...(e ? itemsOf(e) : []), itemKey])];
+      const out = await unwrap(api.PATCH("/v1/baseline/entities/{entity_id}", { params: { path: { entity_id: feature.id } }, body: { attrs: { roadmap_items }, origin: "user" } }));
+      if (!out.entity || !out.applied) return wait(flag, `Sent linking “${subject(flag).name}” for approval.`);
       return { text: `Linked “${subject(flag).name}” to “${feature.title}”.` };
     });
 
@@ -149,14 +167,15 @@ export function GroundTruthFlags({
 
   /** The fixes this person can make here; a fix with no route yet (Give it a code, linking a PRD's feature) shows none. */
   function fixes(flag: Flag) {
+    if (pending.has(rowKey(flag))) return [];
     return flag.fixes.flatMap((fix) => {
       const t = fix.target;
-      const on = (run: () => void) => [{ action: fix.action, run }];
+      const on = (run: () => void) => [{ action: fix.action, words: fix.words, run }];
       switch (fix.action) {
         case "add_to_ground_truth":
           return canWrite || canPropose ? on(() => void add(flag, t)) : [];
         case "link_to_feature":
-          return canWrite && flag.kind === "unlinked_item" ? on(() => setPicking({ flag, what: "feature" })) : [];
+          return canWrite && flag.kind === "unlinked_item" && flag.item?.key ? on(() => setPicking({ flag, what: "feature" })) : [];
         case "confirm_feature":
           return canWrite ? on(() => void confirm(flag, t)) : [];
         case "pick_goal":
@@ -221,20 +240,32 @@ export function GroundTruthFlags({
             .map((f, n) => {
               const s = subject(f);
               const row = fixes(f);
+              const waiting = pending.has(rowKey(f));
+              // One short line; the flag's sentence is behind the (i).
+              const line = waiting
+                ? "Sent for approval"
+                : f.item && f.feature && f.fixes.some((x) => x.action === "confirm_feature")
+                  ? `Waiting to be confirmed: ${shown(f.feature)}`
+                  : (f.where.roadmap?.title ?? (f.where.prd ? `PRD ${f.where.prd.title}` : null));
               return (
                 <li key={`${s.id ?? s.code ?? s.name}-${n}`} data-testid="gt-row" className="flex flex-wrap items-center justify-between gap-2 py-2">
                   <span className="min-w-0">
-                    <span className="block text-[14px] text-text">
-                      {s.code && <span className="mr-1.5 font-mono text-[13px] text-text2">{s.code}</span>}
+                    <span className="flex items-center gap-1 text-[14px] text-text">
+                      {s.code && <span className="mr-0.5 font-mono text-[13px] text-text2">{s.code}</span>}
                       {s.name}
+                      <InfoTip label={s.name}>{f.words}</InfoTip>
                     </span>
-                    <span className="block text-[13px] text-text2">{f.words}</span>
+                    {line && (
+                      <span className="block text-[13px] text-text2" data-testid={waiting ? "gt-pending" : undefined}>
+                        {line}
+                      </span>
+                    )}
                   </span>
                   {row.length > 0 && (
                     <span className="flex flex-wrap gap-2">
                       {row.map((x) => (
-                        <Button key={x.action} disabled={busy} onClick={x.run} aria-label={`${FIX_LABEL[x.action]}: ${shown(s)}`}>
-                          {FIX_LABEL[x.action]}
+                        <Button key={x.action} disabled={busy} onClick={x.run} aria-label={`${x.words}: ${shown(s)}`}>
+                          {x.words}
                         </Button>
                       ))}
                     </span>
@@ -250,10 +281,7 @@ export function GroundTruthFlags({
           graph={graph}
           busy={busy}
           onClose={() => setPicking(null)}
-          onFeature={(feature) => {
-            const t = picking.flag.fixes.find((x) => x.action === "link_to_feature")!.target;
-            void pickFeature(picking.flag, t, feature);
-          }}
+          onFeature={(feature) => void pickFeature(picking.flag, feature)}
           onGoal={(goal) => {
             const t = picking.flag.fixes.find((x) => x.action === "pick_goal")!.target;
             void pickGoal(picking.flag, t, goal);

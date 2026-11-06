@@ -817,7 +817,8 @@ export function setEntityEffort(s: BaselineState, key: string, size: string, use
   updateEntity(s, e, { attrs: { effort } }, { origin: "user", userId, reason: `Engineering check of run ${runId}` });
 }
 
-const KEY_RE = /^[a-z0-9][a-z0-9._-]*$/;
+/** A slug, or a feature code as a PRD names it (F-09), as schemas.KEY_PATTERN. */
+const KEY_RE = /^(?:[a-z0-9][a-z0-9._-]*|[A-Z]{1,3}-\d+)$/;
 
 /** A person's new entity, as service.create_entity: confirmed and locked, a goal proposed (B2). */
 function createEntity(s: BaselineState, input: Schemas["EntityCreate"], userId: string): EntityRow {
@@ -1233,6 +1234,34 @@ export async function routeBaseline(
   // Public-link evidence is open to commenters, so it is routed before the approver check.
   const link = await routeEvidenceLinks(s, caller, req, rest);
   if (link) return link;
+
+  // POST /v1/baseline/proposals (router.py create_proposal): a commenter or above suggests a
+  // change; an approver accepts or rejects it. A person's new entity is checked as a create is.
+  if (rest[0] === "proposals" && !rest[1] && m === "POST") {
+    if (ROLE_ORDER.indexOf(caller.role) < ROLE_ORDER.indexOf("commenter")) return fail(403, "Requires the commenter role");
+    const input = await body<Schemas["ProposalCreate"]>();
+    const fields = (input.fields ?? {}) as Attrs;
+    if (input.op === "create" && input.kind === "entity") {
+      const key = String(fields.key ?? "");
+      if (!String(fields.title ?? "").trim()) return fail(422, "title must not be empty");
+      if (!key || key.length > 120 || !KEY_RE.test(key)) return fail(422, "key: lowercase letters, digits, . _ -, or a feature code");
+      if (s.entities.some((e) => e.type === fields.type && e.key === key)) return fail(409, `${String(fields.type)}:${key} already exists`);
+    }
+    const p: ProposalRow = {
+      id: newId(),
+      entity_id: input.entity_id ?? null,
+      edge_id: input.edge_id ?? null,
+      payload: { op: input.op, kind: input.kind, fields, reason: input.reason ?? null, origin: "user" },
+      run_id: null,
+      actor: `user:${caller.userId}`,
+      status: "open",
+      decided_by: null,
+      decided_at: null,
+      created_at: now(),
+    };
+    s.proposals.push(p);
+    return json(201, proposalOut(p));
+  }
 
   // Removing evidence: approvers remove any; a commenter only link evidence they added (C2c).
   if (rest[0] === "evidence" && rest[1] && !rest[2] && m === "DELETE") {

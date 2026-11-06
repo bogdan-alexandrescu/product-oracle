@@ -61,19 +61,19 @@ const FEATURES: [string, string, Entity["status"], boolean][] = [
 ];
 /** Running today (Current state's proof), as feature_states would say. */
 const RUNNING = new Set([featureId("F-03")]);
-/** The scenario's roadmap items: key, title, the feature it is, a draft. */
+/** The scenario's roadmap items: key, title, the feature it is, a draft (Export to sheets is published, unlinked). */
 const ITEMS: [string, string, string | null, boolean][] = [
-  ["gt-export-to-sheets", "Export to sheets", null, true],
+  ["gt-export-to-sheets", "Export to sheets", null, false],
   ["gt-weekly-digest", "Weekly digest", featureId("F-14"), true],
   ["gt-night-alerts", "Night alerts", featureId("F-03"), false],
 ];
-/** The PRD Scale's approved plan: its features not in the Ground Truth (F-15 spans two milestones: slice F-15a). */
+/** The PRD Scale's approved plan: its features not in the Ground Truth (F-15 spans two milestones: slice F-15a); it serves the scenario's goal. */
 const PRD_FEATURES = [{ code: "F-09", name: "Guest seats", slice: null }, { code: "F-15", name: "Usage report", slice: "F-15a" }];
 
 /** Adds the scenario's features (to the baseline) and items (to the Alerts roadmap). */
 export function seedGroundTruth(baseline: BaselineState, simple: SimpleDb): void {
   const template = baseline.entities.find((e) => e.type === "feature")!;
-  const goal = baseline.entities.find((e) => e.type === "goal" && e.status === "confirmed") ?? baseline.entities.find((e) => e.type === "goal")!;
+  const goal = prdGoal(baseline)!;
   const edge = baseline.edges.find((e) => e.type === "supports")!;
   for (const [key, title, status, serves] of FEATURES) {
     const id = featureId(key);
@@ -92,44 +92,54 @@ const flag = (kind: Kind, fixes: [Action, string][], rest: Partial<Flag>): Flag 
   kind,
   item: null,
   feature: null,
+  goal: null,
   where: { roadmap: null, prd: null },
   words: WORDS[kind],
   fixes: fixes.map(([action, target]) => ({ action, target, words: FIX_WORDS[action] })),
   ...rest,
 });
 
+/** The goal the PRD gives its features (the plan's one goal), as check.py's goal_of. */
+const prdGoal = (baseline: BaselineState) =>
+  baseline.entities.find((e) => e.type === "goal" && e.status === "confirmed") ?? baseline.entities.find((e) => e.type === "goal" && e.status !== "rejected");
+
 function flagsOf(baseline: BaselineState, simple: SimpleDb): Flag[] {
   const byId = new Map(baseline.entities.filter((e) => e.type === "feature").map((e) => [e.id, e]));
   const truth = [...byId.values()].filter((e) => e.status === "confirmed");
-  const ours = FEATURES.map(([key]) => byId.get(featureId(key))).filter((e): e is Entity => !!e && e.status === "confirmed");
+  // A confirmed feature links the roadmap items whose keys it lists (attrs.roadmap_items).
+  const listed = new Set(truth.flatMap((e) => (Array.isArray(e.attrs?.roadmap_items) ? (e.attrs.roadmap_items as unknown[]) : []).filter((k): k is string => typeof k === "string")));
+  const g = prdGoal(baseline);
+  const goal = g ? { id: g.id, code: null, name: g.title } : null;
   const ref = (e: Entity) => ({ id: e.id, code: F_CODE.test(e.key) ? e.key : null, name: e.title });
   const both = { roadmap: ROADMAP, prd: PRD };
   const out: Flag[] = [];
   const items = ITEMS.map(([key]) => simple.items.find((x) => x.key === key)).filter((s): s is NonNullable<typeof s> => !!s && !closed(s) && !s.trashed);
   for (const s of items) {
     const linked = byId.get(s.linked_feature ?? s.feature_id ?? "");
-    if (linked?.status === "confirmed") continue;
+    if (linked?.status === "confirmed" || listed.has(s.key)) continue;
     const id = simple.ids[s.key];
     out.push(
       flag("unlinked_item", [linked?.status === "proposed" ? ["confirm_feature", linked.id] : ["add_to_ground_truth", id], ["link_to_feature", id]], {
-        item: { id, code: null, name: s.title },
+        item: { id, code: null, name: s.title, key: s.key },
         feature: linked ? ref(linked) : null,
         where: both,
       }),
     );
   }
   const names = new Set(truth.map((e) => e.title.trim().toLowerCase()));
-  const missing = PRD_FEATURES.filter((f) => !names.has(f.name.toLowerCase()));
+  const codes = new Set(truth.map((e) => e.key).filter((k) => F_CODE.test(k)));
+  const missing = PRD_FEATURES.filter((f) => !codes.has(f.code) && !names.has(f.name.toLowerCase()));
   for (const f of missing)
-    if (f.slice) out.push(flag("slice_parent_missing", [["add_to_ground_truth", f.code], ["link_to_feature", f.code]], { item: { id: null, code: f.slice, name: f.name }, where: both }));
+    if (f.slice) out.push(flag("slice_parent_missing", [["add_to_ground_truth", f.code], ["link_to_feature", f.code]], { item: { id: null, code: f.slice, name: f.name, key: null }, goal, where: both }));
   for (const f of missing)
-    if (!f.slice) out.push(flag("prd_feature_missing", [["add_to_ground_truth", f.code], ["link_to_feature", f.code]], { feature: { id: null, code: f.code, name: f.name }, where: both }));
-  for (const e of ours) if (!F_CODE.test(e.key)) out.push(flag("no_code", [["give_code", e.id]], { feature: ref(e) }));
+    if (!f.slice) out.push(flag("prd_feature_missing", [["add_to_ground_truth", f.code], ["link_to_feature", f.code]], { feature: { id: null, code: f.code, name: f.name }, goal, where: both }));
+  // Every confirmed feature, as the API checks them.
+  for (const e of truth) if (!F_CODE.test(e.key)) out.push(flag("no_code", [["give_code", e.id]], { feature: ref(e) }));
   const serving = new Set(baseline.edges.filter((e) => e.type === "supports" && e.status !== "rejected").map((e) => e.src_id));
-  for (const e of ours) if (!serving.has(e.id)) out.push(flag("no_goal", [["pick_goal", e.id]], { feature: ref(e) }));
+  for (const e of truth) if (!serving.has(e.id)) out.push(flag("no_goal", [["pick_goal", e.id]], { feature: ref(e) }));
   for (const s of items) {
     const f = byId.get(s.feature_id ?? "");
-    if (f && RUNNING.has(f.id)) out.push(flag("runs_today_on_roadmap", [["take_off_roadmap", simple.ids[s.key]]], { item: { id: simple.ids[s.key], code: null, name: s.title }, feature: ref(f), where: both }));
+    if (f && RUNNING.has(f.id)) out.push(flag("runs_today_on_roadmap", [["take_off_roadmap", simple.ids[s.key]]], { item: { id: simple.ids[s.key], code: null, name: s.title, key: s.key }, feature: ref(f), where: both }));
   }
   return out;
 }
