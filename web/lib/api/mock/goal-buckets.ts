@@ -11,18 +11,13 @@ import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRo
 import { planGoalNames, planSlices } from "./simple-plan";
 import { GOALS, goalPositionOf, goalRank, goalInTrash, roadmapGoal, roadmapGoalKey, roadmapGoalSeed, writeRoadmapGoal, type RoadmapGoalFields } from "./simple-roadmap";
 
-<<<<<<< ours
 // trash-features-goals: `trashed` while in Settings › Trash (left out of every read, kept for Restore).
 // `key`: the Entity.key the API gives a goal at creation (goal_buckets._slug), named in its Trash entry.
 // edit-goals-prds EG1: a goal's owner (a member's id; seeded by email, matched to the member on first read) and when it was archived.
 // goal-order: `position`, the place Move up and Move down store on it (attrs.position, as the API's goals).
 type Goal = { id: string; key: string; title: string; order: number; measure: string | null; target: string | null; due: string | null; archived: boolean; trashed?: boolean; owner_id?: string | null; owner_email?: string; archived_at?: string | null; position?: number | null };
-type Feature = { id: string; key: string; title: string; goal_ids: string[] };
-=======
-type Goal = { id: string; title: string; order: number; measure: string | null; target: string | null; due: string | null; archived: boolean };
 /** assumed_goal_ids: the links whose contribution is assumed (an approved order's, api ASSUMED_LINK). */
 type Feature = { id: string; key: string; title: string; goal_ids: string[]; assumed_goal_ids?: string[] };
->>>>>>> theirs
 export type GoalBucketsDb = { goals: Goal[]; features: Feature[] };
 type Undo = Schemas["GoalBucketsUndo"];
 
@@ -141,15 +136,10 @@ function out(db: GoalBucketsDb, edits: boolean, people: GoalPeople = []): Schema
   const archived = db.goals.filter((g) => g.archived && !g.trashed).sort((a, b) => ((a.archived_at ?? "") < (b.archived_at ?? "") ? 1 : -1));
   return {
     can_edit: edits,
-<<<<<<< ours
     goals: live.map((g) => ({ ...goalOut(g, people), can_edit: edits })),
-    features: db.features.map((f) => ({ id: f.id, key: f.key, title: f.title, goal_ids: f.goal_ids.filter((g) => ids.has(g)) })),
+    features: db.features.map((f) => ({ id: f.id, key: f.key, title: f.title, goal_ids: f.goal_ids.filter((g) => ids.has(g)), assumed_goal_ids: (f.assumed_goal_ids ?? []).filter((g) => ids.has(g)) })),
     archived: archived.map((g) => ({ id: g.id, title: g.title, owner_name: nameOf(people, g.owner_id), archived_at: g.archived_at ?? null })),
     asks_to: people.filter((x) => x.role === "owner" && !x.disabled).map((x) => x.name),
-=======
-    goals: live.map((g) => ({ id: g.id, title: g.title, order: g.order, measure: g.measure, target: g.target, due: g.due, can_edit: edits })),
-    features: db.features.map((f) => ({ id: f.id, key: f.key, title: f.title, goal_ids: f.goal_ids.filter((g) => ids.has(g)), assumed_goal_ids: (f.assumed_goal_ids ?? []).filter((g) => ids.has(g)) })),
->>>>>>> theirs
   };
 }
 
@@ -185,10 +175,13 @@ const complete = (b: GoalIn) => !!(b.title?.trim() && b.measure?.trim() && b.tar
  * keep it (now first), the rest go to `to` or to no goal. */
 function moveOff(db: GoalBucketsDb, g: Goal, to: string | null): Feature[] {
   const held = db.features.filter((f) => f.goal_ids.includes(g.id));
-  const before = held.map((f) => ({ ...f, goal_ids: [...f.goal_ids] }));
+  const before = held.map((f) => ({ ...f, goal_ids: [...f.goal_ids], assumed_goal_ids: f.assumed_goal_ids && [...f.assumed_goal_ids] }));
   for (const f of held) {
     const rest = f.goal_ids.filter((x) => x !== g.id);
-    f.goal_ids = f.goal_ids[0] === g.id && !rest.length && to ? [to] : rest;
+    const first = f.goal_ids[0] === g.id;
+    f.goal_ids = first && !rest.length && to ? [to] : rest;
+    // The link that becomes first gets its contribution set (the API's TOP): no longer assumed.
+    if (first) f.assumed_goal_ids = f.assumed_goal_ids?.filter((x) => x !== f.goal_ids[0]);
   }
   return before;
 }
@@ -389,25 +382,8 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
     return json(200, { goal: { ...goalOut(g, people), id: p[4] }, undo });
   }
   if (p[3] === "goals" && p[5] === "archive" && m === "POST") {
-<<<<<<< ours
     const undo = archiveGoal(db, p[4], (body.to_goal_id as string | null | undefined) ?? null, bin?.now() ?? new Date().toISOString());
     if (undo instanceof Response) return undo;
-=======
-    const g = db.goals.find((x) => x.id === p[4] && !x.archived);
-    if (!g) return json(404, { detail: "No such goal" });
-    const to = (body.to_goal_id as string | null | undefined) ?? null;
-    if (to && !db.goals.some((x) => x.id === to && !x.archived && x.id !== g.id)) return json(422, { detail: "Pick another goal" });
-    const held = db.features.filter((f) => f.goal_ids.includes(g.id));
-    const undo = signed({ goals: [goalSnap(g)], features: held.map(featureSnap), added_goal_id: null });
-    for (const f of held) {
-      const rest = f.goal_ids.filter((x) => x !== g.id);
-      const first = f.goal_ids[0] === g.id;
-      f.goal_ids = first && !rest.length && to ? [to] : rest;
-      // The link that becomes first gets its contribution set (the API's TOP): no longer assumed.
-      if (first) f.assumed_goal_ids = f.assumed_goal_ids?.filter((x) => x !== f.goal_ids[0]);
-    }
-    g.archived = true;
->>>>>>> theirs
     return json(200, { goal: null, undo });
   }
   // edit-goals-prds EG1: Restore an archived goal to the buckets, with Undo.
