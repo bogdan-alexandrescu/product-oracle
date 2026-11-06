@@ -56,5 +56,14 @@
  "Intro\r\n\r\n```\r\nmake carts\r\n```\r\nafter",
  "Intro\r\r```\rmake carts\r```\rafter",
  "Steps:\r\r    make carts\r\rafter",
- ""
+ "",
+ "~~~\n",
+ "  - ```\n  ship the carts\n  ```",
+ "- item\n  - ```\n  ```\n- item",
+ "- item\n>\n\tcode",
+ "> a\n===\n    still the quote",
+ "- item\n> text\n===\n    ```\nmore text",
+ "> ```\n> a\n>",
+ "```\n>\n> ```",
+ "- ```\n  a\n\n- b"
 ]

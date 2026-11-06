@@ -199,9 +199,18 @@ def _banner(ev: ExportVersion) -> str:
     return " · ".join(parts)
 
 
-_FENCE = re.compile(r"^\s*(```|~~~)")
+_FENCE = re.compile(r"^\s*(`{3,}|~{3,})(.*)$")
 _ITEM = re.compile(r"^(?:[-*+]|\d{1,3}[.)])\s")
 _TABLE_SEP = re.compile(r"^\s*\|?\s*:?-{2,}")
+
+
+def _fence_close(line: str) -> re.Pattern | None:
+    """What closes the fence ``line`` opens, as CommonMark reads a fence (a backtick fence's
+    info has no backtick); None if it opens none."""
+    m = _FENCE.match(line)
+    if not m or (m.group(1)[0] == "`" and "`" in m.group(2)):
+        return None
+    return re.compile(rf"^\s*{re.escape(m.group(1)[0])}{{{len(m.group(1))},}}\s*$")
 
 
 @dataclass
@@ -238,9 +247,9 @@ def _units(body: str, budget: float = SLIDE_LINES) -> list[_Unit]:
             group += 1
             i += 1
             continue
-        if _FENCE.match(line):
+        if close := _fence_close(line):
             j = i + 1
-            while j < len(lines) and not _FENCE.match(lines[j]):
+            while j < len(lines) and not close.match(lines[j]):
                 j += 1
             block = lines[i : j + 1]
             units.append(_Unit(heading + "\n".join(block), len(block) + 0.4, group, "block"))
@@ -284,7 +293,7 @@ def _units(body: str, budget: float = SLIDE_LINES) -> list[_Unit]:
                 and lines[j].strip()
                 and not lines[j].lstrip().startswith(("|", "#"))
                 and not _ITEM.match(lines[j])
-                and not _FENCE.match(lines[j])
+                and not _fence_close(lines[j])
             ):
                 j += 1
             kind = "block"
@@ -465,7 +474,7 @@ _CODE_LINK = re.compile(r'<a href="[^"]*">(Code: \d+ lines?, in the full PRD)</a
 
 # The parser the exports render with: code blocks are found as they are rendered.
 _CODE_MD = MarkdownIt("commonmark", {"html": False}).enable(["table", "strikethrough"])
-_CODE_INDENT = re.compile(r"^[ \t>]*")
+_NEWLINE = re.compile(r"\r\n?|\n")
 
 
 def _blank(line: str) -> bool:
@@ -477,7 +486,7 @@ def code_left_out(body: str, href: str) -> str:
     line, "Code: 40 lines, in the full PRD", a link to ``href`` (that place in the full
     PRD), in a paragraph of its own: a deck shows no code (owner, Nov 5), so a long block is
     never cut into continuation slides or left as a blank slide. An empty block is dropped."""
-    lines = body.replace("\r\n", "\n").split("\n")
+    lines = _NEWLINE.split(body)
     out: list[str] = []
     i = 0
     for t in _CODE_MD.parse(body):
@@ -486,12 +495,17 @@ def code_left_out(body: str, href: str) -> str:
         start, end = t.map
         out += lines[i:start]
         first = lines[start]
+        # What the block's first line holds before the code: its quote and list markers ("> ",
+        # "- "), kept, so the line stays in its list item.
         if t.type == "fence":
             prefix = first[: first.index(t.markup)] if t.markup in first else ""
         else:
-            prefix = _CODE_INDENT.match(first).group(0)
+            code = t.content.split("\n", 1)[0]
+            prefix = first[: len(first) - len(code)] if first.endswith(code) else ""
             prefix = prefix[:-4] if prefix.endswith("    ") else prefix.removesuffix("\t")
-        gap = prefix.rstrip()
+        # The line that sets it apart continues its container: quote markers only, a list
+        # marker as spaces (a "-" alone would be an empty item).
+        gap = re.sub(r"[^>]", " ", prefix).rstrip()
         n = len(t.content.splitlines())
         after = end < len(lines) and not _blank(lines[end])
         if n:
