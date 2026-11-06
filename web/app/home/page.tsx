@@ -14,6 +14,7 @@ import { invalidateWaiting, loadInbox, loadMyQuestions, NEED_KINDS, needKind, wa
 import { useAccessRequestRows } from "../inbox/_access";
 import { useActed } from "../inbox/_actions";
 import { allNeeds, NeedTable, usePerms, waitingNeeds, type Need, type StatedNeed } from "../inbox/_needs";
+import { approvalRows, dateSuggestionRows, goalSuggestionRows, proposalRows } from "../inbox/_proposals";
 import { useQuestionRows } from "../inbox/_questions";
 import { GoalsPanel } from "./_goals-panel";
 import { FlightInspector, FlightTable, type Flight, type GoalIndex } from "./_in-flight";
@@ -189,11 +190,23 @@ export default function HomePage() {
   // answered here leaves with its count (qa4-company-47).
   // qa-company-3: a line draws only the actions the signed-in person's role can take.
   const perms = usePerms();
-  const all = inbox ? allNeeds(inbox, questionRows.rows, busy, act, inbox.last_seen_at ?? null, onActed, true, undefined, requestRows.rows, perms) : [];
+  // inbox-meeting-proposals fix: Simple's proposals, approvals and Oracle's date and goal
+  // suggestions waiting on me, as the Inbox lists and counts them (the API's total has them).
+  const seen = inbox?.last_seen_at ?? null;
+  const all = inbox
+    ? [
+        ...allNeeds(inbox, questionRows.rows, busy, act, seen, onActed, true, undefined, requestRows.rows, perms),
+        ...proposalRows(inbox.simple_proposals ?? [], busy, act, seen),
+        ...approvalRows(inbox.simple_approvals ?? [], seen),
+        ...dateSuggestionRows(inbox.simple_date_suggestions ?? [], seen),
+        ...goalSuggestionRows(inbox.simple_goal_suggestions ?? [], seen),
+      ]
+    : [];
   const needs = waitingNeeds(all);
   const visible = all.filter((r) => needs.includes(r) || (r.group === "access-requests" && !r.counted && r.state !== "done"));
   // QA pass D-2: one chip per kind, built from the rows the total counts, so they add up to it.
-  // Checkpoints, cost approvals and overruns are "Approvals" (qa-shell-6), apart from the decision log's Decisions.
+  // Checkpoints, cost approvals, overruns and a roadmap version waiting for my approval are
+  // "Approvals" (qa-shell-6), apart from the decision log's Decisions.
   const kinds = NEED_KINDS.map((k) => ({ ...k, n: needs.filter((r) => needKind(r.group) === k.id).length })).filter((k) => k.n > 0);
   const { rows: shownNeeds, more: moreNeeds } = pickNeeds(visible, MAX_NEEDS);
   // The rail badge's count: the Inbox's New + Open items.
@@ -292,7 +305,7 @@ export default function HomePage() {
             <>
               {/* qa-shell-16: what this count counts, and why Simple's Home says another number. */}
               <InfoTip label="Needs you" side="bottom">
-                Everything the Inbox has waiting on you: approvals, runs, access, reviews, decisions and the questions asked of you.
+                Everything the Inbox has waiting on you: approvals, runs, access, reviews, decisions, the questions asked of you, proposals, Oracle&apos;s dates and goal suggestions.
                 Simple&apos;s Home counts something else, the product decisions on PRDs that wait on you, so its number can differ.
               </InfoTip>
               {/* qa-company-5: plain counts; the Inbox link opens the Inbox, where the items are.

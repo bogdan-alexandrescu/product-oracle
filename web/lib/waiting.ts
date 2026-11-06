@@ -76,17 +76,31 @@ export function invalidateWaiting() {
 }
 
 /**
+ * After an action that changed what waits on me: the page's own `reload` and the rail's and
+ * More's counts read again at once, sharing one Inbox call.
+ */
+export async function reloadWaiting(reload: () => Promise<unknown>): Promise<void> {
+  invalidateWaiting();
+  const reloaded = reload();
+  waitingChanged();
+  await reloaded;
+}
+
+/**
  * QA pass D-2: the kinds Home's Needs you counts by, each a set of the Inbox's groups (NeedGroup,
  * app/inbox/_needs). Every counted row falls in one kind (Other holds the rest), so the chips add
  * up to the total; `/inbox?kind=<id>` shows that kind only.
  */
 export const NEED_KINDS = [
-  { id: "approvals", label: "Approvals", groups: ["checkpoints", "approvals", "overruns"] },
+  { id: "approvals", label: "Approvals", groups: ["checkpoints", "approvals", "roadmap-approvals", "overruns"] },
   { id: "runs", label: "Runs", groups: ["lookups", "imports", "tracks", "deliveries", "revising", "searches"] },
   { id: "access", label: "Access", groups: ["revoke-failures", "access-failures", "access-requests", "share-revocations"] },
   { id: "reviews", label: "Reviews", groups: ["feedback", "discussions"] },
   { id: "decisions", label: "Decisions", groups: ["decisions"] },
   { id: "questions", label: "Questions", groups: ["questions"] },
+  // Proposals on my items, Oracle's dates and goal suggestions (a roadmap version waiting for my
+  // approval is an approval).
+  { id: "proposals", label: "Proposals", groups: ["proposals"] },
   { id: "other", label: "Other", groups: [] as string[] },
 ] as const;
 

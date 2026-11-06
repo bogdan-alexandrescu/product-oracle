@@ -76,7 +76,7 @@ test("a commenter cannot apply, sees why, and asks the person", async ({ page })
   await openDiscussion(page);
   const apply = change(page, MOVE).getByRole("button", { name: "Apply", exact: true });
   await expect(apply).toBeDisabled();
-  await expect(apply).toHaveAttribute("title", APPLY_WHY_NOT);
+  await expect(apply).toHaveAccessibleDescription(APPLY_WHY_NOT);
   await change(page, ASK).getByRole("button", { name: "Ask", exact: true }).click();
   await expect(handled(page).locator("summary")).toHaveText("1 handled");
   await handled(page).locator("summary").click();

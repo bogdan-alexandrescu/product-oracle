@@ -13,9 +13,10 @@ import { asNeedKind, invalidateWaiting, loadInbox, loadMyQuestions, markInboxSee
 
 import { useAccessRequestRows } from "./_access";
 import { useActed } from "./_actions";
-import { allNeeds, NeedTable, SOURCE_COLUMNS, sourceNeeds, STATE_TABS, useFixedHere, usePerms, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
+import { allNeeds, NeedTable, SOURCE_COLUMNS, sourceNeeds, STATE_TABS, useFixedHere, usePerms, waitingCount, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
 import { useQuestionRows } from "./_questions";
 import { minutesRows } from "./_minutes";
+import { approvalRows, dateSuggestionRows, goalSuggestionRows, proposalRows } from "./_proposals";
 import { useReminderRows } from "./_reminders";
 import { useWebhookRows } from "./_webhooks";
 
@@ -23,6 +24,14 @@ type Source = Schemas["SourceOut"];
 
 /** qa-company-42: what a row's action did, said in the banner (by the action's key). */
 const ACTED: [prefix: string, message: string][] = [
+  // A question's proposal is decided outright; the rest go into the working draft.
+  ["proposal-accept-question-", "Accepted: the question is decided"],
+  ["proposal-decline-question-", "Declined: the question stays open"],
+  // A feature ask on no roadmap is filed in Requests, or not filed.
+  ["proposal-accept-ask-", "Accepted: it is filed in Requests"],
+  ["proposal-decline-ask-", "Declined: it is not filed"],
+  ["proposal-accept-", "Accepted: it is in your working draft"],
+  ["proposal-decline-", "Declined: the item is left as it was"],
   ["report-retry-", "Posting the report again"],
   ["report-dismiss-", "Dismissed"],
   ["ritual-retry-", "Preparing it again"],
@@ -109,7 +118,7 @@ function Inbox() {
   const webhookRows = useWebhookRows(busy, act, seenBefore);
   // Remind on a one-pager: a PRD's owner or decider nudged me to review its draft.
   const reminderRows = useReminderRows(seenBefore);
-  const rows = inbox ? [...allNeeds(inbox, asked.rows, busy, act, seenBefore, onActed, false, fixed, requests.rows, perms), ...webhookRows, ...reminderRows, ...minutesRows(inbox.simple_minutes ?? [])] : null;
+  const rows = inbox ? [...allNeeds(inbox, asked.rows, busy, act, seenBefore, onActed, false, fixed, requests.rows, perms), ...webhookRows, ...reminderRows, ...proposalRows(inbox.simple_proposals ?? [], busy, act, seenBefore), ...approvalRows(inbox.simple_approvals ?? [], seenBefore), ...dateSuggestionRows(inbox.simple_date_suggestions ?? [], seenBefore), ...goalSuggestionRows(inbox.simple_goal_suggestions ?? [], seenBefore), ...minutesRows(inbox.simple_minutes ?? [])] : null;
   const kindRows = rows && kind ? rows.filter((r) => needKind(r.group) === kind.id) : rows;
   // Under ?kind= the header counts that kind only, as Home's chip did.
   const waiting = kindRows ? waitingNeeds(kindRows).length : undefined;
@@ -193,6 +202,7 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
   },
   { id: "discussions", title: "Discussions" },
   { id: "approvals", title: "Cost approvals" },
+  { id: "roadmap-approvals", title: "Roadmap approvals" },
   { id: "overruns", title: "Paused on overrun" },
   { id: "lookups", title: "Stuck runs" },
   { id: "imports", title: "Couldn't import" },
@@ -211,6 +221,7 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
   { id: "outcomes", title: "Outcomes" },
   { id: "webhooks", title: "Webhooks" },
   { id: "reminders", title: "Review reminders" },
+  { id: "proposals", title: "Proposals and suggestions" },
   { id: "minutes", title: "Meeting minutes" },
   { id: "oracle-actions", title: "Oracle did" },
   { id: "feedback", title: "Feedback" },
@@ -241,19 +252,19 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
  */
 function InboxTabs({
   rows,
-  waiting,
   questionsError,
   notice,
   onTabChange,
 }: {
   rows: ReturnType<typeof allNeeds>;
+  /** The header's count; Needs you counts each run of a grouped checkpoint from the rows (waitingCount). */
   waiting: number;
   questionsError: string | null;
   notice: ReactNode;
   /** The tab changed: what was settled in place moves on. */
   onTabChange: () => void;
 }) {
-  const count = (st: InboxState) => rows.filter((r) => r.counted && r.state === st).length;
+  const count = (st: InboxState) => rows.filter((r) => r.counted && r.state === st).reduce((n, r) => n + (r.size ?? 1), 0);
   // qa-company-2: the Inbox opens on the tab that holds what waits: New when it has items,
   // else Seen (what I have seen and not handled yet), so "11 waiting" never opens on "Nothing new".
   const [chosen, setTab] = useState<InboxState>(() => (count("new") === 0 && count("open") > 0 ? "open" : "new"));
@@ -272,7 +283,7 @@ function InboxTabs({
   // (the rail badge's count); Staged, Declined and Done are named, with their own counts.
   const live = tab === "new" || tab === "open";
   return (
-    <Panel title={live ? "Needs you" : label} count={live ? waiting : count(tab)} testId="inbox-needs">
+    <Panel title={live ? "Needs you" : label} count={live ? waitingCount(rows) : count(tab)} testId="inbox-needs">
       {/* qa-company-47: on a phone the five tabs keep one line: smaller tabs, no "0" counts. */}
       <div
         className="px-4 pt-1 max-[600px]:overflow-x-auto max-[600px]:px-2 max-[600px]:[&_[role=tab]]:px-1.5 max-[600px]:[&_[role=tablist]]:flex-nowrap"

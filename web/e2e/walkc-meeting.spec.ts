@@ -183,7 +183,9 @@ for (const phone of [false, true]) {
       await tap(later.getByTestId("chat-card-fix").filter({ hasText: fix }));
       await expect(later.getByTestId("chat-card-outcome")).toContainText("Applied by you");
       await owner.reload();
-      await expect(earlier.getByRole("button", { name: "Apply", exact: true })).toBeVisible();
+      // chat-latest-card: the later card on the same item, acted on, replaced the earlier one.
+      await expect(earlier.getByTestId("chat-card-replaced")).toContainText("Replaced by a newer card");
+      await expect(earlier.getByRole("button", { name: "Apply", exact: true })).toHaveCount(0);
       await expect(earlier.getByTestId("chat-card-fix")).toHaveCount(0);
     });
 
