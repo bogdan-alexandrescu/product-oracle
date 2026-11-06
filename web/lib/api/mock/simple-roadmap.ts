@@ -990,6 +990,13 @@ function dependencyLine(title: string, start: string, depTitle: string, end: str
   return `‘${short(title)}’ ${verb} ${day(start)}, but ‘${short(depTitle)}’${depPrd ? ` (${depPrd})` : ""}, which it depends on, ends ${day(end)}`;
 }
 
+/** feature-parts: the keys of the features an item is part of, its parent first, any depth (a loop stops where it would close). */
+function ancestorKeys(s: SeedItem, all: Map<string, { s: SeedItem }>): string[] {
+  const out: string[] = [];
+  for (let cur: SeedItem | undefined = s; cur?.parent && cur.parent !== s.key && !out.includes(cur.parent); cur = all.get(cur.parent)?.s) out.push(cur.parent);
+  return out;
+}
+
 function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, { s: SeedItem; r: { start: Dated; end: Dated } }>, w: [string, string]): Flag[] {
   const out: Flag[] = [];
   const flag = (kind: Flag["kind"], reason: string, fixes: Flag["fixes"], subject: string | null = null): void => {
@@ -1005,8 +1012,8 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
     const key = all.has(k) ? k : (dependencyOf([...all.values()].map((x) => x.s), k)?.key ?? k);
     const dep = all.get(key);
     if (!dep || key === s.key || closed(dep.s) || closed(s) || dep.s.status === "done" || doneItem(dep.s) || (dep.r.end.estimated && r.start.estimated)) continue;
-    // feature-parts: a part is never a broken link against its parent (constraints.check).
-    if (s.parent === key || dep.s.parent === s.key) continue;
+    // feature-parts: a part is never a broken link against an ancestor, any depth (constraints.check).
+    if (ancestorKeys(s, all).includes(key) || ancestorKeys(dep.s, all).includes(s.key)) continue;
     const theirs = ownPrd(dep.s).title;
     const depPrd = theirs !== ownPrd(s).title ? prdName(theirs) : null;
     if (r.start.estimated) {
