@@ -101,6 +101,22 @@ function BuildRefusedFromUrl() {
   return <Notice testId="build-refused">Approvers and owners build the baseline.</Notice>;
 }
 
+/** ?add=goal opens Add goal (Company › Strategy's Add a goal, pass F F-42), once: the address drops it, so closing Add goal leaves no ?add behind. */
+function AddFromUrl({ onAdd }: { onAdd: (kind: AddKind) => void }) {
+  const params = useSearchParams();
+  const router = useRouter();
+  const add = params.get("add");
+  useEffect(() => {
+    if (add !== "goal") return;
+    onAdd("goal");
+    const next = new URLSearchParams(params.toString());
+    next.delete("add");
+    const rest = next.toString();
+    router.replace(rest ? `/baseline?${rest}` : "/baseline", { scroll: false });
+  }, [add, onAdd, params, router]);
+  return null;
+}
+
 /** ?entity=<id> opens that item (Publish's Resolve links here); ?blocker=<id> that blocker (its Open blocker). */
 function OpenFromUrl({ onOpen, onBlocker }: { onOpen: (id: string) => void; onBlocker: (id: string) => void }) {
   const params = useSearchParams();
@@ -513,6 +529,7 @@ export default function BaselinePage() {
       <Suspense fallback={null}>
         <StateViewFromUrl onView={setStateView} />
         <OpenFromUrl onOpen={openItem} onBlocker={openBlocker} />
+        {canWrite && <AddFromUrl onAdd={setAdding} />}
         <TabFromUrl onTab={setTab} onFrom={setFrom} onRun={setRunId} />
         {canInterview && <InterviewFromUrl onGoal={makeMeasurable} onVague={() => void interviewVague()} />}
         {canWrite && <BuildFromUrl onBuild={openBuild} />}
