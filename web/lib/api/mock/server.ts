@@ -5179,13 +5179,14 @@ function inlineHtml(nodes: Inline[]): string {
 
 /** A section's markdown as the API's export renders it (qa-docs-15): paragraphs, lists and real tables, never pipe text. */
 function bodyHtml(md: string): string {
-  // As the API's markdown: a backslash before \ | * _ [ ] ` < > ~ makes that character plain text (no table column,
-  // link, emphasis or strikethrough). Parked as private-use characters while the text is parsed, then put back.
-  const ESCAPABLE = "\\|*_[]`<>~";
+  // As the API's markdown: a backslash before any ASCII punctuation makes that character plain text (no table column,
+  // link, emphasis, strikethrough, heading, list, quote or entity). Parked as private-use characters while the text is
+  // parsed, then put back.
+  const ESCAPABLE = "\\!\"#$%&'()*+,-./:;<=>?@[]^_`{|}~";
   const parked = md
     .replace(/[ \t]*\[c:[\w.:-]+\]/g, "")
-    .replace(/\\([\\|*_[\]`<>~])/g, (_, c: string) => String.fromCharCode(0xe000 + ESCAPABLE.indexOf(c)));
-  return bodyBlocks(parked).replace(/[\ue000-\ue009]/g, (c) => escapeHtml(ESCAPABLE[c.charCodeAt(0) - 0xe000]));
+    .replace(/\\([!-/:-@[-`{-~])/g, (_, c: string) => String.fromCharCode(0xe000 + ESCAPABLE.indexOf(c)));
+  return bodyBlocks(parked).replace(/[\ue000-\ue020]/g, (c) => escapeHtml(ESCAPABLE[c.charCodeAt(0) - 0xe000]));
 }
 
 function bodyBlocks(md: string): string {

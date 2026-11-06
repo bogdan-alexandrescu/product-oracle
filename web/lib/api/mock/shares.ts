@@ -797,21 +797,37 @@ export function codeNames(
   return out;
 }
 
+// The one set of whitespace a name folds, as the API's render._SPACE_SET: every Unicode whitespace, U+FEFF, zero-width space.
+const SPACE = "\\t\\n\\v\\f\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff\\u200b";
+const SPACE_RUN = new RegExp(`[${SPACE}]+`, "g");
+const SPACE_LEAD = new RegExp(`^[${SPACE}]+`);
+
+/** A name on one line, as plain text wherever it is spliced into markdown: a "#" or "&" anywhere and a block marker at its start are escaped. */
+function shownName(name: string): string {
+  return name
+    .replace(SPACE_RUN, " ")
+    .replace(/^ | $/g, "")
+    .replace(/[\\|*_[\]`<>~#&]/g, "\\$&")
+    .replace(/^(?:([+=-])|(\d+)([.)]))/, (_, mark: string | undefined, num: string, end: string) => (mark ? `\\${mark}` : `${num}\\${end}`));
+}
+
 /**
  * G-3 (as the API's render.with_names): each code `names` knows read by its name with the code beside it ("Activation
  * (G1)"); one already beside its name or inside its own name ("Issue ENG-413") stays, so a second pass changes nothing.
- * A name reads on one line: each whitespace run in it is one space.
+ * A name reads on one line (each whitespace run in it is one space) and as plain text.
  */
 export function withNames(text: string, names: Record<string, string>): string {
   if (!Object.keys(names).length) return text;
   return text.replace(CODE, (whole, code: string, at: number) => {
-    const name = (names[code] ?? "").trim().split(/\s+/).join(" ");
-    if (!name || name === code || text.slice(at + whole.length).trimStart().startsWith(name)) return whole;
-    const shown = name.replace(/[\\|*_[\]`<>~]/g, "\\$&");
+    const name = (names[code] ?? "").replace(SPACE_RUN, " ").replace(/^ | $/g, "");
+    const afterText = text.slice(at + whole.length);
+    if (!name || name === code || afterText.replace(SPACE_LEAD, "").startsWith(name)) return whole;
+    const shown = shownName(name);
     if (!name.includes(code)) return `${shown} (${code})`;
-    const cut = shown.indexOf(code);
-    const [before, after] = [shown.slice(0, cut), shown.slice(cut + code.length)];
-    return text.slice(0, at).endsWith(before) && text.slice(at + whole.length).startsWith(after) ? whole : shown;
+    for (let cut = shown.indexOf(code); cut >= 0; cut = shown.indexOf(code, cut + 1)) {
+      if (text.slice(0, at).endsWith(shown.slice(0, cut)) && afterText.startsWith(shown.slice(cut + code.length))) return whole;
+    }
+    return shown;
   });
 }
 

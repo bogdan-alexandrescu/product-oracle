@@ -9,6 +9,7 @@ log, and revocation on a member's disable or demotion and on a trash. Invented d
 ("Example Labs").
 """
 
+import html as html_lib
 import re
 import uuid
 from dataclasses import replace
@@ -1310,9 +1311,7 @@ async def test_a_name_never_opens_a_block_where_it_is_spliced(client, ctx, title
     or an entity in it reads as the character; no_claim=names with no block marker."""
     from oracle.roadmap.models import TrackerRecord
 
-    sections = [
-        (k, lv, h, BLOCK_BODIES.get(k, b)) for k, lv, h, b in SECTIONS
-    ]
+    sections = [(k, lv, h, BLOCK_BODIES.get(k, b)) for k, lv, h, b in SECTIONS]
     await seed_roadmap(ctx, publish=True, sections=sections)
     async with tenant_session(ctx.tenant_id) as s:
         own = await s.scalar(select(TrackerRecord).where(TrackerRecord.external_ref == "ENG-413"))
@@ -1322,13 +1321,15 @@ async def test_a_name_never_opens_a_block_where_it_is_spliced(client, ctx, title
     page = await client.get(f"{PUBLIC}/{token}", headers=await opened(client, token))
     assert page.status_code == 200, page.text
     body = page.text.split("Parse every column.", 1)[1]
-    assert f"{title} (ENG-413)" in _text(page.text), _text(page.text)
+    shown = html_lib.escape(title, quote=False)
+    assert f"{shown} (ENG-413)" in _text(page.text), _text(page.text)
     assert not re.search(r"<(h[1-6]|ol|blockquote|hr)\b", body.split("</section>", 1)[0]), body
     items = re.findall(r"<li>(.*?)</li>", body, re.S)
     assert items and all(not re.search(r"<(h[1-6]|ul|ol|blockquote)\b", i) for i in items), items
     row = re.search(r"<tr>\s*<td>Bulk import</td>(.*?)</tr>", page.text, re.S)
     assert row is not None, page.text
-    assert row.group(1).count("<td") == 1 and not re.search(r"<(h[1-6]|ul|ol|blockquote)", row.group(1))
+    cell = row.group(1)
+    assert cell.count("<td") == 1 and not re.search(r"<(h[1-6]|ul|ol|blockquote)", cell), cell
 
 
 @pytest.mark.parametrize(
@@ -1344,7 +1345,7 @@ async def test_a_name_never_opens_a_block_where_it_is_spliced(client, ctx, title
         ("1. one", "1\\. one"),
         ("12) one", "12\\) one"),
         ("AT&amp;T", "AT\\&amp;T"),
-        ("&#35; x", "\\&#35; x"),
+        ("&#35; x", "\\&\\#35; x"),
     ],
 )
 def test_with_names_escapes_block_markers_and_ampersands(name, shown):
@@ -1375,8 +1376,8 @@ def test_with_names_is_idempotent_for_a_name_holding_its_code_twice():
 
     for name in ("ENG-413 and ENG-413 again", "Fix ENG-413 or ENG-413", "x ENG-413"):
         names = {"ENG-413": name}
-        for text in ("ENG-413 tracks it.", "See ENG-413."):
-            once = with_names(text, names)
+        for words in ("ENG-413 tracks it.", "See ENG-413."):
+            once = with_names(words, names)
             assert with_names(once, names) == once, once
 
 
@@ -1386,7 +1387,7 @@ def test_with_names_makes_a_name_one_line_and_escapes_a_tilde():
     from oracle.shares.render import with_names
 
     got = with_names("Serves G1.", {"G1": "A\n\n# Big\t ~~s~~"})
-    assert got == "Serves A # Big \\~\\~s\\~\\~ (G1)."
+    assert got == "Serves A \\# Big \\~\\~s\\~\\~ (G1)."
 
 
 def test_with_names_is_idempotent_for_a_name_holding_its_code():

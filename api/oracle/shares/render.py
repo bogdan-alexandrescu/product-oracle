@@ -191,9 +191,25 @@ def for_reader(html: str) -> str:
 # G-3: a goal code ("G1") or a tracker key ("ENG-512") as the roadmap's words write it.
 _CODE = re.compile(r"(?<![\w(-])(G-?\d+|[A-Z][A-Z0-9]{1,9}-\d+)(?![\w)-])")
 
-# A name spliced into the text reads as written, on one line: no table column, heading, link,
-# emphasis or strikethrough of its own.
-_MARKDOWN = re.compile(r"[\\|*_\[\]`<>~]")
+# A name spliced into the text reads as written, on one line: no table column, heading, list,
+# quote, link, emphasis, strikethrough or entity of its own. A "#" or "&" anywhere is escaped; a
+# marker that opens a block ("+", "-", "=", "N." and "N)") only at the name's start.
+_MARKDOWN = re.compile(r"[\\|*_\[\]`<>~#&]")
+_BLOCK_START = re.compile(r"^(?:([+=-])|(\d+)([.)]))")
+# The one set of whitespace a name folds (the mock's web/lib/api/mock/shares.ts SPACE has the same).
+_SPACE_SET = (
+    "\t\n\v\f\r\x1c-\x1f \x85\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff\u200b"
+)
+_SPACE = re.compile(f"[{_SPACE_SET}]+")
+_SPACE_LEAD = re.compile(f"^[{_SPACE_SET}]+")
+
+
+def _shown_name(name: str) -> str:
+    """``name`` on one line (each whitespace run one space), as plain text wherever it is
+    spliced into markdown."""
+    shown = _MARKDOWN.sub(r"\\\g<0>", _SPACE.sub(" ", name).strip(" "))
+    return _BLOCK_START.sub(lambda m: f"\\{m[1]}" if m[1] else f"{m[2]}\\{m[3]}", shown)
+
 
 _GOAL_LINE = re.compile(r"^\s*[-*]\s*(G-?\d+)\b[\s.:]+(\S.*?)\s*$", re.M)
 
@@ -202,19 +218,22 @@ def with_names(text: str, names: dict[str, str]) -> str:
     """G-3: each code ``names`` knows read by its name with the code beside it ("Activation
     (G1)"); a code already beside its name (the Goals list's "G1 Activation") stays, as does
     one inside its own name ("Issue ENG-413"), so a second pass changes nothing. A name
-    reads on one line: each whitespace run in it is one space."""
+    reads on one line (each whitespace run in it is one space) and as plain text."""
 
     def named(m: re.Match) -> str:
         code = m.group(1)
-        name = " ".join(names.get(code, "").split())
-        if not name or name == code or text[m.end() :].lstrip().startswith(name):
+        name = _SPACE.sub(" ", names.get(code, "")).strip(" ")
+        after_text = text[m.end() :]
+        if not name or name == code or _SPACE_LEAD.sub("", after_text).startswith(name):
             return m.group(0)
-        shown = _MARKDOWN.sub(r"\\\g<0>", name)
+        shown = _shown_name(name)
         if code not in name:
             return f"{shown} ({code})"
-        before, _, after = shown.partition(code)
-        if text[: m.start()].endswith(before) and text[m.end() :].startswith(after):
-            return m.group(0)
+        # The code beside any one of its occurrences in the name: the name is already there.
+        for at in (k.start() for k in re.finditer(re.escape(code), shown)):
+            ends_before = text[: m.start()].endswith(shown[:at])
+            if ends_before and after_text.startswith(shown[at + len(code) :]):
+                return m.group(0)
         return shown
 
     return _CODE.sub(named, text) if names else text
