@@ -8,7 +8,7 @@ import { login } from "./helpers";
  * options read "US", "EU" and "Your own server"; picking "Your own server" shows the host
  * address field. (The default mock has PostHog disconnected, nothing saved: the API itself has
  * no default host - oracle/integrations/router.py and the mock both return host: null until a
- * host is saved - so the frontend's own fallback is what the Host select shows.)
+ * host is saved - so the Host select starts on "Pick a host".)
  */
 
 // fails_when=the page's own sentence or a field's hint shows loose on the page instead of
@@ -54,9 +54,14 @@ test("analytics: the host options are US, EU and Your own server; Your own serve
   await page.goto("/settings/analytics");
   await expect(page.getByTestId("analytics-state")).toHaveText("Not connected");
   const select = page.getByLabel("Host");
-  await expect(select.locator("option")).toHaveText(["US", "EU", "Your own server"]);
-  // Nothing is saved; this is the frontend's own default, not an API one (see file header).
-  await expect(select).toHaveValue("eu");
+  await expect(select.locator("option")).toHaveText(["Pick a host", "US", "EU", "Your own server"]);
+  // Owner's decision (Nov 5): with nothing saved the list starts on "Pick a host", not EU, and
+  // Save waits until one is picked.
+  await expect(select).toHaveValue("");
+  await page.getByLabel("Project ID").fill("67890");
+  await page.getByLabel("Personal API key").fill("phx_example_key_for_tests");
+  await expect(page.getByRole("button", { name: "Save" })).toBeDisabled();
+  await expect(page.getByTestId("analytics-save-why")).toHaveText("Pick a host to save.");
   await expect(page.getByLabel("Server address")).toHaveCount(0);
 
   await select.selectOption({ label: "Your own server" });
@@ -64,6 +69,9 @@ test("analytics: the host options are US, EU and Your own server; Your own serve
   await expect(address).toBeVisible();
   await address.fill("https://posthog.example.com");
 
+  await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
+
   await select.selectOption({ label: "US" });
   await expect(page.getByLabel("Server address")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
 });

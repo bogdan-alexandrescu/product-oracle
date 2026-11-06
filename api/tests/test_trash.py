@@ -652,6 +652,27 @@ async def test_purge_now_from_trash(client, owner):
     assert (await client.post(f"/v1/trash/{entry['id']}/restore", headers=auth)).status_code == 404
 
 
+async def test_only_owners_purge_and_another_company_never_finds_the_entry(client, owner):
+    """Delete for good and Empty Trash (one DELETE per entry): below owner 403, another company
+    404, and the entry stays."""
+    from tests.roadmap_helpers import other_company
+
+    tenant_id, auth = owner
+    await approved_prd(client, auth)
+    entry = (await client.request("DELETE", f"/v1/documents/{PRD}", headers=auth)).json()
+    for role in ("approver", "commenter", "viewer"):
+        headers = await as_user(tenant_id, role)
+        resp = await client.request("DELETE", f"/v1/trash/{entry['id']}", headers=headers)
+        assert resp.status_code == 403, (role, resp.text)
+    other = await other_company()
+    resp = await client.request("DELETE", f"/v1/trash/{entry['id']}", headers=other)
+    assert resp.status_code == 404, resp.text
+    # Empty Trash from the other company's side purges nothing of ours.
+    for row in (await client.get("/v1/trash", headers=other)).json():
+        await client.request("DELETE", f"/v1/trash/{row['id']}", headers=other)
+    assert [e["id"] for e in (await client.get("/v1/trash", headers=auth)).json()] == [entry["id"]]
+
+
 # --------------------------------------------------------------------------- the scan
 
 

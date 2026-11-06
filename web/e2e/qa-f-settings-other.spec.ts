@@ -62,12 +62,11 @@ for (const phone of [false, true]) {
       await expect(entry.getByText(runText, { exact: true })).toBeVisible();
       await expect(entry).not.toContainText("Baseline to PRD");
 
-      // F-68: the note names every restored item, never "and 1 more".
+      // The note names the item and counts what went with it, not every one of them.
       await entry.getByRole("button", { name: `Restore ${PRD}` }).click();
       const note = page.getByRole("status").filter({ hasText: "Restored" });
-      await expect(note).toContainText(`Restored ${PRD}`);
-      await expect(note).toContainText(runText);
-      await expect(note).not.toContainText(/\d+ more/);
+      await expect(note).toContainText(new RegExp(`^Restored ${PRD} and \\d+ items? that went with it`));
+      await expect(note).not.toContainText(runText);
       await expect(entry).toHaveCount(0);
 
       // Delete for good: asks first, then it is gone.
@@ -88,15 +87,45 @@ for (const phone of [false, true]) {
       await page.getByRole("button", { name: "Actions for Visit reminders" }).click();
       await page.getByRole("menuitem", { name: "Delete…" }).click();
       await page.getByRole("dialog", { name: "Delete Visit reminders" }).getByRole("button", { name: "Move to Trash" }).click();
+      // The toast names the item and counts what went with it.
+      await expect(page.getByRole("status").filter({ hasText: "Moved to Trash" })).toContainText(
+        /^Moved to Trash: Visit reminders( and \d+ items? that went with it)?/,
+      );
       await expect(page).toHaveURL(/\/documents$/);
       await page.goto("/settings/trash");
       await expect(page.getByTestId("trash-entry").first()).toBeVisible();
       await page.getByRole("button", { name: "Empty Trash" }).click();
-      await page.getByRole("alertdialog").getByRole("button", { name: "Empty Trash" }).click();
+      // The dialog names what goes, never a count of entries as if it were every item.
+      const ask = page.getByRole("alertdialog");
+      await expect(ask).toContainText("Everything here goes for good: ");
+      await expect(ask).toContainText("Visit reminders");
+      await expect(ask).not.toContainText(/\d+ items? goe?s? for good/);
+      await ask.getByRole("button", { name: "Empty Trash" }).click();
       await expect(page.getByTestId("trash-empty")).toBeVisible();
       await page.reload();
       await expect(page.getByTestId("trash-empty")).toBeVisible();
       await expect(page.getByRole("button", { name: "Empty Trash" })).toHaveCount(0);
+    });
+
+    test("Trash: a row's name stays on one line, its buttons beside or under it", async ({ page }) => {
+      await login(page);
+      await deletePrd(page);
+      await page.goto("/settings/trash");
+      const entry = page.getByTestId("trash-entry").filter({ hasText: PRD });
+      const name = entry.getByText(PRD, { exact: true });
+      await expect(name).toBeVisible();
+      const box = (await name.boundingBox())!;
+      // One line, at its natural width: never squeezed to a letter per line.
+      expect(box.height).toBeLessThan(30);
+      const words = await name.evaluate((el) => {
+        const r = document.createRange();
+        r.selectNodeContents(el);
+        return r.getClientRects().length;
+      });
+      expect(words).toBe(1);
+      const forGood = (await entry.getByRole("button", { name: `Delete ${PRD} for good` }).boundingBox())!;
+      if (phone) expect(forGood.y).toBeGreaterThanOrEqual(box.y + box.height);
+      expect(forGood.x + forGood.width).toBeLessThanOrEqual((await entry.boundingBox())!.x + (await entry.boundingBox())!.width + 1);
     });
 
     test("F-70: Company's cards carry no explanation sentences; each sits behind the card's (i)", async ({ page }) => {
