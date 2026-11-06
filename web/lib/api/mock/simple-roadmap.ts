@@ -252,6 +252,11 @@ const ROADMAPS: Record<string, { title: string; visibility: "company" | "approve
 };
 /** S7 adds Keep alerts quiet, a goal with no items yet (Oracle suggested features for it on its own). */
 export const GOALS: Record<string, string> = { "grow-retention": "Grow retention", "faster-activation": "Faster activation", "quiet-alerts": "Keep alerts quiet" };
+// MOCK-HOOK (mk-prd-look PS1): the invented PRD's roadmap and goal are known on every load, a reload of a stored roadmap too.
+const MK_ITEMS = mkRoadmapItems(); // MOCK-HOOK
+const MK_GOAL = mkGoal(mkSections().sections); // MOCK-HOOK
+if (MK_ITEMS.length) ROADMAPS["crew-notes-roadmap"] = { title: `${MK_ITEMS[0].prd_doc.title.replace(/ PRD$/, "")} roadmap`, visibility: "company", prd: MK_ITEMS[0].prd_doc.title, draft: 1 }; // MOCK-HOOK
+if (MK_GOAL) GOALS[MK_GOAL.key] = MK_GOAL.title; // MOCK-HOOK
 /** roadmap-talk's goals (the "roadmap-talk" scenario's items name them); known once such an item is seeded. */
 export const TALK_GOALS: Record<string, string> = { reliability: "Reliability", growth: "Growth", activation: "Activation", revenue: "Revenue" };
 const TALK_ITEM = "adaptive-pacing";
@@ -484,10 +489,8 @@ export function seedSimpleRoadmap(): SimpleDb {
   // Nor Oracle's goal suggestions (no goal is confirmed yet: none are made on its own).
   if (newCompany()) return { items: [], ids: {}, own: {}, suggestions: [], decisions: {}, key_dates: {}, goal_suggestions: [], goal_jobs: {}, auto_done: Object.keys(GOALS) };
   // MOCK-HOOK (mk-prd-look PS1): the invented PRD's features on their own roadmap, under its goal.
-  const mk = mkRoadmapItems(); // MOCK-HOOK
-  const mkG = mkGoal(mkSections().sections); // MOCK-HOOK
-  if (mk.length) ROADMAPS["crew-notes-roadmap"] = { title: `${mk[0].prd_doc.title.replace(/ PRD$/, "")} roadmap`, visibility: "company", prd: mk[0].prd_doc.title, draft: 1 }; // MOCK-HOOK
-  if (mkG) GOALS[mkG.key] = mkG.title; // MOCK-HOOK
+  const mk = mkRoadmapItems(); // MOCK-HOOK (read here: the PRD's id is known by now)
+  const mkG = MK_GOAL; // MOCK-HOOK
   return seeded("simple-roadmap", () => ({
     items: [...SEED.map((s) => ({ ...s })), ...mk], // MOCK-HOOK (PS1): ...mk
     ids: Object.fromEntries([...SEED, ...mk].map((s) => [s.key, stableUuid(`simple-item/${s.key}`)])), // MOCK-HOOK (PS1): ...mk

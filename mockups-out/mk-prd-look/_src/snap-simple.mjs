@@ -193,8 +193,8 @@ async function main() {
   await p0.getByLabel("Password").fill(["de", "mo"].join(""));
   await p0.getByRole("button", { name: "Sign in" }).click();
   await p0.waitForURL(/\/home$/, { timeout: 30000 });
+  const state = await first.storageState(); // taken before any one-pager is read: each frame starts from the mock's seed
   await pickKeys(p0);
-  const state = await first.storageState();
   await first.close();
 
   for (const o of ["a", "b", "c", "d", "e"]) {
@@ -205,6 +205,8 @@ async function main() {
       await ctx.addInitScript((dark) => localStorage.setItem("oracle-theme", dark ? "dark" : "light"), !!opts.dark);
       const page = await ctx.newPage();
       page.on("pageerror", (e) => console.log(`  ${name} pageerror: ${e.message.slice(0, 200)}`));
+      page.on("response", (r) => r.status() >= 400 && console.log(`  ${name} ${r.status()} ${r.url()}`));
+      page.on("console", (m) => m.type() === "error" && console.log(`  ${name} console: ${m.text().slice(0, 300)}`));
       await page.goto(`${BASE}${where}`);
       if (opts.list) await page.locator('[data-testid="one-pager-row"]').first().waitFor({ timeout: 30000 });
       else {
@@ -223,8 +225,7 @@ async function main() {
         // Change wording: point at a "Not doing" line (else the first line), Edit, type the new words; Save when asked.
         const line = (await page.locator('[data-line^="not_doing-"]').count()) ? page.locator('[data-line^="not_doing-"]').nth(1) : page.locator("[data-line]").first();
         const id = await line.getAttribute("data-line");
-        await line.scrollIntoViewIfNeeded();
-        await page.evaluate(() => scrollBy(0, -260));
+        await page.evaluate((i) => document.querySelector(`[data-line="${i}"]`)?.scrollIntoView({ block: "center" }), id);
         await line.hover();
         await page.locator(`[data-edit-for="${id}"]`).click();
         const box = page.locator(`#edit-${id}`);
@@ -233,14 +234,16 @@ async function main() {
           await page.getByRole("button", { name: "Save", exact: true }).click();
           await page.locator(`[data-line="${id}"][data-state="edited"]`).waitFor({ timeout: 15000 });
           await page.waitForTimeout(600);
-          await page.locator(`[data-line="${id}"]`).scrollIntoViewIfNeeded();
-          await page.evaluate(() => scrollBy(0, -260));
+          await page.evaluate((i) => document.querySelector(`[data-line="${i}"]`)?.scrollIntoView({ block: "center" }), id);
           await page.mouse.move(5, 5);
         }
       }
       if (opts.feature) {
+        await page.waitForLoadState("networkidle");
         await page.locator('[data-ps1-block="bets"] .ps1-code').first().click();
         await page.locator('[data-testid="item-panel"]').first().waitFor({ timeout: 15000 });
+        await page.getByText("Depends on", { exact: true }).first().waitFor({ timeout: 15000 }); // the panel has read the roadmap
+        await page.waitForTimeout(1500);
       }
       if (opts.present) {
         await page.getByRole("button", { name: "Present" }).first().click();

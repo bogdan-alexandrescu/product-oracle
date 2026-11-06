@@ -22,6 +22,7 @@
 [data-ps1] .ps1-table tr:last-child td { border-bottom: 0; } /* MOCK-HOOK */
 [data-ps1] .ps1-link { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 2px; } /* MOCK-HOOK */
 [data-ps1] .ps1-code { display: inline; padding: 0; margin: 0; border-radius: 3px; color: var(--accent-ink); font-weight: 600; text-decoration: none; background: transparent; text-align: left; cursor: pointer; } /* MOCK-HOOK */
+[data-ps1] li > div [data-testid="one-pager-line-text"] { display: inline; } /* MOCK-HOOK: the words run on beside the code */
 [data-ps1] .ps1-code:hover { background: var(--accent-soft); text-decoration: underline; text-underline-offset: 3px; } /* MOCK-HOOK */
 [data-ps1] li > div .ps1-code:first-child { margin-right: 8px; padding: 1px 6px; border: 1px solid var(--accent-mid, var(--simple-rule)); border-radius: 6px; font-size: 15px; font-variant-numeric: tabular-nums; } /* MOCK-HOOK */
 [data-ps1] .ps1-more, [data-ps1] .ps1-from-toggle { margin-top: 8px; font-size: 15px; font-weight: 600; color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; text-align: left; } /* MOCK-HOOK */
@@ -36,7 +37,7 @@
 }
 [data-ps1] .ps1-nav { display: none; } /* MOCK-HOOK */
 @media (min-width: 768px) { [data-ps1="a"] .ps1-nav, [data-ps1="d"] .ps1-nav { display: flex; } } /* MOCK-HOOK */
-[data-ps1] .ps1-nav a { display: block; padding: 5px 8px; border-radius: 6px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } /* MOCK-HOOK */
+[data-ps1] .ps1-nav a { display: block; padding: 5px 8px; border-radius: 6px; color: var(--text2); overflow-wrap: anywhere; } /* MOCK-HOOK */
 [data-ps1] .ps1-nav a:hover { background: var(--surface2, var(--bg)); color: var(--text); } /* MOCK-HOOK */
 [data-ps1] .ps1-nav .ps1-num { min-width: 1.6em; margin-right: 4px; } /* MOCK-HOOK */
 [data-ps1] .ps1-nav-title { margin: 10px 8px 4px; font-size: 13px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); } /* MOCK-HOOK */
@@ -124,4 +125,3 @@
 [data-ps1-list="e"] > li { aspect-ratio: 8.5 / 11; flex-direction: column; align-items: flex-start !important; justify-content: flex-start; gap: 10px !important; padding: 22px 20px !important; border: 0 !important; background: var(--simple-paper, var(--surface)); box-shadow: 0 1px 3px rgb(0 0 0 / 0.12), 0 8px 22px rgb(0 0 0 / 0.07); font-family: Charter, Georgia, "DejaVu Serif", serif; } /* MOCK-HOOK */
 [data-ps1-list="e"] > li > a { font-size: 19px; line-height: 25px; } /* MOCK-HOOK */
 [data-ps1-list="e"] > li > span:last-child { margin-left: 0 !important; margin-top: auto; font-family: var(--font-sans); } /* MOCK-HOOK */
-[data-ps1="d"] .ps1-nav a { white-space: normal; } /* MOCK-HOOK */
