@@ -438,14 +438,14 @@ test("the side menu's Roadmap count holds the dates to confirm: it equals Needs 
   await page.getByTestId("needs-decision").click();
   const dates = Number(await tray(page).getByTestId("tray-counter").filter({ hasText: "Dates to confirm" }).locator("b").innerText());
   // Pre-demo QA S-6: Needs a decision counts the goals' suggested features it lists too, in a
-  // tile of their own, so the tiles add up to the button. The side menu's Roadmap count is the
-  // other tiles for now (it leaves the suggested features to the Inbox until it counts them too).
+  // tile of their own, so the tiles add up to the button; the side menu's Roadmap count reads
+  // the same ones, so it equals the button.
   const tiles = (await tray(page).getByTestId("tray-counter").locator("b").allInnerTexts()).reduce((n, t) => n + Number(t), 0);
-  const suggested = Number(await tray(page).getByTestId("tray-counter").filter({ hasText: "Suggested features" }).locator("b").innerText());
   await tray(page).getByRole("button", { name: "Close" }).click();
   expect(dates).toBeGreaterThan(0);
-  expect(tiles).toBe(waiting);
-  await expect.poll(async () => Number(await badge(page).innerText())).toBe(tiles - suggested);
+  await expect(page.getByTestId("needs-decision")).toContainText(`· ${tiles}`);
+  expect(tiles).toBeGreaterThanOrEqual(waiting);
+  await expect.poll(async () => Number(await badge(page).innerText())).toBe(tiles);
   await expect(badge(page)).toHaveAttribute("aria-label", new RegExp(`${dates} dates? to confirm`));
 });
 

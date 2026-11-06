@@ -281,13 +281,16 @@ for (const phone of [false, true]) {
       await openFromInbox("Open the suggestions for Keep alerts quiet");
       const card = page.getByTestId("goal-suggestion").first();
       await expect(card).toBeVisible();
-      await expect.poll(() => inboxCount(page, phone)).toBeGreaterThan(0);
-      const n1 = await inboxCount(page, phone);
+      // The side menu's Roadmap count holds the suggested features (the phone's Roadmap tab), so
+      // the phone's More count does not: the one waiting item is counted once.
+      const where1 = phone ? "roadmap" : "more";
+      await expect.poll(() => inboxCount(page, phone, where1)).toBeGreaterThan(0);
+      const n1 = await inboxCount(page, phone, where1);
       await tap(card.getByRole("button", { name: "Accept" }));
       const added = page.getByText(/^Added .+ as a draft$/);
       await expect(added).toBeVisible();
       const feature = (await added.textContent())!.replace(/^Added (.+) as a draft$/, "$1");
-      await expect.poll(() => inboxCount(page, phone)).toBe(n1 - 1);
+      await expect.poll(() => inboxCount(page, phone, where1)).toBe(n1 - 1);
       // The added draft settles after DRAFTING_MS and its Oracle's dates then wait in the Inbox
       // too: the roadmap is read once it has, so the count below already has them.
       await page.waitForTimeout(DRAFTING_MS + 500);

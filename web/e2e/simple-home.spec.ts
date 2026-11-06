@@ -78,9 +78,9 @@ for (const phone of [false, true]) {
           // A yellow count only where something waits on me (home-waiting-one-list): on the Roadmap the
           // broken links (roadmap-decide: as the roadmap counts them), the dates to confirm and the
           // commenter's three proposals on my items, each said in its title (10 in this line's mock: one more date to confirm;
-          // pre-demo QA S-5: an end past its milestone counted as a broken link, as Home counts it; P-1: 23 with the Goal map's 12 features, roadmap items from the first load, each a date to confirm).
-          await expect(page.getByTestId("simple-nav-roadmap-count")).toHaveText("23");
-          await expect(page.getByTestId("simple-nav-roadmap-count")).toHaveAttribute("title", /^23 on the roadmap waiting on you: .*, 3 changes or drafts$/);
+          // pre-demo QA S-5: an end past its milestone counted as a broken link, as Home counts it; P-1: 23 with the Goal map's 12 features, roadmap items from the first load, each a date to confirm; 26 with the 3 suggested features Needs a decision lists).
+          await expect(page.getByTestId("simple-nav-roadmap-count")).toHaveText("26");
+          await expect(page.getByTestId("simple-nav-roadmap-count")).toHaveAttribute("title", /^26 on the roadmap waiting on you: .*, 3 changes or drafts$/);
           await expect(page.getByTestId("simple-nav-one-pagers-count")).toHaveCount(0);
           await expect(page.getByTestId("simple-nav-priorities-count")).toHaveCount(0);
           await expect(page.getByTestId("simple-person")).toContainText(/owner/i);
