@@ -282,3 +282,11 @@ async def test_every_red_flag_with_a_fix_waits_as_a_broken_link(monkeypatch):
     monkeypatch.setattr(company_time, "company_today", today)
     out = await waiting_list._roadmap(None, None)  # type: ignore[arg-type]
     assert [i.key.split(":")[2] for i in out] == ["dependency_order", "outside_milestone"]
+
+
+def test_a_ground_truth_stop_is_named_as_its_run_names_it():
+    """port-AN 5: the one list's run stop reads "Confirm the Ground Truth", as the run's own
+    stop since the Ground Truth words (never "the baseline")."""
+    from oracle.simple import waiting_list
+
+    assert waiting_list._STOP_ACTION["baseline_confirm"] == "Confirm the Ground Truth"
