@@ -10,7 +10,7 @@ import { expect, test, type Page } from "./test";
  * protects = the one-pager keeps its blocks, Edit, Present and Export PDF; under it the whole PRD
  * reads section by section, numbered (1 Problem …), its codes with their names, its tables in
  * their own box; the contents list jumps to a block or a section; a line that starts with a
- * feature code shows the code as a chip that opens the feature panel; a viewer reads it all with
+ * feature code shows the code as a chip that opens its roadmap item's panel (depends on, dates, goal); a viewer reads it all with
  * no Edit; Present shows the one-pager alone;
  * fails_when = the page shows the one-pager only, the PRD's sections carry no numbers, a code
  * shows without its name, or a feature code opens nothing;
@@ -27,6 +27,17 @@ async function openPage(page: Page, email?: string) {
   await expect(page.getByTestId("one-pager-row").first()).toHaveCSS("font-size", "18px");
   await page.goto(URL);
   await expect(page.getByRole("heading", { level: 1, name: "Guided setup" })).toBeVisible();
+}
+
+/** F-26's panel reads the roadmap's item: its code and name, what it depends on, its dates (month first) and its goal. */
+async function expectCalendarPanel(page: Page) {
+  const panel = page.getByTestId("item-panel");
+  await expect(panel.getByTestId("card-name")).toHaveText(/^F-26\s*Calendar invites/);
+  await expect(panel.getByTestId("card-depends")).toContainText("Setup checklist");
+  await expect(panel.getByTestId("card-dates")).toHaveText(/[A-Z][a-z]{2} \d{1,2}/);
+  await expect(panel.getByTestId("card-dates")).not.toHaveText(/\d{4}-\d{2}-\d{2}/);
+  await expect(panel.getByTestId("card-goal")).toContainText("Faster activation");
+  await expect(page.getByText("This feature is not on a roadmap you can see yet")).toHaveCount(0);
 }
 
 const whole = (page: Page) => page.getByTestId("prd-whole");
@@ -70,7 +81,7 @@ for (const scheme of ["light", "dark"] as const) {
       // A feature code in the PRD opens the feature panel.
       await risks.getByRole("button", { name: "Open F-26 Calendar invites" }).click();
       await expect(page.getByTestId("item-panel")).toBeVisible();
-      await expect(page.getByTestId("item-panel")).toHaveAttribute("aria-label", /Calendar invites/);
+      await expectCalendarPanel(page);
     });
 
     test("a line that starts with a feature code shows it as a chip that opens the panel", async ({ page }) => {
@@ -78,7 +89,7 @@ for (const scheme of ["light", "dark"] as const) {
       const line = page.locator('[data-line="risks-3"]');
       await expect(line).toContainText("F-26 Calendar invites may slip past M1");
       await line.getByRole("button", { name: "Open F-26 Calendar invites" }).click();
-      await expect(page.getByTestId("item-panel")).toHaveAttribute("aria-label", /Calendar invites/);
+      await expectCalendarPanel(page);
     });
 
     test("Present shows the one-pager alone", async ({ page }) => {

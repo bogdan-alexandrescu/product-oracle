@@ -114,7 +114,7 @@ function namedInRow(cell: Inline[], row: Inline[][], codes: CodeIndex): boolean 
 function Body({ md, codes, prd }: { md: string; codes: CodeIndex; prd: Doc }) {
   const blocks = useMemo(() => parseBlocks(md), [md]);
   return (
-    <div className="simple-prd-body">
+    <div className="simple-prd-body" data-section-body>
       {blocks.map((b, i) => {
         if (b.t === "p") return <p key={i}><Text c={b.c} codes={codes} prd={prd} /></p>;
         if (b.t === "h") return <p key={i} className="simple-prd-subhead"><Text c={b.c} codes={codes} prd={prd} /></p>;
@@ -168,7 +168,7 @@ export function PrdWhole({ prd, doc }: { prd: PrdSections; doc: Doc }) {
         const H = s.level <= 2 ? "h3" : "h4";
         return (
           <section key={s.section_key} id={`prd-sec-${s.section_key}`} data-prd-sec={s.section_key} data-level={s.level} className="simple-prd-sec">
-            <H className="simple-prd-sec-title">
+            <H className="simple-prd-sec-title" data-user-content>
               {nums.get(s.section_key) && <><span className="simple-prd-num">{nums.get(s.section_key)}</span><span className="sr-only"> </span></>}
               {titleOf(s.heading)}
             </H>
