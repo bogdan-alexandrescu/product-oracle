@@ -25,13 +25,25 @@ const plainHeading = (h: string) => stripRawTokens(h.replace(/\*\*/g, ""));
 const titleOf = (h: string) => { const t = plainHeading(h); return ownNumber(t)?.rest ?? t; };
 const hasWords = (s: SectionOut) => /[\p{L}\p{N}]/u.test(s.body_md ?? "");
 
+/** A table row that gives a code and its name ("| F-26 | Calendar invites |") names that code, as the one-pager reads it. */
+function withTableNames(index: CodeIndex, sections: SectionOut[]): CodeIndex {
+  for (const s of sections)
+    for (const line of (s.body_md ?? "").split("\n")) {
+      const cells = line.trim().startsWith("|") ? line.split("|").map((c) => c.replace(/\*\*/g, "").trim()) : [];
+      const [code, name] = [cells[1], cells[2]];
+      if (!code || !name || !/^[A-Z]{1,3}-\d+$/.test(code) || !/^\p{Lu}/u.test(name) || index.has(code)) continue;
+      index.set(code, { code, kind: code.startsWith("F") ? "Feature" : code.startsWith("M") ? "Milestone" : "Section", name, sectionKey: s.section_key, from: "this PRD" });
+    }
+  return index;
+}
+
 /** The PRD version the one-pager reads, every section (GET /v1/documents/{doc}/versions/{n}). */
 export function usePrdSections(doc: string | null, n: number) {
   const q = useQuery(`simple-prd|${doc}|${n}`, () =>
     doc ? unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc, n } } })).catch(() => null) : Promise.resolve(null),
   );
   const sections = useMemo(() => (q.data?.sections ?? []) as SectionOut[], [q.data]);
-  const codes = useMemo(() => buildCodeIndex(sections.map((s) => ({ section_key: s.section_key, heading: s.heading, body_md: s.body_md }))), [sections]);
+  const codes = useMemo(() => withTableNames(buildCodeIndex(sections.map((s) => ({ section_key: s.section_key, heading: s.heading, body_md: s.body_md }))), sections), [sections]);
   const nums = useMemo(() => numbersOf(sections), [sections]);
   return { sections, codes, nums, loading: q.loading };
 }
@@ -129,7 +141,7 @@ export function PrdContents({ prd, blocks }: { prd: PrdSections; blocks: View["b
       {top.length > 0 && <p className="simple-prd-nav-title">The whole PRD</p>}
       {top.map((s) => (
         <a key={s.section_key} href={`#prd-sec-${s.section_key}`} title={plainHeading(s.heading)}>
-          <span className="simple-prd-num">{nums.get(s.section_key)}</span>
+          <span className="simple-prd-num">{nums.get(s.section_key)}</span>{" "}
           {titleOf(s.heading)}
         </a>
       ))}
@@ -150,7 +162,7 @@ export function PrdWhole({ prd, doc }: { prd: PrdSections; doc: Doc }) {
         return (
           <section key={s.section_key} id={`prd-sec-${s.section_key}`} data-prd-sec={s.section_key} data-level={s.level} className="simple-prd-sec" aria-label={plainHeading(s.heading)}>
             <H className="simple-prd-sec-title">
-              {nums.get(s.section_key) && <span className="simple-prd-num">{nums.get(s.section_key)}</span>}
+              {nums.get(s.section_key) && <><span className="simple-prd-num">{nums.get(s.section_key)}</span>{" "}</>}
               {titleOf(s.heading)}
             </H>
             {hasWords(s) && <Body md={s.body_md} codes={codes} prd={doc} />}

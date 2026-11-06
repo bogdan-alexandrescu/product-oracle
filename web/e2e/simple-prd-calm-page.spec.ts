@@ -45,7 +45,7 @@ for (const scheme of ["light", "dark"] as const) {
       // The whole PRD under the one-pager, numbered as on the Detailed side.
       await expect(whole(page).getByRole("heading", { level: 2, name: "The whole PRD" })).toBeVisible();
       const problem = whole(page).getByRole("region", { name: "Problem" });
-      await expect(problem.getByRole("heading", { level: 3 })).toHaveText("1Problem");
+      await expect(problem.getByRole("heading", { level: 3 })).toHaveText("1 Problem");
       await expect(problem).toContainText("New workspace admins stall during setup");
       // A code is never shown without its name.
       const risks = whole(page).getByRole("region", { name: "Risks and open decisions" });
@@ -54,12 +54,12 @@ for (const scheme of ["light", "dark"] as const) {
 
       // The contents list beside it: the blocks, then the PRD's sections; a pick jumps there.
       const contents = page.getByRole("navigation", { name: "Contents" });
-      await expect(contents.getByRole("link", { name: "What we will build" })).toBeVisible();
+      await expect(contents.getByRole("link", { name: "What we will build", exact: true })).toBeVisible();
       await contents.getByRole("link", { name: "11 Not this quarter" }).click();
       const later = whole(page).getByRole("region", { name: "Not this quarter" });
       await expect(later).toBeInViewport();
       await expect(contents).toBeInViewport();
-      await contents.getByRole("link", { name: "Outcomes and how we measure them" }).click();
+      await contents.getByRole("link", { name: "Outcomes and how we measure them", exact: true }).click();
       await expect(onePager.getByRole("region", { name: "Outcomes and how we measure them" })).toBeInViewport();
 
       // The table reads in its own box.
@@ -107,7 +107,7 @@ test.describe("phone 390", () => {
     await expect(page.getByRole("navigation", { name: "Contents" })).toBeHidden();
     const targets = whole(page).getByRole("region", { name: "Targets" });
     await targets.scrollIntoViewIfNeeded();
-    await expect(targets.getByRole("heading", { level: 3 })).toHaveText("10Targets");
+    await expect(targets.getByRole("heading", { level: 3 })).toHaveText("10 Targets");
     await expect(whole(page).getByRole("region", { name: "Glossary" }).getByRole("region", { name: "Table" })).toBeVisible();
     // Nothing widens the page.
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
