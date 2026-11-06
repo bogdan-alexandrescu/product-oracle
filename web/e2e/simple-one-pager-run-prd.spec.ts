@@ -70,11 +70,13 @@ for (const phone of [false, true]) {
       await readsCleanly(page);
       const look = page.getByRole("region", { name: "Needs a look" });
       // qa4-simple-prd-11 (#999): each names the page's own section, not the PRD's heading.
-      await expect(look.getByTestId("needs-look-line")).toHaveText(["F-40 has no name in the PRD.", "F-50 has no name in the PRD."]);
+      await expect(look.getByTestId("needs-look-line")).toHaveText(["F-40 has no name in “Risks and open decisions”", "F-50 has no name in “Risks and open decisions”"]);
+      // C-15: a code reads as the numbers do, one short line with the detail behind an (i).
+      await expect(look.getByRole("button", { name: "About F-40 has no name in “Risks and open decisions”" })).toHaveAccessibleDescription(/F-40 has no name in the PRD\./);
       await expect(look.getByTestId("needs-look-go")).toHaveText(["In: Risks and open decisions", "In: Risks and open decisions"]);
       // C-15: each line opens the PRD at its section to fix it.
       await expect(look.getByRole("link", { name: "Open the section" })).toHaveCount(2);
-      await expect(look.getByRole("link", { name: "Open the section" }).first()).toHaveAttribute("href", /^\/documents\/[^#]+#top-risks$/);
+      await expect(look.getByRole("link", { name: "Open the section" }).first()).toHaveAttribute("href", /^\/documents\/[^#/]+\/v\/\d+#top-risks$/);
     });
 
     test("when Oracle's job did not write the page, one line says it is the quick read", async ({ page }) => {
