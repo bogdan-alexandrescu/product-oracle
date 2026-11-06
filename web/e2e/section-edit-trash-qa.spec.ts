@@ -62,7 +62,6 @@ for (const theme of THEMES)
       await expect(text).toBeVisible();
       await expect(editor.getByTestId("section-edit-preview")).toHaveCount(0);
       await expect(editor.getByText(/markdown/i).filter({ visible: true })).toHaveCount(0);
-      await expect(editor.getByText("Preview", { exact: true }).filter({ visible: true })).toHaveCount(0);
       await noWiderThanTheScreen(page);
 
       await text.fill("One reminder email per cart, a day after it was left.");

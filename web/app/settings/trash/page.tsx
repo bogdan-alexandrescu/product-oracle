@@ -15,6 +15,24 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 type Entry = Schemas["TrashEntryOut"];
 
 /** F-68: deletes an entry for good now (owners; DELETE /v1/trash/{entry_id}). */
+/** G-4: what an entry holds beyond its name, in a few words: a goal's features, an agenda item's meeting. */
+function holds(root: Entry["root"]): string | null {
+  if (root.type === "goal" && root.features != null) return `with ${root.features} ${root.features === 1 ? "feature" : "features"}`;
+  if (root.type === "agenda_item" && root.meeting) return `from ${root.meeting}`;
+  return null;
+}
+
+/** G-4: Restore's (i): "Restore brings back Goal Activation with 5 features". */
+function restoreText(e: Entry): string {
+  const name = e.root.code ? `${e.root.code} ${e.root.title}` : itemTitle(e.root, e.root.title);
+  const what = `${itemKind(e.root)} ${name}`;
+  if (e.root.type === "agenda_item" && e.root.meeting) return `Restore brings back ${what} to the agenda of ${e.root.meeting}.`;
+  const held = holds(e.root);
+  if (held) return `Restore brings back ${what} ${held}, as they were.`;
+  if (e.items.length) return `Restore brings back ${entryText(e.root, e.items)}, together.`;
+  return `Restore brings back ${what} as it was.`;
+}
+
 const purge = (e: Entry) => unwrap(api.DELETE("/v1/trash/{entry_id}", { params: { path: { entry_id: e.id } } }));
 
 function Row({ e, mayPurge, onGone }: { e: Entry; mayPurge: boolean; onGone: () => void }) {
@@ -66,6 +84,11 @@ function Row({ e, mayPurge, onGone }: { e: Entry; mayPurge: boolean; onGone: () 
           <span className="min-w-0 font-semibold break-words">{e.root.code ? `${e.root.code} ${e.root.title}` : itemTitle(e.root, e.root.title)}</span>
           {e.published && <Chip kind="warn">Was published</Chip>}
         </p>
+        {holds(e.root) && (
+          <p className="mt-0.5 text-sm break-words text-text2" data-testid="trash-holds">
+            {holds(e.root)}
+          </p>
+        )}
         {e.items.length > 0 && (
           <ul aria-label={`Went with ${e.root.title}`} className="mt-1 flex flex-col gap-0.5 text-sm">
             {e.items.map((i) => (
@@ -89,9 +112,14 @@ function Row({ e, mayPurge, onGone }: { e: Entry; mayPurge: boolean; onGone: () 
           {e.days_left} {e.days_left === 1 ? "day" : "days"} left
         </Chip>
         {e.can_restore && (
-          <Button aria-label={`Restore ${e.root.title}`} disabled={busy} onClick={restore}>
-            Restore
-          </Button>
+          <>
+            <Button aria-label={`Restore ${e.root.title}`} disabled={busy} onClick={restore}>
+              Restore
+            </Button>
+            <InfoTip label={`restoring ${e.root.title}`} side="bottom">
+              {restoreText(e)}
+            </InfoTip>
+          </>
         )}
         {mayPurge && (
           <Button variant="ghost" aria-label={`Delete ${e.root.title} for good`} disabled={busy} onClick={() => void deleteForGood()}>
