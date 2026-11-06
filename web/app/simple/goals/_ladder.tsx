@@ -15,6 +15,7 @@
  */
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type PointerEvent as RPointerEvent, type RefObject, type WheelEvent as RWheelEvent } from "react";
 
+import Link from "next/link";
 import { Icon } from "@/components/ds/Icon";
 import { toast } from "@/components/ds/Toast";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -495,6 +496,31 @@ function useLadderProps(): LadderProps {
   return useContext(Ctx)!.props;
 }
 
+/** goal-map-scoreboard: where a goal's reading comes from, or the action that gives it one. */
+function Reading({ g, canEdit, onPick }: { g: GmGoal; canEdit: boolean; onPick: (goal: string) => void }) {
+  const link = "w-fit text-[12px] leading-4 font-semibold text-accent-ink hover:underline";
+  if (g.missing === "metric")
+    return canEdit ? (
+      <button type="button" data-testid="gm-pick-metric" onClick={() => onPick(g.id)} className={link}>
+        Pick its metric
+      </button>
+    ) : (
+      <Link href="/company/metrics" data-testid="gm-see-metrics" className={link}>See metrics</Link>
+    );
+  if (g.missing === "values" && g.metric)
+    return (
+      <Link href={`/company/metrics?metric=${encodeURIComponent(g.metric.id)}`} data-testid="gm-add-value" className={link}>
+        Add a value
+      </Link>
+    );
+  return (
+    <span data-testid="gm-goal-source" className="text-[12px] leading-4 text-text2">
+      {g.metric ? `From ${g.metric.title}` : "Typed in by hand"}
+      {g.read_on ? ` · ${g.read_on}` : ""}
+    </span>
+  );
+}
+
 function GoalCard({ g, i, v }: { g: GmGoal; i: number; v: V }) {
   const p = useLadderProps();
   const now = v.ms.some((m) => m.goal === g.id && m.due_on && m.due_on <= addDays(v.map.today_on, 14));
@@ -517,6 +543,7 @@ function GoalCard({ g, i, v }: { g: GmGoal; i: number; v: V }) {
         <b className="text-[16px]">{num(g.current, g.unit)}</b> of {num(g.target, g.unit)}
         <span className={`ml-auto font-semibold ${KR[g.status]}`}>{KR_WORD[g.status]}</span>
       </span>
+      <Reading g={g} canEdit={v.canChange} onPick={p.onMetric} />
       {draws.length > 0 && <span className="text-[12px] leading-4 text-text2">Draws on: {draws.join(", ")}</span>}
       {v.menu === key && (
         <MenuList
