@@ -1458,7 +1458,7 @@ async def read(
                 SimpleChange.op.in_(("edit_line", NUMBER_OP)),
                 SimpleChange.status == "proposed",
             )
-            .order_by(SimpleChange.at)
+            .order_by(SimpleChange.at, SimpleChange.seq)
         )
     )
     # A numbers fix proposed shows on its "Needs a look" item, never as a line's note.

@@ -12,11 +12,13 @@ from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
+    Identity,
     Index,
     Integer,
     Text,
@@ -171,6 +173,9 @@ class SimpleChange(TenantScoped, Base):
     draft_ids: Mapped[list[uuid.UUID]] = mapped_column(
         ARRAY(Uuid), nullable=False, server_default="{}"
     )
+    # The order changes were made in: ``at`` ties when two land in the same instant, and
+    # the id is random, so lists break the tie on this.
+    seq: Mapped[int] = mapped_column(BigInteger, Identity(), nullable=False)
 
 
 DRAFT_STATUSES = ("working", "submitted", "approved", "discarded")

@@ -189,7 +189,7 @@ def test_baseline_flow_check_up_down_up(scratch_db):
     script = ScriptDirectory.from_config(cfg)
     previous = script.get_revision(BASELINE_FLOW).down_revision
     # removed-tracks, prd-order: renumbered when trains merge.
-    assert script.get_heads() == ["0118_document_position"]
+    assert script.get_heads() == ["0120_simple_changes_seq"]
 
     command.upgrade(cfg, previous)
     assert "'baseline'" not in _flow_check()
