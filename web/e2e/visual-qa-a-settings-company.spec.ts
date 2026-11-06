@@ -202,7 +202,7 @@ const FAILED: { name: string; path: string; url: string; what: string; after: (p
     path: "/v1/strategy/stack",
     url: "/company/strategy",
     what: "Could not load the strategy.",
-    after: (p) => expect(p.getByTestId("strategy-stack")).toBeVisible(),
+    after: (p) => expect(p.getByRole("heading", { name: "Strategy stack", exact: true })).toBeVisible(),
   },
   {
     name: "Settings › Members",
