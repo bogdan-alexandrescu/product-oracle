@@ -1316,7 +1316,7 @@ function QuarterList(props: TimelineProps) {
             <h3 className="flex items-center gap-2 border-b border-line px-3 py-2 text-sm font-semibold">
               {q.label}{" "}
               <span className="font-normal text-text2">
-                {quarterWords(q)} · {items.length} items
+                {quarterWords(q)} · {items.length} {items.length === 1 ? "item" : "items"}
               </span>
               {q === tq && (
                 <span

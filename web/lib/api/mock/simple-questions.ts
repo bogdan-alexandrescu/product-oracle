@@ -26,6 +26,8 @@ type Change = Schemas["SimpleChangeOut"];
 export interface QuestionsCtx {
   me: { id: string; role: Role };
   members: { id: string; name: string; role: Role; email: string }[];
+  /** simple-replaced-prds: the PRD documents; one marked replaced (`replaced_by`) has its questions left out of Simple. */
+  documents?: () => { id: string; slug: string; replaced_by?: unknown[] }[];
 }
 
 interface Q {
@@ -163,11 +165,17 @@ function out(ctx: QuestionsCtx, q: Q): Question {
   };
 }
 
-/** Open first, soonest due first; decided after, newest first (as the API). */
-export function questionsOut(ctx: QuestionsCtx, db: QuestionsDb, prd?: string | null): Question[] {
+/** simple-replaced-prds: the questions' PRD is marked replaced. */
+export const questionsPrdReplaced = (ctx: QuestionsCtx) =>
+  !!ctx.documents?.().some((d) => (d.slug === QUESTIONS_PRD.slug || d.id === QUESTIONS_PRD.id) && d.replaced_by?.length);
+
+/** Open first, soonest due first; decided after, newest first (as the API). `agenda`: a review meeting's own PRD, replaced or not (as questions.due_for). */
+export function questionsOut(ctx: QuestionsCtx, db: QuestionsDb, prd?: string | null, agenda = false): Question[] {
   if (prd && prd !== QUESTIONS_PRD.slug && prd !== QUESTIONS_PRD.id) return [];
+  // simple-replaced-prds (as questions.page_fields and questions._readable): a replaced PRD's open questions leave Simple; its decided ones stay as history.
+  const replaced = !agenda && questionsPrdReplaced(ctx);
   const all = db.questions.map((q) => [q, out(ctx, q)] as const);
-  const open = all.filter(([q]) => !decided(q)).sort(([a], [b]) => a.due - b.due || a.n - b.n);
+  const open = replaced ? [] : all.filter(([q]) => !decided(q)).sort(([a], [b]) => a.due - b.due || a.n - b.n);
   const done = all.filter(([q]) => decided(q)).sort(([a], [b]) => (b.decided_at ?? "").localeCompare(a.decided_at ?? ""));
   return [...open, ...done].map(([, o]) => o);
 }
@@ -212,7 +220,7 @@ export function decidedOutsideRows(ctx: QuestionsCtx, db: QuestionsDb, shown: Qu
  * them while it runs); soonest first.
  */
 export function agendaOut(ctx: QuestionsCtx, db: QuestionsDb, meeting: { id: string; session_id: string; live: boolean }): Question[] {
-  const all = questionsOut(ctx, db);
+  const all = questionsOut(ctx, db, null, true);
   const open = all.filter((q) => q.status === "proposed");
   const here = new Set(db.questions.filter((q) => decided(q) && q.meeting_id === meeting.id).map((q) => stableUuid(`simple-question/${q.n}`)));
   const done = all
