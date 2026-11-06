@@ -179,8 +179,8 @@ import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStray
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, CROWDED_MILESTONES_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
-import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
-import { applyFitDate, knowGoalMapItems, seedFitDateRoadmap } from "./simple-roadmap";
+import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, goalRank, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { applyFitDate, knowGoalMapItems, ownPrd, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapItems, routeGoalMap, type GoalMap } from "./goal-map";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
@@ -4317,7 +4317,42 @@ function sectionLayer(db: Db, versionId: string, key: string): Schemas["SectionO
   return db.versions.find((v) => v.id === versionId)?.sections.find((s) => s.section_key === key)?.layer ?? null;
 }
 
-function documentSummary(db: Db, d: DocumentRow): Schemas["DocumentSummary"] {
+/**
+ * prd-order (oracle.docs.prd_order): each PRD's place in the one company PRD order (1 = first):
+ * its position first; then, without one, the goal order of the goal most of its roadmap items
+ * serve (none last; a tie to the goal first); then its title (case-folded, then as written); then id.
+ */
+function prdOrder(db: Db): Map<string, number> {
+  // The one goal order, as Simple reads it (simpleRoute).
+  const baselineGoals = db.baseline.entities.filter((e) => e.type === "goal");
+  knowCompanyGoals([...baselineGoals, ...(db.simple_roadmap ? bucketGoalsInOrder(db.simple_roadmap, new Set(baselineGoals.map((e) => e.key))) : [])]);
+  const items = (db.simple_roadmap?.items ?? []).filter((s) => !s.trashed && s.goal);
+  // Each goal's place: the one goal order, a goal it does not hold after those by key (as the roadmap's goal rows).
+  const keys = [...new Set(items.map((s) => s.goal!))].sort((a, b) => goalRank(a) - goalRank(b) || a.localeCompare(b));
+  const main = (d: DocumentRow): number | null => {
+    const counts = new Map<number, number>();
+    for (const s of items) {
+      if (ownPrd(s).slug === d.slug) counts.set(keys.indexOf(s.goal!), (counts.get(keys.indexOf(s.goal!)) ?? 0) + 1);
+    }
+    const most = Math.max(0, ...counts.values());
+    return most ? Math.min(...[...counts].filter(([, n]) => n === most).map(([r]) => r)) : null;
+  };
+  const code = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+  const prds = db.documents.filter((d) => (d.kind ?? "prd") === "prd").map((d) => ({ d, goal: main(d) }));
+  prds.sort(
+    (a, b) =>
+      Number(a.d.position == null) - Number(b.d.position == null) ||
+      (a.d.position ?? 0) - (b.d.position ?? 0) ||
+      Number(a.goal === null) - Number(b.goal === null) ||
+      (a.goal ?? 0) - (b.goal ?? 0) ||
+      code(a.d.title.toLowerCase(), b.d.title.toLowerCase()) ||
+      code(a.d.title, b.d.title) ||
+      code(a.d.id, b.d.id),
+  );
+  return new Map(prds.map(({ d }, n) => [d.id, n + 1]));
+}
+
+function documentSummary(db: Db, d: DocumentRow, ranks: Map<string, number> = prdOrder(db)): Schemas["DocumentSummary"] {
   const vs = docVersions(db, d);
   const latest = vs[vs.length - 1];
   const period = d.kind === "update" ? ((latest?.front_matter.period as UpdatePeriod | undefined) ?? null) : null;
@@ -4334,6 +4369,8 @@ function documentSummary(db: Db, d: DocumentRow): Schemas["DocumentSummary"] {
     latest_version: latest?.number ?? null,
     approved_version: vs.filter((v) => v.approved_at).pop()?.number ?? null,
     source: latest?.source ?? null,
+    position: (d.kind ?? "prd") === "prd" ? (d.position ?? null) : null,
+    order: ranks.get(d.id) ?? null,
   };
 }
 
@@ -7001,19 +7038,37 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] !== "documents") return notFound("Route");
   if (p.length === 2) {
     const kind = q.get("kind");
-    return json(
-      200,
-      db.documents
-        .filter((d) => canSee(me.role, d.visibility))
-        .map((d) => documentSummary(db, d))
-        .filter((d) => !kind || d.kind === kind),
-    );
+    const ranks = prdOrder(db);
+    const out = db.documents
+      .filter((d) => canSee(me.role, d.visibility))
+      .map((d) => documentSummary(db, d, ranks))
+      .filter((d) => !kind || d.kind === kind);
+    // prd-order: PRDs alone in the company PRD order.
+    if (kind === "prd") out.sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity));
+    return json(200, out);
   }
 
   const doc = findDocument(db, p[2]);
   if (!doc) return notFound("Document");
   if (p.length === 3) {
     return json(200, documentOut(db, doc));
+  }
+  // prd-order: an owner moves a PRD one place up or down; every PRD keeps its place (1..N).
+  if (p[3] === "move" && p.length === 4 && m === "POST") {
+    if (me.role !== "owner") return json(403, { detail: "Requires the owner role" });
+    if ((doc.kind ?? "prd") !== "prd") return notFound("PRD");
+    const input = await body<Partial<Schemas["PrdMoveIn"]>>();
+    if (input?.to !== "up" && input?.to !== "down") return json(422, { detail: "to is up or down" });
+    const ranks = prdOrder(db);
+    const prds = db.documents.filter((d) => ranks.has(d.id)).sort((a, b) => ranks.get(a.id)! - ranks.get(b.id)!);
+    const at = prds.indexOf(doc);
+    const other = input.to === "up" ? at - 1 : at + 1;
+    if (other >= 0 && other < prds.length) {
+      [prds[at], prds[other]] = [prds[other], prds[at]];
+      prds.forEach((d, n) => (d.position = n + 1));
+    }
+    const after = prdOrder(db);
+    return json(200, prds.filter((d) => canSee(me.role, d.visibility)).map((d) => documentSummary(db, d, after)));
   }
   // H8: who sees the document (owners only, with a reason; the API audits it).
   if (p[3] === "visibility" && p.length === 4 && m === "PATCH") {

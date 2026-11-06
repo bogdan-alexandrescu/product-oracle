@@ -435,7 +435,8 @@ export interface paths {
         };
         /**
          * List Documents
-         * @description Documents, newest first; ``kind`` lists only PRDs or only roadmaps. Each carries
+         * @description Documents, newest first; ``kind`` lists only PRDs (in the company PRD order,
+         *     prd-order) or only roadmaps. Each carries
          *     its latest and latest approved version and the latest version's provenance.
          */
         get: operations["list_documents"];
@@ -467,6 +468,28 @@ export interface paths {
          *     reason; audited as ``document.visibility`` with the values before and after.
          */
         patch: operations["set_document_visibility"];
+        trace?: never;
+    };
+    "/v1/documents/{doc}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move Document
+         * @description prd-order: move a PRD one place ``up`` or ``down`` in the company PRD order, the
+         *     order every page lists PRDs in. Owners only; audited as ``document.move``. Returns the
+         *     PRDs in their new order; at either end nothing moves.
+         */
+        post: operations["move_document"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/documents/{doc}/versions": {
@@ -22695,6 +22718,10 @@ export interface components {
              * @default false
              */
             company_roadmap: boolean;
+            /** Position */
+            position?: number | null;
+            /** Order */
+            order?: number | null;
             /**
              * Created At
              * Format: date-time
@@ -22857,6 +22884,10 @@ export interface components {
              * @default false
              */
             company_roadmap: boolean;
+            /** Position */
+            position?: number | null;
+            /** Order */
+            order?: number | null;
             /**
              * Created At
              * Format: date-time
@@ -33175,6 +33206,17 @@ export interface components {
              * @default []
              */
             unresolved: string[];
+        };
+        /**
+         * PrdMoveIn
+         * @description prd-order: one place up or down in the company PRD order.
+         */
+        PrdMoveIn: {
+            /**
+             * To
+             * @enum {string}
+             */
+            to: "up" | "down";
         };
         /** PrdRef */
         PrdRef: {
@@ -48915,6 +48957,55 @@ export interface operations {
                 content?: never;
             };
             /** @description No such document */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_document: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrdMoveIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSummary"][];
+                };
+            };
+            /** @description Not an owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such PRD */
             404: {
                 headers: {
                     [name: string]: unknown;

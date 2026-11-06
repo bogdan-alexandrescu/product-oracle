@@ -1204,7 +1204,7 @@
           "documents"
         ],
         "summary": "List Documents",
-        "description": "Documents, newest first; ``kind`` lists only PRDs or only roadmaps. Each carries\nits latest and latest approved version and the latest version's provenance.",
+        "description": "Documents, newest first; ``kind`` lists only PRDs (in the company PRD order,\nprd-order) or only roadmaps. Each carries\nits latest and latest approved version and the latest version's provenance.",
         "operationId": "list_documents",
         "security": [
           {
@@ -1337,6 +1337,78 @@
         },
         "x-min-role": "owner",
         "x-per-item": "owner"
+      }
+    },
+    "/v1/documents/{doc}/move": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Move Document",
+        "description": "prd-order: move a PRD one place ``up`` or ``down`` in the company PRD order, the\norder every page lists PRDs in. Owners only; audited as ``document.move``. Returns the\nPRDs in their new order; at either end nothing moves.",
+        "operationId": "move_document",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrdMoveIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentSummary"
+                  },
+                  "title": "Response Move Document"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not an owner"
+          },
+          "404": {
+            "description": "No such PRD"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
       }
     },
     "/v1/documents/{doc}/versions": {
@@ -72510,6 +72582,28 @@
             "title": "Company Roadmap",
             "default": false
           },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -72951,6 +73045,28 @@
             "type": "boolean",
             "title": "Company Roadmap",
             "default": false
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order"
           },
           "created_at": {
             "type": "string",
@@ -101020,6 +101136,24 @@
         "type": "object",
         "title": "PrdLinks",
         "description": "Cross-document links from a roadmap draft to its PRD version's sections."
+      },
+      "PrdMoveIn": {
+        "properties": {
+          "to": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down"
+            ],
+            "title": "To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "to"
+        ],
+        "title": "PrdMoveIn",
+        "description": "prd-order: one place up or down in the company PRD order."
       },
       "PrdRef": {
         "properties": {
