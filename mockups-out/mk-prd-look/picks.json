@@ -340,6 +340,349 @@
           ]
         }
       ]
+    },
+    {
+      "code": "PS1",
+      "name": "PRD on the Simple side",
+      "question": "How should a PRD read in Simple, from block to block and into its sections?",
+      "common": "Every proposal keeps the one-pager as it is: each block and line, Edit and Propose, Needs a look, Start a review meeting, Export PDF, Present, the plan strip, the timeline, notes and statuses. Each also shows the PRD's own sections as written, with no regeneration; a feature code opens the same feature panel as everywhere in Simple. a, b, c and e are the Simple twins of PT1 a, b, c and e; d is Simple only.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Calm page",
+          "recommended": true,
+          "what": "The one-pager as today, then the whole PRD under it in one calm column: every section numbered (1, 4, 11.7) with space and a rule between sections and body text a size up. A contents list on the left stays in view: the one-pager's blocks first, then the PRD's sections. A feature code at the start of a line becomes a small chip that opens the feature panel.",
+          "why": "It is the Simple twin of PT1 a (Calm document): the same numbers, rules and spacing, so a person who moves between Simple and Detailed reads one product. Nothing on the one-pager moves; the PRD is simply there to read below it, as written.",
+          "plus": "Reads top to bottom with no clicks; the contents list shows where you are and jumps to any section; section numbers match Detailed's.",
+          "cost": "A long page: the whole PRD sits under the one-pager. Template: no change (numbers come from heading levels). One-pager read: the page also reads the PRD version the one-pager is built from (GET /v1/documents/{doc}/versions/{n}, one more request; the one-pager's own read is unchanged). PDF and slides: no change (the one-pager PDF and Present show the one-pager only).",
+          "frames": [
+            {
+              "file": "ps1-a-list-1512.html",
+              "caption": "The One-pagers list, Crew notes PRD first"
+            },
+            {
+              "file": "ps1-a-top-1512.html",
+              "caption": "The PRD at rest: the one-pager, with the contents list on the left"
+            },
+            {
+              "file": "ps1-a-long-1512.html",
+              "caption": "4 Features by milestone, mid-page: the table with feature codes and names"
+            },
+            {
+              "file": "ps1-a-edit-1512.html",
+              "caption": "Change wording: Edit open on a Not doing line, new words typed"
+            },
+            {
+              "file": "ps1-a-saved-1512.html",
+              "caption": "Saved: the line now reads \"Invoicing or quoting from the phone, in this release.\", marked as changed, with Undo"
+            },
+            {
+              "file": "ps1-a-feature-1512.html",
+              "caption": "F-1 Offline job notes that sync when the crew is back in signal, opened from its code: the feature panel"
+            },
+            {
+              "file": "ps1-a-hard-1512.html",
+              "caption": "12 Risks and open questions, the widest table, shaded where more columns are, 1512 x 900"
+            },
+            {
+              "file": "ps1-a-hard-1440.html",
+              "caption": "The same at 1440 x 900"
+            },
+            {
+              "file": "ps1-a-viewer-1512.html",
+              "caption": "The top as a viewer: no Edit, no Start a review meeting"
+            },
+            {
+              "file": "ps1-a-dark-1512.html",
+              "caption": "11.7 F-7 Parts used on the job, picked from the van stock list, dark theme"
+            },
+            {
+              "file": "ps1-a-phone-top-390.html",
+              "caption": "Phone, 390 wide: the top"
+            },
+            {
+              "file": "ps1-a-phone-table-390.html",
+              "caption": "Phone, 390 wide: the risks table scrolls across in its own box"
+            },
+            {
+              "file": "ps1-a-present-1512.html",
+              "caption": "Present: the one-pager alone as the slide, Stop presenting at the top"
+            },
+            {
+              "file": "ps1-a-cost-1440.html",
+              "caption": "Cost: 11.9 F-9 Safety walk-round, partway down a long page (the scrollbar's small thumb)"
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Cards",
+          "recommended": false,
+          "what": "Each one-pager block and each PRD section is a card with a header bar that names it (\"Section 4\"); cards sit on the page's tint with space between them. The One-pagers list is a grid of cards too.",
+          "why": "The Simple twin of PT1 b (Section cards): each part is a clear box, easy to tell apart when scanning.",
+          "plus": "Very clear where one part ends and the next starts; works well on a phone, one card under another.",
+          "cost": "Cards take height: fewer sections fit on a screen, and there is no contents list. Template: no change. One-pager read: the page also reads the PRD version the one-pager is built from (GET /v1/documents/{doc}/versions/{n}, one more request; the one-pager's own read is unchanged). PDF and slides: no change (the PDF could draw the same boxes; not needed).",
+          "frames": [
+            {
+              "file": "ps1-b-list-1512.html",
+              "caption": "The One-pagers list, Crew notes PRD first (as a grid of cards)"
+            },
+            {
+              "file": "ps1-b-top-1512.html",
+              "caption": "The PRD at rest: the one-pager's blocks as cards"
+            },
+            {
+              "file": "ps1-b-long-1512.html",
+              "caption": "Section 4 Features by milestone, a card with its table"
+            },
+            {
+              "file": "ps1-b-edit-1512.html",
+              "caption": "Change wording: Edit open on a Not doing line, new words typed"
+            },
+            {
+              "file": "ps1-b-saved-1512.html",
+              "caption": "Saved: the line now reads \"Invoicing or quoting from the phone, in this release.\", marked as changed, with Undo"
+            },
+            {
+              "file": "ps1-b-feature-1512.html",
+              "caption": "F-1 Offline job notes that sync when the crew is back in signal, opened from its code: the feature panel"
+            },
+            {
+              "file": "ps1-b-hard-1512.html",
+              "caption": "Section 12 Risks and open questions, the widest table, shaded where more columns are, 1512 x 900"
+            },
+            {
+              "file": "ps1-b-hard-1440.html",
+              "caption": "The same at 1440 x 900"
+            },
+            {
+              "file": "ps1-b-viewer-1512.html",
+              "caption": "The top as a viewer: no Edit, no Start a review meeting"
+            },
+            {
+              "file": "ps1-b-dark-1512.html",
+              "caption": "11.7 F-7 Parts used on the job, picked from the van stock list, as a card, dark theme"
+            },
+            {
+              "file": "ps1-b-phone-top-390.html",
+              "caption": "Phone, 390 wide: the top"
+            },
+            {
+              "file": "ps1-b-phone-table-390.html",
+              "caption": "Phone, 390 wide: the risks table scrolls across in its own box"
+            },
+            {
+              "file": "ps1-b-present-1512.html",
+              "caption": "Present: the one-pager alone as the slide, Stop presenting at the top"
+            },
+            {
+              "file": "ps1-b-cost-1440.html",
+              "caption": "Cost: two feature cards, 11.9 F-9 and 11.10 F-10, fill a 1440 x 900 screen"
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Summary first",
+          "recommended": false,
+          "what": "A row of tiles over the page: the outcomes (18.4% to 12%, 41% to 95%), how many bets, how many risks and open decisions, and the first delivery date; each tile jumps to its block. Under the one-pager, the whole PRD in parts (Why, What we build, When it ships, Risks and decisions, Sources), long sections folded with Read all.",
+          "why": "The Simple twin of PT1 c (Summary first): the numbers that matter in one glance, then the detail in an order that tells the story.",
+          "plus": "A busy reader gets the goal, size and date before reading a line; parts make a long PRD easy to follow.",
+          "cost": "Folded sections take one more click to read, and which part a section sits in has to be known (a list by section key; a key it does not know follows the section before it). Template: no change. One-pager read: the page also reads the PRD version the one-pager is built from (GET /v1/documents/{doc}/versions/{n}, one more request; the one-pager's own read is unchanged). PDF and slides: no change (the tiles could open the PDF's first page; not needed).",
+          "frames": [
+            {
+              "file": "ps1-c-list-1512.html",
+              "caption": "The One-pagers list, Crew notes PRD first"
+            },
+            {
+              "file": "ps1-c-top-1512.html",
+              "caption": "The PRD at rest: the number tiles over the one-pager"
+            },
+            {
+              "file": "ps1-c-long-1512.html",
+              "caption": "4 Features by milestone, folded to its first rows with Read all, then When it ships"
+            },
+            {
+              "file": "ps1-c-edit-1512.html",
+              "caption": "Change wording: Edit open on a Not doing line, new words typed"
+            },
+            {
+              "file": "ps1-c-saved-1512.html",
+              "caption": "Saved: the line now reads \"Invoicing or quoting from the phone, in this release.\", marked as changed, with Undo"
+            },
+            {
+              "file": "ps1-c-feature-1512.html",
+              "caption": "F-1 Offline job notes that sync when the crew is back in signal, opened from its code: the feature panel"
+            },
+            {
+              "file": "ps1-c-hard-1512.html",
+              "caption": "12 Risks and open questions, the widest table, shaded where more columns are, 1512 x 900"
+            },
+            {
+              "file": "ps1-c-hard-1440.html",
+              "caption": "The same at 1440 x 900"
+            },
+            {
+              "file": "ps1-c-viewer-1512.html",
+              "caption": "The top as a viewer: no Edit, no Start a review meeting"
+            },
+            {
+              "file": "ps1-c-dark-1512.html",
+              "caption": "11.7 F-7 and the feature sections after it, folded, dark theme"
+            },
+            {
+              "file": "ps1-c-phone-top-390.html",
+              "caption": "Phone, 390 wide: the top"
+            },
+            {
+              "file": "ps1-c-phone-table-390.html",
+              "caption": "Phone, 390 wide: the risks table scrolls across in its own box"
+            },
+            {
+              "file": "ps1-c-present-1512.html",
+              "caption": "Present: the one-pager alone as the slide, Stop presenting at the top"
+            },
+            {
+              "file": "ps1-c-cost-1440.html",
+              "caption": "Cost: 11.9 F-9 to 11.12 F-12, each folded: one more click to read each"
+            }
+          ]
+        },
+        {
+          "letter": "d",
+          "name": "Questions",
+          "recommended": false,
+          "what": "Each block asks its question: What problem are we solving, and for whom? What will we build? How will we know it worked? Under each answer, Read it in the PRD opens the sections it rests on. A list of the questions stays on the left; at the end, What else is in the PRD? lists every other section, each folded.",
+          "why": "A Simple-only idea: a one-pager read as the questions people ask in a review, with the PRD's own words one click under each answer.",
+          "plus": "Plain for people who do not know PRD terms; each answer leads to its proof in the PRD.",
+          "cost": "The PRD is not read in its own order: sections are grouped under questions, the rest in a list of folds at the end; the questions are set per block. Template: no change (a block's questions are fixed in the page; the sections come from each line's sources). One-pager read: the page also reads the PRD version the one-pager is built from (GET /v1/documents/{doc}/versions/{n}, one more request; the one-pager's own read is unchanged). PDF and slides: block titles could become the questions; not needed.",
+          "frames": [
+            {
+              "file": "ps1-d-list-1512.html",
+              "caption": "The One-pagers list, Crew notes PRD first"
+            },
+            {
+              "file": "ps1-d-top-1512.html",
+              "caption": "The PRD at rest: each block asks its question, the questions listed on the left"
+            },
+            {
+              "file": "ps1-d-long-1512.html",
+              "caption": "Features by milestone, opened from Read it in the PRD under What will we build?"
+            },
+            {
+              "file": "ps1-d-edit-1512.html",
+              "caption": "Change wording: Edit open on a What are we not doing? line, new words typed"
+            },
+            {
+              "file": "ps1-d-saved-1512.html",
+              "caption": "Saved: the line now reads \"Invoicing or quoting from the phone, in this release.\", marked as changed, with Undo"
+            },
+            {
+              "file": "ps1-d-feature-1512.html",
+              "caption": "F-1 Offline job notes that sync when the crew is back in signal, opened from its code: the feature panel"
+            },
+            {
+              "file": "ps1-d-hard-1512.html",
+              "caption": "Risks and open questions, opened under What could go wrong?, 1512 x 900"
+            },
+            {
+              "file": "ps1-d-hard-1440.html",
+              "caption": "The same at 1440 x 900"
+            },
+            {
+              "file": "ps1-d-viewer-1512.html",
+              "caption": "The top as a viewer: no Edit, no Start a review meeting"
+            },
+            {
+              "file": "ps1-d-dark-1512.html",
+              "caption": "F-7 Parts used on the job, picked from the van stock list, opened in What else is in the PRD?, dark theme"
+            },
+            {
+              "file": "ps1-d-phone-top-390.html",
+              "caption": "Phone, 390 wide: the top"
+            },
+            {
+              "file": "ps1-d-phone-table-390.html",
+              "caption": "Phone, 390 wide: the risks table scrolls across in its own box"
+            },
+            {
+              "file": "ps1-d-present-1512.html",
+              "caption": "Present: the one-pager alone as the slide, Stop presenting at the top"
+            },
+            {
+              "file": "ps1-d-cost-1440.html",
+              "caption": "Cost: What else is in the PRD?, every other section a fold at the end"
+            }
+          ]
+        },
+        {
+          "letter": "e",
+          "name": "Printed pages",
+          "recommended": false,
+          "what": "The one-pager and the PRD as printed sheets on a desk: serif headings, thin rules and tables set small, as in the PDF. The PRD follows in pages by part (Page 2 Why, Page 3 What we build).",
+          "why": "The Simple twin of PT1 e (Printed report): what you read on screen is what the PDF looks like.",
+          "plus": "No surprise when the PDF is opened or printed; feels like a finished document to hand on.",
+          "cost": "The PDF's small type: tables are set at 13 px to fit the sheet, harder to read on a screen; the sheets need a wide screen to look like paper. Template: no change. One-pager read: the page also reads the PRD version the one-pager is built from (GET /v1/documents/{doc}/versions/{n}, one more request; the one-pager's own read is unchanged). PDF: the one-pager PDF would take the same serif headings and rules (its template's CSS); slides: no change.",
+          "frames": [
+            {
+              "file": "ps1-e-list-1512.html",
+              "caption": "The One-pagers list, Crew notes PRD first"
+            },
+            {
+              "file": "ps1-e-top-1512.html",
+              "caption": "The PRD at rest: the one-pager as a sheet"
+            },
+            {
+              "file": "ps1-e-long-1512.html",
+              "caption": "4 Features by milestone on its sheet, the table set small"
+            },
+            {
+              "file": "ps1-e-edit-1512.html",
+              "caption": "Change wording: Edit open on a Not doing line, new words typed"
+            },
+            {
+              "file": "ps1-e-saved-1512.html",
+              "caption": "Saved: the line now reads \"Invoicing or quoting from the phone, in this release.\", marked as changed, with Undo"
+            },
+            {
+              "file": "ps1-e-feature-1512.html",
+              "caption": "F-1 Offline job notes that sync when the crew is back in signal, opened from its code: the feature panel"
+            },
+            {
+              "file": "ps1-e-hard-1512.html",
+              "caption": "12 Risks and open questions on its sheet: the widest table fits, 1512 x 900"
+            },
+            {
+              "file": "ps1-e-hard-1440.html",
+              "caption": "The same at 1440 x 900"
+            },
+            {
+              "file": "ps1-e-viewer-1512.html",
+              "caption": "The top as a viewer: no Edit, no Start a review meeting"
+            },
+            {
+              "file": "ps1-e-dark-1512.html",
+              "caption": "11.7 F-7 Parts used on the job, picked from the van stock list, on a dark sheet, dark theme"
+            },
+            {
+              "file": "ps1-e-phone-top-390.html",
+              "caption": "Phone, 390 wide: the top"
+            },
+            {
+              "file": "ps1-e-phone-table-390.html",
+              "caption": "Phone, 390 wide: the risks table scrolls across in its own box"
+            },
+            {
+              "file": "ps1-e-present-1512.html",
+              "caption": "Present: the one-pager alone as the slide, Stop presenting at the top"
+            },
+            {
+              "file": "ps1-e-cost-1440.html",
+              "caption": "Cost: 4 Features by milestone at 1440 x 900, the table at the PDF's small size"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

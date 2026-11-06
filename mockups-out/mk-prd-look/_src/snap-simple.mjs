@@ -243,6 +243,7 @@ async function main() {
         await page.getByRole("button", { name: "Present" }).first().click();
         await page.locator('[data-testid="one-pager"][data-presenting="true"]').waitFor({ timeout: 15000 });
       }
+      if (!opts.phone) await page.mouse.move(w - 30, h - 4); // nothing pointed at: no hover in a still frame
       await page.waitForTimeout(700);
       const html = await staticHtml(page, [w, h]);
       fs.writeFileSync(path.join(FRAMES, `${name}.html`), html);

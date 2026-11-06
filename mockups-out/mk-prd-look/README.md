@@ -1,4 +1,4 @@
-# mk-prd-look: PRD look (decision PT1)
+# mk-prd-look: PRD look (decisions PT1 and PS1)
 
 Five ways a PRD reads, section to section, as switchable variants in the real web code behind
 `?pt1=a|b|c|d|e` on the PRD page (`/documents/<doc>/v/<n>`). Mock-ups only: the branch is never merged.
@@ -25,6 +25,31 @@ products), the mock's first PRD.
 - `assets/` fonts used by the frames and each proposal's printed PDF (`pt1-<letter>-print.pdf`).
 - `picks.json` the proposals, their cost and the frames with captions.
 - `_src/snap.mjs` the snapshot script.
+
+## PS1: PRD on the Simple side
+
+Five ways a PRD reads in Simple, where a PRD is read as its one-pager, behind `?ps1=a|b|c|d|e` on
+`/simple/one-pagers` and `/simple/one-pagers/<doc>` (a link inside the list keeps the letter).
+
+| Letter | Proposal | Twin in PT1 | |
+|---|---|---|---|
+| a | Calm page | a Calm document | recommended |
+| b | Cards | b Section cards | |
+| c | Summary first | c Summary first | |
+| d | Questions | Simple only | |
+| e | Printed pages | e Printed report | |
+
+Each keeps the one-pager as it is (every block, line, Edit and Propose, Needs a look, review meeting,
+Export PDF, Present, the plan strip, the timeline) and adds the PRD's own sections, read from the
+version the one-pager is built from; a feature code opens the feature panel. `&as=viewer` shows the
+page as a viewer. Every added line is marked `// MOCK-HOOK` (CSS `/* MOCK-HOOK */`):
+`web/components/simple/SimpleLook.tsx`, `SimpleLook.css`, `OnePager.tsx`,
+`web/app/simple/one-pagers/page.tsx`, and in the mock `mk-prd-look.ts` (the invented PRD's one-pager
+is built from its own sections, so a real PRD's one-pager is too), `server.ts`, `simple-one-pager.ts`
+and `simple-roadmap.ts` (the PRD's features on a roadmap, so each code opens its feature).
+
+Frames: `frames/ps1-<letter>-<state>[-<width>].{html,png}`, 14 per proposal, same static rules as
+PT1; `_src/snap-simple.mjs` makes them.
 
 ## Re-snapshot with your real PRDs (on your laptop only)
 
@@ -70,6 +95,20 @@ products), the mock's first PRD.
    the most feature codes, the longest list) and prints its choice; set `SNAP_LONG`, `SNAP_PICK`,
    `SNAP_HARD` or `SNAP_DARK` to choose yourself, e.g.
    `SNAP_HARD=risk-register node mockups-out/mk-prd-look/_src/snap.mjs …`.
+
+   For the Simple frames (PS1), with the same mock running:
+
+   ```sh
+   node mockups-out/mk-prd-look/_src/snap-simple.mjs http://localhost:3393 mockups-out/mk-prd-look/real-frames
+   ```
+
+   The first PRD's one-pager is built from its own sections (problem, features, outcomes, non-goals,
+   risks and milestones, found by key or heading), and its features (headings like `F-3 Name`) go on
+   a roadmap so each code opens its feature. The frames land on `brief-items` (a long section with a
+   table and feature codes), `risks` (the widest table), `feature-f-7` (dark theme) and `feature-f-9`
+   (the cost frames); a missing key is picked by shape and printed. Set `SNAP_LONG`, `SNAP_HARD`,
+   `SNAP_DARK` or `SNAP_COST` to choose, and a prefix such as `ps1-b` as the third argument to redo
+   only some frames.
 
 4. Stop the mock with Ctrl-C in its terminal. Rebuild without `MOCK_PRD_FILE` to go back to the
    invented PRD.
