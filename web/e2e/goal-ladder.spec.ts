@@ -319,6 +319,7 @@ test.describe("visual QA fixes (L-1 to L-8), 1440 light", () => {
     await page.getByTestId("ld-edit").click();
     await reveal(page, card(page, "F-03"));
     await card(page, "F-03").click();
+    await reveal(page, card(page, "F-01"));
     await card(page, "F-01").getByTestId("ld-more").click();
     const menu = page.getByTestId("ld-feature-menu");
     await expect(menu).toBeVisible();
