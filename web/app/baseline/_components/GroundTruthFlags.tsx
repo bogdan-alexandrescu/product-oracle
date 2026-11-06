@@ -50,13 +50,26 @@ function addCode(flag: Flag, target: string): string | undefined {
   return CODE.exec(target)?.[1] ?? CODE.exec(flag.item?.code ?? "")?.[1];
 }
 
+/** A code read one way, as the API reads a code key (F-9 and F-009 read F-09; a slice keeps its letter, F-09a). */
+function canonical(code: string): string | null {
+  const m = /^([A-Z]{1,3})-(\d+)((?:\.\d+)?)([a-j]?)$/.exec(code.trim());
+  return m ? `${m[1]}-${String(Number(m[2])).padStart(2, "0")}${m[3]}${m[4]}` : null;
+}
+
 /**
- * A key for a new feature: its code when the graph has no feature by it (the check reads a code
- * from the key, so the feature is in the Ground Truth by that code and needs no Give it a code),
- * else from its name, not one the graph has (as page.tsx's addSubgoal).
+ * A key for a new feature: its code when no feature has that code as the API reads it (any
+ * feature's key read one way, and every feature code the check names, as a feature's code may
+ * come from its roadmap item's PRD section), since the API refuses a code another feature has;
+ * the check reads a code from the key, so the feature is in the Ground Truth by that code and
+ * needs no Give it a code. Else from its name, not one the graph has (as page.tsx's addSubgoal).
  */
-function newKey(name: string, graph: GraphOut | undefined, code?: string): string {
-  if (code && !(graph?.entities ?? []).some((e) => e.type === "feature" && e.key === code)) return code;
+function newKey(name: string, graph: GraphOut | undefined, check: Check, code?: string): string {
+  const want = code ? canonical(code) : null;
+  const had = [
+    ...(graph?.entities ?? []).filter((e) => e.type === "feature").map((e) => e.key),
+    ...check.flags.flatMap((f) => (f.feature?.id && f.feature.code ? [f.feature.code] : [])),
+  ];
+  if (want && !had.some((k) => (canonical(k) ?? k) === want)) return want;
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "feature";
   const taken = new Set((graph?.entities ?? []).map((e) => e.key));
   let key = slug;
@@ -138,7 +151,7 @@ export function GroundTruthFlags({
   const add = (flag: Flag, target: string) =>
     act(async () => {
       const name = (flag.feature ?? flag.item)!.name;
-      const key = newKey(name, graph, addCode(flag, target));
+      const key = newKey(name, graph, check, addCode(flag, target));
       if (!canWrite) {
         await unwrap(api.POST("/v1/baseline/proposals", { body: { op: "create", kind: "entity", fields: { type: "feature", key, title: name } } }));
         return { text: `Proposed “${name}” for the Ground Truth.` };
