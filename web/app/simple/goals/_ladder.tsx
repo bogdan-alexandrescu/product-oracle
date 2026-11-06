@@ -47,6 +47,9 @@ function num(v: number | null, unit: string): string {
   return unit ? `${n} ${v === 1 && unit.endsWith("s") ? unit.slice(0, -1) : unit}` : n;
 }
 
+/** A milestone's reading is short (the frames: "2.6 of 2"): only % and $ stay beside the number. */
+const mUnit = (unit: string) => (unit === "%" || unit === "$" ? unit : "");
+
 export function usePhone(): boolean {
   return useSyncExternalStore(
     (on) => {
@@ -133,6 +136,8 @@ export interface LadderProps {
   /** The page's title block, and the guardrail strip under the header. */
   head: ReactNode;
   guardrail: ReactNode;
+  /** The map's flags (gates with no feature, features serving no gate): beside the toggle, as no frame has a row for them. */
+  flags?: ReactNode;
 }
 
 export function GoalLadder(props: LadderProps) {
@@ -371,7 +376,8 @@ export function GoalLadder(props: LadderProps) {
     <Ctx.Provider value={{ props }}>
       <header className="flex flex-wrap items-end justify-between gap-3">
       {props.head}
-      <div className="flex flex-wrap items-center gap-2" data-testid="ld-actions">
+      <div className="flex flex-wrap items-center justify-end gap-2" data-testid="ld-actions">
+        {props.flags}
         {may ? (
           <Btn primary={edit} testId="ld-edit" onClick={() => { setEdit(!edit); setMenu(null); setAdding(null); }}>
             {edit ? <><Icon name="check" size={16} /> {canChange ? "Done" : "Done suggesting"}</> : canChange ? "Edit ladder" : "Suggest changes"}
@@ -614,10 +620,11 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
         {v.edit && v.canChange && <span className="ml-auto"><More label={`More for ${m.name}`} open={v.menu === key} onClick={() => v.setMenu(v.menu === key ? null : key)} /></span>}
       </span>
       <span className="text-[12px] leading-4 text-text2" title={m.measure}>
-        {m.threshold === null ? <>Reads <b className="text-text">{num(m.current, m.unit)}</b> · no gate yet</> : <><b className="text-text">{num(m.current, m.unit)}</b> of {num(m.threshold, m.unit)}</>}
+        {m.threshold === null ? <>Reads <b className="text-text">{num(m.current, mUnit(m.unit))}</b> · no gate yet</> : <><b className="text-text">{num(m.current, mUnit(m.unit))}</b> of {num(m.threshold, mUnit(m.unit))}</>}
         {m.due_on ? ` · by ${day(m.due_on)}` : ""}
-        {area ? ` · ${area}` : ""} · <b className={`whitespace-nowrap ${m.proposed ? "text-accent-ink" : KR[m.status]}`}>{m.proposed ? "Proposed" : KR_WORD[m.status]}</b>
+        {area ? ` · ${area}` : ""}
       </span>
+      <b data-testid="ld-ms-status" className={`text-[12px] leading-4 ${m.proposed ? "text-accent-ink" : KR[m.status]}`}>{m.proposed ? "Proposed" : KR_WORD[m.status]}</b>
       {v.menu === key && (
         <MenuList
           testId="ld-ms-menu"

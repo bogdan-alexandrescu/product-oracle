@@ -315,7 +315,6 @@ export function GoalMapPage() {
           <div className="flex flex-col gap-1">
             <h1 className="simple-h1 max-[600px]:sr-only">Goal map</h1>
             <p className="simple-small">Updated {map.today}</p>
-            <Flags map={map} open={open} />
             {off && (
               <p data-testid="gm-off-map" className="simple-small flex flex-wrap items-center gap-x-2 rounded-xl border border-line px-3 py-1.5">
                 <span>
@@ -329,6 +328,7 @@ export function GoalMapPage() {
           </div>
         }
         guardrail={<Guardrail map={map} />}
+        flags={<Flags map={map} open={open} />}
       />
 
       {edit && draft && (
