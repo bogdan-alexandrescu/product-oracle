@@ -7,8 +7,8 @@ import { expect, test, type Page } from "./test";
  *
  * - presenting: protects = Tab inside a flow opened over the presented page stays in that
  *   dialog; fails_when = every Tab pulls focus back to "Stop presenting" behind it.
- * - presenting: protects = Escape on the editor's "Discard your changes?" answers that question
- *   and keeps presenting; fails_when = it ends present mode.
+ * - presenting (C-8: slides, no editor on them): protects = words typed into a line's editor
+ *   before Present are still there when presenting ends; fails_when = they are lost.
  * - phone: protects = a touch that scrolls from a line's hidden Edit leaves the Edit's next
  *   keyboard Enter working; fails_when = that Enter is swallowed.
  * - the plan's bars: protects = a bar too short for its name still shows a few letters of it
@@ -35,6 +35,8 @@ test.describe("desktop", () => {
     });
     await page.getByRole("button", { name: "Present" }).click();
     await expect(page.getByTestId("one-pager")).toHaveAttribute("data-presenting", "true");
+    // C-8: the bets and their flows are the second slide.
+    await page.keyboard.press("ArrowRight");
     await page.getByRole("group", { name: /^User flow of “A setup checklist that shows/ }).getByRole("button", { name: "Open the flow", exact: true }).click();
     const opened = page.getByTestId("flow-detail");
     await expect(opened.getByTestId("flow-svg")).toBeVisible();
@@ -49,27 +51,23 @@ test.describe("desktop", () => {
     await expect(page.getByTestId("one-pager")).toHaveAttribute("data-presenting", "true");
   });
 
-  test("Escape on 'Discard your changes?' while presenting keeps presenting", async ({ page }) => {
+  test("words typed before Present are still in the editor after it (C-8)", async ({ page }) => {
     await login(page);
     await page.goto("/simple/one-pagers");
-    await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Team workspaces PRD" }).click();
+    await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Saved carts PRD" }).click();
     await expect(page.getByRole("article", { name: "One-pager" })).toBeVisible();
-    await page.locator('[data-line="not_doing-2"]').hover();
-    await page.getByRole("button", { name: "Edit “A mobile setup flow" }).click();
+    await page.locator('[data-line="not_doing-1"]').hover();
+    await page.locator('[data-line="not_doing-1"]').getByRole("button", { name: /^Edit “/ }).click();
     const box = page.getByLabel("New wording for");
-    await box.fill("A phone setup flow");
+    await box.fill("Not this quarter: a phone app");
     await page.evaluate(() => {
       document.documentElement.requestFullscreen = () => Promise.reject(new Error("refused"));
     });
     await page.getByRole("button", { name: "Present" }).click();
     await expect(page.getByTestId("one-pager")).toHaveAttribute("data-presenting", "true");
-    await box.click();
     await page.keyboard.press("Escape");
-    const ask = page.getByRole("alertdialog", { name: "Discard your changes?" });
-    await ask.getByRole("button", { name: "Keep editing" }).focus();
-    await page.keyboard.press("Escape");
-    await expect(page.getByTestId("one-pager")).toHaveAttribute("data-presenting", "true");
-    await expect(box).toHaveValue("A phone setup flow");
+    await expect(page.getByTestId("one-pager")).not.toHaveAttribute("data-presenting", "true");
+    await expect(box).toHaveValue("Not this quarter: a phone app");
   });
 
   test("the status chip reads the PRD's own summary, as the list does, without loading every PRD", async ({ page }) => {

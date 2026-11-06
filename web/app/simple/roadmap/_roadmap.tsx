@@ -26,7 +26,7 @@ import { Board, boardColumns, boardLegend, HORIZONS, LEGEND_SWATCH, LegendKeys, 
 import { useKeyBurst } from "./_burst";
 import { FeatureContextMenu, useFeatureDelete } from "@/components/simple/FeatureDelete";
 import { changeRowWords, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, SuggestionPopover, type Act } from "./_card";
-import { boardPicture, chartPicture, exportView, type Brand } from "./_export";
+import { boardPicture, chartPicture, exportView, TooLarge, zoomPicture, type Brand } from "./_export";
 import { KeyDatesEditor } from "./_keydates";
 import { Lanes, pmItem } from "./_lanes";
 import {
@@ -731,7 +731,7 @@ export function SimpleRoadmap() {
     return () => cancelAnimationFrame(id);
   }, [tray]);
   const [keyDates, setKeyDates] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState<"png" | "pdf" | null>(null);
   // qa-shell-24: a phone's pickers sit behind one Filters button.
   const [pickersOpen, setPickersOpen] = useState(false);
   // As the sheets beside it: Escape (focus back on Filters) or a tap outside closes the pickers.
@@ -1084,19 +1084,25 @@ export function SimpleRoadmap() {
 
   const doExport = async (kind: "png" | "pdf") => {
     if (!data) return;
-    setExporting(true);
-    // The Timeline's picture is the goal lanes, laid out off screen once exporting is set.
-    if (format === "timeline") await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    // E-7: the buttons say it is busy (and stay so) until the file is saved.
+    setExporting(kind);
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    // E-1: the Timeline's picture is the zoom shown (its window and header); a phone's quarter
+    // list has none, so its picture is the goal lanes, laid out off screen once exporting is set.
+    const zoomed = format === "timeline" ? (wrap.current?.querySelector<HTMLElement>('[data-testid="timeline-scroll"]') ?? null) : null;
     const labels = wrap.current?.querySelector<HTMLElement>('[data-testid="chart-labels"]') ?? null;
-    if (format !== "board" && !svg.current) return setExporting(false);
+    if (format !== "board" && !zoomed && !svg.current) return setExporting(null);
     try {
-      const pic = format === "board" ? boardPicture(boardColumns(laned ?? data), data.today) : chartPicture(svg.current!, labels);
+      const shown = laned ?? data;
+      // The return queue's order, as the Gantt numbers its rows below the line.
+      const queue = shown.groups.flatMap((g) => g.item_ids).filter((id) => shown.items.some((i) => i.id === id && closedItem(i)));
+      const pic = format === "board" ? boardPicture(boardColumns(shown), data.today, queue) : zoomed ? zoomPicture(zoomed, data.today) : chartPicture(svg.current!, labels);
       const title = `Roadmap · ${FORMAT_WORDS[format]}${format === "gantt" ? ` (${unit})` : ""}`;
       await exportView(kind, pic, { title, filters: filterWords(), brand: await brandOf() }, data.today, `roadmap-${format}`);
-    } catch {
-      toast({ message: "The view could not be exported" });
+    } catch (e) {
+      toast({ message: e instanceof TooLarge ? e.message : "The view could not be exported" });
     } finally {
-      setExporting(false);
+      setExporting(null);
     }
   };
 
@@ -1246,11 +1252,11 @@ export function SimpleRoadmap() {
       )}
       {!blank && (
         <>
-          <Button disabled={exporting} onClick={() => void doExport("png")}>
-            Export PNG
+          <Button disabled={!!exporting} aria-busy={exporting === "png" || undefined} onClick={() => void doExport("png")}>
+            {exporting === "png" ? "Exporting PNG…" : "Export PNG"}
           </Button>
-          <Button disabled={exporting} onClick={() => void doExport("pdf")}>
-            Export PDF
+          <Button disabled={!!exporting} aria-busy={exporting === "pdf" || undefined} onClick={() => void doExport("pdf")}>
+            {exporting === "pdf" ? "Exporting PDF…" : "Export PDF"}
           </Button>
         </>
       )}
@@ -1610,10 +1616,13 @@ export function SimpleRoadmap() {
           />
           </>
         )}
-        {/* The Timeline's export draws its picture from the goal lanes, laid out off screen while it saves. */}
+        {/* The Timeline's export draws its picture from the goal lanes, laid out off screen while it
+            saves, with a row naming each quarter over its months. Off screen, not hidden: the names
+            column is read as text (a hidden element has none). */}
         {format === "timeline" && exporting && (
-          <div aria-hidden className="pointer-events-none fixed top-0 left-[-20000px] w-[1400px]" style={{ visibility: "hidden" }}>
+          <div aria-hidden inert className="pointer-events-none fixed top-0 left-[-20000px] w-[1400px]">
             <Lanes
+              quarterAxis
               data={laned ?? data}
               lane={f.group}
               noWork={noWork}

@@ -14,8 +14,9 @@ import { expect, test, type Locator, type Page } from "./test";
  * Card one-goal-bucket-to-panel: protects = Edit goal's save shows in the open panel, and its Undo
  * too; fails_when = the panel keeps the old measure.
  * Card one-goal-changed-since: protects = Edit goal opened before the panel changed the measure
- * is refused on save with plain words, and the goal keeps the panel's measure; fails_when = the
- * save silently overwrites it.
+ * is refused on save with plain words in the open form, which keeps the typed measure and reads the
+ * goal again, so the next Save goal saves it; fails_when = the save silently overwrites it, or every
+ * further Save goal is refused (the form keeps the old goal).
  * Card one-goal-trashed: protects = once a goal is in Trash, a feature's panel lists no such goal
  * and changes the feature's goal at once; fails_when = it offers the goal in Trash or says
  * "Changed since you saw it".
@@ -86,14 +87,24 @@ test("a measure changed in Edit goal shows in the open panel, and its Undo too",
   await expect(panel(page).getByTestId("card-goal-measure")).toHaveText(WAS);
 });
 
-test("Edit goal opened before the panel changed the measure is refused, in plain words", async ({ page }) => {
+test("Edit goal opened before the panel changed the measure is refused, in plain words, then saves", async ({ page }) => {
   await open(page);
   const measure = await editGoal(page);
   await measure.fill("Teams active after 30 days");
   await panelMeasure(page, NEW);
   await tap(bucket(page).getByRole("button", { name: "Save goal" }));
-  await expect(page.getByRole("alert").filter({ hasText: "This goal changed since you opened it. Look again and save." })).toBeVisible();
+  // The refusal shows in the open form, which keeps what the person typed.
+  const form = bucket(page).getByTestId("goal-form");
+  await expect(form.getByRole("alert")).toHaveText("This goal changed since you opened it. Look again and save.");
+  await expect(page.getByRole("alert").filter({ hasText: "This goal changed since you opened it." })).toHaveCount(1);
   await expect(panel(page).getByTestId("card-goal-measure")).toHaveText(NEW);
+  await expect(measure).toHaveValue("Teams active after 30 days");
+  await expect(form.getByTestId("goal-form-now")).toHaveText(`Saved now: ${NEW}`);
+  // The form now reads the goal as it is, so the next Save goal goes through.
+  await tap(form.getByRole("button", { name: "Save goal" }));
+  await expect(form).toHaveCount(0);
+  await expect(panel(page).getByTestId("card-goal-measure")).toHaveText("Teams active after 30 days");
+  await expect(await editGoal(page)).toHaveValue("Teams active after 30 days");
 });
 
 test("deleting a feature from its row closes its open panel", async ({ page }) => {

@@ -25,8 +25,8 @@ test("the approvals chip says Approvals, and the Inbox link opens the Inbox", as
   await openHome(page);
   const needs = page.getByTestId("home-needs");
   await expect(needs.getByTestId("home-count-approvals")).toHaveText("Approvals 3");
-  await expect(needs.getByText(/^Decisions \d/)).toHaveCount(0);
-  // qa-company-5: the counts are plain counts (the Inbox has no view per kind); the Inbox link opens it.
+  // QA pass D-2: the chips are the Inbox's kinds, each opening the Inbox on its kind; the Inbox link opens it all.
+  await expect(needs.getByTestId("home-count-approvals")).toHaveAttribute("href", "/inbox?kind=approvals");
   await needs.getByTestId("home-inbox-link").click();
   await expect(page).toHaveURL(/\/inbox$/);
 });

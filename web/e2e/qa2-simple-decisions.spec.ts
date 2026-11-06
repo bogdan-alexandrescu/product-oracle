@@ -61,7 +61,7 @@ for (const phone of [false, true]) {
         await expect(group).not.toContainText("decisions in Review: Usage alerts");
         await expect(page.getByTestId("simple-page")).not.toContainText(/\b\d{4}-\d{2}-\d{2}\b/);
         await expect(page.getByTestId("simple-page")).not.toContainText(/ · proposed$/m);
-        // D-3 shows once, beside its meeting.
+        // D-8 shows once, beside its meeting.
         const outside = page.getByRole("region", { name: "Outside meetings" });
         if (await outside.count()) await expect(outside).not.toContainText("Should muted teams still get the weekly digest?");
         const link = group.getByRole("link", { name: "Review: Usage alerts" });

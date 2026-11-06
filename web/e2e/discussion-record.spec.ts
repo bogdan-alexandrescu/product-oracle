@@ -19,8 +19,8 @@ import { login } from "./helpers";
 const DOC = "/documents/checkout-redesign/v/2";
 const COMMENTER = "commenter@example.com";
 const APPROVER = "approver@example.com";
-const RECORD = "Record a date basis: Team estimate supports 2026-12-15";
-const RECORDERS = "Engineering leads and approvers record date bases";
+const RECORD = "Add a date source: Team estimate supports 2026-12-15";
+const RECORDERS = "Engineering leads and approvers add date sources";
 
 const withScenario = (page: Page) => page.addInitScript((key) => localStorage.setItem(key, "discussion-record"), MOCK_SCENARIO_KEY);
 const thread = (page: Page) => page.getByTestId("discussion-thread").filter({ visible: true });

@@ -5,10 +5,11 @@ import { useMemo, useState } from "react";
 
 import { ClaudeOffNotice } from "@/components/ClaudeOffNotice";
 import { Chip, Empty, Icon, InfoTip, LinkButton, Notice, Page, PageHeader, Panel, Split } from "@/components/ds";
+import { LoadError } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
-import { invalidateWaiting, loadInbox, loadMyQuestions, waitingChanged } from "@/lib/waiting";
+import { invalidateWaiting, loadInbox, loadMyQuestions, NEED_KINDS, needKind, waitingChanged, type NeedKind } from "@/lib/waiting";
 
 import { useAccessRequestRows } from "../inbox/_access";
 import { useActed } from "../inbox/_actions";
@@ -26,15 +27,19 @@ const IN_FLIGHT = new Set(["running", "awaiting_checkpoint", "awaiting_approval"
 const PHONE = "(max-width: 600px)";
 
 /**
- * qa-company-5, -6: how many of each kind wait, as plain text. The Inbox has no view per
- * kind, so a count is neither a link that seems to filter nor a bordered pill that looks like
- * a button; the Inbox link beside them opens it.
+ * qa-company-5, -6: how many of each kind wait, never a bordered pill that looks like a button.
+ * QA pass D-2: each opens the Inbox on its kind.
  */
-function Count({ label, n, testId }: { label: string; n: number; testId: string }) {
+function Count({ kind, label, n }: { kind: NeedKind; label: string; n: number }) {
   return (
-    <span data-testid={testId} className="inline-flex h-[26px] items-center gap-1 text-[13px] font-medium whitespace-nowrap text-text2">
+    <Link
+      href={`/inbox?kind=${kind}`}
+      data-testid={`home-count-${kind}`}
+      aria-label={`${label}: ${n} in the Inbox`}
+      className="inline-flex h-[26px] items-center gap-1 text-[13px] font-medium whitespace-nowrap text-text2 hover:text-accent-ink hover:underline"
+    >
       {label} <b className="tnum text-text">{n}</b>
-    </span>
+    </Link>
   );
 }
 
@@ -187,22 +192,17 @@ export default function HomePage() {
   const all = inbox ? allNeeds(inbox, questionRows.rows, busy, act, inbox.last_seen_at ?? null, onActed, true, undefined, requestRows.rows, perms) : [];
   const needs = waitingNeeds(all);
   const visible = all.filter((r) => needs.includes(r) || (r.group === "access-requests" && !r.counted && r.state !== "done"));
-  // Checkpoints, cost approvals and overruns: "Approvals", what they are (qa-shell-6), not the
-  // decision log's Decisions.
-  const approvals = needs.filter((r) => r.group === "checkpoints" || r.group === "approvals" || r.group === "overruns");
-  // Stuck runs and failed imports: counted in the badge, so drawn here too (searches are not).
-  const runs = needs.filter((r) => r.group === "lookups" || r.group === "imports");
-  // Revokes a removed member's disable could not make, and access changes still failing
-  // (owners only), as the Inbox lists them; access requests (owners and approvers, A5).
-  const access = needs.filter((r) => r.group === "revoke-failures" || r.group === "access-failures" || r.group === "access-requests");
-  const reviews = needs.filter((r) => r.group === "feedback");
-  const asked = needs.filter((r) => r.group === "questions");
+  // QA pass D-2: one chip per kind, built from the rows the total counts, so they add up to it.
+  // Checkpoints, cost approvals and overruns are "Approvals" (qa-shell-6), apart from the decision log's Decisions.
+  const kinds = NEED_KINDS.map((k) => ({ ...k, n: needs.filter((r) => needKind(r.group) === k.id).length })).filter((k) => k.n > 0);
   const { rows: shownNeeds, more: moreNeeds } = pickNeeds(visible, MAX_NEEDS);
   // The rail badge's count: the Inbox's New + Open items.
   const waiting = inbox ? needs.length : undefined;
   const openItems = new Map((inbox?.feedback ?? []).map((d) => [d.document_id, d.open_count]));
 
-  const nothingInFlight = flights !== undefined && flights.length === 0;
+  // QA pass D-1: while either list failed, In flight says so with Try again, never empty or a table.
+  const flightError = docsQ.error ?? runsQ.error;
+  const nothingInFlight = !flightError && flights !== undefined && flights.length === 0;
   const flightHeader = (
     <span className="font-display text-lg leading-6 font-bold tracking-heading text-text">
       In flight
@@ -254,6 +254,12 @@ export default function HomePage() {
             {setupError}
           </Notice>
         )}
+        {/* QA pass D-7: Set up is a commenter's and up (the API's setup roles); a failed load says so in its place. */}
+        {setupQ.error && capsReady && can("create_comment") && (
+          <div data-testid="home-setup-load-error">
+            <LoadError what="your setup checklist" error={setupQ.error} onRetry={() => void setupQ.reload()} />
+          </div>
+        )}
         {setup && !setup.hidden && (
           <SetupPanel
             setup={setup}
@@ -286,19 +292,17 @@ export default function HomePage() {
             <>
               {/* qa-shell-16: what this count counts, and why Simple's Home says another number. */}
               <InfoTip label="Needs you" side="bottom">
-                Everything the Inbox has waiting on you: approvals, runs, access requests, reviews and the questions asked of you.
+                Everything the Inbox has waiting on you: approvals, runs, access, reviews, decisions and the questions asked of you.
                 Simple&apos;s Home counts something else, the product decisions on PRDs that wait on you, so its number can differ.
               </InfoTip>
               {/* qa-company-5: plain counts; the Inbox link opens the Inbox, where the items are.
                   qa4-company-50: one group; on a phone it takes its own line under the title, so
                   no count is left alone beside Inbox. */}
-              {(approvals.length > 0 || runs.length > 0 || access.length > 0 || reviews.length > 0 || asked.length > 0) && (
+              {kinds.length > 0 && (
                 <span data-testid="home-needs-counts" className="flex flex-wrap items-center gap-x-2.5 max-[600px]:order-last max-[600px]:basis-full">
-                  {approvals.length > 0 && <Count label="Approvals" n={approvals.length} testId="home-count-approvals" />}
-                  {runs.length > 0 && <Count label="Runs" n={runs.length} testId="home-count-runs" />}
-                  {access.length > 0 && <Count label="Access" n={access.length} testId="home-count-access" />}
-                  {reviews.length > 0 && <Count label="Reviews" n={reviews.length} testId="home-count-reviews" />}
-                  {asked.length > 0 && <Count label="Questions" n={asked.length} testId="home-count-questions" />}
+                  {kinds.map((k) => (
+                    <Count key={k.id} kind={k.id} label={k.label} n={k.n} />
+                  ))}
                 </span>
               )}
               <Link
@@ -364,12 +368,11 @@ export default function HomePage() {
           <div data-testid="home-in-flight-phone-title" className="hidden min-h-12 items-center border-b border-line bg-surface2 px-3 max-[600px]:flex">
             {flightHeader}
           </div>
-          {(docsQ.error || runsQ.error) && (
-            <div className="p-4">
-              <Notice tone="error">{docsQ.error ?? runsQ.error}</Notice>
+          {flightError ? (
+            <div className="p-4 pb-0 max-[600px]:px-3">
+              <LoadError what="what's in flight" error={flightError} onRetry={() => void Promise.all([docsQ.reload(), runsQ.reload()])} />
             </div>
-          )}
-          {nothingInFlight ? (
+          ) : nothingInFlight ? (
             <div data-testid="home-in-flight-empty" className="flex flex-wrap items-center gap-3 px-4 py-4 max-[600px]:px-3">
               <span className="hidden font-display text-lg font-bold tracking-heading min-[601px]:inline">In flight</span>
               <span className="text-[15px] font-semibold text-text2">Nothing in flight</span>

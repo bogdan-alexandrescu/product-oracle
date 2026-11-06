@@ -123,13 +123,20 @@ export function RequestList({
             PRD
           </span>
         )}
-        {/* qa4-work-15: one line of headers, each over its own column's values (the bold title needs none). */}
+        {/* qa4-work-15: one line of headers, each over its own column's values. RQ-3: the first is
+            "Request", over the title; the state chips under it need no header of their own. */}
         <div data-testid="request-list-head-cols" className={`${META_GRID} max-[600px]:hidden`}>
-          {META_COLS.map((c) => (
-            <span key={c.key} className="truncate">
-              {c.label}
-            </span>
-          ))}
+          {META_COLS.map((c) =>
+            c.key === "state" ? (
+              <span key={c.key} data-testid="request-list-head-title" className="truncate">
+                Request
+              </span>
+            ) : (
+              <span key={c.key} className="truncate">
+                {c.label}
+              </span>
+            ),
+          )}
         </div>
       </div>
       <ul className="divide-y divide-line" data-testid="request-list">
@@ -188,7 +195,11 @@ export function RequestList({
               data-testid="request-row"
               data-channel={r.channel}
               aria-current={on ? "true" : undefined}
-              onClick={() => onSelect(r.id)}
+              onClick={(e) => {
+                // A tap on the row's details focuses its title, so a closed sheet hands focus back to the row.
+                e.currentTarget.querySelector("button")?.focus();
+                onSelect(r.id);
+              }}
               className={`flex cursor-pointer items-start gap-3 px-4 py-2.5 ${on ? "bg-accent-soft shadow-[inset_4px_0_0_var(--accent)]" : "hover:bg-surface2"}`}
             >
               {ticking && (

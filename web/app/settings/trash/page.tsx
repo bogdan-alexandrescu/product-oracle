@@ -33,7 +33,10 @@ function Row({ e, onRestored }: { e: Entry; onRestored: () => void }) {
     <li data-testid="trash-entry" className="flex flex-wrap items-start gap-x-4 gap-y-2 px-4 py-3 max-[600px]:px-3">
       <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-baseline gap-x-2">
-          <span className="text-[13px] font-semibold text-text2">{itemKind(e.root)}</span>
+          {/* port-an-decisions: one list, each entry's kind as a chip (Document, Feature, Agenda item, Request, ...). */}
+          <Chip kind="line" data-testid="trash-kind">
+            {itemKind(e.root)}
+          </Chip>
           {/* A feature's code before its name ("F-26 Alert rules engine"), as the roadmap reads it. */}
           <span className="min-w-0 font-semibold break-words">{e.root.code ? `${e.root.code} ${e.root.title}` : e.root.title}</span>
           {e.published && <Chip kind="warn">Was published</Chip>}
@@ -68,8 +71,9 @@ function Row({ e, onRestored }: { e: Entry; onRestored: () => void }) {
   );
 }
 
-/** Settings › Trash (#482): each delete with what went with it, Restore and days left. Owners see
- * everything; others the features and goals they deleted, which they restore themselves (its
+/** Settings › Trash (#482): each delete with what went with it, Restore and days left, as one list
+ * with each entry's kind as a chip. Owners see everything; others what they deleted (features,
+ * goals, decisions, questions, meeting agenda items), which they restore themselves (its
  * can_restore). */
 export default function TrashPage() {
   const { can, loading } = useMe();
@@ -107,7 +111,8 @@ export default function TrashPage() {
                 )}
                 <InfoTip label="deleted items" side="bottom">
                   What you delete waits here for 30 days, with everything that went with it. Until then an owner, or
-                  whoever deleted a feature or goal, can restore it; after that it is gone for good.
+                  whoever deleted a feature, goal, decision or agenda item, can restore it; after that it is gone for
+                  good.
                 </InfoTip>
               </span>
             </Empty>

@@ -417,7 +417,7 @@ export const APPLY_WHY_NOT = "Approvers apply this change.";
 /** Propose of a decision with no one named to decide it, by someone below approver. */
 const CHOOSE_DECIDER = "Choose who decides it";
 /** F3: who has no date rights (oracle.discussions.changes.RECORDERS). */
-export const RECORDERS = "Engineering leads and approvers record date bases";
+export const RECORDERS = "Engineering leads and approvers add date sources";
 const VIEWERS_READ = "Viewers can read discussions but not write in them";
 const STALE = "Someone else changed this since you loaded it; reload and try again";
 const HORIZON_LABEL: Record<string, string> = { now: "Now", next: "Next", later: "Later" };
@@ -438,7 +438,7 @@ export function changeLabel(kind: string, p: Record<string, unknown>, names: Lab
   if (kind === "goal_measure") return clip(`Measure the goal by ${str(p.metric)}: ${str(p.target)}${str(p.horizon) ? ` by ${str(p.horizon)}` : ""}`);
   if (kind === "conflict_pick") return `Settle the conflict with claim ${Number(p.claim_index)}`;
   if (kind === "answer") return clip(`Answer: ${str(p.body)}`);
-  if (kind === "basis_record") return clip(`Record a date basis: ${str(p.reference)} supports ${str(p.supports_date)}`);
+  if (kind === "basis_record") return clip(`Add a date source: ${str(p.reference)} supports ${str(p.supports_date)}`);
   const entity = (v: unknown) => names.entity?.(str(v)) ?? str(v);
   if (kind === "ask_person") return clip(`Ask ${names.member?.(str(p.asked_to)) ?? "someone"}: ${str(p.prompt)}`);
   if (kind === "scope_feature") return clip(`${SCOPE_WORD[str(p.decision)] ?? str(p.decision)} ${entity(p.feature_id)}: ${str(p.reason)}`);
