@@ -191,7 +191,7 @@ import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROW
 import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { knowPrdOrder } from "./prd-rank";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
-import { applyFitDate, knowGoalMapItems, ownPrd, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
+import { applyFitDate, forgetRoadmapReads, knowGoalMapItems, ownPrd, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, MAP_GOALS, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapIdOf, goalMapItems, routeGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
@@ -8295,6 +8295,7 @@ export async function mockFetch(req: Request): Promise<Response> {
     // simple-roadmap-500-paint: the roadmap and its waiting counts read the 500 items once while
     // the roadmap's data is the same; every other call reads afresh.
     const roadmapRead = req.method === "GET" && (url.pathname === "/v1/simple/roadmap" || url.pathname === "/v1/simple/roadmap/waiting");
+    if (req.method !== "GET") forgetRoadmapReads();
     roadmapReadsAt(roadmapRead);
     let res = await route(db, req);
     // home-waiting-one-list: the waiting list's items, read from the routes each kind lives on.

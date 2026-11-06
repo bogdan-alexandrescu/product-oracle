@@ -1728,6 +1728,11 @@ let reads: { stored: string; out: Map<string, Schemas["SimpleRoadmapOut"] | null
 export function roadmapReadsAt(on: boolean): void {
   readsOn = on;
 }
+/** Any write (a person, a goal's order, the PRD order, the roadmap itself) drops the shared
+ * build: the roadmap also reads members, goals and the PRD order, which its own JSON lacks. */
+export function forgetRoadmapReads(): void {
+  reads = { stored: "", out: new Map() };
+}
 function readRoadmap(db: SimpleDb, role: Role, q: URLSearchParams, me: Who): Schemas["SimpleRoadmapOut"] | null {
   if (!readsOn) return roadmapOut(db, role, q, me);
   const stored = JSON.stringify(db);
