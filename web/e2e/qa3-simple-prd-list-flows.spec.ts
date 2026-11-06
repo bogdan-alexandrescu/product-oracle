@@ -11,8 +11,8 @@ import { expect, test, type Locator, type Page } from "./test";
  *
  * - p3-29: protects = the whole one-pagers row opens its one-pager (the status, the empty
  *   middle, "Updated ..."), with one link a row; fails_when = only the title is a link.
- * - p3-30 (prd-order, the owner's Nov 5 order): protects = the list is in the company PRD order;
- *   fails_when = newest first or by title.
+ * - p3-30 (prd-order, the owner's Nov 5 order): protects = the list is in the company PRD order
+ *   and says so ("Company order"); fails_when = newest first, by title, or no order line.
  * - p3-31: protects = a member with no name reads their email once in the rail's person
  *   block; fails_when = the email twice (as the name and the avatar's line).
  * - p3-14: protects = a flow's time reads month first with its day and the zone's friendly name
@@ -171,11 +171,11 @@ test.describe("desktop", () => {
 
   // prd-order (the owner, Nov 5) replaces p3-30's newest first: the one company PRD order, the
   // goal each PRD mainly serves first (e2e/simple-one-pager-prd-order.spec.ts moves one).
-  test("qa-simple-prd-p3-30: one-pagers follow the company PRD order, with no order line", async ({ page }) => {
+  test("qa-simple-prd-p3-30: one-pagers follow the company PRD order, and say so", async ({ page }) => {
     await setUp(page);
     await openOnePagers(page);
     const list = page.getByTestId("simple-one-pagers");
-    await expect(list.getByTestId("one-pagers-order")).toHaveCount(0);
+    await expect(list.getByTestId("one-pagers-order")).toHaveText("Company order");
     await expect(list.getByTestId("one-pager-row").first().getByRole("link")).toHaveText("Usage alerts PRD");
   });
 

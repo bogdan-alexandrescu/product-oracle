@@ -130,10 +130,9 @@ test.describe("desktop", () => {
     const table = page.getByTestId("documents-table");
     const header = (k: string) =>
       table.getByRole("columnheader").filter({ has: page.getByTestId(`sort-${k}`) });
-    // Newest first by default: Updated is the sorted column.
-    await expect(header("updated")).toHaveAttribute("aria-sort", "descending");
-    await expect(page.getByTestId("sort-updated")).toHaveAccessibleName("Sort by Updated, newest first");
-    for (const k of ["title", "status", "latest"])
+    // prd-order: the company PRD order by default, so no column is sorted.
+    await expect(page.getByTestId("documents-order")).toHaveText("Company order");
+    for (const k of ["title", "status", "latest", "updated"])
       await expect(header(k)).toHaveAttribute("aria-sort", "none");
 
     await page.getByTestId("sort-title").click();
