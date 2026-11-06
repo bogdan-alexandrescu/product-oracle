@@ -760,6 +760,12 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
   const proposals = db.changes.filter((c) => c.status === "proposed" && c.op === "edit_line");
   const shown = proposals.filter(sees_);
   const live = sees ? liveChanges(db).filter((c) => c.status !== "undone" && c.op === "edit_line") : [];
+  // As the API's OnePagerOut.fixed: the draft's number fixes, each with its Undo while it can be undone.
+  const fixed: Schemas["OnePagerFixed"][] = (sees ? liveChanges(db).filter((c) => c.op === NUMBER_OP) : []).map((c) => {
+    const key = String(c.target.section ?? "");
+    const heading = ((c.after.sections ?? {}) as Record<string, { heading?: string }>)[key]?.heading ?? key;
+    return { change_id: c.id, words: `Fixed: set to ${String(c.after.number ?? "")} in “${heading}”`, can_undo: c.status === "applied" && c.by === ctx.id && c.session_open };
+  });
   const note = (c: (typeof db.changes)[number], kind: "change" | "proposal"): Schemas["OnePagerNote"] => {
     const lineId = String(c.target.line_id);
     return {
@@ -865,6 +871,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     can_start: starts(ctx),
     // As one_pager.owns: a company owner, the PRD's track owners and its document owner read the
     // PRD's numbers and codes to look at; owners also read the checks a held build failed.
+    fixed,
     needs_look: [
       ...(ctx.role === "owner" || (ctx.trackOwners ?? []).includes(ctx.id) || (!!owner && ctx.id === owner) ? looks : []),
       ...(held ? held.checks.map((text) => ({ kind: "check", text, where: [], source_keys: [] })) : []),
@@ -1031,6 +1038,7 @@ function createNumber(db: OnePagerDb, ctx: OnePagerCtx, b: Record<string, unknow
   if (!key || !said) return json(422, { detail: "target: the section and the words the number is in" });
   if (part !== "body" && part !== "heading") return json(422, { detail: "target.part: body or heading" });
   if (!/^\d[\d,]*(?:\.\d+)?$/.test(next)) return json(422, { detail: "after.number: a number" });
+  if (!old) return json(422, { detail: "before.number: the number as you saw it" });
   if (!db.sections.some((s) => s.key === key)) return json(404, { detail: "No such section in this PRD" });
   const applies = decides(ctx);
   if (!applies && RANK[ctx.role] < RANK.commenter) return json(403, { detail: "Viewers read the one-pager" });
@@ -1052,8 +1060,8 @@ function createNumber(db: OnePagerDb, ctx: OnePagerCtx, b: Record<string, unknow
     target: { document_id: db.doc.id, section: key, said, ...(part === "heading" ? { part } : {}), version: db.version }, before, after,
     status: (applies ? "applied" : "proposed") as Change["status"], by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone",
     at: new Date(mockNowMs()).toISOString(), decided_by: null, decided_at: null, reason: null, decision_reason: null,
-    // As one_pager.route: the PRD's decider, else the company's owners.
-    routed_to: applies ? [] : ctx.decider ? [ctx.decider] : ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,
+    // As one_pager.route: the PRD's decider, else its track owners (approvers), else the company's owners.
+    routed_to: applies ? [] : ctx.decider ? [ctx.decider] : (ctx.trackOwners ?? []).length ? [...ctx.trackOwners!] : ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,
     session_open: applies, in_meeting: false,
   };
   if (applies) {

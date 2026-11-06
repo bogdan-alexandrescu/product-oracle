@@ -1141,11 +1141,16 @@ function seedSimplePlanScenario(datedAll = false): Db {
 /**
  * The "one-pager-heading-count" scenario (owner, Nov 5, 'Fix the heading too'): Guided setup's
  * one-pager counts "Later · 8 items" in a heading over six listed, and the PRD's approved
- * version 3 holds the same sections, so its full page reads what a submitted draft imports.
- * Invented data.
+ * version 3 holds the same sections, so its full page reads what a submitted draft imports;
+ * the PRD has a decider (Dana Decider). Invented data.
  */
 function seedHeadingCountScenario(): Db {
   const db = seed();
+  // The PRD's decider (fix round 2), so its track owner proposes a fix, as in "simple-deciders".
+  db.members.push({
+    email: "dana.decider@example.com", name: "Dana Decider", role: "approver", engineering_lead: false, created_at: "2026-09-10T09:00:00Z",
+    id: uuid(), disabled_at: null, disabled_by: null, status: "active", open_tokens: 0,
+  });
   const op = (db.simple_one_pager = seedHeadingCountOnePager());
   const at = "2026-10-20T15:05:00Z";
   const doc: DocumentRow = {
