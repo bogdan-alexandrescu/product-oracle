@@ -495,6 +495,7 @@ function summary(r: RunOut): Schemas["RunSummary"] {
     source: r.source,
     template: r.template,
     theme: r.theme,
+    roadmap_read: r.roadmap_read ?? null,
     estimate_usd: r.estimate_usd,
     spent_usd: r.spent_usd,
     created_by: r.created_by,

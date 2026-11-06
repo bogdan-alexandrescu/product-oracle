@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { DeleteDialog, DeleteMenu } from "@/components/ArtifactMenu";
 import { decisionSentence, runLabel } from "@/lib/labels";
 import { SourceLink } from "@/components/BuildRoadmap";
+import { RoadmapRead } from "./_roadmap-read";
 import {
   Button,
   Chip,
@@ -334,6 +335,7 @@ export function RunDetail({ id }: { id: string }) {
                 <SourceLink source={run.source} />
               </span>
             )}
+            {run.roadmap_read && <RoadmapRead text={run.roadmap_read} />}
             {templateText && (
               <Chip kind="line" wrap data-testid="run-template">
                 {templateText}
