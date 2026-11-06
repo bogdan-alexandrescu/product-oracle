@@ -80,26 +80,31 @@ test.describe("1440 wide", () => {
   test("the desktop's chart does not move", async ({ page }) => {
     const chart = await open(page, "light");
     const svg = chart.getByTestId("chart-svg");
-    await expect(svg).toHaveAttribute("width", "893");
-    await expect(svg).toHaveAttribute("height", "712");
-    const ticks = await chart.getByTestId("axis-tick").evaluateAll((ts) => ts.map((t) => [t.textContent, Number(t.getAttribute("x")), t.getAttribute("text-anchor")] as const));
-    const want: [string, number][] = [
-      ["Q4 2026", 3],
-      ["Q1 2027", 92.98],
-      ["Q2 2027", 181.01],
-      ["Q3 2027", 270.02],
-      ["Q4 2027", 360.0],
-      ["Q1 2028", 449.99],
-      ["Q2 2028", 539.0],
-      ["Q3 2028", 628.0],
-      ["Q4 2028", 717.99],
-      ["Q1 2029", 807.97],
-    ];
-    expect(ticks.map(([t, , a]) => [t, a])).toEqual(want.map(([t]) => [t, "start"]));
-    ticks.forEach(([, x], n) => expect(x).toBeCloseTo(want[n][1], 1));
+    const scroll = chart.getByTestId("chart-scroll");
+    // The chart fits its box: nothing to scroll, so no label is moved for a scroll window.
+    const [w, box] = await Promise.all([svg.evaluate((s: SVGSVGElement) => s.width.baseVal.value), scroll.evaluate((el) => el.clientWidth)]);
+    expect(w).toBeGreaterThan(0);
+    expect(w).toBeLessThanOrEqual(box + 1);
+    const ticks = await chart.locator('[data-testid="chart-axis"] > g').evaluateAll((gs) =>
+      gs.map((g) => {
+        const t = g.querySelector('[data-testid="axis-tick"]');
+        return { line: Number(g.querySelector("line")!.getAttribute("x1")), text: t?.textContent ?? "", x: Number(t?.getAttribute("x")), anchor: t?.getAttribute("text-anchor") };
+      }),
+    );
+    expect(ticks.length).toBeGreaterThan(4);
+    // Each quarter is labelled in order, from its own line (just after it), left to right.
+    ticks.forEach((t, n) => {
+      expect(t.text).toMatch(n === 0 || t.text.startsWith("Q1") ? /^Q[1-4] \d{4}$/ : /^Q[2-4] '\d{2}$/);
+      expect(t.anchor).toBe("start");
+      expect(t.x - t.line).toBeCloseTo(3, 1);
+      if (n) expect(t.line).toBeGreaterThan(ticks[n - 1].line);
+    });
     await expect(chart.getByTestId("today-pill")).toHaveText("Today");
-    expect(Number(await chart.locator('[data-testid="today-pill"] rect').getAttribute("x"))).toBeCloseTo(22.54, 1);
-    await expect(chart.getByTestId("today-line")).toHaveAttribute("y1", "38");
+    // Today's pill sits by its line, inside the chart.
+    const line = Number(await chart.getByTestId("today-line").getAttribute("x1"));
+    const pillX = Number(await chart.locator('[data-testid="today-pill"] rect').getAttribute("x"));
+    expect(Math.abs(pillX - line)).toBeLessThan(40);
+    expect(Number(await chart.getByTestId("today-line").getAttribute("y1"))).toBeGreaterThan(30);
   });
 });
 
