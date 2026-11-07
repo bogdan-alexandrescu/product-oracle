@@ -1,4 +1,4 @@
-import { MOCK_SCENARIO_KEY, TRACKS_CLOSED_SCENARIO } from "../lib/api/mock/server";
+import { MOCK_SCENARIO_KEY, MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY, TRACKS_CLOSED_SCENARIO } from "../lib/api/mock/server";
 import { THEME_KEY } from "../lib/theme";
 import { login } from "./helpers";
 import { expect, test, type Page } from "./test";
@@ -192,6 +192,30 @@ test.describe("Tracks sheet", () => {
     // Read again after Withdraw, the track is as it was.
     await expect(r).toContainText("No owner · 5 features");
     await expect(r).not.toContainText("· Paused");
+  });
+
+  // at-followups: until the tracks are read the button names no count, never "Tracks · 0".
+  test("the button names no count until the tracks are read", async ({ page }) => {
+    await page.addInitScript(() => {
+      const w = window as unknown as { __labels: string[] };
+      w.__labels = [];
+      const look = () => {
+        const said = document.querySelector('[data-testid="tracks-open"]')?.textContent ?? null;
+        if (said !== null && w.__labels.at(-1) !== said) w.__labels.push(said);
+        requestAnimationFrame(look);
+      };
+      requestAnimationFrame(look);
+    });
+    await login(page);
+    await page.evaluate(
+      ([k, v, msKey]) => (localStorage.setItem(k, v), localStorage.setItem(msKey, "2500")),
+      [MOCK_SLOW_KEY, "/v1/simple/tracks", MOCK_SLOW_MS_KEY] as const,
+    );
+    await page.goto("/simple/roadmap");
+    await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+    await expect(page.getByTestId("tracks-open")).toHaveText("Tracks");
+    await expect(page.getByTestId("tracks-open")).toHaveText("Tracks · 3");
+    expect(await page.evaluate(() => (window as unknown as { __labels: string[] }).__labels)).toEqual(["Tracks", "Tracks · 3"]);
   });
 
   test("a viewer reads", async ({ page }) => {
