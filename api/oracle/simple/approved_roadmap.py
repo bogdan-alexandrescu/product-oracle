@@ -278,7 +278,8 @@ async def apply(
     template = rows[0] if rows else None
     position = max((r.position for r in rows), default=-1)
     listed: set[uuid.UUID] = set()
-    written: dict[str, Any] = {"items": [], "added": [], "shipped": [], "moved_out": []}
+    written: dict[str, Any] = {"items": [], "added": [], "shipped": [], "moved_out": [],
+                               "not_added": []}  # fmt: skip
     from oracle.simple import trash_items
 
     # A feature in Trash keeps its key (and its row on this version): a new item never takes it.
@@ -287,6 +288,10 @@ async def apply(
         row = by_key.get(p.key or "") or by_title.get(p.title.lower())
         if row is None:
             if p.state is not None:
+                continue
+            said = _not_added(p, list(by_key.values()))
+            if said:
+                written["not_added"].append(said)
                 continue
             position += 1
             key, n = p.key or _slug(p.title), 2
@@ -347,6 +352,37 @@ async def apply(
                            {"document_id": str(document.id), "version": version.number,
                             **written})  # fmt: skip
     return True
+
+
+def _not_added(p: PlanItem, rows: list[RoadmapItem]) -> str | None:
+    """every-field: one code, one item. A new row whose title's code a live item of the version
+    reads already adds no second item (the live one stays): why, in plain words; else None."""
+    from oracle.roadmap import codes
+
+    code = codes.title_code(p.title)
+    hit = codes.clash(code, "", None, rows) if code else None
+    return f"{p.title} was not added: {codes.taken(code, hit.title)}" if hit else None  # type: ignore[arg-type]
+
+
+async def _not_added_rows(db: AsyncSession, version: DocumentVersion) -> list[str]:
+    """The version's plan rows that added no item because their code was taken (as
+    :func:`apply` leaves them out), in plain words."""
+    from oracle import company_time
+
+    plan = parse(version.markdown or "", await company_time.company_today(db))
+    if plan.empty:
+        return []
+    rows = list(
+        await db.scalars(select(RoadmapItem).where(RoadmapItem.roadmap_version_id == version.id))
+    )
+    keys, titles = {r.item_key for r in rows}, {r.title.strip().lower() for r in rows}
+    return [
+        said
+        for p in plan.items
+        if p.state is None and (p.key or "") not in keys and p.title.lower() not in titles
+        for said in [_not_added(p, rows)]
+        if said
+    ]
 
 
 async def _milestones(
@@ -500,6 +536,7 @@ async def lines(
             now = (e.row.start_date, e.row.end_date)
             if now != was:
                 differences.append(_difference(e.row.title, now, was, n))
+        differences += await _not_added_rows(db, version)
         out.append(
             SimpleAppliedVersion(
                 roadmap=SimpleDocRef(id=doc.id, slug=doc.slug, title=doc.title),

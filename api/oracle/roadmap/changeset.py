@@ -135,6 +135,34 @@ def apply(base: list[RoadmapItem], changes: list[Any]) -> Applied:
     return out
 
 
+async def _codes(db: AsyncSession, applied: Applied, error: type[ChangeSetError]) -> None:
+    """every-field: one code, one item. An added item whose code, its title's ("F-31 Launch
+    flow") or else its picked feature's, another item of the plan reads in its title is refused
+    in set_code's words (``error``: 422 when added, 409 when it was taken since, at propose).
+    Slices of one feature share its code. oracle.roadmap.codes checks every write too."""
+    from types import SimpleNamespace
+
+    from oracle.roadmap import codes
+    from oracle.simple import service as simple_service
+
+    plan = [p for _, p in applied.items()]
+    for p in plan:
+        if p.base is not None:
+            continue
+        code = codes.title_code(p.title)
+        if code is None and p.feature_id is not None:
+            e = SimpleNamespace(
+                row=SimpleNamespace(feature_id=p.feature_id, prd_section_key=None), code=None
+            )
+            await simple_service.item_codes(db, [e])  # type: ignore[list-item]
+            code = e.code
+        others = [SimpleNamespace(item_key=o.key, title=o.title, feature_id=o.feature_id)
+                  for o in plan]  # fmt: skip
+        hit = codes.clash(code, p.key, p.feature_id, others) if code else None
+        if hit is not None:
+            raise error(codes.taken(code, hit.title))  # type: ignore[arg-type]
+
+
 # --- reads ----------------------------------------------------------------------------------
 
 
@@ -371,7 +399,7 @@ async def update(
     await check_base(db, document, row)
     stored = await _stored(db, changes)
     base = await db.get(DocumentVersion, row.base_version_id)
-    apply(await views.version_items(db, base), _parse(stored))
+    await _codes(db, apply(await views.version_items(db, base), _parse(stored)), ChangeSetError)
     before = list(row.changes)
     row.changes = stored
     row.lock_version += 1
@@ -488,6 +516,7 @@ async def propose(
     base = await db.get(DocumentVersion, row.base_version_id)
     base_rows = await views.version_items(db, base)
     applied = apply(base_rows, changes)
+    await _codes(db, applied, Conflict)
     titles = {r.item_key: r.title for r in base_rows}
     cut = {c.key for c in changes if isinstance(c, CutChange)}
     markdown = await _markdown(db, base, _summary_lines(base.number, changes, titles), cut)
