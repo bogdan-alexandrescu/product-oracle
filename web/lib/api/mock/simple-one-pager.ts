@@ -815,6 +815,10 @@ function metricOf(text: string): Line["metric"] {
 /** set_section_number (owner, Nov 5): a "Needs a look" numbers item's fix, as the API's one_pager. */
 const NUMBER_OP = "set_section_number" as const;
 
+/** As one_pager._ensure: while the PRD's draft is in review, a change that applies is refused. */
+const inReview = (db: OnePagerDb) => db.draft?.status === "submitted";
+const IN_REVIEW = "This PRD's draft is in review: changes wait until it is approved";
+
 /** As one_pager._number_values: the section and the lines resting on it, as the reader has them. */
 function numberValues(db: OnePagerDb, key: string, sees: boolean) {
   const heading = headingNow(db, key, sees);
@@ -965,6 +969,8 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     if (!x.fix) return { ...x, fix: null };
     const f = x.fix;
     const c = fixes.find((y) => y.target.section === f.target.section && y.target.said === f.target.said && (y.target.part ?? "body") === (f.target.part ?? "body"));
+    // As the API: a draft in review takes no change that applies, so who would apply the fix is offered none (an open proposal stays).
+    if (!c && inReview(db) && decides(ctx)) return { ...x, fix: null };
     return {
       ...x,
       fix: {
@@ -1162,6 +1168,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     if (p[4] === "accept" && c.op === NUMBER_OP) {
       const key = String(c.target.section);
       if (held(numberValues(db, key, true)) !== held(c.before)) return numberConflict(db, ctx, key, true, "outdated: the section changed since the proposal");
+      if (inReview(db)) return json(409, { detail: IN_REVIEW });
       writeNumber(db, ctx, c.after);
       c.draft_ids = [db.draft!.id];
     } else if (p[4] === "accept") {
@@ -1219,6 +1226,7 @@ function createNumber(db: OnePagerDb, ctx: OnePagerCtx, b: Record<string, unknow
   const sec = (before.sections as Record<string, { heading: string; body: string }>)[key];
   const patched = said.split(" ")[0].toLowerCase() === old.toLowerCase() ? setNumber(sec[part], said, next) : null;
   if (patched === null) return numberConflict(db, ctx, key, sees, "This number changed since you read it");
+  if (applies && inReview(db)) return json(409, { detail: IN_REVIEW });
   const after: Record<string, unknown> = {
     sections: { [key]: { ...sec, [part]: patched } },
     // A heading's count is no line's words: the lines stay as they are.

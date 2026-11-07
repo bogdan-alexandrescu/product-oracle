@@ -385,8 +385,10 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
     act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/undo", { params: { path: { change_id: n.change_id } } })), true);
   // A numbers item's one-click fix: who changes the PRD applies it (Undo), approvers and commenters propose it.
   // The draft's fixes are listed from the read (v.fixed), so a reload keeps each with its Undo.
-  // A number changed since the page was read (409) is said in words with who changed it; the
-  // page reads the PRD again, and nothing is applied.
+  // A refusal because the PRD changed since the page was read (409) reads the PRD again, and
+  // nothing is applied. A number changed since is said in words with who changed it (the
+  // conflict's own shape); any other refusal (a draft sent for approval meanwhile) says the
+  // API's own words.
   const fixLook = (x: Schemas["OnePagerLook"]) =>
     act(async () => {
       const f = x.fix!;
@@ -395,10 +397,12 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
       });
       const { response, error } = await call;
       if (response.status === 409) {
-        const detail = (error as { detail?: Schemas["SimpleChangeConflict"] } | undefined)?.detail;
-        const by = typeof detail === "object" ? detail?.changed_by?.name : null;
+        const detail = (error as { detail?: unknown } | undefined)?.detail;
         await q.reload();
-        throw new ApiError(409, `This number changed since you read it.${by ? ` Changed by ${by}.` : ""}`);
+        if (detail && typeof detail === "object") {
+          const by = (detail as Schemas["SimpleChangeConflict"]).changed_by?.name;
+          throw new ApiError(409, `This number changed since you read it.${by ? ` Changed by ${by}.` : ""}`);
+        }
       }
       return unwrap(call);
     });

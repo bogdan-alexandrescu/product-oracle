@@ -54,6 +54,15 @@ Test cards (protects / fails_when / no_claim):
   parent as ``in_trash`` with its name and keeps the dates it read from it;
   fails_when=``part_of`` is null or the dates fall back to the window's estimate;
   no_claim=the Trash page.
+- test_accepting_a_proposed_parent_checks_it_again: protects=accepting a proposal to make
+  a feature part of another runs create's check again: the other made part of it meanwhile
+  (a loop), or cut, merged or put in Trash meanwhile, is refused in create's own words,
+  nothing is stored and the proposal still waits; fails_when=the accept stores a loop or
+  puts a part under a closed parent; no_claim=the web.
+- test_undo_of_a_parent_change_checks_the_old_parent_again: protects=undoing a change that
+  took a feature out of its parent refuses, in create's words, when putting it back would
+  make a loop or the old parent is now cut, merged or in Trash; nothing is stored;
+  fails_when=the undo stores a loop or a part under a closed parent; no_claim=the web.
 """
 
 from datetime import date
@@ -482,3 +491,125 @@ async def test_priorities_rows_name_the_parent(client):
     assert rows["pay-1"]["parts"] == [{"id": w.ids["pay-2"], "code": "", "title": "Pay 2",
                                        "cut": False, "in_trash": False}]  # fmt: skip
     assert rows["pay-2"]["parts"] == []
+
+
+LOOP_A_B = "A cannot be part of B: B is already one of its parts"
+
+
+def _closed_words(key: str) -> str:
+    return f"after.parent_key: no open item of this roadmap has the key {key}"
+
+
+async def _cut(client, w, key):
+    r = await client.post(CHANGES, headers=w.ctx.as_("owner"), json={
+        "op": "set_status", "target": {"item_id": w.ids[key]}, "before": {"status": "planned"},
+        "after": {"status": "cut"}})  # fmt: skip
+    assert r.status_code == 201, r.text
+
+
+async def test_accepting_a_proposed_parent_checks_it_again(client):
+    """Review finding (train AS replay review, set_parent proposals): accept runs create's
+    check again, so a proposal made before the roadmap changed stores no loop and no part
+    under a closed parent."""
+    w = await Parts().build(await make_people())
+    owner = w.ctx.as_("owner")
+
+    async def propose(key, parent):
+        r = await w.parent(client, key, None, parent, who="approver")
+        assert r.status_code == 201, r.text
+        assert r.json()["change"]["status"] == "proposed"
+        return r.json()["change"]
+
+    async def accept(change):
+        return await client.post(f"{CHANGES}/{change['id']}/accept", json={}, headers=owner)
+
+    # A loop: the approver proposes "a part of b"; the owner then makes b part of a.
+    loop = await propose("a", "b")
+    assert (await w.parent(client, "b", None, "a")).status_code == 201
+    r = await accept(loop)
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == LOOP_A_B
+    # A cut parent: "c part of d", then d is cut.
+    cut = await propose("c", "d")
+    await _cut(client, w, "d")
+    r = await accept(cut)
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == _closed_words("d")
+    # A merged parent: "p part of own", then own is merged into b.
+    merged = await propose("p", "own")
+    assert (await w.merge(client, "own", "b")).status_code == 201
+    r = await accept(merged)
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == _closed_words("own")
+    items = await w.read(client)
+    assert items["a"]["parent_key"] is None and items["b"]["parent_key"] == "a"
+    assert items["c"]["parent_key"] is None and items["p"]["parent_key"] is None
+    # Nothing was decided: each proposal still waits, and its decider can still decline it.
+    rows = {c["id"]: c for c in (await client.get(CHANGES, headers=owner)).json()}
+    assert [rows[c["id"]]["status"] for c in (loop, cut, merged)] == ["proposed"] * 3
+    r = await client.post(f"{CHANGES}/{loop['id']}/decline", json={}, headers=owner)
+    assert r.status_code == 200, r.text
+
+    # A parent in Trash: "c part of a", then a goes to Trash.
+    w = await Parts().build(await make_people())
+    owner = w.ctx.as_("owner")
+    trashed = await propose("c", "a")
+    assert (await client.delete(f"{ITEMS}/{w.ids['a']}", headers=owner)).status_code == 200
+    r = await accept(trashed)
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == _closed_words("a")
+    assert (await w.read(client))["c"]["parent_key"] is None
+
+
+async def test_undo_of_a_parent_change_checks_the_old_parent_again(client):
+    """Review finding (train AS replay review, set_parent undo): the old parent written back
+    is checked as create checks it."""
+    w = await Parts().build(await make_people())
+    owner = w.ctx.as_("owner")
+
+    async def made(key, before, after):
+        r = await w.parent(client, key, before, after)
+        assert r.status_code == 201, r.text
+        return r.json()["change"]
+
+    async def undo(change):
+        return await client.post(f"{CHANGES}/{change['id']}/undo", headers=owner)
+
+    # c1 makes a part of b, c2 takes a out, c3 makes b part of a: undoing c2 would loop.
+    await made("a", None, "b")
+    c2 = await made("a", "b", None)
+    await made("b", None, "a")
+    r = await undo(c2)
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == LOOP_A_B
+    # c part of d, taken out, d cut: undoing the take-out would put c under a cut feature.
+    await made("c", None, "d")
+    out_c = await made("c", "d", None)
+    await _cut(client, w, "d")
+    r = await undo(out_c)
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == _closed_words("d")
+    # p part of own, taken out, own merged into b: undoing the take-out is refused.
+    await made("p", None, "own")
+    out_p = await made("p", "own", None)
+    assert (await w.merge(client, "own", "b")).status_code == 201
+    r = await undo(out_p)
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == _closed_words("own")
+    items = await w.read(client)
+    assert items["a"]["parent_key"] is None and items["b"]["parent_key"] == "a"
+    assert items["c"]["parent_key"] is None and items["p"]["parent_key"] is None
+    # Nothing was undone.
+    rows = (await client.get(CHANGES, headers=owner)).json()
+    assert not [c for c in rows if c["status"] == "undone"]
+
+    # A parent in Trash: c part of a, taken out, a goes to Trash.
+    w = await Parts().build(await make_people())
+    owner = w.ctx.as_("owner")
+    await made("c", None, "a")
+    out_c = await made("c", "a", None)
+    assert (await client.delete(f"{ITEMS}/{w.ids['a']}", headers=owner)).status_code == 200
+    r = await undo(out_c)
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == _closed_words("a")
+    assert (await w.read(client))["c"]["parent_key"] is None

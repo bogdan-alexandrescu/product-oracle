@@ -24,6 +24,11 @@ import { expect, test, type Page } from "./test";
  *   round 2; a count in words staying a word is the API's test_a_count_in_words_stays_in_words); fails_when=the draft bar
  *   says "2 changes" and nothing lists them, or only the latest fix has an Undo.
  * - protects=a viewer reads no fix; fails_when=a viewer is offered "Use 6".
+ * - protects=while the PRD's draft is in review (sent for approval in another tab) the owner
+ *   is offered no fix, the item staying; "Use 6" on a page read before the draft was sent is
+ *   refused in the API's own words ("This PRD's draft is in review: ..."), and the page then
+ *   reads the PRD again and offers it no more (train AS replay review); fails_when=the owner
+ *   is offered "Use 6" in review, or the refusal says the number changed.
  */
 
 const URL = "/simple/one-pagers/guided-setup";
@@ -153,4 +158,34 @@ test("a number changed since the page was read is refused in words", async ({ pa
   // Nothing applied: the page now reads the draft as it is, with the one fix made in the other tab.
   await expect(fixed(page)).toHaveText([FIXED_COUNT]);
   await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
+});
+
+// Train AS replay review: while the PRD's draft is in review a fix that applies is refused,
+// so the owner is offered none; "Use 6" on a page read before the draft was sent says the
+// API's own words, never that the number changed.
+test("while the PRD's draft is in review the fix waits, and a refusal says why", async ({ page }) => {
+  await setUp(page, "light");
+  await login(page);
+  await page.goto(URL);
+  await item(page, PER).getByRole("button", { name: "Use 200" }).click();
+  await expect(fixed(page)).toHaveText([FIXED_PER]);
+  const readBefore = item(page, COUNT).getByRole("button", { name: "Use 6" });
+  await expect(readBefore).toBeVisible();
+  // A second tab of the same browser sends the draft for approval.
+  const other = await page.context().newPage();
+  await other.goto(URL);
+  const bar = other.getByRole("status", { name: "Working draft" });
+  await bar.getByRole("button", { name: "Send for approval…" }).click();
+  await other.getByTestId("send-for-approval").getByRole("button", { name: "Send for approval" }).click();
+  await expect(bar.getByTestId("draft-waits-on")).toContainText("Sent for approval · waiting on");
+  // In review: the item stays, with no fix to click.
+  await expect(item(other, COUNT)).toBeVisible();
+  await expect(item(other, COUNT).getByRole("button", { name: "Use 6" })).toHaveCount(0);
+  await other.close();
+  await readBefore.click();
+  await expect(page.getByRole("alert").filter({ hasText: "This PRD's draft is in review: changes wait until it is approved" })).toBeVisible();
+  await expect(page.getByRole("alert").filter({ hasText: "This number changed since you read it" })).toHaveCount(0);
+  // The page reads the PRD again: the item stays, and its fix waits for the review.
+  await expect(item(page, COUNT)).toBeVisible();
+  await expect(item(page, COUNT).getByRole("button", { name: "Use 6" })).toHaveCount(0);
 });

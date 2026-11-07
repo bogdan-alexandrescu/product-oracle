@@ -21,6 +21,12 @@ Test cards (protects / fails_when / no_claim):
   a viewer changes the PRD.
 - test_another_company_cannot_fix: protects=tenant scope: another company's owner is 404
   and nothing is written; fails_when=the op reaches another company's PRD.
+- test_a_draft_in_review_holds_the_fix: protects=while the PRD's draft is in review the
+  item carries no fix for who would apply it (it would be refused); a fix sent from a page
+  read before is refused in the API's own words ("This PRD's draft is in review: ..."), not
+  as a stale number; who proposes still proposes, and their open proposal stays on the
+  owner's item; fails_when=the owner is offered "Use 6" in review, the refusal is a stale
+  number's, or a proposer loses the fix; no_claim=the web (e2e simple-one-pager-number-fix).
 
 A count in a section's HEADING (owner, Nov 5, 'Fix the heading too'), on the invented PRD
 "later-list" ("Later · 8 items" over six listed):
@@ -184,6 +190,50 @@ async def test_another_company_cannot_fix(client):
     assert r.status_code == 404, r.text
     async with tenant_session(ctx.tenant_id) as s:
         assert list(await s.scalars(select(SimpleChange))) == []
+
+
+IN_REVIEW = "This PRD's draft is in review: changes wait until it is approved"
+
+
+async def test_a_draft_in_review_holds_the_fix(client):
+    # Review finding (train AS replay review): one_pager._ensure refuses a change that applies
+    # while the PRD's draft is in review, so the item offers no fix to who would apply it.
+    from oracle.docs.models import Document
+    from oracle.review.models import DocumentReviewPolicy
+    from oracle.roadmap.models import ProductTrack
+
+    ctx = await clear_world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == DOC))
+        # The PRD's decider is the owner; the approver owns its track, so reads "Needs a look"
+        # and proposes.
+        s.add(DocumentReviewPolicy(document_id=doc.id, decider_id=ctx.users["owner"].id))
+        s.add(
+            ProductTrack(prd_document_id=doc.id, title="Invites", owner_id=ctx.users["approver"].id)
+        )
+        await s.commit()
+    view = await get(client, ctx, "owner", DOC)
+    read_before = look(view, COUNT)["fix"]
+    assert (await fix(client, ctx, "owner", look(view, PER)["fix"])).status_code == 201
+    draft_id = (await get(client, ctx, "owner", DOC))["draft"]["id"]
+    sub = await client.post(f"/v1/simple/drafts/{draft_id}/submit", headers=ctx.as_("owner"))
+    assert sub.status_code == 200, sub.text
+    # In review: the item stays, with no fix for the owner, who would apply it.
+    item = look(await get(client, ctx, "owner", DOC), COUNT)
+    assert item is not None and item["fix"] is None
+    # The fix from the page read before: refused in the API's words, not a stale number.
+    r = await fix(client, ctx, "owner", read_before)
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"] == IN_REVIEW
+    # Who proposes still proposes: the proposal waits, and stays on the owner's item.
+    mine = look(await get(client, ctx, "approver", DOC), COUNT)
+    assert mine["fix"]["words"] == "Use 6" and mine["fix"]["proposal"] is None
+    r = await fix(client, ctx, "approver", mine["fix"])
+    assert r.status_code == 201, r.text
+    prop = r.json()["change"]
+    assert prop["status"] == "proposed"
+    owner = look(await get(client, ctx, "owner", DOC), COUNT)
+    assert owner["fix"]["proposal"]["change_id"] == prop["id"]
 
 
 # --------------------------------------------------------------------------- a heading's count

@@ -262,6 +262,26 @@ function seed(db: SimpleDb, key: string) {
   return db.items.find((s) => s.key === key)!;
 }
 
+/**
+ * changes._parent: why `key` may not be made part of `v` as `seen` reads the roadmap (null: it
+ * may): an open item of the same roadmap, any depth, never the item itself or one of its own
+ * parts (a feature is never its own ancestor). Create, accept and undo all check it.
+ */
+function parentRefusal(seen: SimpleDb, key: string, v: string | null): string | null {
+  const me = seen.items.find((s) => s.key === key);
+  if (v === null || !me) return null;
+  const live = (k: string) => seen.items.find((x) => x.key === k && !x.trashed);
+  const parent = live(v);
+  // Each feature by its code and name (F-02 Alert routing by team), as changes._parent.
+  const name = (x: { section?: string | null; title: string }) => [prdCode(x.section), x.title].filter(Boolean).join(" ");
+  if (v === key) return `${name(me)} cannot be a part of itself`;
+  if (!parent || parent.roadmap !== me.roadmap || closed(parent)) return `after.parent_key: no open item of this roadmap has the key ${v}`;
+  const up = new Set<string>();
+  for (let k = parent.parent; k && !up.has(k) && live(k); k = live(k)!.parent) up.add(k);
+  if (up.has(key)) return `${name(me)} cannot be part of ${name(parent)}: ${name(parent)} is already one of its parts`;
+  return null;
+}
+
 /** The roadmap slug of a key-date change's target document. */
 function roadmapOfDoc(db: SimpleDb, docId: unknown): string | undefined {
   return [...new Set(db.items.map((s) => s.roadmap))].find((r) => stableUuid(`simple-doc/${r}`) === docId);
@@ -1289,19 +1309,11 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       if (!["planned", "done", "cut"].includes(String(a.status))) return json(422, { detail: "after.status: planned, done or cut" });
       after = { status: a.status };
     } else if (body.op === "set_parent") {
-      // changes.py set_parent: an open item of the same roadmap, any depth, never the item itself or
-      // one of its own parts (a feature is never its own ancestor).
       const v = a.parent_key == null ? null : String(a.parent_key);
       const me = seed(seen, key);
-      const live = (k: string) => seen.items.find((x) => x.key === k && !x.trashed);
-      const parent = v === null ? undefined : live(v);
-      // Each feature by its code and name (F-02 Alert routing by team), as changes._parent.
-      const name = (x: { section?: string | null; title: string }) => [prdCode(x.section), x.title].filter(Boolean).join(" ");
-      if (v === key) return json(422, { detail: `${name(me)} cannot be a part of itself` });
-      if (v !== null && (!parent || parent.roadmap !== me.roadmap || closed(parent))) return json(422, { detail: `after.parent_key: no open item of this roadmap has the key ${v}` });
-      const up = new Set<string>();
-      for (let k = parent?.parent; k && !up.has(k) && live(k); k = live(k)!.parent) up.add(k);
-      if (parent && up.has(key)) return json(422, { detail: `${name(me)} cannot be part of ${name(parent)}: ${name(parent)} is already one of its parts` });
+      const refused = parentRefusal(seen, key, v);
+      if (refused) return json(422, { detail: refused });
+      const parent = v === null ? undefined : seen.items.find((x) => x.key === v && !x.trashed);
       const named = parent ?? (me.parent ? seen.items.find((x) => x.key === me.parent) : undefined);
       if (named) Object.assign(target, { code: prdCode(named.section) ?? "", title: named.title });
       after = { parent_key: v };
@@ -1455,6 +1467,9 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     } else {
       const now_ = current(db, c, c.after);
       if (!same(now_, c.after)) return conflict(db, ctx, now_, touched(c), "Changed since");
+      // As changes.undo: the old parent written back is checked as create checks it.
+      const refused = c.op === "set_parent" ? parentRefusal(readerDb(db, ctx), keyOf(db, c.target.item_id)!, (c.before.parent_key as string | null) ?? null) : null;
+      if (refused) return json(422, { detail: refused });
       const drafts = intoDrafts(db, c, s, true);
       if (drafts instanceof Response) return drafts;
       apply(db, c, c.before, true);
@@ -1519,6 +1534,9 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   } else if (p[4] === "accept") {
     const now_ = current(db, c, c.before);
     if (!same(now_, c.before)) return conflict(db, ctx, now_, touched(c), "outdated");
+    // As changes.decide: a proposed parent is checked again, as create checks it.
+    const refused = c.op === "set_parent" ? parentRefusal(readerDb(db, ctx), keyOf(db, c.target.item_id)!, (c.after.parent_key as string | null) ?? null) : null;
+    if (refused) return json(422, { detail: refused });
     // Into the decider's working draft (their editing session's).
     const session = openEditing(db, ctx.id) ?? newSession(db, ctx.id, "editing");
     const drafts = intoDrafts(db, c, session);
