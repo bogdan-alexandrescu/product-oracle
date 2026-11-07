@@ -1475,8 +1475,12 @@ async def read(
     owner_id = await document_owner(db, document, b.version, w)
     if owner_id:
         ids.add(owner_id)
+    from oracle.members.names import display_name
+
+    # Export QA X-15: a name, never an email ("mira.santos@example.com" reads "Mira Santos").
     names = {
-        u.id: u.name or u.email for u in await db.scalars(select(User).where(User.id.in_(ids)))
+        u.id: display_name(u.email, u.name)
+        for u in await db.scalars(select(User).where(User.id.in_(ids)))
     }
     now = company_time.now()
     from oracle.simple import visuals
@@ -2119,6 +2123,7 @@ h1 { font-size: 17pt; margin: 4px 0 2px; }
 h2 { font-size: 9pt; text-transform: uppercase; letter-spacing: .06em; color: #5b6270;
   margin: 10px 0 3px; border-top: 1px solid #e3e5e9; padding-top: 6px; }
 ul { margin: 0; padding-left: 16px; } li { margin: 1px 0; }
+ul.done { list-style: none; padding-left: 2px; }
 .metric b { font-variant-numeric: tabular-nums; }
 .plan { font-size: 8pt; }
 .plan .r { display: flex; align-items: center; height: 15px; }
@@ -2137,18 +2142,22 @@ ul { margin: 0; padding-left: 16px; } li { margin: 1px 0; }
 .tl .n { width: 30%; padding: 3px 6px 3px 0; }
 .tl .n b { display: block; font-size: 8.5pt; }
 .tl .t { position: relative; flex: 1; }
-.tl .ax { height: 30px; }
-.tl .f { position: absolute; top: 0; transform: translateX(-100%); white-space: nowrap;
-  padding: 0 3px; font-weight: 600; border-right: 2px solid; }
+.tl .ax { position: relative; }
+.tl .f { position: absolute; white-space: nowrap; padding: 0 3px; font-weight: 600;
+  line-height: 14px; border-right: 2px solid; }
+.tl .f.l { border-right: 0; border-left: 2px solid; }
 .tl .mo { position: absolute; bottom: 0; color: #5b6270; border-left: 1px solid #e3e5e9;
   padding-left: 2px; }
-.tl .bar { position: absolute; height: 13px; border: 1px solid; border-radius: 7px;
-  padding: 0 4px; white-space: nowrap; font-weight: 600; font-size: 7pt; overflow: hidden; }
+.tl .bar { position: absolute; height: 14px; border: 1px solid; border-radius: 7px;
+  box-sizing: border-box; line-height: 12px; padding: 0 4px; white-space: nowrap;
+  font-weight: 600; font-size: 7pt; overflow: hidden; }
 .tl .bar.pm { border-style: dashed; }
 .tl .off { position: absolute; top: 0; bottom: 0;
-  background: repeating-linear-gradient(135deg, #d9d5cc 0 2px, transparent 2px 5px); }
+  background: repeating-linear-gradient(135deg, #d9d5cc 0px, #d9d5cc 2px, transparent 2px,
+    transparent 5px); }
 .tl .end { position: absolute; top: 0; bottom: 0; border-left: 1px dashed; }
 .tl .now { position: absolute; top: 0; bottom: 0; border-left: 1.5px solid #c0392b; }
+.tl .key { color: #5b6270; margin-top: 4px; }
 .part { page-break-before: always; }
 .part h3 { font-size: 9.5pt; margin: 6px 0 2px; }
 .part .what { color: #5b6270; }
@@ -2162,16 +2171,62 @@ PM_LANE = "PM-owned · no engineering"
 # CSS px) and a 7pt bold character's, to fit a bar's codes as the web's fitCodes does.
 TL_PX = 0.70 * 178 / 25.4 * 96
 TL_CH = 5.2
+# Export QA X-4, X-6: an 8pt bold flag character's width and a 7pt bold name character's, at
+# most (the PDF's fallback sans is wider than Inter), and a flag's padding and edges, in px.
+FLAG_CH = 6.6
+FLAG_PAD = 9
+NAME_CH = 6.0
+# Page numbers on a PDF of more than one page (X-15).
+PAGE_NUMBERS = (
+    '@page { @bottom-right { content: "Page " counter(page) " of " counter(pages);'
+    " font-size: 8pt; color: #5b6270; } }"
+)
 
 
-def fit_codes(codes: list[str], px: float) -> str:
-    """As many whole codes as fit the bar, then "+N"; never a code cut mid-way (a bar too
-    narrow for even its first code and "+N" shows its first code, as wide as the bar is)."""
-    for k in range(len(codes), 0, -1):
-        text = " · ".join(codes[:k]) + (f" +{len(codes) - k}" if k < len(codes) else "")
-        if len(text) * TL_CH + 10 <= px:
-            return text
-    return codes[0] if codes else ""
+def month_label(m: date, first: bool) -> str:
+    """A month on a timeline axis: "Nov", with its year at the first month and at January
+    ("Nov 2026", "Jan 2027"), so months that repeat across years read apart (X-5)."""
+    month = company_time.calendar_month(m)
+    return f"{month} {m.year}" if first or m.month == 1 else month
+
+
+def range_words(start: date, end: date) -> str:
+    """A milestone's dates, month first: "Nov 2 – Nov 13"; across a year, both years
+    ("Dec 28, 2026 – Feb 12, 2027", X-5)."""
+    day = plan_model._day
+    if start.year == end.year:
+        return f"{day(start)} – {day(end)}"
+    return f"{day(start)}, {start.year} – {day(end)}, {end.year}"
+
+
+def milestone_words(code: str, name: str, cap: int = 28) -> str:
+    """A milestone's code with its name ("M1 Try it"), the name cut with "…" past ``cap``
+    characters so a flag stays inside the lanes; never a bare code."""
+    name = (name or "").strip()
+    if not name:
+        return code
+    return f"{code} {name if len(name) <= cap else name[: cap - 1].rstrip() + '…'}"
+
+
+def place_flags(ends: list[float], widths: list[float]) -> list[tuple[float, int, bool]]:
+    """Each milestone flag's left edge (px), row and side (X-4): its right edge on its end
+    line, or its left edge there when it would start left of the lanes; a flag that would
+    overlap one already placed goes on the next row free, so none is ever cut or hidden."""
+    rows: list[list[tuple[float, float]]] = []
+    out = []
+    for end, w in zip(ends, widths, strict=True):
+        left_side = end - w < 0
+        a = min(end, TL_PX - w) if left_side else end - w
+        row = next(
+            (i for i, taken in enumerate(rows)
+             if all(a + w + 2 <= b0 or a >= b1 + 2 for b0, b1 in taken)),
+            len(rows),
+        )  # fmt: skip
+        if row == len(rows):
+            rows.append([])
+        rows[row].append((a, a + w))
+        out.append((a, row, left_side))
+    return out
 
 
 # The plan strip shows this many rows; the rest are "+N more on the roadmap".
@@ -2190,7 +2245,8 @@ def _plan_html(plan: Any) -> str:
 
     now = f"<span class='now' style='left:{pct(plan.today):.1f}%'></span>" if plan.today else ""
     months = "".join(
-        f"<span class='m' style='left:{pct(m):.1f}%'>{m.strftime('%b')}</span>" for m in plan.months
+        f"<span class='m' style='left:{pct(m):.1f}%'>{month_label(m, i == 0)}</span>"
+        for i, m in enumerate(plan.months)
     )
     out = [
         "<div class='plan'><div class='r'><span class='n'></span>"
@@ -2248,6 +2304,38 @@ def _pieces(slices: list[Any]) -> list[tuple[str, list[Any], Any, Any, int]]:
     return [tuple(p) for p in out]  # type: ignore[misc]
 
 
+def bar_box(left: float, width: float, least: float) -> tuple[float, float]:
+    """A bar's left edge and width (px): at least ``least`` wide, growing left from its end
+    when short, and inside the lanes (left + width never past 100%, X-14)."""
+    w = min(max(width, least), TL_PX)
+    a = max(0.0, left + width - w)
+    return min(a, TL_PX - w), w
+
+
+def bar_label(of: list[Any], px: float) -> tuple[str, dict[str, str]]:
+    """A bar's words (X-6): its features' codes and names when they fit, else their names,
+    else the first name cut with "…"; never a bare code, every full name in the key."""
+    named = " · ".join(f"{x.code} {x.name}" for x in of)
+    if len(named) * NAME_CH + 10 <= px:
+        return named, {}
+    keyed = {x.code: x.name for x in of}
+    names = " · ".join(x.name for x in of)
+    if len(names) * NAME_CH + 10 <= px:
+        return names, keyed
+    return cut_name(of[0].name, len(of) - 1, px), keyed
+
+
+def cut_name(name: str, more: int, px: float) -> str:
+    """The first feature's name cut to the bar with "…" (and "+N" for the others when it
+    fits): a bar never prints a code without its name; the key lists every full name."""
+    tail = f" +{more}" if more else ""
+    for tail_ in [tail, ""] if tail else [""]:
+        room = int((px - 10) / NAME_CH) - len(tail_) - 1
+        if room >= 3:
+            return name[:room].rstrip() + "…" + tail_
+    return name[:1] + "…"
+
+
 def _timeline_html(view: Any, today: Any) -> str:
     """prd-timeline: the plan's timeline for the PDF's first page: milestone flags, months,
     one lane per goal (its targets and what is measured now) and the PM-owned lane."""
@@ -2264,18 +2352,33 @@ def _timeline_html(view: Any, today: Any) -> str:
     def px(a: Any, b: Any) -> float:
         return ((b - a).days + 1) / days * TL_PX
 
-    out = ["<div class='tl'><div class='r'><div class='n'></div><div class='t ax'>"]
-    for m in view.milestones:
+    def at(d: Any, end_of_day: bool = False) -> float:
+        return ((d - start).days + (1 if end_of_day else 0)) / days * TL_PX
+
+    mname = {m.code: milestone_words(m.code, m.name) for m in view.milestones}
+    flags = [(m, f"{mname[m.code]} ends {plan_model._day(m.end_date)}") for m in view.milestones]
+    placed = place_flags([at(m.end_date, True) for m, _ in flags],
+                         [len(text) * FLAG_CH + FLAG_PAD for _, text in flags])  # fmt: skip
+    rows = max([row + 1 for _, row, _ in placed] or [1])
+    out = ["<div class='tl'><div class='r'><div class='n'></div>"
+           f"<div class='t ax' style='height:{rows * 15 + 15}px'>"]  # fmt: skip
+    for (m, text), (a, row, left_side) in zip(flags, placed, strict=True):
         fill, edge, ink = tone[m.code]
-        out.append(f"<span class='f' style='left:{pct(m.end_date, True)};background:{fill};"
-                   f"color:{ink};border-color:{edge}'>{escape(m.code)} ends "
-                   f"{plan_model._day(m.end_date)}</span>")  # fmt: skip
-    mo = start.replace(day=1)
+        out.append(f"<span class='f{' l' if left_side else ''}' style='left:"
+                   f"{a / TL_PX * 100:.2f}%;top:{row * 15}px;background:{fill};color:{ink};"
+                   f"border-color:{edge}'>{escape(text)}</span>")  # fmt: skip
+    mo, first = start.replace(day=1), True
     while mo < end:
-        at = max(mo, start)
-        out.append(f"<span class='mo' style='left:{pct(at)}'>{at.strftime('%b')}</span>")
-        mo = (mo.replace(day=28) + timedelta(days=4)).replace(day=1)
+        nxt = (mo.replace(day=28) + timedelta(days=4)).replace(day=1)
+        # A first month with under ten days on the axis gives its label (and year) to the next.
+        if not (first and (nxt - start).days < 10):
+            on = max(mo, start)
+            out.append(f"<span class='mo' style='left:{pct(on)}'>"
+                       f"{month_label(on, first)}</span>")  # fmt: skip
+            first = False
+        mo = nxt
     out.append("</div></div>")
+    key: dict[str, str] = {}
     names = [g.name for g in view.goals]
     for sl in view.slices:
         if not sl.pm_owned and sl.goal and sl.goal not in names:
@@ -2293,7 +2396,9 @@ def _timeline_html(view: Any, today: Any) -> str:
         rows = max([p[4] + 1 for p in pieces] or [1])
         label = f"<b>{escape(name)}</b>"
         if goal is not None:
-            steps = " → ".join(f"{t.milestone} {t.target}" for t in goal.targets)
+            steps = " → ".join(
+                f"{mname.get(t.milestone, t.milestone)} · {t.target}" for t in goal.targets
+            )
             now = f"Now {goal.measured}" if goal.measured else "Not counted yet"
             if goal.measured and goal.on_track is not None:
                 now += " · on track" if goal.on_track else " · behind"
@@ -2310,23 +2415,29 @@ def _timeline_html(view: Any, today: Any) -> str:
         for code, of, a, b, row in pieces:
             fill, edge, ink = tone.get(code, TONES[0])
             pm_cls = " pm" if of[0].pm_owned else ""
-            out.append(f"<span class='bar{pm_cls}' style='left:{pct(a)};width:calc({pct(b, True)}"
-                       f" - {pct(a)});top:{2 + row * 17}px;background:{fill};border-color:{edge};"
-                       f"color:{ink};min-width:{len(of[0].code) * TL_CH + 10:.0f}px'>"
-                       f"{escape(fit_codes([x.code for x in of], px(a, b)))}</span>")  # fmt: skip
+            # X-14: a bar too short for its first code grows left from its end, never past
+            # its milestone's line or the page's right edge.
+            left, w = bar_box(at(a), px(a, b), 4 * NAME_CH + 10)
+            text, keyed = bar_label(of, w)
+            key.update(keyed)
+            out.append(f"<span class='bar{pm_cls}' style='left:{left / TL_PX * 100:.2f}%;"
+                       f"width:{w / TL_PX * 100:.2f}%;top:{2 + row * 17}px;background:{fill};"
+                       f"border-color:{edge};color:{ink}'>{escape(text)}</span>")  # fmt: skip
         out.append("</div></div>")
+    if key:
+        listed = " · ".join(f"{escape(c)} {escape(n)}" for c, n in sorted(key.items()))
+        out.append(f"<div class='key'>{listed}</div>")
     return "".join(out) + "</div>"
 
 
 def _part_html(view: Any, m: Any) -> str:
     """prd-timeline: one milestone's page: name and dates, Done when, targets, what it
     builds by kind, its open decisions and risks."""
-    day = plan_model._day
     out = [f"<section class='part'><h1>{escape(m.code)} {escape(m.name)}</h1>"
-           f"<div class='meta'>{day(m.start_date)} – {day(m.end_date)}"]  # fmt: skip
+           f"<div class='meta'>{range_words(m.start_date, m.end_date)}"]  # fmt: skip
     if m.effort_weeks is not None:
         out.append(f" · {m.planned_weeks:g} of {m.effort_weeks:g} engineer-weeks planned")
-    out.append("</div><h2>Done when</h2><ul>")
+    out.append("</div><h2>Done when</h2><ul class='done'>")
     out += [f"<li>☐ {escape(d)}</li>" for d in m.done_when] or [f"<li>{NOT_WRITTEN}</li>"]
     out.append("</ul><h2>Targets</h2><ul>")
     out += [f"<li>{escape(t.goal)}: {escape(t.target)}</li>" for t in m.targets] or [
@@ -2371,7 +2482,7 @@ async def pdf_html(db: AsyncSession, principal: Any, doc: str) -> tuple[str, str
         "<!doctype html><html><head><meta charset='utf-8'>",
         "" if timeline else '<meta name="oracle-page-fit" content="one_page">',
         f"<title>{escape(out.document.title)}</title><style>{PAGE_CSS}{BRAND_CSS}"
-        f"{accent_css(brand)}</style></head><body>",
+        f"{accent_css(brand)}{PAGE_NUMBERS if timeline else ''}</style></head><body>",
         str(render_brand_header(brand)),
         f"<h1>{escape(out.document.title)}</h1>",
     ]
