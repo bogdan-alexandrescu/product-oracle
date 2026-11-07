@@ -18,7 +18,8 @@ type Flow = FlowCatalog["flows"][number];
 type Depth = "quick" | "standard" | "deep";
 
 /** Where a page opens the dialog on one flow, with its document filled in (#255). */
-export type RunStart = { flow: Flow["key"]; document: string; title: string };
+/** `features`: the Ground Truth features a Ground Truth to PRD run adds to its PRD (the Engineering check's "Add it to a PRD"). */
+export type RunStart = { flow: Flow["key"]; document: string; title: string; features?: { id: string; title: string }[] };
 
 /** Pick a flow and its knobs, see the estimate, then start the run. */
 export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => void; start?: RunStart }) {
@@ -68,15 +69,16 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  const adds = startFrom?.features;
   const knobs = useMemo(
     () => ({
       depth,
       roles: Object.fromEntries((flow?.segments ?? []).map((s) => [s.name, roles[s.name] ?? s.roles])),
       checkpoints: Object.fromEntries((flow?.segments ?? []).flatMap((s) => (s.checkpoint ? [[s.checkpoint, checkpoints[s.checkpoint] ?? true]] : []))),
       budget_usd: budget.trim() ? Number(budget) : null,
-      ...(flow?.key === "baseline_to_prd" ? { goals } : {}),
+      ...(flow?.key === "baseline_to_prd" ? { goals, ...(adds?.length ? { features: adds.map((f) => f.id) } : {}) } : {}),
     }),
-    [flow, depth, roles, checkpoints, budget, goals],
+    [flow, depth, roles, checkpoints, budget, goals, adds],
   );
 
   const change = <T,>(set: (v: T) => void) => (v: T) => {
@@ -169,6 +171,11 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
           )}
           {catalog.data && flow && (
             <>
+              {!!startFrom?.features?.length && (
+                <p className="font-semibold" data-testid="run-adds">
+                  Adds {startFrom.features.map((f) => f.title).join(", ")}
+                </p>
+              )}
               {catalog.data.runtime_notes.length > 0 && (
                 <ul className="space-y-1 rounded-button bg-accent-soft px-3 py-2 text-sm text-accent-ink" data-testid="runtime-notes">
                   {catalog.data.runtime_notes.map((n) => (

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState, type FormEvent, type MouseEvent, type ReactNode } from "react";
+import { Fragment, useState, type CSSProperties, type FormEvent, type MouseEvent, type ReactNode } from "react";
 
 import { Button, Chip, CodeChip, confirmInPage, DataTable, InfoTip, Panel, type Column } from "@/components/ds";
 import type { EdgeOut, EntityOut, GraphOut, TraceFeature, TraceReport } from "@/lib/api/client";
@@ -707,13 +707,19 @@ function Ledger({
 }) {
   const cols = 3 + goals.length;
   const th = "bg-surface2 px-2 text-[13px] leading-4 font-semibold text-text2";
+  // The Feature column stays in view while the goals scroll by, with a line at its edge so no goal
+  // slides under it unseen; a phone stacks the row instead.
+  const pin = "sticky left-0 z-[1] shadow-[inset_-1px_0_0_var(--line)] max-[600px]:static max-[600px]:shadow-none";
   return (
     // A container: beside an open drawer the columns narrow before the feature's name does (qa-plan-7).
-    <div className="@container min-w-0 overflow-clip">
+    // Many goals (visual QA GT-1): the table keeps the Feature column's room and each goal's width,
+    // and scrolls sideways with the Feature column pinned.
+    <div className="@container min-w-0 overflow-x-auto max-[600px]:overflow-clip" data-testid="ledger-scroll">
       <table
         aria-label="Feature × goal"
         role="table"
-        className="w-full table-fixed border-collapse text-[15px] leading-[22px] max-[600px]:block"
+        style={{ "--goals": goals.length } as CSSProperties}
+        className="w-full min-w-[calc(220px+228px+var(--goals)*var(--goal-w))] table-fixed border-collapse text-[15px] leading-[22px] [--goal-w:148px] @max-[900px]:[--goal-w:96px] max-[600px]:block max-[600px]:min-w-0"
       >
         <colgroup>
           <col />
@@ -727,7 +733,7 @@ function Ledger({
             every label at the same height, then a thin row with each goal's target, labelled on the left. */}
         <thead className="max-[600px]:sr-only">
           <tr>
-            <th scope="col" className={`${th} h-9 pl-4 text-left align-middle max-[600px]:pl-3`}>
+            <th scope="col" className={`${th} ${pin} h-9 pl-4 text-left align-middle max-[600px]:pl-3`}>
               Feature
             </th>
             <th scope="col" className={`${th} text-left align-middle max-[600px]:hidden`}>
@@ -764,9 +770,11 @@ function Ledger({
           </tr>
           {goals.some((g) => goalTarget(g)) && (
             <tr data-testid="ledger-targets">
-              <th scope="row" colSpan={3} className={`${th} h-7 pl-4 text-left align-middle font-medium max-[600px]:hidden`}>
+              {/* Pinned with the Feature column, so no goal's target shows under it without its name. */}
+              <th scope="row" className={`${th} ${pin} h-7 pl-4 text-left align-middle font-medium max-[600px]:hidden`}>
                 Targets
               </th>
+              <td colSpan={2} className={`${th} max-[600px]:hidden`} />
               {goals.map((g) => (
                 <td key={g.id} className={`${th} h-7 border-l border-line text-left align-middle font-medium last:pr-4 max-[600px]:hidden`}>
                   <b className="tnum font-semibold text-text" data-testid="ledger-target">
@@ -791,7 +799,8 @@ function Ledger({
                 scope="colgroup"
                 className="h-9 px-4 text-left max-[600px]:flex max-[600px]:items-center max-[600px]:px-3"
               >
-                <span className="flex min-w-0 items-center gap-2">
+                {/* The product's name and count stay in view while the goals scroll by. */}
+                <span className="flex min-w-0 items-center gap-2 min-[601px]:sticky min-[601px]:left-4 min-[601px]:w-[calc(100cqw-2rem)]">
                   {group.product ? (
                     <>
                       <button
@@ -828,7 +837,7 @@ function Ledger({
               {(requirementsOf.get(f.id) ?? []).map((r) => (
                 <tr key={r.id} role="row" data-testid={`requirement-${r.key}`} className="border-t border-line max-[600px]:block">
                   <td role="cell" colSpan={cols} className="px-2 py-1.5 pl-10 text-sm max-[600px]:block max-[600px]:pl-6">
-                    <span className="flex min-w-0 items-center gap-2">
+                    <span className="flex min-w-0 items-center gap-2 min-[601px]:sticky min-[601px]:left-10 min-[601px]:max-w-[calc(100cqw-3rem)]">
                       <span className="text-text2">Requirement</span>
                       <TitleButton entity={r} onOpen={onOpen} className="max-[600px]:whitespace-normal" />
                       <LockMark entity={r} meId={meId} />
@@ -873,11 +882,20 @@ function FeatureRow({
       data-selected={selected || undefined}
       onClick={() => onOpen(feature.id)}
       role="row"
-      className={`h-12 cursor-pointer border-t border-line hover:bg-surface2 max-[600px]:flex max-[600px]:h-auto max-[600px]:flex-wrap max-[600px]:items-center max-[600px]:gap-x-2 max-[600px]:gap-y-1.5 max-[600px]:px-3 max-[600px]:py-2.5 ${
+      className={`group h-12 cursor-pointer border-t border-line hover:bg-surface2 max-[600px]:flex max-[600px]:h-auto max-[600px]:flex-wrap max-[600px]:items-center max-[600px]:gap-x-2 max-[600px]:gap-y-1.5 max-[600px]:px-3 max-[600px]:py-2.5 ${
         selected ? "bg-accent-soft shadow-[inset_4px_0_0_var(--accent)] hover:bg-accent-soft" : ""
       }`}
     >
-      <td role="cell" className="px-2 py-1.5 pl-4 max-[600px]:block max-[600px]:basis-full max-[600px]:p-0">
+      {/* Pinned while the goals scroll by (visual QA GT-1): it carries the row's own background and
+          the column's edge line. */}
+      <td
+        role="cell"
+        className={`sticky left-0 z-[1] px-2 py-1.5 pl-4 max-[600px]:static max-[600px]:block max-[600px]:basis-full max-[600px]:bg-transparent max-[600px]:p-0 ${
+          selected
+            ? "bg-accent-soft shadow-[inset_4px_0_0_var(--accent),inset_-1px_0_0_var(--line)] max-[600px]:shadow-none"
+            : "bg-surface shadow-[inset_-1px_0_0_var(--line)] group-hover:bg-surface2 max-[600px]:shadow-none"
+        }`}
+      >
         {/* The name keeps the room (qa-plan-7): it wraps whole words to two lines, and the lock,
             Proposed and flags wrap below it rather than squeezing it to "Usa…". */}
         <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">

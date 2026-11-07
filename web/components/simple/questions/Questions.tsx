@@ -69,7 +69,8 @@ export function useQuestionActions(onDone: () => unknown, sessionId?: string | n
     const words = "option" in a ? (a.option === "recommended" ? q.recommendation : q.alternatives.find((o) => o.key === a.option)?.label) : a.answer;
     const change = await run(
       { op: "decide_question", target: { decision_id: q.id }, before: { status: "proposed" }, after: a },
-      `Decided ${q.code}: ${words ?? "your answer"}`,
+      // P-4: the question by its code and its words, never a bare code.
+      `Decided ${q.code} ${q.title}: ${words ?? "your answer"}`,
       q.decider?.name ?? "the owners",
       inRow,
     );
@@ -78,7 +79,7 @@ export function useQuestionActions(onDone: () => unknown, sessionId?: string | n
   const nameDecider = (q: Question, person: { id: string; name: string }) =>
     run(
       { op: "name_decider", target: { decision_id: q.id }, before: { decider_id: q.decider?.id ?? null }, after: { decider_id: person.id } },
-      `${person.name} decides ${q.code}`,
+      `${person.name} decides ${q.code} ${q.title}`,
       q.decider?.name ?? "the owners",
     );
   /** A meeting's agenda: Undo on a question decided in it (its change, while the meeting runs). */

@@ -7,12 +7,12 @@
 // review meeting's Roadmap step does, never the roadmap. Approving the PRD puts its items on the
 // roadmap's working draft and they leave the layer.
 
-import { useCallback, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type MutableRefObject, type ReactNode } from "react";
 
 import { Button, confirmInPage, Icon, InfoTip } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { calendarDay } from "@/lib/dates";
-import { errorMessage } from "@/lib/use-query";
+import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { DatesForm, HATCH, months, movedWords } from "../meetings/[id]/_draft";
 
@@ -61,6 +61,33 @@ export function useShowDrafts(userId: string | null | undefined): [boolean, (on:
     [userId],
   );
   return [show, set];
+}
+
+/** Resolves when the page is idle (the chart drawn and nothing else to do), or after 1.5 s at most. */
+const idle = () =>
+  new Promise<void>((r) => (typeof requestIdleCallback === "function" ? void requestIdleCallback(() => r(), { timeout: 1500 }) : void setTimeout(r, 200)));
+
+/**
+ * Reads the draft PRDs off the roadmap's first draw: the roadmap mounts it once its own data is
+ * in, and it reads when the page is idle. It hands the list up only when there are some, there
+ * were, or the page waits on it (`needed`: a saved or picked PRD may be a draft PRD's), so no
+ * draft PRD re-renders nothing (e2e-timing: the 500-item roadmap's draw).
+ */
+export function DraftPrdsRead({ needed, onRead, reloadRef }: { needed: boolean; onRead: (r: { data: DraftPrd[]; error: boolean }) => void; reloadRef: MutableRefObject<(() => Promise<unknown>) | null> }) {
+  const q = useQuery("simple-roadmap-draft-prds", () => idle().then(() => unwrap(api.GET("/v1/simple/roadmap/draft-prds"))));
+  const { reload } = q;
+  useEffect(() => {
+    reloadRef.current = reload;
+  }, [reload, reloadRef]);
+  const shown = useRef(false);
+  useEffect(() => {
+    if (q.data === undefined && !q.error) return;
+    const data = q.data ?? [];
+    if (!data.length && !shown.current && !needed) return;
+    shown.current = data.length > 0;
+    onRead({ data, error: !!q.error });
+  }, [q.data, q.error, needed, onRead]);
+  return null;
 }
 
 /** The legend chip for a draft: a hatched swatch and its words. */

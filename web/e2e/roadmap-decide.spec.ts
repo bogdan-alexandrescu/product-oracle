@@ -80,15 +80,16 @@ test("acting on a broken link drops the strip, Needs a decision, Home and the si
   await page.getByTestId("needs-decision").click();
   await expect(tray(page).getByTestId("tray-scope")).not.toContainText("can differ");
   await tray(page).getByRole("button", { name: "Close" }).click();
-  // Home's tile: the strip's broken links and the other red flags with a fix (an end past its milestone).
+  // pre-demo QA S-5: Home's tile counts the same broken links (every red flag with a fix, an end past its milestone too).
   const home = await homeLinks(page);
-  expect(home).toBeGreaterThanOrEqual(before);
+  expect(home).toBe(before);
   await page.goto("/simple/roadmap");
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   await strip(page).locator('[data-testid="conflict"][data-item="alert-digest"]').getByRole("button", { name: "Move the dependents" }).click();
   await expect(page.getByText(/Moved what depends on 'Alert rules engine' in your working draft/)).toBeVisible();
   // The prompt leaves at once, without a reload; every count drops with it.
-  await expect(strip(page).locator('[data-testid="conflict"][data-item="alert-digest"]')).toHaveCount(0);
+  // Its end past its milestone Beta stays a broken link of its own.
+  await expect(strip(page).locator('[data-testid="conflict"][data-item="alert-digest"]').filter({ hasText: "starts" })).toHaveCount(0);
   await expect.poll(() => stripCount(page)).toBe(before - 1);
   expect(await trayLinks(page)).toBe(before - 1);
   await expect.poll(() => badgeLinks(page)).toBe(before - 1);
@@ -176,7 +177,8 @@ test("under a filter, every dependent of a cut item can drop it, and every count
   await expect.poll(() => badgeLinks(page)).toBe(whole);
   expect(await trayLinks(page)).toBe(whole);
   await page.getByTestId("needs-decision").click();
-  await expect(tray(page).getByTestId("tray-links-here")).toContainText(`1 of the ${whole} broken links is in these filters`);
+  const shown = await stripCount(page);
+  await expect(tray(page).getByTestId("tray-links-here")).toContainText(`${shown} of the ${whole} broken ${whole === 1 ? "link" : "links"} ${shown === 1 ? "is" : "are"} in these filters`);
   await tray(page).getByRole("button", { name: "Close" }).click();
   await all.getByRole("button", { name: "Clear filters" }).click();
   await expect(page.locator('[data-testid="timeline-row"][data-item="uptime-alerts"]')).toHaveCount(1);
@@ -419,7 +421,9 @@ test("under a filter, Needs a decision says N here, M in all on one basis, and 1
   await expect(scope).toContainText("in your roadmaps' working drafts");
   await expect(scope).not.toContainText("this roadmap's working draft");
   const tiles = await tray(page).getByTestId("tray-counter").locator("b").allInnerTexts();
-  // The tiles count the whole roadmap, as the "in all" does and the button does.
+  // The tiles count the whole roadmap, as the "in all" does and the button does, the suggested features it lists in a tile of their own (pre-demo QA S-6).
+  const suggested = await tray(page).getByTestId("tray-suggested").getByTestId("goal-suggestion").count();
+  await expect(tray(page).getByTestId("tray-counter").filter({ hasText: "Suggested features" }).locator("b")).toHaveText(String(suggested));
   expect(tiles.reduce((n, t) => n + Number(t), 0)).toBe(Number(m![2]));
   expect(button).toBe(Number(m![2]));
   expect(Number(m![1])).toBeLessThan(Number(m![2]));
@@ -430,12 +434,20 @@ test("under a filter, Needs a decision says N here, M in all on one basis, and 1
 
 test("the side menu's Roadmap count holds the dates to confirm: it equals Needs a decision", async ({ page }) => {
   await open(page);
-  const waiting = Number(/· (\d+)/.exec(await page.getByTestId("needs-decision").innerText())![1]);
   await page.getByTestId("needs-decision").click();
+  // The goals' suggested features arrive after the roadmap; the button counts them once they have, so read it then.
+  await expect(tray(page).getByTestId("tray-suggested").getByTestId("goal-suggestion").first()).toBeVisible();
+  const waiting = Number(/· (\d+)/.exec(await page.getByTestId("needs-decision").innerText())![1]);
   const dates = Number(await tray(page).getByTestId("tray-counter").filter({ hasText: "Dates to confirm" }).locator("b").innerText());
+  // Pre-demo QA S-6: Needs a decision counts the goals' suggested features it lists too, in a
+  // tile of their own, so the tiles add up to the button; the side menu's Roadmap count reads
+  // the same ones, so it equals the button.
+  const tiles = (await tray(page).getByTestId("tray-counter").locator("b").allInnerTexts()).reduce((n, t) => n + Number(t), 0);
   await tray(page).getByRole("button", { name: "Close" }).click();
   expect(dates).toBeGreaterThan(0);
-  await expect.poll(async () => Number(await badge(page).innerText())).toBe(waiting);
+  await expect(page.getByTestId("needs-decision")).toContainText(`· ${tiles}`);
+  expect(tiles).toBeGreaterThanOrEqual(waiting);
+  await expect.poll(async () => Number(await badge(page).innerText())).toBe(tiles);
   await expect(badge(page)).toHaveAttribute("aria-label", new RegExp(`${dates} dates? to confirm`));
 });
 
@@ -443,6 +455,11 @@ test("the strip's M in all shows only when a filter hides some broken links", as
   await open(page);
   // The Weekly alert digest's link fixed, the one left (Welcome video's) is under Faster activation.
   await strip(page).locator('[data-testid="conflict"][data-item="alert-digest"]').getByRole("button", { name: "Move the dependents" }).click();
+  // pre-demo QA S-5: its end past its milestone is a broken link too: accepted as a risk here.
+  await expect.poll(() => stripCount(page)).toBe(2);
+  await strip(page).locator('[data-testid="conflict"][data-item="alert-digest"]').getByRole("button", { name: "Accept as risk" }).click();
+  await page.getByLabel("Why it is an accepted risk").fill("Beta can take a late item");
+  await page.getByRole("button", { name: "Save the risk" }).click();
   await expect.poll(() => stripCount(page)).toBe(1);
   await page.goto("/simple/roadmap?goal=faster-activation");
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();

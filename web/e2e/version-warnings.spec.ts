@@ -46,7 +46,7 @@ test("the warnings say what to do, and the date chip opens Plan › Dates", asyn
   expect(await open.innerText()).not.toMatch(ROUTE_OR_ID);
 
   const dates = page.getByTestId("dates-lacking").filter({ visible: true });
-  await expect(dates).toHaveText("1 date lacks a basis");
+  await expect(dates).toHaveText("1 date lacks a date source");
   await dates.click();
   // date-warnings-honest: filtered to the date that lacks a basis.
   await expect(page).toHaveURL(/\/plan\/dates\?prd=[^&]+&dates=2026-12-15$/);
@@ -57,7 +57,7 @@ test("a viewer reads the same plain warnings", async ({ page }) => {
   // protects=#396 every role sees the app's words; fails_when=a viewer's warnings show a
   // route or an id; no_claim=who may record a basis (e2e/date-bases.spec.ts).
   await openVersion(page, "viewer@example.com");
-  await expect(page.getByTestId("dates-lacking").filter({ visible: true })).toHaveText("1 date lacks a basis");
+  await expect(page.getByTestId("dates-lacking").filter({ visible: true })).toHaveText("1 date lacks a date source");
   await chip(page).click();
   await expect(tip(page)).toContainText("a source item Oracle no longer has");
   expect(await tip(page).innerText()).not.toMatch(ROUTE_OR_ID);

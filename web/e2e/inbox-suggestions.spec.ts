@@ -1,3 +1,4 @@
+import { DRAFTING_MS } from "../lib/api/mock/simple-changes";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN, login, signOut } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
@@ -280,15 +281,29 @@ for (const phone of [false, true]) {
       await openFromInbox("Open the suggestions for Keep alerts quiet");
       const card = page.getByTestId("goal-suggestion").first();
       await expect(card).toBeVisible();
-      await expect.poll(() => inboxCount(page, phone)).toBeGreaterThan(0);
-      const n1 = await inboxCount(page, phone);
+      // The side menu's Roadmap count holds the suggested features (the phone's Roadmap tab), so
+      // the phone's More count does not: the one waiting item is counted once.
+      const where1 = phone ? "roadmap" : "more";
+      await expect.poll(() => inboxCount(page, phone, where1)).toBeGreaterThan(0);
+      const n1 = await inboxCount(page, phone, where1);
       await tap(card.getByRole("button", { name: "Accept" }));
-      await expect(page.getByText(/^Added .+ as a draft$/)).toBeVisible();
-      await expect.poll(() => inboxCount(page, phone)).toBe(n1 - 1);
+      const added = page.getByText(/^Added .+ as a draft$/);
+      await expect(added).toBeVisible();
+      const feature = (await added.textContent())!.replace(/^Added (.+) as a draft$/, "$1");
+      await expect.poll(() => inboxCount(page, phone, where1)).toBe(n1 - 1);
+      // The added draft settles after DRAFTING_MS and its Oracle's dates then wait in the Inbox
+      // too: the roadmap is read once it has, so the count below already has them.
+      await page.waitForTimeout(DRAFTING_MS + 500);
+      await readRoadmap(page);
 
       // A teammate's proposal, accepted in Needs a decision.
       await openFromInbox("Open Weekly alert digest on its roadmap");
       const proposal = page.getByTestId("decision-tray").getByTestId("tray-proposal").filter({ hasText: "Weekly alert digest" }).first();
+      await expect(proposal).toBeVisible();
+      // The feature accepted above is a new draft Oracle dates in a moment: once its dates wait
+      // here, read the page again so the count holds them before it is taken.
+      await expect(page.getByTestId("decision-tray").getByTestId("tray-date").filter({ hasText: feature })).toBeVisible({ timeout: 15_000 });
+      await page.reload();
       await expect(proposal).toBeVisible();
       // card: inbox-ask-not-in-tray: a feature ask on no roadmap is decided in its Inbox row only: no roadmap's tray lists it.
       await expect(page.getByTestId("decision-tray").getByTestId("tray-proposal").filter({ hasText: "Bulk export" })).toHaveCount(0);

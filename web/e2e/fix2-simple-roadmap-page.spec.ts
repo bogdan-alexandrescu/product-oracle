@@ -93,7 +93,7 @@ test.describe("desktop", () => {
   test("a broken link reads inside the Timeline's broken-links panel", async ({ page }) => {
     await open(page);
     await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "timeline");
-    const c = conflict(page, "alert-digest");
+    const c = conflict(page, "alert-digest").filter({ hasText: "starts" });
     await expect(c).toBeVisible();
     await expect(c).toContainText("Weekly alert digest");
     const chart = edges((await page.getByTestId("simple-chart").boundingBox())!);
@@ -187,7 +187,7 @@ test.describe("desktop", () => {
     await open(page);
     await page.getByTestId("needs-decision").click();
     const tiles = page.getByTestId("decision-tray").getByTestId("tray-counters").locator("li");
-    await expect(tiles).toHaveCount(4);
+    await expect(tiles).toHaveCount(5);
     const heights = await tiles.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height));
     for (const h of heights) expect(Math.abs(h - heights[0])).toBeLessThanOrEqual(2);
   });
@@ -242,7 +242,7 @@ test.describe("phone", () => {
     await open(page);
     await page.getByTestId("format-waterfall").click();
     await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "waterfall");
-    const c = conflict(page, "alert-digest");
+    const c = conflict(page, "alert-digest").filter({ hasText: "starts" });
     await expect(c).toBeVisible();
     await expect(c).toContainText("Weekly alert digest");
     const box = edges((await c.boundingBox())!);

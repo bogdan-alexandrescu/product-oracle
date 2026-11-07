@@ -294,7 +294,10 @@ for (const [where, use] of [
         const points = page.getByTestId("vxe-point");
         await expect(points.first()).toBeVisible();
         expect(await page.locator('[data-testid="vxe-point"][data-above="false"]').count()).toBeGreaterThan(0);
-        await expect(page.getByLabel("Legend")).toContainText("not planned to finish by Dec 31, 2026");
+        // The words for the line sit behind the heading's (i), not in the Legend.
+        await page.getByTestId("prio-about").click();
+        await expect(page.locator("#prio-about-text")).toContainText("not planned to finish by Dec 31, 2026");
+        await expect(page.getByLabel("Legend")).not.toContainText("not planned to finish by");
         await expect(page.getByTestId("line-caption")).toHaveCount(1);
         await select.selectOption("now");
         await expect(page).not.toHaveURL(/line=/);

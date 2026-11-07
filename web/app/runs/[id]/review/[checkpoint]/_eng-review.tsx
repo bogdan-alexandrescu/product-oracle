@@ -4,11 +4,15 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { Button, Chip, Page, PageHeader, SegmentedControl } from "@/components/ds";
+import { Menu } from "@/components/review/parts";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { useMe } from "@/lib/me";
+import { sortPrds, usePrds } from "@/lib/prd-order";
 import { errorMessage } from "@/lib/use-query";
 
 import type { BriefsCheck, CheckpointOut, RunOut } from "../../../_lib";
+import { NewRunDialog, type RunStart } from "../../../_new-run-dialog";
 
 type Review = Schemas["CheckpointReview"];
 type Action = Review["items"][number]["actions"][number];
@@ -173,16 +177,20 @@ export function EngReview({
   // Only who can decide: the engineering lead once one is named, else the stop's role.
   const waitsFor = cp.lead_stop ? "Waits for the engineering lead" : `Waits for an ${cp.approver_role}`;
 
-  // Every briefs problem is file-level (oracle.engineering.check): nothing to decide, only Send back.
-  // The gate counts the same problems (oracle.runs.service.recheck_briefs); either says so.
-  const unreadable = check.problems.length > 0 || (review.gate?.file_problems ?? 0) > 0;
+  // Every briefs problem is file-level (oracle.engineering.check): nothing to decide. A feature in no
+  // PRD yet is added to one ("Add it to a PRD"); any other problem means Send back. The gate counts
+  // the same problems (oracle.runs.service.recheck_briefs); either says so.
+  const noPrd = check.problems.filter((p) => p.code === "dependency_in_no_prd");
+  const unreadable = Math.max(check.problems.length, review.gate?.file_problems ?? 0) > noPrd.length;
   const tally = unreadable
     ? "The briefs could not be read"
     : `${decided} of ${check.features.length} decided${blockingQuestions ? ` · ${plural(blockingQuestions, "blocking question")}` : ""}`;
+  // Every reason Approve waits on, at once.
+  const waits = [noPrd.length ? "add each feature in no PRD yet to a PRD" : null, left.length ? "give each feature a verdict and answer each blocking question" : null].filter(Boolean);
   const approveWhy = unreadable
     ? "Send the briefs back to the architect to write them again"
     : !gateOpen
-      ? "Give each feature a verdict and answer each blocking question first"
+      ? `${(waits.join(", ") || "give each feature a verdict and answer each blocking question").replace(/^./, (c) => c.toUpperCase())} first`
       : null;
 
   return (
@@ -205,15 +213,18 @@ export function EngReview({
       {unreadable && (
         <div role="alert" data-testid="briefs-problem" className="mb-4 rounded-panel border border-crit bg-crit-soft px-4 py-3 text-[15px]">
           <p className="font-semibold">The briefs could not be read: send them back to the architect.</p>
-          {check.problems.length > 0 && (
+          {check.problems.length > noPrd.length && (
             <ul className="mt-1 list-disc pl-5">
-              {check.problems.map((p, i) => (
-                <li key={i}>{p.message}</li>
-              ))}
+              {check.problems
+                .filter((p) => p.code !== "dependency_in_no_prd")
+                .map((p, i) => (
+                  <li key={i}>{p.message}</li>
+                ))}
             </ul>
           )}
         </div>
       )}
+      {noPrd.length > 0 && <NoPrd problems={noPrd} />}
       {!!check.unmapped_repos?.length && (
         <p data-testid="briefs-unmapped" className="mb-4 text-[15px] text-text2">
           No code map covers {check.unmapped_repos.join(", ")}: {check.unmapped_repos.length > 1 ? "their" : "its"} work is described as assumptions.
@@ -351,6 +362,72 @@ export function EngReview({
         )}
       </div>
     </Page>
+  );
+}
+
+/**
+ * The features the briefs depend on that no PRD holds yet (dependency_in_no_prd), each with "Add it
+ * to a PRD": a pick of the company's PRDs, or a new PRD, starts a Ground Truth to PRD run that adds
+ * it (its features knob). While that run is live the check reads the feature as being added and
+ * the item goes; a stopped run brings it back.
+ */
+function NoPrd({ problems }: { problems: BriefsCheck["problems"] }) {
+  const { can } = useMe();
+  const prds = usePrds();
+  const [start, setStart] = useState<RunStart | null>(null);
+  // A new run lets approvers in; adding to an existing PRD is the same new run.
+  const adds = can("create_run", true);
+  return (
+    <div role="status" data-testid="briefs-no-prd" className="mb-4 rounded-panel border border-warn bg-warn-bg px-4 py-3 text-[15px]">
+      <p className="font-semibold">Features in no PRD yet</p>
+      <ul className="mt-1 space-y-1">
+        {problems.map((p, i) => {
+          // The API writes "<name> is in no PRD yet: <feature> depends on it".
+          const name = p.message.split(" is in no PRD yet")[0];
+          const features = p.entity ? [{ id: p.entity, title: name }] : [];
+          return (
+            <li key={i} data-testid="no-prd-item" className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{p.message}</span>
+              {adds && p.entity && (
+                <Menu label="Add it to a PRD" align="end">
+                  {(close) => (
+                    <ul aria-label={`PRDs to add ${name} to`} className="min-w-48 space-y-0.5">
+                      {sortPrds(prds.data ?? []).map((d) => (
+                        <li key={d.id}>
+                          <button
+                            type="button"
+                            className="block w-full rounded-button px-2 py-1.5 text-left hover:bg-surface2"
+                            onClick={() => {
+                              close();
+                              setStart({ flow: "baseline_to_prd", document: d.slug, title: `Add ${name} to ${d.title}`, features });
+                            }}
+                          >
+                            {d.title}
+                          </button>
+                        </li>
+                      ))}
+                      <li className="border-t border-line pt-0.5">
+                        <button
+                          type="button"
+                          className="block w-full rounded-button px-2 py-1.5 text-left font-semibold text-accent-ink hover:bg-surface2"
+                          onClick={() => {
+                            close();
+                            setStart({ flow: "baseline_to_prd", document: "", title: `Add ${name} to a new PRD`, features });
+                          }}
+                        >
+                          New PRD
+                        </button>
+                      </li>
+                    </ul>
+                  )}
+                </Menu>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {start && <NewRunDialog start={start} onClose={() => setStart(null)} />}
+    </div>
   );
 }
 

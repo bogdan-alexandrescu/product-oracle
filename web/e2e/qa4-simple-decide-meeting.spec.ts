@@ -196,12 +196,13 @@ for (const phone of [false, true]) {
       expect(box.y).toBeGreaterThan((page.viewportSize()!.height * 2) / 3);
     });
 
-    test("qa4-simple-decide-19: the meeting's times read 'Fri Oct 30, 8:18 PM', no zone letters", async ({ page }) => {
+    // RP2 c (port-AN): the decision stamp stands alone, so it keeps its zone ("Wed Nov 4, 4:41 PM PST").
+    test("qa4-simple-decide-19: the meeting's times read 'Fri Oct 30, 8:18 PM PDT', the stamp with its zone", async ({ page }) => {
       await startReview(page);
       await tap(steps(page).getByRole("button", { name: "2 Roadmap" }));
       await tap(page.getByRole("button", { name: "Move Sample data import to Later" }));
       const when = decisions(page).getByTestId("meeting-decision").first().locator("span");
-      await expect(when).toHaveText(/ · [A-Z][a-z]{2} [A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} [AP]M$/);
+      await expect(when).toHaveText(/ · [A-Z][a-z]{2} [A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} [AP]M [A-Z]{2,4}$/);
     });
 
     test("qa4-simple-decide-23: an attendee chip has a visible Mark away / Mark here", async ({ page }) => {
@@ -228,11 +229,27 @@ for (const phone of [false, true]) {
       expect(Math.round((await accept.boundingBox())!.height)).toBe(Math.round((await decline.boundingBox())!.height));
     });
 
-    test("qa4-simple-decide-39: a decision's link is named by its code and its words", async ({ page }) => {
+    test("qa4-simple-decide-39, F-26: a decision's link is its name, no code, and a long line hangs under it", async ({ page }) => {
       await pastMeeting(page);
       const taken = page.getByRole("list", { name: "Decisions taken" });
-      await expect(taken.getByRole("link", { name: /^D-9 Moved / })).toBeVisible();
-      await expect(taken.getByRole("link", { name: /^D-\d+$/ })).toHaveCount(0);
+      await expect(taken.getByRole("link", { name: /^Moved / }).first()).toBeVisible();
+      await expect(taken).not.toContainText(/D-\d+/);
+      const line = taken.getByTestId("decision-taken").first();
+      expect(await line.evaluate((el) => [getComputedStyle(el).textIndent, getComputedStyle(el).paddingLeft])).toEqual(["-16px", "16px"]);
+      // Round 1: on a phone the link keeps its 44 px tap size. Round 3: the row holds the 44 px and the link
+      // is stretched over it, so a tap anywhere on the row opens that decision.
+      if (page.viewportSize()!.width < 600) {
+        expect(await line.evaluate((el) => getComputedStyle(el).minHeight)).toBe("44px");
+        const box = (await line.boundingBox())!;
+        expect(box.height).toBeGreaterThanOrEqual(44);
+        expect(box.width).toBeGreaterThanOrEqual(44);
+        const hit = await line.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return !!at && el.querySelector("a")!.contains(at);
+        });
+        expect(hit).toBe(true);
+      }
     });
 
     test("qa4-simple-decide-32: Connect Slack is drawn as a link, not grey like its note", async ({ page }) => {
@@ -261,3 +278,73 @@ for (const phone of [false, true]) {
     });
   });
 }
+
+test.describe("F-26, round 2: a long decision on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("its link keeps a 44 px tap and hangs under its first line, and ' · ' stays with the approver's name", async ({ page }) => {
+    // "long-decision": the past review also took a decision whose title wraps at 390.
+    await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "long-decision"));
+    await pastMeeting(page);
+    const taken = page.getByRole("list", { name: "Decisions taken" });
+    const line = taken.getByTestId("decision-taken").filter({ hasText: "Send the weekly alert digest" });
+    const link = line.getByRole("link", { name: /^Send the weekly alert digest/ });
+    await expect(link).toBeVisible();
+    const at = await line.evaluate((el) => {
+      const a = el.querySelector("a")!;
+      const rects = [...a.getClientRects()].map((r) => ({ left: Math.round(r.left), top: Math.round(r.top), bottom: Math.round(r.bottom) }));
+      // Where the separator and the name's first letter land, from the text after the link.
+      const tops: Record<string, number> = {};
+      const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+        if (a.contains(n)) continue;
+        const text = n.textContent ?? "";
+        for (const [key, i] of [["dot", text.indexOf("·")], ["name", text.search(/[A-Z]/)]] as const) {
+          if (i < 0 || key in tops) continue;
+          const r = document.createRange();
+          r.setStart(n, i);
+          r.setEnd(n, i + 1);
+          tops[key] = Math.round(r.getBoundingClientRect().top);
+        }
+      }
+      return { rects, tops, left: Math.round(el.getBoundingClientRect().left) };
+    });
+    // The title wraps: its first line starts at the item's left edge, every later line 16 px in.
+    expect(at.rects.length).toBeGreaterThan(1);
+    expect(at.rects[0].left).toBe(at.left);
+    for (const r of at.rects.slice(1)) expect(r.left).toBe(at.left + 16);
+    // ' · ' and the approver's name share a line.
+    expect(at.tops.dot).toBeDefined();
+    expect(Math.abs(at.tops.dot - at.tops.name)).toBeLessThanOrEqual(2);
+  });
+});
+
+test.describe("F-26, round 3: every decision's tap is its own row on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("the top, middle and bottom of each line of a decision's link land on that link, and each row is 44 px tall", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "long-decision"));
+    await pastMeeting(page);
+    const taken = page.getByRole("list", { name: "Decisions taken" });
+    await expect(taken.getByRole("link", { name: /^Send the weekly alert digest/ })).toBeVisible();
+    const found = await taken.evaluate((list) =>
+      [...list.querySelectorAll<HTMLElement>('[data-testid="decision-taken"]')].map((row) => {
+        const a = row.querySelector("a")!;
+        const misses: string[] = [];
+        [...a.getClientRects()].forEach((r, i) => {
+          const x = r.left + Math.min(r.width / 2, 20);
+          for (const [where, y] of [["top", r.top + 1], ["middle", r.top + r.height / 2], ["bottom", r.bottom - 1]] as const) {
+            const hit = document.elementFromPoint(x, y);
+            if (!hit || !a.contains(hit)) misses.push(`${a.textContent} line ${i + 1} ${where}: ${hit?.textContent?.slice(0, 40) ?? "nothing"}`);
+          }
+        });
+        return { name: a.textContent, height: row.getBoundingClientRect().height, misses };
+      }),
+    );
+    expect(found.length).toBeGreaterThan(1);
+    for (const row of found) {
+      expect(row.misses, row.name ?? "").toEqual([]);
+      expect(row.height, row.name ?? "").toBeGreaterThanOrEqual(44);
+    }
+  });
+});

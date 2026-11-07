@@ -1,3 +1,4 @@
+import { MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
 import { THEME_KEY } from "../lib/theme";
 import { login } from "./helpers";
 import { expect, test, type Page } from "./test";
@@ -85,6 +86,47 @@ test.describe("Removed list", () => {
     await r.getByRole("button", { name: "Propose restoring" }).click();
     await expect(page.getByTestId("toasts")).toContainText("Restoring Private beta for 20 teams proposed · waits for Avery Stone");
     await expect(button(page)).toHaveText("Removed · 6");
+  });
+
+  // at-followups: a proposed restore's toast offers Withdraw, as the Tracks sheet's proposals do.
+  test("one who does not decide proposes restoring an archived goal; Withdraw takes the proposal back", async ({ page }) => {
+    await open(page, "commenter@example.com");
+    await button(page).click();
+    const goal = "Fewer support tickets about billing";
+    await row(page, goal).getByRole("button", { name: "Propose restoring" }).click();
+    const toasts = page.getByTestId("toasts");
+    await expect(toasts).toContainText(`Restoring ${goal} proposed · waits for Avery Stone`);
+    await toasts.getByRole("button", { name: "Withdraw" }).click();
+    await expect(toasts).toContainText("Withdrawn");
+    // Taken back: asking again is a new proposal, never "This is asked already".
+    await button(page).click();
+    await row(page, goal).getByRole("button", { name: "Propose restoring" }).click();
+    await expect(toasts).toContainText(`Restoring ${goal} proposed · waits for Avery Stone`);
+    await expect(button(page)).toHaveText("Removed · 6");
+  });
+
+  // at-followups: until the list is read the button names no count, never "Removed · 0".
+  test("the button names no count until the list is read", async ({ page }) => {
+    await page.addInitScript(() => {
+      const w = window as unknown as { __labels: string[] };
+      w.__labels = [];
+      const look = () => {
+        const said = document.querySelector('[data-testid="removed-open"]')?.textContent ?? null;
+        if (said !== null && w.__labels.at(-1) !== said) w.__labels.push(said);
+        requestAnimationFrame(look);
+      };
+      requestAnimationFrame(look);
+    });
+    await login(page);
+    await page.evaluate(
+      ([k, v, msKey]) => (localStorage.setItem(k, v), localStorage.setItem(msKey, "2500")),
+      [MOCK_SLOW_KEY, "/v1/simple/removed", MOCK_SLOW_MS_KEY] as const,
+    );
+    await page.goto("/simple/roadmap");
+    await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+    await expect(button(page)).toHaveText("Removed");
+    await expect(button(page)).toHaveText("Removed · 6");
+    expect(await page.evaluate(() => (window as unknown as { __labels: string[] }).__labels)).toEqual(["Removed", "Removed · 6"]);
   });
 
   test("a viewer reads the list", async ({ page }) => {

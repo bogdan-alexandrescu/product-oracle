@@ -129,6 +129,8 @@ FIELDS = (
     "track_id",
     "prd_document_id",
     "shipped",
+    # feature-parts: set_parent.
+    "parent_key",
 )
 UUID_FIELDS = ("feature_id", "owner_id", "decider_id", "track_id", "prd_document_id")
 DATES = ("start_date", "end_date")
@@ -302,6 +304,41 @@ def fold(row: RoadmapItem, copy: RoadmapItem, overlay: dict[str, Any]) -> Roadma
     values.update(theirs)
     values.update(_changed(row, overlay.get(str(row.id))))
     return overlaid(row, values)
+
+
+# Where an item's dates come from, in a plan table's words, when it has none of its own.
+SOURCE_WORDS = {
+    "typed": "set by a person",
+    "engineering": "engineering estimate",
+    "tracker": "tracker",
+    "accepted": "approved version",
+}
+
+
+def plan_table(rows: list[RoadmapItem]) -> str:
+    """The plan table (oracle.runs.plan_tables) of a Simple draft's items as they are: one
+    row per item but a cut one, its own dates month first (hotfix 4, Nov 6)."""
+    from oracle.runs import plan_tables
+    from oracle.simple.approved_roadmap import NEXT_PRD, SHIPPED
+
+    def cell(text: str) -> str:
+        return " ".join(text.replace("|", "/").split())
+
+    lines = [plan_tables.ITEMS_HEADER, "|---|---|---|---|---|---|"]
+    for r in rows:
+        if r.cut:
+            continue
+        status = {SHIPPED: "shipped", NEXT_PRD: "next PRD"}.get(r.plan_state or "", "planned")
+        words = r.date_basis or (
+            SOURCE_WORDS.get(r.date_source or "", "estimate")
+            if r.start_date or r.end_date
+            else plan_tables.NO_DATE
+        )
+        lines.append(
+            f"| {cell(r.item_key)} | {cell(r.title)} | {plan_tables._day(r.start_date)} | "
+            f"{plan_tables._day(r.end_date)} | {cell(words)} | {status} |"
+        )
+    return "\n".join(lines)
 
 
 async def drop_added(db: AsyncSession, d: SimpleDraft) -> None:
@@ -842,7 +879,7 @@ async def _logs(db: AsyncSession, ds: list[SimpleDraft]) -> dict[uuid.UUID, list
         await db.scalars(
             select(SimpleChange)
             .where(SimpleChange.draft_ids.overlap(ids), SimpleChange.status.in_(COUNTED))
-            .order_by(SimpleChange.at, SimpleChange.id)
+            .order_by(SimpleChange.at, SimpleChange.seq)
         )
     )
     if not rows:
@@ -932,6 +969,21 @@ async def outs(
     )
     me = _me(principal)
     # roadmap-decide review: the author's and the decider's names, read with the draft.
+    # The number a working draft becomes: the one after the roadmap's latest version, which
+    # a run may have added after the draft's base (hotfix 4, Nov 6).
+    latest = (
+        dict(
+            (
+                await db.execute(
+                    select(DocumentVersion.document_id, func.max(DocumentVersion.number))
+                    .where(DocumentVersion.document_id.in_({x.document_id for x in ds}))
+                    .group_by(DocumentVersion.document_id)
+                )
+            ).all()
+        )
+        if ds
+        else {}
+    )
     ids = {d.created_by for d in ds} | {x for d in ds if (x := w.deciders.get(d.document_id))}
     names = (
         {u.id: u.name or u.email for u in await db.scalars(select(User).where(User.id.in_(ids)))}
@@ -949,6 +1001,9 @@ async def outs(
                 status=d.status,
                 base_version=numbers.get(d.base_version_id),  # type: ignore[arg-type]
                 version=numbers.get(d.version_id),
+                next_version=numbers.get(d.version_id)
+                if d.version_id
+                else latest.get(d.document_id, 0) + 1,
                 created_by=d.created_by,
                 created_by_name=names.get(d.created_by),
                 created_at=d.created_at,
@@ -1044,6 +1099,7 @@ OP_WORDS = {
     "move_dependency": "Moved the dependency of",
     "confirm_item": "Confirmed",
     "edit_line": "New wording for",
+    "set_section_number": "New number in",
     "add_key_date": "Added the key date",
     "edit_key_date": "Changed the key date",
     "remove_key_date": "Removed the key date",
@@ -1059,6 +1115,7 @@ OP_WORDS = {
     "set_status": "New status for",
     "set_feature": "New feature for",
     "set_goals": "Moved to another goal:",
+    "set_parent": "Changed what it is part of:",
 }
 
 
@@ -1067,7 +1124,7 @@ async def _live_changes(db: AsyncSession, d: SimpleDraft) -> list[SimpleChange]:
         await db.scalars(
             select(SimpleChange)
             .where(SimpleChange.draft_ids.contains([d.id]), SimpleChange.status.in_(COUNTED))
-            .order_by(SimpleChange.at, SimpleChange.id)
+            .order_by(SimpleChange.at, SimpleChange.seq)
         )
     )
     undone = (
@@ -1163,7 +1220,24 @@ async def submit(
         lines.append(f"- {OP_WORDS.get(c.op, c.op)} {what}")
     for src in await prd_roadmap.sources_out(db, d):
         lines.append(f"- Added from {src.prd.title} (version {src.version}): {src.items} items")
-    markdown = await changeset._markdown(db, base, "\n".join(lines))
+    # The items as the version will hold them; their plan table replaces the base version's
+    # own, so approving applies their own dates and Simple matches it (hotfix 4, Nov 6).
+    overlay = d.overlay or {}
+    current = []
+    for old in [*base_rows, *added]:
+        if old.id in folded:
+            continue
+        cur = (
+            fold(old, copies[old.id], overlay)
+            if old.id in copies
+            else overlaid(old, overlay.get(str(old.id)))
+        )
+        if old in added and cur.merged_into:
+            continue
+        current.append((old, cur))
+    markdown = await changeset._markdown(
+        db, base, "\n".join(lines), plan=plan_table([cur for _, cur in current])
+    )
     # The draft changes items, not the base version's text: only the section it adds is
     # checked for dates, as Oracle's own revisions are (hotfix 3, Nov 6).
     result = await docs_service.import_draft(
@@ -1185,21 +1259,11 @@ async def submit(
         )
     )
     await db.execute(delete(RoadmapItem).where(RoadmapItem.roadmap_version_id == version.id))
-    overlay = d.overlay or {}
     bases = {
         p: await schedule.verified_bases(db, p)
         for p in {r.prd_document_id for r in [*base_rows, *added]}
     }
-    for old in [*base_rows, *added]:
-        if old.id in folded:
-            continue
-        cur = (
-            fold(old, copies[old.id], overlay)
-            if old.id in copies
-            else overlaid(old, overlay.get(str(old.id)))
-        )
-        if old in added and cur.merged_into:
-            continue
+    for old, cur in current:
         note = (
             f"from version {base.number}, changed in Simple"
             if str(old.id) in overlay or old.id in copies
@@ -1252,7 +1316,10 @@ async def _submit_sections(
         )
     )
     try:
-        markdown = one_pager.patched_markdown(base, secs, (d.overlay or {}).get("sections") or {})
+        ov = d.overlay or {}
+        markdown = one_pager.patched_markdown(
+            base, secs, ov.get("sections") or {}, ov.get("headings") or {}
+        )
     except one_pager.ChangeError as e:
         raise DraftError(e.status, e.detail) from e
     result = await docs_service.import_draft(

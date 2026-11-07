@@ -61,6 +61,16 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
       const line = quoted(after.line);
       return line ? `edited a one-pager line to ${line}` : "edited a one-pager line";
     }
+    case "set_section_number": {
+      // As change_words._number_sentence: "set the count in “Later” to 6", naming the section.
+      const key = String(target.section ?? "");
+      const sec = ((before.sections ?? {}) as Record<string, { heading?: string }>)[key] ?? {};
+      const name = String(sec.heading ?? "").replace(/\s*(?:·\s*\d+\s+items?|\(\s*\d+\s+items?\s*\))\s*$/i, "").trim();
+      const what = target.part === "heading" ? "the count" : "the number";
+      const where = name ? ` in “${name}”` : " in a PRD section";
+      const n = String(after.number ?? "");
+      return n ? `set ${what}${where} to ${n}` : `set ${what}${where}`;
+    }
     case "add_key_date": return `added ${keyDate(before, after)}`;
     case "edit_key_date": return `changed ${keyDate(before, after)}`;
     case "remove_key_date": return `removed ${keyDate(before, after)}`;
@@ -83,6 +93,10 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
     case "set_track": return `changed the track of ${x}`;
     case "set_prd": return `changed the PRD of ${x}`;
     case "set_goal": return `changed the goal of ${x}`;
+    case "set_parent": {
+      const parent = [target.code, target.title].map((v) => String(v ?? "")).join(" ").trim();
+      return after.parent_key ? `made ${x} part of ${parent || "another feature"}` : `took ${x} out of ${parent || "the feature it was part of"}`;
+    }
     case "set_goal_measure": return `changed how the goal of ${x} is measured`;
     case "set_status": return `marked ${x} ${after.status ?? "planned"}`;
     case "set_decider": return `changed the decider of ${x}`;

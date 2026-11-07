@@ -570,6 +570,83 @@ function TimezonePanel({ canChange }: { canChange: boolean }) {
 }
 
 /**
+ * INT2: whether Oracle reads each new or repinned brief (the company setting intake_ai_read; an
+ * agent run, $1.50 a read, or Oracle's built-in model when that cannot start or fails). On by
+ * default (owner answer Q2); owners only, as every company setting. The switch shows the
+ * owner's choice at once and keeps it while it saves; a refused save puts it back.
+ */
+function IntakeReadPanel({ canChange }: { canChange: boolean }) {
+  const settingQ = useQuery("settings|intake_ai_read", () =>
+    unwrap(api.GET("/v1/settings/{key}", { params: { path: { key: "intake_ai_read" } } })),
+  );
+  // What the owner just chose, shown while it saves.
+  const [chosen, setChosen] = useState<boolean | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const busy = chosen !== null;
+  const on = chosen ?? (settingQ.data ? settingQ.data.value !== false : undefined);
+
+  async function set(value: boolean) {
+    setChosen(value);
+    setError(null);
+    setSaved(false);
+    try {
+      const out: Schemas["SettingOut"] = await unwrap(
+        api.PUT("/v1/settings/{key}", { params: { path: { key: "intake_ai_read" } }, body: { value } }),
+      );
+      settingQ.setData(() => out);
+      setSaved(true);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setChosen(null);
+    }
+  }
+
+  return (
+    <div id="intake-read" className="scroll-mt-4" data-testid="intake-read-setting">
+      <Panel
+        title="Oracle's read of new briefs"
+        tools={
+          <InfoTip label="Oracle's read of new briefs" side="bottom">
+            Oracle reads each new brief and the author&apos;s pinned sources, and lists what it assumed and what is still open, seen only by the
+            author until they share it. Each read is an agent run ($1.50); when that cannot start or fails, Oracle&apos;s built-in model reads it
+            instead. Off, Oracle does not read new briefs; their questions still come from what each brief says.
+          </InfoTip>
+        }
+      >
+        {settingQ.error && (
+          <div className="p-4">
+            <Notice tone="error">{settingQ.error}</Notice>
+          </div>
+        )}
+        {on !== undefined && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 max-[600px]:px-3">
+            <label className="inline-flex min-w-0 items-center gap-2 text-[15px]">
+              <input
+                type="checkbox"
+                role="switch"
+                className="size-4 shrink-0 accent-[var(--accent)]"
+                checked={on}
+                disabled={!canChange || busy}
+                onChange={(e) => void set(e.target.checked)}
+              />
+              Oracle reads new briefs ($1.50 each)
+            </label>
+            {saved && <SavedNote testId="intake-read-saved" />}
+          </div>
+        )}
+        {error && (
+          <div className="px-4 pb-3 max-[600px]:px-3">
+            <Notice tone="error">{error}</Notice>
+          </div>
+        )}
+      </Panel>
+    </div>
+  );
+}
+
+/**
  * H9 Pricing input: the pricing owner, the one person who decides prices (research [74]).
  * An active owner; unset, the earliest active owner. Owners only: others do not see it.
  */
@@ -684,7 +761,8 @@ function PricingOwnerPanel() {
 
 /**
  * Settings > Company: the company-wide choices an owner makes: the planning horizons, the Company
- * time zone, the pricing owner and the branding (O5 lane 4). Every member reads the branding.
+ * time zone, whether Oracle reads new briefs (INT2), the pricing owner and the branding (O5 lane 4).
+ * Every member reads the branding.
  */
 export default function CompanySettingsPage() {
   // #370: Settings' gate answers a role that cannot read the company settings or the branding.
@@ -716,6 +794,8 @@ export default function CompanySettingsPage() {
           <>
             <HorizonsPanel />
             <TimezonePanel canChange={canChange} />
+            {/* INT2: whether Oracle reads new briefs. */}
+            <IntakeReadPanel canChange={canChange} />
             {/* H9: owners choose the pricing owner; others do not see the field. */}
             {canChange && can("list_members") && <PricingOwnerPanel />}
             {/* one-roadmap-many-prds: the one team that plans every PRD's items. */}

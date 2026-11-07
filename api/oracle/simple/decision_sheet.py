@@ -111,7 +111,7 @@ async def edits(db: AsyncSession, ids: set[uuid.UUID]) -> dict[str, tuple[dateti
         select(SimpleChange).where(
             SimpleChange.op.in_(EDITS), SimpleChange.status.in_(("applied", "accepted")),
             SimpleChange.target["decision_id"].astext.in_([str(i) for i in ids]))
-        .order_by(SimpleChange.at, SimpleChange.id)))  # fmt: skip
+        .order_by(SimpleChange.at, SimpleChange.seq)))  # fmt: skip
     if not rows:
         return {}
     undone = set(await db.scalars(select(SimpleChange.undoes_id).where(

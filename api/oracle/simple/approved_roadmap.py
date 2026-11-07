@@ -266,6 +266,14 @@ async def apply(
         return False
     by_key = {r.item_key: r for r in rows}
     by_title = {r.title.strip().lower(): r for r in rows}
+    from oracle.simple.models import SimpleDraft
+
+    # A Simple draft's version writes its items' own dates (hotfix 4): where they agree, the
+    # dates keep the source they had (a person's stay theirs).
+    from_simple = (
+        await db.scalar(select(SimpleDraft.id).where(SimpleDraft.version_id == version.id).limit(1))
+        is not None
+    )
     track = await _track(db, document, rows)
     template = rows[0] if rows else None
     position = max((r.position for r in rows), default=-1)
@@ -309,7 +317,9 @@ async def apply(
         row.plan_state = None
         own = (row.start_date, row.end_date)
         person = row.date_source == "typed" and any(own) and own != (p.start, p.end)
-        if not person and (p.start or p.end):
+        if from_simple and own == (p.start, p.end):
+            pass
+        elif not person and (p.start or p.end):
             row.start_date, row.end_date = p.start, p.end
             row.date_source = "accepted"
             row.date_basis = p.basis
@@ -477,7 +487,9 @@ async def lines(
         for e in by_doc.get(doc.id, []):
             a = e.row.applied or {}
             if a.get("version") != n:
-                differences.append(f"{e.row.title} was added after version {n}")
+                # A cut item the version does not list is off the plan, as the version has it.
+                if e.status != "cut":
+                    differences.append(f"{e.row.title} was added after version {n}")
                 continue
             if e.status == "cut":
                 differences.append(f"{e.row.title} was cut after version {n}")

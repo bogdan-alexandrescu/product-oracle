@@ -1,0 +1,125 @@
+import { login } from "./helpers";
+import { expect, test, type Page } from "./test";
+
+/**
+ * Pre-demo visual QA, train AR:
+ * - G-3: a shared roadmap (/s/<token>) reads each goal by its name and each tracker issue (an item's or a
+ *   dependency's) by its title, its code beside it; never "Serves G1.", "ENG-512 tracks it" or a bare key.
+ * - G-5: Inbox (Detailed): every row's Open is the same bordered button (a Comment's too), and a long title
+ *   wraps to two lines rather than being cut.
+ * - G-6: Inbox (Detailed) > Sources that need attention: each source's action is its problem's (Reconnect opens
+ *   Settings › Connections for its account; Share again and Pick fewer channels open the source), the sentence
+ *   behind an (i).
+ * fails_when = a code shows without its name, a Team link names an item's issue, a title's line break or "~~"
+ * shows as markdown, an Open is drawn as text, a title is cut on one line, or a
+ * source that must reconnect offers only Edit.
+ */
+
+const DOC = "/documents/example-labs-roadmap";
+const FRAME = 'iframe[title="Shared roadmap"]';
+
+async function openTeamLink(page: Page, audience = "Team") {
+  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "sharing"));
+  await login(page);
+  await page.goto(DOC);
+  await page.getByRole("button", { name: "Share a link", exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: "Share roadmap" });
+  await sheet.getByLabel("Audience").selectOption({ label: audience });
+  await sheet.getByLabel("Label").fill(`${audience}, demo week`);
+  await sheet.getByRole("button", { name: "Create link" }).click();
+  const url = await sheet.getByLabel("Link", { exact: true }).inputValue();
+  const code = await sheet.getByLabel("Passcode", { exact: true }).inputValue();
+  const holder = await page.context().newPage();
+  await holder.setViewportSize(page.viewportSize()!);
+  await holder.goto(new URL(url).pathname);
+  await holder.getByLabel("Passcode").fill(code);
+  await holder.getByRole("button", { name: "Open" }).click();
+  return holder;
+}
+
+for (const scheme of ["light", "dark"] as const) {
+  test.describe(`1440 · ${scheme}`, () => {
+    test.use({ viewport: { width: 1440, height: 900 }, colorScheme: scheme });
+
+    test("G-3: a shared roadmap names each goal and tracker issue beside its code", async ({ page }) => {
+      const holder = await openTeamLink(page);
+      const frame = holder.frameLocator(FRAME);
+      await expect(frame.getByText(/^Shared with you/)).toBeVisible();
+      const body = frame.locator("body");
+      await expect(body).toContainText("Serves Cut monthly churn to 2% (G1).");
+      // Issues on no item's card stay as written: the page shows no more than it already shows.
+      await expect(body).toContainText("ENG-512 tracks it.");
+      await expect(body).toContainText("Priya RamanENG-530");
+      const text = await body.innerText();
+      expect(text).not.toMatch(/Serves G\d/);
+      expect(text).not.toContain("Alert rules engine");
+      expect(text).not.toContain("Partner sign-in tokens");
+      // A Team link hides the items' tracker keys: an item's own issue is not named through it either.
+      await expect(body).toContainText("ENG-541 tracks it.");
+      expect(text).not.toContain("Ledger entries");
+    });
+
+    test("G-3: a tracker issue on an item reads by its title as written, with no table column or link added", async ({ page }) => {
+      const holder = await openTeamLink(page, "Engineering");
+      const frame = holder.frameLocator(FRAME);
+      await expect(frame.getByText(/^Shared with you/)).toBeVisible();
+      const body = frame.locator("body");
+      // A line break and "~~" in the title read on one line as written: no heading, no strikethrough.
+      await expect(body).toContainText("# Ledger entries | v2 [notes](https://example.com/notes) *draft* # Rework ~~old~~ path AT&amp;T &#35; x (ENG-541) tracks it.");
+      await expect(frame.locator('a[href="https://example.com/notes"]')).toHaveCount(0);
+      await expect(frame.locator("em")).toHaveCount(0);
+      await expect(frame.locator("s, del")).toHaveCount(0);
+      await expect(frame.getByRole("heading", { name: /Rework|Ledger entries/ })).toHaveCount(0);
+      // Where a line, a list item or a table cell begins, the name opens no heading, list or table of its own.
+      const list = frame.locator("li").filter({ hasText: "(ENG-541): tracks it too." });
+      await expect(list).toHaveText(/^# Ledger entries .* \(ENG-541\): tracks it too\.$/);
+      await expect(list.locator("h1, h2, h3, h4, ul, ol")).toHaveCount(0);
+      await expect(frame.locator("p").filter({ hasText: "(ENG-541) tracks it as well." })).toHaveText(/^# Ledger entries/);
+      const cell = frame.locator("tr").filter({ hasText: "# Ledger entries" }).locator("td").last();
+      await expect(cell).toHaveText(/^# Ledger entries .* \(ENG-541\)$/);
+      await expect(cell.locator("h1, h2, h3, h4, ul, ol")).toHaveCount(0);
+    });
+
+    test("G-5: every Inbox row's Open is one bordered button, and a long title wraps", async ({ page }) => {
+      // Comment rows (feedback with nothing to accept) beside Proposal and "Oracle asks" rows.
+      await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "suggestions"));
+      await login(page);
+      await page.goto("/inbox");
+      await expect(page.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible();
+      const needs = page.getByRole("tabpanel");
+      const comment = needs.getByTestId("inbox-feedback").locator("tr[data-row]").filter({ hasText: "Comment" }).first();
+      await expect(comment.getByRole("link", { name: /^Open/ })).toHaveAttribute("data-variant", "secondary");
+      const opens = needs.getByRole("link", { name: /^Open/ });
+      await expect(opens.first()).toBeVisible();
+      for (const variant of await opens.evaluateAll((els) => els.map((e) => e.getAttribute("data-variant")))) expect(variant).toBe("secondary");
+      // A title cut with "…" on one line would read nowrap: each wraps to (at most) two lines.
+      const titles = needs.locator(`tr[data-row] td[data-phone="title"] .truncate`);
+      await expect(titles.first()).toBeVisible();
+      const styles = await titles.evaluateAll((els) => els.map((e) => [getComputedStyle(e).whiteSpace, getComputedStyle(e).webkitLineClamp]));
+      for (const [space, clamp] of styles) {
+        expect(space).not.toBe("nowrap");
+        expect(clamp).toBe("2");
+      }
+    });
+
+    test("G-6: a source that needs attention offers its problem's action, the sentence behind an (i)", async ({ page }) => {
+      await login(page);
+      await page.goto("/inbox");
+      const group = page.getByTestId("inbox-sources");
+      const drive = group.getByRole("row").filter({ hasText: "Drive folders" });
+      await expect(drive.getByTestId("source-need-text")).toHaveText("Reconnect to choose files");
+      await expect(drive.getByRole("link", { name: /^Edit/ })).toHaveCount(0);
+      await drive.getByRole("button", { name: "About Reconnect to choose files" }).click();
+      await expect(page.getByText("Reconnect its account in Settings › Connections", { exact: false })).toBeVisible();
+      const docs = group.getByRole("row").filter({ hasText: "Product docs" });
+      await expect(docs.getByTestId("source-need-text")).toHaveText("Lost access to 2 items");
+      await expect(docs.getByRole("link", { name: "Share again in Product docs" })).toHaveAttribute("href", /\/settings\/sources#source-/);
+      const legacy = group.getByRole("row").filter({ hasText: "Legacy all-hands chat" });
+      await expect(legacy.getByRole("link", { name: "Pick fewer channels in Legacy all-hands chat" })).toHaveAttribute("href", /\/settings\/sources#source-/);
+
+      await drive.getByRole("link", { name: "Reconnect Drive folders" }).click();
+      await expect(page).toHaveURL(/\/settings\/connections\?connection=/);
+      await expect(page.getByRole("heading", { level: 1, name: "Connections" })).toBeVisible();
+    });
+  });
+}

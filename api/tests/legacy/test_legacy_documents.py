@@ -152,7 +152,10 @@ async def test_markdown_round_trips_byte_for_byte(client):
     assert same.status_code == 200 and same.json()["number"] == 1
 
 
-async def test_markdown_export_is_the_draft_with_a_banner_after_front_matter(client):
+async def test_markdown_export_is_the_draft_as_plain_markdown_after_front_matter(client):
+    """Export QA pass X, X-17 (train AS cdf393d16): the markdown export is plain markdown:
+    the draft's front matter first (the import needs it), no banner comment, its days month
+    first."""
     _, auth, _ = await _v1(client)
     resp = await client.get(f"/v1/documents/{DOC}/versions/1/export?format=md", headers=auth)
     assert resp.status_code == 200
@@ -160,20 +163,16 @@ async def test_markdown_export_is_the_draft_with_a_banner_after_front_matter(cli
     front, body = V1.split("\n---\n", 1)
     exported = resp.text
     assert exported.startswith(front + "\n---\n")
-    banner, rest = exported[len(front) + 5 :].split("\n", 1)
-    assert re.fullmatch(
-        r"<!-- Product Oracle export: Onboarding checklist PRD \(legacy-onboarding\)"
-        # #463: the export names its time in the Company time zone, with its abbreviation,
-        # month first (e2e-pdf-export): "Oct 13, 2026, 9:00 AM NZDT".
-        r" · version 1 · status draft · imported [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d{2} [AP]M"
-        r" [A-Z]{2,5} -->",
-        banner,
-    )
+    rest = exported[len(front) + 5 :]
+    assert "<!--" not in rest and "Product Oracle export" not in rest
     # raw-tokens-everywhere (owner's pick, Nov 3): the export writes each [c:id] as a numbered
     # footnote and lists the sources at the end, so it is the draft's words with footnotes.
     text, _, notes = rest.strip().partition("\n\n[^1]: ")
     assert "[c:" not in rest and notes
-    assert re.sub(r"\[\^\d+\]", "", text) == re.sub(r" ?\[c:[^\]]+\]", "", body.strip())
+    assert "as of 2026-09-01" in body
+    assert re.sub(r"\[\^\d+\]", "", text) == re.sub(r" ?\[c:[^\]]+\]", "", body.strip()).replace(
+        "as of 2026-09-01", "as of Sep 1, 2026"
+    )
 
 
 async def test_html_full_export_keeps_citations_out_of_the_body(client):

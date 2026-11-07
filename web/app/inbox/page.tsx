@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
 
 import { Chip, Empty, InfoTip, Page, PageHeader, Panel } from "@/components/ds";
@@ -67,6 +67,8 @@ export default function InboxPage() {
 function Inbox() {
   // QA pass D-2: ?kind= (Home's Needs you chips) shows that kind only.
   const kindParam = asNeedKind(useSearchParams().get("kind"));
+  // S-7: /inbox or Simple's /simple/inbox: "Show all" stays on the same page.
+  const path = usePathname();
   const kind = NEED_KINDS.find((k) => k.id === kindParam);
   const q = useQuery("inbox", loadInbox);
   // Questions asked of me (I3): their own group, counted with the rest as the rail badge counts.
@@ -139,7 +141,7 @@ function Inbox() {
           <span>
             Showing <b className="font-semibold text-text">{kind.label}</b>
           </span>
-          <Link href="/inbox" className="font-semibold text-accent-ink hover:underline">
+          <Link href={path} className="font-semibold text-accent-ink hover:underline">
             Show all
           </Link>
         </p>
@@ -217,6 +219,7 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
   { id: "launches", title: "Launches" },
   { id: "requests", title: "Requests" },
   { id: "rituals", title: "Rituals" },
+  { id: "intake-reads", title: "Oracle couldn't read" },
   { id: "metrics", title: "Metrics" },
   { id: "outcomes", title: "Outcomes" },
   { id: "webhooks", title: "Webhooks" },

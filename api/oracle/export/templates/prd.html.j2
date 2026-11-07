@@ -15,7 +15,7 @@
 <body>
 <header class="version-banner status-{{ status }}" role="note" aria-label="Version">
   {{ brand_header }}
-  <span class="banner-doc">{{ title }}</span>
+  <span class="banner-doc">{{ title }}</span><span class="banner-footer-title" aria-hidden="true">{{ footer_title }}</span>
   {% if not link_holder %}<span class="banner-version">Version {{ number }}</span>{% endif %}
   {% if audience_label and not link_holder %}<span class="banner-audience">Audience {{ audience_label }}</span>{% endif %}
   {% if layer != "full" %}<span class="banner-layer">{{ layer_label }}: the full document has the detail</span>{% endif %}
@@ -48,10 +48,8 @@
       <span class="fn-title">
         {%- if f.href %}<a href="{{ f.href }}">{{ f.title }}</a>{% else %}{{ f.title }}{% endif -%}
       </span>
-      <span class="fn-source">{{ f.source }}</span>
       {% if f.retrieved_at %}<span class="fn-retrieved">retrieved {{ f.retrieved_at }}</span>{% endif %}
       {% if f.excerpt %}<blockquote class="fn-excerpt">{{ f.excerpt }}</blockquote>{% endif %}
-      <span class="fn-ref">{{ f.ref }}</span>
       {% if f.backref %}<a class="fn-back" href="#{{ f.backref }}" aria-label="Back to text">↩</a>{% endif %}
     </li>
   {% endfor %}
@@ -69,9 +67,7 @@
       <span class="fn-title">
         {%- if f.href %}<a href="{{ f.href }}">{{ f.title }}</a>{% else %}{{ f.title }}{% endif -%}
       </span>
-      <span class="fn-source">{{ f.source }}</span>
       {% if f.retrieved_at %}<span class="fn-retrieved">retrieved {{ f.retrieved_at }}</span>{% endif %}
-      <span class="fn-ref">{{ f.ref }}</span>
       {% if f.backref %}<a class="fn-back" href="#{{ f.backref }}" aria-label="Back to text">↩</a>{% endif %}
     </li>
   {% endfor %}

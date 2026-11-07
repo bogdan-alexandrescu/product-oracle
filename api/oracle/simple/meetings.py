@@ -706,6 +706,7 @@ PROPOSAL_WORDS = {
     "move_dependency": "move the dependency of",
     "confirm_item": "confirm",
     "edit_line": "new wording for",
+    "set_section_number": "new number in",
     "add_key_date": "add the key date",
     "edit_key_date": "change the key date",
     "remove_key_date": "remove the key date",
@@ -721,6 +722,7 @@ PROPOSAL_WORDS = {
     "set_status": "new status for",
     "set_feature": "new feature for",
     "set_goals": "move to another goal:",
+    "set_parent": "change what it is part of:",
 }
 
 
@@ -750,6 +752,13 @@ async def describe(
             subjects.append(
                 {"kind": "section", "id": str(doc.id), "ref": f"line:{t.get('line_id')}"}
             )
+    elif c.op == "set_section_number":
+        doc = await db.get(Document, uuid.UUID(str(t.get("document_id")))) if t.get(
+            "document_id") else None  # fmt: skip
+        number = str((c.after or {}).get("number") or "")
+        name = f"a section of {doc.title}: {number}" if doc else "a PRD section"
+        if doc is not None:
+            subjects.append({"kind": "section", "id": str(doc.id), "ref": str(t.get("section"))})
     elif c.op == "cut_with_dependents":
         # Review minor: every item the one change cut, the item first, each a subject.
         titles = [str(x) for x in t.get("titles") or []] or ([name] if name else [])
@@ -1182,7 +1191,7 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
                     SimpleChange.target["item_id"].astext.in_([str(i) for i in item_ids]),
                 ),
             )
-            .order_by(SimpleChange.at)
+            .order_by(SimpleChange.at, SimpleChange.seq)
         )
     )
     seen = [c for c in proposals if await _sees_change(db, principal, c)]
@@ -1504,7 +1513,7 @@ async def _trash_removed(
             continue
         at = trash.now()
         root = {"type": "agenda_item", "id": c["id"], "slug": None, "title": c["name"],
-                "kind": "agenda_item", "meeting_id": str(m.id), "row": c["row"],
+                "kind": "agenda_item", "meeting_id": str(m.id), "meeting": m.title, "row": c["row"],
                 "at": c["at"]}  # fmt: skip
         entry = TrashEntry(id=uuid.uuid4(), root_type="agenda_item", root_id=uuid.UUID(c["id"]),
                            root=json.loads(json.dumps(root, default=str)), items=[],
@@ -1896,9 +1905,9 @@ async def _waits(db: AsyncSession, m: SimpleMeeting) -> list[dict]:
     )
     proposals = list(
         await db.scalars(
-            select(SimpleChange).where(
-                SimpleChange.session_id == m.session_id, SimpleChange.status == "proposed"
-            )
+            select(SimpleChange)
+            .where(SimpleChange.session_id == m.session_id, SimpleChange.status == "proposed")
+            .order_by(SimpleChange.at, SimpleChange.seq)
         )
     )
     # walkc-meeting r2 (5j): a working draft waits on whoever approves the meeting's drafts

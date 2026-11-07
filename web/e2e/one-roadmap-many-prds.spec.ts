@@ -1,4 +1,4 @@
-import { OLD_ITEM } from "../lib/api/mock/one-roadmap";
+import { AREA_PRDS, OLD_ITEM } from "../lib/api/mock/one-roadmap";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
@@ -26,6 +26,20 @@ async function open(page: Page) {
   await login(page);
 }
 
+/**
+ * The mock's area PRDs in its company PRD order (prd-order), as Simple › One-pagers lists them
+ * under "Company order": the order every PRD filter follows (byPrdOrder), read, never guessed.
+ */
+async function companyOrder(page: Page): Promise<string[]> {
+  await page.goto("/simple/one-pagers");
+  const links = page.getByTestId("one-pager-row").getByRole("link");
+  await expect(links.first()).toBeVisible();
+  const area = AREA_PRDS.map(([, title]) => title);
+  const order = (await links.allTextContents()).map((t) => t.trim()).filter((t) => area.includes(t));
+  expect([...order].sort()).toEqual([...area].sort());
+  return order;
+}
+
 for (const [name, device] of [["desktop", DESKTOP], ["phone", PHONE]] as const) {
   test.describe(`one company roadmap (${name})`, () => {
     test.use(device);
@@ -34,11 +48,13 @@ for (const [name, device] of [["desktop", DESKTOP], ["phone", PHONE]] as const) 
      * protects = Simple › Roadmap shows two PRDs' items on one roadmap (Product roadmap) and the
      * PRD filter narrows it to one PRD's items and back, and the company roadmap alone feeds it;
      * fails_when = a PRD's items are missing, the roadmap is one per PRD, an item only the older
-     * per-PRD roadmap holds shows, or the PRD filter leaves the other PRD's items on; no_claim =
-     * how a run writes the roadmap (the API's tests).
+     * per-PRD roadmap holds shows, the PRD filter leaves the other PRD's items on, or it lists
+     * the PRDs out of the company PRD order; no_claim = how a run writes the roadmap (the API's
+     * tests).
      */
     test("Simple Roadmap shows items of two PRDs on one roadmap, with a PRD filter", async ({ page }) => {
       await open(page);
+      const order = await companyOrder(page);
       await page.goto("/simple/roadmap");
       await expect(page.getByTestId("simple-roadmap")).toBeVisible();
       for (const title of [...SAFETY, ...SCALE]) await expect(shown(page, title)).toBeVisible();
@@ -48,7 +64,8 @@ for (const [name, device] of [["desktop", DESKTOP], ["phone", PHONE]] as const) 
       // A phone keeps the filters behind its Filters button.
       if (name === "phone") await page.getByTestId("filters-toggle").click();
       const prd = filter(page, "PRD");
-      await expect(prd.locator("option")).toHaveText(["All", "User Safety", "Scale"]);
+      // The filter lists the PRDs in the company PRD order.
+      await expect(prd.locator("option")).toHaveText(["All", ...order]);
       await prd.selectOption({ label: "Scale" });
       for (const title of SCALE) await expect(shown(page, title)).toBeVisible();
       for (const title of SAFETY) await expect(shown(page, title)).toHaveCount(0);

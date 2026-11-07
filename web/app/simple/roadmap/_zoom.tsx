@@ -19,7 +19,9 @@ import {
 } from "react";
 
 import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
+import { InfoTip } from "@/components/ds/InfoTip";
 import { addMonths, calendarDay } from "@/lib/dates";
+import { LINK_KINDS } from "@/lib/roadmap-links";
 
 import { FixButtons, fixCount, type Act } from "./_card";
 import {
@@ -30,7 +32,9 @@ import {
   daysBetween,
   brokenLinks,
   liveBreaks,
+  mergedName,
   ms,
+  partsTree,
   planGoal,
   quarterValue,
   quarters,
@@ -71,7 +75,7 @@ const TODAY = "var(--today)";
 
 type Row =
   | { kind: "lane"; key: string; title: string; count: number }
-  | { kind: "item"; item: Item };
+  | { kind: "item"; item: Item; depth?: number };
 
 /** Items by goal (a lane per goal, then No goal, then Below the line), each item its own row.
  * The lanes are the data's goal groups (oneLane(lanes(data, "goal"))), as the goal cards, the
@@ -98,10 +102,10 @@ function rowsOf(data: Roadmap): Row[] {
   const out: Row[] = [];
   for (const [k, l] of order) {
     out.push({ kind: "lane", key: k, title: l.title, count: l.items.length });
-    for (const i of [...l.items].sort((a, b) =>
-      a.start.date < b.start.date ? -1 : 1,
-    ))
-      out.push({ kind: "item", item: i });
+    const sorted = [...l.items].sort((a, b) => (a.start.date < b.start.date ? -1 : 1));
+    // feature-parts: every part, at any depth, right under its parent (in its top parent's
+    // lane, oneLane), drawn as a tree; one whose parent is not shown keeps its own place.
+    for (const x of partsTree([sorted.map((i) => i.id)], byId)[0]) out.push({ kind: "item", item: byId.get(x.id)!, depth: x.depth });
   }
   if (below.length) {
     out.push({
@@ -312,6 +316,57 @@ export function ConflictPanel({
   // roadmap-decide: every broken link of the working draft, a cut item others depend on
   // included: the same ones Needs a decision, Home and the side menu count.
   const list = data.items.flatMap((i) => brokenLinks(i).map((f) => ({ i, f })));
+  // Pre-demo QA S-14: an item's breaks together, in the order the first of them reads.
+  const groups: (typeof list)[] = [];
+  for (const x of list) {
+    const g = groups.find((y) => y[0].i.id === x.i.id);
+    if (g) g.push(x);
+    else groups.push([x]);
+  }
+  const one = ({ i, f }: (typeof list)[number]) => {
+    // Review: with more than the three fixes (a cut item's Remove the dependency per dependent),
+    // the fixes take their own line under the sentence, as the tray has them.
+    const stacked = phone || fixCount(f) > 3;
+    return (
+      <li
+        key={`${i.id}-${f.kind}-${f.subject}`}
+        data-testid="conflict"
+        data-item={i.key}
+        className={`flex px-3 py-2 ${stacked ? "flex-col gap-1" : "flex-wrap items-center gap-3"}`}
+      >
+        {LINK_KINDS.includes(f.kind) ? (
+          <button
+            type="button"
+            onClick={() => onShow(i.key)}
+            className={`text-left text-sm text-text hover:underline ${stacked ? "" : "min-w-[16rem] flex-1"}`}
+          >
+            {f.reason}
+          </button>
+        ) : (
+          // Pre-demo QA S-5: an end past its milestone counts here too; its feature's name
+          // shows, its sentence behind the (i) (no visible prose).
+          <span className={`flex items-center gap-1 text-sm text-text ${stacked ? "" : "min-w-[16rem] flex-1"}`}>
+            <button type="button" onClick={() => onShow(i.key)} className="text-left hover:underline">
+              {i.title}
+            </button>
+            <InfoTip label={i.title} align="start" testId="conflict-why">
+              {f.reason}
+            </InfoTip>
+          </span>
+        )}
+        <div className="max-w-full min-w-0">
+          <FixButtons
+            item={i}
+            flag={f}
+            items={byId}
+            act={act}
+            canChange={canChange}
+            inline={!stacked}
+          />
+        </div>
+      </li>
+    );
+  };
   const [shut, setShut] = useState(false);
   // Review: a filter hides some: "1 broken link here, 3 in all", with Clear filters; only
   // when the whole roadmap holds more than these filters show.
@@ -358,37 +413,16 @@ export function ConflictPanel({
       </div>
       {!shut && (
         <ul className="divide-y divide-line border-t border-line">
-          {list.map(({ i, f }) => {
-            // Review: with more than the three fixes (a cut item's Remove the dependency per dependent),
-            // the fixes take their own line under the sentence, as the tray has them.
-            const stacked = phone || fixCount(f) > 3;
-            return (
-              <li
-                key={`${i.id}-${f.kind}-${f.subject}`}
-                data-testid="conflict"
-                data-item={i.key}
-                className={`flex px-3 py-2 ${stacked ? "flex-col gap-1" : "flex-wrap items-center gap-3"}`}
-              >
-                <button
-                  type="button"
-                  onClick={() => onShow(i.key)}
-                  className={`text-left text-sm text-text hover:underline ${stacked ? "" : "min-w-[16rem] flex-1"}`}
-                >
-                  {f.reason}
-                </button>
-                <div className="max-w-full min-w-0">
-                  <FixButtons
-                    item={i}
-                    flag={f}
-                    items={byId}
-                    act={act}
-                    canChange={canChange}
-                    inline={!stacked}
-                  />
-                </div>
+          {groups.map((g) =>
+            g.length === 1 ? (
+              one(g[0])
+            ) : (
+              // Pre-demo QA S-14, as on Home: an item's second break sits under its first, ruled together.
+              <li key={g[0].i.id} data-testid="conflict-group" data-item={g[0].i.key} className="py-1">
+                <ul className="ml-3 divide-y divide-line border-l-2 border-crit/40">{g.map(one)}</ul>
               </li>
-            );
-          })}
+            ),
+          )}
         </ul>
       )}
     </section>
@@ -1060,6 +1094,7 @@ function DayChart(props: TimelineProps) {
                 live={live}
                 byId={props.byId}
                 on={on}
+                depth={r.depth ?? 0}
               />
             );
           })}
@@ -1159,6 +1194,7 @@ const TimelineRow = memo(function TimelineRow({
   live: store,
   byId,
   on,
+  depth,
 }: {
   item: Item;
   ds: string;
@@ -1176,6 +1212,8 @@ const TimelineRow = memo(function TimelineRow({
   live: LiveStore;
   byId: Map<string, Item>;
   on: RowMoves;
+  /** feature-parts: how deep a part it is (0: a feature of its own). */
+  depth: number;
 }) {
   const lk = lookOf(i);
   const live = useSyncExternalStore(
@@ -1197,6 +1235,7 @@ const TimelineRow = memo(function TimelineRow({
     <div
       data-testid="timeline-row"
       data-item={i.key}
+      data-depth={depth || undefined}
       data-open={sel || undefined}
       // A row out of sight is not painted (content-visibility), so a drag's frame repaints the
       // rows in sight and not the chart's 500. Its containment stacks the row on its own, so
@@ -1220,11 +1259,19 @@ const TimelineRow = memo(function TimelineRow({
           type="button"
           onClick={() => on.name(i, sel, bx, bw)}
           className={`pointer-events-auto sticky left-0 z-[12] flex flex-none items-center gap-1.5 border-r border-line px-3 text-left text-sm ${sel ? "bg-accent-soft" : "bg-surface"} hover:underline`}
-          style={{ width: labelW }}
+          style={{ width: labelW, paddingLeft: 12 + depth * 14 }}
           title={i.title}
         >
+          {/* feature-parts: a part drawn as a branch of its parent's tree. */}
+          {depth > 0 && (
+            <span aria-hidden className="flex-none text-text2">
+              └
+            </span>
+          )}
           <span className="min-w-0 truncate" style={lk.name}>
             {i.title}
+            {/* panel-menu: a merged feature says where it went, by code and name as its panel does. */}
+            {i.merged_into && <span data-testid="row-merged" className="ml-1 text-text2">· Merged into {mergedName(i, (id) => byId.get(id))}</span>}
           </span>
           {lk.chip && (
             <span
@@ -1334,17 +1381,22 @@ function QuarterList(props: TimelineProps) {
     .sort();
   const qs = quarters(days[0], days[days.length - 1]);
   const tq = qs.find((q) => q.start <= data.today && data.today <= q.end);
+  const byId = new Map(data.items.map((i) => [i.id, i]));
   return (
     <div data-testid="timeline-list" className="space-y-3">
       {qs.map((q) => {
-        const items = data.items
+        const inQ = data.items
           .filter(
             (i) =>
               (q.start <= i.start.date && i.start.date <= q.end) ||
               (q === tq && i.start.date < q.start && i.end.date >= q.start),
           )
           .sort((a, b) => (a.start.date < b.start.date ? -1 : 1));
-        if (!items.length) return null;
+        if (!inQ.length) return null;
+        // feature-parts: the quarter's parts under their parents, as a tree.
+        const tree = partsTree([inQ.map((i) => i.id)], byId)[0];
+        const depth = new Map(tree.map((x) => [x.id, x.depth]));
+        const items = tree.map((x) => byId.get(x.id)!);
         return (
           <section
             key={q.start}
@@ -1389,7 +1441,9 @@ function QuarterList(props: TimelineProps) {
                     key={i.id}
                     data-testid="timeline-row"
                     data-item={i.key}
+                    data-depth={depth.get(i.id) || undefined}
                     data-open={sel || undefined}
+                    style={{ paddingLeft: (depth.get(i.id) ?? 0) * 16 }}
                   >
                     <button
                       type="button"
@@ -1408,6 +1462,11 @@ function QuarterList(props: TimelineProps) {
                           className="block text-sm font-semibold"
                           style={lk.name}
                         >
+                          {(depth.get(i.id) ?? 0) > 0 && (
+                            <span aria-hidden className="mr-1 font-normal text-text2">
+                              └
+                            </span>
+                          )}
                           {i.title}
                           {lk.chip ? (
                             <span

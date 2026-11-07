@@ -377,7 +377,7 @@ type DeckInput = {
   /** Provenance (O4b): the PRD version a roadmap version was built from. */
   source?: Schemas["VersionSource"] | null;
   sections: Section[];
-  citations: { cite_key: string; title?: string | null; ref: string; source: string }[];
+  citations: { cite_key: string; title?: string | null; ref: string; source: string; retrieved_at?: string | null }[];
   /**
    * H8: front matter `slides`, groups of brief section keys; a group is one slide (its first
    * section's heading and body, then each further section as a sub-heading and body). Brief
@@ -502,7 +502,8 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
       heading: "Sources and data points",
       expand: [],
       inner: `<h2 class="slide-title">Sources and data points</h2><ol class="slide-sources">${d.citations
-        .map((c) => `<li>${esc(c.title ?? c.ref)} <span class="src-kind">${esc(c.source)}</span></li>`)
+        // X-9: by title and when it was retrieved, never its kind (export/templates/slide.html.j2).
+        .map((c) => `<li><span class="src-title">${esc(c.title || c.ref)}</span>${c.retrieved_at ? ` <span class="src-retrieved">retrieved ${momentInWords(c.retrieved_at)}</span>` : ""}</li>`)
         .join("")}</ol>`,
     });
   }

@@ -44799,6 +44799,57 @@
         "x-min-role": "approver"
       }
     },
+    "/v1/simple/goal-map/links/detach": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Detach Feature Link",
+        "description": "goal-map-editing: a feature no longer serves the milestone (Edit ladder).",
+        "operationId": "detach_feature_link",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DetachIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalMapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "approver"
+      }
+    },
     "/v1/simple/goal-map/place-card": {
       "post": {
         "tags": [
@@ -49126,7 +49177,7 @@
           "simple"
         ],
         "summary": "Get Simple Priorities",
-        "description": "The live goal-weighted ranking in the company's order joined with the roadmap items\nthe caller sees: each row's Oracle rank, goal, horizon, goal value (a person's estimate\nor the goals'), effort, score, the dependency it waits for, the override that placed it\nand whether the caller's change applies or is proposed; the open priority and estimate\nproposals, the draft items with what they may merge into, and this quarter's\nengineer-weeks per goal. ``line``: where the line is drawn (Now, a key date, a dated\nmilestone or a day; see the module).",
+        "description": "The live goal-weighted ranking in the company's order joined with the roadmap items\nthe caller sees: each row's Oracle rank, goal, horizon, goal value (a person's estimate\nor the goals'), effort, score, the dependency it waits for, the override that placed it\nand whether the caller's change applies or is proposed; the open priority and estimate\nproposals, the draft items with what they may merge into, the items no row holds, and\nthis quarter's engineer-weeks per goal. ``line``: where the line is drawn (Now, a key\ndate, a dated milestone or a day; see the module).",
         "operationId": "get_simple_priorities",
         "security": [
           {
@@ -63479,6 +63530,7 @@
                   "estimate_feature",
                   "confirm_item",
                   "edit_line",
+                  "set_section_number",
                   "add_key_date",
                   "edit_key_date",
                   "remove_key_date",
@@ -63494,6 +63546,7 @@
                   "set_depends",
                   "set_status",
                   "set_feature",
+                  "set_parent",
                   "set_goal_measure",
                   "set_goals",
                   "set_owner",
@@ -63907,6 +63960,7 @@
               "estimate_feature",
               "confirm_item",
               "edit_line",
+              "set_section_number",
               "add_key_date",
               "edit_key_date",
               "remove_key_date",
@@ -63922,6 +63976,7 @@
               "set_depends",
               "set_status",
               "set_feature",
+              "set_parent",
               "set_goal_measure",
               "set_goals",
               "set_owner",
@@ -71997,6 +72052,27 @@
           "version"
         ],
         "title": "DesignReviewOut"
+      },
+      "DetachIn": {
+        "properties": {
+          "feature": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Feature"
+          },
+          "milestone": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Milestone"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feature",
+          "milestone"
+        ],
+        "title": "DetachIn",
+        "description": "goal-map-editing: a feature let go of one milestone (dropped on \"Not on a key\nresult\" or \"No goal\")."
       },
       "DiffLine": {
         "properties": {
@@ -82994,6 +83070,10 @@
           "proposed": {
             "type": "boolean",
             "title": "Proposed"
+          },
+          "can_change": {
+            "type": "boolean",
+            "title": "Can Change"
           }
         },
         "type": "object",
@@ -83013,7 +83093,8 @@
           "days",
           "confirmed",
           "confirmed_on",
-          "proposed"
+          "proposed",
+          "can_change"
         ],
         "title": "GmMilestone"
       },
@@ -83077,6 +83158,18 @@
           "name": {
             "type": "string",
             "title": "Name"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal"
           }
         },
         "type": "object",
@@ -83085,7 +83178,7 @@
           "name"
         ],
         "title": "GmUnplaced",
-        "description": "A feature of the Simple roadmap serving no milestone of the map."
+        "description": "A feature of the Simple roadmap serving no milestone of the map, with the goal its\nitem serves (goal-map-editing: the ladder draws it under that goal, else in No goal)."
       },
       "GoalBucketFeature": {
         "properties": {
@@ -88269,6 +88362,7 @@
               "estimate_feature",
               "confirm_item",
               "edit_line",
+              "set_section_number",
               "add_key_date",
               "edit_key_date",
               "remove_key_date",
@@ -88284,6 +88378,7 @@
               "set_depends",
               "set_status",
               "set_feature",
+              "set_parent",
               "set_goal_measure",
               "set_goals",
               "set_owner",
@@ -88487,6 +88582,17 @@
               }
             ],
             "title": "Line Id"
+          },
+          "section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section"
           }
         },
         "type": "object",
@@ -93014,6 +93120,21 @@
             ],
             "title": "Goals"
           },
+          "features": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Features"
+          },
           "reuse_draft_items": {
             "anyOf": [
               {
@@ -93084,6 +93205,14 @@
             },
             "type": "array",
             "title": "Goals",
+            "default": []
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/TargetFeature"
+            },
+            "type": "array",
+            "title": "Features",
             "default": []
           },
           "reuse_draft_items": {
@@ -99951,6 +100080,109 @@
         ],
         "title": "OnePagerDraft"
       },
+      "OnePagerFix": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "set_section_number",
+            "title": "Action"
+          },
+          "target": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Target"
+          },
+          "before": {
+            "type": "string",
+            "title": "Before"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "words": {
+            "type": "string",
+            "title": "Words"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OnePagerFixProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "target",
+          "before",
+          "value",
+          "words"
+        ],
+        "title": "OnePagerFix",
+        "description": "A \"numbers\" item's one-click fix (owner, Nov 5): POST /v1/simple/changes with ``op``\n``action``, this ``target``, ``before: {number: before}`` and ``after: {number: value}``;\n``words`` is its button (\"Use 6\")."
+      },
+      "OnePagerFixProposal": {
+        "properties": {
+          "change_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Change Id"
+          },
+          "by_name": {
+            "type": "string",
+            "title": "By Name"
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide"
+          },
+          "can_undo": {
+            "type": "boolean",
+            "title": "Can Undo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "change_id",
+          "by_name",
+          "can_decide",
+          "can_undo"
+        ],
+        "title": "OnePagerFixProposal",
+        "description": "An open proposal of the fix: who made it, and whether the reader decides or\nwithdraws it."
+      },
+      "OnePagerFixed": {
+        "properties": {
+          "change_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Change Id"
+          },
+          "words": {
+            "type": "string",
+            "title": "Words"
+          },
+          "can_undo": {
+            "type": "boolean",
+            "title": "Can Undo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "change_id",
+          "words",
+          "can_undo"
+        ],
+        "title": "OnePagerFixed",
+        "description": "A number fix (set_section_number) in the PRD's working draft, read from the draft's\nlive changes: its words ('Fixed: set to 6 in \u201cLater \u00b7 6 items\u201d') and its Undo."
+      },
       "OnePagerFlow": {
         "properties": {
           "title": {
@@ -100269,6 +100501,16 @@
             "type": "array",
             "title": "Source Keys",
             "default": []
+          },
+          "fix": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OnePagerFix"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -100579,6 +100821,14 @@
             },
             "type": "array",
             "title": "Needs Look",
+            "default": []
+          },
+          "fixed": {
+            "items": {
+              "$ref": "#/components/schemas/OnePagerFixed"
+            },
+            "type": "array",
+            "title": "Fixed",
             "default": []
           }
         },
@@ -123146,6 +123396,7 @@
               "estimate_feature",
               "confirm_item",
               "edit_line",
+              "set_section_number",
               "add_key_date",
               "edit_key_date",
               "remove_key_date",
@@ -123161,6 +123412,7 @@
               "set_depends",
               "set_status",
               "set_feature",
+              "set_parent",
               "set_goal_measure",
               "set_goals",
               "set_owner",
@@ -123308,6 +123560,7 @@
               "estimate_feature",
               "confirm_item",
               "edit_line",
+              "set_section_number",
               "add_key_date",
               "edit_key_date",
               "remove_key_date",
@@ -123323,6 +123576,7 @@
               "set_depends",
               "set_status",
               "set_feature",
+              "set_parent",
               "set_goal_measure",
               "set_goals",
               "set_owner",
@@ -124345,6 +124599,17 @@
               }
             ],
             "title": "Version"
+          },
+          "next_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Version"
           },
           "created_by": {
             "type": "string",
@@ -127622,6 +127887,40 @@
         ],
         "title": "SimpleOwnerRef"
       },
+      "SimplePartRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "cut": {
+            "type": "boolean",
+            "title": "Cut",
+            "default": false
+          },
+          "in_trash": {
+            "type": "boolean",
+            "title": "In Trash",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "title"
+        ],
+        "title": "SimplePartRef",
+        "description": "feature-parts: a parent or a part, by its display code (\"\" when none) and name."
+      },
       "SimplePerson": {
         "properties": {
           "id": {
@@ -128321,6 +128620,14 @@
             "type": "array",
             "title": "Drafts"
           },
+          "unranked": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePriorityUnranked"
+            },
+            "type": "array",
+            "title": "Unranked",
+            "default": []
+          },
           "buckets": {
             "items": {
               "$ref": "#/components/schemas/SimpleGoalBucket"
@@ -128876,6 +129183,23 @@
             "title": "Applies",
             "default": false
           },
+          "part_of": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePartRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "parts": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePartRef"
+            },
+            "type": "array",
+            "title": "Parts"
+          },
           "before_override": {
             "anyOf": [
               {
@@ -128897,6 +129221,45 @@
           "title"
         ],
         "title": "SimplePriorityRow"
+      },
+      "SimplePriorityUnranked": {
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Item Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePriorityGoal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "roadmap": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_id",
+          "code",
+          "title",
+          "roadmap"
+        ],
+        "title": "SimplePriorityUnranked",
+        "description": "prio-unranked: a live, non-draft roadmap item with no ranked feature (none, or one the\nranking leaves out): listed under the ranked rows, with no score and no rank."
       },
       "SimpleQuarter": {
         "properties": {
@@ -129872,6 +130235,43 @@
                 "type": "null"
               }
             ]
+          },
+          "parent_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Key"
+          },
+          "part_of": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePartRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "part_path": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePartRef"
+            },
+            "type": "array",
+            "title": "Part Path",
+            "default": []
+          },
+          "parts": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePartRef"
+            },
+            "type": "array",
+            "title": "Parts",
+            "default": []
           },
           "drafting": {
             "type": "boolean",
@@ -136350,6 +136750,31 @@
         ],
         "title": "SyncResult"
       },
+      "TargetFeature": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title"
+        ],
+        "title": "TargetFeature",
+        "description": "A Ground Truth feature a PRD run adds to its PRD (\"Add it to a PRD\")."
+      },
       "TargetGoal": {
         "properties": {
           "id": {
@@ -141862,7 +142287,8 @@
               "question",
               "agenda_item",
               "request",
-              "track"
+              "track",
+              "milestone"
             ],
             "title": "Type"
           },
@@ -141923,6 +142349,28 @@
               }
             ],
             "title": "Wrote"
+          },
+          "features": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Features"
+          },
+          "meeting": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meeting"
           }
         },
         "type": "object",

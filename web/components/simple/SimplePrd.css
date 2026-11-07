@@ -1,0 +1,75 @@
+/* PS1 a "Calm page": the one-pager in one calm column, ruled blocks, the whole PRD under it, a contents list beside it. */
+
+/* The page: contents | one-pager and the whole PRD | margin notes. Below 1600 the card needs the width (the plan strip's labels stay whole), so the contents lie in one sticky row over it that wraps to more lines, never cutting a tab. */
+@media (min-width: 768px) {
+  .simple-calm-cols > article { grid-column: 1; grid-row: 2; }
+  .simple-calm-cols > aside { grid-column: 2; grid-row: 2; }
+  .simple-calm .simple-prd-whole { grid-column: 1; grid-row: 3; }
+  .simple-calm .simple-prd-nav { grid-column: 1 / -1; grid-row: 1; display: flex; flex-flow: row wrap; align-items: baseline; gap: 0 4px; position: sticky; top: 0; z-index: 5; overflow: visible; padding: 4px 0; background: var(--bg); border-bottom: 1px solid var(--simple-rule); font-size: 15px; line-height: 20px; white-space: normal; }
+  .simple-calm .simple-prd-nav a { flex: none; padding: 2px 8px; }
+  .simple-calm .simple-prd-nav-title { margin: 0 4px 0 0; }
+  .simple-calm .simple-prd-nav-title:not(:first-child) { margin-left: 12px; }
+}
+@media (min-width: 1600px) {
+  .simple-calm-cols { max-width: 1400px; grid-template-columns: 180px minmax(0, 820px) var(--simple-margin); column-gap: 24px; }
+  .simple-calm-cols > article { grid-column: 2; grid-row: 1; }
+  .simple-calm-cols > aside { grid-column: 3; grid-row: 1; }
+  .simple-calm .simple-prd-whole { grid-column: 2; grid-row: 2; }
+  .simple-calm .simple-prd-nav { grid-column: 1; grid-row: 1 / span 2; align-self: start; position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-x: visible; overflow-y: auto; flex-flow: column nowrap; align-items: stretch; gap: 2px; padding: 0; background: none; border-bottom: 0; white-space: normal; }
+  .simple-calm .simple-prd-nav a { flex: initial; padding: 5px 8px; }
+  .simple-calm .simple-prd-nav-title { margin: 10px 8px 4px; }
+}
+.simple-prd-nav { display: none; }
+.simple-prd-nav a { display: block; padding: 5px 8px; border-radius: 6px; color: var(--text2); overflow-wrap: anywhere; }
+.simple-prd-nav a:hover { background: var(--surface2, var(--bg)); color: var(--text); }
+.simple-prd-nav .simple-prd-num { min-width: 1.6em; margin-right: 4px; }
+.simple-prd-nav-title { margin: 10px 8px 4px; font-size: 13px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); }
+
+/* The one-pager's blocks, ruled, each under a calm heading. */
+.simple-calm article[aria-label="One-pager"] { box-shadow: none; }
+.simple-calm article[aria-label="One-pager"] > section { margin-top: 0; padding: 22px 0; border-top: 1px solid var(--simple-rule); scroll-margin-top: 24px; }
+.simple-calm article[aria-label="One-pager"] > section:first-of-type { border-top: 0; padding-top: 0; }
+.simple-calm article[aria-label="One-pager"] > section > h2 { font-family: var(--font-display); font-size: 21px; line-height: 28px; font-weight: 650; text-transform: none; letter-spacing: 0; color: var(--text); margin-bottom: 6px; }
+.simple-calm article[aria-label="One-pager"] li [data-testid="one-pager-line-text"] { line-height: 1.6; }
+
+/* A line's feature code in its own column, the words beside it. */
+.simple-calm li span.flex-1:has(> .simple-prd-code:first-child) { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; align-items: start; }
+.simple-calm li span.flex-1:has(> .simple-prd-code:first-child) > :not(.simple-prd-code) { grid-column: 2; justify-self: start; margin-left: 0; }
+.simple-calm li span.flex-1 > .simple-prd-code:first-child { margin-right: 0; margin-top: 2px; padding: 1px 6px; border: 1px solid var(--accent-mid, var(--simple-rule)); border-radius: 6px; font-size: 15px; font-variant-numeric: tabular-nums; }
+
+/* The whole PRD. */
+.simple-prd-whole { min-width: 0; padding: 8px 48px 48px; }
+.simple-prd-whole-title { font-family: var(--font-display); font-size: 24px; line-height: 32px; font-weight: 700; color: var(--text); margin: 8px 0 4px; }
+.simple-prd-sec { scroll-margin-top: 24px; padding: 26px 0; border-top: 1px solid var(--simple-rule); }
+.simple-prd-sec[data-level="3"], .simple-prd-sec[data-level="4"] { border-top: 0; padding-top: 6px; }
+.simple-prd-sec-title { font-family: var(--font-display); color: var(--text); font-weight: 650; overflow-wrap: anywhere; margin-bottom: 10px; }
+h3.simple-prd-sec-title { font-size: 21px; line-height: 28px; }
+h4.simple-prd-sec-title { font-size: 18px; line-height: 26px; }
+.simple-prd-num { display: inline-block; min-width: 2.2em; margin-right: 8px; font-variant-numeric: tabular-nums; color: var(--text-faint); font-weight: 500; }
+.simple-prd-body { font-size: 17px; line-height: 1.65; color: var(--text); overflow-wrap: break-word; }
+.simple-prd-body > * + * { margin-top: 10px; }
+.simple-prd-body ul { list-style: disc; padding-left: 22px; }
+.simple-prd-body ol { list-style: decimal; padding-left: 26px; }
+.simple-prd-body li + li { margin-top: 4px; }
+.simple-prd-body blockquote { border-left: 3px solid var(--simple-rule); padding-left: 12px; color: var(--text2); }
+.simple-prd-subhead { font-weight: 650; }
+.simple-prd-table { overflow-x: auto; max-width: 100%; width: 0; min-width: 100%; /* no width of its own: a wide table never widens the page */ border: 1px solid var(--simple-rule); border-radius: 8px; }
+/* A table wider than its box shows a shade at the side that has more columns (covers that scroll with the table hide it at either end). */
+.simple-prd-table { background: linear-gradient(to right, var(--surface) 40%, transparent) left / 32px 100% no-repeat local, linear-gradient(to left, var(--surface) 40%, transparent) right / 32px 100% no-repeat local, radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--text) 24%, transparent), transparent) left / 14px 100% no-repeat scroll, radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--text) 24%, transparent), transparent) right / 14px 100% no-repeat scroll, var(--surface); }
+.simple-prd-table table { border-collapse: collapse; font-size: 15px; line-height: 1.45; min-width: 100%; }
+.simple-prd-table th { text-align: left; font-weight: 650; background: var(--surface2, var(--bg)); color: var(--text); white-space: nowrap; }
+.simple-prd-table :is(th, td) { padding: 8px 12px; border-bottom: 1px solid var(--simple-rule); vertical-align: top; min-width: 12em; }
+.simple-prd-table :is(th, td):first-child { min-width: 4em; } /* an id or a name column stays narrow */
+.simple-prd-table tr:last-child td { border-bottom: 0; }
+.simple-prd-link { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 2px; }
+.simple-prd-code { display: inline; padding: 0; margin: 0; border-radius: 3px; color: var(--accent-ink); font-weight: 600; text-decoration: none; background: transparent; text-align: left; cursor: pointer; }
+.simple-prd-code:hover { background: var(--accent-soft); text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 767px) { .simple-prd-whole { padding: 8px 8px 32px; } }
+
+/* The One-pagers list: calm rows. */
+.simple-calm-list > li { padding-top: 16px; padding-bottom: 16px; font-size: 18px; }
+
+/* Under the sticky contents row a jump lands clear of it. */
+@media (min-width: 768px) and (max-width: 1599px) {
+  .simple-calm article[aria-label="One-pager"] > section, .simple-calm .simple-prd-sec { scroll-margin-top: calc(var(--prd-nav-h, 64px) + 8px); }
+}

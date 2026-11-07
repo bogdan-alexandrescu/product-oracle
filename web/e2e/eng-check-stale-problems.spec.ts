@@ -63,7 +63,8 @@ test("still a problem: a dependency nobody knows says the briefs could not be re
   await openCheck(page, "eng-check-stale-unknown");
   const problem = page.getByTestId("briefs-problem");
   await expect(problem).toContainText("The briefs could not be read: send them back to the architect.");
-  await expect(problem).toContainText("depends on 'old-ledger'");
+  // The dependency named in words, as oracle.engineering.briefs names one no PRD or Ground Truth has.
+  await expect(problem).toContainText('depends on "old-ledger", a feature Oracle cannot find in any PRD or in Ground Truth');
   await expect(bar(page).getByTestId("eng-tally")).toHaveText("The briefs could not be read");
   await expect(bar(page).getByRole("button", { name: "Approve" })).toHaveCount(0);
   await expect(bar(page).getByRole("button", { name: "Send back to architect" })).toBeEnabled();

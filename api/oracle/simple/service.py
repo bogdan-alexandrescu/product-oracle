@@ -52,7 +52,7 @@ from oracle.roadmap.models import (
     TrackMilestone,
 )
 from oracle.simple import approved_roadmap, constraints, dates, plan_strip
-from oracle.simple.models import RoadmapDateSuggestion, SimpleVisual
+from oracle.simple.models import MilestoneFeature, RoadmapDateSuggestion, SimpleVisual
 from oracle.simple.schemas import (
     DateSuggestionOut,
     SimpleDate,
@@ -128,6 +128,11 @@ class Entry:
     goal_ids: list[uuid.UUID] | None = None
     # one-feature-panel: who the owner shown is (the item's own, else its track's).
     owner_id: uuid.UUID | None = None
+    # feature-parts: the features it is part of on its roadmap, its parent first, up to the
+    # top (any depth; a loop stops where it would close), and its parent's row when that
+    # parent is in Trash (null: none, or on the roadmap).
+    ancestors: list["Entry"] = field(default_factory=list)
+    trashed_parent: RoadmapItem | None = None
 
 
 @dataclass
@@ -209,12 +214,10 @@ def flags_out(e: Entry, may: Any = None) -> list[SimpleFlag]:
     ]
 
 
-LINK_KINDS = ("dependency_order", "cut_with_dependents")
-
-
 async def waiting(db: AsyncSession, principal: Any, roadmap: str | None = None) -> tuple[int, int]:
     """The broken links and the dates to confirm of the whole roadmap as ``principal`` reads
-    it: a red dependency out of order or a cut item others depend on, with a fix; an open date
+    it: every red flag with a one-click fix (an end past its milestone too, as Home and the
+    side menu's waiting list count them, pre-demo QA S-5); an open date
     suggestion the reader may decide; done items left out (the read without the rest of
     :func:`build`). ``roadmap`` (id or slug): that roadmap's alone, as :func:`build` narrows
     it; 404 when the reader cannot read it."""
@@ -236,9 +239,7 @@ async def waiting(db: AsyncSession, principal: Any, roadmap: str | None = None) 
     live = [
         e for e in read.entries if e.status != "done" and (chosen is None or e.roadmap.id == chosen)
     ]
-    links = sum(
-        1 for e in live for f in e.flags if f.state == "red" and f.fixes and f.kind in LINK_KINDS
-    )
+    links = sum(1 for e in live for f in e.flags if f.state == "red" and f.fixes)
     dates = sum(
         1 for e in live if e.suggestion is not None and can_decide(principal, e, read.deciders)
     )
@@ -424,6 +425,7 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
         else:
             bases_by_ref[(b.prd_document_id, b.tracker_key)].append(b)
     goals = await _goals(db, {r.feature_id for r in rows if r.feature_id})
+    ladder = await _ladder_goals(db, {r.id for r in rows})
     effort = await efforts(db, rows)
     # S7: the goals items are linked to directly (dropped on, suggested for).
     linked = {
@@ -486,6 +488,7 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 # one-feature-panel: a goal the item is linked to directly (set in its
                 # panel, dropped on, suggested for) wins over its feature's.
                 goal=next((linked[g] for g in row.goal_ids or [] if g in linked), None)
+                or ladder.get(row.id)
                 or (goals.get(row.feature_id) if row.feature_id else None),
                 goal_ids=[g for g in row.goal_ids or [] if g in linked],
                 window=window,
@@ -542,6 +545,18 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
     )
     for e in entries:
         e.resolved = moved[e.row.id]
+    # feature-parts: each part's ancestors; with no dates of its own, a part reads its
+    # nearest dated ancestor's (a parent in Trash still lends its own typed dates).
+    await _ancestors(db, entries)
+    own = {e.row.id: e.resolved for e in entries}
+    for e in entries:
+        if not e.resolved.undated:
+            continue
+        lent = [own[a.row.id] for a in e.ancestors]
+        top = e.ancestors[-1] if e.ancestors else e
+        if top.trashed_parent is not None:
+            lent.append(dates.resolve(_candidates(top.trashed_parent, [], {}, {}), e.window))
+        e.resolved = next((r for r in lent if not r.undated), e.resolved)
     nodes = [
         constraints.Node(
             id=str(e.row.id),
@@ -558,6 +573,7 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
             else None,
             accepted_risks=list(e.row.accepted_risks or []),
             prd=company.OnRoadmap("", e.prd.title).prd_name if e.prd is not None else None,
+            ancestors=tuple(str(a.row.id) for a in e.ancestors),
         )
         for e in entries
     ]
@@ -611,6 +627,43 @@ def _candidates(
         if r.target_date is not None and r.state != "cancelled":
             out.append(dates.Candidate(None, r.target_date, "tracker", r.updated_at))
     return out
+
+
+async def _ancestors(db: AsyncSession, entries: list[Entry]) -> None:
+    """feature-parts: sets each entry's ``ancestors`` (parent first, any depth, a loop cut
+    where it would close) and ``trashed_parent``."""
+    from oracle.trash.filter import INCLUDE_TRASHED
+
+    by_key = {(e.roadmap.id, e.row.item_key): e for e in entries}
+    missing: set[tuple[Any, str]] = set()
+    for e in entries:
+        seen, cur = {e.row.item_key}, e
+        while cur.row.parent_key and cur.row.parent_key not in seen:
+            seen.add(cur.row.parent_key)
+            nxt = by_key.get((e.roadmap.id, cur.row.parent_key))
+            if nxt is None:
+                missing.add((e.roadmap.id, cur.row.parent_key))
+                break
+            e.ancestors.append(nxt)
+            cur = nxt
+    if not missing:
+        return
+    trashed: dict[tuple[Any, str], RoadmapItem] = {}
+    rows = await db.scalars(
+        select(RoadmapItem)
+        .where(
+            RoadmapItem.roadmap_document_id.in_({d for d, _ in missing}),
+            RoadmapItem.item_key.in_({k for _, k in missing}),
+            RoadmapItem.deleted_at.is_not(None),
+        )
+        .order_by(RoadmapItem.updated_at)
+        .execution_options(**{INCLUDE_TRASHED: True})
+    )
+    for row in rows:
+        trashed[(row.roadmap_document_id, row.item_key)] = row
+    for e in entries:
+        if e.row.parent_key and (e.roadmap.id, e.row.parent_key) not in by_key:
+            e.trashed_parent = trashed.get((e.roadmap.id, e.row.parent_key))
 
 
 def _status(row: RoadmapItem, recs: list[TrackerRecord], cut: set[str]) -> str:
@@ -755,6 +808,31 @@ async def _goals(db: AsyncSession, features: set[uuid.UUID]) -> dict[uuid.UUID, 
     ).all()
     for edge_src, goal in sorted(found, key=lambda row: goal_sort_key(row[1])):
         out.setdefault(edge_src, goal)
+    return out
+
+
+async def _ladder_goals(db: AsyncSession, items: set[uuid.UUID]) -> dict[uuid.UUID, Entity]:
+    """Item id -> the goal it serves on the Goal map and its ladder (pre-demo QA P-6): the goal
+    of a goal milestone it is linked to (MilestoneFeature), the first in the one goal order."""
+    out: dict[uuid.UUID, Entity] = {}
+    if not items:
+        return out
+    found = (
+        await db.execute(
+            select(MilestoneFeature.item_id, Entity)
+            .join(TrackMilestone, TrackMilestone.id == MilestoneFeature.milestone_id)
+            .join(Entity, Entity.id == TrackMilestone.goal_id)
+            .where(
+                MilestoneFeature.item_id.in_(items),
+                TrackMilestone.deleted_at.is_(None),
+                TrackMilestone.status != "dropped",
+                Entity.type == "goal",
+                Entity.status == "confirmed",
+            )
+        )
+    ).all()
+    for item_id, goal in sorted(found, key=lambda row: goal_sort_key(row[1])):
+        out.setdefault(item_id, goal)
     return out
 
 
@@ -1123,6 +1201,7 @@ def item_out(
         depends_keys=list(row.depends_on or []),
         depends_key_of={str(d): k for d, k in e.depends_key_of.items()},
         depends_keys_of={str(d): ks for d, ks in e.depends_keys_of.items()},
+        parent_key=row.parent_key,
         can_decide=may,
         deciders=[names[i] for i in decider_ids(e, deciders) or owners or [] if i in names],
         reasons=_reasons(e),

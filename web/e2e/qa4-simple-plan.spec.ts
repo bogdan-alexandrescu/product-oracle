@@ -91,9 +91,11 @@ test.describe("QA pass 4: simple-plan, phone", () => {
     await open(page, "?tab=value-effort");
     await expect(page.getByTestId("vxe-point").first()).toBeVisible();
     await page.waitForTimeout(300);
-    await expect(page.getByTestId("vxe-middle-effort")).toHaveCount(0);
-    await expect(page.getByTestId("vxe-middle-value")).toBeVisible();
-    await expect(page.getByTestId("vxe-legend-middles")).toHaveText("The dashed line up and down is the middle effort.");
+    // Pinned layout: at 320 wide the middle effort's words fit, the middle value's do not, so the
+    // legend names that line (and only that one).
+    await expect(page.getByTestId("vxe-middle-effort")).toHaveCount(1);
+    await expect(page.getByTestId("vxe-middle-value")).toHaveCount(0);
+    await expect(page.getByTestId("vxe-legend-middles")).toHaveText("The dashed line across is the middle value.");
   });
 });
 
@@ -188,10 +190,10 @@ test.describe("QA pass 4: simple-plan, desktop", () => {
     await setUp(page, { scheme: "dark" });
     await open(page, "?tab=value-effort");
     const legend = page.getByLabel("Legend");
-    const help = legend.locator("xpath=following-sibling::p[1]");
-    await expect(help).toContainText("Drag a mark sideways");
+    // Demo 9: the help is behind the (i); the legend's keys read in one colour.
+    await expect(page.locator("#prio-about-text")).toContainText("Drag a mark sideways");
     const colour = (l: Locator) => l.evaluate((e) => getComputedStyle(e).color);
-    expect(await colour(help)).toBe(await colour(legend.locator("li").last()));
+    expect(await colour(legend.locator("li").first())).toBe(await colour(legend.locator("li").last()));
   });
 
   /* qa4-simple-plan-33: a day already gone is refused, in words. */

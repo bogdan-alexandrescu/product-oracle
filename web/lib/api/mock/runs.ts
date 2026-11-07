@@ -76,6 +76,11 @@ export interface RunsDb {
    * named with their PRD.
    */
   roadmap_features?: Record<string, string>;
+  /**
+   * As oracle.engineering.check.in_no_prd, for a check read again: the Ground Truth features no
+   * PRD holds, by key, with their name and id (a brief depending on one is told it is in no PRD).
+   */
+  no_prd_features?: Record<string, { name: string; entity: string }>;
 }
 
 /** B2: what the baseline says of a run at Confirm the baseline (./from-run.ts, over the baseline mock). */
@@ -161,6 +166,11 @@ export interface RunsContext {
    */
   quietAgents?: boolean;
   /**
+   * F-78 "stuck-agents": as "slow-agents", but the agents never finish: each later tick reads
+   * them again (checked_at now, as the API's tick sets it) and they have sent nothing new.
+   */
+  stuckAgents?: boolean;
+  /**
    * H11 Order priorities, as oracle.autonomy for the runs: its level, its limits, and the
    * "Oracle did" row Oracle leaves when it saves a run's order itself (_tell_order_saved).
    * Absent: Oracle never saves an order at a stop that is on.
@@ -174,6 +184,8 @@ export interface RunsContext {
   documents: DocumentRow[];
   /** #260: the confirmed goals a Baseline to PRD run may name. */
   confirmedGoals?: () => Schemas["TargetGoal"][];
+  /** "Add it to a PRD": the Ground Truth features (not rejected) a Baseline to PRD run may add. */
+  groundTruthFeatures?: () => Schemas["TargetFeature"][];
   latestVersion: (documentId: string) => number | null;
   /** The status of Oracle's live suggestion on a feedback item, if it has one. */
   suggestionStatus?: (feedbackId: string) => Schemas["SuggestionOut"]["status"] | null;
@@ -578,7 +590,7 @@ function resolveKnobs(flowKey: string, raw: KnobsIn | undefined): RunOut["knobs"
   }
   const checkpoints: Record<string, boolean> = {};
   for (const s of flow.segments) if (s.checkpoint) checkpoints[s.checkpoint] = raw?.checkpoints?.[s.checkpoint] ?? true;
-  const knobs: Knobs = { depth, roles, checkpoints, budget_usd: raw?.budget_usd ?? null, goals: [] };
+  const knobs: Knobs = { depth, roles, checkpoints, budget_usd: raw?.budget_usd ?? null, goals: [], features: [] };
   if (flowKey === "baseline_to_prd" && raw?.reuse_baseline) knobs.reuse_baseline = reuseKnob(raw.reuse_baseline);
   if (flowKey === "prd_to_roadmap") knobs.reuse_draft_items = raw?.reuse_draft_items !== false;
   return knobs;
@@ -595,6 +607,21 @@ function targetGoals(ctx: Omit<RunsContext, "db">, flowKey: string, raw: string[
     const goal = confirmed.find((g) => g.id === ref || g.key === ref);
     if (!goal) return `not a confirmed goal: ${ref}`;
     if (!out.includes(goal)) out.push(goal);
+  }
+  return out;
+}
+
+/** "Add it to a PRD", as the API: the Ground Truth features (ids or keys) a Baseline to PRD run adds; null: none named. */
+function targetFeatures(ctx: Omit<RunsContext, "db">, flowKey: string, raw: string[] | null | undefined): Schemas["TargetFeature"][] | string | null {
+  if (raw == null) return null;
+  if (!raw.length) return [];
+  if (flowKey !== "baseline_to_prd") return "only a Ground Truth to PRD run adds features to its PRD";
+  const known = ctx.groundTruthFeatures?.() ?? [];
+  const out: Schemas["TargetFeature"][] = [];
+  for (const ref of raw) {
+    const feature = known.find((f) => f.id === ref || f.key === ref);
+    if (!feature) return `not a Ground Truth feature: ${ref}`;
+    if (!out.some((f) => f.id === feature.id)) out.push(feature);
   }
   return out;
 }
@@ -832,6 +859,8 @@ function liveOf(ctx: RunsContext, cp: CheckpointOut, actions: DraftActionRow[]):
 
 /** The gate of `cp` now, with its live reasons. */
 function gateNow(ctx: RunsContext, cp: CheckpointOut, actions: DraftActionRow[], edits = true): Schemas["Gate"] | null {
+  // As the API's _live_reasons: an order's stale-goal problem is read as of now (gone once its goal is back).
+  recheckOrderGoals(ctx, cp, false);
   return gateOf(cp, actions, edits, liveOf(ctx, cp, actions));
 }
 
@@ -1325,12 +1354,22 @@ const approvedScope = (ctx: Pick<RunsContext, "db">, r: RunOut) => (ctx.db.scope
 const goalSet = (ctx: Pick<RunsContext, "goalKeys">) => (ctx.goalKeys ? new Set(ctx.goalKeys()) : null);
 
 /**
+ * As oracle.priorities.run_order.unknown_goal_message: a new feature names a goal that is not one
+ * of the Ground Truth, said by the goal's last known name; with none, never by its key.
+ */
+function unknownGoalMessage(feature: string, goal: string | undefined | null): string {
+  return goal
+    ? `${feature} names the goal ${goal}, which is not a goal in the Ground Truth: the run must name one that is`
+    : `${feature} names a goal that was deleted: the run must name a goal of the Ground Truth`;
+}
+
+/**
  * As the API's check (oracle.priorities.run_order.check_order), for the codes the mock's
  * orders can show: unknown_feature, not_in_scope, missing_feature, before_prerequisite,
  * new_feature_no_goal, unknown_goal (blocking); differs_from_live, no_goal (advisory). The live ranking is the mock's
  * (./lane-f.ts), restricted to the ranked features.
  */
-function checkOrder(given: OrderSpec, scope: PrdScopeOut["features"] | null, goals: Set<string> | null): PriorityCheck {
+function checkOrder(given: OrderSpec, scope: PrdScopeOut["features"] | null, goals: Set<string> | null, goalTitle?: (key: string) => string | undefined): PriorityCheck {
   const live = ranking(given.method).features;
   const titleOf = (k: string) => live.find((f) => f.key === k)?.title ?? (scope ?? []).find((f) => f.key === k)?.title ?? given.order.find((o) => o.key === k && o.title)?.title ?? k;
   // A key ranked twice is checked once, at its first entry (api: duplicate_key).
@@ -1364,7 +1403,7 @@ function checkOrder(given: OrderSpec, scope: PrdScopeOut["features"] | null, goa
     const keys = named.flatMap((g) => (g.key ? [g.key] : []));
     const zero = new Set(named.filter((g) => g.key && g.contribution === 0).map((g) => g.key!));
     const unknown = goals ? [...new Set(keys)].filter((k) => !goals.has(k)) : [];
-    for (const g of unknown) add("unknown_goal", o.key, `${title} names the goal ${g}, which is not a goal in the baseline: the run must name one that is`);
+    for (const g of unknown) add("unknown_goal", o.key, unknownGoalMessage(title, goalTitle?.(g)));
     if (!unknown.length && !keys.some((k) => (!goals || goals.has(k)) && !zero.has(k))) add("new_feature_no_goal", o.key, `${title} is new and names no goal it serves: the run must name one`);
   }
   for (const k of keys) {
@@ -1405,7 +1444,7 @@ function orderDocument(ctx: Pick<RunsContext, "documents">, r: RunOut): Snapshot
  * becomes the run's proposed snapshot; the run's other proposed one is discarded, one for
  * the same attempt is replaced.
  */
-function proposeOrder(ctx: Pick<RunsContext, "db" | "uuid" | "now" | "documents">, r: RunOut, seq: number, attempt: number, spec: OrderSpec, check: PriorityCheck): SnapshotRow {
+function proposeOrder(ctx: Pick<RunsContext, "db" | "uuid" | "now" | "documents" | "goalTitle">, r: RunOut, seq: number, attempt: number, spec: OrderSpec, check: PriorityCheck): SnapshotRow {
   const all = (ctx.db.priority_snapshots ??= []);
   const same = all.find((x) => x.run_id === r.id && x.status === "proposed" && x.params.segment_seq === seq && x.params.attempt === attempt);
   for (const x of all) if (x !== same && x.run_id === r.id && x.status === "proposed") Object.assign(x, { status: "discarded", decided_at: ctx.now() });
@@ -1413,7 +1452,7 @@ function proposeOrder(ctx: Pick<RunsContext, "db" | "uuid" | "now" | "documents"
   const titles = Object.fromEntries(spec.order.filter((o) => o.title).map((o) => [o.key, o]));
   const liveRows = Object.values(live);
   const rows = check.order!.filter((o) => live[o.key] || titles[o.key]).map((o) =>
-    live[o.key] ? { ...live[o.key], rank: o.rank, live_rank: o.live_rank, run_explanation: o.explanation } : newFeature(titles[o.key], o.rank, spec.method, liveRows, spec.order),
+    live[o.key] ? { ...live[o.key], rank: o.rank, live_rank: o.live_rank, run_explanation: o.explanation } : newFeature(titles[o.key], o.rank, spec.method, liveRows, spec.order, ctx.goalTitle),
   );
   const snap: SnapshotRow = {
     id: same?.id ?? ctx.uuid(),
@@ -1446,10 +1485,11 @@ const num = (v: number) => String(Number(v.toFixed(4)));
  * As oracle.priorities.run_order.new_feature: a feature new in this PRD scored on the same
  * formula (goal weight × contribution × confidence ÷ effort) from the inputs the run set,
  * marked `new`; its confidence is the run's, with no evidence yet. What it depends on, and
- * what waits on it, are the edges the run's feature set gives (`depends_on`).
+ * what waits on it, are the edges the run's feature set gives (`depends_on`). Its goal reads by the
+ * Ground Truth's name for it, rejected goals too (api Known.goal_names), else the live ranking's.
  */
-function newFeature(o: OrderEntry, rank: number, method: Method, live: SnapshotRow["ranking"], order: OrderEntry[]): SnapshotRow["ranking"][number] {
-  const goalTitle = live.flatMap((f) => f.explanation.goals).find((g) => g.goal === o.goal)?.title ?? o.goal ?? "";
+function newFeature(o: OrderEntry, rank: number, method: Method, live: SnapshotRow["ranking"], order: OrderEntry[], goalName?: (key: string) => string | undefined): SnapshotRow["ranking"][number] {
+  const goalTitle = (o.goal ? goalName?.(o.goal) : undefined) ?? live.flatMap((f) => f.explanation.goals).find((g) => g.goal === o.goal)?.title ?? o.goal ?? "";
   const goals: SnapshotRow["ranking"][number]["explanation"]["goals"] = [];
   const steps: string[] = [];
   const missing: string[] = [];
@@ -1516,34 +1556,68 @@ function decideOrder(ctx: Pick<RunsContext, "db" | "now" | "documents" | "accept
   }
 }
 
+type OrderProblem = PriorityCheck["problems"][number] & { stale_goal?: string };
+/** As run_order._OLD_WORDS: a goal problem stored before the goal's name was said, by its key. */
+const OLD_GOAL_WORDS = /^.* names the goal (\S+), which is not a goal (?:in|of) the baseline\b/;
+/** As run_order._old_goal: the goal key an unknown_goal problem in the old words names. */
+const oldGoal = (p: OrderProblem) => (p.code === "unknown_goal" ? (p.message.match(OLD_GOAL_WORDS)?.[1] ?? null) : null);
+/** As run_order._is_stale: a problem stale_goals added (marked), one stored before the mark, or one in the old words. */
+const isStale = (p: OrderProblem) => !!p.stale_goal || p.message.includes("after the order was checked") || oldGoal(p) !== null;
+/** As run_order._stale_key: a stale problem's feature and goal key, when it names one. */
+const staleKey = (p: OrderProblem) => {
+  const goal = p.stale_goal ?? oldGoal(p);
+  return goal ? `${p.feature ?? ""}|${goal}` : null;
+};
+
 /**
- * As oracle.priorities.run_order.stale_goals at approval: each goal an order's new feature serves
- * that is no goal of the baseline now is a blocking unknown_goal, added to the order's check.
+ * As oracle.priorities.run_order.recheck_goals (api runs.service._recheck_order_goals): each goal
+ * an order's new feature serves that is no goal of the Ground Truth now is a blocking unknown_goal
+ * on the order's check, named by its last known name (never its key); one whose goal is back
+ * (restored, confirmed again) is dropped. `add` (Approve order): a newly stale goal is added; a
+ * read (the band, the gate, the Inbox) only drops what no longer holds, keeping a problem by its
+ * words or by its feature and goal (one in older words is said again in today's). Returns the
+ * stale-goal problems open now.
  */
-function recheckOrderGoals(ctx: Pick<RunsContext, "db" | "goalKeys" | "goalTitle">, cp: CheckpointOut): PriorityCheck["problems"] {
+function recheckOrderGoals(ctx: Pick<RunsContext, "db" | "goalKeys" | "goalTitle">, cp: CheckpointOut, add = true): PriorityCheck["problems"] {
   const goals = goalSet(ctx);
-  const snap = (ctx.db.priority_snapshots ?? []).find((x) => x.id === cp.payload.priority_snapshot_id && x.status === "proposed");
+  const snap = cp.status === "pending" && cp.kind === "priority_order" ? (ctx.db.priority_snapshots ?? []).find((x) => x.id === cp.payload.priority_snapshot_id && x.status === "proposed") : undefined;
   if (!goals || !snap) return [];
   const check = snap.check_result ?? { method: snap.method, features: snap.ranking.length, problems: [], order: [] };
-  const said = new Set(check.problems.map((x) => x.message));
-  const stale: PriorityCheck["problems"] = [];
+  const problems = check.problems as OrderProblem[];
+  const kept = problems.filter((p) => !isStale(p));
+  const before = new Set(problems.filter(isStale).map((p) => p.message));
+  const beforeGoals = new Set(problems.filter(isStale).flatMap((p) => staleKey(p) ?? []));
+  const said = new Set(kept.map((x) => x.message));
+  const stale: OrderProblem[] = [];
   for (const row of snap.ranking.filter((x) => x.new)) {
     for (const g of row.explanation.goals ?? []) {
-      if (goals.has(String(g.goal)) || g.contribution === 0) continue;
-      const title = ctx.goalTitle?.(String(g.goal));
+      const key = String(g.goal);
+      if (goals.has(key) || g.contribution === 0) continue;
+      const title = ctx.goalTitle?.(key);
+      // A goal gone from the Ground Truth: its last known name, the row's term kept it (not its key).
       const message = title
-          ? `${row.title} serves the goal ${title}, which was rejected after the order was checked: the run must name a goal of the baseline`
-          : `${row.title} names the goal ${g.goal}, which is not a goal in the baseline: the run must name one that is`;
-      if (said.has(message)) continue;
+        ? `${row.title} serves the goal ${title}, which was rejected after the order was checked: the run must name a goal of the Ground Truth`
+        : unknownGoalMessage(row.title, g.title && g.title !== key ? g.title : null);
+      if (said.has(message) || (!add && !before.has(message) && !beforeGoals.has(`${row.key}|${key}`))) continue;
       said.add(message);
-      stale.push({ code: "unknown_goal", blocking: true, feature: row.key, message });
+      stale.push({ code: "unknown_goal", blocking: true, feature: row.key, message, stale_goal: key });
     }
   }
-  if (stale.length) {
-    snap.check_result = { ...check, problems: [...check.problems, ...stale] };
+  const next = [...kept, ...stale];
+  if (next.length !== problems.length || next.some((p, i) => p.message !== problems[i].message)) {
+    snap.check_result = { ...check, problems: next };
     cp.payload = { ...cp.payload, priority_check: snap.check_result };
   }
   return stale;
+}
+
+/**
+ * As the API's compare read (oracle.priorities.service.compare): the order's stale-goal problems
+ * as of now, before the band reads them.
+ */
+export function refreshOrderGoals(ctx: Pick<RunsContext, "db" | "goalKeys" | "goalTitle">, snap: { checkpoint_id?: string | null; run_id?: string | null }) {
+  const cp = ctx.db.runs.find((r) => r.id === snap.run_id)?.checkpoints.find((c) => c.id === snap.checkpoint_id);
+  if (cp) recheckOrderGoals(ctx, cp, false);
 }
 
 /** The priority stop's note when Oracle saved the order itself (H11 ``priorities`` at Act). */
@@ -1631,7 +1705,7 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
   const dates = def.outputs.includes("eng_dates.yaml") ? datesCheckOf(r, r.id === ENG_DATES_RUN ? SEEDED_DATES : LOCAL_DATES) : null;
   if (dates) ctx.db.artifacts[`${r.id}|${s.seq}|eng_dates.yaml`] = datesYaml(dates, attempt);
   if (def.outputs.includes("priority.yaml")) {
-    s.priority_check = checkOrder(LOCAL_ORDER, scopeOf(ctx, r), goalSet(ctx));
+    s.priority_check = checkOrder(LOCAL_ORDER, scopeOf(ctx, r), goalSet(ctx), ctx.goalTitle);
     snapshot = proposeOrder(ctx, r, s.seq, attempt, LOCAL_ORDER, s.priority_check);
   }
   // The mock writes no strategy draft ("{draft}"): Company › Strategy keeps its own store.
@@ -1755,7 +1829,12 @@ function tick(ctx: RunsContext, ticker = false): Schemas["TickOut"] {
     // A run that could not be checked is named, not counted as active.
     if (unreadIds.has(r.id)) continue;
     out.active_runs += 1;
-    if ((ctx.slowAgents || ctx.quietAgents) && agentsWorking(ctx, r)) continue;
+    if ((ctx.slowAgents || ctx.quietAgents || ctx.stuckAgents) && agentsWorking(ctx, r)) continue;
+    if (ctx.stuckAgents) {
+      const s = r.segments.find((x) => x.status === "running");
+      if (s) s.checked_at = ctx.now();
+      continue;
+    }
     if (r.waiting_for) {
       // F4 lane B, as the API re-checks each tick: the version's roadmap items are ready
       // now, so the Engineering dates step starts (a workflow of its own).
@@ -1802,7 +1881,7 @@ function tick(ctx: RunsContext, ticker = false): Schemas["TickOut"] {
 function startedInCheck(ctx: RunsContext, r: RunOut) {
   const s = r.segments.find((x) => x.status === "running");
   if (!s || s.checked_at) return;
-  if (ctx.slowAgents || ctx.quietAgents) agentsWorking(ctx, r);
+  if (ctx.slowAgents || ctx.quietAgents || ctx.stuckAgents) agentsWorking(ctx, r);
   else s.checked_at = ctx.now();
 }
 
@@ -2069,7 +2148,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
 
   if (p[1] === "flows" && m === "GET") return json(200, flowCatalog());
   if (p[1] === "inbox" && m === "GET") {
-    for (const r of ctx.db.runs) recheckBriefs(ctx.db, r);
+    for (const r of ctx.db.runs) recheckBriefs(ctx.db, r, (x) => docTitle(ctx, x));
     return json(200, inbox(ctx));
   }
   if (p[1] === "internal" && p[2] === "tick" && m === "POST") return json(200, tick(ctx, true));
@@ -2117,6 +2196,9 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const goals = targetGoals(ctx, input.flow, input.knobs?.goals);
     if (typeof goals === "string") return fail(422, goals);
     knobs.goals = goals ?? [];
+    const features = targetFeatures(ctx, input.flow, input.knobs?.features);
+    if (typeof features === "string") return fail(422, features);
+    knobs.features = features ?? [];
     const refused = buildUnderWay(ctx, input.flow);
     if (refused) return refused;
     // A flow that writes no document names none, reads none and takes no template.
@@ -2223,7 +2305,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   const r = ctx.db.runs.find((x) => x.id === p[2]);
   if (!r) return fail(404, `run ${p[2]} not found`);
   // As oracle.runs.service.recheck_briefs: the run, its review's gate and Approve read one check.
-  recheckBriefs(ctx.db, r);
+  recheckBriefs(ctx.db, r, (x) => docTitle(ctx, x));
   const done = (status = 200) => {
     refresh(r);
     // As the API: a checkpoint is decided by its approver role or above; an engineering stop
@@ -2264,6 +2346,9 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       const goals = targetGoals(ctx, r.flow, patch.knobs.goals);
       if (typeof goals === "string") return fail(422, goals);
       knobs.goals = goals ?? r.knobs.goals ?? [];
+      const features = targetFeatures(ctx, r.flow, patch.knobs.features);
+      if (typeof features === "string") return fail(422, features);
+      knobs.features = features ?? r.knobs.features ?? [];
       // As the API: an omitted reuse_draft_items keeps the run's choice.
       if (r.flow === "prd_to_roadmap" && patch.knobs.reuse_draft_items == null) knobs.reuse_draft_items = r.knobs.reuse_draft_items;
       r.knobs = knobs;
@@ -3356,7 +3441,7 @@ function seedAtPriority(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, do
   own.scopes![r.id] = [];
   tick(full);
   const priority = r.segments.find((s) => s.name === "priority")!;
-  const check = checkOrder(spec, scope ?? null, goalSet(ctx));
+  const check = checkOrder(spec, scope ?? null, goalSet(ctx), ctx.goalTitle);
   priority.priority_check = check;
   db.artifacts[`${r.id}|${priority.seq}|priority.yaml`] = priorityYaml(spec, priority.name, 1);
   const snap = proposeOrder(full, r, priority.seq, 1, spec, check);
@@ -3385,7 +3470,7 @@ export function seedPriorityRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
   const checkout = ctx.documents.find((d) => d.slug === "checkout-redesign");
   const earlier = db.runs.find((r) => r.document_slug === "checkout-redesign") ?? db.runs[0];
   const spec: OrderSpec = { method: "goal_weighted", order: ranking("goal_weighted").features.slice(0, 4).map((f) => ({ key: f.key, score: f.score ?? 0, explanation: "As the live ranking" })) };
-  const check = checkOrder(spec, null, goalSet(ctx));
+  const check = checkOrder(spec, null, goalSet(ctx), ctx.goalTitle);
   const snap = proposeOrder({ ...ctx, db }, earlier, 0, 1, spec, check);
   Object.assign(snap, {
     status: "saved",
@@ -4033,7 +4118,7 @@ export const ROADMAP_FILE_PROBLEM_RUN: { run: RunOut; artifacts: Record<string, 
 // ---------------------------------------------------------------- F4 Engineering check
 
 type Brief = { key: string; title: string; approach: string; size: string; depends_on: string[]; questions: { id: string; question: string; blocking: boolean }[] };
-type BriefsCheck = { features: Brief[]; problems: { code: string; message: string; feature?: string | null; features?: string[] }[]; code_map_used: boolean; unmapped_repos: string[]; unnamed_repo: boolean; elsewhere?: Record<string, string> };
+type BriefsCheck = { features: Brief[]; problems: { code: string; message: string; feature?: string | null; features?: string[]; entity?: string }[]; code_map_used: boolean; unmapped_repos: string[]; unnamed_repo: boolean; elsewhere?: Record<string, string> };
 const SIZES = ["xs", "s", "m", "l", "xl"];
 const VERDICTS = ["feasible", "feasible_with_changes", "not_feasible"];
 const VERDICT_WORDS: Record<string, string> = { feasible: "Feasible", feasible_with_changes: "Feasible with changes", not_feasible: "Not feasible as scoped" };
@@ -4069,10 +4154,20 @@ type RunMaps = { ids: string[]; repos: string[] };
  */
 /**
  * As oracle.engineering.check._summarize. `elsewhere`: the keys outside the feature set a brief may
- * depend on, named with their PRD (features of other PRDs on the company roadmap, or waived at the
- * feature set stop); any other dependency outside the set is unknown_dependency.
+ * depend on, named with their PRD (features of other PRDs on the company roadmap, waived at the
+ * feature set stop, or being added to a PRD by a live run); `noPrd`: the Ground Truth features no
+ * PRD holds, by name and entity id (a brief depending on one is told "Export logs is in no PRD
+ * yet"); any other dependency outside the set is unknown_dependency, named in words. Problems in
+ * the API's order: the unknown dependencies in file order, then the features in no PRD yet, then
+ * each unknown code map id once.
  */
-export function briefsCheckOf(briefs: Brief[], file?: BriefsMaps, maps?: RunMaps, elsewhere: Record<string, string> = {}): BriefsCheck {
+export function briefsCheckOf(
+  briefs: Brief[],
+  file?: BriefsMaps,
+  maps?: RunMaps,
+  elsewhere: Record<string, string> = {},
+  noPrd: Record<string, { name: string; entity: string }> = {},
+): BriefsCheck {
   const cited: Record<string, Record<string, string[]>> = {};
   for (const b of briefs) {
     for (const [ref, at] of file?.cites[b.key] ?? []) {
@@ -4092,16 +4187,18 @@ export function briefsCheckOf(briefs: Brief[], file?: BriefsMaps, maps?: RunMaps
   const keys = new Set(briefs.map((b) => b.key));
   const named: Record<string, string> = {};
   const unknown: BriefsCheck["problems"] = [];
-  briefs.forEach((b, i) => {
+  const inNoPrd: BriefsCheck["problems"] = [];
+  for (const b of briefs) {
     for (const d of b.depends_on) {
       if (keys.has(d)) continue;
       if (d in elsewhere) named[d] = elsewhere[d];
-      else unknown.push({ code: "unknown_dependency", feature: b.key, message: `features[${i}] (${b.key}): depends on '${d}', not a feature of the feature set or the company roadmap` });
+      else if (d in noPrd) inNoPrd.push({ code: "dependency_in_no_prd", feature: b.key, entity: noPrd[d].entity, message: `${noPrd[d].name} is in no PRD yet: ${b.title} depends on it` });
+      else unknown.push({ code: "unknown_dependency", feature: b.key, message: `${b.title.trim() ? `${b.title.trim()} (${b.key})` : b.key} depends on "${d}", a feature Oracle cannot find in any PRD or in Ground Truth` });
     }
-  });
+  }
   return {
     features: briefs,
-    problems: [...unknown, ...problems],
+    problems: [...unknown, ...inNoPrd, ...problems],
     code_map_used: !!file?.repos.length,
     unmapped_repos,
     unnamed_repo: !unmapped_repos.length && problems.length > 0,
@@ -4135,14 +4232,34 @@ function briefsYaml(briefs: Brief[], attempt: number): string {
  * problem a later rule may answer is checked again as the rules now are (its other problems
  * stay as they were), so the stop's page and its gate count the same problems.
  */
-export function recheckBriefs(db: RunsDb, r: RunOut) {
+export function recheckBriefs(db: RunsDb, r: RunOut, title: (r: RunOut) => string | null = (x) => x.document_title ?? null) {
+  const STALE = ["unknown_dependency", "dependency_in_no_prd"];
   for (const cp of r.checkpoints) {
     const check = cp.kind === "eng_review" && cp.status === "pending" ? briefsOf(cp) : null;
-    if (!check?.problems.some((p) => p.code === "unknown_dependency")) continue;
-    const deps = briefsCheckOf(check.features, undefined, undefined, db.roadmap_features ?? {});
-    const problems = [...deps.problems, ...check.problems.filter((p) => p.code !== "unknown_dependency")];
+    if (!check?.problems.some((p) => STALE.includes(p.code))) continue;
+    const known = { ...beingAdded(db, r, title), ...(db.roadmap_features ?? {}) };
+    const deps = briefsCheckOf(check.features, undefined, undefined, known, db.no_prd_features ?? {});
+    const problems = [...deps.problems, ...check.problems.filter((p) => !STALE.includes(p.code))];
     cp.payload = { ...cp.payload, briefs_check: { ...check, problems, elsewhere: { ...check.elsewhere, ...deps.elsewhere } } };
   }
+}
+
+/**
+ * As oracle.engineering.check.being_added: the Ground Truth features a live Ground Truth to PRD
+ * run other than `r` was started to add to its PRD, each named with that PRD; a draft or a
+ * stopped run adds nothing.
+ */
+function beingAdded(db: RunsDb, r: RunOut, title: (r: RunOut) => string | null): Record<string, string> {
+  const out: Record<string, string> = {};
+  const live = ["awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun"];
+  for (const run of [...db.runs].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
+    if (run.id === r.id || run.flow !== "baseline_to_prd" || !live.includes(run.status)) continue;
+    const prd = title(run) ?? (run.document_slug ? run.document_slug.replace(/[-_]/g, " ").replace(/^./, (c) => c.toUpperCase()) : null);
+    // "Safety PRD", with PRD after the title when it does not say so (as OnRoadmap.prd_name).
+    const name = !prd ? "a new PRD" : /prd$/i.test(prd) ? prd : `${prd} PRD`;
+    for (const f of run.knobs.features ?? []) out[f.key] ??= `${f.title} (being added to ${name})`;
+  }
+  return out;
 }
 
 const briefsOf = (cp: CheckpointOut) => ((cp.payload as { briefs_check?: BriefsCheck } | undefined)?.briefs_check ?? null);

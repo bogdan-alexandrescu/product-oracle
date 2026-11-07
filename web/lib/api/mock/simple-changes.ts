@@ -40,6 +40,7 @@ import {
   openDraft,
   GOALS,
   MAP_GOALS,
+  mapGoalRef,
   goalId,
   goalIdsOf,
   itemDeciderId,
@@ -78,6 +79,7 @@ import {
 } from "./simple-roadmap";
 import { routeGoalSuggestions } from "./simple-suggestions";
 import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
+import { madeOrder } from "./made-order";
 
 type Change = Schemas["SimpleChangeOut"];
 type Session = Schemas["SimpleSessionOut"];
@@ -183,6 +185,8 @@ const FIELDS: Record<string, string[]> = {
   set_goals: ["goal_ids"],
   // roadmap-decide: a dependent no longer depends on a cut item (changes.py remove_dependency).
   remove_dependency: ["depends_on"],
+  // feature-parts: the key of the feature it is a part of (changes.py set_parent).
+  set_parent: ["parent_key"],
 };
 const FIXES = ["shift_dependents", "move_dependency"];
 /** fix5-cut-dependents: the item and everything waiting on it, cut as one change (changes.py CUT_ALL). */
@@ -256,6 +260,26 @@ function keyOf(db: SimpleDb, id: unknown): string | undefined {
 
 function seed(db: SimpleDb, key: string) {
   return db.items.find((s) => s.key === key)!;
+}
+
+/**
+ * changes._parent: why `key` may not be made part of `v` as `seen` reads the roadmap (null: it
+ * may): an open item of the same roadmap, any depth, never the item itself or one of its own
+ * parts (a feature is never its own ancestor). Create, accept and undo all check it.
+ */
+function parentRefusal(seen: SimpleDb, key: string, v: string | null): string | null {
+  const me = seen.items.find((s) => s.key === key);
+  if (v === null || !me) return null;
+  const live = (k: string) => seen.items.find((x) => x.key === k && !x.trashed);
+  const parent = live(v);
+  // Each feature by its code and name (F-02 Alert routing by team), as changes._parent.
+  const name = (x: { section?: string | null; title: string }) => [prdCode(x.section), x.title].filter(Boolean).join(" ");
+  if (v === key) return `${name(me)} cannot be a part of itself`;
+  if (!parent || parent.roadmap !== me.roadmap || closed(parent)) return `after.parent_key: no open item of this roadmap has the key ${v}`;
+  const up = new Set<string>();
+  for (let k = parent.parent; k && !up.has(k) && live(k); k = live(k)!.parent) up.add(k);
+  if (up.has(key)) return `${name(me)} cannot be part of ${name(parent)}: ${name(parent)} is already one of its parts`;
+  return null;
 }
 
 /** The roadmap slug of a key-date change's target document. */
@@ -380,9 +404,10 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
     else if (f === "feature_id") out[f] = s.feature_id ?? null;
     else if (f === "track_id") out[f] = s.track ? stableUuid(`simple-track/${s.track}`) : null;
     else if (f === "goal_ids") out[f] = goalIdsOf(s);
-    else if (f === "goal_id") out[f] = s.goal && !goalInTrash(db, s.goal) ? stableUuid(`simple-goal/${s.goal}`) : null;
+    else if (f === "goal_id") out[f] = s.goal && !goalInTrash(db, s.goal) ? stableUuid(`simple-goal/${s.goal}`) : s.map_goal && mapGoalRef(db, s.map_goal) ? s.map_goal : null;
     else if (f === "prd_document_id") out[f] = ownPrd(s).id;
     else if (f === "depends_on") out[f] = [...(s.depends ?? [])];
+    else if (f === "parent_key") out[f] = s.parent ?? null;
     else if (f === "status") out[f] = s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned");
     else if (f === "risk") out[f] = (s.risks ?? []).find((r) => r.flag === target.flag && (r.subject ?? null) === (target.subject ?? null)) ?? null;
   }
@@ -413,12 +438,17 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
   if ("feature_id" in values) s.feature_id = (values.feature_id as string | null) ?? null;
   if ("confidence" in values) s.confidence = (values.confidence as typeof s.confidence) ?? undefined;
   if ("track_id" in values) s.track = values.track_id ? like((x) => x.track && stableUuid(`simple-track/${x.track}`), values.track_id)?.track : undefined;
-  if ("goal_id" in values) s.goal = values.goal_id ? (Object.keys(GOALS).find((k) => goalId(k) === values.goal_id) ?? like((x) => x.goal && goalId(x.goal), values.goal_id)?.goal) : undefined;
+  if ("goal_id" in values) {
+    s.goal = values.goal_id ? (Object.keys(GOALS).find((k) => goalId(k) === values.goal_id) ?? like((x) => x.goal && goalId(x.goal), values.goal_id)?.goal) : undefined;
+    // goal-map-editing: a confirmed goal named by its id alone (goal-ladder's).
+    s.map_goal = !s.goal && values.goal_id && String(values.goal_id) in MAP_GOALS ? String(values.goal_id) : undefined;
+  }
   if ("prd_document_id" in values) {
     const x = like((x) => ownPrd(x).id, values.prd_document_id);
     if (x) s.prd_doc = ownPrd(x);
   }
   if ("depends_on" in values) s.depends = [...((values.depends_on as string[]) ?? [])];
+  if ("parent_key" in values) s.parent = (values.parent_key as string | null) ?? undefined;
   if ("status" in values) {
     // changes.py set_status: planned is the tracker's status again (a shipped mark from elsewhere stays).
     if (s.tracked === undefined) s.tracked = !s.status || s.status === "cut" || s.status === "draft" ? "planned" : s.status;
@@ -457,11 +487,32 @@ function newSession(db: SimpleDb, me: string, kind: Session["kind"]): Session {
   return s;
 }
 
+/** A conflict's field and the fields of a change that write it (changes.py WRITES). */
+const WRITES: Record<string, string[]> = { status: ["status", "cut", "shipped"], goal_id: ["goal_id", "goal_ids"] };
+const IS_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** changes._fields: the fields a conflict is about (its items' when keyed by item id); null for any field. */
+function conflictFields(current: Values): string[] | null {
+  const keys = Object.entries(current).flatMap(([k, v]) => (IS_ID.test(k) && v && typeof v === "object" && !Array.isArray(v) ? Object.keys(v) : [k]));
+  if (!keys.length || keys.includes("dependents")) return null;
+  return keys.flatMap((k) => WRITES[k] ?? [k]);
+}
+
+/** changes._writes: whether the change wrote one of these fields of one of these items. */
+function writesFields(c: Change, ids: string[], fields: string[] | null): boolean {
+  if (!(c.op === "set_goal_measure" ? [String(c.target.goal_id)] : touched(c)).some((i) => ids.includes(i))) return false;
+  // A goal's measure: any change of it (targets._last_writer looks by the goal, not its fields).
+  if (!fields || c.op === "set_goal_measure") return true;
+  const wrote = KEYED.includes(c.op) ? ids.flatMap((i) => Object.keys((c.after[i] as Values | undefined) ?? {})) : Object.keys(c.after);
+  return wrote.some((f) => fields.includes(f));
+}
+
 function conflict(db: SimpleDb, ctx: SimpleChangesCtx, current: Values, ids: string[], lead: string): Response {
-  const last = (db.changes ?? [])
-    .filter((c) => ["applied", "accepted", "undone"].includes(c.status) && (c.op === "set_goal_measure" ? [String(c.target.goal_id)] : touched(c)).some((i) => ids.includes(i)))
-    .map((c) => ({ at: c.status === "accepted" && c.decided_at ? c.decided_at : c.at, who: c.status === "accepted" && c.decided_by ? c.decided_by : c.by }))
-    .sort((a, b) => (a.at < b.at ? 1 : -1))[0];
+  const fields = conflictFields(current);
+  const writes = (db.changes ?? [])
+    .filter((c) => ["applied", "accepted", "undone"].includes(c.status) && writesFields(c, ids, fields))
+    .map((c) => ({ at: c.status === "accepted" && c.decided_at ? c.decided_at : c.at, who: c.status === "accepted" && c.decided_by ? c.decided_by : c.by }));
+  const last = madeOrder(writes, (w) => [w.at], true)[0];
   // roadmap-edit-fixes (changes._last_writer): Oracle's draft filled it last: Oracle changed it.
   const oracle = db.items.filter((x) => ids.includes(db.ids[x.key]) && x.drafted_at).map((x) => x.drafted_at!).sort().reverse()[0];
   if (oracle && (!last || oracle >= last.at)) {
@@ -547,9 +598,8 @@ function intoDrafts(db: SimpleDb, c: Change, session: Session, undo = false): st
 /** D-d: the draft's applied changes, not undone: who, when, and whether in a meeting. */
 function changeLog(db: SimpleDb, id: string): Schemas["SimpleDraftChange"][] {
   const cs = db.changes ?? [];
-  return cs
+  return madeOrder(cs, (c) => [c.at])
     .filter((c) => ["applied", "accepted"].includes(c.status) && (c.draft_ids ?? []).includes(id) && !cs.some((u) => u.undoes_id === c.id))
-    .sort((a, b) => (a.at < b.at ? -1 : 1))
     .map((c) => {
       const kind = (db.sessions ?? []).find((x) => x.id === c.session_id)?.kind ?? null;
       // roadmap-decide: every line names its item (a fix: then what else moved).
@@ -570,8 +620,10 @@ function draftOut(db: SimpleDb, ctx: SimpleChangesCtx, d: MockDraft): Schemas["S
   const edits = canEditRoadmap(db, d.roadmap, ctx);
   const decider = db.deciders?.[d.roadmap];
   const approver = approverOf(db, ctx, d);
+  // hotfix 4 (drafts.listing): the number it becomes, after the roadmap's latest version.
+  const latest = Math.max(d.out.base_version ?? 0, ...(db.versions ?? []).filter((v) => v.roadmap === d.roadmap).map((v) => v.number));
   return {
-    ...d.out, changes: draftChanges(db, d.out.id), change_log: changeLog(db, d.out.id), from_prds: draftPrds(d),
+    ...d.out, next_version: d.out.version ?? latest + 1, changes: draftChanges(db, d.out.id), change_log: changeLog(db, d.out.id), from_prds: draftPrds(d),
     // roadmap-decide review (drafts.outs): the author and the roadmap's set decider, by name.
     created_by_name: ctx.names[d.out.created_by] ?? null,
     decider: decider ? { id: decider, name: ctx.names[decider] ?? "its decider" } : null,
@@ -1226,7 +1278,7 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       const f = fields[0];
       const v = a[f] ?? null;
       const known = (x: (typeof seen.items)[number]) => read(seen, x.key, [f], target)[f];
-      if (v !== null && !seen.items.some((x) => known(x) === v) && !(f === "goal_id" && Object.keys(GOALS).some((k) => goalId(k) === v && !goalInTrash(seen, k)))) return json(422, { detail: `after.${f}: ${{ track_id: "a product track", prd_document_id: "a PRD", goal_id: "a goal" }[f]}` });
+      if (v !== null && !seen.items.some((x) => known(x) === v) && !(f === "goal_id" && (Object.keys(GOALS).some((k) => goalId(k) === v && !goalInTrash(seen, k)) || !!mapGoalRef(seen, String(v))))) return json(422, { detail: `after.${f}: ${{ track_id: "a product track", prd_document_id: "a PRD", goal_id: "a goal" }[f]}` });
       after = { [f]: v };
       // roadmap-edit-fixes (changes._track_of_prd): a track is one PRD's, so it follows the PRD.
       const track = f === "prd_document_id" && v ? seen.items.find((x) => ownPrd(x).id === v && x.track)?.track : undefined;
@@ -1256,6 +1308,15 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     } else if (body.op === "set_status") {
       if (!["planned", "done", "cut"].includes(String(a.status))) return json(422, { detail: "after.status: planned, done or cut" });
       after = { status: a.status };
+    } else if (body.op === "set_parent") {
+      const v = a.parent_key == null ? null : String(a.parent_key);
+      const me = seed(seen, key);
+      const refused = parentRefusal(seen, key, v);
+      if (refused) return json(422, { detail: refused });
+      const parent = v === null ? undefined : seen.items.find((x) => x.key === v && !x.trashed);
+      const named = parent ?? (me.parent ? seen.items.find((x) => x.key === me.parent) : undefined);
+      if (named) Object.assign(target, { code: prdCode(named.section) ?? "", title: named.title });
+      after = { parent_key: v };
     }
     else if (body.op === "set_goals") {
       // A goal by its id: the roadmap's, or the goal buckets' of the same name (as add_item reads it).
@@ -1356,10 +1417,9 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   if (!p[3] && m === "POST") return create(db, ctx, (await req.json()) as Schemas["SimpleChangeIn"]);
   if (!p[3] && m === "GET") {
     const status = q.get("status");
-    const rows = (db.changes ?? [])
+    const rows = madeOrder(db.changes ?? [], (c) => [c.at], true)
       .filter((c) => (!q.get("session") || c.session_id === q.get("session")) && (!q.get("document") || c.document_id === q.get("document")) && (!status || c.status === status) && (q.get("mine") !== "true" || c.by === ctx.id))
-      .filter((c) => sees(db, ctx, c) && !onReplacedPrd(db, c))
-      .sort((a, b) => (a.at < b.at ? 1 : -1));
+      .filter((c) => sees(db, ctx, c) && !onReplacedPrd(db, c));
     return json(200, rows.map((c) => view(db, ctx, c)));
   }
   const c = (db.changes ?? []).find((x) => x.id === p[3]);
@@ -1407,6 +1467,9 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     } else {
       const now_ = current(db, c, c.after);
       if (!same(now_, c.after)) return conflict(db, ctx, now_, touched(c), "Changed since");
+      // As changes.undo: the old parent written back is checked as create checks it.
+      const refused = c.op === "set_parent" ? parentRefusal(readerDb(db, ctx), keyOf(db, c.target.item_id)!, (c.before.parent_key as string | null) ?? null) : null;
+      if (refused) return json(422, { detail: refused });
       const drafts = intoDrafts(db, c, s, true);
       if (drafts instanceof Response) return drafts;
       apply(db, c, c.before, true);
@@ -1471,6 +1534,9 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   } else if (p[4] === "accept") {
     const now_ = current(db, c, c.before);
     if (!same(now_, c.before)) return conflict(db, ctx, now_, touched(c), "outdated");
+    // As changes.decide: a proposed parent is checked again, as create checks it.
+    const refused = c.op === "set_parent" ? parentRefusal(readerDb(db, ctx), keyOf(db, c.target.item_id)!, (c.after.parent_key as string | null) ?? null) : null;
+    if (refused) return json(422, { detail: refused });
     // Into the decider's working draft (their editing session's).
     const session = openEditing(db, ctx.id) ?? newSession(db, ctx.id, "editing");
     const drafts = intoDrafts(db, c, session);
@@ -1558,7 +1624,8 @@ export function simpleInboxRows(
   seen: string | null,
   who: Pick<SimpleChangesCtx, "owners" | "roles"> & { role?: Role; names?: Record<string, string> } = { owners: [] },
 ): { simple_proposals: Schemas["InboxSimpleChange"][]; simple_decisions: Schemas["InboxSimpleChange"][]; simple_approvals: Schemas["InboxSimpleApproval"][] } {
-  const changes = db?.changes ?? [];
+  // As changes.inbox_rows: newest decision first, then newest made, a tie by the order made.
+  const changes = madeOrder(db?.changes ?? [], (c) => [c.decided_at, c.at], true);
   const row = (c: Change, at: string | null, state?: Schemas["InboxSimpleChange"]["state"]): Schemas["InboxSimpleChange"] => {
     const key = db ? keyOf(db, c.target.item_id) : undefined;
     const title = key ? seed(db!, key).title : null;
@@ -1678,7 +1745,8 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
   const key = keyOf(db, target.item_id);
   if (!key) return json(404, { detail: "No such roadmap item" });
   const s = seed(db, key);
-  if (!s.draft || closed(s)) return json(422, { detail: "target.item_id: an open draft item" });
+  // panel-menu: any open item merges into another (changes._merge_plan); keep both and a feature link stay a draft's.
+  if (closed(s) || (!s.draft && !(body.op === "merge_item" && target.into_id))) return json(422, { detail: body.op === "merge_item" && !target.into_id ? "Only a draft item is linked to a feature" : "target.item_id: an open draft item" });
   const applies = canDecideItem(db, s, ctx);
   if (body.op === "keep_both") {
     if (!!s.kept_both !== !!body.before?.kept_both) return conflict(db, ctx, { kept_both: !!s.kept_both }, [String(target.item_id)], "Changed since you saw it");
@@ -1691,7 +1759,8 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
     // roadmap-edit-fixes (changes._merge_plan): the kept item never takes a dependency that waits on it.
     const loop = loopOf(db.items, kept.key, (s.depends ?? []).filter((d) => d !== kept.key), [s.key]);
     if (loop) return json(422, { detail: loop });
-    return { target, before: { status: "draft" }, after: { status: "merged", merged_into: { id: target.into_id, code: kept.key, title: kept.title } }, roadmap: s.roadmap, applies };
+    Object.assign(target, { code: prdCode(kept.section) ?? kept.key, title: kept.title });
+    return { target, before: { status: s.draft ? "draft" : (s.status ?? "planned") }, after: { status: "merged", merged_into: { id: target.into_id, code: prdCode(kept.section) ?? kept.key, title: kept.title } }, roadmap: s.roadmap, applies };
   }
   if (typeof target.feature_id === "string" && target.feature_id) {
     // As the API: the draft becomes the feature's item (linked, kept beside look-alikes), still a draft.
@@ -1737,7 +1806,7 @@ function validS7(db: SimpleDb, c: Change): boolean {
   if (c.op === "add_item") return !keyOf(db, c.target.item_id) && !!slugOf(c.target.roadmap_id);
   const key = keyOf(db, c.target.item_id);
   const s = key ? seed(db, key) : undefined;
-  if (!s || !s.draft || closed(s)) return false;
+  if (!s || closed(s) || (!s.draft && !(c.op === "merge_item" && c.target.into_id))) return false;
   if (c.op === "keep_both") return !s.kept_both;
   if (!c.target.into_id) return true;
   const into = keyOf(db, c.target.into_id);
@@ -1802,7 +1871,10 @@ function applyS7(db: SimpleDb, c: Change, undo = false): void {
   }
   const intoKey = c.target.into_id ? keyOf(db, c.target.into_id) : undefined;
   const dependents = db.items.filter((x) => x.depends?.includes(s.key));
-  snaps[c.id] = structuredClone([s, ...(intoKey ? [seed(db, intoKey)] : []), ...dependents.filter((x) => x.key !== intoKey)]);
+  // feature-parts: its parts move to the kept item; the kept item, when one of its parts at any
+  // depth, takes its place under its parent (changes._merge_plan: no part under a closed item, no loop).
+  const parts = db.items.filter((x) => x.parent === s.key && !dependents.includes(x));
+  snaps[c.id] = structuredClone([s, ...(intoKey ? [seed(db, intoKey)] : []), ...[...dependents, ...parts].filter((x) => x.key !== intoKey)]);
   if (!intoKey) {
     s.linked_feature = String(c.target.feature_id);
     s.kept_both = true;
@@ -1815,5 +1887,10 @@ function applyS7(db: SimpleDb, c: Change, undo = false): void {
   if (deps.length) kept.depends = [...(kept.depends ?? []), ...deps];
   for (const d of dependents) d.depends = [...new Set(d.depends!.map((k) => (k === s.key ? kept.key : k)))].filter((k) => k !== d.key);
   kept.notes = [...(kept.notes ?? []), `Merged ${s.title} (${s.key}) into it.`];
+  const under = new Set<string>();
+  for (let k = kept.parent; k && !under.has(k); k = db.items.find((y) => y.key === k && !y.trashed)?.parent) under.add(k);
+  if (under.has(s.key)) kept.parent = s.parent;
+  for (const x of db.items) if (x.parent === s.key && x !== kept && !x.trashed) x.parent = kept.key;
+  s.parent = undefined;
   s.merged_into = kept.key;
 }

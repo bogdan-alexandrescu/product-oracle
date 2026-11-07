@@ -4,14 +4,16 @@
   size: A4;
   margin: 22mm 20mm 22mm 20mm;
   @bottom-left {
-    content: string(doc-title) " \00B7  " string(doc-version) " \00B7  " string(doc-status);
+    content: string(doc-title) string(doc-version) string(doc-status);
     font: 8pt "DejaVu Sans", sans-serif;
     color: #6b7280;
+    white-space: nowrap;
   }
   @bottom-right {
     content: "Page " counter(page) " of " counter(pages);
     font: 8pt "DejaVu Sans", sans-serif;
     color: #6b7280;
+    white-space: nowrap;
   }
 }
 
@@ -47,13 +49,20 @@ body {
 }
 .version-banner > span { display: inline-block; margin-right: 1rem; }
 /* Repeated in every PDF page footer. */
-.version-banner .banner-doc { font-weight: bold; color: var(--ink); string-set: doc-title content(text); }
-.version-banner .banner-version { color: var(--ink); string-set: doc-version content(text); }
+.version-banner .banner-doc { font-weight: bold; color: var(--ink); }
+/* The footer's title, capped (X-10): set from a carrier that takes no room. */
+.version-banner .banner-footer-title {
+  width: 0; height: 0; margin: 0; overflow: hidden; visibility: hidden;
+  string-set: doc-title content(text);
+}
+@media screen { .version-banner .banner-footer-title { display: none; } }
+.version-banner .banner-version { color: var(--ink); string-set: doc-version " \00B7  " content(text); }
 .version-banner .banner-status {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   font-weight: bold;
-  string-set: doc-status content(text);
+  /* The footer's separator rides on the part after it: none when the part is absent. */
+  string-set: doc-status " \00B7  " content(text);
 }
 .status-approved { border-left-color: #1f8a4c; }
 .status-approved .banner-status { color: #1f8a4c; }
@@ -86,8 +95,15 @@ pre code { background: none; padding: 0; }
 
 blockquote { margin-left: 0; padding-left: 0.8rem; border-left: 3px solid var(--rule); color: #4b5563; }
 
-table { border-collapse: collapse; width: 100%; font-size: 10pt; break-inside: auto; }
-th, td { border: 1px solid var(--rule); padding: 0.3rem 0.5rem; text-align: left; vertical-align: top; }
+table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 10pt; break-inside: auto; }
+th, td {
+  border: 1px solid var(--rule); padding: 0.3rem 0.5rem; text-align: left; vertical-align: top;
+  overflow-wrap: anywhere;
+}
+/* A table of many columns: a smaller font, so each column keeps room for its words. */
+table.table-wide { font-size: 8pt; }
+table.table-wide th, table.table-wide td { padding: 0.2rem 0.3rem; }
+thead { display: table-header-group; }
 th { background: #f3f4f6; }
 tr { break-inside: avoid; }
 
@@ -133,6 +149,8 @@ sup.cite a { padding: 0 0.05em; }
 .version-banner .banner-layer { font-weight: 600; }
 .version-banner .banner-source a { color: inherit; }
 .detail-ref { color: inherit; }
+/* A flagged date's mark, small and plain, as the app shows it. */
+.date-mark { font: 7.5pt "DejaVu Sans", sans-serif; color: var(--muted); margin-left: 0.2em; }
 
 /* E1: a spec part's state (an element no body markdown can produce). */
 .spec-state {

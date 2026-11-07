@@ -1,4 +1,4 @@
-import { MOCK_SCENARIO_KEY, TRACKS_CLOSED_SCENARIO } from "../lib/api/mock/server";
+import { MOCK_SCENARIO_KEY, MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY, TRACKS_CLOSED_SCENARIO } from "../lib/api/mock/server";
 import { THEME_KEY } from "../lib/theme";
 import { login } from "./helpers";
 import { expect, test, type Page } from "./test";
@@ -69,12 +69,14 @@ test.describe("Tracks sheet", () => {
     await expect(row(page, "Partner setup track")).toContainText("No owner · 0 features");
     await expect(page.getByTestId("tracks-open")).toHaveText("Tracks · 4");
 
-    // It shows its 4 live features; Move to Trash moves its cut one (In-app tour) too, and says so.
-    await expect(row(page, "Setup and onboarding")).toContainText("4 features");
+    // It shows its 16 live features (its own 4 and the 12 Goal map features the mock seeds on
+    // its roadmap, one-feature-panel); Move to Trash moves its cut one (In-app tour) too, and
+    // says so.
+    await expect(row(page, "Setup and onboarding")).toContainText("16 features");
     await row(page, "Setup and onboarding").getByRole("button", { name: "Move to Trash" }).click();
-    await expect(row(page, "Setup and onboarding").getByTestId("track-trash-confirm")).toHaveText(/Its 4 features and 1 cut or merged move to No track\./);
+    await expect(row(page, "Setup and onboarding").getByTestId("track-trash-confirm")).toHaveText(/Its 16 features and 1 cut or merged move to No track\./);
     await row(page, "Setup and onboarding").getByTestId("track-trash-confirm").getByRole("button", { name: "Move to Trash" }).click();
-    await expect(toasts(page)).toContainText("Moved Setup and onboarding to Trash · 5 features now have no track");
+    await expect(toasts(page)).toContainText("Moved Setup and onboarding to Trash · 17 features now have no track");
     await expect(row(page, "Setup and onboarding")).toHaveCount(0);
     await expect(page.getByTestId("tracks-open")).toHaveText("Tracks · 3");
 
@@ -91,7 +93,8 @@ test.describe("Tracks sheet", () => {
     await expect(page.getByText("Alert rules engine")).toHaveCount(0);
     await page.getByTestId("tracks-open").click();
     await expect(row(page, "Usage alerts track")).toContainText("No owner · 5 features");
-    await expect(row(page, "Guided setup track")).toContainText("4 features");
+    // Its 4 and the Goal map's 12, though the filter shows only the track's own.
+    await expect(row(page, "Guided setup track")).toContainText("16 features");
     await expect(row(page, "Welcome media track")).toContainText("0 features");
   });
 
@@ -137,9 +140,9 @@ test.describe("Tracks sheet", () => {
       await row(page, title).getByRole("button", { name: "Move to Trash" }).click();
       return row(page, title).getByTestId("track-trash-confirm");
     };
-    // 3 live and 1 cut.
-    await expect(row(page, "Guided setup track")).toContainText("3 features");
-    await expect(await ask("Guided setup track")).toHaveText(/^Its 3 features and 1 cut or merged move to No track\./);
+    // 15 live (3 and the Goal map's 12) and 1 cut.
+    await expect(row(page, "Guided setup track")).toContainText("15 features");
+    await expect(await ask("Guided setup track")).toHaveText(/^Its 15 features and 1 cut or merged move to No track\./);
     // No live feature, 1 cut.
     await expect(row(page, "Welcome media track")).toContainText("0 features");
     await expect(await ask("Welcome media track")).toHaveText(/^Its 1 cut or merged feature moves to No track\./);
@@ -192,6 +195,30 @@ test.describe("Tracks sheet", () => {
     // Read again after Withdraw, the track is as it was.
     await expect(r).toContainText("No owner · 5 features");
     await expect(r).not.toContainText("· Paused");
+  });
+
+  // at-followups: until the tracks are read the button names no count, never "Tracks · 0".
+  test("the button names no count until the tracks are read", async ({ page }) => {
+    await page.addInitScript(() => {
+      const w = window as unknown as { __labels: string[] };
+      w.__labels = [];
+      const look = () => {
+        const said = document.querySelector('[data-testid="tracks-open"]')?.textContent ?? null;
+        if (said !== null && w.__labels.at(-1) !== said) w.__labels.push(said);
+        requestAnimationFrame(look);
+      };
+      requestAnimationFrame(look);
+    });
+    await login(page);
+    await page.evaluate(
+      ([k, v, msKey]) => (localStorage.setItem(k, v), localStorage.setItem(msKey, "2500")),
+      [MOCK_SLOW_KEY, "/v1/simple/tracks", MOCK_SLOW_MS_KEY] as const,
+    );
+    await page.goto("/simple/roadmap");
+    await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+    await expect(page.getByTestId("tracks-open")).toHaveText("Tracks");
+    await expect(page.getByTestId("tracks-open")).toHaveText("Tracks · 3");
+    expect(await page.evaluate(() => (window as unknown as { __labels: string[] }).__labels)).toEqual(["Tracks", "Tracks · 3"]);
   });
 
   test("a viewer reads", async ({ page }) => {

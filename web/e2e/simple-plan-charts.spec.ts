@@ -285,15 +285,15 @@ for (const v of VIEWS) {
       const xs = await Promise.all([0, 1, 2, 3].map((k) => centreX(ticks.nth(k))));
       expect(xs[1] - xs[0]).toBeCloseTo(xs[2] - xs[1], 0);
       expect(xs[2] - xs[1]).toBeCloseTo(xs[3] - xs[2], 0);
-      // A 2-week mark is the median effort: QA pass 3 (qa-simple-plan-13) draws it at its real effort, on the 2 wk tick.
+      // A 2-week mark: QA pass 3 (qa-simple-plan-13) draws it at its real effort, on the 2 wk tick.
       expect(Math.abs((await centreX(mark(page, "alert-sso"))) - xs[2])).toBeLessThan(4);
 
-      // The quadrants at the medians, each with its name and count.
-      await expect(page.getByTestId("vxe-quadrant")).toHaveText(["Quick wins · 2", "Big bets · 3", "Fill-ins · 3", "Later · 2"]);
+      // The quadrants at the medians, each with its name and count (P-1: 22 with the Goal map's 12 features, ranked as on Priorities).
+      await expect(page.getByTestId("vxe-quadrant")).toHaveText(["Quick wins · 5", "Big bets · 6", "Fill-ins · 6", "Later · 5"]);
       const plot = (await page.getByTestId("vxe-plot").boundingBox())!;
       const split = (await page.getByTestId("vxe-median-effort").boundingBox())!;
-      // The effort median is 2 weeks: the line runs through the 2 wk tick, not the plot's middle.
-      expect(Math.abs(split.x + split.width / 2 - xs[2])).toBeLessThan(4);
+      // The effort median is 1 week (P-1: with the Goal map's 12 features; 2 weeks without): the line runs through the 1 wk tick, not the plot's middle.
+      expect(Math.abs(split.x + split.width / 2 - xs[1])).toBeLessThan(4);
       expect(Math.abs(split.x + split.width / 2 - (plot.x + plot.width / 2))).toBeGreaterThan(10);
 
       // Twins fan out: alert-export and setup-video share value 0, effort 1.
@@ -304,7 +304,9 @@ for (const v of VIEWS) {
       await expect(mark(page, "alert-export").getByTestId("vxe-code")).toHaveText("AHE");
       // The median lines say what they are ("middle effort", "middle value"), never under a mark.
       const marks = await page.getByTestId("vxe-point").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON() as DOMRect));
-      for (const id of ["vxe-middle-effort", "vxe-middle-value"]) {
+      // P-1: on a phone the 22 marks (with the Goal map's 12) leave "middle value" no free spot, so it is left out (qa4-simple-plan-9).
+      if (v.phone) await expect(page.getByTestId("vxe-middle-value")).toHaveCount(0);
+      for (const id of v.phone ? ["vxe-middle-effort"] : ["vxe-middle-effort", "vxe-middle-value"]) {
         const l = (await page.getByTestId(id).boundingBox())!;
         const under = marks.filter((m) => m.x < l.x + l.width && l.x < m.x + m.width && m.y < l.y + l.height && l.y < m.y + m.height);
         expect(under, id).toEqual([]);
@@ -314,8 +316,10 @@ for (const v of VIEWS) {
       await expect(mark(page, "alert-rules")).toHaveAttribute("data-shape", "square");
       const legend = page.getByLabel("Legend");
       await expect(legend.getByTestId("vxe-legend-no-goal")).toHaveText("No goal");
-      await expect(legend).toContainText("Each mark shows the feature's code; its rank is in the list. Hollow: below the line (not this quarter).");
-      await expect(page.getByText("Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys)")).toBeVisible();
+      // Demo 9: how to read the chart is behind the (i) by the heading; the legend keeps "Below the line".
+      await expect(legend.getByTestId("vxe-legend-hollow")).toHaveText("Below the line");
+      await expect(page.locator("#prio-about-text")).toContainText("Each mark shows the feature's code; point at it for its name, its rank is in the list. Hollow: below the line (not this quarter).");
+      await expect(page.locator("#prio-about-text")).toContainText("Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys)");
 
       // B's Ranked rows: one line each (rank, code, the name cut with "…", the score), a row
       // that misses the line carrying a small "Misses" chip (the line in its title).

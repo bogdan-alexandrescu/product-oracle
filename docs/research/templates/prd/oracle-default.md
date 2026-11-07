@@ -96,13 +96,13 @@ brief: [summary, goal-trace, problem, brief-items, brief-roadmap, non-goals, top
 <!-- Filled after launch: did the success measures move, did the feature serve its goal, what we learned. Feeds the replay test. Leave empty until then. -->
 
 ## Sources and data points {#sources}
-<!-- The only place for sources, numbers and evidence. The body above states conclusions only. List each source with its citation id from the front matter as plain text; no inline citation markers anywhere. -->
+<!-- The only place for sources, numbers and evidence. The body above states conclusions only. List each source by its title in plain words, never by a citation key, file path, file name or tag; no inline citation markers anywhere. Write every code with its name, here and in every table. -->
 
 ### Sources {#sources-list}
-<!-- One line per source: citation id, kind (slack, notion, gdocs, github, fireflies, upload, web, oracle), title, date retrieved. -->
+<!-- One line per source: its title in plain words, its kind (Slack, Notion, Google Docs, GitHub, Fireflies, upload, web, Oracle) and the date retrieved, e.g. "Alerting design notes (GitHub, Oct 2)". -->
 
 ### Data points {#sources-data}
-<!-- Each number used in the document: the value, what it measures, period, and the source id it came from. -->
+<!-- Each number used in the document: the value, what it measures, period, and the title of the source it came from. -->
 
 ### Evidence by section {#sources-evidence}
-<!-- One bullet per body section, keyed by section id (e.g. "problem: c2, c5"), saying which sources and data points support it. Sections with no support say so. -->
+<!-- One bullet per body section, by its heading (e.g. "Problem: Calendar survey, Support tickets review"), naming by title the sources and data points that support it. Sections with no support say so. -->

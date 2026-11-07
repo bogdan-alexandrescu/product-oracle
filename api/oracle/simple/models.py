@@ -12,6 +12,7 @@ from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Date,
@@ -19,6 +20,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Sequence,
     Text,
     UniqueConstraint,
     Uuid,
@@ -34,6 +36,8 @@ from oracle.docs.models import _in
 SUGGESTION_STATUSES = ("open", "accepted", "edited", "dismissed")
 SESSION_KINDS = ("editing", "meeting")
 CHANGE_STATUSES = ("applied", "proposed", "accepted", "declined", "undone")
+# simple_changes.seq's numbers (0121_simple_changes_seq makes it).
+SEQ = Sequence("simple_changes_seq_seq")
 
 
 class RoadmapDateSuggestion(TenantScoped, Base):
@@ -170,6 +174,12 @@ class SimpleChange(TenantScoped, Base):
     # roadmap it touched); empty for a proposal and for non-versioned targets.
     draft_ids: Mapped[list[uuid.UUID]] = mapped_column(
         ARRAY(Uuid), nullable=False, server_default="{}"
+    )
+    # The order changes were made in: ``at`` ties when two land in the same instant, and
+    # the id is random, so lists break the tie on this.
+    # Numbered from a sequence (0121 numbered the rows stored before it by (at, id)).
+    seq: Mapped[int] = mapped_column(
+        BigInteger, SEQ, server_default=SEQ.next_value(), nullable=False
     )
 
 

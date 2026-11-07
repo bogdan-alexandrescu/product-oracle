@@ -114,6 +114,8 @@ const CODES = {
   "setup-health-log": "F-03",
   "price-tiers": "NPT",
   "setup-video": "WV",
+  // P-1: the Goal map's features, roadmap items from the first load (their PRD section's code).
+  ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`gm-f${i + 1}`, `F-${101 + i}`])),
 };
 
 test.describe("desktop", () => {
@@ -132,8 +134,8 @@ test.describe("desktop", () => {
   }) => {
     const admin = await open(page, "admin@example.com");
     expect(await markCodes(admin)).toEqual(CODES);
-    await expect(admin.getByLabel("Legend")).toContainText(
-      "Each mark shows the feature's code; its rank is in the list.",
+    await expect(admin.locator("#prio-about-text")).toContainText(
+      "Each mark shows the feature's code; point at it for its name, its rank is in the list.",
     );
     await expect(admin.getByLabel("Legend")).not.toContainText(
       "Numbers are ranks",
@@ -144,10 +146,12 @@ test.describe("desktop", () => {
     await expect(
       side(admin, "setup-import").getByTestId("side-code"),
     ).toHaveText("F-12");
-    await expect(point(admin, "setup-import")).toHaveAttribute(
-      "title",
-      /^#5 F-12 · /,
-    );
+    // P-3: the mark's code with its name shows on hover.
+    await point(admin, "setup-import").hover();
+    await expect(
+      point(admin, "setup-import").getByTestId("vxe-name"),
+    ).toHaveText(/^#5 F-12 · Sample data import$/);
+    await admin.mouse.move(0, 0);
 
     await dragLeft(admin, "setup-import", 2);
     await expect(
@@ -171,10 +175,9 @@ test.describe("desktop", () => {
       "data-moved",
       "true",
     );
-    await expect(point(admin, "setup-import")).toHaveAttribute(
-      "title",
-      /^#2 F-12 · /,
-    );
+    await expect(
+      point(admin, "setup-import").getByTestId("vxe-name"),
+    ).toHaveText(/^#2 F-12 · /, { useInnerText: false });
     await expect(admin.locator('[data-moved="true"]')).toHaveCount(2);
   });
 
@@ -269,8 +272,8 @@ test.describe("desktop", () => {
     await expect(side(viewer, "alert-sso").getByTestId("side-rank")).toHaveText(
       "7",
     );
-    await expect(viewer.getByLabel("Legend")).toContainText(
-      "Each mark shows the feature's code; its rank is in the list.",
+    await expect(viewer.locator("#prio-about-text")).toContainText(
+      "Each mark shows the feature's code; point at it for its name, its rank is in the list.",
     );
   });
 

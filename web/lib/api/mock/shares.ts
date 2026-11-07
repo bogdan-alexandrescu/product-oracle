@@ -53,15 +53,15 @@ export const SHARING_SECTIONS: SectionSeed[] = [
   { key: "item-falcon", level: 3, heading: "Falcon alerts rework", body: "Owner: Avery Stone. Serves G1. ENG-512 tracks it. Beta by 2026-11-30." },
   { key: "item-import", level: 3, heading: "Northwind bulk import", body: "Owner: Priya Raman. Serves G2. Asked for by Northwind." },
   { key: "next", level: 2, heading: "Next", body: "Shaped, not started." },
-  { key: "item-ledger", level: 3, heading: "Billing ledger v2", body: "Owner: Avery Stone. Serves G1. Depends on Falcon alerts rework." },
+  { key: "item-ledger", level: 3, heading: "Billing ledger v2", body: "Owner: Avery Stone. Serves G1. ENG-541 tracks it. Depends on Falcon alerts rework." },
   { key: "item-partner", level: 3, heading: "Partner API beta", body: "Owner: Priya Raman. Serves G2." },
   { key: "later", level: 2, heading: "Later", body: "Ideas we keep." },
-  { key: "item-ops", level: 3, heading: "Ops console cleanup", body: "Owner: Avery Stone. Kept for the support team." },
+  { key: "item-ops", level: 3, heading: "Ops console cleanup", body: "Owner: Avery Stone. Kept for the support team.\n\n- ENG-541: tracks it too.\n\nENG-541 tracks it as well." },
   {
     key: "dependencies",
     level: 2,
     heading: "Dependencies and owners",
-    body: "| Item | Owner | Depends on |\n|---|---|---|\n| Billing ledger v2 | Avery Stone | Falcon alerts rework |\n| Partner API beta | Priya Raman | ENG-530 |",
+    body: "| Item | Owner | Depends on |\n|---|---|---|\n| Billing ledger v2 | Avery Stone | Falcon alerts rework |\n| Partner API beta | Priya Raman | ENG-530 |\n| Ops console cleanup | Avery Stone | ENG-541 |",
   },
   { key: "sources", level: 2, heading: "Sources and data points", body: "- Platform PRDs, October" },
 ];
@@ -765,7 +765,73 @@ const joinRow = (cells: string[]) => `| ${cells.join(" | ")} |`;
  * column (it repeats the heading). The first column always stays. A goal group's rows are Board's items of that group
  * (`boardGroup`, by key), each card with its dates and delivery state (E-14).
  */
-export function readerBody(md: string, sectionKey: string, items: BoardItem[] = []): string {
+/** G-3: a goal code ("G1") or a tracker key ("ENG-512") as the roadmap's words write it (as the API's render._CODE). */
+const CODE = /(?<![\w(-])(G-?\d+|[A-Z][A-Z0-9]{1,9}-\d+)(?![\w)-])/g;
+const GOAL_LINE = /^\s*[-*]\s*(G-?\d+)\b[\s.:]+(\S.*?)\s*$/gm;
+
+/**
+ * G-3 (as the API's render.code_names): the name of each goal code and tracker key `texts` write: the roadmap's own
+ * Goals list's words up to the measure ("- G1 Activation: 40% to 55% by Q4"), a confirmed goal entity's title by its
+ * key (any case, with or without the dash) and a tracker issue's title from the very record one of the version's own
+ * `items` carries, when the audience's `itemFields` show the items' tracker keys (the keys the page already shows
+ * through an item). A link holder reads no more than the page shows.
+ */
+export function codeNames(
+  texts: string[],
+  goals: { key: string; title: string | null; status?: string }[],
+  records: { external_ref: string; title?: string | null; item_key?: string | null; track_id?: string | null }[],
+  items: { item_key: string; track_id?: string | null }[] = [],
+  itemFields: readonly string[] = [],
+): Record<string, string> {
+  const codes = new Set(texts.flatMap((t) => [...(t ?? "").matchAll(CODE)].map((m) => m[1])));
+  if (!codes.size) return {};
+  const out: Record<string, string> = {};
+  for (const t of texts) for (const m of (t ?? "").matchAll(GOAL_LINE)) out[m[1]] = m[2].split(/:|\s[–—-]\s/)[0].trim();
+  const carried = (r: (typeof records)[number]) => !!r.item_key && items.some((i) => i.item_key === r.item_key && (i.track_id ?? null) === (r.track_id ?? null));
+  if (itemFields.includes("tracker")) for (const r of records) if (codes.has(r.external_ref) && r.title && carried(r)) out[r.external_ref] = r.title;
+  const goalCodes = new Map([...codes].filter((c) => /^G-?\d+$/.test(c)).map((c) => [c.replace("-", "").toLowerCase(), c]));
+  for (const g of goals) {
+    const code = goalCodes.get((g.key ?? "").replace(/-/g, "").toLowerCase());
+    if (code && g.title && g.status === "confirmed") out[code] = g.title;
+  }
+  return out;
+}
+
+// The one set of whitespace a name folds, as the API's render._SPACE_SET: every Unicode whitespace, U+FEFF, zero-width space.
+const SPACE = "\\t\\n\\v\\f\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff\\u200b";
+const SPACE_RUN = new RegExp(`[${SPACE}]+`, "g");
+const SPACE_LEAD = new RegExp(`^[${SPACE}]+`);
+
+/** A name on one line, as plain text wherever it is spliced into markdown: a "#" or "&" anywhere and a block marker at its start are escaped. */
+function shownName(name: string): string {
+  return name
+    .replace(SPACE_RUN, " ")
+    .replace(/^ | $/g, "")
+    .replace(/[\\|*_[\]`<>~#&]/g, "\\$&")
+    .replace(/^(?:([+=-])|(\d+)([.)]))/, (_, mark: string | undefined, num: string, end: string) => (mark ? `\\${mark}` : `${num}\\${end}`));
+}
+
+/**
+ * G-3 (as the API's render.with_names): each code `names` knows read by its name with the code beside it ("Activation
+ * (G1)"); one already beside its name or inside its own name ("Issue ENG-413") stays, so a second pass changes nothing.
+ * A name reads on one line (each whitespace run in it is one space) and as plain text.
+ */
+export function withNames(text: string, names: Record<string, string>): string {
+  if (!Object.keys(names).length) return text;
+  return text.replace(CODE, (whole, code: string, at: number) => {
+    const name = (names[code] ?? "").replace(SPACE_RUN, " ").replace(/^ | $/g, "");
+    const afterText = text.slice(at + whole.length);
+    if (!name || name === code || afterText.replace(SPACE_LEAD, "").startsWith(name)) return whole;
+    const shown = shownName(name);
+    if (!name.includes(code)) return `${shown} (${code})`;
+    for (let cut = shown.indexOf(code); cut >= 0; cut = shown.indexOf(code, cut + 1)) {
+      if (text.slice(0, at).endsWith(shown.slice(0, cut)) && afterText.startsWith(shown.slice(cut + code.length))) return whole;
+    }
+    return shown;
+  });
+}
+
+export function readerBody(md: string, sectionKey: string, items: BoardItem[] = [], names: Record<string, string> = {}): string {
   const group = GROUP_KEY.test(sectionKey);
   const lines = (md ?? "").split("\n").filter((l) => !LEFT_OUT.test(l.trim()) && l.trim() !== NO_GOAL_FLAG);
   const out: string[] = [];
@@ -789,7 +855,7 @@ export function readerBody(md: string, sectionKey: string, items: BoardItem[] = 
     out.push(joinRow(keep.map((n) => head[n])), "|" + "---|".repeat(keep.length), ...rows.map((r) => joinRow(keep.map((n) => r[n]))));
     i = end;
   }
-  return out.join("\n").replace(/\n{3,}/g, "\n\n").replace(/^\n+|\n+$/g, "");
+  return withNames(out.join("\n").replace(/\n{3,}/g, "\n\n").replace(/^\n+|\n+$/g, ""), names);
 }
 
 /** E-14: an item's delivery state as its card says it (as the API's render.STATE_WORDS). */
@@ -834,9 +900,9 @@ function itemDates(start: string | null, end: string | null): string | null {
 }
 
 /** An audience rendering's sections as a link holder reads them (`readerBody`). */
-export function readerSections<S extends { section_key: string; body_md: string; body_text: string }>(sections: S[], items: BoardItem[] = []): S[] {
+export function readerSections<S extends { section_key: string; body_md: string; body_text: string }>(sections: S[], items: BoardItem[] = [], names: Record<string, string> = {}): S[] {
   return sections.map((s) => {
-    const body = readerBody(s.body_md, s.section_key, items);
+    const body = readerBody(s.body_md, s.section_key, items, names);
     return body === s.body_md ? s : { ...s, body_md: body, body_text: body };
   });
 }

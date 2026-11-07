@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useState } from "react";
 
+import { InfoTip } from "@/components/ds/InfoTip";
 import { toast } from "@/components/ds/Toast";
 import { PrdMoveMenu } from "@/components/simple/PrdMoveMenu";
 import { NewPrdButton, NewPrdSheet, StartedRows, useCanStartPrd, useStartedPrds } from "@/components/simple/NewPrd";
@@ -15,6 +16,8 @@ import { useCompanyZone, dayIn } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { sortPrds } from "@/lib/prd-order";
 import { useQuery } from "@/lib/use-query";
+
+import "@/components/simple/SimplePrd.css";
 
 /** One-pagers (#723 S1): the PRDs I may read (the API lists only those), each opening its one-pager. */
 export default function OnePagers() {
@@ -29,6 +32,10 @@ export default function OnePagers() {
   const rows = q.data ? sortPrds(q.data) : null;
   const { can } = useMe();
   const canMove = can("move_document");
+  // V-8, R-8: the words behind the (i) name only what this reader can do here (no review offered to who cannot start one).
+  const canWord = can("create_simple_change");
+  const canReview = can("start_simple_meeting");
+  const lead = `Open a PRD to read it on one page${canWord && canReview ? ", change its wording or start a review" : canWord ? " or change its wording" : canReview ? " or start a review" : ""}.`;
   const [moving, setMoving] = useState(false);
   const [moveError, setMoveError] = useState<string | null>(null);
   // A move says what it did, with an Undo that puts every PRD's stored place back as it was.
@@ -59,14 +66,15 @@ export default function OnePagers() {
     [q],
   );
   return (
-    // qa4-simple-prd-25: a help line, saying what a person can do here.
-    <SimplePage title="One-pagers" lead="Open a PRD to read it on one page, change its wording or start a review.">
+    <SimplePage title="One-pagers">
       <SimpleSection
         title="PRDs"
         testId="simple-one-pagers"
         action={
           // NP1: New PRD beside "Company order", opening the guided sheet.
           <span className="flex flex-wrap items-center gap-3">
+            {/* qa4-simple-prd-25: what a person can do here, behind an (i), not on the page. */}
+            <InfoTip label="One-pagers" align="start" side="bottom">{lead}</InfoTip>
             {/* prd-order: the list says its order, the one company PRD order. */}
             {rows && rows.length + mine.length > 1 ? (
               <span className="simple-small" data-testid="one-pagers-order">
@@ -91,7 +99,7 @@ export default function OnePagers() {
           // qa-simple-prd-42: the status sits beside its title, rows are ruled, each says when it changed.
           // qa-simple-prd-p3-29: the whole row opens the one-pager, as its hover says: the title's
           // link stretches over the row (one link still, its name the title).
-          <ul className="flex flex-col">
+          <ul className="simple-calm-list flex flex-col">
             {moveError && (
               <li role="alert" className="simple-small py-2 text-warn">
                 {moveError}
