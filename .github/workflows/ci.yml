@@ -15,9 +15,11 @@ concurrency:
 # Self-hosted runners (BGD, Nov 6, 2026: "Share SwarmCloud's pool"): with the repository variable
 # SELF_HOSTED_CI set to 'on', every job runs on the shared runner dispatcher's VMs (one
 # e2-standard-8 per job, label ORACLE_CI_RUNNER_LABEL, default bogdan-ci, SwarmCloud's pool);
-# unset or anything else, on GitHub's hosted runners. Turn it off to fall back at once. A fork's
-# pull request always runs on GitHub's hosted runners: the repository is public, and the pool's VMs
-# have passwordless sudo and the pool's network (review of PR 1382).
+# unset or anything else, on GitHub's hosted runners. Turn it off to fall back at once. The fork
+# check below keeps this file's own fork runs hosted, but it is not a control: a fork's pull request
+# runs its own copy of this workflow and can ask for any label. The control is the repository's
+# Actions setting "require approval for all outside contributors": read any workflow change in an
+# outside pull request before approving its run (the pool's VMs have passwordless sudo).
 jobs:
   api:
     runs-on: ${{ vars.SELF_HOSTED_CI == 'on' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON(format('["self-hosted","linux","x64","{0}"]', vars.ORACLE_CI_RUNNER_LABEL || 'bogdan-ci')) || 'ubuntu-latest' }}
