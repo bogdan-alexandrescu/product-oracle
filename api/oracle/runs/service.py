@@ -125,7 +125,7 @@ import uuid
 import weakref
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
@@ -429,6 +429,8 @@ def _set_art(segment: RunSegment, data: dict[str, Any]) -> None:
 # #541 part 5: whether a ``company_draft`` run reads as a member (its target was
 # company-wide when it started). Set by start, never by a caller (not an ORACLE_KNOB).
 MEMBER_VIEW = "member_view"
+# one-roadmap-many-prds: the shared queue a prd_to_roadmap run froze (_frozen_queue).
+COMPANY_QUEUE = "company_queue"
 
 
 async def target_visibility(db: AsyncSession, run: Run) -> str:
@@ -3046,6 +3048,11 @@ async def _prompt_context(
         prior_files=prior_files,
         kind=kind,
         source=source,
+        loop_plan=await _loop_plan_inputs(db, run)
+        if kind == "roadmap"
+        and run.flow != "prd_to_roadmap"
+        and _flow(run).segment(segment.name).imports_draft
+        else None,
         draft=draft_ctx,
         extra_lines=[
             *await extensions.prompt_lines(db, run),
@@ -3253,15 +3260,19 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
         known_from, known = await draft_items.known_items(db, version)
     else:
         known_from, known = await _known_roadmap_items(db, run)
+    frozen = (
+        await _frozen_queue(db, run, version)
+        if run.flow == "prd_to_roadmap"
+        else {"rows": [], "per_week": None, "today": None}
+    )
     return flows.SourceContext(
         approved=version.approved_at is not None or not _flow(run).stores_draft_items,
         known_items=known,
         known_from=known_from,
         horizons=await _run_horizons(db, run),
         schedule_bases=[b.as_json() for b in bases],
-        company_queue=await roadmap_company.run_queue(db, version.document_id, run.created_at)
-        if run.flow == "prd_to_roadmap"
-        else [],
+        company_queue=frozen["rows"],
+        company_plan={k: v for k, v in frozen.items() if k != "rows"},
         slug=document.slug if document else str(version.document_id),
         title=document.title if document else "",
         version=version.number,
@@ -3272,6 +3283,25 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
         edges=edges,
         goals=goals,
     )
+
+
+async def _frozen_queue(
+    db: AsyncSession, run: Run, source: DocumentVersion | None
+) -> dict[str, Any]:
+    """one-roadmap-many-prds: the shared queue this run reads (oracle.roadmap.company
+    .frozen_queue), stored on the run when its first prompt (the roadmap_items segment's)
+    is built, before the run writes its items file; that prompt, the roadmap draft's, every
+    rewrite after a refusal and the check read that copy, though other PRDs' runs land or
+    the team's capacity changes meanwhile. ``source``: the run's PRD version."""
+    frozen = (run.knobs or {}).get(COMPANY_QUEUE)
+    if isinstance(frozen, dict) and isinstance(frozen.get("rows"), list):
+        return frozen
+    frozen = await roadmap_company.frozen_queue(
+        db, source.document_id if source else None, run.created_at, source
+    )
+    _set_knob(run, COMPANY_QUEUE, frozen)
+    await db.flush()
+    return frozen
 
 
 async def _known_roadmap_items(db: AsyncSession, run: Run) -> tuple[str, list[dict[str, str]]]:
@@ -4806,13 +4836,79 @@ def _creator(principal_tenant: uuid.UUID, user: User | None, token: ApiToken | N
     raise LookupError("run creator not found")
 
 
+async def _loop_plan_inputs(
+    db: AsyncSession, run: Run
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """What a roadmap draft without an items file of its own (the feedback loop's next
+    draft, the owner Nov 4) builds its plan tables from, as the roadmap was when the run
+    started (so the brief and the check read the same): (its latest items of the PRD its
+    latest version came from, as an items file's entries; that PRD's verified bases; on the
+    company roadmap, the shared queue with the other PRDs' items, as it stands: a loop draft
+    neither adds nor moves items, and its import carries them forward in their places; the
+    items an approved version took off the plan, shipped or moved to the next PRD, whose
+    plan_state carry_forward keeps: {key, title, state}, so the tables show them with their
+    status and a draft that keeps their rows is not refused). A roadmap with no items (or
+    no document) gives an empty plan: its loop draft still needs both tables, empty."""
+    from oracle.roadmap import draft_items
+    from oracle.roadmap.models import RoadmapItem
+
+    doc = await db.get(Document, run.document_id) if run.document_id else None
+    if doc is None:
+        return [], [], [], []
+    latest = await db.scalar(
+        select(DocumentVersion)
+        .where(
+            DocumentVersion.document_id == doc.id,
+            DocumentVersion.created_at <= run.created_at,
+        )
+        .order_by(DocumentVersion.number.desc())
+        .limit(1)
+    )
+    source = (
+        await db.get(DocumentVersion, latest.source_version_id)
+        if latest is not None and latest.source_version_id
+        else None
+    )
+    prd_id = source.document_id if source is not None else None
+    version = await roadmap_company._items_version(db, doc.id, run.created_at)
+    rows: list[RoadmapItem] = []
+    kept: list[dict[str, Any]] = []
+    if version is not None:
+        replaced = await roadmap_company.replaced_prd_ids(db)
+        for r in await db.scalars(
+            select(RoadmapItem)
+            .where(RoadmapItem.roadmap_version_id == version.id)
+            .order_by(RoadmapItem.position)
+        ):
+            if r.prd_document_id in replaced:
+                continue
+            if r.plan_state is None:
+                rows.append(r)
+            else:
+                kept.append({"key": r.item_key, "title": r.title, "state": r.plan_state})
+    queued: list[dict[str, Any]] = []
+    if doc.company_roadmap:
+        # The other PRDs' items are in the tables as the queue has them.
+        rows = [r for r in rows if r.prd_document_id == prd_id]
+        queued = await roadmap_company.run_queue(db, prd_id, run.created_at)
+    bases = [b.as_json() for b in await schedule.verified_bases(db, prd_id)]
+    return draft_items.entries(rows), bases, queued, kept
+
+
 async def _plan_table_problems(
     db: AsyncSession, run: Run, markdown: str, source_id: uuid.UUID | None
 ) -> list[ImportProblem]:
     """The draft's plan tables against the run's engineering dates (oracle.runs.plan_tables):
-    the items file the roadmap_items segment wrote and the source PRD's verified bases."""
+    the items file the roadmap_items segment wrote and the source PRD's verified bases;
+    any other run's roadmap draft (the feedback loop): the roadmap's own items."""
     from oracle.runs import plan_tables
 
+    if run.flow != "prd_to_roadmap":
+        items, loop_bases, queued, kept = await _loop_plan_inputs(db, run)
+        loop_plan = plan_tables.engineering_plan(items, loop_bases, others=queued, kept=kept)
+        return plan_tables.check(
+            markdown, loop_plan, await company_time.company_today(db), loop=True
+        )
     text = None
     for seg in await db.scalars(
         select(RunSegment).where(RunSegment.run_id == run.id).order_by(RunSegment.seq)
@@ -4823,14 +4919,16 @@ async def _plan_table_problems(
     items = (await items_check(db, run, text)).items if text else None
     source = await db.get(DocumentVersion, source_id) if source_id else None
     bases = await schedule.verified_bases(db, source.document_id if source else None)
-    # one-roadmap-many-prds: the other PRDs' items on the company roadmap are in the tables too.
-    others = await roadmap_company.run_queue(
-        db, source.document_id if source else None, run.created_at
+    # one-roadmap-many-prds: the other PRDs' items on the company roadmap are in the tables
+    # too, from the queue the run froze when its first prompt (roadmap_items) was built.
+    frozen = await _frozen_queue(db, run, source)
+    others = roadmap_company.with_run_items(
+        frozen["rows"], items, **{k: v for k, v in frozen.items() if k != "rows"}
     )
-    plan = plan_tables.engineering_plan(
-        items, [b.as_json() for b in bases], others=roadmap_company.with_run_items(others, items)
-    )
-    return plan_tables.check(markdown, plan, await company_time.company_today(db))
+    plan = plan_tables.engineering_plan(items, [b.as_json() for b in bases], others=others)
+    today = frozen["today"]
+    day = date.fromisoformat(today) if today else await roadmap_company.run_day(db, run.created_at)
+    return plan_tables.check(markdown, plan, day)
 
 
 async def _draft_source(db: AsyncSession, run: Run) -> uuid.UUID | None:
@@ -4906,9 +5004,10 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
         if knobs.get("template") and knobs.get("template_version")
         else None
     )
-    if run.flow == "prd_to_roadmap" and kind == "roadmap":
+    if kind == "roadmap":
         # roadmap-plan-tables: a draft without the plan tables approving it applies to
-        # Simple, or with other items or dates than the run's, goes back to the writer.
+        # Simple, or with other items or dates than the run's, goes back to the writer;
+        # every roadmap draft, the feedback loop's too (the owner, Nov 4).
         problems = await _plan_table_problems(db, run, markdown, source_id)
         if problems:
             return rejection.refused(name, problems)

@@ -151,7 +151,21 @@ async def test_the_prd_draft_prompt_names_the_template_and_pastes_the_skeleton(c
 # citation contract; ROADMAP_PINS_BEFORE_REF_SHOWN proves nothing else moved. Refreshed
 # again when every run task prompt and tool description said Ground Truth (PR 1248 fix 3),
 # whose only changes are GROUND_TRUTH_WORDS; ROADMAP_PINS_BEFORE_RUN_WORDS proves it.
+# Refreshed for loop-plan-tables (port of PR 1220), whose only change is the writer's role
+# words: the writer of a roadmap "writes the roadmap draft" (flows.step_prompt), not "writes
+# the prd draft"; the critic's prompt does not move. ROADMAP_PINS_BEFORE_LOOP_WORDS proves
+# nothing else moved (the loop's plan-table lines are only in a feedback-loop draft).
 ROADMAP_PINS = {
+    (True, "roadmap-board", False): ["0514fce0a732985e", "5732c38f1cf0cfd5"],
+    (True, "roadmap-board", True): ["2d604c284867f034", "084e8b87302298e9"],
+    (True, None, False): ["fec102cf00a0a075", "10ce24fb41aaee47"],
+    (True, None, True): ["17a8f11c3c8239ad", "56ea655243fd668a"],
+    (False, "roadmap-board", False): ["d472f049b6276526", "d091317512690468"],
+    (False, "roadmap-board", True): ["d472f049b6276526", "d091317512690468"],
+    (False, None, False): ["c2bc999906c244e3", "f74fc8430acd4095"],
+    (False, None, True): ["c2bc999906c244e3", "f74fc8430acd4095"],
+}
+ROADMAP_PINS_BEFORE_LOOP_WORDS = {
     (True, "roadmap-board", False): ["9613d52aa0c16cf8", "5732c38f1cf0cfd5"],
     (True, "roadmap-board", True): ["a4a95206047fdf96", "084e8b87302298e9"],
     (True, None, False): ["1b96f2dc239f62c6", "10ce24fb41aaee47"],
@@ -161,6 +175,7 @@ ROADMAP_PINS = {
     (False, None, False): ["c70934903283b379", "f74fc8430acd4095"],
     (False, None, True): ["c70934903283b379", "f74fc8430acd4095"],
 }
+LOOP_WORDS = ("(writes the prd draft)", "(writes the roadmap draft)")
 # (now, before) for each change PR 1248 fix 3 made to the roadmap draft's prompt.
 GROUND_TRUTH_WORDS = (
     (" " + flows.GROUND_TRUTH_LINE, ""),
@@ -297,6 +312,11 @@ def test_the_roadmap_draft_prompt_is_byte_for_byte_unchanged(case):
     digests = [hashlib.sha256(s[2].encode()).hexdigest()[:16] for s in steps]
     assert digests == ROADMAP_PINS[case]
     prompts = [s[2] for s in steps]
+    assert [p.count(LOOP_WORDS[1]) for p in prompts] == [1, 0]
+    prompts = [p.replace(*LOOP_WORDS[::-1], 1) for p in prompts]
+    assert [hashlib.sha256(p.encode()).hexdigest()[:16] for p in prompts] == (
+        ROADMAP_PINS_BEFORE_LOOP_WORDS[case]
+    )
     for now, before in GROUND_TRUTH_WORDS:
         prompts = [p.replace(now, before) for p in prompts]
     assert [hashlib.sha256(p.encode()).hexdigest()[:16] for p in prompts] == (
