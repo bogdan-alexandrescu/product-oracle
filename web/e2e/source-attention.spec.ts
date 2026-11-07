@@ -49,11 +49,11 @@ test("inbox: my sources that need attention, with Edit opening the source", asyn
   await page.goto("/inbox");
   const group = page.getByTestId("inbox-sources");
   await expect(group).toContainText(LEGACY);
-  await expect(group).toContainText(MESSAGE);
+  await expect(group.getByTestId("source-need-text").filter({ hasText: "Too many channels" })).toHaveAttribute("title", MESSAGE);
   // Only the source needing attention, not the one in error.
   await expect(group).not.toContainText("Example repo");
 
-  await group.getByRole("link", { name: `Edit ${LEGACY}` }).click();
+  await group.getByRole("link", { name: `Pick fewer channels in ${LEGACY}` }).click();
   await expect(page).toHaveURL(/\/settings\/sources#source-/);
   const row = page.getByRole("listitem", { name: LEGACY });
   // Arrives with the editor open.

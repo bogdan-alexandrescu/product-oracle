@@ -108,9 +108,11 @@ async def test_team_puts_items_with_no_feature_under_no_goal_at_the_end(client, 
     out = await export(client, ctx, "team")
     now = out.index("h2 Now")
     later = out.index("h2 Next")
+    # Export QA pass X, X-8 (train AS cdf393d16): Team's group heading reads the goal by the
+    # code and name the version gives it; Board (below) keeps the name alone.
     assert out[now:later] == [
         "h2 Now",
-        "h3 Activation",
+        "h3 G1 Activation",
         "h4 CSV parser",
         "h3 Retention",
         "h4 Bulk import",
@@ -202,18 +204,21 @@ async def test_a_goal_renamed_between_renders_regroups_the_shared_page(client, c
     cached page keeps the old goal title; no_claim=the PDF (rendered per link)."""
     share_render.clear_cache()
     await seed_roadmap(ctx, publish=True)
-    for audience in ("board", "team"):
+    # X-8 (train AS cdf393d16): Team's heading reads the version's code beside the name;
+    # Board's the name alone.
+    for audience, heading in (("board", "h3 Activation"), ("team", "h3 G1 Activation")):
         token = token_of((await create(client, ctx, "owner", audience=audience)).json())
         cookie = await opened(client, token)
         first = outline((await client.get(f"{PUBLIC}/{token}", headers=cookie)).text)
-        assert "h3 Activation" in first, first
+        assert heading in first, first
         async with tenant_session(ctx.tenant_id) as s:
             await s.execute(
                 update(Entity).where(Entity.key == "g1").values(title=f"Adoption {audience}")
             )
             await s.commit()
         second = outline((await client.get(f"{PUBLIC}/{token}", headers=cookie)).text)
-        assert f"h3 Adoption {audience}" in second and "h3 Activation" not in second, second
+        assert f"h3 Adoption {audience}" in second and heading not in second, second
+        assert "Activation" not in " ".join(x for x in second if x.startswith("h3 ")), second
         async with tenant_session(ctx.tenant_id) as s:
             await s.execute(update(Entity).where(Entity.key == "g1").values(title="Activation"))
             await s.commit()
@@ -250,11 +255,12 @@ async def test_goal_groups_follow_the_goal_order(client, ctx):
         await s.commit()
     out = await export(client, ctx, "team")
     now = out.index("h2 Now")
+    # X-8 (train AS cdf393d16): Team names the goal the version codes (G1) by code and name.
     assert out[now : out.index("h2 Next")] == [
         "h2 Now",
         "h3 Retention",
         "h4 Bulk import",
-        "h3 Activation",
+        "h3 G1 Activation",
         "h4 CSV parser",
         f"h3 {variants.NO_GOAL_GROUP}",
         "h4 Audit log",

@@ -309,3 +309,30 @@ async def test_a_panel_chat_makes_rows_for_its_starter_only(client):
     box = await inbox(client, ctx, "owner")
     assert [r["discussion_id"] for r in rows(box)] == [shared["id"]]
     assert SECRET_TITLE not in str(box)
+
+
+# Counting card. protects=a closed discussion's leftover proposed and suggested changes
+# make no "changes proposed" row (its changes card offers no action until it is reopened,
+# as when a goals interview closes with Oracle's other versions still proposed), and
+# reopening it brings the row back; fails_when=the row stays counted while closed, so
+# Review changes leads to nothing to act on; no_claim=the card itself (the web spec).
+async def test_a_closed_discussion_counts_no_changes_until_reopened(client):
+    ctx, doc = await company(client)
+    d = await start(
+        client, ctx, "approver", subject=section(doc), title=TITLE, message={"body": "Hi"}
+    )
+    await add_change(ctx, d["id"])
+    await add_change(ctx, d["id"])
+    await add_change(ctx, d["id"], "suggested", by="commenter")
+    [row] = rows(await inbox(client, ctx, "approver"), "changes_proposed")
+    assert row["count"] == 3
+    before = (await inbox(client, ctx, "owner"))["total"]
+
+    await patch(client, ctx, d["id"], "approver", status="closed")
+    for who in ("approver", "owner"):
+        assert rows(await inbox(client, ctx, who), "changes_proposed") == []
+    assert (await inbox(client, ctx, "owner"))["total"] == before - 1
+
+    await patch(client, ctx, d["id"], "approver", status="open")
+    [row] = rows(await inbox(client, ctx, "approver"), "changes_proposed")
+    assert row["count"] == 3

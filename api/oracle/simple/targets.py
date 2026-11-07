@@ -300,6 +300,8 @@ async def _last_writer(db: AsyncSession, c: SimpleChange) -> tuple[Any, Any]:
         if o is not None:
             who = (o.created_at, o.created_by)
     else:
+        # As changes._last_writer: the latest first, a tie on when to the one made last.
+        best: tuple[Any, int, uuid.UUID] | None = None
         rows = await db.scalars(
             select(SimpleChange)
             .where(
@@ -307,13 +309,19 @@ async def _last_writer(db: AsyncSession, c: SimpleChange) -> tuple[Any, Any]:
                 SimpleChange.op.in_([op for op, k in KIND.items() if k == kind]),
                 SimpleChange.target.contains({ID_KEY[kind]: c.target.get(ID_KEY[kind])}),
             )
+            .order_by(
+                SimpleChange.decided_at.desc().nulls_last(),
+                SimpleChange.at.desc(),
+                SimpleChange.seq.desc(),
+            )
             .limit(500)
         )
         for r in rows:
             at = r.decided_at if r.status == "accepted" and r.decided_at else r.at
             by = r.decided_by if r.status == "accepted" and r.decided_by else r.by
-            if who is None or at > who[0]:
-                who = (at, by)
+            if best is None or (at, r.seq) > best[:2]:
+                best = (at, r.seq, by)
+        who = (best[0], best[2]) if best is not None else None
     if who is None:
         return None, None
     names = await changes._names(db, {who[1]})

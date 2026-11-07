@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
-import { Button } from "@/components/ds";
+import { Button, Icon } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
@@ -189,17 +189,35 @@ export function SharedRoadmap({ token }: { token: string }) {
           <h1 className="font-display text-2xl font-bold tracking-heading">Enter the passcode</h1>
           {/* qa-docs-71: who shared what stays unsaid until the passcode (spec-O5 Q5: nothing before it). */}
           <p className="text-text2">Someone shared a private roadmap with you. It opens with the passcode they gave you.</p>
-          {view.note && (
-            <p role="alert" className="font-semibold">
-              {view.note.split(". ")[0]}.
-              <span className="block font-normal text-text2">{view.note.split(". ").slice(1).join(". ")}</span>
-            </p>
-          )}
           <div>
             <label htmlFor={id} className="mb-1.5 block text-[13px] font-semibold text-text2">
               Passcode
             </label>
-            <input id={id} type="password" autoComplete="off" required maxLength={128} autoFocus className={INPUT} value={passcode} onChange={(e) => setPasscode(e.target.value)} />
+            <input
+              id={id}
+              type="password"
+              autoComplete="off"
+              required
+              maxLength={128}
+              autoFocus
+              className={INPUT}
+              value={passcode}
+              aria-invalid={view.note ? true : undefined}
+              aria-describedby={view.note ? `${id}-error` : undefined}
+              onChange={(e) => {
+                setPasscode(e.target.value);
+                if (view.note) setView({ kind: "locked", note: null });
+              }}
+            />
+            {view.note && (
+              <p id={`${id}-error`} role="alert" className="mt-1.5 flex items-start gap-2 text-sm text-crit">
+                <Icon name="alert" size={16} className="mt-0.5" />
+                <span className="min-w-0 break-words">
+                  <span className="font-semibold">{view.note.split(". ")[0]}.</span>
+                  {view.note.includes(". ") && <span className="block">{view.note.split(". ").slice(1).join(". ")}</span>}
+                </span>
+              </p>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <Button variant="primary" type="submit" disabled={busy || !passcode} aria-describedby={!passcode ? `${id}-why` : undefined}>

@@ -11,6 +11,10 @@
  * margin notes; everyone else the published lines and a `changes_in_review` count. Undo
  * works for the change's author while its session is open.
  *
+ * Fixing a number (owner, Nov 5): each "Needs a look" numbers item carries its fix, the
+ * `set_section_number` op (the number in one section's words set, through the same draft,
+ * rights, Undo and approval as a line edit), as the API's one_pager._create_number.
+ *
  * Submit and Remind (owner, 2026-10-26): an owner submits the draft (POST
  * /v1/simple/drafts/{id}/submit): it waits on the PRD's required reviewers (`ctx.reviewers`).
  * Remind (POST /v1/simple/one-pagers/{doc}/remind, owners and the decider) writes each
@@ -19,13 +23,16 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { planByMonth } from "@/lib/simple-home";
-import { planSlices } from "./simple-plan";
+import { PLAN_PRD_SLUG, planOut, planSlices } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { draftDecisionNotes, leftOut } from "./decision-notes";
 import { stableUuid } from "./ids";
-import { annotate, resolved, type Cites } from "./one-pager-checks";
+import { changePhrase, changeSentence } from "./simple-change-words";
+import { annotate, resolved, setNumber, type Cites } from "./one-pager-checks";
+import { roadmapOut } from "./simple-roadmap";
 import { betSubject, flowFor, onePagerFlow, requestVisual, type VisualsDb } from "./simple-visuals";
+import { madeOrder } from "./made-order";
 
 type Role = Schemas["Me"]["role"];
 type Change = Schemas["SimpleChangeOut"];
@@ -44,12 +51,16 @@ export interface OnePagerCtx {
   /** The PRD's decider (Dana Decider in "simple-deciders", as the meetings mock), and its track owners. */
   decider?: string | null;
   trackOwners?: string[];
+  /** A submitted draft's next version, its sections as the draft has them (drafts.submit imports it). */
+  imported?: (sections: { key: string; heading: string; body: string }[], version: number) => void;
   /** Writes one Inbox notification, as oracle.review.collab.notify. */
   notify: (userId: string, kind: "review_reminder", title: string, data: Record<string, unknown>, version: number) => void;
   /** prd-timeline: the PRD's dated plan's milestones ("M1 Prove it"): the PDF prints the timeline, then one page each. */
   planPages?: string[];
   /** e2e-pdf-export ("one-pager-overflow"): the pages the one-pager runs to past its one (the API lays it out). */
   overflowPages?: number;
+  /** S-9 ("one-pager-pdf-down"): the API cannot make PDFs (its 503, export.pdf.PdfUnavailable). */
+  pdfDown?: boolean;
   /** simple-replaced-prds: the PRDs that replaced this one, when it is marked replaced (its read, PDF and Remind are a 404 naming them). */
   replacedBy?: Schemas["PrdRef"][];
 }
@@ -83,6 +94,8 @@ export interface OnePagerDb {
   blocks: { key: string; title: string; rules: string; kind: Schemas["OnePagerBlock"]["kind"]; lines: SeedLine[]; missing?: boolean }[];
   draft: null | {
     id: string; base: number; participants: string[]; lines: Record<string, string>; sections: Record<string, string>;
+    /** A heading's count fixed (owner, Nov 5, 'Fix the heading too'): the API's overlay["headings"]. */
+    headings?: Record<string, string>;
     status?: "working" | "submitted"; waiting_on?: string[]; reminders?: Record<string, string>;
   };
   changes: (Change & { session_open: boolean; in_meeting: boolean; meeting_title?: string | null })[];
@@ -99,6 +112,8 @@ export interface OnePagerDb {
   owner?: string;
   /** The PRD's roadmap slice, when not the default invented one (SLICE). */
   slice?: SliceItem[];
+  /** S-8: the Simple roadmap a PRD's own page reads its slice from at each read (prdSlice). */
+  roadmap?: RoadmapDb;
   /**
    * oracle.simple.quality: Oracle's build failed its checks twice: its blocks and the failed
    * checks' plain words. Owners read it with a "Needs a look" note; everyone else `blocks`
@@ -172,12 +187,15 @@ export function seedOnePager(ownerless = false): OnePagerDb {
  * milestone; one of those is committed past M3's month (the strip's edge).
  */
 type SliceItem = {
+  /** The roadmap item's own id, when the slice is read from the mock roadmap (prdSlice). */
+  id?: string;
   title: string;
   horizon: "now" | "next" | "later";
   start: string;
   end: string;
   estimated: boolean;
-  milestone: [string, string] | null;
+  /** Its milestone's label and day (null: the PRD's plan does not date it, a row of its own). */
+  milestone: [string, string | null] | null;
   /** The track milestone record naming the item, when any (the strip's row). */
   record?: { id: string; name: string };
   /** The day its milestone starts when the PRD's plan dates it (the strip's row spans it). */
@@ -203,7 +221,7 @@ const BETA_LAUNCH = { id: stableUuid("op-milestone/beta-launch"), name: "Beta la
 // Setup checklist in progress, Sample data import new, Welcome video runs today, Alert routing
 // by team runs with old proof), as the API's slice is the PRD's roadmap items.
 /** A slice item's roadmap item id: the mock roadmap's own (simple-roadmap.ts ids) when it is one. */
-const sliceItemId = (x: SliceItem, i: number) => stableUuid(x.key ? `simple-item/${x.key}` : `op-item-${i + 1}`);
+const sliceItemId = (x: SliceItem, i: number) => x.id ?? stableUuid(x.key ? `simple-item/${x.key}` : `op-item-${i + 1}`);
 const SEEDED: Record<number, [string, string]> = { 0: ["setup-checklist", "Setup checklist"], 1: ["setup-import", "Sample data import"], 12: ["setup-video", "Welcome video"] };
 const SLICE: SliceItem[] = [
   ...Array.from({ length: 12 }, (_, i) => ({ title: SEEDED[i]?.[1] ?? `Setup step ${i + 1}`, key: SEEDED[i]?.[0], horizon: "now" as const, start: "2026-10-05", end: "2026-11-20", estimated: false, milestone: ["M1", "2026-11-20"] as [string, string] })),
@@ -249,6 +267,19 @@ export function seedNeedsLookOnePager(): OnePagerDb {
 }
 
 /**
+ * The "one-pager-heading-count" scenario (owner, Nov 5, 'Fix the heading too'): the count is
+ * in the section's heading, "Later · 8 items" over six listed, and the PRD's full version
+ * page reads the same sections (./server.ts). Invented data.
+ */
+export function seedHeadingCountOnePager(): OnePagerDb {
+  const db = seedOnePager();
+  const later = db.sections.find((x) => x.key === "later")!;
+  later.heading = "Later · 8 items";
+  later.body = later.body.replace(/^Eight features wait for next quarter\.\n\n/, "");
+  return db;
+}
+
+/**
  * The "one-pager-not-in-prd" scenario: the PRD has no "Not doing" section, and Oracle marked
  * that block "Not in the PRD yet" (the API's OnePagerBlock.missing). Invented data.
  */
@@ -256,6 +287,8 @@ export function seedNotInPrdOnePager(): OnePagerDb {
   const db = seedOnePager();
   db.sections = db.sections.filter((x) => x.key !== "not-doing");
   db.blocks = db.blocks.map((b) => (b.key === "not_doing" ? { ...b, lines: [], missing: true } : b));
+  // P-9: an older build's lines that only say it, twice in one block: the read says it once.
+  db.blocks = db.blocks.map((b) => (b.key === "risks" ? { ...b, lines: [{ id: "risks-1", text: "Not in the PRD yet.", keys: ["risks"] }, { id: "risks-2", text: "Open decisions: Not in the PRD yet", keys: ["risks"] }] } : b));
   return db;
 }
 
@@ -572,6 +605,106 @@ export function prdOnePager(doc: OnePagerDb["doc"], prdSections: PrdSection[], c
   return seedOnePagerFromSections(doc, sections, [], cites);
 }
 
+type RoadmapDb = Parameters<typeof roadmapOut>[0];
+
+/** As one_pager._feature_code: "f-7", "F-007" read "F-07"; a slice F-15a is F-15. */
+function featureCode(raw: string | null | undefined): string | null {
+  const m = /^([a-z]{1,3})-0*(\d{1,4})[a-j]?$/i.exec((raw ?? "").trim());
+  return m ? `${m[1].toUpperCase()}-${m[2].padStart(2, "0")}` : null;
+}
+
+/**
+ * S-8, as one_pager.prd_items: the PRD's roadmap items, of the roadmap the reader is shown:
+ * those naming the PRD and those of its features (its plan's features and its own coded
+ * sections, F-07), by code. Each is placed by THIS PRD's plan only: one per slice of its
+ * feature in this plan (an undated milestone a row of its own); an item of another PRD with
+ * none under no milestone, never under that PRD's milestone or dates.
+ */
+function prdSlice(rm: RoadmapDb, role: Role, db: OnePagerDb): { items: SliceItem[]; span: [string, string] | null } {
+  const planned = !!rm.plan && (db.doc.slug === PLAN_PRD_SLUG || (rm.plan.prds ?? []).includes(db.doc.slug));
+  const plan = planned ? planOut(rm.plan, { id: db.doc.id, slug: db.doc.slug, title: db.doc.title }, role) : null;
+  const codes = new Set(db.sections.map((x) => featureCode(x.key)).filter((c): c is string => !!c));
+  for (const c of [...(plan?.slices ?? []).map((x) => x.feature_code), ...(plan?.milestones ?? []).flatMap((m) => m.feature_codes)]) {
+    const code = featureCode(c);
+    if (code) codes.add(code);
+  }
+  const out = roadmapOut(rm, role, new URLSearchParams());
+  const items = (out?.items ?? [])
+    .filter((i) => i.prd?.slug === db.doc.slug || i.prd?.id === db.doc.id || (!!featureCode(i.code) && codes.has(featureCode(i.code)!)))
+    .filter((i) => i.status !== "cut")
+    .flatMap((i): SliceItem[] => {
+      const own = i.prd?.slug === db.doc.slug || i.prd?.id === db.doc.id;
+      const base = { id: i.id, title: i.title, horizon: i.horizon, start: i.start.date, end: i.end.date, estimated: i.estimated };
+      const slices = (plan?.slices ?? []).filter((x) => !!featureCode(i.code) && featureCode(x.feature_code) === featureCode(i.code));
+      if (slices.length) {
+        return slices.map((x) => ({
+          ...base, start: x.start_date ?? base.start, end: x.end_date ?? base.end, estimated: !(x.milestone_start && x.milestone_end),
+          milestone: [`${x.milestone} · ${x.milestone_name}`, x.milestone_end ?? null] as [string, string | null],
+          ...(x.milestone_start ? { milestoneStart: x.milestone_start } : {}),
+        }));
+      }
+      if (!own) return [{ ...base, milestone: null }];
+      return [{
+        ...base,
+        milestone: i.milestone?.date ? [i.milestone.name ?? "Milestone", i.milestone.date] as [string, string] : null,
+        ...(i.milestone?.record_id ? { record: { id: i.milestone.record_id, name: i.milestone.record_name ?? "Milestone" } } : {}),
+        ...(i.milestone?.start_date ? { milestoneStart: i.milestone.start_date } : {}),
+      }];
+    });
+  // A dated plan's span is the one its timeline draws.
+  return { items, span: plan?.dated && plan.span ? [plan.span.start, plan.span.end] : null };
+}
+
+/** As one_pager._says_not_in_prd: a line that only says the PRD lacks it; the block's mark says it, once. */
+function saysNotInPrd(text: string): boolean {
+  const said = text.split(/\s+/).filter(Boolean).join(" ").replace(/[ .]+$/, "").toLowerCase();
+  const no = "not in the prd yet";
+  return said === no || (said.endsWith(`: ${no}`) && said.length - no.length <= 40);
+}
+
+// P-5, as one_pager.goal_names / with_goal_names: a goal's code ("G2", "G1.2") with its name
+// beside it, the name the PRD gives it ("G2 (retention)", "G2: Retention", a row "| G2 | Retention |").
+const GOAL_CODE = /\bG\d{1,3}(?:\.\d{1,2})?\b/g;
+const GOAL_PAREN = /\b(G\d{1,3}(?:\.\d{1,2})?)\b\**\s*\(([A-Za-z][^()\n]{0,40})\)/g;
+const GOAL_AFTER = /^\**\s*(?:[:=—–]\s*|\s-\s)?\**([A-Z][\w'’-]*(?: [A-Za-z][\w'’-]*){0,4})/;
+const goalName = (t: string) => {
+  const x = t.split(/\s+/).filter(Boolean).join(" ").replace(/^[ *\-—–:]+|[ *\-—–:]+$/g, "");
+  return x.slice(0, 1).toUpperCase() + x.slice(1);
+};
+const GOAL_MD = /[*_`]+|\[([^\]]*)\]\([^)]*\)|\{#[^}]*\}|<!--[\s\S]*?-->/g;
+
+function goalNames(sections: Sec[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const sec of sections) {
+    const text = `${sec.heading}\n${sec.body}`.replace(GOAL_MD, (_m, g: string | undefined) => g ?? "");
+    for (const m of text.matchAll(GOAL_PAREN)) out[m[1]] ??= goalName(m[2]);
+    for (const raw of text.split("\n")) {
+      if (raw.trim().startsWith("|")) {
+        const cells = raw.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+        cells.forEach((c, i) => {
+          const next = cells[i + 1];
+          if (/^G\d{1,3}(?:\.\d{1,2})?$/.test(c) && next && !/\bG\d/.test(next)) out[c] ??= goalName(next);
+        });
+        continue;
+      }
+      for (const m of raw.matchAll(GOAL_CODE)) {
+        const n = GOAL_AFTER.exec(raw.slice(m.index! + m[0].length));
+        if (n) out[m[0]] ??= goalName(n[1]);
+      }
+    }
+  }
+  return out;
+}
+
+function withGoalNames(text: string, names: Record<string, string>): string {
+  if (!text || !Object.keys(names).length) return text;
+  const t = text.replace(GOAL_PAREN, (all, code: string) => (names[code] ? `${code} ${names[code]}` : all));
+  return t.replace(GOAL_CODE, (code, at: number) => {
+    const name = names[code];
+    return !name || t.slice(at + code.length).replace(/^[ :—–\-*]+/, "").toLowerCase().startsWith(name.toLowerCase()) ? code : `${code} ${name}`;
+  });
+}
+
 /**
  * As one_pager.milestone_span (P4): from the earliest start of the items under dated milestones
  * (or that date, when earlier) to the latest milestone date; null with no dated milestone.
@@ -579,8 +712,8 @@ export function prdOnePager(doc: OnePagerDb["doc"], prdSections: PrdSection[], c
 function milestoneSpan(items: SliceItem[]): [string, string] | null {
   const dated = items.filter((i) => i.milestone?.[1]);
   if (!dated.length) return null;
-  const end = dated.map((i) => i.milestone![1]).sort().pop()!;
-  const start = dated.flatMap((i) => [i.start, i.milestone![1]]).sort()[0];
+  const end = dated.map((i) => i.milestone![1]!).sort().pop()!;
+  const start = dated.flatMap((i) => [i.start, i.milestone![1]!]).sort()[0];
   return [start < end ? start : end, end];
 }
 
@@ -599,6 +732,12 @@ function decides(ctx: OnePagerCtx): boolean {
   if (ctx.role === "owner") return true;
   if (ctx.decider) return ctx.id === ctx.decider;
   return (ctx.trackOwners ?? []).includes(ctx.id) && RANK[ctx.role] >= RANK.approver;
+}
+
+/** As one_pager.may_decide: a proposal's decider is an owner (has_role on the role ladder), or
+ * whom it is routed to; a viewer, commenter or approver decides only what is routed to them. */
+function mayDecide(ctx: OnePagerCtx, c: Pick<Change, "routed_to">): boolean {
+  return !!ctx.id && (RANK[ctx.role] >= RANK.owner || c.routed_to.includes(ctx.id));
 }
 
 /** As one_pager.starts (meetings.may_start): an owner or the PRD's decider start its review. */
@@ -641,6 +780,11 @@ function sectionNow(db: OnePagerDb, key: string, sees = true): string {
   return (sees ? db.draft?.sections[key] : undefined) ?? db.sections.find((s) => s.key === key)!.body;
 }
 
+/** As one_pager._section_body's heading: the draft's, else the published one. */
+function headingNow(db: OnePagerDb, key: string, sees = true): string {
+  return (sees ? db.draft?.headings?.[key] : undefined) ?? db.sections.find((s) => s.key === key)!.heading;
+}
+
 /** As the API's one_pager.patch_all: the facts (bullets, else sentences) the old line says
  * are replaced by the new line in its first section and dropped from the others; null when
  * a section holds none of them (the edit is refused, never appended). */
@@ -668,6 +812,45 @@ function metricOf(text: string): Line["metric"] {
   return m ? { name: m[1].trim() || text, from: m[2], to: m[3] } : null;
 }
 
+/** set_section_number (owner, Nov 5): a "Needs a look" numbers item's fix, as the API's one_pager. */
+const NUMBER_OP = "set_section_number" as const;
+
+/** As one_pager._ensure: while the PRD's draft is in review, a change that applies is refused. */
+const inReview = (db: OnePagerDb) => db.draft?.status === "submitted";
+const IN_REVIEW = "This PRD's draft is in review: changes wait until it is approved";
+
+/** As one_pager._number_values: the section and the lines resting on it, as the reader has them. */
+function numberValues(db: OnePagerDb, key: string, sees: boolean) {
+  const heading = headingNow(db, key, sees);
+  const lines = Object.fromEntries(db.blocks.flatMap((b) => b.lines).filter((l) => l.keys.includes(key)).map((l) => [l.id, (sees ? db.draft?.lines[l.id] : undefined) ?? l.text]));
+  return { sections: { [key]: { heading, body: sectionNow(db, key, sees) } }, lines };
+}
+
+const held = (v: Record<string, unknown>) => JSON.stringify({ sections: v.sections ?? {}, lines: v.lines ?? {} });
+
+function numberConflict(db: OnePagerDb, ctx: OnePagerCtx, key: string, sees: boolean, message: string): Response {
+  const last = sees ? [...liveChanges(db)].reverse().find((c) => key in ((c.after.sections ?? {}) as Record<string, unknown>)) : undefined;
+  const by = last ? { id: last.by, name: ctx.names[last.by] ?? last.by_name } : null;
+  return json(409, { detail: { message: by ? `Changed by ${by.name}` : message, current: { section: key, heading: headingNow(db, key, sees), body: sectionNow(db, key, sees) }, changed_by: by, changed_at: last?.at ?? null } });
+}
+
+function writeNumber(db: OnePagerDb, ctx: OnePagerCtx, values: Record<string, unknown>) {
+  db.draft ??= { id: stableUuid(`simple-one-pager-draft-${db.doc.id}-${mockNowMs()}`), base: db.version, participants: [], lines: {}, sections: {} };
+  if (!db.draft.participants.includes(ctx.id)) db.draft.participants.push(ctx.id);
+  for (const [id, text] of Object.entries((values.lines ?? {}) as Record<string, string>)) {
+    if (text === seedLine(db, id)?.text) delete db.draft.lines[id];
+    else db.draft.lines[id] = text;
+  }
+  for (const [k, v] of Object.entries((values.sections ?? {}) as Record<string, { heading?: string; body: string }>)) {
+    const sec = db.sections.find((s) => s.key === k);
+    if (v.body === sec?.body) delete db.draft.sections[k];
+    else db.draft.sections[k] = v.body;
+    const heads = (db.draft.headings ??= {});
+    if (v.heading === undefined || v.heading === sec?.heading) delete heads[k];
+    else heads[k] = v.heading;
+  }
+}
+
 function write(db: OnePagerDb, ctx: OnePagerCtx, lineId: string, values: Record<string, unknown>) {
   db.draft ??= { id: stableUuid(`simple-one-pager-draft-${db.doc.id}-${mockNowMs()}`), base: db.version, participants: [], lines: {}, sections: {} };
   if (!db.draft.participants.includes(ctx.id)) db.draft.participants.push(ctx.id);
@@ -690,6 +873,7 @@ export function publishOnePager(db: OnePagerDb) {
   if (!d) return;
   for (const b of db.blocks) for (const l of b.lines) if (d.lines[l.id] !== undefined) l.text = d.lines[l.id];
   for (const sec of db.sections) if (d.sections[sec.key] !== undefined) sec.body = d.sections[sec.key];
+  for (const sec of db.sections) if (d.headings?.[sec.key] !== undefined) sec.heading = d.headings[sec.key];
   db.version += 1;
   // qa4-simple-decide-25: as the API (the new version's approved_at), the header's day moves on.
   db.published_at = new Date(mockNowMs()).toISOString();
@@ -700,13 +884,13 @@ export function publishOnePager(db: OnePagerDb) {
 
 function liveChanges(db: OnePagerDb) {
   const undone = new Set(db.changes.filter((c) => c.status === "undone").map((c) => c.undoes_id));
-  return db.changes.filter((c) => (c.status === "applied" || c.status === "accepted") && !undone.has(c.id));
+  return madeOrder(db.changes, (c) => [c.at]).filter((c) => (c.status === "applied" || c.status === "accepted") && !undone.has(c.id));
 }
 
 function out(db: OnePagerDb, ctx: OnePagerCtx, c: Change): Change {
   return {
     ...c,
-    can_decide: c.status === "proposed" && (ctx.role === "owner" || c.routed_to.includes(ctx.id)),
+    can_decide: c.status === "proposed" && mayDecide(ctx, c),
     can_undo: c.status === "applied" && c.by === ctx.id && !db.changes.some((u) => u.undoes_id === c.id),
   };
 }
@@ -720,16 +904,27 @@ function patches(c: Change): Patch[] {
 
 function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
   const sees = seesDraft(db, ctx);
-  const proposals = db.changes.filter((c) => c.status === "proposed");
-  const shown = proposals.filter((c) => c.by === ctx.id || ctx.role === "owner" || c.routed_to.includes(ctx.id));
-  const live = sees ? liveChanges(db).filter((c) => c.status !== "undone") : [];
+  const sees_ = (c: Change) => c.by === ctx.id || mayDecide(ctx, c);
+  // As the API: a numbers fix proposed shows on its "Needs a look" item, never as a line's note.
+  // As one_pager.py: changes by when, a tie in the order they were made (seq), never by id.
+  const made = madeOrder(db.changes, (c) => [c.at]);
+  const fixes = made.filter((c) => c.status === "proposed" && c.op === NUMBER_OP && sees_(c));
+  const proposals = made.filter((c) => c.status === "proposed" && c.op === "edit_line");
+  const shown = proposals.filter(sees_);
+  const live = sees ? liveChanges(db).filter((c) => c.status !== "undone" && c.op === "edit_line") : [];
+  // As the API's OnePagerOut.fixed: the draft's number fixes, each with its Undo while it can be undone.
+  const fixed: Schemas["OnePagerFixed"][] = (sees ? liveChanges(db).filter((c) => c.op === NUMBER_OP) : []).map((c) => {
+    const key = String(c.target.section ?? "");
+    const heading = ((c.after.sections ?? {}) as Record<string, { heading?: string }>)[key]?.heading ?? key;
+    return { change_id: c.id, words: `Fixed: set to ${String(c.after.number ?? "")} in “${heading}”`, can_undo: c.status === "applied" && c.by === ctx.id && c.session_open };
+  });
   const note = (c: (typeof db.changes)[number], kind: "change" | "proposal"): Schemas["OnePagerNote"] => {
     const lineId = String(c.target.line_id);
     return {
       change_id: c.id, line_id: lineId, kind, by: c.by, by_name: c.by_name, at: c.at, in_meeting: c.in_meeting,
       before: String(c.before.line ?? ""), after: String(c.after.line ?? ""), sections: patches(c),
       can_undo: kind === "proposal" ? c.by === ctx.id : c.by === ctx.id && c.session_open,
-      can_decide: kind === "proposal" && (ctx.role === "owner" || c.routed_to.includes(ctx.id)),
+      can_decide: kind === "proposal" && mayDecide(ctx, c),
       adds_feature: lineId.startsWith("bets-"), flow: onePagerFlow(flowFor(db.visuals, "change", c.id)), meeting_title: c.meeting_title ?? null,
     };
   };
@@ -737,12 +932,19 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
   const proposed = new Set(notes.filter((n) => n.kind === "proposal").map((n) => n.line_id));
   const hiddenDraft = !sees && db.draft ? Object.keys(db.draft.lines).length : 0;
   const owner = db.ownerless ? undefined : db.owner ?? ctx.owners[0];
-  const span = milestoneSpan(db.slice ?? SLICE);
+  // S-8: a PRD's own page reads its slice from the roadmap at each read (one_pager.prd_items).
+  const read = db.roadmap ? prdSlice(db.roadmap, ctx.role, db) : null;
+  const placed = read ? read.items : (db.slice ?? SLICE);
+  const span = read?.span ?? milestoneSpan(placed);
+  // The Timeline lists each item once; the strip reads one input per slice.
+  const slice = placed.filter((x, i) => !x.id || placed.findIndex((y) => y.id === x.id) === i);
   const held = ctx.role === "owner" ? db.held ?? null : null;
   // A build held for owners (oracle.simple.quality) is what owners read; others the last good.
   const blocks: Schemas["OnePagerBlock"][] = (held?.blocks ?? db.blocks).map((b) => ({
-      key: b.key, title: b.title, rules: b.rules, kind: b.kind, who: null, missing: !!b.missing && b.lines.length === 0,
-      lines: b.lines.filter((l) => (sees && db.draft?.lines[l.id] !== undefined) || !templateOnly(l.text)).map((l): Line => {
+      key: b.key, title: b.title, rules: b.rules, kind: b.kind, who: null,
+      // P-9: a line that only says "Not in the PRD yet" is the block's mark, said once.
+      missing: (!!b.missing || b.lines.some((l) => !(sees && db.draft?.lines[l.id] !== undefined) && saysNotInPrd(l.text))) && !b.lines.some((l) => (sees && db.draft?.lines[l.id] !== undefined) || (!templateOnly(l.text) && !saysNotInPrd(l.text))),
+      lines: b.lines.filter((l) => (sees && db.draft?.lines[l.id] !== undefined) || (!templateOnly(l.text) && !saysNotInPrd(l.text))).map((l): Line => {
         const edited = sees && db.draft?.lines[l.id] !== undefined;
         // As one_pager._tidy: a stored line's citations resolved, as the PRD's PDF resolves them.
         const text = edited ? db.draft!.lines[l.id] : resolved(uncomment(l.text)).split(/\s+/).filter(Boolean).join(" ");
@@ -762,7 +964,33 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
       }),
     }));
   // Reads clearly (2026-10-30): as one_pager_checks.annotate on the PRD's sections.
-  const looks = annotate(blocks, db.sections, db.cites);
+  // The numbers as the reader's working draft has them, so a fixed number clears.
+  const looks = annotate(blocks, db.sections, db.cites, db.sections.map((x) => ({ ...x, heading: headingNow(db, x.key, sees), body: sectionNow(db, x.key, sees) }))).map((x): Schemas["OnePagerLook"] => {
+    if (!x.fix) return { ...x, fix: null };
+    const f = x.fix;
+    const c = fixes.find((y) => y.target.section === f.target.section && y.target.said === f.target.said && (y.target.part ?? "body") === (f.target.part ?? "body"));
+    // As the API: a draft in review takes no change that applies, so who would apply the fix is offered none (an open proposal stays).
+    if (!c && inReview(db) && decides(ctx)) return { ...x, fix: null };
+    return {
+      ...x,
+      fix: {
+        ...f, target: { ...f.target, document_id: db.doc.id },
+        proposal: c ? { change_id: c.id, by_name: c.by_name, can_decide: mayDecide(ctx, c), can_undo: c.by === ctx.id } : null,
+      },
+    };
+  });
+  // P-5: each goal code with its name beside it; the Edit box keeps the PRD's words.
+  const goals = goalNames(db.sections);
+  for (const b of blocks) {
+    for (const x of b.lines) {
+      const said = x.words ?? x.full ?? x.text;
+      x.text = withGoalNames(x.text, goals);
+      if (x.full) x.full = withGoalNames(x.full, goals);
+      if (x.metric) x.metric.name = withGoalNames(x.metric.name, goals);
+      if (x.measure) x.measure = withGoalNames(x.measure, goals);
+      if (!x.words && (x.full ?? x.text) !== said) x.words = said;
+    }
+  }
   return {
     document: db.doc,
     version: db.version,
@@ -775,14 +1003,14 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     writing: !!db.writing && !held,
     built_at: "2026-10-20T15:05:00Z",
     blocks,
-    timeline: (db.slice ?? SLICE).map((x, i) => ({ id: sliceItemId(x, i), title: x.title, horizon: x.horizon, start: x.start, end: x.end, estimated: x.estimated })),
+    timeline: slice.map((x, i) => ({ id: sliceItemId(x, i), title: x.title, horizon: x.horizon, start: x.start, end: x.end, estimated: x.estimated })),
     plan: planByMonth(
-      (db.slice ?? SLICE).map((x, i) => ({ id: sliceItemId(x, i), start: x.start, end: x.end, estimated: x.estimated, milestone: x.milestone?.[0] ?? null, milestoneDate: x.milestone?.[1] ?? null, milestoneStart: x.milestoneStart ?? null, record: x.record ?? null })),
+      placed.map((x, i) => ({ id: sliceItemId(x, i), start: x.start, end: x.end, estimated: x.estimated, milestone: x.milestone?.[0] ?? null, milestoneDate: x.milestone?.[1] ?? null, milestoneStart: x.milestoneStart ?? null, record: x.record ?? null })),
       // qa4-simple-prd-10: the company's day, as the API's slice (and the notes' times) read it.
       companyDayIso(new Date(mockNowMs())),
     ),
     // As the API: the sections the page's lines rest on.
-    sections: db.sections.filter((s) => db.blocks.some((b) => b.lines.some((l) => l.keys.includes(s.key)))).map((s) => ({ key: s.key, heading: s.heading, body: sectionNow(db, s.key, sees) })),
+    sections: db.sections.filter((s) => db.blocks.some((b) => b.lines.some((l) => l.keys.includes(s.key)))).map((s) => ({ key: s.key, heading: headingNow(db, s.key, sees), body: sectionNow(db, s.key, sees) })),
     // decisions-reversed-or-trashed: the lines' decisions left out as no longer standing.
     left_out: leftOut(),
     notes,
@@ -816,6 +1044,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     can_start: starts(ctx),
     // As one_pager.owns: a company owner, the PRD's track owners and its document owner read the
     // PRD's numbers and codes to look at; owners also read the checks a held build failed.
+    fixed,
     needs_look: [
       ...(ctx.role === "owner" || (ctx.trackOwners ?? []).includes(ctx.id) || (!!owner && ctx.id === owner) ? looks : []),
       ...(held ? held.checks.map((text) => ({ kind: "check", text, where: [], source_keys: [] })) : []),
@@ -836,6 +1065,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     if (p[3] !== db.doc.slug && p[3] !== db.doc.id) return json(404, { detail: "No such PRD" });
     if (ctx.replacedBy?.length) return replaced();
     if (p[4] === "pdf") {
+      if (ctx.pdfDown) return json(503, { detail: "PDF export is unavailable: WeasyPrint cannot load its system libraries (install Pango, see api/Dockerfile): cannot load library 'libpango-1.0-0'" });
       const over = !ctx.planPages?.length && ctx.overflowPages ? ctx.overflowPages : 0;
       const pages = ctx.planPages?.length ? ["The timeline", ...ctx.planPages] : over ? Array.from({ length: over }, (_, i) => `Page ${i + 1}`) : ["One page"];
       // The page's lines as the read resolves them (the API's PDF renders one_pager.read).
@@ -866,6 +1096,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     db.draft.waiting_on = [...new Set([...ctx.reviewers, ...added])];
     db.draft.reminders = {};
     db.changes.forEach((c) => (c.session_open = false));
+    ctx.imported?.(db.sections.map((x) => ({ key: x.key, heading: headingNow(db, x.key), body: sectionNow(db, x.key) })), db.version + 1);
     return json(200, { id: db.draft.id, status: "submitted", version: db.version + 1, waiting_on: db.draft.waiting_on });
   }
   if (p[2] === "one-pagers" && p[4] === "remind" && m === "POST") {
@@ -890,6 +1121,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
   if (p[2] !== "changes") return null;
   if (m === "POST" && p.length === 3) {
     const b = await body(req.clone());
+    if (b.op === NUMBER_OP) return createNumber(db, ctx, b);
     if (b.op !== "edit_line") return null;
     const target = (b.target ?? {}) as Record<string, string>;
     const lineId = String(target.line_id ?? "");
@@ -930,10 +1162,16 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
   const c = db.changes.find((x) => x.id === p[3]);
   if (!c || m !== "POST") return null;
   if (p[4] === "accept" || p[4] === "decline") {
-    if (!(ctx.role === "owner" || c.routed_to.includes(ctx.id))) return json(403, { detail: "Only an owner or the PRD's decider decides this proposal" });
+    if (!mayDecide(ctx, c)) return json(403, { detail: "Only an owner or the PRD's decider decides this proposal" });
     if (c.status !== "proposed") return json(409, { detail: `This change is ${c.status} already` });
     const lineId = String(c.target.line_id);
-    if (p[4] === "accept") {
+    if (p[4] === "accept" && c.op === NUMBER_OP) {
+      const key = String(c.target.section);
+      if (held(numberValues(db, key, true)) !== held(c.before)) return numberConflict(db, ctx, key, true, "outdated: the section changed since the proposal");
+      if (inReview(db)) return json(409, { detail: IN_REVIEW });
+      writeNumber(db, ctx, c.after);
+      c.draft_ids = [db.draft!.id];
+    } else if (p[4] === "accept") {
       if (lineNow(db, lineId) !== c.before.line) return json(409, { detail: { message: "outdated: the line or its sections changed since the proposal", current: { line: lineNow(db, lineId) }, changed_by: null, changed_at: null } });
       write(db, ctx, lineId, c.after);
       c.draft_ids = [db.draft!.id];
@@ -956,12 +1194,74 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     if (c.status !== "applied") return json(409, { detail: `Only an applied change undoes; this one is ${c.status}` });
     if (c.by !== ctx.id) return json(403, { detail: "Only the person who made a change undoes it" });
     if (db.changes.some((u) => u.undoes_id === c.id)) return json(409, { detail: "This change is undone already" });
-    write(db, ctx, String(c.target.line_id), c.before);
+    if (c.op === NUMBER_OP) {
+      const key = String(c.target.section);
+      if (held(numberValues(db, key, true)) !== held(c.after)) return numberConflict(db, ctx, key, true, "Changed since");
+      writeNumber(db, ctx, c.before);
+    } else write(db, ctx, String(c.target.line_id), c.before);
     const u = { ...c, id: stableUuid(`op-undo-${c.id}`), status: "undone" as const, before: c.after, after: c.before, undoes_id: c.id, at: new Date(mockNowMs()).toISOString() };
     db.changes.push(u);
     return json(201, { change: out(db, ctx, u), flags: [] });
   }
   return null;
+}
+
+/** As one_pager._create_number: the number in the words `said` of one section set, with the lines saying the same words. */
+function createNumber(db: OnePagerDb, ctx: OnePagerCtx, b: Record<string, unknown>): Response {
+  const t = (b.target ?? {}) as Record<string, string>;
+  if (t.document_id !== db.doc.id) return json(404, { detail: "No such PRD" });
+  const key = String(t.section ?? ""), said = plain(String(t.said ?? ""));
+  const part = (t.part ?? "body") as "body" | "heading";
+  const old = String(((b.before ?? {}) as Record<string, unknown>).number ?? "").trim();
+  const next = String(((b.after ?? {}) as Record<string, unknown>).number ?? "").trim();
+  if (!key || !said) return json(422, { detail: "target: the section and the words the number is in" });
+  if (part !== "body" && part !== "heading") return json(422, { detail: "target.part: body or heading" });
+  if (!/^\d[\d,]*(?:\.\d+)?$/.test(next)) return json(422, { detail: "after.number: a number" });
+  if (!old) return json(422, { detail: "before.number: the number as you saw it" });
+  if (!db.sections.some((s) => s.key === key)) return json(404, { detail: "No such section in this PRD" });
+  const applies = decides(ctx);
+  if (!applies && RANK[ctx.role] < RANK.commenter) return json(403, { detail: "Viewers read the one-pager" });
+  const sees = seesDraft(db, ctx);
+  const before: Record<string, unknown> = numberValues(db, key, sees);
+  const sec = (before.sections as Record<string, { heading: string; body: string }>)[key];
+  const patched = said.split(" ")[0].toLowerCase() === old.toLowerCase() ? setNumber(sec[part], said, next) : null;
+  if (patched === null) return numberConflict(db, ctx, key, sees, "This number changed since you read it");
+  if (applies && inReview(db)) return json(409, { detail: IN_REVIEW });
+  const after: Record<string, unknown> = {
+    sections: { [key]: { ...sec, [part]: patched } },
+    // A heading's count is no line's words: the lines stay as they are.
+    lines: Object.fromEntries(Object.entries(before.lines as Record<string, string>).map(([i, x]) => [i, part === "heading" ? x : (setNumber(x, said, next) ?? x)])),
+    number: next,
+  };
+  before.number = old;
+  const c = {
+    id: stableUuid(`op-change-${db.doc.id}-${db.changes.length}-${mockNowMs()}`), session_id: applies ? stableUuid(`op-session-${ctx.id}`) : null,
+    document_id: db.doc.id, draft_ids: [] as string[], op: NUMBER_OP,
+    target: { document_id: db.doc.id, section: key, said, ...(part === "heading" ? { part } : {}), version: db.version }, before, after,
+    status: (applies ? "applied" : "proposed") as Change["status"], by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone",
+    at: new Date(mockNowMs()).toISOString(), decided_by: null, decided_at: null, reason: null, decision_reason: null,
+    // As one_pager.route: the PRD's decider, else its track owners (approvers), else the company's owners.
+    routed_to: applies ? [] : ctx.decider ? [ctx.decider] : (ctx.trackOwners ?? []).length ? [...ctx.trackOwners!] : ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,
+    session_open: applies, in_meeting: false,
+  };
+  if (applies) {
+    writeNumber(db, ctx, after);
+    c.draft_ids = [db.draft!.id];
+  }
+  db.changes.push(c);
+  return json(201, { change: out(db, ctx, c), flags: [] });
+}
+
+/**
+ * GET /v1/simple/changes?status=proposed's one-pager part (changes.listing sees edit_line and
+ * set_section_number on a PRD): the proposals this reader sees (an owner, its author, whom it is
+ * routed to), each with whether they may decide it and its words.
+ */
+export function onePagerProposalsOut(dbs: OnePagerDb[], me: { id: string; role: Role }, mine: boolean): Change[] {
+  return dbs
+    .flatMap((d) => d.changes)
+    .filter((c) => c.status === "proposed" && (!mine || c.by === me.id) && (me.role === "owner" || c.by === me.id || c.routed_to.includes(me.id)))
+    .map((c) => ({ ...c, can_decide: me.role === "owner" || c.routed_to.includes(me.id), can_undo: c.by === me.id, words: changeSentence(c, c.by_name, null, false) }));
 }
 
 /**
@@ -974,25 +1274,45 @@ export function onePagerInboxRows(
   me: { id: string; role: Role },
   seen: string | null,
 ): { proposals: Schemas["InboxSimpleChange"][]; decisions: Schemas["InboxSimpleChange"][] } {
-  const row = (c: Change, at: string | null, state?: Schemas["InboxSimpleChange"]["state"]): Schemas["InboxSimpleChange"] => {
+  // What the row is on and what was asked, as changes.inbox_rows (_subject, asked_of) for each kind:
+  // a line's wording quotes the line; a number fix names its PRD and the section it changes.
+  const words = (d: OnePagerDb, c: Change): Pick<Schemas["InboxSimpleChange"], "asked" | "subject" | "line_id" | "section"> => {
+    const proposed = c.status === "proposed";
+    if (c.op === "set_section_number") {
+      const n = String(c.after.number ?? "");
+      const name = `Section number on ${d.doc.title}`;
+      const done = changePhrase(c.op, c.target, c.before, c.after, null);
+      return {
+        subject: n ? `${name}: Use ${n}` : name,
+        // Still to decide: "proposed setting the number in “Not this quarter” to 6".
+        asked: proposed ? `proposed setting${done.slice("set".length)}` : done,
+        line_id: null,
+        section: String(c.target.section ?? "") || null,
+      };
+    }
     const line = String(c.before.line ?? "").split(/\s+/).filter(Boolean).join(" ");
     const next = String(c.after.line ?? "").split(/\s+/).filter(Boolean).join(" ");
     return {
-      id: c.id, op: c.op, status: c.status, item_id: null, item_title: null, document_id: c.document_id, by: c.by, by_name: c.by_name, at: c.at,
-      decided_by: c.decided_by, decided_at: c.decided_at, reason: c.reason, decision_reason: c.decision_reason,
-      state: state ?? (!seen || (at && at > seen) ? "new" : "open"), from_meeting: null,
+      subject: line || null,
       // Still to decide, it reads as proposed (changes.inbox_rows asked_of); once decided, as done.
-      asked: c.status === "proposed" ? `proposed new wording for a one-pager line${next ? `: “${next}”` : ""}` : next ? `edited a one-pager line to “${next}”` : "edited a one-pager line",
-      can_decide: c.status === "proposed" && (me.role === "owner" || c.routed_to.includes(me.id)), from_ask: false,
-      subject: line || null, question_id: null, line_id: String(c.target.line_id ?? "") || null,
+      asked: proposed ? `proposed new wording for a one-pager line${next ? `: “${next}”` : ""}` : changePhrase(c.op, c.target, c.before, c.after, null),
+      line_id: String(c.target.line_id ?? "") || null,
+      section: null,
     };
   };
-  const all = dbs.flatMap((d) => d.changes);
+  const row = (d: OnePagerDb, c: Change, at: string | null, state?: Schemas["InboxSimpleChange"]["state"]): Schemas["InboxSimpleChange"] => ({
+    id: c.id, op: c.op, status: c.status, item_id: null, item_title: null, document_id: c.document_id, by: c.by, by_name: c.by_name, at: c.at,
+    decided_by: c.decided_by, decided_at: c.decided_at, reason: c.reason, decision_reason: c.decision_reason,
+    state: state ?? (!seen || (at && at > seen) ? "new" : "open"), from_meeting: null,
+    can_decide: c.status === "proposed" && (me.role === "owner" || c.routed_to.includes(me.id)), from_ask: false,
+    question_id: null, ...words(d, c),
+  });
+  const all = dbs.flatMap((d) => d.changes.map((c) => [d, c] as const));
   return {
     // As the API: routed to me (the mock routes a proposal to the owners).
-    proposals: all.filter((c) => c.status === "proposed" && c.routed_to.includes(me.id)).map((c) => row(c, c.at)),
+    proposals: all.filter(([, c]) => c.status === "proposed" && c.routed_to.includes(me.id)).map(([d, c]) => row(d, c, c.at)),
     decisions: all
-      .filter((c) => c.by === me.id && (c.status === "accepted" || c.status === "declined") && c.decision_reason !== "Withdrawn by its author")
-      .map((c) => row(c, c.decided_at, !seen || (c.decided_at ?? "") > seen ? undefined : "done")),
+      .filter(([, c]) => c.by === me.id && (c.status === "accepted" || c.status === "declined") && c.decision_reason !== "Withdrawn by its author")
+      .map(([d, c]) => row(d, c, c.decided_at, !seen || (c.decided_at ?? "") > seen ? undefined : "done")),
   };
 }

@@ -186,7 +186,7 @@ export const entryOut = (e: TrashEntryRow, now: string, canRestore = false): Sch
  * whoever deleted a feature, a goal, a decision, a question or a meeting's agenda item restores it too. */
 export function mayRestore(entry: TrashEntryRow, me: { id: string; role: string }): boolean {
   if (me.role === "owner") return true;
-  return entry.out.deleted_by === me.id && ["feature", "goal", "decision", "question", "agenda_item"].includes(entry.out.root.type);
+  return entry.out.deleted_by === me.id && ["feature", "goal", "decision", "question", "agenda_item", "milestone"].includes(entry.out.root.type);
 }
 
 /** trash-features-goals: the Simple rows a feature's or a goal's entry marks `trashed`; the mock
@@ -200,6 +200,8 @@ export type TrashedSimple = {
   versions?: { roadmap: string; without: string[] }[];
   /** edit-decisions: Simple's decisions and the PRD's questions (a question's `id` is set when it is trashed). */
   sheet?: { id?: string; trashed?: boolean }[];
+  /** goal-map-editing: the Goal map's milestones (`trashed` while in Trash). */
+  goal_map?: { milestones: { id: string; trashed?: boolean }[] };
 };
 
 /** trash-features-goals: takes `entry` out of Trash, putting back the feature or the goal it
@@ -215,6 +217,21 @@ export function restoreFromTrash(db: TrashDb, entry: TrashEntryRow, now: string,
   }
   if (root.type === "feature") simple?.items.filter((s) => s.key === root.slug && (!entry.roadmap || s.roadmap === entry.roadmap)).forEach((s) => (s.trashed = false));
   if (root.type === "goal") simple?.goal_buckets?.goals.filter((g) => g.id === root.id).forEach((g) => (g.trashed = false));
+  // trash_items._parent_back: a restored part stays under its parent while that parent is on the
+  // roadmap and open; else (in Trash, merged) or when going back under it would close a loop, it
+  // is a feature of its own.
+  if (root.type === "feature" && simple && "ids" in simple)
+    for (const me of (simple as SimpleDb).items.filter((s) => s.key === root.slug && !s.trashed && s.parent)) {
+      const live = (k: string) => (simple as SimpleDb).items.find((y) => y.key === k && !y.trashed && y.roadmap === me.roadmap);
+      const parent = live(me.parent!);
+      const seen = new Set([me.parent!]);
+      let up = parent?.parent;
+      while (up && !seen.has(up) && up !== me.key) {
+        seen.add(up);
+        up = live(up)?.parent;
+      }
+      if (!parent || parent.merged_into || up === me.key) me.parent = undefined;
+    }
   // trash_items._onto_current: back on every version published while it was in Trash.
   if (root.type === "feature")
     for (const v of simple?.versions ?? []) if (!entry.roadmap || v.roadmap === entry.roadmap) v.without = v.without.filter((k) => k !== root.slug);
@@ -226,6 +243,7 @@ export function restoreFromTrash(db: TrashDb, entry: TrashEntryRow, now: string,
     if (f && f.goal_ids.length === left.size && f.goal_ids.every((g) => left.has(g))) f.goal_ids = [...l.goal_ids];
   }
   if (root.type === "decision" || root.type === "question") simple?.sheet?.filter((r) => r.id === root.id).forEach((r) => (r.trashed = false));
+  if (root.type === "milestone") simple?.goal_map?.milestones.filter((m) => m.id === root.id).forEach((m) => (m.trashed = false));
   db.entries = db.entries.filter((e) => e !== entry);
   return entryOut(entry, now);
 }

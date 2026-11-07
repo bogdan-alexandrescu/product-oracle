@@ -226,9 +226,9 @@ SUBJECTS: dict[str, type[_Subject]] = {
 }
 
 
-# AUD-9: a person's own pages (sources, settings, the Inbox, the account): a chat on one
-# holds the page's name only (the web's pageNameOnly).
-_NAME_ONLY = re.compile(r"^/(sources|settings|inbox|account)(/|$)")
+# AUD-9: a person's own pages (sources, settings, the Inbox, Simple's Inbox, the account): a
+# chat on one holds the page's name only (the web's pageNameOnly).
+_NAME_ONLY = re.compile(r"^/(sources|settings|inbox|account|simple/inbox)(/|$)")
 
 
 def name_only(path: str) -> bool:

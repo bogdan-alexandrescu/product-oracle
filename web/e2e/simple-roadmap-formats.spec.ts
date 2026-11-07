@@ -28,13 +28,20 @@ async function open(page: Page, format: (typeof FORMATS)[number], email?: string
   await expect(page.getByTestId(`format-${format}`)).toHaveAttribute("aria-pressed", "true");
 }
 
-/** Drags a board card with the mouse onto a column's header. */
+/**
+ * Drags a board card with the mouse onto a column: its header, or, where the card sits below the
+ * fold of a long column (the Goal map's features fill Next since P-1, as fix2-simple-roadmap-board
+ * drags), the column at the card's own height (a desktop's columns are one grid row, as tall as the longest).
+ */
 async function dragTo(page: Page, key: string, to: "now" | "next" | "later") {
+  await card(page, key).scrollIntoViewIfNeeded();
   const from = (await card(page, key).boundingBox())!;
-  const target = (await column(page, to).locator("header").boundingBox())!;
+  const head = (await column(page, to).locator("header").boundingBox())!;
+  const col = (await column(page, to).boundingBox())!;
+  const y = head.y >= 0 ? head.y + head.height / 2 : Math.min(from.y + from.height / 2, col.y + col.height - 8);
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
-  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 12 });
+  await page.mouse.move(head.x + head.width / 2, y, { steps: 12 });
   await page.mouse.up();
 }
 

@@ -111,10 +111,17 @@ test.describe("desktop", () => {
     const card = boardCard(page, "alert-digest");
     await expect(card.getByTestId("board-flag")).toContainText("after its milestone");
     const warnings = [(await card.getByTestId("board-flag").textContent())!.trim(), (await card.getByTestId("board-broken").textContent())!.trim()];
-    // The Timeline (mk-qa4-roadmap): the broken link in the panel above the chart, and both in
-    // the item's side panel.
+    // The Timeline (mk-qa4-roadmap): both in the panel above the chart (pre-demo QA S-5 and
+    // S-14, 7821685f4 and efd457e59: the broken link in words, the end past its milestone by
+    // name with its sentence behind an (i)), and both in the item's side panel.
     await format(page, "timeline");
-    await expect(page.getByTestId("conflicts").locator('[data-testid="conflict"][data-item="alert-digest"]')).toContainText(warnings[1]);
+    const listed = page.getByTestId("conflicts").locator('[data-testid="conflict"][data-item="alert-digest"]');
+    await expect(listed).toHaveCount(2);
+    await expect(listed.filter({ hasText: warnings[1] })).toBeVisible();
+    const why = listed.getByTestId("conflict-why");
+    await why.hover();
+    await expect(page.getByRole("tooltip").filter({ hasText: warnings[0] })).toBeVisible();
+    await page.mouse.move(0, 0);
     await openRoadmapItem(page, "alert-digest");
     const flags = page.getByTestId("item-panel").getByTestId("card-flags");
     for (const w of warnings) await expect(flags).toContainText(w);

@@ -635,7 +635,8 @@ async def test_every_audience_keeps_the_goal_column_and_the_cards_why_text(clien
     # roadmap-draft-wording: the written bare code is kept with its goal's name.
     assert re.search(r"<td[^>]*>\s*G1 Activation\s*</td>", html), html
     # The written card of CSV parser: its why (goal and evidence) is kept.
-    assert "Parse every column. Serves G1." in text
+    # X-8: the goal reads by code and name.
+    assert "Parse every column. Serves G1 Activation." in text
 
 
 async def test_serving_no_goal_comes_from_the_items_goal_link_not_the_cards_words(client, ctx):

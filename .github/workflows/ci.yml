@@ -75,8 +75,37 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pytest -n 4 -p no:cacheprovider -m "not timing"
-      # Tests that assert a wall-clock limit (marker `timing`) run alone after the parallel run:
-      # under four workers the runner's load, not the code, decides them.
+
+  # Tests that assert a wall-clock limit (marker `timing`) run alone, on GitHub's hosted runners
+  # where their budgets were tuned: on the pool's VMs four of them miss their budget on main itself
+  # (Nov 6: the Inbox checkpoint p95 and three run-ticker timings), as e2e-timing's did.
+  api-timing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: oracle
+          POSTGRES_PASSWORD: oracle
+          POSTGRES_DB: oracle_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U oracle -d oracle_test"
+          --health-interval 2s --health-timeout 5s --health-retries 30
+    defaults:
+      run:
+        working-directory: api
+    env:
+      ORACLE_TEST_DATABASE_URL: postgresql+asyncpg://oracle:oracle@localhost:5432/oracle_test
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --frozen
       - run: uv run pytest -p no:cacheprovider -m timing
 
   web:

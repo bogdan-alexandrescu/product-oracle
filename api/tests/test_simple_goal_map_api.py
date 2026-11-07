@@ -47,6 +47,9 @@ Test cards (protects / fails_when / no_claim):
   as a guardrail is left out of the goals and read in the guardrail strip (with its 7
   days) when no guardrail constraint is set; fails_when=it is a goal card or missing from
   the strip; no_claim=the web's strip.
+- test_a_merged_feature_leaves_the_map (panel-menu): protects=a published feature merged
+  into another through the feature panel (merge_item) is no longer one of the map's
+  features; fails_when=it is still listed as live; no_claim=the kept feature's links.
 """
 
 import uuid
@@ -510,6 +513,32 @@ async def test_edits_need_approver(client, role):
         assert (await call).status_code == 403
 
 
+async def test_a_milestone_says_who_may_change_it(client):
+    """goal-map-editing review: each milestone carries can_change, the rule the milestone
+    routes enforce (drafts.can_edit): an owner, the roadmap's decider, or with no decider its
+    owner as approver. An approver who is not the decider reads false, though map can_edit is
+    true for them."""
+    from oracle.auth.models import User
+    from oracle.review.models import DocumentReviewPolicy
+
+    ctx, ids = await world()
+    async with tenant_session(ctx.tenant_id) as s:
+        decider = User(email="decider@example.com", password_hash="x", role="approver")
+        s.add(decider)
+        await s.flush()
+        s.add(DocumentReviewPolicy(document_id=uuid.UUID(ids["roadmap"]), decider_id=decider.id))
+        await s.commit()
+        ctx.users["decider"] = decider
+    got = {}
+    for role in ("owner", "approver", "decider", "commenter", "viewer"):
+        body = await read(client, ctx, role)
+        assert {m["can_change"] for m in body["milestones"]} and body["milestones"], role
+        got[role] = {m["can_change"] for m in body["milestones"]}
+    assert got == {"owner": {True}, "approver": {False}, "decider": {True},
+                   "commenter": {False}, "viewer": {False}}  # fmt: skip
+    assert (await read(client, ctx, "approver"))["can_edit"] is True
+
+
 async def test_only_the_company_roadmap_feeds_the_map(client):
     """one-roadmap-many-prds (train review): while the company roadmap exists, the map reads
     its goal milestones alone (the older roadmap's are history) and a new milestone lands on
@@ -573,3 +602,14 @@ async def test_a_guardrail_goal_is_never_a_goal_card(client):
     g = body["guardrail"]
     assert g["name"] == "Account Restrictions" and g["rule"] == "= 0 every day"
     assert g["days"] == [0] * 7 and g["held"] is True and g["current"] == 0
+
+
+async def test_a_merged_feature_leaves_the_map(client):
+    ctx, ids = await world()
+    r = await client.post("/v1/simple/changes", headers=ctx.as_("owner"), json={
+        "op": "merge_item", "target": {"item_id": ids["f1"], "into_id": ids["f2"]},
+        "before": {}, "after": {}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    assert r.json()["change"]["status"] == "applied"
+    body = await read(client, ctx)
+    assert [f["id"] for f in body["features"]] == [ids["f2"]]

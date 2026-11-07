@@ -44,12 +44,20 @@ function proofs(files: number, prs: number, done: number, total: number, value: 
   ];
 }
 
-/** The seed: which of the rows run today and which are being built (by rank). */
+/**
+ * The default company's story by item (the specs' own): Weekly alert digest, Alert routing by team
+ * (its proof 41 days old) and Welcome video run today, whatever else the ranking holds (P-1 put
+ * the Goal map's features in it, later items moved the ranks after them).
+ */
+const STORY_RUNNING = ["alert-digest", "alert-sso", "setup-video"];
+
+/** The seed: which of the rows run today (the story's items, else by rank) and which are being built (by rank). */
 export function seedCurrentState(rows: Row[], today: number): CurrentStateDb {
   const states: CurrentStateDb["states"] = {};
   const iso = (days: number) => new Date(today - days * DAY).toISOString();
-  const running = [2, 6, 8, 19, 26].filter((i) => i < rows.length);
-  const building = [0, 1, 3, 5].filter((i) => i < rows.length);
+  const story = STORY_RUNNING.map((k) => rows.findIndex((r) => r.code === k));
+  const running = story.every((i) => i >= 0) ? story : [2, 6, 8, 19, 26].filter((i) => i < rows.length);
+  const building = [0, 1, 3, 5].filter((i) => i < rows.length && !running.includes(i));
   running.forEach((i, k) => {
     const [files, prs, tasks, value, days, shipped] = RUNNING[k];
     const at = iso(days);

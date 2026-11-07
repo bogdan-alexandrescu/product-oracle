@@ -118,7 +118,7 @@ for (const phone of [false, true]) {
       await expect(question).toBeInViewport();
       await expect(question.getByTestId("question-pending")).toHaveText("Theo Brandt proposed: 5 invites");
       await tap(question.getByRole("button", { name: "Decide as recommended" }));
-      await expect(page.getByText("Decided Q6: 5 invites")).toBeVisible();
+      await expect(page.getByText("Decided Q6 Invite limit on the free plan: 5 invites")).toBeVisible();
 
       // Decided there, it leaves the Inbox and its count.
       const after = await openInboxFromRail(page, phone);
@@ -216,7 +216,7 @@ test.describe("a question's proposal in the Inbox", () => {
     await page.goto("/simple/decisions");
     const question = page.locator('[data-testid="question-row"][data-code="Q6"]');
     await tap(question.getByRole("button", { name: "Decide as recommended" }));
-    await expect(page.getByText("Decided Q6: 5 invites")).toBeVisible();
+    await expect(page.getByText("Decided Q6 Invite limit on the free plan: 5 invites")).toBeVisible();
     // The Inbox's old link, followed now.
     await page.goto(href);
     await expect(page.getByTestId("linked-decided")).toContainText(`${QUESTION} is decided already`);

@@ -352,9 +352,11 @@ def schedule(tenant_id: uuid.UUID, invite_id: uuid.UUID) -> None:
 
 
 async def drain() -> None:
-    """Wait for the background sends under way (tests; shutdown)."""
-    while _tasks:
-        await asyncio.gather(*list(_tasks), return_exceptions=True)
+    """Wait for the background sends under way (tests; shutdown): only the tasks not done
+    yet, as :func:`oracle.intake.read.drain` does (a done task leaves the set only when
+    the loop gets a turn)."""
+    while pending := [t for t in _tasks if not t.done()]:
+        await asyncio.gather(*pending, return_exceptions=True)
 
 
 async def _deliver_logged(tenant_id: uuid.UUID, invite_id: uuid.UUID) -> None:

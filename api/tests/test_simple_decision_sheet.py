@@ -53,19 +53,23 @@ Test cards (protects / fails_when / no_claim):
   change lists (``GET /v1/simple/changes``, Home and Waiting for you) its decision by its
   current code and name, in its target and words, after the decision is renamed;
   fails_when=it names the decision as it was when the suggestion was sent.
+- test_edited_by_names_the_last_edit_made_in_the_same_instant: protects=two edits of one
+  decision made in the same instant name the later one's person as "edited", in the order
+  they were made (``seq``), never by their random ids; fails_when=the row names the earlier
+  edit's person.
 """
 
 import uuid
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from oracle import company_time
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document
 from oracle.simple import questions
-from oracle.simple.models import SimpleMeeting, SimpleMeetingDecision, SimpleSession
+from oracle.simple.models import SimpleChange, SimpleMeeting, SimpleMeetingDecision, SimpleSession
 from oracle.tenancy import tenant_session
 from oracle.trash.filter import INCLUDE_TRASHED
 from tests.baseline_helpers import make_ctx
@@ -494,3 +498,30 @@ async def test_a_waiting_suggestion_names_its_decision_as_it_is_now(client):
     c = next(x for x in r.json() if x["id"] == cid)
     assert c["target"]["name"] == f"{d['ref']} Keep the free plan's seven-seat limit"
     assert "seven-seat" in c["words"] and "five-seat" not in c["words"]
+
+
+async def test_edited_by_names_the_last_edit_made_in_the_same_instant(client):
+    # Review finding (train AS replay review): two edits in the same instant (the clock is
+    # frozen) name the later one's person; the later edit is given the smaller id here, so an
+    # order that falls back to the id names the earlier edit's person.
+    ctx = await make_ctx()
+    d = await _decision(client, ctx, approver="approver")
+    target = {"decision_id": d["id"]}
+    one = await _change(
+        client, ctx, "owner", "edit_decision", target, {"context": "Asked by sales."}
+    )
+    two = await _change(
+        client, ctx, "approver", "edit_decision", target, {"context": "Asked again."}
+    )
+    assert one.status_code == two.status_code == 201, (one.text, two.text)
+    assert two.json()["change"]["status"] == "applied"
+    first, second = uuid.UUID(int=2**128 - 1), uuid.UUID(int=1)
+    async with tenant_session(ctx.tenant_id) as s:
+        for old, new in ((one.json()["change"]["id"], first), (two.json()["change"]["id"], second)):
+            await s.execute(
+                update(SimpleChange).where(SimpleChange.id == uuid.UUID(old)).values(id=new, at=NOW)
+            )
+        await s.commit()
+    row = _row(await _page(client, ctx), d["id"])
+    assert row["context"] == "Asked again."
+    assert row["edited_by"]["id"] == str(ctx.users["approver"].id)

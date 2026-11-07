@@ -464,6 +464,60 @@ async def delete_track(
     return entry
 
 
+async def delete_milestone(db: AsyncSession, principal: Any, row: Any) -> TrashEntry:
+    """goal-map-editing: a goal milestone deleted in Simple goes to Trash on its own. Its
+    features stay linked to it (``milestone_features``), so a restore brings it back with
+    them; while it is deleted every read leaves it out (``deleted_at``)."""
+    at = now()
+    entry = TrashEntry(
+        root_type="milestone",
+        root_id=row.id,
+        root={
+            "type": "milestone",
+            "id": str(row.id),
+            "slug": None,
+            "title": row.name,
+            "kind": "Milestone",
+            "code": row.code or None,
+        },
+        items=[],
+        deleted_by=getattr(principal, "id", None),
+        deleted_by_name=await _actor_name(db, principal),
+        reason=None,
+        published=False,
+        purge_after=at + timedelta(days=RETENTION_DAYS),
+    )
+    entry.created_at = at
+    db.add(entry)
+    await db.flush()
+    row.deleted_at, row.deleted_by = at, getattr(principal, "user_id", None)
+    await audit.record(db, principal, "trash.delete", "milestone", row.id,
+                       {"entry_id": str(entry.id), "root": entry.root, "items": []})  # fmt: skip
+    await db.flush()
+    return entry
+
+
+async def milestone_restored(db: AsyncSession, milestone_id: uuid.UUID) -> None:
+    """A milestone put back by its own restore (the ladder's Undo) leaves Trash too."""
+    await db.execute(
+        delete(TrashEntry).where(
+            TrashEntry.root_type == "milestone", TrashEntry.root_id == milestone_id
+        )
+    )
+
+
+async def _milestone_back(db: AsyncSession, entry: TrashEntry) -> None:
+    """A restored milestone entry puts the milestone back on its roadmap."""
+    if entry.root_type != "milestone":
+        return
+    from oracle.roadmap.models import TrackMilestone
+    from oracle.simple import goal_milestones
+
+    row = await db.get(TrackMilestone, entry.root_id)
+    if row is not None and row.deleted_at is not None:
+        await goal_milestones.put_back(db, row)
+
+
 async def _track_items_back(db: AsyncSession, entry: TrashEntry) -> None:
     """A restored track takes back its features that are still on no track."""
     from oracle.roadmap.models import RoadmapItem
@@ -551,7 +605,7 @@ async def _not_restored(db: AsyncSession, entry: TrashEntry) -> list[dict[str, A
 # it too (edit-decisions: and a decision or a PRD question); everything else in Trash is the
 # owners' alone. port-an-decisions: and a meeting's agenda item (a request is an owner's
 # delete).
-OWN_RESTORE = frozenset({"feature", "goal", "decision", "question", "agenda_item"})
+OWN_RESTORE = frozenset({"feature", "goal", "decision", "question", "agenda_item", "milestone"})
 
 
 def may_restore(principal: Any, entry: TrashEntry) -> bool:
@@ -588,6 +642,7 @@ async def restore_entry(
     from oracle.roadmap import alerts
 
     await _track_items_back(db, entry)
+    await _milestone_back(db, entry)
 
     dropped = await trash_items.after_restore(db, entry, principal)
     await alerts.reopen_after_trash(db, entry.root.get("closed_alerts") or [])
@@ -634,6 +689,15 @@ async def purge_entry(
     from oracle.simple import trash_items
 
     await trash_items.before_purge(db, entry)
+    if entry.root_type == "milestone":
+        from oracle.roadmap.models import TrackMilestone
+
+        # Its features' links go with it (milestone_features cascade).
+        await db.execute(
+            delete(TrackMilestone)
+            .where(TrackMilestone.id == entry.root_id, TrackMilestone.deleted_at.is_not(None))
+            .execution_options(synchronize_session=False)
+        )
     for model in (
         Run,
         Document,

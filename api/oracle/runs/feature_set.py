@@ -71,7 +71,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import confidence as confidence_weights
-from oracle import safe_yaml
+from oracle import safe_yaml, wording
 from oracle.baseline.models import Entity, Proposal
 from oracle.runs.schemas import FeatureSetCheck as CheckOut
 from oracle.runs.schemas import PrdScopeOut, ScopeFeatureOut, ScopeGoal, ScopeRequirementOut
@@ -522,7 +522,7 @@ def _check_sets(
         if key not in served:
             out.add(
                 "target_goal_unserved",
-                f"no included feature serves the target goal {key} ({title})",
+                f"no included feature serves the target goal {wording.named(title, key)}",
                 blocking=False,
             )
     out.flags = _flags(out.features, known)

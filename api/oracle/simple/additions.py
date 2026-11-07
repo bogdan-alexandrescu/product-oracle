@@ -80,6 +80,7 @@ from oracle.simple.schemas import (
     SimpleGoalSuggestionsOut,
     SimpleMatch,
     SimpleMergedInto,
+    SimplePartRef,
     SimpleSuggestJobOut,
 )
 from oracle.simple.schemas import (
@@ -687,8 +688,10 @@ async def _dependency_ideas(
 async def item_extras(
     db: AsyncSession, read_: service.Read, shown: list[service.Entry]
 ) -> dict[uuid.UUID, dict[str, Any]]:
-    """S7's fields of the roadmap read's items: looks_like, merged_into, drafting, flow."""
+    """S7's fields of the roadmap read's items: looks_like, merged_into, drafting, flow;
+    feature-parts' part_of, part_path and parts."""
     out: dict[uuid.UUID, dict[str, Any]] = {}
+    _parts(read_, shown, out)
     drafts_ = [e for e in shown if e.row.draft]
     merged = [e for e in shown if e.row.merged_into]
     if not drafts_ and not merged:
@@ -705,7 +708,7 @@ async def item_extras(
             x["looks_like"] = reconcile(e.row.title, read_.entries, features, e.row.id,
                                         e.roadmap.id)  # fmt: skip
         x["flow"] = await _flow(db, "draft_item", e.row.id)
-        out[e.row.id] = x
+        out.setdefault(e.row.id, {}).update(x)
     for e in merged:
         kept = by_key.get((e.roadmap.id, e.row.merged_into))
         out.setdefault(e.row.id, {})["merged_into"] = SimpleMergedInto(
@@ -714,6 +717,37 @@ async def item_extras(
             title=kept.row.title if kept else e.row.merged_into,  # type: ignore[arg-type]
         )
     return out
+
+
+def _ref(e: service.Entry) -> SimplePartRef:
+    # Its display code ("F-06"), "" when it has none: never its key.
+    return SimplePartRef(id=str(e.row.id), code=e.code or "", title=e.row.title,
+                         cut=e.status == "cut")  # fmt: skip
+
+
+def _trashed(row: RoadmapItem) -> SimplePartRef:
+    # A parent in Trash: its name, read "(in Trash)".
+    return SimplePartRef(id=str(row.id), code="", title=row.title, in_trash=True)
+
+
+def _parts(
+    read_: service.Read, shown: list[service.Entry], out: dict[uuid.UUID, dict[str, Any]]
+) -> None:
+    """feature-parts: each shown item's parent (part_of), the path to it from the top
+    (part_path) and its parts (open or cut; never merged), in order. Any depth."""
+    parts: dict[uuid.UUID, list[SimplePartRef]] = {}
+    for e in read_.entries:
+        if e.ancestors and e.status != "merged":
+            parts.setdefault(e.ancestors[0].row.id, []).append(_ref(e))
+    for e in shown:
+        path = [_ref(a) for a in reversed(e.ancestors)]
+        top = e.ancestors[-1] if e.ancestors else e
+        if top.trashed_parent is not None:
+            path.insert(0, _trashed(top.trashed_parent))
+        if path:
+            out.setdefault(e.row.id, {}).update(part_of=path[-1], part_path=path)
+        if e.row.id in parts:
+            out.setdefault(e.row.id, {})["parts"] = parts[e.row.id]
 
 
 # --------------------------------------------------------------------------- the jobs

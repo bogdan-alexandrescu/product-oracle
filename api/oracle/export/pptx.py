@@ -87,11 +87,17 @@ def _font(tokens: dict, name: str) -> str:
     return first or "DejaVu Sans"
 
 
+_DATE_MARK = re.compile(r"\[(unverified|date withdrawn)\]")
+
+
 def _runs(children) -> list[Run]:
     runs: list[Run] = []
     bold = italic = False
     for t in children or []:
-        if t.type == "text":
+        if t.type == "text" and bold and (m := _DATE_MARK.fullmatch(t.content)):
+            # X-12: a flagged date's mark is a plain word, as the app shows it.
+            runs.append(Run(m.group(1), False, italic))
+        elif t.type == "text":
             # A date in the brief's text reads month first, as on the HTML slides (E-11).
             runs.append(Run(days_in_words(t.content), bold, italic))
         elif t.type == "code_inline":
@@ -406,10 +412,9 @@ def deck_to_pptx(deck: Deck) -> bytes:
             if s.kind == "sources":
                 top = _add_state(slide, s, style, BODY_TOP)
                 frame = _textbox(slide, MARGIN, top, width, Inches(5))
-                for i, (number, src_title, kind, retrieved) in enumerate(s.sources):
+                for i, (number, src_title, _kind, retrieved) in enumerate(s.sources):
                     para = frame.paragraphs[0] if i == 0 else frame.add_paragraph()
                     para.space_after = Pt(6)
-                    extra = f"  {kind}" + (f", retrieved {retrieved}" if retrieved else "")
                     _write_runs(
                         para,
                         [Run(f"{number}. {src_title}")],
@@ -418,9 +423,16 @@ def deck_to_pptx(deck: Deck) -> bytes:
                         style["mono"],
                         style["text"],
                     )
-                    _write_runs(
-                        para, [Run(extra)], 12, style["body"], style["mono"], style["muted"]
-                    )
+                    # X-9: a source reads by its title; never its kind.
+                    if retrieved:
+                        _write_runs(
+                            para,
+                            [Run(f"  retrieved {retrieved}")],
+                            12,
+                            style["body"],
+                            style["mono"],
+                            style["muted"],
+                        )
             else:
                 _add_body(slide, s, deck, style)
         footer = _textbox(slide, MARGIN, FOOTER_TOP, width, Inches(0.35), wrap=False)

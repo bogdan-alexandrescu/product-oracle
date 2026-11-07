@@ -848,7 +848,10 @@ async def test_exports_resolve_prd_links_and_carry_provenance(client, owner, run
     assert f'href="{app}/documents/{PRD}/v/1#s-s-5-1"' in html
     assert 'href="/documents/' not in html
     md = (await client.get(url, params={"format": "md"}, headers=auth)).text
-    assert f"from {PRD_TITLE} ({PRD}) version 1" in md.split("\n-->")[0]
+    # Export QA pass X, X-17 (train AS cdf393d16): the markdown export is plain markdown with
+    # no banner; its front matter keeps the PRD and the version the roadmap was built from.
+    assert "Product Oracle export" not in md
+    assert f"prd: {{document: {PRD}, version: 1}}" in md.split("\n---\n", 1)[0]
     deck = (await client.get(f"/v1/documents/{ROADMAP}/versions/1/deck", headers=auth)).json()
     assert deck["source"]["slug"] == PRD
     assert f"From {PRD_TITLE} v1" in deck["banner"]

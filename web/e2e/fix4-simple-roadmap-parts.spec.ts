@@ -72,7 +72,8 @@ for (const [where, use] of [
         await expect(legendItem(page, /^A broken link$/)).toHaveCount(1);
         // qa-simple-roadmap-32: the Later column's count includes the cut In-app tour.
         await expect(column(page, "later").getByTestId("board-below")).toContainText("In-app tour");
-        await expect(column(page, "later").getByTestId("column-count")).toHaveText("1 item, 1 cut");
+        // roadmap-edit-fixes round 1: F-03 Health log is a live, planned Later item on its PRD's roadmap.
+        await expect(column(page, "later").getByTestId("column-count")).toHaveText("2 items, 1 cut");
       });
     });
   }
@@ -165,10 +166,9 @@ for (const [where, use] of [
 
       // qa-simple-roadmap-35: the hollow diamond has its key.
       await expect(legendItem(page, "Key date in the draft")).toHaveCount(1);
-      // qa-simple-roadmap-29: the working draft's time carries no zone name.
+      // pre-demo QA Demo 8 (was qa-simple-roadmap-29): the working draft's time with its day, month first, and the company zone.
       const words = page.getByTestId("draft-words");
-      await expect(words).toContainText(/since \d{1,2}:\d{2} [AP]M/);
-      await expect(words).not.toContainText(/[AP]M [A-Z]{2,5}\b/);
+      await expect(words).toContainText(/since [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d{2} [AP]M [A-Z]{2,5}/);
     });
 
     test(`days are written month-first (${where})`, async ({ page }) => {

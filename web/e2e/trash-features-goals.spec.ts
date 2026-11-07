@@ -226,9 +226,11 @@ async function moveBar(page: Page, key: string) {
   await expect(count).not.toHaveText(before ?? "");
 }
 
-async function sendForReview(page: Page) {
-  await page.getByTestId("draft-banner").getByRole("button", { name: "Send for review" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Sent for review" })).toBeVisible();
+/** The owner sends the draft on: with no named decider, their Approve and publish (roadmap-decide),
+ * after which it waits in review on the roadmap's required reviewer. */
+async function ownerApproves(page: Page) {
+  await page.getByTestId("draft-banner").getByRole("button", { name: "Approve and publish" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Approved: Alerts roadmap waits for 1 more reviewer" })).toBeVisible();
 }
 
 type RoadmapItem = Item & { key: string; roadmap: { slug: string } };
@@ -248,11 +250,11 @@ test("a feature deleted before the roadmap's next version is published comes bac
   expect(feature && other).toBeTruthy();
   await deleteFeature(page, feature);
 
-  // Another feature's dates moved on the Timeline and the draft sent for review.
+  // Another feature's dates moved on the Timeline and the owner's Approve and publish on the draft.
   await moveBar(page, other.key);
   const roadmap = page.getByTestId("simple-roadmap");
   await expect(roadmap).not.toContainText(feature.title);
-  await sendForReview(page);
+  await ownerApproves(page);
   // The required reviewer's approval on Home publishes the next version, made without the
   // feature in Trash.
   await approveOnHome(page);
@@ -304,7 +306,7 @@ test("a feature added in the draft and restored while the draft is in review sta
   await moveBar(page, other.key);
   const roadmap = page.getByTestId("simple-roadmap");
   await expect(roadmap).not.toContainText(title);
-  await sendForReview(page);
+  await ownerApproves(page);
 
   await page.goto("/settings/trash");
   const row = page.getByTestId("trash-entry").filter({ hasText: title });
@@ -332,15 +334,15 @@ test("a feature added in the draft and restored while the draft is in review sta
 
 /*
  * Card tfg-draft-approved (review round 6): protects = a feature added in the open draft and
- * deleted, its draft then sent and approved while it is in Trash, is still in Settings › Trash;
+ * deleted, its draft then approved by the owner and the required reviewer while it is in Trash, is still in Settings › Trash;
  * Restore puts it in the roadmap's working draft (a new one), not on the published roadmap: a
- * viewer does not see it, its owner does; once that draft is sent and approved on Home it is on
+ * viewer does not see it, its owner does; once the owner approves that draft and the reviewer approves it on Home it is on
  * the roadmap; fails_when = the approval loses it (no Trash row, or Restore refused), Restore puts
- * it on the published roadmap, or the new draft cannot be sent with it; no_claim = the API's rows
+ * it on the published roadmap, or the owner cannot approve the new draft with it; no_claim = the API's rows
  * (pytest test_a_feature_only_in_the_draft_is_restored_to_the_draft_only[draft_approved]).
  */
 test("a feature added in the draft and restored after the draft was approved without it comes back in a new draft", async ({ page }) => {
-  // Two drafts sent and approved, with sign-ins between: past the default 30 s.
+  // Two drafts approved, with sign-ins between: past the default 30 s.
   test.slow();
   await page.addInitScript((key) => localStorage.setItem(key, "trash-reviewer"), MOCK_SCENARIO_KEY);
   await login(page);
@@ -365,11 +367,11 @@ test("a feature added in the draft and restored after the draft was approved wit
   expect(added).toBeTruthy();
   await deleteFeature(page, added);
 
-  // The draft sent and approved on Home while the feature is in Trash.
+  // The owner's Approve and publish, then the reviewer's approval on Home, while the feature is in Trash.
   await moveBar(page, other.key);
   const roadmap = page.getByTestId("simple-roadmap");
   await expect(roadmap).not.toContainText(title);
-  await sendForReview(page);
+  await ownerApproves(page);
   await approveOnHome(page);
   await signOut(page);
   await login(page);
@@ -393,12 +395,12 @@ test("a feature added in the draft and restored after the draft was approved wit
   await expect(roadmap).toContainText(other.title);
   await expect(roadmap).not.toContainText(title);
 
-  // The new draft is sent with it and, approved on Home, it is on the roadmap.
+  // The owner approves the new draft with it and, once the reviewer approves it on Home, it is on the roadmap.
   await signOut(page);
   await login(page);
   await page.goto("/simple/roadmap");
   await expect(page.getByTestId("simple-chart")).toBeVisible();
-  await sendForReview(page);
+  await ownerApproves(page);
   await approveOnHome(page);
   await signOut(page);
   await login(page, "vic.moss@example.com");
@@ -432,7 +434,7 @@ async function addInDraft(page: Page, title: string): Promise<RoadmapItem> {
 /*
  * Card tfg-approved-then-open (owner's rule, Nov 5): protects = a feature added in the open draft
  * and deleted, that draft approved while it is in Trash, and then the roadmap's next draft opened
- * (still working, or sent and waiting for approval): Restore in Settings › Trash puts the feature
+ * (still working, or approved by its owner and waiting for the reviewer): Restore in Settings › Trash puts the feature
  * in that draft only; a viewer does not see it; approving that draft puts exactly one row of it on
  * the roadmap; fails_when = Restore puts it on the published roadmap, opens another draft beside
  * it, or approving shows none or two; no_claim = the API's rows (pytest
@@ -440,7 +442,7 @@ async function addInDraft(page: Page, title: string): Promise<RoadmapItem> {
  */
 for (const then of ["working", "in review"] as const) {
   test(`a feature restored after its draft was approved, while the next draft is ${then}, lands in that draft only`, async ({ page }) => {
-    // Two drafts sent and approved, with sign-ins between: past the default 30 s.
+    // Two drafts approved, with sign-ins between: past the default 30 s.
     test.slow();
     await page.addInitScript((key) => localStorage.setItem(key, "trash-reviewer"), MOCK_SCENARIO_KEY);
     await login(page);
@@ -450,16 +452,16 @@ for (const then of ["working", "in review"] as const) {
     const added = await addInDraft(page, title);
     await deleteFeature(page, added);
 
-    // Its draft sent and approved on Home while the feature is in Trash.
+    // The owner's Approve and publish on its draft, then the reviewer's approval on Home, while the feature is in Trash.
     await moveBar(page, first.key);
-    await sendForReview(page);
+    await ownerApproves(page);
     await approveOnHome(page);
     await signOut(page);
     await login(page);
 
-    // The roadmap's next draft: another bar moved, and maybe sent for review.
+    // The roadmap's next draft: another bar moved, and maybe the owner's Approve and publish.
     await moveBar(page, second.key);
-    if (then === "in review") await sendForReview(page);
+    if (then === "in review") await ownerApproves(page);
 
     await page.goto("/settings/trash");
     const row = page.getByTestId("trash-entry").filter({ hasText: title });
@@ -470,8 +472,8 @@ for (const then of ["working", "in review"] as const) {
     await page.goto("/simple/roadmap");
     await expect(page.getByTestId("simple-chart")).toBeVisible();
     await expect(rows).toHaveCount(1);
-    // Still one draft to send (when it was working), with the feature in it.
-    if (then === "working") await sendForReview(page);
+    // Still one draft for the owner to approve (when it was working), with the feature in it.
+    if (then === "working") await ownerApproves(page);
 
     // A viewer reads the published roadmap: it is not there.
     await signOut(page);

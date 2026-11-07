@@ -3,7 +3,9 @@ Oracle's existing milestone model (``oracle.roadmap.models.TrackMilestone``,
 ``roadmap_id``/``goal_id`` set, ``track_id`` null) rather than a second table.
 
 Own milestones (created here) are created, edited, deleted and restored directly by who
-may change the roadmap (the same rule as a key date, ``drafts.can_edit``). A PRD's own
+may change the roadmap (the same rule as a key date, ``drafts.can_edit``). A deleted one
+goes to Settings > Trash (goal-map-editing, ``oracle.trash.service.delete_milestone``); its
+own restore takes it out of Trash too. A PRD's own
 milestones (``origin_prd_id`` set) are read-only from the PRD's plan (its latest approved
 version, ``oracle.simple.plan``): materialised here on first read, idempotently, so a
 later edit has a row to hold a ``pending_change`` on. Editing one of those does not change
@@ -394,7 +396,11 @@ async def delete(db: AsyncSession, principal: Any, milestone_id: uuid.UUID) -> N
         raise _error(status.HTTP_403_FORBIDDEN,
                      "Only an owner or the roadmap's decider (with none, its owner) "
                      "changes its milestones")  # fmt: skip
-    row.deleted_at, row.deleted_by = company_time.now(), _me(principal)
+    # goal-map-editing: it goes to Settings > Trash (its features stay linked to it).
+    from oracle.trash import service as trash
+
+    await trash.delete_milestone(db, principal, row)
+    row.deleted_by = _me(principal)
     await db.flush()
     await audit.record(db, principal, "goal_milestone.delete", "track_milestone", row.id, data={})
     await db.commit()
@@ -410,6 +416,9 @@ async def restore(db: AsyncSession, principal: Any, milestone_id: uuid.UUID) -> 
                      "Only an owner or the roadmap's decider (with none, its owner) "
                      "changes its milestones")  # fmt: skip
     await put_back(db, row)
+    from oracle.trash import service as trash
+
+    await trash.milestone_restored(db, row.id)
     await db.flush()
     await audit.record(db, principal, "goal_milestone.restore", "track_milestone", row.id, data={})
     await db.commit()

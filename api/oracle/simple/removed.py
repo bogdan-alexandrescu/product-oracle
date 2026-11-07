@@ -43,6 +43,8 @@ from oracle.simple.schemas import (
 router = APIRouter(prefix="/v1/simple", tags=["simple"])
 
 CUT_OPS = ("cut", "cut_with_dependents")
+# The feature panel's Status field cuts with set_status: its stored ``after`` says cut.
+STATUS_OP = "set_status"
 
 
 async def _names(db: AsyncSession) -> dict[uuid.UUID, str]:
@@ -51,14 +53,15 @@ async def _names(db: AsyncSession) -> dict[uuid.UUID, str]:
 
 
 async def _who_cut(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, tuple]:
-    """Item id -> (by, at) of the latest applied or accepted cut that covers it (not undone)."""
+    """Item id -> (by, at) of the latest applied or accepted cut that covers it (not undone):
+    a cut, a cut with its dependents, or a Status set to cut."""
     if not ids:
         return {}
     undone = select(SimpleChange.undoes_id).where(SimpleChange.undoes_id.is_not(None))
     rows = await db.scalars(
         select(SimpleChange)
         .where(
-            SimpleChange.op.in_(CUT_OPS),
+            SimpleChange.op.in_((*CUT_OPS, STATUS_OP)),
             SimpleChange.status.in_(("applied", "accepted")),
             SimpleChange.id.not_in(undone),
         )
@@ -66,6 +69,8 @@ async def _who_cut(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, tup
     )
     out: dict[uuid.UUID, tuple] = {}
     for c in rows:
+        if c.op == STATUS_OP and not (c.after or {}).get("cut"):
+            continue
         keys = list(c.after or {}) if c.op == "cut_with_dependents" else [c.target.get("item_id")]
         for k in keys:
             try:

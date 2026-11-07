@@ -19,7 +19,9 @@ from oracle.quality import text as quality_text
 from oracle.runs import rejection
 from oracle.sources.connectors import slack
 
-CPU_LIMIT = 0.2
+# A backtracking pattern on 200k characters takes minutes; a linear one well under a second on any
+# runner. 1.0 keeps that gap and stops slower CI hardware failing a linear pattern (0.218 s, Nov 6).
+CPU_LIMIT = 1.0
 WALL_LIMIT = 30
 SIZES = (20_000, 200_000)
 

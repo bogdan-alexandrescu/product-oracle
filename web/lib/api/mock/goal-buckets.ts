@@ -220,7 +220,7 @@ export function placeBucketGoals(db: GoalBucketsDb, baseline: { key: string; typ
  * Ground Truth's goals): its attrs.position is its place in the one goal order, and the Ground Truth's goal
  * of the same key takes it too, so every page follows. Approvers and owners, as the API.
  */
-export async function placeBucketGoal(simple: { goal_buckets?: GoalBucketsDb }, role: string, req: Request, p: string[], baseline: { key: string; type: string; attrs?: Record<string, unknown> | null }[]): Promise<Response | null> {
+export async function placeBucketGoal(simple: { goal_buckets?: GoalBucketsDb }, role: string, req: Request, p: string[], baseline: { id?: string; key: string; type: string; attrs?: Record<string, unknown> | null }[]): Promise<Response | null> {
   if (p[1] !== "baseline" || p[2] !== "entities" || !p[3] || p[4] || req.method !== "PATCH") return null;
   const g = simple.goal_buckets?.goals.find((x) => x.id === p[3]);
   if (!g) return null;
@@ -229,7 +229,8 @@ export async function placeBucketGoal(simple: { goal_buckets?: GoalBucketsDb }, 
   const at = body.attrs?.position;
   if (at != null && !(typeof at === "number" && Number.isInteger(at) && at >= 1)) return json(422, { detail: "A goal's position is a whole number of 1 or more" });
   g.position = (at as number | null | undefined) ?? null;
-  const e = baseline.find((x) => x.type === "goal" && x.key === orderKey(g));
+  // goal-map-editing: or the Ground Truth goal of the same id (goal-ladder's goals are both).
+  const e = baseline.find((x) => x.type === "goal" && (x.key === orderKey(g) || x.id === g.id));
   if (e) e.attrs = { ...e.attrs, position: g.position };
   return json(200, { applied: true, entity: { id: g.id, type: "goal", key: orderKey(g), title: g.title, status: g.archived ? "rejected" : "confirmed", attrs: { ...(e?.attrs ?? {}), position: g.position } }, proposal: null });
 }
@@ -274,6 +275,8 @@ export function trashGoal(db: GoalBucketsDb, bin: GoalBucketsTrash, id: string, 
   const g = db.goals.find((x) => x.id === id && !x.trashed);
   if (!g) return json(404, { detail: "No such goal" });
   if (to && !db.goals.some((x) => x.id === to && !x.archived && !x.trashed && x.id !== g.id)) return json(422, { detail: "Pick another goal" });
+  // G-4: the features that served it, which Trash says come back with it.
+  const features = db.features.filter((f) => f.goal_ids.includes(g.id)).length;
   const before = to ? moveOff(db, g, to) : [];
   g.trashed = true;
   const at = bin.now();
@@ -285,7 +288,7 @@ export function trashGoal(db: GoalBucketsDb, bin: GoalBucketsTrash, id: string, 
   const row: TrashEntryRow = {
     out: {
       id: crypto.randomUUID(),
-      root: { type: "goal", id: g.id, slug: g.key, title: g.title, kind: "goal", code: null },
+      root: { type: "goal", id: g.id, slug: g.key, title: g.title, kind: "goal", code: null, features, meeting: null },
       items: [], deleted_by: bin.id, deleted_by_name: bin.name, deleted_at: at, reason,
       published: false, purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString(),
     },

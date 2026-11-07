@@ -24,6 +24,17 @@ the decider (else that track owner, else the company's owners); viewers read. Th
 its sections are written together, so they never disagree; submitting the draft imports
 the PRD's next version with the patched sections, through its review policy.
 
+**Fixing a number** (owner, Nov 5): each "Needs a look" numbers item carries its fix (the
+count set to the items listed, the company-wide target to what its parts add up to), the
+change engine's ``set_section_number`` op: the number in the words ``said`` of one section,
+through the same working draft, with the same rights, Undo and approval as a line edit; a
+stale ``before`` is 409 naming who changed the section. The item clears for those who see
+the draft (the numbers are checked on the drafted sections). A count in the section's
+heading ("Later · 8 items" over six listed; owner, Nov 5, 'Fix the heading too') is set the
+same way (``target.part`` "heading"): the draft holds the new heading
+(``overlay["headings"]``: {key: heading}), the one-pager reads it, and submitting the draft
+imports it under the same section key.
+
 **Remind** (owner, 2026-10-26): on a submitted draft, the PRD's owners (company owners, its
 track owners) and its decider press Remind (:func:`remind`): each reviewer the draft waits
 on gets an Inbox nudge "<name> is waiting for your review of <PRD>" (``review_reminder``),
@@ -40,16 +51,17 @@ from datetime import date, datetime, timedelta
 from html import escape
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time, safe_yaml
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.baseline.models import Entity
 from oracle.docs import visibility
 from oracle.docs.models import Citation, Document, DocumentVersion, Section
 from oracle.review.models import DocumentReviewPolicy
-from oracle.roadmap.models import ProductTrack
+from oracle.roadmap.models import ProductTrack, RoadmapItem
 from oracle.simple import drafts, one_pager_checks, plan_strip, quality
 from oracle.simple import plan as plan_model
 from oracle.simple.changes import IDLE, ChangeError, _session_for_change
@@ -64,6 +76,9 @@ from oracle.simple.one_pager_checks import resolved
 from oracle.simple.schemas import (
     OnePagerBlock,
     OnePagerDraft,
+    OnePagerFix,
+    OnePagerFixed,
+    OnePagerFixProposal,
     OnePagerInReview,
     OnePagerItem,
     OnePagerLine,
@@ -81,7 +96,9 @@ from oracle.simple.schemas import (
     SimplePersonRef,
 )
 
-OPS: frozenset[str] = frozenset({"edit_line"})
+# set_section_number (owner, Nov 5): a "Needs a look" numbers item's one-click fix.
+NUMBER_OP = "set_section_number"
+OPS: frozenset[str] = frozenset({"edit_line", NUMBER_OP})
 LINE_MAX = 300
 PROBLEM_WORDS = 60
 # A shortened line keeps its whole text (at most this long) for "Show all".
@@ -384,11 +401,12 @@ def _id(item: Any) -> str | None:
 
 
 def plan_items(items: list[Any]) -> list[plan_strip.PlanItem]:
-    """The plan strip's reading of a PRD's roadmap items (uncut), each with the milestone
-    record that links it, when any."""
+    """The plan strip's reading of a PRD's roadmap items (neither cut nor merged), each with
+    the milestone record that links it, when any."""
     out = []
     for i in items:
-        if i.status == "cut":
+        # panel-menu: a merged feature (any, not only a draft) is off the plan as a cut one.
+        if i.status in ("cut", "merged"):
             continue
         # plan-model: one input per slice, each in its milestone as the PRD's plan dates it.
         for sl in getattr(i, "slices", None) or []:
@@ -419,6 +437,179 @@ def plan_items(items: list[Any]) -> list[plan_strip.PlanItem]:
             )
         )
     return out
+
+
+# A feature's code read one way ("f-7", "F-007" and 7 read "F-07"; a slice F-15a is F-15).
+_FEATURE_CODE = re.compile(r"([a-z]{1,3})-0*(\d{1,4})[a-j]?", re.IGNORECASE)
+
+
+def _feature_code(raw: Any) -> str | None:
+    if isinstance(raw, int) and not isinstance(raw, bool):
+        raw = f"F-{raw}"
+    m = _FEATURE_CODE.fullmatch(str(raw or "").strip())
+    return f"{m.group(1).upper()}-{int(m.group(2)):02d}" if m else None
+
+
+async def prd_items(
+    db: AsyncSession,
+    document: Document,
+    b: "Built",
+    items: list[Any],
+    view: plan_model.View | None,
+) -> list[Any]:
+    """S-8: the PRD's roadmap items, of the roadmap the reader is shown: its own (the PRD
+    they name) and those of its features (docs/ground-truth.md: an item is a Ground Truth
+    feature by code), whatever PRD they name: the company roadmap's items that deliver a
+    feature of the PRD's plan (``view``: its stored plan, else its approved version's
+    tables, as the Roadmap reads it) or of its own coded sections (F-07), by their code or a
+    slice's feature's (F-07a), or by the feature its plan links.
+
+    Each is placed by THIS PRD's plan only: its slices are the plan's slices of the feature
+    it delivers; an item of another PRD with none sits under no milestone, never under
+    that PRD's milestone or dates."""
+    codes = {c for s in b.sections if (c := _feature_code(s.section_key))}
+    # A code read one way -> the plan's feature code as the PRD writes it.
+    planned: dict[str, str] = {}
+    links: dict[uuid.UUID, str] = {}
+    if view is not None:
+        for raw in view.feature_codes:
+            if c := _feature_code(raw):
+                planned.setdefault(c, raw)
+        for code, raw in view.links.items():
+            try:
+                links[uuid.UUID(raw)] = code
+            except ValueError:
+                continue
+    codes |= set(planned)
+    features: dict[uuid.UUID, uuid.UUID] = {}
+    keyed: dict[uuid.UUID, str] = {}
+    ids = [i.id for i in items if i.id]
+    if ids and (codes or links):
+        features = {
+            i: f
+            for i, f in (
+                await db.execute(
+                    select(RoadmapItem.id, RoadmapItem.feature_id).where(
+                        RoadmapItem.id.in_(ids), RoadmapItem.feature_id.is_not(None)
+                    )
+                )
+            ).all()
+        }
+        if features:
+            keyed = {
+                e: c
+                for e, key in (
+                    await db.execute(
+                        select(Entity.id, Entity.key).where(Entity.id.in_(set(features.values())))
+                    )
+                ).all()
+                if (c := _feature_code(key)) in codes  # type: ignore[assignment]
+            }
+
+    def own(i: Any) -> bool:
+        return i.prd is not None and i.prd.id == document.id
+
+    def mine(i: Any) -> bool:
+        f = features.get(i.id)
+        return (
+            own(i)
+            or _feature_code(i.code) in codes
+            or (f is not None and (f in links or f in keyed))
+        )
+
+    def feature(i: Any) -> str | None:
+        """The plan's feature the item delivers, when the plan has it."""
+        f = features.get(i.id)
+        for c in (_feature_code(i.code), keyed.get(f) if f else None):
+            if c in planned:
+                return planned[c]
+        return links.get(f) if f else None
+
+    out = []
+    for i in items:
+        if not mine(i):
+            continue
+        code = feature(i)
+        slices = view.slices_of(code) if view is not None and code else []
+        out.append(
+            i.model_copy(update={"slices": slices, "milestone": i.milestone if own(i) else None})
+        )
+    return out
+
+
+# A goal's code in a PRD's words ("G2", a subgoal "G1.2"), and the name the PRD gives it
+# beside it: "G2 (retention)", "G2: Retention", "**G2 Retention**", a row "| G2 | Retention |".
+GOAL_CODE = re.compile(r"\bG\d{1,3}(?:\.\d{1,2})?\b")
+_GOAL_PAREN = re.compile(r"\b(G\d{1,3}(?:\.\d{1,2})?)\b\**\s*\(([A-Za-z][^()\n]{0,40})\)")
+_GOAL_AFTER = re.compile(r"\**\s*(?:[:=—–]\s*|\s-\s)?\**([A-Z][\w'’-]*(?: [A-Za-z][\w'’-]*){0,4})")
+
+
+def _goal_name(text: str) -> str:
+    text = " ".join(text.split()).strip(" *-—–:")
+    return text[:1].upper() + text[1:]
+
+
+async def goal_names(db: AsyncSession, sections: list[Section]) -> dict[str, str]:
+    """P-5: each goal code's name: the Ground Truth goal keyed by it (``G2`` -> "Grow
+    retention"), else the name the PRD gives it."""
+    out: dict[str, str] = {}
+    for sec in sections:
+        text = one_pager_checks._plain(f"{sec.heading or ''}\n{sec.body_md or ''}")
+        for m in _GOAL_PAREN.finditer(text):
+            out.setdefault(m.group(1), _goal_name(m.group(2)))
+        for raw in text.splitlines():
+            cells = [c.strip(" *") for c in raw.strip().strip("|").split("|")]
+            if raw.strip().startswith("|"):
+                for c, nxt in zip(cells, cells[1:], strict=False):
+                    if GOAL_CODE.fullmatch(c) and nxt and not GOAL_CODE.search(nxt):
+                        out.setdefault(c, _goal_name(nxt))
+                continue
+            for m in GOAL_CODE.finditer(raw):
+                if n := _GOAL_AFTER.match(raw[m.end() :]):
+                    out.setdefault(m.group(0), _goal_name(n.group(1)))
+    found = {m.group(0) for s in sections for m in GOAL_CODE.finditer(s.body_md or "")}
+    if found:
+        upper = {c.upper(): c for c in found}
+        rows = await db.execute(
+            select(Entity.key, Entity.title, Entity.status).where(
+                Entity.type == "goal",
+                Entity.status != "rejected",
+                func.upper(Entity.key).in_(list(upper)),
+            )
+        )
+        # A confirmed goal's title over a proposed one's, over the PRD's own words.
+        for key, title, _ in sorted(rows.all(), key=lambda r: r[2] == "confirmed"):
+            if title and title.strip():
+                out[upper[key.upper()]] = title.strip()
+    return out
+
+
+def with_goal_names(text: str, names: dict[str, str]) -> str:
+    """The text with each goal code's name beside it ("G2 Grow retention"): a code the PRD
+    named in brackets ("G2 (retention)") reads the name instead of them."""
+    if not text or not names:
+        return text
+
+    def paren(m: re.Match[str]) -> str:
+        return f"{m.group(1)} {names[m.group(1)]}" if m.group(1) in names else m.group(0)
+
+    text = _GOAL_PAREN.sub(paren, text)
+
+    def put(m: re.Match[str]) -> str:
+        code, name = m.group(0), names.get(m.group(0))
+        if not name or text[m.end() :].lstrip(" :—–-*").lower().startswith(name.lower()):
+            return code
+        return f"{code} {name}"
+
+    return GOAL_CODE.sub(put, text)
+
+
+def _says_not_in_prd(text: str) -> bool:
+    """A line that only says the PRD lacks it ("Not in the PRD yet.", "Open decisions: Not in
+    the PRD yet"): the block's own mark says it, once."""
+    said = " ".join(text.split()).rstrip(" .").casefold()
+    no = quality.NOT_IN_PRD.casefold()
+    return said == no or (said.endswith(f": {no}") and len(said) - len(no) <= 40)
 
 
 def _cells(row: str) -> list[str]:
@@ -1144,7 +1335,8 @@ def _section_body(b: Built, d: SimpleDraft | None, key: str) -> tuple[str, str] 
     if sec is None:
         return None
     patched = ((d.overlay or {}).get("sections") or {}) if d else {}
-    return sec.heading, patched.get(key, sec.body_md)
+    heads = ((d.overlay or {}).get("headings") or {}) if d else {}
+    return heads.get(key, sec.heading), patched.get(key, sec.body_md)
 
 
 def _spans(body: str) -> tuple[list[str], bool]:
@@ -1264,12 +1456,15 @@ async def read(
             select(SimpleChange)
             .where(
                 SimpleChange.document_id == document.id,
-                SimpleChange.op == "edit_line",
+                SimpleChange.op.in_(("edit_line", NUMBER_OP)),
                 SimpleChange.status == "proposed",
             )
-            .order_by(SimpleChange.at)
+            .order_by(SimpleChange.at, SimpleChange.seq)
         )
     )
+    # A numbers fix proposed shows on its "Needs a look" item, never as a line's note.
+    fixes = [c for c in proposals if c.op == NUMBER_OP and sees_change(principal, c)]
+    proposals = [c for c in proposals if c.op == "edit_line"]
     shown = [c for c in proposals if sees_change(principal, c)]
     hidden = (len(proposals) - len(shown)) + (
         0 if sees or d is None else (await drafts.counts(db, [d]))[d.id]
@@ -1280,14 +1475,19 @@ async def read(
     unseen = await drafts._live_changes(db, d) if d is not None and not sees else []
     unseen = [c for c in unseen if c.op == "edit_line"]
     not_shown = [c for c in proposals if not sees_change(principal, c)]
+    number_live = [c for c in live if c.op == NUMBER_OP]
     live = [c for c in live if c.op == "edit_line"]
-    sids = {c.session_id for c in live if c.session_id}
+    sids = {c.session_id for c in live + number_live if c.session_id}
     sessions = (
         {s.id: s for s in await db.scalars(select(SimpleSession).where(SimpleSession.id.in_(sids)))}
         if sids
         else {}
     )
-    ids = {c.by for c in live + shown} | ({w.decider} if w.decider else set()) | set(w.track_owners)
+    ids = (
+        {c.by for c in live + shown + fixes}
+        | ({w.decider} if w.decider else set())
+        | set(w.track_owners)
+    )
     ids |= {c.by for c in unseen + not_shown} | {i for c in not_shown for i in c.routed_to or []}
     required: list[uuid.UUID] = []
     if d is not None:
@@ -1301,8 +1501,12 @@ async def read(
     owner_id = await document_owner(db, document, b.version, w)
     if owner_id:
         ids.add(owner_id)
+    from oracle.members.names import display_name
+
+    # Export QA X-15: a name, never an email ("mira.santos@example.com" reads "Mira Santos").
     names = {
-        u.id: u.name or u.email for u in await db.scalars(select(User).where(User.id.in_(ids)))
+        u.id: display_name(u.email, u.name)
+        for u in await db.scalars(select(User).where(User.id.in_(ids)))
     }
     now = company_time.now()
     from oracle.simple import visuals
@@ -1361,17 +1565,39 @@ async def read(
         )
 
     notes = [note(c, "change") for c in live] + [note(c, "proposal") for c in shown]
+
+    def fixed_out(c: SimpleChange) -> OnePagerFixed:
+        s = sessions.get(c.session_id) if c.session_id else None
+        key = str(c.target.get("section") or "")
+        sec = (c.after.get("sections") or {}).get(key) or {}
+        heading = str(sec.get("heading") or key)
+        return OnePagerFixed(
+            change_id=c.id,
+            words=f"Fixed: set to {c.after.get('number') or ''} in “{heading}”",
+            can_undo=c.status == "applied"
+            and c.by == me
+            and s is not None
+            and s.closed_at is None
+            and (s.last_change_at or s.started_at) > now - IDLE,
+        )
+
+    # The draft's number fixes ("Needs a look"), each with its Undo while it can be undone.
+    fixed = [fixed_out(c) for c in number_live]
     proposed = {n.line_id for n in notes if n.kind == "proposal"}
     blocks = []
     for spec in b.specs:
         raw = next((x for x in page if x["key"] == spec.key), {"lines": []})
         lines = []
+        said_missing = False
         for line in raw["lines"]:
             edited = line["id"] in line_text
             text, full = line_text.get(line["id"], line["text"]), None
             if not edited:
                 if template_only(line["text"]):
                     continue  # a template's guidance in a one-pager built before this rule
+                if _says_not_in_prd(line["text"]):
+                    said_missing = True  # P-9: the block's mark says it, once
+                    continue
                 srcs = [x for x in b.sections if x.section_key in line["source_keys"]]
                 text, full = _tidy(text, spec.max_words, line.get("full"), srcs)
             metric = _metric(line.get("metric"))
@@ -1399,7 +1625,7 @@ async def read(
                 rules=spec.rules,
                 kind=spec.kind,
                 lines=lines,
-                missing=bool(raw.get("missing")) and not lines,
+                missing=(bool(raw.get("missing")) or said_missing) and not lines,
             )
         )  # type: ignore[arg-type]
     # S10: each bet ("What we will build") carries its visual.
@@ -1429,8 +1655,76 @@ async def read(
         c.cite_key: (c.title or c.ref, c.excerpt)
         for c in await db.scalars(select(Citation).where(Citation.version_id == b.version.id))
     }
-    looks = one_pager_checks.annotate(blocks, b.sections, cites)
-    slice_ = await service.build(db, principal, prd=str(document.id))
+    patched = ((d.overlay or {}).get("sections") or {}) if sees and d else {}
+    # A heading's count fixed in the draft (owner, Nov 5): the drafted heading.
+    heads = ((d.overlay or {}).get("headings") or {}) if sees and d else {}
+    checked = [
+        Section(
+            section_key=x.section_key,
+            heading=heads.get(x.section_key, x.heading),
+            body_md=patched.get(x.section_key, x.body_md),
+        )
+        if x.section_key in patched or x.section_key in heads
+        else x
+        for x in b.sections
+    ]
+    looks = one_pager_checks.annotate(blocks, b.sections, cites, checked)
+    # A draft in review takes no change that applies (_ensure refuses it): who would apply a
+    # fix is offered none until it is approved. Who proposes still proposes, and an open
+    # proposal stays on its item.
+    held_fix = d is not None and d.status == "submitted" and decides(principal, w)
+
+    def look_out(x: one_pager_checks.Look) -> OnePagerLook:
+        fix = None
+        if x.fix is not None:
+            f = x.fix
+            part = f.get("part", "body")
+            p = next(
+                (c for c in fixes if c.target.get("section") == f["section"]
+                 and c.target.get("said") == f["said"]
+                 and c.target.get("part", "body") == part),
+                None,
+            )  # fmt: skip
+            if not (held_fix and p is None):
+                fix = OnePagerFix(
+                    action=NUMBER_OP,
+                    target={
+                        "document_id": str(document.id),
+                        "section": f["section"],
+                        "said": f["said"],
+                        **({"part": part} if part == "heading" else {}),
+                    },
+                    before=f["before"],
+                    value=f["value"],
+                    words=f"Use {f['value']}",
+                    proposal=OnePagerFixProposal(
+                        change_id=p.id,
+                        by_name=names.get(p.by, "someone"),
+                        can_decide=may_decide(principal, p),
+                        can_undo=p.by == me,
+                    )
+                    if p is not None
+                    else None,
+                )
+        return OnePagerLook(
+            kind=x.kind, text=x.text, where=x.where, source_keys=x.source_keys, fix=fix
+        )
+
+    # P-5: each goal code with its name beside it; the Edit box keeps the PRD's words.
+    goals = await goal_names(db, b.sections)
+    for blk in blocks:
+        for x in blk.lines:
+            said = x.words or x.full or x.text
+            x.text = with_goal_names(x.text, goals)
+            x.full = with_goal_names(x.full, goals) if x.full else x.full
+            if x.metric is not None:
+                x.metric.name = with_goal_names(x.metric.name, goals)
+            x.measure = with_goal_names(x.measure, goals) if x.measure else x.measure
+            if x.words is None and (x.full or x.text) != said:
+                x.words = said
+    slice_ = await service.build(db, principal)
+    view = (await plan_model.views(db, {document.id})).get(document.id)
+    mine = await prd_items(db, document, b, slice_.items, view)
     items = [
         OnePagerItem(
             id=i.id,
@@ -1440,17 +1734,16 @@ async def read(
             end=i.end.date,
             estimated=i.estimated,
         )
-        for i in slice_.items
-        if i.status != "cut"
+        for i in mine
+        if i.status not in ("cut", "merged")
     ]
-    plan = plan_strip.strip(plan_items(slice_.items), slice_.today)
+    plan = plan_strip.strip(plan_items(mine), slice_.today)
     # A dated plan's span is the one its timeline draws (its milestones, or the dates the
     # lead accepted); else the items' dated milestones.
-    view = (await plan_model.views(db, {document.id})).get(document.id)
     if view is not None and view.dated and view.span:
         span: tuple[date, date] | None = (view.span.start, view.span.end)
     else:
-        span = milestone_span(plan_items(slice_.items))
+        span = milestone_span(plan_items(mine))
     timeline = OnePagerBlock(
         key=TIMELINE.key, title=TIMELINE.title, rules=TIMELINE.rules, kind="timeline", lines=[]
     )
@@ -1478,11 +1771,12 @@ async def read(
             blocked_by=drafts.held(d),
             decision_notes=[str(x.get("text")) for x in d.decision_notes or []],
         )
-    patched = ((d.overlay or {}).get("sections") or {}) if sees and d else {}
     used = {k for blk in page for x in blk["lines"] for k in x["source_keys"]}
     sources = [
         OnePagerSource(
-            key=x.section_key, heading=x.heading, body=patched.get(x.section_key, x.body_md)
+            key=x.section_key,
+            heading=heads.get(x.section_key, x.heading),
+            body=patched.get(x.section_key, x.body_md),
         )  # fmt: skip
         for x in b.sections
         if x.section_key in used
@@ -1528,9 +1822,8 @@ async def read(
         and _me(principal) is not None
         and has_role(principal.role, "commenter"),
         can_start=starts(principal, w),
-        needs_look=(
-            [OnePagerLook(**vars(x)) for x in looks] if owns(principal, w, owner_id) else []
-        )
+        fixed=fixed,
+        needs_look=([look_out(x) for x in looks] if owns(principal, w, owner_id) else [])
         + (
             [OnePagerLook(kind="check", text=t) for t in quality.said(b.row.checks)]
             if owner_reads
@@ -1650,7 +1943,7 @@ def _write(d: SimpleDraft, b: Built, line_id: str, values: dict[str, Any]) -> No
             secs.pop(k, None)
         else:
             secs[k] = p["body"]
-    d.overlay = {"sections": secs, "lines": lines}
+    d.overlay = {**ov, "sections": secs, "lines": lines}
 
 
 async def _current(
@@ -1688,6 +1981,8 @@ async def _apply(db, principal, c: SimpleChange, b: Built, values, session, undo
 async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> SimpleChangeResult:
     from oracle.simple import changes
 
+    if body.op == NUMBER_OP:
+        return await _create_number(db, principal, body)
     me, now = changes._me(principal), company_time.now()
     doc_id, line_id = body.target.get("document_id"), str(body.target.get("line_id") or "")
     document = await _document(db, principal, str(doc_id))
@@ -1783,7 +2078,19 @@ async def decide(db, principal, c: SimpleChange, action: str, reason: str | None
         raise ChangeError(403, "Only an owner or the PRD's decider decides this proposal")
     if c.status != "proposed":
         raise ChangeError(409, f"This change is {c.status} already")
-    if action == "accept":
+    if action == "accept" and c.op == NUMBER_OP:
+        document = await db.get(Document, c.document_id)
+        await db.execute(select(Document.id).where(Document.id == document.id).with_for_update())
+        b = await built(db, document)
+        d = await _open_draft(db, document)
+        if _number_values(b, d, str(c.target["section"])) != _held(c.before):
+            raise await _number_conflict(
+                db, b, d, c.target, "outdated: the section changed since the proposal"
+            )
+        session = await _session_for_change(db, me, session_id, True, now)
+        await _apply_number(db, c, b, c.after, session)
+        session.last_change_at = now  # type: ignore[union-attr]
+    elif action == "accept":
         document = await db.get(Document, c.document_id)
         await db.execute(select(Document.id).where(Document.id == document.id).with_for_update())
         b = await built(db, document)
@@ -1858,11 +2165,18 @@ async def undo(db, principal, c: SimpleChange):
     document = await db.get(Document, c.document_id)
     await db.execute(select(Document.id).where(Document.id == document.id).with_for_update())
     b = await built(db, document)
-    text, bodies = await _current(db, b, str(c.target["line_id"]), await _open_draft(db, document))
-    if text != c.after.get("line") or bodies != {
-        k: v["body"] for k, v in (c.after.get("sections") or {}).items()
-    }:
-        raise _conflict("Changed since", text)
+    if c.op == NUMBER_OP:
+        d = await _open_draft(db, document)
+        if _number_values(b, d, str(c.target["section"])) != _held(c.after):
+            raise await _number_conflict(db, b, d, c.target, "Changed since")
+    else:
+        text, bodies = await _current(
+            db, b, str(c.target["line_id"]), await _open_draft(db, document)
+        )
+        if text != c.after.get("line") or bodies != {
+            k: v["body"] for k, v in (c.after.get("sections") or {}).items()
+        }:
+            raise _conflict("Changed since", text)
     u = SimpleChange(
         session_id=c.session_id,
         document_id=c.document_id,
@@ -1877,7 +2191,10 @@ async def undo(db, principal, c: SimpleChange):
         routed_to=[],
         draft_ids=list(c.draft_ids or []),
     )
-    await _apply(db, principal, u, b, c.before, session, undo=True)
+    if c.op == NUMBER_OP:
+        await _apply_number(db, u, b, c.before, session, undo=True)
+    else:
+        await _apply(db, principal, u, b, c.before, session, undo=True)
     db.add(u)
     session.last_change_at = now
     await db.flush()
@@ -1893,14 +2210,231 @@ async def undo(db, principal, c: SimpleChange):
     return SimpleChangeResult(change=await changes.one_out(db, principal, u), flags=[])
 
 
+# --------------------------------------------------------------------------- set_section_number
+# A "Needs a look" numbers item's one-click fix (owner, Nov 5): the number in the words
+# ``said`` of one section set to ``value``, through the PRD's working draft as edit_line;
+# a one-pager line resting on the section and saying the same words is set with it, so
+# the line and its section never disagree. The same rights, Undo and approval as a line.
+# ``target.part`` "heading" (owner, Nov 5, 'Fix the heading too'): the number is in the
+# section's heading ("Later · 8 items"); the draft holds the new heading.
+
+
+def _number_values(b: Built, d: SimpleDraft | None, key: str) -> dict[str, Any]:
+    """The section ``key`` and the lines resting on it, as ``d`` (None: published) has
+    them."""
+    hb = _section_body(b, d, key)
+    if hb is None:
+        raise ChangeError(404, "No such section in this PRD")
+    drafted = ((d.overlay or {}).get("lines") or {}) if d else {}
+    lines = {
+        x["id"]: drafted.get(x["id"], x["text"])
+        for x in _lines(b).values()
+        if key in x["source_keys"]
+    }
+    return {"sections": {key: {"heading": hb[0], "body": hb[1]}}, "lines": lines}
+
+
+def _held(values: dict[str, Any]) -> dict[str, Any]:
+    return {"sections": values.get("sections") or {}, "lines": values.get("lines") or {}}
+
+
+async def _number_conflict(
+    db: AsyncSession, b: Built, d: SimpleDraft | None, target: dict, message: str
+) -> ChangeError:
+    """409: the section's words now, and who changed the section last in the draft."""
+    key = str(target.get("section"))
+    hb = _section_body(b, d, key)
+    last = None
+    if d is not None:
+        last = next(
+            (c for c in reversed(await drafts._live_changes(db, d))
+             if key in ((c.after or {}).get("sections") or {})),
+            None,
+        )  # fmt: skip
+    by = None
+    if last is not None and last.by is not None:
+        u = await db.get(User, last.by)
+        by = SimplePersonRef(id=last.by, name=(u.name or u.email) if u else "someone")
+        message = f"Changed by {by.name}"
+    return ChangeError(
+        409,
+        SimpleChangeConflict(
+            message=message,
+            current={"section": key, "heading": hb[0] if hb else "", "body": hb[1] if hb else ""},
+            changed_by=by,
+            changed_at=last.at if last is not None else None,
+        ).model_dump(mode="json"),
+    )
+
+
+def _write_number(d: SimpleDraft, b: Built, values: dict[str, Any]) -> None:
+    """The section (its heading and words) and its lines, together (a value equal to the
+    published one leaves the draft)."""
+    ov = dict(d.overlay or {})
+    secs, lines = dict(ov.get("sections") or {}), dict(ov.get("lines") or {})
+    heads = dict(ov.get("headings") or {})
+    published = _lines(b)
+    for line_id, text in (values.get("lines") or {}).items():
+        if text == published.get(line_id, {}).get("text"):
+            lines.pop(line_id, None)
+        else:
+            lines[line_id] = text
+    for k, p in (values.get("sections") or {}).items():
+        sec = next((s for s in b.sections if s.section_key == k), None)
+        if sec is not None and p["body"] == sec.body_md:
+            secs.pop(k, None)
+        else:
+            secs[k] = p["body"]
+        if sec is not None and p.get("heading", sec.heading) == sec.heading:
+            heads.pop(k, None)
+        elif sec is not None:
+            heads[k] = p["heading"]
+    ov = {**ov, "sections": secs, "lines": lines, "headings": heads}
+    if not heads:
+        ov.pop("headings")
+    d.overlay = ov
+
+
+async def _apply_number(db, c: SimpleChange, b: Built, values, session, undo=False) -> None:
+    if undo:
+        d = await db.get(SimpleDraft, (c.draft_ids or [None])[0], with_for_update=True)
+        if d is None or d.status != "working":
+            raise ChangeError(
+                409, "Its draft was submitted: undo works only inside a working draft"
+            )
+        await drafts.link(db, session, d)
+    else:
+        d = await _ensure(db, session, b.document, b.version)
+    _write_number(d, b, values)
+    c.draft_ids = [d.id]
+    await db.flush()
+
+
+async def _create_number(
+    db: AsyncSession, principal: Any, body: SimpleChangeIn
+) -> SimpleChangeResult:
+    from oracle.simple import changes
+
+    me, now = changes._me(principal), company_time.now()
+    t = body.target or {}
+    key, said = str(t.get("section") or ""), " ".join(str(t.get("said") or "").split())
+    part = str(t.get("part") or "body")
+    old = str(body.before.get("number") or "").strip()
+    new = str(body.after.get("number") or "").strip()
+    if not key or not said:
+        raise ChangeError(422, "target: the section and the words the number is in")
+    if part not in ("body", "heading"):
+        raise ChangeError(422, "target.part: body or heading")
+    if not re.fullmatch(r"\d[\d,]*(?:\.\d+)?", new) or len(new) > 20:
+        raise ChangeError(422, "after.number: a number")
+    if not old:
+        raise ChangeError(422, "before.number: the number as you saw it")
+    document = await _document(db, principal, str(t.get("document_id")))
+    await db.execute(select(Document.id).where(Document.id == document.id).with_for_update())
+    b = await built(db, document)
+    w = await who(db, document)
+    d = await _open_draft(db, document)
+    sees = d is not None and sees_draft(principal, d, w)
+    applies = decides(principal, w)
+    if not applies and not has_role(principal.role, "commenter"):
+        raise ChangeError(403, "Viewers read the one-pager")
+    before = _number_values(b, d if sees else None, key)
+    cur = before["sections"][key]
+    # A number other than the one its words begin with is stale, as words no longer there.
+    stale = said.split()[0].lower() != old.lower()
+    patched = None if stale else one_pager_checks.set_number(cur[part], said, new)
+    if patched is None:
+        raise await _number_conflict(
+            db, b, d if sees else None, t, "This number changed since you read it"
+        )
+    after = {
+        "sections": {key: {**cur, part: patched}},
+        # A heading's count is no line's words: the lines stay as they are.
+        "lines": {
+            i: text if part == "heading" else one_pager_checks.set_number(text, said, new) or text
+            for i, text in before["lines"].items()
+        },
+    }
+    before |= {"number": old}
+    after |= {"number": new}
+    session = await _session_for_change(db, me, body.session_id, applies, now)
+    c = SimpleChange(
+        session_id=session.id if session else None,
+        document_id=document.id,
+        op=NUMBER_OP,
+        target={
+            "document_id": str(document.id),
+            "section": key,
+            "said": said,
+            **({"part": part} if part == "heading" else {}),
+            "version": b.version.number,
+        },
+        before=before,
+        after=after,
+        status="applied" if applies else "proposed",
+        by=me,
+        at=now,
+        reason=body.reason,
+        routed_to=[] if applies else route(w),
+    )
+    if applies:
+        await _apply_number(db, c, b, after, session)
+        session.last_change_at = now  # type: ignore[union-attr]
+    db.add(c)
+    await db.flush()
+    await audit.record(
+        db,
+        principal,
+        f"simple_change.{c.status}",
+        "simple_change",
+        c.id,
+        data={
+            "op": c.op,
+            "target": c.target,
+            "before": before,
+            "after": after,
+            "document_id": str(document.id),
+        },
+    )
+    await db.commit()
+    return SimpleChangeResult(change=await changes.one_out(db, principal, c), flags=[])
+
+
 # --------------------------------------------------------------------------- submit
 
 
 def patched_markdown(
-    base: DocumentVersion, sections: list[Section], patched: dict[str, str]
+    base: DocumentVersion,
+    sections: list[Section],
+    patched: dict[str, str],
+    headings: dict[str, str] | None = None,
 ) -> str:
-    """The base version's markdown with each patched section's body replaced."""
+    """The base version's markdown with each patched section's body replaced, and each
+    drafted heading (``headings``: key -> heading) written over its own, its ``{#key}`` kept
+    so the section's key and links do not change."""
     md = base.markdown
+    unpatched = "Section {!r} could not be patched; open the detailed view to edit it"
+    for sec in sections:
+        head = (headings or {}).get(sec.section_key)
+        if head is None or head == sec.heading:
+            continue
+        key, said = re.escape(sec.section_key), re.escape(sec.heading)
+        # An ATX heading ("## Later · 8 items {#later}") or a setext one (its words over a
+        # line of "=" or "-"), its key kept.
+        atx = re.compile(rf"^(#{{1,6}}[ \t]+){said}([ \t]*\{{#{key}\}}[ \t]*)$", re.M)
+        setext = re.compile(rf"^(){said}([ \t]*\{{#{key}\}}[ \t]*\n(?:=+|-+)[ \t]*)$", re.M)
+        n = 0
+        for line in (atx, setext):
+            md, n = line.subn(lambda m, h=head: m.group(1) + h + m.group(2), md, count=1)
+            if n:
+                break
+        if not n:
+            raise ChangeError(
+                409,
+                f"The heading “{sec.heading}” is not in the PRD's text as a heading with its"
+                f" key {{#{sec.section_key}}}, so its new words could not be written; open the"
+                " detailed view to edit it",
+            )
     for sec in sections:
         new = patched.get(sec.section_key)
         if new is None or new == sec.body_md:
@@ -1909,10 +2443,7 @@ def patched_markdown(
         if old and old in md:
             md = md.replace(old, new.strip("\n"), 1)
         else:
-            raise ChangeError(
-                409,
-                f"Section {sec.heading!r} could not be patched; open the detailed view to edit it",
-            )
+            raise ChangeError(409, unpatched.format(sec.heading))
     return md
 
 
@@ -1928,6 +2459,7 @@ h1 { font-size: 17pt; margin: 4px 0 2px; }
 h2 { font-size: 9pt; text-transform: uppercase; letter-spacing: .06em; color: #5b6270;
   margin: 10px 0 3px; border-top: 1px solid #e3e5e9; padding-top: 6px; }
 ul { margin: 0; padding-left: 16px; } li { margin: 1px 0; }
+ul.done { list-style: none; padding-left: 2px; }
 .metric b { font-variant-numeric: tabular-nums; }
 .plan { font-size: 8pt; }
 .plan .r { display: flex; align-items: center; height: 15px; }
@@ -1946,18 +2478,22 @@ ul { margin: 0; padding-left: 16px; } li { margin: 1px 0; }
 .tl .n { width: 30%; padding: 3px 6px 3px 0; }
 .tl .n b { display: block; font-size: 8.5pt; }
 .tl .t { position: relative; flex: 1; }
-.tl .ax { height: 30px; }
-.tl .f { position: absolute; top: 0; transform: translateX(-100%); white-space: nowrap;
-  padding: 0 3px; font-weight: 600; border-right: 2px solid; }
+.tl .ax { position: relative; }
+.tl .f { position: absolute; white-space: nowrap; padding: 0 3px; font-weight: 600;
+  line-height: 14px; border-right: 2px solid; }
+.tl .f.l { border-right: 0; border-left: 2px solid; }
 .tl .mo { position: absolute; bottom: 0; color: #5b6270; border-left: 1px solid #e3e5e9;
   padding-left: 2px; }
-.tl .bar { position: absolute; height: 13px; border: 1px solid; border-radius: 7px;
-  padding: 0 4px; white-space: nowrap; font-weight: 600; font-size: 7pt; overflow: hidden; }
+.tl .bar { position: absolute; height: 14px; border: 1px solid; border-radius: 7px;
+  box-sizing: border-box; line-height: 12px; padding: 0 4px; white-space: nowrap;
+  font-weight: 600; font-size: 7pt; overflow: hidden; }
 .tl .bar.pm { border-style: dashed; }
 .tl .off { position: absolute; top: 0; bottom: 0;
-  background: repeating-linear-gradient(135deg, #d9d5cc 0 2px, transparent 2px 5px); }
+  background: repeating-linear-gradient(135deg, #d9d5cc 0px, #d9d5cc 2px, transparent 2px,
+    transparent 5px); }
 .tl .end { position: absolute; top: 0; bottom: 0; border-left: 1px dashed; }
 .tl .now { position: absolute; top: 0; bottom: 0; border-left: 1.5px solid #c0392b; }
+.tl .key { color: #5b6270; margin-top: 4px; }
 .part { page-break-before: always; }
 .part h3 { font-size: 9.5pt; margin: 6px 0 2px; }
 .part .what { color: #5b6270; }
@@ -1971,16 +2507,62 @@ PM_LANE = "PM-owned · no engineering"
 # CSS px) and a 7pt bold character's, to fit a bar's codes as the web's fitCodes does.
 TL_PX = 0.70 * 178 / 25.4 * 96
 TL_CH = 5.2
+# Export QA X-4, X-6: an 8pt bold flag character's width and a 7pt bold name character's, at
+# most (the PDF's fallback sans is wider than Inter), and a flag's padding and edges, in px.
+FLAG_CH = 6.6
+FLAG_PAD = 9
+NAME_CH = 6.0
+# Page numbers on a PDF of more than one page (X-15).
+PAGE_NUMBERS = (
+    '@page { @bottom-right { content: "Page " counter(page) " of " counter(pages);'
+    " font-size: 8pt; color: #5b6270; } }"
+)
 
 
-def fit_codes(codes: list[str], px: float) -> str:
-    """As many whole codes as fit the bar, then "+N"; never a code cut mid-way (a bar too
-    narrow for even its first code and "+N" shows its first code, as wide as the bar is)."""
-    for k in range(len(codes), 0, -1):
-        text = " · ".join(codes[:k]) + (f" +{len(codes) - k}" if k < len(codes) else "")
-        if len(text) * TL_CH + 10 <= px:
-            return text
-    return codes[0] if codes else ""
+def month_label(m: date, first: bool) -> str:
+    """A month on a timeline axis: "Nov", with its year at the first month and at January
+    ("Nov 2026", "Jan 2027"), so months that repeat across years read apart (X-5)."""
+    month = company_time.calendar_month(m)
+    return f"{month} {m.year}" if first or m.month == 1 else month
+
+
+def range_words(start: date, end: date) -> str:
+    """A milestone's dates, month first: "Nov 2 – Nov 13"; across a year, both years
+    ("Dec 28, 2026 – Feb 12, 2027", X-5)."""
+    day = plan_model._day
+    if start.year == end.year:
+        return f"{day(start)} – {day(end)}"
+    return f"{day(start)}, {start.year} – {day(end)}, {end.year}"
+
+
+def milestone_words(code: str, name: str, cap: int = 28) -> str:
+    """A milestone's code with its name ("M1 Try it"), the name cut with "…" past ``cap``
+    characters so a flag stays inside the lanes; never a bare code."""
+    name = (name or "").strip()
+    if not name:
+        return code
+    return f"{code} {name if len(name) <= cap else name[: cap - 1].rstrip() + '…'}"
+
+
+def place_flags(ends: list[float], widths: list[float]) -> list[tuple[float, int, bool]]:
+    """Each milestone flag's left edge (px), row and side (X-4): its right edge on its end
+    line, or its left edge there when it would start left of the lanes; a flag that would
+    overlap one already placed goes on the next row free, so none is ever cut or hidden."""
+    rows: list[list[tuple[float, float]]] = []
+    out = []
+    for end, w in zip(ends, widths, strict=True):
+        left_side = end - w < 0
+        a = min(end, TL_PX - w) if left_side else end - w
+        row = next(
+            (i for i, taken in enumerate(rows)
+             if all(a + w + 2 <= b0 or a >= b1 + 2 for b0, b1 in taken)),
+            len(rows),
+        )  # fmt: skip
+        if row == len(rows):
+            rows.append([])
+        rows[row].append((a, a + w))
+        out.append((a, row, left_side))
+    return out
 
 
 # The plan strip shows this many rows; the rest are "+N more on the roadmap".
@@ -1999,7 +2581,8 @@ def _plan_html(plan: Any) -> str:
 
     now = f"<span class='now' style='left:{pct(plan.today):.1f}%'></span>" if plan.today else ""
     months = "".join(
-        f"<span class='m' style='left:{pct(m):.1f}%'>{m.strftime('%b')}</span>" for m in plan.months
+        f"<span class='m' style='left:{pct(m):.1f}%'>{month_label(m, i == 0)}</span>"
+        for i, m in enumerate(plan.months)
     )
     out = [
         "<div class='plan'><div class='r'><span class='n'></span>"
@@ -2057,6 +2640,38 @@ def _pieces(slices: list[Any]) -> list[tuple[str, list[Any], Any, Any, int]]:
     return [tuple(p) for p in out]  # type: ignore[misc]
 
 
+def bar_box(left: float, width: float, least: float) -> tuple[float, float]:
+    """A bar's left edge and width (px): at least ``least`` wide, growing left from its end
+    when short, and inside the lanes (left + width never past 100%, X-14)."""
+    w = min(max(width, least), TL_PX)
+    a = max(0.0, left + width - w)
+    return min(a, TL_PX - w), w
+
+
+def bar_label(of: list[Any], px: float) -> tuple[str, dict[str, str]]:
+    """A bar's words (X-6): its features' codes and names when they fit, else their names,
+    else the first name cut with "…"; never a bare code, every full name in the key."""
+    named = " · ".join(f"{x.code} {x.name}" for x in of)
+    if len(named) * NAME_CH + 10 <= px:
+        return named, {}
+    keyed = {x.code: x.name for x in of}
+    names = " · ".join(x.name for x in of)
+    if len(names) * NAME_CH + 10 <= px:
+        return names, keyed
+    return cut_name(of[0].name, len(of) - 1, px), keyed
+
+
+def cut_name(name: str, more: int, px: float) -> str:
+    """The first feature's name cut to the bar with "…" (and "+N" for the others when it
+    fits): a bar never prints a code without its name; the key lists every full name."""
+    tail = f" +{more}" if more else ""
+    for tail_ in [tail, ""] if tail else [""]:
+        room = int((px - 10) / NAME_CH) - len(tail_) - 1
+        if room >= 3:
+            return name[:room].rstrip() + "…" + tail_
+    return name[:1] + "…"
+
+
 def _timeline_html(view: Any, today: Any) -> str:
     """prd-timeline: the plan's timeline for the PDF's first page: milestone flags, months,
     one lane per goal (its targets and what is measured now) and the PM-owned lane."""
@@ -2073,18 +2688,33 @@ def _timeline_html(view: Any, today: Any) -> str:
     def px(a: Any, b: Any) -> float:
         return ((b - a).days + 1) / days * TL_PX
 
-    out = ["<div class='tl'><div class='r'><div class='n'></div><div class='t ax'>"]
-    for m in view.milestones:
+    def at(d: Any, end_of_day: bool = False) -> float:
+        return ((d - start).days + (1 if end_of_day else 0)) / days * TL_PX
+
+    mname = {m.code: milestone_words(m.code, m.name) for m in view.milestones}
+    flags = [(m, f"{mname[m.code]} ends {plan_model._day(m.end_date)}") for m in view.milestones]
+    placed = place_flags([at(m.end_date, True) for m, _ in flags],
+                         [len(text) * FLAG_CH + FLAG_PAD for _, text in flags])  # fmt: skip
+    rows = max([row + 1 for _, row, _ in placed] or [1])
+    out = ["<div class='tl'><div class='r'><div class='n'></div>"
+           f"<div class='t ax' style='height:{rows * 15 + 15}px'>"]  # fmt: skip
+    for (m, text), (a, row, left_side) in zip(flags, placed, strict=True):
         fill, edge, ink = tone[m.code]
-        out.append(f"<span class='f' style='left:{pct(m.end_date, True)};background:{fill};"
-                   f"color:{ink};border-color:{edge}'>{escape(m.code)} ends "
-                   f"{plan_model._day(m.end_date)}</span>")  # fmt: skip
-    mo = start.replace(day=1)
+        out.append(f"<span class='f{' l' if left_side else ''}' style='left:"
+                   f"{a / TL_PX * 100:.2f}%;top:{row * 15}px;background:{fill};color:{ink};"
+                   f"border-color:{edge}'>{escape(text)}</span>")  # fmt: skip
+    mo, first = start.replace(day=1), True
     while mo < end:
-        at = max(mo, start)
-        out.append(f"<span class='mo' style='left:{pct(at)}'>{at.strftime('%b')}</span>")
-        mo = (mo.replace(day=28) + timedelta(days=4)).replace(day=1)
+        nxt = (mo.replace(day=28) + timedelta(days=4)).replace(day=1)
+        # A first month with under ten days on the axis gives its label (and year) to the next.
+        if not (first and (nxt - start).days < 10):
+            on = max(mo, start)
+            out.append(f"<span class='mo' style='left:{pct(on)}'>"
+                       f"{month_label(on, first)}</span>")  # fmt: skip
+            first = False
+        mo = nxt
     out.append("</div></div>")
+    key: dict[str, str] = {}
     names = [g.name for g in view.goals]
     for sl in view.slices:
         if not sl.pm_owned and sl.goal and sl.goal not in names:
@@ -2102,7 +2732,9 @@ def _timeline_html(view: Any, today: Any) -> str:
         rows = max([p[4] + 1 for p in pieces] or [1])
         label = f"<b>{escape(name)}</b>"
         if goal is not None:
-            steps = " → ".join(f"{t.milestone} {t.target}" for t in goal.targets)
+            steps = " → ".join(
+                f"{mname.get(t.milestone, t.milestone)} · {t.target}" for t in goal.targets
+            )
             now = f"Now {goal.measured}" if goal.measured else "Not counted yet"
             if goal.measured and goal.on_track is not None:
                 now += " · on track" if goal.on_track else " · behind"
@@ -2119,23 +2751,29 @@ def _timeline_html(view: Any, today: Any) -> str:
         for code, of, a, b, row in pieces:
             fill, edge, ink = tone.get(code, TONES[0])
             pm_cls = " pm" if of[0].pm_owned else ""
-            out.append(f"<span class='bar{pm_cls}' style='left:{pct(a)};width:calc({pct(b, True)}"
-                       f" - {pct(a)});top:{2 + row * 17}px;background:{fill};border-color:{edge};"
-                       f"color:{ink};min-width:{len(of[0].code) * TL_CH + 10:.0f}px'>"
-                       f"{escape(fit_codes([x.code for x in of], px(a, b)))}</span>")  # fmt: skip
+            # X-14: a bar too short for its first code grows left from its end, never past
+            # its milestone's line or the page's right edge.
+            left, w = bar_box(at(a), px(a, b), 4 * NAME_CH + 10)
+            text, keyed = bar_label(of, w)
+            key.update(keyed)
+            out.append(f"<span class='bar{pm_cls}' style='left:{left / TL_PX * 100:.2f}%;"
+                       f"width:{w / TL_PX * 100:.2f}%;top:{2 + row * 17}px;background:{fill};"
+                       f"border-color:{edge};color:{ink}'>{escape(text)}</span>")  # fmt: skip
         out.append("</div></div>")
+    if key:
+        listed = " · ".join(f"{escape(c)} {escape(n)}" for c, n in sorted(key.items()))
+        out.append(f"<div class='key'>{listed}</div>")
     return "".join(out) + "</div>"
 
 
 def _part_html(view: Any, m: Any) -> str:
     """prd-timeline: one milestone's page: name and dates, Done when, targets, what it
     builds by kind, its open decisions and risks."""
-    day = plan_model._day
     out = [f"<section class='part'><h1>{escape(m.code)} {escape(m.name)}</h1>"
-           f"<div class='meta'>{day(m.start_date)} – {day(m.end_date)}"]  # fmt: skip
+           f"<div class='meta'>{range_words(m.start_date, m.end_date)}"]  # fmt: skip
     if m.effort_weeks is not None:
         out.append(f" · {m.planned_weeks:g} of {m.effort_weeks:g} engineer-weeks planned")
-    out.append("</div><h2>Done when</h2><ul>")
+    out.append("</div><h2>Done when</h2><ul class='done'>")
     out += [f"<li>☐ {escape(d)}</li>" for d in m.done_when] or [f"<li>{NOT_WRITTEN}</li>"]
     out.append("</ul><h2>Targets</h2><ul>")
     out += [f"<li>{escape(t.goal)}: {escape(t.target)}</li>" for t in m.targets] or [
@@ -2180,7 +2818,7 @@ async def pdf_html(db: AsyncSession, principal: Any, doc: str) -> tuple[str, str
         "<!doctype html><html><head><meta charset='utf-8'>",
         "" if timeline else '<meta name="oracle-page-fit" content="one_page">',
         f"<title>{escape(out.document.title)}</title><style>{PAGE_CSS}{BRAND_CSS}"
-        f"{accent_css(brand)}</style></head><body>",
+        f"{accent_css(brand)}{PAGE_NUMBERS if timeline else ''}</style></head><body>",
         str(render_brand_header(brand)),
         f"<h1>{escape(out.document.title)}</h1>",
     ]

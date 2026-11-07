@@ -84,8 +84,11 @@ test("an approved PRD's items show once on the Simple roadmap", async ({ page })
   // The Timeline lists each once too, with the PRD's new end.
   await page.getByTestId("format-timeline").click();
   await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "timeline");
+  // The Weekly alert digest's new end (Feb 19) is past its milestone Beta (Nov 30), so the strip
+  // above the chart names it too (roadmap-home-qa 53098a13e); the Timeline's rows list it once.
+  await expect(page.getByTestId("conflict").filter({ hasText: "Weekly alert digest" })).toHaveCount(1);
   for (const [title, , day] of items) {
-    await expect(page.getByRole("button", { name: title, exact: true })).toHaveCount(1);
+    await expect(page.getByTestId("timeline-row").getByRole("button", { name: title, exact: true })).toHaveCount(1);
     await expect(page.getByRole("button", { name: new RegExp(`^${title}, .*${day}\\.`) })).toHaveCount(1);
   }
 });

@@ -120,7 +120,9 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
   if (p[2] === "removed" && m === "GET" && !p[3]) {
     const items: Schemas["SimpleRemovedItem"][] = [];
     for (const s of db.items.filter((x) => x.status === "cut")) {
-      const cut = [...(db.changes ?? [])].reverse().find((c) => c.status === "applied" && (c.op === "cut" || c.op === "cut_with_dependents") && JSON.stringify(c.target).includes(db.ids[s.key]));
+      // As removed._who_cut: a cut, a cut with its dependents, or the panel's Status set to cut.
+      const cuts = (c: { op: string; after: { [key: string]: unknown } }) => c.op === "cut" || c.op === "cut_with_dependents" || (c.op === "set_status" && c.after.status === "cut");
+      const cut = [...(db.changes ?? [])].reverse().find((c) => c.status === "applied" && cuts(c) && JSON.stringify(c.target).includes(db.ids[s.key]));
       const l = cut ? { at: cut.at, by: cut.by } : log[`feature:${s.key}`];
       // As service.can_decide and decider_ids: the item's deciders, else the company's owners.
       const decides = canDecideItem(db, s, ctx);

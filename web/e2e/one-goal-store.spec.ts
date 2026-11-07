@@ -114,7 +114,8 @@ test("deleting a feature from its row closes its open panel", async ({ page }) =
   const row = page.getByTestId("prio-title").filter({ hasText: "Weekly alert digest" });
   await tap(row);
   await expect(panel(page)).toBeVisible();
-  await press(page.getByRole("button", { name: "More for Weekly alert digest (WAD)" }));
+  // prio-company: a row names a feature's own code only (WAD is letters made up), so its ⋯ names it alone.
+  await press(page.getByRole("button", { name: "More for Weekly alert digest", exact: true }));
   await press(page.getByRole("menuitem", { name: "Delete feature" }));
   await expect(page.getByText("Moved Weekly alert digest to Trash.")).toBeVisible();
   await expect(panel(page)).toHaveCount(0);

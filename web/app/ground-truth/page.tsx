@@ -113,7 +113,7 @@ function AddFromUrl({ onAdd }: { onAdd: (kind: AddKind) => void }) {
     const next = new URLSearchParams(params.toString());
     next.delete("add");
     const rest = next.toString();
-    router.replace(rest ? `/baseline?${rest}` : "/baseline", { scroll: false });
+    router.replace(rest ? `/ground-truth?${rest}` : "/ground-truth", { scroll: false });
   }, [add, onAdd, params, router]);
   return null;
 }

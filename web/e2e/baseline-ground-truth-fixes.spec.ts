@@ -57,7 +57,9 @@ for (const [viewport, who] of [
       await expect(total(page)).toHaveText("9");
       await openKind(page, "no_code");
       await row(page, "Smart search").getByRole("button", { name: "Give it a code: Smart search" }).click();
-      await expect(notice(page)).toContainText("“Smart search” is now F-21.");
+      // The next F-number over every code (oracle.baseline.fixes.next_code): the Goal map's features,
+      // roadmap items since P-1, hold F-101 to F-112.
+      await expect(notice(page)).toContainText("“Smart search” is now F-113.");
       await expect(count(page, "no_code")).toHaveCount(0);
       await expect(total(page)).toHaveText("8");
       expect(await fits(page)).toBe(true);

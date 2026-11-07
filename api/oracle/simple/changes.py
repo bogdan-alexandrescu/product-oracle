@@ -56,6 +56,11 @@ Ops and the fields they write (``before`` must name the key fields):
 - ``set_depends``: the keys the item depends on (``depends_on``: item keys of its roadmap,
   or feature keys, as the dependency checks read them; a new key that names no item or
   feature is 422).
+- ``set_parent`` (feature-parts): the item made part of another, ``{"parent_key"}``: the key
+  of an open item (not merged, not cut, not in Trash) of its roadmap, or null to take it
+  out; ``before`` is the stored key as the read shows it (``parent_key``). Any depth (owner's
+  answer, Nov 5): 422 only for the item itself or one of its own parts at any depth (a
+  feature is never its own ancestor). A cut item stays a part and may be taken out.
 - ``set_status``: planned, done or cut; ``before`` ``{"status"}`` as the read showed it;
   writes cut and shipped (done: marked shipped; planned: neither, the tracker's again; a
   shipped mark not made in the panel stays).
@@ -70,11 +75,14 @@ Ops and the fields they write (``before`` must name the key fields):
   key dates, into its working draft (oracle.simple.key_dates).
 - ``add_item`` (S7): a new draft item; oracle.simple.additions makes it (its own rules for
   who applies, its undo removes the item).
-- ``merge_item`` (S7): a draft (``target.item_id``) merged into another item of its
-  roadmap (``target.into_id``): the kept item takes the draft's goal links, dependencies
-  and note, the draft's dependents depend on the kept item, the draft closes
-  (``merged_into``: the kept item's key); or linked to a baseline feature
-  (``target.feature_id``). Keyed by item id like the fixes; ``before`` is read, not given.
+- ``merge_item`` (S7): an open item (``target.item_id``; feature-parts: any, not only a
+  draft) merged into another open item of its roadmap (``target.into_id``): the kept item
+  takes its goal links, dependencies and note, its dependents depend on the kept item, its
+  parts become the kept item's (the kept item, if one of them at any depth, takes its
+  place under its parent), its own
+  ``parent_key`` clears and it closes (``merged_into``: the kept item's key); or a draft
+  linked to a baseline feature (``target.feature_id``, drafts only). Keyed by item id like
+  the fixes; ``before`` is read, not given.
 - ``keep_both`` (S7): kept_both; the draft's look-alikes are no longer offered.
 - ``cut_with_dependents`` (fix5-cut-dependents): the item and every item that waits on it,
   transitively (``dependents``), cut as one change, undone as one; ``before`` is the
@@ -158,6 +166,8 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "set_status": ("status",),
     "set_feature": ("feature_id",),
     "remove_dependency": ("depends_on",),
+    # feature-parts: the item this one is part of.
+    "set_parent": ("parent_key",),
 }
 CONFIDENCES = ("low", "medium", "high")
 # set_status: the statuses a person sets (the others come from the tracker or a merge).
@@ -516,7 +526,7 @@ def current_route(
         return list(c.routed_to or [])
     if (
         c.status != "proposed"
-        or c.op in ("edit_line", "edit_goal_milestone", *QUESTION_OPS)
+        or c.op in ("edit_line", "set_section_number", "edit_goal_milestone", *QUESTION_OPS)
         or c.op in KEY_DATE_OPS
         or c.op in PLAN_OPS
     ):
@@ -554,22 +564,63 @@ def _touched(c: SimpleChange) -> set[str]:
     return {str(c.target.get("item_id"))}
 
 
-async def _last_writer(db: AsyncSession, item_ids: set[str]) -> tuple[Any, Any]:
-    """(SimplePersonRef dict, when) of the last change through Simple that wrote these items."""
+# A conflict's field and the fields of a change that write it (as ``after`` names them).
+WRITES = {"status": {"status", "cut", "shipped"}, "goal_id": {"goal_id", "goal_ids"}}
+
+
+def _fields(current: dict[str, Any]) -> set[str] | None:
+    """The fields a conflict is about: ``current``'s, or its items' when keyed by item id;
+    None (any field) when it names none of an item's own."""
+    keys: set[str] = set()
+    for k, v in current.items():
+        keys |= set(v) if _is_id(k) and isinstance(v, dict) else {k}
+    if not keys or "dependents" in keys:
+        return None
+    return set().union(*(WRITES.get(k, {k}) for k in keys))
+
+
+def _is_id(key: str) -> bool:
+    try:
+        uuid.UUID(key)
+    except ValueError:
+        return False
+    return True
+
+
+def _writes(c: SimpleChange, item_ids: set[str], fields: set[str] | None) -> bool:
+    """Whether the change wrote one of these fields of one of these items."""
+    if not (_touched(c) & item_ids):
+        return False
+    if fields is None:
+        return True
+    if c.op in KEYED:
+        return any(fields & set(c.after.get(i) or {}) for i in item_ids)
+    return bool(fields & set(c.after))
+
+
+async def _last_writer(
+    db: AsyncSession, item_ids: set[str], fields: set[str] | None = None
+) -> tuple[Any, Any]:
+    """(SimplePersonRef dict, when) of the last change through Simple that wrote these
+    fields of these items (any field when None); a tie on when goes to the one made last."""
     rows = await db.scalars(
         select(SimpleChange)
         .where(SimpleChange.status.in_(WRITTEN))
-        .order_by(SimpleChange.decided_at.desc().nulls_last(), SimpleChange.at.desc())
+        .order_by(
+            SimpleChange.decided_at.desc().nulls_last(),
+            SimpleChange.at.desc(),
+            SimpleChange.seq.desc(),
+        )
         .limit(500)
     )
-    best: tuple[datetime, uuid.UUID] | None = None
+    best: tuple[datetime, int, uuid.UUID] | None = None
     for c in rows:
-        if not (_touched(c) & item_ids):
+        if not _writes(c, item_ids, fields):
             continue
         at = c.decided_at if c.status == "accepted" and c.decided_at else c.at
         who = c.decided_by if c.status == "accepted" and c.decided_by else c.by
-        if best is None or at > best[0]:
-            best = (at, who)
+        if best is None or (at, c.seq) > best[:2]:
+            best = (at, c.seq, who)
     # roadmap-edit-fixes: Oracle's draft of a new item (oracle.simple.additions) fills its
     # empty fields after the add: when that came last, Oracle changed it, not the person.
     from oracle.jobs.models import LlmJob
@@ -586,14 +637,14 @@ async def _last_writer(db: AsyncSession, item_ids: set[str]) -> tuple[Any, Any]:
                 return {"id": None, "name": ORACLE}, when
     if best is None:
         return None, None
-    names = await _names(db, {best[1]})
-    return {"id": str(best[1]), "name": names.get(best[1], "someone")}, best[0]
+    names = await _names(db, {best[2]})
+    return {"id": str(best[2]), "name": names.get(best[2], "someone")}, best[0]
 
 
 async def _conflict(
     db: AsyncSession, current: dict[str, Any], item_ids: set[str], lead: str
 ) -> ChangeError:
-    who, at = await _last_writer(db, item_ids)
+    who, at = await _last_writer(db, item_ids, _fields(current))
     name = who["name"] if who else "someone outside Simple"
     return ChangeError(
         409,
@@ -1003,6 +1054,8 @@ async def _plan(
         if loop := await loop_of(db, read_.by_id(), entry, added):
             raise ChangeError(422, loop)
         after = {"depends_on": clean}
+    elif op == "set_parent":
+        after = {"parent_key": await _parent(db, entry, a.get("parent_key"), target, read_)}
     else:  # accept_risk
         if target.get("flag") not in FLAG_KINDS:
             raise ChangeError(422, "target.flag: a constraint flag's kind")
@@ -1090,6 +1143,40 @@ async def _track_of_prd(
     )
 
 
+async def _parent(
+    db: AsyncSession, entry: service.Entry, key: Any, target: dict[str, Any], read_: service.Read
+) -> str | None:
+    """set_parent: the parent's key, checked (an open item of the roadmap, never the item
+    itself or one of its parts, at any depth);
+    ``target`` names the parent the words name (the new one, else the one left)."""
+    row = entry.row
+    key = " ".join(str(key).split()) if key is not None else None
+    named = key or row.parent_key
+    same = [e for e in read_.entries if e.roadmap.id == entry.roadmap.id]
+    parent = next((e for e in same if named and e.row.item_key == named), None)
+    await service.item_codes(db, [entry] + ([parent] if parent is not None else []))
+    if parent is not None:
+        target["code"], target["title"] = parent.code or "", parent.row.title
+    if not key:
+        return None
+
+    def name(e: service.Entry) -> str:
+        return " ".join(x for x in (e.code, e.row.title) if x)
+
+    if key == row.item_key:
+        raise ChangeError(422, f"{name(entry)} cannot be a part of itself")
+    if parent is None or parent.status in ("merged", "cut"):
+        raise ChangeError(422, f"after.parent_key: no open item of this roadmap has the key {key}")
+    if any(a is entry for a in parent.ancestors):
+        # Any depth, never a loop: a feature is never its own ancestor.
+        raise ChangeError(
+            422,
+            f"{name(entry)} cannot be part of {name(parent)}: "
+            f"{name(parent)} is already one of its parts",
+        )
+    return key
+
+
 async def _unknown_keys(db: AsyncSession, keys: list[str], read_: service.Read) -> list[str]:
     """set_depends: the keys that name no roadmap item (its key or code) and no feature."""
 
@@ -1122,10 +1209,12 @@ async def _merge_plan(
     """S7: merge_item's writes, keyed by item id (see the module's docstring)."""
 
     row = entry.row
-    if not row.draft or entry.status in ("merged", "cut"):
-        raise ChangeError(422, "Only an open draft item is merged")
+    if entry.status in ("merged", "cut"):
+        raise ChangeError(422, "Only an open item is merged")
     after: dict[str, dict[str, Any]] = {}
     if target.get("feature_id"):
+        if not row.draft:
+            raise ChangeError(422, "Only a draft item is linked to a feature")
         fid = _uuid(target["feature_id"], "feature_id")
         feature = await db.get(Entity, fid)
         if feature is None or feature.type != "feature":
@@ -1155,13 +1244,24 @@ async def _merge_plan(
             "depends_on": deps,
             "note": f"{kept.row.note}\n{note}" if kept.row.note else note,
         }
-        after[str(row.id)] = {"merged_into": kk}
+        after[str(row.id)] = {"merged_into": kk, "parent_key": None}
         for nid in entry.needed_by:
             n = by_id.get(nid)
             if n is None or n is kept or n is entry:
                 continue
             ks = [k for k in n.row.depends_on or [] if k != dk]
             after[str(nid)] = {"depends_on": ks + ([kk] if kk not in ks else [])}
+        # feature-parts: its parts become the kept item's. The kept item stays where it is,
+        # or, when it is one of the merged item's parts at any depth, takes its place (so
+        # no part is left under a closed item and no loop is made).
+        if any(a is entry for a in kept.ancestors):
+            after.setdefault(str(kept.row.id), {})["parent_key"] = row.parent_key
+        for e in by_id.values():
+            if e.roadmap.id != entry.roadmap.id or e is entry or e is kept:
+                continue
+            if e.row.parent_key != dk:
+                continue
+            after.setdefault(str(e.row.id), {})["parent_key"] = kk
     rows = {str(e.row.id): e.row for e in by_id.values()}
     before = {k: read(rows[k], tuple(v), target) for k, v in after.items()}
     return entry, target, before, after
@@ -1519,6 +1619,10 @@ async def decide(
         current = await _current(db, c, c.before)
         if current != c.before:
             raise await _conflict(db, current, _touched(c), "outdated")
+        if c.op == "set_parent":
+            # The roadmap may have changed since the proposal: create's check again (no
+            # loop, an open parent), in its words.
+            await _parent(db, entry, (c.after or {}).get("parent_key"), dict(c.target), read_)
         # Into the decider's working draft (their editing session's, or S8's meeting's).
         session = await _session_for_change(db, me, session_id, True, now)
         await _apply(db, c, c.after, principal, session)  # type: ignore[arg-type]
@@ -1631,6 +1735,14 @@ async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> Simple
             raise await _conflict(db, current, _touched(c), "Changed since")
     elif current != c.after:
         raise await _conflict(db, current, _touched(c), "Changed since")
+    if c.op == "set_parent" and back.get("parent_key"):
+        # The old parent written back is checked as create checks it: putting the item back
+        # may make a loop now, or the parent may be cut, merged or in Trash since.
+        read_ = await service.load(db, await drafts.overlays_for(db, principal))
+        entry = read_.by_id().get(uuid.UUID(c.target["item_id"]))
+        if entry is None:
+            raise ChangeError(404, "The item is gone")
+        await _parent(db, entry, back["parent_key"], dict(c.target), read_)
     u = SimpleChange(session_id=c.session_id, document_id=c.document_id, op=c.op, target=c.target,
                      before=current, after=back, status="undone", by=me, at=now,
                      undoes_id=c.id, routed_to=[], draft_ids=list(c.draft_ids or []))  # fmt: skip
@@ -1756,7 +1868,8 @@ class _View:
         owners, decider and reviewers (#723 owner answer)."""
         # S5: a one-pager line's change is on a PRD, not a roadmap of this read.
         if (c.document_id is not None and c.document_id not in self.docs
-                and c.op not in ("edit_line", "edit_goal_milestone", *QUESTION_OPS)):  # fmt: skip
+                and c.op not in ("edit_line", "set_section_number", "edit_goal_milestone",
+                                 *QUESTION_OPS)):  # fmt: skip
             return False
         if self.me is None:
             return False
@@ -1921,7 +2034,7 @@ async def listing(
     status: str | None,
     mine: bool,
 ) -> list[SimpleChangeOut]:
-    q = select(SimpleChange).order_by(SimpleChange.at.desc(), SimpleChange.id).limit(500)
+    q = select(SimpleChange).order_by(SimpleChange.at.desc(), SimpleChange.seq.desc()).limit(500)
     if session_id is not None:
         q = q.where(SimpleChange.session_id == session_id)
     if document_id is not None:
@@ -1959,9 +2072,13 @@ async def _on_replaced_prds(db: AsyncSession, changes: list[SimpleChange]) -> se
     return {cid for iid in items for cid in by_item[iid]}
 
 
-def _subject(c: SimpleChange, questions: dict[str, Any]) -> dict[str, Any]:
-    """What a proposal on no item is on (InboxSimpleChange's subject, question_id, line_id):
-    its PRD question by code and title, or its one-pager line as it read."""
+def _subject(
+    c: SimpleChange, questions: dict[str, Any], prds: dict[uuid.UUID, str] | None = None
+) -> dict[str, Any]:
+    """What a proposal on no item is on (InboxSimpleChange's subject, question_id, line_id,
+    section): its PRD question by code and title, its one-pager line as it read, or a one-pager
+    number fix by its PRD's title ("Section number on Guided setup: Use 6", ``prds``) and the
+    section it changes."""
     if c.op in QUESTION_OPS:
         d = questions.get(str(c.target.get("decision_id")))
         if d is None:
@@ -1971,6 +2088,11 @@ def _subject(c: SimpleChange, questions: dict[str, Any]) -> dict[str, Any]:
     if c.op == "edit_line":
         line = " ".join(str((c.before or {}).get("line") or "").split())
         return {"subject": line or None, "line_id": c.target.get("line_id")}
+    if c.op == "set_section_number":
+        title = (prds or {}).get(c.document_id) if c.document_id else None
+        n = str((c.after or {}).get("number") or "")
+        name = f"Section number on {title}" if title else "Section number"
+        return {"subject": f"{name}: Use {n}" if n else name, "section": c.target.get("section")}
     return {}
 
 
@@ -2015,7 +2137,11 @@ async def inbox_rows(
                     & (SimpleChange.decided_at >= since)
                 )
             )
-            .order_by(SimpleChange.decided_at.desc().nulls_last(), SimpleChange.at.desc())
+            .order_by(
+                SimpleChange.decided_at.desc().nulls_last(),
+                SimpleChange.at.desc(),
+                SimpleChange.seq.desc(),
+            )
         )
     )
     waiting = [c for c in rows if c.status == "proposed"]
@@ -2058,6 +2184,15 @@ async def inbox_rows(
     }
     # inbox-meeting-proposals fix: the PRD questions they are on (their code and title).
     on_questions = await _questions(db, waiting + decided)
+    # PR 1320 re-review: a one-pager number fix is named by its PRD.
+    from oracle.docs.models import Document
+
+    fixed_in = {c.document_id for c in waiting + decided if c.op == "set_section_number"}
+    prds = (
+        {d.id: d.title for d in await db.scalars(select(Document).where(Document.id.in_(fixed_in)))}
+        if fixed_in - {None}
+        else {}
+    )
     names = await _names(db, {c.by for c in waiting + decided})
     from oracle.simple import agenda, change_words
 
@@ -2086,6 +2221,10 @@ async def inbox_rows(
         if c.status == "proposed" and c.op == "edit_line":
             line = change_words._quoted((c.after or {}).get("line"))
             return f"proposed new wording for a one-pager line{f': {line}' if line else ''}"
+        if c.status == "proposed" and c.op == "set_section_number":
+            # "proposed setting the number in “Not this quarter” to 6"
+            done = change_words.phrase(c.op, c.target, c.before, c.after, named)
+            return f"proposed setting{done.removeprefix('set')}"
         if c.status in ("proposed", "declined") and c.op == "add_feature_ask":
             # Not filed in Requests until it is accepted.
             ask = change_words._quoted((c.after or {}).get("title"))
@@ -2096,7 +2235,7 @@ async def inbox_rows(
         iid = uuid.UUID(str(c.target["item_id"])) if c.target.get("item_id") else None
         m = asked.get(c.session_id) if c.session_id else None
         title = titles.get(iid) if iid else None
-        on = _subject(c, on_questions)
+        on = _subject(c, on_questions, prds)
         named = title or (on.get("subject") if "question_id" in on else None)
         return InboxSimpleChange(
             from_meeting=SimpleChangeMeeting(id=m.id, title=m.title) if m else None,

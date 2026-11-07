@@ -54,7 +54,7 @@ test.describe("desktop", () => {
     await btn.click();
     const tray = page.getByTestId("decision-tray");
     const tiles = tray.getByTestId("tray-counter");
-    await expect(tiles).toHaveCount(4);
+    await expect(tiles).toHaveCount(5);
     const sum = (await tiles.locator("b").allTextContents()).reduce((s, t) => s + Number(t), 0);
     expect(sum).toBe(n);
     await expect(tray.getByTestId("tray-scope")).toContainText(`${n} to decide in your roadmaps' working drafts`);
@@ -220,7 +220,7 @@ test.describe("desktop", () => {
       await open(page, undefined, scheme);
       await page.getByTestId("needs-decision").click();
       const tiles = page.getByTestId("decision-tray").getByTestId("tray-counter");
-      await expect(tiles).toHaveCount(4);
+      await expect(tiles).toHaveCount(5);
       const boxes = await tiles.evaluateAll((els) => els.map((el) => el.getBoundingClientRect()).map((r) => ({ w: r.width, h: r.height })));
       for (const b of boxes) {
         expect(Math.abs(b.w - boxes[0].w)).toBeLessThanOrEqual(1);

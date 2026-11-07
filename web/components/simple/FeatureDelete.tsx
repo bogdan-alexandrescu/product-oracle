@@ -2,19 +2,23 @@
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 
-import { toast as dsToast, type ToastAsk } from "@/components/ds";
+import { confirmInPage, toast as dsToast, type ToastAsk } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
 import { errorMessage } from "@/lib/use-query";
+import { partsWords } from "@/app/simple/roadmap/_lib";
 
 /**
  * trash-features-goals: a roadmap feature's Delete from its row (the Gantt or Timeline row's
  * context menu, the Priorities row's ⋯). It goes to Settings › Trash, never deleted for good
  * here; the note's Undo restores it with its links, goal and milestone. Shown to who decides
  * on the feature (its own `can_decide`, or a Priorities row's `applies`). `onGone`: the feature
- * went to Trash (the page closes its panel).
+ * went to Trash (the page closes its panel). panel-menu: a feature with `parts` asks first, naming
+ * how many stay on the roadmap (Delete or Cancel), and says it again once done.
  */
 export function useFeatureDelete(reload: () => Promise<unknown>, toast: (ask: ToastAsk) => void = dsToast, onGone?: (id: string) => void) {
-  return async (f: { id: string; title: string }): Promise<void> => {
+  return async (f: { id: string; title: string; parts?: readonly unknown[] }): Promise<void> => {
+    const parts = partsWords(f.parts?.length ?? 0, "stay");
+    if (parts && !(await confirmInPage({ action: "Delete", title: `Delete ${f.title}?`, message: parts, destructive: true, cancel: "Cancel" }))) return;
     try {
       const out = await unwrap(api.DELETE("/v1/simple/roadmap/items/{item_id}", { params: { path: { item_id: f.id } } }));
       // In Trash: its panel, if open, closes with it.
@@ -25,7 +29,7 @@ export function useFeatureDelete(reload: () => Promise<unknown>, toast: (ask: To
         return;
       }
       toast({
-        message: `Moved ${f.title} to Trash.`,
+        message: parts ? `Moved ${f.title} to Trash. ${parts}` : `Moved ${f.title} to Trash.`,
         action: out.can_restore
           ? {
               label: "Undo",
@@ -50,7 +54,7 @@ export function useFeatureDelete(reload: () => Promise<unknown>, toast: (ask: To
 const ITEM = "flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-warn hover:bg-surface2";
 
 /** The menu itself: at a point (a context menu) or under its ⋯ button. Escape or a click away closes it. */
-function Menu({ title, onDelete, onClose, style, className }: { title: string; onDelete: () => void; onClose: () => void; style?: CSSProperties; className: string }) {
+function Menu({ title, onDelete, onClose, style, className, propose }: { title: string; onDelete: () => void; onClose: () => void; style?: CSSProperties; className: string; propose?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   useEffect(() => {
@@ -78,19 +82,20 @@ function Menu({ title, onDelete, onClose, style, className }: { title: string; o
           onDelete();
         }}
       >
-        Delete feature
+        {/* panel-menu: who may not decide proposes it (the same DELETE; its decider decides). */}
+        {propose ? "Propose: delete" : "Delete feature"}
       </button>
     </div>
   );
 }
 
 /** A row's context menu, opened where the person right-clicked (or pressed the menu key). */
-export function FeatureContextMenu({ at, title, onDelete, onClose }: { at: { x: number; y: number }; title: string; onDelete: () => void; onClose: () => void }) {
-  return <Menu title={title} onDelete={onDelete} onClose={onClose} className="fixed" style={{ left: Math.min(at.x, window.innerWidth - 232), top: Math.min(at.y, window.innerHeight - 56) }} />;
+export function FeatureContextMenu({ at, title, onDelete, onClose, propose }: { at: { x: number; y: number }; title: string; onDelete: () => void; onClose: () => void; propose?: boolean }) {
+  return <Menu title={title} onDelete={onDelete} onClose={onClose} propose={propose} className="fixed" style={{ left: Math.min(at.x, window.innerWidth - 232), top: Math.min(at.y, window.innerHeight - 56) }} />;
 }
 
 /** A row's ⋯ button and its menu. */
-export function FeatureMenu({ title, onDelete }: { title: string; onDelete: () => void }) {
+export function FeatureMenu({ title, onDelete, propose }: { title: string; onDelete: () => void; propose?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <span className="relative flex-none">
@@ -104,7 +109,7 @@ export function FeatureMenu({ title, onDelete }: { title: string; onDelete: () =
       >
         ⋯
       </button>
-      {open && <Menu title={title} onDelete={onDelete} onClose={() => setOpen(false)} className="absolute right-0 top-9" />}
+      {open && <Menu title={title} onDelete={onDelete} propose={propose} onClose={() => setOpen(false)} className="absolute right-0 top-9" />}
     </span>
   );
 }

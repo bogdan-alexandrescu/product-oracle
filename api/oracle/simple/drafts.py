@@ -129,6 +129,8 @@ FIELDS = (
     "track_id",
     "prd_document_id",
     "shipped",
+    # feature-parts: set_parent.
+    "parent_key",
 )
 UUID_FIELDS = ("feature_id", "owner_id", "decider_id", "track_id", "prd_document_id")
 DATES = ("start_date", "end_date")
@@ -877,7 +879,7 @@ async def _logs(db: AsyncSession, ds: list[SimpleDraft]) -> dict[uuid.UUID, list
         await db.scalars(
             select(SimpleChange)
             .where(SimpleChange.draft_ids.overlap(ids), SimpleChange.status.in_(COUNTED))
-            .order_by(SimpleChange.at, SimpleChange.id)
+            .order_by(SimpleChange.at, SimpleChange.seq)
         )
     )
     if not rows:
@@ -1097,6 +1099,7 @@ OP_WORDS = {
     "move_dependency": "Moved the dependency of",
     "confirm_item": "Confirmed",
     "edit_line": "New wording for",
+    "set_section_number": "New number in",
     "add_key_date": "Added the key date",
     "edit_key_date": "Changed the key date",
     "remove_key_date": "Removed the key date",
@@ -1112,6 +1115,7 @@ OP_WORDS = {
     "set_status": "New status for",
     "set_feature": "New feature for",
     "set_goals": "Moved to another goal:",
+    "set_parent": "Changed what it is part of:",
 }
 
 
@@ -1120,7 +1124,7 @@ async def _live_changes(db: AsyncSession, d: SimpleDraft) -> list[SimpleChange]:
         await db.scalars(
             select(SimpleChange)
             .where(SimpleChange.draft_ids.contains([d.id]), SimpleChange.status.in_(COUNTED))
-            .order_by(SimpleChange.at, SimpleChange.id)
+            .order_by(SimpleChange.at, SimpleChange.seq)
         )
     )
     undone = (
@@ -1312,7 +1316,10 @@ async def _submit_sections(
         )
     )
     try:
-        markdown = one_pager.patched_markdown(base, secs, (d.overlay or {}).get("sections") or {})
+        ov = d.overlay or {}
+        markdown = one_pager.patched_markdown(
+            base, secs, ov.get("sections") or {}, ov.get("headings") or {}
+        )
     except one_pager.ChangeError as e:
         raise DraftError(e.status, e.detail) from e
     result = await docs_service.import_draft(

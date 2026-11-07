@@ -87,7 +87,19 @@ for (const scheme of ["light", "dark"] as const) {
       await open(page, scheme);
       await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-view", "zoom");
       const lanes = await page.getByTestId("timeline-lane").allInnerTexts();
-      expect(lanes).toEqual(["Activation · 5 items", "Reliability · 5 items", "Revenue · 3 items", "Growth · 4 items", "PM-owned · 3 items"]);
+      // P-1: the Goal map's 12 features are roadmap items from the first load; each names the map goal it
+      // serves (P-6, feature-panel-qa 6bf7dbec7 and its first-load merge 1e1ad87ac), so the map's three goals
+      // lead the lanes in the one goal order and no item is left with No goal.
+      expect(lanes).toEqual([
+        "Sign-ups per rep per day · 4 items",
+        "Revenue per day · 3 items",
+        "Paid conversions per rep per day · 5 items",
+        "Activation · 5 items",
+        "Reliability · 5 items",
+        "Revenue · 3 items",
+        "Growth · 4 items",
+        "PM-owned · 3 items",
+      ]);
       // The Timeline always draws its rows under their goal: no Group by, no stale lanes hint.
       await expect(page.getByTestId("group-milestone")).toHaveCount(0);
       await expect(page.getByTestId("lanes-hint")).toHaveCount(0);
@@ -246,11 +258,14 @@ for (const scheme of ["light", "dark"] as const) {
       const quarters = list.getByTestId("timeline-quarter");
       await expect(quarters).toHaveCount(2);
       await expect(quarters.nth(0).locator("h3")).toHaveText(/^Q4 2026\s*Oct – Dec 2026 · 12 items\s*Today \w{3} \d+$/);
-      await expect(quarters.nth(1).locator("h3")).toHaveText(/^Q1 2027\s*Jan – Mar 2027 · 8 items$/);
-      await expect(list.getByTestId("timeline-row")).toHaveCount(20);
+      // P-1: Q1 2027 also lists the Goal map's 12 features (roadmap items from the first load, next quarter).
+      await expect(quarters.nth(1).locator("h3")).toHaveText(/^Q1 2027\s*Jan – Mar 2027 · 20 items$/);
+      await expect(list.getByTestId("timeline-row")).toHaveCount(32);
       await expect(row(page, "setup-checklist")).toHaveText(/^Setup checklist\s*Nov 2 – Nov 20 · Activation$/);
       await expect(row(page, "plan-f-03")).toHaveText(/^Setup failure alerts\s*Nov 2 – Nov 13/);
-      await expect(quarters.nth(1).getByTestId("timeline-row").first()).toHaveText(/^Public signup\s*Jan 4 – Jan 29, 2027/);
+      // P-1: the Goal map's One-tap sign-up link (Jan 1) starts before Public signup (Jan 4), in start order.
+      await expect(quarters.nth(1).getByTestId("timeline-row").first()).toHaveText(/^One-tap sign-up link\s*Jan 1 – Jun 30, 2027/);
+      await expect(quarters.nth(1).getByTestId("timeline-row").filter({ hasText: "Public signup" })).toHaveText(/^Public signup\s*Jan 4 – Jan 29, 2027/);
       await expect(page.getByTestId("group-milestone")).toHaveCount(0);
 
       await row(page, "plan-f-05").getByTestId("timeline-bar").click();
