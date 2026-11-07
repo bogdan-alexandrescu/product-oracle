@@ -228,7 +228,11 @@ test.describe("QA pass 2: simple-plan, Goal buckets", () => {
       // qa4-simple-plan-12: each code a chip beside its name.
       await expect(activation.getByTestId("bucket-features").locator("li").filter({ hasText: "Sample data import" }).getByTestId("prio-code")).toHaveText("F-12");
       await expect(activation.getByTestId("bucket-features").locator("li").filter({ hasText: "Setup checklist" }).getByTestId("prio-code")).toHaveText("SC");
-      for (const card of await page.getByTestId("goal-bucket").all()) await expect(card).not.toContainText("Nothing this quarter");
+      // A card with weeks this quarter names its features; only a goal with none says "Nothing this quarter"
+      // (the Goal map's goals since P-1: their features are all in Next).
+      for (const card of await page.getByTestId("goal-bucket").all())
+        if ((await card.getByTestId("bucket-share").textContent())?.trim() !== "0%") await expect(card).not.toContainText("Nothing this quarter");
+        else await expect(card.getByTestId("plan-feature")).toHaveCount(0);
     });
 
   /* qa-simple-plan-8, -20, -27, -29: the drawer dims the page, its card body takes the width, pills on one line, no glyph, one control style. */

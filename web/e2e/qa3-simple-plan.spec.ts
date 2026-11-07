@@ -352,16 +352,13 @@ test.describe("QA pass 3: simple-plan, Value / effort", () => {
       const marks = await Promise.all((await page.getByTestId("vxe-point").all()).map(async (m) => (await m.boundingBox())!));
       const shrink = (b: Box) => ({ x: b.x + 2, y: b.y + 2, width: b.width - 4, height: b.height - 4 });
       for (let i = 0; i < marks.length; i++) for (let j = i + 1; j < marks.length; j++) expect(overlap(shrink(marks[i]), shrink(marks[j]))).toBe(0);
-      // Pinned layouts at 390: the default's middle value has room for its words, never under a mark;
-      // the plan's has none, so the legend names both lines.
-      if (!scenario) {
-        const middle = (await page.getByTestId("vxe-middle-value").boundingBox())!;
-        for (const m of marks) expect(overlap(middle, shrink(m))).toBe(0);
-        await expect(page.getByTestId("vxe-legend-middles")).toHaveCount(0);
-      } else {
-        await expect(page.getByTestId("vxe-middle-value")).toHaveCount(0);
-        await expect(page.getByTestId("vxe-legend-middles")).toHaveText("The dashed lines are the middle effort (up and down) and the middle value (across).");
-      }
+      // Pinned layouts at 390: neither plot has room for the middle value's words (the default's 22
+      // marks since P-1 put the Goal map's features in it), so the legend names that line; the plan's
+      // has no room for the middle effort's words either, so it names both.
+      await expect(page.getByTestId("vxe-middle-value")).toHaveCount(0);
+      await expect(page.getByTestId("vxe-legend-middles")).toHaveText(
+        scenario ? "The dashed lines are the middle effort (up and down) and the middle value (across)." : "The dashed line across is the middle value.",
+      );
       expect(await page.getByTestId("vxe-plot").evaluate((e) => getComputedStyle(e).touchAction)).not.toBe("none");
       const more = page.getByTestId("line-caption-more");
       if ((await more.count()) > 0) {

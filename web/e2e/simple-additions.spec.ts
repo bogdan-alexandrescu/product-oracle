@@ -52,10 +52,17 @@ async function dragAdd(page: Page, title: string, target: Locator, at: "top" | "
   // The chip and the target's top on screen together (the page's top).
   await page.evaluate(() => window.scrollTo(0, 0));
   const from = (await chip.boundingBox())!;
-  const to = (await target.boundingBox())!;
+  let to = (await target.boundingBox())!;
   const bottom = (page.viewportSize()?.height ?? 800) - 12;
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
+  // A target below the fold (the Goal map's goals lead the goal rows since P-1): holding the chip,
+  // the person scrolls the page with the wheel until the target's top is on screen.
+  if (to.y + 20 > bottom) {
+    await page.mouse.wheel(0, to.y - bottom / 2);
+    await expect.poll(async () => (await target.boundingBox())!.y).toBeLessThan(bottom - 20);
+    to = (await target.boundingBox())!;
+  }
   await page.mouse.move(to.x + to.width / 2, Math.min(at === "top" ? to.y + 20 : to.y + to.height / 2, bottom), { steps: 12 });
   await page.mouse.up();
 }
