@@ -132,7 +132,8 @@ export const STOP_HELP: Record<string, string> = {
 export type BriefsCheck = {
   features: { key: string; title: string; approach: string; size: string; depends_on: string[]; questions: { id: string; question: string; blocking: boolean }[] }[];
   /** An unknown code map id is one problem, with the features citing it. */
-  problems: { code: string; message: string; feature?: string | null; features?: string[] }[];
+  /** A feature in no PRD yet (dependency_in_no_prd) carries its Ground Truth feature's id. */
+  problems: { code: string; message: string; feature?: string | null; features?: string[]; entity?: string }[];
   code_map_used: boolean;
   /** The repositories the briefs name that none of the run's code maps covers. */
   unmapped_repos?: string[];

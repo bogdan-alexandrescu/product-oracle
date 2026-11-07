@@ -161,7 +161,9 @@ async def test_a_dependency_on_a_key_no_roadmap_knows_is_still_refused():
     ]
 
 
-async def test_a_dependency_waived_at_the_feature_set_stop_passes_the_engineering_check():
+# The waiver names the problem by its code, or by its own ref (gate.problem_ref).
+@pytest.mark.parametrize("answer", ["depends_on_excluded", "depends_on_excluded~3f9a1c2e"])
+async def test_a_dependency_waived_at_the_feature_set_stop_passes_the_engineering_check(answer):
     # protects=a dependency waived at this run's feature set stop is accepted; fails_when=
     # a waived dependency still refuses the briefs.
     w = await world(roadmap=False)
@@ -179,7 +181,7 @@ async def test_a_dependency_waived_at_the_feature_set_stop_passes_the_engineerin
         cp = await _add(s, Checkpoint(run_id=w["run"], kind="feature_set", status="approved"))
         scope.checkpoint_id = cp.id
         s.add(CheckpointAction(checkpoint_id=cp.id, item_key="observability", kind="waive",
-                               answers=["depends_on_excluded"], state="staged"))  # fmt: skip
+                               answers=[answer], state="staged"))  # fmt: skip
         await s.commit()
     summary = await _summary(w, "export-logs")
     assert summary["problems"] == []
@@ -500,10 +502,12 @@ async def test_the_simple_panel_shows_a_dependency_named_by_a_feature_key():
     assert by_key["ahl-1"].needed_by == [by_key["observability"].row.id]
 
 
-async def test_a_confirmed_ground_truth_feature_passes_both_stops():
-    # protects=the four area PRDs, none on the company roadmap yet, may depend on each
-    # other's confirmed features at the Engineering check, as at the feature set stop;
-    # fails_when=the feature set passes and the Engineering check refuses the briefs.
+async def test_a_confirmed_ground_truth_feature_in_no_prd_is_named_at_the_engineering_check():
+    # protects=the feature set stop lets a brief depend on a confirmed feature, and the
+    # Engineering check names it plainly while no PRD holds it (not first at the roadmap
+    # items stop); area PRDs drafted side by side see each other's approved scopes
+    # (test_a_new_prd_s_approved_scope_counts_before_its_import_and_any_roadmap);
+    # fails_when=the Engineering check accepts a feature no PRD will build.
     w = await world(roadmap=False)
     async with tenant_session(w["tenant"]) as s:
         known = await feature_set.known_for_run(s, w["run"])
@@ -515,8 +519,10 @@ async def test_a_confirmed_ground_truth_feature_passes_both_stops():
     )  # fmt: skip
     assert out.blocking == 0
     summary = await _summary(w, "export-logs")
-    assert summary["problems"] == []
-    assert summary["elsewhere"] == {"export-logs": "Export logs"}
+    assert [p["message"] for p in summary["problems"]] == [
+        "Export logs is in no PRD yet: Observability depends on it"
+    ]
+    assert summary["elsewhere"] == {}
 
 
 async def test_a_new_prd_s_approved_scope_counts_before_its_import_and_any_roadmap():

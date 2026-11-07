@@ -57,6 +57,8 @@ ProblemCode = Literal[
     "bad_change",
     "duplicate_question_id",
     "unknown_dependency",
+    # The Engineering check (oracle.engineering.check): a Ground Truth feature no PRD holds.
+    "dependency_in_no_prd",
     "unknown_ref",
     "ref_without_map",
     "no_assumptions",
@@ -72,6 +74,8 @@ class Problem(BaseModel):
     ref: str | None = Field(default=None, exclude=True)
     # unknown_ref: where the feature cites it (touches[i].ref or reuse).
     at: str | None = Field(default=None, exclude=True)
+    # dependency_in_no_prd: the Ground Truth feature's id (the stop adds it to a PRD).
+    entity: str | None = Field(default=None, exclude=True)
 
 
 class Touch(BaseModel):
@@ -334,8 +338,8 @@ def _check(
         for dep in entry.get("depends_on") or [] if not shape else []:
             if dep not in wanted and dep not in elsewhere:
                 out.append(
-                    _p("unknown_dependency", f"{where}: depends on {dep!r}, not a feature of "
-                       "the feature set or the company roadmap", key)
+                    _p("unknown_dependency", f'{_named(entry, key, where)} depends on "{dep}", a '
+                       "feature Oracle cannot find in any PRD or in Ground Truth", key)
                 )  # fmt: skip
         for rw, at, ref in refs:
             if not used:
@@ -356,6 +360,15 @@ def _check(
     for key in sorted(wanted - seen):
         out.append(_p("missing_feature", f"{key} has no brief", key))
     return out
+
+
+def _named(entry: dict[str, Any], key: str | None, where: str) -> str:
+    """A brief's feature as a person reads it: "Observability (observability)", its key
+    alone when the brief has no title, where it is in the file when it has neither."""
+    title = entry.get("title")
+    if _text(title):
+        return f"{title.strip()} ({key})" if key else title.strip()
+    return key or where
 
 
 def parse(text: str) -> TechBriefs:

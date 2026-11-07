@@ -235,6 +235,7 @@ from oracle.runs.schemas import (
     SegmentAttempt,
     SegmentEstimate,
     SegmentOut,
+    TargetFeature,
     TargetGoal,
     TickOut,
     TickUnchecked,
@@ -315,6 +316,9 @@ ORACLE_KNOBS = (
     "reuse_baseline",
     # #260: the confirmed goals a Baseline to PRD run serves, [{"id", "key", "title"}].
     "target_goals",
+    # "Add it to a PRD": the Ground Truth features a Baseline to PRD run adds to its PRD,
+    # [{"id", "key", "title"}].
+    "target_features",
     # E1: the PRD draft's derivation a prd_draft_items run stores its items in.
     "draft_roadmap_id",
     # E1 part B ("Reuse items"): false on a Build roadmap run that derives its items
@@ -1493,6 +1497,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
             budget_usd=_usd(knobs.budget_usd),
             reuse_baseline=(run.knobs or {}).get("reuse_baseline") or None,
             goals=[TargetGoal(**g) for g in (run.knobs or {}).get("target_goals") or []],
+            features=[TargetFeature(**f) for f in (run.knobs or {}).get("target_features") or []],
             reuse_draft_items=(run.knobs or {}).get("reuse_draft_items") is not False
             if run.flow == REUSES_DRAFT_ITEMS
             else None,
@@ -2319,6 +2324,9 @@ async def create_run(
     extra.pop("target_goals", None)
     if goals := await _target_goals(db, flow, body.knobs.goals):
         extra["target_goals"] = goals
+    extra.pop("target_features", None)
+    if features := await _target_features(db, flow, body.knobs.features):
+        extra["target_features"] = features
     extra.pop("reuse_draft_items", None)
     extra.pop("draft_items_reused", None)
     if body.knobs.reuse_draft_items is False and flow.key == REUSES_DRAFT_ITEMS:
@@ -2383,6 +2391,35 @@ async def _target_goals(
     return [{"id": str(g.id), "key": g.key, "title": g.title} for g in goals]
 
 
+async def _target_features(
+    db: AsyncSession, flow: flows.FlowDef, refs: list[str] | None
+) -> list[dict[str, str]]:
+    """The ``target_features`` knob ("Add it to a PRD"): each named Ground Truth feature
+    (key or id, not rejected), once, in the order named. Only a Baseline to PRD run adds
+    features to its PRD."""
+    if not refs:
+        return []
+    if flow.key != "baseline_to_prd":
+        raise Invalid("only a Ground Truth to PRD run adds features to its PRD")
+    refs = list(dict.fromkeys(r.strip() for r in refs))
+    ids = [uuid.UUID(r) for r in refs if is_uuid(r)]
+    rows = (
+        await db.scalars(
+            select(Entity).where(
+                Entity.type == "feature",
+                Entity.status != "rejected",
+                or_(Entity.key.in_(refs), Entity.id.in_(ids)),
+            )
+        )
+    ).all()
+    found = {e.key: e for e in rows} | {str(e.id): e for e in rows}
+    missing = [r for r in refs if r not in found]
+    if missing:
+        raise Invalid(f"not a Ground Truth feature: {', '.join(missing)}")
+    features = list({found[r].id: found[r] for r in refs}.values())
+    return [{"id": str(f.id), "key": f.key, "title": f.title} for f in features]
+
+
 async def _current_inputs(db: AsyncSession, run: Run) -> _Inputs:
     knobs = run.knobs or {}
     source = number = None
@@ -2426,7 +2463,7 @@ async def update_run(
             k: v
             for k, v in oracle.items()
             if k.startswith("intake_")
-            or k in ("reuse_baseline", "target_goals", "reuse_draft_items")
+            or k in ("reuse_baseline", "target_goals", "target_features", "reuse_draft_items")
         }
         run.document_id, oracle = await _resolve_inputs(db, flow, current)
         oracle.update(intake)
@@ -2438,6 +2475,10 @@ async def update_run(
         oracle.pop("target_goals", None)
         if goals := await _target_goals(db, flow, body.knobs.goals):
             oracle["target_goals"] = goals
+    if body.knobs is not None and body.knobs.features is not None:
+        oracle.pop("target_features", None)
+        if features := await _target_features(db, flow, body.knobs.features):
+            oracle["target_features"] = features
     # E1 part B: what the run reuses is decided again by its next estimate.
     oracle.pop("draft_items_reused", None)
     if body.knobs is not None and body.knobs.reuse_draft_items is not None:
@@ -3073,6 +3114,7 @@ async def _prompt_context(
         scope_yaml=scope_yaml,
         launch_id=run.knobs.get("launch_id"),
         target_goals=[(g["key"], g["title"]) for g in run.knobs.get("target_goals") or []],
+        target_features=[(f["key"], f["title"]) for f in run.knobs.get("target_features") or []],
         discussions=discussions,
         baseline_reused=reuse.short_date(
             reused["approved_at"], await company_time.company_time_zone(db)
