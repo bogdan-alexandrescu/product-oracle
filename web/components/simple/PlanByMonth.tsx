@@ -19,9 +19,10 @@ const GRID = "grid grid-cols-[minmax(10rem,32%)_1fr] gap-x-2 max-[600px]:grid-co
  * count ("M1 · Measure it, make it safe · 3 roadmap items"). */
 const WIDE_LABELS = "min-[1280px]:grid-cols-[minmax(10rem,min(26rem,58%))_1fr]";
 
-/** A row's name as read: a bare milestone code says it is a milestone ("Milestone M1"); a
- * named one keeps its name ("M1 · Prove it"). */
-const rowName = (r: PlanStrip["rows"][number]) => (r.milestone && /^M\d{1,2}$/i.test(r.name) ? `Milestone ${r.name}` : r.name);
+/** A row's name as read: on the one-pager a bare milestone code says it is a milestone
+ * ("Milestone M1"); a named one keeps its name ("M1 · Prove it"). Home (`named`) reads the
+ * roadmap's current milestone as it is named, a bare code alone ("M2"). */
+const rowName = (r: PlanStrip["rows"][number], named = false) => (!named && r.milestone && /^M\d{1,2}$/i.test(r.name) ? `Milestone ${r.name}` : r.name);
 
 /**
  * vqa B-14: a one-pager row's label on one line ("Milestone M1 · 12 roadmap items"), cut with
@@ -76,6 +77,7 @@ export function PlanByMonth({
   legend = false,
   items,
   fold = false,
+  names,
 }: {
   plan: PlanStrip;
   /** The PRD the strip draws; none: the company roadmap, every PRD's items (Home). */
@@ -90,6 +92,8 @@ export function PlanByMonth({
   items?: { id: string; title: string; code?: string | null }[];
   /** The timeline slide (C-8): each row's items fold to its count, their names on hover and on asking. */
   fold?: boolean;
+  /** Home (home-milestones-current): the roadmap's item names by id; a row's label's tooltip lists its items under it. */
+  names?: ReadonlyMap<string, string>;
 }) {
   const open = useOpenFeature();
   const from = ms(plan.start);
@@ -120,7 +124,7 @@ export function PlanByMonth({
   // the edge with a committed item holds them): "1 commitment with no milestone ends after Jan".
   const after = `after ${calendarDay(plan.end, { month: "short" })}`;
   const holderRows = plan.rows.filter((r) => !r.estimated && r.end > plan.end);
-  const holders = holderRows.map((r) => (r.milestone ? `in ${rowName(r)}` : "with no milestone"));
+  const holders = holderRows.map((r) => (r.milestone ? `in ${rowName(r, named)}` : "with no milestone"));
   const holderText = holders.length > 1 ? `${holders.slice(0, -1).join(", ")} and ${holders.at(-1)}` : (holders[0] ?? "");
   // qa4-simple-prd-15: the one-pager counts "roadmap items" in its rows, so its footnote does too.
   const rowGrid = named ? GRID : `${GRID} ${WIDE_LABELS}`;
@@ -152,7 +156,7 @@ export function PlanByMonth({
           const width = Math.max(1.5, pct(r.end) - left);
           // qa-simple-prd-p3-15: the one-pager names what the items are.
           const n = `${r.items} ${legend ? "roadmap " : ""}${r.items === 1 ? "item" : "items"}`;
-          const label = named && prd ? `${prd.title} · ${r.milestone ? rowName(r) : "no milestone"} · ${n}` : named ? `${r.milestone ? rowName(r) : "Not in a milestone"} · ${n}` : `${rowName(r)} · ${n}`;
+          const label = named && prd ? `${prd.title} · ${r.milestone ? rowName(r, named) : "no milestone"} · ${n}` : named ? `${r.milestone ? rowName(r, named) : "Not in a milestone"} · ${n}` : `${rowName(r, named)} · ${n}`;
           const when = r.date ? calendarDay(r.date, { month: "short", day: "numeric" }) : null;
           const rowLabel = `${label}${when ? ` · ${when}` : ""}: open the roadmap${prd ? ` filtered to ${prd.title}` : ""}`;
           const words = (
@@ -160,11 +164,11 @@ export function PlanByMonth({
               {/* pre-demo QA S-11 (Home, named): the whole label, wrapped between words as the frame shows it, never
                   cut; vqa B-14 (the one-pager): one line, the whole label behind an (i) when cut. */}
               {named ? (
-                <span className="max-w-full min-w-0 font-semibold break-words" title={label} data-testid={`${testId}-label`}>
+                <span className="max-w-full min-w-0 font-semibold break-words" title={[label, ...(names ? (r.item_ids ?? []).flatMap((id) => (names.has(id) ? [names.get(id)!] : [])) : [])].join("\n")} data-testid={`${testId}-label`}>
                   {label}
                 </span>
               ) : (
-                <RowLabel name={rowName(r)} count={n} testId={testId} />
+                <RowLabel name={rowName(r, named)} count={n} testId={testId} />
               )}
               {when && <span className="simple-small tnum">{when}{r.past_edge ? `, after ${calendarDay(plan.end, { month: "short" })}` : ""}</span>}
               {/* qa4-simple-prd-15: a row with no milestone date that runs past the edge says when it ends;
@@ -196,7 +200,8 @@ export function PlanByMonth({
               {line(k === 0)}
             </span>
           );
-          const rowKey = `${r.name}|${r.date ?? ""}`;
+          // Two rows may read alike (two PRDs' "M2 · Pilot" on one day): each its own key.
+          const rowKey = `${r.name}|${r.date ?? ""}|${r.item_ids?.[0] ?? k}`;
           return (
             <li key={rowKey}>
               {named ? (
@@ -228,7 +233,7 @@ export function PlanByMonth({
                   type="button"
                   data-testid={`${testId}-names`}
                   aria-expanded={unfolded.has(rowKey)}
-                  aria-label={`${unfolded.has(rowKey) ? "Hide" : "Show"} the names in ${rowName(r)}`}
+                  aria-label={`${unfolded.has(rowKey) ? "Hide" : "Show"} the names in ${rowName(r, named)}`}
                   title={(r.item_ids ?? []).flatMap((id) => { const it = titles.get(id); return it ? [it.code ? `${it.code} ${it.title}` : it.title] : []; }).join("\n")}
                   onClick={() => setUnfolded((s) => { const x = new Set(s); if (!x.delete(rowKey)) x.add(rowKey); return x; })}
                   className="simple-small ml-3 font-semibold text-accent-ink underline"
@@ -238,7 +243,7 @@ export function PlanByMonth({
               )}
               {items && (!fold || unfolded.has(rowKey)) && (r.item_ids ?? []).some((id) => titles.has(id)) && (
                 // The row's items, one per line: the name wraps whole, its pill says what it is.
-                <ul data-testid={`${testId}-items`} aria-label={`${rowName(r)}: its roadmap items`} className="simple-small flex flex-col gap-1 pb-2 pl-3 pt-0.5">
+                <ul data-testid={`${testId}-items`} aria-label={`${rowName(r, named)}: its roadmap items`} className="simple-small flex flex-col gap-1 pb-2 pl-3 pt-0.5">
                   {(r.item_ids ?? []).flatMap((id) => {
                     const it = titles.get(id);
                     // one-feature-panel: the name (its code first) opens the feature's panel.

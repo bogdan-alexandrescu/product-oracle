@@ -367,6 +367,7 @@ export default function SimpleHome() {
     () => (roadmap.data ? planByMonth(homePlanInputs(roadmap.data), roadmap.data.today, roadmap.data.windows.now.end) : null),
     [roadmap.data],
   );
+  const planNames = useMemo(() => new Map((roadmap.data?.items ?? []).map((i) => [i.id, i.title])), [roadmap.data]);
   // qa4-simple-home-12: every working draft of mine, each with its own count (one roadmap's draft never hides another's).
   // home-draft-in-review: a draft sent for review shows to whoever approves it (its can_approve) and
   // to the one who sent or wrote it, until it is decided.
@@ -1199,7 +1200,7 @@ export default function SimpleHome() {
                 </p>
               )}
               {plan ? (
-                <PlanByMonth plan={plan} testId="home-strip" named />
+                <PlanByMonth plan={plan} testId="home-strip" named names={planNames} />
               ) : (
                 <p className="simple-small" data-testid="home-plan-empty">
                   Nothing planned this quarter yet.
@@ -1282,10 +1283,15 @@ export default function SimpleHome() {
           <HomeCard id="next-milestone" icon="flag" title="What the next milestone delivers" all="/simple/roadmap" allLabel="All of the roadmap">
             <Block q={roadmap} testId="home-milestone">
               {(r) => {
-                const m = r.milestones.filter((x) => x.date && x.date >= r.today && x.status === "planned").sort((a, b) => a.date!.localeCompare(b.date!))[0];
+                // home-milestones-current: the roadmap's own (goal) milestones count as its track ones do.
+                const ahead = [
+                  ...r.milestones.filter((x) => x.status === "planned").map((x) => ({ name: x.name, date: x.date ?? null, has: (i: (typeof r.items)[number]) => x.item_ids.includes(i.id) })),
+                  ...(r.goal_milestones ?? []).filter((x) => x.progress !== "met").map((x) => ({ name: `${x.code} · ${x.name}`, date: x.date ?? null, has: (i: (typeof r.items)[number]) => x.item_ids.includes(i.id) || i.milestone?.id === x.id })),
+                ];
+                const m = ahead.filter((x) => x.date && x.date >= r.today).sort((a, b) => a.date!.localeCompare(b.date!))[0];
                 if (!m) return <p className="simple-small">No milestone ahead yet.</p>;
                 return (
-                  <Top rows={r.items.filter((i) => m.item_ids.includes(i.id))} more="/simple/roadmap" what="of the items">
+                  <Top rows={r.items.filter((i) => m.has(i))} more="/simple/roadmap" what="of the items">
                     {(i) => (
                       <HomeRow
                         key={i.id}
