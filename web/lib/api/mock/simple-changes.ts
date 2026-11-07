@@ -432,7 +432,8 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
   }
   if ("horizon" in values) s.horizon = values.horizon as typeof s.horizon;
   if ("position" in values) s.position = values.position as number;
-  if ("cut" in values) s.status = values.cut ? "cut" : "planned";
+  // set_status's {cut, shipped} is written below, from the tracker's status read before either is written.
+  if ("cut" in values && !("shipped" in values)) s.status = values.cut ? "cut" : "planned";
   if ("title" in values) s.title = String(values.title);
   if ("draft" in values) s.draft = !!values.draft;
   if ("goal_ids" in values) {
@@ -461,7 +462,7 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
   if ("parent_key" in values) s.parent = (values.parent_key as string | null) ?? undefined;
   if ("shipped" in values) {
     // changes.py set_status ({cut, shipped}): it reads as service._status: cut, then its shipped mark, then the tracker's status.
-    if (s.tracked === undefined) s.tracked = !s.status || s.status === "cut" || s.status === "draft" || (s.status === "done" && s.shipped) ? "planned" : s.status;
+    s.tracked ??= !s.status || s.status === "cut" || s.status === "draft" || (s.status === "done" && s.shipped) ? "planned" : s.status;
     s.shipped = (values.shipped as typeof s.shipped) ?? null;
     s.status = values.cut ? "cut" : s.shipped ? "done" : s.tracked;
   }
