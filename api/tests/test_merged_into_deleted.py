@@ -13,7 +13,8 @@ ITEMS = "/v1/simple/roadmap/items"
 
 async def test_merged_into_a_deleted_item_names_no_key(client):
     w = await World().build()
-    draft = (await w.add(client, "owner", "Import from spreadsheets"))["change"]["target"]["item_id"]
+    added = await w.add(client, "owner", "Import from spreadsheets")
+    draft = added["change"]["target"]["item_id"]
     r = await client.post(CHANGES, headers=w.as_("owner"), json={
         "op": "merge_item", "target": {"item_id": draft, "into_id": w.ids["import-a"]},
         "before": {}, "after": {}})  # fmt: skip
