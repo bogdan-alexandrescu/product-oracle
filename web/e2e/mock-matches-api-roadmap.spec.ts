@@ -76,3 +76,23 @@ test("Status set to Cut in the panel lists the feature as cut today, by who cut 
   const list = page.getByRole("dialog", { name: "Removed from your plans" });
   await expect(list.getByTestId("removed-row").filter({ hasText: "Alert history export" })).toContainText(/Cut on [A-Z][a-z]{2} \d+ by Avery Stone/);
 });
+
+async function setStatus(page: Page, status: string, word: string) {
+  await tap(panel(page).getByRole("button", { name: "Change the status" }));
+  await panel(page).getByTestId("card-status-edit").getByLabel("Status").selectOption(status);
+  await tap(panel(page).getByTestId("card-status-edit").getByRole("button", { name: "Save" }));
+  await expect(panel(page).getByTestId("card-status")).toContainText(word);
+}
+
+// changes.py set_status: Planned clears only the panel's own mark and goes back to the tracker's status.
+for (const [first, word] of [["done", "Done"], ["cut", "Cut"]] as const) {
+  test(`an in-progress feature set to ${word} then to Planned reads In progress again`, async ({ page }) => {
+    await login(page);
+    await roadmap(page);
+    await openRoadmapItem(page, "alert-rules");
+    await expect(panel(page).getByTestId("card-status")).toContainText("In progress");
+    await setStatus(page, first, word);
+    await setStatus(page, "planned", "In progress");
+    await expect(panel(page).getByTestId("card-status")).not.toContainText("Planned");
+  });
+}
