@@ -52,3 +52,31 @@ test.describe("a narrow window", () => {
     await expectInside(roadmaps);
   });
 });
+
+/*
+ * The first frame: the server's HTML, painted before the page's scripts run, shows the table's
+ * loading lines. They span the columns drawn at that width (they used to span every column, so
+ * a hidden one took the visible ones' room until the table had measured itself).
+ */
+for (const width of [880, 1024, 1440]) {
+  test.describe(`the first frame at ${width} px`, () => {
+    test.use({ viewport: { width, height: 900 } });
+
+    test("the Runs table's lines span only the columns drawn before its scripts run", async ({ page }) => {
+      await login(page);
+      // The page as first painted: its HTML and CSS, none of its scripts.
+      await page.route(/\/_next\/static\/chunks\/.*\.js(\?|$)/, (route) => route.abort());
+      await page.goto("/runs");
+      const table = page.getByTestId("runs-table").locator("table");
+      const line = table.locator("td").filter({ visible: true }).first();
+      await expect(line).toBeAttached();
+      const headers = table.locator("th").filter({ visible: true });
+      const box = (await table.boundingBox())!;
+      let sum = 0;
+      for (const h of await headers.all()) sum += (await h.boundingBox())!.width;
+      expect(Math.abs(sum - box.width), "the columns drawn share the table's whole width").toBeLessThanOrEqual(1);
+      expect(Math.abs((await line.boundingBox())!.width - sum)).toBeLessThanOrEqual(1);
+      expect(await line.getAttribute("colspan")).toBe(String(await headers.count()));
+    });
+  });
+}

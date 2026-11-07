@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { login } from "./helpers";
+import { login, signOut } from "./helpers";
 
 /*
  * Fix pass 4 on the Runs list (qa-work-7, 10, 24, 25, 26; qa-onboarding-24), driven through the
@@ -125,6 +125,31 @@ test.describe("desktop", () => {
     await expect(page.getByTestId("runs-waiting")).toHaveCount(0);
     await expect(page.getByTestId("runs-waiting-others")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Start a run…" })).toBeVisible();
+  });
+});
+
+test.describe("a 1024 px window", () => {
+  test.use({ viewport: { width: 1024, height: 768 } });
+
+  test("qa-work-24: the action column is one width whoever looks, its buttons on one line", async ({ page }) => {
+    const action = () => page.getByTestId("runs-table").locator("th").filter({ hasText: "Action" });
+    await openRuns(page);
+    const buttons = page.getByTestId("runs-table").getByRole("button");
+    await expect(buttons).toHaveCount(3);
+    for (const b of await buttons.all()) {
+      const box = (await b.boundingBox())!;
+      // One line: the label neither wraps (a button is one line tall) nor runs out of the button.
+      expect(box.height, `${await b.innerText()} on one line`).toBeLessThanOrEqual(40);
+      expect(await b.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+      const cell = (await b.locator("xpath=ancestor::td[1]").boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(cell.x);
+      expect(box.x + box.width).toBeLessThanOrEqual(cell.x + cell.width);
+    }
+    const owner = (await action().boundingBox())!.width;
+    await signOut(page);
+    await openRuns(page, "approver@example.com");
+    await expect(run(page, "usage-alerts-v2").getByTestId("run-waits-on")).toHaveText(/^Owner approves /);
+    expect(Math.abs((await action().boundingBox())!.width - owner)).toBeLessThanOrEqual(1);
   });
 });
 
