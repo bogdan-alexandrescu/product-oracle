@@ -283,14 +283,21 @@ export function seedHeadingCountOnePager(): OnePagerDb {
  * The "one-pager-two-counts" scenario (review, Nov 7): two numbers to fix in one section, the
  * heading's "Later · 8 items" over six listed and "Five features wait for next quarter" under
  * it, so the section takes two fixes, each with its own Undo; its targets in decimals ("300.5"
- * per region, "1,250.75" company-wide), whose fix keeps them as written. Invented data.
+ * per region, "1,250.75" company-wide), whose fix keeps them as written, and two whose sums
+ * read as a person writes them ("0.3", "1,234,567.5"), and one whose sum ends in an exact half
+ * past the 6th place ("3.0078125"), which rounds up as the API's does. Invented data.
  */
 export function seedTwoCountsOnePager(): OnePagerDb {
   const db = seedHeadingCountOnePager();
   const later = db.sections.find((x) => x.key === "later")!;
   later.body = `Five features wait for next quarter.\n\n${later.body}`;
   const targets = db.sections.find((x) => x.key === "targets")!;
-  targets.body = "Each region adds 300.5 paid workspaces a month. We sell in 5 regions. Company-wide target: 1,250.75 paid workspaces a month.";
+  targets.body = [
+    "Each region adds 300.5 paid workspaces a month. Each region also adds 246913.5 trial seats.",
+    "Each team saves 0.1 support hours a week. We sell in 5 regions. We have 3 teams.",
+    "Each squad trims 1.50390625 setup minutes a day. We run 2 squads.",
+    "Company-wide target: 1,250.75 paid workspaces a month, 1,000,000 trial seats, 2 support hours a week and 3 setup minutes a day.",
+  ].join(" ");
   return db;
 }
 

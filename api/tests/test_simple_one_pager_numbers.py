@@ -663,3 +663,78 @@ def test_a_fix_keeps_a_decimal_as_written():
     assert one_pager_checks.set_number(sec.body_md, "1,200.5 seats", "1,502.50") == (
         "Company-wide target: 1,502.50 seats."
     )
+
+
+def _per_unit_text(body: str) -> list[str]:
+    sec = Section(section_key="targets", heading="Targets", body_md=body)
+    return [x.text for x in one_pager_checks.numbers([sec])]
+
+
+def test_the_target_is_quoted_as_written():
+    # Review (Nov 7): the look text quotes the company-wide target as the PRD writes it,
+    # its separators kept ("1,250.75", never "1250.75").
+    [text] = _per_unit_text(
+        "Each region adds 300.5 paid workspaces a month. We sell in 5 regions. "
+        "Company-wide target: 1,250.75 paid workspaces a month."
+    )
+    assert text == (
+        "300.5 paid workspaces per region × 5 regions is 1,502.5, "
+        "but the company-wide target says 1,250.75."
+    )
+
+
+def test_look_numbers_read_as_a_person_writes_them():
+    # Review (Nov 7): a computed number shows plain, as the mock shows it: "0.3", never
+    # "0.30000000000000004"; "1,234,567.5", never "1.23457e+06" or "1234567.5".
+    assert _per_unit_text(
+        "Each team saves 0.1 support hours a week. We have 3 teams. "
+        "Company-wide target: 2 support hours a week."
+    ) == ["0.1 support hours per team × 3 teams is 0.3, but the company-wide target says 2."]
+    assert _per_unit_text(
+        "Each region adds 246913.5 trial seats. We sell in 5 regions. "
+        "Company-wide target: 1,000,000 trial seats."
+    ) == [
+        "246,913.5 trial seats per region × 5 regions is 1,234,567.5, "
+        "but the company-wide target says 1,000,000."
+    ]
+    assert one_pager_checks._n(0.1 * 3) == "0.3"
+    assert one_pager_checks._n(1234567.5) == "1,234,567.5"
+    assert one_pager_checks._n(200.0) == "200"
+
+
+def test_a_sum_that_matches_as_written_raises_no_look():
+    # Review (Nov 7): "0.1 × 3 teams" against "0.3" company-wide agrees as a person reads it;
+    # the float 0.30000000000000004 must not raise "is 0.3, but ... says 0.3".
+    assert (
+        _per_unit_text(
+            "Each team saves 0.1 support hours a week. We have 3 teams. "
+            "Company-wide target: 0.3 support hours a week."
+        )
+        == []
+    )
+    assert _per_unit_text(
+        "Each team saves 0.1 support hours a week. We have 3 teams. "
+        "Company-wide target: 0.4 support hours a week."
+    ) == ["0.1 support hours per team × 3 teams is 0.3, but the company-wide target says 0.4."]
+
+
+def test_an_exact_half_rounds_up_as_the_mock_does():
+    # Review (Nov 7): an exact half in the 7th place rounds away from zero, as the mock's
+    # toFixed(6) does ("0.007813", never the half-even "0.007812"), in the text and the fix.
+    assert one_pager_checks._n(0.0078125) == "0.007813"
+    assert one_pager_checks._n(3.0078125) == "3.007813"
+    assert one_pager_checks._n(-0.0078125) == "-0.007813"
+    assert one_pager_checks._n(0.1 * 3) == "0.3"
+    [look] = one_pager_checks.numbers([
+        Section(
+            section_key="targets",
+            heading="Targets",
+            body_md="Each squad trims 1.50390625 setup minutes a day. We run 2 squads. "
+            "Company-wide target: 3 setup minutes a day.",
+        )
+    ])  # fmt: skip
+    assert look.text == (
+        "1.503906 setup minutes per squad × 2 squads is 3.007813, "
+        "but the company-wide target says 3."
+    )
+    assert look.fix["value"] == "3.007813"

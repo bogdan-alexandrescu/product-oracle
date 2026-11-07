@@ -18,6 +18,16 @@ import { expect, test, type Page } from "./test";
  *   against "1,250.75" company-wide offers "Use 1,502.50" and sets the section to it;
  *   fails_when=the fix drops the separators or the places ("Use 1502.5"); no_claim=the API's
  *   test_a_fix_keeps_a_decimal_as_written.
+ * - protects=the look text quotes a target as written ("1,250.75") and writes a sum as a person
+ *   does ("0.3", "1,234,567.5"); fails_when=it shows "1250.75", "0.30000000000000004" or
+ *   "1234567.5"; no_claim=the API's test_look_numbers_read_as_a_person_writes_them.
+ * - protects=a sum that matches as written raises no look: after "Use 0.3" the target reads
+ *   "0.3" and "0.1 × 3 teams" no longer shows; fails_when=the float 0.30000000000000004 keeps
+ *   "is 0.3, but the company-wide target says 0.3"; no_claim=the API's
+ *   test_a_sum_that_matches_as_written_raises_no_look.
+ * - protects=an exact half past the 6th place rounds up as the API does ("3.007813" in the
+ *   text and the fix); fails_when=it shows "3.007812"; no_claim=the API's
+ *   test_an_exact_half_rounds_up_as_the_mock_does.
  * - protects=after the heading's fix, the words under it fixed and Undo on the words, the
  *   heading's own fix still undoes (one undo path for lines and numbers); fails_when=the
  *   second Undo is refused or leaves the heading at 6; no_claim=a heading edited away from
@@ -83,11 +93,49 @@ test("a decimal target's fix keeps the number as written", async ({ page }) => {
   await scenario(page, "one-pager-two-counts");
   await login(page);
   await page.goto(URL);
-  await expect(look(page)).toContainText("the company-wide target says 1250.75");
+  await expect(look(page)).toContainText("is 1,502.5, but the company-wide target says 1,250.75.");
   await look(page).getByRole("button", { name: "Use 1,502.50" }).click();
   await expect(fixed(page)).toHaveCount(1);
   await expect(fixed(page)).toContainText("Fixed: set to 1,502.50 in “Targets”");
   await expect(look(page).getByRole("button", { name: /^Use 1,?502/ })).toHaveCount(0);
+});
+
+test("the look text writes its numbers as a person does", async ({ page }) => {
+  await scenario(page, "one-pager-two-counts");
+  await login(page);
+  await page.goto(URL);
+  await expect(look(page)).toContainText(
+    "300.5 paid workspaces per region × 5 regions is 1,502.5, but the company-wide target says 1,250.75.",
+  );
+  await expect(look(page)).toContainText(
+    "246,913.5 trial seats per region × 5 regions is 1,234,567.5, but the company-wide target says 1,000,000.",
+  );
+  await expect(look(page)).toContainText(
+    "0.1 support hours per team × 3 teams is 0.3, but the company-wide target says 2.",
+  );
+  await expect(look(page)).not.toContainText(/0\.30000|1234567|1250\.75/);
+});
+
+test("a sum that matches as written raises no look", async ({ page }) => {
+  await scenario(page, "one-pager-two-counts");
+  await login(page);
+  await page.goto(URL);
+  await expect(look(page)).toContainText("0.1 support hours per team × 3 teams is 0.3, but the company-wide target says 2.");
+  await look(page).getByRole("button", { name: "Use 0.3" }).click();
+  await expect(fixed(page)).toContainText("Fixed: set to 0.3 in “Targets”");
+  await expect(look(page)).toContainText("is 1,502.5, but the company-wide target says 1,250.75.");
+  await expect(look(page)).not.toContainText("support hours per team");
+  await expect(look(page).getByRole("button", { name: "Use 0.3" })).toHaveCount(0);
+});
+
+test("an exact half past the 6th place rounds up as the API does", async ({ page }) => {
+  await scenario(page, "one-pager-two-counts");
+  await login(page);
+  await page.goto(URL);
+  await expect(look(page)).toContainText(
+    "1.503906 setup minutes per squad × 2 squads is 3.007813, but the company-wide target says 3.",
+  );
+  await expect(look(page).getByRole("button", { name: "Use 3.007813" })).toBeVisible();
 });
 
 test("a heading fix undoes after the words under it were fixed and undone", async ({ page }) => {
