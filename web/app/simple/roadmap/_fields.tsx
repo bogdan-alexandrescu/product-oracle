@@ -6,6 +6,7 @@
 import { useState } from "react";
 
 import { Icon } from "@/components/ds/Icon";
+import { InfoTip } from "@/components/ds/InfoTip";
 
 import { api, unwrap } from "@/lib/api/client";
 import { calendarDay } from "@/lib/dates";
@@ -268,8 +269,22 @@ export function PanelFields({
       <Field
         label="Code"
         testId="card-code"
-        canChange={canChange}
-        value={item.code ?? <span className="text-text2">None</span>}
+        canChange={canChange && !item.code_from}
+        value={
+          item.code_from ? (
+            // A code from its Ground Truth feature or its PRD is read here, never changed.
+            <span className="inline-flex items-center gap-1">
+              {item.code}
+              <InfoTip label="this code" align="start" testId="card-code-why">
+                {item.code_from === "feature"
+                  ? "It comes from its Ground Truth feature: change it there."
+                  : "It comes from its PRD's section: change it in the PRD."}
+              </InfoTip>
+            </span>
+          ) : (
+            (item.code ?? <span className="text-text2">None</span>)
+          )
+        }
         editor={(done) => (
           <TextEdit
             label="Code"

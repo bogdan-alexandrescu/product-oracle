@@ -59,6 +59,26 @@ test.describe("a key result's goal", () => {
     await expect(page.getByTestId("ld-column").nth(0).getByTestId("ld-milestone").filter({ hasText: KR })).toHaveCount(1);
   });
 
+  test("a move with no gate typed sends only the move; a gate of 0 is never saved after a move", async ({ page }) => {
+    // protects=in Edit the gate, a new goal with At least left blank moves the key result and
+    // nothing else (no error after the move); a new goal with At least 0 cannot be saved, so the
+    // key result never moves before a refused gate; fails_when=Save gate stays on with 0 and the
+    // key result moves, then an error flashes; no_claim=the gate's own numbers.
+    await openLadder(page);
+    await page.getByTestId("ld-edit").click();
+    await krMenu(page, "Edit the gate");
+    const editor = page.getByTestId("gm-editor");
+    await editor.getByTestId("gm-kr-goal").selectOption({ label: OTHER_GOAL });
+    await editor.getByLabel("At least").fill("0");
+    await expect(editor.getByTestId("gm-save")).toBeDisabled();
+    await expect(page.getByTestId("ld-column").nth(0).getByTestId("ld-milestone").filter({ hasText: KR })).toHaveCount(1);
+    await editor.getByLabel("At least").fill("");
+    await editor.getByTestId("gm-save").click();
+    await expect(toast(page, `Moved ${KR} to ${OTHER_GOAL}`)).toBeVisible();
+    await expect(page.getByTestId("ld-column").nth(1).getByTestId("ld-milestone").filter({ hasText: KR })).toHaveCount(1);
+    await expect(page.getByTestId("gm-editor")).toHaveCount(0);
+  });
+
   test("an approver who is not the decider asks for it from the ladder and from its editor", async ({ page }) => {
     // protects=an approver who may not move key results gets Move to another goal… in its ⋯ menu
     // and the Goal in its editor; each sends a proposal that waits in Needs a decision and leaves
@@ -87,6 +107,7 @@ test.describe("a key result's goal", () => {
     await expect(page.getByTestId("ld-column").nth(0).getByTestId("ld-milestone").filter({ hasText: KR })).toHaveCount(1);
     if (await page.getByTestId("ld-edit").isVisible()) await page.getByTestId("ld-edit").click();
     await expect(page.getByRole("button", { name: `More for ${KR}` })).toHaveCount(0);
+    await expect(page.getByRole("menuitem", { name: "Move to another goal…" })).toHaveCount(0);
   });
 });
 
@@ -130,6 +151,20 @@ test.describe("a roadmap item's feature code", () => {
     await giveCode(page, "F-31");
     await expect(toast(page, /Code changed proposed/)).toBeVisible();
     await expect(panel(page).getByTestId("card-code")).toHaveText("None");
+  });
+
+  test("a code from its PRD reads in place, with why behind an (i)", async ({ page }) => {
+    // protects=an item whose code comes from its PRD shows that code with no Change, and why
+    // only behind its (i); fails_when=the Code field opens for editing and the refusal comes
+    // only on save; no_claim=a Ground Truth feature's code (the same field, the other reason).
+    await login(page);
+    await page.goto("/simple/roadmap");
+    await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+    await openRoadmapItem(page, "alert-digest");
+    await expect(panel(page).getByTestId("card-code")).toContainText("F-06");
+    await expect(panel(page).getByRole("button", { name: "Change the code" })).toHaveCount(0);
+    await panel(page).getByRole("button", { name: "About this code" }).click();
+    await expect(panel(page).getByText("It comes from its PRD's section: change it in the PRD.")).toBeVisible();
   });
 
   test("a viewer reads the code with no Change", async ({ page }) => {

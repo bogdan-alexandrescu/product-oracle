@@ -395,6 +395,9 @@ export function cutRoute(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "r
 }
 
 /** The stored values of one item's fields (the API's changes.read). */
+/** changes.TITLE_MAX: an item's title, its code included. */
+const TITLE_MAX = 200;
+
 function read(db: SimpleDb, key: string, fields: string[], target: Values): Values {
   const s = seed(db, key);
   const own = ownDates(db, s);
@@ -1272,11 +1275,16 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     }
     else if (body.op === "edit_title") {
       let title = String(a.title ?? "").trim();
-      if (!title) return json(422, { detail: "after.title: 1 to 200 characters" });
+      if (!title || title.length > TITLE_MAX) return json(422, { detail: `after.title: 1 to ${TITLE_MAX} characters` });
       // roadmap-edit-fixes: a rename changes the name only; a code the title carries stays.
       const s = seed(seen, key);
       const [code, name] = codedTitle(s.title, prdCode(s.section));
-      if (code && name !== s.title && !codedTitle(title, null)[0]) title = `${code} ${title}`;
+      if (code && name !== s.title && !codedTitle(title, null)[0]) {
+        // changes._with_code: the name is never cut.
+        const room = TITLE_MAX - code.length - 1;
+        if (title.length > room) return json(422, { detail: `The name is too long to carry the code ${code}: shorten it to ${room} characters first` });
+        title = `${code} ${title}`;
+      }
       after = { title };
     } else if (body.op === "edit_outcome") after = { outcome: a.outcome ?? null };
     else if (body.op === "edit_note") {
@@ -1330,11 +1338,12 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       if ((s.feature_id && db.feature_codes?.[s.feature_id]) || prdCode(s.section)) return json(422, { detail: "Its code comes from its Ground Truth feature or its PRD" });
       const code = a.code == null || !String(a.code).trim() ? null : String(a.code).trim().toUpperCase();
       if (code && !/^[A-Z]{1,3}-\d+[a-j]?$/.test(code)) return json(422, { detail: "after.code: a feature code, like F-31" });
-      const other = code ? seen.items.find((x) => x.key !== key && !x.trashed && String(read(seen, x.key, ["code"], target).code ?? "").toUpperCase() === code) : undefined;
-      const taken = (m: string) => json(422, { detail: m });
-      if (other) return taken(`${code} is already the code of ${code} ${codedTitle(other.title, prdCode(other.section))[1]}`);
-      if (code && Object.values(db.feature_codes ?? {}).some((k) => k.toUpperCase() === code)) return taken(`${code} is already the code of a Ground Truth feature`);
+      const taken = code ? codeTaken(db, seen, key, code) : null;
+      if (taken) return json(422, { detail: taken });
       const name = codedTitle(s.title, prdCode(s.section))[1];
+      // changes._with_code: the name is never cut.
+      const room = TITLE_MAX - (code?.length ?? 0) - 1;
+      if (code && name.length > room) return json(422, { detail: `The name is too long to carry the code ${code}: shorten it to ${room} characters first` });
       target.code = code;
       after = { title: code ? `${code} ${name}` : name };
       stored = ["title"];
@@ -1575,6 +1584,10 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     // As changes.decide: a proposed parent is checked again, as create checks it.
     const refused = c.op === "set_parent" ? parentRefusal(readerDb(db, ctx), keyOf(db, c.target.item_id)!, (c.after.parent_key as string | null) ?? null) : null;
     if (refused) return json(422, { detail: refused });
+    // As changes.decide: a code another item or a Ground Truth feature took since is refused;
+    // the proposal stays open, to decline.
+    const taken = c.op === "set_code" && c.target.code ? codeTaken(db, readerDb(db, ctx), keyOf(db, c.target.item_id)!, String(c.target.code)) : null;
+    if (taken) return json(409, { detail: taken });
     // Into the decider's working draft (their editing session's).
     const session = openEditing(db, ctx.id) ?? newSession(db, ctx.id, "editing");
     const drafts = intoDrafts(db, c, session);
@@ -1585,6 +1598,14 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   }
   Object.assign(c, { status: p[4] === "accept" ? "accepted" : "declined", decided_by: ctx.id, decided_at: now, decision_reason: body.reason ?? null });
   return json(200, { change: view(db, ctx, c), flags: TARGETS[c.op] || KEY_DATE_OPS.includes(c.op) ? [] : flagsFor(db, touched(c)) });
+}
+
+/** changes._free_code: who already has ``code`` (another item of the roadmap or a Ground Truth feature), in plain words; null when it is free. */
+function codeTaken(db: SimpleDb, seen: SimpleDb, key: string, code: string): string | null {
+  const other = seen.items.find((x) => x.key !== key && !x.trashed && String(read(seen, x.key, ["code"], {}).code ?? "").toUpperCase() === code);
+  if (other) return `${code} is already the code of ${code} ${codedTitle(other.title, prdCode(other.section))[1]}`;
+  if (Object.values(db.feature_codes ?? {}).some((k) => k.toUpperCase() === code)) return `${code} is already the code of a Ground Truth feature`;
+  return null;
 }
 
 /** A proposal whose feature or goal went to Trash meanwhile: closed, not left open. */

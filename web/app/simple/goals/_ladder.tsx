@@ -1048,8 +1048,8 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
                   { w: "Move to…", on: () => v.act.krTo(m.id) },
                   { w: "Move to Trash", on: () => void v.act.trashKr(m.id), crit: true },
                 ]
-              : // every-field-editable: anyone else who edits the map asks to move it to another goal.
-                [{ w: "Move to another goal…", on: () => v.act.krTo(m.id) }]),
+              : // every-field-editable: anyone else who may propose asks to move it to another goal.
+                v.may ? [{ w: "Move to another goal…", on: () => v.act.krTo(m.id) }] : []),
           ]}
         />
       )}
