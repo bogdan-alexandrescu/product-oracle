@@ -188,14 +188,17 @@ for (const size of SIZES)
       await roadmap(page);
       await format(page, "board");
       // Weekly alert digest depends on Alert rules engine and starts before it ends: broken.
+      const dependencyLine = () => boardCard(page, "alert-digest").getByTestId("board-broken").filter({ hasText: "which it depends on" });
       await expect(boardCard(page, "alert-digest")).toHaveAttribute("data-broken", "true");
+      await expect(dependencyLine()).toHaveCount(1);
       await open(page, "alert-digest");
       await partOf(page, "Alert routing by team");
       await expect(panel(page).getByTestId("card-part-of")).toHaveText("Part of Alert rules engine > Alert routing by team");
-      // Now its grandparent: no broken link.
+      // Now its grandparent: no broken link against it. (Its end past its Beta milestone stays
+      // red: train AS counts that as a broken link too, pre-demo QA S-5.)
       await roadmap(page);
       await format(page, "board");
-      await expect(boardCard(page, "alert-digest")).toHaveAttribute("data-broken", "false");
+      await expect(dependencyLine()).toHaveCount(0);
     });
 
     test("merging a feature that has parts into a feature that is itself a part keeps every part, under the kept one", async ({ page }) => {
