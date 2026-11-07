@@ -193,7 +193,8 @@ async def situations(db: AsyncSession, track: ProductTrack, found: "TrackRead") 
         if staleness.is_stale(item):
             # Stored as the item's own reasons (refs kept), so each reader's line hides what
             # they may not see before it is put into words (staleness.detail_for_reader).
-            own = staleness.one_count(staleness.own_reasons(item))
+            # The section by its heading, said once (the stale-marks walk).
+            own = staleness.one_count(ctx.readable(item, staleness.own_reasons(item)))
             why = staleness.stored_detail(own or ["Its PRD trace changed"])
             out.append(
                 Situation(
@@ -371,9 +372,13 @@ class Lookups:
     hidden: Any = None
     # H11 ``roadmap_watch``, read per request.
     level: str = "recommend"
+    # {"type:key": title} of the Ground Truth items stale alerts name by ref.
+    ref_names: dict[str, str] = field(default_factory=dict)
 
 
 async def lookups(db: AsyncSession, alerts: list[TrackAlert]) -> Lookups:
+    from oracle.roadmap import views
+
     track_ids = {a.track_id for a in alerts}
     track_rows = {
         t.id: t
@@ -390,14 +395,32 @@ async def lookups(db: AsyncSession, alerts: list[TrackAlert]) -> Lookups:
             await db.scalars(select(Document).where(Document.id.in_(prd_ids))) if prd_ids else []
         )
     }
+    # Each alert's item title: an item of the track, or of the roadmap the track follows (an
+    # item carried onto the company roadmap may name another track or none; the stale-marks
+    # walk showed its key).
     titles: dict[tuple[uuid.UUID, str], str] = {}
-    if track_ids:
-        for track_id, key, title in await db.execute(
-            select(RoadmapItem.track_id, RoadmapItem.item_key, RoadmapItem.title)
-            .where(RoadmapItem.track_id.in_(track_ids))
+    roadmap_tracks: dict[uuid.UUID, list[uuid.UUID]] = {}
+    for t in track_rows.values():
+        if t.roadmap_document_id is not None:
+            roadmap_tracks.setdefault(t.roadmap_document_id, []).append(t.id)
+    keys = {a.item_key for a in alerts if a.item_key}
+    if track_ids and keys:
+        for track_id, doc_id, key, title in await db.execute(
+            select(
+                RoadmapItem.track_id,
+                RoadmapItem.roadmap_document_id,
+                RoadmapItem.item_key,
+                RoadmapItem.title,
+            )
+            .where(
+                RoadmapItem.item_key.in_(keys),
+                RoadmapItem.track_id.in_(track_ids)
+                | RoadmapItem.roadmap_document_id.in_(list(roadmap_tracks)),
+            )
             .order_by(RoadmapItem.created_at)
         ):
-            titles[(track_id, key)] = title
+            for tid in {*roadmap_tracks.get(doc_id, []), *([track_id] if track_id else [])}:
+                titles[(tid, key)] = title
     kept_by = {a.kept_by for a in alerts if a.kept_by}
     names = {
         u.id: u.email
@@ -411,8 +434,15 @@ async def lookups(db: AsyncSession, alerts: list[TrackAlert]) -> Lookups:
             role=user.role, can_write=has_role(user.role, "commenter"),  # type: ignore[arg-type]
         )  # fmt: skip
     level = await autonomy.level(db, "roadmap_watch")
+    stored = [
+        r
+        for a in alerts
+        if a.kind == "stale" and a.detail
+        for r in (staleness.stored_reasons(a.detail) or a.detail.split("; "))
+    ]
     return Lookups(track_rows, prds, titles, names, leads, lead,
-                   await visibility.hidden_for_reader(db), level)  # fmt: skip
+                   await visibility.hidden_for_reader(db), level,
+                   await views.ref_names(db, stored))  # fmt: skip
 
 
 def shown(alerts: list[TrackAlert], lk: Lookups) -> list[TrackAlert]:
@@ -436,7 +466,9 @@ def out(
         item_key=a.item_key or None,
         item_title=lk.titles.get((a.track_id, a.item_key)) if a.item_key else None,
         kind=a.kind,  # type: ignore[arg-type]
-        detail=staleness.detail_for_reader(a.detail, lk.hidden) if a.kind == "stale" else a.detail,
+        detail=staleness.detail_for_reader(a.detail, lk.hidden, lk.ref_names)
+        if a.kind == "stale"
+        else a.detail,
         data=a.data or {},
         state=a.state,  # type: ignore[arg-type]
         inbox_state=inbox_state,  # type: ignore[arg-type]

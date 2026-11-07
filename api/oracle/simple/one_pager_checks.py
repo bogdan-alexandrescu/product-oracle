@@ -612,11 +612,11 @@ def set_number(body: str, said: str, value: str) -> str | None:
     words (changed since)."""
     m = _number_at(body, said)
     return (
-        None if m is None else body[: m.start()] + _as_written(m.group(0), value) + body[m.end() :]
+        None if m is None else body[: m.start()] + as_written(m.group(0), value) + body[m.end() :]
     )
 
 
-def _as_written(old: str, value: str) -> str:
+def as_written(old: str, value: str) -> str:
     """``value`` as ``old`` is written: a count in words stays in words ("Eight" -> "Six",
     its case kept); a numeral, or a value with no word for it, as a numeral."""
     if old.isdigit() or old.lower() not in _WORDS:
@@ -629,12 +629,25 @@ def _as_written(old: str, value: str) -> str:
     return word.capitalize() if old[:1].isupper() else word
 
 
+def _like(before: str, value: float) -> str:
+    """``value`` written as ``before`` is: its thousands separators ("1,200,000") and at
+    least its places after the point ("2.75" -> "2.50"), more when the value needs them."""
+    places = len(before.partition(".")[2])
+    own = f"{round(value, 6):f}".rstrip("0").partition(".")[2]
+    return f"{round(value, 6):{',' if ',' in before else ''}.{max(places, len(own))}f}"
+
+
 def _fix(
     sec: Section, said: str, before: str, value: float, heading: bool = False
 ) -> dict[str, str] | None:
     if _number_at((sec.heading if heading else sec.body_md) or "", said) is None:
         return None
-    fix = {"section": sec.section_key, "said": said, "before": before, "value": _n(value)}
+    fix = {
+        "section": sec.section_key,
+        "said": said,
+        "before": before,
+        "value": _like(before, value),
+    }
     return fix | {"part": "heading"} if heading else fix
 
 
@@ -670,7 +683,8 @@ def numbers(sections: list[Section]) -> list[Look]:
                 noun = m.group("noun").lower().removesuffix("s").removesuffix("ie")
                 if hm is None and fields and noun not in listing:
                     continue
-                said = f"{m.group('n')} {m.group('noun')}{m.group('tail')}".strip()
+                # Every word from the number on ("two more features"), as _number_at reads it.
+                said = " ".join(m.group(0).split())
                 looks.append(Look(
                     "numbers",
                     f"“{said}” says {_n(n)}, but “{head}” shows {target} items.",

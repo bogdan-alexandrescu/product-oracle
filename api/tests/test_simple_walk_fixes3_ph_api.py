@@ -196,7 +196,9 @@ async def test_new_prd_version_leaves_items_with_no_section(client, owner, runti
     got = await items(client, auth)
     assert got["payment-step"]["freshness"] == "fresh", got["payment-step"]
     assert got["shipping-step"]["freshness"] == "potentially_stale"
-    assert got["shipping-step"]["stale_reasons"] == ["PRD section s-5-2 changed in version 2"]
+    assert got["shipping-step"]["stale_reasons"] == [
+        "PRD section 5.2 Shipping step changed in version 2"
+    ]
 
 
 async def _mark(tenant_id, key: str | None, reason: str) -> None:
@@ -242,7 +244,7 @@ async def test_track_headline_counts_only_own_staleness(client, owner, runtime):
     assert "stale" not in track["headline"]
     reasons = {i["item_key"]: [r["detail"] for r in i["reasons"] if r["kind"] == "stale"]
                for i in track["at_risk"]}  # fmt: skip
-    assert reasons.get("shipping-step") == ["PRD section s-5-2 changed in version 2"]
+    assert reasons.get("shipping-step") == ["PRD section 5.2 Shipping step changed in version 2"]
     assert not reasons.get("payment-step")
 
 
