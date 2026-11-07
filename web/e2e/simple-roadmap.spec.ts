@@ -202,7 +202,7 @@ test("the drag shows dates and constraint flags live", async ({ page }) => {
   await expect(tl).toBeVisible();
   await tl.scrollIntoViewIfNeeded();
   // Mobile alert push depends on the rules engine: any span before the rules end is broken.
-  // hotfix-effort-start: it starts its 3 weeks before its Dec 20 end (Nov 29), so it is
+  // hotfix-effort-start: it starts its 3 weeks to its Dec 20 end (Nov 30), so it is
   // dragged back past the rules engine's end (Nov 10).
   const box = (await tl.boundingBox())!;
   const rules = (await page.locator('[data-testid="timeline-row"][data-item="alert-rules"] [data-testid="timeline-bar"]').boundingBox())!;
