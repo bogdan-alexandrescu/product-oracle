@@ -367,7 +367,14 @@ export default function SimpleHome() {
     [roadmap.data],
   );
   // qa4-simple-home-12: every working draft of mine, each with its own count (one roadmap's draft never hides another's).
-  const myDrafts = (drafts.data ?? []).filter((d) => d.status === "working" && d.changes > 0 && (d.created_by === myId || d.participant_ids.includes(myId)));
+  // home-draft-in-review: a draft sent for review shows to whoever approves it (its can_approve) and
+  // to the one who sent or wrote it, until it is decided.
+  const myDrafts = (drafts.data ?? []).filter((d) =>
+    d.status === "working"
+      ? d.changes > 0 && (d.created_by === myId || d.participant_ids.includes(myId))
+      : d.status === "submitted" && (d.can_approve || d.submitted_by === myId || d.created_by === myId),
+  );
+  const shownDrafts = new Set(myDrafts.map((d) => d.id));
   const proposalRows = toDecide.length > 0 || decidesAll ? toDecide : mine;
   const proposalTitle = toDecide.length > 0 || decidesAll ? "Proposals on your items" : "Your proposals waiting";
   // A decider's own proposals on items others decide wait too: their own card.
@@ -392,7 +399,8 @@ export default function SimpleHome() {
   const runStops = revisit && inbox.loading ? undefined : runStopsOf(inbox.data)?.filter((s) => !waitKeys || waitKeys.has(`run_stop:${s.id}`));
   // What else waits on me and has no card of its own here: drafts for my approval, dates to
   // confirm and goal suggestions I decide, each with its action in place.
-  const alsoWaiting = (waiting.data?.items ?? []).filter((i) => i.kind === "draft" || i.kind === "goal_suggestion" || (i.kind === "date" && !i.op));
+  // A draft the summary card shows with its action is not listed twice.
+  const alsoWaiting = (waiting.data?.items ?? []).filter((i) => (i.kind === "draft" && !shownDrafts.has(i.ref_id)) || i.kind === "goal_suggestion" || (i.kind === "date" && !i.op));
   const stopCount = runStops?.length ?? 0;
   // walkc-roadmap-tasks: the open tasks on roadmap items that wait on me.
   const myTasks = waiting.data?.tasks ?? [];
@@ -906,12 +914,26 @@ export default function SimpleHome() {
             </p>
           )}
           {myDrafts.map((draft) => (
-            <p key={draft.id} data-testid="home-draft" className="flex flex-wrap items-center justify-between gap-3">
-              {/* roadmap-decide: what happens next and who acts, as the roadmap's banner says it (draftNext). */}
+            <p key={draft.id} data-testid="home-draft" data-status={draft.status} className="flex flex-wrap items-center justify-between gap-3">
+              {/* roadmap-decide: what happens next and who acts, as the roadmap's banner says it (draftNext).
+                  home-draft-in-review: sent, its status word; whom it waits on is in the tip. */}
+              {draft.status === "submitted" ? (
+                <span className="flex flex-wrap items-center gap-x-1.5">
+                  <strong>{draft.document.title}</strong> ·{" "}
+                  {draft.can_approve ? (
+                    "Waiting for your approval"
+                  ) : (
+                    <InfoTip label="who it waits on" align="start" testId="home-draft-waits" trigger={<span className="simple-link">Waiting for review</span>}>
+                      {draftNext(draft, (id) => nameOf(id, "a reviewer")).words}.
+                    </InfoTip>
+                  )}
+                </span>
+              ) : (
               <span>
                 Your working draft of <strong>{draft.document.title}</strong> has {draft.changes} {draft.changes === 1 ? "change" : "changes"}.{" "}
                 {draftNext(draft, (id) => nameOf(id, "a reviewer")).words}.
               </span>
+              )}
               <Link href={`/simple/roadmap?draft=${draft.id}`} className="simple-button">
                 {draftNext(draft).action === "approve" || draftNext(draft).action === "publish" ? "Open draft to approve" : draftNext(draft).action === "submit" ? "Open draft to send for review" : "Open draft"}
               </Link>
