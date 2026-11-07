@@ -36,10 +36,15 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1366, height: 820 } } }],
+  // E2E_PREBUILT=1: the mock build is already in .next-mock (CI builds it in its own step), so the
+  // server only starts; E2E_SERVER_TIMEOUT_MS gives a slow build more than three minutes.
   webServer: {
-    command: `npm run build:mock && npm run start:mock -- -p ${PORT}`,
+    command:
+      process.env.E2E_PREBUILT === "1"
+        ? `npm run start:mock -- -p ${PORT}`
+        : `npm run build:mock && npm run start:mock -- -p ${PORT}`,
     url: `http://localhost:${PORT}/login`,
-    timeout: 180_000,
+    timeout: Number(process.env.E2E_SERVER_TIMEOUT_MS ?? 180_000),
     reuseExistingServer: !process.env.CI,
   },
 });
