@@ -172,7 +172,7 @@ test.describe("at 1440", () => {
     await failing(page, "/v1/setup");
     await openHome(page);
     const error = page.getByTestId("home-setup-load-error");
-    await expect(error).toContainText("Could not load your setup checklist.");
+    await expect(error).toContainText("Could not load Set up.");
     await stopFailing(page);
     await error.getByRole("button", { name: "Try again" }).click();
     await expect(page.getByTestId("home-setup")).toBeVisible();

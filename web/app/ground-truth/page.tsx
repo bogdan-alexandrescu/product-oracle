@@ -439,8 +439,11 @@ export default function BaselinePage() {
   // review kept from before (an earlier run, or this one before a failed reload) stays under the
   // notice, dimmed and inert, without its decision bar: it is not the run asked for.
   const fromRunFailed = !!runId && !!fromRun.error;
+  // A stale ?tab=from-run link that names no run opens Graph rather than an empty panel (visual QA
+  // GT-3). A run still loading, or whose review failed to load, keeps its tab.
+  const active: Tab = tab === "from-run" && !view && !fromRunFailed && !(runId && fromRun.loading) ? "graph" : tab;
   // Approvers decide in the bar, last in the page column and sticky at the window's foot (B-02).
-  const decisionBar = tab === "from-run" && view && !fromRunFailed ? <BottomBar view={view} busy={busy} act={act} /> : null;
+  const decisionBar = active === "from-run" && view && !fromRunFailed ? <BottomBar view={view} busy={busy} act={act} /> : null;
   const tabs: TabItem<Tab>[] = [
     // A kept review that is not current shows no count: the notice says why (visual QA B-03).
     ...(view ? [{ id: "from-run" as const, label: "From this run", count: fromRunFailed ? undefined : view.summary.need_you, kind: "crit" as const }] : []),
@@ -636,10 +639,10 @@ export default function BaselinePage() {
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-2 max-[600px]:flex-col max-[600px]:items-stretch">
-          <Tabs label="Ground Truth views" items={tabs} value={tab} onChange={setTab} />
+          <Tabs label="Ground Truth views" items={tabs} value={active} onChange={setTab} />
           <span className="flex flex-wrap items-center gap-2">
             {/* The Items tab has its own Add, on the kind it shows: one Add control there (qa-plan-49). */}
-            {canWrite && tab !== "items" && (
+            {canWrite && active !== "items" && (
               <Button icon="plus" className="h-10" onClick={() => setAdding("goal")}>
                 Add item
               </Button>
@@ -659,9 +662,9 @@ export default function BaselinePage() {
         {error && <Notice tone="error">{error}</Notice>}
         {notice && <Notice>{notice}</Notice>}
 
-        <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="flex min-w-0 flex-col gap-4">
-          {tab === "from-run" && fromRunFailed && <LoadError what="this run's review" error="" onRetry={() => void reloadFromRun()} />}
-          {tab === "from-run" && view && (
+        <div role="tabpanel" id={`panel-${active}`} aria-labelledby={`tab-${active}`} className="flex min-w-0 flex-col gap-4">
+          {active === "from-run" && fromRunFailed && <LoadError what="this run's review" error="" onRetry={() => void reloadFromRun()} />}
+          {active === "from-run" && view && (
             <div
               data-testid="from-run-view"
               data-current={!fromRunFailed}
@@ -671,7 +674,7 @@ export default function BaselinePage() {
               <FromRunTab view={view} entities={graph.data?.entities ?? []} busy={busy} selectedId={openId} act={act} onOpen={openItem} />
             </div>
           )}
-          {tab === "graph" && (
+          {active === "graph" && (
             <>
               {graph.error && <LoadError what="the Ground Truth" error={graph.error} onRetry={() => void graph.reload()} />}
               {graph.loading && !graph.data && <Loading />}
@@ -697,7 +700,7 @@ export default function BaselinePage() {
               )}
             </>
           )}
-          {tab === "items" && (
+          {active === "items" && (
             <>
               {graph.error && <LoadError what="the Ground Truth" error={graph.error} onRetry={() => void graph.reload()} />}
               {graph.loading && !graph.data && <Loading />}
@@ -713,14 +716,14 @@ export default function BaselinePage() {
               )}
             </>
           )}
-          {tab === "flagged" && (
+          {active === "flagged" && (
             <>
               {trace.error && <Notice tone="error">{trace.error}</Notice>}
               {trace.loading && !trace.data && <Loading />}
               {trace.data && <FlaggedTab trace={trace.data} tags={tags} selectedId={openId} onOpen={openItem} />}
             </>
           )}
-          {tab === "conflicts" && (
+          {active === "conflicts" && (
             <>
               {conflicts.error && <Notice tone="error">{conflicts.error}</Notice>}
               {conflicts.loading && !conflicts.data && <Loading />}
@@ -737,14 +740,14 @@ export default function BaselinePage() {
               )}
             </>
           )}
-          {tab === "blockers" && (
+          {active === "blockers" && (
             <>
               {blockers.error && <Notice tone="error">{blockers.error}</Notice>}
               {blockers.loading && !blockers.data && <Loading />}
               {blockers.data && <BlockersTab blockers={blockers.data} selectedId={blockerId} onOpen={openBlocker} />}
             </>
           )}
-          {tab === "proposals" && (
+          {active === "proposals" && (
             <>
               {(from ? filtered : proposals).error && <Notice tone="error">{(from ? filtered : proposals).error}</Notice>}
               {!shown && <Loading />}

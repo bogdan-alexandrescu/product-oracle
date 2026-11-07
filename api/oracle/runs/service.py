@@ -125,7 +125,7 @@ import uuid
 import weakref
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
@@ -235,6 +235,7 @@ from oracle.runs.schemas import (
     SegmentAttempt,
     SegmentEstimate,
     SegmentOut,
+    TargetFeature,
     TargetGoal,
     TickOut,
     TickUnchecked,
@@ -315,6 +316,9 @@ ORACLE_KNOBS = (
     "reuse_baseline",
     # #260: the confirmed goals a Baseline to PRD run serves, [{"id", "key", "title"}].
     "target_goals",
+    # "Add it to a PRD": the Ground Truth features a Baseline to PRD run adds to its PRD,
+    # [{"id", "key", "title"}].
+    "target_features",
     # E1: the PRD draft's derivation a prd_draft_items run stores its items in.
     "draft_roadmap_id",
     # E1 part B ("Reuse items"): false on a Build roadmap run that derives its items
@@ -429,6 +433,8 @@ def _set_art(segment: RunSegment, data: dict[str, Any]) -> None:
 # #541 part 5: whether a ``company_draft`` run reads as a member (its target was
 # company-wide when it started). Set by start, never by a caller (not an ORACLE_KNOB).
 MEMBER_VIEW = "member_view"
+# one-roadmap-many-prds: the shared queue a prd_to_roadmap run froze (_frozen_queue).
+COMPANY_QUEUE = "company_queue"
 
 
 async def target_visibility(db: AsyncSession, run: Run) -> str:
@@ -1116,6 +1122,9 @@ async def _live_reasons(
 
     out: dict[uuid.UUID, list[dict[str, Any]]] = {}
     for c in checkpoints:
+        # A priority order's stale-goal problem is read as of now too: gone once its goal
+        # is back (kept on the checkpoint, so the gate reads the refreshed check).
+        await _recheck_order_goals(db, c, add=False)
         if c.status == "pending" and c.kind in gate.LIVE_KINDS:
             out[c.id] = await from_run.gate_reasons(db, c.run_id)
     return out
@@ -1488,6 +1497,7 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
             budget_usd=_usd(knobs.budget_usd),
             reuse_baseline=(run.knobs or {}).get("reuse_baseline") or None,
             goals=[TargetGoal(**g) for g in (run.knobs or {}).get("target_goals") or []],
+            features=[TargetFeature(**f) for f in (run.knobs or {}).get("target_features") or []],
             reuse_draft_items=(run.knobs or {}).get("reuse_draft_items") is not False
             if run.flow == REUSES_DRAFT_ITEMS
             else None,
@@ -2314,6 +2324,9 @@ async def create_run(
     extra.pop("target_goals", None)
     if goals := await _target_goals(db, flow, body.knobs.goals):
         extra["target_goals"] = goals
+    extra.pop("target_features", None)
+    if features := await _target_features(db, flow, body.knobs.features):
+        extra["target_features"] = features
     extra.pop("reuse_draft_items", None)
     extra.pop("draft_items_reused", None)
     if body.knobs.reuse_draft_items is False and flow.key == REUSES_DRAFT_ITEMS:
@@ -2378,6 +2391,35 @@ async def _target_goals(
     return [{"id": str(g.id), "key": g.key, "title": g.title} for g in goals]
 
 
+async def _target_features(
+    db: AsyncSession, flow: flows.FlowDef, refs: list[str] | None
+) -> list[dict[str, str]]:
+    """The ``target_features`` knob ("Add it to a PRD"): each named Ground Truth feature
+    (key or id, not rejected), once, in the order named. Only a Baseline to PRD run adds
+    features to its PRD."""
+    if not refs:
+        return []
+    if flow.key != "baseline_to_prd":
+        raise Invalid("only a Ground Truth to PRD run adds features to its PRD")
+    refs = list(dict.fromkeys(r.strip() for r in refs))
+    ids = [uuid.UUID(r) for r in refs if is_uuid(r)]
+    rows = (
+        await db.scalars(
+            select(Entity).where(
+                Entity.type == "feature",
+                Entity.status != "rejected",
+                or_(Entity.key.in_(refs), Entity.id.in_(ids)),
+            )
+        )
+    ).all()
+    found = {e.key: e for e in rows} | {str(e.id): e for e in rows}
+    missing = [r for r in refs if r not in found]
+    if missing:
+        raise Invalid(f"not a Ground Truth feature: {', '.join(missing)}")
+    features = list({found[r].id: found[r] for r in refs}.values())
+    return [{"id": str(f.id), "key": f.key, "title": f.title} for f in features]
+
+
 async def _current_inputs(db: AsyncSession, run: Run) -> _Inputs:
     knobs = run.knobs or {}
     source = number = None
@@ -2421,7 +2463,7 @@ async def update_run(
             k: v
             for k, v in oracle.items()
             if k.startswith("intake_")
-            or k in ("reuse_baseline", "target_goals", "reuse_draft_items")
+            or k in ("reuse_baseline", "target_goals", "target_features", "reuse_draft_items")
         }
         run.document_id, oracle = await _resolve_inputs(db, flow, current)
         oracle.update(intake)
@@ -2433,6 +2475,10 @@ async def update_run(
         oracle.pop("target_goals", None)
         if goals := await _target_goals(db, flow, body.knobs.goals):
             oracle["target_goals"] = goals
+    if body.knobs is not None and body.knobs.features is not None:
+        oracle.pop("target_features", None)
+        if features := await _target_features(db, flow, body.knobs.features):
+            oracle["target_features"] = features
     # E1 part B: what the run reuses is decided again by its next estimate.
     oracle.pop("draft_items_reused", None)
     if body.knobs is not None and body.knobs.reuse_draft_items is not None:
@@ -3043,6 +3089,11 @@ async def _prompt_context(
         prior_files=prior_files,
         kind=kind,
         source=source,
+        loop_plan=await _loop_plan_inputs(db, run)
+        if kind == "roadmap"
+        and run.flow != "prd_to_roadmap"
+        and _flow(run).segment(segment.name).imports_draft
+        else None,
         draft=draft_ctx,
         extra_lines=[
             *await extensions.prompt_lines(db, run),
@@ -3063,6 +3114,7 @@ async def _prompt_context(
         scope_yaml=scope_yaml,
         launch_id=run.knobs.get("launch_id"),
         target_goals=[(g["key"], g["title"]) for g in run.knobs.get("target_goals") or []],
+        target_features=[(f["key"], f["title"]) for f in run.knobs.get("target_features") or []],
         discussions=discussions,
         baseline_reused=reuse.short_date(
             reused["approved_at"], await company_time.company_time_zone(db)
@@ -3250,15 +3302,19 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
         known_from, known = await draft_items.known_items(db, version)
     else:
         known_from, known = await _known_roadmap_items(db, run)
+    frozen = (
+        await _frozen_queue(db, run, version)
+        if run.flow == "prd_to_roadmap"
+        else {"rows": [], "per_week": None, "today": None}
+    )
     return flows.SourceContext(
         approved=version.approved_at is not None or not _flow(run).stores_draft_items,
         known_items=known,
         known_from=known_from,
         horizons=await _run_horizons(db, run),
         schedule_bases=[b.as_json() for b in bases],
-        company_queue=await roadmap_company.run_queue(db, version.document_id, run.created_at)
-        if run.flow == "prd_to_roadmap"
-        else [],
+        company_queue=frozen["rows"],
+        company_plan={k: v for k, v in frozen.items() if k != "rows"},
         slug=document.slug if document else str(version.document_id),
         title=document.title if document else "",
         version=version.number,
@@ -3269,6 +3325,25 @@ async def _source_context(db: AsyncSession, run: Run) -> flows.SourceContext | N
         edges=edges,
         goals=goals,
     )
+
+
+async def _frozen_queue(
+    db: AsyncSession, run: Run, source: DocumentVersion | None
+) -> dict[str, Any]:
+    """one-roadmap-many-prds: the shared queue this run reads (oracle.roadmap.company
+    .frozen_queue), stored on the run when its first prompt (the roadmap_items segment's)
+    is built, before the run writes its items file; that prompt, the roadmap draft's, every
+    rewrite after a refusal and the check read that copy, though other PRDs' runs land or
+    the team's capacity changes meanwhile. ``source``: the run's PRD version."""
+    frozen = (run.knobs or {}).get(COMPANY_QUEUE)
+    if isinstance(frozen, dict) and isinstance(frozen.get("rows"), list):
+        return frozen
+    frozen = await roadmap_company.frozen_queue(
+        db, source.document_id if source else None, run.created_at, source
+    )
+    _set_knob(run, COMPANY_QUEUE, frozen)
+    await db.flush()
+    return frozen
 
 
 async def _known_roadmap_items(db: AsyncSession, run: Run) -> tuple[str, list[dict[str, str]]]:
@@ -4803,13 +4878,79 @@ def _creator(principal_tenant: uuid.UUID, user: User | None, token: ApiToken | N
     raise LookupError("run creator not found")
 
 
+async def _loop_plan_inputs(
+    db: AsyncSession, run: Run
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """What a roadmap draft without an items file of its own (the feedback loop's next
+    draft, the owner Nov 4) builds its plan tables from, as the roadmap was when the run
+    started (so the brief and the check read the same): (its latest items of the PRD its
+    latest version came from, as an items file's entries; that PRD's verified bases; on the
+    company roadmap, the shared queue with the other PRDs' items, as it stands: a loop draft
+    neither adds nor moves items, and its import carries them forward in their places; the
+    items an approved version took off the plan, shipped or moved to the next PRD, whose
+    plan_state carry_forward keeps: {key, title, state}, so the tables show them with their
+    status and a draft that keeps their rows is not refused). A roadmap with no items (or
+    no document) gives an empty plan: its loop draft still needs both tables, empty."""
+    from oracle.roadmap import draft_items
+    from oracle.roadmap.models import RoadmapItem
+
+    doc = await db.get(Document, run.document_id) if run.document_id else None
+    if doc is None:
+        return [], [], [], []
+    latest = await db.scalar(
+        select(DocumentVersion)
+        .where(
+            DocumentVersion.document_id == doc.id,
+            DocumentVersion.created_at <= run.created_at,
+        )
+        .order_by(DocumentVersion.number.desc())
+        .limit(1)
+    )
+    source = (
+        await db.get(DocumentVersion, latest.source_version_id)
+        if latest is not None and latest.source_version_id
+        else None
+    )
+    prd_id = source.document_id if source is not None else None
+    version = await roadmap_company._items_version(db, doc.id, run.created_at)
+    rows: list[RoadmapItem] = []
+    kept: list[dict[str, Any]] = []
+    if version is not None:
+        replaced = await roadmap_company.replaced_prd_ids(db)
+        for r in await db.scalars(
+            select(RoadmapItem)
+            .where(RoadmapItem.roadmap_version_id == version.id)
+            .order_by(RoadmapItem.position)
+        ):
+            if r.prd_document_id in replaced:
+                continue
+            if r.plan_state is None:
+                rows.append(r)
+            else:
+                kept.append({"key": r.item_key, "title": r.title, "state": r.plan_state})
+    queued: list[dict[str, Any]] = []
+    if doc.company_roadmap:
+        # The other PRDs' items are in the tables as the queue has them.
+        rows = [r for r in rows if r.prd_document_id == prd_id]
+        queued = await roadmap_company.run_queue(db, prd_id, run.created_at)
+    bases = [b.as_json() for b in await schedule.verified_bases(db, prd_id)]
+    return draft_items.entries(rows), bases, queued, kept
+
+
 async def _plan_table_problems(
     db: AsyncSession, run: Run, markdown: str, source_id: uuid.UUID | None
 ) -> list[ImportProblem]:
     """The draft's plan tables against the run's engineering dates (oracle.runs.plan_tables):
-    the items file the roadmap_items segment wrote and the source PRD's verified bases."""
+    the items file the roadmap_items segment wrote and the source PRD's verified bases;
+    any other run's roadmap draft (the feedback loop): the roadmap's own items."""
     from oracle.runs import plan_tables
 
+    if run.flow != "prd_to_roadmap":
+        items, loop_bases, queued, kept = await _loop_plan_inputs(db, run)
+        loop_plan = plan_tables.engineering_plan(items, loop_bases, others=queued, kept=kept)
+        return plan_tables.check(
+            markdown, loop_plan, await company_time.company_today(db), loop=True
+        )
     text = None
     for seg in await db.scalars(
         select(RunSegment).where(RunSegment.run_id == run.id).order_by(RunSegment.seq)
@@ -4820,14 +4961,16 @@ async def _plan_table_problems(
     items = (await items_check(db, run, text)).items if text else None
     source = await db.get(DocumentVersion, source_id) if source_id else None
     bases = await schedule.verified_bases(db, source.document_id if source else None)
-    # one-roadmap-many-prds: the other PRDs' items on the company roadmap are in the tables too.
-    others = await roadmap_company.run_queue(
-        db, source.document_id if source else None, run.created_at
+    # one-roadmap-many-prds: the other PRDs' items on the company roadmap are in the tables
+    # too, from the queue the run froze when its first prompt (roadmap_items) was built.
+    frozen = await _frozen_queue(db, run, source)
+    others = roadmap_company.with_run_items(
+        frozen["rows"], items, **{k: v for k, v in frozen.items() if k != "rows"}
     )
-    plan = plan_tables.engineering_plan(
-        items, [b.as_json() for b in bases], others=roadmap_company.with_run_items(others, items)
-    )
-    return plan_tables.check(markdown, plan, await company_time.company_today(db))
+    plan = plan_tables.engineering_plan(items, [b.as_json() for b in bases], others=others)
+    today = frozen["today"]
+    day = date.fromisoformat(today) if today else await roadmap_company.run_day(db, run.created_at)
+    return plan_tables.check(markdown, plan, day)
 
 
 async def _draft_source(db: AsyncSession, run: Run) -> uuid.UUID | None:
@@ -4903,9 +5046,10 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
         if knobs.get("template") and knobs.get("template_version")
         else None
     )
-    if run.flow == "prd_to_roadmap" and kind == "roadmap":
+    if kind == "roadmap":
         # roadmap-plan-tables: a draft without the plan tables approving it applies to
-        # Simple, or with other items or dates than the run's, goes back to the writer.
+        # Simple, or with other items or dates than the run's, goes back to the writer;
+        # every roadmap draft, the feedback loop's too (the owner, Nov 4).
         problems = await _plan_table_problems(db, run, markdown, source_id)
         if problems:
             return rejection.refused(name, problems)
@@ -10312,17 +10456,22 @@ async def _recheck_scope(db: AsyncSession, cp: Checkpoint) -> int:
     return feature_set.blocking_of(check)
 
 
-async def _recheck_order_goals(db: AsyncSession, cp: Checkpoint) -> list[dict[str, Any]]:
-    """Re-check, at approval, the goals a priority order's new features serve (C8): one
-    rejected since the order was checked is a blocking problem added to the order's check
-    and the checkpoint's, so every approval path refuses on it. Returns the new problems."""
+async def _recheck_order_goals(
+    db: AsyncSession, cp: Checkpoint, *, add: bool = True
+) -> list[dict[str, Any]]:
+    """Re-check the goals a priority order's new features serve (C8), as of now: one
+    rejected or deleted since the order was checked is a blocking problem kept on the
+    order's check and the checkpoint's, so every approval path refuses on it; one whose goal
+    is back (restored, confirmed again) is dropped, so Approve order accepts it. ``add``
+    (approval): a newly stale goal is added; a read only drops what no longer holds.
+    Returns the stale-goal problems open now."""
+    if cp.kind != "priority_order" or cp.status != "pending":
+        return []
     snapshot = await run_order.snapshot_for(db, cp)
     if snapshot is None or snapshot.status != "proposed":
         return []
-    stale = await run_order.stale_goals(db, snapshot)
-    if stale:
-        check = dict(snapshot.check_result or {})
-        check["problems"] = [*(check.get("problems") or []), *stale]
+    check, stale = await run_order.recheck_goals(db, snapshot, add=add)
+    if check != (snapshot.check_result or {}):
         snapshot.check_result = check
         cp.payload = {**(cp.payload or {}), "priority_check": check}
     return stale

@@ -87,6 +87,11 @@ class KnobsIn(BaseModel):
     # goal trace covers them (422 for a goal that is not confirmed, or another flow).
     # Omitted on create: none (a run from a brief: the brief's goals); on PATCH: unchanged.
     goals: list[str] | None = Field(default=None, max_length=10)
+    # Baseline to PRD only (the Engineering check's "Add it to a PRD"): the Ground Truth
+    # features (keys or ids, not rejected) the run adds to its PRD; its baseline and feature
+    # set prompts keep them (422 for an unknown or rejected feature, or another flow).
+    # Omitted on create: none; on PATCH: unchanged.
+    features: list[str] | None = Field(default=None, max_length=20)
     # Build roadmap only (E1 part B, "Reuse items"): false derives the roadmap items again
     # instead of reusing the approved version's draft items ("Derive the items again").
     # Omitted on create: true; on PATCH: unchanged.
@@ -108,6 +113,14 @@ class TargetGoal(BaseModel):
     title: str
 
 
+class TargetFeature(BaseModel):
+    """A Ground Truth feature a PRD run adds to its PRD ("Add it to a PRD")."""
+
+    id: uuid.UUID
+    key: str
+    title: str
+
+
 class KnobsOut(BaseModel):
     depth: Depth
     roles: dict[str, list[str]]
@@ -117,6 +130,8 @@ class KnobsOut(BaseModel):
     reuse_baseline: ReusedBaseline | None = None
     # The goals the run serves, in the order named (#260).
     goals: list[TargetGoal] = []
+    # The Ground Truth features the run adds to its PRD, in the order named.
+    features: list[TargetFeature] = []
     # Build roadmap (E1 part B): whether its items step reuses the source version's draft
     # items when they are ready; null on other flows.
     reuse_draft_items: bool | None = None

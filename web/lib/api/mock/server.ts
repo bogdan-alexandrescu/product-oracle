@@ -11,7 +11,7 @@ import { citationHref, formatDate, formatDay } from "@/lib/format";
 import { parseBlocks, plainText, type Inline } from "@/lib/markdown";
 import { mockName as displayName } from "./people";
 
-import { MOCK_SCENARIO_KEY, mockUuid, seeded, stableUuid } from "./ids";
+import { MOCK_SCENARIO_KEY, mockUuid, newCompany, seeded, stableUuid } from "./ids";
 import { acceptNewFeatures, addDecisionEntity, addDuplicateProposals, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, addStatusOverlapProposals, addThreeWayConflict, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, readMetricIntoGoal, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
 import { BLOCKER_NARROWED_SCENARIO, documentGate, narrowResolvedBlocker, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
@@ -104,7 +104,7 @@ import { routeFirefliesBrowse } from "./fireflies";
 import { liveReply, routeLive } from "./live";
 import { sourceBrowseRoute } from "./source-browse";
 import { DRAFT_NEW_ITEMS_SCENARIO, itemsChangedSince, routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
-import { BEFORE_DRAFTING, LATE_ANSWER_WITHHELD, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type IntakeContext, type SubjectLookup } from "./intake";
+import { BEFORE_DRAFTING, intakeReadInbox, LATE_ANSWER_WITHHELD, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, seedReadFailedTwice, startedIntakeRun, type IntakeContext, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, REPORT_DRAFT_ITEM, REPORT_DRAFT_ITEM_SCENARIO, REPORT_PRD_MOVED_SCENARIO, reportsRoute, type LiveTracks, type ReportsDb } from "./reports";
 import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
 import { addDigest, addMetricsReview, ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
@@ -183,7 +183,7 @@ import { onePagerInboxRows, onePagerProposalsOut, planSlice, prdOnePager, routeO
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
-import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
+import { approvalItems, CANCELLED_DRAFT, draftAct, draftPrdsOut, REPLACED_DRAFT, SAVED_CARTS, seedDraftPrd, seedMeetingDraftDates, WORKSPACES, WORKSPACES_DRAFT } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, seedTwoDependencies, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { groundTruthCheck, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth } from "./ground-truth";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
@@ -541,7 +541,9 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * next tick (recorded, the decide call answers 503; ./runs.ts); "slow-agents" as the default
  * company where a segment's agents take two ticks: the first reads them working (#258); "quiet-agents" as
  * "slow-agents" where the first tick reads agents with no heartbeat and no cost reported that wrote 12 proposals
- * (run-progress); "questions" as the default
+ * (run-progress); "stuck-agents" as "slow-agents" where the agents then send nothing new, each tick only
+ * reading them again (F-78); "long-decision" as the default company where the past review also took a
+ * decision whose title wraps on a phone (F-26, ./simple-meetings.ts); "questions" as the default
  * company plus an "Oracle asks" question on an intake with no PRD and an "Approver asks"
  * question on a PRD section, both asked of the signed-in owner, and one delegated to
  * approver@example.com (C2); "private-finding" as "questions" plus a private finding (S6) on
@@ -587,6 +589,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * finding shared in full;
  * "brief-goal-rejected" as the default company plus a brief by the approver serving Raise
  * activation and Cut early churn, a goal rejected since (#260, ./intake.ts seedBriefGoalRejected);
+ * "intake-read-failed-twice" as the default company plus a brief by the signed-in owner whose
+ * last two reads by Oracle failed, so its Inbox row shows (INT2, ./intake.ts seedReadFailedTwice);
  * "run-discussions" as "feature-set" plus an open discussion and a private one (the approver's,
  * with the owner) on that run's waiting checkpoint (G5, ./discussions.ts seedRunDiscussions);
  * "discussion-change-kinds" as "feature-set" plus the approver's open discussion on that run's
@@ -858,6 +862,13 @@ function seedQuestions(): Db {
   return db;
 }
 
+/** The default company plus a brief Oracle couldn't read twice in a row (INT2): see MOCK_SCENARIO_KEY. */
+function seedReadFailedTwiceScenario(): Db {
+  const db = seed();
+  seedReadFailedTwice(ensureV2(db), db.user_id);
+  return db;
+}
+
 /** The default company plus a brief before drafting (C5): see MOCK_SCENARIO_KEY. */
 function seedBeforeDraftingScenario(): Db {
   const db = seed();
@@ -995,8 +1006,8 @@ function seedTrashReviewerScenario(): Db {
 }
 
 /**
- * removed-tracks review (the Move to Trash confirm), "tracks-closed": Guided setup track holds 2
- * live features and 1 cut, Welcome media track only a cut one (Welcome video), and Usage alerts
+ * removed-tracks review (the Move to Trash confirm), "tracks-closed": Guided setup track holds 3
+ * live features (15 with the Goal map's 12, seeded on its roadmap) and 1 cut, Welcome media track only a cut one (Welcome video), and Usage alerts
  * track 5 live and 1 merged draft (Alert inbox, merged into Alert rules engine). Invented data.
  */
 export const TRACKS_CLOSED_SCENARIO = "tracks-closed";
@@ -2209,6 +2220,32 @@ const seedEngCheckCrossPrd = () =>
   });
 
 /**
+ * "eng-check-no-prd" scenario: the "eng-check" run whose first brief also depends on Export logs,
+ * a Ground Truth feature no PRD holds, and whose second depends on a code Oracle cannot find: the
+ * check names both in words, as oracle.engineering.check does ("eng-check-add-to-prd": Export logs
+ * alone, so the briefs can be read and Approve waits on it). The Safety PRD is there to add
+ * Export logs to ("Add it to a PRD": a run of it with Export logs to add; while it is live the
+ * check reads Export logs as being added to the Safety PRD).
+ */
+const seedEngCheckNoPrd = (unknown: boolean) => {
+  const entity = stableUuid("eng-check-no-prd/export-logs");
+  const noPrd = { "export-logs": { name: "Export logs", entity } };
+  const db = seedEngCheckWith(unknown ? "eng-check-no-prd" : "eng-check-add-to-prd", (check) => {
+    const briefs = (check as unknown as { features: Parameters<typeof briefsCheckOf>[0] }).features;
+    const linked = briefs.map((b, i) => (i === 0 ? { ...b, depends_on: [...b.depends_on, "export-logs"] } : i === 1 && unknown ? { ...b, depends_on: [...b.depends_on, "made-up-feature"] } : b));
+    Object.assign(check, briefsCheckOf(linked, undefined, undefined, {}, noPrd));
+  });
+  db.runs!.no_prd_features = noPrd;
+  const at = "2026-10-20T15:00:00Z";
+  db.baseline.entities.push({ id: entity, type: "feature", key: "export-logs", title: "Export logs", body: "People download their activity log as a file.", attrs: {}, status: "confirmed", origin: "user", locked: false, locked_by: null, locked_at: null, confidence: null, run_id: null, created_at: at, updated_at: at });
+  db.documents.push({
+    id: stableUuid("eng-check-no-prd/safety"), slug: "safety", title: "Safety PRD", status: "approved", kind: "prd",
+    template: null, template_version: null, theme: null, created_at: at, updated_at: at,
+  });
+  return db;
+};
+
+/**
  * "eng-check-stale" / "eng-check-stale-unknown" scenarios: the "eng-check" run waiting at an
  * Engineering check stored before cross-PRD links were read (the owner, Nov 4), so its first
  * brief's dependency is stored as unknown. The account health ledger is now a Safety PRD
@@ -2379,6 +2416,19 @@ function seedPriorityOrder(): Db {
 }
 
 /**
+ * Follow-up to PR 1244 "priority-order-goal-review" scenario: "priority-order" plus a Build the
+ * Ground Truth run waiting at its review that proposed Cut early churn (the goal the Gift boxes
+ * order's new feature serves), so a person rejects it in that review, and Undo brings it back.
+ */
+function seedPriorityOrderGoalReview(): Db {
+  const db = seedPriorityOrder();
+  const run = seeded("priority-order-goal-review", () => seedBaselineReviewRun(db.runs!, runsContext(db)));
+  const churn = db.baseline.entities.find((e) => e.type === "goal" && e.key === "g.early-churn");
+  if (churn) churn.run_id = run.id;
+  return db;
+}
+
+/**
  * build-runplan RP2 "meeting-draft-dates" scenario: the Simple home's data, the Saved carts PRD a
  * draft whose run dated six items on its draft roadmap (./meeting-draft.ts).
  */
@@ -2387,7 +2437,32 @@ function seedMeetingDraftDatesScenario(): Db {
   // The fixtures' Saved carts PRD, named as the review shows it.
   const doc = db.documents.find((d) => d.slug === SAVED_CARTS.slug)!;
   doc.title = SAVED_CARTS.title;
-  if (db.simple_roadmap) seedMeetingDraftDates(db.simple_roadmap, doc.id);
+  if (db.simple_roadmap) seedMeetingDraftDates(db.simple_roadmap, doc.id, docVersions(db, doc).at(-1)?.number ?? 1);
+  return db;
+}
+
+/**
+ * RP2 'Draft layer on roadmap' "roadmap-draft-layer" scenario: the meeting-draft-dates data, with
+ * Team workspaces in draft too, Online deposits' draft (its PRD replaced) and Clinic outreach's
+ * (its run cancelled), which the layer leaves out (./meeting-draft.ts).
+ */
+export const DRAFT_LAYER_SCENARIO = "roadmap-draft-layer";
+function seedDraftLayerScenario(): Db {
+  const db = seedMeetingDraftDatesScenario();
+  const rm = db.simple_roadmap;
+  if (!rm) return db;
+  const prd = (slug: string, title?: string) => {
+    const doc = db.documents.find((d) => d.slug === slug)!;
+    if (title) doc.title = title;
+    return { doc, ref: { id: doc.id, slug: doc.slug, title: doc.title }, version: docVersions(db, doc).at(-1)?.number ?? 1 };
+  };
+  const ws = prd(WORKSPACES.slug, WORKSPACES.title);
+  seedDraftPrd(rm, ws.ref, WORKSPACES_DRAFT, { version: ws.version });
+  const dep = prd("online-deposits");
+  dep.doc.replaced_by = [ws.doc.id];
+  seedDraftPrd(rm, dep.ref, REPLACED_DRAFT, { version: dep.version });
+  const out = prd("clinic-outreach");
+  seedDraftPrd(rm, out.ref, CANCELLED_DRAFT, { version: out.version, cancelled: true });
   return db;
 }
 
@@ -3546,6 +3621,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     undelivered: localStorage.getItem(MOCK_SCENARIO_KEY) === "undelivered",
     slowAgents: localStorage.getItem(MOCK_SCENARIO_KEY) === "slow-agents",
     quietAgents: localStorage.getItem(MOCK_SCENARIO_KEY) === "quiet-agents",
+    stuckAgents: localStorage.getItem(MOCK_SCENARIO_KEY) === "stuck-agents",
     // H11 Order priorities: Oracle saves a run's order within the limits at Act.
     autonomy: {
       level: () => levelFor((db.autonomy ??= emptyAutonomy()), "priorities"),
@@ -3556,6 +3632,8 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     documents: db.documents,
     confirmedGoals: () =>
       db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title })),
+    groundTruthFeatures: () =>
+      db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected").map((e) => ({ id: e.id, key: e.key, title: e.title })),
     suggestionStatus: (id) => withSuggestion(db.llm, { id } as FeedbackRow).suggestion?.status ?? null,
     staged: (id) => isStaged(withSuggestion(db.llm, { id } as FeedbackRow).suggestion),
     baselineReview: (runId, actions) => baselineReviewOf(db.baseline, runId, actions as Schemas["ReviewAction"][]),
@@ -3778,6 +3856,10 @@ function load(): Db {
             ? seedEngCheckUnreadable
           : scenario === "eng-check-cross-prd"
             ? seedEngCheckCrossPrd
+          : scenario === "eng-check-no-prd"
+            ? () => seedEngCheckNoPrd(true)
+          : scenario === "eng-check-add-to-prd"
+            ? () => seedEngCheckNoPrd(false)
           : scenario === "eng-check-stale"
             ? () => seedEngCheckStale("account-health-ledger")
           : scenario === "eng-check-stale-unknown"
@@ -3800,8 +3882,12 @@ function load(): Db {
             ? seedRunReviewDecider
           : scenario === "priority-order"
             ? seedPriorityOrder
+          : scenario === "priority-order-goal-review"
+            ? seedPriorityOrderGoalReview
           : scenario === "meeting-draft-dates"
             ? seedMeetingDraftDatesScenario
+          : scenario === DRAFT_LAYER_SCENARIO
+            ? seedDraftLayerScenario
           : scenario === "next-draft" || scenario === "next-draft-costly"
             ? () => seedNextDraft(scenario === "next-draft-costly")
           : scenario === "before-drafting"
@@ -3814,6 +3900,8 @@ function load(): Db {
             ? seedLateAnswersScenario
           : scenario === "brief-goal-rejected"
             ? seedBriefGoalRejectedScenario
+          : scenario === "intake-read-failed-twice"
+            ? seedReadFailedTwiceScenario
           : scenario === "questions"
             ? seedQuestions
             : scenario === "private-finding"
@@ -7384,7 +7472,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     const mayMove = me.role === "approver" || me.role === "owner";
     // Every confirmed feature, as the API lists them: the Detailed Plan's traced features too
     // (after the Simple ones, so the seed's marks by rank stay as they are: new, nothing built).
-    const res = await routeCurrentState(db.current_state, [...rows, ...planFeatureRows()], mayMove, req, p, Date.now());
+    // A new company ("empty" scenario) has no goals or features yet (F-34).
+    const res = await routeCurrentState(db.current_state, [...rows, ...(newCompany() ? [] : planFeatureRows())], mayMove, req, p, Date.now());
     if (res) return res;
   }
   const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));
@@ -7480,6 +7569,33 @@ async function route(db: Db, req: Request): Promise<Response> {
       if (!applyRoadmapVersion(db, doc, latest)) return json(409, { detail: "This roadmap's approved version has no plan table" });
       const out = appliedVersionOf(db.simple_roadmap!, doc.slug, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames });
       return out ? json(200, out) : json(404, { detail: "No such roadmap" });
+    }
+    // RP2 'Draft layer on roadmap': GET /v1/simple/roadmap/draft-prds, and Change dates / Leave out
+    // on a draft item (approvers and up), as oracle.simple.router.
+    if (p[3] === "draft-prds") {
+      const rm = db.simple_roadmap!;
+      const state = (id: string) => {
+        const doc = db.documents.find((d) => d.id === id);
+        return {
+          // docs.visibility.visible_to: a commenter or a viewer sees company documents only.
+          visible: !!doc && canSee(me.role, doc.visibility),
+          replaced: !!doc?.replaced_by?.length,
+          // A version at or after the drafted one approved (roadmap_drafts._drafts).
+          approved: (n: number) => !!doc && docVersions(db, doc).some((v) => v.number >= n && !!v.approved_at),
+        };
+      };
+      if (!p[4] && r.method === "GET") return json(200, draftPrdsOut(rm, state, atLeast(me.role, "approver")));
+      if (p[4] === "items" && p[5] && (p[6] === "dates" || p[6] === "leave-out") && r.method === "POST") {
+        if (!atLeast(me.role, "approver")) return json(403, { detail: "Requires the approver role" });
+        const shown = draftPrdsOut(rm, state, true).flatMap((d) => d.items.map((i) => ({ item: i, prd: d.prd.id })));
+        const hit = shown.find((x) => x.item.id === p[5]);
+        if (!hit) return json(404, { detail: "No such draft item" });
+        const body = p[6] === "dates" ? ((await r.json()) as { start?: string; end?: string }) : {};
+        const done = draftAct(rm, [hit.prd], p[6] === "dates" ? { kind: "dates", id: p[5], start: body.start ?? "", end: body.end ?? "" } : { kind: "leave", id: p[5] });
+        if ("status" in done) return json(done.status, { detail: done.detail });
+        return new Response(null, { status: 204 });
+      }
+      return json(404, { detail: "Not Found" });
     }
     // removed-tracks: Simple's removed list, its tracks and their change ops (./simple-removed.ts).
     const removedRes = await routeRemoved(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames }, r, p, () => (db.trash ??= emptyTrash()).entries, (id) =>
@@ -7837,6 +7953,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     inbox.metrics = metricRows;
     inbox.total += metricCounted;
     inbox.needs_me = (inbox.needs_me ?? 0) + metricCounted;
+    // INT2: my open briefs whose last two reads or more failed (oracle.intake.read.inbox_rows); each counts.
+    const intakeReads = intakeReadInbox(ensureV2(db), me.id);
+    inbox.intake_reads = intakeReads;
+    inbox.total += intakeReads.length;
+    inbox.needs_me = (inbox.needs_me ?? 0) + intakeReads.length;
     // F-7: my unread webhook notices count, for the roles that can open Settings › Webhooks.
     const webhookNotices = atLeast(me.role, "approver")
       ? (db.review_v2?.notifications ?? []).filter((n) => n.user_id === me.id && !n.read_at && (n.kind === "webhook_paused" || n.kind === "webhook_url_changed")).length
@@ -8182,15 +8303,18 @@ async function route(db: Db, req: Request): Promise<Response> {
           r.version === v.number &&
           r.status === "ready",
       );
+      // RP2 'Draft layer on roadmap': a PRD whose run's draft roadmap holds its dated items
+      // (./meeting-draft.ts) gives those, less the ones left out, at their typed dates.
+      const runDraft = row ? [] : approvalItems((db.simple_roadmap ??= seedSimpleRoadmap()), doc.id);
       approvedPrdToDraft(
         (db.simple_roadmap ??= seedSimpleRoadmap()),
         {
           prd: { id: doc.id, slug: doc.slug, title: doc.title },
           version: v.number,
-          roadmap: row?.roadmap ?? null,
+          roadmap: row?.roadmap ?? (runDraft.length ? "onboarding-roadmap" : null),
           // As the API's _dated: the end is the engineering lead's accepted date (the PRD's
           // newest verified basis for the item), else the item's own; the start is its own.
-          items: (row?.items ?? []).map((i) => {
+          items: runDraft.length ? runDraft : (row?.items ?? []).map((i) => {
             const ms = (i.milestone ?? {}) as { date?: unknown; start_date?: unknown };
             const lead = (db.roadmap?.bases ?? [])
               .filter((b) => b.prd_document_id === doc.id && b.item_key === i.item_key && b.status === "verified")

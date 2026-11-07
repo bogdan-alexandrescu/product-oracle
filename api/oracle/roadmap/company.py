@@ -25,8 +25,8 @@ Many PRDs (one per area of focus) feed it; links between features stay within it
   PRD title>`` and their verified status; the old PRD keeps its own.
 """
 
-import math
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -48,8 +48,6 @@ CAPACITY_KEY = "team_capacity"
 DEFAULT_CAPACITY = {"team_size": 1, "focus": 1.0}
 HORIZON_ORDER = {"now": 0, "next": 1, "later": 2}
 CARRIED = "carried from {title}"
-LAST = math.inf
-NEW = 10**9  # a new item of a run: after every item already on the roadmap
 
 
 class CompanyError(Exception):
@@ -159,13 +157,19 @@ def _slug_words(slug: Any) -> str | None:
     return str(slug).replace("-", " ").replace("_", " ").capitalize() if slug else None
 
 
+# The run statuses whose approved scope is not on the company roadmap: the run stopped
+# before its PRD was written.
+STOPPED_RUNS = ("cancelled", "failed")
+
+
 async def features_on_roadmap(db: AsyncSession) -> dict[str, OnRoadmap]:
     """The features the company roadmap knows, by key (the owner, Nov 4: a PRD's feature may
     depend on one that lives in another area PRD): the included features of every PRD's
-    latest approved scope (a new PRD's too, before its import names its document, and
-    before the company roadmap exists; a replaced PRD feeds nothing) and the items of the
-    roadmap's latest version with items (an item's key and its feature's key, with its
-    horizon and dependencies). One read: a check calls this once."""
+    latest approved scope of a run not cancelled or failed (a new PRD's too, before its
+    import names its document, and before the company roadmap exists; a replaced PRD feeds
+    nothing; a stopped update run's PRD falls back to the scope it superseded) and the
+    items of the roadmap's latest version with items (an item's key and its feature's key,
+    with its horizon and dependencies). One read: a check calls this once."""
     from oracle.runs.models import Run
     from oracle.runs.scope_models import PrdScope, PrdScopeItem
 
@@ -192,12 +196,19 @@ async def features_on_roadmap(db: AsyncSession) -> dict[str, OnRoadmap]:
         .limit(1)
         .scalar_subquery()
     )
-    # Each PRD's latest approved scope (a new PRD's: its run's).
+    # Each PRD's latest scope ever approved (a new PRD's: its run's) of a run still live or
+    # done: a cancelled or failed run's scope feeds nothing, and the scope its approval
+    # superseded (an earlier finished run's) counts again.
     prd = func.coalesce(PrdScope.document_id, PrdScope.run_id)
     latest_scopes = (
         select(PrdScope.id)
         .ext(distinct_on(prd))
-        .where(PrdScope.status == "approved")
+        .join(Run, Run.id == PrdScope.run_id)
+        .where(
+            PrdScope.status.in_(("approved", "superseded")),
+            PrdScope.approved_at.is_not(None),
+            Run.status.not_in(STOPPED_RUNS),
+        )
         .order_by(prd, PrdScope.approved_at.desc().nulls_last(), PrdScope.created_at.desc())
     )
     scopes = (
@@ -453,12 +464,6 @@ async def queue(
         )
         if r.prd_document_id not in replaced and r.plan_state is None
     ]
-    # Milestone order: horizon, then where the milestone first shows on the roadmap.
-    first: dict[str, tuple[int, int]] = {}
-    for r in rows:
-        name = (r.milestone or {}).get("name") if isinstance(r.milestone, dict) else None
-        if name and name not in first:
-            first[name] = (HORIZON_ORDER.get(r.horizon, 3), r.position)
     # The company goal order: the first goal each item's feature supports.
     feature_ids = {r.feature_id for r in rows if r.feature_id}
     goal_of: dict[uuid.UUID, tuple] = {}
@@ -480,25 +485,20 @@ async def queue(
             key = goal_sort_key(goal)
             if src not in goal_of or key < goal_of[src]:
                 goal_of[src] = key
-    last = (True, LAST)
+    rank = {key: n for n, key in enumerate(sorted(set(goal_of.values())))}
+    places = [_place(r, rank.get(goal_of.get(r.feature_id)) if r.feature_id else None)
+              for r in rows]  # fmt: skip
+    orders = dict(zip(map(id, rows), _orders(places), strict=True))
 
     def order(r: RoadmapItem) -> tuple:
-        name = (r.milestone or {}).get("name") if isinstance(r.milestone, dict) else None
-        place = first.get(name) if name else None
-        return (
-            place is None,
-            place or (HORIZON_ORDER.get(r.horizon, 3), r.position),
-            goal_of.get(r.feature_id, last) if r.feature_id else last,
-            -_priority(r),
-            r.position,
-        )
+        return orders[id(r)]
 
     prds = {
         p["id"]: p
         for p in await refs(db, list({r.prd_document_id for r in rows if r.prd_document_id}))
     }
     per_week = _per_week(cap)
-    today = await company_time.company_today(db)
+    today = await run_day(db, as_of)
     out: list[Queued] = []
     ordered = _after_dependencies(sorted(rows, key=order), await feature_keys_of(db, rows))
     for r, (start, end) in zip(ordered, _dates([_effort(r) for r in ordered], per_week, today),
@@ -520,19 +520,54 @@ async def feature_keys_of(db: AsyncSession, rows: list[RoadmapItem]) -> dict[uui
     return {r.id: keys[r.feature_id] for r in rows if r.feature_id in keys}
 
 
+def _resolve[T](
+    rows: list[T], key: Callable[[T], str], feature_key: Callable[[T], str | None]
+) -> dict[str, list[T]]:
+    at: dict[str, list[T]] = {}
+    for r in rows:
+        at.setdefault(key(r), [r])
+    by_feature: dict[str, list[T]] = {}
+    for r in rows:
+        if (k := feature_key(r)) is not None and k not in at:
+            by_feature.setdefault(k, []).append(r)
+    return {**by_feature, **at}
+
+
 def resolve_dependencies(
     rows: list[RoadmapItem], feature_keys: dict[uuid.UUID, str]
 ) -> dict[str, list[RoadmapItem]]:
     """What each dependency key names: the item with that key, else the items of the feature
     with that key (:func:`feature_keys_of`), in ``rows``' order."""
-    at: dict[str, list[RoadmapItem]] = {}
-    for r in rows:
-        at.setdefault(r.item_key, [r])
-    by_feature: dict[str, list[RoadmapItem]] = {}
-    for r in rows:
-        if (key := feature_keys.get(r.id)) is not None and key not in at:
-            by_feature.setdefault(key, []).append(r)
-    return {**by_feature, **at}
+    return _resolve(rows, lambda r: r.item_key, lambda r: feature_keys.get(r.id))
+
+
+def _dependency_order[T](
+    ordered: list[T],
+    key: Callable[[T], str],
+    depends_on: Callable[[T], list[str]],
+    feature_key: Callable[[T], str | None],
+) -> list[T]:
+    """``ordered`` with each entry after the entries it depends on (by key, or by its
+    feature's key); else as ordered. A cycle keeps the order it has."""
+    at = _resolve(ordered, key, feature_key)
+    out: list[T] = []
+    placed: set[int] = set()
+    visiting: set[int] = set()
+
+    def place(r: T) -> None:
+        if id(r) in placed or id(r) in visiting:
+            return
+        visiting.add(id(r))
+        for dep in depends_on(r):
+            for d in at.get(dep, ()):
+                place(d)
+        visiting.discard(id(r))
+        placed.add(id(r))
+        out.append(r)
+
+    for r in ordered:
+        place(r)
+    return out
 
 
 def _after_dependencies(
@@ -541,25 +576,63 @@ def _after_dependencies(
     """``ordered`` with each item after the items it depends on (by item key, or by its
     feature's key), whichever PRD they are in (the owner, Nov 4: a link between PRDs is
     real); else as ordered. A cycle keeps the order it has: the items check reports it
-    (oracle.runs.roadmap, ``dependency_cycle``)."""
-    at = resolve_dependencies(ordered, feature_keys or {})
-    out: list[RoadmapItem] = []
-    placed: set[uuid.UUID] = set()
-    visiting: set[uuid.UUID] = set()
+    (oracle.runs.roadmap, ``dependency_cycle``). :func:`with_run_items` orders a run's
+    queue the same way (:func:`_dependency_order`)."""
+    keys = feature_keys or {}
+    return _dependency_order(ordered, lambda r: r.item_key, lambda r: r.depends_on or [],
+                             lambda r: keys.get(r.id))  # fmt: skip
 
-    def place(r: RoadmapItem) -> None:
-        if r.id in placed or r.id in visiting:
-            return
-        visiting.add(r.id)
-        for dep in r.depends_on or []:
-            for d in at.get(dep, ()):
-                place(d)
-        visiting.discard(r.id)
-        placed.add(r.id)
-        out.append(r)
 
-    for r in ordered:
-        place(r)
+def _milestone_name(milestone: Any) -> str | None:
+    """The name of an item's milestone (stored as {name, ...}; a run's file may name it
+    alone)."""
+    if isinstance(milestone, str):
+        return milestone.strip() or None
+    if isinstance(milestone, dict) and isinstance(milestone.get("name"), str):
+        return milestone["name"].strip() or None
+    return None
+
+
+async def run_day(db: AsyncSession, as_of: datetime | None = None) -> date:
+    """The company's day at ``as_of`` (a run's start), else today: a run's prompt and its
+    check date the queue from the same day though the run crosses the company's midnight."""
+    if as_of is None:
+        return await company_time.company_today(db)
+    return company_time.day(as_of, await company_time.company_time_zone(db))
+
+
+def _place(item: RoadmapItem, goal: int | None) -> dict[str, Any]:
+    """What an item's place in the queue is made of: its milestone, horizon and position,
+    its rank in the company goal order (None: no goal) and its priority."""
+    return {
+        "milestone": _milestone_name(item.milestone),
+        "horizon": HORIZON_ORDER.get(item.horizon, 3),
+        "position": item.position,
+        "goal": goal,
+        "priority": _priority(item),
+    }
+
+
+def _orders(places: list[dict[str, Any]]) -> list[tuple]:
+    """Each item's sort key in one team's queue, from :func:`_place`: items naming a
+    milestone first, in the milestone's place (the horizon and position of its item that
+    sits first on the roadmap), the rest in their own; then the goal order, then priority
+    (highest first), then position. :func:`queue` and :func:`with_run_items` both order by
+    it, so a run's plan tables are the queue once its file lands."""
+    first: dict[str, tuple[int, int]] = {}
+    for p in sorted(places, key=lambda p: p["position"]):
+        if p["milestone"] and p["milestone"] not in first:
+            first[p["milestone"]] = (p["horizon"], p["position"])
+    out = []
+    for p in places:
+        place = first.get(p["milestone"]) if p["milestone"] else None
+        out.append((
+            place is None,
+            place or (p["horizon"], p["position"]),
+            (p["goal"] is None, p["goal"] or 0),
+            -p["priority"],
+            p["position"],
+        ))  # fmt: skip
     return out
 
 
@@ -583,14 +656,82 @@ async def run_queue(
     """What a PRD's roadmap run reads of the shared queue: every item on the company
     roadmap with its place in one team's queue ({key, title, prd, start, end, ours}); the
     other PRDs' items go into the draft's plan tables as they are (Dates from: team queue).
-    ``as_of`` (the run's start): the roadmap as it was then, so the prompt and the check of a
-    run read the same queue though another PRD's draft lands mid-run."""
-    company_doc = await active(db)
-    if company_doc is None:
-        return []
-    cap, rows = await queue(db, as_of)
-    today = (await company_time.company_today(db)).isoformat()
-    return [
+    ``as_of`` (the run's start): the roadmap as it was then, dated from the run's day."""
+    return (await frozen_queue(db, prd_id, as_of))["rows"]
+
+
+async def _feature_goals(db: AsyncSession) -> tuple[dict[str, int | None], dict[uuid.UUID, int]]:
+    """Every feature's key -> its rank in the company goal order (the first goal it
+    supports, over every goal; None: it supports none), and the same by feature id."""
+    features = {
+        e.key: e.id
+        for e in await db.scalars(
+            select(Entity).where(Entity.type == "feature", Entity.status != "rejected")
+        )
+    }
+    found = (
+        await db.execute(
+            select(Edge.src_id, Entity)
+            .join(Entity, Entity.id == Edge.dst_id)
+            .where(
+                Edge.type == "supports",
+                Edge.status != "rejected",
+                Entity.type == "goal",
+                Entity.status != "rejected",
+            )
+        )
+    ).all()
+    rank = {key: n for n, key in enumerate(sorted({goal_sort_key(g) for _, g in found}))}
+    by_id: dict[uuid.UUID, int] = {}
+    for src, goal in found:
+        by_id[src] = min(by_id.get(src, len(rank)), rank[goal_sort_key(goal)])
+    return {k: by_id.get(i) for k, i in features.items()}, by_id
+
+
+async def _section_features(
+    db: AsyncSession, prd_version: DocumentVersion | None
+) -> dict[str, str]:
+    """Each section of the run's PRD version -> the key of the feature it links, the one
+    landing traces an item naming that section to (oracle.roadmap.items.derive_traces)."""
+    from oracle.docs.models import Section
+    from oracle.roadmap.items import _linked_by_section
+
+    if prd_version is None:
+        return {}
+    keys = set(await db.scalars(select(Section.section_key).where(
+        Section.version_id == prd_version.id)))  # fmt: skip
+    linked = await _linked_by_section(db, prd_version, keys)
+    return {
+        k: next(e.key for e in found if e.type == "feature")
+        for k, found in linked.items()
+        if any(e.type == "feature" for e in found)
+    }
+
+
+async def frozen_queue(
+    db: AsyncSession,
+    prd_id: uuid.UUID | None,
+    as_of: datetime | None = None,
+    prd_version: DocumentVersion | None = None,
+) -> dict[str, Any]:
+    """The shared queue as a run stores it once, when its first prompt is built (JSON):
+    {rows: :func:`run_queue`'s rows, per_week: the team's capacity, today: the run's day,
+    features: :func:`_feature_goals`' keys, sections: :func:`_section_features` of the
+    run's PRD version ``prd_version``}; per_week and today are None without a company
+    roadmap. The run's prompts, every rewrite and its check read this copy, though other
+    PRDs' runs land or the capacity changes."""
+    if await active(db) is None:
+        return {"rows": [], "per_week": None, "today": None, "features": {}, "sections": {}}
+    cap, queued = await queue(db, as_of)
+    today = (await run_day(db, as_of)).isoformat()
+    features, goal_of = await _feature_goals(db)
+    ids = {q.item.feature_id for q in queued if q.item.feature_id}
+    key_of = (
+        dict((await db.execute(select(Entity.id, Entity.key).where(Entity.id.in_(ids)))).all())
+        if ids
+        else {}
+    )
+    rows = [
         {
             "key": q.item.item_key,
             "title": q.item.title,
@@ -598,58 +739,129 @@ async def run_queue(
             "start": q.start.isoformat(),
             "end": q.end.isoformat(),
             "ours": q.item.prd_document_id == prd_id,
-            # What with_run_items re-plans the queue from.
+            # What with_run_items plans the queue again from (see _place).
+            "milestone": _milestone_name(q.item.milestone),
+            "horizon": HORIZON_ORDER.get(q.item.horizon, 3),
+            "position": q.item.position,
+            "goal": goal_of.get(q.item.feature_id) if q.item.feature_id else None,
+            "priority": _priority(q.item),
+            # What it waits on, and its feature's key (another PRD's item may name either).
+            "depends_on": list(q.item.depends_on or []),
+            "feature_key": key_of.get(q.item.feature_id),
             "effort_weeks": q.effort_weeks,
-            "order": q.order,
             "per_week": _per_week(cap),
             "today": today,
         }
-        for q in rows
+        for q in queued
     ]
+    return {"rows": rows, "per_week": _per_week(cap), "today": today, "features": features,
+            "sections": await _section_features(db, prd_version)}  # fmt: skip
+
+
+def _run_entries(items: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:
+    """The items of a run's file that landing stores, in file order (as import_items keeps
+    them: a horizon, a title and an id not used before); None: no file, or one with no
+    items that could be read."""
+    from oracle.roadmap.models import HORIZONS
+    from oracle.runs.roadmap import _text
+
+    if not items:
+        return None
+    out, seen = [], set()
+    for raw in items:
+        key = str(raw.get("id"))
+        if (_text(raw.get("horizon")) not in HORIZONS or not _text(raw.get("title"))
+                or key in seen or key.startswith("#")):  # fmt: skip
+            continue
+        seen.add(key)
+        out.append(raw)
+    return out
+
+
+def _run_feature(
+    raw: dict[str, Any], features: dict[str, Any], sections: dict[str, str]
+) -> str | None:
+    """The key of the feature landing traces a file's item to (derive_traces): the one it
+    declares, else the one its PRD section links, else the one keyed as the item."""
+    from oracle.runs.roadmap import _text
+
+    declared = raw.get("feature") if isinstance(raw.get("feature"), str) else None
+    section = _text(raw.get("prd_section"))
+    for key in (declared, sections.get(section) if section else None, _text(raw.get("id"))):
+        if key and key in features:
+            return key
+    return None
+
+
+def _run_goal(raw: dict[str, Any], features: dict[str, Any], sections: dict[str, str]) -> Any:
+    """The goal rank of the feature landing traces a file's item to (:func:`_run_feature`)."""
+    key = _run_feature(raw, features, sections)
+    return features[key] if key is not None else None
+
+
+def _keys(raw: Any) -> list[str]:
+    """A file item's ``depends_on`` as keys (the check reports anything else)."""
+    from oracle.runs.roadmap import _text
+
+    return [k for k in (_text(d) for d in raw) if k] if isinstance(raw, list) else []
 
 
 def with_run_items(
-    rows: list[dict[str, Any]], items: list[dict[str, Any]] | None
+    rows: list[dict[str, Any]],
+    items: list[dict[str, Any]] | None,
+    *,
+    per_week: float | None = None,
+    today: str | None = None,
+    features: dict[str, Any] | None = None,
+    sections: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
-    """The shared queue with this run's items file in it: the run's PRD's rows are replaced
-    by the file's items (an item already on the roadmap keeps its place; a new one goes
-    after its horizon's items, in file order) and the queue is planned again as one team,
-    so the run's own items and every other PRD's take their place together. ``items``: the
-    file's items as its check read them (``ItemsCheck.items``, from
-    oracle.runs.roadmap.check_items_async, kept per text): the file is never parsed here;
-    none (a missing or unreadable file): the queue as it is."""
-    if not rows or not items:
+    """The shared queue with this run's items file in it, as :func:`queue` will plan it once
+    the file lands: the run's PRD's rows are replaced by the file's items, which take
+    positions 0..n-1 in file order (import_items), and every other PRD's item comes after
+    them in its current order (carry_other_prds); each milestone's place and the order are
+    :func:`_orders`', then each item after what it depends on (:func:`queue`'s
+    :func:`_after_dependencies` step, across PRDs, by item key or feature key). ``items``:
+    the file's items as its check read them
+    (``ItemsCheck.items``, from oracle.runs.roadmap.check_items_async, kept per text): the
+    file is never parsed here; none (a missing or unreadable file): the queue as it is.
+    ``per_week`` and ``today`` (the run's frozen capacity and day, else the rows'): the
+    run's own items are dated though the shared queue is empty. ``features`` and
+    ``sections`` (:func:`frozen_queue`'s): the goal each item's feature serves and its
+    key."""
+    per_week = per_week or (rows[0]["per_week"] if rows and "per_week" in rows[0] else None)
+    today = today or (rows[0]["today"] if rows and "today" in rows[0] else None)
+    entries = _run_entries(items)
+    if entries is None or not per_week or not today:
         return rows
-    ours = {r["key"]: r for r in rows if r["ours"]}
-    prd = next((r["prd"] for r in ours.values()), "")
-    merged = [r for r in rows if not r["ours"]]
-    for i, raw in enumerate(items):
-        key = str(raw.get("id") or "").strip() if isinstance(raw, dict) else ""
-        # The check names an item without an id "#<n>": it is not placed, as before.
-        if not key or key.startswith("#") or any(r["key"] == key for r in merged):
-            continue
-        old = ours.get(key)
-        if old is not None:
-            order, effort = old["order"], old["effort_weeks"]
-        else:
-            item = RoadmapItem(horizon=raw.get("horizon"), priority=raw.get("priority")
-                               if isinstance(raw.get("priority"), dict) else None,
-                               economics={"declared": raw["economics"]}
-                               if isinstance(raw.get("economics"), dict) else {})  # fmt: skip
-            horizon = HORIZON_ORDER.get(str(raw.get("horizon") or ""), 3)
-            order = (True, (horizon, NEW + i), (True, LAST), -_priority(item), NEW + i)
-            effort = _effort(item)
-        title = str(raw.get("title") or "").strip() or key
-        merged.append({"key": key, "title": title, "prd": prd, "ours": True,
-                       "effort_weeks": effort, "order": order})  # fmt: skip
-    first = rows[0]
-    merged.sort(key=lambda r: tuple(r["order"]))
-    planned = _dates([r["effort_weeks"] for r in merged], first["per_week"],
-                     date.fromisoformat(first["today"]))  # fmt: skip
+    prd = next((r["prd"] for r in rows if r["ours"]), "")
+    merged: list[dict[str, Any]] = []
+    for raw in entries:
+        # Landing stores the file's priority and declared economics alone, whether or not
+        # the item was on the roadmap (its baseline economics never carry effort_weeks), and
+        # traces the item to its feature again.
+        item = RoadmapItem(horizon=raw.get("horizon"), position=len(merged),
+                           milestone=raw.get("milestone"),
+                           priority=raw["priority"] if isinstance(raw.get("priority"), dict)
+                           else None,
+                           economics={"declared": raw["economics"]}
+                           if isinstance(raw.get("economics"), dict) else {})  # fmt: skip
+        merged.append({"key": str(raw["id"]), "title": str(raw.get("title")).strip(),
+                       "prd": prd, "ours": True, "effort_weeks": _effort(item),
+                       "depends_on": _keys(raw.get("depends_on")),
+                       "feature_key": _run_feature(raw, features or {}, sections or {}),
+                       **_place(item, _run_goal(raw, features or {}, sections or {}))})  # fmt: skip
+    for r in sorted((r for r in rows if not r["ours"]), key=lambda r: r["position"]):
+        merged.append({**r, "position": len(merged)})
+    orders = _orders(merged)
+    ordered = _dependency_order(
+        [r for _, r in sorted(zip(orders, merged, strict=True), key=lambda p: p[0])],
+        lambda r: r["key"], lambda r: r.get("depends_on") or [], lambda r: r.get("feature_key"),
+    )  # fmt: skip
+    planned = _dates([r["effort_weeks"] for r in ordered], per_week, date.fromisoformat(today))
     return [
-        {**r, "start": start.isoformat(), "end": end.isoformat(), "per_week": first["per_week"],
-         "today": first["today"]}
-        for r, (start, end) in zip(merged, planned, strict=True)
+        {**r, "start": start.isoformat(), "end": end.isoformat(), "per_week": per_week,
+         "today": today}
+        for r, (start, end) in zip(ordered, planned, strict=True)
     ]  # fmt: skip
 
 

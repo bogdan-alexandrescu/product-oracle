@@ -116,6 +116,8 @@ interface SeedItem {
   dates?: { start: string | null; end: string; source: "engineering" | "accepted" };
   /** build-runplan RP2: the PRD it belongs to when not its roadmap's own (./meeting-draft.ts). */
   prd_doc?: { id: string; slug: string; title: string };
+  /** RP2 'Draft layer on roadmap': a draft item's owner, by name (./meeting-draft.ts). */
+  draft_owner?: string;
   /** Bring a date in: the re-plan sliced or split it, so its date waits for a new estimate. */
   estimate_pending?: boolean;
   /** approved-roadmap-to-simple: the source words of the dates an applied roadmap version gave it
@@ -168,6 +170,9 @@ interface SimpleDb {
   agenda_midway?: { topic: string; by: string } | null;
   /** D-a: each track's owner (track key -> person id); their role (Who.roles) says whether they decide. */
   track_owners?: Record<string, string>;
+  /** RP2 'Draft layer on roadmap': each draft PRD's run (PRD id -> run), as DraftRoadmap.run_id
+   * and prd_version_id hold it (./meeting-draft.ts draftPrdsOut). */
+  draft_runs?: Record<string, { run_id: string; version: number; cancelled?: boolean }>;
   /** S4: people's display names (person id -> name), for the items' owners. */
   people?: Record<string, string>;
   /** S4: proposed decisions naming an item (item key -> decisions). */

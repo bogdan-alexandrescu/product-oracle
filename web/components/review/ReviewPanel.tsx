@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState, type ComponentProps, type ReactNode } from "react";
 
 import { ResolutionPanel, type GoTo } from "@/components/FeedbackPanel";
-import { JobsPanel, ORACLE_WORK } from "@/components/JobsPanel";
+import { JobsPanel, keyWords, ORACLE_WORK } from "@/components/JobsPanel";
 import { ReportsPanel } from "@/components/ReportsPanel";
 import { LowConfidence } from "@/components/CitationChip";
 import { Icon, Inspector, InspectorRow, Label } from "@/components/ds";
@@ -118,7 +118,7 @@ export function ReviewPanel({
           (discussion ??
             (error ? <ErrorNote>{error}</ErrorNote> : !entries ? <Loading /> : <FeedbackList entries={entries} {...list} />))}
         {tab === "sources" && version && <SourcesTab version={version} />}
-        {tab === "history" && <HistoryTab doc={doc} n={n} refreshKey={refreshKey} goTo={goTo} />}
+        {tab === "history" && <HistoryTab doc={doc} n={n} refreshKey={refreshKey} goTo={goTo} version={version} />}
       </div>
     </Inspector>
   );
@@ -226,7 +226,9 @@ function SourcesTab({ version }: { version: VersionOut }) {
   );
 }
 
-function HistoryTab({ doc, n, refreshKey, goTo }: { doc: string; n: number; refreshKey: number; goTo?: GoTo }) {
+function HistoryTab({ doc, n, refreshKey, goTo, version }: { doc: string; n: number; refreshKey: number; goTo?: GoTo; version?: VersionOut }) {
+  // F-35: jobs and reports name a section as the outline does ("1. Problem"), never by its key.
+  const sectionName = (key: string) => version?.sections.find((s) => s.section_key === key)?.heading ?? keyWords(key);
   // ?tab=reports (where applying a next draft lands, C1e): Reports opens on What changed.
   const [landed] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "reports");
   return (
@@ -235,10 +237,10 @@ function HistoryTab({ doc, n, refreshKey, goTo }: { doc: string; n: number; refr
         <ResolutionPanel doc={doc} n={n} refreshKey={refreshKey} goTo={goTo} />
       </Fold>
       <Fold title="Reports" testId="history-reports">
-        <ReportsPanel doc={doc} n={n} refreshKey={refreshKey} initialTab={landed ? "changes" : "resolution"} />
+        <ReportsPanel doc={doc} n={n} refreshKey={refreshKey} initialTab={landed ? "changes" : "resolution"} sectionName={sectionName} />
       </Fold>
       <Fold title="Oracle's work" testId="history-jobs" anchor={ORACLE_WORK}>
-        <JobsPanel doc={doc} version={n} refreshKey={refreshKey} />
+        <JobsPanel doc={doc} version={n} refreshKey={refreshKey} sectionName={sectionName} />
       </Fold>
     </div>
   );

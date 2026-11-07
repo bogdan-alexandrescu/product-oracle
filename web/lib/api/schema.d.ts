@@ -12461,6 +12461,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/roadmap/draft-prds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Simple Roadmap Draft Prds
+         * @description The draft layer (RP2): every PRD the caller may read whose run's draft roadmap holds
+         *     dated items not approved yet, each with its items, dates, owner and run. A replaced
+         *     PRD, a cancelled run and an approved PRD version are left out.
+         */
+        get: operations["list_simple_roadmap_draft_prds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/draft-prds/items/{item_id}/dates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change Simple Roadmap Draft Dates
+         * @description Change dates on a draft item: the run's draft keeps them, the roadmap does not.
+         */
+        post: operations["change_simple_roadmap_draft_dates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/draft-prds/items/{item_id}/leave-out": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Leave Out Simple Roadmap Draft Item
+         * @description Leave out a draft item: it never goes on the roadmap.
+         */
+        post: operations["leave_out_simple_roadmap_draft_item"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/roadmap/apply-approved": {
         parameters: {
             query?: never;
@@ -30308,6 +30370,8 @@ export interface components {
             reuse_baseline?: boolean | null;
             /** Goals */
             goals?: string[] | null;
+            /** Features */
+            features?: string[] | null;
             /** Reuse Draft Items */
             reuse_draft_items?: boolean | null;
         };
@@ -30334,6 +30398,11 @@ export interface components {
              * @default []
              */
             goals: components["schemas"]["TargetGoal"][];
+            /**
+             * Features
+             * @default []
+             */
+            features: components["schemas"]["TargetFeature"][];
             /** Reuse Draft Items */
             reuse_draft_items?: boolean | null;
         };
@@ -43794,6 +43863,52 @@ export interface components {
              */
             what: "email" | "slack";
         };
+        /**
+         * SimpleRoadmapDraftItem
+         * @description A dated item of a draft PRD on the Simple roadmap's draft layer, with its owner.
+         */
+        SimpleRoadmapDraftItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Horizon */
+            horizon: string;
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Owner Name */
+            owner_name?: string | null;
+        };
+        /**
+         * SimpleRoadmapDraftPrd
+         * @description RP2 'Draft layer on roadmap': a PRD whose run's draft roadmap holds dated items not
+         *     approved yet, shown hatched over the roadmap until the PRD is approved.
+         */
+        SimpleRoadmapDraftPrd: {
+            prd: components["schemas"]["SimpleDocRef"];
+            /** Run Id */
+            run_id?: string | null;
+            /** Items */
+            items: components["schemas"]["SimpleRoadmapDraftItem"][];
+            /**
+             * Can Change
+             * @default false
+             */
+            can_change: boolean;
+        };
         /** SimpleRoadmapItem */
         SimpleRoadmapItem: {
             /**
@@ -46234,6 +46349,21 @@ export interface components {
             /** Unavailable */
             unavailable?: components["schemas"]["UnavailableItem"][];
             source: components["schemas"]["SourceOut"];
+        };
+        /**
+         * TargetFeature
+         * @description A Ground Truth feature a PRD run adds to its PRD ("Add it to a PRD").
+         */
+        TargetFeature: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
         };
         /**
          * TargetGoal
@@ -74222,6 +74352,88 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DateSuggestionOut"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_simple_roadmap_draft_prds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleRoadmapDraftPrd"][];
+                };
+            };
+        };
+    };
+    change_simple_roadmap_draft_dates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleDraftDatesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    leave_out_simple_roadmap_draft_item: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
