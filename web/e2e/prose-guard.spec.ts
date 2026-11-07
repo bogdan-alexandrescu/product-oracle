@@ -190,17 +190,20 @@ const ceilings: Ceilings = fs.existsSync(CEILINGS_FILE) ? JSON.parse(fs.readFile
 
 /**
  * The ceilings on the merge base (with origin/main, or PROSE_BASE), or an error saying why
- * they could not be read. A merge base without the file has no ceilings yet.
+ * they could not be read. A merge base without the file has no ceilings yet. The spec only
+ * reads the repository, never fetches: CI's mock shards check out with main's history
+ * (.github/workflows/ci.yml), and run locally it uses the ref that is there.
  */
 function baseCeilings(): Ceilings | string {
   const git = (...args: string[]) => execFileSync("git", args, { cwd: __dirname, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   const ref = process.env.PROSE_BASE || "origin/main";
-  let base: string;
+  let base: string | null = null;
   try {
     base = git("merge-base", "HEAD", ref);
   } catch {
-    return `no merge base with ${ref}: run git fetch origin main (or set PROSE_BASE to the branch the PR goes into)`;
+    // No such ref, or a shallow checkout without the history: the error below says what to run.
   }
+  if (!base) return `no merge base with ${ref}: run git fetch origin main (with --unshallow in a shallow clone), or set PROSE_BASE to the branch the PR goes into`;
   try {
     return JSON.parse(git("show", `${base}:web/e2e/prose-ceilings.json`));
   } catch {
