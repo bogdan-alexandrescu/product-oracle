@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { Notice, Panel } from "@/components/ds";
+import { InfoTip, Notice, Panel } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -49,12 +49,18 @@ export function SlackPingsPanel() {
   }
 
   return (
-    <Panel title="Slack pings" testId="slack-pings">
+    <Panel
+      title="Slack pings"
+      testId="slack-pings"
+      // F-24: why and how behind the (i), no explanation on the page.
+      tools={
+        <InfoTip label="Slack pings">
+          Oracle&apos;s Slack app sends you a direct message for what you choose here. If Oracle can&apos;t find you in Slack, it names you in the
+          notifications channel instead, without the titles of approvers-only items.
+        </InfoTip>
+      }
+    >
       <div className="space-y-3 px-4 py-3 text-[15px] max-[600px]:px-3">
-        <p className="text-text2">
-          Oracle&apos;s Slack app sends you a direct message for what you choose here. If Oracle can&apos;t find you in Slack, it names you in
-          the notifications channel instead, without the titles of approvers-only items.
-        </p>
         {slack.data && !slack.data.connected && (
           <Notice testId="slack-pings-off">
             {canConnect ? (
@@ -75,13 +81,14 @@ export function SlackPingsPanel() {
           <ul className="space-y-2">
             {PINGS.map((p) => (
               <li key={p.key}>
-                <label className="flex items-start gap-2">
+                {/* F-24: on a phone the whole row is the tap target, at least 44 px high, as the weekly report's. */}
+                <label className="flex items-start gap-2 max-[600px]:min-h-11 max-[600px]:gap-3">
                   <input
                     type="checkbox"
                     checked={pings[p.key]}
                     disabled={saving !== null}
                     onChange={(e) => void toggle(p.key, e.target.checked)}
-                    className="mt-1 size-4 accent-[var(--accent)]"
+                    className="mt-1 size-4 flex-none accent-[var(--accent)] max-[600px]:mt-0 max-[600px]:size-6"
                     data-testid={`ping-${p.key}`}
                   />
                   <span>

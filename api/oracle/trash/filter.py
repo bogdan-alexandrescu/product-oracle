@@ -270,11 +270,21 @@ def _live(cls: Any) -> ColumnElement[bool]:
 def _leave_out_trash(state: ORMExecuteState) -> None:
     if not state.is_select or state.execution_options.get(INCLUDE_TRASHED):
         return
-    # One function for every class: SQLAlchemy caches a criteria function by its code, so
-    # per-class closures would all get the first class's clause.
-    state.statement = state.statement.options(
-        *(
+    state.statement = state.statement.options(*_options())
+
+
+# The criteria options, built once (each holds no bound value): building one per trashable
+# class on every SELECT was a large share of a read's time (the Inbox makes about 75 reads).
+_OPTIONS: tuple[Any, ...] = ()
+
+
+def _options() -> tuple[Any, ...]:
+    global _OPTIONS
+    if not _OPTIONS:
+        # One function for every class: SQLAlchemy caches a criteria function by its code,
+        # so per-class closures would all get the first class's clause.
+        _OPTIONS = tuple(
             with_loader_criteria(entity, lambda cls: _live(cls), include_aliases=True)
             for entity in criteria()
         )
-    )
+    return _OPTIONS

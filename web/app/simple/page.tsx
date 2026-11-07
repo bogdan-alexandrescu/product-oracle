@@ -14,6 +14,7 @@ import { Button } from "@/components/ds/Button";
 import { InfoTip } from "@/components/ds/InfoTip";
 import { Dialog } from "@/components/ds/Dialog";
 import { setToastPlace, toast } from "@/components/ds/Toast";
+import { LoadError } from "@/components/ui";
 import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
 import { usePhone } from "@/components/simple/FlowViews";
 import { GoalNum, GoalOrderEdit } from "@/components/simple/GoalOrder";
@@ -311,10 +312,13 @@ export default function SimpleHome() {
   // caller's (an owner's all, a commenter's own two, a viewer's none), until each is done.
   const setupQ = useQuery(k("setup"), () => (can("get_setup") ? unwrap(api.GET("/v1/setup")) : Promise.resolve(undefined)), { keepPrevious: true });
   const setup = can("get_setup") && setupOpen(setupQ.data) && !setupQ.data.hidden ? setupQ.data : null;
-  async function hideSetup() {
+  // F-28: a hidden Set up comes back from Home's menu.
+  const setupHidden = can("get_setup") && setupOpen(setupQ.data) && setupQ.data.hidden ? setupQ.data : null;
+  async function hideSetup(hidden = true) {
     try {
-      await unwrap(api.PATCH("/v1/me/preferences", { body: { setup_hidden: true } }));
-      toast({ message: "Set up hidden. Detailed Home keeps it behind its Set up chip." });
+      await unwrap(api.PATCH("/v1/me/preferences", { body: { setup_hidden: hidden } }));
+      // Round 2: the toast says what happened, with Show; no how-to sentence.
+      if (hidden) toast({ message: "Set up hidden", action: { label: "Show", onClick: () => void hideSetup(false) } });
     } catch (e) {
       toast({ message: errorMessage(e) });
     }
@@ -669,7 +673,11 @@ export default function SimpleHome() {
         </Dialog>
       )}
       <header data-testid="home-greeting" className="-mt-4 flex flex-col gap-1">
-        <p className="simple-small tnum">{formatInZone(now.toISOString(), zone, { weekday: "long", month: "long", day: "numeric" })}</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="simple-small tnum">{formatInZone(now.toISOString(), zone, { weekday: "long", month: "long", day: "numeric" })}</p>
+          {/* F-28, the owner's pick (Nov 5): a hidden Set up comes back from Home's menu. */}
+          {setupHidden && <HomeMenu onShowSetup={() => void hideSetup(false)} />}
+        </div>
         <p className="simple-lead max-[600px]:min-h-[2lh]">
           {greeting(hour)}
           {firstName ? `, ${firstName}` : ""}. <span data-testid="home-sentence">{sentence}</span>
@@ -721,6 +729,11 @@ export default function SimpleHome() {
       {/* qa-onboarding-6: an invited member's role welcome, in Simple too (dismissed in one mode, gone in both). */}
       <SimpleWelcome show={setupQ.data?.welcome === true} onDismissed={() => void setupQ.reload()} />
       {setupFirst && setup && (can("put_setting") || !setupQ.data?.welcome) && <SetupCard setup={setup} owner={can("put_setting")} onHide={() => void hideSetup()} />}
+      {/* F-8: a Set up that failed to load says so, with Try again, never vanishes; Detailed's error
+          note. A viewer has no Set up steps (they cannot add sources), so is not told. */}
+      {can("get_setup") && can("create_source") && setupQ.error && !setupQ.data && tiles !== undefined && tiles.length === 0 && (
+        <LoadError what="Set up" error={setupQ.error} onRetry={() => void setupQ.reload()} />
+      )}
 
       <section aria-label="Goals" data-testid="home-goals">
         {canOrder && !ordering && (tiles?.length ?? 0) > 1 && (
@@ -1405,7 +1418,8 @@ function SetupCard({ setup, owner, onHide }: { setup: Schemas["SetupOut"]; owner
                 )
               }
               title={
-                !st.done && href ? (
+                // F-27: a finished step opens too, to change it, as Detailed Home's Change does.
+                href ? (
                   <Link href={href} className="text-accent-ink hover:underline">
                     {copy.label}
                   </Link>
@@ -1419,6 +1433,54 @@ function SetupCard({ setup, owner, onHide }: { setup: Schemas["SetupOut"]; owner
         })}
       </ul>
     </HomeCard>
+  );
+}
+
+/** Home's menu (the more icon): Show Set up while it is hidden. Escape or a click outside closes it. */
+function HomeMenu({ onShowSetup }: { onShowSetup: () => void }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onDown = (e: PointerEvent) => {
+      if (root.current && !root.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onDown);
+    };
+  }, [open]);
+  return (
+    <div ref={root} className="relative flex-none">
+      <button
+        type="button"
+        aria-label="Home menu"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="grid h-8 w-8 place-items-center rounded-lg text-text2 hover:bg-surface2 max-[600px]:h-11 max-[600px]:w-11"
+      >
+        <Icon name="more" size={18} />
+      </button>
+      {open && (
+        <div role="menu" className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-line bg-surface p-1 shadow-tip">
+          <button
+            type="button"
+            role="menuitem"
+            className="block w-full rounded-md px-2 py-1.5 text-left text-[15px] hover:bg-surface2 max-[600px]:min-h-11"
+            onClick={() => {
+              setOpen(false);
+              onShowSetup();
+            }}
+          >
+            Show Set up
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

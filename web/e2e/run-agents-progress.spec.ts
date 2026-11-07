@@ -38,7 +38,7 @@ test("a running segment shows its agents and the cost so far, and Refresh progre
   await expect(first.getByTestId("agent-role")).not.toBeEmpty();
   await expect(first).toContainText("Running");
   await expect(first.getByTestId("agent-elapsed")).toHaveText(/^\d+[smh]/);
-  await expect(first.getByTestId("agent-heartbeat")).toContainText("last heartbeat");
+  await expect(first.getByTestId("agent-heartbeat")).toContainText("last update");
   await expect(progress).not.toContainText("$0.00 spent so far");
   await expect(progress).toContainText(/\$\d+\.\d\d spent so far · checked/);
   await expect(page.getByTestId("run-details").getByTestId("run-spent")).not.toHaveText("$0.00");

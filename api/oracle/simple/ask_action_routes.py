@@ -873,5 +873,10 @@ NOT_OFFERED: frozenset[str] = frozenset(
         "withdraw_schedule_basis",
         "withdraw_simple_change",
         "withdraw_simple_draft",
+        # The Simple roadmap's draft layer (port 1241: PRDs not approved yet, their dates and
+        # leave-out): not offered until allowed by name.
+        "change_simple_roadmap_draft_dates",
+        "leave_out_simple_roadmap_draft_item",
+        "list_simple_roadmap_draft_prds",
     }
 )

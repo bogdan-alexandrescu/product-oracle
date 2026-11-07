@@ -514,7 +514,7 @@ async def import_items(
         await db.delete(old)
     await db.flush()
     seen: set[str] = set()
-    for position, raw in enumerate(check.items):
+    for raw in check.items:
         key = str(raw.get("id"))
         horizon = items_file._text(raw.get("horizon"))
         title = items_file._text(raw.get("title"))
@@ -535,7 +535,9 @@ async def import_items(
             track_id=track.id if track else None,
             run_id=run_id,
             item_key=key,
-            position=position,
+            # 0..n-1 in file order, an item left out leaving no gap: the other PRDs'
+            # items carried after them start at n (oracle.roadmap.company.with_run_items).
+            position=len(result.items),
             title=title,
             outcome=items_file._text(raw.get("outcome")),
             horizon=horizon,

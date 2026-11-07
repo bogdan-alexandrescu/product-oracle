@@ -129,6 +129,12 @@ async def _item(db: AsyncSession, document: Document, item_id: uuid.UUID) -> Roa
     raise MeetingError(404, "No such draft item")
 
 
+def set_dates(row: RoadmapItem, start: date, end: date) -> None:
+    """Change dates on a draft item: it keeps them as typed, still draft (the meeting's step
+    and the roadmap's draft layer both)."""
+    row.start_date, row.end_date, row.date_source = start, end, "typed"
+
+
 async def change_dates(
     db: AsyncSession,
     principal: Any,
@@ -139,8 +145,7 @@ async def change_dates(
 ) -> None:
     """Change dates: the item keeps them as typed, still draft. The caller commits."""
     _, document = await _changing(db, principal, meeting_id)
-    row = await _item(db, document, item_id)
-    row.start_date, row.end_date, row.date_source = start, end, "typed"
+    set_dates(await _item(db, document, item_id), start, end)
 
 
 async def leave_out(
