@@ -1,6 +1,7 @@
 import { MOCK_FAIL_ONCE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN, login } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
+import { countRowOf } from "./vxe-counts";
 
 /*
  * Review of fix2-simple-plan (/simple/priorities): with a dated plan the Ranked list shows what
@@ -109,7 +110,15 @@ test.describe("fix2-simple-plan review: Value / effort, proposals, the goal draw
     expect(withGoal.length).toBeGreaterThan(0);
     await page.getByRole("tab", { name: "Value / effort" }).click();
     await expect(page.getByTestId("vxe-point").first()).toBeVisible();
-    for (const code of withGoal) await expect(page.locator(`[data-testid="vxe-point"][data-code="${code}"]`)).not.toHaveAttribute("aria-label", /no goal/);
+    // PV-1: a feature is its own mark, or a row in a count's sheet (which never says "no goal" either).
+    const lone = await page.getByTestId("vxe-point").evaluateAll((els) => els.map((e) => e.getAttribute("data-code")!));
+    for (const code of withGoal.filter((c) => lone.includes(c))) await expect(page.locator(`[data-testid="vxe-point"][data-code="${code}"]`)).not.toHaveAttribute("aria-label", /no goal/);
+    const counted = withGoal.filter((c) => !lone.includes(c));
+    expect(counted.length).toBeGreaterThan(0);
+    for (const code of counted) {
+      await expect(await countRowOf(page, code)).not.toContainText(/no goal/i);
+      await page.keyboard.press("Escape");
+    }
   });
 
   test("a proposal says so even when the list cannot be read again", async ({ page }) => {
