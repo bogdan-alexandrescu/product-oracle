@@ -363,7 +363,7 @@ def unknown_goal_message(feature: str, goal: str | None) -> str:
     known name; with none (the goal was deleted, or never was one), never by its key."""
     if goal:
         return (
-            f"{feature} names the goal {goal}, which is not a goal in the Ground Truth: "
+            f"{feature} names the goal {goal}, which is not a goal of the Ground Truth: "
             "the run must name one that is"
         )
     return f"{feature} names a goal that was deleted: the run must name a goal of the Ground Truth"
