@@ -85,8 +85,8 @@ for (const who of [
             const box = await label.boundingBox();
             expect(
               box!.width,
-              "Label column has room for its word",
-            ).toBeGreaterThanOrEqual(60);
+              "Label column keeps a readable width (160 px) at every width",
+            ).toBeGreaterThanOrEqual(160);
           }
           // The label gets the spare room on a wide screen: the mock's longest one stays on one line.
           if (size.width >= 1024 && doc.name === "with links") {

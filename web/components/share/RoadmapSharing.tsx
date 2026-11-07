@@ -580,7 +580,7 @@ function ShareLinks({ doc, reloadKey }: { doc: string; reloadKey: number }) {
     { key: "label", header: "Label", phone: "title", wrap: true, cell: (l) => <span className="font-medium">{l.label}</span> },
     { key: "audience", header: "Audience", width: "110px", phone: "meta", cell: (l) => audienceLabel(l.audience) },
     { key: "version", header: "Version", width: "80px", phone: "meta", cell: (l) => <span className="tnum">v{l.version_number}</span> },
-    { key: "by", header: "Created by", width: "120px", narrow: "mid", phone: "hide", cell: (l) => l.created_by_name ?? "A member" },
+    { key: "by", header: "Created by", width: "120px", narrow: "wide", phone: "hide", cell: (l) => l.created_by_name ?? "A member" },
     {
       key: "expires",
       header: "Ends",
@@ -613,7 +613,7 @@ function ShareLinks({ doc, reloadKey }: { doc: string; reloadKey: number }) {
       key: "last",
       header: "Last viewed",
       width: "150px",
-      narrow: "mid",
+      narrow: "wide",
       phone: "hide",
       wrap: true,
       cell: (l) => (
