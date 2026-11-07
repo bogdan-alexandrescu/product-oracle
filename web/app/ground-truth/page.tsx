@@ -6,6 +6,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { setupReturn } from "@/app/settings/_nav";
 import { Button, InfoTip, KpiStrip, LinkButton, Notice, Page, PageHeader, Split, ViewOnly, type Kpi } from "@/components/ds";
 import { VagueGoalsLine } from "@/components/discuss/VagueGoalsLine";
+import { LinkedDiscussion } from "@/components/discuss/LinkedDiscussion";
 import { usePhone } from "@/components/ds/page-info";
 import { LoadError, Loading } from "@/components/ui";
 import { startInterview, startInterviews, vagueGoals } from "@/lib/api/goal-interview";
@@ -524,6 +525,7 @@ export default function BaselinePage() {
   if (stateView === "current")
     return (
       <Page>
+        <LinkedDiscussion />
         <Suspense fallback={null}>
           <StateViewFromUrl onView={setStateView} />
         </Suspense>
@@ -533,6 +535,7 @@ export default function BaselinePage() {
 
   return (
     <Page>
+      <LinkedDiscussion />
       <Suspense fallback={null}>
         <StateViewFromUrl onView={setStateView} />
         <OpenFromUrl onOpen={openItem} onBlocker={openBlocker} />
