@@ -11,8 +11,8 @@ Test cards (protects / fails_when / no_claim):
   engineering dates) -> the most recently updated wins; fails_when=the first or the
   earliest wins; no_claim=none.
 - test_an_end_only_item_starts_its_effort_before_its_end (and the tests after it):
-  protects=a start no source gives is the end minus the feature's effort (weeks x 7
-  days), else the end minus 28 days, before the window's start if need be, never after
+  protects=a start no source gives makes a span of the feature's effort (weeks x 7
+  days, the end minus N-1, as a suggestion's span), else of 28 days, before the window's start if need be, never after
   the end; a typed start is never changed; an estimated end keeps its rule;
   fails_when=the bar starts at the window's start (a 1-week feature read as a 10-week
   bar); no_claim=where the effort comes from (tests/test_simple_roadmap_api.py).
@@ -86,25 +86,37 @@ def test_ties_within_a_source_take_the_latest_update():
 def test_an_end_only_item_starts_its_effort_before_its_end():
     end = Candidate(None, date(2026, 11, 30), "tracker", NEW)
     week = dates.resolve([end], WINDOW, effort_weeks=1)
-    assert week.start == Dated(date(2026, 11, 23), "estimated", True)
+    assert week.start == Dated(date(2026, 11, 24), "estimated", True)
     assert week.end == Dated(date(2026, 11, 30), "tracker", False)
-    assert dates.resolve([end], WINDOW, effort_weeks=0.5).start.date == date(2026, 11, 26)
-    assert dates.resolve([end], WINDOW, effort_weeks=4).start.date == date(2026, 11, 2)
+    assert dates.resolve([end], WINDOW, effort_weeks=0.5).start.date == date(2026, 11, 27)
+    assert dates.resolve([end], WINDOW, effort_weeks=4).start.date == date(2026, 11, 3)
 
 
 def test_an_end_only_item_without_effort_starts_28_days_before_its_end():
     end = Candidate(None, date(2026, 11, 30), "tracker", NEW)
-    assert dates.resolve([end], WINDOW).start == Dated(date(2026, 11, 2), "estimated", True)
-    assert dates.resolve([end], WINDOW, effort_weeks=None).start.date == date(2026, 11, 2)
+    assert dates.resolve([end], WINDOW).start == Dated(date(2026, 11, 3), "estimated", True)
+    assert dates.resolve([end], WINDOW, effort_weeks=None).start.date == date(2026, 11, 3)
+
+
+def test_an_estimated_span_is_the_effort_s_days_as_a_suggestion_s():
+    # A 1-week item spans 7 days and a 3-week item 21, end included, as suggest() spans
+    # its days (start + days - 1); without an effort, 28 days as suggest()'s fallback.
+    end = Candidate(None, date(2026, 11, 30), "tracker", NEW)
+    for weeks, days in ((1, 7), (3, 21), (None, dates.FALLBACK_DAYS)):
+        r = dates.resolve([end], WINDOW, effort_weeks=weeks)
+        assert (r.end.date - r.start.date).days + 1 == days
+        s = dates.suggest(WINDOW, [], [days] if weeks else [], None, "now")
+        assert (s.end - s.start).days + 1 == days
+    assert dates.resolve([end], WINDOW, effort_weeks=3).start.date == date(2026, 11, 10)
 
 
 def test_an_estimated_start_may_lie_before_the_window_never_after_the_end():
     early = Candidate(None, date(2026, 10, 10), "engineering", NEW)
     r = dates.resolve([early], WINDOW, effort_weeks=2)
-    assert r.start == Dated(date(2026, 9, 26), "estimated", True)
+    assert r.start == Dated(date(2026, 9, 27), "estimated", True)
     # An end before its window keeps working: its effort back from the end.
     before = dates.resolve([Candidate(None, date(2026, 9, 30), "tracker", NEW)], WINDOW)
-    assert before.start == Dated(date(2026, 9, 2), "estimated", True)
+    assert before.start == Dated(date(2026, 9, 3), "estimated", True)
     assert before.start.date <= before.end.date
     tiny = dates.resolve([early], WINDOW, effort_weeks=0.01)
     assert tiny.start.date <= tiny.end.date
