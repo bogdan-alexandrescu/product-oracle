@@ -629,14 +629,25 @@ def as_written(old: str, value: str) -> str:
     return word.capitalize() if old[:1].isupper() else word
 
 
+def _like(before: str, value: float) -> str:
+    """``value`` written as ``before`` is: its thousands separators ("1,200,000") and at
+    least its places after the point ("2.75" -> "2.50"), more when the value needs them."""
+    places = len(before.partition(".")[2])
+    own = f"{round(value, 6):f}".rstrip("0").partition(".")[2]
+    return f"{round(value, 6):{',' if ',' in before else ''}.{max(places, len(own))}f}"
+
+
 def _fix(
     sec: Section, said: str, before: str, value: float, heading: bool = False
 ) -> dict[str, str] | None:
     if _number_at((sec.heading if heading else sec.body_md) or "", said) is None:
         return None
-    # A number written with thousands separators ("1,200,000") is set the same way.
-    shown = f"{int(value):,}" if "," in before and value == int(value) else _n(value)
-    fix = {"section": sec.section_key, "said": said, "before": before, "value": shown}
+    fix = {
+        "section": sec.section_key,
+        "said": said,
+        "before": before,
+        "value": _like(before, value),
+    }
     return fix | {"part": "heading"} if heading else fix
 
 

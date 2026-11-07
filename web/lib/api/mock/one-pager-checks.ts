@@ -397,11 +397,17 @@ export function asWritten(old: string, value: string): string {
   return old[0] === old[0].toUpperCase() ? word[0].toUpperCase() + word.slice(1) : word;
 }
 
+/** one_pager_checks._like: `value` written as `before` is: its thousands separators ("1,200,000") and at least its places after the point ("2.75" -> "2.50"), more when the value needs them. */
+function like(before: string, value: number): string {
+  const v = Number(value.toFixed(6));
+  const places = Math.max(before.split(".")[1]?.length ?? 0, v.toFixed(6).replace(/0+$/, "").split(".")[1]?.length ?? 0);
+  return before.includes(",") ? v.toLocaleString("en-US", { minimumFractionDigits: places, maximumFractionDigits: places }) : v.toFixed(places);
+}
+
 /** one_pager_checks._fix: a numbers item's fix (its document_id filled by the read); `heading`: the number is in the section's heading (part "heading"). */
 function fixOf(s: Sec, said: string, before: string, value: number, heading = false): Look["fix"] {
   if (!numberAt(heading ? s.heading : s.body, said)) return null;
-  // A number written with thousands separators ("1,200,000") is set the same way.
-  const shown = before.includes(",") && Number.isInteger(value) ? value.toLocaleString("en-US") : String(value);
+  const shown = like(before, value);
   return { action: "set_section_number", target: { document_id: "", section: s.key, said, ...(heading ? { part: "heading" } : {}) }, before, value: shown, words: `Use ${shown}`, proposal: null };
 }
 
