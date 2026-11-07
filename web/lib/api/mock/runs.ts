@@ -16,7 +16,7 @@ import { fileItems } from "./checkpoint-review";
 import { agentQuestionsOut, seedAgentQuestions, type StoredAgentQuestion } from "./agent-questions";
 import { readableRefusal } from "./refusal";
 import { mockNowMs } from "./clock";
-import { answerCode, applySuggestion, titled, latestScope, problemRef, REF_MARK, prepareScope, recheck as recheckScope, routeScopes, SCOPE_EDIT_FIELDS, scopeEdits, scopeSendBack, type StoredScope } from "./scope";
+import { answerCode, applySuggestion, latestScope, problemRef, REF_MARK, prepareScope, recheck as recheckScope, routeScopes, SCOPE_EDIT_FIELDS, scopeEdits, scopeSendBack, type StoredScope } from "./scope";
 
 type RunOut = Schemas["RunOut"];
 type SegmentOut = Schemas["SegmentOut"];
@@ -754,6 +754,51 @@ function waivable(kind: string, code: string): boolean {
   return false;
 }
 
+
+// As oracle.runs.gate._LETTERS: a key's letters spelt out (ASCII and the Latin letters), never \w,
+// so a message splits here as the API splits it.
+const LETTERS = "A-Za-z0-9_\\u00c0-\\u00d6\\u00d8-\\u00f6\\u00f8-\\u024f";
+const GATE_TOKEN = new RegExp(
+  `(?<![${LETTERS}-])(?:(requirement key|requirement|goal) )?(?<![${LETTERS}-])(#[0-9]+|[${LETTERS}][${LETTERS}.]*(?:-[${LETTERS}.]+)*)(?![${LETTERS}-])`,
+  "g",
+);
+// As oracle.runs.gate._CODE: a key that is itself a code ("G-B"), shown beside its name.
+const GATE_CODE = /^(?:[A-Z][A-Z0-9]*(?:[-.][A-Z0-9]+)+[a-j]?|[A-Z]{1,4}\d+)$/;
+const keyWords = (key: string) => {
+  const words = key.replace(/[-_]+/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
+/**
+ * As oracle.runs.gate._titled: a C6 problem's message as people read it. A feature's key reads
+ * as its title (else the key in words), a requirement (quoted) and a goal by its name with its
+ * key beside it when that is a code, and a row the agents left unkeyed ("#2") as its number; an
+ * ordinary word shaped like a key ("follow-up") stays as written.
+ */
+function gateLabel(
+  message: string,
+  titles: Record<string, string>,
+  keys: string[],
+  requirements: Record<string, string> = {},
+  goals: Record<string, string> = {},
+): string {
+  if (!message) return message;
+  const features = new Set([...Object.keys(titles), ...keys, ...[...message.matchAll(/\bdepends on (\S+?)(?=,|\s|$)/g)].map((m) => m[1])]);
+  const text = message.replace(GATE_TOKEN, (whole, kind: string | undefined, t: string) => {
+    const lead = kind ? `${kind} ` : "";
+    if (t.startsWith("#")) return lead + t.slice(1);
+    const own = kind ? (kind === "goal" ? goals : requirements) : {};
+    if (Object.hasOwn(own, t)) {
+      const name = own[t] || keyWords(t);
+      const shown = GATE_CODE.test(t) && name !== t ? `${name} (${t})` : name;
+      return lead + (kind === "goal" ? shown : `"${shown}"`);
+    }
+    if (features.has(t) && /^[\p{Ll}\p{Nd}]/u.test(t)) return lead + (titles[t] || keyWords(t));
+    return whole;
+  });
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 /** As oracle.runs.gate.BLOCKING_SOURCES: each kind's stored blocking reasons and file-level problems. */
 export type GateReason = Pick<ItemReason, "item" | "item_title" | "code" | "severity" | "label"> & { fixes?: ItemReason["fixes"]; ref?: string };
 
@@ -769,12 +814,22 @@ function blockingOf(cp: CheckpointOut, live?: GateReason[]): { reasons: GateReas
   if (check === undefined) return null;
   const problems = (check?.problems ?? []).filter((p) => p.blocking !== false);
   const fileLevel = (p: (typeof problems)[number]) => !p.feature || (cp.kind === "feature_set" && FEATURE_SET_FILE_PROBLEMS.includes(p.code));
+  // As oracle.runs.gate._problems: every feature of the file has a title or a problem of its own.
+  const keys = (check?.problems ?? []).flatMap((p) => (p.feature ? [p.feature] : []));
   const reasons = problems
     .filter((p) => !fileLevel(p))
     .map((p): GateReason => {
       // As oracle.runs.gate._problems: a C6 problem's feature by its title (C8's check has none).
-      const titles = (check as FeatureSetCheck | null)?.titles;
-      return { item: p.feature!, item_title: titles?.[p.feature!] ?? null, code: p.code, ref: problemRef(p), severity: "blocking", label: titled(p.message, titles) };
+      const fs = check as FeatureSetCheck | null;
+      const titles = fs?.titles ?? {};
+      return {
+        item: p.feature!,
+        item_title: titles[p.feature!] ?? null,
+        code: p.code,
+        ref: problemRef(p),
+        severity: "blocking",
+        label: gateLabel(p.message, titles, keys, fs?.requirement_names, fs?.goal_names),
+      };
     });
   return { reasons, files: problems.filter(fileLevel).length };
 }
@@ -1212,7 +1267,12 @@ function featureSetYaml(spec: FeatureSetSpec, document: string | null | undefine
 }
 
 /** The counts of a set's check, with the problems and flags given. */
-function checkOf(spec: FeatureSetSpec, problems: FeatureSetCheck["problems"] = [], flags: FeatureSetCheck["flags"] = {}): FeatureSetCheck {
+function checkOf(
+  spec: FeatureSetSpec,
+  problems: FeatureSetCheck["problems"] = [],
+  flags: FeatureSetCheck["flags"] = {},
+  names: Pick<FeatureSetCheck, "requirement_names" | "goal_names"> = { requirement_names: {}, goal_names: {} },
+): FeatureSetCheck {
   return {
     features: spec.features.length,
     requirements: spec.features.reduce((n, f) => n + f.requirements.length, 0),
@@ -1220,6 +1280,7 @@ function checkOf(spec: FeatureSetSpec, problems: FeatureSetCheck["problems"] = [
     problems,
     flags,
     titles: Object.fromEntries(spec.features.map((f) => [f.key, f.title])),
+    ...names,
   };
 }
 
@@ -3021,7 +3082,7 @@ Returning buyers pick a saved address at checkout instead of typing it again.
  * waiting at its feature set, whose check found one blocking problem (bulk-address-edit
  * depends on a feature left out) and two flags, so Approve is refused until it is sent back.
  */
-export function seedFeatureSetRun(db: RunsDb, ctx: Omit<RunsContext, "db">, twoOfOne = false): RunOut {
+export function seedFeatureSetRun(db: RunsDb, ctx: Omit<RunsContext, "db">, twoOfOne = false, named = false): RunOut {
   const { from, now } = seedClock();
   // Its own runs list, so the ticks below move this run only.
   const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}) };
@@ -3058,9 +3119,27 @@ export function seedFeatureSetRun(db: RunsDb, ctx: Omit<RunsContext, "db">, twoO
             },
           ]
         : []),
+      // "feature-set-names": problems naming a requirement, a goal and a feature whose key holds a non-ASCII letter.
+      ...(named
+        ? [
+            {
+              code: "unknown_requirement",
+              blocking: true,
+              feature: "saved-addresses",
+              requirement: "saved-addresses-pick",
+              message: "requirement saved-addresses-pick of saved-addresses is neither a Ground Truth requirement nor one this run proposed",
+            },
+            { code: "unknown_goal", blocking: true, feature: "saved-addresses", requirement: null, message: "saved-addresses: goal retention-rate is not a confirmed goal" },
+            { code: "unknown_dependency", blocking: true, feature: "address-labels", requirement: null, message: "address-labels needs café-pickup, which is not in the feature set or the Ground Truth" },
+          ]
+        : []),
     ],
     { "bulk-address-edit": ["serves_no_goal", "low_confidence"], "saved-addresses": ["new_feature"] },
+    named
+      ? { requirement_names: { "saved-addresses-pick": "The buyer picks one of up to five saved addresses" }, goal_names: { "retention-rate": "Retention rate" } }
+      : undefined,
   );
+  if (named) check.titles["café-pickup"] = "Café pickup";
   featureSet.feature_set_check = check;
   featureSet.artifacts = ["design.md", "feature_set.yaml"];
   db.artifacts[`${r.id}|${featureSet.seq}|feature_set.yaml`] = featureSetYaml(SAVED_ADDRESSES, r.document_slug, featureSet.name, 1);
@@ -4679,6 +4758,8 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
       if (a.kind === "edit" && !SCOPE_EDIT_FIELDS.includes(a.field ?? "")) return fail(422, `field: one of ${SCOPE_EDIT_FIELDS.join(", ")}`);
     }
     if (a.kind === "waive") {
+      // As oracle.runs.actions._waive_reason: a roadmap item's or a feature's waiver carries its reason.
+      if ((cp.kind === "roadmap_items" || cp.kind === "feature_set") && !(a.value as { reason?: string } | null)?.reason?.trim()) return fail(422, "waive needs a reason");
       // D3: never a date or the whole file; the approver's alone (a commenter cannot suggest one).
       if (a.item_key === "*") return fail(422, FILE_NOT_WAIVED);
       if (cp.kind === "priority_order") return fail(422, "a priority order checkpoint takes no item actions");
