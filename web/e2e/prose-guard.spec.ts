@@ -190,17 +190,32 @@ const ceilings: Ceilings = fs.existsSync(CEILINGS_FILE) ? JSON.parse(fs.readFile
 
 /**
  * The ceilings on the merge base (with origin/main, or PROSE_BASE), or an error saying why
- * they could not be read. A merge base without the file has no ceilings yet.
+ * they could not be read. A merge base without the file has no ceilings yet. A checkout of
+ * one commit (CI's, a lane's) has no origin/main or none of its history: the spec fetches
+ * main, with the history a merge base needs, once and tries again.
  */
 function baseCeilings(): Ceilings | string {
   const git = (...args: string[]) => execFileSync("git", args, { cwd: __dirname, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   const ref = process.env.PROSE_BASE || "origin/main";
-  let base: string;
-  try {
-    base = git("merge-base", "HEAD", ref);
-  } catch {
-    return `no merge base with ${ref}: run git fetch origin main (or set PROSE_BASE to the branch the PR goes into)`;
+  const mergeBase = () => {
+    try {
+      return git("merge-base", "HEAD", ref);
+    } catch {
+      return null;
+    }
+  };
+  let base = mergeBase();
+  // Each worker loads this file: one that loses the race for the fetch's lock tries again.
+  for (let i = 0; !base && !process.env.PROSE_BASE && i < 3; i++) {
+    try {
+      const shallow = git("rev-parse", "--is-shallow-repository") === "true";
+      git("fetch", "--quiet", "--no-tags", ...(shallow ? ["--unshallow"] : []), "origin", "+refs/heads/main:refs/remotes/origin/main");
+    } catch {
+      // Another worker's fetch holds the lock, or there is no network: the merge base says which.
+    }
+    base = mergeBase();
   }
+  if (!base) return `no merge base with ${ref}: run git fetch origin main (or set PROSE_BASE to the branch the PR goes into)`;
   try {
     return JSON.parse(git("show", `${base}:web/e2e/prose-ceilings.json`));
   } catch {

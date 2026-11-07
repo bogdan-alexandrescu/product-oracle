@@ -6,13 +6,13 @@ import { expect, test, type Locator, type Page } from "./test";
  * hotfix-2: moving a roadmap item whose dates come from a date source is accepted. In the
  * "simple-dated-move" scenario (invented data), Alert replay engine came from the Usage alerts
  * PRD dated only by engineering's end, Apr 2, 2027: the item stores that end, and the roadmap
- * shows a start its effort before it (Mar 5). A move sends the dates the roadmap shows as its
+ * shows a start its effort before it (Mar 6). A move sends the dates the roadmap shows as its
  * `before`; it sent the stored ones (none, as engineering's), so every move was refused
  * "Changed since you saw it", also right after a reload.
  *
  * protects = dragging that bar earlier, or moving it with the arrow keys, is accepted, with no
  * refusal, and the new dates show as the item's own, also after a reload; fails_when = the move
- * is refused or the bar snaps back to Mar 5 - Apr 2; no_claim = the API's check
+ * is refused or the bar snaps back to Mar 6 - Apr 2; no_claim = the API's check
  * (api/tests/test_approved_prd_roadmap_api.py).
  */
 
@@ -28,7 +28,7 @@ async function open(page: Page) {
   await page.getByTestId("format-gantt").click();
   const b = bar(page, "alert-replay");
   await b.scrollIntoViewIfNeeded();
-  await expect(b).toHaveAttribute("data-start", "2027-03-05");
+  await expect(b).toHaveAttribute("data-start", "2027-03-06");
   await expect(b).toHaveAttribute("data-end", "2027-04-02");
   return b;
 }
@@ -66,6 +66,6 @@ test("moving it with the arrow keys is accepted, also right after a reload", asy
   await page.waitForTimeout(1200);
   await expect(page.getByText(/^Moved 'Alert replay engine' to /)).toBeVisible();
   await expect(refused(page)).toHaveCount(0);
-  await expect(b).toHaveAttribute("data-start", "2027-02-26");
+  await expect(b).toHaveAttribute("data-start", "2027-02-27");
   await expect(b).toHaveAttribute("data-end", "2027-03-26");
 });

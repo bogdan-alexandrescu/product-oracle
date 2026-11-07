@@ -86,10 +86,15 @@ async def test_a_stale_reason_names_a_hidden_decision_only_to_who_may_see_it(
     assert resp.status_code == 200, resp.text
     (item,) = [i for i in resp.json()["items"] if i["item_key"] == "shipping-step"]
     assert item["freshness"] == "potentially_stale"
-    assert "requirement:saved-cards changed" in item["stale_reasons"]
-    assert (f"decision:{key}" in resp.text) is sees, who
-    if not sees:
-        assert "a linked Ground Truth item changed" in item["stale_reasons"]
+    # In words, never by ref; a lone Ground Truth item by its name (the stale-marks walk).
+    assert f"decision:{key}" not in resp.text, who
+    if sees:
+        assert item["stale_reasons"] == ["A decision and a requirement changed"], who
+    else:
+        assert item["stale_reasons"] == [
+            "a linked Ground Truth item changed",
+            'The requirement "Saved cards" changed',
+        ], who
     stale = [a for a in await alerts_of(client, me) if a["kind"] == "stale"]
     assert len(stale) == 1
     detail = stale[0]["detail"]
@@ -97,7 +102,9 @@ async def test_a_stale_reason_names_a_hidden_decision_only_to_who_may_see_it(
     if sees:
         assert detail == "A decision and a requirement changed", (who, detail)
     else:
-        assert detail == "a linked Ground Truth item changed; a requirement changed", (who, detail)
+        assert (
+            detail == 'a linked Ground Truth item changed; The requirement "Saved cards" changed'
+        ), (who, detail)
     overview = await client.get(f"/v1/tracks/{track['id']}", headers=me)
     assert overview.status_code == 200
     # The track's alerts read in words for everyone; only who may see it learns a decision changed.
@@ -156,7 +163,9 @@ async def test_a_stale_alert_never_splits_a_hidden_title(client, ctx, runtime, w
     if sees:
         assert f"{SPLIT_TITLE} changed" in detail, (who, detail)
     else:
-        assert detail == "a linked Ground Truth item changed; a requirement changed", (who, detail)
+        assert (
+            detail == 'a linked Ground Truth item changed; The requirement "Saved cards" changed'
+        ), (who, detail)
     inbox = await client.get("/v1/inbox", headers=me)
     overview = await client.get(f"/v1/tracks/{track['id']}", headers=me)
     assert inbox.status_code == 200 and overview.status_code == 200
@@ -181,7 +190,9 @@ async def test_an_old_stale_alert_line_reads_as_before(client, ctx, runtime, who
     if sees:
         assert detail == "A decision and a requirement changed", (who, detail)
     else:
-        assert detail == "a linked Ground Truth item changed; a requirement changed", (who, detail)
+        assert (
+            detail == 'a linked Ground Truth item changed; The requirement "Saved cards" changed'
+        ), (who, detail)
     async with tenant_session(ctx.tenant_id) as s:
         await s.execute(
             update(Decision)

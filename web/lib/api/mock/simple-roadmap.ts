@@ -22,7 +22,7 @@ import type { OnePagerDb } from "./simple-one-pager";
 import { appliedMilestones, type AppliedRecord } from "./approved-roadmap";
 import { PLAN_PRD_SLUG, planMilestones, planSlices, planSpan, type PlanDb } from "./simple-plan";
 import { COMPANY_SLUG, COMPANY_TITLE } from "./one-roadmap";
-import { estimates } from "./simple-priorities";
+import { startEffort } from "./simple-priorities";
 import { basePlan as fitBasePlan, PLAN_TARGET as FIT_PLAN_TARGET, schedule as fitSchedule } from "./fit-date-engine";
 
 type Item = Schemas["SimpleRoadmapItem"];
@@ -66,7 +66,8 @@ interface SeedItem {
   /** Its own milestone (RoadmapItem.milestone): its day from the horizon's start, null when it has no date.
    * build-feature-panel review 2: `engine` is what the date engine stored besides the name and
    * day (its date_source, basis_ids...), never shown; a null name reads "Milestone". */
-  milestone?: { name: string | null; day: number | null; engine?: Record<string, unknown> };
+  /** item-milestone: `id`, a goal milestone of its roadmap picked in its panel (no day). */
+  milestone?: { name: string | null; day: number | null; engine?: Record<string, unknown>; id?: string };
   /** The track milestone record naming the item (its name), whatever its own text says. */
   record?: string;
   /** The roadmap item's validation gates (days from the window's start); one naming a
@@ -367,6 +368,8 @@ export function goalRank(key: string): number {
   const n = companyGoals.findIndex((g) => g.key === key);
   return n < 0 ? Number.MAX_SAFE_INTEGER : n;
 }
+/** goal-order: how goal groups sort: the one goal order, then by key (the goal-suggestions list sorts so too). */
+export const goalOrderKey = (key: string): string => `0${String(goalRank(key)).padStart(16, "0")}${key}`;
 /** A goal's position (by key), null when unset or unknown. */
 export function goalPositionOf(key: string): number | null {
   const g = companyGoals.find((x) => x.key === key);
@@ -820,12 +823,13 @@ export function ownDates(db: SimpleDb, s: SeedItem): SimpleDb["own"][string] | u
 }
 
 /**
- * dates.lead_days (hotfix-effort-start): an estimated start lies the item's effort as Priorities
- * reads it (weeks x 7 calendar days) before a given end, else 28 days.
+ * dates.lead_days (hotfix-effort-start): the days of an estimated span to a given end, its end
+ * included: the item's effort as Priorities reads it (weeks x 7 calendar days, at least 1), else
+ * 28 days (a feature with no effort, as service.efforts reads none), as a suggestion spans its days.
  */
 function leadDays(db: SimpleDb, s: SeedItem): number {
-  const weeks = estimates(db, s.key, db.ids[s.key] ?? stableUuid(`simple-item/${s.key}`)).effort;
-  return weeks && weeks > 0 ? Math.floor(weeks * 7 + 0.5) : 28;
+  const weeks = startEffort(db, s.key, db.ids[s.key] ?? stableUuid(`simple-item/${s.key}`));
+  return weeks && weeks > 0 ? Math.max(1, Math.floor(weeks * 7 + 0.5)) : 28;
 }
 
 function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated; end: Dated } {
@@ -837,12 +841,12 @@ function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated
   if (s.dates) {
     const end: Dated = { date: s.dates.end, source: s.dates.source, estimated: false };
     if (s.dates.start) return { start: { date: s.dates.start, source: s.dates.source, estimated: false }, end };
-    return { start: { date: addDays(end.date, -leadDays(db, s)), source: "estimated", estimated: true }, end };
+    return { start: { date: addDays(end.date, 1 - leadDays(db, s)), source: "estimated", estimated: true }, end };
   }
   const end: Dated = s.end !== undefined && s.source ? { date: addDays(w[0], s.end), source: s.source, estimated: false } : { date: w[1], source: "estimated", estimated: true };
   let start: Dated = { date: w[0], source: "estimated", estimated: true };
   if (s.start !== undefined && s.source) start = { date: addDays(w[0], s.start), source: s.source, estimated: false };
-  else if (!end.estimated) start = { date: addDays(end.date, -leadDays(db, s)), source: "estimated", estimated: true };
+  else if (!end.estimated) start = { date: addDays(end.date, 1 - leadDays(db, s)), source: "estimated", estimated: true };
   return { start, end };
 }
 
@@ -919,8 +923,13 @@ export function knowGoalMapItems(db: SimpleDb | undefined, items: { key: string;
 }
 
 /** hotfix-2 ("simple-dated-move"): an Alerts PRD item dated only by its date source (engineering's
- * end, no start), as approving the PRD stores it on the draft; its start is estimated. */
+ * end, no start), as approving the PRD stores it on the draft; its start is estimated. Two more
+ * such items whose features have no effort (a 28-day span), the second after Alert replay engine. */
 export function dateSourceItem(db: SimpleDb): void {
+  for (const [key, title, end, depends] of [["alert-archive", "Alert archive", "2027-03-19", []], ["alert-sounds", "Alert sound picker", "2027-04-16", ["alert-replay"]]] as const) {
+    db.items.push({ key, title, horizon: horizonOf(end), roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", from_prd: { slug: "usage-alerts", title: "Usage alerts" }, dates: { start: null, end, source: "engineering" }, depends: [...depends] });
+    db.ids[key] = stableUuid(`simple-item/${key}`);
+  }
   const end = "2027-04-02";
   db.items.push({ key: "alert-replay", title: "Alert replay engine", horizon: horizonOf(end), roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", from_prd: { slug: "usage-alerts", title: "Usage alerts" }, dates: { start: null, end, source: "engineering" } });
   db.ids["alert-replay"] = stableUuid("simple-item/alert-replay");
@@ -1322,8 +1331,9 @@ export function draftChanges(db: SimpleDb, id: string): number {
 
 /** Who sees a draft in the mock: owners, its people, the roadmap's decider and its required reviewers. */
 export function seesDraft(d: MockDraft, me: { id: string; role: Role }, db?: SimpleDb): boolean {
-  // drafts.sees: whoever it waits on and its roadmap's required reviewers read it too.
-  return me.role === "owner" || d.out.created_by === me.id || d.out.participant_ids.includes(me.id) || db?.deciders?.[d.roadmap] === me.id || (d.out.waiting_on ?? []).includes(me.id) || (db?.reviewers?.[d.roadmap] ?? []).includes(me.id);
+  // drafts.sees: whoever it waits on, its roadmap's required reviewers and the owners of its roadmap's tracks read it too.
+  const ownsTrack = !!db?.items.some((s) => s.roadmap === d.roadmap && !!s.track && db.track_owners?.[s.track] === me.id);
+  return me.role === "owner" || d.out.created_by === me.id || d.out.participant_ids.includes(me.id) || db?.deciders?.[d.roadmap] === me.id || (d.out.waiting_on ?? []).includes(me.id) || (db?.reviewers?.[d.roadmap] ?? []).includes(me.id) || ownsTrack;
 }
 
 /** The roadmap as one reader reads it: hidden drafts' roadmaps at their published items. */
@@ -1357,6 +1367,12 @@ function readerView(db: SimpleDb, me: { id: string; role: Role }): { db: SimpleD
  * change's stale check and a fix's plan read them, so a commenter acts on what they see. */
 export function readerDb(db: SimpleDb, me: { id: string; role: Role }): SimpleDb {
   return readerView(db, me).db;
+}
+
+/** item-milestone: a picked goal milestone's code and name as the read shows them (service.build), else as stored. */
+export function pickedName(db: Pick<SimpleDb, "goal_milestones">, m: { id?: string; name: string | null }): string | null {
+  const gm = (db.goal_milestones ?? []).find((x) => x.id === m.id);
+  return gm ? `${gm.code} ${gm.name}` : m.name;
 }
 
 export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Who): Schemas["SimpleRoadmapOut"] | null {
@@ -1412,10 +1428,11 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     const gone = trashedParent(s);
     return [...(gone ? [partRef(gone, true)] : []), ...ancestorsOf(s).reverse().map((a) => partRef(a))];
   };
-  // additions.item_extras: merged_into's code falls back to the key; a part's is its display code or "".
-  const ref = (k: string, key = true) => {
-    const x = db.items.find((y) => y.key === k);
-    return { id: db.ids[k], code: (x && prdCode(x.section)) ?? (key ? k : ""), title: x?.title ?? k };
+  // additions.item_extras: merged_into's code falls back to the kept item's name, never its key; a part's is its display code or "".
+  // A kept item in Trash or gone reads "a deleted feature", its id and code empty.
+  const ref = (k: string) => {
+    const x = db.items.find((y) => y.key === k && !y.trashed);
+    return x ? { id: db.ids[k], code: prdCode(x.section) || x.title, title: x.title } : { id: "", code: "", title: "a deleted feature" };
   };
   // The plan-model lane: the plan PRD's items whose code is a plan feature carry its slices.
   const slices = db.plan ? planSlices() : [];
@@ -1425,6 +1442,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   };
   // trash-features-goals: a goal in Trash is left out of every item's goal (service.load's goal_ids).
   const inTrash = (k: string) => goalInTrash(reader.full, k);
+  const linked = (s: SeedItem): string | undefined => [...(s.goal ? [s.goal] : []), ...(s.goals ?? [])].find((k) => !inTrash(k));
   // roadmap-edit-fixes: a dependency names an item by its key, else by its code or feature key.
   const depOf = (k: string) => (all.has(k) ? k : dependencyOf(seeds, k)?.key);
   const items: Item[] = seeds.map((s) => {
@@ -1440,7 +1458,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       code: (s.feature_id && db.feature_codes?.[s.feature_id]) || code,
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: ROADMAP_DOC_SLUG[s.roadmap] ?? s.roadmap, title: rm.title },
       prd: ownPrd(s),
-      goal: s.goal && !inTrash(s.goal) ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, ...roadmapGoal(reader.full, s.goal), position: goalPositionOf(s.goal), ...READINGS[s.goal] } : s.map_goal ? mapGoalRef(reader.full, s.map_goal) : (reader.full.map_goals?.[db.ids[s.key]] ?? null),
+      // service.load: the first goal it is linked to directly (goal_ids) that is not in Trash, else its Goal map goal.
+      goal: linked(s) ? { id: stableUuid(`simple-goal/${linked(s)}`), key: linked(s)!, ...roadmapGoal(reader.full, linked(s)!), position: goalPositionOf(linked(s)!), ...READINGS[linked(s)!] } : s.map_goal ? mapGoalRef(reader.full, s.map_goal) : (reader.full.map_goals?.[db.ids[s.key]] ?? null),
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
       confidence: s.confidence ?? null,
       status: s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned"),
@@ -1453,7 +1472,10 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       suggestion: suggestion ? { ...suggestion, can_decide: decides(s) } : null,
       // service._milestone: its own dated milestone (set_milestone writes it, as typed in its
       // panel; null: cleared), else the track's record, else its own undated one.
-      milestone: s.milestone?.day != null
+      // item-milestone: a goal milestone picked in its panel, read by id with its live code and name.
+      milestone: s.milestone?.id
+        ? { id: s.milestone.id, name: pickedName(db, s.milestone), date: null, source: "item", ...recordOf(s) }
+        : s.milestone?.day != null
         ? { name: s.milestone.name, date: addDays(w[s.horizon][0], s.milestone.day), source: "item", ...recordOf(s) }
         : s.milestone && !s.record
           ? { name: s.milestone.name, date: null, source: "item" }
@@ -1486,8 +1508,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       parent_key: s.parent ?? null,
       part_of: pathOf(s).at(-1) ?? null,
       part_path: pathOf(s),
-      // Open parts, then cut ones (below the line); never a merged one.
-      parts: [...seeds.filter((x) => x.parent === s.key && !closed(x)), ...seeds.filter((x) => x.parent === s.key && !x.merged_into && x.status === "cut")].map((x) => partRef(x)),
+      // additions._parts: in roadmap order, open and cut mixed; never a merged one.
+      parts: seeds.filter((x) => x.parent === s.key && !x.merged_into).map((x) => partRef(x)),
       drafting: !!s.drafting_until,
       flow: s.draft ? (s.flow ?? null) : (flowFor(db.visuals, "feature", db.ids[s.key]) ?? betFlow(db, s)),
       goal_ids: goalIdsOf(s),
@@ -1538,7 +1560,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     const sort = !ref
       ? "1"
       : "key" in ref
-        ? `0${String(goalRank(String(ref.key))).padStart(16, "0")}${ref.key}`
+        ? goalOrderKey(String(ref.key))
         : group === "prd"
           ? `0${String(prdRank(ref)).padStart(16, "0")}${ref.title}`
           : `0${ref.title}`;
