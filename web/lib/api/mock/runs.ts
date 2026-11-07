@@ -1530,16 +1530,26 @@ function decideOrder(ctx: Pick<RunsContext, "db" | "now" | "documents" | "accept
 }
 
 type OrderProblem = PriorityCheck["problems"][number] & { stale_goal?: string };
-/** As run_order._is_stale: a problem stale_goals added (marked), or one stored before the mark. */
-const isStale = (p: OrderProblem) => !!p.stale_goal || p.message.includes("after the order was checked");
+/** As run_order._OLD_WORDS: a goal problem stored before the goal's name was said, by its key. */
+const OLD_GOAL_WORDS = /^.* names the goal (\S+), which is not a goal (?:in|of) the baseline\b/;
+/** As run_order._old_goal: the goal key an unknown_goal problem in the old words names. */
+const oldGoal = (p: OrderProblem) => (p.code === "unknown_goal" ? (p.message.match(OLD_GOAL_WORDS)?.[1] ?? null) : null);
+/** As run_order._is_stale: a problem stale_goals added (marked), one stored before the mark, or one in the old words. */
+const isStale = (p: OrderProblem) => !!p.stale_goal || p.message.includes("after the order was checked") || oldGoal(p) !== null;
+/** As run_order._stale_key: a stale problem's feature and goal key, when it names one. */
+const staleKey = (p: OrderProblem) => {
+  const goal = p.stale_goal ?? oldGoal(p);
+  return goal ? `${p.feature ?? ""}|${goal}` : null;
+};
 
 /**
  * As oracle.priorities.run_order.recheck_goals (api runs.service._recheck_order_goals): each goal
  * an order's new feature serves that is no goal of the Ground Truth now is a blocking unknown_goal
  * on the order's check, named by its last known name (never its key); one whose goal is back
  * (restored, confirmed again) is dropped. `add` (Approve order): a newly stale goal is added; a
- * read (the band, the gate, the Inbox) only drops what no longer holds. Returns the stale-goal
- * problems open now.
+ * read (the band, the gate, the Inbox) only drops what no longer holds, keeping a problem by its
+ * words or by its feature and goal (one in older words is said again in today's). Returns the
+ * stale-goal problems open now.
  */
 function recheckOrderGoals(ctx: Pick<RunsContext, "db" | "goalKeys" | "goalTitle">, cp: CheckpointOut, add = true): PriorityCheck["problems"] {
   const goals = goalSet(ctx);
@@ -1549,6 +1559,7 @@ function recheckOrderGoals(ctx: Pick<RunsContext, "db" | "goalKeys" | "goalTitle
   const problems = check.problems as OrderProblem[];
   const kept = problems.filter((p) => !isStale(p));
   const before = new Set(problems.filter(isStale).map((p) => p.message));
+  const beforeGoals = new Set(problems.filter(isStale).flatMap((p) => staleKey(p) ?? []));
   const said = new Set(kept.map((x) => x.message));
   const stale: OrderProblem[] = [];
   for (const row of snap.ranking.filter((x) => x.new)) {
@@ -1560,7 +1571,7 @@ function recheckOrderGoals(ctx: Pick<RunsContext, "db" | "goalKeys" | "goalTitle
       const message = title
         ? `${row.title} serves the goal ${title}, which was rejected after the order was checked: the run must name a goal of the Ground Truth`
         : unknownGoalMessage(row.title, g.title && g.title !== key ? g.title : null);
-      if (said.has(message) || (!add && !before.has(message))) continue;
+      if (said.has(message) || (!add && !before.has(message) && !beforeGoals.has(`${row.key}|${key}`))) continue;
       said.add(message);
       stale.push({ code: "unknown_goal", blocking: true, feature: row.key, message, stale_goal: key });
     }

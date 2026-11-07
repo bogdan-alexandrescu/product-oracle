@@ -43,6 +43,7 @@ only. Moving and pinning rows is pick C9.
 """
 
 import json
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -678,10 +679,33 @@ def approve(snapshot: PrioritySnapshot, by: uuid.UUID | None, document_id: uuid.
 STALE_GOAL = "stale_goal"
 # How a stale-goal problem stored before the mark reads (a rejected goal, by its title).
 _STALE_TEXT = "after the order was checked"
+# How a goal problem stored before the goal's name was said reads: by the goal's key, "in" (or
+# "of") the baseline. Stale too, so a read or Approve order says it again in today's words.
+_OLD_WORDS = re.compile(
+    r"^.* names the goal (?P<goal>\S+), which is not a goal (?:in|of) the baseline\b"
+)
+
+
+def _old_goal(problem: dict[str, Any]) -> str | None:
+    """The goal key an unknown_goal problem in the old words names, or None."""
+    if problem.get("code") != "unknown_goal":
+        return None
+    found = _OLD_WORDS.match(str(problem.get("message") or ""))
+    return found["goal"] if found else None
 
 
 def _is_stale(problem: dict[str, Any]) -> bool:
-    return bool(problem.get(STALE_GOAL)) or _STALE_TEXT in str(problem.get("message") or "")
+    return (
+        bool(problem.get(STALE_GOAL))
+        or _STALE_TEXT in str(problem.get("message") or "")
+        or _old_goal(problem) is not None
+    )
+
+
+def _stale_key(problem: dict[str, Any]) -> tuple[Any, str] | None:
+    """A stale problem's feature and goal key, when it names one (its mark, or the old words)."""
+    goal = problem.get(STALE_GOAL) or _old_goal(problem)
+    return (problem.get("feature"), str(goal)) if goal else None
 
 
 async def stale_goals(
@@ -755,12 +779,18 @@ async def recheck_goals(
     """The order's check with its stale-goal problems (:func:`stale_goals`) as of now, and
     those problems. One whose goal is a goal of the Ground Truth again (restored, confirmed)
     is dropped; ``add``: one newly stale is added too (Approve order), else only what the
-    order already said is kept (a read: the band, the gate, the Inbox)."""
+    order already said is kept (a read: the band, the gate, the Inbox), by its words or by its
+    feature and goal: one stored in older words is said again in today's."""
     check = dict(snapshot.check_result or {})
     problems = list(check.get("problems") or [])
     kept = [p for p in problems if not _is_stale(p)]
     said = {p.get("message") for p in problems if _is_stale(p)}
-    stale = [p for p in await stale_goals(db, snapshot, kept) if add or p["message"] in said]
+    goals = {k for p in problems if _is_stale(p) and (k := _stale_key(p))}
+    stale = [
+        p
+        for p in await stale_goals(db, snapshot, kept)
+        if add or p["message"] in said or _stale_key(p) in goals
+    ]
     check["problems"] = [*kept, *stale]
     return check, stale
 
