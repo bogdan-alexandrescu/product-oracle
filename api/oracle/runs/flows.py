@@ -1730,6 +1730,9 @@ class PromptContext:
     baseline_reused: str | None = None
     # #260: a Baseline to PRD run's target goals, (key, title) in the order named.
     target_goals: list[tuple[str, str]] = field(default_factory=list)
+    # "Add it to a PRD": the Ground Truth features a Baseline to PRD run adds to its PRD,
+    # (key, title) in the order named.
+    target_features: list[tuple[str, str]] = field(default_factory=list)
     # G5: the agents' view of the discussions about this run
     # (oracle.discussions.agent_view), newest activity first.
     discussions: list[dict[str, Any]] = field(default_factory=list)
@@ -1745,6 +1748,15 @@ TARGET_GOALS_TASK = {
     "priority": "Weigh the target goals first when you rank.",
     "prd_draft": "The Goal trace section ({#goal-trace}) covers every target goal: what "
     "in this PRD moves it and how much, or that nothing does.",
+}
+
+
+# "Add it to a PRD": what each Baseline to PRD segment does with the features to add.
+TARGET_FEATURES_TASK = {
+    "baseline": "Propose and evidence each of them, beside what the PRD needs anyway.",
+    "feature_set": "Another PRD depends on them: keep each of them under features, with "
+    "the features it needs; leave one out, under excluded, only when this PRD cannot build "
+    "it, and say why.",
 }
 
 
@@ -1930,6 +1942,13 @@ def step_prompt(
             "Target goals: this PRD serves these confirmed goals.",
             *(f"- {key}: {title}" for key, title in ctx.target_goals),
             TARGET_GOALS_TASK[segment.name],
+            "",
+        ]
+    if ctx.target_features and segment.name in TARGET_FEATURES_TASK:
+        lines += [
+            "Features to add: add these Ground Truth features to this PRD.",
+            *(f"- {key}: {title}" for key, title in ctx.target_features),
+            TARGET_FEATURES_TASK[segment.name],
             "",
         ]
     if ctx.mcp_reachable:

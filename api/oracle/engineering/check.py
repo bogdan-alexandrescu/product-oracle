@@ -230,13 +230,16 @@ async def elsewhere(db: AsyncSession, run: Run) -> dict[str, str]:
     :func:`oracle.roadmap.company.features_on_roadmap`: the area PRDs drafted side by side
     see each other's approved scopes), named with their PRD, and the dependencies waived
     at this run's feature set stop (a staged waiver of a feature's ``depends_on_excluded``,
-    by its code or its ref: the excluded features it depends on). A Ground Truth feature in
-    no PRD is not among them (:func:`in_no_prd`)."""
+    by its code or its ref: the excluded features it depends on), and the features another
+    live run is adding to its PRD (:func:`being_added`). A Ground Truth feature in no PRD
+    is not among them (:func:`in_no_prd`)."""
     from oracle.roadmap import company
     from oracle.runs import feature_set, gate
     from oracle.runs.models import CheckpointAction
 
     out = {k: f.label for k, f in (await company.features_on_roadmap(db)).items()}
+    for key, label in (await being_added(db, run)).items():
+        out.setdefault(key, label)
     scope = await feature_set.approved_scope(db, run_id=run.id)
     if scope is None or scope.checkpoint_id is None:
         return out
@@ -260,6 +263,33 @@ async def elsewhere(db: AsyncSession, run: Run) -> dict[str, str]:
             for dep in i.depends_on or []:
                 if dep in left_out:
                     out.setdefault(dep, left_out[dep] or dep)
+    return out
+
+
+# The run statuses of a run that may still add a feature to its PRD: started, not stopped
+# and not finished (a finished run's approved scope says what it kept).
+ADDING = ("awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun")
+
+
+async def being_added(db: AsyncSession, run: Run) -> dict[str, str]:
+    """The Ground Truth features a live Ground Truth to PRD run other than ``run`` was
+    started to add to its PRD ("Add it to a PRD": its ``target_features``), each named with
+    that PRD: "Export logs (being added to Safety PRD)". A draft run (never started) or a
+    stopped one adds nothing: the feature is in no PRD again."""
+    from oracle.docs.models import Document
+    from oracle.roadmap.company import _slug_words
+
+    out: dict[str, str] = {}
+    rows = await db.execute(
+        select(Run.knobs, Document.title)
+        .outerjoin(Document, Document.id == Run.document_id)
+        .where(Run.flow == "baseline_to_prd", Run.status.in_(ADDING), Run.id != run.id)
+        .order_by(Run.created_at)
+    )
+    for knobs, title in rows:
+        prd = title or _slug_words((knobs or {}).get("document_slug")) or "a new"
+        for f in (knobs or {}).get("target_features") or []:
+            out.setdefault(f["key"], f"{f['title']} (being added to {prd} PRD)")
     return out
 
 

@@ -30264,6 +30264,8 @@ export interface components {
             reuse_baseline?: boolean | null;
             /** Goals */
             goals?: string[] | null;
+            /** Features */
+            features?: string[] | null;
             /** Reuse Draft Items */
             reuse_draft_items?: boolean | null;
         };
@@ -30290,6 +30292,11 @@ export interface components {
              * @default []
              */
             goals: components["schemas"]["TargetGoal"][];
+            /**
+             * Features
+             * @default []
+             */
+            features: components["schemas"]["TargetFeature"][];
             /** Reuse Draft Items */
             reuse_draft_items?: boolean | null;
         };
@@ -46063,6 +46070,21 @@ export interface components {
             /** Unavailable */
             unavailable?: components["schemas"]["UnavailableItem"][];
             source: components["schemas"]["SourceOut"];
+        };
+        /**
+         * TargetFeature
+         * @description A Ground Truth feature a PRD run adds to its PRD ("Add it to a PRD").
+         */
+        TargetFeature: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
         };
         /**
          * TargetGoal

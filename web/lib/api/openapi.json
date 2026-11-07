@@ -92877,6 +92877,21 @@
             ],
             "title": "Goals"
           },
+          "features": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Features"
+          },
           "reuse_draft_items": {
             "anyOf": [
               {
@@ -92947,6 +92962,14 @@
             },
             "type": "array",
             "title": "Goals",
+            "default": []
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/TargetFeature"
+            },
+            "type": "array",
+            "title": "Features",
             "default": []
           },
           "reuse_draft_items": {
@@ -136109,6 +136132,31 @@
           "source"
         ],
         "title": "SyncResult"
+      },
+      "TargetFeature": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title"
+        ],
+        "title": "TargetFeature",
+        "description": "A Ground Truth feature a PRD run adds to its PRD (\"Add it to a PRD\")."
       },
       "TargetGoal": {
         "properties": {
