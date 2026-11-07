@@ -141,3 +141,43 @@ async def test_the_review_screen_reasons_carry_the_gate_refs(client, owner, runt
         r["ref"]: r["answered"] for r in feature["reasons"] if r["code"] == "depends_on_excluded"
     }
     assert answered == {refs[0]: True, refs[1]: False}
+
+
+def _label(problem: dict, titles: dict[str, str]) -> str:
+    check = {"problems": [{"feature": "saved-addresses", **problem}], "titles": titles}
+    cp = Checkpoint(kind="feature_set", status="pending", payload={"feature_set_check": check})
+    shut = gate.approve_gate(cp, None, [])
+    assert shut is not None
+    [row] = shut.left
+    return row.label
+
+
+def test_a_gate_row_rewrites_feature_keys_only_never_a_key_like_word():
+    """An ordinary hyphenated word ("in-store", "follow-up") is not a feature key: it stays as
+    written, while the feature's key reads as its title."""
+    label = _label(
+        {
+            "code": "depends_on_excluded",
+            "message": "saved-addresses needs in-store pickup from the follow-up PRD",
+        },  # fmt: skip
+        {"saved-addresses": "Saved addresses"},
+    )
+    assert label == "Saved addresses needs in-store pickup from the follow-up PRD"
+
+
+def test_a_gate_row_reads_a_numbered_row_and_an_untitled_dependency():
+    """A row the agents left unkeyed ("#2") reads as its number; a feature key with no title
+    (a dependency the set does not hold) reads as words."""
+    label = _label(
+        {"code": "missing_field", "message": "requirement #2 of feature saved-addresses lacks key"},
+        {"saved-addresses": "Saved addresses"},
+    )
+    assert label == "Requirement 2 of feature Saved addresses lacks key"
+    label = _label(
+        {
+            "code": "depends_on_excluded",
+            "message": "saved-addresses depends on gift-notes, which is excluded",
+        },  # fmt: skip
+        {"saved-addresses": "Saved addresses"},
+    )
+    assert label == "Saved addresses depends on Gift notes, which is excluded"
