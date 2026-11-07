@@ -32,6 +32,8 @@ export interface ChangeOut {
   proposed_by: PersonRef | null;
   suggested_by: PersonRef | null;
   status: ChangeStatus;
+  /** The API's changes.is_open: listed under "Open changes"; the Inbox counts only these (waits_on). */
+  open: boolean;
   /** The kind's main action for the caller; null for viewers. */
   action: ChangeAction | null;
   can: { suggest: boolean; edit: boolean; withdraw: boolean; dismiss: boolean };
@@ -49,8 +51,8 @@ export interface ChangeOut {
 export type ChangeKindOut = { kind: string; verb: ChangeVerb; schema: Record<string, unknown> };
 export type ChangeResult = { change: ChangeOut; result: Record<string, unknown> | null };
 
-export const OPEN_STATUSES: ChangeStatus[] = ["proposed", "suggested"];
-export const isOpen = (c: ChangeOut) => OPEN_STATUSES.includes(c.status);
+/** An open change, by the API's one rule (changes.is_open, which the Inbox's count uses too). */
+export const isOpen = (c: ChangeOut) => c.open;
 
 /** Each kind as a person reads it in the "Propose a change" picker. */
 export const KIND_LABEL: Record<string, string> = {

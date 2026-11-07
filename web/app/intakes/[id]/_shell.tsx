@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
 import { DeleteDialog } from "@/components/ArtifactMenu";
+import { LinkedDiscussion } from "@/components/discuss/LinkedDiscussion";
 import { Button, Chip, confirmInPage, Icon, InfoTip, Notice, Page, PageHeader, Sheet, Split } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { Menu, TabBar } from "@/components/review/parts";
@@ -371,6 +372,7 @@ export function BeforeDrafting({ id }: { id: string }) {
           <div className="p-2">{inspector}</div>
         </Sheet>
       )}
+      <LinkedDiscussion />
     </Page>
   );
 }
