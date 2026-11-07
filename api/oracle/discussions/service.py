@@ -396,6 +396,8 @@ class Labels:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
         self.rows: dict[tuple[type, uuid.UUID], Any] = {}
+        #: The discussions whose subject row is missing (deleted): no page opens their thread.
+        self.missing: set[Any] = set()
 
     async def get(self, model: type, id_: Any) -> Any:
         key = (model, uuid.UUID(str(id_)))
@@ -407,7 +409,16 @@ class Labels:
         try:
             return await self._of(d)
         except (KeyError, ValueError):
-            return d.subject_kind.replace("_", " ").capitalize(), "/"
+            return self._lost(d, "/")
+
+    async def gone(self, d: Discussion) -> bool:
+        """Whether the discussion's subject was deleted (its row is missing), whatever its link."""
+        await self.of(d)
+        return d.id in self.missing
+
+    def _lost(self, d: Discussion, url: str) -> tuple[str, str]:
+        self.missing.add(d.id)
+        return d.subject_kind.replace("_", " ").capitalize(), url
 
     async def _of(self, d: Discussion) -> tuple[str, str]:
         from oracle.baseline.models import Conflict, Entity
@@ -419,11 +430,10 @@ class Labels:
         from oracle.v2.models import KnowledgeGap, ProductIntake
 
         s, kind = d.subject, d.subject_kind
-        gone = kind.replace("_", " ").capitalize()
         if kind in ("document", "section", "roadmap_item"):
             doc = await self.get(Document, s["document_id"])
             if doc is None:
-                return gone, "/"
+                return self._lost(d, "/")
             url = f"/documents/{doc.slug}/v/{s['version']}"
             if kind == "document":
                 return doc.title, url
@@ -443,7 +453,7 @@ class Labels:
             run = await self.get(Run, s["run_id"])
             cp = await self.get(Checkpoint, s["checkpoint_id"])
             if run is None:
-                return gone, "/runs"
+                return self._lost(d, "/runs")
             flow = flows.FLOWS.get(run.flow)
             cp_kind = cp.kind if cp is not None else s.get("checkpoint_kind", "")
             label = f"{flow.title if flow else run.flow} · {CHECKPOINT_LABEL.get(cp_kind, cp_kind)}"
@@ -452,23 +462,41 @@ class Labels:
             return label, f"/runs/{run.id}"
         if kind == "entity":
             entity = await self.get(Entity, s["entity_id"])
-            return (entity.title if entity else gone), "/ground-truth"
+            return (entity.title, "/ground-truth") if entity else self._lost(d, "/ground-truth")
         if kind == "conflict":
             conflict = await self.get(Conflict, s["conflict_id"])
-            return (f"Conflict on {conflict.field}" if conflict else gone), "/ground-truth"
+            if conflict is None:
+                return self._lost(d, "/ground-truth")
+            return f"Conflict on {conflict.field}", "/ground-truth"
+        # An intake and its gaps are shown on its own page (Before drafting); a gap of no intake
+        # is its PRD's, raised in review: its newest version. Both open the thread from the link.
         if kind == "intake":
             intake = await self.get(ProductIntake, s["intake_id"])
-            return (intake.title if intake else gone), f"/briefs/{s['intake_id']}"
+            if intake is None:
+                return self._lost(d, "/")
+            return intake.title, f"/intakes/{intake.id}"
         if kind == "gap":
             gap = await self.get(KnowledgeGap, s["gap_id"])
             if gap is None:
-                return gone, "/"
+                return self._lost(d, "/")
             category = categories.BY_KEY.get(gap.category)
             label = f"{category.label if category else gap.category} gap"
-            return label, f"/briefs/{gap.intake_id}" if gap.intake_id else "/"
+            if gap.intake_id is not None:
+                return label, f"/intakes/{gap.intake_id}"
+            doc = await self.get(Document, gap.document_id)
+            newest = doc and await self.db.scalar(
+                select(func.max(DocumentVersion.number)).where(
+                    DocumentVersion.document_id == doc.id
+                )
+            )
+            if not newest:
+                return self._lost(d, "/")
+            return label, f"/documents/{doc.slug}/v/{newest}"
         if kind == "track":
             track = await self.get(ProductTrack, s["track_id"])
-            label = track.title if track else gone
+            if track is None:
+                return self._lost(d, "/plan")
+            label = track.title
             return (f"{label} · {s['milestone']}" if s.get("milestone") else label), "/plan"
         if kind == "priorities":
             return "Priority order", "/priorities"

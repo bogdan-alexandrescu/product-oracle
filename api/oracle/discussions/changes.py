@@ -422,27 +422,27 @@ async def _supersede(
 
 #: The subjects whose page opens a thread from the Inbox's link (``?discussion=<id>&changes=1``)
 #: with its changes card in view: a document's version (and its items), a run (its sheet), and
-#: the Ground Truth (goals, conflicts), a brief (and its gaps), the plan (its tracks) and the
-#: priorities, each in a sheet (web: components/discuss/LinkedDiscussion).
+#: the Ground Truth (goals, conflicts), an intake's page (it and its gaps; a PRD's own gap: its
+#: version), the plan (its tracks) and the priorities, each in a sheet (web:
+#: components/discuss/LinkedDiscussion).
 THREAD_PAGES = (
     "document", "section", "roadmap_item", "checkpoint", "checkpoint_item",
     "entity", "conflict", "intake", "gap", "track", "priorities",
 )  # fmt: skip
 #: A screen discussion's page that opens it: a document's version (or a page under it), a run's
-#: own page (not its checkpoint reviews), the Ground Truth, a brief, the plan or the priorities.
+#: own page (not its checkpoint reviews), an intake's page, the Ground Truth, a
+#: tech brief, the plan or the priorities.
 THREAD_PATH = re.compile(
-    r"^/(documents/[^/?#]+/v/\d+(?:/[^?#]*)?|runs/[^/?#]+|ground-truth|briefs/[^/?#]+|plan"
-    r"|priorities)(?:[?#]|$)"
+    r"^/(documents/[^/?#]+/v/\d+(?:/[^?#]*)?|runs/[^/?#]+|intakes/[^/?#]+|ground-truth"
+    r"|briefs/[^/?#]+|plan|priorities)(?:[?#]|$)"
 )
-#: Where ``service.Labels`` links a discussion whose document, run or gap was deleted: no page
-#: there opens its thread, so its changes wait on no one.
-GONE_URLS = ("/", "/runs")
 
 
-def opens_thread(d: Discussion, url: str | None = None) -> bool:
+def opens_thread(d: Discussion, gone: bool = False) -> bool:
     """Whether the discussion's page opens its thread, and so its changes card, from a link.
-    ``url``: its link as ``service.Labels`` reads it; a deleted subject's opens nothing."""
-    if url is not None and url.partition("?")[0].partition("#")[0] in GONE_URLS:
+    ``gone``: its subject's row is missing (``service.Labels.gone``); a deleted subject's page
+    opens nothing."""
+    if gone:
         return False
     if d.subject_kind == "screen":
         return bool(THREAD_PATH.match(str((d.subject or {}).get("path") or "")))
@@ -459,13 +459,13 @@ def is_open(c: _Status) -> bool:
     return c.status in OPEN
 
 
-def waits_on(d: Discussion, c: _Status, participant: bool, url: str | None = None) -> bool:
+def waits_on(d: Discussion, c: _Status, participant: bool, gone: bool = False) -> bool:
     """The one rule for a change waiting on an approver: what the Inbox's "N changes proposed"
     counts and its Review changes lands on, an open change in the card's open list. Open
     (``is_open``) in an open discussion whose page opens the card (``opens_thread``); Oracle's
     proposals wait on its participants, people's suggestions on every approver of an open one
     (c6). A closed discussion's card offers no action until it is reopened."""
-    if d.status != "open" or not is_open(c) or not opens_thread(d, url):
+    if d.status != "open" or not is_open(c) or not opens_thread(d, gone):
         return False
     return participant or (d.visibility == "open" and c.status == "suggested")
 

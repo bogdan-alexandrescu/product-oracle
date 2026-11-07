@@ -278,8 +278,8 @@ async def rows(
         if did not in seen_ok:
             continue
         d, parts, seat = seen_ok[did]
-        _label, url = await labels.of(d)
-        waiting = [c for c in open_ if changes.waits_on(d, c, seat.participant, url)]
+        gone = await labels.gone(d)
+        waiting = [c for c in open_ if changes.waits_on(d, c, seat.participant, gone)]
         if not waiting:
             continue
         at = max(c.at for c in waiting)
