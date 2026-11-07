@@ -45,20 +45,17 @@ const MID_HIDE = "min-[601px]:@max-[1000px]:hidden";
 const WIDE_HIDE = "min-[601px]:@max-[1320px]:hidden";
 const narrowClass = (n: Column<unknown>["narrow"]) =>
   n === "hide" ? NARROW_HIDE : n === "laptop" ? LAPTOP_HIDE : n === "mid" ? MID_HIDE : n === "wide" ? WIDE_HIDE : "";
-/** The table width under which each kind of narrow column is gone (as the classes above). */
-const NARROW_UNDER: Record<NonNullable<Column<unknown>["narrow"]>, number> = { hide: 760, laptop: 820, mid: 1000, wide: 1320 };
 /**
- * The table widths between those, each with the class that shows a cell only there: before the
- * table has measured itself (the server's HTML), a line spanning the columns has one cell per
- * band, so CSS alone gives it the span of the columns drawn. The last band's cell is the phone's.
+ * Before the table has measured itself (the server's HTML), a line across it spans every column,
+ * and each narrow column adds a zero-width <col> at the end, drawn only where the column is gone,
+ * so CSS alone keeps the line to the columns drawn without taking their room.
  */
-const BANDS = [
-  { under: 760, show: "min-[601px]:@max-[760px]:table-cell" },
-  { under: 820, show: "min-[601px]:@min-[760px]:@max-[820px]:table-cell" },
-  { under: 1000, show: "min-[601px]:@min-[820px]:@max-[1000px]:table-cell" },
-  { under: 1320, show: "min-[601px]:@min-[1000px]:@max-[1320px]:table-cell" },
-  { under: Infinity, show: "min-[601px]:@min-[1320px]:table-cell max-[600px]:block" },
-];
+const FILLER: Record<NonNullable<Column<unknown>["narrow"]>, string> = {
+  hide: "hidden min-[601px]:@max-[760px]:table-column",
+  laptop: "hidden min-[601px]:@max-[820px]:table-column",
+  mid: "hidden min-[601px]:@max-[1000px]:table-column",
+  wide: "hidden min-[601px]:@max-[1320px]:table-column",
+};
 
 /** Phone-only classes per role; the row itself becomes a wrapping flex block. */
 const PHONE_CELL: Record<PhoneRole, string> = {
@@ -177,7 +174,7 @@ export function DataTable<T>({
   // while the table has no rows, the hidden columns (read from their <col>) drop their header
   // cell. Rows keep every cell (their hidden ones line up with the header's), as do the lines
   // among them (a group, a row's detail), which span every column. Until the table has read its
-  // <col>s (`hidden` is null: the server's HTML, the first paint), the lines use BANDS instead.
+  // <col>s (`hidden` is null: the server's HTML, the first paint), the lines use FILLER instead.
   const wrap = useRef<HTMLDivElement>(null);
   const [hidden, setHidden] = useState<ReadonlySet<string> | null>(null);
   const hides = columns.map((c) => `${c.key}:${phone(c)}`).join("|");
@@ -197,26 +194,12 @@ export function DataTable<T>({
   }, [hides]);
   const bare = list.length === 0;
   const narrow = columns.some((c) => c.narrow);
-  /** A line across the table: one cell spanning the columns drawn, or one per band until they are known. */
-  const across = (className: string, children: ReactNode, testId?: string) => {
-    if (hidden || !narrow)
-      return (
-        <td role="cell" colSpan={Math.max(1, columns.filter((c) => !hidden?.has(c.key)).length)} className={`${className} max-[600px]:block`} data-testid={testId}>
-          {children}
-        </td>
-      );
-    return BANDS.map((b) => (
-      <td
-        key={b.under}
-        role="cell"
-        colSpan={Math.max(1, columns.filter((c) => !c.narrow || NARROW_UNDER[c.narrow] < b.under).length)}
-        className={`${className} hidden ${b.show}`}
-        data-testid={testId}
-      >
-        {children}
-      </td>
-    ));
-  };
+  /** A line across the table: one cell spanning the columns drawn (with FILLER until they are known). */
+  const across = (className: string, children: ReactNode, testId?: string) => (
+    <td role="cell" colSpan={Math.max(1, columns.filter((c) => !hidden?.has(c.key)).length)} className={`${className} max-[600px]:block`} data-testid={testId}>
+      {children}
+    </td>
+  );
 
   const groups = group ? list.map(group) : [];
   return (
@@ -232,6 +215,7 @@ export function DataTable<T>({
           {columns.map((c) => (
             <col key={c.key} style={c.width ? { width: c.width } : undefined} className={phone(c)} />
           ))}
+          {bare && !hidden && columns.map((c) => c.narrow && <col key={`f-${c.key}`} style={{ width: 0 }} className={FILLER[c.narrow]} />)}
         </colgroup>
         {/* On a phone the header is for screen readers only (sr-only: a 1 px clipped box), so
             nothing in it can run off the screen there (qa-work-31); its row wraps inside that
