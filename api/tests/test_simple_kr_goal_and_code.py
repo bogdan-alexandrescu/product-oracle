@@ -211,3 +211,20 @@ async def test_a_code_never_cuts_the_name(client):
         "The name is too long to carry the code F-31: shorten it to 195 characters first"
     )
     assert by_key(await get(client, ctx, "owner"))["a"]["title"] == long
+
+
+async def test_the_read_says_where_a_code_comes_from(client):
+    # protects=an item whose code comes from its PRD reads code_from "prd" (the panel shows it
+    # read-only); its own code (set_code's) and no code read null; fails_when=the read gives no
+    # way to tell them apart; no_claim=a Ground Truth feature's code (priorities' short codes).
+    ctx = await make_people()
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        _, pv, _, rv = await seed.roadmap("payments")
+        await seed.item(rv, pv, "a", position=0, title="Alerts")
+        await seed.item(rv, pv, "b", position=1, title="F-07 Billing")
+        await seed.item(rv, pv, "c", position=2, title="Exports", prd_section_key="f-06")
+        await s.commit()
+    shown = by_key(await get(client, ctx, "owner"))
+    got = {k: (shown[k]["code"], shown[k]["code_from"]) for k in "abc"}
+    assert got == {"a": (None, None), "b": ("F-07", None), "c": ("F-06", "prd")}
