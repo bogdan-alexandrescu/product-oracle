@@ -306,49 +306,32 @@ export const planInput = (i: Item): PlanInput => ({
 
 /**
  * home-milestones-current: Home's plan inputs, each item (not cut) in the roadmap's current
- * milestone, as the Simple roadmap's Milestone lanes find it, named by its code and name:
- * - the roadmap milestone picked in its panel, by id, with its live code and name;
- * - else the track milestone naming it (its record, or its own milestone's words);
- * - else a typed milestone whose code is one of its roadmap's current milestones (M1 renamed:
- *   the current M1's name, never the old words);
- * - else, when its roadmap has milestones of its own, none ("Not in a milestone"): a removed
- *   one, an old name, a bare "M2". A roadmap with none keeps an item's typed words as its row
- *   (CLD's production walk), never a bare code;
- * - an item with no milestone at all: the first of its track's it ends on or before, if any.
- * A PRD's plan slices are not read (home-waiting-one-list: never one PRD's plan milestones).
+ * milestone as the Simple roadmap's Milestone lanes find it: the roadmap milestone picked in its
+ * panel (by id, its live code and name), else the track milestone it leads to (the one naming it,
+ * its record, its own milestone's by name, else its track's first it ends on or before). An item
+ * whose milestone is gone (removed, renamed away, or a stale text such as a bare "M2") is in none:
+ * "Not in a milestone". A PRD's plan slices are not read (home-waiting-one-list: never one PRD's
+ * plan milestones).
  */
 export function homePlanInputs(data: Roadmap): PlanInput[] {
-  const goals = data.goal_milestones ?? [];
-  const live = new Map(goals.map((m) => [m.id, m]));
+  const live = new Map((data.goal_milestones ?? []).map((m) => [m.id, m]));
   const tracked = data.milestones.filter((m) => m.date && !(m.start_date && m.end_date)).sort((a, b) => byCodePoint(a.date!, b.date!));
+  const leadsTo = (i: Item) =>
+    tracked.find((m) => m.item_ids.includes(i.id)) ??
+    (i.milestone?.record_id ? tracked.find((m) => m.id === i.milestone!.record_id) : undefined) ??
+    (i.milestone?.name ? tracked.find((m) => m.name === i.milestone!.name && (!i.track || m.track_id === i.track.id)) : undefined) ??
+    tracked.find((m) => !!i.track && m.track_id === i.track.id && i.end.date <= m.date!);
   return data.items
     .filter((i) => i.status !== "cut")
     .map((i) => {
       const base: PlanInput = { start: i.start.date, end: i.end.date, estimated: i.estimated, milestone: null, milestoneDate: null, id: i.id };
-      const goal = (gm: (typeof goals)[number]): PlanInput => {
+      const gm = i.milestone?.id ? live.get(i.milestone.id) : undefined;
+      if (gm) {
         const name = `${gm.code} · ${gm.name}`;
         return { ...base, milestone: name, milestoneDate: gm.date ?? null, record: { id: `goal:${gm.id}`, name } };
-      };
-      const track = (tm: (typeof tracked)[number]): PlanInput => ({ ...base, milestone: tm.name, milestoneDate: tm.date ?? null, record: { id: `track:${tm.id}`, name: tm.name } });
-      const m = i.milestone;
-      const picked = m?.id ? live.get(m.id) : undefined;
-      if (picked) return goal(picked);
-      const named =
-        tracked.find((t) => t.item_ids.includes(i.id)) ??
-        (m?.record_id ? tracked.find((t) => t.id === m.record_id) : undefined) ??
-        (m?.name ? tracked.find((t) => t.name === m.name && (!i.track || t.track_id === i.track.id)) : undefined);
-      if (named) return track(named);
-      if (m?.id || m?.name) {
-        // Its roadmap's own milestones, and its PRD's on it.
-        const own = goals.filter((g) => g.roadmap_id === i.roadmap.id && (!g.prd || g.prd.id === i.prd?.id)).sort((a, b) => Number(!!a.prd) - Number(!!b.prd));
-        const [code, label] = milestoneOf(m.name ?? null);
-        const same = own.find((g) => g.code.toUpperCase() === code);
-        if (same) return goal(same);
-        if (own.length || m.id || label === code) return base;
-        return { ...base, milestone: m.name!, milestoneDate: m.date ?? null };
       }
-      const after = tracked.find((t) => !!i.track && t.track_id === i.track.id && i.end.date <= t.date!);
-      return after ? track(after) : base;
+      const tm = leadsTo(i);
+      return tm ? { ...base, milestone: tm.name, milestoneDate: tm.date ?? null, record: { id: `track:${tm.id}`, name: tm.name } } : base;
     });
 }
 

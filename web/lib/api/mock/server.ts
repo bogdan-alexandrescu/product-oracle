@@ -191,7 +191,7 @@ import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROW
 import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { knowPrdOrder } from "./prd-rank";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedPrdCalmPage, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
-import { applyFitDate, forgetRoadmapReads, knowGoalMapItems, ownPrd, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
+import { applyFitDate, companyToday, forgetRoadmapReads, knowGoalMapItems, ownPrd, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, MAP_GOALS, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapGoals, goalMapIdOf, goalMapItems, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
@@ -1175,14 +1175,20 @@ function seedMeetingAgendaSheetScenario(): Db {
 
 /**
  * The plan strip's "+N more" (#723 polish): "simple-home" plus ten invented items on the
- * onboarding roadmap (Guided setup, the top PRD by priority), each with its own milestone.
+ * onboarding roadmap (Guided setup, the top PRD by priority), each placed in its own milestone
+ * of that roadmap (home-milestones-current: Home's rows are the roadmap's current milestones).
  */
 function seedSimpleHomeMilestonesScenario(): Db {
   const db = seedSimpleHomeScenario();
   const rm = db.simple_roadmap!;
+  const today = Date.parse(`${companyToday()}T00:00:00Z`);
+  rm.goal_milestones = [...(rm.goal_milestones ?? [])];
   for (let i = 1; i <= 10; i++) {
     const key = `setup-step-${i}`;
-    rm.items.push({ key, title: `Setup step ${i}`, horizon: "now", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", start: 5 * i, end: 5 * i + 20, source: "typed", milestone: { name: `Step ${i}`, day: 5 * i + 20 } });
+    const id = stableUuid(`simple-gm/step-${i}`);
+    const date = new Date(today + (5 * i + 20) * 86_400_000).toISOString().slice(0, 10);
+    rm.goal_milestones.push({ id, roadmap: "onboarding-roadmap", code: `S${i}`, name: `Step ${i}`, date, goal: "faster-activation", gates: [key], counts_when: "", progress: "not_started" });
+    rm.items.push({ key, title: `Setup step ${i}`, horizon: "now", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", start: 5 * i, end: 5 * i + 20, source: "typed", milestone: { id, name: `S${i} · Step ${i}`, day: 5 * i + 20 } });
     rm.ids[key] = stableUuid(`simple-item/${key}`);
   }
   return db;
