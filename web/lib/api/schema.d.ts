@@ -42352,6 +42352,8 @@ export interface components {
             record_name?: string | null;
             /** Start Date */
             start_date?: string | null;
+            /** Id */
+            id?: string | null;
         };
         /**
          * SimpleItemTask

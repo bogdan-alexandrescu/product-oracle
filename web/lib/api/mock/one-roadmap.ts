@@ -9,11 +9,14 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { stableUuid } from "./ids";
+import type { MockMilestone } from "./simple-milestones";
 import type { SeedItem, SimpleDb } from "./simple-roadmap";
 
 export const ONE_ROADMAP_SCENARIO = "one-roadmap";
 /** old-milestones: "one-roadmap" with goal milestones still on the older Trust plan roadmap. */
 export const OLD_MILESTONES_SCENARIO = "old-milestones";
+/** item-milestone: "one-roadmap" with both area PRDs' milestones on the company roadmap. */
+export const ITEM_MILESTONE_SCENARIO = "item-milestone";
 export const COMPANY_SLUG = "product-roadmap";
 export const COMPANY_TITLE = "Product roadmap";
 /** The area PRDs that feed it (slug, title), and the PRD they replace. */
@@ -58,4 +61,22 @@ export function seedCompanyRoadmap(db: SimpleDb): SimpleDb {
   db.decisions = {};
   db.key_dates = {};
   return db;
+}
+
+/**
+ * item-milestone ("item-milestone" scenario): the company roadmap's milestones from its two PRDs'
+ * plans, User Safety's M1 and M2 and Scale's M1 (goal_milestones.list_for_roadmaps makes them per
+ * PRD), none with an item in it yet. Invented data only.
+ */
+export function seedItemMilestones(): MockMilestone[] {
+  const safety = { slug: AREA_PRDS[0][0], title: AREA_PRDS[0][1], owner: "Nora Vance" };
+  const scale = { slug: AREA_PRDS[1][0], title: AREA_PRDS[1][1], owner: "Theo Marsh" };
+  const at = (prd: typeof safety, code: string, name: string, date: string): MockMilestone => ({
+    id: stableUuid(`simple-gm/item-milestone/${prd.slug}/${code}`), roadmap: COMPANY_SLUG, code, name, date, goal: null, gates: [], counts_when: "", progress: "not_started", prd,
+  });
+  return [
+    at(safety, "M1", "Reports reach a person", "2026-11-27"),
+    at(safety, "M2", "Blocks hold everywhere", "2026-12-18"),
+    at(scale, "M1", "Load measured", "2026-12-04"),
+  ];
 }

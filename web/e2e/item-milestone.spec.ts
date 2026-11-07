@@ -80,7 +80,7 @@ for (const [name, device] of [["desktop", DESKTOP], ["phone", PHONE]] as const) 
       await expect(card(page)).toBeVisible();
       await expect(card(page).getByTestId("card-milestone")).toHaveText("No milestone");
       await card(page).getByRole("button", { name: "Change the milestone" }).click();
-      await expect(card(page).getByLabel("Milestone", { exact: true }).locator("option")).toHaveText(["No milestone", SAFETY_M1, SAFETY_M2, SCALE_M1]);
+      await expect(card(page).getByLabel("Milestone", { exact: true }).locator("option")).toHaveText(["No milestone", SCALE_M1, SAFETY_M1, SAFETY_M2]);
       await card(page).getByRole("button", { name: "Cancel" }).click();
 
       await pick(page, SAFETY_M2);

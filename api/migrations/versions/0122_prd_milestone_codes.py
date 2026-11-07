@@ -14,8 +14,8 @@ The downgrade removes the PRD milestones that would collide again (all but the f
 roadmap, goal and code; the read never makes them again under the old index), then puts the
 old index back.
 
-Revision ID: 0119_prd_milestone_codes
-Revises: 0118_document_position
+Revision ID: 0122_prd_milestone_codes
+Revises: 0121_simple_changes_seq
 """
 
 from collections.abc import Sequence
@@ -23,8 +23,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0119_prd_milestone_codes"
-down_revision: str | None = "0118_document_position"
+revision: str = "0122_prd_milestone_codes"
+down_revision: str | None = "0121_simple_changes_seq"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
