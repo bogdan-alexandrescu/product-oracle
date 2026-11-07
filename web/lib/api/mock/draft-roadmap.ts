@@ -108,6 +108,7 @@ function item(ctx: DraftRoadmapContext, doc: Doc, v: Version, s: ItemSeed, posit
     blockers: [],
     trace: [],
     depends_on: s.depends_on ?? [],
+    depends_titles: {},
     validation_gates: [],
     economics: {},
     priority: { rank: s.rank, score: null, explanation: null } as Item["priority"],

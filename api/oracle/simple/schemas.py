@@ -125,6 +125,9 @@ class SimpleItemMilestone(BaseModel):
     record_name: str | None = None
     # plan-model: the milestone's start when the PRD's plan dates it (``date`` its end).
     start_date: dt.date | None = None
+    # item-milestone: the roadmap milestone picked for it in its panel (a goal milestone of its
+    # roadmap, ``SimpleGoalMilestone.id``); it wins over the PRD plan's placement.
+    id: uuid.UUID | None = None
 
 
 class SimpleOwnerRef(BaseModel):

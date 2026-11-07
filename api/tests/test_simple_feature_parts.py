@@ -258,9 +258,9 @@ async def test_merge_any_open_item(client):
     assert merge["status"] == "applied"
     items = await w.read(client)
     c, p, own, d = items["c"], items["p"], items["own"], items["d"]
-    # merged_into keeps its key as the code when the item has none (S7, as before).
+    # merged_into reads the kept item's name as the code when it has none: never its key.
     assert c["status"] == "merged"
-    assert c["merged_into"] == {"id": w.ids["p"], "code": "p", "title": "P"}
+    assert c["merged_into"] == {"id": w.ids["p"], "code": "P", "title": "P"}
     assert c["parent_key"] is None and c["parts"] == []
     # The kept item was c's part: it is a part no more, and takes c's other part.
     assert p["parent_key"] is None and p["part_of"] is None
