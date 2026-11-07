@@ -16,7 +16,7 @@ import { fileItems } from "./checkpoint-review";
 import { agentQuestionsOut, seedAgentQuestions, type StoredAgentQuestion } from "./agent-questions";
 import { readableRefusal } from "./refusal";
 import { mockNowMs } from "./clock";
-import { answerCode, applySuggestion, titled, latestScope, problemRef, REF_MARK, prepareScope, recheck as recheckScope, routeScopes, SCOPE_EDIT_FIELDS, scopeEdits, scopeSendBack, type StoredScope } from "./scope";
+import { answerCode, applySuggestion, latestScope, problemRef, REF_MARK, prepareScope, recheck as recheckScope, routeScopes, SCOPE_EDIT_FIELDS, scopeEdits, scopeSendBack, type StoredScope } from "./scope";
 
 type RunOut = Schemas["RunOut"];
 type SegmentOut = Schemas["SegmentOut"];
@@ -754,6 +754,24 @@ function waivable(kind: string, code: string): boolean {
   return false;
 }
 
+
+/**
+ * As oracle.runs.gate._titled: a C6 problem's message as people read it. Only a feature's key
+ * (its title, else the key in words) and a row the agents left unkeyed ("#2", its number) are
+ * rewritten; an ordinary word shaped like a key ("follow-up") stays as written.
+ */
+function gateLabel(message: string, titles: Record<string, string>, keys: string[]): string {
+  if (!message) return message;
+  const features = new Set([...Object.keys(titles), ...keys, ...[...message.matchAll(/\bdepends on (\S+?)(?=,|\s|$)/g)].map((m) => m[1])]);
+  const text = message.replace(/(?<![\w-])(?:#\d+|[a-z0-9][\w.]*(?:-[\w.]+)*)(?![\w-])/g, (t) => {
+    if (t.startsWith("#")) return t.slice(1);
+    if (!features.has(t)) return t;
+    const words = t.replace(/[-_]+/g, " ").trim();
+    return titles[t] || words.charAt(0).toUpperCase() + words.slice(1);
+  });
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 /** As oracle.runs.gate.BLOCKING_SOURCES: each kind's stored blocking reasons and file-level problems. */
 export type GateReason = Pick<ItemReason, "item" | "item_title" | "code" | "severity" | "label"> & { fixes?: ItemReason["fixes"]; ref?: string };
 
@@ -769,12 +787,14 @@ function blockingOf(cp: CheckpointOut, live?: GateReason[]): { reasons: GateReas
   if (check === undefined) return null;
   const problems = (check?.problems ?? []).filter((p) => p.blocking !== false);
   const fileLevel = (p: (typeof problems)[number]) => !p.feature || (cp.kind === "feature_set" && FEATURE_SET_FILE_PROBLEMS.includes(p.code));
+  // As oracle.runs.gate._problems: every feature of the file has a title or a problem of its own.
+  const keys = (check?.problems ?? []).flatMap((p) => (p.feature ? [p.feature] : []));
   const reasons = problems
     .filter((p) => !fileLevel(p))
     .map((p): GateReason => {
       // As oracle.runs.gate._problems: a C6 problem's feature by its title (C8's check has none).
-      const titles = (check as FeatureSetCheck | null)?.titles;
-      return { item: p.feature!, item_title: titles?.[p.feature!] ?? null, code: p.code, ref: problemRef(p), severity: "blocking", label: titled(p.message, titles) };
+      const titles = (check as FeatureSetCheck | null)?.titles ?? {};
+      return { item: p.feature!, item_title: titles[p.feature!] ?? null, code: p.code, ref: problemRef(p), severity: "blocking", label: gateLabel(p.message, titles, keys) };
     });
   return { reasons, files: problems.filter(fileLevel).length };
 }
@@ -4679,6 +4699,8 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
       if (a.kind === "edit" && !SCOPE_EDIT_FIELDS.includes(a.field ?? "")) return fail(422, `field: one of ${SCOPE_EDIT_FIELDS.join(", ")}`);
     }
     if (a.kind === "waive") {
+      // As oracle.runs.actions._waive_reason: a roadmap item's or a feature's waiver carries its reason.
+      if ((cp.kind === "roadmap_items" || cp.kind === "feature_set") && !(a.value as { reason?: string } | null)?.reason?.trim()) return fail(422, "waive needs a reason");
       // D3: never a date or the whole file; the approver's alone (a commenter cannot suggest one).
       if (a.item_key === "*") return fail(422, FILE_NOT_WAIVED);
       if (cp.kind === "priority_order") return fail(422, "a priority order checkpoint takes no item actions");
