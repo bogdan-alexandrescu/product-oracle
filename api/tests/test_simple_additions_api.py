@@ -390,7 +390,7 @@ async def test_merge_item_per_role(client):
     merge = r.json()["change"]
     items = await w.items(client)
     assert items[draft]["status"] == "merged"
-    assert items[draft]["merged_into"] == {"id": w.ids["import-a"], "code": "import-a",
+    assert items[draft]["merged_into"] == {"id": w.ids["import-a"], "code": "Bulk import",
                                            "title": "Bulk import"}  # fmt: skip
     kept = items[w.ids["import-a"]]
     assert w.goals["grow"] in kept["goal_ids"]
