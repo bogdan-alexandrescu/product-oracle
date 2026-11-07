@@ -1823,7 +1823,13 @@ async def read(
         and has_role(principal.role, "commenter"),
         can_start=starts(principal, w),
         fixed=fixed,
-        needs_look=([look_out(x) for x in looks] if owns(principal, w, owner_id) else [])
+        # Who is no owner reads only the items holding a proposal of theirs or one they
+        # decide (the Inbox's Open on "Section number on <PRD>" lands there, review Nov 7).
+        needs_look=(
+            [look_out(x) for x in looks]
+            if owns(principal, w, owner_id)
+            else [y for y in map(look_out, looks) if y.fix is not None and y.fix.proposal]
+        )
         + (
             [OnePagerLook(kind="check", text=t) for t in quality.said(b.row.checks)]
             if owner_reads
@@ -2165,10 +2171,15 @@ async def undo(db, principal, c: SimpleChange):
     document = await db.get(Document, c.document_id)
     await db.execute(select(Document.id).where(Document.id == document.id).with_for_update())
     b = await built(db, document)
+    held_now, back = c.after, c.before
     if c.op == NUMBER_OP:
         d = await _open_draft(db, document)
-        if _number_values(b, d, str(c.target["section"])) != _held(c.after):
+        now_held = _number_values(b, d, str(c.target["section"]))
+        undone = _number_undone(c, now_held)
+        if undone is None:
             raise await _number_conflict(db, b, d, c.target, "Changed since")
+        held_now = {**now_held, "number": c.after.get("number")}
+        back = {**undone, "number": c.before.get("number")}
     else:
         text, bodies = await _current(
             db, b, str(c.target["line_id"]), await _open_draft(db, document)
@@ -2182,8 +2193,8 @@ async def undo(db, principal, c: SimpleChange):
         document_id=c.document_id,
         op=c.op,
         target=c.target,
-        before=c.after,
-        after=c.before,
+        before=held_now,
+        after=back,
         status="undone",
         by=me,
         at=now,
@@ -2192,7 +2203,7 @@ async def undo(db, principal, c: SimpleChange):
         draft_ids=list(c.draft_ids or []),
     )
     if c.op == NUMBER_OP:
-        await _apply_number(db, u, b, c.before, session, undo=True)
+        await _apply_number(db, u, b, back, session, undo=True)
     else:
         await _apply(db, principal, u, b, c.before, session, undo=True)
     db.add(u)
@@ -2265,6 +2276,31 @@ async def _number_conflict(
             changed_at=last.at if last is not None else None,
         ).model_dump(mode="json"),
     )
+
+
+def _number_undone(c: SimpleChange, now: dict[str, Any]) -> dict[str, Any] | None:
+    """The section and its lines as ``now`` holds them with only ``c``'s number put back,
+    so either of two fixes in one section undoes (review, Nov 7); None when the number
+    ``c`` set is no longer there (changed since)."""
+    if now == _held(c.after):
+        return _held(c.before)
+    key, part = str(c.target["section"]), str(c.target.get("part") or "body")
+    first, *rest = str(c.target["said"]).split()
+    was = str(c.before.get("number") or first)
+    said = " ".join([one_pager_checks.as_written(first, str(c.after.get("number") or "")), *rest])
+    sec = dict(now["sections"][key])
+    put = one_pager_checks.set_number(sec[part], said, was)
+    if put is None:
+        return None
+    sec[part] = put
+    set_before, set_after = c.before.get("lines") or {}, c.after.get("lines") or {}
+    lines = {
+        i: (one_pager_checks.set_number(text, said, was) or text)
+        if set_before.get(i) != set_after.get(i)
+        else text
+        for i, text in (now.get("lines") or {}).items()
+    }
+    return {"sections": {key: sec}, "lines": lines}
 
 
 def _write_number(d: SimpleDraft, b: Built, values: dict[str, Any]) -> None:

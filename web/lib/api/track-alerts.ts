@@ -65,3 +65,6 @@ export function firstSafeAction(a: TrackAlertOut): "accept_date" | "review" | "k
 
 /** The Plan, with the alert's item selected. */
 export const planHref = (a: Pick<TrackAlertOut, "item_key">) => (a.item_key ? `/plan?item=${enc(a.item_key)}` : "/plan");
+
+/** The Plan with the alert's item selected and its stale Review open (Still valid…). */
+export const reviewHref = (a: Pick<TrackAlertOut, "item_key">) => (a.item_key ? `/plan?item=${enc(a.item_key)}&review=1` : "/plan");

@@ -13,13 +13,13 @@ import uuid
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import func, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import changes, company_time
 from oracle.baseline.models import Entity
 from oracle.docs import visibility
-from oracle.docs.models import Document, DocumentVersion
+from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.roadmap import items as items_mod
 from oracle.roadmap import staleness, tracker
 from oracle.roadmap.models import (
@@ -169,6 +169,11 @@ class ItemContext:
         self.milestones: dict[uuid.UUID, Any] = {}
         # What the reader may not see (visibility.hidden_for_reader); None: everything.
         self.hidden: visibility.Hidden | None = None
+        # The items' PRD section headings by (PRD version, section key), and the names of
+        # the Ground Truth items their stale reasons name by ref ("goal:g-1": its title):
+        # a reason says names, never keys (the stale-marks walk).
+        self.headings: dict[tuple[uuid.UUID, str], str] = {}
+        self.ref_names: dict[str, str] = {}
 
     @classmethod
     async def load(cls, db: AsyncSession, rows: list[RoadmapItem]) -> "ItemContext":
@@ -225,7 +230,43 @@ class ItemContext:
             ):
                 ctx.prd_records.setdefault((r.prd_document_id, r.item_key), []).append(r)
         ctx.milestones = await items_mod.live_milestones(db, rows)
+        anchors = {
+            (v, i.prd_section_key)
+            for i in rows
+            if i.prd_section_key
+            for v in (i.prd_version_id, i.reconciled_version_id)
+            if v
+        }
+        if anchors:
+            ctx.headings = {
+                (v, k): h
+                for v, k, h in await db.execute(
+                    select(Section.version_id, Section.section_key, Section.heading).where(
+                        or_(
+                            *(
+                                and_(Section.version_id == v, Section.section_key == k)
+                                for v, k in anchors
+                            )
+                        )  # fmt: skip
+                    )
+                )
+            }
+        ctx.ref_names = await ref_names(db, [r for i in rows for r in i.stale_reasons or []])
         return ctx
+
+    def heading_of(self, item: RoadmapItem) -> str | None:
+        """The item's PRD section heading, as reconciled, else as built."""
+        key = item.prd_section_key
+        if not key:
+            return None
+        for v in (item.reconciled_version_id, item.prd_version_id):
+            if v and (heading := self.headings.get((v, key))):
+                return heading
+        return None
+
+    def readable(self, item: RoadmapItem, reasons: list[str]) -> list[str]:
+        """``reasons`` with the item's PRD section named by its heading."""
+        return staleness.with_heading(reasons, item.prd_section_key, self.heading_of(item))
 
     def records_of(self, item: RoadmapItem) -> list[TrackerRecord]:
         on_track = self.records.get((item.track_id, item.item_key), []) if item.track_id else []
@@ -234,6 +275,19 @@ class ItemContext:
 
     def milestone_of(self, item: RoadmapItem) -> Any:
         return self.milestones.get(item.id, item.milestone)
+
+
+async def ref_names(db: AsyncSession, reasons: list[str]) -> dict[str, str]:
+    """{"type:key": title} of the Ground Truth items ``reasons`` name by ref."""
+    refs = staleness.refs_in(reasons)
+    if not refs:
+        return {}
+    rows = await db.execute(
+        select(Entity.type, Entity.key, Entity.title).where(
+            or_(*(and_(Entity.type == t, Entity.key == k) for t, k in refs))
+        )
+    )
+    return {f"{t}:{k}": title for t, k, title in rows}
 
 
 def item_out(item: RoadmapItem, ctx: ItemContext, view: str = "full") -> RoadmapItemOut:
@@ -251,7 +305,12 @@ def item_out(item: RoadmapItem, ctx: ItemContext, view: str = "full") -> Roadmap
         horizon=item.horizon,  # type: ignore[arg-type]
         milestone=ctx.milestone_of(item),
         freshness=item.freshness,  # type: ignore[arg-type]
-        stale_reasons=staleness.for_reader(item.stale_reasons, ctx.hidden),
+        # In words, each said once: the section by its heading, a lone Ground Truth item by
+        # its name (the stale-marks walk); what the reader may not see is hidden first.
+        stale_reasons=staleness.say(
+            ctx.readable(item, staleness.for_reader(item.stale_reasons, ctx.hidden)),
+            ctx.ref_names,
+        ),
         stale_since=item.stale_since,
         caused_by_change_id=item.caused_by_change_id,
         prd=PrdAnchor(
@@ -316,8 +375,46 @@ async def items_view(
         source=source,
         track_id=track_id,
         view=view,  # type: ignore[arg-type]
-        items=[item_out(i, ctx, view) for i in rows],
+        items=await with_dependency_names(db, document, [item_out(i, ctx, view) for i in rows]),
     )
+
+
+async def with_dependency_names(
+    db: AsyncSession, document: Document, items: list[RoadmapItemOut]
+) -> list[RoadmapItemOut]:
+    """Each item's ``depends_titles``: the name of each dependency that is not an item of
+    the same version (another version's item on this roadmap, else the reader's view of
+    any roadmap's, else a Ground Truth feature by key), so a dependency never reads as its
+    key (the stale-marks walk: "keys-out-of-checkpoints"). An item of a roadmap the reader
+    may not see never names one (visibility.hidden_document_ids)."""
+    here = {i.item_key for i in items}
+    wanted = {k for i in items for k in i.depends_on if k not in here}
+    if not wanted:
+        return items
+    names: dict[str, str] = {}
+    stmt = (
+        select(RoadmapItem.roadmap_document_id, RoadmapItem.item_key, RoadmapItem.title)
+        .where(RoadmapItem.item_key.in_(wanted))
+        .order_by(RoadmapItem.created_at)
+    )
+    if hidden := await visibility.hidden_document_ids(db):
+        stmt = stmt.where(RoadmapItem.roadmap_document_id.not_in(hidden))
+    for doc_id, key, title in await db.execute(stmt):
+        # This roadmap's own first, the latest last; another roadmap's only if none.
+        if doc_id == document.id or key not in names:
+            names[key] = title
+    for key, title in await db.execute(
+        select(Entity.key, Entity.title).where(
+            Entity.type == "feature", Entity.key.in_(wanted - set(names))
+        )
+    ):
+        names[key] = title
+    return [
+        i.model_copy(update={"depends_titles": {k: names[k] for k in i.depends_on if k in names}})
+        if any(k in names for k in i.depends_on)
+        else i
+        for i in items
+    ]
 
 
 # --- alignment ---------------------------------------------------------------------------
@@ -661,7 +758,9 @@ def item_risk(
                 risk.off = True
     if staleness.is_stale(item):
         why = staleness.stale_why(
-            staleness.for_reader(staleness.own_reasons(item), ctx.hidden), "its PRD trace changed"
+            ctx.readable(item, staleness.for_reader(staleness.own_reasons(item), ctx.hidden)),
+            "its PRD trace changed",
+            ctx.ref_names,
         )
         reasons.append({"kind": "stale", "detail": why})
     when = tracker.milestone_date(item, dated, ctx.milestone_of(item))
@@ -778,6 +877,50 @@ def assess(
     return out, risks
 
 
+async def sharing_tracks(db: AsyncSession, roadmap_document_id: uuid.UUID) -> list[ProductTrack]:
+    """Every track that follows the roadmap, in the order :func:`owner_of` breaks ties by."""
+    return list(
+        await db.scalars(
+            select(ProductTrack)
+            .where(ProductTrack.roadmap_document_id == roadmap_document_id)
+            .order_by(ProductTrack.created_at, ProductTrack.id)
+        )
+    )
+
+
+def owner_of(item: RoadmapItem, sharing: list[ProductTrack]) -> uuid.UUID | None:
+    """The track an item of a roadmap belongs to among the tracks that follow it
+    (:func:`sharing_tracks`): its PRD's track, else its own track, else the first track."""
+    if not sharing:
+        return None
+    for t in sharing:
+        if t.prd_document_id == item.prd_document_id:
+            return t.id
+    if any(t.id == item.track_id for t in sharing):
+        return item.track_id
+    return sharing[0].id
+
+
+async def own_rows(
+    db: AsyncSession,
+    track: ProductTrack,
+    rows: list[RoadmapItem],
+    sharing: list[ProductTrack] | None = None,
+) -> list[RoadmapItem]:
+    """The track's own items of its roadmap's version. A roadmap several tracks follow (the
+    company roadmap, many PRDs feeding it) gives each track its own items only (the
+    stale-marks walk: every track group counted the whole roadmap and listed another PRD's
+    items): each item is under exactly one track (:func:`owner_of`). ``sharing``: the
+    roadmap's tracks when the caller already has them (:func:`monitor_owners`)."""
+    if track.roadmap_document_id is None or not rows:
+        return rows
+    if sharing is None:
+        sharing = await sharing_tracks(db, track.roadmap_document_id)
+    if len(sharing) <= 1:
+        return rows
+    return [i for i in rows if owner_of(i, sharing) == track.id]
+
+
 class TrackRead:
     """What one overview read: the overview, each item's risk by item id, and the items,
     their context, the track's milestones and tracker records it was computed from (the
@@ -792,13 +935,15 @@ class TrackRead:
         self.records: list[TrackerRecord] = kw["records"]
 
 
-async def read(db: AsyncSession, track: ProductTrack) -> TrackRead:
+async def read(
+    db: AsyncSession, track: ProductTrack, sharing: list[ProductTrack] | None = None
+) -> TrackRead:
     base = await track_out(db, track)
     roadmap = (
         await db.get(Document, track.roadmap_document_id) if track.roadmap_document_id else None
     )
     version = await items_version(db, roadmap, approved_first=True) if roadmap else None
-    rows = await version_items(db, version)
+    rows = await own_rows(db, track, await version_items(db, version), sharing)
     ctx = await ItemContext.load(db, rows)
     milestones = await milestones_of(db, track.id)
     records = await tracker.records_for_track(db, track.id)
@@ -821,9 +966,11 @@ async def read(db: AsyncSession, track: ProductTrack) -> TrackRead:
     )
 
 
-async def overview(db: AsyncSession, track: ProductTrack) -> TrackOverview:
+async def overview(
+    db: AsyncSession, track: ProductTrack, sharing: list[ProductTrack] | None = None
+) -> TrackOverview:
     """The track's overview; the read it came from rides along for :func:`monitor`."""
-    found = await read(db, track)
+    found = await read(db, track, sharing)
     found.overview._found = found
     return found.overview
 
@@ -847,15 +994,21 @@ def snapshot(o: TrackOverview) -> dict[str, Any]:
 
 
 async def monitor(
-    db: AsyncSession, track: ProductTrack, actor: Any
+    db: AsyncSession,
+    track: ProductTrack,
+    actor: Any,
+    *,
+    sharing: list[ProductTrack] | None = None,
 ) -> tuple[TrackOverview, uuid.UUID | None, list[str]]:
     """Compute the overview, store its snapshot, and record a ``product_track`` change
     when health, at-risk items or the next milestone changed, then sync the track's alerts
-    (oracle.roadmap.alerts) whether or not it changed. The caller commits."""
+    (oracle.roadmap.alerts) whether or not it changed. The caller commits. ``sharing``: the
+    roadmap's tracks, when the caller already has them."""
     from oracle.roadmap import alerts
 
-    o = await overview(db, track)
-    found = o._found or await read(db, track)
+    # The hourly pass (no list to share) keeps the two-argument call its tests stand in for.
+    o = await (overview(db, track) if sharing is None else overview(db, track, sharing))
+    found = o._found or await read(db, track, sharing)
     after = snapshot(o)
     before = dict(track.monitor or {})
     changed = [
@@ -881,6 +1034,43 @@ async def monitor(
     await alerts.sync(db, track, found, event_id)
     o = o.model_copy(update={"monitored_at": track.monitored_at})
     return o, event_id, changed
+
+
+async def monitor_owners(
+    db: AsyncSession, roadmap_document_id: uuid.UUID, items: list[RoadmapItem], actor: Any
+) -> list[uuid.UUID]:
+    """Re-check, at once, only the active tracks that own ``items`` of the roadmap
+    (:func:`owner_of`), so acting on an item updates its track's alerts and counts in the
+    same request (the stale-marks walk), with no work for the roadmap's other tracks. Each
+    track is locked and checked in its own savepoint: one that raises is logged and rolled
+    back alone (the hourly pass checks it again), and the action and the other tracks'
+    checks stand. Returns the tracks that could not be checked."""
+    if not items:
+        return []
+    sharing = await sharing_tracks(db, roadmap_document_id)
+    owners = {o for o in (owner_of(i, sharing) for i in items) if o is not None}
+    if not owners:
+        return []
+    await db.flush()  # the action itself stays outside every track's savepoint
+    locked = await db.scalars(
+        select(ProductTrack)
+        .where(ProductTrack.id.in_(owners), ProductTrack.status == "active")
+        .order_by(ProductTrack.created_at, ProductTrack.id)
+        .with_for_update()
+    )
+    failed: list[uuid.UUID] = []
+    for track in list(locked):
+        track_id = track.id
+        try:
+            async with db.begin_nested():
+                await monitor(db, track, actor, sharing=sharing)
+        except Exception:  # noqa: BLE001 - logged; the action and the other tracks stand
+            log.exception("track %s could not be re-checked after a staleness action", track_id)
+            failed.append(track_id)
+            # The savepoint's rollback expired what it touched: read the tracks again, so
+            # the next track's check never loads an expired row lazily.
+            sharing = await sharing_tracks(db, roadmap_document_id)
+    return failed
 
 
 async def monitor_due(

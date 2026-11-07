@@ -284,7 +284,8 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   const prd = usePrdSections(q.data?.document.slug ?? null, q.data?.version ?? 0);
   // inbox-meeting-proposals fix: ?line= (the Inbox's Open on a proposed wording) shows the
   // lines and lands on that one, once the page is read; ?section= (its Open on a proposed
-  // number fix, PR 1320 re-review) on that section of the whole PRD under the page, once read.
+  // number fix, PR 1320 re-review) on that section of the whole PRD under the page, once read;
+  // on its "Needs a look" item instead when that holds the proposal, Accept and Decline there.
   const pageRead = !!q.data;
   const landed = useRef(false);
   useEffect(() => {
@@ -297,7 +298,14 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   const prdRead = prd.sections.length > 0;
   useEffect(() => {
     const section = new URLSearchParams(window.location.search).get("section");
-    if (!pageRead || !prdRead || landed.current || !section || sessionId) return;
+    if (!pageRead || landed.current || !section || sessionId) return;
+    const proposed = document.querySelector(`[data-look-proposal="${CSS.escape(section)}"]`);
+    if (proposed) {
+      landed.current = true;
+      requestAnimationFrame(() => proposed.scrollIntoView({ block: "center" }));
+      return;
+    }
+    if (!prdRead) return;
     landed.current = true;
     requestAnimationFrame(() => document.getElementById(`prd-sec-${section}`)?.scrollIntoView({ block: "start" }));
   }, [pageRead, prdRead, sessionId]);
@@ -1230,7 +1238,7 @@ export function NeedsALook({ items, blocks = [], sections = [], doc, version, co
           const code = codeOf(x);
           const name = code ? codeNames?.get(code) : undefined;
           return (
-            <li key={i} data-kind={x.kind} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <li key={i} data-kind={x.kind} data-look-proposal={x.fix?.proposal ? String(x.fix.target.section ?? "") : undefined} className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span data-testid="needs-look-line">{line}</span>
               {line !== x.text && (
                 <InfoTip label={line} align="start">
