@@ -10,7 +10,8 @@ import { expect, test, type Page } from "./test";
  *   (Edit the gate): the owner moves it with Undo, an approver who is not the roadmap's decider
  *   asks for it (a proposal), a viewer only reads;
  * - a roadmap item with no code gets its feature code in its panel: a code another feature has
- *   is refused in plain words, the owner's has Undo, a commenter's is a proposal, a viewer reads.
+ *   is refused in plain words, the owner's has Undo (refused in plain words when another item
+ *   took the old code since), a commenter's is a proposal, a viewer reads.
  *
  * Test cards (protects / fails_when / no_claim) are each test's comment.
  */
@@ -142,6 +143,36 @@ test.describe("a roadmap item's feature code", () => {
     await expect(panel(page).getByTestId("card-name")).toHaveText(/^F-31\s*Alert history export/);
     await toast(page, "Code changed").getByRole("button", { name: "Undo" }).click();
     await expect(panel(page).getByTestId("card-code")).toHaveText("None");
+  });
+
+  test("Undo never gives the old code to a second item: it is refused in plain words", async ({ page, context }) => {
+    // protects=Undo of a code change whose old code another item took since (here from a second
+    // tab) is refused ("F-31 is already the code of F-31 Alert routing by team") and both items
+    // keep their codes; fails_when=Undo lands and two items read F-31; no_claim=a Ground Truth
+    // feature taking the code.
+    await openExport(page);
+    await giveCode(page, "F-31");
+    await expect(panel(page).getByTestId("card-code")).toHaveText("F-31");
+    await giveCode(page, "F-32");
+    await expect(panel(page).getByTestId("card-code")).toHaveText("F-32");
+    const undoIt = toast(page, "Code changed").getByRole("button", { name: "Undo" });
+    await undoIt.hover(); // held while the other tab gives F-31 away
+
+    const other = await context.newPage();
+    await other.goto("/simple/roadmap");
+    await expect(other.getByTestId("simple-roadmap")).toBeVisible();
+    await openRoadmapItem(other, "alert-sso");
+    await expect(panel(other).getByTestId("card-code")).toHaveText("None");
+    await giveCode(other, "F-31");
+    await expect(panel(other).getByTestId("card-code")).toHaveText("F-31");
+    await other.close();
+
+    await undoIt.click();
+    await expect(toast(page, "F-31 is already the code of F-31 Alert routing by team")).toBeVisible();
+    await page.reload();
+    await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+    await openRoadmapItem(page, "alert-export");
+    await expect(panel(page).getByTestId("card-code")).toHaveText("F-32");
   });
 
   test("a commenter's code is a proposal", async ({ page }) => {

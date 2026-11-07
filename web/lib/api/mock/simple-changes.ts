@@ -1285,6 +1285,9 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
         if (title.length > room) return json(422, { detail: `The name is too long to carry the code ${code}: shorten it to ${room} characters first` });
         title = `${code} ${title}`;
       }
+      // changes._title_code: a code the new title leads with is checked as set_code checks it.
+      const taken = titleCodeTaken(db, seen, key, title);
+      if (taken) return json(422, { detail: taken });
       after = { title };
     } else if (body.op === "edit_outcome") after = { outcome: a.outcome ?? null };
     else if (body.op === "edit_note") {
@@ -1509,6 +1512,9 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
       // As changes.undo: the old parent written back is checked as create checks it.
       const refused = c.op === "set_parent" ? parentRefusal(readerDb(db, ctx), keyOf(db, c.target.item_id)!, (c.before.parent_key as string | null) ?? null) : null;
       if (refused) return json(422, { detail: refused });
+      // As changes.undo: the code the old title carries may be another item's or a feature's since.
+      const taken = (c.op === "set_code" || c.op === "edit_title") && c.before.title ? titleCodeTaken(db, readerDb(db, ctx), keyOf(db, c.target.item_id)!, String(c.before.title)) : null;
+      if (taken) return json(409, { detail: taken });
       const drafts = intoDrafts(db, c, s, true);
       if (drafts instanceof Response) return drafts;
       apply(db, c, c.before, true);
@@ -1588,6 +1594,8 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     // the proposal stays open, to decline.
     const taken = c.op === "set_code" && c.target.code ? codeTaken(db, readerDb(db, ctx), keyOf(db, c.target.item_id)!, String(c.target.code)) : null;
     if (taken) return json(409, { detail: taken });
+    const renamed = c.op === "edit_title" ? titleCodeTaken(db, readerDb(db, ctx), keyOf(db, c.target.item_id)!, String(c.after.title ?? "")) : null;
+    if (renamed) return json(409, { detail: renamed });
     // Into the decider's working draft (their editing session's).
     const session = openEditing(db, ctx.id) ?? newSession(db, ctx.id, "editing");
     const drafts = intoDrafts(db, c, session);
@@ -1606,6 +1614,21 @@ function codeTaken(db: SimpleDb, seen: SimpleDb, key: string, code: string): str
   if (other) return `${code} is already the code of ${code} ${codedTitle(other.title, prdCode(other.section))[1]}`;
   if (Object.values(db.feature_codes ?? {}).some((k) => k.toUpperCase() === code)) return `${code} is already the code of a Ground Truth feature`;
   return null;
+}
+
+/** changes._title_code: a title leading with a code other than the item's own ("F-31 Alerts") gives the item that code, checked as set_code checks it; an item coded by its feature or PRD keeps that one. */
+function titleCodeTaken(db: SimpleDb, seen: SimpleDb, key: string, title: string): string | null {
+  const s = seed(seen, key);
+  if ((s.feature_id && db.feature_codes?.[s.feature_id]) || prdCode(s.section)) return null;
+  const lead = codedTitle(title, null)[0];
+  if (!lead || !/^[A-Z]{1,3}-\d+[a-j]?$/.test(lead) || lead === codedTitle(s.title, null)[0]) return null;
+  return codeTaken(db, seen, key, lead);
+}
+
+/** changes._merge_plan: another item showing ``code`` as its own (its title's, not its feature's or PRD's), in set_code's words. */
+function ownCodeTaken(db: SimpleDb, key: string, code: string): string | null {
+  const other = db.items.find((x) => x.key !== key && !x.trashed && !(x.feature_id && db.feature_codes?.[x.feature_id]) && !prdCode(x.section) && codedTitle(x.title, null)[0]?.toUpperCase() === code.toUpperCase());
+  return other ? `${code} is already the code of ${code} ${codedTitle(other.title, null)[1]}` : null;
 }
 
 /** A proposal whose feature or goal went to Trash meanwhile: closed, not left open. */
@@ -1823,6 +1846,9 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
   }
   if (typeof target.feature_id === "string" && target.feature_id) {
     // As the API: the draft becomes the feature's item (linked, kept beside look-alikes), still a draft.
+    const code = db.feature_codes?.[target.feature_id];
+    const taken = code ? ownCodeTaken(db, key, code) : null;
+    if (taken) return json(422, { detail: taken });
     return { target, before: { [String(target.item_id)]: { feature_id: null, kept_both: !!s.kept_both } }, after: { [String(target.item_id)]: { feature_id: target.feature_id, kept_both: true } }, roadmap: s.roadmap, applies };
   }
   return json(422, { detail: "target: into_id or feature_id" });
