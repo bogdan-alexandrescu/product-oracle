@@ -177,7 +177,8 @@ test.describe("One-pagers list and the planned PRD", () => {
     await login(page);
     await page.goto("/simple");
     await page.locator('nav[aria-label="Simple"]:visible').getByRole("link", { name: "One-pagers" }).click();
-    await expect(page.getByText("Open a PRD to read it on one page, change its wording or start a review.")).toBeVisible();
+    await page.getByRole("button", { name: "About One-pagers" }).focus();
+    await expect(page.getByRole("tooltip").filter({ hasText: "Open a PRD to read it on one page, change its wording or start a review." })).toBeVisible();
     const row = page.getByTestId("one-pager-row").filter({ hasText: "Guided setup" });
     await expect(row).toContainText("Approved");
     await expect(row).not.toContainText("Draft");

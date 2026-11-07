@@ -92,7 +92,9 @@ for (const phone of [false, true]) {
         test(`the One-pagers help line offers ${who === "owner" ? "an" : "a"} ${who} only what they can do`, async ({ page }) => {
           await login(page, email);
           await page.goto("/simple/one-pagers");
-          await expect(page.getByText(lead, { exact: true })).toBeVisible();
+          await page.getByRole("button", { name: "About One-pagers" }).focus();
+          const tip = page.getByRole("tooltip").filter({ hasText: "Open a PRD to read it on one page" });
+          await expect(tip).toHaveText(lead);
           if (who === "viewer") await expect(page.getByText(/change its wording|start a review/)).toHaveCount(0);
         });
       }

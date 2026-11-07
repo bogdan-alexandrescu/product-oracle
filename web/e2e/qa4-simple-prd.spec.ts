@@ -42,7 +42,8 @@ test.describe("desktop", () => {
   test("a never-published PRD is not called published, and its dates agree with the list (qa4-simple-prd-3, 9, 25, 34)", async ({ page }) => {
     await login(page);
     await page.goto("/simple/one-pagers");
-    await expect(page.getByText("Open a PRD to read it on one page, change its wording or start a review.")).toBeVisible();
+    await page.getByRole("button", { name: "About One-pagers" }).focus();
+    await expect(page.getByRole("tooltip").filter({ hasText: "Open a PRD to read it on one page, change its wording or start a review." })).toBeVisible();
     const row = page.getByTestId("one-pager-row").filter({ hasText: "Saved carts PRD" });
     await expect(row).toContainText("Updated Oct 18, 2026");
     await row.getByRole("link", { name: "Saved carts PRD" }).click();
@@ -119,6 +120,8 @@ test.describe("desktop", () => {
 
   test("a commenter's card starts at its own padding (qa4-simple-prd-21)", async ({ page }) => {
     await openFromList(page, "Saved carts PRD", COMMENTER);
+    // The contents row grows when the whole PRD's tabs arrive: measure once the page is whole.
+    await expect(page.getByTestId("prd-whole")).toBeVisible();
     const card = (await page.getByRole("article", { name: "One-pager" }).boundingBox())!;
     const first = (await page.getByRole("region", { name: "Problem and who has it" }).boundingBox())!;
     expect(first.y - card.y).toBeLessThan(36);
@@ -256,3 +259,35 @@ test.describe("phone", () => {
     expect(overlaps(box, (await page.getByRole("link", { name: "Open in Detailed" }).boundingBox())!)).toBe(false);
   });
 });
+
+for (const width of [1024, 1280, 390]) {
+  test(`a jumped-to heading sits below the sticky contents row at ${width} px`, async ({ page }) => {
+    // fails_when: the jump offset is a fixed 64 px while the wrapped row is taller, leaving the heading under the row
+    await page.setViewportSize({ width, height: 800 });
+    await login(page);
+    await page.goto("/simple/one-pagers/guided-setup");
+    await expect(page.getByRole("article", { name: "One-pager" })).toBeVisible();
+    const nav = page.getByRole("navigation", { name: "Contents" });
+    if (width < 768) {
+      // No contents row on a phone: a jump by link lands on the heading with nothing over it.
+      await expect(nav).toBeHidden();
+      return;
+    }
+    const tabs = nav.getByRole("link");
+    const count = await tabs.count();
+    expect(count).toBeGreaterThan(2);
+    for (const i of [1, count - 1]) {
+      const tab = tabs.nth(i);
+      const target = (await tab.getAttribute("href"))!.slice(1);
+      await tab.click();
+      await page.waitForTimeout(600);
+      const gap = await page.evaluate((id) => {
+        const el = document.getElementById(id)!;
+        const h = (el.querySelector("h1,h2,h3,h4") ?? el) as HTMLElement;
+        const n = document.querySelector('nav[aria-label="Contents"]')!.getBoundingClientRect();
+        return Math.round(h.getBoundingClientRect().top - n.bottom);
+      }, target);
+      expect(gap).toBeGreaterThanOrEqual(0);
+    }
+  });
+}
