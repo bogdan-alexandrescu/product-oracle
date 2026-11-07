@@ -7,15 +7,15 @@ once when they are removed. "Changes proposed" rows are derived on read from
 approvers and up get one for Oracle's ``proposed`` and people's ``suggested`` changes;
 approvers not in an open discussion get one for ``suggested`` changes only (c6: commenters
 suggest, approvers stage); a closed discussion's changes, and those of a discussion whose
-page does not open its thread, count for no one. Every row is shown with G1's access check at
-read time, so none shows a title its reader may not see.
+subject was deleted (no page opens its thread), count for no one. Every row is shown with
+G1's access check at read time, so none shows a title its reader may not see.
 """
 
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.authz import has_role
@@ -187,11 +187,17 @@ async def rows(
         )
     )
     # Changes proposed: open changes of open discussions, each counted by changes.waits_on
-    # once the reader's seat is known (below).
-    pending: dict[uuid.UUID, list[DiscussionChange]] = {}
+    # once the reader's seat is known (below); only the columns it and the row's time read.
+    pending: dict[uuid.UUID, list] = {}
     if has_role(principal.role, "approver"):
-        for c in await db.scalars(
-            select(DiscussionChange)
+        for c in await db.execute(
+            select(
+                DiscussionChange.discussion_id,
+                DiscussionChange.status,
+                func.coalesce(DiscussionChange.suggested_at, DiscussionChange.created_at).label(
+                    "at"
+                ),
+            )
             .join(Discussion, Discussion.id == DiscussionChange.discussion_id)
             .where(DiscussionChange.status.in_(changes.OPEN), Discussion.status == "open")
         ):
@@ -272,10 +278,11 @@ async def rows(
         if did not in seen_ok:
             continue
         d, parts, seat = seen_ok[did]
-        waiting = [c for c in open_ if changes.waits_on(d, c, seat.participant)]
+        _label, url = await labels.of(d)
+        waiting = [c for c in open_ if changes.waits_on(d, c, seat.participant, url)]
         if not waiting:
             continue
-        at = max(c.suggested_at or c.created_at for c in waiting)
+        at = max(c.at for c in waiting)
         out.append(
             InboxDiscussionItem(
                 **await base(d, parts),

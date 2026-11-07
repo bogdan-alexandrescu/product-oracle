@@ -312,6 +312,8 @@ class DiscussionChangeOut(BaseModel):
     proposed_by: DiscussionPerson | None
     suggested_by: DiscussionPerson | None
     status: ChangeStatus
+    # changes.is_open: the card lists it under "Open changes"; the Inbox counts only these.
+    open: bool
     # None for a caller who can never act on it (viewers).
     action: ChangeAction | None = None
     can: ChangeCan = ChangeCan()
