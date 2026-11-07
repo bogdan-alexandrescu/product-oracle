@@ -258,6 +258,24 @@ def test_x8_goal_names_name_prose_beside_links_and_each_code_of_a_pair():
     assert w("`G1` then G1.", GOALS) == "`G1` then G1 Activation."
 
 
+def test_x8_a_code_in_brackets_after_a_name_is_named_already():
+    """protects=G-3 with X-8: a shared roadmap reads a goal by its name with the code in
+    brackets ("Activation (G1)", oracle.shares.render.with_names), which already puts the
+    code beside its name, so the export's goal names leave it as it is; fails_when=the page
+    reads "Activation (G1 Activation)", or the confirmed goal's newer title is followed by
+    the version's older name; no_claim=a bracket holding more than the code."""
+    w = render_module.with_goal_names
+    assert w("Serves Activation (G1).", GOALS) == "Serves Activation (G1)."
+    assert w("Serves Adoption rate (**G1**).", GOALS) == "Serves Adoption rate (**G1**)."
+    assert w("| Bulk import | Activation (G1) |", GOALS) == "| Bulk import | Activation (G1) |"
+    # A bare code beside it still reads with its name, as does a code in a bracket of more.
+    assert w("Serves Activation (G1) and G2.", GOALS) == (
+        "Serves Activation (G1) and G2 Retention."
+    )
+    assert w("Two goals (G1, G2).", GOALS) == "Two goals (G1 Activation, G2 Retention)."
+    assert w("Goals: (G1).", GOALS) == "Goals: (G1 Activation)."
+
+
 DATED_LINKS = (
     "See [report](https://example.com/a?from=2026-01-02), "
     "<https://example.com/b?to=2026-02-03> and https://example.com/c?on=2026-03-04. "
