@@ -65,8 +65,9 @@ export function seedCompanyRoadmap(db: SimpleDb): SimpleDb {
 
 /**
  * item-milestone ("item-milestone" scenario): the company roadmap's milestones from its two PRDs'
- * plans, User Safety's M1 and M2 and Scale's M1 (goal_milestones.list_for_roadmaps makes them per
- * PRD), none with an item in it yet. Invented data only.
+ * plans, User Safety's M1 to M3 and Scale's M1 to M3 (goal_milestones.list_for_roadmaps makes them
+ * per PRD), none with an item in it yet. Both PRDs' M3 read "Ready for launch": told apart by id.
+ * Invented data only.
  */
 export function seedItemMilestones(): MockMilestone[] {
   const safety = { slug: AREA_PRDS[0][0], title: AREA_PRDS[0][1], owner: "Nora Vance" };
@@ -77,6 +78,9 @@ export function seedItemMilestones(): MockMilestone[] {
   return [
     at(safety, "M1", "Reports reach a person", "2026-11-27"),
     at(safety, "M2", "Blocks hold everywhere", "2026-12-18"),
+    at(safety, "M3", "Ready for launch", "2027-01-15"),
     at(scale, "M1", "Load measured", "2026-12-04"),
+    at(scale, "M2", "Twice the load", "2026-12-18"),
+    at(scale, "M3", "Ready for launch", "2027-01-15"),
   ];
 }

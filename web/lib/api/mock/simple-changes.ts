@@ -756,9 +756,9 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   // its panel, stored by id with its code and name and no date.
   const pickedMs = body.op === "set_milestone" ? (after.milestone as Values | null | undefined) : undefined;
   if (pickedMs && typeof pickedMs === "object" && pickedMs.id) {
-    const gm = (db.goal_milestones ?? []).find((m) => m.id === pickedMs.id && !m.deleted);
-    const k = keyOf(db, target.item_id);
-    if (!gm || !k || gm.roadmap !== seed(db, k).roadmap) return json(422, { detail: "after.milestone.id: a milestone of the item's roadmap" });
+    const refused = pickRefused(db, target.item_id, pickedMs.id);
+    if (refused) return json(422, { detail: refused });
+    const gm = (db.goal_milestones ?? []).find((m) => m.id === pickedMs.id)!;
     after.milestone = { id: gm.id, name: `${gm.code} ${gm.name}`, date: null, date_source: null };
   }
   if (body.op === "set_goal_measure") {
@@ -803,6 +803,14 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   }
   (db.changes ??= []).push(change);
   return json(201, { change: view(db, ctx, change), flags: [] });
+}
+
+/** item-milestone (changes._roadmap_milestone): why a goal milestone cannot be picked for the item, in its plain words; null when it can. */
+function pickRefused(db: SimpleDb, itemId: unknown, milestoneId: unknown): string | null {
+  const gm = (db.goal_milestones ?? []).find((m) => m.id === milestoneId);
+  const k = keyOf(db, itemId);
+  if (!gm || !k || gm.roadmap !== seed(db, k).roadmap) return "That milestone is not on this item's roadmap.";
+  return gm.deleted ? "That milestone was deleted." : null;
 }
 
 /** A milestone as the item reads it: the goal milestone picked for it (its id), else its name
@@ -1499,6 +1507,10 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   if (c.status !== "proposed") return json(409, { detail: `This change is ${c.status} already` });
   const body = (await req.json().catch(() => ({}))) as { reason?: string | null };
   if (p[4] === "accept" && c.op === "set_goal_measure" && !same(goalMeasure(db, c.target.goal_id), c.before)) return conflict(db, ctx, goalMeasure(db, c.target.goal_id)!, [String(c.target.goal_id)], "outdated");
+  // item-milestone: a proposed pick's milestone may be deleted since (changes.decide checks it again).
+  const pickedOnAccept = p[4] === "accept" && c.op === "set_milestone" ? (c.after?.milestone as Values | null | undefined) : undefined;
+  const refusedOnAccept = pickedOnAccept?.id ? pickRefused(db, c.target.item_id, pickedOnAccept.id) : null;
+  if (refusedOnAccept) return json(422, { detail: refusedOnAccept });
   if (p[4] === "accept" && TARGETS[c.op]) writeTarget(db, c, c.after, false, ctx);
   // goal_milestones.decide: a milestone card's change (before.milestone); a change asked of a
   // PRD's milestone (before.date) is decided below.

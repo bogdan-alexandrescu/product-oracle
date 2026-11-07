@@ -41,7 +41,7 @@ Ops and the fields they write (``before`` must name the key fields):
   Its ``before`` is compared by name and date only: the read shows no date_source.
   item-milestone: ``{"milestone": {"id"}}`` places it in a milestone of its roadmap (a goal
   milestone, its own or a PRD's), stored with that milestone's code and name and no date;
-  its ``before`` is then compared by that id.
+  its ``before`` is then compared by that id; accepting a proposed one checks it again.
 - ``set_goals``: the goals an item serves, ``{"goal_ids": [...]}`` (the one it moves most
   first), each a live goal; the goal buckets carry a task added there to another goal.
   An item with a baseline feature takes the feature along (applied, accepted or undone):
@@ -418,11 +418,14 @@ def _seen_milestone(m: Any) -> tuple | None:
 async def _roadmap_milestone(db: AsyncSession, entry: Any, raw: Any) -> dict[str, Any]:
     """item-milestone: ``after.milestone.id`` picked in the panel, a live goal milestone of the
     item's roadmap (its own or a PRD's), stored by id with its code and name and no date (the
-    pick places the item; its dates stay as they are)."""
+    pick places the item; its dates stay as they are). Checked again when a proposed pick is
+    accepted; refused in plain words (they reach people)."""
     mid = _uuid(raw, "after.milestone.id")
     m = await db.get(TrackMilestone, mid)
-    if m is None or m.deleted_at is not None or m.roadmap_id != entry.roadmap.id:
-        raise ChangeError(422, "after.milestone.id: a milestone of the item's roadmap")
+    if m is None or m.roadmap_id != entry.roadmap.id:
+        raise ChangeError(422, "That milestone is not on this item's roadmap.")
+    if m.deleted_at is not None:
+        raise ChangeError(422, "That milestone was deleted.")
     name = " ".join(f"{m.code or ''} {m.name}".split())[:TITLE_MAX]
     return {"id": str(m.id), "name": name, "date": None, "date_source": None}
 
@@ -1643,6 +1646,10 @@ async def decide(
             # The roadmap may have changed since the proposal: create's check again (no
             # loop, an open parent), in its words.
             await _parent(db, entry, (c.after or {}).get("parent_key"), dict(c.target), read_)
+        picked = (c.after or {}).get("milestone") if c.op == "set_milestone" else None
+        if isinstance(picked, dict) and picked.get("id"):
+            # item-milestone: the milestone picked may be deleted since the proposal.
+            await _roadmap_milestone(db, entry, picked["id"])
         # Into the decider's working draft (their editing session's, or S8's meeting's).
         session = await _session_for_change(db, me, session_id, True, now)
         await _apply(db, c, c.after, principal, session)  # type: ignore[arg-type]
