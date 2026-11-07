@@ -44,7 +44,7 @@ async function home(page: Page, width: number, email: string = ADMIN.email) {
 /** A row's items, as its tooltip lists them under its label. */
 async function itemsOf(page: Page, label: string) {
   const el = page.getByTestId("home-strip-row").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`) }) });
-  await el.first().getByTestId("home-strip-span").hover();
+  await el.first().hover();
   return Promise.all((await el.all()).map(async (l) => ((await l.getAttribute("title")) ?? "").split("\n").slice(1).sort()));
 }
 
