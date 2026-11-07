@@ -57,6 +57,8 @@ export interface RoadmapDb {
   changes: Change[];
   /** F2: track alerts (seeded only in the "track-alerts" scenario, so other specs' Inbox counts stay). */
   alerts?: StoredAlert[];
+  /** The freshness of a Plan item the roadmap version has no row for (the alerts scenarios' stale item), by key. */
+  freshness?: Record<string, Item["freshness"]>;
   /** plan-open-from-simple "plan-same-key": the Checkout redesign roadmap draft holds a key Usage alerts' roadmap holds too. */
   same_key?: boolean;
   /** F2: tracker record history, one row per changed field. */
@@ -208,6 +210,7 @@ function itemsFor(ctx: RoadmapContext, roadmap: Version, trackId: string | null)
       blockers: [],
       trace: [],
       depends_on: [],
+      depends_titles: {},
       validation_gates: [],
       economics: {},
       priority: null,
@@ -247,11 +250,14 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
       created_at: AT, monitored_at: null, monitor: {},
     };
     // qa-plan-1: in the app (not the roadmap-only scenarios), the track reads the Plan's items.
-    const alertsScenario = scenario === TRACK_ALERTS_SCENARIO || scenario === TRACK_ALERTS_MANY_SCENARIO || scenario === TRACK_ALERTS_ACTIONS_SCENARIO || scenario === TRACK_ALERTS_HISTORY_SCENARIO;
+    const alertsScenario = scenario === TRACK_ALERTS_SCENARIO || scenario === TRACK_ALERTS_MANY_SCENARIO || scenario === TRACK_ALERTS_ACTIONS_SCENARIO || scenario === TRACK_ALERTS_HISTORY_SCENARIO || scenario === TRACK_ALERTS_STALE_SCENARIO || scenario === TRACK_ALERTS_STALE_REMOVED_SCENARIO;
+    const staleScenario = scenario === TRACK_ALERTS_STALE_SCENARIO || scenario === TRACK_ALERTS_STALE_REMOVED_SCENARIO;
     if (opts.plan && !withItems && !withDiff && !planStale && !alertsScenario) track.plan = true;
     db.tracks.push(track);
     const rv = roadmap && latest(ctx, roadmap.id);
     if (rv) db.items[rv.id] = itemsFor(ctx, rv, track.id);
+    // The stale-marks walk: an item depending on one this version has no row for (named, never its key).
+    if (staleScenario && rv?.id && db.items[rv.id]?.[0]) db.items[rv.id]![0]!.depends_on = ["team-budgets"];
     // O4 'document dates': the roadmap's Beta date rests on ENG-412; its GA date's basis
     // (ENG-413) was withdrawn, so the version view marks it "date withdrawn". In the
     // "plan-decider" scenario (#346) and "plan-timeline-edit" it stands, so a version proposed
@@ -339,8 +345,8 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
       });
     }
     if (withDiff && roadmap) seedDiff(ctx, db, roadmap.id, track.id);
-    if (scenario === TRACK_ALERTS_SCENARIO || scenario === TRACK_ALERTS_MANY_SCENARIO || scenario === TRACK_ALERTS_ACTIONS_SCENARIO || scenario === TRACK_ALERTS_HISTORY_SCENARIO)
-      seedAlerts(db, track.id, scenario === TRACK_ALERTS_MANY_SCENARIO, scenario === TRACK_ALERTS_ACTIONS_SCENARIO, scenario === TRACK_ALERTS_HISTORY_SCENARIO);
+    if (alertsScenario)
+      seedAlerts(db, track.id, scenario === TRACK_ALERTS_MANY_SCENARIO, scenario === TRACK_ALERTS_ACTIONS_SCENARIO, scenario === TRACK_ALERTS_HISTORY_SCENARIO, staleScenario, scenario === TRACK_ALERTS_STALE_REMOVED_SCENARIO);
     // "launches": a second track, Checkout redesign PRD, with no roadmap yet (New launch's Track picker).
     // fix4: the alignment report scenarios have it too, so a report's second track is one the mock keeps.
     const secondTrack = scenario === "launches" || scenario === "alignment-report" || scenario === "report-prd-moved" || scenario === "report-draft-item" || scenario === REPORT_OFF_TRACK_SCENARIO || scenario === REPORT_ITEM_MILESTONE_SCENARIO;
@@ -545,8 +551,35 @@ function withEngineering(db: RoadmapDb, item: Item, view: string): Item {
   const engineering = db.records
     .filter((r) => r.track_id === item.track_id && r.item_key === item.item_key)
     .map((r) => ({ id: r.id, tracker: r.tracker, external_ref: r.external_ref, state: r.state, raw_status: r.raw_status, target_date: r.target_date, estimate: r.estimate, url: r.url }));
-  if (view === "brief") return { ...item, feature: null, requirements: [], blockers: [], trace: [], depends_on: [], validation_gates: [], economics: {}, priority: null, confidence: null, engineering: [] };
+  if (view === "brief") return { ...item, feature: null, requirements: [], blockers: [], trace: [], depends_on: [], depends_titles: {}, validation_gates: [], economics: {}, priority: null, confidence: null, engineering: [] };
   return { ...item, engineering };
+}
+
+/**
+ * As oracle.roadmap.views.with_dependency_names: each dependency that is not an item of the
+ * version, by its name (another version's item of this roadmap, else another roadmap's: the
+ * Plan's seeded items stand for those).
+ */
+function withDependencyNames(ctx: RoadmapContext, db: RoadmapDb, doc: Doc, items: Item[]): Item[] {
+  const here = new Set(items.map((i) => i.item_key));
+  const names = new Map<string, string>(ALERTS_APPROVED.map((x) => [x.key, x.title]));
+  for (const v of ctx.versions.filter((x) => x.document_id === doc.id).sort((a, b) => a.number - b.number))
+    for (const i of db.items[v.id] ?? []) if (!here.has(i.item_key)) names.set(i.item_key, i.title);
+  return items.map((i) => ({ ...i, depends_titles: Object.fromEntries((i.depends_on ?? []).filter((k) => !here.has(k) && names.has(k)).map((k) => [k, names.get(k)!])) }));
+}
+
+/** As oracle.roadmap.staleness.refusal: why nothing was done, in plain words. */
+function stalenessRefusal(action: string, states: readonly string[]): string {
+  const words: Record<string, string> = {
+    fresh: "up to date",
+    potentially_stale: "marked as possibly stale",
+    under_review: "already under review",
+    reconciled: "already marked still valid",
+  };
+  const verb = action === "reconcile" ? "mark still valid" : action;
+  const unique = [...new Set(states)].sort();
+  if (!unique.length) return `Nothing to ${verb}: no such item`;
+  return `Nothing to ${verb}: ${states.length === 1 ? "this item is" : "these items are"} ${unique.map((x) => words[x] ?? x.replace(/_/g, " ")).join(" or ")}`;
 }
 
 function docRef(doc: Doc, v?: Version): Schemas["DocumentRef"] {
@@ -827,7 +860,7 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
         source: src ? { id: src.document_id, slug: src.slug, title: src.title, version: src.version, approved: !!src.approved_at } : null,
         track_id: db.tracks.find((t) => t.roadmap_id === doc.id)?.id ?? null,
         view,
-        items: (v ? db.items[v.id] ?? [] : []).map((i) => withEngineering(db, liveItem(db, i), view)),
+        items: withDependencyNames(ctx, db, doc, (v ? db.items[v.id] ?? [] : []).map((i) => withEngineering(db, liveItem(db, i), view))),
       };
       return json(200, out);
     }
@@ -855,14 +888,34 @@ export async function routeRoadmap(ctx: RoadmapContext, db: RoadmapDb, req: Requ
       const items = (v ? db.items[v.id] ?? [] : []).filter((i) => !b.item_keys?.length || b.item_keys.includes(i.item_key));
       if (b.action === "reconcile" && !b.reason?.trim()) return json(422, { detail: "reconciling needs a reason" });
       const from = b.action === "review" ? ["potentially_stale"] : ["potentially_stale", "under_review"];
+      const to: Item["freshness"] = b.action === "review" ? "under_review" : "reconciled";
+      // A Plan item the version has no row for (the alerts scenarios): its freshness by key.
+      const keyed = (b.item_keys ?? []).filter((k) => !items.some((i) => i.item_key === k) && db.freshness?.[k]);
+      const states = [...items.map((i) => i.freshness), ...keyed.map((k) => db.freshness![k]!)];
       const targets = items.filter((i) => from.includes(i.freshness));
-      if (!targets.length) return json(409, { detail: `nothing to ${b.action}` });
-      const changed = targets.map((i) => {
-        const entry = { item: i.item_key, id: i.id, from: i.freshness, to: b.action === "review" ? "under_review" : "reconciled" };
-        i.freshness = entry.to as Item["freshness"];
-        if (b.reason) i.note = b.reason;
-        return entry;
-      });
+      const keyedTargets = keyed.filter((k) => from.includes(db.freshness![k]!));
+      if (!targets.length && !keyedTargets.length) return json(409, { detail: stalenessRefusal(b.action, states) });
+      const changed = [
+        ...targets.map((i) => {
+          const entry = { item: i.item_key, id: i.id, from: i.freshness, to };
+          i.freshness = to;
+          if (b.reason) i.note = b.reason;
+          return entry;
+        }),
+        ...keyedTargets.map((k) => {
+          const entry = { item: k, id: stableUuid(`roadmap-item/${k}`), from: db.freshness![k]!, to };
+          db.freshness![k] = to;
+          return entry;
+        }),
+      ];
+      // As the API: acting monitors the roadmap's tracks at once, so a reconciled item's stale
+      // alert resolves and leaves the Inbox and its counts (the stale-marks walk).
+      if (to === "reconciled") {
+        const done = new Set(changed.map((c) => c.item));
+        const ours = new Set(db.tracks.filter((t) => t.roadmap_id === doc.id).map((t) => t.id));
+        for (const a of db.alerts ?? [])
+          if (a.kind === "stale" && a.state !== "resolved" && a.item_key && done.has(a.item_key) && ours.has(a.track_id)) Object.assign(a, { state: "resolved", resolved_at: now() });
+      }
       return json(200, { changed, items: (v ? db.items[v.id] ?? [] : []).map((i) => withEngineering(db, liveItem(db, i), "full")) });
     }
     if (p[3] === "versions" && p[5] === "items" && m === "PUT") {
@@ -1984,6 +2037,13 @@ export const TRACK_ALERTS_ACTIONS_SCENARIO = "track-alerts-actions";
  * 23 imports, more than the item history lists.
  */
 export const TRACK_ALERTS_HISTORY_SCENARIO = "track-alerts-history";
+/**
+ * The stale-marks walk: "track-alerts" plus "Budgets per team" may be stale (its PRD section
+ * changed): Review in the Inbox opens the Plan's Still valid…, and reconciling resolves it.
+ */
+export const TRACK_ALERTS_STALE_SCENARIO = "track-alerts-stale";
+/** As "track-alerts-stale", the PRD section Behaviour removed in version 2 (not changed). */
+export const TRACK_ALERTS_STALE_REMOVED_SCENARIO = "track-alerts-stale-removed";
 const ACTIONS_BLOCKER_ID = stableUuid("track-alert/slack-alerts/blocker");
 type StoredAlert = Omit<TrackAlertOut, "prd" | "actions" | "inbox_state">;
 /** The Plan's ENG-405 record (routePlan seeds it as plan:record:ENG-405). */
@@ -1994,7 +2054,7 @@ const DONE_DAYS = 30;
  * One open date slip: ENG-405 (Weekly alert digest) moved from Nov 30 to Dec 9; Beta rests
  * on Nov 30. `many` adds two open "not on the roadmap" alerts on the same track.
  */
-function seedAlerts(db: RoadmapDb, trackId: string, many = false, actions = false, history = false) {
+function seedAlerts(db: RoadmapDb, trackId: string, many = false, actions = false, history = false, stale = false, removed = false) {
   db.alerts = [
     {
       id: stableUuid("track-alert/alert-digest/date_slip"), track_id: trackId, item_key: "alert-digest", item_title: "Weekly alert digest",
@@ -2027,6 +2087,16 @@ function seedAlerts(db: RoadmapDb, trackId: string, many = false, actions = fals
         kind: "unplanned", detail: "acme/app#425 (Usage dashboard charts) is not on the roadmap", data: { tracker_ref: "acme/app#425" }, ...open,
       },
     );
+  }
+  if (stale) {
+    // As the API words it (staleness.with_heading, one_count): the section by its heading, once;
+    // a section gone from the version "removed", as the rest of the Inbox says it.
+    db.alerts.push({
+      id: stableUuid("track-alert/team-budgets/stale"), track_id: trackId, item_key: "team-budgets", item_title: "Budgets per team",
+      kind: "stale", detail: `PRD section Behaviour ${removed ? "removed" : "changed"} in version 2`, data: { freshness: "potentially_stale" },
+      state: "open", opened_at: "2026-10-20T15:06:00Z", kept_by: null, kept_by_name: null, kept_at: null, note: null, resolved_at: null,
+    });
+    (db.freshness ??= {})["team-budgets"] = "potentially_stale";
   }
   db.recordEvents = [{ record_id: SLIP_RECORD_ID, observed_at: "2026-10-20T15:00:00Z", field: "target_date", before: "2026-11-30", after: "2026-12-09" }];
   if (history) {

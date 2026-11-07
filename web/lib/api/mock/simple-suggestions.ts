@@ -16,7 +16,7 @@ import type { Schemas } from "@/lib/api/client";
 import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { newCompany, stableUuid } from "./ids";
-import { canEditRoadmap, closed, GOALS, goalId, goalPositionOf, goalRank, knowTalkGoals, roadmapId, lookalikes, matchesOf, TALK_GOALS, type GoalSuggestionRow, type SimpleDb } from "./simple-roadmap";
+import { canEditRoadmap, closed, GOALS, goalId, goalOrderKey, goalPositionOf, knowTalkGoals, MAP_GOALS, mapGoalRef, roadmapId, lookalikes, matchesOf, TALK_GOALS, type GoalSuggestionRow, type SimpleDb } from "./simple-roadmap";
 
 type Role = Schemas["Me"]["role"];
 
@@ -139,11 +139,20 @@ type Ctx = { id: string; role: Role; names: Record<string, string>; owners?: str
 
 /**
  * qa4-simple-home-4: as the API (additions._goals), every confirmed company goal is a goal to
- * suggest under, by its own id: the mock's roadmap goals, then the baseline's confirmed goals.
+ * suggest under, by its own id: the mock's roadmap goals, the baseline's confirmed goals, then
+ * the Goal map's goals (named by their id, as the roadmap's items name them).
  */
-const goalKeys = (ctx: Ctx): string[] => [...Object.keys(GOALS), ...(ctx.companyGoals ?? []).map((g) => g.key).filter((k) => !(k in GOALS))];
-const idOf = (ctx: Ctx, key: string): string => (key in GOALS ? goalId(key) : (ctx.companyGoals?.find((g) => g.key === key)?.id ?? goalId(key)));
-const titleOf = (ctx: Ctx, key: string): string => GOALS[key] ?? ctx.companyGoals?.find((g) => g.key === key)?.title ?? key;
+type GoalRow = { key: string; id: string; title: string };
+function goalRows(db: SimpleDb | undefined, ctx: Ctx): GoalRow[] {
+  const out: GoalRow[] = Object.keys(GOALS).map((k) => ({ key: k, id: goalId(k), title: GOALS[k] }));
+  for (const g of ctx.companyGoals ?? []) if (!(g.key in GOALS)) out.push({ key: g.key, id: g.id, title: g.title });
+  const map = [...Object.values(db?.map_goals ?? {}), ...Object.keys(MAP_GOALS).map((id) => (db ? mapGoalRef(db, id) : null))];
+  for (const g of map) if (g && !out.some((x) => x.id === g.id || x.key === g.key)) out.push({ key: g.key, id: g.id, title: g.title });
+  return out;
+}
+const goalKeys = (db: SimpleDb | undefined, ctx: Ctx): string[] => goalRows(db, ctx).map((g) => g.key);
+const idOf = (db: SimpleDb | undefined, ctx: Ctx, key: string): string => goalRows(db, ctx).find((g) => g.key === key)?.id ?? goalId(key);
+const titleOf = (db: SimpleDb | undefined, ctx: Ctx, key: string): string => goalRows(db, ctx).find((g) => g.key === key)?.title ?? key;
 // The mock's roadmap items name its own goals, so a company goal's items are not modelled: never "empty" (no empty group on Roadmap).
 
 /** The roadmap a goal's suggestions belong to: the one holding its items, else the first. */
@@ -176,7 +185,7 @@ export function fileSuggestion(db: SimpleDb, ctx: Ctx, goal: string, title: stri
   const o = outcome.replace(/\s+/g, " ").trim();
   if (!t || t.length > 200 || !o || o.length > 1000) return { status: 422, detail: "A name and what it does, and for whom" };
   // As the API: a held suggestion (owners only) refuses no one else's like title.
-  if (db.goal_suggestions!.some((x) => x.goal === goal && x.status !== "accepted" && (ctx.role === "owner" || !x.checks?.length) && norm(x.title) === norm(t))) return { status: 409, detail: `${t} is suggested for ${titleOf(ctx, goal)} already` };
+  if (db.goal_suggestions!.some((x) => x.goal === goal && x.status !== "accepted" && (ctx.role === "owner" || !x.checks?.length) && norm(x.title) === norm(t))) return { status: 409, detail: `${t} is suggested for ${titleOf(db, ctx, goal)} already` };
   const r: GoalSuggestionRow = {
     id: crypto.randomUUID(), goal, title: t, outcome: o, why: "", evidence: [], status: "open", reason: null, origin: "person", proposed_by: ctx.id,
     created_at: new Date(mockNowMs()).toISOString(), decided_by_name: null, decided_at: null, change_id: null, item_id: null, flow: null,
@@ -198,7 +207,7 @@ function out(db: SimpleDb, s: GoalSuggestionRow, ctx: Ctx): Schemas["SimpleGoalS
   const open = s.status === "open";
   const decides = goalDecider(db, s.goal, ctx).mine;
   return {
-    id: s.id, goal: { id: idOf(ctx, s.goal), key: s.goal, title: titleOf(ctx, s.goal) }, title: s.title, outcome: s.outcome, why: s.why, evidence: s.evidence,
+    id: s.id, goal: { id: idOf(db, ctx, s.goal), key: s.goal, title: titleOf(db, ctx, s.goal) }, title: s.title, outcome: s.outcome, why: s.why, evidence: s.evidence,
     status: s.status, reason: s.reason, origin: s.origin, created_at: s.created_at, decided_by_name: s.decided_by_name, decided_at: s.decided_at,
     change_id: s.change_id, item_id: s.item_id, looks_like: open ? matchesOf(db, lookalikes(db, s.title, null)) : [], flow: s.flow,
     proposed_by_name: s.proposed_by ? (ctx.names[s.proposed_by] ?? null) : null,
@@ -221,7 +230,7 @@ export function goalSuggestionInboxRows(db: SimpleDb | undefined, ctx: Ctx, seen
     .map((s) => {
       const rm = roadmapOf(db!, s.goal);
       return {
-        id: s.id, goal: { id: idOf(ctx, s.goal), key: s.goal, title: titleOf(ctx, s.goal) }, title: s.title, outcome: s.outcome,
+        id: s.id, goal: { id: idOf(db, ctx, s.goal), key: s.goal, title: titleOf(db, ctx, s.goal) }, title: s.title, outcome: s.outcome,
         from_oracle: s.origin !== "person", proposed_by_name: s.proposed_by ? (ctx.names[s.proposed_by] ?? null) : null,
         document_id: rm ? roadmapId(rm) : null, at: s.created_at, state: !seen || s.created_at > seen ? "new" : "open",
       };
@@ -232,7 +241,7 @@ function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-const goalOf = (ctx: Ctx, value: string | undefined): string | undefined => goalKeys(ctx).find((k) => idOf(ctx, k) === value || k === value);
+const goalOf = (db: SimpleDb, ctx: Ctx, value: string | undefined): string | undefined => goalKeys(db, ctx).find((k) => idOf(db, ctx, k) === value || k === value);
 
 /** /v1/simple/goal-suggestions and /v1/simple/goals/{goal_id}/suggest. `addItem` makes the add_item change. */
 export async function routeGoalSuggestions(
@@ -250,7 +259,7 @@ export async function routeGoalSuggestions(
     if (m !== "POST" || (p[4] !== "suggest" && p[4] !== "suggestions")) return null;
     // As the API (additions.suggest): the role first, then the goal (422, never found across companies).
     if (p[4] === "suggest" && ctx.role === "viewer") return json(403, { detail: "Commenters and up ask Oracle for suggestions" });
-    const goal = goalOf(ctx, p[3]);
+    const goal = goalOf(db, ctx, p[3]);
     if (!goal) return json(422, { detail: "No such goal" });
     if (p[4] === "suggestions") {
       const body = (await req.json().catch(() => ({}))) as { title?: string; outcome?: string };
@@ -258,19 +267,19 @@ export async function routeGoalSuggestions(
       return "detail" in r ? json(r.status, { detail: r.detail }) : json(201, out(db, r, ctx));
     }
     const job = (db.goal_jobs![goal] ??= { until: mockNowMs() + SUGGEST_JOB_MS, job_id: crypto.randomUUID(), origin: "on_demand" });
-    return json(200, { goal_id: idOf(ctx, goal), pending: true, job_id: job.job_id });
+    return json(200, { goal_id: idOf(db, ctx, goal), pending: true, job_id: job.job_id });
   }
   if (!p[3] && m === "GET") {
-    const only = q.get("goal_id") ? goalOf(ctx, q.get("goal_id")!) : undefined;
+    const only = q.get("goal_id") ? goalOf(db, ctx, q.get("goal_id")!) : undefined;
     if (q.get("goal_id") && !only) return json(404, { detail: "No such goal" });
     const status = q.get("status") ?? "open";
     // A new company has no confirmed goal yet: none to suggest under.
-    // goal-order: the goals in the one goal order (else as before), as the API lists them.
-    const goals = (newCompany() ? [] : goalKeys(ctx).filter((g) => !only || g === only)).sort((a, b) => goalRank(a) - goalRank(b));
+    // goal-order: the goals in the one goal order, as the API lists them and the roadmap groups them.
+    const goals = (newCompany() ? [] : goalKeys(db, ctx).filter((g) => !only || g === only)).sort((a, b) => (goalOrderKey(a) < goalOrderKey(b) ? -1 : 1));
     return json(200, {
       goals: goals.map((g) => {
         const d = goalDecider(db, g, ctx);
-        return { goal: { id: idOf(ctx, g), key: g, title: titleOf(ctx, g), position: goalPositionOf(g) }, pending: !!db.goal_jobs![g], empty: g in GOALS && isEmpty(db, g), decider_name: d.id ? (ctx.names[d.id] ?? null) : null, can_decide: d.mine };
+        return { goal: { id: idOf(db, ctx, g), key: g, title: titleOf(db, ctx, g), position: goalPositionOf(g) }, pending: !!db.goal_jobs![g], empty: g in GOALS && isEmpty(db, g), decider_name: d.id ? (ctx.names[d.id] ?? null) : null, can_decide: d.mine };
       }),
       suggestions: rows.filter((s) => goals.includes(s.goal) && s.status === status && (ctx.role === "owner" || !s.checks?.length)).map((s) => out(db, s, ctx)),
     });
@@ -296,7 +305,7 @@ export async function routeGoalSuggestions(
   if (s.status !== "open") return json(409, { detail: `This suggestion is ${s.status} already` });
   const res = await addItem({
     op: "add_item",
-    target: { roadmap_id: body.roadmap_id ?? null, where: { kind: "goal", value: idOf(ctx, s.goal) }, suggestion_id: s.id },
+    target: { roadmap_id: body.roadmap_id ?? null, where: { kind: "goal", value: idOf(db, ctx, s.goal) }, suggestion_id: s.id },
     before: {},
     after: { title: s.title, outcome: s.outcome },
     session_id: body.session_id ?? null,

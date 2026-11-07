@@ -476,3 +476,121 @@ def test_setext_heading_is_patched():
     with pytest.raises(ChangeError) as e:
         one_pager.patched_markdown(SimpleNamespace(markdown=md), [gone], {}, {"later": "Soon · 6"})
     assert "“Soon · 8 items”" in str(e.value.detail)
+
+
+# --------------------------------------------------------------------------- follow-ups
+
+TWO_DOC = "later-two"
+TWO_PRD = HEAD_PRD.replace("title: Later list", "title: Later two").replace(
+    "## Later · 8 items {#later}\n",
+    "## Later · 8 items {#later}\n\nFive features wait for next quarter.\n",
+)
+TWO_BODY = "“Five features wait for next” says 5, but “Later · 6 items” shows 6 items."
+
+
+async def two_world(client):
+    ctx = await make_ctx()
+    r = await client.post(f"/v1/documents/{TWO_DOC}/versions", content=TWO_PRD.encode(),
+                          headers=MD | ctx.as_("owner"))  # fmt: skip
+    assert r.status_code in (200, 201), r.text
+    return ctx
+
+
+async def test_either_of_two_fixes_in_a_section_undoes(client):
+    # Review finding: with two number fixes in one section only the newer could be undone;
+    # the older's Undo said "Changed by <yourself>". Each undoes its own number only.
+    ctx = await two_world(client)
+    head = (await fix(client, ctx, "owner", look(await get(client, ctx, "owner", TWO_DOC),
+                                                 HEAD)["fix"])).json()["change"]  # fmt: skip
+    body_fix = look(await get(client, ctx, "owner", TWO_DOC), TWO_BODY)["fix"]
+    body = (await fix(client, ctx, "owner", body_fix)).json()["change"]
+    view = await get(client, ctx, "owner", TWO_DOC)
+    assert [(x["change_id"], x["can_undo"]) for x in view["fixed"]] == [
+        (head["id"], True),
+        (body["id"], True),
+    ]
+    u = await client.post(f"{CHANGES}/{head['id']}/undo", headers=ctx.as_("owner"))
+    assert u.status_code in (200, 201), u.text
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.scalar(select(SimpleDraft))
+        assert "later" not in (d.overlay.get("headings") or {})
+        assert d.overlay["sections"]["later"].startswith("Six features wait for next quarter.")
+    after = await get(client, ctx, "owner", TWO_DOC)
+    assert [x["change_id"] for x in after["fixed"]] == [body["id"]]
+    u = await client.post(f"{CHANGES}/{body['id']}/undo", headers=ctx.as_("owner"))
+    assert u.status_code in (200, 201), u.text
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.scalar(select(SimpleDraft))
+        assert not d.overlay.get("sections", {}).get("later")
+        assert not (d.overlay.get("headings") or {})
+    assert (await get(client, ctx, "owner", TWO_DOC))["fixed"] == []
+
+
+async def test_undo_whose_number_is_gone_is_refused(client):
+    # The older fix's number was changed again since: its undo is refused, nothing written.
+    ctx = await clear_world(client)
+    f = look(await get(client, ctx, "owner", DOC), COUNT)["fix"]
+    one = (await fix(client, ctx, "owner", f)).json()["change"]
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.scalar(select(SimpleDraft))
+        secs = dict(d.overlay["sections"])
+        secs["later"] = secs["later"].replace("Six features", "Seven features")
+        d.overlay = {**d.overlay, "sections": secs}
+        await s.commit()
+    u = await client.post(f"{CHANGES}/{one['id']}/undo", headers=ctx.as_("owner"))
+    assert u.status_code == 409, u.text
+
+
+async def test_a_decider_who_is_no_owner_sees_the_proposal(client):
+    # Review finding: the Inbox's Open on "Section number on <PRD>" lands the PRD's decider
+    # (no owner) on the one-pager, where "Needs a look" was owners-only: the proposal routed
+    # to them shows on its item, with Accept and Decline; nothing else does.
+    from oracle.docs.models import Document
+    from oracle.review.models import DocumentReviewPolicy
+
+    ctx = await clear_world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == DOC))
+        s.add(DocumentReviewPolicy(document_id=doc.id, decider_id=ctx.users["approver"].id))
+        await s.commit()
+    assert (await get(client, ctx, "approver", DOC))["needs_look"] == []
+    f = look(await get(client, ctx, "owner", DOC), COUNT)["fix"]
+    r = await fix(client, ctx, "commenter", f)
+    assert r.status_code == 201, r.text
+    prop = r.json()["change"]
+    assert prop["routed_to"] == [str(ctx.users["approver"].id)]
+    mine = await get(client, ctx, "approver", DOC)
+    assert [x["text"] for x in mine["needs_look"]] == [COUNT]
+    assert mine["needs_look"][0]["fix"]["proposal"]["change_id"] == prop["id"]
+    assert mine["needs_look"][0]["fix"]["proposal"]["can_decide"] is True
+    acc = await client.post(f"{CHANGES}/{prop['id']}/accept", headers=ctx.as_("approver"))
+    assert acc.status_code == 200, acc.text
+    assert (await get(client, ctx, "approver", DOC))["needs_look"] == []
+
+
+def test_a_fix_keeps_thousands_separators():
+    sec = Section(
+        section_key="targets",
+        heading="Targets",
+        body_md="Company-wide target: 1,200,000 paid seats in total.",
+    )
+    f = one_pager_checks._fix(sec, "1,200,000 paid seats", "1,200,000", 1100000)
+    assert f is not None and f["value"] == "1,100,000"
+    plain = Section(section_key="t", heading="T", body_md="Target: 1200000 paid seats.")
+    assert one_pager_checks._fix(plain, "1200000 paid seats", "1200000", 1100000)["value"] == (
+        "1100000"
+    )
+
+
+def test_a_word_between_number_and_noun_keeps_its_fix():
+    sec = Section(
+        section_key="later",
+        heading="Later",
+        body_md="We plan two more features for spring.\n\n- One\n- Two\n- Three\n",
+    )
+    [x] = one_pager_checks.numbers([sec])
+    assert x.fix is not None
+    assert x.fix["said"] == "two more features for spring"
+    assert one_pager_checks.set_number(sec.body_md, x.fix["said"], x.fix["value"]).startswith(
+        "We plan three more features"
+    )

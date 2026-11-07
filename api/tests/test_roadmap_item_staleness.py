@@ -70,7 +70,7 @@ async def test_a_new_prd_version_marks_only_the_items_whose_section_changed(
     assert got["payment-step"]["freshness"] == "fresh"
     ship = got["shipping-step"]
     assert ship["freshness"] == "potentially_stale"
-    assert ship["stale_reasons"] == ["PRD section s-5-2 changed in version 2"]
+    assert ship["stale_reasons"] == ["PRD section 5.2 Shipping step changed in version 2"]
     assert ship["stale_since"] and ship["caused_by_change_id"]
     # Still traced to the PRD version it was built from: nothing rewritten.
     assert ship["prd"]["document"]["version"] == 1
@@ -84,6 +84,30 @@ async def test_a_new_prd_version_marks_only_the_items_whose_section_changed(
         assert event.subject_kind == "document_version" and event.cause == "version_imported"
         assert event.handled_by.index("trace.mark_stale") < event.handled_by.index("roadmap.items")
         assert event.data["roadmap"]["item_ids"] == [ship["id"]]
+
+
+async def test_a_section_gone_from_a_new_prd_version_is_named_by_its_old_heading(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+):
+    """protects=a section gone from the PRD is named by the heading it had in the version the
+    item was built from, in one read for every such item; fails_when=the reason names the
+    section's key ("PRD section s-5-2 removed"), or says "is gone" where the rest of the
+    Inbox says a section was removed; no_claim=a section that only changed."""
+    _, auth = owner
+    await approved_prd(client, auth)
+    await built_roadmap(client, auth, runtime)
+    text = draft("prd_v1.md")
+    assert "{#s-5-2}" in text
+    # Version 2 gives section 5.2 a new anchor: the key s-5-2 is gone.
+    assert (
+        await import_draft(client, auth, text.replace("{#s-5-2}", "{#s-5-2b}"))
+    ).status_code == 201
+    ship = (await items(client, auth))["shipping-step"]
+    assert ship["freshness"] == "potentially_stale"
+    assert "PRD section 5.2 Shipping step removed in version 2" in ship["stale_reasons"]
+    assert not any("s-5-2" in r for r in ship["stale_reasons"])
 
 
 async def test_a_changed_requirement_marks_its_items(client, owner, runtime):  # noqa: F811
@@ -102,7 +126,10 @@ async def test_a_changed_requirement_marks_its_items(client, owner, runtime):  #
     assert resp.status_code == 200, resp.text
     got = await items(client, auth)
     assert got["payment-step"]["freshness"] == "potentially_stale"
-    assert got["payment-step"]["stale_reasons"] == ["requirement:saved-cards changed"]
+    # Named, never by its ref (the stale-marks walk).
+    assert got["payment-step"]["stale_reasons"] == [
+        'The requirement "Saved cards and wallets" changed'
+    ]
     assert got["shipping-step"]["freshness"] == "fresh"
 
 
@@ -220,7 +247,7 @@ async def test_bulk_changes_name_the_count_that_applies_to_the_item_once(
     await bulk(11)
     reasons = (await items(client, auth))["payment-step"]["stale_reasons"]
     # Only the requirement of the 42 and of the 11 is the payment step's: it is named, once.
-    assert reasons == ["requirement:saved-cards changed"], reasons
+    assert reasons == ['The requirement "Saved cards" changed'], reasons
 
 
 async def test_a_real_bulk_write_reads_ground_truth_items_merged_and_plural(
@@ -366,6 +393,20 @@ def test_an_old_literal_section_link_reason_is_reworded_when_read():
     # One stored before the Ground Truth rename reads Ground Truth.
     old_count = "PRD section s-5-1 links 3 baseline items, which changed"
     assert staleness.for_reader([old_count], None) == [counted]
+
+
+def test_a_gone_section_reason_stored_in_the_old_words_reads_removed():
+    """A reason stored as "PRD section X is gone in version N" reads in the Inbox's words for
+    a removed section ("removed"), on every read path, with no migration; it counts as the
+    same section's line as a "changed" one; fails_when=an old row still says "is gone"."""
+    old = "PRD section Shipping step is gone in version 2"
+    new = "PRD section Shipping step removed in version 2"
+    assert staleness.for_reader([old], None) == [new]
+    assert staleness.stale_why([old], "default") == new
+    assert staleness.detail_for_reader(staleness.stored_detail([old]), None) == new
+    assert staleness.with_heading(["PRD section s-5-2 is gone in version 2"], "s-5-2",
+                                  "Shipping step") == [new]  # fmt: skip
+    assert staleness.one_count(["PRD section Shipping step changed in version 1", new]) == [new]
 
 
 def test_an_old_literal_reason_naming_a_hidden_decision_is_hidden_before_it_is_reworded():
