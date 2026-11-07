@@ -41,6 +41,7 @@ import {
   RESEARCH_UNSAFE_LINK_SCENARIO,
   routeDiscussions,
   seedDiscussionInbox,
+  seedIntakeDiscussion,
   seedDiscussionReplies,
   seedDiscussions,
   seedDiscussionRecord,
@@ -104,7 +105,7 @@ import { routeFirefliesBrowse } from "./fireflies";
 import { liveReply, routeLive } from "./live";
 import { sourceBrowseRoute } from "./source-browse";
 import { DRAFT_NEW_ITEMS_SCENARIO, itemsChangedSince, routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
-import { BEFORE_DRAFTING, intakeReadInbox, LATE_ANSWER_WITHHELD, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, seedReadFailedTwice, startedIntakeRun, type IntakeContext, type SubjectLookup } from "./intake";
+import { BEFORE_DRAFTING, gapCategoryLabel, intakeReadInbox, LATE_ANSWER_WITHHELD, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, seedReadFailedTwice, startedIntakeRun, type IntakeContext, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, REPORT_DRAFT_ITEM, REPORT_DRAFT_ITEM_SCENARIO, REPORT_PRD_MOVED_SCENARIO, reportsRoute, type LiveTracks, type ReportsDb } from "./reports";
 import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
 import { addDigest, addMetricsReview, ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
@@ -4280,7 +4281,9 @@ function load(): Db {
             ? seedRunDiscussionsScenario(db)
             : scenario === "discussion-record"
               ? seedDiscussionRecordScenario(db)
-              : scenario === "discussion-change-kinds"
+              : scenario === "discussion-intake"
+                ? seedIntakeDiscussion({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, ensureV2(db).intakes[0])
+                : scenario === "discussion-change-kinds"
                 ? seedDiscussionChangeKindsScenario(db)
                 : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
@@ -4628,10 +4631,35 @@ function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): Su
     return { key: `run_item:${run.id}:${cp.kind}:${s.item_key}`, label: `${label} · ${s.item_key}`, url: `/runs/${run.id}`, run_id: run.id };
   }
   if (kind === "priorities") return { key: "priorities", label: "Priority order", url: "/priorities" };
+  // An intake and its gaps open on the intake's page; a PRD's own gap on its newest version (as Labels.of).
+  if (kind === "intake") {
+    const intake = ensureV2(db).intakes.find((i) => i.id === s.intake_id);
+    if (!intake) return { status: 404, detail: "Intake not found" };
+    return { key: `intake:${intake.id}`, label: intake.title, url: `/intakes/${intake.id}` };
+  }
+  if (kind === "gap") {
+    const gap = ensureV2(db).gaps.find((g) => g.id === s.gap_id);
+    if (!gap) return { status: 404, detail: "Gap not found" };
+    const label = `${gapCategoryLabel(gap.category)} gap`;
+    if (gap.intake_id) return { key: `gap:${gap.id}`, label, url: `/intakes/${gap.intake_id}` };
+    const doc = gap.document_id ? findDocument(db, gap.document_id) : undefined;
+    const newest = doc ? docVersions(db, doc).pop() : undefined;
+    if (!doc || !newest) return { status: 404, detail: "Gap not found" };
+    return { key: `gap:${gap.id}`, label, url: `/documents/${doc.slug}/v/${newest.number}` };
+  }
   // ask-page-context: the page's own name, as the API (Labels.of).
   if (kind === "screen") return { key: `screen:${s.path}`, label: (s.view as { name?: string } | undefined)?.name || screenPageName(String(s.path)), url: String(s.path) };
   const id = Object.values(s)[0];
   return { key: `${kind}:${id}`, label: kind.replace("_", " "), url: "/" };
+}
+
+/** As service.Labels.gone: a discussion whose subject's row is missing (deleted); its page opens no thread. */
+function discussionGone(db: Db, d: DiscussionRow): boolean {
+  const s = d.subject as Record<string, unknown>;
+  if (["document", "section", "roadmap_item"].includes(d.subject_kind)) return !findDocument(db, String(s.document_id));
+  if (d.subject_kind === "checkpoint" || d.subject_kind === "checkpoint_item") return !db.runs?.runs.some((r) => r.id === s.run_id);
+  if (d.subject_kind === "intake" || d.subject_kind === "gap") return "status" in discussionSubject(db, d.subject_kind, s);
+  return false;
 }
 
 /** D13: a "general" item on the whole draft, raised on `v` by `authorId` (as create_general_feedback). */
@@ -7992,7 +8020,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     // F2: the track group (the track's owner, else every owner); its new and open alerts count.
     const tracked = inboxTracks(roadmapCtx, db.roadmap, seenBefore);
     // G6: invitations, mentions and changes proposed in discussions; new and open ones count.
-    const discussions = discussionInboxRows(db.discussions ?? emptyDiscussions(), db.members, me, seenBefore);
+    const discussions = discussionInboxRows(db.discussions ?? emptyDiscussions(), db.members, me, seenBefore, (d) => discussionGone(db, d));
     const discussing = discussions.filter((r) => r.state !== "done").length;
     // A5: pending access requests, for owners and approvers; each counts.
     const accessRequestRows = inboxAccessRequests(db, me);

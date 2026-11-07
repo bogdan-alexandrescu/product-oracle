@@ -825,20 +825,83 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
   });
 }
 
+/**
+ * "discussion-intake": the approver's open discussion on an intake (its page: Before drafting,
+ * /intakes/<id>), where Oracle proposes one way to measure its goal; Review changes opens it there.
+ */
+export function seedIntakeDiscussion(ctx: Omit<DiscussionsContext, "me" | "db">, intake: { id: string; title: string }): DiscussionsDb {
+  const db = emptyDiscussions();
+  const approver = ctx.members.find((m) => m.email === "approver@example.com")!.id;
+  const id = ctx.uuid();
+  const at = "2026-10-21T08:30:00Z";
+  db.discussions.push({
+    id,
+    subject_kind: "intake",
+    subject: { intake_id: intake.id },
+    subject_key: `intake:${intake.id}`,
+    subject_label: intake.title,
+    subject_url: `/intakes/${intake.id}`,
+    document_id: null,
+    run_id: null,
+    title: "Saved addresses: how do we measure it?",
+    visibility: "open",
+    author_only: false,
+    status: "open",
+    origin: "discuss",
+    started_by: approver,
+    summary: null,
+    summary_status: "none",
+    summary_shared: true,
+    last_message_at: at,
+    lock_version: 1,
+    created_at: at,
+    updated_at: at,
+  });
+  db.participants.push({ discussion_id: id, user_id: approver, added_via: "started", left_at: null, last_read_at: null, created_at: at });
+  db.messages.push({
+    id: ctx.uuid(),
+    discussion_id: id,
+    author_kind: "person",
+    author_id: approver,
+    body: "How will we know repeat checkout got faster?",
+    mentions: [],
+    mentions_oracle: false,
+    reply_to: null,
+    created_at: at,
+    edited_at: null,
+    deleted_at: null,
+  });
+  db.changes!.push({
+    id: ctx.uuid(),
+    discussion_id: id,
+    kind: "goal_measure",
+    label: "Measure repeat checkout time in seconds",
+    target: { title: "Repeat checkout time" },
+    payload: { metric: "Repeat checkout time", unit: "seconds", target: 30 },
+    edited_payload: null,
+    rationale: null,
+    proposed_by_kind: "oracle",
+    proposed_by: null,
+    suggested_by: null,
+    status: "proposed",
+    lock_version: 1,
+    created_at: at,
+  });
+  return db;
+}
+
 /** The API's changes.THREAD_PAGES and THREAD_PATH: the pages that open a thread from a link (?discussion=<id>&changes=1). */
 const THREAD_PAGES = ["document", "section", "roadmap_item", "checkpoint", "checkpoint_item", "entity", "conflict", "intake", "gap", "track", "priorities"];
-const THREAD_PATH = /^\/(documents\/[^/?#]+\/v\/\d+(?:\/[^?#]*)?|runs\/[^/?#]+|ground-truth|briefs\/[^/?#]+|plan|priorities)(?:[?#]|$)/;
-/** The API's changes.GONE_URLS: where a discussion whose document, run or gap was deleted links. */
-const GONE_URLS = ["/", "/runs"];
-/** The API's changes.opens_thread: whether the discussion's page opens its thread (and its changes card) from its link. */
-function opensThread(d: DiscussionRow): boolean {
-  if (GONE_URLS.includes(d.subject_url.split(/[?#]/)[0])) return false;
+const THREAD_PATH = /^\/(documents\/[^/?#]+\/v\/\d+(?:\/[^?#]*)?|runs\/[^/?#]+|intakes\/[^/?#]+|ground-truth|briefs\/[^/?#]+|plan|priorities)(?:[?#]|$)/;
+/** The API's changes.opens_thread: whether the discussion's page opens its thread (and its changes card) from its link; a deleted subject's (its row is missing, Labels.gone) opens nothing. */
+function opensThread(d: DiscussionRow, gone: (d: DiscussionRow) => boolean): boolean {
+  if (gone(d)) return false;
   if (d.subject_kind === "screen") return THREAD_PATH.test(String((d.subject as { path?: string }).path ?? ""));
   return THREAD_PAGES.includes(d.subject_kind);
 }
 /** The API's changes.waits_on: an open change of an open discussion whose page opens its card; Oracle's proposals wait on its participants, suggestions on every approver of an open one. */
-function waitsOn(d: DiscussionRow, c: ChangeRow, participant: boolean): boolean {
-  if (d.status !== "open" || !isOpenStatus(c.status) || !opensThread(d)) return false;
+function waitsOn(d: DiscussionRow, c: ChangeRow, participant: boolean, gone: (d: DiscussionRow) => boolean): boolean {
+  if (d.status !== "open" || !isOpenStatus(c.status) || !opensThread(d, gone)) return false;
   return participant || (d.visibility === "open" && c.status === "suggested");
 }
 
@@ -849,7 +912,13 @@ function waitsOn(d: DiscussionRow, c: ChangeRow, participant: boolean): boolean 
  * open discussions whose page opens their thread only (waitsOn): a closed one's card offers no
  * action until it is reopened, and a deleted subject's page opens no thread.
  */
-export function discussionInboxRows(db: DiscussionsDb, members: Member[], me: { id: string; role: Role }, seen: string | null): Schemas["InboxDiscussionItem"][] {
+export function discussionInboxRows(
+  db: DiscussionsDb,
+  members: Member[],
+  me: { id: string; role: Role },
+  seen: string | null,
+  gone: (d: DiscussionRow) => boolean = () => false,
+): Schemas["InboxDiscussionItem"][] {
   const name = (id: string | null) => {
     const m = id ? members.find((x) => x.id === id) : undefined;
     return m ? displayName(m.email) : null;
@@ -895,7 +964,7 @@ export function discussionInboxRows(db: DiscussionsDb, members: Member[], me: { 
     for (const d of db.discussions) {
       if (!readable(d)) continue;
       const inIt = active(d).some((p) => p.user_id === me.id);
-      const waiting = (db.changes ?? []).filter((c) => c.discussion_id === d.id && waitsOn(d, c, inIt));
+      const waiting = (db.changes ?? []).filter((c) => c.discussion_id === d.id && waitsOn(d, c, inIt, gone));
       if (!waiting.length) continue;
       const at = waiting.map((c) => c.created_at).sort().at(-1)!;
       out.push({ ...base(d), id: `chg_${d.id}`, kind: "changes_proposed", by: null, excerpt: null, count: waiting.length, at, state: fresh(at) });
