@@ -417,6 +417,7 @@ export type NeedGroup =
   | "requests"
   | "dates"
   | "rituals"
+  | "intake-reads"
   | "metrics"
   | "outcomes"
   | "webhooks"
@@ -1031,6 +1032,34 @@ export function dateNeeds(inbox: InboxOut, busy: string | null, act: Act): Need[
             Reject
           </LinkButton>
         </>
+      ),
+    };
+  });
+}
+
+/**
+ * INT2: an open brief of mine Oracle couldn't read twice or more in a row (its built-in model
+ * failing too). Counted until a read works or the brief closes; Open goes to the brief, where
+ * Try again starts a read.
+ */
+export function intakeReadNeeds(inbox: InboxOut): Need[] {
+  return (inbox.intake_reads ?? []).map((r) => {
+    const label = `Oracle couldn't read ${r.title}`;
+    return {
+      key: `intake-read-${r.intake_id}`,
+      icon: "doc",
+      kind: "Brief",
+      item: (
+        <span className="truncate" title={label} data-testid="intake-read-need">
+          {label}
+        </span>
+      ),
+      context: <span className="block truncate text-text2">{`${plural(r.failures, "failed read")} in a row`}</span>,
+      at: r.at ?? null,
+      action: (
+        <LinkButton href={`/intakes/${r.intake_id}`} aria-label={`Open ${r.title}`}>
+          Open
+        </LinkButton>
       ),
     };
   });
@@ -2232,6 +2261,7 @@ export function allNeeds(
     ...stated(launches.counted, "launches"),
     ...stated(requests.counted, "requests"),
     ...ritualNeeds(inbox, busy, act),
+    ...stated(intakeReadNeeds(inbox), "intake-reads"),
     ...metricNeeds(inbox, seenBefore),
     ...stated(outcomes.counted, "outcomes"),
     ...oracleActionNeeds(inbox.oracle_actions ?? [], busy, act, seenBefore),

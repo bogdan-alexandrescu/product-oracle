@@ -12,6 +12,10 @@ a run's token is refused (the ``simple`` area is in no run-token scope, oracle.m
   propose it; never the published version's dates. 409 ``outdated`` when the item has
   dates now.
 - ``POST .../date-suggestions/{id}/dismiss``: who decides (can_decide).
+- ``GET /v1/simple/roadmap/draft-prds``: viewer and up, the draft layer (RP2): each PRD the
+  reader sees whose run's draft roadmap holds dated items not approved yet
+  (oracle.simple.roadmap_drafts). ``POST .../draft-prds/items/{id}/dates|leave-out``:
+  approvers and up, change the run's draft, never the roadmap.
 """
 
 import uuid
@@ -29,6 +33,7 @@ from oracle.simple import (
     drafts,
     goal_milestones,
     old_milestones,
+    roadmap_drafts,
     service,
     suggestions,
 )
@@ -39,10 +44,12 @@ from oracle.simple.schemas import (
     RoadmapGroup,
     SimpleAppliedVersion,
     SimpleChangeResult,
+    SimpleDraftDatesIn,
     SimpleGoalMilestone,
     SimpleGoalMilestoneIn,
     SimpleGoalMilestonePatch,
     SimpleOldMilestonesResult,
+    SimpleRoadmapDraftPrd,
     SimpleRoadmapOut,
     SimpleRoadmapWaiting,
 )
@@ -117,6 +124,36 @@ async def list_date_suggestions(
         for s, e, may in await suggestions.visible(db, principal)
         if s.status == status_
     ]
+
+
+@router.get("/draft-prds", response_model=list[SimpleRoadmapDraftPrd])
+async def list_simple_roadmap_draft_prds(
+    principal: Reader, db: TenantDB
+) -> list[SimpleRoadmapDraftPrd]:
+    """The draft layer (RP2): every PRD the caller may read whose run's draft roadmap holds
+    dated items not approved yet, each with its items, dates, owner and run. A replaced
+    PRD, a cancelled run and an approved PRD version are left out."""
+    return await roadmap_drafts.draft_prds(db, principal)
+
+
+@router.post("/draft-prds/items/{item_id}/dates", status_code=status.HTTP_204_NO_CONTENT)
+async def change_simple_roadmap_draft_dates(
+    item_id: uuid.UUID, body: SimpleDraftDatesIn, principal: Approver, db: TenantDB
+) -> None:
+    """Change dates on a draft item: the run's draft keeps them, the roadmap does not."""
+    if not await roadmap_drafts.change_dates(db, principal, item_id, body.start, body.end):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such draft item")
+    await db.commit()
+
+
+@router.post("/draft-prds/items/{item_id}/leave-out", status_code=status.HTTP_204_NO_CONTENT)
+async def leave_out_simple_roadmap_draft_item(
+    item_id: uuid.UUID, principal: Approver, db: TenantDB
+) -> None:
+    """Leave out a draft item: it never goes on the roadmap."""
+    if not await roadmap_drafts.leave_out(db, principal, item_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such draft item")
+    await db.commit()
 
 
 @router.post("/apply-approved", response_model=SimpleAppliedVersion)

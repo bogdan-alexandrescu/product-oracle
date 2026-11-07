@@ -161,8 +161,12 @@ export function ConflictsTab({
                 {(c.claims as Claim[]).map((claim, i) => (
                   <tr key={i} data-testid="claim" className="h-11 border-t border-line">
                     <td className={td}>
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span className="min-w-0 truncate font-medium" title={words(claim.value)}>
+                      {/* A phone wraps the claim and its badge rather than cutting it (visual QA GT-4). */}
+                      <span className="flex min-w-0 items-center gap-2 max-[600px]:flex-wrap max-[600px]:gap-y-1">
+                        <span
+                          className="min-w-0 truncate font-medium max-[600px]:break-words max-[600px]:whitespace-normal"
+                          title={words(claim.value)}
+                        >
                           {words(claim.value)}
                         </span>
                         {res.winner === i && (

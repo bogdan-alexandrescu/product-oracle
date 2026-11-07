@@ -111,7 +111,7 @@ for (const phone of [false, true]) {
       await expect.poll(() => waiting(page).catch(() => 0)).toBe(before - 1);
 
       // The item is cut, as Accept in Needs a decision cuts it.
-      await expect((await openItem(page)).getByTestId("item-cut")).toHaveText("Cut: it sits below the line, out of the plan");
+      await expect((await openItem(page)).getByTestId("item-cut")).toHaveText(/^Cut on [A-Z][a-z]{2} \d+ by .+/);
     });
 
     // card: inbox-meeting-proposal-decline

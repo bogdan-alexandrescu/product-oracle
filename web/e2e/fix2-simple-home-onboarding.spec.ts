@@ -126,7 +126,8 @@ test("qa-onboarding-48: a new company's owner switches to Simple, sees the setup
   await connectTools(page);
   await expect(progress(page)).toHaveText("3 of 8 done");
   await expect(step(page, "Connect tools")).toContainText("1 connected");
-  await expect(step(page, "Connect tools").getByRole("link")).toHaveCount(0);
+  // F-27: a finished step still opens, to change it.
+  await expect(step(page, "Connect tools").getByRole("link", { name: "Connect tools" })).toHaveAttribute("href", /\/settings\/connections\?from=simple-setup$/);
   await checkHorizons(page);
   await expect(progress(page)).toHaveText("4 of 8 done");
   await setZone(page);

@@ -66,7 +66,8 @@ test("an unknown brief says it was not found", async ({ page }) => {
   // protects=the 404 path; fails_when=the page hangs or shows an empty brief.
   await login(page);
   await page.goto("/briefs/00000000-0000-4000-8000-000000000000");
-  await expect(page.getByText("Tech brief not found")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Tech brief not found" })).toBeVisible();
+  await expect(page.getByTestId("brief-not-found")).toContainText("This tech brief doesn't exist or was deleted.");
 });
 
 test.describe("on a phone", () => {

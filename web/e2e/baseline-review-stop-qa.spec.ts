@@ -4,12 +4,12 @@ import { MOCK_FAIL_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /**
- * Visual QA pass B on the run's baseline review stop (/baseline?run=…): a row shows its
+ * Visual QA pass B on the run's Ground Truth review stop (/ground-truth?run=…): a row shows its
  * name, never its internal key (B-01); the bottom decision bar keeps clear of the Ask dock and
  * of the page's last row, its button and gate line read in full (B-02); a review that cannot
  * load says so in plain words with Try again, never the API's words or an id (B-03); the
  * blocker's gate reason names it by its statement, never its key. Mock API ("baseline-review"
- * scenario: an Oct 20 Build baseline run waiting at its review); invented data only.
+ * scenario: an Oct 20 Build the Ground Truth run waiting at its review); invented data only.
  * QA_SHOTS=<dir> also saves a screenshot of each view there.
  */
 
@@ -24,7 +24,7 @@ async function shot(page: Page, name: string) {
 async function open(page: Page, run: string, scenario = "baseline-review") {
   await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, scenario] as const);
   await login(page);
-  await page.goto(`/baseline?run=${run}`);
+  await page.goto(`/ground-truth?run=${run}`);
   await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
 }
 
@@ -188,7 +188,7 @@ test("B-03: switching to a run whose review cannot load says so above the earlie
 
 test("the blocker's gate reason names it by its statement, never its key", async ({ page }) => {
   await login(page);
-  await page.goto("/baseline?tab=blockers");
+  await page.goto("/ground-truth?tab=blockers");
   const statement = "The address lookup service allows 100 requests a minute per company";
   await page.getByTestId("blocker-row").filter({ hasText: statement }).click();
   const insp = page.getByTestId("blocker-inspector");

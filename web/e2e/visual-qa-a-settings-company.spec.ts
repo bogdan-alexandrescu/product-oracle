@@ -193,7 +193,7 @@ const FAILED: { name: string; path: string; url: string; what: string; after: (p
   {
     name: "Ground Truth",
     path: "/v1/baseline/graph",
-    url: "/baseline",
+    url: "/ground-truth",
     what: "Could not load the Ground Truth.",
     after: (p) => expect(p.getByRole("tab").first()).toBeVisible(),
   },
