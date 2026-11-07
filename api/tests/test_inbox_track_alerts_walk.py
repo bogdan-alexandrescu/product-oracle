@@ -9,7 +9,10 @@ PRDs (Scale, Conversion), each with its own track:
 3. names, never keys: an alert names its item; a stale reason names the PRD section by its
    heading, once (the latest version), and a lone Ground Truth item by its name; a roadmap
    item names a dependency outside its version;
-4. Review and Still valid refuse in plain words.
+4. Review and Still valid refuse in plain words;
+5. the re-check after Review or Still valid runs only for the tracks that own the changed
+   items, each on its own, so one broken track never undoes the action; and a dependency's
+   name never comes from a roadmap the reader may not see.
 
 Against Postgres. Invented data only.
 
@@ -24,6 +27,7 @@ from sqlalchemy import select
 
 from oracle.baseline.models import Entity
 from oracle.docs.models import Document, DocumentVersion, Section
+from oracle.roadmap import views
 from oracle.roadmap.models import ProductTrack, RoadmapItem
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
@@ -256,3 +260,94 @@ async def test_review_and_still_valid_refuse_in_plain_words(client):
     )
     r = await client.post(act, json=review, headers=ctx.as_("owner"))
     assert r.json()["detail"] == "Nothing to review: this item is already marked still valid"
+
+
+ACT = f"/v1/roadmaps/{ROADMAP}/items/staleness"
+
+
+async def test_the_recheck_touches_only_the_tracks_that_own_the_changed_items(client, monkeypatch):
+    """protects=the re-check after Still valid is bounded: only the track that owns each changed
+    item (its PRD's track, else its own, else the first) is re-checked; fails_when=every
+    active track on the roadmap is monitored for a one-item action; no_claim=the hourly pass."""
+    ctx, tracks = await monitored(client)
+    real, calls = views.monitor, []
+
+    async def spy(db, track, actor, **kw):
+        calls.append(str(track.id))
+        return await real(db, track, actor, **kw)
+
+    monkeypatch.setattr(views, "monitor", spy)
+    still = {"action": "reconcile", "version": 1, "reason": "Still holds"}
+    r = await client.post(ACT, json={**still, "item_keys": ["checkout-tips"]},
+                          headers=ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert calls == [tracks["conversion"]]
+    r = await client.post(ACT, json={**still, "item_keys": ["read-replicas"]},
+                          headers=ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert calls == [tracks["conversion"], tracks["scale"]]
+
+
+async def test_a_track_whose_recheck_fails_leaves_the_still_valid_applied(client, monkeypatch):
+    """protects=failure isolation: a track whose re-check raises is rolled back alone; the
+    Still valid stands for every item and the other track's alert closes; fails_when=the
+    request turns into a 500 and the action is rolled back; no_claim=the log line."""
+    ctx, tracks = await monitored(client)
+    real = views.monitor
+
+    async def broken(db, track, actor, **kw):
+        out = await real(db, track, actor, **kw)
+        if str(track.id) == tracks["scale"]:
+            raise RuntimeError("an example failure after the alerts were written")
+        return out
+
+    monkeypatch.setattr(views, "monitor", broken)
+    r = await client.post(
+        ACT,
+        json={"action": "reconcile", "version": 1, "reason": "Both still hold",
+              "item_keys": ["read-replicas", "checkout-tips"]},
+        headers=ctx.as_("owner"),
+    )  # fmt: skip
+    assert r.status_code == 200, r.text
+    fresh = {i["item_key"]: i["freshness"] for i in r.json()["items"]}
+    assert fresh["read-replicas"] == fresh["checkout-tips"] == "reconciled"
+    rows = await inbox_tracks(client, ctx)
+    assert stale_keys(rows[tracks["conversion"]]) == {"signup-nudge"}
+    # The broken track's re-check rolled back alone: its alert waits for the next pass.
+    assert stale_keys(rows[tracks["scale"]]) == {"read-replicas"}
+    async with tenant_session(ctx.tenant_id) as s:
+        item = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "read-replicas"))
+        assert item.freshness == "reconciled"
+
+
+async def test_a_dependency_on_a_roadmap_the_reader_may_not_see_has_no_name(client):
+    """protects=a dependency's name comes only from what the reader may see: an item of an
+    owners-and-approvers roadmap names a dependency for an approver, not for a commenter;
+    fails_when=a commenter reads the hidden roadmap's item title; no_claim=the web fallback."""
+    ctx, _ = await world()
+    async with tenant_session(ctx.tenant_id) as s:
+        hidden = await _add(s, Document(slug="pricing-roadmap", title="Pricing roadmap",
+                                        kind="roadmap", status="approved",
+                                        visibility="approvers"))  # fmt: skip
+        top = "# Pricing roadmap"
+        hv = await _add(s, DocumentVersion(document_id=hidden.id, number=1, markdown=top,
+                                           content_hash=_hash(top)))  # fmt: skip
+        s.add(RoadmapItem(roadmap_document_id=hidden.id, roadmap_version_id=hv.id,
+                          item_key="example-price-tier", title="Example price tier",
+                          horizon="now", position=0))  # fmt: skip
+        nudge = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "signup-nudge"))
+        nudge.depends_on = [*nudge.depends_on, "example-price-tier"]
+        await s.commit()
+
+    async def titles(role: str) -> dict[str, str]:
+        r = await client.get(
+            f"/v1/roadmaps/{ROADMAP}/items", params={"version": 1}, headers=ctx.as_(role)
+        )
+        assert r.status_code == 200, r.text
+        return {i["item_key"]: i for i in r.json()["items"]}["signup-nudge"]["depends_titles"]
+
+    assert await titles("approver") == {
+        "keys-out-of-checkpoints": "Keys out of checkpoints",
+        "example-price-tier": "Example price tier",
+    }
+    assert await titles("commenter") == {"keys-out-of-checkpoints": "Keys out of checkpoints"}

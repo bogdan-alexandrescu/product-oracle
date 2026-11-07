@@ -86,6 +86,29 @@ async def test_a_new_prd_version_marks_only_the_items_whose_section_changed(
         assert event.data["roadmap"]["item_ids"] == [ship["id"]]
 
 
+async def test_a_section_gone_from_a_new_prd_version_is_named_by_its_old_heading(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+):
+    """protects=a section gone from the PRD is named by the heading it had in the version the
+    item was built from, in one read for every such item; fails_when=the reason names the
+    section's key ("PRD section s-5-2 is gone"); no_claim=a section that only changed."""
+    _, auth = owner
+    await approved_prd(client, auth)
+    await built_roadmap(client, auth, runtime)
+    text = draft("prd_v1.md")
+    assert "{#s-5-2}" in text
+    # Version 2 gives section 5.2 a new anchor: the key s-5-2 is gone.
+    assert (
+        await import_draft(client, auth, text.replace("{#s-5-2}", "{#s-5-2b}"))
+    ).status_code == 201
+    ship = (await items(client, auth))["shipping-step"]
+    assert ship["freshness"] == "potentially_stale"
+    assert "PRD section 5.2 Shipping step is gone in version 2" in ship["stale_reasons"]
+    assert not any("s-5-2" in r for r in ship["stale_reasons"])
+
+
 async def test_a_changed_requirement_marks_its_items(client, owner, runtime):  # noqa: F811
     tenant_id, auth = owner
     await approved_prd(client, auth)
