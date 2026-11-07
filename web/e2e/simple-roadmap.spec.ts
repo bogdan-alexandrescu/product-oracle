@@ -419,9 +419,11 @@ test("the keyboard moves and resizes a bar", async ({ page }) => {
   await expect(page.getByText(/Moved 'Alert history export'.*in your working draft/)).toBeVisible();
   await expect(b).toHaveAttribute("data-start", plus(start, 7));
   await expect(b).toHaveAttribute("data-end", plus(end, 7));
+  // effort-reader: its 1-week span is 7 days, its end included, so Shift+arrow lengthens it
+  // (a week shorter would end before it starts).
   await b.focus();
-  await page.keyboard.press("Shift+ArrowLeft");
-  await expect(b).toHaveAttribute("data-end", end);
+  await page.keyboard.press("Shift+ArrowRight");
+  await expect(b).toHaveAttribute("data-end", plus(end, 14));
   await expect(b).toHaveAttribute("data-start", plus(start, 7));
 });
 
