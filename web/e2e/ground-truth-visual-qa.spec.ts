@@ -74,6 +74,8 @@ async function gt1(page: Page, { phone, tag, ask, drawer }: { phone: boolean; ta
 
   // The last goal is reached by scrolling sideways; the feature's name stays pinned on the left.
   const scroller = page.getByTestId("ledger-scroll");
+  // The ledger starts below the fold under the Ready to move list: bring the first feature up.
+  await name.scrollIntoViewIfNeeded();
   const before = (await name.boundingBox())!;
   await scroller.evaluate((el) => el.scrollTo({ left: el.scrollWidth }));
   const last = ledger.locator("thead tr").first().locator("th").last().getByRole("button");
