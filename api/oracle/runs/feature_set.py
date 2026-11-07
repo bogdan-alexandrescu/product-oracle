@@ -162,6 +162,9 @@ class Known:
     requirements: dict[str, Ref] = field(default_factory=dict)
     # Confirmed goals only.
     goals: dict[str, uuid.UUID] = field(default_factory=dict)
+    # Every non-rejected goal's title by its key, confirmed or not: a goal the check refuses
+    # is still named by it.
+    goal_titles: dict[str, str] = field(default_factory=dict)
     # Non-rejected constraint entities.
     constraints: dict[str, uuid.UUID] = field(default_factory=dict)
     # Constraint keys that are open blockers gating publishing.
@@ -189,6 +192,10 @@ class FeatureSetCheck:
     # Each feature's title by its key (included and left out): the gate names a problem's
     # feature by it, never by its key.
     titles: dict[str, str] = field(default_factory=dict)
+    # Each requirement and goal a problem names, by its key: its name ("" when it has none),
+    # so the gate names it by that, never by its key.
+    requirement_names: dict[str, str] = field(default_factory=dict)
+    goal_names: dict[str, str] = field(default_factory=dict)
 
     def add(
         self,
@@ -221,6 +228,8 @@ class FeatureSetCheck:
             "problems": self.problems,
             "flags": self.flags,
             "titles": self.titles,
+            "requirement_names": self.requirement_names,
+            "goal_names": self.goal_names,
         }
 
 
@@ -526,6 +535,22 @@ def _check_sets(
                 blocking=False,
             )
     out.flags = _flags(out.features, known)
+    _name_keys(out, known)
+
+
+def _name_keys(out: FeatureSetCheck, known: Known) -> None:
+    """The name of each requirement and goal a problem names: a requirement's baseline
+    title, else its text; a goal's title."""
+    said = " ".join(p["message"] for p in out.problems)
+    for f in out.features:
+        for r in f["requirements"]:
+            if r["key"] and r["key"] in said:
+                ref = known.requirements.get(r["key"])
+                out.requirement_names[r["key"]] = (ref.title if ref else "") or r["text"] or ""
+        for g in f["goals"]:
+            if g["key"] in said:
+                title = known.goal_titles.get(g["key"]) or known.targets.get(g["key"])
+                out.goal_names[g["key"]] = title or ""
 
 
 def _cycles(graph: dict[str, list[str]]) -> list[list[str]]:
@@ -741,6 +766,7 @@ async def known_for_run(db: AsyncSession, run_id: uuid.UUID) -> Known:
         elif e.type == "requirement":
             known.requirements[e.key] = Ref(entity_id=e.id, title=e.title)
         elif e.type == "goal":
+            known.goal_titles[e.key] = e.title or ""
             if e.status == "confirmed":
                 known.goals[e.key] = e.id
         else:
