@@ -4,9 +4,9 @@ import { expect, test, type Locator, type Page } from "./test";
 
 /*
  * effort-reader (drafts.sees): the owners of a roadmap's tracks read its working draft, as the
- * API's drafts.who reads them. In the "simple-deciders" scenario (invented data) Theo Brandt
- * (commenter@example.com) owns the Guided setup track on the Onboarding roadmap, decides
- * nothing there and reviews nothing.
+ * API's drafts.who reads them. In the "simple-deciders" scenario (invented data) Cory Hale
+ * (cory.hale@example.com, a commenter) owns the onboarding track on the Onboarding roadmap,
+ * decides nothing there and reviews nothing.
  * protects = after the owner moves Setup checklist a week earlier in the working draft, the
  * track owner's Gantt shows the moved dates; fails_when = the track owner reads the published
  * dates, the draft hidden from them; no_claim = the API's rule (api/tests for drafts.sees).
@@ -38,7 +38,7 @@ test("a track owner sees the working draft of their track's roadmap", async ({ p
   const start = (await b.getAttribute("data-start"))!;
   const end = (await b.getAttribute("data-end"))!;
   await signOut(page);
-  await login(page, "commenter@example.com");
+  await login(page, "cory.hale@example.com");
   b = await gantt(page);
   await expect(b).toHaveAttribute("data-start", start);
   await expect(b).toHaveAttribute("data-end", end);
