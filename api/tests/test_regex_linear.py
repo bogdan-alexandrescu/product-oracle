@@ -100,6 +100,31 @@ CASES = {
             '"\\n" * n',
         ],
     ),
+    # A goal code in brackets after its own name (oracle.export.render, X-8 with G-3): the
+    # opening bracket's pattern, on any text, and the goal names it serves.
+    "bracket_opens": (
+        "from oracle.export.render import _BRACKET_OPENS",
+        "_BRACKET_OPENS.search(s)",
+        [
+            '"_" * n + "x"',
+            '"*" * n + " x"',
+            '" " * n + "x"',
+            '"_ (" * (n // 3) + "x"',
+            '"(" + " " * n + "x"',
+            '"( *" * (n // 3) + "x"',
+        ],
+    ),
+    "goal_names": (
+        "from oracle.export.render import with_goal_names",
+        'with_goal_names(s, {"G1": "Activation"})',
+        [
+            '"G1 " * (n // 3)',
+            '"Activation (G1) " * (n // 16)',
+            '"_" * n + " (G1)"',
+            '"G1" + " " * n',
+            '"x (G1" * (n // 5)',
+        ],
+    ),
 }
 
 

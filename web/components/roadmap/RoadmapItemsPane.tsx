@@ -2,19 +2,20 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useMemo, useState } from "react";
 
-import { Button, FilterChips, InfoTip, Panel, Sheet, Split, type Column } from "@/components/ds";
+import { FilterChips, InfoTip, Panel, Sheet, Split, type Column } from "@/components/ds";
 import { ItemInspector } from "@/components/review/ItemInspector";
 import { ItemsTable } from "@/components/review/ItemsTable";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { sectionHref } from "@/lib/section-link";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { useQuery } from "@/lib/use-query";
 
 import { baseName, CompareBar } from "./CompareBar";
 import { HORIZONS, needsAttention, sectionFor, toItemRow, withUnbacked, type ItemRow } from "./item-row";
 import { ChangeChips, ItemHistory, WhatChanged } from "./ItemChanges";
+import { StalenessActions } from "./StalenessActions";
 import { CHANGED, useItemsDiff, type Compare } from "./useItemsDiff";
 
 type Filter = "all" | "changed" | "attention";
@@ -151,9 +152,11 @@ export function RoadmapItemsPane({
       rows={rows}
       bases={basesQ.data ?? undefined}
       documentHref={docKey ? sectionHref(doc, n, docKey) : null}
+      // The stale-marks walk: a dependency outside this version reads by its name, never its key.
+      dependencyTitles={r.ghost ? undefined : item?.depends_titles}
       freshnessActions={
         canDecide && (r.freshness === "potentially_stale" || r.freshness === "under_review") ? (
-          <StalenessActions key={`${r.key}|${r.freshness}`} doc={doc} n={n} row={r} onChanged={onChanged} />
+          <StalenessActions key={`${r.key}|${r.freshness}`} doc={doc} n={n} itemKey={r.key} freshness={r.freshness} onChanged={onChanged} />
         ) : undefined
       }
     >
@@ -201,86 +204,6 @@ export function RoadmapItemsPane({
       <Sheet open={sheet && !!row} title={row?.title ?? "Item"} onClose={() => setSheet(false)} testId="sheet-item">
         {row && inspector(row)}
       </Sheet>
-    </div>
-  );
-}
-
-/** Mark under review; Still valid… with a one-line reason. The table follows the response. */
-function StalenessActions({
-  doc,
-  n,
-  row,
-  onChanged,
-}: {
-  doc: string;
-  n: number;
-  row: ItemRow;
-  onChanged: (items: Item[]) => void;
-}) {
-  const [asking, setAsking] = useState(false);
-  const [reason, setReason] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function act(action: "review" | "reconcile") {
-    setBusy(true);
-    setError(null);
-    try {
-      const out = await unwrap(
-        api.POST("/v1/roadmaps/{doc}/items/staleness", {
-          params: { path: { doc } },
-          body: { action, version: n, item_keys: [row.key], reason: action === "reconcile" ? reason.trim() : null },
-        }),
-      );
-      onChanged(out.items);
-    } catch (e) {
-      setError(errorMessage(e));
-      setBusy(false);
-    }
-  }
-
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    if (reason.trim()) void act("reconcile");
-  };
-
-  return (
-    <div className="mt-3 flex flex-col gap-2">
-      <div className="flex flex-wrap gap-2">
-        {row.freshness === "potentially_stale" && (
-          <Button onClick={() => act("review")} disabled={busy}>
-            Mark under review
-          </Button>
-        )}
-        {!asking && (
-          <Button variant="ghost" onClick={() => setAsking(true)} disabled={busy}>
-            Still valid…
-          </Button>
-        )}
-      </div>
-      {asking && (
-        <form onSubmit={submit} className="flex flex-col gap-2">
-          <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
-            Why it is still valid
-            <input
-              autoFocus
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              maxLength={500}
-              className="h-10 rounded-button border border-line-strong bg-surface px-2.5 text-[15px] font-normal text-text"
-            />
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <Button type="submit" variant="primary" disabled={busy || !reason.trim()}>
-              Mark still valid
-            </Button>
-            <Button variant="ghost" onClick={() => setAsking(false)} disabled={busy}>
-              Cancel
-            </Button>
-          </div>
-        </form>
-      )}
-      {error && <ErrorNote>{error}</ErrorNote>}
     </div>
   );
 }
