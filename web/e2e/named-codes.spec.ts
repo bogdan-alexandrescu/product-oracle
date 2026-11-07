@@ -61,6 +61,10 @@ test("a goal chip's card opens on hover and Enter, shows name, target and Open, 
   await page.goto("/plan");
   const chip = planGoal(page, "Weekly alert digest").getByTestId("code-chip");
   const card = page.getByTestId("code-card");
+  // The track's actions show once the person's role has loaded and push the table down: hover after
+  // they have, or the pointer ends on the row above's chip (G-A Activation) when a slow load moves it.
+  await expect(page.getByTestId("track-check").first()).toBeVisible();
+  await expect(chip).toBeVisible();
 
   await chip.hover();
   await expect(card).toBeVisible();
