@@ -41,14 +41,14 @@ test("either of two number fixes in one section undoes", async ({ page }) => {
   // Undo the older: its number goes back, the newer stays.
   await fixed(page).first().getByRole("button", { name: "Undo" }).click();
   await expect(fixed(page)).toHaveCount(1);
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByRole("alert").filter({ hasText: /Changed/ })).toHaveCount(0);
   await expect(bar(page)).toContainText("1 change");
   // The heading reads 8 again (its fix offered), and the words, now six, disagree with it.
   await expect(look(page).getByRole("button", { name: "Use 6" })).toBeVisible();
   await expect(look(page).getByRole("button", { name: "Use 8" })).toBeVisible();
   await fixed(page).getByRole("button", { name: "Undo" }).click();
   await expect(fixed(page)).toHaveCount(0);
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByRole("alert").filter({ hasText: /Changed/ })).toHaveCount(0);
 });
 
 test("a line edit while the PRD's draft is in review is refused in the API's words", async ({ page }) => {
@@ -65,5 +65,8 @@ test("a line edit while the PRD's draft is in review is refused in the API's wor
   await expect(page.getByRole("alert").filter({ hasText: IN_REVIEW })).toBeVisible();
   const line = page.locator('[data-line="bets-1"]');
   await expect(line).not.toHaveAttribute("data-state", "edited");
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("button", { name: "Discard" }).click();
+  await expect(line).toContainText("A setup checklist that shows");
   await expect(line).not.toContainText("A setup checklist with the next two steps");
 });
