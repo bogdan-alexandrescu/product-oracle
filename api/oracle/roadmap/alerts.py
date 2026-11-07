@@ -295,14 +295,17 @@ def in_audience(
     principal: "Principal", track: ProductTrack, kind: str, leads: frozenset[uuid.UUID]
 ) -> bool:
     """The alert's Inbox audience: the track's owner, else every owner; date slips and
-    overdue items also the engineering leads (A3)."""
+    overdue items also the engineering leads (A3). People only: a caller with no person
+    (an API token) is nobody's owner, and a track with no owner is owned by nobody."""
     uid = principal.user_id
+    if uid is None:
+        return False
     if track.owner_id is not None:
         if uid == track.owner_id:
             return True
     elif principal.role == "owner":
         return True
-    return kind in LEAD_KINDS and uid is not None and uid in leads
+    return kind in LEAD_KINDS and uid in leads
 
 
 def may_accept(principal: "Principal", leads: frozenset[uuid.UUID]) -> bool:
@@ -483,6 +486,52 @@ def out(
     )
 
 
+async def recheck_skipped(
+    db: AsyncSession, principal: "Principal", track_ids: set[uuid.UUID] | None = None
+) -> uuid.UUID | None:
+    """Re-check one track whose re-check after an action was skipped (it raised:
+    :func:`oracle.roadmap.views.monitor_owners` marks it ``recheck``), on a read of its
+    alerts rather than at the hourly pass: one track per read, locked and checked in its
+    own savepoint and committed; one that raises again is rolled back alone and stays
+    marked. ``track_ids``: only these tracks (a read of one track's alerts); None: any
+    of the caller's. Only for a reader who sees everything (owners and approvers), so the
+    check never runs on a narrowed view. Returns the track re-checked."""
+    from oracle.roadmap import views
+
+    if principal.user_id is None or visibility.restricted(principal):
+        return None
+    query = (
+        select(ProductTrack)
+        .where(ProductTrack.status == "active", ProductTrack.monitor["recheck"].as_boolean())
+        .order_by(ProductTrack.created_at, ProductTrack.id)
+    )
+    if track_ids is not None:
+        query = query.where(ProductTrack.id.in_(track_ids))
+    flagged = list(await db.scalars(query))
+    if flagged and track_ids is None:
+        leads = await engineering_leads(db)
+        # The caller's tracks: any alert of theirs reaches them (a lead's: slips, overdue).
+        flagged = [t for t in flagged if in_audience(principal, t, LEAD_KINDS[0], leads)]
+    if not flagged:
+        return None
+    track = await db.scalar(
+        select(ProductTrack)
+        .where(ProductTrack.id == flagged[0].id)
+        .with_for_update(skip_locked=True)
+    )
+    if track is None:  # another read is re-checking it now
+        return None
+    track_id = track.id
+    try:
+        async with db.begin_nested():
+            await views.monitor(db, track, "system")
+    except Exception:  # noqa: BLE001 - logged; the read goes on, the hourly pass tries too
+        views.log.exception("track %s could not be re-checked on a read", track_id)
+        return None
+    await db.commit()
+    return track_id
+
+
 async def list_alerts(
     db: AsyncSession, principal: "Principal", state: str, track_id: uuid.UUID | None
 ) -> list[TrackAlertOut]:
@@ -491,6 +540,7 @@ async def list_alerts(
         query = query.where(TrackAlert.state == state)
     if track_id is not None:
         query = query.where(TrackAlert.track_id == track_id)
+    await recheck_skipped(db, principal, None if track_id is None else {track_id})
     rows = list(await db.scalars(query))
     lk = await lookups(db, rows)
     return [out(a, principal, lk) for a in shown(rows, lk)]
@@ -733,6 +783,7 @@ async def inbox_rows(
     else Open), and kept and resolved ones of the last 30 days (Done)."""
     if principal.run_id is not None or principal.run_token_id is not None:
         return []
+    await recheck_skipped(db, principal)
     since = datetime.now(UTC) - timedelta(days=DONE_DAYS)
     rows = list(
         await db.scalars(
@@ -747,18 +798,36 @@ async def inbox_rows(
     )
     if not rows:
         return []
-    lk = await lookups(db, rows)
+    # The caller's alerts first, from the tracks alone; the rest is read for what is shown.
+    track_rows = {
+        t.id: t
+        for t in await db.scalars(
+            select(ProductTrack).where(ProductTrack.id.in_({a.track_id for a in rows}))
+        )
+    }
+    leads = await engineering_leads(db)
     mine = [
         a
-        for a in shown(rows, lk)
-        if in_audience(principal, lk.tracks[a.track_id], a.kind, lk.leads)
+        for a in rows
+        if (t := track_rows.get(a.track_id)) and in_audience(principal, t, a.kind, leads)
     ]
     groups: dict[uuid.UUID, list[TrackAlert]] = {}
     for a in mine:
         groups.setdefault(a.track_id, []).append(a)
+    lk = await lookups(
+        db,
+        [
+            a
+            for alerts in groups.values()
+            for a in [
+                *[a for a in alerts if a.state == "open"][:INBOX_CHILDREN],
+                *[a for a in alerts if a.state != "open"][:20],
+            ]
+        ],
+    )
     result: list[InboxTrack] = []
     for track_id, alerts in groups.items():
-        track = lk.tracks[track_id]
+        track = track_rows[track_id]
         prd = lk.prds.get(track.prd_document_id)
         live = [a for a in alerts if a.state == "open"]
         counts = InboxTrackCounts(

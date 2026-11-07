@@ -103,8 +103,11 @@ _SIZE = re.compile(r"\d+ (?:Ground Truth|baseline) items?")
 _OLD_COUNT = re.compile(r"\b(\d+) baseline (items?)\b")
 
 
-# A PRD version's reason on one section ("PRD section Checkout changed in version 5").
-_SECTION_VERSION = re.compile(r"PRD section (.+) (?:changed|is gone) in version \d+")
+# A PRD version's reason on one section ("PRD section Checkout changed in version 5",
+# "PRD section Checkout removed in version 5"; stored before as "is gone in version 5").
+_SECTION_VERSION = re.compile(r"PRD section (.+) (?:changed|removed|is gone) in version \d+")
+# A gone section's reason in its old words: read in the Inbox's words for a removed section.
+_GONE = re.compile(r"(PRD section .+) is gone( in version \d+)")
 
 
 def one_count(reasons: Iterable[str]) -> list[str]:
@@ -127,9 +130,11 @@ def one_count(reasons: Iterable[str]) -> list[str]:
 def with_heading(reasons: Iterable[str], section_key: str | None, heading: str | None) -> list[str]:
     """``reasons`` naming the item's own PRD section by its heading, not its key (the
     stale-marks walk: "PRD section feature-x-2217a4 changed in version 4" read as a key).
-    A reason stored with the key reads with the heading, with no migration needed."""
+    A reason stored with the key reads with the heading, and one stored as "is gone" reads
+    "removed" (:func:`_reworded`), with no migration needed."""
+    reasons = [_GONE.sub(r"\1 removed\2", r) for r in reasons]
     if not section_key or not heading or heading == section_key:
-        return list(reasons)
+        return reasons
     old, new = f"PRD section {section_key} ", f"PRD section {heading} "
     return [new + r[len(old) :] if r.startswith(old) else r for r in reasons]
 
@@ -245,6 +250,8 @@ def _reworded(reason: str) -> str:
     migration is never needed: the read path keeps up with the wording on its own."""
     if m := _OLD_SECTION_LINK.fullmatch(reason):
         return f"PRD section {m[1]} links {_noun(m[2], 1)}{m[3]}"
+    if m := _GONE.fullmatch(reason):
+        return f"{m[1]} removed{m[2]}"
     return ground_truth_count(reason)
 
 
@@ -408,7 +415,7 @@ async def _by_prd_version(db: AsyncSession, event: ChangeEvent, found: dict) -> 
         # The section by its heading (the stale-marks walk), never its key.
         if key not in hashes:
             gone.append((item, version_id, key))
-            found[item.id] = (item, f"PRD section {key} is gone in version {new.number}")
+            found[item.id] = (item, f"PRD section {key} removed in version {new.number}")
         elif hashes[key] != section_hash:
             found[item.id] = (
                 item,
@@ -433,7 +440,7 @@ async def _by_prd_version(db: AsyncSession, event: ChangeEvent, found: dict) -> 
     )
     for item, version_id, key in gone:  # in place: the order items were found in stays
         if heading := old_headings.get((version_id, key)):
-            found[item.id] = (item, f"PRD section {heading} is gone in version {new.number}")
+            found[item.id] = (item, f"PRD section {heading} removed in version {new.number}")
 
 
 async def _by_section(db: AsyncSession, event: ChangeEvent, found: dict) -> None:

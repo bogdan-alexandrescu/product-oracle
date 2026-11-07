@@ -1042,9 +1042,10 @@ async def monitor_owners(
     """Re-check, at once, only the active tracks that own ``items`` of the roadmap
     (:func:`owner_of`), so acting on an item updates its track's alerts and counts in the
     same request (the stale-marks walk), with no work for the roadmap's other tracks. Each
-    track is locked and checked in its own savepoint: one that raises is logged and rolled
-    back alone (the hourly pass checks it again), and the action and the other tracks'
-    checks stand. Returns the tracks that could not be checked."""
+    track is locked and checked in its own savepoint: one that raises is logged, rolled
+    back alone and marked ``recheck``, so the next read of its alerts checks it again
+    (oracle.roadmap.alerts.recheck_skipped; the hourly pass too), and the action and the
+    other tracks' checks stand. Returns the tracks that could not be checked."""
     if not items:
         return []
     sharing = await sharing_tracks(db, roadmap_document_id)
@@ -1070,6 +1071,10 @@ async def monitor_owners(
             # The savepoint's rollback expired what it touched: read the tracks again, so
             # the next track's check never loads an expired row lazily.
             sharing = await sharing_tracks(db, roadmap_document_id)
+            skipped = next(t for t in sharing if t.id == track_id)
+            # Re-checked on the next read of its alerts (a check clears the mark).
+            skipped.monitor = {**(skipped.monitor or {}), "recheck": True}
+            await db.flush()
     return failed
 
 
