@@ -182,13 +182,27 @@ class TrackMilestone(TenantScoped, Base):
             "roadmap_id IS NOT NULL OR target_date IS NULL OR cardinality(basis_ids) > 0",
             name="dated_needs_basis",
         ),
+        # A roadmap's own milestones are coded per goal; a PRD's per PRD (item-milestone: two
+        # PRDs' M1 in one goal are both made).
         Index(
             "uq_track_milestones_goal_code",
             "roadmap_id",
             "goal_id",
             "code",
             unique=True,
-            postgresql_where=text("roadmap_id IS NOT NULL AND deleted_at IS NULL"),
+            postgresql_where=text(
+                "roadmap_id IS NOT NULL AND deleted_at IS NULL AND origin_prd_id IS NULL"
+            ),
+        ),
+        Index(
+            "uq_track_milestones_prd_code",
+            "roadmap_id",
+            "origin_prd_id",
+            "code",
+            unique=True,
+            postgresql_where=text(
+                "roadmap_id IS NOT NULL AND deleted_at IS NULL AND origin_prd_id IS NOT NULL"
+            ),
         ),
     )
 

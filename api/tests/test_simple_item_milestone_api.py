@@ -142,8 +142,8 @@ async def test_company_roadmap_lists_each_prds_milestones_in_one_goal(client):
         company.company_roadmap = True
         cv = await sd.version(company)
         a = await sd.item(cv, sv, "report-button", title="Report button", goal_ids=[goal.id])
-        b = await sd.item(cv, cv_scale, "read-replicas", position=1, title="Read replicas",
-                          goal_ids=[goal.id])  # fmt: skip
+        await sd.item(cv, cv_scale, "read-replicas", position=1, title="Read replicas",
+                      goal_ids=[goal.id])  # fmt: skip
         s.add_all([
             SimplePrdPlan(document_id=safety.id, version_id=sv.id, status="ready", source="prd",
                           data=_plan(("M1", "Reports reach a person", "2026-11-27"),

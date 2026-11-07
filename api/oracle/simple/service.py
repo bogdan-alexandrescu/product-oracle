@@ -704,6 +704,11 @@ def _milestone(
     own_date = dates.as_date(own.get("date"))
     m = track_ms.get((track.id, row.item_key)) if track is not None else None
     record = {"record_id": m.id, "record_name": m.name} if m is not None else {}
+    # item-milestone: a roadmap milestone picked in the panel wins over the track's record.
+    if own.get("id"):
+        return SimpleItemMilestone(
+            name=own.get("name"), date=own_date, source="item", id=own["id"], **record
+        )
     if own_date is not None:
         return SimpleItemMilestone(name=own.get("name"), date=own_date, source="item", **record)
     if m is not None:
@@ -1405,7 +1410,8 @@ async def build(
             continue
         it.slices = view.slices_of(it.code)
         it.milestones = list(dict.fromkeys(x.milestone for x in it.slices))
-        if it.milestone is not None:
+        # item-milestone: a picked roadmap milestone is read by its id, not by the plan's code.
+        if it.milestone is not None and it.milestone.id is None:
             named = it.milestone.record_name or it.milestone.name
             pm = view.milestone(plan_strip.milestone_of(named)[0])
             if pm is not None and pm.end_date is not None:

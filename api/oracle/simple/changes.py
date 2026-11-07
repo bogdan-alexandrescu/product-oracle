@@ -39,6 +39,9 @@ Ops and the fields they write (``before`` must name the key fields):
 - ``set_milestone`` (S9): the item's own milestone, ``{"milestone": {name, date,
   date_source: "typed"}}`` (date optional), or null to clear it.
   Its ``before`` is compared by name and date only: the read shows no date_source.
+  item-milestone: ``{"milestone": {"id"}}`` places it in a milestone of its roadmap (a goal
+  milestone, its own or a PRD's), stored with that milestone's code and name and no date;
+  its ``before`` is then compared by that id.
 - ``set_goals``: the goals an item serves, ``{"goal_ids": [...]}`` (the one it moves most
   first), each a live goal; the goal buckets carry a task added there to another goal.
   An item with a baseline feature takes the feature along (applied, accepted or undone):
@@ -100,7 +103,7 @@ from oracle.authz import has_role
 from oracle.baseline.models import Entity
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap import company as roadmap_company
-from oracle.roadmap.models import HORIZONS, RoadmapItem
+from oracle.roadmap.models import HORIZONS, RoadmapItem, TrackMilestone
 from oracle.simple import drafts, service
 from oracle.simple.models import (
     RoadmapDateSuggestion,
@@ -393,10 +396,25 @@ def write(row: RoadmapItem, values: dict[str, Any], target: dict[str, Any]) -> N
 
 
 def _seen_milestone(m: Any) -> tuple | None:
-    """A milestone as the item reads it: its name and day, None when it has neither."""
-    if not isinstance(m, dict) or not (m.get("name") or m.get("date")):
+    """A milestone as the item reads it: the roadmap milestone picked for it (its id), else
+    its name and day; None when it has none."""
+    if not isinstance(m, dict) or not (m.get("id") or m.get("name") or m.get("date")):
         return None
+    if m.get("id"):
+        return ("id", str(m["id"]))
     return (m.get("name") or None, _iso(_day(m.get("date"), "milestone.date")))
+
+
+async def _roadmap_milestone(db: AsyncSession, entry: Any, raw: Any) -> dict[str, Any]:
+    """item-milestone: ``after.milestone.id`` picked in the panel, a live goal milestone of the
+    item's roadmap (its own or a PRD's), stored by id with its code and name and no date (the
+    pick places the item; its dates stay as they are)."""
+    mid = _uuid(raw, "after.milestone.id")
+    m = await db.get(TrackMilestone, mid)
+    if m is None or m.deleted_at is not None or m.roadmap_id != entry.roadmap.id:
+        raise ChangeError(422, "after.milestone.id: a milestone of the item's roadmap")
+    name = " ".join(f"{m.code or ''} {m.name}".split())[:TITLE_MAX]
+    return {"id": str(m.id), "name": name, "date": None, "date_source": None}
 
 
 def _normal(fields: tuple[str, ...], values: dict[str, Any]) -> dict[str, Any]:
@@ -896,6 +914,8 @@ async def _plan(
         m = a.get("milestone")
         if m is None:
             after = {"milestone": None}
+        elif isinstance(m, dict) and m.get("id"):
+            after = {"milestone": await _roadmap_milestone(db, entry, m["id"])}
         else:
             name = " ".join(str((m or {}).get("name") or "").split()) if isinstance(m, dict) else ""
             if not name or len(name) > TITLE_MAX:
