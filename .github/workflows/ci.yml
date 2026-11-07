@@ -12,9 +12,13 @@ concurrency:
   group: ci-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Self-hosted runners (BGD, Nov 6, 2026: "Share SwarmCloud's pool"): with the repository variable
+# SELF_HOSTED_CI set to 'on', every job runs on the shared runner dispatcher's VMs (one
+# e2-standard-8 per job, label ORACLE_CI_RUNNER_LABEL, default bogdan-ci, SwarmCloud's pool);
+# unset or anything else, on GitHub's hosted runners. Turn it off to fall back at once.
 jobs:
   api:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.SELF_HOSTED_CI == 'on' && fromJSON(format('["self-hosted","linux","x64","{0}"]', vars.ORACLE_CI_RUNNER_LABEL || 'bogdan-ci')) || 'ubuntu-latest' }}
     # The suite takes ~30 min on 4 workers (89-120 min serially); a hung run frees its
     # runner after 150.
     timeout-minutes: 150
@@ -72,7 +76,7 @@ jobs:
       - run: uv run pytest -p no:cacheprovider -m timing
 
   web:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.SELF_HOSTED_CI == 'on' && fromJSON(format('["self-hosted","linux","x64","{0}"]', vars.ORACLE_CI_RUNNER_LABEL || 'bogdan-ci')) || 'ubuntu-latest' }}
     defaults:
       run:
         working-directory: web
@@ -97,7 +101,7 @@ jobs:
       - run: npm run build
 
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.SELF_HOSTED_CI == 'on' && fromJSON(format('["self-hosted","linux","x64","{0}"]', vars.ORACLE_CI_RUNNER_LABEL || 'bogdan-ci')) || 'ubuntu-latest' }}
     services:
       postgres:
         image: postgres:16
@@ -133,7 +137,7 @@ jobs:
   # dod-perf review: the web's timing specs (tagged @timing, as the API's `timing` mark) on the
   # mock-backed build, alone (one worker) so no other test's load counts against them.
   e2e-timing:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.SELF_HOSTED_CI == 'on' && fromJSON(format('["self-hosted","linux","x64","{0}"]', vars.ORACLE_CI_RUNNER_LABEL || 'bogdan-ci')) || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
