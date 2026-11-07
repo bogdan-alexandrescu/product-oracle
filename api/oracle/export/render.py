@@ -1034,6 +1034,12 @@ _GOAL_LISTED = re.compile(
 _GOAL_CODE = re.compile(r"(?<![\w#/-])(G\d{1,3})(?![\w-])(?!\**\s*\()")
 # The same, or one after another code and a slash ("G1/G2"): with_goal_names checks the pair.
 _GOAL_CODE_OR_PAIRED = re.compile(r"(?<![\w#-])(G\d{1,3})(?![\w-])(?!\**\s*\()")
+# A code alone in brackets right after a name ("Activation (G1)", "Adoption rate (**G1**)"):
+# how a shared page reads a goal (oracle.shares.render.with_names, G-3), the code already
+# beside its name. The text before the code is read through a short window only.
+_NAME_THEN_BRACKET = re.compile(r"[\w*_][ \t ]*\([ \t]*\**$")
+_BRACKET_CLOSES = re.compile(r"\**[ \t]*\)")
+_BEFORE_WINDOW = 16
 
 
 # Markdown that is not prose: inline code, a link's destination (with its title), an
@@ -1087,7 +1093,8 @@ def goal_names(sections: list[Section]) -> dict[str, str]:
 
 def with_goal_names(body: str, names: dict[str, str]) -> str:
     """Every goal code the version names reads with its name ("G2 Retention", E-12, X-8):
-    in a table cell or in prose; a code already followed by its name is left as it is."""
+    in a table cell or in prose; a code already followed by its name is left as it is, as
+    is one alone in brackets after a name ("Activation (G1)", a shared page's G-3 form)."""
     if not names:
         return body
 
@@ -1102,6 +1109,9 @@ def with_goal_names(body: str, names: dict[str, str]) -> str:
             prev_code = m.end()
             name = names.get(code)
             if name is None or text[m.end() :].lstrip(" *").lower().startswith(name.lower()):
+                continue
+            before = text[max(0, m.start() - _BEFORE_WINDOW) : m.start()]
+            if _NAME_THEN_BRACKET.search(before) and _BRACKET_CLOSES.match(text, m.end()):
                 continue
             out.append(text[at : m.end()] + f" {name}")
             at = m.end()
