@@ -700,3 +700,38 @@ def test_look_numbers_read_as_a_person_writes_them():
     assert one_pager_checks._n(0.1 * 3) == "0.3"
     assert one_pager_checks._n(1234567.5) == "1,234,567.5"
     assert one_pager_checks._n(200.0) == "200"
+
+
+def test_a_sum_that_matches_as_written_raises_no_look():
+    # Review (Nov 7): "0.1 × 3 teams" against "0.3" company-wide agrees as a person reads it;
+    # the float 0.30000000000000004 must not raise "is 0.3, but ... says 0.3".
+    assert _per_unit_text(
+        "Each team saves 0.1 support hours a week. We have 3 teams. "
+        "Company-wide target: 0.3 support hours a week."
+    ) == []
+    assert _per_unit_text(
+        "Each team saves 0.1 support hours a week. We have 3 teams. "
+        "Company-wide target: 0.4 support hours a week."
+    ) == ["0.1 support hours per team × 3 teams is 0.3, but the company-wide target says 0.4."]
+
+
+def test_an_exact_half_rounds_up_as_the_mock_does():
+    # Review (Nov 7): an exact half in the 7th place rounds away from zero, as the mock's
+    # toFixed(6) does ("0.007813", never the half-even "0.007812"), in the text and the fix.
+    assert one_pager_checks._n(0.0078125) == "0.007813"
+    assert one_pager_checks._n(3.0078125) == "3.007813"
+    assert one_pager_checks._n(-0.0078125) == "-0.007813"
+    assert one_pager_checks._n(0.1 * 3) == "0.3"
+    [look] = one_pager_checks.numbers([
+        Section(
+            section_key="targets",
+            heading="Targets",
+            body_md="Each squad trims 1.50390625 setup minutes a day. We run 2 squads. "
+            "Company-wide target: 3 setup minutes a day.",
+        )
+    ])  # fmt: skip
+    assert look.text == (
+        "1.503906 setup minutes per squad × 2 squads is 3.007813, "
+        "but the company-wide target says 3."
+    )
+    assert look.fix["value"] == "3.007813"
