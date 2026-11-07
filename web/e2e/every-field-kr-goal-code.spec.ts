@@ -11,7 +11,8 @@ import { expect, test, type Page } from "./test";
  *   asks for it (a proposal), a viewer only reads;
  * - a roadmap item with no code gets its feature code in its panel: a code another feature has
  *   is refused in plain words, the owner's has Undo (refused in plain words when another item
- *   took the old code since), a commenter's is a proposal, a viewer reads.
+ *   took the old code since), a commenter's is a proposal, a viewer reads;
+ * - an item added with a title that starts with a code another item has is refused in plain words.
  *
  * Test cards (protects / fails_when / no_claim) are each test's comment.
  */
@@ -203,5 +204,35 @@ test.describe("a roadmap item's feature code", () => {
     // it; no_claim=other fields.
     await openExport(page, "viewer");
     await expect(panel(page).getByRole("button", { name: "Change the code" })).toHaveCount(0);
+  });
+});
+
+test.describe("an added item's code", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  async function addFromSheet(page: Page, title: string) {
+    await page.getByTestId("quick-add-open").click();
+    const sheet = page.getByRole("dialog", { name: "Add an item" });
+    await sheet.getByLabel("Title").fill(title);
+    await sheet.getByLabel("Roadmap").selectOption({ label: "Alerts roadmap" });
+    await sheet.getByLabel("Where").selectOption({ label: "Next" });
+    await sheet.getByRole("button", { name: "Add", exact: true }).click();
+    return sheet;
+  }
+
+  // protects=adding an item whose title starts with a code another item has is refused in
+  // set_code's plain words and nothing is added; a free code adds; fails_when=two items read
+  // F-06 after the add; no_claim=a proposal accepted after the code was taken (pytest).
+  test("a code another item has is refused in plain words; a free one adds", async ({ page }) => {
+    await login(page);
+    await page.goto("/simple/roadmap");
+    await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+    const sheet = await addFromSheet(page, "F-06 Night digest");
+    await expect(toast(page, "F-06 is already the code of F-06 Weekly alert digest")).toBeVisible();
+    await expect(page.getByTestId("timeline-row").filter({ hasText: "Night digest" })).toHaveCount(0);
+    await sheet.getByLabel("Title").fill("F-37 Night digest");
+    await sheet.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(toast(page, "Added F-37 Night digest as a draft")).toBeVisible();
+    await expect(panel(page).getByTestId("card-code")).toHaveText("F-37");
   });
 });

@@ -1556,6 +1556,9 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     writeKeyDate(db, c, c.after.key_date);
   } else if (p[4] === "accept" && S7_OPS.includes(c.op)) {
     if (!validS7(db, c)) return json(409, { detail: "outdated: the items changed since it was proposed" });
+    // As additions.decide: a code its title carries that another item or a feature took since; the proposal stays open, to decline.
+    const taken = c.op === "add_item" ? titleCodeTaken(db, readerDb(db, ctx), null, String(c.after.title ?? "")) : null;
+    if (taken) return json(409, { detail: taken });
     const session = openEditing(db, ctx.id) ?? newSession(db, ctx.id, "editing");
     const drafts = intoDrafts(db, anchored(db, c), session);
     if (drafts instanceof Response) return drafts;
@@ -1616,18 +1619,18 @@ function codeTaken(db: SimpleDb, seen: SimpleDb, key: string, code: string): str
   return null;
 }
 
-/** changes._title_code: a title leading with a code other than the item's own ("F-31 Alerts") gives the item that code, checked as set_code checks it; an item coded by its feature or PRD keeps that one. */
-function titleCodeTaken(db: SimpleDb, seen: SimpleDb, key: string, title: string): string | null {
-  const s = seed(seen, key);
-  if ((s.feature_id && db.feature_codes?.[s.feature_id]) || prdCode(s.section)) return null;
+/** changes._title_code: a title leading with a code other than the item's own ("F-31 Alerts", any code the read takes from a title) gives the item that code, checked as set_code checks it; an item coded by its feature or PRD keeps that one. ``key`` null: an item being added. */
+function titleCodeTaken(db: SimpleDb, seen: SimpleDb, key: string | null, title: string): string | null {
+  const s = key ? seed(seen, key) : null;
+  if (s && ((s.feature_id && db.feature_codes?.[s.feature_id]) || prdCode(s.section))) return null;
   const lead = codedTitle(title, null)[0];
-  if (!lead || !/^[A-Z]{1,3}-\d+[a-j]?$/.test(lead) || lead === codedTitle(s.title, null)[0]) return null;
-  return codeTaken(db, seen, key, lead);
+  if (!lead || (s && lead === codedTitle(s.title, null)[0])) return null;
+  return codeTaken(db, seen, key ?? "", lead);
 }
 
-/** changes._merge_plan: another item showing ``code`` as its own (its title's, not its feature's or PRD's), in set_code's words. */
-function ownCodeTaken(db: SimpleDb, key: string, code: string): string | null {
-  const other = db.items.find((x) => x.key !== key && !x.trashed && !(x.feature_id && db.feature_codes?.[x.feature_id]) && !prdCode(x.section) && codedTitle(x.title, null)[0]?.toUpperCase() === code.toUpperCase());
+/** changes._merge_plan: another item showing ``code`` as its own (its title's, not its feature's or PRD's), in set_code's words; ``seen``: the items the reader reads. */
+function ownCodeTaken(seen: SimpleDb, key: string, code: string): string | null {
+  const other = seen.items.find((x) => x.key !== key && !x.trashed && !(x.feature_id && seen.feature_codes?.[x.feature_id]) && !prdCode(x.section) && codedTitle(x.title, null)[0]?.toUpperCase() === code.toUpperCase());
   return other ? `${code} is already the code of ${code} ${codedTitle(other.title, null)[1]}` : null;
 }
 
@@ -1822,6 +1825,9 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
       if (!name || name.length > 200) return json(422, { detail: "after.milestone.name: 1 to 200 characters" });
       after.milestone = { name, date: typeof m.date === "string" ? m.date : null, date_source: typeof m.date === "string" ? "typed" : null };
     }
+    // As additions._plan: a title leading with a code another item or a feature has is refused, in set_code's words.
+    const taken = titleCodeTaken(db, readerDb(db, ctx), null, title);
+    if (taken) return json(422, { detail: taken });
     return { target, before: {}, after, roadmap, applies: canEditRoadmap(db, roadmap, ctx) };
   }
   const key = keyOf(db, target.item_id);
@@ -1846,9 +1852,14 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
   }
   if (typeof target.feature_id === "string" && target.feature_id) {
     // As the API: the draft becomes the feature's item (linked, kept beside look-alikes), still a draft.
-    const code = db.feature_codes?.[target.feature_id];
-    const taken = code ? ownCodeTaken(db, key, code) : null;
-    if (taken) return json(422, { detail: taken });
+    // Its code (the feature's key, before any ".", and its short code, a published PRD section's) is no other item's own.
+    const fid = target.feature_id;
+    const short = db.items.find((x) => x.feature_id === fid && !x.draft && prdCode(x.section))?.section;
+    const codes = [db.feature_keys?.[fid] ?? db.feature_codes?.[fid], short ? prdCode(short) : null].map((k) => k?.split(".")[0]);
+    for (const code of new Set(codes.filter((k): k is string => !!k && /^[A-Z]{1,3}-\d+[a-j]?$/.test(k)))) {
+      const taken = ownCodeTaken(readerDb(db, ctx), key, code);
+      if (taken) return json(422, { detail: taken });
+    }
     return { target, before: { [String(target.item_id)]: { feature_id: null, kept_both: !!s.kept_both } }, after: { [String(target.item_id)]: { feature_id: target.feature_id, kept_both: true } }, roadmap: s.roadmap, applies };
   }
   return json(422, { detail: "target: into_id or feature_id" });

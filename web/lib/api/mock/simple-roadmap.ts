@@ -211,6 +211,8 @@ interface SimpleDb {
   prd_milestones?: Record<string, PrdMilestone[]>;
   /** lane-gt-ui: each baseline feature's code (F-12), by id: an item reads its feature's code (server.ts). */
   feature_codes?: Record<string, string>;
+  /** Every Ground Truth feature's key by its id (changes._merge_plan reads its code from it). */
+  feature_keys?: Record<string, string>;
   /** build-milestones-on-roadmap: each roadmap's milestones per goal (./simple-milestones.ts). */
   goal_milestones?: MockMilestone[];
   /** roadmap-keydates review ("roadmap-keydates-uncoded"): a track milestone record's own day
