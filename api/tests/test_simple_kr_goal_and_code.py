@@ -146,3 +146,68 @@ async def test_set_code_gives_an_item_its_feature_code(client):
     assert r.status_code == 201, r.text
     shown = by_key(await get(client, ctx, "owner"))["a"]
     assert (shown["code"], shown["title"]) == (None, "Alerts")
+
+
+async def coded_pair(ctx: Ctx, first: str = "Alerts") -> tuple[str, str]:
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        _, pv, _, rv = await seed.roadmap("payments")
+        a = await seed.item(rv, pv, "a", position=0, title=first)
+        b = await seed.item(rv, pv, "b", position=1, title="Billing")
+        await s.commit()
+    return str(a.id), str(b.id)
+
+
+def propose_code(client, ctx: Ctx, item: str, code: str, who: str = "commenter"):
+    body = {"op": "set_code", "target": {"item_id": item}, "before": {"code": None},
+            "after": {"code": code}}  # fmt: skip
+    return client.post(CHANGES, json=body, headers=ctx.as_(who))
+
+
+async def test_accepting_a_code_another_item_took_since_is_refused(client):
+    ctx = await make_people()
+    a, b = await coded_pair(ctx)
+    made = []
+    for item in (a, b):
+        r = await propose_code(client, ctx, item, "F-31")
+        assert r.status_code == 201, r.text
+        assert r.json()["change"]["status"] == "proposed"
+        made.append(r.json()["change"]["id"])
+    r = await client.post(f"{CHANGES}/{made[0]}/accept", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    r = await client.post(f"{CHANGES}/{made[1]}/accept", headers=ctx.as_("owner"))
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"] == "F-31 is already the code of F-31 Alerts"
+    shown = by_key(await get(client, ctx, "owner"))
+    assert (shown["a"]["code"], shown["b"]["code"]) == ("F-31", None)
+    # The proposal stays open, to decline.
+    r = await client.post(f"{CHANGES}/{made[1]}/decline", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    assert r.json()["change"]["status"] == "declined"
+
+
+async def test_accepting_a_code_a_ground_truth_feature_took_since_is_refused(client):
+    ctx = await make_people()
+    a, _ = await coded_pair(ctx)
+    r = await propose_code(client, ctx, a, "F-33")
+    assert r.status_code == 201, r.text
+    cid = r.json()["change"]["id"]
+    async with tenant_session(ctx.tenant_id) as s:
+        await Seed(s).entity("feature", "F-33")
+        await s.commit()
+    r = await client.post(f"{CHANGES}/{cid}/accept", headers=ctx.as_("owner"))
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"] == "F-33 is already the code of a Ground Truth feature"
+    assert by_key(await get(client, ctx, "owner"))["a"]["code"] is None
+
+
+async def test_a_code_never_cuts_the_name(client):
+    ctx = await make_people()
+    long = "Alerts " + "x" * 190  # 197 characters: no room for "F-31 " in 200
+    a, _ = await coded_pair(ctx, first=long)
+    r = await propose_code(client, ctx, a, "F-31", who="owner")
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == (
+        "The name is too long to carry the code F-31: shorten it to 195 characters first"
+    )
+    assert by_key(await get(client, ctx, "owner"))["a"]["title"] == long
