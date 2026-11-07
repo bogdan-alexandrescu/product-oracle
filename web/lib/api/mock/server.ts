@@ -200,6 +200,7 @@ import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEn
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 import { waitingItems } from "./waiting-list";
+import { HOME_MILESTONES_SCENARIO, seedHomeMilestones } from "./home-milestones";
 import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience, spansRow, type BoardItem } from "./audience";
 import {
   draftPublicTexts,
@@ -4173,6 +4174,8 @@ function load(): Db {
                 ? () => seedApprovedRoadmapScenario(true)
               : scenario === ONE_ROADMAP_SCENARIO
                 ? seedOneRoadmapScenario
+              : scenario === HOME_MILESTONES_SCENARIO
+                ? () => ({ ...seed(), simple_roadmap: seedHomeMilestones() })
               : scenario === OLD_MILESTONES_SCENARIO
                 ? () => {
                     const db = seedOneRoadmapScenario();
