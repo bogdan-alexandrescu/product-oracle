@@ -12,6 +12,7 @@ from oracle.auth.service import create_user, make_session_cookie
 from oracle.baseline.models import Entity
 from oracle.config import get_settings
 from oracle.models import AuditEvent
+from oracle.roadmap.models import RoadmapItem
 from oracle.tenancy import tenant_session
 from tests.fixtures import import_draft
 from tests.roadmap_helpers import other_company
@@ -441,3 +442,46 @@ async def test_the_change_set_list_pages(client, owner, runtime):  # noqa: F811
     assert [s["id"] for s in (await client.get(SETS, headers=auth)).json()] == newest_first
     assert (await client.get(SETS, params={"limit": 0}, headers=auth)).status_code == 422
     assert (await client.get(SETS, params={"limit": 101}, headers=auth)).status_code == 422
+
+
+async def test_an_added_item_never_takes_a_code_another_item_has(client, owner, runtime):  # noqa: F811
+    """protects=(every-field) Edit plan's Add an item never gives a code to a second item: a
+    title leading with a live item's code, or a picked Ground Truth feature whose code is a
+    live item's title code, is refused when added (422) in set_code's words; one taken after it
+    was added is refused at propose (409) and no version is made; fails_when=the proposed
+    version holds two items reading F-31; no_claim=Simple's own add (its own test)."""
+    tenant_id, auth = owner
+    await approved_roadmap(client, auth, runtime)
+    async with tenant_session(tenant_id) as s:
+        row = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "shipping-step"))
+        row.title = "F-31 Alert routing by team"
+        feature = Entity(type="feature", key="F-31", title="Launch flow", status="confirmed",
+                         origin="user", attrs={})  # fmt: skip
+        s.add(feature)
+        await s.flush()
+        fid = str(feature.id)
+        await s.commit()
+    out = (await client.post(SETS, headers=auth)).json()
+    taken = "F-31 is already the code of F-31 Alert routing by team"
+    r = await patch(
+        client, auth, out, [{"op": "add", "title": "F-31 Launch flow", "horizon": "next"}]
+    )
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == taken
+    r = await patch(client, auth, out, [{"op": "add", "title": "Launch flow", "horizon": "next",
+                                         "feature_id": fid}])  # fmt: skip
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == taken
+    r = await patch(
+        client, auth, out, [{"op": "add", "title": "F-32 Launch flow", "horizon": "next"}]
+    )
+    assert r.status_code == 200, r.text
+    async with tenant_session(tenant_id) as s:
+        row = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "shipping-step"))
+        row.title = "F-32 Alert routing by team"
+        await s.commit()
+    r = await client.post(f"{SETS}/{out['id']}/propose", headers=auth)
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"] == "F-32 is already the code of F-32 Alert routing by team"
+    r = await client.get(f"/v1/documents/{ROADMAP}/versions/2", headers=auth)
+    assert r.status_code == 404, r.text

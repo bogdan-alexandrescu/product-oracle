@@ -29,6 +29,7 @@ from oracle import company_time
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
 from tests.test_simple_changes_api import make_people
+from tests.test_simple_goal_buckets_api import URL as BUCKETS
 from tests.test_simple_goal_milestones_api import CHANGES, MILESTONES, get_roadmap
 from tests.test_simple_roadmap_api import NOW, Seed, by_key, get
 
@@ -403,3 +404,29 @@ async def test_restoring_an_item_whose_code_was_taken_since_is_refused(client):
     assert r.status_code == 200, r.text
     shown = {i["title"]: i["code"] for i in (await get(client, ctx, "owner"))["items"]}
     assert shown == {"Alerts": "F-30", "Billing": "F-38"}
+
+
+async def test_a_goal_restore_never_gives_a_taken_code_to_a_second_item(client):
+    # protects=restoring a goal brings back the goal alone (the rows its Trash entry holds, as
+    # trash_items._codes_free checks them): an item deleted before whose code another item
+    # took meanwhile stays in Trash, and its own restore is still refused in set_code's words;
+    # fails_when=two items read F-30 after the goal comes back; no_claim=the goal's links.
+    ctx = await make_people()
+    _, b = await coded_roadmap(ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        goal = str((await Seed(s).entity("goal", "faster-rides", position=1)).id)
+        await s.commit()
+    a = by_key(await get(client, ctx, "owner"))["a"]["id"]
+    r = await client.delete(f"{ITEMS}/{a}", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    r = await client.delete(f"{BUCKETS}/goals/{goal}", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    r = await rename(client, ctx, b, "Billing", "F-30 Billing")
+    assert r.status_code == 201, r.text
+    r = await client.post(f"{BUCKETS}/goals/{goal}/restore", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    out = await get(client, ctx, "owner")
+    assert [i["code"] for i in out["items"]].count("F-30") == 1 and "a" not in by_key(out)
+    r = await client.post(f"{ITEMS}/{a}/restore", headers=ctx.as_("owner"))
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"] == "F-30 is already the code of F-30 Billing: rename it first"
