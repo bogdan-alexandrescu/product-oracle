@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "./test";
 
 import { CONSOLE_HELD_RUN, CONSOLE_HELD_RUN_ID } from "../lib/api/mock/runs";
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_FAIL_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login, openSeeded, seedConsoleHeld, seedRun } from "./helpers";
 
 /**
@@ -17,6 +17,15 @@ import { login, openSeeded, seedConsoleHeld, seedRun } from "./helpers";
  * - stop-waive: protects=a stop row's Waive… asks for a reason there and stages the waiver;
  *   a refused one keeps its reason with the API's words under that row; fails_when=it posts
  *   with no reason or says the refusal only under the whole list; no_claim=the API's refusal.
+ * - refusal-sentence: protects=a refusal in the API's words reads as a sentence (a capital first
+ *   letter); fails_when=it shows "this checkpoint is decided"; no_claim=the API's words.
+ * - no-draft: protects=a Waive with no shared review read says in plain words that nothing was
+ *   waived and keeps its form and reason; fails_when=the form closes as if it worked;
+ *   no_claim=why the review could not be read.
+ * - gate-names: protects=the feature set's gate rows name a requirement, a goal and a feature
+ *   whose key holds a non-ASCII letter by name, as the API does (api/tests/test_checkpoint_gate_refs.py);
+ *   fails_when=a row shows "retention-rate", "saved-addresses-pick" or "café-pickup";
+ *   no_claim=the API's own check.
  */
 
 const REASON = "Section lands in the next PRD version";
@@ -182,7 +191,61 @@ test("a refused Waive on a stop row keeps its reason and says why under that row
 
   await drift(page).getByRole("button", { name: "Waive", exact: true }).click();
   await expect(drift(page).getByRole("alert")).toHaveText(
-    "this checkpoint is decided",
+    "This checkpoint is decided",
   );
   await expect(drift(page).getByRole("textbox")).toHaveValue(REASON);
+});
+
+test("a Waive with no shared review read says nothing was waived and keeps its form", async ({
+  page,
+}) => {
+  await login(page);
+  const cp = CONSOLE_HELD_RUN.run.checkpoints.find((c) => c.status === "pending")!;
+  // The stop's shared review cannot be read (GET fails), so there is no draft to stage on.
+  await page.evaluate(
+    ([key, path]) => localStorage.setItem(key, path),
+    [MOCK_FAIL_KEY, `/v1/runs/${CONSOLE_HELD_RUN_ID}/checkpoints/${cp.id}/review`] as const,
+  );
+  await openSeeded(page, seedConsoleHeld, `/runs/${CONSOLE_HELD_RUN_ID}`);
+  const gateRow = decision(page)
+    .getByTestId("gate-reason")
+    .filter({ hasText: "Usage export" });
+  await gateRow.getByRole("button", { name: "Waive…" }).click();
+  await gateRow.getByRole("textbox").fill(REASON);
+  await gateRow.getByRole("button", { name: "Waive", exact: true }).click();
+  await expect(gateRow.getByRole("alert")).toHaveText(
+    "This stop's shared review could not be read, so nothing was waived. Reload the page and try again.",
+  );
+  await expect(gateRow.getByRole("textbox")).toHaveValue(REASON);
+});
+
+test("the feature set's gate rows name each requirement, goal and feature, never by its key", async ({
+  page,
+}) => {
+  await page.addInitScript(
+    ([key, s]) => localStorage.setItem(key, s),
+    [MOCK_SCENARIO_KEY, "feature-set-names"],
+  );
+  await login(page);
+  await page.getByTestId("nav-runs").click();
+  await page
+    .locator('[data-testid="run-row"][data-document="saved-addresses"]')
+    .getByRole("link")
+    .click();
+  const gate = page
+    .getByTestId("checkpoint-feature_set")
+    .getByTestId("approve-gate");
+  await expect(gate.getByTestId("gate-reason")).toHaveCount(4);
+  await expect(gate).toContainText(
+    'Requirement "The buyer picks one of up to five saved addresses" of Saved addresses is neither a Ground Truth requirement nor one this run proposed',
+  );
+  await expect(gate).toContainText(
+    "Saved addresses: goal Retention rate is not a confirmed goal",
+  );
+  await expect(gate).toContainText(
+    "Address labels needs Café pickup, which is not in the feature set or the Ground Truth",
+  );
+  for (const key of ["saved-addresses-pick", "retention-rate", "café-pickup"]) {
+    await expect(gate).not.toContainText(key);
+  }
 });

@@ -99,7 +99,7 @@ def _roadmap_items(cp: Checkpoint) -> tuple[list[dict[str, Any]], int]:
 _LETTERS = "A-Za-z0-9_\u00c0-\u00d6\u00d8-\u00f6\u00f8-\u024f"
 _TOKEN = re.compile(
     rf"(?<![{_LETTERS}-])(?:(?P<kind>requirement key|requirement|goal) )?"
-    rf"(?<![{_LETTERS}-])(?P<token>#\d+|[{_LETTERS}][{_LETTERS}.]*(?:-[{_LETTERS}.]+)*)"
+    rf"(?<![{_LETTERS}-])(?P<token>#[0-9]+|[{_LETTERS}][{_LETTERS}.]*(?:-[{_LETTERS}.]+)*)"
     rf"(?![{_LETTERS}-])"
 )
 # The one place a message names a feature that is not in the set (unknown_dependency).

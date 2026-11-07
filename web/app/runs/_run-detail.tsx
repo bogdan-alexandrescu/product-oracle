@@ -1146,12 +1146,13 @@ function SegmentItem({
     try {
       draft.accept(await call());
     } catch (e) {
-      setDraftError(errorMessage(e));
+      setDraftError(asSentence(errorMessage(e)));
     }
   }
-  // D3: the gate's Waive… says a refusal under its own form, so it rejects instead.
+  // D3: the gate's Waive… says a refusal under its own form, so it rejects instead; with no
+  // shared draft to stage it on, nothing is waived and the form says so.
   const waive = async (body: ActionIn) => {
-    if (!shared) return;
+    if (!shared) throw new ApiError(0, NO_SHARED_DRAFT);
     draft.accept(await unwrap(api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions", { ...draftPath(shared.checkpoint_id), body })));
   };
   const draftActs: DraftActs | undefined = shared
@@ -1448,7 +1449,7 @@ function SegmentItem({
               review={shared?.checkpoint_id === cp.id ? shared : null}
               onSaveNote={(text) => saveNote(cp.id, text)}
               onReload={draft.reload}
-              onWaive={shared?.checkpoint_id === cp.id ? waive : undefined}
+              onWaive={waitingCp?.id === cp.id ? waive : undefined}
               noteRef={(el) => {
                 noteFields.current[cp.id] = el;
               }}
@@ -2417,6 +2418,7 @@ function CheckpointRow({
   onWaive?: (body: ActionIn) => Promise<void>;
 }) {
   const noteId = useId();
+  const { can } = useMe();
   // D8: the note is saved to the shared draft as I type; the line under it says how it went.
   const saved = review?.note ?? "";
   const canSave = !!review?.can_stage;
@@ -2632,7 +2634,8 @@ function CheckpointRow({
               ? `${plural(left, "blocking problem")} open before your edits: Oracle checks the file again once it applies them.`
               : approveBlocked!
           }
-          onWaive={review?.can_stage ? onWaive : undefined}
+          // A shared draft not read yet still offers Waive… to whoever may stage: its form then says nothing was waived.
+          onWaive={(review ? review.can_stage : can("stage_checkpoint_action")) ? onWaive : undefined}
         />
       )}
       <Sheet open={discussing} title={`Discuss: ${CHECKPOINT_LABEL[cp.kind]}`} onClose={() => setDiscussing(false)} testId="sheet-discuss">
@@ -2739,6 +2742,11 @@ function WaiveFix({ label, reason, onWaive }: { label: string; reason: string; o
   );
 }
 
+/** The API's words as a sentence: its refusals start lowercase ("this checkpoint is decided"). */
+const asSentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+const NO_SHARED_DRAFT = "This stop's shared review could not be read, so nothing was waived. Reload the page and try again.";
+
 /** D3: a waiver's reason and Waive. A refused waiver keeps its form and reason, with the API's words under it. */
 function WaiveForm({ reason: label, onWaive, onDone }: { reason: string; onWaive: (text: string) => Promise<void>; onDone: () => void }) {
   const [reason, setReason] = useState("");
@@ -2753,7 +2761,7 @@ function WaiveForm({ reason: label, onWaive, onDone }: { reason: string; onWaive
           setBusy(true);
           setError(null);
           onWaive(reason.trim())
-            .then(onDone, (e: unknown) => setError(errorMessage(e)))
+            .then(onDone, (e: unknown) => setError(asSentence(errorMessage(e))))
             .finally(() => setBusy(false));
         }}
       >
