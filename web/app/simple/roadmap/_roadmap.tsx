@@ -376,7 +376,8 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onApprove, onRe
     el.scrollIntoView({ block: "center" });
     el.querySelector<HTMLButtonElement>("[data-step]")?.focus();
   }, []);
-  const working = drafts.filter((d) => d.status === "working" || d.status === "submitted");
+  // A draft with no changes (its last one undone) has nothing to approve: no banner for it.
+  const working = drafts.filter((d) => (d.status === "working" || d.status === "submitted") && (d.changes > 0 || !!d.from_prds?.length));
   if (!working.length) {
     if (!inReview) return null;
     return (
@@ -1500,6 +1501,9 @@ export function SimpleRoadmap() {
   // pre-demo QA S-6: the suggested features the tray lists for a decision count on its button too.
   const suggestedWaiting = (suggestions.data?.suggestions ?? []).filter((s) => s.can_accept || s.can_reject).length;
   const waiting = counted.total + suggestedWaiting - counted.links - counted.dates.length + (allLinks ?? counted.links) + (allDates ?? counted.dates.length);
+  // Like the side menu, no number until every part it adds up is read (a failed read counts as read).
+  const read = (q: { data?: unknown; error: string | null }) => q.data !== undefined || !!q.error;
+  const waitingRead = read(proposals) && read(suggestions) && (!anyFilter || read(wholeLinks));
   const qList = quarters(data.windows.now.start, data.windows.later.end);
   // qa-shell-8: a new company's roadmap has nothing on it (no item, milestone or key date, and
   // no filter narrowing it): one line on what shows here and the next step, no empty chart and
@@ -1594,11 +1598,12 @@ export function SimpleRoadmap() {
           data-testid="needs-decision"
           title={`Broken links, dates to confirm, proposals, items pulled in and suggested features, ${f.roadmap ? "in this roadmap's working draft" : "in your roadmaps' working drafts"}`}
           onClick={() => setTray(true)}
-          data-zero={waiting ? undefined : "true"}
+          data-zero={!waitingRead || waiting ? undefined : "true"}
+          aria-busy={waitingRead ? undefined : true}
           // fix4 qa-simple-roadmap-38: at 0 the button is muted (nothing waits), still opens the tray.
-          className={waiting ? "border-warn" : "border-line text-text2"}
+          className={waitingRead && waiting ? "border-warn" : "border-line text-text2"}
         >
-          Needs a decision · {waiting}
+          Needs a decision{waitingRead ? ` · ${waiting}` : ""}
         </Button>
       )}
       <Button

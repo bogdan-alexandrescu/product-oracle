@@ -8578,8 +8578,10 @@ export async function mockFetch(req: Request): Promise<Response> {
     const db = load();
     const marks = db.webhooks?.hooks.length ? runMarks(db.runs?.runs) : null;
     // simple-roadmap-500-paint: the roadmap and its waiting counts read the 500 items once while
-    // the roadmap's data is the same; every other call reads afresh.
-    const roadmapRead = req.method === "GET" && (url.pathname === "/v1/simple/roadmap" || url.pathname === "/v1/simple/roadmap/waiting");
+    // the roadmap's data is the same; every other call reads afresh. The side menu's waiting list
+    // (read first, ahead of the roadmap) reads the roadmap too, so it shares the same build.
+    const roadmapRead =
+      req.method === "GET" && (url.pathname === "/v1/simple/roadmap" || url.pathname === "/v1/simple/roadmap/waiting" || url.pathname === "/v1/simple/decisions/waiting");
     if (req.method !== "GET") forgetRoadmapReads();
     roadmapReadsAt(roadmapRead);
     let res = await route(db, req);
