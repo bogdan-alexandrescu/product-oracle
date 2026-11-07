@@ -66,7 +66,8 @@ interface SeedItem {
   /** Its own milestone (RoadmapItem.milestone): its day from the horizon's start, null when it has no date.
    * build-feature-panel review 2: `engine` is what the date engine stored besides the name and
    * day (its date_source, basis_ids...), never shown; a null name reads "Milestone". */
-  milestone?: { name: string | null; day: number | null; engine?: Record<string, unknown> };
+  /** item-milestone: `id`, a goal milestone of its roadmap picked in its panel (no day). */
+  milestone?: { name: string | null; day: number | null; engine?: Record<string, unknown>; id?: string };
   /** The track milestone record naming the item (its name), whatever its own text says. */
   record?: string;
   /** The roadmap item's validation gates (days from the window's start); one naming a
@@ -1359,6 +1360,12 @@ export function readerDb(db: SimpleDb, me: { id: string; role: Role }): SimpleDb
   return readerView(db, me).db;
 }
 
+/** item-milestone: a picked goal milestone's code and name as the read shows them (service.build), else as stored. */
+export function pickedName(db: Pick<SimpleDb, "goal_milestones">, m: { id?: string; name: string | null }): string | null {
+  const gm = (db.goal_milestones ?? []).find((x) => x.id === m.id);
+  return gm ? `${gm.code} ${gm.name}` : m.name;
+}
+
 export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Who): Schemas["SimpleRoadmapOut"] | null {
   knowTalkGoals(db);
   knowExtraRoadmaps(db);
@@ -1453,7 +1460,10 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       suggestion: suggestion ? { ...suggestion, can_decide: decides(s) } : null,
       // service._milestone: its own dated milestone (set_milestone writes it, as typed in its
       // panel; null: cleared), else the track's record, else its own undated one.
-      milestone: s.milestone?.day != null
+      // item-milestone: a goal milestone picked in its panel, read by id with its live code and name.
+      milestone: s.milestone?.id
+        ? { id: s.milestone.id, name: pickedName(db, s.milestone), date: null, source: "item", ...recordOf(s) }
+        : s.milestone?.day != null
         ? { name: s.milestone.name, date: addDays(w[s.horizon][0], s.milestone.day), source: "item", ...recordOf(s) }
         : s.milestone && !s.record
           ? { name: s.milestone.name, date: null, source: "item" }
