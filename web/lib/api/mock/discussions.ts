@@ -766,13 +766,50 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
       status,
       created_at: late,
     });
+  // The approver's open goals interview on "Weekly checkout time", Oracle's two versions
+  // proposed: its page (/ground-truth) opens no thread, so they make no Inbox row.
+  const open = ctx.uuid();
+  const checkout = ctx.uuid();
+  db.discussions.push({
+    ...db.discussions.find((x) => x.id === interview)!,
+    id: open,
+    subject: { entity_id: checkout, interview: true },
+    subject_key: `entity:${checkout}`,
+    subject_label: "Weekly checkout time",
+    title: "Make “Weekly checkout time” measurable",
+    status: "open",
+  });
+  db.participants.push({ discussion_id: open, user_id: approver, added_via: "started", left_at: null, last_read_at: null, created_at: late });
+  for (const n of [1, 2])
+    db.changes.push({
+      ...change,
+      id: ctx.uuid(),
+      discussion_id: open,
+      kind: "goal_measure",
+      label: `Make Weekly checkout time measurable: version ${n}`,
+      target: { entity_id: checkout, title: "Weekly checkout time" },
+      payload: { entity_id: checkout, metric: "Weekly checkout time", target: 60 * n },
+      proposed_by_kind: "oracle",
+      suggested_by: null,
+      status: "proposed",
+      created_at: late,
+    });
+}
+
+/** The API's changes.opens_thread: whether the discussion's page opens its thread (and its changes card) from a link. */
+const THREAD_PAGES = ["document", "section", "roadmap_item", "checkpoint", "checkpoint_item"];
+const THREAD_PATH = /^\/(documents\/[^/?#]+\/v\/\d+|runs\/[^/?#]+)(?:[/?#]|$)/;
+function opensThread(d: DiscussionRow): boolean {
+  if (d.subject_kind === "screen") return THREAD_PATH.test(String((d.subject as { path?: string }).path ?? ""));
+  return THREAD_PAGES.includes(d.subject_kind);
 }
 
 /**
  * G6: my discussion rows for GET /v1/inbox, as the API derives them (oracle.discussions.inbox):
  * Invited and Mentioned rows of discussions I can read, and for approvers the changes waiting
  * on them (participants: proposed and suggested; others, of open discussions: suggested), in
- * open discussions only: a closed one's card offers no action until it is reopened.
+ * open discussions whose page opens their thread only: a closed one's card offers no action
+ * until it is reopened, and a goal's page (/ground-truth) shows no card.
  */
 export function discussionInboxRows(db: DiscussionsDb, members: Member[], me: { id: string; role: Role }, seen: string | null): Schemas["InboxDiscussionItem"][] {
   const name = (id: string | null) => {
@@ -818,7 +855,8 @@ export function discussionInboxRows(db: DiscussionsDb, members: Member[], me: { 
   }
   if (atLeast(me.role, "approver")) {
     for (const d of db.discussions) {
-      if (!readable(d) || d.status !== "open") continue;
+      // The API's changes.waits_on: open changes of an open discussion whose page opens its card.
+      if (!readable(d) || d.status !== "open" || !opensThread(d)) continue;
       const inIt = active(d).some((p) => p.user_id === me.id);
       const waiting = (db.changes ?? []).filter(
         (c) => c.discussion_id === d.id && (c.status === "suggested" || (inIt && c.status === "proposed")),
