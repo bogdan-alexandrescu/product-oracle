@@ -383,19 +383,23 @@ async def with_dependency_names(
     db: AsyncSession, document: Document, items: list[RoadmapItemOut]
 ) -> list[RoadmapItemOut]:
     """Each item's ``depends_titles``: the name of each dependency that is not an item of
-    the same version (another version's item on this roadmap, else any roadmap's, else a
-    Ground Truth feature by key), so a dependency never reads as its key (the stale-marks
-    walk: "keys-out-of-checkpoints")."""
+    the same version (another version's item on this roadmap, else the reader's view of
+    any roadmap's, else a Ground Truth feature by key), so a dependency never reads as its
+    key (the stale-marks walk: "keys-out-of-checkpoints"). An item of a roadmap the reader
+    may not see never names one (visibility.hidden_document_ids)."""
     here = {i.item_key for i in items}
     wanted = {k for i in items for k in i.depends_on if k not in here}
     if not wanted:
         return items
     names: dict[str, str] = {}
-    for doc_id, key, title in await db.execute(
+    stmt = (
         select(RoadmapItem.roadmap_document_id, RoadmapItem.item_key, RoadmapItem.title)
         .where(RoadmapItem.item_key.in_(wanted))
         .order_by(RoadmapItem.created_at)
-    ):
+    )
+    if hidden := await visibility.hidden_document_ids(db):
+        stmt = stmt.where(RoadmapItem.roadmap_document_id.not_in(hidden))
+    for doc_id, key, title in await db.execute(stmt):
         # This roadmap's own first, the latest last; another roadmap's only if none.
         if doc_id == document.id or key not in names:
             names[key] = title
@@ -873,34 +877,48 @@ def assess(
     return out, risks
 
 
+async def sharing_tracks(db: AsyncSession, roadmap_document_id: uuid.UUID) -> list[ProductTrack]:
+    """Every track that follows the roadmap, in the order :func:`owner_of` breaks ties by."""
+    return list(
+        await db.scalars(
+            select(ProductTrack)
+            .where(ProductTrack.roadmap_document_id == roadmap_document_id)
+            .order_by(ProductTrack.created_at, ProductTrack.id)
+        )
+    )
+
+
+def owner_of(item: RoadmapItem, sharing: list[ProductTrack]) -> uuid.UUID | None:
+    """The track an item of a roadmap belongs to among the tracks that follow it
+    (:func:`sharing_tracks`): its PRD's track, else its own track, else the first track."""
+    if not sharing:
+        return None
+    for t in sharing:
+        if t.prd_document_id == item.prd_document_id:
+            return t.id
+    if any(t.id == item.track_id for t in sharing):
+        return item.track_id
+    return sharing[0].id
+
+
 async def own_rows(
-    db: AsyncSession, track: ProductTrack, rows: list[RoadmapItem]
+    db: AsyncSession,
+    track: ProductTrack,
+    rows: list[RoadmapItem],
+    sharing: list[ProductTrack] | None = None,
 ) -> list[RoadmapItem]:
     """The track's own items of its roadmap's version. A roadmap several tracks follow (the
     company roadmap, many PRDs feeding it) gives each track its own items only (the
     stale-marks walk: every track group counted the whole roadmap and listed another PRD's
-    items): an item is the track of its PRD's, else of its own track, else the first
-    track's, so each item is under exactly one track."""
+    items): each item is under exactly one track (:func:`owner_of`). ``sharing``: the
+    roadmap's tracks when the caller already has them (:func:`monitor_owners`)."""
     if track.roadmap_document_id is None or not rows:
         return rows
-    sharing = list(
-        await db.scalars(
-            select(ProductTrack)
-            .where(ProductTrack.roadmap_document_id == track.roadmap_document_id)
-            .order_by(ProductTrack.created_at, ProductTrack.id)
-        )
-    )
+    if sharing is None:
+        sharing = await sharing_tracks(db, track.roadmap_document_id)
     if len(sharing) <= 1:
         return rows
-    by_prd = {t.prd_document_id: t.id for t in sharing}
-    ids = {t.id for t in sharing}
-
-    def owner(i: RoadmapItem) -> uuid.UUID:
-        if i.prd_document_id in by_prd:
-            return by_prd[i.prd_document_id]
-        return i.track_id if i.track_id in ids else sharing[0].id
-
-    return [i for i in rows if owner(i) == track.id]
+    return [i for i in rows if owner_of(i, sharing) == track.id]
 
 
 class TrackRead:
@@ -917,13 +935,15 @@ class TrackRead:
         self.records: list[TrackerRecord] = kw["records"]
 
 
-async def read(db: AsyncSession, track: ProductTrack) -> TrackRead:
+async def read(
+    db: AsyncSession, track: ProductTrack, sharing: list[ProductTrack] | None = None
+) -> TrackRead:
     base = await track_out(db, track)
     roadmap = (
         await db.get(Document, track.roadmap_document_id) if track.roadmap_document_id else None
     )
     version = await items_version(db, roadmap, approved_first=True) if roadmap else None
-    rows = await own_rows(db, track, await version_items(db, version))
+    rows = await own_rows(db, track, await version_items(db, version), sharing)
     ctx = await ItemContext.load(db, rows)
     milestones = await milestones_of(db, track.id)
     records = await tracker.records_for_track(db, track.id)
@@ -946,9 +966,11 @@ async def read(db: AsyncSession, track: ProductTrack) -> TrackRead:
     )
 
 
-async def overview(db: AsyncSession, track: ProductTrack) -> TrackOverview:
+async def overview(
+    db: AsyncSession, track: ProductTrack, sharing: list[ProductTrack] | None = None
+) -> TrackOverview:
     """The track's overview; the read it came from rides along for :func:`monitor`."""
-    found = await read(db, track)
+    found = await read(db, track, sharing)
     found.overview._found = found
     return found.overview
 
@@ -972,15 +994,21 @@ def snapshot(o: TrackOverview) -> dict[str, Any]:
 
 
 async def monitor(
-    db: AsyncSession, track: ProductTrack, actor: Any
+    db: AsyncSession,
+    track: ProductTrack,
+    actor: Any,
+    *,
+    sharing: list[ProductTrack] | None = None,
 ) -> tuple[TrackOverview, uuid.UUID | None, list[str]]:
     """Compute the overview, store its snapshot, and record a ``product_track`` change
     when health, at-risk items or the next milestone changed, then sync the track's alerts
-    (oracle.roadmap.alerts) whether or not it changed. The caller commits."""
+    (oracle.roadmap.alerts) whether or not it changed. The caller commits. ``sharing``: the
+    roadmap's tracks, when the caller already has them."""
     from oracle.roadmap import alerts
 
-    o = await overview(db, track)
-    found = o._found or await read(db, track)
+    # The hourly pass (no list to share) keeps the two-argument call its tests stand in for.
+    o = await (overview(db, track) if sharing is None else overview(db, track, sharing))
+    found = o._found or await read(db, track, sharing)
     after = snapshot(o)
     before = dict(track.monitor or {})
     changed = [
@@ -1006,6 +1034,43 @@ async def monitor(
     await alerts.sync(db, track, found, event_id)
     o = o.model_copy(update={"monitored_at": track.monitored_at})
     return o, event_id, changed
+
+
+async def monitor_owners(
+    db: AsyncSession, roadmap_document_id: uuid.UUID, items: list[RoadmapItem], actor: Any
+) -> list[uuid.UUID]:
+    """Re-check, at once, only the active tracks that own ``items`` of the roadmap
+    (:func:`owner_of`), so acting on an item updates its track's alerts and counts in the
+    same request (the stale-marks walk), with no work for the roadmap's other tracks. Each
+    track is locked and checked in its own savepoint: one that raises is logged and rolled
+    back alone (the hourly pass checks it again), and the action and the other tracks'
+    checks stand. Returns the tracks that could not be checked."""
+    if not items:
+        return []
+    sharing = await sharing_tracks(db, roadmap_document_id)
+    owners = {o for o in (owner_of(i, sharing) for i in items) if o is not None}
+    if not owners:
+        return []
+    await db.flush()  # the action itself stays outside every track's savepoint
+    locked = await db.scalars(
+        select(ProductTrack)
+        .where(ProductTrack.id.in_(owners), ProductTrack.status == "active")
+        .order_by(ProductTrack.created_at, ProductTrack.id)
+        .with_for_update()
+    )
+    failed: list[uuid.UUID] = []
+    for track in list(locked):
+        track_id = track.id
+        try:
+            async with db.begin_nested():
+                await monitor(db, track, actor, sharing=sharing)
+        except Exception:  # noqa: BLE001 - logged; the action and the other tracks stand
+            log.exception("track %s could not be re-checked after a staleness action", track_id)
+            failed.append(track_id)
+            # The savepoint's rollback expired what it touched: read the tracks again, so
+            # the next track's check never loads an expired row lazily.
+            sharing = await sharing_tracks(db, roadmap_document_id)
+    return failed
 
 
 async def monitor_due(

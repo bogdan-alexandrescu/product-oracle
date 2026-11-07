@@ -397,6 +397,7 @@ async def _by_prd_version(db: AsyncSession, event: ChangeEvent, found: dict) -> 
             RoadmapItem.roadmap_version_id.is_not(None),
         )
     )
+    gone: list[tuple[RoadmapItem, uuid.UUID | None, str]] = []
     for item in rows:
         version_id, section_hash = anchor(item)
         if version_id == new.id:
@@ -406,17 +407,33 @@ async def _by_prd_version(db: AsyncSession, event: ChangeEvent, found: dict) -> 
             continue  # nothing of its own changed (P11): see the module's docstring
         # The section by its heading (the stale-marks walk), never its key.
         if key not in hashes:
-            gone = await db.scalar(
-                select(Section.heading).where(
-                    Section.version_id == version_id, Section.section_key == key
-                )
-            )
-            found[item.id] = (item, f"PRD section {gone or key} is gone in version {new.number}")
+            gone.append((item, version_id, key))
+            found[item.id] = (item, f"PRD section {key} is gone in version {new.number}")
         elif hashes[key] != section_hash:
             found[item.id] = (
                 item,
                 f"PRD section {headings.get(key) or key} changed in version {new.number}",
             )
+    if not gone:
+        return
+    # A gone section by the heading it had where each item was anchored: one read for all.
+    versions = {v for _, v, _ in gone if v is not None}
+    old_headings = (
+        {
+            (v, k): h
+            for v, k, h in await db.execute(
+                select(Section.version_id, Section.section_key, Section.heading).where(
+                    Section.version_id.in_(versions),
+                    Section.section_key.in_({k for _, _, k in gone}),
+                )
+            )
+        }
+        if versions
+        else {}
+    )
+    for item, version_id, key in gone:  # in place: the order items were found in stays
+        if heading := old_headings.get((version_id, key)):
+            found[item.id] = (item, f"PRD section {heading} is gone in version {new.number}")
 
 
 async def _by_section(db: AsyncSession, event: ChangeEvent, found: dict) -> None:

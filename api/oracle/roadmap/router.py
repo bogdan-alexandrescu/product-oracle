@@ -302,8 +302,8 @@ async def act_on_roadmap_item_staleness(
     """Settle potentially stale items: ``review`` (under review) or ``reconcile`` (still
     valid, with a reason; re-anchored on the PRD's latest approved version), on the version
     named, else the one the tracks follow (the latest approved with items). 409 when no item
-    is in a state the action applies to; then every active track on the roadmap is
-    monitored, so its alerts follow at once."""
+    is in a state the action applies to. The tracks that own the changed items are then
+    re-checked, so their alerts follow at once."""
     document = await _document(db, doc, "roadmap")
     # No version named (the Plan item panel's Review): the one the tracks follow, the latest
     # approved with items, whose rows the track alerts are about (the stale-marks walk).
@@ -327,16 +327,12 @@ async def act_on_roadmap_item_staleness(
         raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from e
     except staleness.Invalid as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from e
-    # Acting updates every count at once (the stale-marks walk): each active track on this
-    # roadmap is monitored now, so a reconciled item's stale alert resolves and leaves the
-    # Inbox, not at the next hourly pass.
-    for track in await db.scalars(
-        select(ProductTrack)
-        .where(ProductTrack.roadmap_document_id == document.id, ProductTrack.status == "active")
-        .order_by(ProductTrack.created_at, ProductTrack.id)
-        .with_for_update()
-    ):
-        await views.monitor(db, track, principal)
+    # Acting updates every count at once (the stale-marks walk): the tracks that own the
+    # changed items are re-checked now, each on its own (views.monitor_owners), so a
+    # reconciled item's stale alert leaves the Inbox, not at the next hourly pass, and a
+    # track that cannot be checked never undoes the action.
+    acted = {c["id"] for c in changed}
+    await views.monitor_owners(db, document.id, [i for i in rows if str(i.id) in acted], principal)
     await db.commit()
     out = await views.items_view(db, document, version, "full")
     return ItemStalenessOut(changed=changed, items=out.items)
