@@ -17,6 +17,7 @@
 """
 
 import dataclasses
+import re
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -415,6 +416,34 @@ async def _supersede(
             c.status = "superseded"
             c.decision_note = "Replaced by a later proposal from Oracle"
     await db.flush()
+
+
+# --- what waits on an approver (G6's Inbox and the changes card) --------------------------------
+
+#: The subjects whose page opens a thread from the Inbox's link (``?discussion=<id>``), its
+#: changes card under it: a document's version (and its items) and a run (its sheet). A goal,
+#: a brief, the plan or the priorities do not, so Review changes would land on no change.
+THREAD_PAGES = ("document", "section", "roadmap_item", "checkpoint", "checkpoint_item")
+#: A screen discussion's page that opens it: a document's version or a run.
+THREAD_PATH = re.compile(r"^/(documents/[^/?#]+/v/\d+|runs/[^/?#]+)(?:[/?#]|$)")
+
+
+def opens_thread(d: Discussion) -> bool:
+    """Whether the discussion's page opens its thread, and so its changes card, from a link."""
+    if d.subject_kind == "screen":
+        return bool(THREAD_PATH.match(str((d.subject or {}).get("path") or "")))
+    return d.subject_kind in THREAD_PAGES
+
+
+def waits_on(d: Discussion, c: DiscussionChange, participant: bool) -> bool:
+    """The one rule for a change waiting on an approver: what the Inbox's "N changes proposed"
+    counts and its Review changes lands on, an open change in the card's open list. Open
+    (``proposed`` or ``suggested``) in an open discussion whose page opens the card; Oracle's
+    proposals wait on its participants, people's suggestions on every approver of an open one
+    (c6). A closed discussion's card offers no action until it is reopened."""
+    if d.status != "open" or c.status not in OPEN or not opens_thread(d):
+        return False
+    return participant or (d.visibility == "open" and c.status == "suggested")
 
 
 # --- what the caller may do -------------------------------------------------------------------
