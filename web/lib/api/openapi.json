@@ -43083,6 +43083,143 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/simple/roadmap/draft-prds": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "List Simple Roadmap Draft Prds",
+        "description": "The draft layer (RP2): every PRD the caller may read whose run's draft roadmap holds\ndated items not approved yet, each with its items, dates, owner and run. A replaced\nPRD, a cancelled run and an approved PRD version are left out.",
+        "operationId": "list_simple_roadmap_draft_prds",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SimpleRoadmapDraftPrd"
+                  },
+                  "type": "array",
+                  "title": "Response List Simple Roadmap Draft Prds"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/roadmap/draft-prds/items/{item_id}/dates": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Change Simple Roadmap Draft Dates",
+        "description": "Change dates on a draft item: the run's draft keeps them, the roadmap does not.",
+        "operationId": "change_simple_roadmap_draft_dates",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimpleDraftDatesIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/simple/roadmap/draft-prds/items/{item_id}/leave-out": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Leave Out Simple Roadmap Draft Item",
+        "description": "Leave out a draft item: it never goes on the roadmap.",
+        "operationId": "leave_out_simple_roadmap_draft_item",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
     "/v1/simple/roadmap/apply-approved": {
       "post": {
         "tags": [
@@ -129323,6 +129460,97 @@
           "what"
         ],
         "title": "SimpleRetryDeliveryIn"
+      },
+      "SimpleRoadmapDraftItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "horizon": {
+            "type": "string",
+            "title": "Horizon"
+          },
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date",
+            "title": "End"
+          },
+          "owner_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title",
+          "horizon",
+          "start",
+          "end"
+        ],
+        "title": "SimpleRoadmapDraftItem",
+        "description": "A dated item of a draft PRD on the Simple roadmap's draft layer, with its owner."
+      },
+      "SimpleRoadmapDraftPrd": {
+        "properties": {
+          "prd": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleRoadmapDraftItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "can_change": {
+            "type": "boolean",
+            "title": "Can Change",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "prd",
+          "items"
+        ],
+        "title": "SimpleRoadmapDraftPrd",
+        "description": "RP2 'Draft layer on roadmap': a PRD whose run's draft roadmap holds dated items not\napproved yet, shown hatched over the roadmap until the PRD is approved."
       },
       "SimpleRoadmapItem": {
         "properties": {
