@@ -31,6 +31,11 @@ from tests.conftest import seed_company
 from tests.test_priorities import _token
 
 SOURCES = get_args(CitationSource)
+# Each source kind as a person reads it (the default PRD template's Sources list).
+PLAIN_KINDS = {
+    "slack": "Slack", "notion": "Notion", "gdocs": "Google Docs", "github": "GitHub",
+    "fireflies": "Fireflies", "upload": "upload", "web": "web", "oracle": "Oracle",
+}  # fmt: skip
 DRAFT_SEGMENTS = [
     ("baseline_to_prd", "prd_draft", "prd"),
     ("feedback_loop", "next_draft", "prd"),
@@ -175,7 +180,11 @@ def test_a_confidence_outside_0_to_1_is_refused_in_plain_words(value):
 )
 def test_builtin_prd_templates_list_oracle_as_a_source_kind(t):
     body = builtins.builtin_body(t)
-    assert "kind (" + ", ".join(SOURCES) + ")" in body
+    # prd-source-words (PR 1350): Oracle's default lists its sources by title, each kind in
+    # plain words; the other built-ins keep the kinds as citation ids. Either way every kind,
+    # Oracle's own among them, is named.
+    plain = "kind (" + ", ".join(PLAIN_KINDS[s] for s in SOURCES) + ")"
+    assert "kind (" + ", ".join(SOURCES) + ")" in body or plain in body
 
 
 async def test_an_unedited_builtin_gets_the_new_skeleton_as_its_next_version(client, tenant_id):
