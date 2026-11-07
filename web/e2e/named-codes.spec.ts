@@ -258,8 +258,12 @@ test("keyboard: Tab passes the chip; Enter opens the card, Tab leaves it; Escape
 test("keyboard: a citation chip's card takes focus on open, Tab leaves it, and Escape gives focus back", async ({ page }) => {
   await login(page);
   await page.goto("/documents/checkout-redesign/v/2");
-  const cite = (await openSection(page, "problem")).getByTestId("cite-c4");
+  const problem = await openSection(page, "problem");
+  const cite = problem.getByTestId("cite-c4");
   const card = page.getByTestId("code-card");
+  // The sections' verdicts show once the person's role has loaded and grow the sections above, so
+  // the page scrolls to keep Problem in place, and a scroll closes an open card: click after they show.
+  await expect(problem.getByRole("group", { name: /^Verdict for/ })).toBeVisible();
   await cite.click();
   await expect(card).toBeVisible();
   const source = card.getByRole("link", { name: /Open source/ });
