@@ -128,8 +128,13 @@ async def test_every_import_path_matches_the_rest_import(client, tenant_id, path
         url = f"/versions/2/export?format={fmt}"
         ea = (await client.get(f"/v1/documents/via-api{url}", headers=viewer)).text
         eb = (await client.get(f"/v1/documents/via-other{url}", headers=viewer)).text
-        # The export names its import time, month first, in the Company time zone.
-        assert STAMP.search(ea), ea[:400]
+        if fmt == "html":
+            # The export names its import time, month first, in the Company time zone.
+            assert STAMP.search(ea), ea[:400]
+        else:
+            # Export QA pass X, X-17 (train AS cdf393d16): the markdown export is plain
+            # markdown, with no banner naming the time.
+            assert "Product Oracle export" not in ea and "Product Oracle export" not in eb
         assert norm(ea) == norm(eb)
 
 

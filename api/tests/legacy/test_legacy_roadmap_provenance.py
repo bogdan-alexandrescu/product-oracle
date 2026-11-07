@@ -91,9 +91,14 @@ async def test_roadmap_records_the_approved_prd_version_and_keeps_it(client, run
         )
         assert str(roadmap_v1.source_version_id) == v1["id"]
 
-    # The exports carry the provenance banner.
+    # The HTML export's banner carries the provenance, linked to the PRD version. The
+    # markdown export is plain markdown with no banner (export QA pass X, X-17, train AS
+    # cdf393d16).
+    html = await client.get(f"/v1/documents/{ROADMAP}/versions/1/export?format=html", headers=auth)
+    assert ">From Onboarding checklist PRD v1</a>" in html.text
+    assert '/documents/legacy-onboarding/v/1"' in html.text
     md = await client.get(f"/v1/documents/{ROADMAP}/versions/1/export?format=md", headers=auth)
-    assert "from Onboarding checklist PRD (legacy-onboarding) version 1" in md.text
+    assert md.status_code == 200 and "Product Oracle export" not in md.text
     # The run needs an approved version to start a second roadmap too.
     again = await client.post(
         "/v1/runs",
