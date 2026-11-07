@@ -202,10 +202,10 @@ for (const [size, viewport] of [["phone", PHONE], ["desktop", DESKTOP]] as const
 test("phone, the default company: the 15 features at effort 1 week, goal value 0 are one count of 15, listed by rank", async ({ page }) => {
   await open(page, PHONE, null);
   const count = page.locator('[data-testid="vxe-crowd"][data-count="15"]');
-  await expect(count).toHaveAccessibleName("15 features at effort 1 wk · goal value 0: show them");
+  await expect(count).toHaveAccessibleName("15 features at effort 1 week · goal value 0 or no goal: AHE Alert history export, F-110 Annual plan offer, F-104 Complaint early warning and 12 more; show them");
   await count.click();
   const sheet = page.getByTestId("vxe-crowd-sheet");
-  await expect(sheet.getByRole("heading")).toHaveText("15 features · effort 1 wk · goal value 0");
+  await expect(sheet.getByRole("heading")).toHaveText("15 features · effort 1 week · goal value 0 or no goal");
   // Every feature there has the same numbers, so the title says them and the rows do not.
   await expect(sheet.getByTestId("vxe-crowd-row").first()).toHaveText(/^6\s*AHE\s*Alert history export$/);
   // Escape closes the sheet; the chart is as it was.
@@ -240,7 +240,7 @@ test("desktop: a mark moved onto another's spot with the arrow keys joins its co
   await page.keyboard.press("ArrowDown");
   await expect(sc).toHaveCount(0);
   const count = page.locator('[data-testid="vxe-crowd"][data-count="2"]');
-  await expect(count).toHaveAccessibleName("2 features at effort 2 wk · goal value 3: show them");
+  await expect(count).toHaveAccessibleName("2 features at effort 2 weeks · goal value 3: SC Setup checklist, ARB Alert routing by team; show them");
   await expect(count).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("vxe-crowd-sheet").getByTestId("vxe-crowd-row")).toHaveText([/Setup checklist/, /Alert routing by team/]);

@@ -299,7 +299,7 @@ for (const v of VIEWS) {
 
       // PV-1 One count per spot: the 15 features at value 0, effort 1 (alert-export and setup-video among them) are one count.
       const count = page.locator('[data-testid="vxe-crowd"][data-count="15"]');
-      await expect(count).toHaveAccessibleName("15 features at effort\u00a01\u00a0wk · goal\u00a0value\u00a00: show them");
+      await expect(count).toHaveAccessibleName(/^15 features at effort 1 week · goal value 0 or no goal: AHE Alert history export, .* and 12 more; show them$/);
       for (const code of ["alert-export", "setup-video", "setup-health-log"]) await expect(mark(page, code)).toHaveCount(0);
       // The median lines say what they are ("middle effort", "middle value"), never under a mark or a count.
       const marks = await page.locator('[data-testid="vxe-point"], [data-testid="vxe-crowd"]').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON() as DOMRect));
@@ -349,11 +349,15 @@ for (const v of VIEWS) {
       await page.keyboard.press("Escape");
       await expect(page.getByTestId("item-panel")).toHaveCount(0);
       await expect(sideRow(page, "price-tiers")).toHaveAttribute("data-selected", "true");
-      // Select a row: its mark lights up instead.
+      // Select a row: its mark lights up instead, and the row opens its feature panel too (Escape closes it first).
       if (v.phone) await sideRow(page, "alert-digest").getByRole("button").tap();
       else await sideRow(page, "alert-digest").getByRole("button").click();
       await expect(mark(page, "alert-digest")).toHaveAttribute("aria-pressed", "true");
       await expect(mark(page, "price-tiers")).toHaveAttribute("aria-pressed", "false");
+      await expect(sideRow(page, "alert-digest")).toHaveAttribute("data-selected", "true");
+      await expect(page.getByTestId("item-panel")).toContainText(await sideRow(page, "alert-digest").getByTestId("prio-title").innerText());
+      await page.keyboard.press("Escape");
+      await expect(page.getByTestId("item-panel")).toHaveCount(0);
       await expect(sideRow(page, "alert-digest")).toHaveAttribute("data-selected", "true");
       if (!v.phone) {
         // Escape closes what is open on top first (the Ask panel), and leaves the selection.
