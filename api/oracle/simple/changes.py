@@ -944,7 +944,7 @@ async def _plan(
         # roadmap-edit-fixes: a rename changes the name only; a code the title carries stays.
         code, name = service.coded_title(row.title, _code_of(entry))
         if name != row.title and code and service.coded_title(title, None)[0] is None:
-            title = f"{code} {title}"[:TITLE_MAX]
+            title = _with_code(code, title)
         after = {"title": title}
     elif op == "set_milestone":
         m = a.get("milestone")
@@ -1063,7 +1063,7 @@ async def _plan(
         code = await _free_code(db, entry, a.get("code"), read_)
         name = service.coded_title(row.title, _code_of(entry))[1]
         target["code"] = code
-        after = {"title": f"{code} {name}"[:TITLE_MAX] if code else name}
+        after = {"title": _with_code(code, name) if code else name}
         stored = ("title",)
     else:  # accept_risk
         if target.get("flag") not in FLAG_KINDS:
@@ -1112,6 +1112,18 @@ async def _free_code(db: AsyncSession, entry: Any, raw: Any, read_: Any) -> str 
     if code in features:
         raise ChangeError(422, f"{code} is already the code of a Ground Truth feature")
     return code
+
+
+def _with_code(code: str, name: str) -> str:
+    """An item's title, its code before its name; the name is never cut (422 when the two do
+    not fit)."""
+    room = TITLE_MAX - len(code) - 1
+    if len(name) > room:
+        raise ChangeError(
+            422,
+            f"The name is too long to carry the code {code}: shorten it to {room} characters first",
+        )
+    return f"{code} {name}"
 
 
 def _code_of(e: Any) -> str | None:
@@ -1662,6 +1674,13 @@ async def decide(
             # The roadmap may have changed since the proposal: create's check again (no
             # loop, an open parent), in its words.
             await _parent(db, entry, (c.after or {}).get("parent_key"), dict(c.target), read_)
+        if c.op == "set_code" and c.target.get("code"):
+            # every-field: another item or a Ground Truth feature may have taken the code since
+            # the proposal; it stays open, to decline.
+            try:
+                await _free_code(db, entry, c.target["code"], read_)
+            except ChangeError as e:
+                raise ChangeError(409, e.detail) from e
         # Into the decider's working draft (their editing session's, or S8's meeting's).
         session = await _session_for_change(db, me, session_id, True, now)
         await _apply(db, c, c.after, principal, session)  # type: ignore[arg-type]
