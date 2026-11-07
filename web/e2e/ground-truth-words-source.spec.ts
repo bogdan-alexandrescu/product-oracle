@@ -14,9 +14,10 @@ import { expect, test } from "./test";
  * the API's export and email templates (api/oracle's .j2 and .html, Jinja tags aside: the PDF,
  * deck and public roadmap exports, the invite emails), and every string the export builders in
  * Python write (api/oracle/export's .py: the PDF's render.py, the deck; docstrings, comments and
- * raw-string patterns aside). And no spec in web/e2e expects a page to say one: the
- * strings given to toHaveText, toContainText, getByText and a role's `name:` (test titles,
- * comments and checks that a text is gone aside).
+ * raw-string patterns aside), and the other Python that renders shown text (RENDERERS: the shared
+ * page's render.py and public.py, the public roadmap page, the invite and minutes emails). And
+ * no spec in web/e2e expects a page to say one: the strings given to toHaveText, toContainText,
+ * getByText and a role's `name:` (test titles, comments and checks that a text is gone aside).
  * fails_when = a label such as "change it in Baseline" or "Detailed › Baseline" is left, or a
  * spec still waits for "Baseline to PRD".
  *
@@ -218,14 +219,32 @@ function pythonStrings(text: string): [number, string][] {
 const pythonOldNames = (rel: string, text: string) =>
   pythonStrings(text).flatMap(([line, said]) => (saysOld(rel, said) ? [`${rel}:${line}: ${said.trim().slice(0, 120)}`] : []));
 
-const builders = () => fs.readdirSync(EXPORT).filter((f) => f.endsWith(".py")).map((f) => path.join(EXPORT, f));
+/**
+ * The other Python that writes text a person reads, each named: the shared page's renderer and
+ * its public route, the public roadmap page and the roadmap views they draw, the invite email
+ * and its send, and the meeting minutes email (meetings.py's deliver).
+ */
+const RENDERERS = [
+  "shares/render.py",
+  "shares/public.py",
+  "roadmap/public.py",
+  "roadmap/variants.py",
+  "members/mailer.py",
+  "members/delivery.py",
+  "simple/meetings.py",
+];
+
+const builders = () => [
+  ...fs.readdirSync(EXPORT).filter((f) => f.endsWith(".py")).map((f) => path.join(EXPORT, f)),
+  ...RENDERERS.map((f) => path.join(API, f)),
+];
 
 test("no string a page can show in web/app, web/components or web/lib says Desired state, Current state or Baseline", () => {
   const found = ["app", "components", "lib"].flatMap((dir) => [...sources(path.join(WEB, dir))].flatMap((f) => oldNames(relOf(f), read(f))));
   expect(found).toEqual([]);
 });
 
-test("no string of the mock's JSON data, an export or email template, nor an export builder in Python says Desired state, Current state or Baseline", () => {
+test("no string of the mock's JSON data, an export or email template, nor a Python export builder, shared page or email says Desired state, Current state or Baseline", () => {
   const mock = fs.readdirSync(MOCK).filter((f) => f.endsWith(".json")).flatMap((f) => jsonOldNames(relOf(path.join(MOCK, f)), read(path.join(MOCK, f))));
   const sent = [...templates(API)].flatMap((f) => templateOldNames(path.relative(API, f), read(f)));
   const built = builders().flatMap((f) => pythonOldNames(path.relative(API, f), read(f)));
@@ -304,6 +323,13 @@ test("the check finds an old name planted in web/lib, the mock and a spec's expe
     "export/deck.py:11: <p>Read from the Desired state.</p>",
   ]);
   expect(builders().map((f) => path.basename(f)), "the PDF's and the deck's builders are read").toEqual(expect.arrayContaining(["render.py", "deck.py"]));
+  // fails_when = the check does not read the Python that renders shared pages and emails.
+  const named = builders().map((f) => path.relative(API, f));
+  expect(named, "the shared page's and the emails' renderers are read").toEqual(expect.arrayContaining(RENDERERS));
+  for (const f of RENDERERS) expect(fs.existsSync(path.join(API, f)), f).toBe(true);
+  expect(pythonOldNames("shares/render.py", 'TITLE = "Shared from the Baseline"\nKEY = "baseline"\nhref = f"/baseline/{slug}"')).toEqual([
+    "shares/render.py:1: Shared from the Baseline",
+  ]);
   for (const kept of [
     'test("Baseline to PRD reads Ground Truth to PRD", async () => {});',
     '// The heading once read "Baseline to PRD".',
