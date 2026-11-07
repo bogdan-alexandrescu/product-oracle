@@ -13,7 +13,8 @@ import { expect, test, type Page } from "./test";
  * Card home-prd-waiting: protects = the card is headed "Waiting for you: <PRD>", says how many the
  * person owns and that they are also on its review meeting's agenda, lists the late one first, and
  * deciding one there ("Another answer", then an answer) lowers the Decisions count; the meeting's
- * agenda lists all 15 open questions, the approver's included; fails_when = the card is missing,
+ * agenda lists all 15 open questions, the approver's included, every one shown (none folded under
+ * "N more"), the approver's with "Decide for <name>" as a secondary button; fails_when = the card is missing,
  * lists someone else's question, or the agenda leaves out a question of a later milestone;
  * no_claim = the Decisions page's own lists (simple-decisions-questions.spec.ts).
  *
@@ -134,16 +135,28 @@ for (const phone of [false, true]) {
       await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
       await page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "3 Decisions" }).click();
       const due = region(page, "On the agenda");
-      await expect(due.getByTestId("decisions-due-summary")).toContainText("15 decisions");
-      await due.getByRole("button", { name: /^11 more: Q/ }).click();
+      await expect(due.getByTestId("decisions-due-summary")).toHaveText(/^Due by \w{3} \w{3} \d{1,2} · 15 decisions · from Guided setup draft 3$/);
+      // Fidelity ("Waiting for you + agenda"): every decision listed under that one line, none folded.
       const rows = due.getByTestId("question-row");
       await expect(rows).toHaveCount(15);
+      await expect(due.getByRole("button", { name: /more/ })).toHaveCount(0);
       await expect(rows.first()).toContainText("Q5 Reminder default time");
       // Whoever owns it: the approver's, an unowned one, and the later milestones' questions.
       await expect(due.locator('[data-code="Q7"]')).toBeVisible();
       await expect(due.locator('[data-code="Q2"]')).toBeVisible();
       await expect(due.locator('[data-code="Q16"]')).toBeVisible();
       await expect(rows.last()).toContainText("Q16 Self-serve plan cancel");
+      // Fidelity: the approver's decision reads "<name> decides" with "Decide for <name>" as a
+      // secondary button (as on Decisions), never the primary "Decide as recommended".
+      const theirs = due.locator('[data-code="Q7"]');
+      const name = (await theirs.getByText(/ decides$/).textContent())!.replace(/ decides$/, "");
+      expect(name).not.toBe("");
+      const forThem = theirs.getByRole("button", { name: `Decide for ${name}` });
+      await expect(forThem).toBeVisible();
+      await expect(forThem).not.toHaveClass(/simple-button-primary/);
+      await expect(theirs.getByRole("button", { name: "Decide as recommended" })).toHaveCount(0);
+      // One of the person's own still has the primary button.
+      await expect(due.locator('[data-code="Q5"]').getByRole("button", { name: "Decide as recommended" })).toHaveClass(/simple-button-primary/);
     });
   });
 }
