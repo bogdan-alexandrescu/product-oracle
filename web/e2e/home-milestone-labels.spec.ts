@@ -32,10 +32,10 @@ import { expect, test, type Page } from "./test";
  * ends in an ellipsis, its words run past its box, or is clipped by a box round it.
  */
 
-async function home(page: Page, width: number) {
+async function home(page: Page, width: number, email: string = ADMIN.email) {
   await page.setViewportSize({ width, height: 900 });
   await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, HOME_MILESTONES_SCENARIO] as const);
-  await login(page, ADMIN.email);
+  await login(page, email);
   await page.goto("/simple");
   await expect(page.getByRole("heading", { name: "The plan this quarter" })).toBeVisible();
   await expect(page.getByTestId("home-strip-label").first()).toBeVisible();
@@ -86,16 +86,21 @@ test("Home's plan groups by the roadmap's current milestones, a removed one's it
   expect(loose).not.toEqual(expect.arrayContaining(["Sample data import"]));
   expect(loose).not.toEqual(expect.arrayContaining(["Welcome video"]));
   expect(loose).not.toEqual(expect.arrayContaining(["Alert history export"]));
-  // What the next milestone delivers: Alerts' own M1 (Nov 20), before the track's Beta (Nov 30).
-  const next = page.getByTestId("home-milestone-row");
-  await expect(next).toHaveCount(1);
-  await expect(next).toContainText("Alert rules engine");
-  await expect(next).toContainText("M1 · Alerts live for 50 teams");
   // The Simple roadmap's Milestone lanes name the same current M1.
   await page.goto("/simple/roadmap");
   await page.getByTestId("format-gantt").click();
   await page.getByTestId("group-milestone").click();
   await expect(page.getByText("M1 Alerts live for 50 teams", { exact: true }).first()).toBeVisible();
+});
+
+test("What the next milestone delivers reads the roadmap's own milestones too", async ({ page }) => {
+  // A reader's Home has the card: Alerts' own M1 (Nov 20) comes before the track's Beta (Nov 30).
+  await home(page, 1440, "viewer@example.com");
+  const next = page.getByTestId("home-next-milestone").getByTestId("home-milestone-row");
+  await expect(next).toHaveCount(1);
+  await expect(next).toContainText("Alert rules engine");
+  await expect(next).toContainText("M1 · Alerts live for 50 teams");
+  await expect(page.getByTestId("home-next-milestone")).not.toContainText("Weekly alert digest");
 });
 
 for (const width of [1440, 1024, 390]) {
