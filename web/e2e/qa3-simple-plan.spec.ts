@@ -331,6 +331,7 @@ test.describe("QA pass 3: simple-plan, Value / effort", () => {
     await sc.focus();
     await page.keyboard.press("ArrowLeft");
     await expect(sc).toHaveAttribute("aria-label", /effort 1\.5 weeks/);
+    await sc.focus();
     await page.keyboard.press("ArrowLeft");
     await expect(sc).toHaveAttribute("aria-label", /effort 1 week(,|$)/);
   });

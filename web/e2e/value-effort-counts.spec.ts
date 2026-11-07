@@ -220,3 +220,20 @@ test("the (i) says what a count is; nothing new shows on the page", async ({ pag
   await expect(page.locator("#prio-about-text")).toContainText("Where marks would cover each other, one dark mark counts them; tap it for their list.");
   await expect(page.getByText("one dark mark counts them")).toBeHidden();
 });
+
+test("desktop: a mark moved onto another's spot with the arrow keys joins its count, which takes the focus", async ({ page }) => {
+  await open(page, DESKTOP, null);
+  // Setup checklist (goal value 4, 2 wk) down to Alert routing by team's spot (goal value 3, 2 wk).
+  const sc = page.locator('[data-testid="vxe-point"][data-code="setup-checklist"]');
+  await sc.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(sc).toHaveAttribute("aria-label", /goal value 3\.5,/);
+  await sc.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(sc).toHaveCount(0);
+  const count = page.locator('[data-testid="vxe-crowd"][data-count="2"]');
+  await expect(count).toHaveAccessibleName("2 features at effort 2 wk · goal value 3: show them");
+  await expect(count).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("vxe-crowd-sheet").getByTestId("vxe-crowd-row")).toHaveText([/Setup checklist/, /Alert routing by team/]);
+});

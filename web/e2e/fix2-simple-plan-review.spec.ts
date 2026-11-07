@@ -110,13 +110,13 @@ test.describe("fix2-simple-plan review: Value / effort, proposals, the goal draw
     expect(withGoal.length).toBeGreaterThan(0);
     await page.getByRole("tab", { name: "Value / effort" }).click();
     await expect(page.getByTestId("vxe-point").first()).toBeVisible();
-    // PV-1: a feature is its own mark, or a row in a count's sheet drawn with its goal's shape.
+    // PV-1: a feature is its own mark, or a row in a count's sheet (which never says "no goal" either).
     const lone = await page.getByTestId("vxe-point").evaluateAll((els) => els.map((e) => e.getAttribute("data-code")!));
     for (const code of withGoal.filter((c) => lone.includes(c))) await expect(page.locator(`[data-testid="vxe-point"][data-code="${code}"]`)).not.toHaveAttribute("aria-label", /no goal/);
     const counted = withGoal.filter((c) => !lone.includes(c));
     expect(counted.length).toBeGreaterThan(0);
     for (const code of counted) {
-      await expect(await countRowOf(page, code)).not.toHaveAttribute("data-shape", "none");
+      await expect(await countRowOf(page, code)).not.toContainText(/no goal/i);
       await page.keyboard.press("Escape");
     }
   });
