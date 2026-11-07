@@ -487,10 +487,11 @@ export const NEW_FLOW_OPS = new Set(["add_item_task", "add_launch_task", "add_ac
  */
 export function draftNext(
   d: Pick<Schemas["SimpleDraftOut"], "status" | "can_submit" | "can_approve" | "can_publish" | "base_version" | "published" | "waiting_on"> &
-    Partial<Pick<Schemas["SimpleDraftOut"], "decider" | "decider_approved">> & { required_reviewers?: string[] },
+    Partial<Pick<Schemas["SimpleDraftOut"], "decider" | "decider_approved" | "next_version">> & { required_reviewers?: string[] },
   names?: (id: string) => string,
 ): { words: string; action: "submit" | "approve" | "publish" | null } {
-  const v = `version ${(d.base_version ?? 0) + 1}`;
+  // hotfix 4: the number it becomes, after the roadmap's latest version (a run's may be newer than its base).
+  const v = `version ${d.next_version ?? (d.base_version ?? 0) + 1}`;
   const publish = d.published ? `${v} replaces the approved roadmap` : `${v} is published`;
   // Review: the roadmap's decider by name (the draft carries it) until they approve, then whom it waits on.
   const decider = d.decider && !d.decider_approved ? [d.decider.name] : [];

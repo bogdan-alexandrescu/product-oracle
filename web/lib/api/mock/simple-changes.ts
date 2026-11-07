@@ -575,8 +575,10 @@ function draftOut(db: SimpleDb, ctx: SimpleChangesCtx, d: MockDraft): Schemas["S
   const edits = canEditRoadmap(db, d.roadmap, ctx);
   const decider = db.deciders?.[d.roadmap];
   const approver = approverOf(db, ctx, d);
+  // hotfix 4 (drafts.listing): the number it becomes, after the roadmap's latest version.
+  const latest = Math.max(d.out.base_version ?? 0, ...(db.versions ?? []).filter((v) => v.roadmap === d.roadmap).map((v) => v.number));
   return {
-    ...d.out, changes: draftChanges(db, d.out.id), change_log: changeLog(db, d.out.id), from_prds: draftPrds(d),
+    ...d.out, next_version: d.out.version ?? latest + 1, changes: draftChanges(db, d.out.id), change_log: changeLog(db, d.out.id), from_prds: draftPrds(d),
     // roadmap-decide review (drafts.outs): the author and the roadmap's set decider, by name.
     created_by_name: ctx.names[d.out.created_by] ?? null,
     decider: decider ? { id: decider, name: ctx.names[decider] ?? "its decider" } : null,
