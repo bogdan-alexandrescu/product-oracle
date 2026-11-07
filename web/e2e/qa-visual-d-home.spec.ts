@@ -182,7 +182,7 @@ test.describe("at 1440", () => {
   test("D-7: a viewer, who has no Set up, sees no setup error", async ({ page }) => {
     await failing(page, "/v1/setup");
     await openHome(page, "viewer");
-    await expect(page.getByTestId("home-goals").or(page.locator("[data-testid^='home-goal-']").first())).toBeVisible();
+    await expect(page.getByTestId("home-goals").or(page.locator("[data-testid^='home-goal-']")).first()).toBeVisible();
     await expect(page.getByTestId("home-setup-load-error")).toHaveCount(0);
   });
 });
@@ -191,6 +191,8 @@ test.describe("on a phone", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
   test("D-8: a Needs you item cut at two lines draws nothing over the line below it", async ({ page }) => {
+    // A small phone (320 wide), where the mock's longest question runs past two lines.
+    await page.setViewportSize({ width: 320, height: 700 });
     await openHome(page);
     const table = page.getByTestId("home-needs-table");
     await expect(table).toBeVisible();
@@ -199,7 +201,7 @@ test.describe("on a phone", () => {
         .filter((el) => getComputedStyle(el).webkitLineClamp === "2" && el.scrollHeight > el.clientHeight + 1)
         .map((el) => ({ text: (el.textContent ?? "").slice(0, 40), overflow: getComputedStyle(el).overflowY })),
     );
-    // The mock has an item long enough to be cut on a phone; what is cut is clipped, not drawn on.
+    // The mock has an item long enough to be cut on a small phone; what is cut is clipped, not drawn on.
     expect(clamped.length).toBeGreaterThan(0);
     expect(clamped.filter((c) => c.overflow !== "hidden")).toEqual([]);
   });

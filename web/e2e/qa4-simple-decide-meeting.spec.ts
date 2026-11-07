@@ -196,12 +196,13 @@ for (const phone of [false, true]) {
       expect(box.y).toBeGreaterThan((page.viewportSize()!.height * 2) / 3);
     });
 
-    test("qa4-simple-decide-19: the meeting's times read 'Fri Oct 30, 8:18 PM', no zone letters", async ({ page }) => {
+    // RP2 c (port-AN): the decision stamp stands alone, so it keeps its zone ("Wed Nov 4, 4:41 PM PST").
+    test("qa4-simple-decide-19: the meeting's times read 'Fri Oct 30, 8:18 PM PDT', the stamp with its zone", async ({ page }) => {
       await startReview(page);
       await tap(steps(page).getByRole("button", { name: "2 Roadmap" }));
       await tap(page.getByRole("button", { name: "Move Sample data import to Later" }));
       const when = decisions(page).getByTestId("meeting-decision").first().locator("span");
-      await expect(when).toHaveText(/ · [A-Z][a-z]{2} [A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} [AP]M$/);
+      await expect(when).toHaveText(/ · [A-Z][a-z]{2} [A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} [AP]M [A-Z]{2,4}$/);
     });
 
     test("qa4-simple-decide-23: an attendee chip has a visible Mark away / Mark here", async ({ page }) => {

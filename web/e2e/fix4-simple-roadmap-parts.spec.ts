@@ -72,7 +72,8 @@ for (const [where, use] of [
         await expect(legendItem(page, /^A broken link$/)).toHaveCount(1);
         // qa-simple-roadmap-32: the Later column's count includes the cut In-app tour.
         await expect(column(page, "later").getByTestId("board-below")).toContainText("In-app tour");
-        await expect(column(page, "later").getByTestId("column-count")).toHaveText("1 item, 1 cut");
+        // roadmap-edit-fixes round 1: F-03 Health log is a live, planned Later item on its PRD's roadmap.
+        await expect(column(page, "later").getByTestId("column-count")).toHaveText("2 items, 1 cut");
       });
     });
   }
