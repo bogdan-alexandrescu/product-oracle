@@ -5,7 +5,7 @@
  * built from reads under it in one calm column, numbered as the Detailed side numbers it (PT1's
  * numbersOf), with a contents list beside it. A feature code opens the feature panel.
  */
-import { Fragment, useMemo, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, type ReactNode } from "react";
 
 import { numbersOf, ownNumber } from "@/components/PrdLook";
 import { useOpenFeature } from "@/components/simple/OpenFeature";
@@ -141,8 +141,20 @@ function Body({ md, codes, prd }: { md: string; codes: CodeIndex; prd: Doc }) {
 export function PrdContents({ prd, blocks }: { prd: PrdSections; blocks: View["blocks"] }) {
   const { sections, nums } = prd;
   const top = sections.filter((s) => s.level === 2);
+  const ref = useRef<HTMLElement>(null);
+  // The jump offset follows the sticky row's real height, which grows as its tabs wrap.
+  useEffect(() => {
+    const nav = ref.current;
+    const host = nav?.parentElement;
+    if (!nav || !host) return;
+    const set = () => host.style.setProperty("--prd-nav-h", `${Math.ceil(nav.getBoundingClientRect().height)}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(nav);
+    return () => { ro.disconnect(); host.style.removeProperty("--prd-nav-h"); };
+  }, []);
   return (
-    <nav className="simple-prd-nav simple-noprint" aria-label="Contents">
+    <nav ref={ref} className="simple-prd-nav simple-noprint" aria-label="Contents">
       <p className="simple-prd-nav-title">On one page</p>
       {blocks.map((b) => <a key={b.key} href={`#op-${b.key}`}>{b.title}</a>)}
       {top.length > 0 && <p className="simple-prd-nav-title">The whole PRD</p>}

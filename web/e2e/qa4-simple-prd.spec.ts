@@ -259,3 +259,35 @@ test.describe("phone", () => {
     expect(overlaps(box, (await page.getByRole("link", { name: "Open in Detailed" }).boundingBox())!)).toBe(false);
   });
 });
+
+for (const width of [1024, 1280, 390]) {
+  test(`a jumped-to heading sits below the sticky contents row at ${width} px`, async ({ page }) => {
+    // fails_when: the jump offset is a fixed 64 px while the wrapped row is taller, leaving the heading under the row
+    await page.setViewportSize({ width, height: 800 });
+    await login(page);
+    await page.goto("/simple/one-pagers/guided-setup");
+    await expect(page.getByRole("article", { name: "One-pager" })).toBeVisible();
+    const nav = page.getByRole("navigation", { name: "Contents" });
+    if (width < 768) {
+      // No contents row on a phone: a jump by link lands on the heading with nothing over it.
+      await expect(nav).toBeHidden();
+      return;
+    }
+    const tabs = nav.getByRole("link");
+    const count = await tabs.count();
+    expect(count).toBeGreaterThan(2);
+    for (const i of [1, count - 1]) {
+      const tab = tabs.nth(i);
+      const target = (await tab.getAttribute("href"))!.slice(1);
+      await tab.click();
+      await page.waitForTimeout(600);
+      const gap = await page.evaluate((id) => {
+        const el = document.getElementById(id)!;
+        const h = (el.querySelector("h1,h2,h3,h4") ?? el) as HTMLElement;
+        const n = document.querySelector('nav[aria-label="Contents"]')!.getBoundingClientRect();
+        return Math.round(h.getBoundingClientRect().top - n.bottom);
+      }, target);
+      expect(gap).toBeGreaterThanOrEqual(0);
+    }
+  });
+}

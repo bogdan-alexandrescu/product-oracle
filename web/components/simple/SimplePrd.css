@@ -71,5 +71,5 @@ h4.simple-prd-sec-title { font-size: 18px; line-height: 26px; }
 
 /* Under the sticky contents row a jump lands clear of it. */
 @media (min-width: 768px) and (max-width: 1599px) {
-  .simple-calm article[aria-label="One-pager"] > section, .simple-calm .simple-prd-sec { scroll-margin-top: 64px; }
+  .simple-calm article[aria-label="One-pager"] > section, .simple-calm .simple-prd-sec { scroll-margin-top: calc(var(--prd-nav-h, 64px) + 8px); }
 }
