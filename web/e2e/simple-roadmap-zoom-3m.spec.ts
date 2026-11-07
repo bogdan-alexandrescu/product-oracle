@@ -60,8 +60,11 @@ async function weeksInView(page: Page) {
 
 /** Slides the chart sideways with the mouse wheel, as a person would, by about `dx` pixels. */
 async function slide(page: Page, dx: number) {
+  // The chart's top on screen, the pointer over a part of it in sight: the Goal map's goals add
+  // counters above the chart since P-1 (P-6), so its top can sit low on the page.
+  await page.getByTestId("timeline-names-head").scrollIntoViewIfNeeded();
   const view = (await page.getByTestId("timeline-scroll").boundingBox())!;
-  await page.mouse.move(view.x + view.width / 2, view.y + 200);
+  await page.mouse.move(view.x + view.width / 2, Math.min(view.y + 200, page.viewportSize()!.height - 20));
   const sl = () => page.getByTestId("timeline-scroll").evaluate((el) => el.scrollLeft);
   const from = await sl();
   await page.mouse.wheel(dx, 0);
@@ -264,6 +267,17 @@ test.describe("desktop", () => {
     expect(today.x).toBeGreaterThan(view.x);
     expect(today.x).toBeLessThan(view.x + view.width);
     const bar = page.locator('[data-testid="timeline-row"][data-item="alert-digest"]').getByTestId("timeline-bar");
+    // Its row is below the fold (the Goal map's goals lead the lanes since P-1, P-6): the person
+    // scrolls the page down with the wheel over the page's header, the chart left where it is sideways.
+    const sl = await page.getByTestId("timeline-scroll").evaluate((el) => el.scrollLeft);
+    const rowTop = (await bar.boundingBox())!.y;
+    const fold = page.viewportSize()!.height;
+    if (rowTop > fold - 60) {
+      await page.mouse.move(view.x + view.width / 2, 40);
+      await page.mouse.wheel(0, rowTop - fold / 2);
+      await expect.poll(async () => (await bar.boundingBox())!.y).toBeLessThan(fold - 60);
+    }
+    expect(await page.getByTestId("timeline-scroll").evaluate((el) => el.scrollLeft)).toBe(sl);
     await expect(bar).toBeInViewport();
     const bb = (await bar.boundingBox())!;
     expect(bb.x).toBeGreaterThan(today.x);
