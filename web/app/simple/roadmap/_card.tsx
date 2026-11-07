@@ -17,6 +17,7 @@ import { useScreenSubject } from "@/lib/screen-subject";
 
 import { HORIZONS, type Horizon } from "./_board";
 import { NameEdit, PanelFields } from "./_fields";
+import { CutBy } from "./_removed";
 import {
   milestoneInk,
   shortDay,
@@ -945,11 +946,8 @@ export function FloatingCard({
           Oracle is drafting…
         </p>
       )}
-      {cut && (
-        <p className="mt-1 text-sm text-text2" data-testid="item-cut">
-          Cut: it sits below the line, out of the plan
-        </p>
-      )}
+      {/* removed-tracks: a cut feature's head says who cut it and when (the Removed list's row). */}
+      {cut && <CutBy id={item.id} />}
       {item.merged_into && (
         <p className="mt-1 text-sm text-text2" data-testid="item-merged">
           Merged into {item.merged_into.title}

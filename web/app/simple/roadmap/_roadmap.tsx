@@ -23,6 +23,8 @@ import { byPrdOrderOf, usePrdOrder } from "@/lib/prd-order";
 import { useQuery } from "@/lib/use-query";
 
 import { QuickAdd } from "./_add";
+import { RemovedButton } from "./_removed";
+import { TracksButton } from "./_tracks";
 import { MsCard, MsKey, MsLayer, MsProvider, MsToast, useMilestones, type MsLane, type MsRow } from "./_milestones";
 import { Board, boardColumns, boardLegend, HORIZONS, LEGEND_SWATCH, LegendKeys, MARK_WORDS, PM_LANE, type Horizon, type LegendEntry } from "./_board";
 import { useKeyBurst } from "./_burst";
@@ -1638,6 +1640,7 @@ export function SimpleRoadmap() {
   const narrowed = [data.roadmap ? "roadmap" : "", f.prd, f.goal, f.track, f.from, f.to].filter(Boolean).length;
   const filters = (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="filters">
+      <RemovedButton items={data.items} canChange={canChange} onOpen={(id) => (setPop(null), openCard(id))} onChanged={reload} />
       {phone ? (
         <Button data-filters-toggle="" data-testid="filters-toggle" aria-expanded={pickersOpen} aria-controls="roadmap-pickers" onClick={() => setPickersOpen(!pickersOpen)}>
           {narrowed ? `Filters · ${narrowed}` : "Filters"}
@@ -1650,6 +1653,11 @@ export function SimpleRoadmap() {
           {pickers}
         </div>
       )}
+      {/* removed-tracks: a button, apart from the Track filter by its border and the rule before it. */}
+      <span className="flex items-center gap-x-4">
+        {!phone && <span aria-hidden className="h-6 border-l border-line" />}
+        <TracksButton items={data.items} canChange={canChange} onChanged={reload} />
+      </span>
       {/* The Timeline always draws its rows under their goal (rowsOf), so it offers no Group by. */}
       {format !== "timeline" && (
       <span className="flex max-w-full min-w-0 flex-wrap items-center gap-1.5 text-sm text-text2">
