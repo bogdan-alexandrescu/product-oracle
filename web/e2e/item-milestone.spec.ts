@@ -17,7 +17,11 @@ const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile:
 
 const SAFETY_M1 = "M1 Reports reach a person (User Safety)";
 const SAFETY_M2 = "M2 Blocks hold everywhere (User Safety)";
+const SAFETY_M3 = "M3 Ready for launch (User Safety)";
 const SCALE_M1 = "M1 Load measured (Scale)";
+const SCALE_M2 = "M2 Twice the load (Scale)";
+// The same code and name as User Safety's M3: told apart by id, never by name.
+const SCALE_M3 = "M3 Ready for launch (Scale)";
 const ITEM = "read-replicas";
 
 async function open(page: Page, email: string = ADMIN.email) {
@@ -80,7 +84,7 @@ for (const [name, device] of [["desktop", DESKTOP], ["phone", PHONE]] as const) 
       await expect(card(page)).toBeVisible();
       await expect(card(page).getByTestId("card-milestone")).toHaveText("No milestone");
       await card(page).getByRole("button", { name: "Change the milestone" }).click();
-      await expect(card(page).getByLabel("Milestone", { exact: true }).locator("option")).toHaveText(["No milestone", SCALE_M1, SAFETY_M1, SAFETY_M2]);
+      await expect(card(page).getByLabel("Milestone", { exact: true }).locator("option")).toHaveText(["No milestone", SCALE_M1, SCALE_M2, SCALE_M3, SAFETY_M1, SAFETY_M2, SAFETY_M3]);
       await card(page).getByRole("button", { name: "Cancel" }).click();
 
       await pick(page, SAFETY_M2);
@@ -113,6 +117,32 @@ for (const [name, device] of [["desktop", DESKTOP], ["phone", PHONE]] as const) 
       await expect(card(page).getByTestId("card-milestone")).toHaveText("No milestone");
       await expect(lane(page, SAFETY_M2)).toHaveCount(0);
       expect(await itemsIn(page, "No milestone")).toContain(ITEM);
+    });
+
+    /**
+     * protects = a pick is checked against the milestone the feature is in by its id: another tab
+     * moves it from User Safety's M3 Ready for launch to Scale's, which reads the same name, and
+     * a pick from the panel still showing User Safety's is refused as changed since;
+     * fails_when = the two are told apart by name only, so the stale pick goes through;
+     * no_claim = the API's check (api pytest).
+     */
+    test("a stale pick is refused when the feature moved to a milestone of the same name", async ({ page }) => {
+      await open(page);
+      await openRoadmapItem(page, ITEM);
+      await pick(page, SAFETY_M3);
+      await expect(card(page).getByTestId("card-milestone")).toHaveText(SAFETY_M3);
+      // Someone else (the same person in another tab) moves it to Scale's milestone of that name.
+      const other = await page.context().newPage();
+      await other.goto("/simple/roadmap");
+      await expect(other.getByTestId("simple-roadmap")).toBeVisible();
+      await openRoadmapItem(other, ITEM);
+      await expect(card(other).getByTestId("card-milestone")).toHaveText(SAFETY_M3);
+      await pick(other, SCALE_M3);
+      await expect(card(other).getByTestId("card-milestone")).toHaveText(SCALE_M3);
+      await other.close();
+      await pick(page, SAFETY_M1);
+      await expect(page.getByText(/Changed since you saw it/).first()).toBeVisible();
+      await expect(card(page).getByTestId("card-milestone")).not.toHaveText(SAFETY_M1);
     });
 
     /**

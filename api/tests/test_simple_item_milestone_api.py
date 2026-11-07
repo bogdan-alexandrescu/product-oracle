@@ -9,10 +9,15 @@ Test cards (protects / fails_when / no_claim):
   PRD milestone of its roadmap by the milestone's id (applied into the working draft, with
   Undo), the item reads that milestone by id with its code and name and keeps its dates; a
   stale ``before`` is a 409, a move to another milestone and a clear go through, Undo puts the
-  last one back; a milestone of another roadmap or no milestone at all is a 422; a commenter's
-  pick is proposed (the item unchanged) and a viewer is refused; fails_when=the pick is not
-  stored or read by id, it moves the item's dates, it applies for a commenter, or a foreign
-  milestone is taken; no_claim=the web (web/e2e/item-milestone.spec.ts).
+  last one back; a milestone of another roadmap or no milestone at all is a 422 that says so in
+  plain words, and a deleted one says it was deleted; a commenter's pick is proposed (the item
+  unchanged) and a viewer is refused; fails_when=the pick is not stored or read by id, it moves
+  the item's dates, it applies for a commenter, a foreign or deleted milestone is taken, or the
+  refusal is not plain words; no_claim=the web (web/e2e/item-milestone.spec.ts).
+- test_a_proposed_pick_of_a_milestone_deleted_since_is_refused_on_accept: protects=a commenter's
+  pick waits on the decider; the milestone is deleted meanwhile, and accepting it is refused in
+  plain words with the item left in no milestone and the proposal still open; fails_when=the
+  accept places the item in a deleted milestone; no_claim=declining it (the change engine's).
 - test_company_roadmap_lists_each_prds_milestones_in_one_goal: protects=two PRDs whose items
   serve the same goal on the company roadmap both have their own M1 listed (a PRD's milestones
   are coded per PRD, not per goal), and an item of one PRD is placed in the other PRD's M1;
@@ -21,7 +26,7 @@ Test cards (protects / fails_when / no_claim):
 """
 
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
 
 from oracle.roadmap.models import RoadmapItem, TrackMilestone
 from oracle.simple.models import SimplePrdPlan
@@ -72,9 +77,11 @@ async def test_panel_places_an_item_in_a_roadmap_milestone(client):
         other = await Seed(s).doc("hiking-roadmap", "roadmap")
         foreign = TrackMilestone(track_id=None, roadmap_id=other.id, code="M1",
                                  name="Trail maps live", target_date=date(2026, 12, 4))  # fmt: skip
-        s.add(foreign)
+        gone = TrackMilestone(track_id=None, roadmap_id=uuid.UUID(w.roadmap_id), code="M7",
+                              name="Old launch", deleted_at=datetime.now(UTC))  # fmt: skip
+        s.add_all([foreign, gone])
         await s.commit()
-        foreign_id = str(foreign.id)
+        foreign_id, gone_id = str(foreign.id), str(gone.id)
     body = await _read(client, ctx, "decider")
     ms = {m["code"]: m for m in body["goal_milestones"] if m["roadmap_id"] == w.roadmap_id}
     assert {"M1", "M2"} <= set(ms), body["goal_milestones"]
@@ -91,10 +98,14 @@ async def test_panel_places_an_item_in_a_roadmap_milestone(client):
     assert r.json()["change"]["status"] == "proposed"
     assert _item(await _read(client, ctx, "decider"), a)["milestone"] is None
 
-    # Not a milestone of the item's roadmap, or none at all: refused.
+    # Not a milestone of the item's roadmap, none at all, or a deleted one: refused, in plain words.
     for bad in (foreign_id, str(uuid.uuid4())):
         r = await _post(client, ctx, "decider", a, None, {"id": bad})
         assert r.status_code == 422, r.text
+        assert r.json()["detail"] == "That milestone is not on this item's roadmap.", r.text
+    r = await _post(client, ctx, "decider", a, None, {"id": gone_id})
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == "That milestone was deleted.", r.text
 
     r = await _post(client, ctx, "decider", a, None, {"id": m1["id"], "name": "M1 Prove it"})
     assert r.status_code == 201, r.text
@@ -176,3 +187,29 @@ async def test_company_roadmap_lists_each_prds_milestones_in_one_goal(client):
     assert r.json()["change"]["status"] == "applied"
     it = _item(await _read(client, ctx, "owner"), ids["a"])
     assert (it["milestone"]["id"], it["milestone"]["name"]) == (scale_m1["id"], "M1 Load measured")
+
+
+async def test_a_proposed_pick_of_a_milestone_deleted_since_is_refused_on_accept(client):
+    ctx = await make_people()
+    w = await World(ctx).build(decider=True, ops=["im"])
+    a = w.ids["im-a"]
+    async with tenant_session(ctx.tenant_id) as s:
+        own = TrackMilestone(track_id=None, roadmap_id=uuid.UUID(w.roadmap_id), code="M1",
+                             name="Beta for ten teams", target_date=date(2026, 12, 4))  # fmt: skip
+        s.add(own)
+        await s.commit()
+        own_id = own.id
+    r = await _post(client, ctx, "commenter", a, None, {"id": str(own_id)})
+    assert r.status_code == 201, r.text
+    proposal = r.json()["change"]
+    assert proposal["status"] == "proposed"
+    async with tenant_session(ctx.tenant_id) as s:
+        (await s.get(TrackMilestone, own_id)).deleted_at = datetime.now(UTC)
+        await s.commit()
+    r = await client.post(f"{CHANGES}/{proposal['id']}/accept", json={},
+                          headers=ctx.as_("decider"))  # fmt: skip
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == "That milestone was deleted.", r.text
+    assert _item(await _read(client, ctx, "decider"), a)["milestone"] is None
+    rows = (await client.get(CHANGES, headers=ctx.as_("decider"))).json()
+    assert {c["id"]: c["status"] for c in rows}[proposal["id"]] == "proposed", rows
