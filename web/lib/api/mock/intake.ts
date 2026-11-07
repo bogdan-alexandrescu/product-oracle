@@ -1378,6 +1378,8 @@ export function seedBriefGoalRejected(db: V2Db, authorId: string, goalIds: strin
 
 /** Failed reads in a row that raise the author's Inbox row (oracle.intake.read.INBOX_AFTER). */
 const INBOX_AFTER = 2;
+/** A closed brief: no read, no Inbox row (oracle.intake.job.CLOSED_INTAKE). */
+const CLOSED_INTAKE: ReadonlySet<Intake["status"]> = new Set(["converted", "archived"]);
 /** A read whose built-in job failed, in the API's words (oracle.intake.read.JOB_FAILED). */
 const READ_FAILED = "Oracle's read failed. The rules read stands.";
 
@@ -1388,7 +1390,7 @@ const READ_FAILED = "Oracle's read failed. The rules read stands.";
  */
 export function intakeReadInbox(db: V2Db, userId: string): Schemas["InboxIntakeRead"][] {
   return db.intakes
-    .filter((i) => i.author_id === userId && i.status !== "converted" && i.status !== "archived")
+    .filter((i) => i.author_id === userId && !CLOSED_INTAKE.has(i.status))
     .flatMap((i) => {
       const read = db.intake_reads?.[i.id]?.read;
       return read && read.failures >= INBOX_AFTER ? [{ intake: i, failures: read.failures, at: read.finished_at ?? null }] : [];

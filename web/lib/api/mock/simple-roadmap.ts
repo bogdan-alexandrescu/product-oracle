@@ -41,6 +41,8 @@ interface SeedItem {
   horizon: Horizon;
   roadmap: string;
   goal?: string;
+  /** goal-map-editing: its goal named by a confirmed goal's id (goal-ladder's goals have no key here). */
+  map_goal?: string;
   track?: string;
   confidence?: "low" | "medium" | "high";
   /** Days from the window's start; with `source`. */
@@ -91,6 +93,8 @@ interface SeedItem {
   /** prio-company: the key of the item whose feature this one is (an item a move on Priorities
    * added to the company roadmap for a feature it did not hold); else its own feature. */
   feature?: string;
+  /** feature-parts: the key of the feature it is a part of (RoadmapItem.parent_key). */
+  parent?: string;
   /** S7: the Ground Truth feature (with no item) this draft was linked to by a merge. */
   // A draft merged with a Ground Truth feature that has no item: linked to it (still a draft).
   linked_feature?: string;
@@ -112,6 +116,8 @@ interface SeedItem {
   dates?: { start: string | null; end: string; source: "engineering" | "accepted" };
   /** build-runplan RP2: the PRD it belongs to when not its roadmap's own (./meeting-draft.ts). */
   prd_doc?: { id: string; slug: string; title: string };
+  /** RP2 'Draft layer on roadmap': a draft item's owner, by name (./meeting-draft.ts). */
+  draft_owner?: string;
   /** Bring a date in: the re-plan sliced or split it, so its date waits for a new estimate. */
   estimate_pending?: boolean;
   /** approved-roadmap-to-simple: the source words of the dates an applied roadmap version gave it
@@ -164,6 +170,9 @@ interface SimpleDb {
   agenda_midway?: { topic: string; by: string } | null;
   /** D-a: each track's owner (track key -> person id); their role (Who.roles) says whether they decide. */
   track_owners?: Record<string, string>;
+  /** RP2 'Draft layer on roadmap': each draft PRD's run (PRD id -> run), as DraftRoadmap.run_id
+   * and prd_version_id hold it (./meeting-draft.ts draftPrdsOut). */
+  draft_runs?: Record<string, { run_id: string; version: number; cancelled?: boolean }>;
   /** S4: people's display names (person id -> name), for the items' owners. */
   people?: Record<string, string>;
   /** S4: proposed decisions naming an item (item key -> decisions). */
@@ -181,6 +190,8 @@ interface SimpleDb {
   goal_buckets?: import("./goal-buckets").GoalBucketsDb;
   /** one-feature-panel: a roadmap goal edited through the goal edit (goal key -> its fields). */
   goal_edits?: Record<string, RoadmapGoalFields>;
+  /** pre-demo QA P-6: item id -> the goal it serves on the Goal map (service._ladder_goals), read when the item has no goal of its own. */
+  map_goals?: Record<string, Schemas["SimpleGoalRef"]>;
   goal_jobs?: Record<string, { until: number; job_id: string; origin: "auto" | "on_demand" }>;
   auto_done?: string[];
   /** S7: the seeds a merge changed, as they were (change id -> seeds), for its undo. */
@@ -308,6 +319,14 @@ export function knowTalkGoals(db: { items: { key: string }[]; plan?: unknown }):
 const GOALS_KNOWN: Record<string, boolean> = {};
 /** Confirmed Baseline goals a scenario adds by their own ids (goal-ladder's), id to title: add_item may name them. */
 export const MAP_GOALS: Record<string, string> = {};
+/**
+ * goal-map-editing: an item's own goal named by a confirmed goal's id (goal-ladder's), as the API's
+ * goal_ids; none while that goal is in Trash or unknown (service.load leaves it out).
+ */
+export function mapGoalRef(db: Pick<SimpleDb, "goal_buckets">, id: string): Schemas["SimpleGoalRef"] | null {
+  if (!(id in MAP_GOALS) || db.goal_buckets?.goals.some((g) => g.id === id && g.trashed)) return null;
+  return { id, key: id, title: MAP_GOALS[id], metric: null, position: null, target: null, due: null, current: null, unit: null };
+}
 
 /**
  * build-goal-order-control: the "goal-order" scenarios' added goals (server.ts seeds them), named
@@ -562,6 +581,19 @@ export function seedSimpleDeciders(people: { decider: string; approver: string; 
   for (const s of db.items) if (s.key === "setup-tour" || s.key === "setup-video") s.track = "welcome";
   db.deciders = { "pricing-roadmap": people.decider };
   db.track_owners = { alerts: people.approver, onboarding: people.commenter, welcome: people.viewer };
+  return db;
+}
+
+/**
+ * PS1 a "Calm page", the "prd-calm-page" scenario: the default company's roadmap plus the Guided
+ * setup PRD's F-26 (its risks name it), on its roadmap as the API has it. Not in the default seed,
+ * so the default story's counts and ranks stay as they were.
+ */
+export function seedPrdCalmPage(): SimpleDb {
+  const db = seedSimpleRoadmap();
+  const s: SeedItem = { key: "setup-calendar", title: "Calendar invites", horizon: "next", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "medium", start: 50, end: 80, source: "typed", depends: ["setup-checklist"], section: "f-26", heading: "F-26 Calendar invites" };
+  db.items.splice(db.items.findIndex((x) => x.key === "price-tiers"), 0, s);
+  db.ids[s.key] = stableUuid(`simple-item/${s.key}`);
   return db;
 }
 
@@ -873,11 +905,15 @@ export function itemOfOtherPrd(db: SimpleDb, key: string, roadmap: string): void
   if (s) s.prd_doc = itemPrd({ ...s, roadmap });
 }
 
-/** one-feature-panel: the Goal map's features as roadmap items (once the map is read), each its own. */
+/**
+ * one-feature-panel: the Goal map's features as roadmap items, each its own. With a company
+ * roadmap they are on it, as the map holds only the milestones of roadmaps that feed it
+ * (goal_map._on_map: company.feeding_ids).
+ */
 export function knowGoalMapItems(db: SimpleDb | undefined, items: { key: string; id: string; title: string; section: string }[]): void {
   for (const it of items) {
     if (!db || db.ids[it.key]) continue;
-    db.items.push({ key: it.key, title: it.title, horizon: "next", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", section: it.section, heading: `${it.section.toUpperCase()} ${it.title}` });
+    db.items.push({ key: it.key, title: it.title, horizon: "next", roadmap: db.company_roadmap ?? "onboarding-roadmap", track: "onboarding", confidence: "medium", section: it.section, heading: `${it.section.toUpperCase()} ${it.title}` });
     db.ids[it.key] = it.id;
   }
 }
@@ -959,6 +995,13 @@ function dependencyLine(title: string, start: string, depTitle: string, end: str
   return `‘${short(title)}’ ${verb} ${day(start)}, but ‘${short(depTitle)}’${depPrd ? ` (${depPrd})` : ""}, which it depends on, ends ${day(end)}`;
 }
 
+/** feature-parts: the keys of the features an item is part of, its parent first, any depth (a loop stops where it would close). */
+function ancestorKeys(s: SeedItem, all: Map<string, { s: SeedItem }>): string[] {
+  const out: string[] = [];
+  for (let cur: SeedItem | undefined = s; cur?.parent && cur.parent !== s.key && !out.includes(cur.parent); cur = all.get(cur.parent)?.s) out.push(cur.parent);
+  return out;
+}
+
 function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, { s: SeedItem; r: { start: Dated; end: Dated } }>, w: [string, string]): Flag[] {
   const out: Flag[] = [];
   const flag = (kind: Flag["kind"], reason: string, fixes: Flag["fixes"], subject: string | null = null): void => {
@@ -974,6 +1017,8 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
     const key = all.has(k) ? k : (dependencyOf([...all.values()].map((x) => x.s), k)?.key ?? k);
     const dep = all.get(key);
     if (!dep || key === s.key || closed(dep.s) || closed(s) || dep.s.status === "done" || doneItem(dep.s) || (dep.r.end.estimated && r.start.estimated)) continue;
+    // feature-parts: a part is never a broken link against an ancestor, any depth (constraints.check).
+    if (ancestorKeys(s, all).includes(key) || ancestorKeys(dep.s, all).includes(s.key)) continue;
     const theirs = ownPrd(dep.s).title;
     const depPrd = theirs !== ownPrd(s).title ? prdName(theirs) : null;
     if (r.start.estimated) {
@@ -1332,6 +1377,46 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   const seeds = visibleItems(db, role);
   const all = new Map(seeds.map((s) => [s.key, { s, r: resolve(db, s, w[s.horizon]) }]));
   afterDependencies(all);
+  // feature-parts (service._ancestors): each part's ancestors, its parent first, any depth (a loop
+  // stops where it would close), and its parent's row when that parent is in Trash.
+  const ancestorsOf = (s: SeedItem): SeedItem[] => {
+    const out: SeedItem[] = [];
+    const seen = new Set([s.key]);
+    for (let cur = s; cur.parent && !seen.has(cur.parent); ) {
+      seen.add(cur.parent);
+      const next = all.get(cur.parent)?.s;
+      if (!next) break;
+      out.push(next);
+      cur = next;
+    }
+    return out;
+  };
+  const trashedParent = (s: SeedItem): SeedItem | undefined => {
+    const top = ancestorsOf(s).at(-1) ?? s;
+    return top.parent && !all.has(top.parent) ? reader.full.items.find((y) => y.key === top.parent && y.trashed && y.roadmap === s.roadmap) : undefined;
+  };
+  // service.load: a part with no dates of its own reads its nearest dated ancestor's (a parent in
+  // Trash still lends its own).
+  const undated = (r: { start: Dated; end: Dated }) => r.start.estimated && r.end.estimated;
+  const own = new Map([...all].map(([k, x]) => [k, x.r]));
+  for (const x of all.values()) {
+    if (!undated(x.r)) continue;
+    const lent = ancestorsOf(x.s).map((a) => own.get(a.key)!);
+    const gone = trashedParent(x.s);
+    if (gone) lent.push(resolve(db, gone, w[gone.horizon]));
+    x.r = lent.find((r) => !undated(r)) ?? x.r;
+  }
+  // additions._parts: a parent or a part by its display code ("" when none) and name.
+  const partRef = (x: SeedItem, inTrash = false) => ({ id: db.ids[x.key] ?? reader.full.ids[x.key], code: prdCode(x.section) ?? "", title: x.title, cut: !x.merged_into && x.status === "cut", in_trash: inTrash });
+  const pathOf = (s: SeedItem) => {
+    const gone = trashedParent(s);
+    return [...(gone ? [partRef(gone, true)] : []), ...ancestorsOf(s).reverse().map((a) => partRef(a))];
+  };
+  // additions.item_extras: merged_into's code falls back to the key; a part's is its display code or "".
+  const ref = (k: string, key = true) => {
+    const x = db.items.find((y) => y.key === k);
+    return { id: db.ids[k], code: (x && prdCode(x.section)) ?? (key ? k : ""), title: x?.title ?? k };
+  };
   // The plan-model lane: the plan PRD's items whose code is a plan feature carry its slices.
   const slices = db.plan ? planSlices() : [];
   const slicesOf = (s: SeedItem, prdSlug: string) => {
@@ -1355,7 +1440,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       code: (s.feature_id && db.feature_codes?.[s.feature_id]) || code,
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: ROADMAP_DOC_SLUG[s.roadmap] ?? s.roadmap, title: rm.title },
       prd: ownPrd(s),
-      goal: s.goal && !inTrash(s.goal) ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, ...roadmapGoal(reader.full, s.goal), position: goalPositionOf(s.goal), ...READINGS[s.goal] } : null,
+      goal: s.goal && !inTrash(s.goal) ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, ...roadmapGoal(reader.full, s.goal), position: goalPositionOf(s.goal), ...READINGS[s.goal] } : s.map_goal ? mapGoalRef(reader.full, s.map_goal) : (reader.full.map_goals?.[db.ids[s.key]] ?? null),
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
       confidence: s.confidence ?? null,
       status: s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned"),
@@ -1396,7 +1481,13 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       ].slice(0, 3),
       open_decisions: (db.decisions?.[s.key] ?? []).map((d) => ({ id: stableUuid(`simple-decision/${d.number}`), number: d.number, title: d.title })),
       looks_like: s.draft && !s.kept_both && !closed(s) ? matchesOf(db, s.looks_like ?? []) : [],
-      merged_into: s.merged_into ? { id: db.ids[s.merged_into], code: s.merged_into, title: db.items.find((x) => x.key === s.merged_into)?.title ?? s.merged_into } : null,
+      merged_into: s.merged_into ? ref(s.merged_into) : null,
+      // feature-parts: the feature it is a part of (set_parent's before is its key) and its open parts.
+      parent_key: s.parent ?? null,
+      part_of: pathOf(s).at(-1) ?? null,
+      part_path: pathOf(s),
+      // Open parts, then cut ones (below the line); never a merged one.
+      parts: [...seeds.filter((x) => x.parent === s.key && !closed(x)), ...seeds.filter((x) => x.parent === s.key && !x.merged_into && x.status === "cut")].map((x) => partRef(x)),
       drafting: !!s.drafting_until,
       flow: s.draft ? (s.flow ?? null) : (flowFor(db.visuals, "feature", db.ids[s.key]) ?? betFlow(db, s)),
       goal_ids: goalIdsOf(s),
@@ -1763,7 +1854,7 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
     const one = q.get("roadmap");
     if (one && !readableRoadmap(one, me.role)) return json(404, { detail: "No such roadmap" });
     const items = (readRoadmap(db, me.role, new URLSearchParams(one ? { roadmap: one } : {}), me)?.items ?? []).filter((i) => i.status !== "done");
-    const links = items.flatMap((i) => i.flags).filter((f) => f.state === "red" && f.fixes.length > 0 && (f.kind === "dependency_order" || f.kind === "cut_with_dependents"));
+    const links = items.flatMap((i) => i.flags).filter((f) => f.state === "red" && f.fixes.length > 0);
     return json(200, { broken_links: links.length, dates_to_confirm: items.filter((i) => !!i.suggestion?.can_decide).length });
   }
   const slugOf = (id: string) => Object.keys(ROADMAPS).find((r) => roadmapId(r) === id) ?? null;

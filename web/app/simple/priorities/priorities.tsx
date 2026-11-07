@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 
-import { Button, Sheet, toast } from "@/components/ds";
+import { Button, InfoTip, Sheet, toast } from "@/components/ds";
 import { FlowThumb } from "@/components/simple/Flow";
 import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief, type GoalPanelStart, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
 import { FlowPanel, subjectOf } from "@/components/simple/FlowVisual";
@@ -82,6 +82,19 @@ const SUBTITLE: Record<Tab, string> = {
   buckets: "Where the engineer-weeks go, goal by goal.",
 };
 
+/** Value / effort's how-to-read words, behind the page's (i) (Demo 9: no visible explanation). */
+const VE_WORDS = (data: Out, mayChange: boolean): string => {
+  const fCodes = data.rows.length > 0 && data.rows.every((r) => /^F-\d+$/.test(r.short_code || r.code));
+  return `${fCodes ? "Each mark shows the feature's code from its one-pager; point at it for its name, its rank is in the list." : "Each mark shows the feature's code; point at it for its name, its rank is in the list."} Hollow: below the line (${lineWords(data)}). A mark on a middle line counts on the side its rank puts it. ${mayChange ? "Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys); a feature with no goal has no goal value to change." : "Select a mark to find it in the list."}`;
+};
+
+/** Goal buckets' how-to-read words, behind the page's (i) like Value / effort's. */
+const BUCKETS_WORDS = (data: Out): string => {
+  // qa4-simple-plan-2: milestones or key dates on the roadmap (the Line's) are not a dated plan; never say there are no dates.
+  const dated = (data.lines ?? []).some((l) => l.kind === "milestone" || l.kind === "key_date");
+  return `${dated ? "Grouped by goal for this quarter; the milestones and key dates are on the Ranked list's Line." : "No dated plan yet, so the work is not placed by milestone."}${data.weeks_total > 0 ? ` Engineer-weeks per confirmed goal this quarter: ${fmt(data.weeks_total)} wk in all.` : ""}`;
+};
+
 /** The calendar quarter a date falls in, as people say it: "Q4 2026". */
 const quarterOf = (date: string): string => `Q${Math.floor((Number(date.slice(5, 7)) - 1) / 3) + 1} ${date.slice(0, 4)}`;
 
@@ -106,8 +119,10 @@ async function send(body: ChangeIn): Promise<Sent> {
   }
 }
 
+/** What opens the feature panel: a ranked row, or an item with no ranked feature (prio-unranked). */
+type Opened = Pick<Row, "feature_id" | "item_id" | "code" | "title">;
 /** one-feature-panel: a ranked row's name opens the feature's panel (the roadmap's). */
-const OpenRow = createContext<((r: Row) => void) | null>(null);
+const OpenRow = createContext<((r: Opened) => void) | null>(null);
 
 export function Priorities() {
   const params = useSearchParams();
@@ -173,7 +188,7 @@ export function Priorities() {
     }
     return c;
   }, [data, marks]);
-  const shownData = data && show && marks ? { ...data, rows: data.rows.filter((r) => { const f = marks.get(r.feature_id); return !!f && showsAs(f.mark) === show; }) } : null;
+  const shownData = data && show && marks ? { ...data, rows: data.rows.filter((r) => { const f = marks.get(r.feature_id); return !!f && showsAs(f.mark) === show; }), unranked: [] } : null;
   // Roles through can() and the rows' own fields: the API says who applies and who proposes.
   const mayChange = capsReady && can("create_simple_change") && !!data?.can_change;
   // S7: Oracle's suggested features under each goal bucket (an accept adds a draft here).
@@ -224,9 +239,9 @@ export function Priorities() {
   const shapes = goalShapes(data?.rows ?? []);
   // qa-shell-8: a new company has no feature to rank: one line on what shows here and the next
   // step, with no line or comparison to pick over nothing.
-  const blank = !!data && !data.rows.length && !data.drafts.length && !data.proposals.length;
+  const blank = !!data && !data.rows.length && !data.unranked.length && !data.drafts.length && !data.proposals.length;
   const hasGoals = (suggestions.data?.goals.length ?? 0) > 0;
-  const [rowOpen, setRowOpen] = useState<Row | null>(null);
+  const [rowOpen, setRowOpen] = useState<Opened | null>(null);
   // A feature deleted from its row closes its panel, if open.
   const removeFeature = useFeatureDelete(q.reload, undefined, (id) => setRowOpen((r) => (r?.item_id === id ? null : r)));
 
@@ -235,11 +250,18 @@ export function Priorities() {
       <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-[length:var(--simple-h1)] font-semibold leading-[var(--simple-h1-leading)]">Priorities</h1>
-          <p className="text-text2" data-testid="prio-subtitle">
-            {SUBTITLE[tab]}
-            {/* mk-goalbuckets: Goal buckets names the plan's quarter ("Q4 2026"); its card gives the plan's dates. */}
-            {data ? ` ${tab === "buckets" && data.plan?.span ? quarterOf(data.plan.span.start) : data.plan?.span ? `This plan, ${planSpan(data.plan.span)}` : data.quarter.label}.` : ""}
-            {data && tab === "ranked" && splitAtLine(data) ? ` ${data.plan?.span ? "The plan's dates" : "Each feature's end date"} decide${data.plan?.span ? "" : "s"} what makes the line, so what makes it is listed first, each part by rank.` : ""}
+          {/* Demo 9 / P-7: the view's explanation sits behind an (i); the line under the heading says only which quarter or plan. */}
+          <p className="flex items-center gap-1.5 text-text2">
+            <span data-testid="prio-subtitle">
+              {/* mk-goalbuckets: Goal buckets names the plan's quarter ("Q4 2026"); its card gives the plan's dates. */}
+              {data ? `${tab === "buckets" && data.plan?.span ? quarterOf(data.plan.span.start) : data.plan?.span ? `This plan, ${planSpan(data.plan.span)}` : data.quarter.label}` : ""}
+            </span>
+            <InfoTip label={TABS.find((t) => t.key === tab)?.label ?? "this view"} align="start" side="bottom" testId="prio-about" id="prio-about-text">
+              {SUBTITLE[tab]}
+              {data && tab === "ranked" && splitAtLine(data) ? ` ${data.plan?.span ? "The plan's dates" : "Each feature's end date"} decide${data.plan?.span ? "" : "s"} what makes the line, so what makes it is listed first, each part by rank.` : ""}
+              {tab === "value-effort" && data ? ` ${VE_WORDS(data, mayChange)}` : ""}
+              {tab === "buckets" && data && !(data.plan?.milestones.length && data.plan.span) ? <span data-testid="buckets-intro"> {BUCKETS_WORDS(data)}</span> : ""}
+            </InfoTip>
           </p>
         </div>
         <Link href="/priorities" className="text-[length:var(--simple-small)] font-medium text-accent-ink underline">
@@ -278,7 +300,8 @@ export function Priorities() {
               onClick={() => setParams({ compare: compare ? null : "1" })}
               className={`relative h-6 w-11 rounded-full border border-line-strong ${compare ? "bg-accent" : "bg-surface2"}`}
             >
-              <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-surface shadow transition-all ${compare ? "left-6" : "left-0.5"}`} />
+              {/* V-3: the off knob in the ink's grey, so it stands out from its track in dark as in light. */}
+              <span data-testid="compare-knob" className={`absolute top-0.5 h-4 w-4 rounded-full shadow transition-all ${compare ? "left-6 bg-surface" : "left-0.5 bg-text2"}`} />
             </button>
             <span aria-hidden>Compare with Oracle</span>
           </label>
@@ -315,7 +338,7 @@ export function Priorities() {
           <ShowFilter counts={showCounts} pick={show} onPick={setShow} />
           {show && (
             <p className="mt-2 text-[length:var(--simple-small)] text-text2">
-              {SHOW_NOTE[show](showCounts[show])} Ranks stay as in the full list.
+              {SHOW_NOTE[show](showCounts[show])} <InfoTip label="ranks shown">Ranks stay as in the full list.</InfoTip>
             </p>
           )}
         </div>
@@ -377,6 +400,17 @@ function MovedTag({ words }: { words: string }) {
 }
 
 /** The row's short code (stays with the item however it ranks), one chip style above and below the line; its name in the title. */
+/** panel-menu: a part names the feature it is part of, by its code and name. */
+function PartOf({ r }: { r: Row }) {
+  if (!r.part_of) return null;
+  return (
+    <span data-testid="prio-part-of" className="text-[length:var(--simple-small)] text-text2">
+      part of {[r.part_of.code, r.part_of.title].filter(Boolean).join(" ")}
+      {r.part_of.in_trash ? " (in Trash)" : ""}
+    </span>
+  );
+}
+
 function CodeChip({ r }: { r: Row }) {
   return (
     <span data-testid="prio-code" title={r.title} className="min-w-[3.25rem] flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1.5 text-center text-[length:var(--simple-small)] font-semibold tabular-nums text-text">
@@ -411,7 +445,7 @@ const SHOW_NOTE: Record<ShowKind, (n: number) => string> = {
   exists: (n) => `${n} features that run today.`,
 };
 
-function Ranked({ data, phone, compare, mayChange, changed, moved, onDelete }: { data: Out; phone: boolean; compare: boolean; mayChange: boolean; changed: Changed; moved: Moved | null; onDelete: (f: { id: string; title: string }) => void }) {
+function Ranked({ data, phone, compare, mayChange, changed, moved, onDelete }: { data: Out; phone: boolean; compare: boolean; mayChange: boolean; changed: Changed; moved: Moved | null; onDelete: (f: { id: string; title: string; parts?: readonly unknown[] }) => void }) {
   const [side, setSide] = useState<"yours" | "oracle">("yours");
   // A goal's list (from a Home goal card) leaves out the features not ranked yet.
   const goalOn = !!useSearchParams().get("goal");
@@ -450,6 +484,7 @@ function Ranked({ data, phone, compare, mayChange, changed, moved, onDelete }: {
       ) : (
         list
       )}
+      {data.unranked.length > 0 && !goalOn && <Unranked items={data.unranked} />}
       {data.drafts.length > 0 && !goalOn && <Drafts drafts={data.drafts} proposals={data.proposals} mayChange={mayChange} changed={changed} />}
       {move && (
         <MoveDialog
@@ -471,7 +506,7 @@ function Ranked({ data, phone, compare, mayChange, changed, moved, onDelete }: {
   );
 }
 
-function YourList({ data, half = false, mayChange, onMove, changed, moved, onDelete }: { data: Out; half?: boolean; mayChange: boolean; onMove: (row: Row, position: number) => void; changed: Changed; moved: Moved | null; onDelete: (f: { id: string; title: string }) => void }) {
+function YourList({ data, half = false, mayChange, onMove, changed, moved, onDelete }: { data: Out; half?: boolean; mayChange: boolean; onMove: (row: Row, position: number) => void; changed: Changed; moved: Moved | null; onDelete: (f: { id: string; title: string; parts?: readonly unknown[] }) => void }) {
   // A Home goal card opens the list for its goal (?goal=<its key>&name=<its name>): a row's own goal
   // by key, so two goals with one name keep apart; a row known only from the plan, by name.
   const params = useSearchParams();
@@ -635,6 +670,7 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
                 )}
                 <OwnKey r={r} />
                 <MarkFor featureId={r.feature_id} />
+                <PartOf r={r} />
               </span>
               {/* walkb-priorities: no ml-auto, so details that wrap under the title start at the left on every row. */}
               <span data-testid="prio-details" className={`${half ? "basis-full sm:pl-12" : ""} flex min-w-0 max-w-full flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--simple-small)] text-text2`}>
@@ -660,7 +696,7 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
                 <Numbers r={r} mayChange={mayChange} changed={changed} />
               </span>
               {/* trash-features-goals: Delete feature (to Trash, Undo) for who decides on it. */}
-              {mayChange && r.applies && r.item_id && <FeatureMenu title={nameOf(r)} onDelete={() => onDelete({ id: r.item_id!, title: r.title })} />}
+              {mayChange && r.item_id && <FeatureMenu title={nameOf(r)} propose={!r.applies} onDelete={() => onDelete({ id: r.item_id!, title: r.title, parts: r.parts })} />}
             </div>
             {/* qa4-simple-plan-25: Oracle's rank and the move sit in a slot of their own under the row, so the row keeps its layout. */}
             {((r.oracle_rank != null && r.oracle_rank !== r.rank) || words) && (
@@ -714,6 +750,44 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
       })}
     </ol>
     </>
+  );
+}
+
+/**
+ * prio-unranked: the live roadmap items with no ranked feature, under the ranked rows in a row's
+ * look, muted: no rank, no score, nothing to drag; a click (or Enter) opens the one feature panel.
+ */
+function Unranked({ items }: { items: Out["unranked"] }) {
+  const open = useContext(OpenRow);
+  return (
+    <section aria-labelledby="prio-unranked-head" data-testid="prio-unranked" className="mt-4">
+      <h2 id="prio-unranked-head" className="mb-2 flex items-center gap-1.5 text-[length:var(--simple-small)] font-semibold text-text2">
+        No ranked feature
+        <InfoTip label="No ranked feature" align="start">
+          These roadmap items have no ranked feature yet, so they have no rank or score. Link each to a Ground Truth feature and it ranks.
+        </InfoTip>
+      </h2>
+      <ul className="flex flex-col gap-[var(--simple-gap)]">
+        {items.map((u) => (
+          <li key={u.item_id} data-testid="prio-unranked-row" data-code={u.code} className="rounded-[var(--simple-card-radius)] border border-line bg-surface2 p-3 text-text2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {/* The rank's column, empty: an unranked item has no rank. */}
+              <span aria-hidden className="w-8" />
+              <span className="flex min-w-[12rem] flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+                {open ? (
+                  <button type="button" className="min-w-0 text-left font-medium hover:underline" onClick={() => open({ feature_id: u.item_id, item_id: u.item_id, code: u.code, title: u.title })}>
+                    {u.title}
+                  </button>
+                ) : (
+                  <span className="min-w-0 font-medium">{u.title}</span>
+                )}
+              </span>
+              <span className="text-[length:var(--simple-small)]">{u.goal?.title ?? "No goal"}</span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -1140,7 +1214,7 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
  * the accent, its code on it (9.5 px); hollow below the line. No goal: a neutral circle with a
  * dashed edge (never a cross).
  */
-function ShapeMark({ shape, hollow, code }: { shape: Shape; hollow: boolean; code?: string }) {
+function ShapeMark({ shape, hollow, code, small = false }: { shape: Shape; hollow: boolean; code?: string; small?: boolean }) {
   const none = shape === "none";
   const fill = hollow ? "var(--surface)" : none ? "var(--line)" : "var(--accent)";
   const text = hollow || none ? "var(--text)" : "var(--on-accent)";
@@ -1154,7 +1228,7 @@ function ShapeMark({ shape, hollow, code }: { shape: Shape; hollow: boolean; cod
     none: <circle cx="18" cy="18" r="14" {...common} />,
   };
   return (
-    <svg width="36" height="36" viewBox="0 0 36 36" aria-hidden className="block overflow-visible">
+    <svg width={small ? 18 : 36} height={small ? 18 : 36} viewBox="0 0 36 36" aria-hidden className="block flex-none overflow-visible">
       {path[shape]}
       {code != null && (
         <text data-testid="vxe-code" x="18" y={shape === "triangle" ? 26.3 : shape === "pentagon" ? 23 : 21.4} textAnchor="middle" fontSize={code.length <= 4 ? 9.5 : 8} fontWeight="700" fill={text}>
@@ -1227,12 +1301,14 @@ function markSpots(
   o: { at: (r: Row) => [number, number]; avoid: Box[] },
 ): Map<string, [number, number]> {
   const R = 18;
+  // V-4: marks keep GAP px apart, never touching (a hollow mark's ring reads as one with its neighbour's).
+  const GAP = 4;
   if (!w || !h) return new Map(rows.map((r) => [r.feature_id, o.at(r)]));
   const placed: [number, number][] = [];
   const inside = (x: number, y: number) => x >= R && x <= w - R && y >= R && y <= h - R;
   const free = (x: number, y: number) =>
     inside(x, y) &&
-    placed.every(([px, py]) => Math.abs(px - x) >= 2 * R || Math.abs(py - y) >= 2 * R) &&
+    placed.every(([px, py]) => Math.abs(px - x) >= 2 * R + GAP || Math.abs(py - y) >= 2 * R + GAP) &&
     // qa4-simple-plan-9: a mark keeps 3 px clear of a quadrant's name, never on its edge.
     o.avoid.every((q) => x + R + 3 <= q[0] || x - R - 3 >= q[2] || y + R + 3 <= q[1] || y - R - 3 >= q[3]);
   const out = new Map<string, [number, number]>();
@@ -1384,23 +1460,22 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
     }
   }
 
-  // Marks on the same spot fan out sideways around it so none hides another (B: 37 px apart).
+  // Marks on the same spot fan out sideways around it so none hides another (B: 37 px apart; V-4: 42, a gap between them).
   const spot = (r: Row) => `${effortOf(r)}|${r.goal_value ?? 0}`;
   const twins = new Map<string, string[]>();
   for (const r of rows) twins.set(spot(r), [...(twins.get(spot(r)) ?? []), r.feature_id]);
   const fan = (r: Row) => {
     const at = twins.get(spot(r))!;
-    return (at.indexOf(r.feature_id) - (at.length - 1) / 2) * 37;
+    return (at.indexOf(r.feature_id) - (at.length - 1) / 2) * 42;
   };
 
   const QUADRANTS = [
     { name: "Quick wins", at: "left-[10px] top-[8px]" },
     { name: "Big bets", at: "right-[10px] top-[8px] text-right" },
-    { name: "Fill-ins", at: "bottom-[8px] left-[10px]" },
-    { name: "Later", at: "bottom-[22px] right-[10px] text-right" },
+    // V-4: the bottom names sit just above the zero line (4% up), never on it.
+    { name: "Fill-ins", at: "bottom-[calc(4%+4px)] left-[10px]" },
+    { name: "Later", at: "bottom-[calc(4%+4px)] right-[10px] text-right" },
   ];
-  // B's legend: "Codes are the one-pager's feature codes" when every mark's code is one, else codes stay with the item.
-  const fCodes = rows.length > 0 && rows.every((r) => /^F-\d+$/.test(r.short_code || r.code));
   const effortAt = xPct(byEffort.median);
   const valueAt = yPct(byValue.median);
   // B writes "middle effort" at the foot of its line and "middle value" under its line at 82%
@@ -1410,7 +1485,8 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
   const vy = (valueAt / 100) * h;
   const quadrantBoxes = QUADRANTS.map((q, k): Box => {
     const len = `${q.name} · ${counts[k]}`.length * 8.6;
-    return [[10, 8, 10 + len, 28], [w - 10 - len, 8, w - 10, 28], [10, h - 28, 10 + len, h - 8], [w - 10 - len, h - 42, w - 10, h - 22]][k] as Box;
+    const foot = h - h * 0.04 - 4;
+    return [[10, 8, 10 + len, 28], [w - 10 - len, 8, w - 10, 28], [10, foot - 20, 10 + len, foot], [w - 10 - len, foot - 20, w - 10, foot]][k] as Box;
   });
   const spots = markSpots(rows, w, h, {
     at: (r) => [(xPct(effortOf(r)) / 100) * w + fan(r), (yPct(r.goal_value ?? 0) / 100) * h],
@@ -1492,6 +1568,11 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
               const top = w ? `${sy + (d?.dy ?? 0)}px` : `calc(${yPct(r.goal_value ?? 0)}% + ${d?.dy ?? 0}px)`;
               const isMoved = !!movedWords(moved, r);
               const isSelected = selected === r.feature_id;
+              // The name tag stays inside the plot: it runs left from a mark in the right half, right from one in the left.
+              const onRight = w ? sx > w / 2 : xPct(effortOf(r)) > 50;
+              const tagRoom = w ? (onRight ? sx + 18 : w - sx + 18) : undefined;
+              // Below the mark unless that passes the plot's foot (a mark on the zero line); then above it.
+              const tagAbove = !!h && sy + 18 + 4 + 22 > h && sy - 18 - 4 - 22 >= 0;
               return (
                 <button
                   key={r.feature_id}
@@ -1506,8 +1587,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                   data-shape={shapeOf(r)}
                   aria-pressed={isSelected}
                   aria-label={`#${r.rank} ${nameOf(r)}: goal value ${fmt(r.goal_value)}, ${r.effort == null ? "PM-owned, no effort" : `effort ${fmt(r.effort)} ${r.effort === 1 ? "week" : "weeks"}`}${r.above_line ? "" : ", below the line"}${goalOf(r) ? "" : ", no goal"}`}
-                  title={`#${r.rank} ${r.short_code || r.code} · ${r.title}`}
-                  className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full ${isSelected ? "z-20 ring-[3px] ring-accent ring-offset-2 ring-offset-surface" : isMoved ? "z-10 ring-2 ring-accent ring-offset-2 ring-offset-surface" : ""} ${mayChange && r.can_reorder ? "cursor-grab touch-none" : "cursor-pointer"}`}
+                  className={`group absolute -translate-x-1/2 -translate-y-1/2 rounded-full hover:z-30 focus-visible:z-30 ${isSelected ? "z-20 ring-[3px] ring-accent ring-offset-2 ring-offset-surface" : isMoved ? "z-10 ring-2 ring-accent ring-offset-2 ring-offset-surface" : ""} ${mayChange && r.can_reorder ? "cursor-grab touch-none" : "cursor-pointer"}`}
                   style={{ left, top }}
                   onClick={() => {
                     if (dragged.current) {
@@ -1529,6 +1609,15 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                   onKeyDown={(e) => key(e, r)}
                 >
                   <ShapeMark shape={shapeOf(r)} hollow={!r.above_line} code={r.short_code || r.code} />
+                  {/* P-3: a mark's code with its name, on hover, focus or selection (the plot has no room to name every mark). */}
+                  <span
+                    data-testid="vxe-name"
+                    aria-hidden
+                    className={`pointer-events-none absolute ${onRight ? "right-0" : "left-0"} ${tagAbove ? "bottom-full mb-1" : "top-full mt-1"} z-30 truncate whitespace-nowrap rounded-md bg-text px-2 py-0.5 text-[13px] font-semibold leading-[18px] text-bg group-hover:block group-focus-visible:block ${isSelected ? "block" : "hidden"}`}
+                    style={{ maxWidth: tagRoom }}
+                  >
+                    #{r.rank} {r.short_code || r.code} · {r.title}
+                  </span>
                 </button>
               );
             })}
@@ -1575,13 +1664,12 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                   : "The dashed line across is the middle value."}
             </li>
           )}
-          <li>
-            {fCodes ? "Each mark shows the feature's code from its one-pager; its rank is in the list." : "Each mark shows the feature's code; its rank is in the list."} Hollow: below the line ({lineWords(data)}). A mark on a middle line counts on the side its rank puts it.
+          {/* Demo 9: how to read the chart is behind the (i) by the heading; the legend keeps its key. */}
+          <li className="flex items-center gap-1" data-testid="vxe-legend-hollow">
+            <ShapeMark shape="circle" hollow small />
+            Below the line
           </li>
         </ul>
-        <p className="mt-1 pl-6 text-[15px] leading-[22px] text-text2">
-          {mayChange ? "Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys); a feature with no goal has no goal value to change." : "Select a mark to find it in the list."}
-        </p>
       </section>
       <section aria-label="Ranked side list" className="min-w-0">
         <h2 className="mb-2 text-[21px] font-[650] leading-7">Ranked</h2>
@@ -2092,8 +2180,6 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
   // An empty "No goal" bucket warns about nothing: it is left out.
   const buckets: Bucket[] = all.filter((b) => !(b.no_goal && b.weeks === 0 && b.codes.length === 0)).map((b) => (moved.length ? { ...b, share: total ? b.weeks / total : 0 } : b));
   const percent = sharePercents(buckets.map((b) => b.weeks));
-  // qa4-simple-plan-2: milestones or key dates on the roadmap (the Line's) are not a dated plan; never say there are no dates.
-  const dated = (data.lines ?? []).some((l) => l.kind === "milestone" || l.kind === "key_date");
   const weeksOf = (r: Row) => (r.effort == null ? "" : `${fmt(r.effort)} wk`);
   // A goal's features as Archive counts them: its bucket's.
   const featuresOf: GoalFeatures = (title) => (buckets.find((b) => !b.no_goal && sameGoal(b.title, title))?.codes ?? []).map((c) => ({ code: c, name: rowOf.get(c)?.title ?? c, slices: [] }));
@@ -2102,12 +2188,6 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
   const planned = data.weeks_total > 0;
   return (
     <section aria-label="Goal buckets" className={note ? "max-sm:pb-48" : ""}>
-      <p className="mb-3 text-text2" data-testid="buckets-intro">
-        {dated
-          ? "Grouped by goal for this quarter; the milestones and key dates are on the Ranked list's Line."
-          : "No dated plan yet, so the work is not placed by milestone."}
-        {planned ? ` Engineer-weeks per confirmed goal this quarter: ${fmt(moved.length ? total : data.weeks_total)} wk in all.` : null}
-      </p>
       {!planned && (
         <p className="mb-3 text-text2" data-testid="buckets-empty">
           Nothing planned this quarter.
@@ -2124,10 +2204,12 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
                   data-testid="bucket-segment"
                   title={`${b.title}: ${fmt(b.weeks)} wk · ${percent[k]}%`}
                   style={{ width: `${b.share * 100}%` }}
-                  className={`min-h-12 min-w-0 border-r border-surface p-2 text-[length:var(--simple-small)] ${b.no_goal ? "bg-warn-bg text-warn" : "bg-accent-soft text-accent-ink"}`}
+                  // V-5: neighbouring goals alternate the soft and mid accent fills, so two segments never read as one (dark included).
+                  data-fill={b.no_goal ? "warn" : k % 2 ? "mid" : "soft"}
+                  className={`min-h-12 min-w-0 border-r border-surface p-2 text-[length:var(--simple-small)] ${b.no_goal ? "bg-warn-bg text-warn" : k % 2 ? "bg-accent-mid text-accent-ink" : "bg-accent-soft text-accent-ink"}`}
                 >
                   {/* qa-simple-plan-40: the numbers are said once, on the cards below. */}
-                  <span className="block truncate font-medium">{b.title}</span>
+                  <span className="block truncate font-medium" title={b.title}>{b.title}</span>
                 </div>
               ) : null,
             )}
@@ -2226,8 +2308,11 @@ function UndatedBuckets({ data, suggestions, reload }: { data: Out; suggestions:
                         weeks={r ? weeksOf(r) : ""}
                         grip={movable ? { onPointerDown: (e) => featureGrip(f, e), onKeyDown: (e) => featureGrip(f, e) } : undefined}
                         lifted={drag.lifted === c}
-                        onOpen={r ? () => setOpened({ code: r.code, name: r.title }) : undefined}
+                        // S-3: a feature not among the ranked rows opens by its code and name all the same.
+                        onOpen={() => setOpened(r ? { code: r.code, name: r.title } : { code: c, name })}
                         actions={tasks.actions(t)}
+                        // panel-menu: a part names the feature it is part of, as on the ranked rows.
+                        partOf={r && <PartOf r={r} />}
                       />
                     );
                   })}

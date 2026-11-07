@@ -72,7 +72,7 @@ test("B-08: Documents shows one load error with Try again that reloads both list
   await page.goto("/plan/documents");
   const notice = page.getByTestId("load-error");
   await expect(notice).toHaveCount(1);
-  await expect(notice).toContainText("Couldn't load your roadmaps and approved PRDs.");
+  await expect(notice).toContainText("Could not load your roadmaps and approved PRDs.");
   await page.evaluate((k) => localStorage.removeItem(k), MOCK_FAIL_KEY);
   await notice.getByRole("button", { name: "Try again" }).click();
   await expect(notice).toHaveCount(0);
@@ -233,19 +233,19 @@ test("review 4: Push to tracker's reason has one tooltip", async ({ page }) => {
 });
 
 // protects=review 5, 6: the notice names the list that failed, and a failed list's table has no
-// empty line; fails_when=it says "Couldn't load your roadmaps." when the PRDs failed, or the
+// empty line; fails_when=it says "Could not load your roadmaps." when the PRDs failed, or the
 // table says "No approved PRDs yet".
 test("review 5, 6: Documents names the list that failed and drops its empty line", async ({ page }) => {
   await login(page);
   await store(page, MOCK_FAIL_KEY, "/v1/documents?kind=prd");
   await page.goto("/plan/documents");
   const notice = page.getByTestId("load-error");
-  await expect(notice).toContainText("Couldn't load your approved PRDs.");
+  await expect(notice).toContainText("Could not load your approved PRDs.");
   await expect(page.getByTestId("roadmap-row").filter({ visible: true }).first()).toBeVisible();
   await expect(page.getByTestId("approved-prds-table").filter({ visible: true })).not.toContainText("No approved PRDs yet");
   await store(page, MOCK_FAIL_KEY, "/v1/documents");
   await page.reload();
-  await expect(notice).toContainText("Couldn't load your roadmaps and approved PRDs.");
+  await expect(notice).toContainText("Could not load your roadmaps and approved PRDs.");
   await expect(page.getByTestId("roadmaps-table").filter({ visible: true })).not.toContainText("No roadmaps yet");
   await expect(page.getByTestId("approved-prds-table").filter({ visible: true })).not.toContainText("No approved PRDs yet");
 });

@@ -6,15 +6,23 @@ on:
   pull_request:
 
 # One run per pull request: a new head cancels the PR's older run, so superseded runs
-# stop holding the account's shared hosted runners (owner, 2026-10-23). Each main push is
+# stop holding runners (owner, 2026-10-23). Each main push is
 # its own group (by commit), so a merge never drops the run of the merge before it.
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Self-hosted runners (BGD, Nov 6, 2026: "Share SwarmCloud's pool"): with the repository variable
+# SELF_HOSTED_CI set to 'on', every job runs on the shared runner dispatcher's VMs (one
+# e2-standard-8 per job, label ORACLE_CI_RUNNER_LABEL, default bogdan-ci, SwarmCloud's pool);
+# unset or anything else, on GitHub's hosted runners. Turn it off to fall back at once. The fork
+# check below keeps this file's own fork runs hosted, but it is not a control: a fork's pull request
+# runs its own copy of this workflow and can ask for any label. The control is the repository's
+# Actions setting "require approval for all outside contributors": read any workflow change in an
+# outside pull request before approving its run (the pool's VMs have passwordless sudo).
 jobs:
   api:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.SELF_HOSTED_CI == 'on' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON(format('["self-hosted","linux","x64","{0}"]', vars.ORACLE_CI_RUNNER_LABEL || 'bogdan-ci')) || 'ubuntu-latest' }}
     # The suite takes ~30 min on 4 workers (89-120 min serially); a hung run frees its
     # runner after 150.
     timeout-minutes: 150
@@ -67,12 +75,41 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pytest -n 4 -p no:cacheprovider -m "not timing"
-      # Tests that assert a wall-clock limit (marker `timing`) run alone after the parallel run:
-      # under four workers the runner's load, not the code, decides them.
+
+  # Tests that assert a wall-clock limit (marker `timing`) run alone, on GitHub's hosted runners
+  # where their budgets were tuned: on the pool's VMs four of them miss their budget on main itself
+  # (Nov 6: the Inbox checkpoint p95 and three run-ticker timings), as e2e-timing's did.
+  api-timing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: oracle
+          POSTGRES_PASSWORD: oracle
+          POSTGRES_DB: oracle_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U oracle -d oracle_test"
+          --health-interval 2s --health-timeout 5s --health-retries 30
+    defaults:
+      run:
+        working-directory: api
+    env:
+      ORACLE_TEST_DATABASE_URL: postgresql+asyncpg://oracle:oracle@localhost:5432/oracle_test
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --frozen
       - run: uv run pytest -p no:cacheprovider -m timing
 
   web:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.SELF_HOSTED_CI == 'on' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON(format('["self-hosted","linux","x64","{0}"]', vars.ORACLE_CI_RUNNER_LABEL || 'bogdan-ci')) || 'ubuntu-latest' }}
     defaults:
       run:
         working-directory: web
@@ -97,7 +134,7 @@ jobs:
       - run: npm run build
 
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.SELF_HOSTED_CI == 'on' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON(format('["self-hosted","linux","x64","{0}"]', vars.ORACLE_CI_RUNNER_LABEL || 'bogdan-ci')) || 'ubuntu-latest' }}
     services:
       postgres:
         image: postgres:16
@@ -130,10 +167,37 @@ jobs:
           name: e2e-results
           path: web/test-results/
 
+  # BGD, Nov 6, 2026 ("Move it to CI, sharded"): a train's or hotfix's pull request runs the whole
+  # mock-backed Playwright suite here, split 8 ways on the runner pool, instead of on CLD's laptop.
+  # Each shard builds the mock app once, then runs its share with the e2e/ci.env settings.
+  mock-e2e:
+    if: github.event_name == 'pull_request' && (startsWith(github.head_ref, 'train/') || startsWith(github.head_ref, 'hotfix/'))
+    runs-on: ${{ vars.SELF_HOSTED_CI == 'on' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON(format('["self-hosted","linux","x64","{0}"]', vars.ORACLE_CI_RUNNER_LABEL || 'bogdan-ci')) || 'ubuntu-latest' }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: cd web && npm ci && npx playwright install --with-deps chromium
+      - run: cd web && npm run build:mock
+      - run: cd web && E2E_PREBUILT=1 E2E_WORKERS=4 npm run test:ci -- --shard=${{ matrix.shard }}/8
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mock-e2e-results-${{ matrix.shard }}
+          path: web/test-results/
+
   # dod-perf review: the web's timing specs (tagged @timing, as the API's `timing` mark) on the
   # mock-backed build, alone (one worker) so no other test's load counts against them.
   e2e-timing:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # timing budgets are tuned on GitHub's runners; the pool's VMs draw the 500-item views ~50 ms slower
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

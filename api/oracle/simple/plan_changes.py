@@ -267,6 +267,7 @@ async def _apply(db: AsyncSession, principal: Any, c: SimpleChange) -> None:
         if row.deleted_at is None:
             raise _err(409, "outdated: the milestone is back already")
         await goal_milestones.put_back(db, row)
+        await trash.milestone_restored(db, row.id)
     elif c.op == "add_track":
         prd_id = uuid.UUID(c.after["prd_id"])
         prd = await db.get(Document, prd_id)

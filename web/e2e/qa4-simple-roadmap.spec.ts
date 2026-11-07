@@ -88,9 +88,10 @@ for (const [where, size] of [
       await btn.click();
       const tray = page.getByTestId("decision-tray");
       await expect(tray).toBeVisible();
-      // 38: Weekly alert digest's milestone flag is under Other flags only, not again under Broken links.
+      // 38: Weekly alert digest's milestone flag is listed once: under Broken links (it has a fix,
+      // pre-demo QA S-5), not again under Other flags.
       const milestoneFlag = /after its milestone/;
-      await expect(tray.getByTestId("tray-broken").filter({ hasText: "Weekly alert digest" })).not.toContainText(milestoneFlag);
+      await expect(tray.getByTestId("tray-broken").filter({ hasText: "Weekly alert digest" })).toContainText(milestoneFlag);
       await expect(tray.getByText(milestoneFlag)).toHaveCount(1);
       await page.keyboard.press("Escape");
       await expect(tray).toHaveCount(0);
@@ -101,7 +102,8 @@ for (const [where, size] of [
       await open(page);
       await page.getByTestId("format-board").click();
       await expect(column(page, "now").getByTestId("column-window")).toHaveText("Oct 1 – Dec 31, 2026");
-      await expect(column(page, "later").getByTestId("column-count")).toHaveText("1 item, 1 cut");
+      // roadmap-edit-fixes round 1: F-03 Health log is a live, planned Later item on its PRD's roadmap.
+    await expect(column(page, "later").getByTestId("column-count")).toHaveText("2 items, 1 cut");
       const sugg = page.getByTestId("goal-suggestions-open").first();
       if (await sugg.count()) await expect(sugg).toHaveText(/^✦ \d+ suggested features?$/);
       for (const t of await page.getByTestId("board-looks-like").allTextContents()) expect(t).not.toMatch(/\b[FD]-\d/);
@@ -168,7 +170,13 @@ test.describe("desktop only", () => {
     await open(page, { scenario: "simple-home" });
     const count = page.getByTestId("simple-nav-roadmap-count");
     await expect(count).toBeVisible();
-    await expect(count).toHaveAttribute("title", /^\d+ on the roadmap waiting on you: \d+ broken links?, \d+ dates? to confirm, \d+ (change or draft|changes or drafts)$/);
+    // roadmap-count: the goals' suggested features Needs a decision lists are counted and named too;
+    // the kinds named add up to the number shown.
+    const words = /^(\d+) on the roadmap waiting on you: (\d+) broken links?, (\d+) dates? to confirm, (\d+) suggested features?, (\d+) (?:change or draft|changes or drafts)$/;
+    await expect(count).toHaveAttribute("title", words);
+    const [all, ...parts] = words.exec((await count.getAttribute("title"))!)!.slice(1).map(Number);
+    await expect(count).toHaveText(String(all));
+    expect(parts.reduce((s, p) => s + p, 0)).toBe(all);
   });
 
   test("qa4-17: Enter with a title but no roadmap moves focus to the roadmap picker", async ({ page }) => {

@@ -40,13 +40,13 @@ test("approver starts a build: depth, review toggle and estimate, then the banne
   await openSheet(page);
   const s = sheet(page);
   // F-30: what a build does is in the title's (i).
-  await s.getByRole("button", { name: "About building the baseline" }).click();
+  await s.getByRole("button", { name: "About building the Ground Truth" }).click();
   await expect(s.getByRole("tooltip")).toHaveText(
     "Oracle reads your connected sources and proposes goals, products, features, constraints and evidence. Nothing is confirmed until you review it.",
   );
   // Closed again: unpinned, and the pointer off the (i).
-  await s.getByRole("button", { name: "About building the baseline" }).click();
-  await s.getByRole("heading", { name: "Build the baseline" }).hover();
+  await s.getByRole("button", { name: "About building the Ground Truth" }).click();
+  await s.getByRole("heading", { name: "Build the Ground Truth" }).hover();
   await expect(s.getByRole("tooltip")).toHaveCount(0);
   const depth = s.getByRole("group", { name: "Depth" });
   await expect(depth.getByRole("button", { name: "Standard" })).toHaveAttribute("aria-pressed", "true");
@@ -137,7 +137,7 @@ test("Home with no goals offers Build the Ground Truth and opens the sheet", asy
   await expect(empty.getByRole("link", { name: "Import your baseline" })).toHaveCount(0);
   await empty.getByRole("button", { name: "About building the Ground Truth" }).hover();
   await expect(page.getByRole("tooltip")).toContainText(
-    "Oracle reads your sources and proposes your goals; they show here once confirmed. You can also push the Ground Truth as YAML with oracle push.",
+    "Oracle reads your sources and proposes your goals; they show here once confirmed. You can also send a Ground Truth file from the command line.",
   );
   await empty.getByRole("link", { name: "Build the Ground Truth" }).click();
   await expect(page).toHaveURL(/\/ground-truth\?build=1$/);

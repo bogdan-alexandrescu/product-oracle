@@ -238,6 +238,9 @@ test("at 390 px rows are cards, the inspector is a sheet, the bar collapses, no 
 test("a held console approval is confirmed once the blocking row is waived", async ({ page }) => {
   await seeded(page);
   await page.goto("/inbox");
+  // B-22: three or more feature sets waiting fold into one line until Show runs opens them.
+  const group = page.getByRole("row").filter({ has: page.getByTestId("checkpoint-group").filter({ hasText: /^Feature set and dependencies/ }) });
+  await group.getByRole("button", { name: "Show runs" }).click();
   const inboxRow = page.locator("tr[data-row]").filter({ hasText: "Address book" }).filter({ visible: true });
   await expect(inboxRow).toHaveCount(1);
   await inboxRow.getByRole("link", { name: "Review" }).click();

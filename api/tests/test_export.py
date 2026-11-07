@@ -197,12 +197,13 @@ async def test_html_citations_are_numbered_sources_in_the_appendix(client, fx):
         "#product thread on drop-off</a>"
     ) in src1
     assert "Most users abandon at the shipping step" in src1
-    assert "slack" in src1 and "retrieved Oct 16, 2026, 6:10 AM PDT" in _text(src1)
+    # X-9: a source reads by its title, never its kind or raw ref.
+    assert "slack" not in _text(src1) and "retrieved Oct 16, 2026, 6:10 AM PDT" in _text(src1)
 
     # A non-http(s) ref is shown as text, never as a link.
     src3 = appendix[appendix.index('id="src-3"') : appendix.index('id="src-4"')]
     assert 'href="javascript' not in html
-    assert "Carrier API notes" in src3 and "javascript:alert(1)" in src3
+    assert "Carrier API notes" in src3 and "javascript:alert(1)" not in src3
     assert "Unused source" in appendix[appendix.index('id="src-4"') :]
 
 
@@ -341,33 +342,29 @@ async def test_pdf_without_system_libraries_is_503(client, fx, monkeypatch):
 # --- markdown ---------------------------------------------------------------------
 
 
-async def test_markdown_is_stored_markdown_with_banner_after_front_matter(client, fx):
+async def test_markdown_is_stored_markdown_without_a_banner(client, fx):
+    """X-17: the markdown export is plain markdown: no banner comment; the front matter
+    stays first (the import needs it)."""
     resp = await _export(client, fx, "md", n=1)
     assert resp.headers["content-type"].startswith("text/markdown")
     assert 'filename="checkout-redesign-v1.md"' in resp.headers["content-disposition"]
     body = resp.text
     front_matter_end = V1_MARKDOWN.index("---\n", 3) + len("---\n")
     assert body.startswith(V1_MARKDOWN[:front_matter_end])  # front matter stays first
-    banner = body[front_matter_end:].splitlines()[0]
-    assert banner.startswith("<!-- Product Oracle export:") and banner.endswith("-->")
-    assert "version 1" in banner and "status superseded" in banner
-    assert "imported Oct 16, 2026, 7:01 AM PDT" in banner
+    assert "<!--" not in body
     # Nothing else changed but the citation, now a footnote (raw-tokens-everywhere).
-    assert body.replace(banner + "\n", "", 1) == (
+    assert body == (
         V1_MARKDOWN.replace(" [c:c1].", "[^1].")
         + "\n[^1]: #product thread on drop-off (slack: https://example.slack.com/archives/C123/p1700000000)\n"
     )
     assert "[c:" not in body
 
-    v2 = (await _export(client, fx, "md", n=2)).text
-    assert "status approved" in v2 and "approved Oct 17, 2026, 2:30 AM PDT" in v2
 
-
-def test_markdown_banner_without_front_matter():
+def test_markdown_without_front_matter_has_no_banner():
     @dataclass
     class _V:
         number: int = 3
-        markdown: str = "# Title {#title}\n"
+        markdown: str = "# Title {#title}\nShip by 2026-11-30, see `2026-11-30` in code.\n"
         created_at: datetime = datetime(2026, 10, 16, tzinfo=UTC)
         approved_at: datetime | None = None
 
@@ -382,11 +379,8 @@ def test_markdown_banner_without_front_matter():
     out = render_markdown(
         ExportVersion(document=_D(), version=_V(), sections=[], citations=[], latest_number=3)
     )
-    first, rest = out.split("\n", 1)
-    assert first.startswith("<!-- ") and first.endswith(" -->")
-    assert "--" not in first[4:-3]  # cannot close the comment early
-    assert "status draft" in first
-    assert rest == "# Title {#title}\n"
+    # X-17: days read month first, outside code; no banner comment.
+    assert out == "# Title {#title}\nShip by Nov 30, 2026, see `2026-11-30` in code.\n"
 
 
 def test_prose_dates_read_month_first_in_exports():

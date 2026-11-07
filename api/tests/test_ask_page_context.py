@@ -115,13 +115,14 @@ async def test_an_open_discussion_never_carries_a_page_view(client):
     assert "Saved carts for guests" not in await built(ctx, resp.json()["id"])
 
 
-# protects=AUD-9 in the API: a person's own pages (Sources, Settings, the Inbox, the account)
-# hold the page's name only, whatever the client sends; fails_when=another client's view of
-# such a page is stored or read; no_claim=what the web sends (pageNameOnly).
+# protects=AUD-9 in the API: a person's own pages (Sources, Settings, the Inbox, Simple's
+# Inbox, the account) hold the page's name only, whatever the client sends; fails_when=another
+# client's view of such a page is stored or read; no_claim=what the web sends (pageNameOnly).
 async def test_a_persons_own_page_keeps_its_name_only_whatever_is_sent(client):
     ctx, _doc = await company(client)
     shown = {"name": "Members", "lines": ["Pat Example, pat@example.com, owner"]}
-    for path in ("/settings/members", "/sources", "/inbox", "/account", "/settings"):
+    own = ("/settings/members", "/sources", "/inbox", "/simple/inbox", "/account", "/settings")
+    for path in own:
         d = await start(
             client, ctx,
             {

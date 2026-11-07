@@ -3,9 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { Button, Notice } from "@/components/ds";
+import { Button, InfoTip, Notice, SegmentedControl } from "@/components/ds";
 import { MarkdownBody } from "@/components/MarkdownBody";
-import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
+import { InlineError, TEXTAREA } from "@/components/review/parts";
 import { api, type CitationOut, type Schemas, type SectionOut } from "@/lib/api/client";
 import { parseBlocks } from "@/lib/markdown";
 import { sectionHref } from "@/lib/section-link";
@@ -13,8 +13,8 @@ import { sectionHref } from "@/lib/section-link";
 const NO_HIGHLIGHTS: never[] = [];
 
 /**
- * "Edit section": type into a section's markdown with a live preview (citation chips
- * kept). Save is the next version with this section replaced; a section that changed
+ * "Edit section": type into a section's markdown, its preview (citation chips kept) behind
+ * Edit / Preview so the text shows once (D-13). Save is the next version with this section replaced; a section that changed
  * since it opened is refused with Reload, which loads its current text.
  */
 export function EditSection({
@@ -37,6 +37,7 @@ export function EditSection({
   const [conflict, setConflict] = useState<Schemas["ConflictResponse"] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pane, setPane] = useState<"edit" | "preview">("edit");
   const blocks = useMemo(() => parseBlocks(draft), [draft]);
 
   async function save() {
@@ -81,16 +82,35 @@ export function EditSection({
         </Button>
       </div>
       <div className="mt-2 flex flex-col gap-2.5">
-        <label className={FIELD_LABEL}>
-          Section text (markdown)
-          <textarea rows={8} value={draft} onChange={(e) => setDraft(e.target.value)} className={TEXTAREA} />
-        </label>
-        <div>
-          <p className={FIELD_LABEL}>Preview</p>
-          <div className="doc-body mt-1 rounded-lg border border-line bg-surface px-2.5 py-2" data-testid="section-edit-preview">
+        <div className="flex flex-wrap items-center gap-2">
+          <SegmentedControl
+            label="Edit or preview"
+            size="sm"
+            items={[
+              { value: "edit", label: "Edit" },
+              { value: "preview", label: "Preview" },
+            ]}
+            value={pane}
+            onChange={setPane}
+          />
+          <InfoTip label="editing a section">
+            The text is markdown (# a heading, - a list, **bold**). Preview shows it as the document reads it, its
+            citations included.
+          </InfoTip>
+        </div>
+        {pane === "edit" ? (
+          <textarea
+            rows={8}
+            aria-label="Section text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            className={TEXTAREA}
+          />
+        ) : (
+          <div className="doc-body rounded-lg border border-line bg-surface px-2.5 py-2" data-testid="section-edit-preview">
             <MarkdownBody blocks={blocks} highlights={NO_HIGHLIGHTS} activeId={null} citations={citations} onHighlightClick={() => {}} />
           </div>
-        </div>
+        )}
         {conflict && (
           <div data-testid="section-edit-conflict">
             <Notice

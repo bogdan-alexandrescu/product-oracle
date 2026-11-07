@@ -91,7 +91,7 @@ for (const [where, use] of [
           await expect(bar(page, "alert-digest")).toHaveAttribute("data-broken", "true");
           await expect(page.locator('[data-testid="dep-arrow"][data-from="alert-rules"][data-to="alert-digest"]')).toHaveAttribute("data-state", "red");
           await expect(page.locator('[data-testid="dep-arrow"][data-from="setup-checklist"][data-to="setup-import"]')).toHaveAttribute("data-state", "amber");
-          await expect(page.locator('[data-testid="conflicts"] [data-testid="conflict"][data-item="alert-digest"]')).toContainText("which it depends on, ends");
+          await expect(page.locator('[data-testid="conflicts"] [data-testid="conflict"][data-item="alert-digest"]').filter({ hasText: "starts" })).toContainText("which it depends on, ends");
           await expect(page.getByTestId("item-milestone").first()).toBeAttached();
           await expect(page.getByTestId("below-the-line")).toBeVisible();
           // fix4 qa-simple-roadmap-3: the return queue's place is on hover ("1st to come back"), not a "#1" on the bar.
@@ -119,8 +119,12 @@ for (const [where, use] of [
           await expect(page.getByTestId("track-milestone")).toHaveCount(1);
           await expect(page.getByTestId("today-line")).toBeAttached();
         }
-        await expect(page.getByTestId("goal-counter")).toHaveCount(2);
+        // The roadmap's two goals, and the Goal map's three: its features are roadmap items from the
+        // first load (P-1), each counted under the map goal it serves (P-6, feature-panel-qa 6bf7dbec7, 1e1ad87ac).
+        await expect(page.getByTestId("goal-counter")).toHaveCount(5);
         await expect(page.getByTestId("goal-counters")).toContainText("Teams active after 90 days");
+        for (const goal of ["Sign-ups per rep per day", "Revenue per day", "Paid conversions per rep per day"])
+          await expect(page.getByTestId("goal-counter").filter({ hasText: goal })).toHaveCount(1);
         for (const t of ["timeline", "gantt", "board", "waterfall"]) await expect(page.getByTestId(`format-${t}`)).toBeVisible();
         await expect(page.getByTestId(where === "phone" ? "format-timeline" : "format-gantt")).toHaveAttribute("aria-pressed", "true");
         if (where === "phone") await noSidewaysScroll(page);
@@ -251,13 +255,13 @@ test("a broken link's fixes: move the dependents, accept as risk", async ({ page
   await open(page);
   const arrow = page.locator('[data-testid="dep-arrow"][data-from="alert-rules"][data-to="alert-digest"]');
   await expect(arrow).toHaveAttribute("data-state", "red");
-  await page.locator('[data-testid="conflicts"] [data-testid="conflict"][data-item="alert-digest"]').getByRole("button", { name: "Accept as risk" }).click();
+  await page.locator('[data-testid="conflicts"] [data-testid="conflict"][data-item="alert-digest"]').filter({ hasText: "starts" }).getByRole("button", { name: "Accept as risk" }).click();
   await page.getByLabel("Why it is an accepted risk").fill("The digest can ship on the old rules");
   await page.getByRole("button", { name: "Save the risk" }).click();
   await expect(arrow).toHaveAttribute("data-state", "amber");
   await page.getByRole("button", { name: "Undo" }).first().click();
   await expect(arrow).toHaveAttribute("data-state", "red");
-  await page.locator('[data-testid="conflicts"] [data-testid="conflict"][data-item="alert-digest"]').getByRole("button", { name: "Move the dependents" }).click();
+  await page.locator('[data-testid="conflicts"] [data-testid="conflict"][data-item="alert-digest"]').filter({ hasText: "starts" }).getByRole("button", { name: "Move the dependents" }).click();
   await expect(page.getByText(/Moved what depends on 'Alert rules engine' in your working draft/)).toBeVisible();
   await expect(arrow).toHaveAttribute("data-state", "ok");
 });
@@ -393,7 +397,7 @@ test("only a new feature's proposal carries a flow thumbnail", async ({ page }) 
  */
 test("a commenter proposes a fix from the callout", async ({ page }) => {
   await open(page, "commenter@example.com");
-  const callout = page.locator('[data-testid="conflicts"] [data-testid="conflict"][data-item="alert-digest"]');
+  const callout = page.locator('[data-testid="conflicts"] [data-testid="conflict"][data-item="alert-digest"]').filter({ hasText: "starts" });
   await callout.getByRole("button", { name: "Move the dependents" }).click();
   await expect(page.getByText(/Moved what depends on 'Alert rules engine' proposed: it waits for .+ in Needs a decision/)).toBeVisible();
 });

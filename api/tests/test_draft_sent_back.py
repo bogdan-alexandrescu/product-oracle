@@ -358,6 +358,32 @@ UNNAMED_PRD = _default_content("prd.md", "next_draft", 1).replace(
 )
 
 
+# PRD source words: a draft sent back for an issue number says so, never "which codes".
+ISSUE_PRD = _default_content("prd.md", "next_draft", 1).replace(
+    "Serves G1 (activation).", "Serves G1 (activation), as be#1357 asked."
+)
+
+
+async def test_a_draft_sent_back_for_an_issue_number_says_what_the_warnings_are(client, owner):
+    tenant_id, auth = owner
+    swarm = on()
+    swarm.step_files[WRITER] = {"prd.md": ISSUE_PRD}
+    run = await _feedback_run(client, auth, tenant_id, swarm)
+
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    [answer] = swarm.answers
+    assert answer["payload"]["verdict"] == "NOT_YET"
+    [note] = [n for n in run["notes"] if "Oracle sent" in n]
+    assert "names an issue by its number, so Oracle sent" in note
+    assert "the import's warnings on its issue numbers as findings" in note
+    assert "which codes" not in note and "unnamed code" not in note
+    assert note.endswith(
+        "if it still names an issue by its number, the import says which issue numbers "
+        "and prd_review waits in the Inbox."
+    ), note
+
+
 async def test_a_draft_with_unnamed_codes_goes_back_to_the_writer_first(client, owner):
     tenant_id, auth = owner
     swarm = on()

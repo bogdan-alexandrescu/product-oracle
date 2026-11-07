@@ -98,6 +98,10 @@ for (const phone of [false, true]) {
         await expect(digest).toHaveCount(1);
         await expect(digest).toBeDisabled();
         await expect(digest).toContainText("it would make a loop");
+        // Typing the loop-making feature's key gets past the choice, and the API refuses it.
+        await panel(page).getByLabel("Or another PRD's feature key").fill("F-06");
+        await tap(panel(page).getByRole("button", { name: "Save" }));
+        await expect(page.getByText(/Not added, it would make a loop: .*Weekly alert digest already depends on .*Alert rules engine/).first()).toBeVisible();
         await expect(panel(page).getByTestId("card-depends")).toContainText("Nothing");
         await page.reload();
         await open(page, "alert-rules");

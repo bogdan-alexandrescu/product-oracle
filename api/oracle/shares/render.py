@@ -26,7 +26,7 @@ import re
 import urllib.parse
 import uuid
 from collections import OrderedDict
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, datetime
 from types import SimpleNamespace
@@ -188,13 +188,107 @@ def for_reader(html: str) -> str:
     return style + html
 
 
-def reader_body(body_md: str, section_key: str, items: Sequence[ItemView] = ()) -> str:
+# G-3: a goal code ("G1") or a tracker key ("ENG-512") as the roadmap's words write it.
+_CODE = re.compile(r"(?<![\w(-])(G-?\d+|[A-Z][A-Z0-9]{1,9}-\d+)(?![\w)-])")
+
+# A name spliced into the text reads as written, on one line: no table column, heading, list,
+# quote, link, emphasis, strikethrough or entity of its own. A "#" or "&" anywhere is escaped; a
+# marker that opens a block ("+", "-", "=", "N." and "N)") only at the name's start.
+_MARKDOWN = re.compile(r"[\\|*_\[\]`<>~#&]")
+_BLOCK_START = re.compile(r"^(?:([+=-])|(\d+)([.)]))")
+# The one set of whitespace a name folds (the mock's web/lib/api/mock/shares.ts SPACE has the same).
+_SPACE_SET = (
+    "\t\n\v\f\r\x1c-\x1f \x85\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff\u200b"
+)
+_SPACE = re.compile(f"[{_SPACE_SET}]+")
+_SPACE_LEAD = re.compile(f"^[{_SPACE_SET}]+")
+
+
+def _shown_name(name: str) -> str:
+    """``name`` on one line (each whitespace run one space), as plain text wherever it is
+    spliced into markdown."""
+    shown = _MARKDOWN.sub(r"\\\g<0>", _SPACE.sub(" ", name).strip(" "))
+    return _BLOCK_START.sub(lambda m: f"\\{m[1]}" if m[1] else f"{m[2]}\\{m[3]}", shown)
+
+
+_GOAL_LINE = re.compile(r"^\s*[-*]\s*(G-?\d+)\b[\s.:]+(\S.*?)\s*$", re.M)
+
+
+def with_names(text: str, names: dict[str, str]) -> str:
+    """G-3: each code ``names`` knows read by its name with the code beside it ("Activation
+    (G1)"); a code already beside its name (the Goals list's "G1 Activation") stays, as does
+    one inside its own name ("Issue ENG-413"), so a second pass changes nothing. A name
+    reads on one line (each whitespace run in it is one space) and as plain text."""
+
+    def named(m: re.Match) -> str:
+        code = m.group(1)
+        name = _SPACE.sub(" ", names.get(code, "")).strip(" ")
+        after_text = text[m.end() :]
+        if not name or name == code or _SPACE_LEAD.sub("", after_text).startswith(name):
+            return m.group(0)
+        shown = _shown_name(name)
+        if code not in name:
+            return f"{shown} ({code})"
+        # The code beside any one of its occurrences in the name: the name is already there.
+        for at in (k.start() for k in re.finditer(re.escape(code), shown)):
+            ends_before = text[: m.start()].endswith(shown[:at])
+            if ends_before and after_text.startswith(shown[at + len(code) :]):
+                return m.group(0)
+        return shown
+
+    return _CODE.sub(named, text) if names else text
+
+
+async def code_names(
+    db, texts: Sequence[str], items: Sequence[ItemView] = (), item_fields: Collection[str] = ()
+) -> dict[str, str]:
+    """G-3: the name of each goal code and tracker key ``texts`` write: the confirmed
+    goal's title (its key, any case, with or without the dash) and the tracker issue's
+    title from the very record one of the version's own ``items`` carries, when the
+    audience's ``item_fields`` show the items' tracker keys (the keys the page already
+    shows through an item). A link holder reads no more than the page shows."""
+    from oracle.baseline.models import Entity
+
+    codes = {m.group(1) for t in texts for m in _CODE.finditer(t or "")}
+    if not codes:
+        return {}
+    # The roadmap's own Goals list ("- G1 Activation: 40% to 55% by Q4"): its words for
+    # each goal, up to the measure.
+    out: dict[str, str] = {
+        m.group(1): re.split(r":|\s[–—-]\s", m.group(2))[0].strip()
+        for t in texts
+        for m in _GOAL_LINE.finditer(t or "")
+    }
+    if "tracker" in item_fields:
+        for item in items:
+            out.update({k: v for k, v in item.tracker_titles.items() if k in codes and v})
+    goals = {c.replace("-", "").lower(): c for c in codes if re.fullmatch(r"G-?\d+", c)}
+    if goals:
+        rows = await db.execute(
+            select(Entity.key, Entity.title).where(
+                Entity.type == "goal", Entity.status == "confirmed", Entity.title.is_not(None)
+            )
+        )
+        for key, title in rows:
+            code = goals.get((key or "").replace("-", "").lower())
+            if code and title:
+                out[code] = title
+    return out
+
+
+def reader_body(
+    body_md: str,
+    section_key: str,
+    items: Sequence[ItemView] = (),
+    names: dict[str, str] | None = None,
+) -> str:
     """A section's text as a link holder reads it (qa-docs-12, qa-docs-13): no left-out
     line (the company's note on what it left out) nor an item's no-goal flag, and in each
     table no column every row leaves empty and, under a goal group's heading, no Goal
     column (it repeats the heading). The first column always stays. A goal group's rows
     are Board's items of that group (:func:`variants.board_group`, by key), each card
-    with its dates and delivery state (E-14)."""
+    with its dates and delivery state (E-14). Each code ``names`` knows reads by its name
+    (:func:`with_names`, G-3)."""
     from oracle.roadmap import variants
 
     group = variants.spans_row(section_key)
@@ -232,7 +326,7 @@ def reader_body(body_md: str, section_key: str, items: Sequence[ItemView] = ()) 
         out.append("|" + "---|" * len(keep))
         out += [variants._join_row([r[n] for n in keep]) for r in rows]
         i = end
-    return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip("\n")
+    return with_names(re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip("\n"), names or {})
 
 
 # E-14: an item's delivery state (oracle.simple.service delivery) as its card says it.
@@ -284,7 +378,7 @@ def _with_footer(html: str, footer: str) -> str:
     return html + footer
 
 
-def _for_link_holder(ev):
+def _for_link_holder(ev, names: dict[str, str] | None = None):
     """The export as a link holder may see it: no citation, no Sources appendix, no
     evidence link (the render then has nothing to number or list)."""
     from oracle.export.render import sources_keys
@@ -296,7 +390,9 @@ def _for_link_holder(ev):
         for s in sections:
             if s.section_key in appendix:
                 continue
-            s.body_md = reader_body(strip_citations(s.body_md or ""), s.section_key, ev.items)
+            s.body_md = reader_body(
+                strip_citations(s.body_md or ""), s.section_key, ev.items, names
+            )
             s.citation_keys = []
             out.append(s)
         return out
@@ -381,11 +477,19 @@ async def render_share(ctx: ShareContext, fmt: str = "html") -> str | bytes:
         # The items' goal groups are read from the baseline at render time: a goal renamed
         # or unconfirmed since makes a new key, so the page regroups (owner decision
         # 2026-10-26).
-        key = (ctx.publication_id, ctx.audience, fmt, variants.render_key(ev.items))
+        # G-3: the names its codes read by are part of what it shows.
+        names = await code_names(
+            db,
+            [s.body_md or "" for s in ev.all_sections],
+            ev.items,
+            variants.VARIANTS[ctx.audience].item_fields,
+        )
+        key = (ctx.publication_id, ctx.audience, fmt, variants.render_key(ev.items),
+               tuple(sorted(names.items())))  # fmt: skip
         if key in _cache and fmt == "html":
             await db.commit()
             return for_reader(_with_footer(str(_cache[key]), footer))
-        ev = _for_link_holder(detached(ev))
+        ev = _for_link_holder(detached(ev), names)
         await db.commit()  # no connection held while it waits for the pool
     if fmt == "html":
         html = await _on_pool(ctx, _render_audience, ev, "html")

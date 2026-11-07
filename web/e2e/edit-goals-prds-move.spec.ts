@@ -56,7 +56,11 @@ for (const size of SIZES) {
       const before = await order(page);
       expect(before.length).toBeGreaterThan(2);
       const [first, second] = before;
-      const last = before[before.length - 1];
+      // The Goal map's goals (its features' goals since P-1, not this scenario's company goals) have
+      // buckets with no ⋯: the last goal with a menu is the company's last.
+      const owned: string[] = [];
+      for (const g of before) if (await bucket(page, g).getByRole("button", { name: `More for ${g}`, exact: true }).count()) owned.push(g);
+      const last = owned[owned.length - 1];
 
       await expect(await menu(page, first)).toHaveText(["Edit goal", "Move down", "Archive goal", "Delete goal"]);
       await page.keyboard.press("Escape");

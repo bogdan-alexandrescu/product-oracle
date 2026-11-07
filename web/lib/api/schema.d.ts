@@ -12463,6 +12463,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/roadmap/draft-prds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Simple Roadmap Draft Prds
+         * @description The draft layer (RP2): every PRD the caller may read whose run's draft roadmap holds
+         *     dated items not approved yet, each with its items, dates, owner and run. A replaced
+         *     PRD, a cancelled run and an approved PRD version are left out.
+         */
+        get: operations["list_simple_roadmap_draft_prds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/draft-prds/items/{item_id}/dates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change Simple Roadmap Draft Dates
+         * @description Change dates on a draft item: the run's draft keeps them, the roadmap does not.
+         */
+        post: operations["change_simple_roadmap_draft_dates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/draft-prds/items/{item_id}/leave-out": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Leave Out Simple Roadmap Draft Item
+         * @description Leave out a draft item: it never goes on the roadmap.
+         */
+        post: operations["leave_out_simple_roadmap_draft_item"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/roadmap/apply-approved": {
         parameters: {
             query?: never;
@@ -13026,6 +13088,26 @@ export interface paths {
          * @description goal-ladder: a feature moved to another milestone's work (Edit ladder).
          */
         post: operations["move_feature_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-map/links/detach": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Detach Feature Link
+         * @description goal-map-editing: a feature no longer serves the milestone (Edit ladder).
+         */
+        post: operations["detach_feature_link"];
         delete?: never;
         options?: never;
         head?: never;
@@ -14519,9 +14601,9 @@ export interface paths {
          *     the caller sees: each row's Oracle rank, goal, horizon, goal value (a person's estimate
          *     or the goals'), effort, score, the dependency it waits for, the override that placed it
          *     and whether the caller's change applies or is proposed; the open priority and estimate
-         *     proposals, the draft items with what they may merge into, and this quarter's
-         *     engineer-weeks per goal. ``line``: where the line is drawn (Now, a key date, a dated
-         *     milestone or a day; see the module).
+         *     proposals, the draft items with what they may merge into, the items no row holds, and
+         *     this quarter's engineer-weeks per goal. ``line``: where the line is drawn (Now, a key
+         *     date, a dated milestone or a day; see the module).
          */
         get: operations["get_simple_priorities"];
         put?: never;
@@ -19371,7 +19453,7 @@ export interface components {
             /** Message Id */
             message_id: string | null;
             /** Op */
-            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped" | "api_action");
+            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped" | "api_action");
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -19489,7 +19571,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -22429,6 +22511,23 @@ export interface components {
         DesignReviewOut: {
             event: components["schemas"]["DesignReviewEventOut"];
             version: components["schemas"]["ArtifactVersionOut"];
+        };
+        /**
+         * DetachIn
+         * @description goal-map-editing: a feature let go of one milestone (dropped on "Not on a key
+         *     result" or "No goal").
+         */
+        DetachIn: {
+            /**
+             * Feature
+             * Format: uuid
+             */
+            feature: string;
+            /**
+             * Milestone
+             * Format: uuid
+             */
+            milestone: string;
         };
         /** DiffLine */
         DiffLine: {
@@ -26395,6 +26494,8 @@ export interface components {
             confirmed_on: string | null;
             /** Proposed */
             proposed: boolean;
+            /** Can Change */
+            can_change: boolean;
         };
         /**
          * GmOffMap
@@ -26429,7 +26530,8 @@ export interface components {
         };
         /**
          * GmUnplaced
-         * @description A feature of the Simple roadmap serving no milestone of the map.
+         * @description A feature of the Simple roadmap serving no milestone of the map, with the goal its
+         *     item serves (goal-map-editing: the ladder draws it under that goal, else in No goal).
          */
         GmUnplaced: {
             /**
@@ -26439,6 +26541,8 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            /** Goal */
+            goal?: string | null;
         };
         /** GoalBucketFeature */
         GoalBucketFeature: {
@@ -28494,7 +28598,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
             /**
              * Status
              * @enum {string}
@@ -28550,6 +28654,8 @@ export interface components {
             question_id?: string | null;
             /** Line Id */
             line_id?: string | null;
+            /** Section */
+            section?: string | null;
         };
         /**
          * InboxSimpleDateSuggestion
@@ -30266,6 +30372,8 @@ export interface components {
             reuse_baseline?: boolean | null;
             /** Goals */
             goals?: string[] | null;
+            /** Features */
+            features?: string[] | null;
             /** Reuse Draft Items */
             reuse_draft_items?: boolean | null;
         };
@@ -30292,6 +30400,11 @@ export interface components {
              * @default []
              */
             goals: components["schemas"]["TargetGoal"][];
+            /**
+             * Features
+             * @default []
+             */
+            features: components["schemas"]["TargetFeature"][];
             /** Reuse Draft Items */
             reuse_draft_items?: boolean | null;
         };
@@ -32855,6 +32968,64 @@ export interface components {
             decision_notes: string[];
         };
         /**
+         * OnePagerFix
+         * @description A "numbers" item's one-click fix (owner, Nov 5): POST /v1/simple/changes with ``op``
+         *     ``action``, this ``target``, ``before: {number: before}`` and ``after: {number: value}``;
+         *     ``words`` is its button ("Use 6").
+         */
+        OnePagerFix: {
+            /**
+             * Action
+             * @constant
+             */
+            action: "set_section_number";
+            /** Target */
+            target: {
+                [key: string]: string;
+            };
+            /** Before */
+            before: string;
+            /** Value */
+            value: string;
+            /** Words */
+            words: string;
+            proposal?: components["schemas"]["OnePagerFixProposal"] | null;
+        };
+        /**
+         * OnePagerFixProposal
+         * @description An open proposal of the fix: who made it, and whether the reader decides or
+         *     withdraws it.
+         */
+        OnePagerFixProposal: {
+            /**
+             * Change Id
+             * Format: uuid
+             */
+            change_id: string;
+            /** By Name */
+            by_name: string;
+            /** Can Decide */
+            can_decide: boolean;
+            /** Can Undo */
+            can_undo: boolean;
+        };
+        /**
+         * OnePagerFixed
+         * @description A number fix (set_section_number) in the PRD's working draft, read from the draft's
+         *     live changes: its words ('Fixed: set to 6 in “Later · 6 items”') and its Undo.
+         */
+        OnePagerFixed: {
+            /**
+             * Change Id
+             * Format: uuid
+             */
+            change_id: string;
+            /** Words */
+            words: string;
+            /** Can Undo */
+            can_undo: boolean;
+        };
+        /**
          * OnePagerFlow
          * @description A design bundle's flow (S10's), as the API returns it; none yet: null.
          */
@@ -32989,6 +33160,7 @@ export interface components {
              * @default []
              */
             source_keys: string[];
+            fix?: components["schemas"]["OnePagerFix"] | null;
         };
         /** OnePagerMetric */
         OnePagerMetric: {
@@ -33109,6 +33281,11 @@ export interface components {
              * @default []
              */
             needs_look: components["schemas"]["OnePagerLook"][];
+            /**
+             * Fixed
+             * @default []
+             */
+            fixed: components["schemas"]["OnePagerFixed"][];
         };
         /**
          * OnePagerRemindOut
@@ -41048,7 +41225,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -41097,7 +41274,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -41545,6 +41722,8 @@ export interface components {
             base_version: number | null;
             /** Version */
             version: number | null;
+            /** Next Version */
+            next_version?: number | null;
             /**
              * Created By
              * Format: uuid
@@ -42873,6 +43052,28 @@ export interface components {
             /** Name */
             name: string;
         };
+        /**
+         * SimplePartRef
+         * @description feature-parts: a parent or a part, by its display code ("" when none) and name.
+         */
+        SimplePartRef: {
+            /** Id */
+            id: string;
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
+            /**
+             * Cut
+             * @default false
+             */
+            cut: boolean;
+            /**
+             * In Trash
+             * @default false
+             */
+            in_trash: boolean;
+        };
         /** SimplePerson */
         SimplePerson: {
             /**
@@ -43188,6 +43389,11 @@ export interface components {
             proposals: components["schemas"]["SimplePriorityProposal"][];
             /** Drafts */
             drafts: components["schemas"]["SimplePriorityDraft"][];
+            /**
+             * Unranked
+             * @default []
+             */
+            unranked: components["schemas"]["SimplePriorityUnranked"][];
             /** Buckets */
             buckets: components["schemas"]["SimpleGoalBucket"][];
             /** Weeks Total */
@@ -43408,10 +43614,31 @@ export interface components {
              * @default false
              */
             applies: boolean;
+            part_of?: components["schemas"]["SimplePartRef"] | null;
+            /** Parts */
+            parts?: components["schemas"]["SimplePartRef"][];
             /** Before Override */
             before_override?: {
                 [key: string]: unknown;
             } | null;
+        };
+        /**
+         * SimplePriorityUnranked
+         * @description prio-unranked: a live, non-draft roadmap item with no ranked feature (none, or one the
+         *     ranking leaves out): listed under the ranked rows, with no score and no rank.
+         */
+        SimplePriorityUnranked: {
+            /**
+             * Item Id
+             * Format: uuid
+             */
+            item_id: string;
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
+            goal?: components["schemas"]["SimplePriorityGoal"] | null;
+            roadmap: components["schemas"]["SimpleDocRef"];
         };
         /** SimpleQuarter */
         SimpleQuarter: {
@@ -43645,6 +43872,52 @@ export interface components {
              */
             what: "email" | "slack";
         };
+        /**
+         * SimpleRoadmapDraftItem
+         * @description A dated item of a draft PRD on the Simple roadmap's draft layer, with its owner.
+         */
+        SimpleRoadmapDraftItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Horizon */
+            horizon: string;
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Owner Name */
+            owner_name?: string | null;
+        };
+        /**
+         * SimpleRoadmapDraftPrd
+         * @description RP2 'Draft layer on roadmap': a PRD whose run's draft roadmap holds dated items not
+         *     approved yet, shown hatched over the roadmap until the PRD is approved.
+         */
+        SimpleRoadmapDraftPrd: {
+            prd: components["schemas"]["SimpleDocRef"];
+            /** Run Id */
+            run_id?: string | null;
+            /** Items */
+            items: components["schemas"]["SimpleRoadmapDraftItem"][];
+            /**
+             * Can Change
+             * @default false
+             */
+            can_change: boolean;
+        };
         /** SimpleRoadmapItem */
         SimpleRoadmapItem: {
             /**
@@ -43763,6 +44036,19 @@ export interface components {
              */
             looks_like: components["schemas"]["SimpleMatch"][];
             merged_into?: components["schemas"]["SimpleMergedInto"] | null;
+            /** Parent Key */
+            parent_key?: string | null;
+            part_of?: components["schemas"]["SimplePartRef"] | null;
+            /**
+             * Part Path
+             * @default []
+             */
+            part_path: components["schemas"]["SimplePartRef"][];
+            /**
+             * Parts
+             * @default []
+             */
+            parts: components["schemas"]["SimplePartRef"][];
             /**
              * Drafting
              * @description S7: Oracle's drafting job for this draft is queued or running.
@@ -46074,6 +46360,21 @@ export interface components {
             source: components["schemas"]["SourceOut"];
         };
         /**
+         * TargetFeature
+         * @description A Ground Truth feature a PRD run adds to its PRD ("Add it to a PRD").
+         */
+        TargetFeature: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+        };
+        /**
          * TargetGoal
          * @description A confirmed goal a PRD run serves (#260).
          */
@@ -47989,7 +48290,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "document" | "intake" | "run" | "feature" | "goal" | "decision" | "question" | "agenda_item" | "request" | "track";
+            type: "document" | "intake" | "run" | "feature" | "goal" | "decision" | "question" | "agenda_item" | "request" | "track" | "milestone";
             /**
              * Id
              * Format: uuid
@@ -48007,6 +48308,10 @@ export interface components {
             created_at?: string | null;
             /** Wrote */
             wrote?: string | null;
+            /** Features */
+            features?: number | null;
+            /** Meeting */
+            meeting?: string | null;
         };
         /**
          * TrashedOut
@@ -74068,6 +74373,88 @@ export interface operations {
             };
         };
     };
+    list_simple_roadmap_draft_prds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleRoadmapDraftPrd"][];
+                };
+            };
+        };
+    };
+    change_simple_roadmap_draft_dates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleDraftDatesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    leave_out_simple_roadmap_draft_item: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     apply_approved_roadmap: {
         parameters: {
             query: {
@@ -74976,6 +75363,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MoveLinkIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detach_feature_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DetachIn"];
             };
         };
         responses: {

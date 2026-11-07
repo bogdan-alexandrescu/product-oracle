@@ -373,6 +373,36 @@ function said(s: Sec): string[] {
   return [...sentences(prose.join(" ")), ...bullets, ...cells.map((r) => r.join(" · "))];
 }
 
+const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** one_pager_checks._number_at: the first number in `body` that reads `said` (its first word the number, the words after it in order). */
+function numberAt(body: string, said: string): RegExpExecArray | null {
+  const [first, ...rest] = said.split(/\s+/).filter(Boolean);
+  const after = rest.map((w) => `[\\W_]+${esc(w)}`).join("");
+  return new RegExp(`(?<![\\w.,])${esc(first)}(?!\\w)(?=${after}(?!\\w))`, "i").exec(body ?? "");
+}
+
+/** one_pager_checks.set_number: `body` with the number of `said` set to `value`; null when it holds no such words. */
+export function setNumber(body: string, said: string, value: string): string | null {
+  const m = numberAt(body, said);
+  return m ? body.slice(0, m.index) + asWritten(m[0], value) + body.slice(m.index + m[0].length) : null;
+}
+
+/** one_pager_checks._as_written: a count in words stays in words ("Eight" -> "Six", its case kept); a numeral, or a value with no word for it, as a numeral. */
+function asWritten(old: string, value: string): string {
+  if (/^\d+$/.test(old) || !WORDS.includes(old.toLowerCase())) return value;
+  const word = WORDS[Number(value)];
+  if (!/^\d+$/.test(value) || !word) return value;
+  if (old === old.toUpperCase()) return word.toUpperCase();
+  return old[0] === old[0].toUpperCase() ? word[0].toUpperCase() + word.slice(1) : word;
+}
+
+/** one_pager_checks._fix: a numbers item's fix (its document_id filled by the read); `heading`: the number is in the section's heading (part "heading"). */
+function fixOf(s: Sec, said: string, before: string, value: number, heading = false): Look["fix"] {
+  if (!numberAt(heading ? s.heading : s.body, said)) return null;
+  return { action: "set_section_number", target: { document_id: "", section: s.key, said, ...(heading ? { part: "heading" } : {}) }, before, value: String(value), words: `Use ${value}`, proposal: null };
+}
+
 function numbers(secs: Sec[]): Look[] {
   const looks: Look[] = [];
   for (const s of secs) {
@@ -381,7 +411,8 @@ function numbers(secs: Sec[]): Look[] {
     const head = plain(s.heading);
     const hm = /(?:·|\()\s*(\d+)\s+items?\b/i.exec(head);
     const shown = hm ? Number(hm[1]) : null;
-    if (shown !== null && listed && shown !== listed) looks.push({ kind: "numbers", text: `“${head}” says ${shown} items, but it lists ${listed}.`, where: [head], source_keys: [s.key] });
+    if (hm && shown !== null && listed && shown !== listed)
+      looks.push({ kind: "numbers", text: `“${head}” says ${shown} items, but it lists ${listed}.`, where: [head], source_keys: [s.key], fix: fixOf(s, head.slice(hm.index + hm[0].indexOf(hm[1]), hm.index + hm[0].length), hm[1], listed, true) });
     const target = shown ?? listed;
     if (!target) continue;
     // A count disagrees only with a list of the same things (CLD's walk B, 2026-11-01):
@@ -395,7 +426,8 @@ function numbers(secs: Sec[]): Look[] {
         if (n === null || n === target) continue;
         const noun = m[2].toLowerCase().replace(/s$/, "").replace(/ie$/, "");
         if (hm === null && fields && !listing.includes(noun)) continue;
-        looks.push({ kind: "numbers", text: `“${`${m[1]} ${m[2]}${m[3]}`.trim()}” says ${n}, but “${head}” shows ${target} items.`, where: [head], source_keys: [s.key] });
+        const words = `${m[1]} ${m[2]}${m[3]}`.trim();
+        looks.push({ kind: "numbers", text: `“${words}” says ${n}, but “${head}” shows ${target} items.`, where: [head], source_keys: [s.key], fix: fixOf(s, words, m[1], target, t === head) });
       }
     }
   }
@@ -422,6 +454,7 @@ function numbers(secs: Sec[]): Look[] {
           text: `${per} ${m[3]} per ${thing} × ${count[2]} is ${per * count[0]}, but the company-wide target says ${total}.`,
           where: [...new Set(where.map((x) => plain(x.heading)))],
           source_keys: [...new Set(where.map((x) => x.key))],
+          fix: fixOf(ts, tm![0], tm![1], per * count[0]),
         });
         break;
       }
@@ -452,7 +485,7 @@ export function wholeWord(cut: string, said: string): string {
 }
 
 /** one_pager_checks.annotate: fills the blocks' clear-reading fields in place; the "Needs a look" items. */
-export function annotate(blocks: Block[], secs: Sec[], cites: Cites = {}): Look[] {
+export function annotate(blocks: Block[], secs: Sec[], cites: Cites = {}, checked: Sec[] = secs): Look[] {
   const names = glossary(secs), notes = footnoteNotes(secs), found = measures(secs, cites), who = whoHasIt(secs);
   const unnamed = new Map<string, string[]>();
   for (const b of blocks) {
@@ -482,5 +515,5 @@ export function annotate(blocks: Block[], secs: Sec[], cites: Cites = {}): Look[
     const k = [...new Set(keys)];
     return { kind: "code", text: `${code} has no name in the PRD.`, where: k.map((x) => heads[x] ?? x), source_keys: k };
   });
-  return [...looks, ...numbers(secs)];
+  return [...looks, ...numbers(checked)];
 }

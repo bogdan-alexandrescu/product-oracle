@@ -18,10 +18,14 @@ const OLD_LINK = `/i/${MOCK_INTERVIEW_TOKEN}`;
 const ASK = "Make a new link? The old link stops working.";
 const REPLACED = "This link was replaced by a newer one. Ask the team that sent it for the new link.";
 
+/** The interview page's own status, in its header under "← Interviews" (the list's row has one too while it leaves). */
+const status = (page: Page) => page.locator("header").filter({ has: page.getByTestId("interview-back") }).getByTestId("interview-status");
+
 async function openInterview(page: Page) {
   await page.goto("/requests/interviews");
   await page.getByTestId("interview-row").filter({ hasText: "Ana Lima" }).click();
-  await expect(page.getByTestId("interview-status")).toHaveText("Invited");
+  await expect(page).toHaveURL(/\/requests\/interviews\/[^/?]+$/);
+  await expect(status(page)).toHaveText("Invited");
 }
 
 /** No element in `testId` is wider than its box (no text cut mid-word or scrolled away), and the page does not scroll sideways. */
@@ -52,7 +56,7 @@ async function makeNewLink(page: Page): Promise<string> {
 
   // Ana opened it, so the interview is in progress; the new link carries it on.
   await page.goBack();
-  await expect(page.getByTestId("interview-status")).toHaveText("In progress");
+  await expect(status(page)).toHaveText("In progress");
   await page.getByRole("button", { name: "Make a new link", exact: true }).click();
   await dialog.getByRole("button", { name: "Make a new link", exact: true }).click();
 
@@ -100,7 +104,7 @@ test("the old link of a withdrawn interview says it was withdrawn", async ({ pag
   const url = await makeNewLink(page);
   await page.getByRole("button", { name: "Withdraw link", exact: true }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Withdraw link", exact: true }).click();
-  await expect(page.getByTestId("interview-status")).toHaveText("Withdrawn");
+  await expect(status(page)).toHaveText("Withdrawn");
   await page.goto(OLD_LINK);
   await expect(page.getByTestId("interview-refused")).toHaveText("This link was withdrawn.");
   await page.goto(new URL(url).pathname);

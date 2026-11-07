@@ -23,7 +23,8 @@ and the features serving them.
   ``gaps``: each gated area of a milestone with no feature in its cell (a milestone with no
   area and no feature: area None). ``unplaced``: the Simple roadmap's features (not a draft,
   cut or merged) serving no milestone of the map, as the signed-in person reads it (the
-  working drafts they may see; never an item they cannot open). ``read_on``: the day of a
+  working drafts they may see; never an item they cannot open), each with the goal its item
+  serves (goal-map-editing). ``read_on``: the day of a
   goal's latest reading, in words ("Nov 1"). ``off_map``: the confirmed goals with no number
   to aim at (no numeric ``target``, not a guardrail), so a goal Home links to is never lost.
 - Why a feature helps: once it shipped (its ``shipped`` mark, else the day a launch with it
@@ -55,6 +56,7 @@ from oracle.metrics.models import Metric, MetricValue
 from oracle.preferences.models import UserPreference
 from oracle.roadmap import company
 from oracle.roadmap.models import RoadmapItem, TrackMilestone
+from oracle.simple import drafts
 from oracle.simple.goal_milestones import _next_code
 from oracle.simple.models import FocusArea, MilestoneFeature
 
@@ -135,6 +137,9 @@ class GmMilestone(BaseModel):
     # When it was confirmed, in words ("Nov 2").
     confirmed_on: str | None
     proposed: bool
+    # Whether the signed-in person changes it directly (Trash, move, edit): the rule the
+    # milestone routes enforce (drafts.can_edit). Map can_edit (approver and up) is wider.
+    can_change: bool
 
 
 class GmLink(BaseModel):
@@ -183,10 +188,12 @@ class GmGap(BaseModel):
 
 
 class GmUnplaced(BaseModel):
-    """A feature of the Simple roadmap serving no milestone of the map."""
+    """A feature of the Simple roadmap serving no milestone of the map, with the goal its
+    item serves (goal-map-editing: the ladder draws it under that goal, else in No goal)."""
 
     id: uuid.UUID
     name: str
+    goal: uuid.UUID | None = None
 
 
 class GmOffMap(BaseModel):
@@ -254,6 +261,14 @@ class MoveLinkIn(BaseModel):
     feature: uuid.UUID
     from_milestone: uuid.UUID
     to_milestone: uuid.UUID
+
+
+class DetachIn(BaseModel):
+    """goal-map-editing: a feature let go of one milestone (dropped on "Not on a key
+    result" or "No goal")."""
+
+    feature: uuid.UUID
+    milestone: uuid.UUID
 
 
 class PlaceIn(BaseModel):
@@ -488,7 +503,8 @@ async def _unplaced(db: AsyncSession, principal: Any, placed: set[uuid.UUID]) ->
     for e in read.entries:
         if e.status in ("draft", "cut", "merged") or e.row.id in placed or e.row.id in out:
             continue
-        out[e.row.id] = GmUnplaced(id=e.row.id, name=e.row.title)
+        goal = e.goal.id if e.goal is not None else None
+        out[e.row.id] = GmUnplaced(id=e.row.id, name=e.row.title, goal=goal)
     return list(out.values())
 
 
@@ -567,6 +583,7 @@ async def build(db: AsyncSession, principal: Any, can_edit: bool) -> GoalMapOut:
     rows = await _on_map(db)
     on_map = {m.id for m in rows}
     ms_out = []
+    who = await drafts.who(db, {m.roadmap_id for m in rows if m.roadmap_id is not None})
     for m in rows:
         goal = by_goal.get(m.goal_id)  # type: ignore[arg-type]
         if goal is None:
@@ -593,6 +610,7 @@ async def build(db: AsyncSession, principal: Any, can_edit: bool) -> GoalMapOut:
                 confirmed=m.gate_confirmed_by,
                 confirmed_on=_short(m.gate_confirmed_on),
                 proposed=gated and m.gate_confirmed_by is None,
+                can_change=drafts.can_edit(principal, m.roadmap_id, who),  # type: ignore[arg-type]
             )
         )
     shown = {m.id for m in ms_out}
@@ -605,12 +623,18 @@ async def build(db: AsyncSession, principal: Any, can_edit: bool) -> GoalMapOut:
         )
     ).all()
     links = [(link, item) for link, item in links if link.milestone_id in shown]
+    overlays = await drafts.overlays_for(db, principal)
     shipped = await _shipped_on(db, list({item.id: item for _, item in links}.values()))
     goal_of = {m.id: m.goal for m in ms_out}
     around: dict[tuple[uuid.UUID, date], tuple[float | None, float | None]] = {}
     feats: dict[uuid.UUID, GmFeature] = {}
     for link, item in links:
         title = item.title
+        # panel-menu: a feature merged into another (as the reader's draft has it, as the
+        # roadmap reads it) is no longer one of the map's.
+        mine_ = (overlays.get(item.roadmap_document_id) or {}).get(str(link.item_id)) or {}
+        if mine_.get("merged_into", item.merged_into):
+            continue
         f = feats.get(link.item_id)
         goal_id = goal_of[link.milestone_id]
         on = shipped.get(item.id)
@@ -764,6 +788,20 @@ async def move_link(db: AsyncSession, body: MoveLinkIn) -> None:
         await db.delete(link)
     else:
         link.milestone_id = to.id
+
+
+async def detach(db: AsyncSession, body: DetachIn) -> None:
+    """goal-map-editing: the feature no longer serves the milestone (its other links stay;
+    with none left it is unplaced, under the goal its item serves)."""
+    link = await db.scalar(
+        select(MilestoneFeature).where(
+            MilestoneFeature.item_id == body.feature,
+            MilestoneFeature.milestone_id == body.milestone,
+        )
+    )
+    if link is None:
+        raise GoalMapError(404, "No such feature on that milestone")
+    await db.delete(link)
 
 
 async def add_area(db: AsyncSession, body: AreaIn) -> None:

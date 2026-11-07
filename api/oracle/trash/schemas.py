@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 # edit-decisions: an open decision or a PRD question (oracle.simple.decision_sheet).
 # port-an-decisions: a meeting's agenda item or a request.
 # removed-tracks: a product track.
+# goal-map-editing: a goal milestone.
 TrashItemType = Literal[
     "document",
     "intake",
@@ -19,6 +20,7 @@ TrashItemType = Literal[
     "agenda_item",
     "request",
     "track",
+    "milestone",
 ]
 
 
@@ -30,13 +32,17 @@ class TrashItem(BaseModel):
     slug: str | None = None
     title: str
     # A document's kind (prd, roadmap, spec, update, ...), "intake", a run's flow,
-    # "feature", "goal" or "Track".
+    # "feature", "goal", "Track" or "Milestone".
     kind: str
     # A feature's code on its roadmap ("F-26"), shown before its name.
     code: str | None = None
     # qa4-docs-26: a run in the delete dialog, in words: when it ran and what it wrote.
     created_at: datetime | None = None
     wrote: str | None = None
+    # G-4: what Restore brings back with it: a goal's features (those that served it when it
+    # was deleted) and a removed agenda item's meeting, by its title.
+    features: int | None = None
+    meeting: str | None = None
 
 
 class DependentsOut(BaseModel):

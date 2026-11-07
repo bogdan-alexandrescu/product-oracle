@@ -5,15 +5,17 @@ import { expect, test, type Locator, type Page } from "./test";
 /*
  * Simple's Definition of Done, item 4 (docs/simple-dod-actions-plan.md): the Priorities actions
  * no spec drove yet, on a desktop (1440x900) and a phone (390x844). Driven against the mock's
- * default scenario: Oracle's order setup-checklist, alert-rules, alert-digest, alert-mobile,
- * setup-import, alert-export, alert-sso, price-tiers, setup-video; the draft Team invite nudges
+ * default scenario: Oracle's order starts setup-checklist, alert-rules, alert-digest, alert-mobile,
+ * setup-import, alert-export, alert-sso (the Goal map's features, P-1, rank after them, then the
+ * default roadmap's other items); the draft Team invite nudges
  * (setup-ideas) waits below the ranking; Grow retention's bucket holds Oracle's suggestion
  * "Alert templates for new teams".
  */
 
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
-const ORACLE = ["setup-checklist", "alert-rules", "alert-digest", "alert-mobile", "setup-import", "alert-export", "alert-sso", "price-tiers", "setup-video"];
+/** The head of Oracle's order; a test compares the whole order with the one it read first. */
+const ORACLE_HEAD = ["setup-checklist", "alert-rules", "alert-digest", "alert-mobile", "setup-import", "alert-export", "alert-sso"];
 
 const isPhone = (page: Page) => (page.viewportSize()?.width ?? 1440) <= 640;
 const codes = (page: Page) => page.getByTestId("prio-row").evaluateAll((els) => els.map((e) => e.getAttribute("data-code")));
@@ -95,10 +97,12 @@ for (const [where, use] of [
      */
     test(`an approver's reorder is a proposal with its reason (${where})`, async ({ page }) => {
       await open(page, "approver@example.com");
+      const oracle = await codes(page);
+      expect(oracle.slice(0, ORACLE_HEAD.length)).toEqual(ORACLE_HEAD);
       await dragRow(page, "alert-export", 0);
       await giveReason(page, "Two teams asked for it this month", "Propose");
       await expect(page.getByText(/^Proposed: .* decides$/)).toBeVisible();
-      expect(await codes(page)).toEqual(ORACLE);
+      expect(await codes(page)).toEqual(oracle);
       await expect(row(page, "alert-export").getByTestId("prio-proposal")).toBeVisible();
     });
 
@@ -162,6 +166,8 @@ test.describe("phone", () => {
    */
   test("an owner's move on a phone is an override with its reason and Oracle's ghost, undone", async ({ page }) => {
     await open(page);
+    const oracle = await codes(page);
+    expect(oracle.slice(0, ORACLE_HEAD.length)).toEqual(ORACLE_HEAD);
     await dragRow(page, "alert-export", 0);
     await giveReason(page, "Two large customers asked for it", "Move");
     await expect(page.getByText("Moved Alert history export to rank 1")).toBeVisible();
@@ -169,7 +175,7 @@ test.describe("phone", () => {
     await expect(row(page, "alert-export").getByTestId("prio-ghost")).toHaveText("Oracle #6");
     await expect(row(page, "alert-export").getByTestId("prio-override")).toContainText("Moved by Avery Stone: “Two large customers asked for it”");
     await page.getByRole("button", { name: "Undo" }).click();
-    await expect.poll(() => codes(page)).toEqual(ORACLE);
+    await expect.poll(() => codes(page)).toEqual(oracle);
   });
 
   /*

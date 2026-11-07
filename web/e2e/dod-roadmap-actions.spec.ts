@@ -19,6 +19,18 @@ const bar = (page: Page, key: string): Locator => page.locator(`g[data-testid="b
 const body = (page: Page, key: string): Locator => bar(page, key).locator("rect[data-body]");
 const toast = (page: Page, text: string | RegExp) => page.getByText(text).first();
 
+/**
+ * The digest's link to Alert rules engine has left Needs a decision's broken links. Its end past
+ * its milestone (Beta) is a broken link too since pre-demo QA S-5 (7821685f4), so the digest's
+ * row stays, with that line alone.
+ */
+async function expectOnlyMilestoneLeft(t: Locator) {
+  const lines = t.getByTestId("tray-broken").filter({ hasText: "Weekly alert digest" }).getByTestId("flag-reason");
+  await expect(lines.filter({ hasText: "Alert rules engine" })).toHaveCount(0);
+  await expect(lines).toHaveCount(1);
+  await expect(lines).toContainText("after its milestone");
+}
+
 /** The roadmap, signed in as `email` (the owner when none). `gantt`: its Gantt (a phone's bars). */
 async function open(page: Page, email?: string, gantt = false, scenario?: string) {
   if (scenario) await page.context().addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, scenario] as const);
@@ -209,7 +221,7 @@ for (const [where, use] of [
       const row = t.getByTestId("tray-broken").filter({ hasText: "Weekly alert digest" }).first();
       await row.getByRole("button", { name: "Move the dependency" }).click();
       await expect(toast(page, /Moved 'Alert rules engine'/)).toBeVisible();
-      await expect(t.getByTestId("tray-broken").filter({ hasText: "Weekly alert digest" })).toHaveCount(0);
+      await expectOnlyMilestoneLeft(t);
       await expect(page.getByTestId("draft-count")).toHaveText("1");
       if (!isPhone(page)) {
         await t.getByRole("button", { name: "Close" }).click();
@@ -240,7 +252,7 @@ for (const [where, use] of [
       await tray(page);
       await row().getByRole("button", { name: "Move the dependents" }).first().click();
       await expect(toast(page, /Moved what depends on 'Alert rules engine' in your working draft/)).toBeVisible();
-      await expect(t.getByTestId("tray-broken").filter({ hasText: "Weekly alert digest" })).toHaveCount(0);
+      await expectOnlyMilestoneLeft(t);
     });
 
     /*

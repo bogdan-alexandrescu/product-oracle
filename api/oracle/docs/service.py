@@ -1495,7 +1495,7 @@ async def import_draft(
     if origin == "run":
         # #306: an agent names the codes it writes; a draft that does not is flagged. A
         # roadmap's date words too (roadmap-draft-wording).
-        warnings += draft_checks.run_warnings(document.kind, draft.sections)
+        warnings += draft_checks.run_warnings(document.kind, draft.sections, markdown)
         if document.kind == "prd" and run_id is not None:
             # Walk 2, problem 17: a PRD drafted from an intake never calls missing what a
             # pinned source or a baseline feature the brief names describes.

@@ -11,6 +11,11 @@ Test cards (protects / fails_when / no_claim):
   who removed it), newest first, with whether the reader restores it and who decides
   otherwise; a goal rejected for another reason is left out; fails_when=a kind is missing,
   who/when is empty, or a viewer reads that they decide; no_claim=the web.
+- test_a_feature_cut_from_its_panel_status_names_who_and_when: protects=a feature cut with
+  op ``set_status`` (the feature panel's Status field, after.status cut) is on ``GET
+  /v1/simple/removed`` with who cut it and when, as one cut with op ``cut`` (the panel's
+  "Cut on <day> by <name>" line reads it); fails_when=who or when is empty for it;
+  no_claim=the web (web/e2e/panel-menu-tree.spec.ts).
 - test_unarchive_goal_and_restore_milestone_through_the_change_engine: protects=op
   ``unarchive_goal`` (this line's oracle.simple.goal_asks: an approver or owner applies it,
   a commenter's is proposed to the owners and applies on accept) takes an archived goal off
@@ -156,6 +161,17 @@ async def test_removed_lists_what_was_cut_archived_and_removed(client):
         assert row.archived_by == ctx.users["approver"].id and row.archived_at is not None
         ml = await s.get(TrackMilestone, uuid.UUID(m["id"]))
         assert ml.deleted_by == ctx.users["owner"].id
+
+
+async def test_a_feature_cut_from_its_panel_status_names_who_and_when(client):
+    ctx = await make_ctx()
+    ids = await seed(ctx)
+    out = await change(client, ctx, "owner", "set_status", {"item_id": ids["item_id"]},
+                       {"status": "cut"}, before={"status": "planned"})  # fmt: skip
+    assert out["change"]["status"] == "applied", out
+    (f,) = await removed(client, ctx)
+    assert (f["kind"], f["id"]) == ("feature", ids["item_id"])
+    assert f["by_name"] == name(ctx, "owner") and f["at"] is not None
 
 
 async def test_unarchive_goal_and_restore_milestone_through_the_change_engine(client):

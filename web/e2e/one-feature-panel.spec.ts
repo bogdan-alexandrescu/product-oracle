@@ -246,9 +246,12 @@ test.describe("Goal map", () => {
     for (let i = 0; i < n; i++) {
       const card = cards.nth(i);
       const words = (await card.locator("span.font-semibold").first().innerText()).trim();
-      const code = words.match(/^F-\d+/)?.[0];
-      expect(code, words).toBeTruthy();
-      const name = words.replace(/^F-\d+\s*/, "");
+      // goal-map-editing (PR 1379): every roadmap feature is on the ladder; one whose item has no
+      // code yet (the API's item.code is null) shows its name alone, and its panel opens on it.
+      const chip = card.locator(".simple-code");
+      const code = (await chip.count()) ? (await chip.innerText()).trim() : "";
+      if (code) expect(code, words).toMatch(/^F-\d+$/);
+      const name = code ? words.replace(/^F-\d+\s*/, "") : words;
       // On the ladder, a click only selects the card: Open (or Enter) opens its panel.
       await tap(card);
       await card.getByTestId("ld-open").click();

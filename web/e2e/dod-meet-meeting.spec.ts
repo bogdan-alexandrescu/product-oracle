@@ -83,7 +83,7 @@ for (const phone of [false, true]) {
       await tap(page.getByRole("button", { name: "Add comment" }));
       const comment = page.getByTestId("meeting-comment");
       await expect(comment).toContainText("Keep the checklist to five steps");
-      await expect(comment.locator("span")).toHaveText(/^\S.* · /);
+      await expect(comment.locator("span:not([data-user-content])")).toHaveText(/^\S.* · /);
 
       const rows = allDecisions(page).getByTestId("meeting-decision");
       await expect(rows).toHaveCount(4);

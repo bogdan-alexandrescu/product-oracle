@@ -62,7 +62,15 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
         const warn = (await panel.boundingBox())!;
         for (const c of await warnings.all()) {
           const key = (await c.getAttribute("data-item"))!;
-          await expect(c).toContainText(/starts/);
+          // Pre-demo QA S-5 (7821685f4): an end past its milestone is listed too, by its
+          // feature's name with its sentence behind an (i); a link reads its sentence whole.
+          if (await c.getByTestId("conflict-why").count()) {
+            await c.getByTestId("conflict-why").hover();
+            await expect(c.getByRole("tooltip")).toBeVisible();
+            await expect(c.getByRole("tooltip")).toContainText("after its milestone");
+            await page.mouse.move(0, 0);
+            await expect(c.getByRole("tooltip")).toBeHidden();
+          } else await expect(c).toContainText(/starts/);
           const bar = bars(page).and(page.locator(`[data-item="${key}"]`));
           await expect(bar).toBeVisible();
           await expect(bar, `${key}: a listed warning's bar is flagged as broken`).not.toHaveAttribute("data-broken", "false");
@@ -81,7 +89,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       await digest.focus();
       for (let i = 0; i < 10; i++) await page.keyboard.press("Shift+ArrowRight");
       await expect(digest).not.toHaveAttribute("data-end", end!);
-      await expect(page.locator('[data-testid="conflict"][data-item="alert-digest"]')).toBeVisible();
+      await expect(page.locator('[data-testid="conflict"][data-item="alert-digest"]').filter({ hasText: "starts" })).toBeVisible();
       await expect(page.getByTestId("draft-count")).toBeVisible();
       await clear();
     });

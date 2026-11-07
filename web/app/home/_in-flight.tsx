@@ -247,7 +247,7 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
   const statement = new Map((named.data ?? []).map((b) => [b.id, b.statement]));
   // QA pass D-5: each line opens its blocker (as Publish's Resolve does); a check with no named
   // blocker opens the PRD's Publish page, where its blocks are listed.
-  const blockerHref = (id: string) => `/baseline?tab=blockers&blocker=${encodeURIComponent(id)}`;
+  const blockerHref = (id: string) => `/ground-truth?tab=blockers&blocker=${encodeURIComponent(id)}`;
   const blockers: { key: string; title: string; hard: boolean; href: string }[] = failing.flatMap((i) => {
     const each = (i.evidence_ids ?? []).flatMap((id) =>
       statement.has(id) ? [{ key: `${i.key}:${id}`, title: statement.get(id)!, hard: i.hard, href: blockerHref(id) }] : [],

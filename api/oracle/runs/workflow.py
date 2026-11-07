@@ -176,6 +176,12 @@ def code_name_trouble(warnings: list[str]) -> str:
         parts.append("uses codes without their names")
     if "codes_not_listed" in warnings:
         parts.append("writes three or more codes in a row instead of a list")
+    # PRD source words (oracle.docs.source_words).
+    if "source_not_named" in warnings:
+        parts.append("lists sources by key, path, file name or tag, or writes a code with no "
+                     "name in Sources")  # fmt: skip
+    if "issue_number" in warnings:
+        parts.append("names an issue by its number")
     # roadmap-draft-wording (oracle.roadmap.draft_words).
     if "queue_said_as_estimate" in warnings:
         parts.append("says an end date comes from the item's own estimate, not its place in "
@@ -186,6 +192,22 @@ def code_name_trouble(warnings: list[str]) -> str:
     if "described_called_missing" in warnings:
         parts.append("calls something missing that a source or a feature describes")
     return " and ".join(parts) or "uses codes without their names"
+
+
+def warning_subject(warnings: list[str]) -> str:
+    """What a sent-back draft's warnings point at, in plain words ("codes", "source
+    lines", "issue numbers"), by the import's warning codes."""
+    parts: list[str] = []
+    for codes, what in (
+        (("unnamed_code", "codes_not_listed"), "codes"),
+        (("source_not_named",), "source lines"),
+        (("issue_number",), "issue numbers"),
+        (("queue_said_as_estimate", "unverified_written"), "date words"),
+        (("described_called_missing",), "lines that call something missing"),
+    ):
+        if any(c in warnings for c in codes) and what not in parts:
+            parts.append(what)
+    return " and ".join(parts) or "codes"
 
 
 def code_name_findings(name: str, code_names: list[str], warnings: list[str]) -> list[str]:

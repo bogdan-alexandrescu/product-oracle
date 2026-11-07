@@ -5,7 +5,8 @@
   (propose one), ``PATCH /milestones/{id}`` (set its threshold, confirm it), ``POST /links``
   (attach a feature to a cell), ``POST /goals/{id}/metric`` (pick the metric that gives
   the goal its readings), ``POST /links/move`` (goal-ladder: a feature to another
-  milestone): approver and up; each answers the map as it now reads.
+  milestone), ``POST /links/detach`` (goal-map-editing: a feature let go of a milestone):
+  approver and up; each answers the map as it now reads.
 - ``POST /place-card`` and ``DELETE /places`` (goal-ladder place_card and Tidy up): viewer
   and up, each person's own places of cards.
 """
@@ -24,6 +25,7 @@ from oracle.simple.goal_map import (
     AreaIn,
     AreaOrderIn,
     AttachIn,
+    DetachIn,
     GateIn,
     GoalMapOut,
     GoalTargetIn,
@@ -118,6 +120,12 @@ async def attach_feature(body: AttachIn, principal: Approver, db: TenantDB) -> G
 async def move_feature_link(body: MoveLinkIn, principal: Approver, db: TenantDB) -> GoalMapOut:
     """goal-ladder: a feature moved to another milestone's work (Edit ladder)."""
     return await _run(db, principal, goal_map.move_link(db, body))
+
+
+@router.post("/links/detach", response_model=GoalMapOut)
+async def detach_feature_link(body: DetachIn, principal: Approver, db: TenantDB) -> GoalMapOut:
+    """goal-map-editing: a feature no longer serves the milestone (Edit ladder)."""
+    return await _run(db, principal, goal_map.detach(db, body))
 
 
 @router.post("/place-card", response_model=GoalMapOut)

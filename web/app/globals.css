@@ -26,6 +26,9 @@
   --on-accent: #ffffff;
   --accent-ink: #075985;
   --accent-soft: #e5f3fc;
+  /* pre-demo QA P-10: the feature panel's selected tab (Details | Talk to Oracle). */
+  --panel-tab-on: var(--surface);
+  --panel-tab-on-ink: var(--text);
   --accent-mid: #b6daf2;
   --hero: #0c1a2e;
   --hero-2: #173052;
@@ -84,6 +87,8 @@
     --on-accent: #06101e;
     --accent-ink: #b9e3fc;
     --accent-soft: #10294a;
+    --panel-tab-on: #1f4a7a;
+    --panel-tab-on-ink: #ffffff;
     --accent-mid: #1f4a7a;
     --hero: #11233b;
     --hero-2: #1a3352;
@@ -122,6 +127,8 @@
   --on-accent: #06101e;
   --accent-ink: #b9e3fc;
   --accent-soft: #10294a;
+  --panel-tab-on: #1f4a7a;
+  --panel-tab-on-ink: #ffffff;
   --accent-mid: #1f4a7a;
   --hero: #11233b;
   --hero-2: #1a3352;
@@ -219,6 +226,11 @@
   --simple-canvas: var(--bg);
   --simple-card: var(--surface);
   --simple-radius: 14px;
+}
+/* pre-demo QA P-10: the feature panel's selected tab stands out in dark too (its tokens above). */
+.panel-tabs [role="tab"][aria-selected="true"] {
+  background: var(--panel-tab-on);
+  color: var(--panel-tab-on-ink);
 }
 .simple-mode {
   font-size: var(--simple-body);
@@ -1453,3 +1465,122 @@ code .date-mark {
 .goal-order-grip { color: var(--text-faint); font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 6px; cursor: grab; touch-action: none; }
 .goal-order-arrow { min-width: 44px; height: 44px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--text); font-weight: 700; }
 .goal-order-arrow:disabled { opacity: 0.35; }
+
+/*
+ * X-3: a printed Detailed page (a roadmap or PRD version saved as PDF) is the document alone,
+ * across the sheet, in light colours whatever the theme: no nav rail, Ask dock, version toolbar,
+ * Outline, section switcher or review panel; headings stay with the block after them and tables
+ * wrap inside the page. The tokens below are the light values of every token the dark theme
+ * changes, in a selector that outranks both dark ones, so a dark theme prints as light.
+ * Simple keeps its own print look.
+ */
+@media print {
+  :root:not([data-mode="simple"]):root {
+    --accent-ink: #075985;
+    --accent-mid: #b6daf2;
+    --accent-soft: #e5f3fc;
+    --accent: #0369a1;
+    --bg: #f3f6f9;
+    --brand-mark: #0b3a7a;
+    --crit-bg: #fdecea;
+    --crit: #b42318;
+    --line-strong: #7d8ea3;
+    --line: #d6e0ea;
+    --na-bg: #eef1f5;
+    --na: #5b6878;
+    --on-accent: #ffffff;
+    --panel-tab-on-ink: var(--text);
+    --panel-tab-on: var(--surface);
+    --pass-bg: #e3f5ee;
+    --pass: #0a7a55;
+    --prd-m1-bg: #e5f3fc;
+    --prd-m1-fill: #cfe8f8;
+    --prd-m1: #0369a1;
+    --prd-m2-bg: #f1ecfd;
+    --prd-m2-fill: #e0d4fa;
+    --prd-m2: #6d28d9;
+    --prd-m3-bg: #fdf3dc;
+    --prd-m3-fill: #f7e1b0;
+    --prd-m3: #9a5b00;
+    --prd-pm: #5b6878;
+    --seg-on-shadow: 0 1px 2px rgba(13, 23, 36, 0.12);
+    --shadow: 0 1px 2px rgba(13, 23, 36, 0.06);
+    --spark-fill: rgba(3, 105, 161, 0.1);
+    --surface2: #eef4fa;
+    --surface: #ffffff;
+    --text-faint: #606a77;
+    --text2: #4f5d6e;
+    --text: #0d1724;
+    --tip-shadow: 0 12px 32px rgba(13, 23, 36, 0.28);
+    --tip-text: #eef4fa;
+    --tip: #0d1724;
+    --today: #7c3aed;
+    --warn-bg: #fdf3dc;
+    --warn: #8a5a00;
+    color-scheme: light;
+  }
+  :root:not([data-mode="simple"]),
+  :root:not([data-mode="simple"]) body {
+    background: #fff;
+    color: var(--text);
+  }
+  [data-testid="app-nav"],
+  [data-testid="tab-bar"],
+  [data-testid="phone-header"],
+  [data-testid="hop-dock"],
+  [data-testid="skip-link"],
+  [data-testid="version-toolbar"],
+  [data-testid="version-tabs"],
+  [data-testid="view-note"],
+  [data-testid="outline-rail"],
+  [data-testid="section-switcher"],
+  [data-testid="review-panel-column"],
+  [data-testid="phone-bar"],
+  [data-testid="doc-header"] [data-page-back],
+  [data-testid="doc-header"] [data-page-action],
+  article[aria-label="Document"] .expand-btn,
+  [data-testid="document-sections"] [data-testid="review-bar"],
+  [data-testid="document-sections"] [aria-label^="Actions for "],
+  [data-testid="document-sections"] [aria-label^="Open feedback on this section"],
+  article[aria-label="Document"] > nav[aria-label="Previous and next section"] {
+    display: none !important;
+  }
+  main#main { grid-column: 1 / -1; }
+  main#main:has([data-testid="version-toolbar"]) > div > div { padding-inline: 0; }
+  [data-testid="prd-layout"] { display: block; }
+  article[aria-label="Document"] {
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: none;
+  }
+  article[aria-label="Document"] :is(h1, h2, h3, h4, h5, h6) { break-after: avoid; }
+  article[aria-label="Document"] :is(p, li) { orphans: 3; widows: 3; }
+  article[aria-label="Document"] :is(blockquote, pre, figure, img, tr) { break-inside: avoid; }
+  article[aria-label="Document"] thead { display: table-header-group; }
+  article[aria-label="Document"] .table-wrap {
+    max-width: 100%;
+    margin-right: 0;
+    overflow: visible;
+  }
+  article[aria-label="Document"] table {
+    width: 100%;
+    min-width: 0 !important;
+    table-layout: auto;
+  }
+  article[aria-label="Document"] :is(th, td) { overflow-wrap: anywhere; }
+  article[aria-label="Document"] pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+  /* A roadmap version's Items tab is not inside the Document article: its fixed column widths
+     leave the Item column a sliver on paper, so the columns share the sheet and cells wrap. */
+  [data-testid="roadmap-items-table"] { overflow: visible; }
+  [data-testid="roadmap-items-table"] table { table-layout: auto; }
+  [data-testid="roadmap-items-table"] col { width: auto !important; }
+  [data-testid="roadmap-items-table"] td {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+  [data-testid="roadmap-items-table"] tr { break-inside: avoid; }
+  [data-testid="roadmap-items-table"] thead { display: table-header-group; }
+}

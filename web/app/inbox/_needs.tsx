@@ -101,11 +101,16 @@ function ageOf(at: string | null | undefined): string {
 /** A cost in dollars ("$53.00"), or that there is none yet. */
 const money = (v: number | null | undefined) => (v == null ? "no estimate" : formatMoney(v));
 
-export const NEED_COLUMNS: Column<Need>[] = [
+// Below 1100 px the side columns shrink with the table (the var()s are set on NeedTable's section) so the item keeps its room.
+const SIDE_WRAP = "max-[1099px]:overflow-visible max-[1099px]:whitespace-normal max-[1099px]:break-words max-[1099px]:[&_.truncate]:overflow-visible max-[1099px]:[&_.truncate]:whitespace-normal max-[1099px]:[&_.truncate]:break-words";
+
+const WRAP_TWO = "[&_.truncate]:line-clamp-2 [&_.truncate]:whitespace-normal [&_.truncate]:break-words max-[600px]:[&_.truncate]:overflow-hidden!";
+
+const BASE_COLUMNS: Column<Need>[] = [
   {
     key: "kind",
     header: "Kind",
-    width: "170px",
+    width: "var(--need-kind-w, 170px)",
     phone: "meta",
     // A child row's kind cell is empty: the left rule ties it to its parent.
     className: "max-[600px]:has-[[data-child-rule]]:hidden",
@@ -123,6 +128,9 @@ export const NEED_COLUMNS: Column<Need>[] = [
     key: "item",
     header: "Item",
     phone: "title",
+    // G-5: a long title wraps to two lines rather than being cut.
+    wrap: true,
+    className: WRAP_TWO,
     // The item's text keeps its room: a chip or a note goes to a second line rather than cut it.
     cell: (n) => (
       <span
@@ -132,7 +140,7 @@ export const NEED_COLUMNS: Column<Need>[] = [
       </span>
     ),
   },
-  { key: "context", header: "For", width: "24%", phone: "meta", narrow: "hide", cell: (n) => n.context },
+  { key: "context", header: "For", width: "var(--need-ctx-w, 24%)", phone: "meta", narrow: "hide", cell: (n) => n.context },
   {
     key: "age",
     header: "Age",
@@ -154,7 +162,7 @@ export const NEED_COLUMNS: Column<Need>[] = [
     key: "act",
     header: <span className="sr-only">Action</span>,
     // Wide enough for a row's actions on one line (qa-company-9): the primary, then the rest.
-    width: "340px",
+    width: "var(--need-act-w, 340px)",
     align: "right",
     phone: "action",
     wrap: true,
@@ -165,7 +173,7 @@ export const NEED_COLUMNS: Column<Need>[] = [
     cell: (n) => (
       <span
         data-row-actions
-        className="inline-flex flex-wrap items-center justify-end gap-1.5 min-[601px]:flex-nowrap min-[601px]:[&>a]:whitespace-nowrap min-[601px]:[&>button]:whitespace-nowrap has-[[data-inbox-actions]]:flex has-[[data-inbox-actions]]:w-full has-[[data-child-actions]]:flex has-[[data-child-actions]]:w-full"
+        className="inline-flex flex-wrap items-center justify-end gap-1.5 min-[1100px]:flex-nowrap min-[601px]:[&>a]:whitespace-nowrap min-[601px]:[&>button]:whitespace-nowrap has-[[data-inbox-actions]]:flex has-[[data-inbox-actions]]:w-full has-[[data-child-actions]]:flex has-[[data-child-actions]]:w-full"
       >
         {n.action}
       </span>
@@ -173,14 +181,17 @@ export const NEED_COLUMNS: Column<Need>[] = [
   },
 ];
 
+export const NEED_COLUMNS: Column<Need>[] = BASE_COLUMNS.map((c) =>
+  c.key === "kind" || c.key === "context" ? { ...c, className: `${c.className ?? ""} ${SIDE_WRAP}` } : c,
+);
+
 /**
  * qa-company-27: on Home's narrow lines a long item or "For" wraps to a second line, then ends in an ellipsis (its title holds the rest).
  * QA pass D-8: clipped at two lines on a phone too, where DataTable lets `.truncate` overflow (else line 3 draws over the next line).
  */
-const WRAP_TWO = "[&_.truncate]:line-clamp-2 [&_.truncate]:whitespace-normal [&_.truncate]:break-words max-[600px]:[&_.truncate]:overflow-hidden!";
 
 /** Home's narrower lines: one action each. */
-export const NEED_COLUMNS_COMPACT: Column<Need>[] = NEED_COLUMNS.map((c) =>
+export const NEED_COLUMNS_COMPACT: Column<Need>[] = BASE_COLUMNS.map((c) =>
   c.key === "kind"
     ? {
         ...c,
@@ -275,7 +286,12 @@ export function NeedTable({
       : n,
   );
   return (
-    <section aria-label={heading ? undefined : title} aria-labelledby={heading ? headingId : undefined} data-testid={testId}>
+    <section
+      aria-label={heading ? undefined : title}
+      aria-labelledby={heading ? headingId : undefined}
+      data-testid={testId}
+      className="[--need-ctx-w:24%] [--need-act-w:340px] [--need-kind-w:170px] max-[1099px]:[--need-act-w:26%] max-[1099px]:[--need-ctx-w:20%] max-[1099px]:[--need-kind-w:15%]"
+    >
       {heading && (
         <h3
           id={headingId}
@@ -771,7 +787,7 @@ export function reportNeeds(reports: InboxReport[], seenBefore: string | null | 
       ),
       at: r.created_at,
       action: (
-        <LinkButton variant={r.read ? "ghost" : undefined} href={`/plan/reports/${r.id}`} aria-label="Open">
+        <LinkButton href={`/plan/reports/${r.id}`} aria-label="Open">
           Open
         </LinkButton>
       ),
@@ -853,7 +869,7 @@ export function discussionNeeds(inbox: InboxOut, seenBefore: string | null | und
           </span>
         ),
         action: (
-          <LinkButton variant={done ? "ghost" : undefined} href={r.subject_url} aria-label={`Open ${r.title}`}>
+          <LinkButton href={r.subject_url} aria-label={`Open ${r.title}`}>
             Open
           </LinkButton>
         ),
@@ -1318,7 +1334,7 @@ function ChildActions({
           </Button>
         )
       )}
-      <LinkButton variant="ghost" href={itemHref(c, child.item)} aria-label={`Open ${title}`}>
+      <LinkButton href={itemHref(c, child.item)} aria-label={`Open ${title}`}>
         Open
       </LinkButton>
       {error && (
@@ -1854,15 +1870,20 @@ export function inboxNeeds(
  */
 export function sourceNeeds(sources: Schemas["SourceOut"][], mayEdit = true): Need[] {
   return needingAttention(sources).map((s) => {
-    const why = sourceNeedReason(s, mayEdit);
+    const fix = sourceFix(s, mayEdit);
     return {
       key: s.id,
       icon: "sources",
       kind: "Source",
       item: (
-        // qa-company-20: the reason wraps to a second line rather than cut mid-sentence.
-        <span className="line-clamp-2 min-w-0 break-words whitespace-normal" title={why} data-testid="source-need-text">
-          {why}
+        // qa-company-20, G-6: the problem in short (it wraps), what to do behind its (i).
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="line-clamp-2 min-w-0 break-words whitespace-normal" title={fix.why} data-testid="source-need-text">
+            {fix.problem}
+          </span>
+          <InfoTip label={fix.problem} align="start">
+            {fix.why}
+          </InfoTip>
         </span>
       ),
       context: (
@@ -1871,10 +1892,11 @@ export function sourceNeeds(sources: Schemas["SourceOut"][], mayEdit = true): Ne
         </span>
       ),
       at: s.updated_at,
-      // qa-company-44: a role that cannot edit sources reads the row, with no Edit.
+      // qa-company-44: a role that cannot edit sources reads the row, with no action.
+      // G-6: the action is the problem's: Reconnect opens the account on Settings › Connections, the rest the source.
       action: mayEdit ? (
-        <LinkButton href={`/settings/sources#source-${s.id}`} aria-label={`Edit ${s.name}`}>
-          Edit
+        <LinkButton href={fix.href} aria-label={fix.action === "Reconnect" ? `Reconnect ${s.name}` : `${fix.action} in ${s.name}`}>
+          {fix.action}
         </LinkButton>
       ) : (
         <ByRole who="View only" title="Your role cannot edit sources: commenters and above can" />
@@ -1883,14 +1905,23 @@ export function sourceNeeds(sources: Schemas["SourceOut"][], mayEdit = true): Ne
   });
 }
 
-/** Why a source needs a person: the API's message, else what it lost or must reconnect for. */
-function sourceNeedReason(s: Schemas["SourceOut"], mayEdit: boolean): string {
+/** Why a source needs a person, in short and in full (the API's message, else what it lost or must reconnect
+ * for), and the action that fixes it (G-6). */
+function sourceFix(s: Schemas["SourceOut"], mayEdit: boolean): { problem: string; why: string; action: string; href: string } {
+  const source = `/settings/sources#source-${s.id}`;
   if (s.status === "needs_attention" || !needsPerson(s)) {
-    return s.last_error ?? (mayEdit ? "Needs attention: edit this source to sync it again" : "Needs attention: it syncs again once it is edited");
+    const why = s.last_error ?? (mayEdit ? "Edit this source to sync it again" : "It syncs again once it is edited");
+    // A Slack source saved before the channel limit: picking fewer is the fix.
+    const channels = s.kind === "slack" && /channel/i.test(s.last_error ?? "");
+    return { problem: channels ? "Too many channels" : "Not syncing", why, action: channels ? "Pick fewer channels" : "Edit", href: source };
   }
-  if (s.reconnect_reason) return `${s.reconnect_reason}: reconnect its account in Settings › Connections`;
+  if (s.reconnect_reason) {
+    const href = s.connection_id ? `/settings/connections?connection=${s.connection_id}` : "/settings/connections";
+    return { problem: s.reconnect_reason, why: "Reconnect its account in Settings › Connections", action: "Reconnect", href };
+  }
   const lost = lostItems(s);
-  return `Lost access to ${plural(lost, "item")}: share ${lost === 1 ? "it" : "them"} again or remove ${lost === 1 ? "it" : "them"} from this source`;
+  const them = lost === 1 ? "it" : "them";
+  return { problem: `Lost access to ${plural(lost, "item")}`, why: `Share ${them} again or remove ${them} from this source`, action: "Share again", href: source };
 }
 
 /** H6 launch rows: Ready to launch and Notes to send (the launch's owner), Set tier (approvers),
@@ -2439,7 +2470,7 @@ export function trackNeeds(
                 Reopen
               </Button>
             )}
-            <LinkButton variant={a.actions.includes("reopen") ? "ghost" : "secondary"} href={planHref(a)} aria-label={`Open ${alertTitle(a)}`}>
+            <LinkButton href={planHref(a)} aria-label={`Open ${alertTitle(a)}`}>
               Open
             </LinkButton>
           </span>
@@ -2531,7 +2562,7 @@ function TrackAlertActions({ a, busy, act }: { a: TrackAlertOut; busy: string | 
           Keep watching
         </Button>
       )}
-      <LinkButton variant="ghost" href={planHref(a)} aria-label={`Open ${title}`}>
+      <LinkButton href={planHref(a)} aria-label={`Open ${title}`}>
         Open
       </LinkButton>
       {errorLine}

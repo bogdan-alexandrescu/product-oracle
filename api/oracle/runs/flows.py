@@ -408,6 +408,17 @@ DECLINED_LINE = (
     "A request the company said no to (state disqualified) is not scope unless a person "
     "reopens it; cite its decision when it comes up."
 )
+# PRD source words (oracle.docs.source_words checks the draft): what a person reads in a
+# PRD's Sources and body. Only the PRD writer's task: the roadmap's prompts are unchanged.
+PRD_SOURCE_WORDS = (
+    " In the Sources and data points section, list each source by its title in plain "
+    'words, with its kind and date ("Alerting design notes (GitHub, Oct 2)"): never a '
+    "citation key such as c7, a file path, a file name or a tag such as [BE]; a data "
+    "point names the source it came from by its title too. In the body, name an issue by "
+    'what it is ("the slow export bug"), never by its number. Write every code with its '
+    'name at its first use in each section and in every table row ("Grow activation '
+    '(G-A1)", "KR 1.1 Weekly planners"), Sources and Data points included.'
+)
 # Stated in every task that writes a draft (owner, 2026-10-20), when the task is read
 # (:meth:`SegmentDef.task_for`).
 CITATION_CONTRACT = CITATION_CONTRACT_MARK
@@ -749,7 +760,8 @@ FLOWS: dict[str, FlowDef] = {
                     + " "
                     + CITATION_CONTRACT
                     + DECISIONS_TASK
-                    + UNKNOWN_IS_WORK_DRAFT,
+                    + UNKNOWN_IS_WORK_DRAFT
+                    + PRD_SOURCE_WORDS,
                     tools=(
                         "get_prd_scope",
                         "list_entities",
@@ -1600,8 +1612,12 @@ class SourceContext:
     # a milestone date may name.
     schedule_bases: list[dict[str, Any]] = field(default_factory=list)
     # one-roadmap-many-prds: every item on the company roadmap in one team's queue
-    # (oracle.roadmap.company.run_queue); empty: no company roadmap.
+    # (oracle.roadmap.company.run_queue); empty: no company roadmap. Frozen on the run when
+    # its first prompt (the roadmap_items segment's) is built, with company_plan: the rest
+    # of oracle.roadmap.company.frozen_queue (per_week, today: the team's capacity and the
+    # run's day its own items are dated from; features, sections: the goal each serves).
     company_queue: list[dict[str, Any]] = field(default_factory=list)
+    company_plan: dict[str, Any] = field(default_factory=dict)
     # The run's planning horizons (A1, the planning_horizons setting as the run started,
     # run.knobs["planning_horizons"]); empty: B2's defaults (HORIZONS).
     horizons: dict[str, int] = field(default_factory=dict)
@@ -1702,6 +1718,11 @@ class PromptContext:
     kind: str = "prd"
     # prd_to_roadmap: the approved PRD version the roadmap is built from.
     source: SourceContext | None = None
+    # roadmap-plan-tables for any other roadmap draft (the feedback loop): what its plan
+    # tables are built from (oracle.runs.service._loop_plan_inputs): the roadmap's items as
+    # an items file's check reads them, the verified bases, the company queue and the
+    # items an approved version took off the plan.
+    loop_plan: tuple[list[dict[str, Any]], ...] | None = None
     # The target document's template, theme and starting skeleton (prd_to_roadmap's
     # roadmap; baseline_to_prd's PRD when the run has a template, C4).
     draft: DraftContext | None = None
@@ -1721,6 +1742,9 @@ class PromptContext:
     baseline_reused: str | None = None
     # #260: a Baseline to PRD run's target goals, (key, title) in the order named.
     target_goals: list[tuple[str, str]] = field(default_factory=list)
+    # "Add it to a PRD": the Ground Truth features a Baseline to PRD run adds to its PRD,
+    # (key, title) in the order named.
+    target_features: list[tuple[str, str]] = field(default_factory=list)
     # G5: the agents' view of the discussions about this run
     # (oracle.discussions.agent_view), newest activity first.
     discussions: list[dict[str, Any]] = field(default_factory=list)
@@ -1736,6 +1760,15 @@ TARGET_GOALS_TASK = {
     "priority": "Weigh the target goals first when you rank.",
     "prd_draft": "The Goal trace section ({#goal-trace}) covers every target goal: what "
     "in this PRD moves it and how much, or that nothing does.",
+}
+
+
+# "Add it to a PRD": what each Baseline to PRD segment does with the features to add.
+TARGET_FEATURES_TASK = {
+    "baseline": "Propose and evidence each of them, beside what the PRD needs anyway.",
+    "feature_set": "Another PRD depends on them: keep each of them under features, with "
+    "the features it needs; leave one out, under excluded, only when this PRD cannot build "
+    "it, and say why.",
 }
 
 
@@ -1854,8 +1887,12 @@ def step_prompt(
 ) -> str:
     """The prompt of one agent step (``first``: the step that starts the attempt)."""
     r = ROLES[role]
+    does = r.description.lower()
+    if role == "writer" and ctx.kind != "prd" and ctx.kind in KIND_NAMES:
+        # The feedback loop's writer of a roadmap (or another kind) writes that draft.
+        does = f"writes the {KIND_NAMES[ctx.kind]} draft"
     lines = [
-        f"You are the {r.title.lower()} ({r.description.lower()}) in Product Oracle's "
+        f"You are the {r.title.lower()} ({does}) in Product Oracle's "
         f"{flow.title} flow, segment '{segment.title}'.",
         f"Run {ctx.run_id}"
         + (f", {KIND_NAMES[ctx.kind]} document '{ctx.document}'" if ctx.document else "")
@@ -1917,6 +1954,13 @@ def step_prompt(
             "Target goals: this PRD serves these confirmed goals.",
             *(f"- {key}: {title}" for key, title in ctx.target_goals),
             TARGET_GOALS_TASK[segment.name],
+            "",
+        ]
+    if ctx.target_features and segment.name in TARGET_FEATURES_TASK:
+        lines += [
+            "Features to add: add these Ground Truth features to this PRD.",
+            *(f"- {key}: {title}" for key, title in ctx.target_features),
+            TARGET_FEATURES_TASK[segment.name],
             "",
         ]
     if ctx.mcp_reachable:
@@ -1999,7 +2043,8 @@ def step_prompt(
         from oracle.roadmap import company
         from oracle.runs import plan_tables
 
-        queued = company.with_run_items(ctx.source.company_queue, ctx.run_items)
+        queued = company.with_run_items(ctx.source.company_queue, ctx.run_items,
+                                         **ctx.source.company_plan)  # fmt: skip
         plan = plan_tables.engineering_plan(
             ctx.run_items,
             ctx.source.schedule_bases,
@@ -2007,6 +2052,15 @@ def step_prompt(
         )
         lines += company.queue_lines(queued)
         lines += plan_tables.prompt_lines(plan, critic=role == "critic")
+    elif segment.imports_draft and ctx.kind == "roadmap" and ctx.loop_plan is not None:
+        # The owner (Nov 4): every roadmap draft, the feedback loop's next draft too.
+        from oracle.roadmap import company
+        from oracle.runs import plan_tables
+
+        items, bases, queued, kept = ctx.loop_plan
+        plan = plan_tables.engineering_plan(items, bases, others=queued, kept=kept)
+        lines += company.queue_lines(queued)
+        lines += plan_tables.prompt_lines(plan, critic=role == "critic", loop=True)
     if ctx.extra_lines:
         lines += ["", *ctx.extra_lines]
     if flow.key == "update_draft" and ctx.document:

@@ -1,8 +1,8 @@
 /**
  * goal-ladder: the "goal-ladder" scenario (LADDER_SCENARIO), the Goal map drawn as the Goal
  * ladder at real volume: four goals in priority order and a guardrail, twelve milestones, 63
- * features under them (one serving two milestones, in two goals), two Simple roadmap features
- * with no goal (the map's unplaced) and about 40 dependencies, some across goals. Each feature
+ * features under them (one serving two milestones, in two goals), one more with no roadmap item, two Simple roadmap
+ * features with no goal and four serving a goal but no milestone (the map's unplaced) and about 40 dependencies, some across goals. Each feature
  * is its own Simple roadmap item ("gm-f1", ...; code F-01, ...) with its status, dates and
  * what it waits on, as the API reads them. Invented company, people and products only.
  */
@@ -17,6 +17,8 @@ type Status = GmMilestone["status"];
 export const LADDER_SCENARIO = "goal-ladder";
 /** The scenario's names, for its specs. */
 export const LADDER = { today: "2026-11-03" } as const;
+/** The feature with no roadmap item. */
+export const BARE = "Pause a plan from the mobile app";
 
 const goal = (id: string, name: string, math: string, current: number | null, target: number, unit: string, status: Status, position: number): GmGoal & { position: number } => ({
   id, name, measure: name.toLowerCase(), target, current, unit, status, math, builds_on: [], history: [], metric: { id: `metric-${id}`, title: name }, missing: null, choices: [], read_on: "Nov 1", position,
@@ -25,7 +27,7 @@ const goal = (id: string, name: string, math: string, current: number | null, ta
 const GOALS = [
   goal("lg1", "Teams stay past their first year", "Teams that renew see the value every week, not once a quarter.", 81, 88, "%", "on_track", 1),
   goal("lg2", "New teams set up in one day", "A new team runs its first real project on the day it signs up.", 2.6, 1, "days", "at_risk", 2),
-  goal("lg3", "Larger teams add paid seats", "Teams over 50 people grow seats without a sales call.", 4, 12, "%", "not_measured", 3),
+  goal("lg3", "Larger teams add paid seats", "Teams over 50 people grow seat revenue without a sales call.", 11200, 20000, "$", "not_measured", 3),
   goal("lg4", "Half the support tickets per team", "People answer their own questions inside the product.", 3.1, 1.5, "", "no_gate", 4),
 ];
 
@@ -40,21 +42,21 @@ function ms(id: string, g: string, name: string, threshold: number | null, curre
   return {
     id, name, goal: g, measure: gl.measure, threshold, unit: gl.unit, current, status, areas: [area(areaName)], depends: [],
     month: due ? MONTHS[Number(due.slice(5, 7)) - 1] : "Nov", due: due ? words(due) : null, due_on: due, days: Array.from({ length: 7 }, () => current),
-    confirmed: status === "met" ? "Dana Example" : null, confirmed_on: status === "met" ? "Nov 2" : null, proposed: false,
+    confirmed: status === "met" ? "Dana Example" : null, confirmed_on: status === "met" ? "Nov 2" : null, proposed: false, can_change: false,
   };
 }
 
 const MILESTONES: GmMilestone[] = [
-  ms("lm1", "lg1", "Weekly active teams baseline set", 74, 74, "2026-11-13", "on_track", "Reports"),
+  ms("lm1", "lg1", "Weekly active teams first measured", 74, 74, "2026-11-13", "on_track", "Reports"),
   ms("lm2", "lg1", "Renewal rate at 85% for spring renewals", 85, 81, "2027-02-26", "at_risk", "Support"),
   ms("lm3", "lg1", "Mobile check-ins weekly for half of teams", 50, null, "2027-03-26", "not_measured", "Mobile"),
   ms("lm4", "lg2", "Setup time under two days", 2, 2.6, "2026-11-13", "at_risk", "Onboarding"),
   ms("lm5", "lg2", "Imports finish without help", 90, 68, "2026-12-18", "on_track", "Platform"),
   ms("lm6", "lg2", "Setup time one day for new teams", 1, null, "2027-01-29", "not_measured", "Onboarding"),
-  ms("lm7", "lg3", "Seat growth baseline for large teams", 4, 4, "2026-12-04", "met", "Billing"),
+  ms("lm7", "lg3", "Seat revenue first measured for large teams", 10000, 10000, "2026-12-04", "met", "Billing"),
   ms("lm8", "lg3", "Self-serve seat changes for every plan", null, null, null, "no_gate", "Billing"),
-  ms("lm9", "lg3", "Seat growth at 12% a quarter", 12, null, "2027-03-19", "not_measured", "Reports"),
-  ms("lm10", "lg4", "Ticket baseline by topic", 3.1, 3.1, "2026-11-27", "missed", "Support"),
+  ms("lm9", "lg3", "Seat revenue of $20,000 per month", 20000, null, "2027-03-19", "not_measured", "Reports"),
+  ms("lm10", "lg4", "Ticket volume measured by topic", 3.1, 3.1, "2026-11-27", "missed", "Support"),
   ms("lm11", "lg4", "Help answers inside every screen", 100, 40, "2027-01-15", "on_track", "Support"),
   ms("lm12", "lg4", "Tickets per team down to 1.5", null, null, "2027-03-12", "no_gate", "Onboarding"),
 ];
@@ -99,7 +101,7 @@ const ROWS: Row[] = [
   ["Admin audit trail for seat and role changes", "g3", "m9", "Platform", "planned", null, null, []],
   ["Volume pricing shown in the product for teams over 50", "g3", "m9", "Billing", "planned", null, null, []],
   ["Ticket topics tagged by the help desk each day", "g4", "m10", "Support", "done", "2026-09-14", "2026-10-30", []],
-  ["Ticket baseline report by topic and team size", "g4", "m10", "Reports", "in_progress", "2026-11-02", "2026-11-27", [37, 2]],
+  ["Ticket volume report by topic and team size", "g4", "m10", "Reports", "in_progress", "2026-11-02", "2026-11-27", [37, 2]],
   ["Help panel that opens beside the screen you are on", "g4", "m11", "Support", "in_progress", "2026-10-26", "2026-12-18", [37]],
   ["Answers written for the twenty most asked questions", "g4", "m11", "Support", "planned", "2026-11-16", "2027-01-08", [37]],
   ["Search across help answers, projects and comments", "g4", "m11", "Support", "planned", "2026-12-07", "2027-01-15", [39]],
@@ -127,6 +129,11 @@ const ROWS: Row[] = [
   ["Weekly summary email every owner can tune", "g1", "m1", "Reports", "planned", "2026-11-16", "2026-12-18", [3]],
   ["Accessibility pass on boards, lists and forms", null, "", "Platform", "planned", "2026-11-23", "2027-01-15", []],
   ["Year-end export of all projects for records", null, "", "Platform", "planned", null, null, []],
+  // goal-map-editing: features that serve a goal but no milestone yet ("Not on a key result").
+  ["Team templates gallery", "g1", "", "Reports", "planned", null, null, []],
+  ["Usage tips in the weekly email", "g1", "", "Support", "planned", null, null, []],
+  ["Bulk invite from a spreadsheet", "g2", "", "Onboarding", "planned", null, null, []],
+  ["Seat usage chart for admins", "g3", "", "Billing", "planned", null, null, []],
 ];
 /** F-03 also serves M10 (two milestones, two goals). */
 const ALSO: Record<number, string> = { 3: "m10" };
@@ -136,11 +143,14 @@ const pad = (n: number) => String(n).padStart(2, "0");
 /** The ladder's goal map (short ids: goal-map.ts gives them the API's UUIDs; features are "f1"...). */
 export function ladderMap(): GoalMap {
   const features: GmFeature[] = ROWS.flatMap(([name, g, m, a], i) => {
-    if (!g) return [];
+    if (!g || !m) return [];
     const milestones = [m, ...(ALSO[i + 1] ? [ALSO[i + 1]] : [])].map((x) => `l${x}`);
     const link = (milestone: string) => ({ milestone, expected: "", confidence: "Medium" as const, measured: null, lift: "not_measured" as const, shipped_on: null, before: null, after: null });
     return [{ id: `f${i + 1}`, name, area: area(a), milestones, lever: a, expected: "", confidence: "Medium" as const, released: false, measured: null, lift: "not_measured" as const, links: milestones.map(link) }];
   });
+  // One feature with no roadmap item (no code, no key): a link onto it is refused, for a reason that is not a loop.
+  const link = { milestone: "lm12", expected: "", confidence: "Medium" as const, measured: null, lift: "not_measured" as const, shipped_on: null, before: null, after: null };
+  features.push({ id: "bare-feature", name: BARE, area: area("Mobile"), milestones: ["lm12"], lever: "Mobile", expected: "", confidence: "Medium", released: false, measured: null, lift: "not_measured", links: [link] });
   return {
     goals: GOALS.map(({ position, ...g }) => (void position, { ...g })),
     areas: AREAS.map((a) => ({ id: area(a), name: a, lever: a })),
@@ -164,9 +174,13 @@ export function ladderGoals(idOf: (k: string) => string): { id: string; key: str
   return GOALS.map((g) => ({ id: idOf(g.id), key: `g.${g.id}`, title: g.name, status: "confirmed", attrs: { metric: g.measure, target: g.target, unit: g.unit, math: g.math, position: g.position } }));
 }
 
-/** Each feature as its Simple roadmap item: key, title, code's section, status, dates and what it waits on. */
-export function ladderItems(): { key: string; title: string; section: string; status: "done" | "in_progress" | "planned"; dates?: { start: string | null; end: string; source: "engineering" }; depends: string[] }[] {
-  return ROWS.map(([title, , , , status, start, end, deps], i) => ({
+/**
+ * Each feature as its Simple roadmap item: key, title, code's section, status, dates and what it
+ * waits on; one on no milestone names its goal itself (`goal`, the ladder's short id: "lg1").
+ */
+export function ladderItems(): { key: string; title: string; section: string; status: "done" | "in_progress" | "planned"; dates?: { start: string | null; end: string; source: "engineering" }; depends: string[]; goal?: string }[] {
+  return ROWS.map(([title, g, m, , status, start, end, deps], i) => ({
     key: `gm-f${i + 1}`, title, section: `f-${pad(i + 1)}`, status, ...(end ? { dates: { start, end, source: "engineering" as const } } : {}), depends: deps.map((d) => `gm-f${d}`),
+    ...(g && !m ? { goal: `l${g}` } : {}),
   }));
 }

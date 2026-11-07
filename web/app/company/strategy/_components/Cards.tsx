@@ -206,7 +206,7 @@ function FocusRow({ c, goals, canAddGoal, onPick }: { c: Choice; goals: Map<stri
           <>
             <span className="text-sm text-warn">No goal derives from it</span>
             {canAddGoal && (
-              <Link href="/baseline?add=goal" className="text-sm font-medium text-accent-ink hover:underline">
+              <Link href="/ground-truth?add=goal" className="text-sm font-medium text-accent-ink hover:underline">
                 Add a goal
               </Link>
             )}

@@ -23,7 +23,12 @@ async function open(page: Page, scheme: "light" | "dark") {
   await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-view", "zoom");
 }
 
-const conflict = (page: Page, key: string) => page.locator(`[data-testid="conflict"][data-item="${key}"]`);
+/**
+ * An item's link to what it depends on in the panel. Since pre-demo QA S-5 and S-14 (7821685f4,
+ * efd457e59) the digest's end past its milestone is listed under it too, by name with its
+ * sentence behind an (i): this is its dependency break.
+ */
+const conflict = (page: Page, key: string) => page.locator(`[data-testid="conflict"][data-item="${key}"]`).filter({ hasText: "starts" });
 
 for (const scheme of ["light", "dark"] as const) {
   test.describe(`desktop, ${scheme}`, () => {

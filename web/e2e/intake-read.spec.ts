@@ -5,7 +5,7 @@ import { login } from "./helpers";
 
 /*
  * INT2, the parts of Oracle's read of a brief that live outside the brief page (port of #632):
- * Settings › Company's switch "Oracle reads new intakes" (the company setting intake_ai_read,
+ * Settings › Company's switch "Oracle reads new briefs" (the company setting intake_ai_read,
  * owners only, as GET and PUT /v1/settings/{key} are), and the Inbox row "Oracle couldn't read
  * <title>" (InboxOut.intake_reads: an open brief of mine whose last two reads or more failed).
  * The "intake-read-failed-twice" mock scenario adds "Bulk order invoices", a brief by the
@@ -27,7 +27,7 @@ import { login } from "./helpers";
  */
 
 const PHONE = { width: 390, height: 844 };
-const SWITCH = "Oracle reads new intakes ($1.50 each)";
+const SWITCH = "Oracle reads new briefs ($1.50 each)";
 const FAILED_TITLE = "Bulk order invoices";
 const FAILED_SCENARIO = "intake-read-failed-twice";
 

@@ -363,6 +363,14 @@ class SimpleRoadmapItem(BaseModel):
         description="S7: likely duplicates of a draft not kept both (at most 2, best first).",
     )
     merged_into: "SimpleMergedInto | None" = None
+    # feature-parts: the key of the item this one is part of as stored (set_parent's
+    # ``before``), that item (null: none, or not on the roadmap; in_trash: in Trash), the
+    # path to it from the top (top first, the parent last), and the item's parts (open or
+    # cut, never merged) in the roadmap's order. Any depth; never a loop.
+    parent_key: str | None = None
+    part_of: "SimplePartRef | None" = None
+    part_path: list["SimplePartRef"] = []
+    parts: list["SimplePartRef"] = []
     drafting: bool = Field(
         default=False, description="S7: Oracle's drafting job for this draft is queued or running."
     )
@@ -393,6 +401,13 @@ class SimpleMergedInto(BaseModel):
     id: str
     code: str
     title: str
+
+
+class SimplePartRef(SimpleMergedInto):
+    """feature-parts: a parent or a part, by its display code ("" when none) and name."""
+
+    cut: bool = False
+    in_trash: bool = False
 
 
 class SimpleGroup(BaseModel):
@@ -633,6 +648,8 @@ ChangeOp = Literal[
     # S5: a one-pager line, as a section patch of each of its source sections
     # (oracle.simple.one_pager).
     "edit_line",
+    # A number inside a PRD section, the one-pager's "Needs a look" fix (owner, Nov 5).
+    "set_section_number",
     # Roadmap-plus: a roadmap's key dates, into its working draft (oracle.simple.key_dates).
     "add_key_date",
     "edit_key_date",
@@ -655,6 +672,8 @@ ChangeOp = Literal[
     "set_status",
     # lane-gt-ui: the Ground Truth feature the item is (Add to Ground Truth, Link to a feature).
     "set_feature",
+    # feature-parts: the item made part of another (any depth, never a loop), or taken out.
+    "set_parent",
     # one-feature-panel: how the goal the item serves is measured (its target and date).
     "set_goal_measure",
     # goal-buckets-tasks: the goals an item serves (into the working draft).
@@ -899,6 +918,8 @@ class InboxSimpleChange(BaseModel):
     subject: str | None = None
     question_id: uuid.UUID | None = None
     line_id: str | None = None
+    # PR 1320 re-review: a one-pager number fix's PRD section (its key), where Open lands.
+    section: str | None = None
 
 
 DraftStatus = Literal["working", "submitted", "approved", "discarded"]
@@ -955,6 +976,8 @@ class SimpleDraftOut(BaseModel):
     # The version it was opened on, and the one submitting it imported.
     base_version: int | None
     version: int | None
+    # The number it becomes (or became): the one after the roadmap's latest version (hotfix 4).
+    next_version: int | None = None
     created_by: uuid.UUID
     # roadmap-decide review: the author's name, so the banner names whose draft it is at once.
     created_by_name: str | None = None
@@ -1116,6 +1139,10 @@ class SimplePriorityRow(BaseModel):
     on_roadmap: bool = False
     # The caller's change applies (else it is proposed).
     applies: bool = False
+    # feature-parts: the feature this one is part of, as the roadmap reads it (its part_of).
+    part_of: "SimplePartRef | None" = None
+    # Its own parts, as the roadmap reads them (open or cut), whether this list shows them or not.
+    parts: "list[SimplePartRef]" = Field(default_factory=list)
     # The feature's active override as override_priority's ``before.override`` wants it.
     before_override: dict[str, Any] | None = None
 
@@ -1275,6 +1302,17 @@ class SimplePriorityDraft(BaseModel):
     merge_into: list[SimplePriorityMerge] = []
 
 
+class SimplePriorityUnranked(BaseModel):
+    """prio-unranked: a live, non-draft roadmap item with no ranked feature (none, or one the
+    ranking leaves out): listed under the ranked rows, with no score and no rank."""
+
+    item_id: uuid.UUID
+    code: str
+    title: str
+    goal: SimplePriorityGoal | None = None
+    roadmap: SimpleDocRef
+
+
 class SimpleGoalBucket(BaseModel):
     # The goal's key, or "none".
     key: str
@@ -1312,6 +1350,8 @@ class SimplePrioritiesOut(BaseModel):
     rows: list[SimplePriorityRow]
     proposals: list[SimplePriorityProposal]
     drafts: list[SimplePriorityDraft]
+    # prio-unranked: the items no row holds, by horizon then position.
+    unranked: list[SimplePriorityUnranked] = []
     buckets: list[SimpleGoalBucket]
     weeks_total: float
     # Commenter and up: may reorder and estimate (applies or proposes).
@@ -1375,6 +1415,40 @@ class OnePagerLine(BaseModel):
     words: str | None = None
 
 
+class OnePagerFixProposal(BaseModel):
+    """An open proposal of the fix: who made it, and whether the reader decides or
+    withdraws it."""
+
+    change_id: uuid.UUID
+    by_name: str
+    can_decide: bool
+    can_undo: bool
+
+
+class OnePagerFix(BaseModel):
+    """A "numbers" item's one-click fix (owner, Nov 5): POST /v1/simple/changes with ``op``
+    ``action``, this ``target``, ``before: {number: before}`` and ``after: {number: value}``;
+    ``words`` is its button ("Use 6")."""
+
+    action: Literal["set_section_number"]
+    # {document_id, section (its key), said (the words the number is in), part ("heading"
+    # when the number is in the section's heading; absent: its text)}.
+    target: dict[str, str]
+    before: str
+    value: str
+    words: str
+    proposal: OnePagerFixProposal | None = None
+
+
+class OnePagerFixed(BaseModel):
+    """A number fix (set_section_number) in the PRD's working draft, read from the draft's
+    live changes: its words ('Fixed: set to 6 in “Later · 6 items”') and its Undo."""
+
+    change_id: uuid.UUID
+    words: str
+    can_undo: bool
+
+
 class OnePagerLook(BaseModel):
     """One "Needs a look" item for the PRD's owners (numbers that disagree, a code with no
     name): what to look at, and the sections it is in. Shared by the one-pager's checks."""
@@ -1383,6 +1457,8 @@ class OnePagerLook(BaseModel):
     text: str
     where: list[str] = []
     source_keys: list[str] = []
+    # A "numbers" item's fix; null for other items and a number in no section's text.
+    fix: OnePagerFix | None = None
 
 
 class OnePagerItem(BaseModel):
@@ -1580,6 +1656,8 @@ class OnePagerOut(BaseModel):
     # disagree and its codes with no name (the PRD's owners; ad-onepager), and the checks a
     # build held for owners failed twice (kind "check"; oracle.simple.quality).
     needs_look: list[OnePagerLook] = []
+    # The working draft's number fixes, for those who see the draft (fix round 2).
+    fixed: list[OnePagerFixed] = []
 
 
 # --------------------------------------------------------------------------- S7
@@ -2159,6 +2237,23 @@ class SimpleDraftRoadmap(BaseModel):
     # Once this meeting approved the dates (no draft left): how many items it put on the
     # roadmap, so the step says so after a reload too; null while the dates are draft.
     approved: int | None = None
+
+
+class SimpleRoadmapDraftItem(SimpleDraftRoadmapItem):
+    """A dated item of a draft PRD on the Simple roadmap's draft layer, with its owner."""
+
+    owner_name: str | None = None
+
+
+class SimpleRoadmapDraftPrd(BaseModel):
+    """RP2 'Draft layer on roadmap': a PRD whose run's draft roadmap holds dated items not
+    approved yet, shown hatched over the roadmap until the PRD is approved."""
+
+    prd: SimpleDocRef
+    run_id: uuid.UUID | None = None
+    items: list[SimpleRoadmapDraftItem]
+    # The reader may Change dates and Leave out (approvers and up).
+    can_change: bool = False
 
 
 class SimpleDraftDatesIn(BaseModel):

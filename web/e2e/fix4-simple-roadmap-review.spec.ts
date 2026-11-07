@@ -91,7 +91,7 @@ test.describe("phone", () => {
       await expect(page.getByTestId("broken-callout")).toHaveCount(0);
       const conflicts = page.getByTestId("conflicts").getByTestId("conflict");
       await expect(conflicts.first()).toBeVisible();
-      await expect(page.locator('[data-testid="conflict"][data-item="alert-digest"]')).toContainText("which it depends on, ends");
+      await expect(page.locator('[data-testid="conflict"][data-item="alert-digest"]').filter({ hasText: "starts" })).toContainText("which it depends on, ends");
       for (const c of await conflicts.all()) {
         const words = c.getByRole("button").first();
         const cut = await words.evaluate((el) => el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1);

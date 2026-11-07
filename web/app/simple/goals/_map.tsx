@@ -16,6 +16,7 @@ import { Icon } from "@/components/ds/Icon";
 import { NewPrdSheet, useCanStartPrd } from "@/components/simple/NewPrd";
 import { api, unwrap } from "@/lib/api/client";
 import type { GmArea, GmFeature, GmGoal, GoalMap } from "@/lib/api/mock/goal-map";
+import { formatCount } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -34,8 +35,8 @@ type Edit = "propose" | "goal" | "attach" | "prd" | "area" | "gate" | "metric" |
 
 function num(v: number | null, unit: string): string {
   if (v === null) return "—";
-  if (unit === "$") return v >= 1000 ? `$${Math.round(v / 100) / 10}k` : `$${v}`;
-  return `${Math.round(v * 10) / 10}`;
+  if (unit === "$") return v >= 1000 ? `$${formatCount(Math.round(v / 100) / 10)}k` : `$${formatCount(v)}`;
+  return formatCount(Math.round(v * 10) / 10);
 }
 
 
@@ -603,7 +604,8 @@ function Flags({ map, open }: { map: GoalMap; open: Ctx["open"] }) {
         </button>
       )}
       {unplaced > 0 && (
-        <button type="button" data-testid="gm-flag-unplaced" className={chip} onClick={() => open("unplaced")}>
+        // goal-map-editing: leads to the features on no milestone on the ladder, highlighted.
+        <button type="button" data-testid="gm-flag-unplaced" className={chip} onClick={() => window.dispatchEvent(new Event("ld-show-loose"))}>
           {unplaced} {unplaced === 1 ? "feature serves" : "features serve"} no gate
         </button>
       )}

@@ -238,7 +238,19 @@ test.describe("phone", () => {
       await expect(page.locator("html")).toHaveAttribute("data-theme", t);
       const far = page.getByTestId("date-suggestion-context").filter({ has: page.getByTestId("date-suggestion-far-out") }).first();
       await expect(far).toBeVisible();
-      await far.getByTestId("date-suggestion-far-out-tip").tap();
+      // The Inbox's groups settle as their reads arrive. A person scrolls the row up to read it, so
+      // its tip has room below its chip (at the window's bottom edge it flips above, as qa-docs-19 "a tip flips when it has no room" decided):
+      // a tap on a moving row would retry scrolled to the bottom edge instead.
+      const info = far.getByTestId("date-suggestion-far-out-tip");
+      let lastY = Number.NaN;
+      await expect.poll(async () => {
+        const y = (await info.boundingBox())?.y ?? Number.NaN;
+        const settled = y === lastY;
+        lastY = y;
+        return settled;
+      }).toBe(true);
+      await info.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await info.tap();
       const tip = far.getByRole("tooltip");
       await expect(tip).toHaveText(FAR_OUT_TIP);
       const box = (await tip.boundingBox())!;

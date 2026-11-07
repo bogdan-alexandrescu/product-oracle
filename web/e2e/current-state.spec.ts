@@ -191,8 +191,10 @@ for (const size of ["desktop", "phone"] as const) {
       for (const row of (await rows.all()).slice(0, 3)) await pillAfter(row.getByTestId("prio-title"), row.getByTestId("cs-mark"));
       // cs2-b: right next to the name, not pushed to the far right of the row: on the name's last
       // line, a small gap after its last word (or, where the row is narrow, on the line under it).
+      // A feature's own code (PR 1234, prio-own-key) is part of its name: the pill follows the code.
       for (const row of (await rows.all()).slice(0, 5)) {
-        const end = await row.getByTestId("prio-title").evaluate((el) => {
+        const named = (await row.getByTestId("prio-own-key").count()) ? row.getByTestId("prio-own-key") : row.getByTestId("prio-title");
+        const end = await named.evaluate((el) => {
           const r = document.createRange();
           r.selectNodeContents(el);
           const last = [...r.getClientRects()].at(-1)!;

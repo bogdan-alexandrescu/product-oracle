@@ -419,8 +419,11 @@ async def test_markers_sit_after_the_exact_span_everywhere(client, owner, runtim
     export = (await client.get(f"{VERSIONS}/1/export", params={"format": "md"}, headers=auth)).text
     assert export.count(marker) == 3
     html = (await client.get(f"{VERSIONS}/1/export", params={"format": "html"}, headers=auth)).text
-    assert html.count("Dec 15, 2026 <strong>[unverified]</strong>") == 2
-    assert "<code>2026-12-15</code> <strong>[unverified]</strong>" in html
+    # Export QA pass X, X-12 (train AS cdf393d16): the flag is a small plain mark.
+    mark = '<span class="date-mark" data-date-mark="unverified">unverified</span>'
+    assert html.count(f"Dec 15, 2026 {mark}") == 2
+    assert f"<code>2026-12-15</code> {mark}" in html
+    assert "[unverified]" not in html
     deck = (await client.get(f"{VERSIONS}/1/deck", headers=auth)).json()
     text = " ".join(e["html"] for s in deck["slides"] for e in s["expand"]) + " ".join(
         s["html"] for s in deck["slides"]

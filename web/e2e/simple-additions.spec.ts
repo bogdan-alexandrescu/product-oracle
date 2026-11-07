@@ -52,10 +52,17 @@ async function dragAdd(page: Page, title: string, target: Locator, at: "top" | "
   // The chip and the target's top on screen together (the page's top).
   await page.evaluate(() => window.scrollTo(0, 0));
   const from = (await chip.boundingBox())!;
-  const to = (await target.boundingBox())!;
+  let to = (await target.boundingBox())!;
   const bottom = (page.viewportSize()?.height ?? 800) - 12;
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
+  // A target below the fold (the Goal map's goals lead the goal rows since P-1): holding the chip,
+  // the person scrolls the page with the wheel until the target's top is on screen.
+  if (to.y + 20 > bottom) {
+    await page.mouse.wheel(0, to.y - bottom / 2);
+    await expect.poll(async () => (await target.boundingBox())!.y).toBeLessThan(bottom - 20);
+    to = (await target.boundingBox())!;
+  }
   await page.mouse.move(to.x + to.width / 2, Math.min(at === "top" ? to.y + 20 : to.y + to.height / 2, bottom), { steps: 12 });
   await page.mouse.up();
 }
@@ -167,7 +174,7 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(toastWith(page, `Merged '${TWIN}' into Weekly alert digest in your working draft`)).toBeVisible();
       await tray.getByRole("button", { name: "Close" }).click();
       await expect(column(page, "later").getByTestId("board-below").locator(`[data-item="${TWIN_KEY}"]`)).toBeVisible();
-      await expect(c.getByTestId("item-merged")).toHaveText("Merged into alert-digest");
+      await expect(c.getByTestId("item-merged")).toHaveText("Merged into F-06 Weekly alert digest");
       await boardCard(page, "alert-digest").click();
       await expect(page.getByTestId("floating-card").getByTestId("card-reasons")).toContainText(`Merged ${TWIN} (${TWIN_KEY}) into it.`);
       await page.getByTestId("floating-card").getByRole("button", { name: "Close" }).click();
@@ -316,7 +323,7 @@ for (const scheme of ["light", "dark"] as const) {
     /**
      * Card simple-additions-priorities: protects = Priorities' goal buckets show a goal's
      * one Suggestions button whose drawer has Get more from Oracle and Accept; Merge on an unranked draft is a real
-     * merge (merge_item): the roadmap shows the draft "Merged into <code>"; fails_when = the
+     * merge (merge_item): the roadmap shows the draft "Merged into <code> <name>" (never the key); fails_when = the
      * bucket lacks the suggestions, or Merge is a cut on the roadmap; no_claim = bucket shares.
      */
     test("priorities: a bucket's suggestion is accepted and Merge merges the draft", async ({ page }) => {
@@ -342,7 +349,7 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(toastWith(page, "Merged Team invite nudges into Setup checklist")).toBeVisible();
       await page.goto(ROADMAP);
       await board(page);
-      await expect(boardCard(page, "setup-ideas").getByTestId("item-merged")).toHaveText("Merged into setup-checklist");
+      await expect(boardCard(page, "setup-ideas").getByTestId("item-merged")).toHaveText(/^Merged into (\S+ )?Setup checklist$/);
     });
   });
 

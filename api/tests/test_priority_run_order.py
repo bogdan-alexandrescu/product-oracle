@@ -982,9 +982,9 @@ def test_check_a_row_goal_that_does_not_serve_is_no_goal():
 def test_check_a_new_feature_naming_an_unknown_goal_is_blocking(goals, extra):
     out = run_order.check_order(NEW_ONE + extra, known=new_known(goals))
     assert codes(out) == [("unknown_goal", True, "new-one")]
+    # No goal of that key was ever named: never its key (follow-up to PR 1244).
     assert out.problems[0]["message"] == (
-        "Gift notes names the goal no-such-goal, which is not a goal in the baseline: "
-        "the run must name one that is"
+        "Gift notes names a goal that was deleted: the run must name a goal of the Ground Truth"
     )
 
 
@@ -1067,8 +1067,7 @@ async def test_a_row_goal_with_no_contribution_is_proposed_as_assumed(client, ow
 
 NO_GOAL = "Bulk edit is new and names no goal it serves: the run must name one"
 UNKNOWN_GOAL = (
-    "Bulk edit names the goal no-such-goal, which is not a goal in the baseline: "
-    "the run must name one that is"
+    "Bulk edit names a goal that was deleted: the run must name a goal of the Ground Truth"
 )
 # bulk-edit's row naming its goal with no contribution: the feature set's 0 wins.
 ROW_GOAL_ALONE = ORDER_NEW.replace("    weight: 3\n    contribution: 2\n", "")
@@ -1198,3 +1197,162 @@ async def test_approve_rechecks_the_goals_of_its_new_features(client, owner, run
     # The run page and the Inbox say it too, and a second try is refused the same way.
     run = await get(client, (await as_user(tenant_id, "approver")), run["id"])
     assert pending(run)["cannot_approve"] == BLOCKED
+
+
+async def _set_goal_status(tenant_id, status: str) -> None:
+    async with tenant_session(tenant_id) as s:
+        goal = await s.scalar(select(Entity).where(Entity.key == "activation"))
+        goal.status = status
+        await s.commit()
+
+
+async def _approve(client, tenant_id, run):
+    cp = pending(run)
+    return await client.post(
+        f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/decide",
+        json={"decision": "approved"},
+        headers=await as_user(tenant_id, "approver"),
+    )
+
+
+async def _order_texts(client, tenant_id, run) -> list[str]:
+    """What people read of the order's problems: the band (compare), the run page's gate
+    chips and the Inbox."""
+    approver = await as_user(tenant_id, "approver")
+    (snap,) = await snapshots(tenant_id, run["id"])
+    band = await client.get(f"/v1/priorities/snapshots/{snap.id}/compare", headers=approver)
+    body = band.json()
+    run = await get(client, approver, run["id"])
+    gate = pending(run).get("gate") or {}
+    inbox = (await client.get("/v1/inbox", headers=approver)).text
+    return [
+        *[p["message"] for p in body["snapshot"]["check_result"]["problems"]],
+        *[p["message"] for r in body["rows"] for p in r["problems"]],
+        *[x["label"] for x in gate.get("left") or []],
+        inbox,
+    ]
+
+
+@pytest.mark.parametrize("restored", ["confirmed", "proposed"])
+async def test_a_stale_goal_problem_clears_once_the_goal_is_back(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+    restored,
+):
+    """Follow-up to PR 1244: the goal a new feature serves is rejected after the check, so
+    Approve order is refused and the order keeps the problem; once the goal is restored or
+    confirmed again, the next read (the band, the run page's gate, the Inbox) no longer
+    has it, and Approve order saves the order."""
+    tenant_id, _ = owner
+    run = await at_priority(client, owner, runtime, ORDER_NEW, features=CLEAN)
+    await _set_goal_status(tenant_id, "rejected")
+    assert (await _approve(client, tenant_id, run)).status_code == 409
+    assert any(STALE_GOAL in t for t in await _order_texts(client, tenant_id, run))
+
+    await _set_goal_status(tenant_id, restored)
+    assert not any(STALE_GOAL in t for t in await _order_texts(client, tenant_id, run))
+    approver = await as_user(tenant_id, "approver")
+    run = await get(client, approver, run["id"])
+    cp = pending(run)
+    assert cp["cannot_approve"] is None
+    assert (cp.get("gate") or {}).get("open", True) is True
+    resp = await _approve(client, tenant_id, run)
+    assert resp.status_code == 200, resp.text
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert snap.status == "saved"
+    assert not any(STALE_GOAL == p["message"] for p in snap.check_result["problems"])
+
+
+async def test_a_deleted_goal_is_named_by_its_last_known_name(client, owner, runtime):  # noqa: F811
+    """Follow-up to PR 1244: the goal a new feature serves is deleted after the check. The
+    problem names it by its last known name, never its key, on the band, the gate and the
+    Inbox."""
+    tenant_id, _ = owner
+    run = await at_priority(client, owner, runtime, ORDER_NEW, features=CLEAN)
+    async with tenant_session(tenant_id) as s:
+        goal = await s.scalar(select(Entity).where(Entity.key == "activation"))
+        for edge in await s.scalars(
+            select(Edge).where((Edge.src_id == goal.id) | (Edge.dst_id == goal.id))
+        ):
+            await s.delete(edge)
+        await s.delete(goal)
+        await s.commit()
+    resp = await _approve(client, tenant_id, run)
+    assert resp.status_code == 409, resp.text
+    named = (
+        "Bulk edit names the goal Activation, which is not a goal in the Ground Truth: "
+        "the run must name one that is"
+    )
+    assert named in resp.json()["detail"]["message"]
+    texts = await _order_texts(client, tenant_id, run)
+    assert any(named in t for t in texts), texts
+    assert not any("goal activation" in t for t in texts), texts
+
+
+def test_check_a_rejected_goal_is_named_by_its_name():
+    """A goal the Ground Truth rejected is said by its name, never its key."""
+    k = new_known([])
+    k.goal_names = {"activation": "Activation", "old-goal": "Old goal"}
+    out = run_order.check_order(NEW_ONE + "    goal: old-goal\n", known=k)
+    assert codes(out) == [("unknown_goal", True, "new-one")]
+    assert out.problems[0]["message"] == (
+        "Gift notes names the goal Old goal, which is not a goal in the Ground Truth: "
+        "the run must name one that is"
+    )
+
+
+def test_check_a_goal_with_no_name_is_a_deleted_goal():
+    """A goal key with no name known anywhere is never shown: it is a goal that was deleted."""
+    out = run_order.check_order(NEW_ONE + "    goal: g-old-key\n", known=new_known([]))
+    assert codes(out) == [("unknown_goal", True, "new-one")]
+    message = out.problems[0]["message"]
+    assert message == (
+        "Gift notes names a goal that was deleted: the run must name a goal of the Ground Truth"
+    )
+    assert "g-old-key" not in message
+
+
+async def test_an_old_worded_deleted_goal_problem_reads_in_the_new_words(client, owner, runtime):  # noqa: F811
+    """Review of the port of PR 1274: a pending order stored before the new words holds a
+    deleted goal's problem by its key ("names the goal activation, which is not a goal in
+    the baseline"). Every read says it with the goal's name and no key, and Approve order
+    leaves one problem for it, not two."""
+    tenant_id, _ = owner
+    run = await at_priority(client, owner, runtime, ORDER_NEW, features=CLEAN)
+    old = (
+        "Bulk edit names the goal activation, which is not a goal in the baseline: "
+        "the run must name one that is"
+    )
+    problem = {"code": "unknown_goal", "blocking": True, "feature": "bulk-edit", "message": old}
+    async with tenant_session(tenant_id) as s:
+        goal = await s.scalar(select(Entity).where(Entity.key == "activation"))
+        for edge in await s.scalars(
+            select(Edge).where((Edge.src_id == goal.id) | (Edge.dst_id == goal.id))
+        ):
+            await s.delete(edge)
+        await s.delete(goal)
+        snap = await s.scalar(select(PrioritySnapshot).where(PrioritySnapshot.run_id == run["id"]))
+        check = {**(snap.check_result or {}), "problems": [problem]}
+        snap.check_result = check
+        cp = await s.get(Checkpoint, snap.checkpoint_id)
+        cp.payload = {**(cp.payload or {}), "priority_check": check}
+        await s.commit()
+    named = (
+        "Bulk edit names the goal Activation, which is not a goal in the Ground Truth: "
+        "the run must name one that is"
+    )
+    texts = await _order_texts(client, tenant_id, run)
+    assert any(named in t for t in texts), texts
+    assert not any("goal activation" in t for t in texts), texts
+    assert not any("in the baseline" in t for t in texts[:-1]), texts
+
+    resp = await _approve(client, tenant_id, run)
+    assert resp.status_code == 409, resp.text
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert snap.status == "proposed"
+    assert [
+        (p["code"], p["feature"], p["message"])
+        for p in snap.check_result["problems"]
+        if p["blocking"]
+    ] == [("unknown_goal", "bulk-edit", named)]

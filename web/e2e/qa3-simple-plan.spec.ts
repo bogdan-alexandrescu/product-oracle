@@ -285,7 +285,9 @@ test.describe("QA pass 3: simple-plan, a dated plan", () => {
     await setUp(page, { scenario: "simple-plan", phone: true, scheme: "dark" });
     await open(page, "?tab=buckets");
     // mk-goalbuckets frames: the intro says where the weeks go and names the plan's quarter.
-    await expect(page.getByTestId("prio-subtitle")).toHaveText("Where the engineer-weeks go, goal by goal. Q4 2026.");
+    await expect(page.getByTestId("prio-subtitle")).toHaveText("Q4 2026");
+    // Demo 9: the intro is behind the (i).
+    await expect(page.locator("#prio-about-text")).toHaveText("Where the engineer-weeks go, goal by goal.");
     for (const l of await page.getByTestId("goal-bar-segment").locator("[data-label]").allTextContents()) expect(l).toMatch(/^M\d [A-Z][\w ]* · [\d.]+ wk$/);
     const outside = page.getByTestId("plan-outside-goal").first();
     if ((await outside.count()) > 0) await expect(outside).toContainText(/\d wk/);
@@ -308,7 +310,7 @@ test.describe("QA pass 3: simple-plan, Value / effort", () => {
     await expect(page.locator('[data-testid="vxe-point"][aria-label*="effort 1 weeks"]')).toHaveCount(0);
     await expect(page.locator('[data-testid="vxe-point"][aria-label*="effort 1 week,"], [data-testid="vxe-point"][aria-label$="effort 1 week"]').first()).toBeAttached();
     const legend = page.getByRole("list", { name: "Legend" });
-    await expect(legend).toContainText("Each mark shows the feature's code");
+    await expect(page.locator("#prio-about-text")).toContainText("Each mark shows the feature's code");
     await expect(legend).not.toContainText("Codes stay with the item");
     await page.locator('[data-testid="vxe-point"][data-code="setup-checklist"]').click();
     await expect(page.locator('[data-testid="side-row"][data-code="setup-checklist"]').getByTestId("side-numbers")).toHaveText(/^goal value [\d.]+ · confidence [\d.]+ · [\d.]+ wk · score [\d.]+$/);
@@ -350,8 +352,13 @@ test.describe("QA pass 3: simple-plan, Value / effort", () => {
       const marks = await Promise.all((await page.getByTestId("vxe-point").all()).map(async (m) => (await m.boundingBox())!));
       const shrink = (b: Box) => ({ x: b.x + 2, y: b.y + 2, width: b.width - 4, height: b.height - 4 });
       for (let i = 0; i < marks.length; i++) for (let j = i + 1; j < marks.length; j++) expect(overlap(shrink(marks[i]), shrink(marks[j]))).toBe(0);
-      const middle = (await page.getByTestId("vxe-middle-value").boundingBox())!;
-      for (const m of marks) expect(overlap(middle, shrink(m))).toBe(0);
+      // Pinned layouts at 390: neither plot has room for the middle value's words (the default's 22
+      // marks since P-1 put the Goal map's features in it), so the legend names that line; the plan's
+      // has no room for the middle effort's words either, so it names both.
+      await expect(page.getByTestId("vxe-middle-value")).toHaveCount(0);
+      await expect(page.getByTestId("vxe-legend-middles")).toHaveText(
+        scenario ? "The dashed lines are the middle effort (up and down) and the middle value (across)." : "The dashed line across is the middle value.",
+      );
       expect(await page.getByTestId("vxe-plot").evaluate((e) => getComputedStyle(e).touchAction)).not.toBe("none");
       const more = page.getByTestId("line-caption-more");
       if ((await more.count()) > 0) {

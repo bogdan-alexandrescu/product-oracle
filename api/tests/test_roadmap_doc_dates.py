@@ -221,17 +221,22 @@ async def test_a_withdrawn_basis_marks_the_approved_version_s_dates(client, owne
     for layer in ("full",):
         html = (await client.get(url, params={"format": "html", "layer": layer}, headers=auth)).text
         html = html.replace("\u00a0", " ")  # a date's no-break spaces (E-11)
-        assert "Nov 30, 2026 <strong>[date withdrawn]</strong>" in html, layer
+        # Export QA pass X, X-12 (train AS cdf393d16): the flag is a small plain mark.
+        assert (
+            'Nov 30, 2026 <span class="date-mark" data-date-mark="withdrawn">date withdrawn</span>'
+        ) in html, layer
+        assert "[date withdrawn]" not in html, layer
     # Present and the slide export: the deck.
     deck = (await client.get(f"{VERSIONS}/1/deck", headers=auth)).json()
     text = " ".join(s["html"] for s in deck["slides"]) + " ".join(
         e["html"] for s in deck["slides"] for e in s["expand"]
     ).replace("\u00a0", " ")
     assert "Nov 30, 2026 <strong>[date withdrawn]</strong>" in text
-    # The markdown export is the stored text (a copy for editing) with the comment.
+    # The markdown export is the stored text (a copy for editing) with the comment, its days
+    # month first (export QA pass X, X-17, train AS cdf393d16).
     md = (await client.get(url, params={"format": "md"}, headers=auth)).text
     assert "[date withdrawn]" not in md
-    assert "Beta by 2026-11-30 <!-- oracle: date withdrawn -->." in md
+    assert "Beta by Nov 30, 2026 <!-- oracle: date withdrawn -->." in md
 
     # A new verified basis for the date: the marker goes.
     await record(client, auth, "ENG-412", "2026-11-30")

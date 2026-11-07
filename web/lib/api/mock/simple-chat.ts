@@ -2104,7 +2104,8 @@ async function walkOut(db: SimpleDb, chat: ChatDb, ctx: ChatCtx) {
   for (const d of next?.agenda ?? []) steps.push({ id: `agenda_decision:${d.id}`, kind: "agenda_decision", title: d.title, why: `On the agenda of ${next!.title}: read it before the meeting.`, card: null, change: null, decision: d });
   const res = await engine(db, ctx, "GET", "/v1/simple/changes?status=proposed");
   const changes = res.ok ? ((await res.json()) as Schemas["SimpleChangeOut"][]) : [];
-  for (const c of changes.filter((x) => x.can_decide).sort((a, b) => (a.at < b.at ? -1 : 1))) {
+  // The list is newest first with a tie in the order made reversed: reversed, it is chat.py's order (at, seq).
+  for (const c of changes.filter((x) => x.can_decide).reverse()) {
     const item = byId.get(String(c.target.item_id ?? ""));
     steps.push({ id: `proposal:${c.id}`, kind: "proposal", title: `${OP_TITLE[c.op] ?? c.op}: ${item?.title ?? "an item"}`, why: `${c.by_name} proposes it${c.reason ? `: ${c.reason}` : ""}. You decide.`, card: null, change: c, decision: null });
   }
