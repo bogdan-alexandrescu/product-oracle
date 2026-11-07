@@ -5,7 +5,7 @@ import { PRIORITY_NO_GOAL_RUN } from "../lib/api/mock/runs";
 import { login } from "./helpers";
 
 /**
- * The run order's goal words, as the Ground Truth words change wrote them: a goal an order names that the Ground
+ * The run order's goal words, as the Ground Truth wording change set them: a goal an order names that the Ground
  * Truth lacks is "not a goal of the Ground Truth" (never "in"), on the order's Unknown goal chip
  * as in the API's problem sentence (oracle.priorities.run_order.unknown_goal_message). Test card:
  * protects=the chip's hover text reads "of the Ground Truth"; fails_when=it reads "in the
