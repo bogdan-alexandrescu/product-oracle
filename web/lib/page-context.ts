@@ -126,5 +126,6 @@ export const PAGE_CONTEXT: Record<string, PageContext> = {
  * page's name only, as the API's screen context does.
  */
 export function pageNameOnly(path: string): boolean {
-  return /^\/(sources|settings|inbox|account)(\/|$)/.test(path.split("?")[0]);
+  // Simple's own Inbox (PR 1354) is a person's own page too.
+  return /^\/(sources|settings|inbox|account|simple\/inbox)(\/|$)/.test(path.split("?")[0]);
 }
