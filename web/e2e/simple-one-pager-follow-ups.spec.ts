@@ -14,6 +14,14 @@ import { expect, test, type Page } from "./test";
  * - protects=while the PRD's draft is in review an owner's line edit is refused in the API's
  *   words ("This PRD's draft is in review: ..."), and the line stays as it was;
  *   fails_when=the mock applies the edit in review.
+ * - protects=a decimal target keeps its number as written: "300.5 per region × 5 regions"
+ *   against "1,250.75" company-wide offers "Use 1,502.50" and sets the section to it;
+ *   fails_when=the fix drops the separators or the places ("Use 1502.5"); no_claim=the API's
+ *   test_a_fix_keeps_a_decimal_as_written.
+ * - protects=after the heading's fix, the words under it fixed and Undo on the words, the
+ *   heading's own fix still undoes (one undo path for lines and numbers); fails_when=the
+ *   second Undo is refused or leaves the heading at 6; no_claim=a heading edited away from
+ *   its number (the API's test_heading_fix_whose_number_left_the_heading_is_refused).
  */
 
 const URL = "/simple/one-pagers/guided-setup";
@@ -69,4 +77,33 @@ test("a line edit while the PRD's draft is in review is refused in the API's wor
   await page.getByRole("button", { name: "Discard" }).click();
   await expect(line).toContainText("A setup checklist that shows");
   await expect(line).not.toContainText("A setup checklist with the next two steps");
+});
+
+test("a decimal target's fix keeps the number as written", async ({ page }) => {
+  await scenario(page, "one-pager-two-counts");
+  await login(page);
+  await page.goto(URL);
+  await expect(look(page)).toContainText("the company-wide target says 1250.75");
+  await look(page).getByRole("button", { name: "Use 1,502.50" }).click();
+  await expect(fixed(page)).toHaveCount(1);
+  await expect(fixed(page)).toContainText("Fixed: set to 1,502.50 in “Targets”");
+  await expect(look(page).getByRole("button", { name: /^Use 1,?502/ })).toHaveCount(0);
+});
+
+test("a heading fix undoes after the words under it were fixed and undone", async ({ page }) => {
+  await scenario(page, "one-pager-two-counts");
+  await login(page);
+  await page.goto(URL);
+  await look(page).getByRole("button", { name: "Use 6" }).click();
+  await expect(fixed(page)).toHaveCount(1);
+  await look(page).getByRole("button", { name: "Use 6" }).click();
+  await expect(fixed(page)).toHaveCount(2);
+  // The newer (the words) first, then the heading's own fix.
+  await fixed(page).last().getByRole("button", { name: "Undo" }).click();
+  await expect(fixed(page)).toHaveCount(1);
+  await expect(look(page).getByRole("button", { name: "Use 6" })).toBeVisible();
+  await fixed(page).getByRole("button", { name: "Undo" }).click();
+  await expect(fixed(page)).toHaveCount(0);
+  await expect(page.getByRole("alert").filter({ hasText: /Changed/ })).toHaveCount(0);
+  await expect(look(page)).toContainText("“Later · 8 items” says 8 items, but it lists 6.");
 });
