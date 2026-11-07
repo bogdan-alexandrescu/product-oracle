@@ -148,8 +148,15 @@ test.describe("a 1024 px window", () => {
     const owner = (await action().boundingBox())!.width;
     await signOut(page);
     await openRuns(page, "approver@example.com");
-    await expect(run(page, "usage-alerts-v2").getByTestId("run-waits-on")).toHaveText(/^Owner approves /);
+    const says = run(page, "usage-alerts-v2").getByTestId("run-waits-on");
+    await expect(says).toHaveText(/^Owner approves /);
     expect(Math.abs((await action().boundingBox())!.width - owner)).toBeLessThanOrEqual(1);
+    // Who decides fits the same column, inside its cell and the row's one-line height.
+    const [sb, cb] = [(await says.boundingBox())!, (await says.locator("xpath=ancestor::td[1]").boundingBox())!];
+    expect(sb.x).toBeGreaterThanOrEqual(cb.x);
+    expect(sb.x + sb.width).toBeLessThanOrEqual(cb.x + cb.width);
+    expect(await says.evaluate((el) => el.scrollWidth <= el.clientWidth), "who decides is not cut off").toBe(true);
+    for (const r of await rows(page).all()) expect((await r.boundingBox())!.height).toBeLessThanOrEqual(48);
   });
 });
 

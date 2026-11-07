@@ -198,8 +198,9 @@ export default function RunsPage() {
     {
       key: "act",
       header: <span className="sr-only">Action</span>,
-      // One width whoever looks: "Owner approves $…" fits it, as do the buttons.
-      width: "160px",
+      // qa-work-24: one width whoever looks, narrow enough that the For column keeps each name on
+      // one line; who decides wraps onto two short lines within the row's height instead.
+      width: "128px",
       align: "right",
       phone: "action",
       // qa-work-24: one button style, one width, right-aligned; who decides when it is not you.
@@ -219,7 +220,7 @@ export default function RunsPage() {
           );
         const who = rowWaitsOn(r);
         return who ? (
-          <span className="text-[13px] whitespace-nowrap text-text2" data-testid="run-waits-on">
+          <span className="block text-[13px] leading-4 whitespace-normal text-text2" data-testid="run-waits-on">
             {who}
           </span>
         ) : null;
