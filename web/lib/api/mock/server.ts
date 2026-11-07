@@ -1002,7 +1002,7 @@ function seedTrashReviewerScenario(): Db {
 }
 
 /**
- * removed-tracks review (the Move to Trash confirm), "tracks-closed": Guided setup track holds 2
+ * removed-tracks review (the Move to Trash confirm), "tracks-closed": Guided setup track holds 3
  * live features and 1 cut, Welcome media track only a cut one (Welcome video), and Usage alerts
  * track 5 live and 1 merged draft (Alert inbox, merged into Alert rules engine). Invented data.
  */

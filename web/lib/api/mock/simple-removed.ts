@@ -10,7 +10,7 @@ import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
 import { seedGoalBuckets } from "./goal-buckets";
 import { stableUuid } from "./ids";
-import { closed, GOALS, ROADMAPS, TRACKS, type SimpleDb } from "./simple-roadmap";
+import { canDecideItem, canEditRoadmap, closed, deciderIds, GOALS, ROADMAPS, TRACKS, type SimpleDb } from "./simple-roadmap";
 import type { MockMilestone } from "./simple-milestones";
 import type { TrashEntryRow } from "./trash";
 
@@ -122,7 +122,10 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
     for (const s of db.items.filter((x) => x.status === "cut")) {
       const cut = [...(db.changes ?? [])].reverse().find((c) => c.status === "applied" && (c.op === "cut" || c.op === "cut_with_dependents") && JSON.stringify(c.target).includes(db.ids[s.key]));
       const l = cut ? { at: cut.at, by: cut.by } : log[`feature:${s.key}`];
-      items.push({ kind: "feature", id: db.ids[s.key], title: s.title, where: ROADMAPS[s.roadmap]?.title ?? "", at: l?.at ?? null, by_name: name(l?.by), can_decide: owner, decider_name: owner ? null : deciderName, roadmap_id: stableUuid(`simple-doc/${s.roadmap}`) });
+      // As service.can_decide and decider_ids: the item's deciders, else the company's owners.
+      const decides = canDecideItem(db, s, ctx);
+      const route = deciderIds(db, s)[0];
+      items.push({ kind: "feature", id: db.ids[s.key], title: s.title, where: ROADMAPS[s.roadmap]?.title ?? "", at: l?.at ?? null, by_name: name(l?.by), can_decide: decides, decider_name: decides ? null : (name(route) ?? deciderName), roadmap_id: stableUuid(`simple-doc/${s.roadmap}`) });
     }
     // An archived goal comes back through the goal asks' unarchive_goal (./simple-changes.ts):
     // an approver or owner restores it, anyone else asks the owners (oracle.simple.goal_asks).
@@ -133,7 +136,9 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
     }
     for (const ms of ((db.goal_milestones ?? []) as MockMilestone[]).filter((x) => x.deleted)) {
       const l = log[`milestone:${ms.id}`];
-      items.push({ kind: "milestone", id: ms.id, title: ms.name, where: ms.goal ? (GOALS[ms.goal] ?? ms.goal) : "", at: l?.at ?? null, by_name: name(l?.by), can_decide: owner, decider_name: owner ? null : deciderName, roadmap_id: stableUuid(`simple-doc/${ms.roadmap}`) });
+      // As drafts.can_edit: who changes the milestone's roadmap puts it back.
+      const decides = canEditRoadmap(db, ms.roadmap, ctx);
+      items.push({ kind: "milestone", id: ms.id, title: ms.name, where: ms.goal ? (GOALS[ms.goal] ?? ms.goal) : "", at: l?.at ?? null, by_name: name(l?.by), can_decide: decides, decider_name: decides ? null : deciderName, roadmap_id: stableUuid(`simple-doc/${ms.roadmap}`) });
     }
     items.sort((a, b) => ((b.at ?? "") > (a.at ?? "") ? 1 : -1));
     return json(200, { items });
@@ -192,8 +197,9 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
   if (body.op === "restore_goal_milestone") {
     const ms = ((db.goal_milestones ?? []) as MockMilestone[]).find((x) => x.id === t.milestone_id && x.deleted);
     if (!ms) return json(404, { detail: "No such removed milestone" });
-    if (owner) ms.deleted = false;
-    return done(change(ctx, body, owner, ctx.owners, `restored the milestone ${ms.name}`), () => void (ms.deleted = true));
+    const edits = canEditRoadmap(db, ms.roadmap, ctx);
+    if (edits) ms.deleted = false;
+    return done(change(ctx, body, edits, ctx.owners, `restored the milestone ${ms.name}`), () => void (ms.deleted = true));
   }
   if (body.op === "add_track") {
     const title = (a.title ?? "").trim();
