@@ -257,6 +257,9 @@ class RoadmapItemOut(BaseModel):
     blockers: list[BlockerDependency] = []
     trace: list[TraceLink] = []
     depends_on: list[str] = []
+    # The name of each dependency that is not an item of the same version, by key (another
+    # version's item, another roadmap's, or a Ground Truth feature): never shown as a key.
+    depends_titles: dict[str, str] = {}
     validation_gates: list[dict[str, Any]] = []
     economics: dict[str, Any] = {}
     priority: dict[str, Any] | None = None

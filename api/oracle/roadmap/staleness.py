@@ -103,17 +103,74 @@ _SIZE = re.compile(r"\d+ (?:Ground Truth|baseline) items?")
 _OLD_COUNT = re.compile(r"\b(\d+) baseline (items?)\b")
 
 
+# A PRD version's reason on one section ("PRD section Checkout changed in version 5").
+_SECTION_VERSION = re.compile(r"PRD section (.+) (?:changed|is gone) in version \d+")
+
+
 def one_count(reasons: Iterable[str]) -> list[str]:
     """The reasons with one counted line per verb, the latest (#505): two bulk writes read
     "11 Ground Truth items changed", never "42 Ground Truth items changed; 11 Ground
-    Truth items changed"."""
+    Truth items changed". And one line per PRD section, the latest version's (the
+    stale-marks walk): "PRD section Checkout changed in version 5", never once per
+    version."""
     out: list[str] = []
     for reason in reasons:
         if m := _COUNTED.fullmatch(reason):
             out = [r for r in out if not ((o := _COUNTED.fullmatch(r)) and o[2] == m[2])]
+        if m := _SECTION_VERSION.fullmatch(reason):
+            out = [r for r in out if not ((o := _SECTION_VERSION.fullmatch(r)) and o[1] == m[1])]
         if reason not in out:
             out.append(reason)
     return out
+
+
+def with_heading(reasons: Iterable[str], section_key: str | None, heading: str | None) -> list[str]:
+    """``reasons`` naming the item's own PRD section by its heading, not its key (the
+    stale-marks walk: "PRD section feature-x-2217a4 changed in version 4" read as a key).
+    A reason stored with the key reads with the heading, with no migration needed."""
+    if not section_key or not heading or heading == section_key:
+        return list(reasons)
+    old, new = f"PRD section {section_key} ", f"PRD section {heading} "
+    return [new + r[len(old) :] if r.startswith(old) else r for r in reasons]
+
+
+def refs_in(reasons: Iterable[str]) -> set[tuple[str, str]]:
+    """The Ground Truth items the reasons name by ref, as ``(type, key)``."""
+    out: set[tuple[str, str]] = set()
+    for reason in reasons:
+        if _REF.fullmatch(reason):
+            kind, _, key = reason.split(" ", 1)[0].partition(":")
+            out.add((kind, key))
+    return out
+
+
+def name_refs(reasons: Iterable[str], names: dict[str, str] | None) -> list[str]:
+    """A reason naming one Ground Truth item by ref, the only one with its verb, said with
+    that item's name (the stale-marks walk: "goal:kr-3-4-every-client-fit-scored was
+    rejected" reads 'The goal "Every client fit scored" was rejected'). Several with one
+    verb stay counted (:func:`in_words`: "The feature and 2 goals changed"); a ref with no
+    known name is left to :func:`in_words`. ``names``: {"type:key": title}."""
+    reasons = list(reasons)
+    if not names:
+        return reasons
+    by_verb: dict[str, list[int]] = {}
+    for i, reason in enumerate(reasons):
+        if m := _REF.fullmatch(reason):
+            by_verb.setdefault(m[2], []).append(i)
+    for verb, at in by_verb.items():
+        if len(at) != 1:
+            continue
+        ref = reasons[at[0]][: -(len(verb) + 1)]
+        if title := names.get(ref):
+            kind = ref.partition(":")[0].replace("_", " ")
+            reasons[at[0]] = f'The {kind} "{title}" {verb}'
+    return reasons
+
+
+def say(reasons: Iterable[str], names: dict[str, str] | None = None) -> list[str]:
+    """Reasons as a person reads them: each said once, a lone Ground Truth item by its
+    name, the rest in words (:func:`one_count`, :func:`name_refs`, :func:`in_words`)."""
+    return in_words(name_refs(one_count(reasons), names))
 
 
 # A reason naming one Ground Truth item by its ref ("feature:delivery-x changed").
@@ -163,12 +220,14 @@ def in_words(reasons: Iterable[str]) -> list[str]:
     return lines
 
 
-def stale_why(reasons: Iterable[str] | None, default: str) -> str:
+def stale_why(
+    reasons: Iterable[str] | None, default: str, names: dict[str, str] | None = None
+) -> str:
     """An item's stale reasons as one line, each said once, in words. A reason stored
     in the old literal form (prod-6) is reworded first (:func:`_reworded`), with no
     migration needed."""
     reworded = [_reworded(r) for r in (reasons or [])]
-    return "; ".join(in_words(one_count(reworded))) or default
+    return "; ".join(say(reworded, names)) or default
 
 
 # A reason naming what the reader may not see, said without it (#541).
@@ -236,7 +295,7 @@ def stored_detail(reasons: list[str]) -> str:
     return json.dumps(reasons, ensure_ascii=False)
 
 
-def _stored_reasons(detail: str) -> list[str] | None:
+def stored_reasons(detail: str) -> list[str] | None:
     """The reasons of a detail stored by :func:`stored_detail`; None for a line stored
     before it, its reasons joined by ``"; "``."""
     if not detail.startswith("["):
@@ -290,7 +349,9 @@ def _starts_in(title: Any, parts: list[str], i: int, j: int) -> bool:
     return False
 
 
-def detail_for_reader(detail: str | None, hidden: Any) -> str | None:
+def detail_for_reader(
+    detail: str | None, hidden: Any, names: dict[str, str] | None = None
+) -> str | None:
     """A stored stale alert's reasons (:func:`stored_detail`) as one line for the reader:
     what they may not see is hidden first (:func:`for_reader`), then the rest is put into
     words (:func:`in_words`), so a reader never learns the kind of a hidden item ("A
@@ -299,10 +360,10 @@ def detail_for_reader(detail: str | None, hidden: Any) -> str | None:
     prod-6's literal refs) reads the same way, with no migration needed."""
     if not detail:
         return detail
-    reasons = _stored_reasons(detail)
+    reasons = stored_reasons(detail)
     if reasons is None:
         reasons = _old_reasons(detail, hidden)
-    line = "; ".join(in_words(one_count(for_reader(reasons, hidden))))
+    line = "; ".join(say(for_reader(reasons, hidden), names))
     # The last word: a line read that still names something hidden is not shown.
     return HIDDEN_REASON if hidden is not None and hidden.names(line) else line
 
@@ -322,15 +383,14 @@ async def _by_prd_version(db: AsyncSession, event: ChangeEvent, found: dict) -> 
     new = await db.get(DocumentVersion, event.subject_id)
     if new is None:
         return
-    hashes = dict(
-        (
-            await db.execute(
-                select(Section.section_key, Section.content_hash).where(
-                    Section.version_id == new.id
-                )
-            )
-        ).all()
-    )
+    hashes: dict[str, str] = {}
+    headings: dict[str, str] = {}
+    for key, content_hash, heading in await db.execute(
+        select(Section.section_key, Section.content_hash, Section.heading).where(
+            Section.version_id == new.id
+        )
+    ):
+        hashes[key], headings[key] = content_hash, heading
     rows = await db.scalars(
         select(RoadmapItem).where(
             RoadmapItem.prd_document_id == new.document_id,
@@ -344,10 +404,19 @@ async def _by_prd_version(db: AsyncSession, event: ChangeEvent, found: dict) -> 
         key = item.prd_section_key
         if key is None:
             continue  # nothing of its own changed (P11): see the module's docstring
+        # The section by its heading (the stale-marks walk), never its key.
         if key not in hashes:
-            found[item.id] = (item, f"PRD section {key} is gone in version {new.number}")
+            gone = await db.scalar(
+                select(Section.heading).where(
+                    Section.version_id == version_id, Section.section_key == key
+                )
+            )
+            found[item.id] = (item, f"PRD section {gone or key} is gone in version {new.number}")
         elif hashes[key] != section_hash:
-            found[item.id] = (item, f"PRD section {key} changed in version {new.number}")
+            found[item.id] = (
+                item,
+                f"PRD section {headings.get(key) or key} changed in version {new.number}",
+            )
 
 
 async def _by_section(db: AsyncSession, event: ChangeEvent, found: dict) -> None:
@@ -580,6 +649,28 @@ async def _reconcile_anchor(db: AsyncSession, item: RoadmapItem) -> dict[str, An
     return before
 
 
+# What a refusal says of the items' state, in plain words (the stale-marks walk: a second
+# Review read "nothing to review: under_review").
+STATE_WORDS = {
+    "fresh": "up to date",
+    "potentially_stale": "marked as possibly stale",
+    "under_review": "already under review",
+    "reconciled": "already marked still valid",
+}
+ACTION_WORDS = {"review": "review", "reconcile": "mark still valid"}
+
+
+def refusal(action: str, items: list[RoadmapItem]) -> str:
+    """Why nothing was done, in plain words: "Nothing to review: this item is already
+    under review"."""
+    states = sorted({i.freshness for i in items})
+    if not states:
+        return f"Nothing to {ACTION_WORDS.get(action, action)}: no such item"
+    words = " or ".join(STATE_WORDS.get(s, s.replace("_", " ")) for s in states)
+    subject = "this item is" if len(items) == 1 else "these items are"
+    return f"Nothing to {ACTION_WORDS.get(action, action)}: {subject} {words}"
+
+
 async def act(
     db: AsyncSession,
     principal: Principal,
@@ -593,8 +684,7 @@ async def act(
         raise Invalid("reconciling needs a reason")
     targets = [i for i in items if i.freshness in FROM_STATES[action]]
     if not targets:
-        states = sorted({i.freshness for i in items}) or ["no items"]
-        raise Conflict(f"nothing to {action}: {', '.join(states)}")
+        raise Conflict(refusal(action, items))
     now = datetime.now(UTC)
     changed = []
     for item in targets:

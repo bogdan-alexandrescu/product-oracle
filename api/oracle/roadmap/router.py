@@ -319,6 +319,16 @@ async def act_on_roadmap_item_staleness(
         raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from e
     except staleness.Invalid as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from e
+    # Acting updates every count at once (the stale-marks walk): each active track on this
+    # roadmap is monitored now, so a reconciled item's stale alert resolves and leaves the
+    # Inbox, not at the next hourly pass.
+    for track in await db.scalars(
+        select(ProductTrack)
+        .where(ProductTrack.roadmap_document_id == document.id, ProductTrack.status == "active")
+        .order_by(ProductTrack.created_at, ProductTrack.id)
+        .with_for_update()
+    ):
+        await views.monitor(db, track, principal)
     await db.commit()
     out = await views.items_view(db, document, version, "full")
     return ItemStalenessOut(changed=changed, items=out.items)

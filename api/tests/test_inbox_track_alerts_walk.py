@@ -215,6 +215,8 @@ async def test_review_and_still_valid_refuse_in_plain_words(client):
     assert (await client.post(act, json=still, headers=ctx.as_("owner"))).status_code == 200
     r = await client.post(act, json=still, headers=ctx.as_("owner"))
     assert r.status_code == 409
-    assert r.json()["detail"] == "Nothing to mark still valid: this item is already marked still valid"
+    assert r.json()["detail"] == (
+        "Nothing to mark still valid: this item is already marked still valid"
+    )
     r = await client.post(act, json=review, headers=ctx.as_("owner"))
     assert r.json()["detail"] == "Nothing to review: this item is already marked still valid"

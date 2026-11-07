@@ -115076,6 +115076,14 @@
             "title": "Depends On",
             "default": []
           },
+          "depends_titles": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Depends Titles",
+            "default": {}
+          },
           "validation_gates": {
             "items": {
               "additionalProperties": true,

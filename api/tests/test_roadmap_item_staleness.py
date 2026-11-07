@@ -70,7 +70,7 @@ async def test_a_new_prd_version_marks_only_the_items_whose_section_changed(
     assert got["payment-step"]["freshness"] == "fresh"
     ship = got["shipping-step"]
     assert ship["freshness"] == "potentially_stale"
-    assert ship["stale_reasons"] == ["PRD section s-5-2 changed in version 2"]
+    assert ship["stale_reasons"] == ["PRD section 5.2 Shipping step changed in version 2"]
     assert ship["stale_since"] and ship["caused_by_change_id"]
     # Still traced to the PRD version it was built from: nothing rewritten.
     assert ship["prd"]["document"]["version"] == 1
@@ -102,7 +102,10 @@ async def test_a_changed_requirement_marks_its_items(client, owner, runtime):  #
     assert resp.status_code == 200, resp.text
     got = await items(client, auth)
     assert got["payment-step"]["freshness"] == "potentially_stale"
-    assert got["payment-step"]["stale_reasons"] == ["requirement:saved-cards changed"]
+    # Named, never by its ref (the stale-marks walk).
+    assert got["payment-step"]["stale_reasons"] == [
+        'The requirement "Saved cards and wallets" changed'
+    ]
     assert got["shipping-step"]["freshness"] == "fresh"
 
 
@@ -220,7 +223,7 @@ async def test_bulk_changes_name_the_count_that_applies_to_the_item_once(
     await bulk(11)
     reasons = (await items(client, auth))["payment-step"]["stale_reasons"]
     # Only the requirement of the 42 and of the 11 is the payment step's: it is named, once.
-    assert reasons == ["requirement:saved-cards changed"], reasons
+    assert reasons == ['The requirement "Saved cards" changed'], reasons
 
 
 async def test_a_real_bulk_write_reads_ground_truth_items_merged_and_plural(

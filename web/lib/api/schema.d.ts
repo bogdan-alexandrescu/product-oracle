@@ -38172,6 +38172,13 @@ export interface components {
              */
             depends_on: string[];
             /**
+             * Depends Titles
+             * @default {}
+             */
+            depends_titles: {
+                [key: string]: string;
+            };
+            /**
              * Validation Gates
              * @default []
              */
