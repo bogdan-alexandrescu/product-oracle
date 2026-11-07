@@ -173,6 +173,29 @@ export interface LadderProps {
   flags?: ReactNode;
 }
 
+/**
+ * every-field-editable: a key result asked onto another goal by who may not move it (an approver
+ * who is not the roadmap's decider): a proposal through the change engine, named by the goal
+ * alone, that waits in Needs a decision for the decider to accept or decline.
+ */
+export async function proposeKrGoal(m: GmMilestone, goal: string, what: string, reload: () => unknown): Promise<void> {
+  await unwrap(
+    api.POST("/v1/simple/changes", {
+      body: { op: "edit_goal_milestone", target: { milestone_id: m.id }, before: { milestone: { goal_id: m.goal } }, after: { milestone: { goal_id: goal } } },
+    }),
+  );
+  await reload();
+  toast({ message: `Proposed: ${what}; it waits in Needs a decision` });
+}
+
+/** every-field-editable: the owner's or decider's own move of a key result to another goal, with Undo. */
+export async function moveKrGoal(m: GmMilestone, goal: string, what: string, reload: () => unknown): Promise<void> {
+  const to = (goal_id: string) => unwrap(api.PATCH("/v1/simple/roadmap/milestones/{milestone_id}", { params: { path: { milestone_id: m.id } }, body: { goal_id } }));
+  await to(goal);
+  await reload();
+  toast({ message: what, action: { label: "Undo", onClick: () => void to(m.goal).then(reload) } });
+}
+
 export function GoalLadder(props: LadderProps) {
   const { map } = props;
   const { can, me } = useMe();
@@ -507,7 +530,17 @@ export function GoalLadder(props: LadderProps) {
     moveKr: async (milestone, goal, before) => {
       const m = map.milestones.find((x) => x.id === milestone);
       if (!m) return;
-      if (!krCan(milestone)) return refuse("Only an owner or the roadmap's decider moves milestones");
+      if (!krCan(milestone)) {
+        if (goal === m.goal) return refuse("Only an owner or the roadmap's decider moves milestones");
+        // every-field-editable: who may not move it (an approver who is not the decider) asks to.
+        try {
+          await proposeKrGoal(m, goal, `move ${krName(milestone)} to ${goalName(goal)}`, reload);
+          setMenu(null);
+        } catch (e) {
+          failed(e);
+        }
+        return;
+      }
       const was = new Map(map.milestones.map((x) => [x.id, x.depends[0] ?? null] as const));
       const from = krsOf(m.goal);
       const ids = krsOf(goal).filter((x) => x !== milestone);
@@ -1015,7 +1048,8 @@ function MilestoneCard({ m, v }: { m: GmMilestone; v: V }) {
                   { w: "Move to…", on: () => v.act.krTo(m.id) },
                   { w: "Move to Trash", on: () => void v.act.trashKr(m.id), crit: true },
                 ]
-              : []),
+              : // every-field-editable: anyone else who may propose asks to move it to another goal.
+                v.may ? [{ w: "Move to another goal…", on: () => v.act.krTo(m.id) }] : []),
           ]}
         />
       )}

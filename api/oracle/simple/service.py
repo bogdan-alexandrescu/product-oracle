@@ -1144,11 +1144,13 @@ def item_out(
     row, r = e.row, e.resolved
     names = names or {}
     may = can_decide(principal, e, deciders) if principal is not None else False
-    code, title = coded_title(row.title, e.code or _prd_code(row.prd_section_key))
+    prd = _prd_code(row.prd_section_key)
+    code, title = coded_title(row.title, e.code or prd)
     return SimpleRoadmapItem(
         id=row.id,
         key=row.item_key,
         code=code,
+        code_from=("feature" if e.code and e.code != prd else "prd") if e.code or prd else None,
         title=title,
         outcome=row.outcome,
         note=row.note,

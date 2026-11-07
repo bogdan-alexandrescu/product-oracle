@@ -168,6 +168,8 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "remove_dependency": ("depends_on",),
     # feature-parts: the item this one is part of.
     "set_parent": ("parent_key",),
+    # every-field-editable: the item's feature code, stored as its title's lead ("F-31 Alerts").
+    "set_code": ("code",),
 }
 CONFIDENCES = ("low", "medium", "high")
 # set_status: the statuses a person sets (the others come from the tracker or a merge).
@@ -183,6 +185,7 @@ SHOWN = {
     "set_depends": lambda e: {"depends_on": list(e.row.depends_on or [])},
     "set_status": lambda e: {"status": e.status},
     "set_feature": lambda e: {"feature_id": str(e.row.feature_id) if e.row.feature_id else None},
+    "set_code": lambda e: {"code": service.coded_title(e.row.title, _code_of(e))[0]},
 }
 STORED = {"set_track": ("track_id",), "set_prd": ("prd_document_id",), "set_goal": ("goal_ids",)}
 FIXES = ("shift_dependents", "move_dependency")
@@ -941,7 +944,8 @@ async def _plan(
         # roadmap-edit-fixes: a rename changes the name only; a code the title carries stays.
         code, name = service.coded_title(row.title, _code_of(entry))
         if name != row.title and code and service.coded_title(title, None)[0] is None:
-            title = f"{code} {title}"[:TITLE_MAX]
+            title = _with_code(code, title)
+        await _title_code(db, entry, title, read_)
         after = {"title": title}
     elif op == "set_milestone":
         m = a.get("milestone")
@@ -1056,6 +1060,12 @@ async def _plan(
         after = {"depends_on": clean}
     elif op == "set_parent":
         after = {"parent_key": await _parent(db, entry, a.get("parent_key"), target, read_)}
+    elif op == "set_code":
+        code = await _free_code(db, entry, a.get("code"), read_)
+        name = service.coded_title(row.title, _code_of(entry))[1]
+        target["code"] = code
+        after = {"title": _with_code(code, name) if code else name}
+        stored = ("title",)
     else:  # accept_risk
         if target.get("flag") not in FLAG_KINDS:
             raise ChangeError(422, "target.flag: a constraint flag's kind")
@@ -1073,6 +1083,72 @@ async def _plan(
             }
         }
     return entry, target, read(row, stored, target), after
+
+
+async def _free_code(db: AsyncSession, entry: Any, raw: Any, read_: Any) -> str | None:
+    """set_code: the code asked for, read one way (f-31: F-31), when it is a feature code no
+    other item of the roadmap and no Ground Truth feature has; None takes it off. An item whose
+    code comes from its feature or PRD section keeps that one (422)."""
+    from oracle.simple.priorities import FEATURE_CODE
+
+    if _code_of(entry):
+        raise ChangeError(422, "Its code comes from its Ground Truth feature or its PRD")
+    if raw is None or not str(raw).strip():
+        return None
+    code = str(raw).strip().upper()
+    if not FEATURE_CODE.fullmatch(code):
+        raise ChangeError(422, "after.code: a feature code, like F-31")
+    await _not_taken(db, entry, code, read_.by_id())
+    return code
+
+
+async def _not_taken(
+    db: AsyncSession, entry: Any, code: str, by_id: dict, own_only: bool = False
+) -> None:
+    """One code, one item: 422 when another item of the roadmap reads ``code`` (``own_only``:
+    as its own, its title's, not from its feature or PRD) or, but for ``own_only``, a Ground
+    Truth feature has it."""
+    from oracle.simple.priorities import _short_codes
+
+    await service.item_codes(db, list(by_id.values()))
+    for d in by_id.values():
+        if d is entry or d.row.id == entry.row.id or (own_only and _code_of(d)):
+            continue
+        shown = service.coded_title(d.row.title, _code_of(d))[0]
+        if shown and shown.upper() == code.upper():
+            raise ChangeError(422, f"{code} is already the code of {_named(d)}")
+    if own_only:
+        return
+    features = {k.upper() for k in (await _short_codes(db, names=False)).values() if k}
+    features |= {
+        k.upper() for k in await db.scalars(select(Entity.key).where(Entity.type == "feature"))
+    }
+    if code.upper() in features:
+        raise ChangeError(422, f"{code} is already the code of a Ground Truth feature")
+
+
+async def _title_code(db: AsyncSession, entry: Any, title: str, read_: Any) -> None:
+    """every-field: a title leading with a code other than the item's own ("F-31 Alerts",
+    any code the read takes from a title: service.coded_title) gives the item that code: it is
+    checked as set_code checks it, in its words. ``entry`` None: an item being added."""
+    if entry is not None and _code_of(entry):
+        return  # its feature's or PRD's code stays its code; the title is only words
+    lead = service.coded_title(title, None)[0]
+    if lead and (entry is None or lead != service.coded_title(entry.row.title, None)[0]):
+        new = SimpleNamespace(row=SimpleNamespace(id=None))
+        await _not_taken(db, entry if entry is not None else new, lead, read_.by_id())
+
+
+def _with_code(code: str, name: str) -> str:
+    """An item's title, its code before its name; the name is never cut (422 when the two do
+    not fit)."""
+    room = TITLE_MAX - len(code) - 1
+    if len(name) > room:
+        raise ChangeError(
+            422,
+            f"The name is too long to carry the code {code}: shorten it to {room} characters first",
+        )
+    return f"{code} {name}"
 
 
 def _code_of(e: Any) -> str | None:
@@ -1207,6 +1283,7 @@ async def _merge_plan(
     db: AsyncSession, entry: service.Entry, target: dict[str, Any], by_id: dict
 ) -> tuple[service.Entry, dict[str, Any], dict[str, Any], dict[str, Any]]:
     """S7: merge_item's writes, keyed by item id (see the module's docstring)."""
+    from oracle.simple.priorities import FEATURE_CODE, _short_codes
 
     row = entry.row
     if entry.status in ("merged", "cut"):
@@ -1220,6 +1297,11 @@ async def _merge_plan(
         if feature is None or feature.type != "feature":
             raise ChangeError(422, "target.feature_id: a Ground Truth feature")
         target["feature_id"], target["code"], target["title"] = str(fid), feature.key, feature.title
+        # every-field: the item reads the feature's code; no other item may show it as its own.
+        short = (await _short_codes(db, names=False)).get(feature.key) or ""
+        for code in dict.fromkeys(k.split(".")[0] for k in (feature.key, short) if k):
+            if FEATURE_CODE.fullmatch(code):
+                await _not_taken(db, entry, code, by_id, own_only=True)
         after[str(row.id)] = {"feature_id": str(fid), "kept_both": True}
     else:
         into = _uuid(target.get("into_id"), "into_id")
@@ -1623,6 +1705,18 @@ async def decide(
             # The roadmap may have changed since the proposal: create's check again (no
             # loop, an open parent), in its words.
             await _parent(db, entry, (c.after or {}).get("parent_key"), dict(c.target), read_)
+        if c.op == "set_code" and c.target.get("code"):
+            # every-field: another item or a Ground Truth feature may have taken the code since
+            # the proposal; it stays open, to decline.
+            try:
+                await _free_code(db, entry, c.target["code"], read_)
+            except ChangeError as e:
+                raise ChangeError(409, e.detail) from e
+        if c.op == "edit_title":
+            try:
+                await _title_code(db, entry, (c.after or {}).get("title") or "", read_)
+            except ChangeError as e:
+                raise ChangeError(409, e.detail) from e
         # Into the decider's working draft (their editing session's, or S8's meeting's).
         session = await _session_for_change(db, me, session_id, True, now)
         await _apply(db, c, c.after, principal, session)  # type: ignore[arg-type]
@@ -1743,6 +1837,17 @@ async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> Simple
         if entry is None:
             raise ChangeError(404, "The item is gone")
         await _parent(db, entry, back["parent_key"], dict(c.target), read_)
+    if c.op in ("set_code", "edit_title") and back.get("title"):
+        # every-field: the code the old title carries may be another item's or a Ground Truth
+        # feature's since: refused in propose's and accept's words, so no two items share it.
+        read_ = await service.load(db, await drafts.overlays_for(db, principal))
+        entry = read_.by_id().get(uuid.UUID(c.target["item_id"]))
+        if entry is None:
+            raise ChangeError(404, "The item is gone")
+        try:
+            await _title_code(db, entry, back["title"], read_)
+        except ChangeError as e:
+            raise ChangeError(409, e.detail) from e
     u = SimpleChange(session_id=c.session_id, document_id=c.document_id, op=c.op, target=c.target,
                      before=current, after=back, status="undone", by=me, at=now,
                      undoes_id=c.id, routed_to=[], draft_ids=list(c.draft_ids or []))  # fmt: skip

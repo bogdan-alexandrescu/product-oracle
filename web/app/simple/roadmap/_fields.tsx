@@ -6,6 +6,7 @@
 import { useState } from "react";
 
 import { Icon } from "@/components/ds/Icon";
+import { InfoTip } from "@/components/ds/InfoTip";
 
 import { api, unwrap } from "@/lib/api/client";
 import { calendarDay } from "@/lib/dates";
@@ -264,6 +265,37 @@ export function PanelFields({
       className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5"
       data-testid="panel-fields"
     >
+      {/* every-field-editable: the feature code (F-31), so a feature with none can be given one. */}
+      <Field
+        label="Code"
+        testId="card-code"
+        canChange={canChange && !item.code_from}
+        value={
+          item.code_from ? (
+            // A code from its Ground Truth feature or its PRD is read here, never changed.
+            <span className="inline-flex items-center gap-1">
+              {item.code}
+              <InfoTip label="this code" align="start" testId="card-code-why">
+                {item.code_from === "feature"
+                  ? "It comes from its Ground Truth feature: change it there."
+                  : "It comes from its PRD's section: change it in the PRD."}
+              </InfoTip>
+            </span>
+          ) : (
+            (item.code ?? <span className="text-text2">None</span>)
+          )
+        }
+        editor={(done) => (
+          <TextEdit
+            label="Code"
+            value={item.code ?? ""}
+            optional
+            max={12}
+            done={done}
+            save={(v) => change("Code changed", "set_code", { code: item.code ?? null }, { code: v || null })}
+          />
+        )}
+      />
       <Field
         label="Outcome"
         testId="card-outcome"

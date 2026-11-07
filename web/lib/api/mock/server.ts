@@ -193,7 +193,7 @@ import { knowPrdOrder } from "./prd-rank";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedPrdCalmPage, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, forgetRoadmapReads, knowGoalMapItems, ownPrd, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, MAP_GOALS, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
-import { goalMapGoals, goalMapIdOf, goalMapItems, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
+import { goalMapGoals, goalMapIdOf, goalMapItems, ladderMilestones, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
@@ -7457,6 +7457,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   db.simple_roadmap.prd_milestones = prdMilestonesOf(db);
   // lane-gt-ui: an item reads its feature's code (service.load's Entry.code).
   db.simple_roadmap.feature_codes = Object.fromEntries(db.baseline.entities.filter((e) => e.type === "feature" && /^[A-Z]{1,3}-\d+[a-j]?$/.test(e.key)).map((e) => [e.id, e.key]));
+  db.simple_roadmap.feature_keys = Object.fromEntries(db.baseline.entities.filter((e) => e.type === "feature").map((e) => [e.id, e.key]));
   // changes.py set_feature: the feature is a baseline feature, not rejected.
   if (p[1] === "simple" && p[2] === "changes" && !p[3] && m === "POST") {
     const c = await req.clone().json().catch(() => null) as { op?: string; after?: { feature_id?: string | null } } | null;
@@ -7636,7 +7637,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const companyGoals = db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title }));
     // simple-replaced-prds: the PRDs marked replaced (their drafts are left out, as drafts.listing).
     const replaced = replacedPrds(db);
-    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash, goalBin: bin, ...askFiling, replaced }, r, p, q);
+    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash, goalBin: bin, ...askFiling, replaced, ladder: ladderMilestones(db, me) }, r, p, q);
   };
   // Simple S8: review meetings, the Decisions page, and changes made through a meeting.
   // Seeded on the first meetings or Decisions read, so the other Simple screens keep their data.
