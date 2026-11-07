@@ -65,15 +65,17 @@ const drafts = (db: SimpleDb, prdIds: string[]) => db.items.filter((s) => s.draf
  * PRD with a version at or after the drafted one approved are left out. One card per PRD (its run's
  * newest draft); an undated item is not listed, as approval does not place it. By PRD title. */
 export function draftPrdsOut(db: SimpleDb, state: (prdId: string) => DraftPrdState, canChange: boolean): Schemas["SimpleRoadmapDraftPrd"][] {
-  const all = roadmapOut(db, "owner", new URLSearchParams({ draft_roadmap: "1" }))?.items ?? [];
   const prds = new Map<string, { id: string; slug: string; title: string }>();
   for (const s of db.items) if (s.draft_roadmap && s.prd_doc && s.status !== "cut") prds.set(s.prd_doc.id, s.prd_doc);
-  return [...prds.values()]
-    .filter((prd) => {
-      const run = db.draft_runs?.[prd.id];
-      const st = state(prd.id);
-      return st.visible && !st.replaced && !run?.cancelled && !(run && st.approved(run.version));
-    })
+  const shown = [...prds.values()].filter((prd) => {
+    const run = db.draft_runs?.[prd.id];
+    const st = state(prd.id);
+    return st.visible && !st.replaced && !run?.cancelled && !(run && st.approved(run.version));
+  });
+  // No draft PRD (the usual case, the 500-item roadmap's): no roadmap build for nothing.
+  if (!shown.length) return [];
+  const all = roadmapOut(db, "owner", new URLSearchParams({ draft_roadmap: "1" }))?.items ?? [];
+  return shown
     .sort((a, b) => a.title.localeCompare(b.title))
     .map((prd) => ({
       prd,
@@ -92,8 +94,10 @@ export function draftPrdsOut(db: SimpleDb, state: (prdId: string) => DraftPrdSta
 
 /** The dated items an approval takes from the PRD's run draft (the API's derived items of the version, less those left out). */
 export function approvalItems(db: SimpleDb, prdId: string) {
+  const rows = drafts(db, [prdId]);
+  if (!rows.length) return [];
   const all = roadmapOut(db, "owner", new URLSearchParams({ draft_roadmap: "1" }))?.items ?? [];
-  return drafts(db, [prdId]).map((s) => {
+  return rows.map((s) => {
     const i = all.find((x) => x.id === db.ids[s.key])!;
     return { key: s.key, title: s.title, horizon: s.horizon, outcome: null, start: i.start.date, end: i.end.date, source: "engineering" as const };
   });
