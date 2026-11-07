@@ -2019,6 +2019,7 @@ export function SimpleRoadmap() {
                 onOpen={(id) => setCard({ id, left: 0, top: 0 })}
                 onSuggestion={(how, d) => void onSuggestion(it, how, d)}
                 focus={it.id === linkedItem}
+                milestones={data.goal_milestones}
               />
             )}
           />
@@ -2126,6 +2127,7 @@ export function SimpleRoadmap() {
             onOpen={(id) => setCard({ id, ...anchorOf(id) })}
             onSuggestion={(how, d) => void onSuggestion(cardItem, how, d)}
             focus={cardItem.id === linkedItem}
+            milestones={data.goal_milestones}
             onHorizon={format === "board" && canChange && !closedItem(cardItem) ? (h) => onHorizon(cardItem, h) : undefined}
           />
         )}
