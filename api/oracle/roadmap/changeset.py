@@ -457,24 +457,22 @@ async def _markdown(
         for s in sections
         if s.section_key == "plan" and cut
     }
+    added = SimpleNamespace(section_key=SECTION_KEY, level=2, heading="Plan changes", body_md=body)
+    at = next((n for n, s in enumerate(sections) if s.section_key == "sources"), len(sections))
+    sections = [*sections[:at], added, *sections[at:]]
     if plan is not None:
         own = next((s for s in sections if s.section_key == "plan"), None)
         if own is not None:
             replace["plan"] = (own.heading, plan)
         else:
-            # Before the first table approving would read, else before Sources.
+            # Before the first table approving would read, else right after the changes.
             at = next(
                 (n for n, s in enumerate(sections) if _items_table(s.body_md or "")),
-                next((n for n, s in enumerate(sections) if s.section_key == "sources"),
-                     len(sections)),
-            )  # fmt: skip
+                sections.index(added) + 1,
+            )
             new = SimpleNamespace(section_key="plan", level=2, heading="Plan", body_md=plan)
             sections = [*sections[:at], new, *sections[at:]]
-    added = SimpleNamespace(section_key=SECTION_KEY, level=2, heading="Plan changes", body_md=body)
-    at = next((n for n, s in enumerate(sections) if s.section_key == "sources"), len(sections))
-    return compose_markdown(
-        base.front_matter or {}, [*sections[:at], added, *sections[at:]], replace, []
-    )
+    return compose_markdown(base.front_matter or {}, sections, replace, [])
 
 
 async def propose(
