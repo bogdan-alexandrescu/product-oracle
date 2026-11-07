@@ -2150,6 +2150,32 @@ const seedEngCheckCrossPrd = () =>
   });
 
 /**
+ * "eng-check-no-prd" scenario: the "eng-check" run whose first brief also depends on Export logs,
+ * a Ground Truth feature no PRD holds, and whose second depends on a code Oracle cannot find: the
+ * check names both in words, as oracle.engineering.check does ("eng-check-add-to-prd": Export logs
+ * alone, so the briefs can be read and Approve waits on it). The Safety PRD is there to add
+ * Export logs to ("Add it to a PRD": a run of it with Export logs to add; while it is live the
+ * check reads Export logs as being added to the Safety PRD).
+ */
+const seedEngCheckNoPrd = (unknown: boolean) => {
+  const entity = stableUuid("eng-check-no-prd/export-logs");
+  const noPrd = { "export-logs": { name: "Export logs", entity } };
+  const db = seedEngCheckWith(unknown ? "eng-check-no-prd" : "eng-check-add-to-prd", (check) => {
+    const briefs = (check as unknown as { features: Parameters<typeof briefsCheckOf>[0] }).features;
+    const linked = briefs.map((b, i) => (i === 0 ? { ...b, depends_on: [...b.depends_on, "export-logs"] } : i === 1 && unknown ? { ...b, depends_on: [...b.depends_on, "made-up-feature"] } : b));
+    Object.assign(check, briefsCheckOf(linked, undefined, undefined, {}, noPrd));
+  });
+  db.runs!.no_prd_features = noPrd;
+  const at = "2026-10-20T15:00:00Z";
+  db.baseline.entities.push({ id: entity, type: "feature", key: "export-logs", title: "Export logs", body: "People download their activity log as a file.", attrs: {}, status: "confirmed", origin: "user", locked: false, locked_by: null, locked_at: null, confidence: null, run_id: null, created_at: at, updated_at: at });
+  db.documents.push({
+    id: stableUuid("eng-check-no-prd/safety"), slug: "safety", title: "Safety PRD", status: "approved", kind: "prd",
+    template: null, template_version: null, theme: null, created_at: at, updated_at: at,
+  });
+  return db;
+};
+
+/**
  * "eng-check-stale" / "eng-check-stale-unknown" scenarios: the "eng-check" run waiting at an
  * Engineering check stored before cross-PRD links were read (the owner, Nov 4), so its first
  * brief's dependency is stored as unknown. The account health ledger is now a Safety PRD
@@ -3486,6 +3512,8 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     documents: db.documents,
     confirmedGoals: () =>
       db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title })),
+    groundTruthFeatures: () =>
+      db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected").map((e) => ({ id: e.id, key: e.key, title: e.title })),
     suggestionStatus: (id) => withSuggestion(db.llm, { id } as FeedbackRow).suggestion?.status ?? null,
     staged: (id) => isStaged(withSuggestion(db.llm, { id } as FeedbackRow).suggestion),
     baselineReview: (runId, actions) => baselineReviewOf(db.baseline, runId, actions as Schemas["ReviewAction"][]),
@@ -3708,6 +3736,10 @@ function load(): Db {
             ? seedEngCheckUnreadable
           : scenario === "eng-check-cross-prd"
             ? seedEngCheckCrossPrd
+          : scenario === "eng-check-no-prd"
+            ? () => seedEngCheckNoPrd(true)
+          : scenario === "eng-check-add-to-prd"
+            ? () => seedEngCheckNoPrd(false)
           : scenario === "eng-check-stale"
             ? () => seedEngCheckStale("account-health-ledger")
           : scenario === "eng-check-stale-unknown"

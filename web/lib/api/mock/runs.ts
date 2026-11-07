@@ -76,6 +76,11 @@ export interface RunsDb {
    * named with their PRD.
    */
   roadmap_features?: Record<string, string>;
+  /**
+   * As oracle.engineering.check.in_no_prd, for a check read again: the Ground Truth features no
+   * PRD holds, by key, with their name and id (a brief depending on one is told it is in no PRD).
+   */
+  no_prd_features?: Record<string, { name: string; entity: string }>;
 }
 
 /** B2: what the baseline says of a run at Confirm the baseline (./from-run.ts, over the baseline mock). */
@@ -174,6 +179,8 @@ export interface RunsContext {
   documents: DocumentRow[];
   /** #260: the confirmed goals a Baseline to PRD run may name. */
   confirmedGoals?: () => Schemas["TargetGoal"][];
+  /** "Add it to a PRD": the Ground Truth features (not rejected) a Baseline to PRD run may add. */
+  groundTruthFeatures?: () => Schemas["TargetFeature"][];
   latestVersion: (documentId: string) => number | null;
   /** The status of Oracle's live suggestion on a feedback item, if it has one. */
   suggestionStatus?: (feedbackId: string) => Schemas["SuggestionOut"]["status"] | null;
@@ -578,7 +585,7 @@ function resolveKnobs(flowKey: string, raw: KnobsIn | undefined): RunOut["knobs"
   }
   const checkpoints: Record<string, boolean> = {};
   for (const s of flow.segments) if (s.checkpoint) checkpoints[s.checkpoint] = raw?.checkpoints?.[s.checkpoint] ?? true;
-  const knobs: Knobs = { depth, roles, checkpoints, budget_usd: raw?.budget_usd ?? null, goals: [] };
+  const knobs: Knobs = { depth, roles, checkpoints, budget_usd: raw?.budget_usd ?? null, goals: [], features: [] };
   if (flowKey === "baseline_to_prd" && raw?.reuse_baseline) knobs.reuse_baseline = reuseKnob(raw.reuse_baseline);
   if (flowKey === "prd_to_roadmap") knobs.reuse_draft_items = raw?.reuse_draft_items !== false;
   return knobs;
@@ -595,6 +602,21 @@ function targetGoals(ctx: Omit<RunsContext, "db">, flowKey: string, raw: string[
     const goal = confirmed.find((g) => g.id === ref || g.key === ref);
     if (!goal) return `not a confirmed goal: ${ref}`;
     if (!out.includes(goal)) out.push(goal);
+  }
+  return out;
+}
+
+/** "Add it to a PRD", as the API: the Ground Truth features (ids or keys) a Baseline to PRD run adds; null: none named. */
+function targetFeatures(ctx: Omit<RunsContext, "db">, flowKey: string, raw: string[] | null | undefined): Schemas["TargetFeature"][] | string | null {
+  if (raw == null) return null;
+  if (!raw.length) return [];
+  if (flowKey !== "baseline_to_prd") return "only a Ground Truth to PRD run adds features to its PRD";
+  const known = ctx.groundTruthFeatures?.() ?? [];
+  const out: Schemas["TargetFeature"][] = [];
+  for (const ref of raw) {
+    const feature = known.find((f) => f.id === ref || f.key === ref);
+    if (!feature) return `not a Ground Truth feature: ${ref}`;
+    if (!out.some((f) => f.id === feature.id)) out.push(feature);
   }
   return out;
 }
@@ -2069,7 +2091,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
 
   if (p[1] === "flows" && m === "GET") return json(200, flowCatalog());
   if (p[1] === "inbox" && m === "GET") {
-    for (const r of ctx.db.runs) recheckBriefs(ctx.db, r);
+    for (const r of ctx.db.runs) recheckBriefs(ctx.db, r, (x) => docTitle(ctx, x));
     return json(200, inbox(ctx));
   }
   if (p[1] === "internal" && p[2] === "tick" && m === "POST") return json(200, tick(ctx, true));
@@ -2117,6 +2139,9 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const goals = targetGoals(ctx, input.flow, input.knobs?.goals);
     if (typeof goals === "string") return fail(422, goals);
     knobs.goals = goals ?? [];
+    const features = targetFeatures(ctx, input.flow, input.knobs?.features);
+    if (typeof features === "string") return fail(422, features);
+    knobs.features = features ?? [];
     const refused = buildUnderWay(ctx, input.flow);
     if (refused) return refused;
     // A flow that writes no document names none, reads none and takes no template.
@@ -2223,7 +2248,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
   const r = ctx.db.runs.find((x) => x.id === p[2]);
   if (!r) return fail(404, `run ${p[2]} not found`);
   // As oracle.runs.service.recheck_briefs: the run, its review's gate and Approve read one check.
-  recheckBriefs(ctx.db, r);
+  recheckBriefs(ctx.db, r, (x) => docTitle(ctx, x));
   const done = (status = 200) => {
     refresh(r);
     // As the API: a checkpoint is decided by its approver role or above; an engineering stop
@@ -2264,6 +2289,9 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       const goals = targetGoals(ctx, r.flow, patch.knobs.goals);
       if (typeof goals === "string") return fail(422, goals);
       knobs.goals = goals ?? r.knobs.goals ?? [];
+      const features = targetFeatures(ctx, r.flow, patch.knobs.features);
+      if (typeof features === "string") return fail(422, features);
+      knobs.features = features ?? r.knobs.features ?? [];
       // As the API: an omitted reuse_draft_items keeps the run's choice.
       if (r.flow === "prd_to_roadmap" && patch.knobs.reuse_draft_items == null) knobs.reuse_draft_items = r.knobs.reuse_draft_items;
       r.knobs = knobs;
@@ -4033,7 +4061,7 @@ export const ROADMAP_FILE_PROBLEM_RUN: { run: RunOut; artifacts: Record<string, 
 // ---------------------------------------------------------------- F4 Engineering check
 
 type Brief = { key: string; title: string; approach: string; size: string; depends_on: string[]; questions: { id: string; question: string; blocking: boolean }[] };
-type BriefsCheck = { features: Brief[]; problems: { code: string; message: string; feature?: string | null; features?: string[] }[]; code_map_used: boolean; unmapped_repos: string[]; unnamed_repo: boolean; elsewhere?: Record<string, string> };
+type BriefsCheck = { features: Brief[]; problems: { code: string; message: string; feature?: string | null; features?: string[]; entity?: string }[]; code_map_used: boolean; unmapped_repos: string[]; unnamed_repo: boolean; elsewhere?: Record<string, string> };
 const SIZES = ["xs", "s", "m", "l", "xl"];
 const VERDICTS = ["feasible", "feasible_with_changes", "not_feasible"];
 const VERDICT_WORDS: Record<string, string> = { feasible: "Feasible", feasible_with_changes: "Feasible with changes", not_feasible: "Not feasible as scoped" };
@@ -4069,10 +4097,20 @@ type RunMaps = { ids: string[]; repos: string[] };
  */
 /**
  * As oracle.engineering.check._summarize. `elsewhere`: the keys outside the feature set a brief may
- * depend on, named with their PRD (features of other PRDs on the company roadmap, or waived at the
- * feature set stop); any other dependency outside the set is unknown_dependency.
+ * depend on, named with their PRD (features of other PRDs on the company roadmap, waived at the
+ * feature set stop, or being added to a PRD by a live run); `noPrd`: the Ground Truth features no
+ * PRD holds, by name and entity id (a brief depending on one is told "Export logs is in no PRD
+ * yet"); any other dependency outside the set is unknown_dependency, named in words. Problems in
+ * the API's order: the unknown dependencies in file order, then the features in no PRD yet, then
+ * each unknown code map id once.
  */
-export function briefsCheckOf(briefs: Brief[], file?: BriefsMaps, maps?: RunMaps, elsewhere: Record<string, string> = {}): BriefsCheck {
+export function briefsCheckOf(
+  briefs: Brief[],
+  file?: BriefsMaps,
+  maps?: RunMaps,
+  elsewhere: Record<string, string> = {},
+  noPrd: Record<string, { name: string; entity: string }> = {},
+): BriefsCheck {
   const cited: Record<string, Record<string, string[]>> = {};
   for (const b of briefs) {
     for (const [ref, at] of file?.cites[b.key] ?? []) {
@@ -4092,16 +4130,18 @@ export function briefsCheckOf(briefs: Brief[], file?: BriefsMaps, maps?: RunMaps
   const keys = new Set(briefs.map((b) => b.key));
   const named: Record<string, string> = {};
   const unknown: BriefsCheck["problems"] = [];
-  briefs.forEach((b, i) => {
+  const inNoPrd: BriefsCheck["problems"] = [];
+  for (const b of briefs) {
     for (const d of b.depends_on) {
       if (keys.has(d)) continue;
       if (d in elsewhere) named[d] = elsewhere[d];
-      else unknown.push({ code: "unknown_dependency", feature: b.key, message: `features[${i}] (${b.key}): depends on '${d}', not a feature of the feature set or the company roadmap` });
+      else if (d in noPrd) inNoPrd.push({ code: "dependency_in_no_prd", feature: b.key, entity: noPrd[d].entity, message: `${noPrd[d].name} is in no PRD yet: ${b.title} depends on it` });
+      else unknown.push({ code: "unknown_dependency", feature: b.key, message: `${b.title.trim() ? `${b.title.trim()} (${b.key})` : b.key} depends on "${d}", a feature Oracle cannot find in any PRD or in Ground Truth` });
     }
-  });
+  }
   return {
     features: briefs,
-    problems: [...unknown, ...problems],
+    problems: [...unknown, ...inNoPrd, ...problems],
     code_map_used: !!file?.repos.length,
     unmapped_repos,
     unnamed_repo: !unmapped_repos.length && problems.length > 0,
@@ -4135,14 +4175,34 @@ function briefsYaml(briefs: Brief[], attempt: number): string {
  * problem a later rule may answer is checked again as the rules now are (its other problems
  * stay as they were), so the stop's page and its gate count the same problems.
  */
-export function recheckBriefs(db: RunsDb, r: RunOut) {
+export function recheckBriefs(db: RunsDb, r: RunOut, title: (r: RunOut) => string | null = (x) => x.document_title ?? null) {
+  const STALE = ["unknown_dependency", "dependency_in_no_prd"];
   for (const cp of r.checkpoints) {
     const check = cp.kind === "eng_review" && cp.status === "pending" ? briefsOf(cp) : null;
-    if (!check?.problems.some((p) => p.code === "unknown_dependency")) continue;
-    const deps = briefsCheckOf(check.features, undefined, undefined, db.roadmap_features ?? {});
-    const problems = [...deps.problems, ...check.problems.filter((p) => p.code !== "unknown_dependency")];
+    if (!check?.problems.some((p) => STALE.includes(p.code))) continue;
+    const known = { ...beingAdded(db, r, title), ...(db.roadmap_features ?? {}) };
+    const deps = briefsCheckOf(check.features, undefined, undefined, known, db.no_prd_features ?? {});
+    const problems = [...deps.problems, ...check.problems.filter((p) => !STALE.includes(p.code))];
     cp.payload = { ...cp.payload, briefs_check: { ...check, problems, elsewhere: { ...check.elsewhere, ...deps.elsewhere } } };
   }
+}
+
+/**
+ * As oracle.engineering.check.being_added: the Ground Truth features a live Ground Truth to PRD
+ * run other than `r` was started to add to its PRD, each named with that PRD; a draft or a
+ * stopped run adds nothing.
+ */
+function beingAdded(db: RunsDb, r: RunOut, title: (r: RunOut) => string | null): Record<string, string> {
+  const out: Record<string, string> = {};
+  const live = ["awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun"];
+  for (const run of [...db.runs].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
+    if (run.id === r.id || run.flow !== "baseline_to_prd" || !live.includes(run.status)) continue;
+    const prd = title(run) ?? (run.document_slug ? run.document_slug.replace(/[-_]/g, " ").replace(/^./, (c) => c.toUpperCase()) : null);
+    // "Safety PRD", with PRD after the title when it does not say so (as OnRoadmap.prd_name).
+    const name = !prd ? "a new PRD" : /prd$/i.test(prd) ? prd : `${prd} PRD`;
+    for (const f of run.knobs.features ?? []) out[f.key] ??= `${f.title} (being added to ${name})`;
+  }
+  return out;
 }
 
 const briefsOf = (cp: CheckpointOut) => ((cp.payload as { briefs_check?: BriefsCheck } | undefined)?.briefs_check ?? null);

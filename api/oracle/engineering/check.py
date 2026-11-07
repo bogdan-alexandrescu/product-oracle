@@ -277,7 +277,7 @@ async def being_added(db: AsyncSession, run: Run) -> dict[str, str]:
     that PRD: "Export logs (being added to Safety PRD)". A draft run (never started) or a
     stopped one adds nothing: the feature is in no PRD again."""
     from oracle.docs.models import Document
-    from oracle.roadmap.company import _slug_words
+    from oracle.roadmap.company import OnRoadmap, _slug_words
 
     out: dict[str, str] = {}
     rows = await db.execute(
@@ -287,9 +287,11 @@ async def being_added(db: AsyncSession, run: Run) -> dict[str, str]:
         .order_by(Run.created_at)
     )
     for knobs, title in rows:
-        prd = title or _slug_words((knobs or {}).get("document_slug")) or "a new"
+        prd = title or _slug_words((knobs or {}).get("document_slug"))
+        # "Safety PRD", with PRD after the title when it does not say so (OnRoadmap.prd_name).
+        name = OnRoadmap("", prd).prd_name if prd else "a new PRD"
         for f in (knobs or {}).get("target_features") or []:
-            out.setdefault(f["key"], f"{f['title']} (being added to {prd} PRD)")
+            out.setdefault(f["key"], f"{f['title']} (being added to {name})")
     return out
 
 
