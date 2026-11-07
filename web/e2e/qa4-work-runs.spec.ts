@@ -25,8 +25,10 @@ test.describe("desktop", () => {
   test("qa4-work-25: the over-budget banner says what Resume allows in the shown numbers, in short sentences", async ({ page }) => {
     await openRun(page, "Team workspaces");
     await expect(page.getByTestId("run-overrun-held")).toHaveText(
-      "Spent $14.20, past its limit. Estimate $9.00, limit $13.50 (150%). The PRD review is held until you resume it. Resuming lets it spend up to $18.70 in total, $4.50 more. Cancel run stops it.",
+      "Paused: over budget. Resume or cancel it.",
     );
+    // F-39: what Resume allows sits behind the Overrun (i).
+    await expect(page.getByTestId("run-resume-allows")).toHaveText("Resuming lets it spend up to $18.70 in total, $4.50 more.");
     await expect(page.getByTestId("run-overrun-held")).not.toContainText(";");
   });
 

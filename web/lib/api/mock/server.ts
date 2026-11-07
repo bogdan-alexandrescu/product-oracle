@@ -540,7 +540,9 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * next tick (recorded, the decide call answers 503; ./runs.ts); "slow-agents" as the default
  * company where a segment's agents take two ticks: the first reads them working (#258); "quiet-agents" as
  * "slow-agents" where the first tick reads agents with no heartbeat and no cost reported that wrote 12 proposals
- * (run-progress); "questions" as the default
+ * (run-progress); "stuck-agents" as "slow-agents" where the agents then send nothing new, each tick only
+ * reading them again (F-78); "long-decision" as the default company where the past review also took a
+ * decision whose title wraps on a phone (F-26, ./simple-meetings.ts); "questions" as the default
  * company plus an "Oracle asks" question on an intake with no PRD and an "Approver asks"
  * question on a PRD section, both asked of the signed-in owner, and one delegated to
  * approver@example.com (C2); "private-finding" as "questions" plus a private finding (S6) on
@@ -3476,6 +3478,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     undelivered: localStorage.getItem(MOCK_SCENARIO_KEY) === "undelivered",
     slowAgents: localStorage.getItem(MOCK_SCENARIO_KEY) === "slow-agents",
     quietAgents: localStorage.getItem(MOCK_SCENARIO_KEY) === "quiet-agents",
+    stuckAgents: localStorage.getItem(MOCK_SCENARIO_KEY) === "stuck-agents",
     // H11 Order priorities: Oracle saves a run's order within the limits at Act.
     autonomy: {
       level: () => levelFor((db.autonomy ??= emptyAutonomy()), "priorities"),

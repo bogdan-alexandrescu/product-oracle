@@ -138,8 +138,10 @@ test("rirs-19: a paused run says what Resume lets go on", async ({ page }) => {
   await openRun(page, "Paused");
   await expect(page.getByRole("button", { name: "Resume" })).toBeVisible();
   await expect(page.getByTestId("run-overrun-held")).toHaveText(
-    "Spent $14.20, past its limit. Estimate $9.00, limit $13.50 (150%). The PRD review is held until you resume it. Resuming lets it spend up to $18.70 in total, $4.50 more. Cancel run stops it.",
+    "Paused: over budget. Resume or cancel it.",
   );
+  // F-39: what Resume allows sits behind the Overrun (i).
+  await expect(page.getByTestId("run-resume-allows")).toHaveText("Resuming lets it spend up to $18.70 in total, $4.50 more.");
 });
 
 test("rirs-21: the header's Decide goes to the one decision below, not a second one", async ({ page }) => {
