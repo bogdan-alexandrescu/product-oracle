@@ -158,7 +158,7 @@ test.describe("desktop", () => {
     await expect(page.getByTestId("inbox-tab-new")).toBeVisible();
     // Two new runs are fewer than three: plain rows, never a group of them.
     await expect(page.getByTestId("checkpoint-group")).toHaveCount(0);
-    await expect(page.locator("[role=tabpanel] tr[data-need]").getByTestId("checkpoint-label").filter({ hasText: /^Confirm the baseline/ })).toHaveCount(2);
+    await expect(page.locator("[role=tabpanel] tr[data-need]").getByTestId("checkpoint-label").filter({ hasText: /^Confirm the Ground Truth/ })).toHaveCount(2);
     expect(await listed()).toBe(await tabCount("New"));
     await tabs.getByRole("tab", { name: /^Seen/ }).click();
     await expect(page.getByTestId("inbox-tab-open")).toBeVisible();

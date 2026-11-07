@@ -508,6 +508,29 @@ export function placedSlices(i: Item): Slice[] {
   return d.map((x) => ({ ...x, start_date: at(x.start_date!), end_date: was > 0 ? at(x.end_date!) : end }));
 }
 export type Milestone = Roadmap["milestones"][number];
+/** A goal milestone of a roadmap (its own, or a PRD's): what a feature is placed in from its panel. */
+export type GoalMilestone = Roadmap["goal_milestones"][number];
+
+/**
+ * item-milestone: the milestones a roadmap's feature can be placed in, in order: the roadmap's
+ * own first, then each PRD's in the one PRD order (`prdOrder`), each by its code (M1, M2, M10).
+ */
+export function placeable(all: readonly GoalMilestone[], roadmapId: string, prdOrder?: (a: { slug?: string | null; id?: string | null; title: string }, b: { slug?: string | null; id?: string | null; title: string }) => number): GoalMilestone[] {
+  return all
+    .filter((m) => m.roadmap_id === roadmapId)
+    .sort(
+      (a, b) =>
+        Number(!!a.prd) - Number(!!b.prd) ||
+        (a.prd && b.prd && a.prd.id !== b.prd.id ? (prdOrder?.(a.prd, b.prd) ?? a.prd.title.localeCompare(b.prd.title)) : 0) ||
+        a.code.localeCompare(b.code, undefined, { numeric: true }),
+    );
+}
+
+/** item-milestone: a goal milestone's words, its code and name, with its PRD when the roadmap's come from several ("M1 Load measured (Scale)"). */
+export function goalMilestoneWords(m: GoalMilestone, all: readonly GoalMilestone[]): string {
+  const prds = new Set(all.filter((x) => x.roadmap_id === m.roadmap_id && x.prd).map((x) => x.prd!.id));
+  return `${milestoneWords(`${m.code} ${m.name}`)}${m.prd && prds.size > 1 ? ` (${m.prd.title})` : ""}`;
+}
 
 /** A milestone's colour, by its code (M1, M2, M3, then round again). */
 const MILESTONE_INKS = ["var(--accent)", "var(--pass)", "var(--warn)", "var(--na)"];
@@ -568,7 +591,8 @@ export function planGoal(item: Item | undefined): string | null {
 /**
  * The rows' lanes. Goal: the API's goal groups, a planned item going under the goal its PRD's
  * plan slices move most, not another goal its feature supports (the API's lane of that goal
- * when there is one; one lane per goal, "No goal" last); Milestone: an item under its PRD's milestone of its first slice, in code
+ * when there is one; one lane per goal, "No goal" last); Milestone: an item placed in a goal milestone
+ * from its panel under that one (item-milestone), else under its PRD's milestone of its first slice, in code
  * order, titled with the PRD when the plan's items come from more than one; an item with no
  * slice under the track milestone it leads to (fix4 qa-simple-roadmap-11: the milestone naming
  * it, else its own milestone's, else the first of its track's it ends on or before), by date
@@ -602,12 +626,19 @@ export function lanes(data: Roadmap, by: Lane): Roadmap {
       tracked.find((m) => m.item_ids.includes(i.id)) ??
       (i.milestone?.name ? tracked.find((m) => m.name === i.milestone!.name && (!i.track || m.track_id === i.track.id)) : undefined) ??
       tracked.find((m) => !!i.track && m.track_id === i.track.id && i.end.date <= m.date!);
+    // item-milestone: a feature placed in a goal milestone from its panel goes in that one's lane.
+    const placed = new Map((data.goal_milestones ?? []).map((m) => [m.id, m]));
     for (const g of data.groups)
       for (const id of g.item_ids) {
         const item = byId.get(id);
+        const picked = item?.milestone?.id ? placed.get(item.milestone.id) : undefined;
         const first = item?.slices[0];
         const tm = item && !first ? leadsTo(item) : undefined;
-        if (first) {
+        if (picked) {
+          const key = picked.prd ? `milestone:${picked.prd.slug}:${picked.code}` : `goal-milestone:${picked.id}`;
+          order.set(key, [picked.code, picked.prd?.title ?? ""]);
+          put(key, goalMilestoneWords(picked, data.goal_milestones), id);
+        } else if (first) {
           const prd = item!.prd;
           const key = `milestone:${prd?.slug ?? ""}:${first.milestone}`;
           order.set(key, [first.milestone, prd?.title ?? ""]);

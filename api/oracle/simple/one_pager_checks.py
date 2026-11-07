@@ -590,7 +590,9 @@ def _num(text: str) -> float | None:
 
 
 def _n(x: float) -> str:
-    return str(int(x)) if x == int(x) else f"{x:g}"
+    """``x`` as a person writes it: thousands separators, no float noise, never cut or in
+    exponent form ("0.3", not "0.30000000000000004"; "1,234,567.5", not "1.23457e+06")."""
+    return f"{round(x, 6):,f}".rstrip("0").rstrip(".")
 
 
 def _sentences(sec: Section) -> list[str]:
@@ -612,11 +614,11 @@ def set_number(body: str, said: str, value: str) -> str | None:
     words (changed since)."""
     m = _number_at(body, said)
     return (
-        None if m is None else body[: m.start()] + _as_written(m.group(0), value) + body[m.end() :]
+        None if m is None else body[: m.start()] + as_written(m.group(0), value) + body[m.end() :]
     )
 
 
-def _as_written(old: str, value: str) -> str:
+def as_written(old: str, value: str) -> str:
     """``value`` as ``old`` is written: a count in words stays in words ("Eight" -> "Six",
     its case kept); a numeral, or a value with no word for it, as a numeral."""
     if old.isdigit() or old.lower() not in _WORDS:
@@ -629,12 +631,25 @@ def _as_written(old: str, value: str) -> str:
     return word.capitalize() if old[:1].isupper() else word
 
 
+def _like(before: str, value: float) -> str:
+    """``value`` written as ``before`` is: its thousands separators ("1,200,000") and at
+    least its places after the point ("2.75" -> "2.50"), more when the value needs them."""
+    places = len(before.partition(".")[2])
+    own = f"{round(value, 6):f}".rstrip("0").partition(".")[2]
+    return f"{round(value, 6):{',' if ',' in before else ''}.{max(places, len(own))}f}"
+
+
 def _fix(
     sec: Section, said: str, before: str, value: float, heading: bool = False
 ) -> dict[str, str] | None:
     if _number_at((sec.heading if heading else sec.body_md) or "", said) is None:
         return None
-    fix = {"section": sec.section_key, "said": said, "before": before, "value": _n(value)}
+    fix = {
+        "section": sec.section_key,
+        "said": said,
+        "before": before,
+        "value": _like(before, value),
+    }
     return fix | {"part": "heading"} if heading else fix
 
 
@@ -670,7 +685,8 @@ def numbers(sections: list[Section]) -> list[Look]:
                 noun = m.group("noun").lower().removesuffix("s").removesuffix("ie")
                 if hm is None and fields and noun not in listing:
                     continue
-                said = f"{m.group('n')} {m.group('noun')}{m.group('tail')}".strip()
+                # Every word from the number on ("two more features"), as _number_at reads it.
+                said = " ".join(m.group(0).split())
                 looks.append(Look(
                     "numbers",
                     f"“{said}” says {_n(n)}, but “{head}” shows {target} items.",
@@ -713,7 +729,7 @@ def _per_unit(sections: list[Section]) -> list[Look]:
                 looks.append(Look(
                     "numbers",
                     f"{_n(per)} {m.group('unit')} per {thing} × {count[2]} is "
-                    f"{_n(per * count[0])}, but the company-wide target says {_n(total)}.",
+                    f"{_n(per * count[0])}, but the company-wide target says {t.group('n')}.",
                     list(dict.fromkeys(_plain(x.heading or "") for x in (sec, count[1], tsec))),
                     list(dict.fromkeys(x.section_key for x in (sec, count[1], tsec))),
                     _fix(tsec, t.group(0), t.group("n"), per * count[0]),

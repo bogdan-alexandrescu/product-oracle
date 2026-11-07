@@ -363,6 +363,8 @@ function marked(text: string, notes: Record<string, string>): [string, string[]]
 const WORDS = "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty".split(" ");
 const NUM = `(?:\\d[\\d,]*(?:\\.\\d+)?|${WORDS.join("|")})`;
 const num = (t: string) => { const w = WORDS.indexOf(t.toLowerCase()); if (w >= 0) return w; const n = Number(t.replace(/,/g, "")); return Number.isNaN(n) ? null : n; };
+/** one_pager_checks._n: `x` as a person writes it: thousands separators, no float noise ("0.3", "1,234,567.5"). */
+const plainNum = (x: number) => Number(x.toFixed(6)).toLocaleString("en-US", { maximumFractionDigits: 6 });
 const COUNT = new RegExp(`\\b(${NUM})\\s+(?:(?:more|other|new|open|big|small|planned)\\s+)?(features|items|bets|ideas|requests|tickets|stories|epics|projects|risks)\\b((?:\\s+[a-z]+){0,3})`, "gi");
 const PER = new RegExp(`\\b(?:each|every|per)\\s+([a-z]+?)s?\\s+(?:[a-z]+\\s+){0,2}?(${NUM})\\s+([a-z]+(?:\\s+[a-z]+)?)`, "gi");
 const FIELD = /^[A-Z][\w ]{0,24}:\s/;
@@ -389,7 +391,7 @@ export function setNumber(body: string, said: string, value: string): string | n
 }
 
 /** one_pager_checks._as_written: a count in words stays in words ("Eight" -> "Six", its case kept); a numeral, or a value with no word for it, as a numeral. */
-function asWritten(old: string, value: string): string {
+export function asWritten(old: string, value: string): string {
   if (/^\d+$/.test(old) || !WORDS.includes(old.toLowerCase())) return value;
   const word = WORDS[Number(value)];
   if (!/^\d+$/.test(value) || !word) return value;
@@ -397,10 +399,18 @@ function asWritten(old: string, value: string): string {
   return old[0] === old[0].toUpperCase() ? word[0].toUpperCase() + word.slice(1) : word;
 }
 
+/** one_pager_checks._like: `value` written as `before` is: its thousands separators ("1,200,000") and at least its places after the point ("2.75" -> "2.50"), more when the value needs them. */
+function like(before: string, value: number): string {
+  const v = Number(value.toFixed(6));
+  const places = Math.max(before.split(".")[1]?.length ?? 0, v.toFixed(6).replace(/0+$/, "").split(".")[1]?.length ?? 0);
+  return before.includes(",") ? v.toLocaleString("en-US", { minimumFractionDigits: places, maximumFractionDigits: places }) : v.toFixed(places);
+}
+
 /** one_pager_checks._fix: a numbers item's fix (its document_id filled by the read); `heading`: the number is in the section's heading (part "heading"). */
 function fixOf(s: Sec, said: string, before: string, value: number, heading = false): Look["fix"] {
   if (!numberAt(heading ? s.heading : s.body, said)) return null;
-  return { action: "set_section_number", target: { document_id: "", section: s.key, said, ...(heading ? { part: "heading" } : {}) }, before, value: String(value), words: `Use ${value}`, proposal: null };
+  const shown = like(before, value);
+  return { action: "set_section_number", target: { document_id: "", section: s.key, said, ...(heading ? { part: "heading" } : {}) }, before, value: shown, words: `Use ${shown}`, proposal: null };
 }
 
 function numbers(secs: Sec[]): Look[] {
@@ -426,8 +436,9 @@ function numbers(secs: Sec[]): Look[] {
         if (n === null || n === target) continue;
         const noun = m[2].toLowerCase().replace(/s$/, "").replace(/ie$/, "");
         if (hm === null && fields && !listing.includes(noun)) continue;
-        const words = `${m[1]} ${m[2]}${m[3]}`.trim();
-        looks.push({ kind: "numbers", text: `“${words}” says ${n}, but “${head}” shows ${target} items.`, where: [head], source_keys: [s.key], fix: fixOf(s, words, m[1], target, t === head) });
+        // Every word from the number on ("two more features"), as numberAt reads it.
+        const words = m[0].split(/\s+/).filter(Boolean).join(" ");
+        looks.push({ kind: "numbers", text: `“${words}” says ${plainNum(n)}, but “${head}” shows ${target} items.`, where: [head], source_keys: [s.key], fix: fixOf(s, words, m[1], target, t === head) });
       }
     }
   }
@@ -451,7 +462,7 @@ function numbers(secs: Sec[]): Look[] {
         const where = [sec, count[1], ts];
         looks.push({
           kind: "numbers",
-          text: `${per} ${m[3]} per ${thing} × ${count[2]} is ${per * count[0]}, but the company-wide target says ${total}.`,
+          text: `${plainNum(per)} ${m[3]} per ${thing} × ${count[2]} is ${plainNum(per * count[0])}, but the company-wide target says ${tm![1]}.`,
           where: [...new Set(where.map((x) => plain(x.heading)))],
           source_keys: [...new Set(where.map((x) => x.key))],
           fix: fixOf(ts, tm![0], tm![1], per * count[0]),
