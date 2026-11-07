@@ -61,11 +61,11 @@ test("a decision names the member who clicked Approve", async ({ page }) => {
   await login(page, "approver@example.com");
   await page.getByTestId("nav-runs").click();
   await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth to PRD" })).toBeVisible();
 
   const baseline = page.getByTestId("checkpoint-baseline_confirm");
   await baseline.getByLabel("Note for the agents").fill("Name an owner for every goal");
   await baseline.getByRole("button", { name: "Approve and continue" }).click();
   const section = page.getByRole("complementary", { name: "Run" }).filter({ visible: true }).getByTestId("run-decisions");
-  await expect(section.getByTestId("run-decision")).toHaveText(["The baseline was approved by Priya Raman. Note: Name an owner for every goal."]);
+  await expect(section.getByTestId("run-decision")).toHaveText(["The Ground Truth was approved by Priya Raman. Note: Name an owner for every goal."]);
 });
