@@ -70,7 +70,7 @@ async def test_a_new_prd_version_marks_only_the_items_whose_section_changed(
     assert got["payment-step"]["freshness"] == "fresh"
     ship = got["shipping-step"]
     assert ship["freshness"] == "potentially_stale"
-    assert ship["stale_reasons"] == ["PRD section s-5-2 changed in version 2"]
+    assert ship["stale_reasons"] == ["PRD section 5.2 Shipping step changed in version 2"]
     assert ship["stale_since"] and ship["caused_by_change_id"]
     # Still traced to the PRD version it was built from: nothing rewritten.
     assert ship["prd"]["document"]["version"] == 1
@@ -84,6 +84,29 @@ async def test_a_new_prd_version_marks_only_the_items_whose_section_changed(
         assert event.subject_kind == "document_version" and event.cause == "version_imported"
         assert event.handled_by.index("trace.mark_stale") < event.handled_by.index("roadmap.items")
         assert event.data["roadmap"]["item_ids"] == [ship["id"]]
+
+
+async def test_a_section_gone_from_a_new_prd_version_is_named_by_its_old_heading(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+):
+    """protects=a section gone from the PRD is named by the heading it had in the version the
+    item was built from, in one read for every such item; fails_when=the reason names the
+    section's key ("PRD section s-5-2 is gone"); no_claim=a section that only changed."""
+    _, auth = owner
+    await approved_prd(client, auth)
+    await built_roadmap(client, auth, runtime)
+    text = draft("prd_v1.md")
+    assert "{#s-5-2}" in text
+    # Version 2 gives section 5.2 a new anchor: the key s-5-2 is gone.
+    assert (
+        await import_draft(client, auth, text.replace("{#s-5-2}", "{#s-5-2b}"))
+    ).status_code == 201
+    ship = (await items(client, auth))["shipping-step"]
+    assert ship["freshness"] == "potentially_stale"
+    assert "PRD section 5.2 Shipping step is gone in version 2" in ship["stale_reasons"]
+    assert not any("s-5-2" in r for r in ship["stale_reasons"])
 
 
 async def test_a_changed_requirement_marks_its_items(client, owner, runtime):  # noqa: F811
@@ -102,7 +125,10 @@ async def test_a_changed_requirement_marks_its_items(client, owner, runtime):  #
     assert resp.status_code == 200, resp.text
     got = await items(client, auth)
     assert got["payment-step"]["freshness"] == "potentially_stale"
-    assert got["payment-step"]["stale_reasons"] == ["requirement:saved-cards changed"]
+    # Named, never by its ref (the stale-marks walk).
+    assert got["payment-step"]["stale_reasons"] == [
+        'The requirement "Saved cards and wallets" changed'
+    ]
     assert got["shipping-step"]["freshness"] == "fresh"
 
 
@@ -220,7 +246,7 @@ async def test_bulk_changes_name_the_count_that_applies_to_the_item_once(
     await bulk(11)
     reasons = (await items(client, auth))["payment-step"]["stale_reasons"]
     # Only the requirement of the 42 and of the 11 is the payment step's: it is named, once.
-    assert reasons == ["requirement:saved-cards changed"], reasons
+    assert reasons == ['The requirement "Saved cards" changed'], reasons
 
 
 async def test_a_real_bulk_write_reads_ground_truth_items_merged_and_plural(

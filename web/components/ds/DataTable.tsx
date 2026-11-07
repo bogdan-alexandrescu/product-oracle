@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { Fragment, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { usePickableTable } from "./panel-close";
 
 export type Column<T> = {
@@ -157,11 +157,35 @@ export function DataTable<T>({
   const role = (c: Column<T>, i: number): PhoneRole => (c.hideOnPhone ? "hide" : (c.phone ?? (i === 0 ? "title" : "meta")));
   const phone = (c: Column<T>) =>
     `${c.hideOnPhone || c.phone === "hide" ? "max-[600px]:hidden" : ""} ${narrowClass(c.narrow)}`.trim();
-  const visibleCols = columns.length;
+  // The loading and empty lines span the columns drawn now. The CSS hides a phone's or a narrow
+  // table's columns, but a hidden header cell still takes a column slot, which a span of the
+  // visible count leaves out and a span of all of them gives the visible columns' room to. So
+  // while the table has no rows, the hidden columns (read from their <col>) drop their header
+  // cell. Rows keep every cell (their hidden ones line up with the header's), as do the lines
+  // among them (a group, a row's detail), which span every column.
+  const wrap = useRef<HTMLDivElement>(null);
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set());
+  const hides = columns.map((c) => `${c.key}:${phone(c)}`).join("|");
+  useLayoutEffect(() => {
+    const el = wrap.current;
+    if (!el) return;
+    const count = () => {
+      const cols = [...el.querySelectorAll(":scope > table > colgroup > col")];
+      const keys = columns.filter((_, i) => cols[i] && getComputedStyle(cols[i]).display === "none").map((c) => c.key);
+      setHidden((was) => (keys.length === was.size && keys.every((k) => was.has(k)) ? was : new Set(keys)));
+    };
+    count();
+    const watch = new ResizeObserver(count);
+    watch.observe(el);
+    return () => watch.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `hides` names every column and how it hides
+  }, [hides]);
+  const bare = list.length === 0;
+  const visibleCols = Math.max(1, columns.filter((c) => !hidden.has(c.key)).length);
 
   const groups = group ? list.map(group) : [];
   return (
-    <div className={`min-w-0 overflow-clip ${columns.some((c) => c.narrow) ? "@container" : ""}`} data-testid={testId}>
+    <div ref={wrap} className={`min-w-0 overflow-clip ${columns.some((c) => c.narrow) ? "@container" : ""}`} data-testid={testId}>
       <table
         // Roles are explicit because the phone layout changes the rows' CSS display.
         role={selectable ? "grid" : "table"}
@@ -179,17 +203,19 @@ export function DataTable<T>({
             box rather than laying its headers out wider than the phone (walk-docs-priorities 6). */}
         <thead className={hideHeader ? "sr-only" : "max-[600px]:sr-only"} role="rowgroup">
           <tr role="row" className={hideHeader ? "flex max-w-full flex-wrap" : "max-[600px]:flex max-[600px]:max-w-full max-[600px]:flex-wrap"}>
-            {columns.map((c) => (
-              <th
-                key={c.key}
-                scope="col"
-                role="columnheader"
-                aria-sort={c.ariaSort}
-                className={`sticky top-0 z-[1] h-9 bg-surface2 px-2 text-[13px] leading-4 font-semibold whitespace-nowrap text-text2 first:pl-4 last:pr-4 max-[600px]:first:pl-3 max-[600px]:last:pr-3 ${align(c)} ${phone(c)}`}
-              >
-                {c.header}
-              </th>
-            ))}
+            {columns.map((c) =>
+              bare && hidden.has(c.key) ? null : (
+                <th
+                  key={c.key}
+                  scope="col"
+                  role="columnheader"
+                  aria-sort={c.ariaSort}
+                  className={`sticky top-0 z-[1] h-9 bg-surface2 px-2 text-[13px] leading-4 font-semibold whitespace-nowrap text-text2 first:pl-4 last:pr-4 max-[600px]:first:pl-3 max-[600px]:last:pr-3 ${align(c)} ${phone(c)}`}
+                >
+                  {c.header}
+                </th>
+              ),
+            )}
           </tr>
         </thead>
         <tbody ref={body} role="rowgroup" className="max-[600px]:block">
@@ -224,7 +250,7 @@ export function DataTable<T>({
                   <tr role="row" className="border-t border-line bg-surface2 max-[600px]:block" data-group={g} {...groupProps?.(g)}>
                     <th
                       role="rowheader"
-                      colSpan={visibleCols}
+                      colSpan={columns.length}
                       scope="colgroup"
                       className="h-9 px-4 max-[600px]:flex max-[600px]:items-center max-[600px]:px-3 text-left font-display tracking-heading text-[15px] font-bold"
                     >
@@ -266,7 +292,7 @@ export function DataTable<T>({
                 )}
                 {extra != null && extra !== false && (
                   <tr role="row" data-detail={k} className="max-[600px]:block">
-                    <td role="cell" colSpan={visibleCols} className="px-4 pt-1 pb-3 max-[600px]:block max-[600px]:px-3">
+                    <td role="cell" colSpan={columns.length} className="px-4 pt-1 pb-3 max-[600px]:block max-[600px]:px-3">
                       {extra}
                     </td>
                   </tr>
