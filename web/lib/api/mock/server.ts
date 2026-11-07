@@ -570,6 +570,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * problem (C6, saved-addresses);
  * "feature-set-two" as "feature-set" with a second blocking problem of the same code on the same
  * feature (each waived on its own, with its own reason);
+ * "feature-set-names" as "feature-set" with problems naming a requirement, a goal and a feature whose
+ * key holds a non-ASCII letter (each named in the gate's rows, never by its key);
  * "scope-review" as the default company plus three runs at their feature set (C7: attempt 1
  * with three rows that need a person, attempt 2, and a held console approval);
  * "scope-review-kept" as "scope-review" with the held run's Bulk edit also new and a likely
@@ -2337,9 +2339,9 @@ function seedRunReviewDecider(): Db {
 }
 
 /** The default seed plus a run waiting at its feature set with a blocking problem (C6, ./runs.ts). */
-function seedFeatureSet(twoOfOne = false): Db {
+function seedFeatureSet(twoOfOne = false, named = false): Db {
   const db = seed();
-  seeded(twoOfOne ? "feature-set-two" : "feature-set", () => seedFeatureSetRun(db.runs!, runsContext(db), twoOfOne));
+  seeded(named ? "feature-set-names" : twoOfOne ? "feature-set-two" : "feature-set", () => seedFeatureSetRun(db.runs!, runsContext(db), twoOfOne, named));
   return db;
 }
 
@@ -3832,6 +3834,8 @@ function load(): Db {
             ? () => seedFeatureSet()
           : scenario === "feature-set-two"
             ? () => seedFeatureSet(true)
+          : scenario === "feature-set-names"
+            ? () => seedFeatureSet(false, true)
           : scenario === "baseline-review" || scenario === "baseline-review-console"
             ? () => seedBaselineReview(scenario === "baseline-review-console")
           : scenario === "simple-waits"

@@ -24936,6 +24936,20 @@ export interface components {
             titles: {
                 [key: string]: string;
             };
+            /**
+             * Requirement Names
+             * @default {}
+             */
+            requirement_names: {
+                [key: string]: string;
+            };
+            /**
+             * Goal Names
+             * @default {}
+             */
+            goal_names: {
+                [key: string]: string;
+            };
         };
         /**
          * FeatureSetProblem
