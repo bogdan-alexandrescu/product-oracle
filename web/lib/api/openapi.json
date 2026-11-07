@@ -129942,6 +129942,21 @@
             ],
             "title": "Code"
           },
+          "code_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "feature",
+                  "prd"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code From"
+          },
           "title": {
             "type": "string",
             "title": "Title"

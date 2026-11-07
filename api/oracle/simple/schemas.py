@@ -304,6 +304,9 @@ class SimpleRoadmapItem(BaseModel):
     # The PRD's own code of the section the item was imported from ("f-06" -> "F-06");
     # null when that section key is no code.
     code: str | None = None
+    # every-field-editable: where a code no one gives comes from: its Ground Truth feature
+    # ("feature") or its PRD section ("prd"), so set_code refuses it; null for an item's own.
+    code_from: Literal["feature", "prd"] | None = None
     title: str
     outcome: str | None = None
     # build-feature-panel (AN PR 1204): the item's notes (op edit_note), the panel's Notes row.

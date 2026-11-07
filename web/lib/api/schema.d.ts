@@ -43920,6 +43920,8 @@ export interface components {
             key: string;
             /** Code */
             code?: string | null;
+            /** Code From */
+            code_from?: ("feature" | "prd") | null;
             /** Title */
             title: string;
             /** Outcome */
