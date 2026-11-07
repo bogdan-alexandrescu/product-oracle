@@ -1,0 +1,133 @@
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { ADMIN, login, openRoadmapItem } from "./helpers";
+import { expect, test, type Locator, type Page } from "./test";
+
+/*
+ * item-milestone (product gap, Nov 6, 2026: no screen could put a roadmap item in a milestone):
+ * the one feature panel's Milestone row is a picker for every roadmap item, offering each
+ * milestone of the company roadmap across its PRDs (code and name, the PRD beside it when there
+ * are several), or none. A pick goes into the working draft with Undo (a commenter's is a
+ * proposal), and the Gantt's Group by Milestone regroups at once. Driven through the UI against
+ * the mock's "item-milestone" scenario: the "one-roadmap" company roadmap (User Safety and Scale
+ * items) with both PRDs' milestones. Invented data only.
+ */
+
+const DESKTOP = { viewport: { width: 1440, height: 900 } };
+const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
+
+const SAFETY_M1 = "M1 Reports reach a person (User Safety)";
+const SAFETY_M2 = "M2 Blocks hold everywhere (User Safety)";
+const SCALE_M1 = "M1 Load measured (Scale)";
+const ITEM = "read-replicas";
+
+async function open(page: Page, email: string = ADMIN.email) {
+  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "item-milestone"] as const);
+  await login(page, email);
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+}
+
+const card = (page: Page): Locator => page.getByTestId("floating-card");
+
+/** Opens the Milestone picker in the open card and saves `label`. */
+async function pick(page: Page, label: string) {
+  await card(page).getByRole("button", { name: "Change the milestone" }).click();
+  await card(page).getByLabel("Milestone", { exact: true }).selectOption({ label });
+  await card(page).getByRole("button", { name: "Save" }).click();
+}
+
+/** The items (their keys) in a lane of the Gantt: the bars between its header and the next one's. */
+async function itemsIn(page: Page, title: string): Promise<string[]> {
+  const header = page.getByTestId("chart-group").filter({ has: page.locator("span", { hasText: new RegExp(`^${title.replace(/[()]/g, "\\$&")}$`) }) });
+  await expect(header, `a lane "${title}"`).toHaveCount(1);
+  await header.scrollIntoViewIfNeeded();
+  const top = (await header.boundingBox())!.y;
+  const tops = await page.locator('[data-testid="chart-group"], [data-testid="below-the-line"]').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().top));
+  const next = Math.min(...tops.filter((t) => t > top + 1), Number.POSITIVE_INFINITY);
+  return page.locator('g[data-testid="bar"]').evaluateAll(
+    (els, [from, to]) =>
+      els
+        .filter((e) => {
+          const r = e.getBoundingClientRect();
+          const mid = r.top + r.height / 2;
+          return mid > from && mid < to;
+        })
+        .map((e) => e.getAttribute("data-item") ?? ""),
+    [top, next] as const,
+  );
+}
+
+const lane = (page: Page, title: string): Locator => page.getByTestId("chart-group").filter({ has: page.locator("span", { hasText: title }) });
+
+for (const [name, device] of [["desktop", DESKTOP], ["phone", PHONE]] as const) {
+  test.describe(`a feature's milestone in its panel (${name})`, () => {
+    test.use(device);
+    test.setTimeout(90_000);
+
+    /**
+     * protects = Read replicas (a Scale item with no milestone) gets a Milestone picker in its
+     * panel offering No milestone and every milestone of the company roadmap, User Safety's and
+     * Scale's, each by code and name with its PRD; picking User Safety's M2 says so with Undo and
+     * the panel reads it; the Gantt's Group by Milestone puts it in that lane; a second pick made
+     * from the grouped Gantt moves it to Scale's M1 lane at once; Undo moves it back; No
+     * milestone puts it with the rest; fails_when = the row is read-only or missing, a PRD's
+     * milestones are not offered, the pick is not saved, or the Gantt keeps the old grouping
+     * until a reload; no_claim = how the API stores the pick (api pytest).
+     */
+    test("an owner puts a feature in any PRD's milestone and the Gantt regroups", async ({ page }) => {
+      await open(page);
+      await openRoadmapItem(page, ITEM);
+      await expect(card(page)).toBeVisible();
+      await expect(card(page).getByTestId("card-milestone")).toHaveText("No milestone");
+      await card(page).getByRole("button", { name: "Change the milestone" }).click();
+      await expect(card(page).getByLabel("Milestone", { exact: true }).locator("option")).toHaveText(["No milestone", SAFETY_M1, SAFETY_M2, SCALE_M1]);
+      await card(page).getByRole("button", { name: "Cancel" }).click();
+
+      await pick(page, SAFETY_M2);
+      await expect(page.getByText("Milestone changed in your working draft").first()).toBeVisible();
+      await expect(card(page).getByTestId("card-milestone")).toHaveText(SAFETY_M2);
+      await card(page).getByRole("button", { name: "Close" }).click();
+
+      await page.getByTestId("format-gantt").click();
+      await page.getByTestId("group-milestone").click();
+      expect(await itemsIn(page, SAFETY_M2)).toEqual([ITEM]);
+      expect(await itemsIn(page, "No milestone")).not.toContain(ITEM);
+
+      // From the grouped Gantt: its bar opens the same panel; the lane follows the pick at once.
+      const bar = page.locator(`g[data-testid="bar"][data-item="${ITEM}"]`);
+      await bar.scrollIntoViewIfNeeded();
+      await bar.click();
+      await expect(card(page).getByTestId("card-milestone")).toHaveText(SAFETY_M2);
+      await pick(page, SCALE_M1);
+      await expect(card(page).getByTestId("card-milestone")).toHaveText(SCALE_M1);
+      await expect(lane(page, SAFETY_M2)).toHaveCount(0);
+      expect(await itemsIn(page, SCALE_M1)).toEqual([ITEM]);
+
+      // Undo puts it back in User Safety's M2.
+      await page.getByRole("button", { name: "Undo" }).last().click();
+      await expect(card(page).getByTestId("card-milestone")).toHaveText(SAFETY_M2);
+      await expect(lane(page, SCALE_M1)).toHaveCount(0);
+      expect(await itemsIn(page, SAFETY_M2)).toEqual([ITEM]);
+
+      await pick(page, "No milestone");
+      await expect(card(page).getByTestId("card-milestone")).toHaveText("No milestone");
+      await expect(lane(page, SAFETY_M2)).toHaveCount(0);
+      expect(await itemsIn(page, "No milestone")).toContain(ITEM);
+    });
+
+    /**
+     * protects = a commenter's pick is a proposal for the people who decide: the panel says it
+     * waits in Needs a decision and the feature stays in no milestone; fails_when = the
+     * commenter's pick applies, or the picker is missing for them; no_claim = deciding it (the
+     * change engine's own specs).
+     */
+    test("a commenter's pick waits for a decision", async ({ page }) => {
+      await open(page, "commenter@example.com");
+      await openRoadmapItem(page, ITEM);
+      await expect(card(page).getByTestId("card-milestone")).toHaveText("No milestone");
+      await pick(page, SCALE_M1);
+      await expect(page.getByText(/^Milestone changed proposed: it waits for/).first()).toBeVisible();
+      await expect(card(page).getByTestId("card-milestone")).toHaveText("No milestone");
+    });
+  });
+}
