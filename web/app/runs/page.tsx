@@ -114,9 +114,6 @@ export default function RunsPage() {
   // qa-work-10: the badge counts only the runs this person can act on; the rest wait on others.
   const mine = waiting.filter((r) => rowAction(r) !== null);
   const others = waiting.length - mine.length;
-  // qa-work-24: the action column is as wide as what it shows (a button, or who decides), so
-  // the For column keeps each name on one line beside the page's scrollbar room.
-  const saysWho = runs.some((r) => rowAction(r) === null && rowWaitsOn(r) !== null);
 
   const columns: Column<RunSummary>[] = [
     {
@@ -201,7 +198,9 @@ export default function RunsPage() {
     {
       key: "act",
       header: <span className="sr-only">Action</span>,
-      width: saysWho ? "160px" : "128px",
+      // qa-work-24: one width whoever looks, narrow enough that the For column keeps each name on
+      // one line; who decides wraps onto two short lines within the row's height instead.
+      width: "128px",
       align: "right",
       phone: "action",
       // qa-work-24: one button style, one width, right-aligned; who decides when it is not you.
@@ -221,7 +220,7 @@ export default function RunsPage() {
           );
         const who = rowWaitsOn(r);
         return who ? (
-          <span className="text-[13px] whitespace-nowrap text-text2" data-testid="run-waits-on">
+          <span className="block text-[13px] leading-4 whitespace-normal text-text2" data-testid="run-waits-on">
             {who}
           </span>
         ) : null;
