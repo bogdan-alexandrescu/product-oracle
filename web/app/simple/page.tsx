@@ -374,7 +374,6 @@ export default function SimpleHome() {
       ? d.changes > 0 && (d.created_by === myId || d.participant_ids.includes(myId))
       : d.status === "submitted" && (d.can_approve || d.submitted_by === myId || d.created_by === myId),
   );
-  const shownDrafts = new Set(myDrafts.map((d) => d.id));
   const proposalRows = toDecide.length > 0 || decidesAll ? toDecide : mine;
   const proposalTitle = toDecide.length > 0 || decidesAll ? "Proposals on your items" : "Your proposals waiting";
   // A decider's own proposals on items others decide wait too: their own card.
@@ -399,8 +398,7 @@ export default function SimpleHome() {
   const runStops = revisit && inbox.loading ? undefined : runStopsOf(inbox.data)?.filter((s) => !waitKeys || waitKeys.has(`run_stop:${s.id}`));
   // What else waits on me and has no card of its own here: drafts for my approval, dates to
   // confirm and goal suggestions I decide, each with its action in place.
-  // A draft the summary card shows with its action is not listed twice.
-  const alsoWaiting = (waiting.data?.items ?? []).filter((i) => (i.kind === "draft" && !shownDrafts.has(i.ref_id)) || i.kind === "goal_suggestion" || (i.kind === "date" && !i.op));
+  const alsoWaiting = (waiting.data?.items ?? []).filter((i) => i.kind === "draft" || i.kind === "goal_suggestion" || (i.kind === "date" && !i.op));
   const stopCount = runStops?.length ?? 0;
   // walkc-roadmap-tasks: the open tasks on roadmap items that wait on me.
   const myTasks = waiting.data?.tasks ?? [];

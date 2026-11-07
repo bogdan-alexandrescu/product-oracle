@@ -38,12 +38,11 @@ test("a roadmap draft sent for review shows on Home to its decider until decided
   await draftRow(page).getByRole("button", { name: "Waiting for review" }).click();
   await expect(page.getByText(/it waits for Priya Raman to approve/)).toBeVisible();
 
-  // The decider: the card with its one action, listed once.
+  // The decider: the card with its one action.
   await signOut(page);
   await login(page, "approver@example.com");
   await openHome(page);
   await expect(draftRow(page)).toContainText("Waiting for your approval");
-  await expect(page.getByTestId("home-also-waiting-list").filter({ hasText: "Onboarding roadmap" })).toHaveCount(0);
   await draftRow(page).getByRole("link", { name: "Open draft to approve" }).click();
   await expect(page).toHaveURL(/\/simple\/roadmap\?draft=/);
   await page.getByTestId("draft-banner").getByRole("button", { name: "Approve", exact: true }).click();
@@ -52,6 +51,7 @@ test("a roadmap draft sent for review shows on Home to its decider until decided
   // Decided: gone from Home.
   await openHome(page);
   await expect(draftRow(page)).toHaveCount(0);
+  await expect(page.getByTestId("waiting-item").filter({ hasText: "Onboarding roadmap" })).toHaveCount(0);
 });
 
 test("a viewer sees no draft in review on Home", async ({ page }) => {
