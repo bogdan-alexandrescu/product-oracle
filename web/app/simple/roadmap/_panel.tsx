@@ -12,6 +12,7 @@ import { useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/simple-waiting";
 
 import { FloatingCard, type Act } from "./_card";
+import { DraftDetails, type DraftItem, type DraftPrd } from "./_drafts";
 import { ChangeFailed, changedWords, decide, nearWords, propose, resultWords, setRoadmapToday, suggestion, undo, type Change, type Item } from "./_lib";
 
 const toast = (ask: ToastAsk) => dsToast({ place: "corner", ...ask });
@@ -62,11 +63,17 @@ export function FeaturePanel({
   phone,
   canChange,
   onClose,
+  draft,
+  top,
 }: {
   feature: PanelFeature;
   phone: boolean;
   canChange: boolean;
   onClose: () => void;
+  /** RP2 'Draft layer on roadmap': a draft PRD's item, on no roadmap yet; its changes go to the run's draft. */
+  draft?: { item: DraftItem; prd: DraftPrd; onChanged: (said: string) => Promise<unknown> };
+  /** Where the desktop panel starts (px from the top), when not its corner: under the page's toolbar. */
+  top?: number;
 }) {
   const roadmap = useQuery("simple-roadmap:{}", () =>
     unwrap(api.GET("/v1/simple/roadmap", {})).then((d) => {
@@ -151,7 +158,9 @@ export function FeaturePanel({
     sendItemChanged();
   };
 
-  const body = !data ? (
+  const body = draft ? (
+    <DraftDetails item={draft.item} prd={draft.prd.prd} canChange={draft.prd.can_change} onChanged={draft.onChanged} onClose={onClose} />
+  ) : !data ? (
     <p className="p-4 text-[15px] text-text2">{roadmap.error ?? "Loading…"}</p>
   ) : !item ? (
     <div className="p-4">
@@ -178,16 +187,17 @@ export function FeaturePanel({
       onSuggestion={(how, dates) => void onSuggestion(how, dates)}
     />
   );
-  if (phone && item) return <div data-testid="item-panel" aria-label={item.title} className="contents">{body}</div>;
+  if (phone && item && !draft) return <div data-testid="item-panel" aria-label={item.title} className="contents">{body}</div>;
   return (
     <aside
       data-testid="item-panel"
-      aria-label={item?.title ?? feature.name}
+      aria-label={draft?.item.title ?? item?.title ?? feature.name}
       className={
         phone
           ? "fixed inset-x-0 bottom-0 z-40 rounded-t-xl border border-line bg-surface shadow-tip"
           : "fixed right-3 top-3 z-40 max-h-[calc(100dvh-24px)] w-[400px] overflow-y-auto rounded-xl border border-line bg-surface shadow-tip"
       }
+      style={!phone && top ? { top, maxHeight: `calc(100dvh - ${top + 12}px)` } : undefined}
     >
       {body}
     </aside>
