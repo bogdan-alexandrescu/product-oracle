@@ -179,7 +179,7 @@ import { runGroupsOut } from "./simple-runs";
 import { roadmapRead } from "./roadmap-read";
 import { questionInboxRows } from "./simple-questions";
 import { rebuildsOut } from "./rebuilds";
-import { onePagerInboxRows, planSlice, prdOnePager, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { onePagerInboxRows, onePagerProposalsOut, planSlice, prdOnePager, routeOnePager, seedHeadingCountOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
@@ -1307,6 +1307,35 @@ function seedSimplePlanScenario(datedAll = false): Db {
     id: db.simple_one_pager.doc.id, slug: PLAN_PRD_SLUG, title: db.simple_one_pager.doc.title, status: "approved", kind: "prd",
     template: null, template_version: null, theme: null, created_at: at, updated_at: at,
   });
+  return db;
+}
+
+/**
+ * The "one-pager-heading-count" scenario (owner, Nov 5, 'Fix the heading too'): Guided setup's
+ * one-pager counts "Later · 8 items" in a heading over six listed, and the PRD's approved
+ * version 3 holds the same sections, so its full page reads what a submitted draft imports;
+ * the PRD has a decider (Dana Decider). Invented data.
+ */
+function seedHeadingCountScenario(): Db {
+  const db = seed();
+  // The PRD's decider (fix round 2), so its track owner proposes a fix, as in "simple-deciders".
+  db.members.push({
+    email: "dana.decider@example.com", name: "Dana Decider", role: "approver", engineering_lead: false, created_at: "2026-09-10T09:00:00Z",
+    id: uuid(), disabled_at: null, disabled_by: null, status: "active", open_tokens: 0,
+  });
+  const op = (db.simple_one_pager = seedHeadingCountOnePager());
+  const at = "2026-10-20T15:05:00Z";
+  const doc: DocumentRow = {
+    id: op.doc.id, slug: op.doc.slug, title: op.doc.title, status: "approved", kind: "prd",
+    template: null, template_version: null, theme: null, created_at: at, updated_at: at,
+  };
+  db.documents.push(doc);
+  const v3 = buildVersion(doc, {
+    number: 3, created_at: "2026-10-20T15:00:00Z", citations: [],
+    sections: [{ key: "title", level: 1, heading: op.doc.title, body: "Help new admins finish setup on their first day." }, ...op.sections.map((x) => ({ ...x, level: 2 }))],
+  });
+  v3.approved_at = at;
+  db.versions.push(v3);
   return db;
 }
 
@@ -3883,6 +3912,8 @@ function load(): Db {
                 ? () => seedSimplePlanScenario()
               : scenario === "roadmap-keydates"
                 ? seedRoadmapKeyDatesScenario
+              : scenario === "one-pager-heading-count"
+                ? seedHeadingCountScenario
               : scenario === "roadmap-keydates-uncoded"
                 ? seedRoadmapKeyDatesUncodedScenario
               : scenario === "roadmap-keydates-two-prds"
@@ -6360,7 +6391,7 @@ async function onePagerOf(db: Db, req: Request, p: string[]): Promise<OnePagerDb
   if (p[2] === "changes" && p[3]) return all.find((o) => o.changes.some((c) => c.id === p[3])) ?? seeded;
   if (p[2] === "changes" && req.method === "POST") {
     const b = ((await req.clone().json().catch(() => ({}))) ?? {}) as { op?: string; target?: { document_id?: unknown } };
-    if (b.op === "edit_line") return forDoc(b.target?.document_id) ?? seeded;
+    if (b.op === "edit_line" || b.op === "set_section_number") return forDoc(b.target?.document_id) ?? seeded;
   }
   return seeded;
 }
@@ -7301,6 +7332,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     ? seedNeedsLookOnePager()
     : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-not-in-prd"
     ? seedNotInPrdOnePager()
+    : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-heading-count"
+    ? seedHeadingCountOnePager()
     : seedOnePager(localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-no-owner");
   // Simple S10: the visuals the one-pager, the roadmap and the priorities show.
   db.simple_visuals ??= seedVisuals();
@@ -7387,6 +7420,20 @@ async function route(db: Db, req: Request): Promise<Response> {
         // Its decider and track owners, as the meetings mock's Guided setup (simple-meetings prds).
         decider: onePagerDb.doc.slug === "guided-setup" ? (db.members.find((x) => x.email === "dana.decider@example.com")?.id ?? null) : null,
         trackOwners: onePagerDb.doc.slug === "guided-setup" && mockApproverOwnsTrack() ? db.members.filter((x) => x.email === "approver@example.com").map((x) => x.id) : [],
+        // As drafts.submit: the PRD's next version imported with the draft's sections, so its
+        // full page reads them (only a PRD the mock keeps versions of).
+        imported: (sections, version) => {
+          const doc = db.documents.find((d) => d.id === onePagerDb.doc.id);
+          const last = doc ? docVersions(db, doc).at(-1) : undefined;
+          if (!doc || !last || last.number >= version) return;
+          const drafted = new Map(sections.map((x) => [x.key, x]));
+          db.versions.push(buildVersion(doc, {
+            number: version, created_at: now(), citations: [], by: { id: me.id, name: displayName(me.email, me.name) },
+            sections: last.sections.map((x) => ({ key: x.section_key, level: x.level, heading: drafted.get(x.section_key)?.heading ?? x.heading, body: drafted.get(x.section_key)?.body ?? x.body_md })),
+          }));
+          doc.status = "in_review";
+          doc.updated_at = now();
+        },
         notify: (user_id, kind, title, data, version) =>
           ensureReviewV2(db).notifications.push({
             id: uuid(), user_id, kind, title, document_id: onePagerDb.doc.id, version_number: version, section_key: null,
@@ -7537,7 +7584,10 @@ async function route(db: Db, req: Request): Promise<Response> {
       if (engineRes?.ok) {
         const rows = (await engineRes.json()) as Schemas["SimpleChangeOut"][];
         const sheet = (await sheetProposals(meetingsDb, meetingsCtx, q.get("status"))).filter((c) => q.get("mine") !== "true" || c.by === me.id);
-        return json(200, [...rows, ...sheet].sort((a, b) => (a.at < b.at ? 1 : -1)));
+        // The one-pagers' proposals are Simple changes too (a line's wording, a number fix: PR 1320 re-review).
+        const onePagers = q.get("status") === "proposed" ? onePagerProposalsOut([...(db.simple_one_pager ? [db.simple_one_pager] : []), ...Object.values(db.simple_one_pagers ?? {})], { id: me.id, role: me.role }, q.get("mine") === "true") : [];
+        // Newest first; a tie keeps each list's own order (the changes' is the order made, qaC-numfix).
+        return json(200, [...rows, ...sheet, ...onePagers].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)));
       }
       if (engineRes) return engineRes;
     }

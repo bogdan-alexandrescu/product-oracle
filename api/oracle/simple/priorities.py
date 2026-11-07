@@ -203,7 +203,7 @@ async def _proposals(
                 SimpleChange.status == "proposed",
                 SimpleChange.op.in_(PROPOSED_OPS + DRAFT_OPS),
             )
-            .order_by(SimpleChange.at, SimpleChange.id)
+            .order_by(SimpleChange.at, SimpleChange.seq)
         )
     )
     if not rows:

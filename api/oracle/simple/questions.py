@@ -428,7 +428,8 @@ async def rows(
     views = await plan.views(db, set(docs))
     pending = {}
     for c in await db.scalars(select(SimpleChange).where(
-            SimpleChange.op == "decide_question", SimpleChange.status == "proposed")):  # fmt: skip
+            SimpleChange.op == "decide_question", SimpleChange.status == "proposed")
+            .order_by(SimpleChange.at, SimpleChange.seq)):  # fmt: skip
         pending.setdefault(c.target.get("decision_id"), c)
     from oracle.simple import decision_sheet
 
@@ -667,7 +668,7 @@ async def due_for(
         made = list(await db.scalars(select(SimpleChange).where(
             SimpleChange.session_id == session_id, SimpleChange.op == "decide_question",
             SimpleChange.status == "applied", SimpleChange.by == me)
-            .order_by(SimpleChange.at.desc())))  # fmt: skip
+            .order_by(SimpleChange.at.desc(), SimpleChange.seq.desc())))  # fmt: skip
         undone = set(await db.scalars(select(SimpleChange.undoes_id).where(
             SimpleChange.undoes_id.in_([c.id for c in made])))) if made else set()  # fmt: skip
         for q in done:

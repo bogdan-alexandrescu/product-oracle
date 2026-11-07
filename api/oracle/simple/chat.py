@@ -318,7 +318,8 @@ async def shown_text(
     number = saved.number if saved is not None else None
     d = await one_pager._open_draft(db, prd)
     patched = ((d.overlay or {}).get("sections") or {}) if d is not None else {}
-    if not patched or d is None or d.base_version_id is None:
+    heads = ((d.overlay or {}).get("headings") or {}) if d is not None else {}
+    if not (patched or heads) or d is None or d.base_version_id is None:
         return text, number
     if not one_pager.sees_draft(principal, d, await one_pager.who(db, prd)):
         return text, number
@@ -331,13 +332,15 @@ async def shown_text(
         )
     )
     try:
-        return one_pager.patched_markdown(base, secs, patched), base.number
+        return one_pager.patched_markdown(base, secs, patched, heads), base.number
     except ChangeError:
         # A section the patch cannot find in the markdown: its front matter and title, then
         # its sections as the one-pager lists them, each with its edited body.
         head = re.split(r"^## ", base.markdown, maxsplit=1, flags=re.M)[0].strip()
         body = "\n\n".join(
-            f"## {x.heading}\n\n{patched.get(x.section_key, x.body_md).strip()}" for x in secs
+            f"## {heads.get(x.section_key, x.heading)}\n\n"
+            f"{patched.get(x.section_key, x.body_md).strip()}"
+            for x in secs
         )
         return "\n\n".join(p for p in (head, body) if p), base.number
 
@@ -2707,7 +2710,7 @@ async def walk(db: AsyncSession, principal: Any) -> WalkOut:
         await db.scalars(
             select(SimpleChange)
             .where(SimpleChange.status == "proposed")
-            .order_by(SimpleChange.at, SimpleChange.id)
+            .order_by(SimpleChange.at, SimpleChange.seq)
         )
     )
     if proposed:

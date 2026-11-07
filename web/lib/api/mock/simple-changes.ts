@@ -79,6 +79,7 @@ import {
 } from "./simple-roadmap";
 import { routeGoalSuggestions } from "./simple-suggestions";
 import { entryOut, mayRestore, restoreFromTrash, type TrashDb, type TrashEntryRow } from "./trash";
+import { madeOrder } from "./made-order";
 
 type Change = Schemas["SimpleChangeOut"];
 type Session = Schemas["SimpleSessionOut"];
@@ -466,11 +467,32 @@ function newSession(db: SimpleDb, me: string, kind: Session["kind"]): Session {
   return s;
 }
 
+/** A conflict's field and the fields of a change that write it (changes.py WRITES). */
+const WRITES: Record<string, string[]> = { status: ["status", "cut", "shipped"], goal_id: ["goal_id", "goal_ids"] };
+const IS_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** changes._fields: the fields a conflict is about (its items' when keyed by item id); null for any field. */
+function conflictFields(current: Values): string[] | null {
+  const keys = Object.entries(current).flatMap(([k, v]) => (IS_ID.test(k) && v && typeof v === "object" && !Array.isArray(v) ? Object.keys(v) : [k]));
+  if (!keys.length || keys.includes("dependents")) return null;
+  return keys.flatMap((k) => WRITES[k] ?? [k]);
+}
+
+/** changes._writes: whether the change wrote one of these fields of one of these items. */
+function writesFields(c: Change, ids: string[], fields: string[] | null): boolean {
+  if (!(c.op === "set_goal_measure" ? [String(c.target.goal_id)] : touched(c)).some((i) => ids.includes(i))) return false;
+  // A goal's measure: any change of it (targets._last_writer looks by the goal, not its fields).
+  if (!fields || c.op === "set_goal_measure") return true;
+  const wrote = KEYED.includes(c.op) ? ids.flatMap((i) => Object.keys((c.after[i] as Values | undefined) ?? {})) : Object.keys(c.after);
+  return wrote.some((f) => fields.includes(f));
+}
+
 function conflict(db: SimpleDb, ctx: SimpleChangesCtx, current: Values, ids: string[], lead: string): Response {
-  const last = (db.changes ?? [])
-    .filter((c) => ["applied", "accepted", "undone"].includes(c.status) && (c.op === "set_goal_measure" ? [String(c.target.goal_id)] : touched(c)).some((i) => ids.includes(i)))
-    .map((c) => ({ at: c.status === "accepted" && c.decided_at ? c.decided_at : c.at, who: c.status === "accepted" && c.decided_by ? c.decided_by : c.by }))
-    .sort((a, b) => (a.at < b.at ? 1 : -1))[0];
+  const fields = conflictFields(current);
+  const writes = (db.changes ?? [])
+    .filter((c) => ["applied", "accepted", "undone"].includes(c.status) && writesFields(c, ids, fields))
+    .map((c) => ({ at: c.status === "accepted" && c.decided_at ? c.decided_at : c.at, who: c.status === "accepted" && c.decided_by ? c.decided_by : c.by }));
+  const last = madeOrder(writes, (w) => [w.at], true)[0];
   // roadmap-edit-fixes (changes._last_writer): Oracle's draft filled it last: Oracle changed it.
   const oracle = db.items.filter((x) => ids.includes(db.ids[x.key]) && x.drafted_at).map((x) => x.drafted_at!).sort().reverse()[0];
   if (oracle && (!last || oracle >= last.at)) {
@@ -556,9 +578,8 @@ function intoDrafts(db: SimpleDb, c: Change, session: Session, undo = false): st
 /** D-d: the draft's applied changes, not undone: who, when, and whether in a meeting. */
 function changeLog(db: SimpleDb, id: string): Schemas["SimpleDraftChange"][] {
   const cs = db.changes ?? [];
-  return cs
+  return madeOrder(cs, (c) => [c.at])
     .filter((c) => ["applied", "accepted"].includes(c.status) && (c.draft_ids ?? []).includes(id) && !cs.some((u) => u.undoes_id === c.id))
-    .sort((a, b) => (a.at < b.at ? -1 : 1))
     .map((c) => {
       const kind = (db.sessions ?? []).find((x) => x.id === c.session_id)?.kind ?? null;
       // roadmap-decide: every line names its item (a fix: then what else moved).
@@ -1384,10 +1405,9 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   if (!p[3] && m === "POST") return create(db, ctx, (await req.json()) as Schemas["SimpleChangeIn"]);
   if (!p[3] && m === "GET") {
     const status = q.get("status");
-    const rows = (db.changes ?? [])
+    const rows = madeOrder(db.changes ?? [], (c) => [c.at], true)
       .filter((c) => (!q.get("session") || c.session_id === q.get("session")) && (!q.get("document") || c.document_id === q.get("document")) && (!status || c.status === status) && (q.get("mine") !== "true" || c.by === ctx.id))
-      .filter((c) => sees(db, ctx, c) && !onReplacedPrd(db, c))
-      .sort((a, b) => (a.at < b.at ? 1 : -1));
+      .filter((c) => sees(db, ctx, c) && !onReplacedPrd(db, c));
     return json(200, rows.map((c) => view(db, ctx, c)));
   }
   const c = (db.changes ?? []).find((x) => x.id === p[3]);
@@ -1586,7 +1606,8 @@ export function simpleInboxRows(
   seen: string | null,
   who: Pick<SimpleChangesCtx, "owners" | "roles"> & { role?: Role; names?: Record<string, string> } = { owners: [] },
 ): { simple_proposals: Schemas["InboxSimpleChange"][]; simple_decisions: Schemas["InboxSimpleChange"][]; simple_approvals: Schemas["InboxSimpleApproval"][] } {
-  const changes = db?.changes ?? [];
+  // As changes.inbox_rows: newest decision first, then newest made, a tie by the order made.
+  const changes = madeOrder(db?.changes ?? [], (c) => [c.decided_at, c.at], true);
   const row = (c: Change, at: string | null, state?: Schemas["InboxSimpleChange"]["state"]): Schemas["InboxSimpleChange"] => {
     const key = db ? keyOf(db, c.target.item_id) : undefined;
     const title = key ? seed(db!, key).title : null;

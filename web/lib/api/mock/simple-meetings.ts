@@ -59,6 +59,7 @@ import { APPROVED_KEY, draftAct, draftRoadmapOut } from "./meeting-draft";
 import { goalRank, homeRoadmapOf, roadmapId, roadmapOut, tasksWaiting, type SimpleDb } from "./simple-roadmap";
 import type { ChatMeetings, MeetingAgenda, MeetingNote } from "./simple-chat";
 import { agendaRight, agendaRowsOut, editAgenda, restoreAgendaRow, TOPIC_MINS, type AgendaCtx, type AgendaRowDb, type AgendaSheetDb } from "./simple-meeting-agenda";
+import { madeOrder } from "./made-order";
 
 export const MOCK_MEETINGS_KEY = "po-mock-simple-meetings";
 /** "minutes-later": the minutes job ends this long after End (the production walk: 14 s). */
@@ -535,7 +536,7 @@ function proposals(ctx: MeetingsCtx, p: Prd): Change[] {
   const ids = new Set(prdItems(ctx, p).map((i) => i.id));
   const roadmap = (ctx.roadmap.changes ?? []).filter((c) => c.status === "proposed" && ids.has(String(c.target.item_id)));
   const lines = p.slug === ctx.onePager.doc.slug ? ctx.onePager.changes.filter((c) => c.status === "proposed") : [];
-  return [...roadmap, ...lines].filter((c) => sees(ctx, c)).sort((a, b) => (a.at < b.at ? -1 : 1)).map((c) => bare(ctx, c));
+  return madeOrder([...roadmap, ...lines], (c) => [c.at]).filter((c) => sees(ctx, c)).map((c) => bare(ctx, c));
 }
 
 /** The decider approved, and something still holds publishing (drafts.holds). */
@@ -859,7 +860,7 @@ function record(db: MeetingsDb, ctx: MeetingsCtx, m: Meeting, title: string, sub
 
 const OP_WORDS: Record<string, string> = {
   move_dates: "New dates for", accept_date_suggestion: "Accepted Oracle's dates for", change_horizon: "Moved", reorder: "Reordered", cut: "Cut",
-  restore: "Restored", edit_title: "Renamed", edit_outcome: "New outcome for", accept_risk: "Accepted a risk on", confirm_item: "Confirmed", edit_line: "New wording for",
+  restore: "Restored", edit_title: "Renamed", edit_outcome: "New outcome for", accept_risk: "Accepted a risk on", confirm_item: "Confirmed", edit_line: "New wording for", set_section_number: "New number in",
   cut_with_dependents: "Cut with its dependents:",
 };
 
@@ -870,7 +871,7 @@ const HORIZON_TO: Record<string, string> = { now: "Now", next: "Next", later: "L
 const PROPOSAL_WORDS: Record<string, string> = {
   move_dates: "new dates for", accept_date_suggestion: "accept Oracle's dates for", change_horizon: "move", reorder: "reorder", cut: "cut",
   restore: "restore", edit_title: "rename", edit_outcome: "new outcome for", accept_risk: "accept a risk on", shift_dependents: "move the dependents of",
-  move_dependency: "move the dependency of", confirm_item: "confirm", edit_line: "new wording for", add_key_date: "add the key date",
+  move_dependency: "move the dependency of", confirm_item: "confirm", edit_line: "new wording for", set_section_number: "new number in", add_key_date: "add the key date",
   edit_key_date: "change the key date", remove_key_date: "remove the key date", add_item: "add", merge_item: "merge",
   keep_both: "keep beside its look-alikes:", cut_with_dependents: "cut with its dependents:", set_goals: "move to another goal:",
 };

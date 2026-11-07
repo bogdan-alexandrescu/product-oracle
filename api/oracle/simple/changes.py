@@ -526,7 +526,7 @@ def current_route(
         return list(c.routed_to or [])
     if (
         c.status != "proposed"
-        or c.op in ("edit_line", "edit_goal_milestone", *QUESTION_OPS)
+        or c.op in ("edit_line", "set_section_number", "edit_goal_milestone", *QUESTION_OPS)
         or c.op in KEY_DATE_OPS
         or c.op in PLAN_OPS
     ):
@@ -564,22 +564,63 @@ def _touched(c: SimpleChange) -> set[str]:
     return {str(c.target.get("item_id"))}
 
 
-async def _last_writer(db: AsyncSession, item_ids: set[str]) -> tuple[Any, Any]:
-    """(SimplePersonRef dict, when) of the last change through Simple that wrote these items."""
+# A conflict's field and the fields of a change that write it (as ``after`` names them).
+WRITES = {"status": {"status", "cut", "shipped"}, "goal_id": {"goal_id", "goal_ids"}}
+
+
+def _fields(current: dict[str, Any]) -> set[str] | None:
+    """The fields a conflict is about: ``current``'s, or its items' when keyed by item id;
+    None (any field) when it names none of an item's own."""
+    keys: set[str] = set()
+    for k, v in current.items():
+        keys |= set(v) if _is_id(k) and isinstance(v, dict) else {k}
+    if not keys or "dependents" in keys:
+        return None
+    return set().union(*(WRITES.get(k, {k}) for k in keys))
+
+
+def _is_id(key: str) -> bool:
+    try:
+        uuid.UUID(key)
+    except ValueError:
+        return False
+    return True
+
+
+def _writes(c: SimpleChange, item_ids: set[str], fields: set[str] | None) -> bool:
+    """Whether the change wrote one of these fields of one of these items."""
+    if not (_touched(c) & item_ids):
+        return False
+    if fields is None:
+        return True
+    if c.op in KEYED:
+        return any(fields & set(c.after.get(i) or {}) for i in item_ids)
+    return bool(fields & set(c.after))
+
+
+async def _last_writer(
+    db: AsyncSession, item_ids: set[str], fields: set[str] | None = None
+) -> tuple[Any, Any]:
+    """(SimplePersonRef dict, when) of the last change through Simple that wrote these
+    fields of these items (any field when None); a tie on when goes to the one made last."""
     rows = await db.scalars(
         select(SimpleChange)
         .where(SimpleChange.status.in_(WRITTEN))
-        .order_by(SimpleChange.decided_at.desc().nulls_last(), SimpleChange.at.desc())
+        .order_by(
+            SimpleChange.decided_at.desc().nulls_last(),
+            SimpleChange.at.desc(),
+            SimpleChange.seq.desc(),
+        )
         .limit(500)
     )
-    best: tuple[datetime, uuid.UUID] | None = None
+    best: tuple[datetime, int, uuid.UUID] | None = None
     for c in rows:
-        if not (_touched(c) & item_ids):
+        if not _writes(c, item_ids, fields):
             continue
         at = c.decided_at if c.status == "accepted" and c.decided_at else c.at
         who = c.decided_by if c.status == "accepted" and c.decided_by else c.by
-        if best is None or at > best[0]:
-            best = (at, who)
+        if best is None or (at, c.seq) > best[:2]:
+            best = (at, c.seq, who)
     # roadmap-edit-fixes: Oracle's draft of a new item (oracle.simple.additions) fills its
     # empty fields after the add: when that came last, Oracle changed it, not the person.
     from oracle.jobs.models import LlmJob
@@ -596,14 +637,14 @@ async def _last_writer(db: AsyncSession, item_ids: set[str]) -> tuple[Any, Any]:
                 return {"id": None, "name": ORACLE}, when
     if best is None:
         return None, None
-    names = await _names(db, {best[1]})
-    return {"id": str(best[1]), "name": names.get(best[1], "someone")}, best[0]
+    names = await _names(db, {best[2]})
+    return {"id": str(best[2]), "name": names.get(best[2], "someone")}, best[0]
 
 
 async def _conflict(
     db: AsyncSession, current: dict[str, Any], item_ids: set[str], lead: str
 ) -> ChangeError:
-    who, at = await _last_writer(db, item_ids)
+    who, at = await _last_writer(db, item_ids, _fields(current))
     name = who["name"] if who else "someone outside Simple"
     return ChangeError(
         409,
@@ -1815,7 +1856,8 @@ class _View:
         owners, decider and reviewers (#723 owner answer)."""
         # S5: a one-pager line's change is on a PRD, not a roadmap of this read.
         if (c.document_id is not None and c.document_id not in self.docs
-                and c.op not in ("edit_line", "edit_goal_milestone", *QUESTION_OPS)):  # fmt: skip
+                and c.op not in ("edit_line", "set_section_number", "edit_goal_milestone",
+                                 *QUESTION_OPS)):  # fmt: skip
             return False
         if self.me is None:
             return False
@@ -1980,7 +2022,7 @@ async def listing(
     status: str | None,
     mine: bool,
 ) -> list[SimpleChangeOut]:
-    q = select(SimpleChange).order_by(SimpleChange.at.desc(), SimpleChange.id).limit(500)
+    q = select(SimpleChange).order_by(SimpleChange.at.desc(), SimpleChange.seq.desc()).limit(500)
     if session_id is not None:
         q = q.where(SimpleChange.session_id == session_id)
     if document_id is not None:
@@ -2018,9 +2060,13 @@ async def _on_replaced_prds(db: AsyncSession, changes: list[SimpleChange]) -> se
     return {cid for iid in items for cid in by_item[iid]}
 
 
-def _subject(c: SimpleChange, questions: dict[str, Any]) -> dict[str, Any]:
-    """What a proposal on no item is on (InboxSimpleChange's subject, question_id, line_id):
-    its PRD question by code and title, or its one-pager line as it read."""
+def _subject(
+    c: SimpleChange, questions: dict[str, Any], prds: dict[uuid.UUID, str] | None = None
+) -> dict[str, Any]:
+    """What a proposal on no item is on (InboxSimpleChange's subject, question_id, line_id,
+    section): its PRD question by code and title, its one-pager line as it read, or a one-pager
+    number fix by its PRD's title ("Section number on Guided setup: Use 6", ``prds``) and the
+    section it changes."""
     if c.op in QUESTION_OPS:
         d = questions.get(str(c.target.get("decision_id")))
         if d is None:
@@ -2030,6 +2076,11 @@ def _subject(c: SimpleChange, questions: dict[str, Any]) -> dict[str, Any]:
     if c.op == "edit_line":
         line = " ".join(str((c.before or {}).get("line") or "").split())
         return {"subject": line or None, "line_id": c.target.get("line_id")}
+    if c.op == "set_section_number":
+        title = (prds or {}).get(c.document_id) if c.document_id else None
+        n = str((c.after or {}).get("number") or "")
+        name = f"Section number on {title}" if title else "Section number"
+        return {"subject": f"{name}: Use {n}" if n else name, "section": c.target.get("section")}
     return {}
 
 
@@ -2074,7 +2125,11 @@ async def inbox_rows(
                     & (SimpleChange.decided_at >= since)
                 )
             )
-            .order_by(SimpleChange.decided_at.desc().nulls_last(), SimpleChange.at.desc())
+            .order_by(
+                SimpleChange.decided_at.desc().nulls_last(),
+                SimpleChange.at.desc(),
+                SimpleChange.seq.desc(),
+            )
         )
     )
     waiting = [c for c in rows if c.status == "proposed"]
@@ -2117,6 +2172,15 @@ async def inbox_rows(
     }
     # inbox-meeting-proposals fix: the PRD questions they are on (their code and title).
     on_questions = await _questions(db, waiting + decided)
+    # PR 1320 re-review: a one-pager number fix is named by its PRD.
+    from oracle.docs.models import Document
+
+    fixed_in = {c.document_id for c in waiting + decided if c.op == "set_section_number"}
+    prds = (
+        {d.id: d.title for d in await db.scalars(select(Document).where(Document.id.in_(fixed_in)))}
+        if fixed_in - {None}
+        else {}
+    )
     names = await _names(db, {c.by for c in waiting + decided})
     from oracle.simple import agenda, change_words
 
@@ -2145,6 +2209,10 @@ async def inbox_rows(
         if c.status == "proposed" and c.op == "edit_line":
             line = change_words._quoted((c.after or {}).get("line"))
             return f"proposed new wording for a one-pager line{f': {line}' if line else ''}"
+        if c.status == "proposed" and c.op == "set_section_number":
+            # "proposed setting the number in “Not this quarter” to 6"
+            done = change_words.phrase(c.op, c.target, c.before, c.after, named)
+            return f"proposed setting{done.removeprefix('set')}"
         if c.status in ("proposed", "declined") and c.op == "add_feature_ask":
             # Not filed in Requests until it is accepted.
             ask = change_words._quoted((c.after or {}).get("title"))
@@ -2155,7 +2223,7 @@ async def inbox_rows(
         iid = uuid.UUID(str(c.target["item_id"])) if c.target.get("item_id") else None
         m = asked.get(c.session_id) if c.session_id else None
         title = titles.get(iid) if iid else None
-        on = _subject(c, on_questions)
+        on = _subject(c, on_questions, prds)
         named = title or (on.get("subject") if "question_id" in on else None)
         return InboxSimpleChange(
             from_meeting=SimpleChangeMeeting(id=m.id, title=m.title) if m else None,

@@ -24,6 +24,17 @@ the decider (else that track owner, else the company's owners); viewers read. Th
 its sections are written together, so they never disagree; submitting the draft imports
 the PRD's next version with the patched sections, through its review policy.
 
+**Fixing a number** (owner, Nov 5): each "Needs a look" numbers item carries its fix (the
+count set to the items listed, the company-wide target to what its parts add up to), the
+change engine's ``set_section_number`` op: the number in the words ``said`` of one section,
+through the same working draft, with the same rights, Undo and approval as a line edit; a
+stale ``before`` is 409 naming who changed the section. The item clears for those who see
+the draft (the numbers are checked on the drafted sections). A count in the section's
+heading ("Later · 8 items" over six listed; owner, Nov 5, 'Fix the heading too') is set the
+same way (``target.part`` "heading"): the draft holds the new heading
+(``overlay["headings"]``: {key: heading}), the one-pager reads it, and submitting the draft
+imports it under the same section key.
+
 **Remind** (owner, 2026-10-26): on a submitted draft, the PRD's owners (company owners, its
 track owners) and its decider press Remind (:func:`remind`): each reviewer the draft waits
 on gets an Inbox nudge "<name> is waiting for your review of <PRD>" (``review_reminder``),
@@ -65,6 +76,9 @@ from oracle.simple.one_pager_checks import resolved
 from oracle.simple.schemas import (
     OnePagerBlock,
     OnePagerDraft,
+    OnePagerFix,
+    OnePagerFixed,
+    OnePagerFixProposal,
     OnePagerInReview,
     OnePagerItem,
     OnePagerLine,
@@ -82,7 +96,9 @@ from oracle.simple.schemas import (
     SimplePersonRef,
 )
 
-OPS: frozenset[str] = frozenset({"edit_line"})
+# set_section_number (owner, Nov 5): a "Needs a look" numbers item's one-click fix.
+NUMBER_OP = "set_section_number"
+OPS: frozenset[str] = frozenset({"edit_line", NUMBER_OP})
 LINE_MAX = 300
 PROBLEM_WORDS = 60
 # A shortened line keeps its whole text (at most this long) for "Show all".
@@ -1319,7 +1335,8 @@ def _section_body(b: Built, d: SimpleDraft | None, key: str) -> tuple[str, str] 
     if sec is None:
         return None
     patched = ((d.overlay or {}).get("sections") or {}) if d else {}
-    return sec.heading, patched.get(key, sec.body_md)
+    heads = ((d.overlay or {}).get("headings") or {}) if d else {}
+    return heads.get(key, sec.heading), patched.get(key, sec.body_md)
 
 
 def _spans(body: str) -> tuple[list[str], bool]:
@@ -1439,12 +1456,15 @@ async def read(
             select(SimpleChange)
             .where(
                 SimpleChange.document_id == document.id,
-                SimpleChange.op == "edit_line",
+                SimpleChange.op.in_(("edit_line", NUMBER_OP)),
                 SimpleChange.status == "proposed",
             )
-            .order_by(SimpleChange.at)
+            .order_by(SimpleChange.at, SimpleChange.seq)
         )
     )
+    # A numbers fix proposed shows on its "Needs a look" item, never as a line's note.
+    fixes = [c for c in proposals if c.op == NUMBER_OP and sees_change(principal, c)]
+    proposals = [c for c in proposals if c.op == "edit_line"]
     shown = [c for c in proposals if sees_change(principal, c)]
     hidden = (len(proposals) - len(shown)) + (
         0 if sees or d is None else (await drafts.counts(db, [d]))[d.id]
@@ -1455,14 +1475,19 @@ async def read(
     unseen = await drafts._live_changes(db, d) if d is not None and not sees else []
     unseen = [c for c in unseen if c.op == "edit_line"]
     not_shown = [c for c in proposals if not sees_change(principal, c)]
+    number_live = [c for c in live if c.op == NUMBER_OP]
     live = [c for c in live if c.op == "edit_line"]
-    sids = {c.session_id for c in live if c.session_id}
+    sids = {c.session_id for c in live + number_live if c.session_id}
     sessions = (
         {s.id: s for s in await db.scalars(select(SimpleSession).where(SimpleSession.id.in_(sids)))}
         if sids
         else {}
     )
-    ids = {c.by for c in live + shown} | ({w.decider} if w.decider else set()) | set(w.track_owners)
+    ids = (
+        {c.by for c in live + shown + fixes}
+        | ({w.decider} if w.decider else set())
+        | set(w.track_owners)
+    )
     ids |= {c.by for c in unseen + not_shown} | {i for c in not_shown for i in c.routed_to or []}
     required: list[uuid.UUID] = []
     if d is not None:
@@ -1540,6 +1565,24 @@ async def read(
         )
 
     notes = [note(c, "change") for c in live] + [note(c, "proposal") for c in shown]
+
+    def fixed_out(c: SimpleChange) -> OnePagerFixed:
+        s = sessions.get(c.session_id) if c.session_id else None
+        key = str(c.target.get("section") or "")
+        sec = (c.after.get("sections") or {}).get(key) or {}
+        heading = str(sec.get("heading") or key)
+        return OnePagerFixed(
+            change_id=c.id,
+            words=f"Fixed: set to {c.after.get('number') or ''} in “{heading}”",
+            can_undo=c.status == "applied"
+            and c.by == me
+            and s is not None
+            and s.closed_at is None
+            and (s.last_change_at or s.started_at) > now - IDLE,
+        )
+
+    # The draft's number fixes ("Needs a look"), each with its Undo while it can be undone.
+    fixed = [fixed_out(c) for c in number_live]
     proposed = {n.line_id for n in notes if n.kind == "proposal"}
     blocks = []
     for spec in b.specs:
@@ -1612,7 +1655,56 @@ async def read(
         c.cite_key: (c.title or c.ref, c.excerpt)
         for c in await db.scalars(select(Citation).where(Citation.version_id == b.version.id))
     }
-    looks = one_pager_checks.annotate(blocks, b.sections, cites)
+    patched = ((d.overlay or {}).get("sections") or {}) if sees and d else {}
+    # A heading's count fixed in the draft (owner, Nov 5): the drafted heading.
+    heads = ((d.overlay or {}).get("headings") or {}) if sees and d else {}
+    checked = [
+        Section(
+            section_key=x.section_key,
+            heading=heads.get(x.section_key, x.heading),
+            body_md=patched.get(x.section_key, x.body_md),
+        )
+        if x.section_key in patched or x.section_key in heads
+        else x
+        for x in b.sections
+    ]
+    looks = one_pager_checks.annotate(blocks, b.sections, cites, checked)
+
+    def look_out(x: one_pager_checks.Look) -> OnePagerLook:
+        fix = None
+        if x.fix is not None:
+            f = x.fix
+            part = f.get("part", "body")
+            p = next(
+                (c for c in fixes if c.target.get("section") == f["section"]
+                 and c.target.get("said") == f["said"]
+                 and c.target.get("part", "body") == part),
+                None,
+            )  # fmt: skip
+            fix = OnePagerFix(
+                action=NUMBER_OP,
+                target={
+                    "document_id": str(document.id),
+                    "section": f["section"],
+                    "said": f["said"],
+                    **({"part": part} if part == "heading" else {}),
+                },
+                before=f["before"],
+                value=f["value"],
+                words=f"Use {f['value']}",
+                proposal=OnePagerFixProposal(
+                    change_id=p.id,
+                    by_name=names.get(p.by, "someone"),
+                    can_decide=may_decide(principal, p),
+                    can_undo=p.by == me,
+                )
+                if p is not None
+                else None,
+            )
+        return OnePagerLook(
+            kind=x.kind, text=x.text, where=x.where, source_keys=x.source_keys, fix=fix
+        )
+
     # P-5: each goal code with its name beside it; the Edit box keeps the PRD's words.
     goals = await goal_names(db, b.sections)
     for blk in blocks:
@@ -1674,11 +1766,12 @@ async def read(
             blocked_by=drafts.held(d),
             decision_notes=[str(x.get("text")) for x in d.decision_notes or []],
         )
-    patched = ((d.overlay or {}).get("sections") or {}) if sees and d else {}
     used = {k for blk in page for x in blk["lines"] for k in x["source_keys"]}
     sources = [
         OnePagerSource(
-            key=x.section_key, heading=x.heading, body=patched.get(x.section_key, x.body_md)
+            key=x.section_key,
+            heading=heads.get(x.section_key, x.heading),
+            body=patched.get(x.section_key, x.body_md),
         )  # fmt: skip
         for x in b.sections
         if x.section_key in used
@@ -1724,9 +1817,8 @@ async def read(
         and _me(principal) is not None
         and has_role(principal.role, "commenter"),
         can_start=starts(principal, w),
-        needs_look=(
-            [OnePagerLook(**vars(x)) for x in looks] if owns(principal, w, owner_id) else []
-        )
+        fixed=fixed,
+        needs_look=([look_out(x) for x in looks] if owns(principal, w, owner_id) else [])
         + (
             [OnePagerLook(kind="check", text=t) for t in quality.said(b.row.checks)]
             if owner_reads
@@ -1846,7 +1938,7 @@ def _write(d: SimpleDraft, b: Built, line_id: str, values: dict[str, Any]) -> No
             secs.pop(k, None)
         else:
             secs[k] = p["body"]
-    d.overlay = {"sections": secs, "lines": lines}
+    d.overlay = {**ov, "sections": secs, "lines": lines}
 
 
 async def _current(
@@ -1884,6 +1976,8 @@ async def _apply(db, principal, c: SimpleChange, b: Built, values, session, undo
 async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> SimpleChangeResult:
     from oracle.simple import changes
 
+    if body.op == NUMBER_OP:
+        return await _create_number(db, principal, body)
     me, now = changes._me(principal), company_time.now()
     doc_id, line_id = body.target.get("document_id"), str(body.target.get("line_id") or "")
     document = await _document(db, principal, str(doc_id))
@@ -1979,7 +2073,19 @@ async def decide(db, principal, c: SimpleChange, action: str, reason: str | None
         raise ChangeError(403, "Only an owner or the PRD's decider decides this proposal")
     if c.status != "proposed":
         raise ChangeError(409, f"This change is {c.status} already")
-    if action == "accept":
+    if action == "accept" and c.op == NUMBER_OP:
+        document = await db.get(Document, c.document_id)
+        await db.execute(select(Document.id).where(Document.id == document.id).with_for_update())
+        b = await built(db, document)
+        d = await _open_draft(db, document)
+        if _number_values(b, d, str(c.target["section"])) != _held(c.before):
+            raise await _number_conflict(
+                db, b, d, c.target, "outdated: the section changed since the proposal"
+            )
+        session = await _session_for_change(db, me, session_id, True, now)
+        await _apply_number(db, c, b, c.after, session)
+        session.last_change_at = now  # type: ignore[union-attr]
+    elif action == "accept":
         document = await db.get(Document, c.document_id)
         await db.execute(select(Document.id).where(Document.id == document.id).with_for_update())
         b = await built(db, document)
@@ -2054,11 +2160,18 @@ async def undo(db, principal, c: SimpleChange):
     document = await db.get(Document, c.document_id)
     await db.execute(select(Document.id).where(Document.id == document.id).with_for_update())
     b = await built(db, document)
-    text, bodies = await _current(db, b, str(c.target["line_id"]), await _open_draft(db, document))
-    if text != c.after.get("line") or bodies != {
-        k: v["body"] for k, v in (c.after.get("sections") or {}).items()
-    }:
-        raise _conflict("Changed since", text)
+    if c.op == NUMBER_OP:
+        d = await _open_draft(db, document)
+        if _number_values(b, d, str(c.target["section"])) != _held(c.after):
+            raise await _number_conflict(db, b, d, c.target, "Changed since")
+    else:
+        text, bodies = await _current(
+            db, b, str(c.target["line_id"]), await _open_draft(db, document)
+        )
+        if text != c.after.get("line") or bodies != {
+            k: v["body"] for k, v in (c.after.get("sections") or {}).items()
+        }:
+            raise _conflict("Changed since", text)
     u = SimpleChange(
         session_id=c.session_id,
         document_id=c.document_id,
@@ -2073,7 +2186,10 @@ async def undo(db, principal, c: SimpleChange):
         routed_to=[],
         draft_ids=list(c.draft_ids or []),
     )
-    await _apply(db, principal, u, b, c.before, session, undo=True)
+    if c.op == NUMBER_OP:
+        await _apply_number(db, u, b, c.before, session, undo=True)
+    else:
+        await _apply(db, principal, u, b, c.before, session, undo=True)
     db.add(u)
     session.last_change_at = now
     await db.flush()
@@ -2089,14 +2205,231 @@ async def undo(db, principal, c: SimpleChange):
     return SimpleChangeResult(change=await changes.one_out(db, principal, u), flags=[])
 
 
+# --------------------------------------------------------------------------- set_section_number
+# A "Needs a look" numbers item's one-click fix (owner, Nov 5): the number in the words
+# ``said`` of one section set to ``value``, through the PRD's working draft as edit_line;
+# a one-pager line resting on the section and saying the same words is set with it, so
+# the line and its section never disagree. The same rights, Undo and approval as a line.
+# ``target.part`` "heading" (owner, Nov 5, 'Fix the heading too'): the number is in the
+# section's heading ("Later · 8 items"); the draft holds the new heading.
+
+
+def _number_values(b: Built, d: SimpleDraft | None, key: str) -> dict[str, Any]:
+    """The section ``key`` and the lines resting on it, as ``d`` (None: published) has
+    them."""
+    hb = _section_body(b, d, key)
+    if hb is None:
+        raise ChangeError(404, "No such section in this PRD")
+    drafted = ((d.overlay or {}).get("lines") or {}) if d else {}
+    lines = {
+        x["id"]: drafted.get(x["id"], x["text"])
+        for x in _lines(b).values()
+        if key in x["source_keys"]
+    }
+    return {"sections": {key: {"heading": hb[0], "body": hb[1]}}, "lines": lines}
+
+
+def _held(values: dict[str, Any]) -> dict[str, Any]:
+    return {"sections": values.get("sections") or {}, "lines": values.get("lines") or {}}
+
+
+async def _number_conflict(
+    db: AsyncSession, b: Built, d: SimpleDraft | None, target: dict, message: str
+) -> ChangeError:
+    """409: the section's words now, and who changed the section last in the draft."""
+    key = str(target.get("section"))
+    hb = _section_body(b, d, key)
+    last = None
+    if d is not None:
+        last = next(
+            (c for c in reversed(await drafts._live_changes(db, d))
+             if key in ((c.after or {}).get("sections") or {})),
+            None,
+        )  # fmt: skip
+    by = None
+    if last is not None and last.by is not None:
+        u = await db.get(User, last.by)
+        by = SimplePersonRef(id=last.by, name=(u.name or u.email) if u else "someone")
+        message = f"Changed by {by.name}"
+    return ChangeError(
+        409,
+        SimpleChangeConflict(
+            message=message,
+            current={"section": key, "heading": hb[0] if hb else "", "body": hb[1] if hb else ""},
+            changed_by=by,
+            changed_at=last.at if last is not None else None,
+        ).model_dump(mode="json"),
+    )
+
+
+def _write_number(d: SimpleDraft, b: Built, values: dict[str, Any]) -> None:
+    """The section (its heading and words) and its lines, together (a value equal to the
+    published one leaves the draft)."""
+    ov = dict(d.overlay or {})
+    secs, lines = dict(ov.get("sections") or {}), dict(ov.get("lines") or {})
+    heads = dict(ov.get("headings") or {})
+    published = _lines(b)
+    for line_id, text in (values.get("lines") or {}).items():
+        if text == published.get(line_id, {}).get("text"):
+            lines.pop(line_id, None)
+        else:
+            lines[line_id] = text
+    for k, p in (values.get("sections") or {}).items():
+        sec = next((s for s in b.sections if s.section_key == k), None)
+        if sec is not None and p["body"] == sec.body_md:
+            secs.pop(k, None)
+        else:
+            secs[k] = p["body"]
+        if sec is not None and p.get("heading", sec.heading) == sec.heading:
+            heads.pop(k, None)
+        elif sec is not None:
+            heads[k] = p["heading"]
+    ov = {**ov, "sections": secs, "lines": lines, "headings": heads}
+    if not heads:
+        ov.pop("headings")
+    d.overlay = ov
+
+
+async def _apply_number(db, c: SimpleChange, b: Built, values, session, undo=False) -> None:
+    if undo:
+        d = await db.get(SimpleDraft, (c.draft_ids or [None])[0], with_for_update=True)
+        if d is None or d.status != "working":
+            raise ChangeError(
+                409, "Its draft was submitted: undo works only inside a working draft"
+            )
+        await drafts.link(db, session, d)
+    else:
+        d = await _ensure(db, session, b.document, b.version)
+    _write_number(d, b, values)
+    c.draft_ids = [d.id]
+    await db.flush()
+
+
+async def _create_number(
+    db: AsyncSession, principal: Any, body: SimpleChangeIn
+) -> SimpleChangeResult:
+    from oracle.simple import changes
+
+    me, now = changes._me(principal), company_time.now()
+    t = body.target or {}
+    key, said = str(t.get("section") or ""), " ".join(str(t.get("said") or "").split())
+    part = str(t.get("part") or "body")
+    old = str(body.before.get("number") or "").strip()
+    new = str(body.after.get("number") or "").strip()
+    if not key or not said:
+        raise ChangeError(422, "target: the section and the words the number is in")
+    if part not in ("body", "heading"):
+        raise ChangeError(422, "target.part: body or heading")
+    if not re.fullmatch(r"\d[\d,]*(?:\.\d+)?", new) or len(new) > 20:
+        raise ChangeError(422, "after.number: a number")
+    if not old:
+        raise ChangeError(422, "before.number: the number as you saw it")
+    document = await _document(db, principal, str(t.get("document_id")))
+    await db.execute(select(Document.id).where(Document.id == document.id).with_for_update())
+    b = await built(db, document)
+    w = await who(db, document)
+    d = await _open_draft(db, document)
+    sees = d is not None and sees_draft(principal, d, w)
+    applies = decides(principal, w)
+    if not applies and not has_role(principal.role, "commenter"):
+        raise ChangeError(403, "Viewers read the one-pager")
+    before = _number_values(b, d if sees else None, key)
+    cur = before["sections"][key]
+    # A number other than the one its words begin with is stale, as words no longer there.
+    stale = said.split()[0].lower() != old.lower()
+    patched = None if stale else one_pager_checks.set_number(cur[part], said, new)
+    if patched is None:
+        raise await _number_conflict(
+            db, b, d if sees else None, t, "This number changed since you read it"
+        )
+    after = {
+        "sections": {key: {**cur, part: patched}},
+        # A heading's count is no line's words: the lines stay as they are.
+        "lines": {
+            i: text if part == "heading" else one_pager_checks.set_number(text, said, new) or text
+            for i, text in before["lines"].items()
+        },
+    }
+    before |= {"number": old}
+    after |= {"number": new}
+    session = await _session_for_change(db, me, body.session_id, applies, now)
+    c = SimpleChange(
+        session_id=session.id if session else None,
+        document_id=document.id,
+        op=NUMBER_OP,
+        target={
+            "document_id": str(document.id),
+            "section": key,
+            "said": said,
+            **({"part": part} if part == "heading" else {}),
+            "version": b.version.number,
+        },
+        before=before,
+        after=after,
+        status="applied" if applies else "proposed",
+        by=me,
+        at=now,
+        reason=body.reason,
+        routed_to=[] if applies else route(w),
+    )
+    if applies:
+        await _apply_number(db, c, b, after, session)
+        session.last_change_at = now  # type: ignore[union-attr]
+    db.add(c)
+    await db.flush()
+    await audit.record(
+        db,
+        principal,
+        f"simple_change.{c.status}",
+        "simple_change",
+        c.id,
+        data={
+            "op": c.op,
+            "target": c.target,
+            "before": before,
+            "after": after,
+            "document_id": str(document.id),
+        },
+    )
+    await db.commit()
+    return SimpleChangeResult(change=await changes.one_out(db, principal, c), flags=[])
+
+
 # --------------------------------------------------------------------------- submit
 
 
 def patched_markdown(
-    base: DocumentVersion, sections: list[Section], patched: dict[str, str]
+    base: DocumentVersion,
+    sections: list[Section],
+    patched: dict[str, str],
+    headings: dict[str, str] | None = None,
 ) -> str:
-    """The base version's markdown with each patched section's body replaced."""
+    """The base version's markdown with each patched section's body replaced, and each
+    drafted heading (``headings``: key -> heading) written over its own, its ``{#key}`` kept
+    so the section's key and links do not change."""
     md = base.markdown
+    unpatched = "Section {!r} could not be patched; open the detailed view to edit it"
+    for sec in sections:
+        head = (headings or {}).get(sec.section_key)
+        if head is None or head == sec.heading:
+            continue
+        key, said = re.escape(sec.section_key), re.escape(sec.heading)
+        # An ATX heading ("## Later · 8 items {#later}") or a setext one (its words over a
+        # line of "=" or "-"), its key kept.
+        atx = re.compile(rf"^(#{{1,6}}[ \t]+){said}([ \t]*\{{#{key}\}}[ \t]*)$", re.M)
+        setext = re.compile(rf"^(){said}([ \t]*\{{#{key}\}}[ \t]*\n(?:=+|-+)[ \t]*)$", re.M)
+        n = 0
+        for line in (atx, setext):
+            md, n = line.subn(lambda m, h=head: m.group(1) + h + m.group(2), md, count=1)
+            if n:
+                break
+        if not n:
+            raise ChangeError(
+                409,
+                f"The heading “{sec.heading}” is not in the PRD's text as a heading with its"
+                f" key {{#{sec.section_key}}}, so its new words could not be written; open the"
+                " detailed view to edit it",
+            )
     for sec in sections:
         new = patched.get(sec.section_key)
         if new is None or new == sec.body_md:
@@ -2105,10 +2438,7 @@ def patched_markdown(
         if old and old in md:
             md = md.replace(old, new.strip("\n"), 1)
         else:
-            raise ChangeError(
-                409,
-                f"Section {sec.heading!r} could not be patched; open the detailed view to edit it",
-            )
+            raise ChangeError(409, unpatched.format(sec.heading))
     return md
 
 

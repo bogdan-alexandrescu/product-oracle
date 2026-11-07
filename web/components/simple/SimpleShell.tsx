@@ -90,11 +90,13 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
         const dates = roadmap?.dates_to_confirm ?? items.filter((i) => i.kind === "date" && !i.key.startsWith("proposal:")).length;
         // The suggested features Needs a decision lists and counts (the same read and filter as its panel).
         const suggested = (goalSuggestions?.suggestions ?? []).filter((s) => s.can_accept || s.can_reject).length;
-        const asks = items.filter((i) => i.kind === "proposal" || i.kind === "draft" || (i.kind === "date" && i.key.startsWith("proposal:"))).length;
+        // PR 1320 re-review: a one-pager number fix (set_section_number) is the one-pager's, not the
+        // roadmap's: it counts in the Inbox beyond the tabs, as a one-pager wording does.
+        const asks = items.filter((i) => (i.kind === "proposal" && i.op !== "set_section_number") || i.kind === "draft" || (i.kind === "date" && i.key.startsWith("proposal:"))).length;
         // inbox-meeting-proposals fix: the Inbox's part the Roadmap tab counts too (a proposal on a
-        // PRD question or a one-pager line is not the roadmap's).
+        // PRD question or a one-pager line or number is not the roadmap's).
         const inboxRoadmap =
-          inbox.simple_proposals.filter((x) => !["decide_question", "name_decider", "edit_line"].includes(x.op)).length +
+          inbox.simple_proposals.filter((x) => !["decide_question", "name_decider", "edit_line", "set_section_number"].includes(x.op)).length +
           inbox.simple_approvals.length +
           inbox.simple_goal_suggestions.length;
         const all = waitingCount(inbox, questions);

@@ -11,6 +11,10 @@
  * margin notes; everyone else the published lines and a `changes_in_review` count. Undo
  * works for the change's author while its session is open.
  *
+ * Fixing a number (owner, Nov 5): each "Needs a look" numbers item carries its fix, the
+ * `set_section_number` op (the number in one section's words set, through the same draft,
+ * rights, Undo and approval as a line edit), as the API's one_pager._create_number.
+ *
  * Submit and Remind (owner, 2026-10-26): an owner submits the draft (POST
  * /v1/simple/drafts/{id}/submit): it waits on the PRD's required reviewers (`ctx.reviewers`).
  * Remind (POST /v1/simple/one-pagers/{doc}/remind, owners and the decider) writes each
@@ -24,9 +28,11 @@ import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { draftDecisionNotes, leftOut } from "./decision-notes";
 import { stableUuid } from "./ids";
-import { annotate, resolved, type Cites } from "./one-pager-checks";
+import { changePhrase, changeSentence } from "./simple-change-words";
+import { annotate, resolved, setNumber, type Cites } from "./one-pager-checks";
 import { roadmapOut } from "./simple-roadmap";
 import { betSubject, flowFor, onePagerFlow, requestVisual, type VisualsDb } from "./simple-visuals";
+import { madeOrder } from "./made-order";
 
 type Role = Schemas["Me"]["role"];
 type Change = Schemas["SimpleChangeOut"];
@@ -45,6 +51,8 @@ export interface OnePagerCtx {
   /** The PRD's decider (Dana Decider in "simple-deciders", as the meetings mock), and its track owners. */
   decider?: string | null;
   trackOwners?: string[];
+  /** A submitted draft's next version, its sections as the draft has them (drafts.submit imports it). */
+  imported?: (sections: { key: string; heading: string; body: string }[], version: number) => void;
   /** Writes one Inbox notification, as oracle.review.collab.notify. */
   notify: (userId: string, kind: "review_reminder", title: string, data: Record<string, unknown>, version: number) => void;
   /** prd-timeline: the PRD's dated plan's milestones ("M1 Prove it"): the PDF prints the timeline, then one page each. */
@@ -86,6 +94,8 @@ export interface OnePagerDb {
   blocks: { key: string; title: string; rules: string; kind: Schemas["OnePagerBlock"]["kind"]; lines: SeedLine[]; missing?: boolean }[];
   draft: null | {
     id: string; base: number; participants: string[]; lines: Record<string, string>; sections: Record<string, string>;
+    /** A heading's count fixed (owner, Nov 5, 'Fix the heading too'): the API's overlay["headings"]. */
+    headings?: Record<string, string>;
     status?: "working" | "submitted"; waiting_on?: string[]; reminders?: Record<string, string>;
   };
   changes: (Change & { session_open: boolean; in_meeting: boolean; meeting_title?: string | null })[];
@@ -253,6 +263,19 @@ export function seedNeedsLookOnePager(): OnePagerDb {
   bets.lines = bets.lines.slice(0, 2);
   blocks.find((b) => b.key === "risks")!.lines = [{ id: "risks-1", text: "Pricing for teams is TBD", keys: ["risks"] }];
   db.held = { blocks, checks: ["2 bets; a one-pager has 3 to 5", "A line in “Risks and open decisions” says “TBD”"] };
+  return db;
+}
+
+/**
+ * The "one-pager-heading-count" scenario (owner, Nov 5, 'Fix the heading too'): the count is
+ * in the section's heading, "Later · 8 items" over six listed, and the PRD's full version
+ * page reads the same sections (./server.ts). Invented data.
+ */
+export function seedHeadingCountOnePager(): OnePagerDb {
+  const db = seedOnePager();
+  const later = db.sections.find((x) => x.key === "later")!;
+  later.heading = "Later · 8 items";
+  later.body = later.body.replace(/^Eight features wait for next quarter\.\n\n/, "");
   return db;
 }
 
@@ -711,6 +734,12 @@ function decides(ctx: OnePagerCtx): boolean {
   return (ctx.trackOwners ?? []).includes(ctx.id) && RANK[ctx.role] >= RANK.approver;
 }
 
+/** As one_pager.may_decide: a proposal's decider is an owner (has_role on the role ladder), or
+ * whom it is routed to; a viewer, commenter or approver decides only what is routed to them. */
+function mayDecide(ctx: OnePagerCtx, c: Pick<Change, "routed_to">): boolean {
+  return !!ctx.id && (RANK[ctx.role] >= RANK.owner || c.routed_to.includes(ctx.id));
+}
+
 /** As one_pager.starts (meetings.may_start): an owner or the PRD's decider start its review. */
 function starts(ctx: OnePagerCtx): boolean {
   return ctx.role === "owner" || (!!ctx.decider && ctx.id === ctx.decider);
@@ -751,6 +780,11 @@ function sectionNow(db: OnePagerDb, key: string, sees = true): string {
   return (sees ? db.draft?.sections[key] : undefined) ?? db.sections.find((s) => s.key === key)!.body;
 }
 
+/** As one_pager._section_body's heading: the draft's, else the published one. */
+function headingNow(db: OnePagerDb, key: string, sees = true): string {
+  return (sees ? db.draft?.headings?.[key] : undefined) ?? db.sections.find((s) => s.key === key)!.heading;
+}
+
 /** As the API's one_pager.patch_all: the facts (bullets, else sentences) the old line says
  * are replaced by the new line in its first section and dropped from the others; null when
  * a section holds none of them (the edit is refused, never appended). */
@@ -778,6 +812,41 @@ function metricOf(text: string): Line["metric"] {
   return m ? { name: m[1].trim() || text, from: m[2], to: m[3] } : null;
 }
 
+/** set_section_number (owner, Nov 5): a "Needs a look" numbers item's fix, as the API's one_pager. */
+const NUMBER_OP = "set_section_number" as const;
+
+/** As one_pager._number_values: the section and the lines resting on it, as the reader has them. */
+function numberValues(db: OnePagerDb, key: string, sees: boolean) {
+  const heading = headingNow(db, key, sees);
+  const lines = Object.fromEntries(db.blocks.flatMap((b) => b.lines).filter((l) => l.keys.includes(key)).map((l) => [l.id, (sees ? db.draft?.lines[l.id] : undefined) ?? l.text]));
+  return { sections: { [key]: { heading, body: sectionNow(db, key, sees) } }, lines };
+}
+
+const held = (v: Record<string, unknown>) => JSON.stringify({ sections: v.sections ?? {}, lines: v.lines ?? {} });
+
+function numberConflict(db: OnePagerDb, ctx: OnePagerCtx, key: string, sees: boolean, message: string): Response {
+  const last = sees ? [...liveChanges(db)].reverse().find((c) => key in ((c.after.sections ?? {}) as Record<string, unknown>)) : undefined;
+  const by = last ? { id: last.by, name: ctx.names[last.by] ?? last.by_name } : null;
+  return json(409, { detail: { message: by ? `Changed by ${by.name}` : message, current: { section: key, heading: headingNow(db, key, sees), body: sectionNow(db, key, sees) }, changed_by: by, changed_at: last?.at ?? null } });
+}
+
+function writeNumber(db: OnePagerDb, ctx: OnePagerCtx, values: Record<string, unknown>) {
+  db.draft ??= { id: stableUuid(`simple-one-pager-draft-${db.doc.id}-${mockNowMs()}`), base: db.version, participants: [], lines: {}, sections: {} };
+  if (!db.draft.participants.includes(ctx.id)) db.draft.participants.push(ctx.id);
+  for (const [id, text] of Object.entries((values.lines ?? {}) as Record<string, string>)) {
+    if (text === seedLine(db, id)?.text) delete db.draft.lines[id];
+    else db.draft.lines[id] = text;
+  }
+  for (const [k, v] of Object.entries((values.sections ?? {}) as Record<string, { heading?: string; body: string }>)) {
+    const sec = db.sections.find((s) => s.key === k);
+    if (v.body === sec?.body) delete db.draft.sections[k];
+    else db.draft.sections[k] = v.body;
+    const heads = (db.draft.headings ??= {});
+    if (v.heading === undefined || v.heading === sec?.heading) delete heads[k];
+    else heads[k] = v.heading;
+  }
+}
+
 function write(db: OnePagerDb, ctx: OnePagerCtx, lineId: string, values: Record<string, unknown>) {
   db.draft ??= { id: stableUuid(`simple-one-pager-draft-${db.doc.id}-${mockNowMs()}`), base: db.version, participants: [], lines: {}, sections: {} };
   if (!db.draft.participants.includes(ctx.id)) db.draft.participants.push(ctx.id);
@@ -800,6 +869,7 @@ export function publishOnePager(db: OnePagerDb) {
   if (!d) return;
   for (const b of db.blocks) for (const l of b.lines) if (d.lines[l.id] !== undefined) l.text = d.lines[l.id];
   for (const sec of db.sections) if (d.sections[sec.key] !== undefined) sec.body = d.sections[sec.key];
+  for (const sec of db.sections) if (d.headings?.[sec.key] !== undefined) sec.heading = d.headings[sec.key];
   db.version += 1;
   // qa4-simple-decide-25: as the API (the new version's approved_at), the header's day moves on.
   db.published_at = new Date(mockNowMs()).toISOString();
@@ -810,13 +880,13 @@ export function publishOnePager(db: OnePagerDb) {
 
 function liveChanges(db: OnePagerDb) {
   const undone = new Set(db.changes.filter((c) => c.status === "undone").map((c) => c.undoes_id));
-  return db.changes.filter((c) => (c.status === "applied" || c.status === "accepted") && !undone.has(c.id));
+  return madeOrder(db.changes, (c) => [c.at]).filter((c) => (c.status === "applied" || c.status === "accepted") && !undone.has(c.id));
 }
 
 function out(db: OnePagerDb, ctx: OnePagerCtx, c: Change): Change {
   return {
     ...c,
-    can_decide: c.status === "proposed" && (ctx.role === "owner" || c.routed_to.includes(ctx.id)),
+    can_decide: c.status === "proposed" && mayDecide(ctx, c),
     can_undo: c.status === "applied" && c.by === ctx.id && !db.changes.some((u) => u.undoes_id === c.id),
   };
 }
@@ -830,16 +900,27 @@ function patches(c: Change): Patch[] {
 
 function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
   const sees = seesDraft(db, ctx);
-  const proposals = db.changes.filter((c) => c.status === "proposed");
-  const shown = proposals.filter((c) => c.by === ctx.id || ctx.role === "owner" || c.routed_to.includes(ctx.id));
-  const live = sees ? liveChanges(db).filter((c) => c.status !== "undone") : [];
+  const sees_ = (c: Change) => c.by === ctx.id || mayDecide(ctx, c);
+  // As the API: a numbers fix proposed shows on its "Needs a look" item, never as a line's note.
+  // As one_pager.py: changes by when, a tie in the order they were made (seq), never by id.
+  const made = madeOrder(db.changes, (c) => [c.at]);
+  const fixes = made.filter((c) => c.status === "proposed" && c.op === NUMBER_OP && sees_(c));
+  const proposals = made.filter((c) => c.status === "proposed" && c.op === "edit_line");
+  const shown = proposals.filter(sees_);
+  const live = sees ? liveChanges(db).filter((c) => c.status !== "undone" && c.op === "edit_line") : [];
+  // As the API's OnePagerOut.fixed: the draft's number fixes, each with its Undo while it can be undone.
+  const fixed: Schemas["OnePagerFixed"][] = (sees ? liveChanges(db).filter((c) => c.op === NUMBER_OP) : []).map((c) => {
+    const key = String(c.target.section ?? "");
+    const heading = ((c.after.sections ?? {}) as Record<string, { heading?: string }>)[key]?.heading ?? key;
+    return { change_id: c.id, words: `Fixed: set to ${String(c.after.number ?? "")} in “${heading}”`, can_undo: c.status === "applied" && c.by === ctx.id && c.session_open };
+  });
   const note = (c: (typeof db.changes)[number], kind: "change" | "proposal"): Schemas["OnePagerNote"] => {
     const lineId = String(c.target.line_id);
     return {
       change_id: c.id, line_id: lineId, kind, by: c.by, by_name: c.by_name, at: c.at, in_meeting: c.in_meeting,
       before: String(c.before.line ?? ""), after: String(c.after.line ?? ""), sections: patches(c),
       can_undo: kind === "proposal" ? c.by === ctx.id : c.by === ctx.id && c.session_open,
-      can_decide: kind === "proposal" && (ctx.role === "owner" || c.routed_to.includes(ctx.id)),
+      can_decide: kind === "proposal" && mayDecide(ctx, c),
       adds_feature: lineId.startsWith("bets-"), flow: onePagerFlow(flowFor(db.visuals, "change", c.id)), meeting_title: c.meeting_title ?? null,
     };
   };
@@ -879,7 +960,19 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
       }),
     }));
   // Reads clearly (2026-10-30): as one_pager_checks.annotate on the PRD's sections.
-  const looks = annotate(blocks, db.sections, db.cites);
+  // The numbers as the reader's working draft has them, so a fixed number clears.
+  const looks = annotate(blocks, db.sections, db.cites, db.sections.map((x) => ({ ...x, heading: headingNow(db, x.key, sees), body: sectionNow(db, x.key, sees) }))).map((x): Schemas["OnePagerLook"] => {
+    if (!x.fix) return { ...x, fix: null };
+    const f = x.fix;
+    const c = fixes.find((y) => y.target.section === f.target.section && y.target.said === f.target.said && (y.target.part ?? "body") === (f.target.part ?? "body"));
+    return {
+      ...x,
+      fix: {
+        ...f, target: { ...f.target, document_id: db.doc.id },
+        proposal: c ? { change_id: c.id, by_name: c.by_name, can_decide: mayDecide(ctx, c), can_undo: c.by === ctx.id } : null,
+      },
+    };
+  });
   // P-5: each goal code with its name beside it; the Edit box keeps the PRD's words.
   const goals = goalNames(db.sections);
   for (const b of blocks) {
@@ -911,7 +1004,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
       companyDayIso(new Date(mockNowMs())),
     ),
     // As the API: the sections the page's lines rest on.
-    sections: db.sections.filter((s) => db.blocks.some((b) => b.lines.some((l) => l.keys.includes(s.key)))).map((s) => ({ key: s.key, heading: s.heading, body: sectionNow(db, s.key, sees) })),
+    sections: db.sections.filter((s) => db.blocks.some((b) => b.lines.some((l) => l.keys.includes(s.key)))).map((s) => ({ key: s.key, heading: headingNow(db, s.key, sees), body: sectionNow(db, s.key, sees) })),
     // decisions-reversed-or-trashed: the lines' decisions left out as no longer standing.
     left_out: leftOut(),
     notes,
@@ -945,6 +1038,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     can_start: starts(ctx),
     // As one_pager.owns: a company owner, the PRD's track owners and its document owner read the
     // PRD's numbers and codes to look at; owners also read the checks a held build failed.
+    fixed,
     needs_look: [
       ...(ctx.role === "owner" || (ctx.trackOwners ?? []).includes(ctx.id) || (!!owner && ctx.id === owner) ? looks : []),
       ...(held ? held.checks.map((text) => ({ kind: "check", text, where: [], source_keys: [] })) : []),
@@ -996,6 +1090,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     db.draft.waiting_on = [...new Set([...ctx.reviewers, ...added])];
     db.draft.reminders = {};
     db.changes.forEach((c) => (c.session_open = false));
+    ctx.imported?.(db.sections.map((x) => ({ key: x.key, heading: headingNow(db, x.key), body: sectionNow(db, x.key) })), db.version + 1);
     return json(200, { id: db.draft.id, status: "submitted", version: db.version + 1, waiting_on: db.draft.waiting_on });
   }
   if (p[2] === "one-pagers" && p[4] === "remind" && m === "POST") {
@@ -1020,6 +1115,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
   if (p[2] !== "changes") return null;
   if (m === "POST" && p.length === 3) {
     const b = await body(req.clone());
+    if (b.op === NUMBER_OP) return createNumber(db, ctx, b);
     if (b.op !== "edit_line") return null;
     const target = (b.target ?? {}) as Record<string, string>;
     const lineId = String(target.line_id ?? "");
@@ -1060,10 +1156,15 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
   const c = db.changes.find((x) => x.id === p[3]);
   if (!c || m !== "POST") return null;
   if (p[4] === "accept" || p[4] === "decline") {
-    if (!(ctx.role === "owner" || c.routed_to.includes(ctx.id))) return json(403, { detail: "Only an owner or the PRD's decider decides this proposal" });
+    if (!mayDecide(ctx, c)) return json(403, { detail: "Only an owner or the PRD's decider decides this proposal" });
     if (c.status !== "proposed") return json(409, { detail: `This change is ${c.status} already` });
     const lineId = String(c.target.line_id);
-    if (p[4] === "accept") {
+    if (p[4] === "accept" && c.op === NUMBER_OP) {
+      const key = String(c.target.section);
+      if (held(numberValues(db, key, true)) !== held(c.before)) return numberConflict(db, ctx, key, true, "outdated: the section changed since the proposal");
+      writeNumber(db, ctx, c.after);
+      c.draft_ids = [db.draft!.id];
+    } else if (p[4] === "accept") {
       if (lineNow(db, lineId) !== c.before.line) return json(409, { detail: { message: "outdated: the line or its sections changed since the proposal", current: { line: lineNow(db, lineId) }, changed_by: null, changed_at: null } });
       write(db, ctx, lineId, c.after);
       c.draft_ids = [db.draft!.id];
@@ -1086,12 +1187,73 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     if (c.status !== "applied") return json(409, { detail: `Only an applied change undoes; this one is ${c.status}` });
     if (c.by !== ctx.id) return json(403, { detail: "Only the person who made a change undoes it" });
     if (db.changes.some((u) => u.undoes_id === c.id)) return json(409, { detail: "This change is undone already" });
-    write(db, ctx, String(c.target.line_id), c.before);
+    if (c.op === NUMBER_OP) {
+      const key = String(c.target.section);
+      if (held(numberValues(db, key, true)) !== held(c.after)) return numberConflict(db, ctx, key, true, "Changed since");
+      writeNumber(db, ctx, c.before);
+    } else write(db, ctx, String(c.target.line_id), c.before);
     const u = { ...c, id: stableUuid(`op-undo-${c.id}`), status: "undone" as const, before: c.after, after: c.before, undoes_id: c.id, at: new Date(mockNowMs()).toISOString() };
     db.changes.push(u);
     return json(201, { change: out(db, ctx, u), flags: [] });
   }
   return null;
+}
+
+/** As one_pager._create_number: the number in the words `said` of one section set, with the lines saying the same words. */
+function createNumber(db: OnePagerDb, ctx: OnePagerCtx, b: Record<string, unknown>): Response {
+  const t = (b.target ?? {}) as Record<string, string>;
+  if (t.document_id !== db.doc.id) return json(404, { detail: "No such PRD" });
+  const key = String(t.section ?? ""), said = plain(String(t.said ?? ""));
+  const part = (t.part ?? "body") as "body" | "heading";
+  const old = String(((b.before ?? {}) as Record<string, unknown>).number ?? "").trim();
+  const next = String(((b.after ?? {}) as Record<string, unknown>).number ?? "").trim();
+  if (!key || !said) return json(422, { detail: "target: the section and the words the number is in" });
+  if (part !== "body" && part !== "heading") return json(422, { detail: "target.part: body or heading" });
+  if (!/^\d[\d,]*(?:\.\d+)?$/.test(next)) return json(422, { detail: "after.number: a number" });
+  if (!old) return json(422, { detail: "before.number: the number as you saw it" });
+  if (!db.sections.some((s) => s.key === key)) return json(404, { detail: "No such section in this PRD" });
+  const applies = decides(ctx);
+  if (!applies && RANK[ctx.role] < RANK.commenter) return json(403, { detail: "Viewers read the one-pager" });
+  const sees = seesDraft(db, ctx);
+  const before: Record<string, unknown> = numberValues(db, key, sees);
+  const sec = (before.sections as Record<string, { heading: string; body: string }>)[key];
+  const patched = said.split(" ")[0].toLowerCase() === old.toLowerCase() ? setNumber(sec[part], said, next) : null;
+  if (patched === null) return numberConflict(db, ctx, key, sees, "This number changed since you read it");
+  const after: Record<string, unknown> = {
+    sections: { [key]: { ...sec, [part]: patched } },
+    // A heading's count is no line's words: the lines stay as they are.
+    lines: Object.fromEntries(Object.entries(before.lines as Record<string, string>).map(([i, x]) => [i, part === "heading" ? x : (setNumber(x, said, next) ?? x)])),
+    number: next,
+  };
+  before.number = old;
+  const c = {
+    id: stableUuid(`op-change-${db.doc.id}-${db.changes.length}-${mockNowMs()}`), session_id: applies ? stableUuid(`op-session-${ctx.id}`) : null,
+    document_id: db.doc.id, draft_ids: [] as string[], op: NUMBER_OP,
+    target: { document_id: db.doc.id, section: key, said, ...(part === "heading" ? { part } : {}), version: db.version }, before, after,
+    status: (applies ? "applied" : "proposed") as Change["status"], by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone",
+    at: new Date(mockNowMs()).toISOString(), decided_by: null, decided_at: null, reason: null, decision_reason: null,
+    // As one_pager.route: the PRD's decider, else its track owners (approvers), else the company's owners.
+    routed_to: applies ? [] : ctx.decider ? [ctx.decider] : (ctx.trackOwners ?? []).length ? [...ctx.trackOwners!] : ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,
+    session_open: applies, in_meeting: false,
+  };
+  if (applies) {
+    writeNumber(db, ctx, after);
+    c.draft_ids = [db.draft!.id];
+  }
+  db.changes.push(c);
+  return json(201, { change: out(db, ctx, c), flags: [] });
+}
+
+/**
+ * GET /v1/simple/changes?status=proposed's one-pager part (changes.listing sees edit_line and
+ * set_section_number on a PRD): the proposals this reader sees (an owner, its author, whom it is
+ * routed to), each with whether they may decide it and its words.
+ */
+export function onePagerProposalsOut(dbs: OnePagerDb[], me: { id: string; role: Role }, mine: boolean): Change[] {
+  return dbs
+    .flatMap((d) => d.changes)
+    .filter((c) => c.status === "proposed" && (!mine || c.by === me.id) && (me.role === "owner" || c.by === me.id || c.routed_to.includes(me.id)))
+    .map((c) => ({ ...c, can_decide: me.role === "owner" || c.routed_to.includes(me.id), can_undo: c.by === me.id, words: changeSentence(c, c.by_name, null, false) }));
 }
 
 /**
@@ -1104,25 +1266,45 @@ export function onePagerInboxRows(
   me: { id: string; role: Role },
   seen: string | null,
 ): { proposals: Schemas["InboxSimpleChange"][]; decisions: Schemas["InboxSimpleChange"][] } {
-  const row = (c: Change, at: string | null, state?: Schemas["InboxSimpleChange"]["state"]): Schemas["InboxSimpleChange"] => {
+  // What the row is on and what was asked, as changes.inbox_rows (_subject, asked_of) for each kind:
+  // a line's wording quotes the line; a number fix names its PRD and the section it changes.
+  const words = (d: OnePagerDb, c: Change): Pick<Schemas["InboxSimpleChange"], "asked" | "subject" | "line_id" | "section"> => {
+    const proposed = c.status === "proposed";
+    if (c.op === "set_section_number") {
+      const n = String(c.after.number ?? "");
+      const name = `Section number on ${d.doc.title}`;
+      const done = changePhrase(c.op, c.target, c.before, c.after, null);
+      return {
+        subject: n ? `${name}: Use ${n}` : name,
+        // Still to decide: "proposed setting the number in “Not this quarter” to 6".
+        asked: proposed ? `proposed setting${done.slice("set".length)}` : done,
+        line_id: null,
+        section: String(c.target.section ?? "") || null,
+      };
+    }
     const line = String(c.before.line ?? "").split(/\s+/).filter(Boolean).join(" ");
     const next = String(c.after.line ?? "").split(/\s+/).filter(Boolean).join(" ");
     return {
-      id: c.id, op: c.op, status: c.status, item_id: null, item_title: null, document_id: c.document_id, by: c.by, by_name: c.by_name, at: c.at,
-      decided_by: c.decided_by, decided_at: c.decided_at, reason: c.reason, decision_reason: c.decision_reason,
-      state: state ?? (!seen || (at && at > seen) ? "new" : "open"), from_meeting: null,
+      subject: line || null,
       // Still to decide, it reads as proposed (changes.inbox_rows asked_of); once decided, as done.
-      asked: c.status === "proposed" ? `proposed new wording for a one-pager line${next ? `: “${next}”` : ""}` : next ? `edited a one-pager line to “${next}”` : "edited a one-pager line",
-      can_decide: c.status === "proposed" && (me.role === "owner" || c.routed_to.includes(me.id)), from_ask: false,
-      subject: line || null, question_id: null, line_id: String(c.target.line_id ?? "") || null,
+      asked: proposed ? `proposed new wording for a one-pager line${next ? `: “${next}”` : ""}` : changePhrase(c.op, c.target, c.before, c.after, null),
+      line_id: String(c.target.line_id ?? "") || null,
+      section: null,
     };
   };
-  const all = dbs.flatMap((d) => d.changes);
+  const row = (d: OnePagerDb, c: Change, at: string | null, state?: Schemas["InboxSimpleChange"]["state"]): Schemas["InboxSimpleChange"] => ({
+    id: c.id, op: c.op, status: c.status, item_id: null, item_title: null, document_id: c.document_id, by: c.by, by_name: c.by_name, at: c.at,
+    decided_by: c.decided_by, decided_at: c.decided_at, reason: c.reason, decision_reason: c.decision_reason,
+    state: state ?? (!seen || (at && at > seen) ? "new" : "open"), from_meeting: null,
+    can_decide: c.status === "proposed" && (me.role === "owner" || c.routed_to.includes(me.id)), from_ask: false,
+    question_id: null, ...words(d, c),
+  });
+  const all = dbs.flatMap((d) => d.changes.map((c) => [d, c] as const));
   return {
     // As the API: routed to me (the mock routes a proposal to the owners).
-    proposals: all.filter((c) => c.status === "proposed" && c.routed_to.includes(me.id)).map((c) => row(c, c.at)),
+    proposals: all.filter(([, c]) => c.status === "proposed" && c.routed_to.includes(me.id)).map(([d, c]) => row(d, c, c.at)),
     decisions: all
-      .filter((c) => c.by === me.id && (c.status === "accepted" || c.status === "declined") && c.decision_reason !== "Withdrawn by its author")
-      .map((c) => row(c, c.decided_at, !seen || (c.decided_at ?? "") > seen ? undefined : "done")),
+      .filter(([, c]) => c.by === me.id && (c.status === "accepted" || c.status === "declined") && c.decision_reason !== "Withdrawn by its author")
+      .map(([d, c]) => row(d, c, c.decided_at, !seen || (c.decided_at ?? "") > seen ? undefined : "done")),
   };
 }

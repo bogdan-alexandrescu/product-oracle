@@ -62,7 +62,9 @@ def scratch_db():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == [REVISION]
+    # One head, and this migration is on its chain (test_migrations pins the head itself).
+    [head] = script.get_heads()
+    assert REVISION in {r.revision for r in script.walk_revisions("base", head)}
 
 
 def test_up_down_up(scratch_db):

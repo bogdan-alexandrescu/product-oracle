@@ -19389,7 +19389,7 @@ export interface components {
             /** Message Id */
             message_id: string | null;
             /** Op */
-            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped" | "api_action");
+            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature" | "mark_shipped" | "api_action");
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -19507,7 +19507,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -28534,7 +28534,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
             /**
              * Status
              * @enum {string}
@@ -28590,6 +28590,8 @@ export interface components {
             question_id?: string | null;
             /** Line Id */
             line_id?: string | null;
+            /** Section */
+            section?: string | null;
         };
         /**
          * InboxSimpleDateSuggestion
@@ -32895,6 +32897,64 @@ export interface components {
             decision_notes: string[];
         };
         /**
+         * OnePagerFix
+         * @description A "numbers" item's one-click fix (owner, Nov 5): POST /v1/simple/changes with ``op``
+         *     ``action``, this ``target``, ``before: {number: before}`` and ``after: {number: value}``;
+         *     ``words`` is its button ("Use 6").
+         */
+        OnePagerFix: {
+            /**
+             * Action
+             * @constant
+             */
+            action: "set_section_number";
+            /** Target */
+            target: {
+                [key: string]: string;
+            };
+            /** Before */
+            before: string;
+            /** Value */
+            value: string;
+            /** Words */
+            words: string;
+            proposal?: components["schemas"]["OnePagerFixProposal"] | null;
+        };
+        /**
+         * OnePagerFixProposal
+         * @description An open proposal of the fix: who made it, and whether the reader decides or
+         *     withdraws it.
+         */
+        OnePagerFixProposal: {
+            /**
+             * Change Id
+             * Format: uuid
+             */
+            change_id: string;
+            /** By Name */
+            by_name: string;
+            /** Can Decide */
+            can_decide: boolean;
+            /** Can Undo */
+            can_undo: boolean;
+        };
+        /**
+         * OnePagerFixed
+         * @description A number fix (set_section_number) in the PRD's working draft, read from the draft's
+         *     live changes: its words ('Fixed: set to 6 in “Later · 6 items”') and its Undo.
+         */
+        OnePagerFixed: {
+            /**
+             * Change Id
+             * Format: uuid
+             */
+            change_id: string;
+            /** Words */
+            words: string;
+            /** Can Undo */
+            can_undo: boolean;
+        };
+        /**
          * OnePagerFlow
          * @description A design bundle's flow (S10's), as the API returns it; none yet: null.
          */
@@ -33029,6 +33089,7 @@ export interface components {
              * @default []
              */
             source_keys: string[];
+            fix?: components["schemas"]["OnePagerFix"] | null;
         };
         /** OnePagerMetric */
         OnePagerMetric: {
@@ -33149,6 +33210,11 @@ export interface components {
              * @default []
              */
             needs_look: components["schemas"]["OnePagerLook"][];
+            /**
+             * Fixed
+             * @default []
+             */
+            fixed: components["schemas"]["OnePagerFixed"][];
         };
         /**
          * OnePagerRemindOut
@@ -41081,7 +41147,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -41130,7 +41196,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "edit_note" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "set_section_number" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_confidence" | "set_track" | "set_prd" | "set_goal" | "set_depends" | "set_status" | "set_feature" | "set_parent" | "set_goal_measure" | "set_goals" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents" | "edit_goal_milestone" | "delete_item" | "delete_goal" | "archive_goal" | "unarchive_goal" | "remove_dependency" | "restore_goal_milestone" | "add_track" | "edit_track" | "delete_track" | "edit_decision" | "edit_question" | "withdraw_decision" | "add_question";
             /** Target */
             target: {
                 [key: string]: unknown;

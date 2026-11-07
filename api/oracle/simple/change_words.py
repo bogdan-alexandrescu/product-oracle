@@ -6,6 +6,7 @@ here, and an op without one reads "changed <the item>".
 "Ana changed the estimate of F-08 Billing page · undone".
 """
 
+import re
 from typing import Any
 
 HORIZON_WORDS = {"now": "Now", "next": "Next", "later": "Later"}
@@ -104,6 +105,8 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
         case "edit_line":
             line = _quoted(after.get("line"))
             return f"edited a one-pager line to {line}" if line else "edited a one-pager line"
+        case "set_section_number":
+            return _number_sentence(target, before, after)
         case "add_key_date":
             return f"added {_key_date(before, after)}"
         case "edit_key_date":
@@ -233,3 +236,19 @@ def sentence(
     if undone:
         words += " · undone"
     return words
+
+
+# A heading's own count (" · 8 items", " (8 items)") is not part of the section's name.
+_HEAD_COUNT = re.compile(r"\s*(?:·\s*\d+\s+items?|\(\s*\d+\s+items?\s*\))\s*$", re.I)
+
+
+def _number_sentence(target: dict, before: dict, after: dict) -> str:
+    """set_section_number, naming the section: "set the count in “Later” to 6" (a
+    heading's count), "set the number in “Not this quarter” to 6" (its words)."""
+    key = str(target.get("section") or "")
+    sec = (before.get("sections") or {}).get(key) or {}
+    name = _HEAD_COUNT.sub("", str(sec.get("heading") or "")).strip()
+    what = "the count" if target.get("part") == "heading" else "the number"
+    where = f" in “{name}”" if name else " in a PRD section"
+    n = str(after.get("number") or "")
+    return f"set {what}{where} to {n}" if n else f"set {what}{where}"

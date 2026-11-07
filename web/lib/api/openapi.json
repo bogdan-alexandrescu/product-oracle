@@ -63393,6 +63393,7 @@
                   "estimate_feature",
                   "confirm_item",
                   "edit_line",
+                  "set_section_number",
                   "add_key_date",
                   "edit_key_date",
                   "remove_key_date",
@@ -63822,6 +63823,7 @@
               "estimate_feature",
               "confirm_item",
               "edit_line",
+              "set_section_number",
               "add_key_date",
               "edit_key_date",
               "remove_key_date",
@@ -88223,6 +88225,7 @@
               "estimate_feature",
               "confirm_item",
               "edit_line",
+              "set_section_number",
               "add_key_date",
               "edit_key_date",
               "remove_key_date",
@@ -88442,6 +88445,17 @@
               }
             ],
             "title": "Line Id"
+          },
+          "section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section"
           }
         },
         "type": "object",
@@ -99906,6 +99920,109 @@
         ],
         "title": "OnePagerDraft"
       },
+      "OnePagerFix": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "set_section_number",
+            "title": "Action"
+          },
+          "target": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Target"
+          },
+          "before": {
+            "type": "string",
+            "title": "Before"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "words": {
+            "type": "string",
+            "title": "Words"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OnePagerFixProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "target",
+          "before",
+          "value",
+          "words"
+        ],
+        "title": "OnePagerFix",
+        "description": "A \"numbers\" item's one-click fix (owner, Nov 5): POST /v1/simple/changes with ``op``\n``action``, this ``target``, ``before: {number: before}`` and ``after: {number: value}``;\n``words`` is its button (\"Use 6\")."
+      },
+      "OnePagerFixProposal": {
+        "properties": {
+          "change_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Change Id"
+          },
+          "by_name": {
+            "type": "string",
+            "title": "By Name"
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide"
+          },
+          "can_undo": {
+            "type": "boolean",
+            "title": "Can Undo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "change_id",
+          "by_name",
+          "can_decide",
+          "can_undo"
+        ],
+        "title": "OnePagerFixProposal",
+        "description": "An open proposal of the fix: who made it, and whether the reader decides or\nwithdraws it."
+      },
+      "OnePagerFixed": {
+        "properties": {
+          "change_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Change Id"
+          },
+          "words": {
+            "type": "string",
+            "title": "Words"
+          },
+          "can_undo": {
+            "type": "boolean",
+            "title": "Can Undo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "change_id",
+          "words",
+          "can_undo"
+        ],
+        "title": "OnePagerFixed",
+        "description": "A number fix (set_section_number) in the PRD's working draft, read from the draft's\nlive changes: its words ('Fixed: set to 6 in \u201cLater \u00b7 6 items\u201d') and its Undo."
+      },
       "OnePagerFlow": {
         "properties": {
           "title": {
@@ -100224,6 +100341,16 @@
             "type": "array",
             "title": "Source Keys",
             "default": []
+          },
+          "fix": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OnePagerFix"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -100534,6 +100661,14 @@
             },
             "type": "array",
             "title": "Needs Look",
+            "default": []
+          },
+          "fixed": {
+            "items": {
+              "$ref": "#/components/schemas/OnePagerFixed"
+            },
+            "type": "array",
+            "title": "Fixed",
             "default": []
           }
         },
@@ -123101,6 +123236,7 @@
               "estimate_feature",
               "confirm_item",
               "edit_line",
+              "set_section_number",
               "add_key_date",
               "edit_key_date",
               "remove_key_date",
@@ -123264,6 +123400,7 @@
               "estimate_feature",
               "confirm_item",
               "edit_line",
+              "set_section_number",
               "add_key_date",
               "edit_key_date",
               "remove_key_date",

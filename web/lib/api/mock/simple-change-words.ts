@@ -61,6 +61,16 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
       const line = quoted(after.line);
       return line ? `edited a one-pager line to ${line}` : "edited a one-pager line";
     }
+    case "set_section_number": {
+      // As change_words._number_sentence: "set the count in “Later” to 6", naming the section.
+      const key = String(target.section ?? "");
+      const sec = ((before.sections ?? {}) as Record<string, { heading?: string }>)[key] ?? {};
+      const name = String(sec.heading ?? "").replace(/\s*(?:·\s*\d+\s+items?|\(\s*\d+\s+items?\s*\))\s*$/i, "").trim();
+      const what = target.part === "heading" ? "the count" : "the number";
+      const where = name ? ` in “${name}”` : " in a PRD section";
+      const n = String(after.number ?? "");
+      return n ? `set ${what}${where} to ${n}` : `set ${what}${where}`;
+    }
     case "add_key_date": return `added ${keyDate(before, after)}`;
     case "edit_key_date": return `changed ${keyDate(before, after)}`;
     case "remove_key_date": return `removed ${keyDate(before, after)}`;
