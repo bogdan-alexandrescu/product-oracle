@@ -45,6 +45,7 @@ test("Home's plan groups by the roadmap's current milestones, a removed one's it
   expect(Number(/ · (\d+) items?$/.exec(loose!)![1])).toBeGreaterThanOrEqual(2);
   // The Simple roadmap's Milestone lanes name the same current milestone.
   await page.goto("/simple/roadmap");
+  await page.getByTestId("format-gantt").click();
   await page.getByTestId("group-milestone").click();
   await expect(page.getByText("M1 Alerts live for 50 teams", { exact: true }).first()).toBeVisible();
 });
