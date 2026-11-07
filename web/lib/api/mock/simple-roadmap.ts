@@ -19,7 +19,7 @@ import { newCompany, seeded, stableUuid } from "./ids";
 import { milestoneOut, oldMilestonesOut, routeMilestones, type MockMilestone, type OldCtx } from "./simple-milestones";
 import { betSubject, flowFor, type VisualsDb } from "./simple-visuals";
 import type { OnePagerDb } from "./simple-one-pager";
-import { appliedMilestones, type AppliedRecord } from "./approved-roadmap";
+import { appliedMilestones, rowCodeTaken, type AppliedRecord } from "./approved-roadmap";
 import { PLAN_PRD_SLUG, planMilestones, planSlices, planSpan, type PlanDb } from "./simple-plan";
 import { COMPANY_SLUG, COMPANY_TITLE } from "./one-roadmap";
 import { estimates } from "./simple-priorities";
@@ -1638,6 +1638,9 @@ function appliedVersionOut(db: SimpleDb, slug: string, role: Role, all: Map<stri
     else if (endDiffers) differences.push(`${x.s.title} ends ${dayWord(end)}, version ${n} says ${dayWord(row.end)}`);
     else if (startDiffers) differences.push(`${x.s.title} starts ${dayWord(start)}, version ${n} says ${dayWord(row.start)}`);
   }
+  // As lines' _not_added_rows: the version's rows that added no item because their code was taken.
+  const shownKeys = new Set(db.items.filter((s) => s.roadmap === slug).map((s) => s.key));
+  for (const row of a.plan) if (!shownKeys.has(row.key)) differences.push(...[rowCodeTaken(db, slug, row.title)].filter((x): x is string => !!x));
   return {
     roadmap: { id: roadmapId(slug), slug, title: roadmapTitle(db, slug) },
     version: n, approved_at: a.approved_at, href: a.href,

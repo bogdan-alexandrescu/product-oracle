@@ -57,6 +57,8 @@ export interface PlanEditsContext {
   seededApproved: (slug: string) => number | null;
   /** A new version of `doc` copied from `base`, with a Plan changes section. */
   newVersion: (doc: Doc, base: VersionLike, body: string) => VersionLike;
+  /** every-field: a Ground Truth feature's code (its key, F-31), as simple.service.item_codes reads it; null when it has none. */
+  featureCode?: (featureId: string) => string | null;
 }
 
 const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
@@ -117,6 +119,22 @@ function apply(base: PlanEditItem[], changes: Change[]): Applied {
     } else if (c.op === "reorder") lanes[item.horizon].splice(Math.min(c.position, lanes[item.horizon].length), 0, item);
   }
   return out;
+}
+
+// The read's leading code (oracle.roadmap.codes.title_code): a code, then the name.
+const titleCode = (title: string) => /^([A-Z][A-Z0-9]*-\d+[a-z]?)\s+\S/.exec(title ?? "")?.[1] ?? null;
+
+/** changeset._codes: one code, one item. An added item whose code (its title's, else its picked feature's) another item of the plan
+ * reads in its title is refused in set_code's words: 422 when added, 409 at propose (taken since). Slices of one feature share it. */
+function codesFree(ctx: PlanEditsContext, applied: Applied, status: number) {
+  const plan = HORIZONS.flatMap((h) => applied.lanes[h]);
+  for (const p of plan) {
+    if (!p.isNew) continue;
+    const code = titleCode(p.title) ?? (p.feature_id ? (ctx.featureCode?.(p.feature_id) ?? null) : null);
+    if (!code) continue;
+    const hit = plan.find((o) => o.key !== p.key && !(p.feature_id && o.feature_id === p.feature_id) && titleCode(o.title)?.toUpperCase() === code.toUpperCase());
+    if (hit) throw new Refused(status, `${code} is already the code of ${hit.title}`);
+  }
 }
 
 function view(ctx: PlanEditsContext, db: PlanEditsDb, doc: Doc, row: ChangeSetRow): Schemas["ChangeSetOut"] {
@@ -234,7 +252,7 @@ export async function routeChangeSets(ctx: PlanEditsContext, db: PlanEditsDb, re
       checkBase(ctx, doc, row);
       const changes = input.changes.map((c) => (c.op === "add" ? { ...c, key: c.key ?? slugOf(c.title) } : c));
       for (const c of changes) if (c.op === "cut" && !c.reason?.trim()) throw new Refused(422, "a cut needs its reason");
-      apply(itemsOf(ctx, db, doc.slug, row.base_version), changes);
+      codesFree(ctx, apply(itemsOf(ctx, db, doc.slug, row.base_version), changes), 422);
       row.changes = changes;
       stamp(row);
       return json(200, view(ctx, db, doc, row));
@@ -251,6 +269,7 @@ export async function routeChangeSets(ctx: PlanEditsContext, db: PlanEditsDb, re
       if (!row.changes.length) throw new Refused(422, "Nothing to propose: the change set has no changes");
       const baseItems = itemsOf(ctx, db, doc.slug, row.base_version);
       const applied = apply(baseItems, row.changes);
+      codesFree(ctx, applied, 409);
       const base = ctx.versions.find((v) => v.document_id === doc.id && v.number === row.base_version);
       if (!base) throw new Refused(404, `version ${row.base_version} of '${doc.slug}' not found`);
       const body = linesOf(row.base_version, row.changes, new Map(baseItems.map((i) => [i.key, i.title])));

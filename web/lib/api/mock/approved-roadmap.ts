@@ -110,6 +110,15 @@ const leaves = (status: string): "shipped" | "moved_out" | null =>
  * to the next PRD leave the plan, an unknown key is a new item; its milestones replace the
  * ones the last applied version gave. False when the text has no plan table (nothing changes).
  */
+/** approved_roadmap._not_added: why a plan row whose title code a live item of the roadmap reads already adds no item, in plain
+ * words ("F-31 Launch flow was not added: F-31 is already the code of F-31 Alert routing by team"); null when it is free. */
+export function rowCodeTaken(db: SimpleDb, slug: string, title: string): string | null {
+  const code = /^([A-Z][A-Z0-9]*-\d+[a-z]?)\s+\S/.exec(title)?.[1];
+  if (!code) return null;
+  const hit = db.items.find((x) => x.roadmap === slug && !x.trashed && /^([A-Z][A-Z0-9]*-\d+[a-z]?)\s+\S/.exec(x.title)?.[1]?.toUpperCase() === code.toUpperCase());
+  return hit ? `${title} was not added: ${code} is already the code of ${hit.title}` : null;
+}
+
 export function applyApprovedRoadmap(db: SimpleDb, slug: string, version: { number: number; approved_at: string; markdown: string; href: string }): boolean {
   const plan = parsePlan(version.markdown);
   if (!plan) return false;
@@ -136,6 +145,8 @@ export function applyApprovedRoadmap(db: SimpleDb, slug: string, version: { numb
       Object.assign(s, { dates, basis: row.basis ?? undefined });
       continue;
     }
+    // every-field (approved_roadmap._not_added): a row whose title code a live item reads already adds no second item.
+    if (rowCodeTaken(db, slug, row.title)) continue;
     const like = mine[0];
     const item: SeedItem = {
       key: row.key, title: row.title, roadmap: slug,

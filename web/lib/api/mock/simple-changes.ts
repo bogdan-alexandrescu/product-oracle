@@ -1101,16 +1101,20 @@ function restoreItemRoute(db: SimpleDb, ctx: SimpleChangesCtx, itemId: string): 
   return json(200, restoreFromTrash(ctx.trash!, entry, iso(mockNowMs()), db, ctx.id));
 }
 
-/** trash_items._codes_free: a feature coming back whose code another item took while it was in Trash (its title's, as an add
- * checks it; its feature's or PRD's, against other items' title codes), in set_code's words; null when it is free. */
+/** trash_items._codes_free: an item coming back whose code another item took while it was in Trash (its title's, as an add
+ * checks it; its feature's or PRD's, against other items' title codes), in set_code's words; null when it is free. Every
+ * restore goes through it, a feature's and a goal's: as the API, it checks the items the entry brings back (a goal's entry
+ * holds the goal alone, so a goal comes back and an item deleted before stays in Trash). */
 export function restoreCodeTaken(db: SimpleDb, me: { id: string; role: Role }, entry: TrashEntryRow): string | null {
   const root = entry.out.root;
-  const s = root.type === "feature" ? db.items.find((x) => x.key === root.slug && x.trashed && (!entry.roadmap || x.roadmap === entry.roadmap)) : undefined;
-  if (!s) return null;
-  const seen = readerDb(db, me);
-  const own = (s.feature_id && db.feature_codes?.[s.feature_id]) || prdCode(s.section);
-  const taken = own ? ownCodeTaken(seen, s.key, own) : titleCodeTaken(db, seen, null, s.title);
-  return taken && `${taken}: rename it first`;
+  const back = root.type === "feature" ? db.items.filter((x) => x.key === root.slug && x.trashed && (!entry.roadmap || x.roadmap === entry.roadmap)).slice(0, 1) : [];
+  const seen = back.length ? readerDb(db, me) : null;
+  for (const s of back) {
+    const own = (s.feature_id && db.feature_codes?.[s.feature_id]) || prdCode(s.section);
+    const taken = own ? ownCodeTaken(seen!, s.key, own) : titleCodeTaken(db, seen!, null, s.title);
+    if (taken) return `${taken}: rename it first`;
+  }
+  return null;
 }
 
 /** add_key_date / edit_key_date / remove_key_date (key_dates.create). */

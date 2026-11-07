@@ -5955,6 +5955,10 @@ function planEditsContext(db: Db, me: { id: string; role: Role }): PlanEditsCont
     now,
     deciderOf: (id) => db.review_v2?.policies.find((x) => x.document_id === id)?.decider_id ?? null,
     seededItems: seededPlanItems,
+    featureCode: (id) => {
+      const e = db.baseline.entities.find((x) => x.id === id && x.type === "feature");
+      return e && /^[A-Z]{1,3}-\d+[a-j]?$/.test(e.key) ? e.key : null;
+    },
     // The Plan mock's usage-alerts-roadmap v1 is its approved plan (./roadmap.ts, ALERTS_APPROVED).
     seededApproved: (slug) => (slug === ALERTS_ROADMAP_SLUG ? 1 : null),
     newVersion: (doc, base, body) => {
@@ -7612,6 +7616,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       trash: (db.trash ??= emptyTrash()), id: me.id, name: simpleNames[me.id] ?? me.email, now: () => new Date(mockNowMs()).toISOString(), people,
       propose: (g: { id: string; title: string }, to: string | null, reason: string | null) =>
         proposeGoalDelete(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames, trash: db.trash }, g, to, reason),
+      refuseRestore: (entry: TrashEntryRow) => restoreCodeTaken(db.simple_roadmap!, me, entry),
     };
     const bucketsRes = await routeGoalBuckets(db.simple_roadmap!, me.role, r, p, bin);
     if (bucketsRes) return bucketsRes;

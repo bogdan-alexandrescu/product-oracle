@@ -243,6 +243,8 @@ export type GoalBucketsTrash = {
   now: () => string;
   people?: GoalPeople;
   propose?: (goal: { id: string; title: string }, to: string | null, reason: string | null) => unknown;
+  /** every-field: why the restore is refused (trash_items.before_restore, which every restore goes through), else null. */
+  refuseRestore?: (entry: TrashEntryRow) => string | null;
 };
 
 /** Archive (goal_buckets.archive), also an accepted Ask to archive: the Undo, or an error. */
@@ -324,6 +326,8 @@ export async function routeGoalBuckets(simple: { goal_buckets?: GoalBucketsDb; g
     if (!mayRestore(entry, { id: bin.id, role })) {
       return json(403, { detail: "Only an owner, or whoever deleted it, restores this" });
     }
+    const refused = bin.refuseRestore?.(entry) ?? null;
+    if (refused) return json(409, { detail: refused });
     return json(200, restoreFromTrash(bin.trash, entry, bin.now(), { items: [], goal_buckets: db }));
   }
   // trash-features-goals: DELETE .../goals/{id}?to_goal_id=: approvers and owners delete it (and
