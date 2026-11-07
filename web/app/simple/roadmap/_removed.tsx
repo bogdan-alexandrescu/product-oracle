@@ -8,6 +8,7 @@ import { formatDay } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
 
 import { ChangeFailed, propose, undo, type Item } from "./_lib";
+import { withdraw } from "./_tracks";
 
 type Removed = Schemas["SimpleRemovedItem"];
 
@@ -67,7 +68,19 @@ export function RemovedButton({ items, canChange, onOpen, onChanged }: { items: 
       const res = await propose(restoreBody(r));
       setOpen(false);
       await refresh();
-      if (res.change.status !== "applied") toast({ message: `Restoring ${r.title} proposed · waits for ${r.decider_name ?? "an owner"}` });
+      // at-followups: a proposal is taken back from its toast, as the Tracks sheet's are.
+      if (res.change.status !== "applied")
+        toast({
+          message: `Restoring ${r.title} proposed · waits for ${r.decider_name ?? "an owner"}`,
+          action: {
+            label: "Withdraw",
+            onClick: () =>
+              void withdraw(res.change.id).then(
+                () => (toast({ message: "Withdrawn" }), refresh()),
+                (e) => toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not withdraw it" }),
+              ),
+          },
+        });
       // Undo where the API allows it (a goal put back is archived again from its own menu).
       else if (res.change.can_undo)
         toast({
@@ -85,7 +98,8 @@ export function RemovedButton({ items, canChange, onOpen, onChanged }: { items: 
   return (
     <div ref={box} className="relative" data-testid="removed">
       <Button className="!h-8" aria-expanded={open} aria-controls="removed-list" data-testid="removed-open" onClick={() => setOpen(!open)}>
-        Removed · {rows.length}
+        {/* at-followups: no count until the list is read (never "Removed · 0" while it loads). */}
+        {removed.data ? `Removed · ${rows.length}` : "Removed"}
       </Button>
       {open && (
         <div id="removed-list" role="dialog" aria-label="Removed from your plans" className="absolute top-10 left-0 z-30 w-[min(560px,calc(100vw-32px))] rounded-xl border border-line bg-surface shadow-xl">
@@ -112,7 +126,7 @@ export function RemovedButton({ items, canChange, onOpen, onChanged }: { items: 
                 )}
               </li>
             ))}
-            {rows.length === 0 && <li className="px-3 py-2 text-text2">Nothing removed</li>}
+            {removed.data && rows.length === 0 && <li className="px-3 py-2 text-text2">Nothing removed</li>}
           </ul>
         </div>
       )}

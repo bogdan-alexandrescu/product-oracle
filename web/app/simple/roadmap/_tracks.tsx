@@ -23,7 +23,8 @@ function asking(after: Record<string, string | null>): string {
   return after.status === "paused" ? "Pause" : after.status === "closed" ? "Close" : "Resume";
 }
 
-async function withdraw(id: string): Promise<void> {
+/** The proposer takes a proposal back (the Tracks sheet's toasts, the Removed list's too). */
+export async function withdraw(id: string): Promise<void> {
   const { error } = await api.POST("/v1/simple/changes/{change_id}/withdraw", { params: { path: { change_id: id } } });
   const detail = (error as { detail?: unknown } | undefined)?.detail;
   if (error) throw new ChangeFailed(typeof detail === "string" ? detail : "Oracle could not withdraw it", 409);
@@ -99,7 +100,8 @@ export function TracksButton({ items, canChange, onChanged }: { items: Item[]; c
   return (
     <>
       <Button className="!h-8" data-testid="tracks-open" aria-haspopup="dialog" onClick={() => setOpen(true)}>
-        Tracks · {tracks.length}
+        {/* at-followups: no count until the tracks are read (never "Tracks · 0" while they load). */}
+        {data ? `Tracks · ${tracks.length}` : "Tracks"}
       </Button>
       <Sheet open={open} title="Tracks" onClose={() => setOpen(false)} side testId="tracks-sheet" tools={canChange ? undefined : <span className="text-sm text-text2">View only</span>}>
         <div className="px-4 pb-4">
