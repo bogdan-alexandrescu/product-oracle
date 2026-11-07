@@ -8,7 +8,8 @@ import { login } from "./helpers";
  * action, on the mock layer ("discussions" scenario). Besides the open Saved carts discussion
  * (2 changes waiting on the approver), the approver's goals interview on "Weekly saved carts"
  * was closed once their pick made the goal measurable, leaving Oracle's other 3 versions
- * proposed: a closed discussion's card offers no action, so it must make no row.
+ * proposed: a closed discussion's card offers no action, so it must make no row. The open
+ * goals interview's and the priorities' changes make the other two changes rows.
  *
  * Card: protects=every changes row's Review changes opens a card whose open changes match the
  * row's count, each with an action, and the closed interview makes no row; fails_when=the
@@ -30,7 +31,7 @@ test("every changes row leads to the changes it counts, and a closed discussion 
   await expect(open).toBeVisible();
   // The closed interview's leftover versions are not counted: no row, nothing that cannot be cleared.
   await expect(rowsOf(page).filter({ hasText: CLOSED_TITLE })).toHaveCount(0);
-  await expect(rowsOf(page).filter({ hasText: /changes? proposed/ })).toHaveCount(1);
+  await expect(rowsOf(page).filter({ hasText: /changes? proposed/ })).toHaveCount(3);
 
   await open.getByRole("link", { name: "Review changes" }).click();
   await expect(page).toHaveURL(/\?discussion=[^&]+&changes=1/);

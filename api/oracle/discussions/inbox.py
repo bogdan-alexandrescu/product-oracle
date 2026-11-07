@@ -2,12 +2,13 @@
 
 Invited and Mentioned rows are written with the message or the add that makes them (in
 its transaction), done when the person reads past them or dismisses them, and deleted at
-once when they are removed. "Changes proposed" rows are derived on read: participants
-who are approvers and up get one for Oracle's ``proposed`` and people's ``suggested``
-changes; approvers not in an open discussion get one for ``suggested`` changes only
-(c6: commenters suggest, approvers stage); a closed discussion's changes count for no one
-until it is reopened. Every row is shown with G1's access check at
-read time, so none shows a title its reader may not see.
+once when they are removed. "Changes proposed" rows are derived on read from
+``changes.waits_on``, the rule the changes card's open list follows: participants who are
+approvers and up get one for Oracle's ``proposed`` and people's ``suggested`` changes;
+approvers not in an open discussion get one for ``suggested`` changes only (c6: commenters
+suggest, approvers stage); a closed discussion's changes, and those of a discussion whose
+subject was deleted (no page opens its thread), count for no one. Every row is shown with
+G1's access check at read time, so none shows a title its reader may not see.
 """
 
 import uuid
@@ -18,7 +19,7 @@ from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.authz import has_role
-from oracle.discussions import access
+from oracle.discussions import access, changes
 from oracle.discussions.models import (
     Discussion,
     DiscussionChange,
@@ -185,27 +186,22 @@ async def rows(
             .limit(SETTLED_LIMIT)
         )
     )
-    pending: dict[uuid.UUID, dict[str, int]] = {}
-    pending_at: dict[uuid.UUID, datetime] = {}
+    # Changes proposed: open changes of open discussions, each counted by changes.waits_on
+    # once the reader's seat is known (below); only the columns it and the row's time read.
+    pending: dict[uuid.UUID, list] = {}
     if has_role(principal.role, "approver"):
-        for did, status, n, at in await db.execute(
+        for c in await db.execute(
             select(
                 DiscussionChange.discussion_id,
                 DiscussionChange.status,
-                func.count(),
-                func.max(func.coalesce(DiscussionChange.suggested_at, DiscussionChange.created_at)),
+                func.coalesce(DiscussionChange.suggested_at, DiscussionChange.created_at).label(
+                    "at"
+                ),
             )
             .join(Discussion, Discussion.id == DiscussionChange.discussion_id)
-            # A closed discussion's changes card offers no action (reopening it does): its
-            # leftovers, such as a goals interview's unused versions, wait on no one.
-            .where(
-                DiscussionChange.status.in_(("proposed", "suggested")),
-                Discussion.status == "open",
-            )
-            .group_by(DiscussionChange.discussion_id, DiscussionChange.status)
+            .where(DiscussionChange.status.in_(changes.OPEN), Discussion.status == "open")
         ):
-            pending.setdefault(did, {})[status] = n
-            pending_at[did] = max(at, pending_at.get(did, at))
+            pending.setdefault(c.discussion_id, []).append(c)
     ids = {r.discussion_id for r in [*live, *done]} | set(pending)
     if not ids:
         return []
@@ -278,26 +274,23 @@ async def rows(
                 state="done" if r.done_at else fresh(r.created_at),  # type: ignore[arg-type]
             )
         )
-    for did, counts in pending.items():
+    for did, open_ in pending.items():
         if did not in seen_ok:
             continue
         d, parts, seat = seen_ok[did]
-        if seat.participant:
-            n = counts.get("proposed", 0) + counts.get("suggested", 0)
-        elif d.visibility == "open":
-            n = counts.get("suggested", 0)
-        else:
-            n = 0
-        if n == 0:
+        _label, url = await labels.of(d)
+        waiting = [c for c in open_ if changes.waits_on(d, c, seat.participant, url)]
+        if not waiting:
             continue
+        at = max(c.at for c in waiting)
         out.append(
             InboxDiscussionItem(
                 **await base(d, parts),
                 id=f"{CHANGES_ID}{d.id}",
                 kind="changes_proposed",
-                count=n,
-                at=pending_at[did],
-                state=fresh(pending_at[did]),  # type: ignore[arg-type]
+                count=len(waiting),
+                at=at,
+                state=fresh(at),  # type: ignore[arg-type]
             )
         )
     out.sort(key=lambda i: (i.at, i.id), reverse=True)

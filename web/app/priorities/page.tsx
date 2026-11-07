@@ -29,6 +29,7 @@ import {
   type Column,
 } from "@/components/ds";
 import { codeTagRoom } from "@/components/ds/CodeChip";
+import { LinkedDiscussion } from "@/components/discuss/LinkedDiscussion";
 import { usePhone } from "@/components/ds/page-info";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -1512,6 +1513,7 @@ function Priorities() {
 
   return (
     <Page>
+      <LinkedDiscussion />
       <PageHeader
         title="Priorities"
         status={
