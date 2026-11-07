@@ -58,7 +58,7 @@ test("a refused waive keeps its form and reason and says why", async ({ page }) 
   await other.close();
 
   await row.getByRole("button", { name: "Waive", exact: true }).click();
-  await expect(row.getByRole("alert")).toHaveText("this checkpoint is decided");
+  await expect(row.getByRole("alert")).toHaveText("This checkpoint is decided");
   await expect(row.getByRole("textbox")).toHaveValue(REASON);
   await expect(row.getByRole("button", { name: "Waive", exact: true })).toBeEnabled();
 });

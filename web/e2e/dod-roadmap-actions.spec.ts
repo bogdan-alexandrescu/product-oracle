@@ -205,7 +205,8 @@ for (const [where, use] of [
       await expectCut(page, "alert-mobile", false);
       await expect(page.getByTestId("draft-count")).toHaveText("1");
       await page.getByTestId("draft-banner").getByRole("button", { name: "Undo" }).click();
-      await expect(page.getByTestId("draft-count")).toHaveText("0");
+      // simple-roadmap-count-waits (#1399): a draft with its last change undone has no banner.
+      await expect(page.getByTestId("draft-banner")).toHaveCount(0);
       await expectCut(page, "alert-rules", false);
     });
 
@@ -248,7 +249,8 @@ for (const [where, use] of [
       // The tray covers the draft's banner: closed for its Undo, then opened again.
       await t.getByRole("button", { name: "Close" }).click();
       await page.getByTestId("draft-banner").getByRole("button", { name: "Undo" }).click();
-      await expect(page.getByTestId("draft-count")).toHaveText("0");
+      // simple-roadmap-count-waits (#1399): a draft with its last change undone has no banner.
+      await expect(page.getByTestId("draft-banner")).toHaveCount(0);
       await tray(page);
       await row().getByRole("button", { name: "Move the dependents" }).first().click();
       await expect(toast(page, /Moved what depends on 'Alert rules engine' in your working draft/)).toBeVisible();
