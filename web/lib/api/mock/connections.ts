@@ -540,6 +540,10 @@ async function handle(db: ConnDb, req: Request, p: string[], role: string, email
         }
         if (!ok) return json(422, { detail: "company_timezone must be an IANA time zone name" });
       }
+      // INT2: as oracle.tenant_settings_api.validate (null resets it, on).
+      if (key === "intake_ai_read" && value !== null && value !== undefined && typeof value !== "boolean") {
+        return json(422, { detail: "intake_ai_read must be true or false" });
+      }
       if (key === "sign_in_without_invite" && !["request", "join", "refuse"].includes(String(value))) {
         return json(422, { detail: "sign_in_without_invite must be request, join or refuse" });
       }

@@ -104,7 +104,7 @@ import { routeFirefliesBrowse } from "./fireflies";
 import { liveReply, routeLive } from "./live";
 import { sourceBrowseRoute } from "./source-browse";
 import { DRAFT_NEW_ITEMS_SCENARIO, itemsChangedSince, routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
-import { BEFORE_DRAFTING, LATE_ANSWER_WITHHELD, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type IntakeContext, type SubjectLookup } from "./intake";
+import { BEFORE_DRAFTING, intakeReadInbox, LATE_ANSWER_WITHHELD, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, seedReadFailedTwice, startedIntakeRun, type IntakeContext, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, REPORT_DRAFT_ITEM, REPORT_DRAFT_ITEM_SCENARIO, REPORT_PRD_MOVED_SCENARIO, reportsRoute, type LiveTracks, type ReportsDb } from "./reports";
 import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
 import { addDigest, addMetricsReview, ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
@@ -586,6 +586,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * finding shared in full;
  * "brief-goal-rejected" as the default company plus a brief by the approver serving Raise
  * activation and Cut early churn, a goal rejected since (#260, ./intake.ts seedBriefGoalRejected);
+ * "intake-read-failed-twice" as the default company plus a brief by the signed-in owner whose
+ * last two reads by Oracle failed, so its Inbox row shows (INT2, ./intake.ts seedReadFailedTwice);
  * "run-discussions" as "feature-set" plus an open discussion and a private one (the approver's,
  * with the owner) on that run's waiting checkpoint (G5, ./discussions.ts seedRunDiscussions);
  * "discussion-change-kinds" as "feature-set" plus the approver's open discussion on that run's
@@ -851,6 +853,13 @@ function seedQuestions(): Db {
       asked_to: approver.id, asked_by: db.user_id, section_key: "metrics", status: "delegated", ...at("2026-10-18T10:00:00Z"),
     },
   );
+  return db;
+}
+
+/** The default company plus a brief Oracle couldn't read twice in a row (INT2): see MOCK_SCENARIO_KEY. */
+function seedReadFailedTwiceScenario(): Db {
+  const db = seed();
+  seedReadFailedTwice(ensureV2(db), db.user_id);
   return db;
 }
 
@@ -3744,6 +3753,8 @@ function load(): Db {
             ? seedLateAnswersScenario
           : scenario === "brief-goal-rejected"
             ? seedBriefGoalRejectedScenario
+          : scenario === "intake-read-failed-twice"
+            ? seedReadFailedTwiceScenario
           : scenario === "questions"
             ? seedQuestions
             : scenario === "private-finding"
@@ -7693,6 +7704,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     inbox.metrics = metricRows;
     inbox.total += metricCounted;
     inbox.needs_me = (inbox.needs_me ?? 0) + metricCounted;
+    // INT2: my open briefs whose last two reads or more failed (oracle.intake.read.inbox_rows); each counts.
+    const intakeReads = intakeReadInbox(ensureV2(db), me.id);
+    inbox.intake_reads = intakeReads;
+    inbox.total += intakeReads.length;
+    inbox.needs_me = (inbox.needs_me ?? 0) + intakeReads.length;
     // F-7: my unread webhook notices count, for the roles that can open Settings › Webhooks.
     const webhookNotices = atLeast(me.role, "approver")
       ? (db.review_v2?.notifications ?? []).filter((n) => n.user_id === me.id && !n.read_at && (n.kind === "webhook_paused" || n.kind === "webhook_url_changed")).length

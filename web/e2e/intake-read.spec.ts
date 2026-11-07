@@ -115,7 +115,7 @@ test("Inbox row: two failed reads in a row raise one row that opens the brief, a
   await page.goto("/inbox");
   await expect(page.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible();
   await expect(page.getByTestId("inbox-intake-reads")).toHaveCount(0);
-  await expect(badge).toHaveText(before > 1 ? String(before - 1) : /^$/);
+  await expect(badge).toHaveText(String(before - 1));
 });
 
 test("Inbox row: another member does not get the author's row", async ({ page }) => {

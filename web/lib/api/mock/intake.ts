@@ -1373,3 +1373,49 @@ export function seedBriefGoalRejected(db: V2Db, authorId: string, goalIds: strin
   );
   intake.goal_ids = goalIds;
 }
+
+// --- INT2: Oracle's read failing, and the author's Inbox row ---------------------------------
+
+/** Failed reads in a row that raise the author's Inbox row (oracle.intake.read.INBOX_AFTER). */
+const INBOX_AFTER = 2;
+/** A read whose built-in job failed, in the API's words (oracle.intake.read.JOB_FAILED). */
+const READ_FAILED = "Oracle's read failed. The rules read stands.";
+
+/**
+ * InboxOut.intake_reads, as oracle.intake.read.inbox_rows: one row per open brief of mine whose
+ * last reads failed twice or more in a row, the last changed first. A read that works resets
+ * the count (the ai-read route above), so the row goes.
+ */
+export function intakeReadInbox(db: V2Db, userId: string): Schemas["InboxIntakeRead"][] {
+  return db.intakes
+    .filter((i) => i.author_id === userId && i.status !== "converted" && i.status !== "archived")
+    .flatMap((i) => {
+      const read = db.intake_reads?.[i.id]?.read;
+      return read && read.failures >= INBOX_AFTER ? [{ intake: i, failures: read.failures, at: read.finished_at ?? null }] : [];
+    })
+    .sort((a, b) => b.intake.updated_at.localeCompare(a.intake.updated_at))
+    .map(({ intake, failures, at }) => ({ intake_id: intake.id, title: intake.title, failures, at }));
+}
+
+/** The "intake-read-failed-twice" scenario's brief: Oracle's last two reads of it failed (one Inbox row). */
+export const READ_FAILED_TWICE = { intakeId: "c2700000-0000-4000-8000-000000000001", title: "Bulk order invoices" } as const;
+
+/** A brief by `authorId` whose last two reads failed: the built-in job failed both times. */
+export function seedReadFailedTwice(db: V2Db, authorId: string) {
+  const at = "2026-10-22T10:00:00Z";
+  const intake = addIntake(
+    db, authorId, READ_FAILED_TWICE.title,
+    "Finance teams ask for one invoice per bulk order instead of one per site. Group invoices by bulk order.",
+    [], at, READ_FAILED_TWICE.intakeId,
+  );
+  db.intake_reads = {
+    ...(db.intake_reads ?? {}),
+    [intake.id]: {
+      read: {
+        state: "failed", path: "job", started_at: "2026-10-22T10:55:00Z", finished_at: "2026-10-22T11:00:00Z", sources: 0, added: null,
+        dropped_refs: 0, failures: 2, error: { code: "job_failed", message: READ_FAILED },
+      },
+      on_demand: [],
+    },
+  };
+}
