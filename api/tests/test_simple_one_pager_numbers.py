@@ -594,3 +594,72 @@ def test_a_word_between_number_and_noun_keeps_its_fix():
     assert one_pager_checks.set_number(sec.body_md, x.fix["said"], x.fix["value"]).startswith(
         "We plan three more features"
     )
+
+
+async def _heading_fixed_then_edited(client, heading: str, body_lead: str = ""):
+    """head_world with its heading count fixed (8 to 6), then the section edited in the
+    draft: its heading to ``heading``, ``body_lead`` put before its list."""
+    ctx = await head_world(client)
+    f = look(await get(client, ctx, "owner", HEAD_DOC), HEAD)["fix"]
+    one = (await fix(client, ctx, "owner", f)).json()["change"]
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.scalar(select(SimpleDraft))
+        ov = {**d.overlay, "headings": {"later": heading}}
+        if body_lead:
+            ov["sections"] = {"later": body_lead + one["before"]["sections"]["later"]["body"]}
+        d.overlay = ov
+        await s.commit()
+    return ctx, one
+
+
+async def test_heading_fix_undoes_after_the_heading_was_edited(client):
+    # Review minor (Nov 7): a heading fix undone once the heading was edited around its
+    # number puts only the number back; the edit stays and the body is untouched.
+    ctx, one = await _heading_fixed_then_edited(client, "Later, after spring · 6 items")
+    u = await client.post(f"{CHANGES}/{one['id']}/undo", headers=ctx.as_("owner"))
+    assert u.status_code in (200, 201), u.text
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.scalar(select(SimpleDraft))
+        assert d.overlay["headings"] == {"later": "Later, after spring · 8 items"}
+        assert "later" not in (d.overlay.get("sections") or {})
+
+
+async def test_heading_fix_whose_number_left_the_heading_is_refused(client):
+    # Review minor (Nov 7): once the heading no longer holds the fixed number, the undo does
+    # not look for it in the body (a body number the heading fix never set): it is refused
+    # with the section's words now, and nothing is written.
+    ctx, one = await _heading_fixed_then_edited(
+        client, "Later · 7 items", "About 6 items wait for spring.\n\n"
+    )
+    u = await client.post(f"{CHANGES}/{one['id']}/undo", headers=ctx.as_("owner"))
+    assert u.status_code == 409, u.text
+    assert u.json()["detail"]["current"]["heading"] == "Later · 7 items"
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.scalar(select(SimpleDraft))
+        assert d.overlay["headings"] == {"later": "Later · 7 items"}
+        assert d.overlay["sections"]["later"].startswith("About 6 items wait for spring.")
+        assert [c.status for c in await s.scalars(select(SimpleChange))] == ["applied"]
+
+
+def test_a_fix_keeps_a_decimal_as_written():
+    # Review minor (Nov 7): a decimal keeps its places and separators ("1,200.5" -> "1,502.5",
+    # never "1502.5"; "2.75" -> "2.50"), and a long value is never cut ("1.23457e+06").
+    def value(said: str, before: str, to: float) -> str:
+        sec = Section(section_key="t", heading="T", body_md=f"Company-wide target: {said}.")
+        f = one_pager_checks._fix(sec, said, before, to)
+        assert f is not None
+        return f["value"]
+
+    assert value("1,200.5 paid seats", "1,200.5", 1502.5) == "1,502.5"
+    assert value("1,200.75 paid seats", "1,200.75", 1502.5) == "1,502.50"
+    assert value("1,200.5 paid seats", "1,200.5", 1500) == "1,500.0"
+    assert value("2.75 hours saved", "2.75", 2.5) == "2.50"
+    assert value("2.75 hours saved", "2.75", 3) == "3.00"
+    assert value("2 hours saved", "2", 2.25) == "2.25"
+    assert value("1234567 paid seats", "1234567", 1234567.5) == "1234567.5"
+    assert value("1,000,000 paid seats", "1,000,000", 1234567.5) == "1,234,567.5"
+    assert value("0.5 hours saved", "0.5", 0.1 * 3) == "0.3"
+    sec = Section(section_key="t", heading="T", body_md="Company-wide target: 1,200.5 seats.")
+    assert one_pager_checks.set_number(sec.body_md, "1,200.5 seats", "1,502.50") == (
+        "Company-wide target: 1,502.50 seats."
+    )
