@@ -122,6 +122,7 @@ def cpu_seconds(setup: str, call: str, make: str, n: int) -> float:
 @pytest.mark.parametrize(
     "name,make", [(name, make) for name, (_, _, makes) in CASES.items() for make in makes]
 )
+@pytest.mark.timing  # a CPU budget: runs alone in the api-timing job
 def test_adversarial_input_runs_in_linear_time(name, make, n):
     setup, call, _ = CASES[name]
     assert cpu_seconds(setup, call, make, n) < CPU_LIMIT

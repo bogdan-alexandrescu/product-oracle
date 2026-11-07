@@ -35,6 +35,7 @@ def _headings(lines: int = 12) -> str:
 SHAPES = {"body": _body, "headings": _headings}
 
 
+@pytest.mark.timing  # a CPU budget: runs alone in the api-timing job
 @pytest.mark.parametrize("shape", sorted(SHAPES))
 def test_parse_draft_is_linear_on_a_space_run(shape):
     text = SHAPES[shape]()
@@ -47,6 +48,7 @@ def test_parse_draft_is_linear_on_a_space_run(shape):
     assert took < CPU_LIMIT, f"{shape} took {took:.2f}s of CPU"
 
 
+@pytest.mark.timing  # a CPU budget: runs alone in the api-timing job
 @pytest.mark.parametrize("shape", sorted(SHAPES))
 async def test_import_is_linear_on_a_space_run(client, shape):
     _, auth = await seed_auth()
@@ -105,6 +107,7 @@ def _fast(fn, limit=0.15):
     assert took < limit, f"took {took:.2f}s of CPU"
 
 
+@pytest.mark.timing  # a CPU budget: runs alone in the api-timing job
 def test_citation_re_is_linear_on_open_markers():
     from oracle.docs.parser import CITATION_RE
 
@@ -113,6 +116,7 @@ def test_citation_re_is_linear_on_open_markers():
     assert CITATION_RE.findall("a [c:c1] b [c:c2]") == ["c1", "c2"]
 
 
+@pytest.mark.timing  # a CPU budget: runs alone in the api-timing job
 def test_quality_bullets_are_linear_on_blank_lines():
     from oracle.quality.text import _BULLET
 
@@ -122,6 +126,7 @@ def test_quality_bullets_are_linear_on_blank_lines():
     assert [b.strip() for b in found] == ["one", "two", "three", "four"]
 
 
+@pytest.mark.timing  # a CPU budget: runs alone in the api-timing job
 def test_template_title_line_is_linear():
     from oracle.templates.service import draft_skeleton
 
@@ -174,6 +179,7 @@ def _heading_shapes():
     }
 
 
+@pytest.mark.timing  # a CPU budget: runs alone in the api-timing job
 @pytest.mark.parametrize("shape", sorted(_heading_shapes()))
 @pytest.mark.parametrize("kind", ["issue", "source"])
 def test_source_words_check_is_linear_on_long_headings(shape, kind):
