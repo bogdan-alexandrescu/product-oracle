@@ -40,7 +40,7 @@ from oracle.baseline.models import Edge, Entity
 from oracle.docs import prd_order
 from oracle.docs.models import Document, DocumentVersion
 from oracle.members.names import display_name
-from oracle.priorities.scoring import _number
+from oracle.priorities.scoring import effort_weeks
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap import company
 from oracle.roadmap.models import (
@@ -781,8 +781,7 @@ async def efforts(db: AsyncSession, rows: list[RoadmapItem]) -> dict[uuid.UUID, 
         return {}
     weeks: dict[uuid.UUID, float] = {}
     for fid, attrs in await db.execute(select(Entity.id, Entity.attrs).where(Entity.id.in_(ids))):
-        a = attrs or {}
-        v = _number(a["effort"]) if "effort" in a else _number(a.get("effort_weeks"))
+        v = effort_weeks(attrs)
         if v is not None and v > 0:
             weeks[fid] = v
     return {r.id: weeks[r.feature_id] for r in rows if r.feature_id in weeks}

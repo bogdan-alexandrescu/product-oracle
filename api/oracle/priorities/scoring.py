@@ -138,6 +138,13 @@ def _number(value: Any) -> float | None:
     return None
 
 
+def effort_weeks(attrs: dict[str, Any] | None) -> float | None:
+    """A feature's effort in weeks as the ranking reads it: attrs ``effort``, else
+    ``effort_weeks`` (T-shirt sizes as SIZES); None when absent or unreadable."""
+    attrs = attrs or {}
+    return _number(attrs["effort"]) if "effort" in attrs else _number(attrs.get("effort_weeks"))
+
+
 def _round(x: float | None, n: int = 3) -> float | None:
     return None if x is None else round(x, n)
 
@@ -248,7 +255,12 @@ def goal_value(f: FeatureInput) -> tuple[float, list[dict[str, Any]]]:
 
 def estimated_goal_value(f: FeatureInput) -> float | None:
     """A person's estimate of the feature's goal value (attrs ``goal_value`` >= 0, S6)."""
-    v = _number(f.attrs.get("goal_value"))
+    return goal_value_estimate(f.attrs)
+
+
+def goal_value_estimate(attrs: dict[str, Any] | None) -> float | None:
+    """attrs ``goal_value`` as a number of 0 or more (S6), else None."""
+    v = _number((attrs or {}).get("goal_value"))
     return v if v is not None and v >= 0 else None
 
 

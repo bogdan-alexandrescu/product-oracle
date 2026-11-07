@@ -12,8 +12,9 @@ Test cards (protects / fails_when / no_claim):
   earliest wins; no_claim=none.
 - test_an_end_only_item_starts_its_effort_before_its_end (and the tests after it):
   protects=a start no source gives makes a span of the feature's effort (weeks x 7
-  days, the end minus N-1, as a suggestion's span), else of 28 days, before the window's start if need be, never after
-  the end; a typed start is never changed; an estimated end keeps its rule;
+  days, the end minus N-1, as a suggestion's span), else of 28 days, before the window's
+  start if need be, never after the end; a typed start is never changed; an estimated
+  end keeps its rule;
   fails_when=the bar starts at the window's start (a 1-week feature read as a 10-week
   bar); no_claim=where the effort comes from (tests/test_simple_roadmap_api.py).
 - test_horizon_windows_at_a_quarter_boundary: protects=now/next/later are the company's
@@ -61,7 +62,7 @@ def test_precedence_own_over_engineering_over_tracker_over_window():
 
     r = dates.resolve([tracker, engineering], WINDOW)
     assert r.end == Dated(date(2026, 11, 20), "engineering", False)
-    assert r.start == Dated(date(2026, 10, 23), "estimated", True)
+    assert r.start == Dated(date(2026, 10, 24), "estimated", True)
     assert (r.source, r.estimated) == ("engineering", False)
 
     r = dates.resolve([tracker], WINDOW)

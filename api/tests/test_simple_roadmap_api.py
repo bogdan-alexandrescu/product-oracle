@@ -259,8 +259,8 @@ async def test_dates_come_from_each_source(client):
         "source": "engineering",
         "estimated": False,
     }
-    # hotfix-effort-start: no effort -> 28 days before its end, not the window's Oct 1.
-    assert items["eng"]["start"] == {"date": "2026-11-06", "source": "estimated", "estimated": True}
+    # hotfix-effort-start: no effort -> a 28-day span to its end, not the window's Oct 1.
+    assert items["eng"]["start"] == {"date": "2026-11-07", "source": "estimated", "estimated": True}
     assert (items["eng"]["source"], items["eng"]["estimated"]) == ("engineering", False)
     assert items["tracked"]["end"]["source"] == "tracker"
     assert items["tracked"]["status"] == "in_progress"
@@ -271,9 +271,9 @@ async def test_dates_come_from_each_source(client):
 
 
 async def test_an_end_only_item_starts_its_feature_effort_before_its_end(client):
-    """hotfix-effort-start: an S feature (1 week) dated only by its end starts 7 days before
-    it, on the roadmap and in the meeting draft's spans; an XS (0.5 week) 4 days; one with
-    effort_weeks 2, 14 days; one without effort, 28 days."""
+    """hotfix-effort-start: an S feature (1 week) dated only by its end spans 7 days, its end
+    included, on the roadmap and in the meeting draft's spans; an XS (0.5 week) 4 days; one
+    with effort_weeks 2, 14 days; one without effort, 28 days."""
     ctx = await make_ctx()
     async with tenant_session(ctx.tenant_id) as s:
         seed = Seed(s)
@@ -293,8 +293,8 @@ async def test_an_end_only_item_starts_its_feature_effort_before_its_end(client)
         await s.commit()
         spans = await meeting_draft._spans(s, rows)
     items = by_key(await get(client, ctx))
-    starts = {"small": "2026-11-23", "tiny": "2026-11-26", "weeks": "2026-11-16",
-              "plain": "2026-11-02", "none": "2026-11-02"}  # fmt: skip
+    starts = {"small": "2026-11-24", "tiny": "2026-11-27", "weeks": "2026-11-17",
+              "plain": "2026-11-03", "none": "2026-11-03"}  # fmt: skip
     for key, day in starts.items():
         assert items[key]["start"] == {"date": day, "source": "estimated", "estimated": True}
         assert items[key]["end"]["date"] == "2026-11-30"
