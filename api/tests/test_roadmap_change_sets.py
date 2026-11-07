@@ -472,6 +472,13 @@ async def test_an_added_item_never_takes_a_code_another_item_has(client, owner, 
                                          "feature_id": fid}])  # fmt: skip
     assert r.status_code == 422, r.text
     assert r.json()["detail"] == taken
+    two = [
+        {"op": "add", "title": t, "horizon": "next"}
+        for t in ("F-33 Night digest", "F-33 Launch flow")
+    ]
+    r = await patch(client, auth, out, two)
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == "F-33 is already the code of F-33 Night digest"
     r = await patch(
         client, auth, out, [{"op": "add", "title": "F-32 Launch flow", "horizon": "next"}]
     )

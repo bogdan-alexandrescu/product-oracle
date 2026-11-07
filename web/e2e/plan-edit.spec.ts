@@ -167,6 +167,7 @@ test("Edit plan: a later proposal supersedes the waiting one, which can't be app
 // plan, adding "F-31 Launch flow" is refused in plain words and nothing is added; a free code is added; fails_when = two items on
 // the plan read F-31 (the mock's codesFree, as changeset._codes); no_claim = a picked feature's code (api/tests/test_roadmap_change_sets.py).
 test("Edit plan: an item whose code another item has is refused in plain words", async ({ page }) => {
+  await withDecider(page);
   await openPlan(page);
   await page.getByTestId("plan-edit").click();
   await expect(changes(page)).toContainText(BASE_1);

@@ -94,18 +94,19 @@ class Refused extends Error {
   }
 }
 
-type Applied = { lanes: Record<Horizon, (PlanEditItem & { isNew: boolean; deferred: boolean })[]>; cut: { item: PlanEditItem; reason: string }[] };
+type Applied = { lanes: Record<Horizon, (PlanEditItem & { isNew: boolean; deferred: boolean })[]>; cut: { item: PlanEditItem; reason: string }[]; added: string[] };
 
 function apply(base: PlanEditItem[], changes: Change[]): Applied {
   const lanes: Applied["lanes"] = { now: [], next: [], later: [] };
   for (const i of base) lanes[i.horizon].push({ ...i, isNew: false, deferred: false });
-  const out: Applied = { lanes, cut: [] };
+  const out: Applied = { lanes, cut: [], added: [] };
   const all = () => HORIZONS.flatMap((h) => lanes[h]);
   for (const c of changes) {
     if (c.op === "add") {
       const key = c.key ?? slugOf(c.title);
       if (all().some((i) => i.key === key) || out.cut.some((x) => x.item.key === key)) throw new Refused(422, `the plan has an item ${key} already`);
       lanes[c.horizon].push({ key, title: c.title, horizon: c.horizon, outcome: c.outcome ?? null, feature_id: c.feature_id ?? null, isNew: true, deferred: false });
+      out.added.push(key);
       continue;
     }
     const item = all().find((i) => i.key === c.key);
@@ -128,11 +129,13 @@ const titleCode = (title: string) => /^([A-Z][A-Z0-9]*-\d+[a-z]?)\s+\S/.exec(tit
  * reads in its title is refused in set_code's words: 422 when added, 409 at propose (taken since). Slices of one feature share it. */
 function codesFree(ctx: PlanEditsContext, applied: Applied, status: number) {
   const plan = HORIZONS.flatMap((h) => applied.lanes[h]);
-  for (const p of plan) {
-    if (!p.isNew) continue;
+  // The item there first holds the code: the base's, then the adds in the order made.
+  const added = plan.filter((p) => p.isNew).sort((a, b) => applied.added.indexOf(a.key) - applied.added.indexOf(b.key));
+  for (const [n, p] of added.entries()) {
+    const before = [...plan.filter((o) => !o.isNew), ...added.slice(0, n)];
     const code = titleCode(p.title) ?? (p.feature_id ? (ctx.featureCode?.(p.feature_id) ?? null) : null);
     if (!code) continue;
-    const hit = plan.find((o) => o.key !== p.key && !(p.feature_id && o.feature_id === p.feature_id) && titleCode(o.title)?.toUpperCase() === code.toUpperCase());
+    const hit = before.find((o) => o.key !== p.key && !(p.feature_id && o.feature_id === p.feature_id) && titleCode(o.title)?.toUpperCase() === code.toUpperCase());
     if (hit) throw new Refused(status, `${code} is already the code of ${hit.title}`);
   }
 }

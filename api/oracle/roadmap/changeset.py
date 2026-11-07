@@ -82,6 +82,8 @@ class Applied:
     # Per horizon, in order.
     lanes: dict[str, list[Planned]]
     cut: list[tuple[Planned, str]] = field(default_factory=list)
+    # The keys of the items added, in the order the changes add them.
+    added: list[str] = field(default_factory=list)
 
     def items(self) -> list[tuple[int, Planned]]:
         out: list[tuple[int, Planned]] = []
@@ -120,6 +122,7 @@ def apply(base: list[RoadmapItem], changes: list[Any]) -> Applied:
             if key in cut or any(p.key == key for lane in lanes.values() for p in lane):
                 raise ChangeSetError(f"the plan has an item {key} already")
             lanes[c.horizon].append(Planned(key, c.title, c.horizon, c.outcome, c.feature_id))
+            out.added.append(key)
             continue
         item = find(c.key)
         lanes[item.horizon].remove(item)
@@ -146,9 +149,11 @@ async def _codes(db: AsyncSession, applied: Applied, error: type[ChangeSetError]
     from oracle.simple import service as simple_service
 
     plan = [p for _, p in applied.items()]
-    for p in plan:
-        if p.base is not None:
-            continue
+    # The item there first holds the code: the base's, then the adds in the order made.
+    added = [p for p in plan if p.base is None]
+    added.sort(key=lambda p: applied.added.index(p.key) if p.key in applied.added else 0)
+    for n, p in enumerate(added):
+        before = [o for o in plan if o.base is not None] + added[:n]
         code = codes.title_code(p.title)
         if code is None and p.feature_id is not None:
             e = SimpleNamespace(
@@ -157,7 +162,7 @@ async def _codes(db: AsyncSession, applied: Applied, error: type[ChangeSetError]
             await simple_service.item_codes(db, [e])  # type: ignore[list-item]
             code = e.code
         others = [SimpleNamespace(item_key=o.key, title=o.title, feature_id=o.feature_id)
-                  for o in plan]  # fmt: skip
+                  for o in before]  # fmt: skip
         hit = codes.clash(code, p.key, p.feature_id, others) if code else None
         if hit is not None:
             raise error(codes.taken(code, hit.title))  # type: ignore[arg-type]
