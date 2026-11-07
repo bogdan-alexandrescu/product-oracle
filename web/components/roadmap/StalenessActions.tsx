@@ -6,6 +6,7 @@ import { Button } from "@/components/ds";
 import { ErrorNote } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage } from "@/lib/use-query";
+import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 type Item = Schemas["RoadmapItemOut"];
 
@@ -49,6 +50,10 @@ export function StalenessActions({
           body: { action, version: n ?? null, item_keys: [itemKey], reason: action === "reconcile" ? reason.trim() : null },
         }),
       );
+      // Acting resolves the item's track alert at once: the Inbox and the rail count read again,
+      // not the Inbox call shared in the last two seconds.
+      invalidateWaiting();
+      waitingChanged();
       await onChanged(out.items);
     } catch (e) {
       setError(errorMessage(e));
