@@ -31,9 +31,10 @@ import { login } from "./helpers";
 
 const withScenario = (page: Page, scenario: string) => page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, scenario]);
 
-async function openCheck(page: Page, scenario = "eng-check-no-prd", who = "commenter@example.com") {
+/** Opens the check from the Inbox as the engineering lead, or with `owner` as the mock owner (who may start a run). */
+async function openCheck(page: Page, scenario = "eng-check-no-prd", owner = false) {
   await withScenario(page, scenario);
-  await login(page, who);
+  await (owner ? login(page) : login(page, "commenter@example.com"));
   await page.goto("/inbox");
   const inboxRow = page.getByTestId("inbox-checkpoints").locator("tr[data-row]").filter({ hasText: "Engineering check" });
   await inboxRow.getByRole("link", { name: "Review" }).click();
@@ -59,7 +60,7 @@ test("no PRD, unknown and own heading: the Engineering check names a feature in 
 });
 
 test("add to a PRD and both reasons: picking the Safety PRD starts its run with Export logs, and the check no longer waits on it", async ({ page }) => {
-  await openCheck(page, "eng-check-add-to-prd", "owner@example.com");
+  await openCheck(page, "eng-check-add-to-prd", true);
   const why = page.getByTestId("approve-why");
   await expect(why).toHaveText("Add each feature in no PRD yet to a PRD, give each feature a verdict and answer each blocking question first");
   await expect(page.getByTestId("briefs-problem")).toHaveCount(0);
