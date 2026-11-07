@@ -1429,9 +1429,10 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     return [...(gone ? [partRef(gone, true)] : []), ...ancestorsOf(s).reverse().map((a) => partRef(a))];
   };
   // additions.item_extras: merged_into's code falls back to the kept item's name, never its key; a part's is its display code or "".
-  // A kept item in Trash or gone reads "a deleted feature", its id and code empty.
-  const ref = (k: string) => {
-    const x = db.items.find((y) => y.key === k && !y.trashed);
+  // A kept item in Trash or gone reads "a deleted feature", its id and code empty. The kept item is
+  // found in the merged item's own roadmap, as the API's by_key is keyed by (roadmap id, key).
+  const ref = (k: string, roadmap: string) => {
+    const x = db.items.find((y) => y.key === k && y.roadmap === roadmap && !y.trashed);
     return x ? { id: db.ids[k], code: prdCode(x.section) || x.title, title: x.title } : { id: "", code: "", title: "a deleted feature" };
   };
   // The plan-model lane: the plan PRD's items whose code is a plan feature carry its slices.
@@ -1503,7 +1504,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       ].slice(0, 3),
       open_decisions: (db.decisions?.[s.key] ?? []).map((d) => ({ id: stableUuid(`simple-decision/${d.number}`), number: d.number, title: d.title })),
       looks_like: s.draft && !s.kept_both && !closed(s) ? matchesOf(db, s.looks_like ?? []) : [],
-      merged_into: s.merged_into ? ref(s.merged_into) : null,
+      merged_into: s.merged_into ? ref(s.merged_into, s.roadmap) : null,
       // feature-parts: the feature it is a part of (set_parent's before is its key) and its open parts.
       parent_key: s.parent ?? null,
       part_of: pathOf(s).at(-1) ?? null,
