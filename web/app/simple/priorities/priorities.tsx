@@ -1464,10 +1464,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
   const { spots, crowds } = markLayout(rows, w, h, (r) => [(xPct(effortOf(r)) / 100) * w, (yPct(r.goal_value ?? 0) / 100) * h], quadrantBoxes);
   // The open count as the data has it now: the one holding most of its features; none once they are all apart.
   const crowdOpen = crowdIds ? (crowds.map((c) => ({ c, n: c.rows.filter((r) => crowdIds.includes(r.feature_id)).length })).filter((x) => x.n > 0).sort((x, y) => y.n - x.n)[0]?.c ?? null) : null;
-  const crowdGone = !!crowdIds && !crowdOpen && !!w;
-  useEffect(() => {
-    if (crowdGone) setCrowdIds(null);
-  }, [crowdGone]);
+  if (crowdIds && !crowdOpen && w) setCrowdIds(null);
   const R = MARK_R;
   const taken: Box[] = [...[...spots.values(), ...crowds.map((c) => c.at)].map(([x, y]): Box => [x - R, y - R, x + R, y + R]), ...quadrantBoxes];
   const free = (b: Box) => b[0] >= 0 && b[2] <= w && b[1] >= 0 && b[3] <= h && !taken.some((o) => o[0] < b[2] && b[0] < o[2] && o[1] < b[3] && b[1] < o[3]);
