@@ -44,7 +44,7 @@ test("Review changes opens the thread on the changes it counts", async ({ page }
 
 test("with no change open, the Inbox offers no Review changes", async ({ page }) => {
   await inbox(page);
-  await review(page).click();
+  await rowsOf(page).filter({ hasText: TITLE }).getByRole("link", { name: "Review changes" }).click();
   const card = page.getByTestId("discussion-thread").filter({ visible: true }).getByTestId("changes-card");
   const open = card.getByRole("list", { name: "Open changes" }).getByTestId("change-row");
   await expect(open).toHaveCount(2);
