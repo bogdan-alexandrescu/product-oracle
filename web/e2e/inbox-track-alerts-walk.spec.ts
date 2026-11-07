@@ -11,6 +11,7 @@ import { login } from "./helpers";
  * dependency on it, an item that version has no row for. The API's rules (the alert resolving
  * at once, each track's own items, the names) are proven by
  * api/tests/test_inbox_track_alerts_walk.py; each test here proves what a person sees and does.
+ * "track-alerts-stale-removed" is the same with the section removed in version 2.
  */
 
 const STALE = "Budgets per team";
@@ -91,4 +92,21 @@ test("a roadmap item names a dependency outside its version, never its key", asy
   const depends = page.getByTestId("item-depends").filter({ visible: true });
   await expect(depends).toContainText(STALE);
   await expect(depends).not.toContainText("team-budgets");
+});
+
+// protects = a stale alert whose PRD section was removed says so in the words the rest of the
+// Inbox uses for a removed section ("removed"), in the Inbox row and on the Plan's card;
+// fails_when = it reads "PRD section Behaviour is gone in version 2"; no_claim = how the API
+// words a stored reason (api/tests/test_roadmap_item_staleness.py).
+test("a stale alert on a removed PRD section reads 'removed' in the Inbox and the Plan", async ({ page }) => {
+  const removed = "PRD section Behaviour removed in version 2";
+  await page.addInitScript((key) => localStorage.setItem(key, "track-alerts-stale-removed"), MOCK_SCENARIO_KEY);
+  await login(page);
+  await openInbox(page);
+  const row = alertRows(page).filter({ hasText: STALE });
+  await expect(row.getByTestId("track-alert-detail")).toHaveText(removed);
+  await expect(row).not.toContainText("is gone");
+  await row.getByRole("link", { name: `Review ${STALE}` }).click();
+  await expect(page).toHaveURL(/\/plan\?item=team-budgets&review=1$/);
+  await expect(staleCard(page).getByTestId("plan-alert-detail")).toHaveText(removed);
 });
