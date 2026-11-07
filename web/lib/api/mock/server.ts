@@ -179,7 +179,7 @@ import { runGroupsOut } from "./simple-runs";
 import { roadmapRead } from "./roadmap-read";
 import { questionInboxRows } from "./simple-questions";
 import { rebuildsOut } from "./rebuilds";
-import { onePagerInboxRows, onePagerProposalsOut, planSlice, prdOnePager, routeOnePager, seedHeadingCountOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { onePagerInboxRows, onePagerProposalsOut, planSlice, prdOnePager, routeOnePager, seedHeadingCountOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedTwoCountsOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
@@ -7429,6 +7429,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     ? seedNotInPrdOnePager()
     : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-heading-count"
     ? seedHeadingCountOnePager()
+    : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-two-counts"
+    ? seedTwoCountsOnePager()
     : seedOnePager(localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-no-owner");
   // Simple S10: the visuals the one-pager, the roadmap and the priorities show.
   db.simple_visuals ??= seedVisuals();
