@@ -168,6 +168,8 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "remove_dependency": ("depends_on",),
     # feature-parts: the item this one is part of.
     "set_parent": ("parent_key",),
+    # every-field-editable: the item's feature code, stored as its title's lead ("F-31 Alerts").
+    "set_code": ("code",),
 }
 CONFIDENCES = ("low", "medium", "high")
 # set_status: the statuses a person sets (the others come from the tracker or a merge).
@@ -183,6 +185,7 @@ SHOWN = {
     "set_depends": lambda e: {"depends_on": list(e.row.depends_on or [])},
     "set_status": lambda e: {"status": e.status},
     "set_feature": lambda e: {"feature_id": str(e.row.feature_id) if e.row.feature_id else None},
+    "set_code": lambda e: {"code": service.coded_title(e.row.title, _code_of(e))[0]},
 }
 STORED = {"set_track": ("track_id",), "set_prd": ("prd_document_id",), "set_goal": ("goal_ids",)}
 FIXES = ("shift_dependents", "move_dependency")
@@ -1056,6 +1059,12 @@ async def _plan(
         after = {"depends_on": clean}
     elif op == "set_parent":
         after = {"parent_key": await _parent(db, entry, a.get("parent_key"), target, read_)}
+    elif op == "set_code":
+        code = await _free_code(db, entry, a.get("code"), read_)
+        name = service.coded_title(row.title, _code_of(entry))[1]
+        target["code"] = code
+        after = {"title": f"{code} {name}"[:TITLE_MAX] if code else name}
+        stored = ("title",)
     else:  # accept_risk
         if target.get("flag") not in FLAG_KINDS:
             raise ChangeError(422, "target.flag: a constraint flag's kind")
@@ -1073,6 +1082,40 @@ async def _plan(
             }
         }
     return entry, target, read(row, stored, target), after
+
+
+async def _free_code(db: AsyncSession, entry: Any, raw: Any, read_: Any) -> str | None:
+    """set_code: the code asked for, read one way (f-31: F-31), when it is a feature code no
+    other item of the roadmap and no Ground Truth feature has; None takes it off. An item whose
+    code comes from its feature or PRD section keeps that one (422)."""
+    from oracle.simple.priorities import FEATURE_CODE, _short_codes
+
+    if _code_of(entry):
+        raise ChangeError(422, "Its code comes from its Ground Truth feature or its PRD")
+    if raw is None or not str(raw).strip():
+        return None
+    code = str(raw).strip().upper()
+    if not FEATURE_CODE.fullmatch(code):
+        raise ChangeError(422, "after.code: a feature code, like F-31")
+    by_id = read_.by_id()
+    await service.item_codes(db, list(by_id.values()))
+    for d in by_id.values():
+        if d is entry or d.row.id == entry.row.id:
+            continue
+        shown = service.coded_title(d.row.title, _code_of(d))[0]
+        if shown and shown.upper() == code:
+            raise ChangeError(409, {"message": f"{code} is already the code of {_named(d)}",
+                                    "current": None, "changed_by": None,
+                                    "changed_at": None})  # fmt: skip
+    features = {k.upper() for k in (await _short_codes(db, names=False)).values() if k}
+    features |= {
+        k.upper() for k in await db.scalars(select(Entity.key).where(Entity.type == "feature"))
+    }
+    if code in features:
+        raise ChangeError(409, {"message": f"{code} is already the code of a Ground Truth feature",
+                                "current": None, "changed_by": None,
+                                "changed_at": None})  # fmt: skip
+    return code
 
 
 def _code_of(e: Any) -> str | None:

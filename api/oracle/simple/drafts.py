@@ -1116,6 +1116,7 @@ OP_WORDS = {
     "set_feature": "New feature for",
     "set_goals": "Moved to another goal:",
     "set_parent": "Changed what it is part of:",
+    "set_code": "New code for",
 }
 
 

@@ -674,6 +674,8 @@ ChangeOp = Literal[
     "set_feature",
     # feature-parts: the item made part of another (any depth, never a loop), or taken out.
     "set_parent",
+    # every-field-editable: the item's feature code (F-31), carried in its stored title.
+    "set_code",
     # one-feature-panel: how the goal the item serves is measured (its target and date).
     "set_goal_measure",
     # goal-buckets-tasks: the goals an item serves (into the working draft).

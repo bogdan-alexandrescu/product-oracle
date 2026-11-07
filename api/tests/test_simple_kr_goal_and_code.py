@@ -143,6 +143,6 @@ async def test_set_code_gives_an_item_its_feature_code(client):
     r = await post({"code": None}, {"code": "F-32"})
     assert r.status_code == 409, r.text
     r = await client.post(f"{CHANGES}/{c['id']}/undo", headers=ctx.as_("owner"))
-    assert r.status_code == 200, r.text
+    assert r.status_code == 201, r.text
     shown = by_key(await get(client, ctx, "owner"))["a"]
     assert (shown["code"], shown["title"]) == (None, "Alerts")
