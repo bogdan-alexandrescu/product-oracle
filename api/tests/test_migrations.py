@@ -189,7 +189,7 @@ def test_baseline_flow_check_up_down_up(scratch_db):
     cfg = _cfg()
     script = ScriptDirectory.from_config(cfg)
     previous = script.get_revision(BASELINE_FLOW).down_revision
-    # removed-tracks, prd-order: renumbered when trains merge.
+    # removed-tracks, prd-order, qaC-numfix: renumbered when trains merge.
     assert script.get_heads() == ["0120_simple_changes_seq"]
 
     command.upgrade(cfg, previous)
@@ -254,11 +254,11 @@ def test_revision_run_up_down_up(scratch_db):
     assert "run_id" in _columns("entity_revisions")
 
 
-SIMPLE_CHANGES_SEQ = "0113_simple_changes_seq"
+SIMPLE_CHANGES_SEQ = "0120_simple_changes_seq"
 
 
 def test_simple_changes_seq_backfills_in_the_order_made(scratch_db):
-    # protects=0113 numbers the changes already stored by (at, id): older ones first, and
+    # protects=0120 numbers the changes already stored by (at, id): older ones first, and
     # rows sharing one ``at`` by id, so a tie lists the same as it did before the column;
     # a change made after the upgrade numbers after them all and NOT NULL holds;
     # fails_when=seq follows storage (heap) order, or a new change takes a used number;

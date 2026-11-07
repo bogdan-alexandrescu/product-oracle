@@ -7,9 +7,10 @@ one-pager's number fixes, GET /v1/simple/changes, the Inbox, proposals) breaks a
 The column is added nullable with no default (no table rewrite), the changes already
 stored are numbered by (at, id) (the order lists showed them in before), and only then does
 it take its default from a sequence that starts after the highest number, and NOT NULL.
-The backfill is a plain UPDATE (reads go on, writes of the same rows wait); NOT NULL scans
-the table under a short ACCESS EXCLUSIVE lock. The wait for each lock is capped
-(LOCK_TIMEOUT). The downgrade drops the column and its sequence.
+It all runs in one transaction: ADD COLUMN takes the table's ACCESS EXCLUSIVE lock and it is
+held to the commit, so reads and writes of simple_changes wait through the backfill (one
+UPDATE) and the NOT NULL scan. The wait for the lock is capped (LOCK_TIMEOUT). The
+downgrade drops the column and its sequence.
 
 Revision ID: 0120_simple_changes_seq
 Revises: 0119_trash_milestones
