@@ -60,19 +60,22 @@ test("inbox: cancel a run paused on overrun", async ({ page }) => {
 
 test("inbox: retry importing a run's output Oracle stopped trying to import", async ({ page }) => {
   await login(page);
-  // A run whose resumed advance failed five times: its step failed, owners see it.
+  // A run whose resumed advance failed five times: its step failed, owners see it. Written in the
+  // mock's own turn (seedRun): Home's reads still in flight after sign-in cannot save over it.
   await page.evaluate(() => {
-    const key = "po-mock-db-v2";
-    const db = JSON.parse(localStorage.getItem(key)!);
-    const run = db.runs.runs.find((r: { document_slug: string }) => r.document_slug === "team-onboarding");
-    run.status = "running";
-    run.checkpoints = [];
-    run.segments[0].status = "failed";
-    run.segments[0].error = "Couldn't import its output: DataError on 5 tries in a row.";
-    run.import_failed =
-      "Couldn't import team-onboarding's output: DataError on 5 tries in a row, and Oracle stopped trying.";
-    run.can_retry_import = true;
-    localStorage.setItem(key, JSON.stringify(db));
+    type Run = { document_slug: string; status: string; checkpoints: unknown[]; segments: { status: string; error: string }[]; import_failed: string; can_retry_import: boolean };
+    const write = (globalThis as { __poMockWrite?: (change: (db: { runs: { runs: Run[] } }) => void) => Promise<void> }).__poMockWrite;
+    if (!write) throw new Error("The mock API is not loaded: sign in before seeding");
+    return write((db) => {
+      const run = db.runs.runs.find((r) => r.document_slug === "team-onboarding")!;
+      run.status = "running";
+      run.checkpoints = [];
+      run.segments[0].status = "failed";
+      run.segments[0].error = "Couldn't import its output: DataError on 5 tries in a row.";
+      run.import_failed =
+        "Couldn't import team-onboarding's output: DataError on 5 tries in a row, and Oracle stopped trying.";
+      run.can_retry_import = true;
+    });
   });
   await page.goto("/inbox");
   const imports = page.getByTestId("inbox-imports");

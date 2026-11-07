@@ -238,6 +238,9 @@ test.describe("on a phone", () => {
     await login(page);
     await openInbox(page);
     const row = page.locator("[role=tabpanel]").getByTestId("inbox-access-requests").locator("tr[data-row]").filter({ hasText: NEW_PERSON });
+    // The rows above take their owner's actions once the person's role has loaded, which moves this
+    // row up: measure once they show (the cost approval's Approve), as a person reads the settled page.
+    await expect(page.locator("[role=tabpanel]").getByTestId("inbox-approvals").getByRole("button", { name: "Approve $53.00" })).toBeVisible();
     const email = (await row.getByText(`${NEW_PERSON} asks to join`).boundingBox())!;
     const select = (await row.getByRole("combobox", { name: `Role for ${NEW_PERSON}` }).boundingBox())!;
     const approve = (await row.getByRole("button", { name: "Approve", exact: true }).boundingBox())!;
