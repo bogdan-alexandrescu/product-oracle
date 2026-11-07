@@ -41,10 +41,10 @@ async function home(page: Page, width: number, email: string = ADMIN.email) {
   await expect(page.getByTestId("home-strip-label").first()).toBeVisible();
 }
 
-/** A row's items, as its label's tooltip lists them under the label. */
+/** A row's items, as its tooltip lists them under its label. */
 async function itemsOf(page: Page, label: string) {
-  const el = page.getByTestId("home-strip-label").filter({ hasText: new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`) });
-  await el.first().hover();
+  const el = page.getByTestId("home-strip-row").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`) }) });
+  await el.first().getByTestId("home-strip-span").hover();
   return Promise.all((await el.all()).map(async (l) => ((await l.getAttribute("title")) ?? "").split("\n").slice(1).sort()));
 }
 

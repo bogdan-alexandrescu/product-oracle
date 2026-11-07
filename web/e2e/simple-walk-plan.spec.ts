@@ -78,8 +78,8 @@ for (const phone of [false, true]) {
           // home-milestones-current (PR 1424): the roadmap has no M1 or M2, so the noted texts
           // name no current milestone: their items are not in one, and no row is named by them.
           for (const t of texts) expect(t).not.toMatch(/^M[12]\b|Measure it|Ship to beta/);
-          const loose = labels.filter({ hasText: /^Not in a milestone · \d+ items?$/ });
-          await loose.hover();
+          const loose = plan.getByTestId("home-strip-row").filter({ has: labels.filter({ hasText: /^Not in a milestone · \d+ items?$/ }) });
+          await loose.getByTestId("home-strip-span").hover();
           expect(((await loose.getAttribute("title")) ?? "").split("\n").slice(1)).toEqual(
             expect.arrayContaining(["Usage export", "Dry run", "Setup audit", "Beta invites", "Beta feedback form"]),
           );

@@ -316,7 +316,8 @@ const sameWords = (a: string, b: string) => a.trim().replace(/\s+/g, " ").toLowe
 
 /**
  * home-milestones-current: Home's plan inputs, each item (not cut) in the roadmap's current
- * milestone, dated or not, a dropped one never: the roadmap milestone picked in its panel (by
+ * milestone, dated or not, a dropped one never (nor a PRD's plan milestone, its start and end
+ * dated): the roadmap milestone picked in its panel (by
  * id) or naming it, else the track milestone naming it or its record, else the current milestone
  * its typed text names by code ("M1") or name (its roadmap's, then its track's), else its
  * track's first dated one it ends on or before. Each row reads that milestone's own code and
@@ -327,7 +328,8 @@ const sameWords = (a: string, b: string) => a.trim().replace(/\s+/g, " ").toLowe
 export function homePlanInputs(data: Roadmap): PlanInput[] {
   const goals = data.goal_milestones ?? [];
   const live = new Map(goals.map((m) => [m.id, m]));
-  const tracks = data.milestones.filter((m) => m.status !== "dropped");
+  // A milestone with a start and an end is a PRD's plan milestone, never read here.
+  const tracks = data.milestones.filter((m) => m.status !== "dropped" && !(m.start_date && m.end_date));
   const codeOf = (name: string) => MILESTONE_CODE.exec(name.trim())?.[1].toUpperCase() ?? null;
   const restOf = (name: string) => (codeOf(name) ? MILESTONE_CODE.exec(name.trim())![2] : name);
   type Gm = (typeof goals)[number];

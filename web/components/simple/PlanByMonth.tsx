@@ -92,7 +92,7 @@ export function PlanByMonth({
   items?: { id: string; title: string; code?: string | null }[];
   /** The timeline slide (C-8): each row's items fold to its count, their names on hover and on asking. */
   fold?: boolean;
-  /** Home (home-milestones-current): the roadmap's item names by id; a row's label's tooltip lists its items under it. */
+  /** Home (home-milestones-current): the roadmap's item names by id; a row's tooltip lists its items under its label. */
   names?: ReadonlyMap<string, string>;
 }) {
   const open = useOpenFeature();
@@ -164,7 +164,7 @@ export function PlanByMonth({
               {/* pre-demo QA S-11 (Home, named): the whole label, wrapped between words as the frame shows it, never
                   cut; vqa B-14 (the one-pager): one line, the whole label behind an (i) when cut. */}
               {named ? (
-                <span className="max-w-full min-w-0 font-semibold break-words" title={[label, ...(names ? (r.item_ids ?? []).flatMap((id) => (names.has(id) ? [names.get(id)!] : [])) : [])].join("\n")} data-testid={`${testId}-label`}>
+                <span className="max-w-full min-w-0 font-semibold break-words" title={label} data-testid={`${testId}-label`}>
                   {label}
                 </span>
               ) : (
@@ -210,6 +210,7 @@ export function PlanByMonth({
                   data-testid={`${testId}-row`}
                   data-milestone={r.milestone ? "true" : undefined}
                   aria-label={rowLabel}
+                  title={names ? [label, ...(r.item_ids ?? []).flatMap((id) => (names.has(id) ? [names.get(id)!] : []))].join("\n") : undefined}
                   className={`${rowGrid} items-center rounded-md py-1 hover:bg-surface2`}
                 >
                   {words}
