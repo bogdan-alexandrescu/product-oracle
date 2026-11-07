@@ -16,9 +16,13 @@ import type { Act } from "./_card";
 import {
   confidenceWord,
   datesFrom,
+  goalMilestoneWords,
+  milestoneWords,
   partsWords,
+  placeable,
   statusWord,
   yearSpan,
+  type GoalMilestone,
   type Item,
 } from "./_lib";
 
@@ -160,6 +164,9 @@ function Pick({
   );
 }
 
+/** item-milestone: the Milestone picker's option for the milestone shown now when it was not picked there. */
+const SHOWN = "shown";
+
 /** The distinct refs (track, PRD, goal) the roadmap's items have: what an item may be moved to. */
 function refs<T extends { id: string }>(
   items: Map<string, Item>,
@@ -189,12 +196,23 @@ function datesKind(item: Item): string {
   return datesFrom(item);
 }
 
+/** item-milestone: the milestone a feature reads: the goal milestone picked for it, else its
+ * PRD plan's (its slices'), else its own; "" with none. */
+function milestoneShown(item: Item, milestones: readonly GoalMilestone[]): string {
+  const picked = item.milestone?.id ? milestones.find((m) => m.id === item.milestone!.id) : undefined;
+  if (picked) return goalMilestoneWords(picked, milestones);
+  if (!item.milestone?.id && item.slices.length)
+    return [...new Map(item.slices.map((x) => [x.milestone, `${x.milestone} ${x.milestone_name}`])).values()].join(", ");
+  return item.milestone?.name ? milestoneWords(item.milestone.name) : "";
+}
+
 export function PanelFields({
   item,
   items,
   act,
   canChange,
   onOpen,
+  milestones = [],
 }: {
   item: Item;
   items: Map<string, Item>;
@@ -202,9 +220,12 @@ export function PanelFields({
   canChange: boolean;
   /** Opens another feature's own panel (a dependency, or one that needs this one). */
   onOpen?: (id: string) => void;
+  /** item-milestone: the roadmap read's goal milestones (the item's roadmap's are offered). */
+  milestones?: readonly GoalMilestone[];
 }) {
   const [why, setWhy] = useState(false);
   const prdOrderOf = usePrdOrder();
+  const shownMilestone = milestoneShown(item, milestones);
   const goal = item.goal;
   const people = useQuery(`people:panel:${canChange}`, () =>
     canChange
@@ -585,6 +606,36 @@ export function PanelFields({
                 parts("PRD"),
               )
             }
+          />
+        )}
+      />
+      <Field
+        label="Milestone"
+        testId="card-milestone"
+        canChange={canChange}
+        value={shownMilestone || <span className="text-text2">No milestone</span>}
+        editor={(done) => (
+          <Pick
+            label="Milestone"
+            value={item.milestone?.id ?? (shownMilestone ? SHOWN : "")}
+            done={done}
+            options={[
+              // A milestone the feature reads that is not one picked here (its plan's, or typed in chat).
+              ...(shownMilestone && !item.milestone?.id ? [{ value: SHOWN, label: shownMilestone }] : []),
+              { value: "", label: "No milestone" },
+              ...placeable(milestones, item.roadmap.id, byPrdOrderOf(prdOrderOf)).map((m) => ({ value: m.id, label: goalMilestoneWords(m, milestones) })),
+            ]}
+            save={async (v) => {
+              if (v === SHOWN) return;
+              const m = item.milestone;
+              await change(
+                "Milestone changed",
+                "set_milestone",
+                // The item's own milestone as it reads it (one from its track or plan is not its own).
+                { milestone: m && m.source === "item" ? { id: m.id ?? null, name: m.name ?? null, date: m.date ?? null } : null },
+                { milestone: v ? { id: v } : null },
+              );
+            }}
           />
         )}
       />

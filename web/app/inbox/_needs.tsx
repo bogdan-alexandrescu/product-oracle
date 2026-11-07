@@ -23,6 +23,7 @@ import {
   keepTrackAlert,
   planHref,
   reopenTrackAlert,
+  reviewHref as alertReviewHref,
   type InboxTrack,
   type TrackAlertOut,
 } from "@/lib/api/track-alerts";
@@ -2546,7 +2547,11 @@ function TrackAlertActions({ a, busy, act }: { a: TrackAlertOut; busy: string | 
           Accept new date
         </Button>
       )}
-      {first === "review" && <LinkButton href={planHref(a)}>Review</LinkButton>}
+      {first === "review" && (
+        <LinkButton href={alertReviewHref(a)} aria-label={`Review ${title}`}>
+          Review
+        </LinkButton>
+      )}
       {first === "keep" && (
         <Button disabled={busy !== null} aria-label={`Keep watching ${title}`} onClick={() => setKeeping(true)}>
           Keep watching
