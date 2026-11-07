@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { Button, confirmInPage, toast } from "@/components/ds";
+import { Button, confirmInPage, InfoTip, toast } from "@/components/ds";
 import { setToastPlace } from "@/components/ds/Toast";
 import { MeetingChat } from "@/components/simple/chat/MeetingChat";
 import { MeetingClock } from "@/components/simple/FlowVisual";
@@ -905,9 +905,13 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
             <ul aria-label="Decisions taken" className="space-y-1">
               {m.meeting_decisions.map((x) => (
                 <DecidedItem key={x.id} flow={x.flow}>
-                  <span>
-                    {/* qa4-simple-decide-39: the link is named by its code and its words. */}
-                    <Link className={`${LINK} ${PHONE_TAP} inline-flex items-center max-[600px]:min-w-11`} aria-label={`${code(x)} ${x.title}`} href={code(x).startsWith("D-") ? `/simple/decisions#d-${x.number}` : `/simple/decisions?meeting=${m.id}`}>{code(x)}</Link> {x.title} · {x.approver.name}
+                  {/* F-26: the decision by its name as the link, no code; a long line hangs under it.
+                      Round 3: on a phone the row is the 44 px tap: the link stays inline (the hang needs it)
+                      and is stretched over its own row, so neighbouring decisions never overlap; ' · ' stays
+                      with the approver's name. */}
+                  <span data-testid="decision-taken" className="relative min-w-0 pl-4 -indent-4 max-[600px]:min-h-11">
+                    <Link className={`${LINK} max-[600px]:after:absolute max-[600px]:after:inset-0`} href={code(x).startsWith("D-") ? `/simple/decisions#d-${x.number}` : `/simple/decisions?meeting=${m.id}`}>{x.title}</Link>{" "}
+                    <span className="whitespace-nowrap">· {x.approver.name}</span>
                   </span>
                 </DecidedItem>
               ))}
@@ -939,8 +943,9 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
                   <li>Decisions page · posted</li>
                   <li>Each attendee&apos;s Inbox · posted</li>
                   {/* dod-delivery: each attendee's email and the Slack post, with Retry when one failed. */}
-                  <li>{d.email ? <DeliveryLine meetingId={m.id} what="email" words={emailWords(d)} canRetry={!!m.can.retry_delivery} reload={reload} testId="delivery-email" /> : "Email · not sent (not picked)"}</li>
-                  <li>{d.slack ? <DeliveryLine meetingId={m.id} what="slack" words={slackWords(d)} canRetry={!!m.can.retry_delivery} reload={reload} testId="delivery-slack" /> : "Slack · not posted (not picked)"}</li>
+                  {/* Round 3: a delivery not chosen gives its reason behind an (i), not in the line. */}
+                  <li>{d.email ? <DeliveryLine meetingId={m.id} what="email" words={emailWords(d)} canRetry={!!m.can.retry_delivery} reload={reload} testId="delivery-email" /> : <span className="inline-flex items-center gap-1">Email · not sent <InfoTip label="Email not sent" align="start">Not chosen for this meeting.</InfoTip></span>}</li>
+                  <li>{d.slack ? <DeliveryLine meetingId={m.id} what="slack" words={slackWords(d)} canRetry={!!m.can.retry_delivery} reload={reload} testId="delivery-slack" /> : <span className="inline-flex items-center gap-1">Slack · not sent <InfoTip label="Slack not sent" align="start">Not chosen for this meeting.</InfoTip></span>}</li>
                 </ul>
                 <Link className="font-semibold text-accent-ink hover:underline" href={`/simple/decisions?meeting=${m.id}`}>Open the Decisions page</Link>
               </div>
