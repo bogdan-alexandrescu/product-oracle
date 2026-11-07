@@ -2199,6 +2199,15 @@ def range_words(start: date, end: date) -> str:
     return f"{day(start)}, {start.year} – {day(end)}, {end.year}"
 
 
+def milestone_words(code: str, name: str, cap: int = 28) -> str:
+    """A milestone's code with its name ("M1 Try it"), the name cut with "…" past ``cap``
+    characters so a flag stays inside the lanes; never a bare code."""
+    name = (name or "").strip()
+    if not name:
+        return code
+    return f"{code} {name if len(name) <= cap else name[: cap - 1].rstrip() + '…'}"
+
+
 def place_flags(ends: list[float], widths: list[float]) -> list[tuple[float, int, bool]]:
     """Each milestone flag's left edge (px), row and side (X-4): its right edge on its end
     line, or its left edge there when it would start left of the lanes; a flag that would
@@ -2346,7 +2355,8 @@ def _timeline_html(view: Any, today: Any) -> str:
     def at(d: Any, end_of_day: bool = False) -> float:
         return ((d - start).days + (1 if end_of_day else 0)) / days * TL_PX
 
-    flags = [(m, f"{m.code} ends {plan_model._day(m.end_date)}") for m in view.milestones]
+    mname = {m.code: milestone_words(m.code, m.name) for m in view.milestones}
+    flags = [(m, f"{mname[m.code]} ends {plan_model._day(m.end_date)}") for m in view.milestones]
     placed = place_flags([at(m.end_date, True) for m, _ in flags],
                          [len(text) * FLAG_CH + FLAG_PAD for _, text in flags])  # fmt: skip
     rows = max([row + 1 for _, row, _ in placed] or [1])
@@ -2386,7 +2396,9 @@ def _timeline_html(view: Any, today: Any) -> str:
         rows = max([p[4] + 1 for p in pieces] or [1])
         label = f"<b>{escape(name)}</b>"
         if goal is not None:
-            steps = " → ".join(f"{t.milestone} {t.target}" for t in goal.targets)
+            steps = " → ".join(
+                f"{mname.get(t.milestone, t.milestone)} · {t.target}" for t in goal.targets
+            )
             now = f"Now {goal.measured}" if goal.measured else "Not counted yet"
             if goal.measured and goal.on_track is not None:
                 now += " · on track" if goal.on_track else " · behind"

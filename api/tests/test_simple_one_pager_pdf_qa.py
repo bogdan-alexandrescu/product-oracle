@@ -4,7 +4,7 @@ Postgres; invented PRD, people, goals and features.
 
 Test cards (protects / fails_when / no_claim):
 
-- test_milestone_flags_never_overlap_or_leave_the_lanes: protects=X-4, each "M1 ends Nov 13"
+- test_milestone_flags_never_overlap_or_leave_the_lanes: protects=X-4, each "M1 Try it ends Nov 13"
   flag sits whole inside the lanes (never over the lane names) and flags that would collide
   stack on another row; fails_when=two flags on one row overlap by a width estimate, or a
   flag starts left of the lanes or ends past their right edge; no_claim=exact font metrics.
@@ -124,8 +124,9 @@ async def test_milestone_flags_never_overlap_or_leave_the_lanes(client):
     right_aligned = "translateX(-100%)" in css_rule(html, ".tl .f")
     flags = re.findall(r"<span class='f(?: l)?' style='([^']*)'>([^<]*)</span>", timeline(html))
     day = one_pager.plan_model._day
-    want = [f"{c} ends {day(date.fromisoformat(b))}" for c, _, _, b in MILESTONES]
+    want = [f"{c} {n} ends {day(date.fromisoformat(b))}" for c, n, _, b in MILESTONES]
     assert [t for _, t in flags] == want
+    assert not re.findall(r"\bM\d+\b(?! \S)", timeline(html)), "bare milestone code"
     spans: dict[float, list[tuple[float, float]]] = {}
     for style, text in flags:
         w = len(text) * FLAG_CH + FLAG_PAD

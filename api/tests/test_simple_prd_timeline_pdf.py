@@ -80,18 +80,19 @@ async def test_pdf_prints_the_timeline_then_a_page_per_milestone(client):
     assert "class='plan'" not in html
     tl = html[html.index("<div class='tl'>") : html.index("<section class='part'>")]
     for flag in (
-        "M1 ends Nov 27",
-        "M2 ends Dec 25",
-        "M3 ends Feb 12",
+        "M1 Prove it ends Nov 27",
+        "M2 Scale volume ends Dec 25",
+        "M3 Open to all ends Feb 12",
     ):  # month first, as the app writes days (qa-shell-21)
         assert flag in tl
-    assert "M1 100 weekly active teams → M2 250 weekly active teams" in tl
+    assert "M1 Prove it · 100 weekly active teams → M2 Scale volume · 250 weekly active teams" in tl
     assert "Not counted yet" in tl and "PM-owned · no engineering" in tl
     assert tl.count("class='off'") == 4  # the year-end break, hatched in each of the 4 lanes
     for coded in ("F-05a Team invites, part 1 of 2", "F-05b Team invites, part 2 of 2",
                   "F-04 Pricing page words"):  # a code is never alone: its name is beside it
         assert coded in tl
     assert not re.findall(r"F-\d+[a-z]?\b(?! \S)", tl)
+    assert not re.findall(r"\bM\d+\b(?! \S)", tl), "bare milestone code"
     parts = html.split("<section class='part'>")[1:]
     assert [p[p.index("<h1>") + 4 : p.index("</h1>")] for p in parts] == [
         "M1 Prove it",
