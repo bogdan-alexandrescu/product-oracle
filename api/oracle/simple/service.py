@@ -209,12 +209,10 @@ def flags_out(e: Entry, may: Any = None) -> list[SimpleFlag]:
     ]
 
 
-LINK_KINDS = ("dependency_order", "cut_with_dependents")
-
-
 async def waiting(db: AsyncSession, principal: Any, roadmap: str | None = None) -> tuple[int, int]:
     """The broken links and the dates to confirm of the whole roadmap as ``principal`` reads
-    it: a red dependency out of order or a cut item others depend on, with a fix; an open date
+    it: every red flag with a one-click fix (an end past its milestone too, as Home and the
+    side menu's waiting list count them, pre-demo QA S-5); an open date
     suggestion the reader may decide; done items left out (the read without the rest of
     :func:`build`). ``roadmap`` (id or slug): that roadmap's alone, as :func:`build` narrows
     it; 404 when the reader cannot read it."""
@@ -236,9 +234,7 @@ async def waiting(db: AsyncSession, principal: Any, roadmap: str | None = None) 
     live = [
         e for e in read.entries if e.status != "done" and (chosen is None or e.roadmap.id == chosen)
     ]
-    links = sum(
-        1 for e in live for f in e.flags if f.state == "red" and f.fixes and f.kind in LINK_KINDS
-    )
+    links = sum(1 for e in live for f in e.flags if f.state == "red" and f.fixes)
     dates = sum(
         1 for e in live if e.suggestion is not None and can_decide(principal, e, read.deciders)
     )

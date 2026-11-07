@@ -753,8 +753,14 @@ export default function SimpleHome() {
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         {g.guardrail && <span className="simple-tag">guardrail</span>}
                         {share(g.weight) != null && (
-                          <span data-testid="home-goal-weight" className="simple-small tnum">
-                            Counts for {share(g.weight)}% of each feature&apos;s score
+                          // pre-demo QA S-10: the share in short, what it means behind its (i).
+                          <span className="inline-flex items-center gap-1">
+                            <span data-testid="home-goal-weight" className="simple-small tnum">
+                              {share(g.weight)}% of the score
+                            </span>
+                            <InfoTip label="the goal's share of the score" align="start">
+                              Counts for {share(g.weight)}% of each feature&apos;s score.
+                            </InfoTip>
                           </span>
                         )}
                       </div>
@@ -806,9 +812,13 @@ export default function SimpleHome() {
         {/* qa4-simple-home-6: a goal still proposed is not on Home: said, so Detailed's extra goal is no surprise. */}
         {proposedGoals.length > 0 && (
           <div data-testid="home-goals-proposed-list" className="simple-small mt-2">
-            <p data-testid="home-goals-proposed">
-              {proposedGoals.length === 1 ? "1 proposed goal is not shown here until it is confirmed." : `${proposedGoals.length} proposed goals are not shown here until they are confirmed.`}
-              {!can("confirm_entity") && " The goal's owner confirms it."}
+            {/* pre-demo QA S-10: the count in short, why it is not on Home behind its (i). */}
+            <p className="flex items-center gap-1">
+              <span data-testid="home-goals-proposed">{proposedGoals.length === 1 ? "1 proposed goal" : `${proposedGoals.length} proposed goals`}</span>
+              <InfoTip label="proposed goals" align="start">
+                {proposedGoals.length === 1 ? "It is not shown here until it is confirmed." : "They are not shown here until they are confirmed."}
+                {!can("confirm_entity") && " The goal's owner confirms it."}
+              </InfoTip>
             </p>
             {/* home-waiting-one-list: each proposed goal, with Confirm / Not this for who confirms goals. */}
             <ul className="mt-1" aria-label="Proposed goals">
@@ -1199,7 +1209,8 @@ export default function SimpleHome() {
                           </>
                         }
                         meta={
-                          <ul className="flex flex-col gap-3">
+                          // pre-demo QA S-14: an item's breaks sit under its name, ruled together, never as entries of their own.
+                          <ul data-testid="home-broken-breaks" className={`flex flex-col gap-3 ${links.length > 1 ? "border-l-2 border-crit/40 pl-3" : ""}`}>
                             {links.map((b) => (
                               <BrokenRow
                                 key={`${b.item.id}-${b.flag.kind}-${b.flag.subject}`}

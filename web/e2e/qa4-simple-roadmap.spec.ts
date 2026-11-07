@@ -88,9 +88,10 @@ for (const [where, size] of [
       await btn.click();
       const tray = page.getByTestId("decision-tray");
       await expect(tray).toBeVisible();
-      // 38: Weekly alert digest's milestone flag is under Other flags only, not again under Broken links.
+      // 38: Weekly alert digest's milestone flag is listed once: under Broken links (it has a fix,
+      // pre-demo QA S-5), not again under Other flags.
       const milestoneFlag = /after its milestone/;
-      await expect(tray.getByTestId("tray-broken").filter({ hasText: "Weekly alert digest" })).not.toContainText(milestoneFlag);
+      await expect(tray.getByTestId("tray-broken").filter({ hasText: "Weekly alert digest" })).toContainText(milestoneFlag);
       await expect(tray.getByText(milestoneFlag)).toHaveCount(1);
       await page.keyboard.press("Escape");
       await expect(tray).toHaveCount(0);

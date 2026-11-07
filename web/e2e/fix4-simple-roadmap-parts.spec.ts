@@ -166,10 +166,9 @@ for (const [where, use] of [
 
       // qa-simple-roadmap-35: the hollow diamond has its key.
       await expect(legendItem(page, "Key date in the draft")).toHaveCount(1);
-      // qa-simple-roadmap-29: the working draft's time carries no zone name.
+      // pre-demo QA Demo 8 (was qa-simple-roadmap-29): the working draft's time with its day, month first, and the company zone.
       const words = page.getByTestId("draft-words");
-      await expect(words).toContainText(/since \d{1,2}:\d{2} [AP]M/);
-      await expect(words).not.toContainText(/[AP]M [A-Z]{2,5}\b/);
+      await expect(words).toContainText(/since [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d{2} [AP]M [A-Z]{2,5}/);
     });
 
     test(`days are written month-first (${where})`, async ({ page }) => {

@@ -192,8 +192,7 @@ async def _links_in_read(client, ctx, who: str, **query) -> int:
     r = await client.get(ROADMAP, params=query, headers=ctx.as_(who))
     assert r.status_code == 200, r.text
     return len([f for i in r.json()["items"] if i["status"] != "done" for f in i["flags"]
-                if f["state"] == "red" and f["fixes"]
-                and f["kind"] in ("dependency_order", "cut_with_dependents")])  # fmt: skip
+                if f["state"] == "red" and f["fixes"]])  # fmt: skip
 
 
 async def test_waiting_count_reads_the_whole_roadmap(client):
