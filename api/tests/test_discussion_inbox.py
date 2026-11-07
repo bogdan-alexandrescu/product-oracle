@@ -17,10 +17,11 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select
 
-from oracle.discussions.models import DiscussionChange, DiscussionInboxItem
+from oracle.discussions import changes
+from oracle.discussions.models import Discussion, DiscussionChange, DiscussionInboxItem
 from oracle.tenancy import tenant_session
 from oracle.v2.models import StakeholderQuestion
-from tests.test_discussions import company, get, patch, post, section, start, uid
+from tests.test_discussions import SLUG, company, get, patch, post, section, start, uid
 
 TITLE = "Caps: measure from plan thresholds?"
 SECRET_TITLE = "Pricing: a private aside"
@@ -336,3 +337,73 @@ async def test_a_closed_discussion_counts_no_changes_until_reopened(client):
     await patch(client, ctx, d["id"], "approver", status="open")
     [row] = rows(await inbox(client, ctx, "approver"), "changes_proposed")
     assert row["count"] == 3
+
+
+# --- the one rule for a change waiting on an approver (changes.waits_on) ------------------
+
+
+def _d(subject_kind: str = "section", subject: dict | None = None, **kw) -> Discussion:
+    return Discussion(
+        subject_kind=subject_kind,
+        subject=subject or {},
+        status=kw.get("status", "open"),
+        visibility=kw.get("visibility", "open"),
+    )
+
+
+def _c(status: str) -> DiscussionChange:
+    return DiscussionChange(status=status, kind="section_edit")
+
+
+# Counting card. protects=the one rule the Inbox's "N changes proposed" and the changes card
+# share: an open change of an open discussion whose page opens its thread waits on its
+# participants (Oracle's proposals) and on every approver of an open one (suggestions);
+# fails_when=a change counts on a page with no thread (a goal, a brief, the plan, the
+# priorities), a handled change counts, or a closed discussion's leftovers count;
+# no_claim=the pages (the web specs).
+def test_waits_on_is_an_open_change_on_a_page_that_opens_its_thread():
+    for kind in ("document", "section", "roadmap_item", "checkpoint", "checkpoint_item"):
+        assert changes.waits_on(_d(kind), _c("proposed"), participant=True), kind
+    for kind in ("entity", "conflict", "intake", "gap", "track", "priorities"):
+        assert not changes.waits_on(_d(kind), _c("suggested"), participant=True), kind
+    for path in ("/documents/saved-carts/v/2", "/documents/saved-carts/v/2/items", "/runs/r1"):
+        assert changes.waits_on(_d("screen", {"path": path}), _c("proposed"), True), path
+    for path in ("/plan", "/ground-truth", "/documents", "/runs"):
+        assert not changes.waits_on(_d("screen", {"path": path}), _c("proposed"), True), path
+    for status in ("staged", "done", "dismissed", "superseded"):
+        assert not changes.waits_on(_d(), _c(status), participant=True), status
+    assert not changes.waits_on(_d(status="closed"), _c("proposed"), participant=True)
+    # Not in it: people's suggestions of an open discussion only.
+    assert changes.waits_on(_d(), _c("suggested"), participant=False)
+    assert not changes.waits_on(_d(), _c("proposed"), participant=False)
+    assert not changes.waits_on(_d(visibility="private"), _c("suggested"), participant=False)
+
+
+# Counting card. protects=Review changes appears only when the card shows a change and lands
+# on it: a discussion on the priorities (its page opens no thread) with open changes makes no
+# row, a screen discussion on a document's version does, and the row's count is the card's
+# open changes; fails_when=the priorities discussion's changes are counted, so Review changes
+# opens a page with no changes card; no_claim=the screens (discussion-review-changes-empty).
+async def test_changes_count_only_where_review_changes_lands_on_the_card(client):
+    ctx, doc = await company(client)
+    away = await start(
+        client, ctx, "approver", subject_kind="priorities", subject={}, title="Order",
+        message={"body": "Move it up?"},
+    )  # fmt: skip
+    await add_change(ctx, away["id"])
+    await add_change(ctx, away["id"], "suggested", by="commenter")
+    assert rows(await inbox(client, ctx, "approver"), "changes_proposed") == []
+    assert rows(await inbox(client, ctx, "owner"), "changes_proposed") == []
+
+    here = await start(
+        client, ctx, "approver", subject_kind="screen", title=TITLE,
+        subject={"path": f"/documents/{SLUG}/v/1"}, message={"body": "This page?"},
+    )  # fmt: skip
+    await add_change(ctx, here["id"])
+    await add_change(ctx, here["id"], "suggested", by="commenter")
+    [row] = rows(await inbox(client, ctx, "approver"), "changes_proposed")
+    assert row["discussion_id"] == here["id"] and row["count"] == 2
+    resp = await client.get(f"/v1/discussions/{here['id']}/changes", headers=ctx.as_("approver"))
+    assert resp.status_code == 200, resp.text
+    shown = [c for c in resp.json() if c["status"] in ("proposed", "suggested")]
+    assert len(shown) == row["count"] and all(c["action"] for c in shown)
