@@ -20,6 +20,8 @@ not prove.
 import hashlib
 from datetime import UTC, datetime
 
+from sqlalchemy import select
+
 from oracle.baseline.models import Entity
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.roadmap.models import ProductTrack, RoadmapItem
@@ -161,6 +163,40 @@ async def test_reconciling_an_item_takes_its_alert_out_of_the_inbox_at_once(clie
     r = await client.post(
         f"/v1/roadmaps/{ROADMAP}/items/staleness",
         json={"action": "review", "version": 1, "item_keys": ["signup-nudge"]},
+        headers=ctx.as_("owner"),
+    )
+    assert r.status_code == 200, r.text
+    assert stale_keys((await inbox_tracks(client, ctx))[tracks["conversion"]]) == {"signup-nudge"}
+
+
+async def test_still_valid_with_no_version_settles_the_version_the_tracks_follow(client):
+    """protects=bug 1 from the Plan item panel, which names no version: with a newer version
+    not yet approved, Still valid settles the approved row the alert is about; fails_when=the
+    newer version's row is settled and the alert stays in the Inbox; no_claim=a version named
+    by the Items tab (settles that version's row, as before)."""
+    ctx, tracks = await monitored(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        rm = await s.scalar(select(Document).where(Document.slug == ROADMAP))
+        v1 = await s.scalar(
+            select(DocumentVersion).where(
+                DocumentVersion.document_id == rm.id, DocumentVersion.number == 1
+            )
+        )
+        v2 = await _add(s, DocumentVersion(document_id=rm.id, number=2, markdown="# v2",
+                                           content_hash=_hash("# v2"),
+                                           source_version_id=v1.source_version_id))  # fmt: skip
+        for i in list(
+            await s.scalars(select(RoadmapItem).where(RoadmapItem.roadmap_version_id == v1.id))
+        ):
+            s.add(RoadmapItem(roadmap_document_id=rm.id, roadmap_version_id=v2.id,
+                              item_key=i.item_key, title=i.title, horizon=i.horizon,
+                              position=i.position, prd_document_id=i.prd_document_id,
+                              prd_version_id=i.prd_version_id, freshness=i.freshness,
+                              stale_reasons=list(i.stale_reasons)))  # fmt: skip
+        await s.commit()
+    r = await client.post(
+        f"/v1/roadmaps/{ROADMAP}/items/staleness",
+        json={"action": "reconcile", "item_keys": ["checkout-tips"], "reason": "Still holds"},
         headers=ctx.as_("owner"),
     )
     assert r.status_code == 200, r.text
