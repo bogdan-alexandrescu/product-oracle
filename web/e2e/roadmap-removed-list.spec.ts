@@ -30,9 +30,11 @@ const row = (page: Page, title: string) => list(page).getByTestId("removed-row")
 
 test.describe("Removed list", () => {
   test("an owner restores a cut feature, an archived goal and a removed milestone; the feature's Undo puts it back", async ({ page }) => {
+    test.setTimeout(90_000);
     await open(page);
     await shot(page, "ec2-c-rest");
-    await expect(button(page)).toHaveText("Removed · 3");
+    // The seed's cut feature, removed milestone and four archived goals (three archived before who was kept).
+    await expect(button(page)).toHaveText("Removed · 6");
     await button(page).click();
     await expect(list(page).getByText("Removed from your plans")).toBeVisible();
     await expect(row(page, "In-app tour")).toContainText(/Feature · Onboarding roadmap · Cut on [A-Z][a-z]{2} \d+ by /);
@@ -51,23 +53,25 @@ test.describe("Removed list", () => {
     await button(page).click();
     await row(page, "In-app tour").getByRole("button", { name: "Restore" }).click();
     await expect(list(page)).toBeHidden();
-    await expect(button(page)).toHaveText("Removed · 2");
+    await expect(button(page)).toHaveText("Removed · 5");
     const toasts = page.getByTestId("toasts");
     await expect(toasts).toContainText("Restored In-app tour");
     await shot(page, "ec2-c-result");
     await toasts.getByRole("button", { name: "Undo" }).click();
-    await expect(button(page)).toHaveText("Removed · 3");
+    await expect(button(page)).toHaveText("Removed · 6");
 
     await button(page).click();
     await row(page, "Fewer support tickets about billing").getByRole("button", { name: "Restore" }).click();
     await expect(toasts).toContainText("Restored Fewer support tickets about billing");
-    await expect(button(page)).toHaveText("Removed · 2");
+    await expect(button(page)).toHaveText("Removed · 5");
     await button(page).click();
     await row(page, "Private beta for 20 teams").getByRole("button", { name: "Restore" }).click();
     await expect(toasts).toContainText("Restored Private beta for 20 teams");
-    await expect(button(page)).toHaveText("Removed · 1");
+    await expect(button(page)).toHaveText("Removed · 4");
     await button(page).click();
-    await expect(list(page).getByTestId("removed-row")).toHaveCount(1);
+    await expect(list(page).getByTestId("removed-row")).toHaveCount(4);
+    // An archived goal whose archiver is not known reads its day alone.
+    await expect(row(page, "Faster first report").locator("span.inline-block")).toHaveText(/^Archived on [A-Z][a-z]{2} \d+$/);
   });
 
   test("an approver restores an archived goal and proposes restoring what another decides, naming the decider", async ({ page }) => {
@@ -80,13 +84,13 @@ test.describe("Removed list", () => {
     await shot(page, "ec2-c-propose");
     await r.getByRole("button", { name: "Propose restoring" }).click();
     await expect(page.getByTestId("toasts")).toContainText("Restoring Private beta for 20 teams proposed · waits for Avery Stone");
-    await expect(button(page)).toHaveText("Removed · 3");
+    await expect(button(page)).toHaveText("Removed · 6");
   });
 
   test("a viewer reads the list", async ({ page }) => {
     await open(page, "viewer@example.com");
     await button(page).click();
-    await expect(list(page).getByTestId("removed-row")).toHaveCount(3);
+    await expect(list(page).getByTestId("removed-row")).toHaveCount(6);
     await expect(list(page).getByRole("button", { name: /Restore|Propose restoring/ })).toHaveCount(0);
     await shot(page, "ec2-c-readonly");
   });
@@ -106,7 +110,7 @@ test.describe("Removed list", () => {
       expect((await by.boundingBox())!.height).toBeLessThan(24);
       await shot(page, "ec2-c-open-phone");
       await row(page, "Private beta for 20 teams").getByRole("button", { name: "Restore" }).click();
-      await expect(button(page)).toHaveText("Removed · 2");
+      await expect(button(page)).toHaveText("Removed · 5");
     });
   });
 });

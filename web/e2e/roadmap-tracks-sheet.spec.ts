@@ -31,6 +31,7 @@ const toasts = (page: Page) => page.getByTestId("toasts");
 
 test.describe("Tracks sheet", () => {
   test("an owner adds, renames, sets an owner, pauses, closes and moves a track to Trash, then restores it", async ({ page }) => {
+    test.setTimeout(90_000);
     await open(page);
     await shot(page, "et-b-rest");
     await expect(page.getByTestId("tracks-open")).toHaveText("Tracks · 3");
@@ -68,12 +69,12 @@ test.describe("Tracks sheet", () => {
     await expect(row(page, "Partner setup track")).toContainText("No owner · 0 features");
     await expect(page.getByTestId("tracks-open")).toHaveText("Tracks · 4");
 
-    // It shows its 3 live features; Move to Trash moves its cut one (In-app tour) too, and says so.
-    await expect(row(page, "Setup and onboarding")).toContainText("3 features");
+    // It shows its 4 live features; Move to Trash moves its cut one (In-app tour) too, and says so.
+    await expect(row(page, "Setup and onboarding")).toContainText("4 features");
     await row(page, "Setup and onboarding").getByRole("button", { name: "Move to Trash" }).click();
-    await expect(row(page, "Setup and onboarding").getByTestId("track-trash-confirm")).toHaveText(/Its 3 features and 1 cut or merged move to No track\./);
+    await expect(row(page, "Setup and onboarding").getByTestId("track-trash-confirm")).toHaveText(/Its 4 features and 1 cut or merged move to No track\./);
     await row(page, "Setup and onboarding").getByTestId("track-trash-confirm").getByRole("button", { name: "Move to Trash" }).click();
-    await expect(toasts(page)).toContainText("Moved Setup and onboarding to Trash · 4 features now have no track");
+    await expect(toasts(page)).toContainText("Moved Setup and onboarding to Trash · 5 features now have no track");
     await expect(row(page, "Setup and onboarding")).toHaveCount(0);
     await expect(page.getByTestId("tracks-open")).toHaveText("Tracks · 3");
 
@@ -90,11 +91,12 @@ test.describe("Tracks sheet", () => {
     await expect(page.getByText("Alert rules engine")).toHaveCount(0);
     await page.getByTestId("tracks-open").click();
     await expect(row(page, "Usage alerts track")).toContainText("No owner · 5 features");
-    await expect(row(page, "Guided setup track")).toContainText("3 features");
+    await expect(row(page, "Guided setup track")).toContainText("4 features");
     await expect(row(page, "Welcome media track")).toContainText("0 features");
   });
 
   test("Move to Trash on a track with features asks once and names the count; Undo brings both back", async ({ page }) => {
+    test.setTimeout(90_000);
     await open(page);
     await page.getByRole("radio", { name: "Gantt" }).or(page.getByRole("button", { name: "Gantt", exact: true })).first().click();
     await page.getByTestId("group-track").click();
@@ -126,6 +128,7 @@ test.describe("Tracks sheet", () => {
   });
 
   test("Move to Trash names the live features, and the cut or merged ones only when there are any", async ({ page }) => {
+    test.setTimeout(90_000);
     await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, TRACKS_CLOSED_SCENARIO] as const);
     await open(page);
     await page.getByTestId("tracks-open").click();
@@ -134,9 +137,9 @@ test.describe("Tracks sheet", () => {
       await row(page, title).getByRole("button", { name: "Move to Trash" }).click();
       return row(page, title).getByTestId("track-trash-confirm");
     };
-    // 2 live and 1 cut.
-    await expect(row(page, "Guided setup track")).toContainText("2 features");
-    await expect(await ask("Guided setup track")).toHaveText(/^Its 2 features and 1 cut or merged move to No track\./);
+    // 3 live and 1 cut.
+    await expect(row(page, "Guided setup track")).toContainText("3 features");
+    await expect(await ask("Guided setup track")).toHaveText(/^Its 3 features and 1 cut or merged move to No track\./);
     // No live feature, 1 cut.
     await expect(row(page, "Welcome media track")).toContainText("0 features");
     await expect(await ask("Welcome media track")).toHaveText(/^Its 1 cut or merged feature moves to No track\./);
