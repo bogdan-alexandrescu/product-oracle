@@ -166,7 +166,7 @@ jobs:
   # dod-perf review: the web's timing specs (tagged @timing, as the API's `timing` mark) on the
   # mock-backed build, alone (one worker) so no other test's load counts against them.
   e2e-timing:
-    runs-on: ${{ vars.SELF_HOSTED_CI == 'on' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON(format('["self-hosted","linux","x64","{0}"]', vars.ORACLE_CI_RUNNER_LABEL || 'bogdan-ci')) || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest  # timing budgets are tuned on GitHub's runners; the pool's VMs draw the 500-item views ~50 ms slower
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
