@@ -17,6 +17,10 @@ Test cards (protects / fails_when / no_claim):
   proposal, a viewer is refused, a code another item or feature has is refused in plain words,
   and a code that is not a feature code is 422; fails_when=any of these is let through;
   no_claim=the Ground Truth page.
+- test_restoring_an_item_whose_code_was_taken_since_is_refused: protects=Restore from Trash
+  of an item whose title code another item took while it was in Trash is refused (409) in
+  set_code's words, and goes through once that code is free; fails_when=two items read
+  F-30 after the restore; no_claim=a feature's key (its own check).
 """
 
 import pytest
@@ -27,6 +31,8 @@ from tests.baseline_helpers import Ctx, make_ctx
 from tests.test_simple_changes_api import make_people
 from tests.test_simple_goal_milestones_api import CHANGES, MILESTONES, get_roadmap
 from tests.test_simple_roadmap_api import NOW, Seed, by_key, get
+
+ITEMS = "/v1/simple/roadmap/items"
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
@@ -376,3 +382,24 @@ async def test_a_rename_checks_any_leading_code_the_read_sees(client):
     r = await rename(client, ctx, a, "Alerts", "ABCD-1 Alerts")
     assert r.status_code == 422, r.text
     assert r.json()["detail"] == "ABCD-1 is already the code of ABCD-1 Billing"
+
+
+async def test_restoring_an_item_whose_code_was_taken_since_is_refused(client):
+    ctx = await make_people()
+    _, b = await coded_roadmap(ctx)
+    a = by_key(await get(client, ctx, "owner"))["a"]["id"]
+    r = await client.delete(f"{ITEMS}/{a}", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    r = await rename(client, ctx, b, "Billing", "F-30 Billing")
+    assert r.status_code == 201, r.text
+    r = await client.post(f"{ITEMS}/{a}/restore", headers=ctx.as_("owner"))
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"] == "F-30 is already the code of F-30 Billing: rename it first"
+    codes = [i["code"] for i in (await get(client, ctx, "owner"))["items"]]
+    assert codes.count("F-30") == 1 and "a" not in by_key(await get(client, ctx, "owner"))
+    r = await rename(client, ctx, b, "Billing", "F-38 Billing")
+    assert r.status_code == 201, r.text
+    r = await client.post(f"{ITEMS}/{a}/restore", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    shown = {i["title"]: i["code"] for i in (await get(client, ctx, "owner"))["items"]}
+    assert shown == {"Alerts": "F-30", "Billing": "F-38"}
