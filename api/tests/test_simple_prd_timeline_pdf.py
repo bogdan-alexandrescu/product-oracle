@@ -17,6 +17,8 @@ Test cards (protects / fails_when / no_claim):
   page and its strip; fails_when=milestone pages appear; no_claim=the web.
 """
 
+import re
+
 from sqlalchemy import select
 
 from oracle.auth.deps import Principal
@@ -86,7 +88,10 @@ async def test_pdf_prints_the_timeline_then_a_page_per_milestone(client):
     assert "M1 100 weekly active teams → M2 250 weekly active teams" in tl
     assert "Not counted yet" in tl and "PM-owned · no engineering" in tl
     assert tl.count("class='off'") == 4  # the year-end break, hatched in each of the 4 lanes
-    assert ">F-05a<" in tl and ">F-05b<" in tl and ">F-04<" in tl
+    for coded in ("F-05a Team invites, part 1 of 2", "F-05b Team invites, part 2 of 2",
+                  "F-04 Pricing page words"):  # a code is never alone: its name is beside it
+        assert coded in tl
+    assert not re.findall(r"F-\d+[a-z]?\b(?! \S)", tl)
     parts = html.split("<section class='part'>")[1:]
     assert [p[p.index("<h1>") + 4 : p.index("</h1>")] for p in parts] == [
         "M1 Prove it",
@@ -107,9 +112,9 @@ async def test_pdf_bar_codes_fit_the_bar(client):
     import re
 
     data = {**DATA, "features": [
-        {"code": c, "name": c, "milestones": ["M2"], "effort": [2], "goals": ["Growth"],
+        {"code": c, "name": n, "milestones": ["M2"], "effort": [2], "goals": ["Growth"],
          "order": ["weeks 1-2"]}
-        for c in ("F-06", "F-08", "F-12")
+        for c, n in (("F-06", "Invite reminders"), ("F-08", "Bulk import"), ("F-12", "Upgrades"))
     ]}  # fmt: skip
     ctx = await world(client)
     async with tenant_session(ctx.tenant_id) as s:
@@ -122,8 +127,8 @@ async def test_pdf_bar_codes_fit_the_bar(client):
     tl = html[html.index("<div class='tl'>") : html.index("<section class='part'>")]
     (label,) = re.findall(r"<span class='bar'[^>]*>([^<]*)</span>", tl)
     # Two weeks of a 15-week span in the lanes' 70% of A4's 178 mm: about 45 px.
-    assert label == "F-06 +2"
-    assert "F-08" not in label
+    assert label.startswith("Inv") and label.endswith("… +2") and "F-" not in label
+    assert "F-06 Invite reminders" in tl  # every full name is in the key
 
 
 async def test_pdf_without_a_dated_plan_stays_one_page(client):

@@ -158,15 +158,19 @@ async def test_every_bar_code_has_its_name(client):
     names = {c: n for c, n, _, _ in FEATURES} | {"F-04": "Pricing page words"}
     printed = set()
     for label in labels:
+        # A bar never prints a code without its name right after it (a cut name is fine).
+        for code in re.findall(r"F-\d+[a-z]?\b(?! \S)", label):
+            raise AssertionError(("bare code on a bar", code, label))
         for code in re.findall(r"F-\d+[a-z]?", label):
-            name = names[code[:4]]
-            assert name in label or f"{code} {name}" in keyed, (code, label)
+            assert names[code[:4]] in label, (code, label)
             printed.add(code[:4])
     # Codes a bar folds into "+N" are in the key with their names too.
     for code in re.findall(r"F-\d+[a-z]?", keyed):
         assert f"{code} {names[code[:4]]}" in keyed
         printed.add(code[:4])
     assert printed == set(names)
+    # Nothing else on the timeline page prints a feature code without its name either.
+    assert not re.findall(r"F-\d+[a-z]?\b(?! \S)", tl)
 
 
 async def test_holiday_shading_writes_each_stop_in_full(client):
@@ -191,7 +195,7 @@ async def test_bars_stay_inside_their_milestone_and_the_page(client):
         left, width = _num(style, "left"), _num(style, "width")
         assert left >= 0 and left + width <= 100.01, (label, left, width)
     # The one-week M6 bar (F-14) ends on M6's line, not past it.
-    f14 = next(s for s, label in bars if "F-14" in label)
+    f14 = next(s for s, label in bars if label.startswith("H") or "F-14" in label)
     assert _num(f14, "left") + _num(f14, "width") <= ends["M6"] + 0.01
 
 

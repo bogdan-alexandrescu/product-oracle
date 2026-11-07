@@ -2183,16 +2183,6 @@ PAGE_NUMBERS = (
 )
 
 
-def fit_codes(codes: list[str], px: float) -> str:
-    """As many whole codes as fit the bar, then "+N"; never a code cut mid-way (a bar too
-    narrow for even its first code and "+N" shows its first code, as wide as the bar is)."""
-    for k in range(len(codes), 0, -1):
-        text = " · ".join(codes[:k]) + (f" +{len(codes) - k}" if k < len(codes) else "")
-        if len(text) * TL_CH + 10 <= px:
-            return text
-    return codes[0] if codes else ""
-
-
 def month_label(m: date, first: bool) -> str:
     """A month on a timeline axis: "Nov", with its year at the first month and at January
     ("Nov 2026", "Jan 2027"), so months that repeat across years read apart (X-5)."""
@@ -2314,12 +2304,27 @@ def bar_box(left: float, width: float, least: float) -> tuple[float, float]:
 
 
 def bar_label(of: list[Any], px: float) -> tuple[str, dict[str, str]]:
-    """A bar's words (X-6): its features' codes and names when they fit, else as many whole
-    codes as fit then "+N", each code then listed with its name in the timeline's key."""
+    """A bar's words (X-6): its features' codes and names when they fit, else their names,
+    else the first name cut with "…"; never a bare code, every full name in the key."""
     named = " · ".join(f"{x.code} {x.name}" for x in of)
     if len(named) * NAME_CH + 10 <= px:
         return named, {}
-    return fit_codes([x.code for x in of], px), {x.code: x.name for x in of}
+    keyed = {x.code: x.name for x in of}
+    names = " · ".join(x.name for x in of)
+    if len(names) * NAME_CH + 10 <= px:
+        return names, keyed
+    return cut_name(of[0].name, len(of) - 1, px), keyed
+
+
+def cut_name(name: str, more: int, px: float) -> str:
+    """The first feature's name cut to the bar with "…" (and "+N" for the others when it
+    fits): a bar never prints a code without its name; the key lists every full name."""
+    tail = f" +{more}" if more else ""
+    for tail_ in ([tail, ""] if tail else [""]):
+        room = int((px - 10) / NAME_CH) - len(tail_) - 1
+        if room >= 3:
+            return name[:room].rstrip() + "…" + tail_
+    return name[:1] + "…"
 
 
 def _timeline_html(view: Any, today: Any) -> str:
@@ -2400,7 +2405,7 @@ def _timeline_html(view: Any, today: Any) -> str:
             pm_cls = " pm" if of[0].pm_owned else ""
             # X-14: a bar too short for its first code grows left from its end, never past
             # its milestone's line or the page's right edge.
-            left, w = bar_box(at(a), px(a, b), len(of[0].code) * TL_CH + 10)
+            left, w = bar_box(at(a), px(a, b), 4 * NAME_CH + 10)
             text, keyed = bar_label(of, w)
             key.update(keyed)
             out.append(f"<span class='bar{pm_cls}' style='left:{left / TL_PX * 100:.2f}%;"
