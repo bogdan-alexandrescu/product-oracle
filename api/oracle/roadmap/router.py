@@ -300,10 +300,18 @@ async def act_on_roadmap_item_staleness(
     doc: str, body: ItemStalenessAction, principal: Approver, db: TenantDB
 ) -> ItemStalenessOut:
     """Settle potentially stale items: ``review`` (under review) or ``reconcile`` (still
-    valid, with a reason; re-anchored on the PRD's latest approved version). 409 when no
-    item is in a state the action applies to."""
+    valid, with a reason; re-anchored on the PRD's latest approved version), on the version
+    named, else the one the tracks follow (the latest approved with items). 409 when no item
+    is in a state the action applies to; then every active track on the roadmap is
+    monitored, so its alerts follow at once."""
     document = await _document(db, doc, "roadmap")
-    version = await _version(db, document, body.version)
+    # No version named (the Plan item panel's Review): the one the tracks follow, the latest
+    # approved with items, whose rows the track alerts are about (the stale-marks walk).
+    version = (
+        await _version(db, document, body.version)
+        if body.version is not None
+        else await views.items_version(db, document, approved_first=True)
+    )
     rows = await views.version_items(db, version)
     if body.item_keys:
         known = {i.item_key for i in rows}

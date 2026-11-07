@@ -9770,8 +9770,10 @@ export interface paths {
         /**
          * Act On Roadmap Item Staleness
          * @description Settle potentially stale items: ``review`` (under review) or ``reconcile`` (still
-         *     valid, with a reason; re-anchored on the PRD's latest approved version). 409 when no
-         *     item is in a state the action applies to.
+         *     valid, with a reason; re-anchored on the PRD's latest approved version), on the version
+         *     named, else the one the tracks follow (the latest approved with items). 409 when no item
+         *     is in a state the action applies to; then every active track on the roadmap is
+         *     monitored, so its alerts follow at once.
          */
         post: operations["act_on_roadmap_item_staleness"];
         delete?: never;

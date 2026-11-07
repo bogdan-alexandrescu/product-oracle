@@ -18,6 +18,8 @@ import { acceptTrackAlertDate, alertDay, alertSentence, keepTrackAlert, listTrac
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { WaiveForm } from "../company/strategy/_components/DriftList";
+import { StalenessActions } from "@/components/roadmap/StalenessActions";
+
 import { REPLAN, StartRunDialog } from "./_start-run";
 import { assess, type GoalView, type Point } from "../home/_goals";
 import { dateBasis, HORIZON_LABEL, nextSentence, roadmapHref, stateChip, type PlanDrift, type PlanItem } from "./_lib";
@@ -289,12 +291,17 @@ function discussionOf(a: TrackAlertOut, item: PlanItem): { subject: DiscussionSu
   return { subject: { kind: "track", subject: { track_id: a.track_id }, label: a.prd.title }, key: `track:${a.track_id}`, title: `Discuss ${a.prd.title}` };
 }
 
+/** Whether the page was opened to review a stale item (the Inbox's Review: /plan?item=…&review=1). */
+const reviewAsked = () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("review") === "1";
+
 function AlertCard({ a, item, links, onChanged }: { a: TrackAlertOut; item: PlanItem; links?: PlanLinks; onChanged: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [keeping, setKeeping] = useState(false);
   const [asking, setAsking] = useState(false);
   const [discussing, setDiscussing] = useState(false);
+  // The Inbox's Review lands here with ?review=1: a stale alert's Still valid… is open.
+  const [reviewing, setReviewing] = useState(() => a.kind === "stale" && a.state !== "resolved" && reviewAsked());
   const [note, setNote] = useState("");
   const fieldId = useId();
   const blocker = typeof a.data.blocker_id === "string" ? a.data.blocker_id : null;
@@ -370,20 +377,8 @@ function AlertCard({ a, item, links, onChanged }: { a: TrackAlertOut; item: Plan
               </Button>
             )}
             {replanning && <StartRunDialog action={REPLAN} trackId={a.track_id} prdTitle={a.prd.title} onClose={() => setReplanning(false)} />}
-            {(has("review") || has("reconcile")) && (
-              <Button
-                disabled={busy}
-                onClick={() =>
-                  void run(() =>
-                    unwrap(
-                      api.POST("/v1/roadmaps/{doc}/items/staleness", {
-                        params: { path: { doc: item.roadmap.slug } },
-                        body: { action: "review", item_keys: [item.key] },
-                      }),
-                    ),
-                  )
-                }
-              >
+            {(has("review") || has("reconcile")) && !reviewing && (
+              <Button disabled={busy} aria-expanded={false} onClick={() => setReviewing(true)}>
                 Review
               </Button>
             )}
@@ -417,6 +412,21 @@ function AlertCard({ a, item, links, onChanged }: { a: TrackAlertOut; item: Plan
             )}
           </span>
         )
+      )}
+      {/* The stale-marks walk: Review opens the Items tab's Still valid… (reason, Mark still
+          valid), not a bare "under review" mark that showed nothing. */}
+      {reviewing && (
+        <StalenessActions
+          doc={item.roadmap.slug}
+          itemKey={item.key}
+          freshness={a.data.freshness as string | undefined}
+          open
+          onCancel={() => setReviewing(false)}
+          onChanged={async () => {
+            setReviewing(false);
+            await onChanged();
+          }}
+        />
       )}
       {asking && a.item_key && prdId && (
         <AskTeammate

@@ -347,7 +347,8 @@ class ItemStalenessAction(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     action: Literal["review", "reconcile"]
-    # The roadmap version; omitted: the latest version with items.
+    # The roadmap version; omitted: the one the tracks follow (the latest approved version
+    # with items, else the latest with items).
     version: int | None = Field(None, ge=1)
     item_keys: list[str] = Field(default_factory=list, max_length=500)
     reason: str | None = Field(None, max_length=2000)

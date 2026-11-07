@@ -210,6 +210,7 @@ function itemsFor(ctx: RoadmapContext, roadmap: Version, trackId: string | null)
       blockers: [],
       trace: [],
       depends_on: [],
+      depends_titles: {},
       validation_gates: [],
       economics: {},
       priority: null,
@@ -549,7 +550,7 @@ function withEngineering(db: RoadmapDb, item: Item, view: string): Item {
   const engineering = db.records
     .filter((r) => r.track_id === item.track_id && r.item_key === item.item_key)
     .map((r) => ({ id: r.id, tracker: r.tracker, external_ref: r.external_ref, state: r.state, raw_status: r.raw_status, target_date: r.target_date, estimate: r.estimate, url: r.url }));
-  if (view === "brief") return { ...item, feature: null, requirements: [], blockers: [], trace: [], depends_on: [], validation_gates: [], economics: {}, priority: null, confidence: null, engineering: [] };
+  if (view === "brief") return { ...item, feature: null, requirements: [], blockers: [], trace: [], depends_on: [], depends_titles: {}, validation_gates: [], economics: {}, priority: null, confidence: null, engineering: [] };
   return { ...item, engineering };
 }
 

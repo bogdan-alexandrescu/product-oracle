@@ -33927,7 +33927,7 @@
           "roadmaps"
         ],
         "summary": "Act On Roadmap Item Staleness",
-        "description": "Settle potentially stale items: ``review`` (under review) or ``reconcile`` (still\nvalid, with a reason; re-anchored on the PRD's latest approved version). 409 when no\nitem is in a state the action applies to.",
+        "description": "Settle potentially stale items: ``review`` (under review) or ``reconcile`` (still\nvalid, with a reason; re-anchored on the PRD's latest approved version), on the version\nnamed, else the one the tracks follow (the latest approved with items). 409 when no item\nis in a state the action applies to; then every active track on the roadmap is\nmonitored, so its alerts follow at once.",
         "operationId": "act_on_roadmap_item_staleness",
         "security": [
           {
