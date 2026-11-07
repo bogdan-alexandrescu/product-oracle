@@ -138,6 +138,33 @@ jobs:
           name: e2e-results
           path: web/test-results/
 
+  # BGD, Nov 6, 2026 ("Move it to CI, sharded"): a train's or hotfix's pull request runs the whole
+  # mock-backed Playwright suite here, split 8 ways on the runner pool, instead of on CLD's laptop.
+  # Each shard builds the mock app once, then runs its share with the e2e/ci.env settings.
+  mock-e2e:
+    if: github.event_name == 'pull_request' && (startsWith(github.head_ref, 'train/') || startsWith(github.head_ref, 'hotfix/'))
+    runs-on: ${{ vars.SELF_HOSTED_CI == 'on' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON(format('["self-hosted","linux","x64","{0}"]', vars.ORACLE_CI_RUNNER_LABEL || 'bogdan-ci')) || 'ubuntu-latest' }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: cd web && npm ci && npx playwright install --with-deps chromium
+      - run: cd web && npm run build:mock
+      - run: cd web && E2E_PREBUILT=1 E2E_WORKERS=4 npm run test:ci -- --shard=${{ matrix.shard }}/8
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mock-e2e-results-${{ matrix.shard }}
+          path: web/test-results/
+
   # dod-perf review: the web's timing specs (tagged @timing, as the API's `timing` mark) on the
   # mock-backed build, alone (one worker) so no other test's load counts against them.
   e2e-timing:
