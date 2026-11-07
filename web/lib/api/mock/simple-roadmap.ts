@@ -1412,10 +1412,10 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     const gone = trashedParent(s);
     return [...(gone ? [partRef(gone, true)] : []), ...ancestorsOf(s).reverse().map((a) => partRef(a))];
   };
-  // additions.item_extras: merged_into's code falls back to the key; a part's is its display code or "".
-  const ref = (k: string, key = true) => {
+  // additions.item_extras: merged_into's code falls back to the kept item's name, never its key; a part's is its display code or "".
+  const ref = (k: string) => {
     const x = db.items.find((y) => y.key === k);
-    return { id: db.ids[k], code: (x && prdCode(x.section)) ?? (key ? k : ""), title: x?.title ?? k };
+    return { id: db.ids[k], code: (x && prdCode(x.section)) || x?.title || "", title: x?.title ?? k };
   };
   // The plan-model lane: the plan PRD's items whose code is a plan feature carry its slices.
   const slices = db.plan ? planSlices() : [];

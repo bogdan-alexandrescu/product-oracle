@@ -1281,7 +1281,7 @@ async def test_a_deleted_goal_is_named_by_its_last_known_name(client, owner, run
     resp = await _approve(client, tenant_id, run)
     assert resp.status_code == 409, resp.text
     named = (
-        "Bulk edit names the goal Activation, which is not a goal in the Ground Truth: "
+        "Bulk edit names the goal Activation, which is not a goal of the Ground Truth: "
         "the run must name one that is"
     )
     assert named in resp.json()["detail"]["message"]
@@ -1297,7 +1297,7 @@ def test_check_a_rejected_goal_is_named_by_its_name():
     out = run_order.check_order(NEW_ONE + "    goal: old-goal\n", known=k)
     assert codes(out) == [("unknown_goal", True, "new-one")]
     assert out.problems[0]["message"] == (
-        "Gift notes names the goal Old goal, which is not a goal in the Ground Truth: "
+        "Gift notes names the goal Old goal, which is not a goal of the Ground Truth: "
         "the run must name one that is"
     )
 
@@ -1339,7 +1339,7 @@ async def test_an_old_worded_deleted_goal_problem_reads_in_the_new_words(client,
         cp.payload = {**(cp.payload or {}), "priority_check": check}
         await s.commit()
     named = (
-        "Bulk edit names the goal Activation, which is not a goal in the Ground Truth: "
+        "Bulk edit names the goal Activation, which is not a goal of the Ground Truth: "
         "the run must name one that is"
     )
     texts = await _order_texts(client, tenant_id, run)
