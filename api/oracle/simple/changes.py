@@ -1128,19 +1128,15 @@ async def _not_taken(
 
 
 async def _title_code(db: AsyncSession, entry: Any, title: str, read_: Any) -> None:
-    """every-field: a title leading with a code other than the item's own ("F-31 Alerts") gives
-    the item that code: it is checked as set_code checks it, in its words."""
-    from oracle.simple.priorities import FEATURE_CODE
-
-    if _code_of(entry):
+    """every-field: a title leading with a code other than the item's own ("F-31 Alerts",
+    any code the read takes from a title: service.coded_title) gives the item that code: it is
+    checked as set_code checks it, in its words. ``entry`` None: an item being added."""
+    if entry is not None and _code_of(entry):
         return  # its feature's or PRD's code stays its code; the title is only words
     lead = service.coded_title(title, None)[0]
-    if (
-        lead
-        and FEATURE_CODE.fullmatch(lead)
-        and lead != service.coded_title(entry.row.title, None)[0]
-    ):
-        await _not_taken(db, entry, lead, read_.by_id())
+    if lead and (entry is None or lead != service.coded_title(entry.row.title, None)[0]):
+        new = SimpleNamespace(row=SimpleNamespace(id=None))
+        await _not_taken(db, entry if entry is not None else new, lead, read_.by_id())
 
 
 def _with_code(code: str, name: str) -> str:
