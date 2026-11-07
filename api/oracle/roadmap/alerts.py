@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, autonomy
@@ -511,11 +511,28 @@ async def recheck_skipped(
     from oracle.roadmap import views
 
     try:
+        # One cheap look on the read's own session first: nothing marked (the usual case)
+        # opens no second connection.
+        if not await db.scalar(select(exists(_marked(track_ids)))):
+            return None
         async with tenant_session(principal.tenant_id) as own:
             return await _recheck_one(own, principal, track_ids)
     except Exception:  # noqa: BLE001 - logged; the read goes on, the hourly pass tries too
         views.log.exception("a skipped track re-check could not run on a read")
         return None
+
+
+def _marked(track_ids: set[uuid.UUID] | None):
+    """The active tracks marked for a re-check whose back-off has passed."""
+    failed_at = ProductTrack.monitor["recheck_failed_at"].as_float()
+    query = select(ProductTrack.id).where(
+        ProductTrack.status == "active",
+        ProductTrack.monitor["recheck"].as_boolean(),
+        failed_at.is_(None) | (failed_at < time.time() - RECHECK_BACKOFF_SECONDS),
+    )
+    if track_ids is not None:
+        query = query.where(ProductTrack.id.in_(track_ids))
+    return query
 
 
 async def _recheck_one(
@@ -526,15 +543,9 @@ async def _recheck_one(
     failed_at = ProductTrack.monitor["recheck_failed_at"].as_float()
     query = (
         select(ProductTrack)
-        .where(
-            ProductTrack.status == "active",
-            ProductTrack.monitor["recheck"].as_boolean(),
-            failed_at.is_(None) | (failed_at < time.time() - RECHECK_BACKOFF_SECONDS),
-        )
+        .where(ProductTrack.id.in_(_marked(track_ids)))
         .order_by(failed_at.asc().nulls_first(), ProductTrack.created_at, ProductTrack.id)
     )
-    if track_ids is not None:
-        query = query.where(ProductTrack.id.in_(track_ids))
     flagged = list(await own.scalars(query))
     if flagged and track_ids is None:
         leads = await engineering_leads(own)
