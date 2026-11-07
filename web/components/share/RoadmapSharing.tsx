@@ -577,7 +577,7 @@ function ShareLinks({ doc, reloadKey }: { doc: string; reloadKey: number }) {
   };
   const columns: Column<Link_>[] = [
     // R-5: the label takes the room the fixed columns leave; the actions keep theirs.
-    { key: "label", header: "Label", phone: "title", wrap: true, cell: (l) => <span className="font-medium">{l.label}</span> },
+    { key: "label", header: "Label", width: links.length > 0 ? undefined : "25%", phone: "title", wrap: true, cell: (l) => <span className="font-medium">{l.label}</span> },
     { key: "audience", header: "Audience", width: "110px", phone: "meta", cell: (l) => audienceLabel(l.audience) },
     { key: "version", header: "Version", width: "80px", phone: "meta", cell: (l) => <span className="tnum">v{l.version_number}</span> },
     { key: "by", header: "Created by", width: "120px", narrow: "wide", phone: "hide", cell: (l) => l.created_by_name ?? "A member" },
@@ -645,7 +645,8 @@ function ShareLinks({ doc, reloadKey }: { doc: string; reloadKey: number }) {
       header: "",
       // R-5: room for "New passcode" whole; the owner's other buttons wrap beneath it. An
       // empty table has no buttons, and its empty row spans the hidden columns too, so Label
-      // shares the room with it there.
+      // shares the room with it there (the empty row's span counts the hidden columns too, so Label
+      // keeps 25% of the table, never less than 160 px from 1024 wide).
       width: links.length > 0 ? "160px" : undefined,
       phone: "meta",
       wrap: true,

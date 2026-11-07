@@ -21,6 +21,7 @@ const SIZES = [
   { name: "1200", width: 1200, height: 800 },
   { name: "1280", width: 1280, height: 800 },
   { name: "1440", width: 1440, height: 900 },
+  { name: "1600", width: 1600, height: 900 },
   { name: "1920", width: 1920, height: 1000 },
   { name: "390", width: 390, height: 844 },
 ];
