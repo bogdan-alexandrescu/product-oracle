@@ -161,6 +161,11 @@ export interface RunsContext {
    */
   quietAgents?: boolean;
   /**
+   * F-78 "stuck-agents": as "slow-agents", but the agents never finish: each later tick reads
+   * them again (checked_at now, as the API's tick sets it) and they have sent nothing new.
+   */
+  stuckAgents?: boolean;
+  /**
    * H11 Order priorities, as oracle.autonomy for the runs: its level, its limits, and the
    * "Oracle did" row Oracle leaves when it saves a run's order itself (_tell_order_saved).
    * Absent: Oracle never saves an order at a stop that is on.
@@ -1802,7 +1807,12 @@ function tick(ctx: RunsContext, ticker = false): Schemas["TickOut"] {
     // A run that could not be checked is named, not counted as active.
     if (unreadIds.has(r.id)) continue;
     out.active_runs += 1;
-    if ((ctx.slowAgents || ctx.quietAgents) && agentsWorking(ctx, r)) continue;
+    if ((ctx.slowAgents || ctx.quietAgents || ctx.stuckAgents) && agentsWorking(ctx, r)) continue;
+    if (ctx.stuckAgents) {
+      const s = r.segments.find((x) => x.status === "running");
+      if (s) s.checked_at = ctx.now();
+      continue;
+    }
     if (r.waiting_for) {
       // F4 lane B, as the API re-checks each tick: the version's roadmap items are ready
       // now, so the Engineering dates step starts (a workflow of its own).
@@ -1849,7 +1859,7 @@ function tick(ctx: RunsContext, ticker = false): Schemas["TickOut"] {
 function startedInCheck(ctx: RunsContext, r: RunOut) {
   const s = r.segments.find((x) => x.status === "running");
   if (!s || s.checked_at) return;
-  if (ctx.slowAgents || ctx.quietAgents) agentsWorking(ctx, r);
+  if (ctx.slowAgents || ctx.quietAgents || ctx.stuckAgents) agentsWorking(ctx, r);
   else s.checked_at = ctx.now();
 }
 

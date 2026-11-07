@@ -137,7 +137,7 @@ test("Home with no goals offers Build the Ground Truth and opens the sheet", asy
   await expect(empty.getByRole("link", { name: "Import your baseline" })).toHaveCount(0);
   await empty.getByRole("button", { name: "About building the Ground Truth" }).hover();
   await expect(page.getByRole("tooltip")).toContainText(
-    "Oracle reads your sources and proposes your goals; they show here once confirmed. You can also push the Ground Truth as YAML with oracle push.",
+    "Oracle reads your sources and proposes your goals; they show here once confirmed. You can also send a Ground Truth file from the command line.",
   );
   await empty.getByRole("link", { name: "Build the Ground Truth" }).click();
   await expect(page).toHaveURL(/\/ground-truth\?build=1$/);

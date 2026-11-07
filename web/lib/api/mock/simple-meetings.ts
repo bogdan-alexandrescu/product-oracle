@@ -334,6 +334,10 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
         context: "Raised in the weekly product review.", options: [{ key: "a", label: "Yes, this quarter" }, { key: "b", label: "Not now" }], review_at: iso(now + 26 * day).slice(0, 10), created_by: owner ?? null,
       }),
       d(4, `Moved ${digest?.title ?? "Alert digest"}`, { origin: "meeting", meeting_id: past, at: iso(Date.parse(startedAt) + 20 * 60_000), subjects: [...(digest ? [{ kind: "roadmap_item", id: digest.id, ref: digest.key }] : []), { kind: "document", id: alerts.id }] }),
+      // F-26 ("long-decision" scenario): a decision whose title wraps on a phone.
+      ...(typeof localStorage !== "undefined" && localStorage.getItem("po-mock-scenario") === "long-decision"
+        ? [d(6, "Send the weekly alert digest on Monday mornings to every team on the free plan", { origin: "meeting", meeting_id: past, at: iso(Date.parse(startedAt) + 30 * 60_000), subjects: [{ kind: "document", id: alerts.id }] })]
+        : []),
     ],
     meetings: [{
       id: past, title: "Review: Usage alerts", prd: "usage-alerts", origin: "one_pager", occurrence_id: null, session_id: stableUuid("simple-meeting-session/past"),
