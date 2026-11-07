@@ -90,15 +90,30 @@ def _roadmap_items(cp: Checkpoint) -> tuple[list[dict[str, Any]], int]:
     return list(check.get("reasons") or []), int(check.get("file_problems") or 0)
 
 
-_KEY = re.compile(r"(?<![\w-])[a-z0-9]+(?:[-_][a-z0-9]+)+(?![\w-])")
+# A token a C6 message may name a feature by: a key-shaped word or a row the agents left
+# unkeyed ("#2"). Only a feature's key and such a row are rewritten; any other word stays.
+_TOKEN = re.compile(r"(?<![\w-])(?:#\d+|[a-z0-9][\w.]*(?:-[\w.]+)*)(?![\w-])")
+# The one place a message names a feature that is not in the set (unknown_dependency).
+_DEPENDS = re.compile(r"\bdepends on (\S+?)(?=,|\s|$)")
 
 
-def _titled(message: str | None, titles: dict[str, str]) -> str | None:
+def _titled(message: str | None, titles: dict[str, str], keys: Iterable[str] = ()) -> str | None:
     """A C6 problem's message as people read it: each feature's key as its title (a key
-    with none in words), as the review screen words it."""
-    if not message or not titles:
+    with none in words), as the review screen words it, and a "#n" row as its number.
+    ``keys``: the feature keys the check names beside the titled ones."""
+    if not message:
         return message
-    text = _KEY.sub(lambda m: titles.get(m.group(0)) or _words(m.group(0)), message)
+    features = set(titles) | set(keys) | set(_DEPENDS.findall(message))
+
+    def word(m: re.Match[str]) -> str:
+        token = m.group(0)
+        if token.startswith("#"):
+            return token[1:]
+        if token in features:
+            return titles.get(token) or _words(token)
+        return token
+
+    text = _TOKEN.sub(word, message)
     return text[:1].upper() + text[1:]
 
 
@@ -116,6 +131,8 @@ def _problems(check: Any, file_codes: Iterable[str] = ()) -> tuple[list[dict[str
     reasons: list[dict[str, Any]] = []
     file_problems = 0
     titles = check.get("titles") or {}
+    # Every feature of the file has a title or a problem of its own (a missing title is one).
+    keys = {p["feature"] for p in check.get("problems") or [] if p.get("feature")}
     for p in check.get("problems") or []:
         blocking = p.get("blocking", True)
         if not p.get("feature") or p.get("code") in file_codes:
@@ -128,7 +145,7 @@ def _problems(check: Any, file_codes: Iterable[str] = ()) -> tuple[list[dict[str
                 "code": p.get("code"),
                 "ref": problem_ref(p),
                 "severity": BLOCKING if blocking else "advisory",
-                "label": _titled(p.get("message"), titles),
+                "label": _titled(p.get("message"), titles, keys),
             }
         )
     return reasons, file_problems
