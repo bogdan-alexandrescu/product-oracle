@@ -367,6 +367,8 @@ export function goalRank(key: string): number {
   const n = companyGoals.findIndex((g) => g.key === key);
   return n < 0 ? Number.MAX_SAFE_INTEGER : n;
 }
+/** goal-order: how goal groups sort: the one goal order, then by key (the goal-suggestions list sorts so too). */
+export const goalOrderKey = (key: string): string => `0${String(goalRank(key)).padStart(16, "0")}${key}`;
 /** A goal's position (by key), null when unset or unknown. */
 export function goalPositionOf(key: string): number | null {
   const g = companyGoals.find((x) => x.key === key);
@@ -1486,8 +1488,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       parent_key: s.parent ?? null,
       part_of: pathOf(s).at(-1) ?? null,
       part_path: pathOf(s),
-      // Open parts, then cut ones (below the line); never a merged one.
-      parts: [...seeds.filter((x) => x.parent === s.key && !closed(x)), ...seeds.filter((x) => x.parent === s.key && !x.merged_into && x.status === "cut")].map((x) => partRef(x)),
+      // additions._parts: in roadmap order, open and cut mixed; never a merged one.
+      parts: seeds.filter((x) => x.parent === s.key && !x.merged_into).map((x) => partRef(x)),
       drafting: !!s.drafting_until,
       flow: s.draft ? (s.flow ?? null) : (flowFor(db.visuals, "feature", db.ids[s.key]) ?? betFlow(db, s)),
       goal_ids: goalIdsOf(s),
@@ -1538,7 +1540,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     const sort = !ref
       ? "1"
       : "key" in ref
-        ? `0${String(goalRank(String(ref.key))).padStart(16, "0")}${ref.key}`
+        ? goalOrderKey(String(ref.key))
         : group === "prd"
           ? `0${String(prdRank(ref)).padStart(16, "0")}${ref.title}`
           : `0${ref.title}`;

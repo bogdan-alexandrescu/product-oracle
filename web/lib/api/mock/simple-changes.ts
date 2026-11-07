@@ -396,6 +396,7 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
     else if (f === "horizon") out[f] = s.horizon;
     else if (f === "position") out[f] = s.position ?? db.items.indexOf(s);
     else if (f === "cut") out[f] = s.status === "cut";
+    else if (f === "shipped") out[f] = s.shipped ?? null;
     else if (f === "title") out[f] = s.title;
     else if (f === "outcome") out[f] = s.outcome ?? null;
     else if (f === "note") out[f] = s.note ?? null;
@@ -414,6 +415,15 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
   return out;
 }
 
+/** changes.py PANEL_DONE: the shipped mark the panel's Status set to done leaves. */
+const PANEL_DONE = "Marked done in its panel";
+
+/** changes.py set_status: its stored after, {cut, shipped}; planned clears only the panel's own done mark. */
+function statusAfter(s: ReturnType<typeof seed>, status: string, by: string): Values {
+  const kept = s.shipped?.note === PANEL_DONE ? null : (s.shipped ?? null);
+  return { cut: status === "cut", shipped: status === "done" ? (s.shipped ?? { note: PANEL_DONE, by, on: iso(mockNowMs()).slice(0, 10) }) : kept };
+}
+
 function write(db: SimpleDb, key: string, values: Values, target: Values): void {
   const s = seed(db, key);
   if ("start_date" in values) {
@@ -422,7 +432,8 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
   }
   if ("horizon" in values) s.horizon = values.horizon as typeof s.horizon;
   if ("position" in values) s.position = values.position as number;
-  if ("cut" in values) s.status = values.cut ? "cut" : "planned";
+  // set_status's {cut, shipped} is written below, from the tracker's status read before either is written.
+  if ("cut" in values && !("shipped" in values)) s.status = values.cut ? "cut" : "planned";
   if ("title" in values) s.title = String(values.title);
   if ("draft" in values) s.draft = !!values.draft;
   if ("goal_ids" in values) {
@@ -449,10 +460,11 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
   }
   if ("depends_on" in values) s.depends = [...((values.depends_on as string[]) ?? [])];
   if ("parent_key" in values) s.parent = (values.parent_key as string | null) ?? undefined;
-  if ("status" in values) {
-    // changes.py set_status: planned is the tracker's status again (a shipped mark from elsewhere stays).
-    if (s.tracked === undefined) s.tracked = !s.status || s.status === "cut" || s.status === "draft" ? "planned" : s.status;
-    s.status = values.status === "planned" ? s.tracked : (values.status as typeof s.status);
+  if ("shipped" in values) {
+    // changes.py set_status ({cut, shipped}): it reads as service._status: cut, then its shipped mark, then the tracker's status.
+    s.tracked ??= !s.status || s.status === "cut" || s.status === "draft" || (s.status === "done" && s.shipped) ? "planned" : s.status;
+    s.shipped = (values.shipped as typeof s.shipped) ?? null;
+    s.status = values.cut ? "cut" : s.shipped ? "done" : s.tracked;
   }
   if ("risk" in values) {
     const kept = (s.risks ?? []).filter((r) => !(r.flag === target.flag && (r.subject ?? null) === (target.subject ?? null)));
@@ -1307,7 +1319,8 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       after = { depends_on: clean };
     } else if (body.op === "set_status") {
       if (!["planned", "done", "cut"].includes(String(a.status))) return json(422, { detail: "after.status: planned, done or cut" });
-      after = { status: a.status };
+      after = statusAfter(seed(seen, key), String(a.status), ctx.id);
+      stored = ["cut", "shipped"];
     } else if (body.op === "set_parent") {
       const v = a.parent_key == null ? null : String(a.parent_key);
       const me = seed(seen, key);
@@ -1599,10 +1612,10 @@ export function proposeOffAgenda(db: SimpleDb, ctx: SimpleChangesCtx, body: Sche
   const key = keyOf(db, body.target.item_id);
   if (!key) return json(404, { detail: "No such roadmap item" });
   const fields = FIELDS[body.op] ?? Object.keys(body.after ?? {});
-  const after = body.op === "cut" ? { cut: true } : body.op === "restore" ? { cut: false } : { ...(body.after ?? {}) };
+  const after = body.op === "cut" ? { cut: true } : body.op === "restore" ? { cut: false } : body.op === "set_status" ? statusAfter(seed(db, key), String(body.after?.status), ctx.id) : { ...(body.after ?? {}) };
   const c: Change = {
     id: crypto.randomUUID(), session_id: sessionId, document_id: stableUuid(`simple-doc/${seed(db, key).roadmap}`), draft_ids: [],
-    op: body.op, target: { ...body.target }, before: body.before ?? read(db, key, fields, body.target), after, status: "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: iso(mockNowMs()),
+    op: body.op, target: { ...body.target }, before: body.op === "set_status" ? read(db, key, ["cut", "shipped"], body.target) : (body.before ?? read(db, key, fields, body.target)), after, status: "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: iso(mockNowMs()),
     decided_by: null, decided_at: null, reason: body.reason ?? null, decision_reason: null, routed_to: [], undoes_id: null, undone: false, can_decide: false, can_undo: false,
     from_meeting: meeting, off_agenda: true,
   };
@@ -1715,6 +1728,9 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
       // The goal buckets' goals (./goal-buckets.ts) are the same goals, by their name.
       const bucket = db.goal_buckets?.goals.find((g) => g.id === value)?.title;
       goal = Object.keys(GOALS).find((k) => goalId(k) === value || k === value || (!!bucket && GOALS[k] === bucket));
+      // A Goal map goal (the goal-suggestions list names it by its id) is a confirmed goal too.
+      const mapped = Object.values(db.map_goals ?? {}).find((g) => g.id === value);
+      if (!goal && mapped) MAP_GOALS[value] ??= mapped.title;
       if (!goal && !(value in MAP_GOALS)) return json(422, { detail: "target.where.value: a goal's id" });
     } else if (where?.kind === "horizon") {
       if (!["now", "next", "later"].includes(value)) return json(422, { detail: "target.where.value: now, next or later" });
