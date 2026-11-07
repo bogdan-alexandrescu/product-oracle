@@ -29,7 +29,9 @@ from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle.auth.deps import Principal
 from oracle.baseline.models import Entity
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.roadmap import alerts, views
@@ -459,6 +461,102 @@ async def test_a_recheck_that_fails_again_on_a_read_leaves_the_read_whole(client
     rows = await inbox_tracks(client, ctx)
     assert stale_keys(rows[tracks["scale"]]) == {"read-replicas"}
     assert "checkout-tips" in stale_keys(rows[tracks["conversion"]])
+
+
+async def _both_skipped(client, monkeypatch) -> tuple[Ctx, dict]:
+    """Both tracks' re-checks after an action raise, so both are marked ``recheck``."""
+    ctx, tracks = await monitored(client)
+    real = views.monitor
+
+    async def broken(db, track, actor, **kw):
+        await real(db, track, actor, **kw)
+        raise RuntimeError("an example failure after the alerts were written")
+
+    monkeypatch.setattr(views, "monitor", broken)
+    r = await client.post(ACT, json=BOTH, headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    monkeypatch.setattr(views, "monitor", real)
+    return ctx, tracks
+
+
+async def test_a_track_that_keeps_failing_on_a_read_lets_the_next_track_be_rechecked(
+    client, monkeypatch
+):
+    """protects=a re-check that fails on a read backs off: the next read re-checks the next
+    marked track, and the failing one is not re-run on every read; fails_when=the read
+    always takes the first marked track, so the second stays stale and the first's full
+    check reruns on every Inbox read; no_claim=when the back-off ends."""
+    ctx, tracks = await _both_skipped(client, monkeypatch)
+    first, other = await _recheck_order(ctx, tracks)
+    real = views.monitor
+    calls: list[str] = []
+
+    async def first_fails(db, track, actor, **kw):
+        calls.append(str(track.id))
+        out = await real(db, track, actor, **kw)
+        if str(track.id) == tracks[first]:
+            raise RuntimeError("an example failure that happens every time")
+        return out
+
+    monkeypatch.setattr(views, "monitor", first_fails)
+    rows = await inbox_tracks(client, ctx)
+    assert calls == [tracks[first]]
+    assert OWN_KEY[other] in stale_keys(rows[tracks[other]])
+    rows = await inbox_tracks(client, ctx)
+    assert calls == [tracks[first], tracks[other]]
+    assert OWN_KEY[other] not in stale_keys(rows[tracks[other]])
+    assert OWN_KEY[first] in stale_keys(rows[tracks[first]])
+    # The failing track waits out its back-off: more reads check nothing.
+    await inbox_tracks(client, ctx)
+    await inbox_tracks(client, ctx)
+    assert calls == [tracks[first], tracks[other]]
+    async with tenant_session(ctx.tenant_id) as s:
+        track = await s.get(ProductTrack, uuid.UUID(tracks[first]))
+        assert track.monitor.get("recheck") is True
+
+
+async def test_a_recheck_whose_commit_fails_leaves_the_read_whole(client, monkeypatch):
+    """protects=the read's re-check writes inside its own try: a commit that fails is
+    logged and the Inbox still answers; fails_when=the commit runs outside the try and the
+    read turns into a 500; no_claim=why a commit fails."""
+    ctx, tracks = await _both_skipped(client, monkeypatch)
+    real_monitor, real_commit = views.monitor, AsyncSession.commit
+    checked: list[str] = []
+
+    async def spy(db, track, actor, **kw):
+        checked.append(str(track.id))
+        return await real_monitor(db, track, actor, **kw)
+
+    async def failing_commit(self):
+        if checked and not getattr(failing_commit, "done", False):
+            failing_commit.done = True
+            raise RuntimeError("an example commit failure")
+        return await real_commit(self)
+
+    monkeypatch.setattr(views, "monitor", spy)
+    monkeypatch.setattr(AsyncSession, "commit", failing_commit)
+    rows = await inbox_tracks(client, ctx)
+    assert failing_commit.done and len(checked) == 1
+    assert OWN_KEY["scale"] in stale_keys(rows[tracks["scale"]])
+
+
+async def test_a_recheck_on_a_read_commits_only_the_track(client, monkeypatch):
+    """protects=the read's re-check commits its track's rows only, never what the read had
+    put in its own session; fails_when=the re-check commits the read's session;
+    no_claim=the read's own writes."""
+    ctx, tracks = await _both_skipped(client, monkeypatch)
+    owner = Principal(tenant_id=ctx.tenant_id, kind="user", role="owner",
+                      user_id=ctx.users["owner"].id)  # fmt: skip
+    async with tenant_session(ctx.tenant_id) as s:
+        s.add(Entity(type="feature", key="left-unsaved", title="Left unsaved",
+                     status="confirmed", origin="user"))  # fmt: skip
+        await s.flush()
+        assert await alerts.recheck_skipped(s, owner) is not None
+        await s.rollback()
+    async with tenant_session(ctx.tenant_id) as s:
+        assert await s.scalar(select(Entity).where(Entity.key == "left-unsaved")) is None
+        marked = [t for t in await s.scalars(select(ProductTrack)) if t.monitor.get("recheck")]
+        assert len(marked) == 1  # the re-checked track's clearing stands
 
 
 async def test_a_track_with_no_owner_is_owned_by_nobody(client):
