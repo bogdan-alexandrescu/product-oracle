@@ -1146,12 +1146,13 @@ function SegmentItem({
     try {
       draft.accept(await call());
     } catch (e) {
-      setDraftError(errorMessage(e));
+      setDraftError(asSentence(errorMessage(e)));
     }
   }
-  // D3: the gate's Waive… says a refusal under its own form, so it rejects instead.
+  // D3: the gate's Waive… says a refusal under its own form, so it rejects instead; with no
+  // shared draft to stage it on, nothing is waived and the form says so.
   const waive = async (body: ActionIn) => {
-    if (!shared) return;
+    if (!shared) throw new ApiError(0, NO_SHARED_DRAFT);
     draft.accept(await unwrap(api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions", { ...draftPath(shared.checkpoint_id), body })));
   };
   const draftActs: DraftActs | undefined = shared
@@ -1160,6 +1161,7 @@ function SegmentItem({
         meId: me?.user_id ?? null,
         error: draftError,
         act: (body) => write(() => unwrap(api.POST("/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions", { ...draftPath(shared.checkpoint_id), body }))),
+        waive,
         stage: (actionId) =>
           write(() =>
             unwrap(
@@ -1447,7 +1449,7 @@ function SegmentItem({
               review={shared?.checkpoint_id === cp.id ? shared : null}
               onSaveNote={(text) => saveNote(cp.id, text)}
               onReload={draft.reload}
-              onWaive={shared?.checkpoint_id === cp.id ? waive : undefined}
+              onWaive={waitingCp?.id === cp.id ? waive : undefined}
               noteRef={(el) => {
                 noteFields.current[cp.id] = el;
               }}
@@ -1821,6 +1823,8 @@ interface DraftActs {
   meId: string | null;
   error: string | null;
   act: (body: ActionIn) => Promise<void>;
+  /** D3: stage a waiver; a refusal rejects, so it is said where Waive was pressed. */
+  waive: (body: ActionIn) => Promise<void>;
   stage: (actionId: string) => Promise<void>;
   undo: (actionId: string) => Promise<void>;
 }
@@ -1925,7 +1929,8 @@ function ItemsCheckLine({
               </p>
               <ul className="mt-1 space-y-1.5">
                 {g.reasons.map((r, i) => (
-                  <li key={`${r.code}-${i}`} className="flex min-w-0 flex-col items-start gap-0.5 text-sm" data-testid="item-reason" data-code={r.code}>
+                  // data-ref: the gate's name for the reason (a roadmap item's is its code), as the gate's rows carry it.
+                  <li key={`${r.code}-${i}`} className="flex min-w-0 flex-col items-start gap-0.5 text-sm" data-testid="item-reason" data-code={r.code} data-ref={r.code}>
                     <Chip kind={r.severity === "blocking" ? "crit" : "warn"} className={REASON_CHIP} data-testid="reason-chip">
                       {r.label}
                     </Chip>
@@ -1942,7 +1947,15 @@ function ItemsCheckLine({
                       <span className="flex flex-wrap gap-1.5" data-testid="reason-fix-buttons">
                         {r.fixes
                           .filter((f) => complete(f.action))
-                          .map((f) => (
+                          .map((f) =>
+                            f.action.kind === "waive" ? (
+                              <WaiveFix
+                                key={f.label}
+                                label={f.label}
+                                reason={r.label}
+                                onWaive={(text) => draft.waive({ item_key: f.action.item, kind: "waive", answers: [r.code], value: { reason: text } })}
+                              />
+                            ) : (
                             <Button
                               key={f.label}
                               className="h-8 px-2.5 text-sm"
@@ -1961,7 +1974,8 @@ function ItemsCheckLine({
                             >
                               {f.label}
                             </Button>
-                          ))}
+                            ),
+                          )}
                       </span>
                     )}
                   </li>
@@ -2404,6 +2418,7 @@ function CheckpointRow({
   onWaive?: (body: ActionIn) => Promise<void>;
 }) {
   const noteId = useId();
+  const { can } = useMe();
   // D8: the note is saved to the shared draft as I type; the line under it says how it went.
   const saved = review?.note ?? "";
   const canSave = !!review?.can_stage;
@@ -2619,7 +2634,8 @@ function CheckpointRow({
               ? `${plural(left, "blocking problem")} open before your edits: Oracle checks the file again once it applies them.`
               : approveBlocked!
           }
-          onWaive={review?.can_stage ? onWaive : undefined}
+          // A shared draft not read yet still offers Waive… to whoever may stage: its form then says nothing was waived.
+          onWaive={(review ? review.can_stage : can("stage_checkpoint_action")) ? onWaive : undefined}
         />
       )}
       <Sheet open={discussing} title={`Discuss: ${CHECKPOINT_LABEL[cp.kind]}`} onClose={() => setDiscussing(false)} testId="sheet-discuss">
@@ -2687,9 +2703,6 @@ const gateKey = (x: { item: string; code: string; ref?: string }) => `${x.item}|
 /** One blocking reason: its own reason box, text and Waive, so waiving it waives it alone. */
 function GateRow({ x, onWaive }: { x: NonNullable<CheckpointOut["gate"]>["left"][number]; onWaive?: (body: ActionIn) => Promise<void> }) {
   const [open, setOpen] = useState(false);
-  const [reason, setReason] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   return (
     <li data-testid="gate-reason" data-ref={x.ref || x.code}>
       <div className="flex flex-wrap items-center gap-2">
@@ -2701,50 +2714,74 @@ function GateRow({ x, onWaive }: { x: NonNullable<CheckpointOut["gate"]>["left"]
           <button
             type="button"
             className="inline-flex min-h-6 items-center font-medium text-accent-ink underline max-[600px]:min-h-11"
-            onClick={() => {
-              setOpen(true);
-              setReason("");
-              setError(null);
-            }}
+            onClick={() => setOpen(true)}
           >
             Waive…
           </button>
         )}
       </div>
       {open && onWaive && (
-        <form
-          className="mt-1 flex flex-wrap items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setBusy(true);
-            setError(null);
-            // A refused waiver keeps its form and reason, with the API's words under it.
-            onWaive({ item_key: x.item, kind: "waive", answers: [x.ref || x.code], value: { reason: reason.trim() } })
-              .then(
-                () => setOpen(false),
-                (e: unknown) => setError(errorMessage(e)),
-              )
-              .finally(() => setBusy(false));
-          }}
-        >
-          <input
-            aria-label={`Reason to waive: ${x.label}`}
-            placeholder="Why this is fine for now"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            className={`${INPUT} h-8 min-w-0 flex-1`}
-          />
-          <Button type="submit" className="h-8 px-2.5 text-sm" disabled={busy || !reason.trim()}>
-            Waive
-          </Button>
-        </form>
+        <WaiveForm
+          reason={x.label}
+          onWaive={(text) => onWaive({ item_key: x.item, kind: "waive", answers: [x.ref || x.code], value: { reason: text } })}
+          onDone={() => setOpen(false)}
+        />
       )}
-      {open && error && (
+    </li>
+  );
+}
+
+/** A reason row's Waive…: opens the waiver's reason box under it, where a refusal is said too. */
+function WaiveFix({ label, reason, onWaive }: { label: string; reason: string; onWaive: (text: string) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  if (open) return <WaiveForm reason={reason} onWaive={onWaive} onDone={() => setOpen(false)} />;
+  return (
+    <Button className="h-8 px-2.5 text-sm" onClick={() => setOpen(true)}>
+      {label}
+    </Button>
+  );
+}
+
+/** The API's words as a sentence: its refusals start lowercase ("this checkpoint is decided"). */
+const asSentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+const NO_SHARED_DRAFT = "This stop's shared review could not be read, so nothing was waived. Reload the page and try again.";
+
+/** D3: a waiver's reason and Waive. A refused waiver keeps its form and reason, with the API's words under it. */
+function WaiveForm({ reason: label, onWaive, onDone }: { reason: string; onWaive: (text: string) => Promise<void>; onDone: () => void }) {
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <>
+      <form
+        className="mt-1 flex flex-wrap items-center gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setBusy(true);
+          setError(null);
+          onWaive(reason.trim())
+            .then(onDone, (e: unknown) => setError(asSentence(errorMessage(e))))
+            .finally(() => setBusy(false));
+        }}
+      >
+        <input
+          aria-label={`Reason to waive: ${label}`}
+          placeholder="Why this is fine for now"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          className={`${INPUT} h-8 min-w-0 flex-1`}
+        />
+        <Button type="submit" className="h-8 px-2.5 text-sm" disabled={busy || !reason.trim()}>
+          Waive
+        </Button>
+      </form>
+      {error && (
         <p className="mt-1 text-sm text-crit" role="alert">
           {error}
         </p>
       )}
-    </li>
+    </>
   );
 }
 

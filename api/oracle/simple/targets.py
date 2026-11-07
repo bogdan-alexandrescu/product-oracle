@@ -72,7 +72,7 @@ from oracle.launches.models import TASK_STATUSES as LAUNCH_TASK_STATUSES
 from oracle.priorities import service as priorities
 from oracle.priorities.models import PriorityOverride
 from oracle.priorities.schemas import OverrideCreate
-from oracle.priorities.scoring import _number
+from oracle.priorities.scoring import effort_weeks, goal_value_estimate
 from oracle.requests.models import CHANNELS as REQUEST_CHANNELS
 from oracle.requests.models import REQUESTER_KINDS, ProductRequest
 from oracle.roadmap import company
@@ -208,10 +208,7 @@ def _keys(c: SimpleChange) -> tuple[str, ...]:
 
 def estimates(attrs: dict[str, Any] | None) -> dict[str, float | None]:
     """A feature's goal value estimate and effort as the ranking reads them (S6)."""
-    attrs = attrs or {}
-    goal = _number(attrs.get("goal_value"))
-    effort = _number(attrs["effort"]) if "effort" in attrs else _number(attrs.get("effort_weeks"))
-    return {"goal_value": goal if goal is not None and goal >= 0 else None, "effort": effort}
+    return {"goal_value": goal_value_estimate(attrs), "effort": effort_weeks(attrs)}
 
 
 def goal_measure(goal: Entity) -> dict[str, Any]:

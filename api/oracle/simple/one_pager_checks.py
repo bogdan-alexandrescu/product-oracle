@@ -25,6 +25,7 @@ as one list, which other checks (the Definition of Done quality checks) can join
 
 import re
 from dataclasses import dataclass, field
+from decimal import ROUND_HALF_UP, Context, Decimal
 from typing import Any
 
 from oracle.docs.models import Section
@@ -589,8 +590,16 @@ def _num(text: str) -> float | None:
         return None
 
 
+def _round(x: float) -> Decimal:
+    """``x`` to 6 places, an exact half away from zero, as the mock's ``toFixed(6)`` rounds it
+    ("0.0078125" -> "0.007813"); a number is compared and written as rounded here."""
+    return Decimal(x).quantize(Decimal("1e-6"), ROUND_HALF_UP, Context(prec=400))
+
+
 def _n(x: float) -> str:
-    return str(int(x)) if x == int(x) else f"{x:g}"
+    """``x`` as a person writes it: thousands separators, no float noise, never cut or in
+    exponent form ("0.3", not "0.30000000000000004"; "1,234,567.5", not "1.23457e+06")."""
+    return f"{_round(x):,f}".rstrip("0").rstrip(".")
 
 
 def _sentences(sec: Section) -> list[str]:
@@ -629,14 +638,25 @@ def as_written(old: str, value: str) -> str:
     return word.capitalize() if old[:1].isupper() else word
 
 
+def _like(before: str, value: float) -> str:
+    """``value`` written as ``before`` is: its thousands separators ("1,200,000") and at
+    least its places after the point ("2.75" -> "2.50"), more when the value needs them."""
+    places = len(before.partition(".")[2])
+    own = f"{_round(value):f}".rstrip("0").partition(".")[2]
+    return f"{_round(value):{',' if ',' in before else ''}.{max(places, len(own))}f}"
+
+
 def _fix(
     sec: Section, said: str, before: str, value: float, heading: bool = False
 ) -> dict[str, str] | None:
     if _number_at((sec.heading if heading else sec.body_md) or "", said) is None:
         return None
-    # A number written with thousands separators ("1,200,000") is set the same way.
-    shown = f"{int(value):,}" if "," in before and value == int(value) else _n(value)
-    fix = {"section": sec.section_key, "said": said, "before": before, "value": shown}
+    fix = {
+        "section": sec.section_key,
+        "said": said,
+        "before": before,
+        "value": _like(before, value),
+    }
     return fix | {"part": "heading"} if heading else fix
 
 
@@ -711,12 +731,13 @@ def _per_unit(sections: list[Section]) -> list[Look]:
                     re.I,
                 )
                 total = _num(t.group("n")) if t else None
-                if total is None or total == per * count[0]:
+                # Equal as written: 0.1 × 3 is 0.3, not 0.30000000000000004.
+                if total is None or _round(total) == _round(per * count[0]):
                     continue
                 looks.append(Look(
                     "numbers",
                     f"{_n(per)} {m.group('unit')} per {thing} × {count[2]} is "
-                    f"{_n(per * count[0])}, but the company-wide target says {_n(total)}.",
+                    f"{_n(per * count[0])}, but the company-wide target says {t.group('n')}.",
                     list(dict.fromkeys(_plain(x.heading or "") for x in (sec, count[1], tsec))),
                     list(dict.fromkeys(x.section_key for x in (sec, count[1], tsec))),
                     _fix(tsec, t.group(0), t.group("n"), per * count[0]),

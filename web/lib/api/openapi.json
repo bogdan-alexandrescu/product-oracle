@@ -78807,6 +78807,22 @@
             "type": "object",
             "title": "Titles",
             "default": {}
+          },
+          "requirement_names": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Requirement Names",
+            "default": {}
+          },
+          "goal_names": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Goal Names",
+            "default": {}
           }
         },
         "type": "object",

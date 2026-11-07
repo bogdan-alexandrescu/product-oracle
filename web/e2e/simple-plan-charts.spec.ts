@@ -2,6 +2,7 @@ import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { THEME_KEY } from "../lib/theme";
 import { ADMIN, login } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
+import { countRowOf } from "./vxe-counts";
 
 /*
  * The plan-charts lane (the owner's picks of 2026-10-28): Priorities' Goal buckets header is
@@ -274,7 +275,7 @@ for (const v of VIEWS) {
     test("value / effort: a log effort axis split at the medians, linked to the ranked list", async ({ page }) => {
       await setUp(page, v.scheme, null);
       await page.goto("/simple/priorities?tab=value-effort");
-      await expect(mark(page, "alert-rules")).toBeVisible();
+      await expect(mark(page, "alert-sso")).toBeVisible();
 
       // The log axis: 0.5, 1, 2, 4 (B: "Effort (engineer-weeks, log scale)"), each doubling the same distance.
       const ticks = page.getByTestId("vxe-tick");
@@ -296,14 +297,12 @@ for (const v of VIEWS) {
       expect(Math.abs(split.x + split.width / 2 - xs[1])).toBeLessThan(4);
       expect(Math.abs(split.x + split.width / 2 - (plot.x + plot.width / 2))).toBeGreaterThan(10);
 
-      // Twins fan out: alert-export and setup-video share value 0, effort 1.
-      const a = (await mark(page, "alert-export").boundingBox())!;
-      const b = (await mark(page, "setup-video").boundingBox())!;
-      const overlap = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
-      expect(overlap).toBe(0);
-      await expect(mark(page, "alert-export").getByTestId("vxe-code")).toHaveText("AHE");
-      // The median lines say what they are ("middle effort", "middle value"), never under a mark.
-      const marks = await page.getByTestId("vxe-point").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON() as DOMRect));
+      // PV-1 One count per spot: the 15 features at value 0, effort 1 (alert-export and setup-video among them) are one count.
+      const count = page.locator('[data-testid="vxe-crowd"][data-count="15"]');
+      await expect(count).toHaveAccessibleName(/^15 features at effort 1 week · goal value 0 or no goal: AHE Alert history export, .* and 12 more; show them$/);
+      for (const code of ["alert-export", "setup-video", "setup-health-log"]) await expect(mark(page, code)).toHaveCount(0);
+      // The median lines say what they are ("middle effort", "middle value"), never under a mark or a count.
+      const marks = await page.locator('[data-testid="vxe-point"], [data-testid="vxe-crowd"]').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON() as DOMRect));
       // P-1: on a phone the 22 marks (with the Goal map's 12) leave "middle value" no free spot, so it is left out (qa4-simple-plan-9).
       if (v.phone) await expect(page.getByTestId("vxe-middle-value")).toHaveCount(0);
       for (const id of v.phone ? ["vxe-middle-effort"] : ["vxe-middle-effort", "vxe-middle-value"]) {
@@ -311,9 +310,16 @@ for (const v of VIEWS) {
         const under = marks.filter((m) => m.x < l.x + l.width && l.x < m.x + m.width && m.y < l.y + l.height && l.y < m.y + m.height);
         expect(under, id).toEqual([]);
       }
-      // A feature with no goal is never a cross: a neutral dashed circle, named in the legend.
-      for (const code of ["alert-export", "setup-video", "price-tiers", "setup-health-log"]) await expect(mark(page, code)).toHaveAttribute("data-shape", "none");
-      await expect(mark(page, "alert-rules")).toHaveAttribute("data-shape", "square");
+      // A feature with no goal is never a cross: a neutral dashed circle, named in the legend (in a count's sheet too).
+      await expect(mark(page, "price-tiers")).toHaveAttribute("data-shape", "none");
+      await expect((await countRowOf(page, "alert-export")).getByTestId("vxe-crowd-code")).toHaveText("AHE");
+      for (const code of ["alert-export", "setup-video", "setup-health-log"]) await expect(page.locator(`[data-testid="vxe-crowd-row"][data-code="${code}"]`)).toHaveAttribute("data-shape", "none");
+      await page.keyboard.press("Escape");
+      // On a phone Alert rules engine shares a count with Sample data import.
+      if (v.phone) {
+        await expect(await countRowOf(page, "alert-rules")).toHaveAttribute("data-shape", "square");
+        await page.keyboard.press("Escape");
+      } else await expect(mark(page, "alert-rules")).toHaveAttribute("data-shape", "square");
       const legend = page.getByLabel("Legend");
       await expect(legend.getByTestId("vxe-legend-no-goal")).toHaveText("No goal");
       // Demo 9: how to read the chart is behind the (i) by the heading; the legend keeps "Below the line".
@@ -330,18 +336,28 @@ for (const v of VIEWS) {
       await expect(misses).toHaveAttribute("title", "Misses this quarter");
       await expect(sideRow(page, "price-tiers").getByTestId("prio-title")).toHaveAttribute("title", "New plan tiers");
 
-      // Select a mark (a tap on a phone): its row lights up and comes into view.
+      // Select a mark (a tap on a phone): it opens its feature panel and its row lights up; on a desktop the row comes
+      // into view, on a phone the chart stays in view (the list is under it).
       if (v.phone) await mark(page, "price-tiers").tap();
       else await mark(page, "price-tiers").click();
       await expect(mark(page, "price-tiers")).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByTestId("item-panel")).toContainText("New plan tiers");
       await expect(sideRow(page, "price-tiers")).toHaveAttribute("data-selected", "true");
-      await expect(sideRow(page, "price-tiers")).toBeInViewport();
+      if (!v.phone) await expect(sideRow(page, "price-tiers")).toBeInViewport();
       await expect(page.locator('[data-testid="side-row"][data-selected="true"]')).toHaveCount(1);
-      // Select a row: its mark lights up instead.
+      // Escape closes the panel first and leaves the selection.
+      await page.keyboard.press("Escape");
+      await expect(page.getByTestId("item-panel")).toHaveCount(0);
+      await expect(sideRow(page, "price-tiers")).toHaveAttribute("data-selected", "true");
+      // Select a row: its mark lights up instead, and the row opens its feature panel too (Escape closes it first).
       if (v.phone) await sideRow(page, "alert-digest").getByRole("button").tap();
       else await sideRow(page, "alert-digest").getByRole("button").click();
       await expect(mark(page, "alert-digest")).toHaveAttribute("aria-pressed", "true");
       await expect(mark(page, "price-tiers")).toHaveAttribute("aria-pressed", "false");
+      await expect(sideRow(page, "alert-digest")).toHaveAttribute("data-selected", "true");
+      await expect(page.getByTestId("item-panel")).toContainText(await sideRow(page, "alert-digest").getByTestId("prio-title").innerText());
+      await page.keyboard.press("Escape");
+      await expect(page.getByTestId("item-panel")).toHaveCount(0);
       await expect(sideRow(page, "alert-digest")).toHaveAttribute("data-selected", "true");
       if (!v.phone) {
         // Escape closes what is open on top first (the Ask panel), and leaves the selection.
@@ -357,11 +373,12 @@ for (const v of VIEWS) {
       await page.keyboard.press("Escape");
       await expect(page.locator('[data-testid="side-row"][data-selected="true"]')).toHaveCount(0);
       await expect(page.locator('[data-testid="vxe-point"][aria-pressed="true"]')).toHaveCount(0);
-      // The keyboard: Enter on a focused mark selects it.
-      await mark(page, "setup-video").focus();
+      // The keyboard: Enter on a focused mark selects it and opens its panel.
+      await mark(page, "alert-mobile").focus();
       await page.keyboard.press("Enter");
-      await expect(sideRow(page, "setup-video")).toHaveAttribute("data-selected", "true");
-      await expect(sideRow(page, "setup-video")).toBeInViewport();
+      await expect(sideRow(page, "alert-mobile")).toHaveAttribute("data-selected", "true");
+      await expect(page.getByTestId("item-panel")).toContainText("Mobile alert push");
+      if (!v.phone) await expect(sideRow(page, "alert-mobile")).toBeInViewport();
     });
   });
 }

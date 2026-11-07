@@ -52,3 +52,57 @@ test.describe("a narrow window", () => {
     await expectInside(roadmaps);
   });
 });
+
+/*
+ * The first frame: the server's HTML, painted before the page's scripts run, shows the table's
+ * loading lines. They span the columns drawn at that width (they used to span every column, so
+ * a hidden one took the visible ones' room until the table had measured itself), each as one
+ * cell (they used to be one cell per width band, four of them hidden, so a locator met five).
+ * The Runs table drops a column under 1320 px and another under 760 px; at these windows it is
+ * 635 px (601-760), 775 px (760-820), 815 px (also 760-820), 959 px (820-1000) and 1375 px wide.
+ */
+async function openFirstFrame(page: Page) {
+  await login(page);
+  // The page as first painted: its HTML and CSS, none of its scripts.
+  await page.route(/\/_next\/static\/chunks\/.*\.js(\?|$)/, (route) => route.abort());
+  await page.goto("/runs");
+  const table = page.getByTestId("runs-table").locator("table");
+  const row = table.locator("tbody tr").first();
+  await expect(row).toBeAttached();
+  await expect(row.locator("td"), "the line is one cell").toHaveCount(1);
+  return { table, line: row.locator("td") };
+}
+
+for (const width of [700, 840, 880, 1024, 1440]) {
+  test.describe(`the first frame at ${width} px`, () => {
+    test.use({ viewport: { width, height: 900 } });
+
+    test("the Runs table's lines span only the columns drawn before its scripts run", async ({ page }) => {
+      const { table, line } = await openFirstFrame(page);
+      await expect(line).toBeVisible();
+      const headers = table.locator("th").filter({ visible: true });
+      const box = (await table.boundingBox())!;
+      const cells = [];
+      for (const h of await headers.all()) cells.push((await h.boundingBox())!);
+      const sum = cells.reduce((w, c) => w + c.width, 0);
+      expect(Math.abs(sum - box.width), "the columns drawn share the table's whole width").toBeLessThanOrEqual(1);
+      const cell = (await line.boundingBox())!;
+      expect(Math.abs(cell.x - cells[0].x), "the line starts at the first column drawn").toBeLessThanOrEqual(1);
+      expect(Math.abs(cell.width - sum), "the line ends at the last column drawn").toBeLessThanOrEqual(1);
+    });
+  });
+}
+
+test.describe("the first frame on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("the Runs table's lines are one block as wide as the table before its scripts run", async ({ page }) => {
+    const { table, line } = await openFirstFrame(page);
+    await expect(line).toBeVisible();
+    expect(await line.evaluate((td) => getComputedStyle(td).display)).toBe("block");
+    const box = (await table.boundingBox())!;
+    const cell = (await line.boundingBox())!;
+    expect(Math.abs(cell.x - box.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(cell.width - box.width)).toBeLessThanOrEqual(1);
+  });
+});

@@ -272,7 +272,7 @@ for (const phone of [false, true]) {
        * each row's buttons in a right-hand column (under the row on a phone); "Show 4 more" a
        * text link; the run-approvals note last; Home's card with the soonest three (two on a
        * phone); the meeting's "On the agenda" with "Due by Tue Nov 3 · 5 decisions · from Guided
-       * setup draft 3", four rows and "1 more: Q9"; fails_when = a part is missing, placed
+       * setup draft 3" and every row under it; fails_when = a part is missing, placed
        * elsewhere or the switch spans the page; no_claim = pixel sizes beyond the layout.
        */
       test("A: Decisions, Home and the meeting's agenda as the mock-up draws them", async ({ page }) => {
@@ -325,9 +325,9 @@ for (const phone of [false, true]) {
         await expect(due.getByRole("heading", { name: "On the agenda" })).toBeVisible();
         // build-rundecide RD3 a: every open question of the PRD is on the agenda, soonest first.
         await expect(due.getByTestId("decisions-due-summary")).toHaveText(/^Due by \w{3} \w{3} \d{1,2} · 15 decisions · from Guided setup draft 3$/);
-        await expect(due.getByTestId("question-row")).toHaveCount(4);
-        await due.getByRole("button", { name: /^11 more: Q/ }).click();
+        // Fidelity ("Waiting for you + agenda"): every decision listed, none folded.
         await expect(due.getByTestId("question-row")).toHaveCount(15);
+        await expect(due.getByRole("button", { name: /more/ })).toHaveCount(0);
         await expect(due.getByTestId("question-row").last()).toContainText("Q16 Self-serve plan cancel");
       });
     });

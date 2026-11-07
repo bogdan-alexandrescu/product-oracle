@@ -45,6 +45,17 @@ const MID_HIDE = "min-[601px]:@max-[1000px]:hidden";
 const WIDE_HIDE = "min-[601px]:@max-[1320px]:hidden";
 const narrowClass = (n: Column<unknown>["narrow"]) =>
   n === "hide" ? NARROW_HIDE : n === "laptop" ? LAPTOP_HIDE : n === "mid" ? MID_HIDE : n === "wide" ? WIDE_HIDE : "";
+/**
+ * Before the table has measured itself (the server's HTML), a line across it spans every column,
+ * and each narrow column adds a zero-width <col> at the end, drawn only where the column is gone,
+ * so CSS alone keeps the line to the columns drawn without taking their room.
+ */
+const FILLER: Record<NonNullable<Column<unknown>["narrow"]>, string> = {
+  hide: "hidden min-[601px]:@max-[760px]:table-column",
+  laptop: "hidden min-[601px]:@max-[820px]:table-column",
+  mid: "hidden min-[601px]:@max-[1000px]:table-column",
+  wide: "hidden min-[601px]:@max-[1320px]:table-column",
+};
 
 /** Phone-only classes per role; the row itself becomes a wrapping flex block. */
 const PHONE_CELL: Record<PhoneRole, string> = {
@@ -162,9 +173,10 @@ export function DataTable<T>({
   // visible count leaves out and a span of all of them gives the visible columns' room to. So
   // while the table has no rows, the hidden columns (read from their <col>) drop their header
   // cell. Rows keep every cell (their hidden ones line up with the header's), as do the lines
-  // among them (a group, a row's detail), which span every column.
+  // among them (a group, a row's detail), which span every column. Until the table has read its
+  // <col>s (`hidden` is null: the server's HTML, the first paint), the lines use FILLER instead.
   const wrap = useRef<HTMLDivElement>(null);
-  const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set());
+  const [hidden, setHidden] = useState<ReadonlySet<string> | null>(null);
   const hides = columns.map((c) => `${c.key}:${phone(c)}`).join("|");
   useLayoutEffect(() => {
     const el = wrap.current;
@@ -172,7 +184,7 @@ export function DataTable<T>({
     const count = () => {
       const cols = [...el.querySelectorAll(":scope > table > colgroup > col")];
       const keys = columns.filter((_, i) => cols[i] && getComputedStyle(cols[i]).display === "none").map((c) => c.key);
-      setHidden((was) => (keys.length === was.size && keys.every((k) => was.has(k)) ? was : new Set(keys)));
+      setHidden((was) => (was && keys.length === was.size && keys.every((k) => was.has(k)) ? was : new Set(keys)));
     };
     count();
     const watch = new ResizeObserver(count);
@@ -181,11 +193,17 @@ export function DataTable<T>({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `hides` names every column and how it hides
   }, [hides]);
   const bare = list.length === 0;
-  const visibleCols = Math.max(1, columns.filter((c) => !hidden.has(c.key)).length);
+  const narrow = columns.some((c) => c.narrow);
+  /** A line across the table: one cell spanning the columns drawn (with FILLER until they are known). */
+  const across = (className: string, children: ReactNode, testId?: string) => (
+    <td role="cell" colSpan={Math.max(1, columns.filter((c) => !hidden?.has(c.key)).length)} className={`${className} max-[600px]:block`} data-testid={testId}>
+      {children}
+    </td>
+  );
 
   const groups = group ? list.map(group) : [];
   return (
-    <div ref={wrap} className={`min-w-0 overflow-clip ${columns.some((c) => c.narrow) ? "@container" : ""}`} data-testid={testId}>
+    <div ref={wrap} className={`min-w-0 overflow-clip ${narrow ? "@container" : ""}`} data-testid={testId}>
       <table
         // Roles are explicit because the phone layout changes the rows' CSS display.
         role={selectable ? "grid" : "table"}
@@ -197,6 +215,7 @@ export function DataTable<T>({
           {columns.map((c) => (
             <col key={c.key} style={c.width ? { width: c.width } : undefined} className={phone(c)} />
           ))}
+          {bare && !hidden && columns.map((c) => c.narrow && <col key={`f-${c.key}`} style={{ width: 0 }} className={FILLER[c.narrow]} />)}
         </colgroup>
         {/* On a phone the header is for screen readers only (sr-only: a 1 px clipped box), so
             nothing in it can run off the screen there (qa-work-31); its row wraps inside that
@@ -204,7 +223,7 @@ export function DataTable<T>({
         <thead className={hideHeader ? "sr-only" : "max-[600px]:sr-only"} role="rowgroup">
           <tr role="row" className={hideHeader ? "flex max-w-full flex-wrap" : "max-[600px]:flex max-[600px]:max-w-full max-[600px]:flex-wrap"}>
             {columns.map((c) =>
-              bare && hidden.has(c.key) ? null : (
+              bare && hidden?.has(c.key) ? null : (
                 <th
                   key={c.key}
                   scope="col"
@@ -222,17 +241,16 @@ export function DataTable<T>({
           {loading && list.length === 0 &&
             [0, 1, 2].map((i) => (
               <tr key={`l${i}`} aria-hidden className="h-11 border-t border-line max-[600px]:flex max-[600px]:items-center">
-                <td colSpan={visibleCols} className="px-4 max-[600px]:block max-[600px]:w-full max-[600px]:px-3">
-                  {/* qa4-shell-19: line-strong (3:1 on the card), so a loading list never reads as an empty, finished one. */}
-                  <span className="block h-3 w-2/3 animate-pulse rounded bg-line-strong" />
-                </td>
+                {across(
+                  "px-4 max-[600px]:w-full max-[600px]:px-3",
+                  // qa4-shell-19: line-strong (3:1 on the card), so a loading list never reads as an empty, finished one.
+                  <span className="block h-3 w-2/3 animate-pulse rounded bg-line-strong" />,
+                )}
               </tr>
             ))}
           {!loading && list.length === 0 && empty !== null && (
             <tr role="row" className="border-t border-line max-[600px]:block">
-              <td role="cell" colSpan={visibleCols} className="px-4 py-8 max-[600px]:block text-center text-text2" data-testid="table-empty">
-                {empty}
-              </td>
+              {across("px-4 py-8 text-center text-text2", empty, "table-empty")}
             </tr>
           )}
           {list.map((row, i) => {

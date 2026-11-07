@@ -1036,9 +1036,12 @@ _GOAL_CODE = re.compile(r"(?<![\w#/-])(G\d{1,3})(?![\w-])(?!\**\s*\()")
 _GOAL_CODE_OR_PAIRED = re.compile(r"(?<![\w#-])(G\d{1,3})(?![\w-])(?!\**\s*\()")
 # A code alone in brackets right after its own goal's name ("Activation (G1)", "Adoption
 # rate (**G1**)"): how a shared page reads a goal (oracle.shares.render.with_names, G-3), the
-# code already beside its name. The text before the code is read through a short window only.
-_BRACKET_OPENS = re.compile(r"[*_]*[ \t ]*\([ \t]*\**$")
+# code already beside its name. The text before the code is read through a short window only;
+# the pattern holds the bracket alone (the emphasis and spaces before it are stripped), so it
+# runs in linear time on any text.
+_BRACKET_OPENS = re.compile(r"\([ \t]*\**$")
 _BRACKET_CLOSES = re.compile(r"\**[ \t]*\)")
+_SPACES_STARS = re.compile(r"[ *]*")
 _BEFORE_WINDOW = 16
 
 
@@ -1097,11 +1100,13 @@ def _after_own_name(text: str, at: int, name: str) -> bool:
     opens = _BRACKET_OPENS.search(before)
     if opens is None:
         return False
-    head = before[: opens.start()]
+    head = before[: opens.start()].rstrip(" \t\u00a0").rstrip("*_")
     if not head.casefold().endswith(name.casefold()):
         return False
+    # '_' is part of a word ("pre_Activation"), as in the goal code's pattern; a run of them
+    # after a space opens italics ("_Activation_").
     lead = head[: len(head) - len(name)]
-    return not lead[-1:].isalnum()
+    return not lead.rstrip("_")[-1:].isalnum()
 
 
 def with_goal_names(body: str, names: dict[str, str]) -> str:
@@ -1122,7 +1127,9 @@ def with_goal_names(body: str, names: dict[str, str]) -> str:
                 continue
             prev_code = m.end()
             name = names.get(code)
-            if name is None or text[m.end() :].lstrip(" *").lower().startswith(name.lower()):
+            # What follows the code, read up to its name's length (never the rest of the text).
+            after = _SPACES_STARS.match(text, m.end()).end()  # type: ignore[union-attr]
+            if name is None or text[after : after + 2 * len(name)].lower().startswith(name.lower()):
                 continue
             if _after_own_name(text, m.start(), name) and _BRACKET_CLOSES.match(text, m.end()):
                 continue

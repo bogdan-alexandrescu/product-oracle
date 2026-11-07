@@ -17,8 +17,9 @@ suggestion. Pure functions: the caller (oracle.simple.service) gathers the candi
 An item's own dates stored with ``date_source`` ``engineering`` or ``tracker`` rank with that
 source. Ties within a source: the most recently updated candidate wins. A start that no
 source gives is the window's start when no source gives an end either; else (hotfix-effort-
-start) the end minus the feature's effort (``effort_weeks`` x 7 calendar days, as
-Priorities reads it), or minus 28 days without one, even before the window's start, never
+start) a span of the feature's effort (``effort_weeks`` x 7 calendar days, as
+Priorities reads it; the end minus N-1, as :func:`suggest` spans its days), or of 28 days
+without one, even before the window's start, never
 after the end. An end that no source gives is the window's end, or 42 days from a start
 after the window. Every resolved date says its source and whether it is estimated.
 
@@ -144,11 +145,11 @@ def _best(candidates: Iterable[Candidate], field: str) -> Candidate | None:
 
 
 def lead_days(effort_weeks: float | None) -> int:
-    """The calendar days an estimated start lies before its end: the effort's weeks x 7,
-    else 28 days."""
+    """The calendar days an estimated span takes, its end included: the effort's weeks x 7
+    (whole days, at least 1), else 28 days, as suggest() spans its days."""
     if effort_weeks is None or effort_weeks <= 0:
         return FALLBACK_DAYS
-    return int(effort_weeks * 7 + 0.5)
+    return max(1, int(effort_weeks * 7 + 0.5))
 
 
 def resolve(
@@ -162,7 +163,7 @@ def resolve(
     if start is None:
         day = window[0]
         if end is not None:
-            day = end.date - timedelta(days=lead_days(effort_weeks))
+            day = end.date - timedelta(days=lead_days(effort_weeks) - 1)
         start = Dated(day, "estimated", True)
     if end is None:
         day = window[1]

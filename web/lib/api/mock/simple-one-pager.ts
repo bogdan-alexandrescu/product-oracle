@@ -282,12 +282,22 @@ export function seedHeadingCountOnePager(): OnePagerDb {
 /**
  * The "one-pager-two-counts" scenario (review, Nov 7): two numbers to fix in one section, the
  * heading's "Later · 8 items" over six listed and "Five features wait for next quarter" under
- * it, so the section takes two fixes, each with its own Undo. Invented data.
+ * it, so the section takes two fixes, each with its own Undo; its targets in decimals ("300.5"
+ * per region, "1,250.75" company-wide), whose fix keeps them as written, and two whose sums
+ * read as a person writes them ("0.3", "1,234,567.5"), and one whose sum ends in an exact half
+ * past the 6th place ("3.0078125"), which rounds up as the API's does. Invented data.
  */
 export function seedTwoCountsOnePager(): OnePagerDb {
   const db = seedHeadingCountOnePager();
   const later = db.sections.find((x) => x.key === "later")!;
   later.body = `Five features wait for next quarter.\n\n${later.body}`;
+  const targets = db.sections.find((x) => x.key === "targets")!;
+  targets.body = [
+    "Each region adds 300.5 paid workspaces a month. Each region also adds 246913.5 trial seats.",
+    "Each team saves 0.1 support hours a week. We sell in 5 regions. We have 3 teams.",
+    "Each squad trims 1.50390625 setup minutes a day. We run 2 squads.",
+    "Company-wide target: 1,250.75 paid workspaces a month, 1,000,000 trial seats, 2 support hours a week and 3 setup minutes a day.",
+  ].join(" ");
   return db;
 }
 
@@ -1236,16 +1246,19 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
       const back = numberUndone(c, now);
       if (!back) return numberConflict(db, ctx, key, true, "Changed since");
       writeNumber(db, ctx, back);
-      const u = { ...c, id: stableUuid(`op-undo-${c.id}`), status: "undone" as const, before: { ...now, number: c.after.number }, after: { ...back, number: c.before.number }, undoes_id: c.id, at: new Date(mockNowMs()).toISOString() };
-      db.changes.push(u);
-      return json(201, { change: out(db, ctx, u), flags: [] });
+      return undone(db, ctx, c, { ...now, number: c.after.number }, { ...back, number: c.before.number });
     }
     write(db, ctx, String(c.target.line_id), c.before);
-    const u = { ...c, id: stableUuid(`op-undo-${c.id}`), status: "undone" as const, before: c.after, after: c.before, undoes_id: c.id, at: new Date(mockNowMs()).toISOString() };
-    db.changes.push(u);
-    return json(201, { change: out(db, ctx, u), flags: [] });
+    return undone(db, ctx, c, c.after, c.before);
   }
   return null;
+}
+
+/** As one_pager.undo: the undo of `c`, written already, recorded as its own change (`before`: what it found, `after`: what it put back). */
+function undone(db: OnePagerDb, ctx: OnePagerCtx, c: OnePagerDb["changes"][number], before: Change["before"], after: Change["after"]): Response {
+  const u = { ...c, id: stableUuid(`op-undo-${c.id}`), status: "undone" as const, before, after, undoes_id: c.id, at: new Date(mockNowMs()).toISOString() };
+  db.changes.push(u);
+  return json(201, { change: out(db, ctx, u), flags: [] });
 }
 
 /** As one_pager._create_number: the number in the words `said` of one section set, with the lines saying the same words. */

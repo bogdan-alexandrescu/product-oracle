@@ -515,6 +515,9 @@ class FeatureSetCheck(BaseModel):
     flags: dict[str, list[str]] = {}
     # Each feature's title by its key (included and left out).
     titles: dict[str, str] = {}
+    # Each requirement and goal a problem names: its name by its key ("" when it has none).
+    requirement_names: dict[str, str] = {}
+    goal_names: dict[str, str] = {}
 
 
 class ScopeGoal(BaseModel):

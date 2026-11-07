@@ -308,7 +308,6 @@ test.describe("QA pass 3: simple-plan, Value / effort", () => {
       expect(Math.abs(b.x + b.width / 2 - tickX)).toBeLessThan(40);
     }
     await expect(page.locator('[data-testid="vxe-point"][aria-label*="effort 1 weeks"]')).toHaveCount(0);
-    await expect(page.locator('[data-testid="vxe-point"][aria-label*="effort 1 week,"], [data-testid="vxe-point"][aria-label$="effort 1 week"]').first()).toBeAttached();
     const legend = page.getByRole("list", { name: "Legend" });
     await expect(page.locator("#prio-about-text")).toContainText("Each mark shows the feature's code");
     await expect(legend).not.toContainText("Codes stay with the item");
@@ -327,6 +326,14 @@ test.describe("QA pass 3: simple-plan, Value / effort", () => {
     await sso.focus();
     await page.keyboard.press("ArrowRight");
     await expect(page.locator('[data-testid="side-row"][data-code="alert-sso"]').getByTestId("moved")).toHaveText(/^(rank stays #\d+|now #\d+) \(effort [\d.]+ wk\)$/);
+    // One week reads "1 week" (PV-1: the 1-week features share one count, so a mark is moved there with the keys).
+    const sc = page.locator('[data-testid="vxe-point"][data-code="setup-checklist"]');
+    await sc.focus();
+    await page.keyboard.press("ArrowLeft");
+    await expect(sc).toHaveAttribute("aria-label", /effort 1\.5 weeks/);
+    await sc.focus();
+    await page.keyboard.press("ArrowLeft");
+    await expect(sc).toHaveAttribute("aria-label", /effort 1 week(,|$)/);
   });
 
   /* qa-simple-plan-14: a drag shows the value the mark will take. */
@@ -349,16 +356,24 @@ test.describe("QA pass 3: simple-plan, Value / effort", () => {
       await setUp(page, { phone: true, scenario: scenario ?? undefined });
       await open(page, "?tab=value-effort");
       await page.waitForTimeout(300);
-      const marks = await Promise.all((await page.getByTestId("vxe-point").all()).map(async (m) => (await m.boundingBox())!));
+      // PV-1 One count per spot: a count is a mark too, and every feature is drawn once (its own mark or in one count).
+      const drawn = page.locator('[data-testid="vxe-point"], [data-testid="vxe-crowd"]');
+      const marks = await Promise.all((await drawn.all()).map(async (m) => (await m.boundingBox())!));
       const shrink = (b: Box) => ({ x: b.x + 2, y: b.y + 2, width: b.width - 4, height: b.height - 4 });
       for (let i = 0; i < marks.length; i++) for (let j = i + 1; j < marks.length; j++) expect(overlap(shrink(marks[i]), shrink(marks[j]))).toBe(0);
-      // Pinned layouts at 390: neither plot has room for the middle value's words (the default's 22
-      // marks since P-1 put the Goal map's features in it), so the legend names that line; the plan's
-      // has no room for the middle effort's words either, so it names both.
-      await expect(page.getByTestId("vxe-middle-value")).toHaveCount(0);
-      await expect(page.getByTestId("vxe-legend-middles")).toHaveText(
-        scenario ? "The dashed lines are the middle effort (up and down) and the middle value (across)." : "The dashed line across is the middle value.",
-      );
+      const counted = await page.getByTestId("vxe-crowd").evaluateAll((es) => es.reduce((n, e) => n + Number((e as HTMLElement).dataset.count), 0));
+      expect(counted).toBeGreaterThan(0);
+      expect((await page.getByTestId("vxe-point").count()) + counted).toBe(await page.getByTestId("side-row").count());
+      // Pinned layouts at 390: the default's plot has no room for the middle value's words, so the legend
+      // names that line; the plan's counts leave room for both lines' words.
+      if (scenario) {
+        await expect(page.getByTestId("vxe-middle-value")).toHaveCount(1);
+        await expect(page.getByTestId("vxe-middle-effort")).toHaveCount(1);
+        await expect(page.getByTestId("vxe-legend-middles")).toHaveCount(0);
+      } else {
+        await expect(page.getByTestId("vxe-middle-value")).toHaveCount(0);
+        await expect(page.getByTestId("vxe-legend-middles")).toHaveText("The dashed line across is the middle value.");
+      }
       expect(await page.getByTestId("vxe-plot").evaluate((e) => getComputedStyle(e).touchAction)).not.toBe("none");
       const more = page.getByTestId("line-caption-more");
       if ((await more.count()) > 0) {

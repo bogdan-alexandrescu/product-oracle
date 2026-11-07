@@ -104,16 +104,17 @@ for (const [size, viewport] of [["1440", DESKTOP], ["390", PHONE]] as const) {
 
         test(`P-3, V-4: ${email}'s Value / effort marks name their feature and keep apart; bottom names sit off the zero line`, async ({ page }) => {
           await open(page, email, theme, "value-effort");
-          const mark = page.locator('[data-testid="vxe-point"][data-code="alert-export"]');
+          // PV-1: Setup checklist is its own mark at both widths (Alert history export's is in the count of 15).
+          const mark = page.locator('[data-testid="vxe-point"][data-code="setup-checklist"]');
           await expect(mark).toBeVisible();
-          await expect(mark).toHaveAccessibleName(/Alert history export/);
+          await expect(mark).toHaveAccessibleName(/Setup checklist/);
           if (size === "1440") await mark.hover();
           else await mark.click();
           await expect(mark.getByTestId("vxe-name")).toBeVisible();
-          await expect(mark.getByTestId("vxe-name")).toHaveText("#6 AHE · Alert history export");
+          await expect(mark.getByTestId("vxe-name")).toHaveText("#1 SC · Setup checklist");
           await page.mouse.move(0, 0);
-          // V-4: every two marks keep a gap (no touching rings).
-          const boxes = await page.getByTestId("vxe-point").evaluateAll((es) => es.map((e) => e.querySelector("svg")!.getBoundingClientRect()).map((b) => [b.left, b.top, b.right, b.bottom]));
+          // V-4: every two marks keep a gap (no touching rings); a count is a mark too.
+          const boxes = await page.locator('[data-testid="vxe-point"], [data-testid="vxe-crowd"]').evaluateAll((es) => es.map((e) => e.querySelector("svg")!.getBoundingClientRect()).map((b) => [b.left, b.top, b.right, b.bottom]));
           for (let i = 0; i < boxes.length; i++)
             for (let j = i + 1; j < boxes.length; j++) {
               const [a, b] = [boxes[i], boxes[j]];
@@ -199,10 +200,11 @@ for (const [size, viewport] of [["1440", DESKTOP], ["390", PHONE]] as const) {
 
       if (size === "390")
         test("P-3: a mark with a very long title shows its name cut with an ellipsis, still inside the plot", async ({ page }) => {
-          const long = "Alert history export for every workspace, every team and every project, in every file format, with a copy sent to each admin by email every week";
+          const long = "Setup checklist for every workspace, every team and every project, in every file format, with a copy sent to each admin by email every week";
           await open(page, OWNER, theme);
           // Rename the feature through its panel (More actions, Rename, Save), then read the chart.
-          await page.getByTestId("prio-title").filter({ hasText: "Alert history export" }).first().click();
+          // PV-1: Setup checklist is its own mark on a phone (Alert history export's is in a count).
+          await page.getByTestId("prio-title").filter({ hasText: "Setup checklist" }).first().click();
           const panel = page.getByTestId("item-panel");
           await expect(panel).toBeVisible();
           await panel.getByRole("button", { name: "More actions" }).click();
@@ -212,7 +214,7 @@ for (const [size, viewport] of [["1440", DESKTOP], ["390", PHONE]] as const) {
           await expect(panel.getByRole("button", { name: "Save" })).toHaveCount(0);
           await page.keyboard.press("Escape");
           await page.getByRole("tab", { name: "Value / effort" }).click();
-          const mark = page.locator('[data-testid="vxe-point"][data-code="alert-export"]');
+          const mark = page.locator('[data-testid="vxe-point"][data-code="setup-checklist"]');
           await mark.scrollIntoViewIfNeeded();
           await expect(mark).toHaveAccessibleName(new RegExp(long.slice(0, 40)));
           await mark.click();
