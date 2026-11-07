@@ -293,6 +293,18 @@ def test_x8_a_code_in_brackets_after_another_word_reads_with_its_name():
     )
 
 
+def test_x8_an_underscore_joins_a_word_to_the_name():
+    """protects=X-8: '_' is part of a word, as in the goal code's own pattern, so a name
+    joined to a word by '_' is not the goal's name, while an italic name still is;
+    fails_when="pre_Activation (G1)" counts as the name "Activation", or "_Activation_ (G1)"
+    gets its name twice; no_claim=a bracket holding more than the code."""
+    w = render_module.with_goal_names
+    assert w("Serves pre_Activation (G1).", GOALS) == "Serves pre_Activation (G1 Activation)."
+    assert w("Serves pre__Activation (G1).", GOALS) == "Serves pre__Activation (G1 Activation)."
+    assert w("Serves _Activation_ (G1).", GOALS) == "Serves _Activation_ (G1)."
+    assert w("Serves __Activation__ (**G1**).", GOALS) == "Serves __Activation__ (**G1**)."
+
+
 DATED_LINKS = (
     "See [report](https://example.com/a?from=2026-01-02), "
     "<https://example.com/b?to=2026-02-03> and https://example.com/c?on=2026-03-04. "
