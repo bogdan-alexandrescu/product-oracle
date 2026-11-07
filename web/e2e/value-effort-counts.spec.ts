@@ -5,7 +5,7 @@ import { expect, test, type Page } from "./test";
 
 /*
  * PV-1 One count per spot (BGD's pick, Nov 7), on Simple's Priorities, Value / effort, phone (390) and desktop (1440),
- * on the mock's default company (15 features at effort 1 wk, goal value 0) and its "simple-plan" scenario (the dated
+ * on the mock's default company (15 features at effort 1 week, goal value 0) and its "simple-plan" scenario (the dated
  * plan, 40 features): marks that would cover each other are one dark count mark; no two marks overlap (a count is a
  * mark); every mark and count sits within half a mark of its real values (or just clear of a corner's name); a count
  * opens a sheet listing its features by rank, a row opens the one feature panel, and a lone mark opens it too.
@@ -84,11 +84,19 @@ function markValues(label: string): { e: [number, number]; v: [number, number] }
   return { e: [effort, effort], v: [value, value] };
 }
 
-/** A count's numbers from its name ("15 features at effort 1 wk · goal value 0", or spans "effort 3–5 wk · goal value 5–7"). */
+/**
+ * A count's numbers from its name ("15 features at effort 1 week · goal value 0", spans "effort 3–5 weeks · goal value
+ * 5–7"); PM-owned work sits at 0.25 wk, and a feature with no goal value at 0.
+ */
 function countValues(label: string): { e: [number, number]; v: [number, number] } {
-  const m = /effort\s([\d.]+)(?:⁠–⁠([\d.]+))?\swk · goal\svalue\s([\d.]+)(?:⁠–⁠([\d.]+))?/.exec(label);
-  expect(m, `a count names what its features share: ${label}`).not.toBeNull();
-  return { e: [Number(m![1]), Number(m![2] ?? m![1])], v: [Number(m![3]), Number(m![4] ?? m![3])] };
+  const where = /^\d+ features at (.*?): /.exec(label)?.[1] ?? "";
+  const pm = where.includes("PM-owned");
+  const e = /effort ([\d.]+)(?:⁠–⁠([\d.]+))? weeks?/.exec(where);
+  const v = /goal value ([\d.]+)(?:⁠–⁠([\d.]+))?/.exec(where);
+  expect(e || pm, `a count names what its features share: ${label}`).toBeTruthy();
+  const es = e ? [Number(e[1]), Number(e[2] ?? e[1])] : [0.25, 0.25];
+  const vs = v ? [Number(v[1]), Number(v[2] ?? v[1])] : [0, 0];
+  return { e: [pm ? 0.25 : es[0], es[1]], v: [where.includes("no goal") ? 0 : vs[0], vs[1]] };
 }
 
 /**
@@ -191,7 +199,7 @@ for (const [size, viewport] of [["phone", PHONE], ["desktop", DESKTOP]] as const
   }
 }
 
-test("phone, the default company: the 15 features at effort 1 wk, goal value 0 are one count of 15, listed by rank", async ({ page }) => {
+test("phone, the default company: the 15 features at effort 1 week, goal value 0 are one count of 15, listed by rank", async ({ page }) => {
   await open(page, PHONE, null);
   const count = page.locator('[data-testid="vxe-crowd"][data-count="15"]');
   await expect(count).toHaveAccessibleName("15 features at effort 1 wk · goal value 0: show them");
@@ -212,7 +220,7 @@ test("phone, the 40-feature dated plan: a count whose features differ gives thei
   await spread.click();
   const rows = page.getByTestId("vxe-crowd-sheet").getByTestId("vxe-crowd-row");
   await expect(rows.first()).toBeVisible();
-  for (const t of await rows.allInnerTexts()) expect(t.replace(/\s+/g, " ")).toMatch(/ [\d.]+ · [\d.]+ wk$/);
+  for (const t of await rows.allInnerTexts()) expect(t.replace(/\s+/g, " ")).toMatch(/ ([\d.]+|–) · ([\d.]+ weeks?|PM-owned)$/);
 });
 
 test("the (i) says what a count is; nothing new shows on the page", async ({ page }) => {

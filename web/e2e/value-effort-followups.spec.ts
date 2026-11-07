@@ -91,7 +91,7 @@ test("the dated plan: a count says what its features share in the lone marks' wo
 test("the default company: a count's name gives weeks as lone marks do and names its first three features", async ({ page }) => {
   await open(page, null);
   const count = page.locator('[data-testid="vxe-crowd"][data-count="15"]');
-  await expect(count).toHaveAccessibleName(/^15 features at effort 1 week · (goal value 0|no goal): \S+ [^,]+, \S+ [^,]+, \S+ [^,]+ and 12 more; show them$/);
+  await expect(count).toHaveAccessibleName(/^15 features at effort 1 week · goal value 0 or no goal: \S+ [^,]+, \S+ [^,]+, \S+ [^,]+ and 12 more; show them$/);
   await count.click();
   const rows = page.getByTestId("vxe-crowd-sheet").getByTestId("vxe-crowd-row");
   const first = await rows.evaluateAll((es) =>

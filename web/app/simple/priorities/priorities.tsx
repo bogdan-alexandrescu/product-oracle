@@ -239,7 +239,7 @@ export function Priorities() {
       });
   }
 
-  const shapes = goalShapes(data?.rows ?? []);
+  const shapes = goalShapes(data);
   // qa-shell-8: a new company has no feature to rank: one line on what shows here and the next
   // step, with no line or comparison to pick over nothing.
   const blank = !!data && !data.rows.length && !data.unranked.length && !data.drafts.length && !data.proposals.length;
@@ -376,10 +376,18 @@ export function Priorities() {
   );
 }
 
-/** Each goal's shape (first ranked first); rows with no goal are a neutral dashed circle. */
-function goalShapes(rows: Row[]): Map<string, Shape> {
-  const out = new Map<string, Shape>();
-  for (const r of rows) if (r.goal && !out.has(r.goal.key)) out.set(r.goal.key, SHAPES[out.size % SHAPES.length]);
+/** A goal's key for its shape: its name as a mark's name reads it (the row's goal, else the plan's), any case. */
+const goalKey = (name: string) => name.trim().toLowerCase();
+
+/** Each goal's shape and name (first ranked first), by the goal a mark's name reads; rows with no goal are a neutral dashed circle. */
+function goalShapes(data: Out | undefined): Map<string, { shape: Shape; name: string }> {
+  const out = new Map<string, { shape: Shape; name: string }>();
+  if (!data) return out;
+  const goalOf = goalOfRow(data);
+  for (const r of data.rows) {
+    const g = goalOf(r);
+    if (g && !out.has(goalKey(g))) out.set(goalKey(g), { shape: SHAPES[out.size % SHAPES.length], name: g });
+  }
   return out;
 }
 
@@ -1288,7 +1296,7 @@ function medianSplit(rows: Row[], key: (r: Row) => number, high: boolean): { med
   return { median, firstHalf: new Set(sorted.slice(0, Math.ceil(n / 2)).map((r) => r.feature_id)) };
 }
 
-function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: { data: Out; shapes: Map<string, Shape>; mayChange: boolean; changed: Changed; moved: Moved | null; featureOpen: boolean }) {
+function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: { data: Out; shapes: Map<string, { shape: Shape; name: string }>; mayChange: boolean; changed: Changed; moved: Moved | null; featureOpen: boolean }) {
   const box = useRef<HTMLDivElement>(null);
   // The plot's size, kept as it resizes (where the median lines' words fit).
   const [plotSize, setPlotSize] = useState({ w: 0, h: 0 });
@@ -1321,15 +1329,21 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
   const byEffort = medianSplit(rows, effortOf, false);
   const quadrant = (r: Row) => (byValue.firstHalf.has(r.feature_id) ? (byEffort.firstHalf.has(r.feature_id) ? 0 : 1) : byEffort.firstHalf.has(r.feature_id) ? 2 : 3);
   const counts = [0, 1, 2, 3].map((q) => rows.filter((r) => quadrant(r) === q).length);
-  const shapeOf = (r: Row): Shape => (r.goal ? (shapes.get(r.goal.key) ?? "circle") : "none");
   const goalOf = goalOfRow(data);
+  // One goal for a mark's shape and its name: the plan's, as the name reads it.
+  const hasGoal = (r: Row) => !!goalOf(r);
+  const shapeOf = (r: Row): Shape => {
+    const g = goalOf(r);
+    return g ? (shapes.get(goalKey(g))?.shape ?? "circle") : "none";
+  };
   const sideRefs = useRef(new Map<string, HTMLLIElement>());
   const markRefs = useRef(new Map<string, HTMLButtonElement>());
   const phone = usePhone();
   // one-feature-panel: every mark, on a phone and on a desktop, opens the feature's panel.
   const openRow = useContext(OpenRow);
-  // PV-1: the count whose features are listed in a sheet.
-  const [crowdOpen, setCrowdOpen] = useState<Crowd<Row> | null>(null);
+  // PV-1: the count whose features are listed in a sheet, by its features (its rows follow the data while it is open).
+  const [crowdIds, setCrowdIds] = useState<string[] | null>(null);
+  const setCrowdOpen = (c: Crowd<Row> | null) => setCrowdIds(c ? c.rows.map((r) => r.feature_id) : null);
 
   const panelOpen = usePanelOpen();
   useEffect(() => {
@@ -1448,6 +1462,12 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
   });
   // PV-1 One count per spot: each mark within half a mark of its values; marks that would cover each other are one count.
   const { spots, crowds } = markLayout(rows, w, h, (r) => [(xPct(effortOf(r)) / 100) * w, (yPct(r.goal_value ?? 0) / 100) * h], quadrantBoxes);
+  // The open count as the data has it now: the one holding most of its features; none once they are all apart.
+  const crowdOpen = crowdIds ? (crowds.map((c) => ({ c, n: c.rows.filter((r) => crowdIds.includes(r.feature_id)).length })).filter((x) => x.n > 0).sort((x, y) => y.n - x.n)[0]?.c ?? null) : null;
+  const crowdGone = !!crowdIds && !crowdOpen && !!w;
+  useEffect(() => {
+    if (crowdGone) setCrowdIds(null);
+  }, [crowdGone]);
   const R = MARK_R;
   const taken: Box[] = [...[...spots.values(), ...crowds.map((c) => c.at)].map(([x, y]): Box => [x - R, y - R, x + R, y + R]), ...quadrantBoxes];
   const free = (b: Box) => b[0] >= 0 && b[2] <= w && b[1] >= 0 && b[3] <= h && !taken.some((o) => o[0] < b[2] && b[0] < o[2] && o[1] < b[3] && b[1] < o[3]);
@@ -1586,6 +1606,8 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                 key={c.id}
                 crowd={c}
                 lit={!!selected && c.rows.some((r) => r.feature_id === selected)}
+                moved={c.rows.some((r) => !!movedWords(moved, r))}
+                hasGoal={hasGoal}
                 onPick={() => setCrowdOpen(c)}
                 buttonRef={(el) => {
                   // A row selected in the side list brings its count into view.
@@ -1620,6 +1642,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
           crowd={crowdOpen}
           mark={(r) => <ShapeMark shape={shapeOf(r)} hollow={!r.above_line} small />}
           shape={shapeOf}
+          hasGoal={hasGoal}
           onClose={() => setCrowdOpen(null)}
           onOpen={(r) => {
             setCrowdOpen(null);
@@ -1630,11 +1653,11 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
         <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 pl-6 text-[15px] leading-[22px] text-text2" aria-label="Legend">
           {[...shapes.entries()].map(([k, s]) => (
             <li key={k} className="flex items-center gap-1">
-              <LegendMark shape={s} />
-              {rows.find((r) => r.goal?.key === k)?.goal?.title}
+              <LegendMark shape={s.shape} />
+              {s.name}
             </li>
           ))}
-          {rows.some((r) => !r.goal) && (
+          {rows.some((r) => !hasGoal(r)) && (
             <li className="flex items-center gap-1" data-testid="vxe-legend-no-goal">
               <LegendMark shape="none" />
               No goal
@@ -1680,7 +1703,16 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                 data-selected={isSelected ? "true" : undefined}
                 className={`scroll-my-4 rounded-lg border text-[15px] leading-[22px] ${isSelected ? "border-accent bg-accent-soft ring-2 ring-accent" : words ? "border-accent ring-2 ring-accent" : "border-line"} ${isSelected ? "" : r.above_line ? "bg-surface" : "bg-surface2 text-text2"}`}
               >
-                <button type="button" aria-pressed={isSelected} onClick={() => select(r.feature_id, "row")} className="flex w-full items-center gap-1.5 rounded-lg px-2 py-0.5 text-left">
+                <button
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() => {
+                    // one-feature-panel: a row opens its feature's panel too, and stays selected with its mark.
+                    select(r.feature_id, "row");
+                    openRow?.(r);
+                  }}
+                  className="flex w-full items-center gap-1.5 rounded-lg px-2 py-0.5 text-left"
+                >
                   <span className="w-5 flex-none text-right font-[650] tabular-nums" data-testid="side-rank">
                     {r.rank}
                   </span>
