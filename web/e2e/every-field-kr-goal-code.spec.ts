@@ -236,3 +236,39 @@ test.describe("an added item's code", () => {
     await expect(panel(page).getByTestId("card-code")).toHaveText("F-37");
   });
 });
+
+test.describe("a restored item's code", () => {
+  async function giveCode(page: Page, key: string, code: string) {
+    await openRoadmapItem(page, key);
+    await panel(page).getByRole("button", { name: "Change the code" }).click();
+    await panel(page).getByLabel("Code").fill(code);
+    await panel(page).getByTestId("card-code-edit").getByRole("button", { name: "Save" }).click();
+    await expect(panel(page).getByTestId("card-code")).toHaveText(code);
+    await page.keyboard.press("Escape");
+  }
+
+  // protects=Restore in Settings › Trash of an item whose code another item took while it was in
+  // Trash is refused in set_code's plain words and the item stays in Trash; fails_when=two items
+  // read F-31 after the restore; no_claim=a feature's key (pytest).
+  test("a code another item took meanwhile is refused in plain words", async ({ page }) => {
+    await login(page);
+    await page.goto("/simple/roadmap");
+    await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+    await giveCode(page, "alert-export", "F-31");
+    const bar = page.locator('[data-testid="timeline-row"][data-item="alert-export"] [data-testid="timeline-bar"]');
+    await bar.click({ button: "right" });
+    await page.getByTestId("feature-menu").getByRole("menuitem", { name: "Delete feature" }).click();
+    await expect(page.getByTestId("toasts")).toContainText("to Trash.");
+    await expect(bar).toHaveCount(0);
+    await giveCode(page, "alert-sso", "F-31");
+
+    await page.goto("/settings/trash");
+    const row = page.getByTestId("trash-entry").filter({ hasText: "Alert history export" });
+    await row.getByRole("button", { name: /^Restore / }).click();
+    await expect(row).toContainText("F-31 is already the code of F-31 Alert routing by team: rename it first");
+    await expect(row).toHaveCount(1);
+    await page.goto("/simple/roadmap");
+    await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+    await expect(bar).toHaveCount(0);
+  });
+});

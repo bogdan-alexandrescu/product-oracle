@@ -169,7 +169,7 @@ import {
   type PricingDb,
 } from "./pricing";
 import { bucketGoalsInOrder, placeBucketGoal, placeBucketGoals, routeGoalBuckets, seedGoalBuckets, seedGoalBucketsHard, seedGoalBucketsWith } from "./goal-buckets";
-import { proposeGoalDelete, routeSimpleChanges, seedFeatureAskProposal, seedSimpleProposal, simpleInboxRows, type SimpleChangesCtx } from "./simple-changes";
+import { proposeGoalDelete, restoreCodeTaken, routeSimpleChanges, seedFeatureAskProposal, seedSimpleProposal, simpleInboxRows, type SimpleChangesCtx } from "./simple-changes";
 import { routeCurrentState, seedCurrentState, type CurrentStateDb } from "./currentstate";
 import { featureKeyOf, prioritiesOut } from "./simple-priorities";
 import { restoreTrack, routeRemoved } from "./simple-removed";
@@ -6625,6 +6625,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       // As the API: the draft only when the person starting the run may see it.
       roadmapRead: (starter) => roadmapRead(db.documents, db.versions, db.simple_roadmap, String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"), (d) => seesDraft(d, starter, db.simple_roadmap)),
       onRestore: (released) => (db.simple_roadmap && restoreTrack(db.simple_roadmap, released)) || relinkDocuments(ensureRequests(db), released as ReleasedRequest[], (id) => ensureV2(db).intakes.some((i) => i.id === id)),
+      // every-field: as trash_items._codes_free, never one code on two items.
+      refuseRestore: (entry) => (db.simple_roadmap ? restoreCodeTaken(db.simple_roadmap, me, entry) : null),
       // port-an-decisions: Restore puts a meeting's removed agenda item or a deleted request back.
       restoreRoot: (entry) => {
         if (entry.request !== undefined) {

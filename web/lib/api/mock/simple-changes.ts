@@ -744,8 +744,9 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     // an owner's right; then the move is the item's. An estimate is the feature's (stored here
     // under the item standing for it).
     if (body.op === "override_priority" && ctx.role !== "owner") return json(403, { detail: "Only an owner can add a feature to the company roadmap" });
-    const key = body.op === "override_priority" ? addToCompany(db, target.feature_id) : featureItem(db, target.feature_id);
+    const key = body.op === "override_priority" ? addToCompany(db, target.feature_id, readerDb(db, ctx)) : featureItem(db, target.feature_id);
     if (!key) return json(404, { detail: "No such feature" });
+    if (typeof key === "object") return json(422, { detail: key.refused });
     target.item_id = db.ids[key];
   }
   if (spec.adds) target[spec.id] = crypto.randomUUID();
@@ -1095,7 +1096,21 @@ function restoreItemRoute(db: SimpleDb, ctx: SimpleChangesCtx, itemId: string): 
   const entry = ctx.trash?.entries.find((e) => e.out.root.type === "feature" && e.out.root.id === itemId);
   if (!entry) return json(404, { detail: "No such roadmap item" });
   if (!mayRestore(entry, ctx)) return json(403, { detail: "Only an owner, or whoever deleted it, restores this" });
+  const taken = restoreCodeTaken(db, ctx, entry);
+  if (taken) return json(409, { detail: taken });
   return json(200, restoreFromTrash(ctx.trash!, entry, iso(mockNowMs()), db, ctx.id));
+}
+
+/** trash_items._codes_free: a feature coming back whose code another item took while it was in Trash (its title's, as an add
+ * checks it; its feature's or PRD's, against other items' title codes), in set_code's words; null when it is free. */
+export function restoreCodeTaken(db: SimpleDb, me: { id: string; role: Role }, entry: TrashEntryRow): string | null {
+  const root = entry.out.root;
+  const s = root.type === "feature" ? db.items.find((x) => x.key === root.slug && x.trashed && (!entry.roadmap || x.roadmap === entry.roadmap)) : undefined;
+  if (!s) return null;
+  const seen = readerDb(db, me);
+  const own = (s.feature_id && db.feature_codes?.[s.feature_id]) || prdCode(s.section);
+  const taken = own ? ownCodeTaken(seen, s.key, own) : titleCodeTaken(db, seen, null, s.title);
+  return taken && `${taken}: rename it first`;
 }
 
 /** add_key_date / edit_key_date / remove_key_date (key_dates.create). */
