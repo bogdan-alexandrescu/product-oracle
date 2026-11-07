@@ -4,12 +4,12 @@ import { MOCK_FAIL_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /**
- * Visual QA pass B on the run's baseline review stop (/baseline?run=…): a row shows its
+ * Visual QA pass B on the run's Ground Truth review stop (/ground-truth?run=…): a row shows its
  * name, never its internal key (B-01); the bottom decision bar keeps clear of the Ask dock and
  * of the page's last row, its button and gate line read in full (B-02); a review that cannot
  * load says so in plain words with Try again, never the API's words or an id (B-03); the
  * blocker's gate reason names it by its statement, never its key. Mock API ("baseline-review"
- * scenario: an Oct 20 Build baseline run waiting at its review); invented data only.
+ * scenario: an Oct 20 Build the Ground Truth run waiting at its review); invented data only.
  * QA_SHOTS=<dir> also saves a screenshot of each view there.
  */
 
@@ -24,8 +24,8 @@ async function shot(page: Page, name: string) {
 async function open(page: Page, run: string, scenario = "baseline-review") {
   await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, scenario] as const);
   await login(page);
-  await page.goto(`/baseline?run=${run}`);
-  await expect(page.getByRole("heading", { level: 1, name: "Desired state" })).toBeVisible();
+  await page.goto(`/ground-truth?run=${run}`);
+  await expect(page.getByRole("heading", { level: 1, name: "Ground Truth" })).toBeVisible();
 }
 
 async function box(l: Locator) {
@@ -68,7 +68,7 @@ for (const view of VIEWS) {
       }
       const b = bar(page);
       await expect(b).toBeVisible();
-      const approve = b.getByRole("button", { name: "Approve baseline" });
+      const approve = b.getByRole("button", { name: "Approve the Ground Truth" });
       await expect(approve).toBeVisible();
       expect(await fits(approve)).toBe(true);
       const gate = b.getByTestId("bar-gate");
@@ -122,16 +122,16 @@ for (const view of VIEWS) {
     test("B-03: a review that cannot load says so in plain words with Try again", async ({ page }) => {
       await open(page, MISSING);
       const err = page.getByTestId("load-error");
-      await expect(err).toContainText("Couldn't load this run's review.");
+      await expect(err).toContainText("Could not load this run's review.");
       await expect(err.getByRole("button", { name: "Try again" })).toBeVisible();
       // Never the API's words, nor any id.
       await expect(page.locator("#main")).not.toContainText(/not found/i);
       await expect(page.locator("#main")).not.toContainText(/[0-9a-f]{8}-[0-9a-f]{4}-/);
       // The From this run tab keeps its place and its body says what went wrong, not blank.
       await expect(page.getByRole("tab", { name: /From this run/ })).toHaveAttribute("aria-selected", "true");
-      await expect(page.getByRole("tabpanel")).toContainText("Couldn't load this run's review.");
+      await expect(page.getByRole("tabpanel")).toContainText("Could not load this run's review.");
       await err.getByRole("button", { name: "Try again" }).click();
-      await expect(err).toContainText("Couldn't load this run's review.");
+      await expect(err).toContainText("Could not load this run's review.");
       await shot(page, `b03-load-error-${tag}`);
     });
   });
@@ -164,7 +164,7 @@ test("B-03: switching to a run whose review cannot load says so above the earlie
   await page.getByRole("tab", { name: /From this run/ }).click();
   const panel = page.getByRole("tabpanel");
   const err = panel.getByTestId("load-error");
-  await expect(err).toContainText("Couldn't load this run's review.");
+  await expect(err).toContainText("Could not load this run's review.");
   await expect(err.getByRole("button", { name: "Try again" })).toBeVisible();
   // The earlier review stays below the notice, marked as not the one asked for, with no decision bar.
   const kept = page.getByTestId("from-run-view");
@@ -182,13 +182,13 @@ test("B-03: switching to a run whose review cannot load says so above the earlie
   expect(Number(await page.getByTestId("from-run-band-wrap").evaluate((el) => getComputedStyle(el).opacity))).toBeLessThan(1);
   await expect(page.getByTestId("tab-count-from-run")).toHaveCount(0);
   await err.getByRole("button", { name: "Try again" }).click();
-  await expect(err).toContainText("Couldn't load this run's review.");
+  await expect(err).toContainText("Could not load this run's review.");
   await shot(page, "b03-kept-review-failed");
 });
 
 test("the blocker's gate reason names it by its statement, never its key", async ({ page }) => {
   await login(page);
-  await page.goto("/baseline?tab=blockers");
+  await page.goto("/ground-truth?tab=blockers");
   const statement = "The address lookup service allows 100 requests a minute per company";
   await page.getByTestId("blocker-row").filter({ hasText: statement }).click();
   const insp = page.getByTestId("blocker-inspector");

@@ -155,7 +155,7 @@ function withGoalNames(f: RankedFeature, names: Names | null | undefined): Ranke
 /** A goal with no name: "Unknown goal", its key only in the tooltip. */
 function UnknownGoal({ goal }: { goal: string }) {
   return (
-    <Chip kind="crit" title={`${goal} is not a goal in the baseline`} data-testid="unknown-goal">
+    <Chip kind="crit" title={`${goal} is not a goal in the Ground Truth`} data-testid="unknown-goal">
       Unknown goal
     </Chip>
   );
