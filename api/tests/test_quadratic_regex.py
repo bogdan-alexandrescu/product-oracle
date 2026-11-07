@@ -146,9 +146,10 @@ def test_template_title_line_is_linear():
     assert "# My title{#goals}" in skeleton("# {#goals}\n")
 
 
-# CPU-bound: on the runner pool's VMs, beside seven other pytest workers, one 20-line check measured 1.37 s
-# against its 1.0 s budget (train AU, Nov 7) while it takes well under it alone; a quadratic scan takes many
-# seconds, so the budget still catches one. It runs in the api-timing job, alone.
+# CPU-bound: on the runner pool's VMs, beside seven other pytest workers, one 20-line
+# check measured 1.37 s against its 1.0 s budget (Nov 7) while it takes well under it
+# alone; a quadratic scan takes many seconds, so the budget still catches one. It runs
+# in the api-timing job, alone.
 @pytest.mark.timing
 @pytest.mark.parametrize("unit", ["](", "](a", "https://", "a.b/"])
 @pytest.mark.parametrize("lines", [1, 20])
