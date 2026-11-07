@@ -118,11 +118,11 @@ async def test_set_code_gives_an_item_its_feature_code(client):
     shown = by_key(await get(client, ctx, "owner"))["a"]
     assert (shown["code"], shown["title"]) == (None, "Alerts")
     r = await post({"code": None}, {"code": "F-07"})
-    assert r.status_code == 409, r.text
-    assert r.json()["detail"]["message"] == "F-07 is already the code of F-07 Billing"
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == "F-07 is already the code of F-07 Billing"
     r = await post({"code": None}, {"code": "f-12"})
-    assert r.status_code == 409, r.text
-    assert r.json()["detail"]["message"] == "F-12 is already the code of a Ground Truth feature"
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == "F-12 is already the code of a Ground Truth feature"
     r = await post({"code": None}, {"code": "Alerts"})
     assert r.status_code == 422, r.text
     r = await post({"code": None}, {"code": "f-31"}, who="viewer")

@@ -106,6 +106,15 @@ export interface SimpleChangesCtx {
   /** S9 (targets.py add_feature_ask): files a feature ask in Requests, and drops it on undo. */
   fileAsk?: (input: { id: string; title: string; channel: string; requester_name: string | null; requester_kind: string; filed_by: string }) => void;
   dropAsk?: (id: string) => void;
+  /** every-field-editable: the Goal ladder's key results (goal-map.ts ladderMilestones), the same
+   * track_milestones in the API: an edit_goal_milestone may name one. */
+  ladder?: LadderMilestones;
+}
+
+/** every-field-editable: a Goal ladder key result as an edit_goal_milestone reads and writes it. */
+export interface LadderMilestones {
+  find: (id: string) => { value: Record<string, unknown>; can_change: boolean; name: string; decider: string | null } | null;
+  write: (id: string, goal_id: string) => void;
 }
 
 /** edit-goals-prds (oracle.simple.goal_asks): a goal archived or restored, asked by who may not
@@ -187,6 +196,8 @@ const FIELDS: Record<string, string[]> = {
   remove_dependency: ["depends_on"],
   // feature-parts: the key of the feature it is a part of (changes.py set_parent).
   set_parent: ["parent_key"],
+  // every-field-editable: the item's feature code, stored as its title's lead (changes.py set_code).
+  set_code: ["code"],
 };
 const FIXES = ["shift_dependents", "move_dependency"];
 /** fix5-cut-dependents: the item and everything waiting on it, cut as one change (changes.py CUT_ALL). */
@@ -408,6 +419,7 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
     else if (f === "prd_document_id") out[f] = ownPrd(s).id;
     else if (f === "depends_on") out[f] = [...(s.depends ?? [])];
     else if (f === "parent_key") out[f] = s.parent ?? null;
+    else if (f === "code") out[f] = (s.feature_id && db.feature_codes?.[s.feature_id]) || codedTitle(s.title, prdCode(s.section))[0];
     else if (f === "status") out[f] = s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned");
     else if (f === "risk") out[f] = (s.risks ?? []).find((r) => r.flag === target.flag && (r.subject ?? null) === (target.subject ?? null)) ?? null;
   }
@@ -944,19 +956,23 @@ const MILESTONE_OP = "edit_goal_milestone";
 function createMilestoneChange(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"]): Response {
   if (ctx.role === "viewer") return json(403, { detail: "Viewers may not propose a change" });
   const m = (db.goal_milestones ?? []).find((x) => x.id === body.target.milestone_id && !x.deleted);
-  if (!m) return json(404, { detail: "No such milestone" });
-  if (m.prd) return json(422, { detail: "A PRD's milestone: change it on its card (it asks the PRD's owner)" });
-  if (canEditRoadmap(db, m.roadmap, ctx)) return json(409, { detail: "You change this milestone directly" });
+  const kr = m ? null : ctx.ladder?.find(String(body.target.milestone_id));
+  if (!m && !kr) return json(404, { detail: "No such milestone" });
+  if (m?.prd) return json(422, { detail: "A PRD's milestone: change it on its card (it asks the PRD's owner)" });
+  if (m ? canEditRoadmap(db, m.roadmap, ctx) : kr!.can_change) return json(409, { detail: "You change this milestone directly" });
   if (!("milestone" in body.before) || !("milestone" in (body.after ?? {}))) return json(422, { detail: "before.milestone and after.milestone (null: remove it)" });
-  const current = milestoneValue(m, db.ids);
-  if (!same(body.before.milestone, current)) return json(409, { detail: { message: "Changed since you saw it", current: { milestone: current }, changed_by: null, changed_at: null } });
+  const current = m ? milestoneValue(m, db.ids) : kr!.value;
+  // every-field-editable (goal_milestones.create_change): before.milestone may name only the fields seen.
+  const seenMs = body.before.milestone as Record<string, unknown> | null;
+  if (!seenMs || typeof seenMs !== "object" || !Object.keys(seenMs).length || Object.keys(seenMs).some((k) => !(k in current))) return json(422, { detail: "before.milestone: the milestone as you saw it (name, date, goal_id, item_ids, counts_when)" });
+  if (!same(seenMs, Object.fromEntries(Object.keys(seenMs).map((k) => [k, current[k]])))) return json(409, { detail: { message: "Changed since you saw it", current: { milestone: current }, changed_by: null, changed_at: null } });
   const wanted = body.after?.milestone as Record<string, unknown> | null;
   const after = wanted ? { ...current, ...Object.fromEntries(Object.entries(wanted).filter(([k, v]) => k in current && (v !== null || k === "goal_id"))) } : null;
   if (after && same(after, current)) return json(422, { detail: "after.milestone: nothing changes" });
-  const doc = stableUuid(`simple-doc/${m.roadmap}`);
-  const decider = db.deciders?.[m.roadmap];
+  const doc = m ? stableUuid(`simple-doc/${m.roadmap}`) : null;
+  const decider = m ? db.deciders?.[m.roadmap] : kr!.decider;
   const change: Change = {
-    id: crypto.randomUUID(), session_id: null, document_id: doc, draft_ids: [], op: body.op, target: { milestone_id: m.id, roadmap_id: doc, name: m.name },
+    id: crypto.randomUUID(), session_id: null, document_id: doc, draft_ids: [], op: body.op, target: { milestone_id: String(body.target.milestone_id), roadmap_id: doc, name: m?.name ?? kr!.name },
     before: { milestone: current }, after: { milestone: after }, status: "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: iso(mockNowMs()),
     decided_by: null, decided_at: null, reason: body.reason ?? null, decision_reason: null,
     routed_to: decider ? [decider] : ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,
@@ -1308,6 +1324,20 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     } else if (body.op === "set_status") {
       if (!["planned", "done", "cut"].includes(String(a.status))) return json(422, { detail: "after.status: planned, done or cut" });
       after = { status: a.status };
+    } else if (body.op === "set_code") {
+      // changes._free_code: a feature code no other item or Ground Truth feature has; the title carries it.
+      const s = seed(seen, key);
+      if ((s.feature_id && db.feature_codes?.[s.feature_id]) || prdCode(s.section)) return json(422, { detail: "Its code comes from its Ground Truth feature or its PRD" });
+      const code = a.code == null || !String(a.code).trim() ? null : String(a.code).trim().toUpperCase();
+      if (code && !/^[A-Z]{1,3}-\d+[a-j]?$/.test(code)) return json(422, { detail: "after.code: a feature code, like F-31" });
+      const other = code ? seen.items.find((x) => x.key !== key && !x.trashed && String(read(seen, x.key, ["code"], target).code ?? "").toUpperCase() === code) : undefined;
+      const taken = (m: string) => json(422, { detail: m });
+      if (other) return taken(`${code} is already the code of ${code} ${codedTitle(other.title, prdCode(other.section))[1]}`);
+      if (code && Object.values(db.feature_codes ?? {}).some((k) => k.toUpperCase() === code)) return taken(`${code} is already the code of a Ground Truth feature`);
+      const name = codedTitle(s.title, prdCode(s.section))[1];
+      target.code = code;
+      after = { title: code ? `${code} ${name}` : name };
+      stored = ["title"];
     } else if (body.op === "set_parent") {
       const v = a.parent_key == null ? null : String(a.parent_key);
       const me = seed(seen, key);
@@ -1488,9 +1518,17 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   // PRD's milestone (before.date) is decided below.
   else if (p[4] === "accept" && c.op === MILESTONE_OP && "milestone" in (c.before ?? {})) {
     const ms = (db.goal_milestones ?? []).find((x) => x.id === c.target.milestone_id && !x.deleted);
-    if (!ms) return json(404, { detail: "The milestone is gone" });
+    const kr = ms ? null : ctx.ladder?.find(String(c.target.milestone_id));
+    if (kr) {
+      // every-field-editable: a Goal ladder key result's new goal.
+      if (!same(kr.value, c.before.milestone)) return json(409, { detail: { message: "outdated: the milestone changed since the proposal", current: { milestone: kr.value }, changed_by: null, changed_at: null } });
+      const goal = (c.after.milestone as Record<string, unknown> | null)?.goal_id;
+      if (goal) ctx.ladder!.write(String(c.target.milestone_id), String(goal));
+    } else if (!ms) return json(404, { detail: "The milestone is gone" });
+    else {
     if (!same(milestoneValue(ms, db.ids), c.before.milestone)) return json(409, { detail: { message: "outdated: the milestone changed since the proposal", current: { milestone: milestoneValue(ms, db.ids) }, changed_by: null, changed_at: null } });
     writeMilestone(ms, db.ids, c.after.milestone as Record<string, unknown> | null);
+    }
   }
   else if (p[4] === "accept" && KEY_DATE_OPS.includes(c.op)) {
     const rm = roadmapOfDoc(db, c.target.document_id)!;

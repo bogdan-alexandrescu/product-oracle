@@ -1104,17 +1104,13 @@ async def _free_code(db: AsyncSession, entry: Any, raw: Any, read_: Any) -> str 
             continue
         shown = service.coded_title(d.row.title, _code_of(d))[0]
         if shown and shown.upper() == code:
-            raise ChangeError(409, {"message": f"{code} is already the code of {_named(d)}",
-                                    "current": None, "changed_by": None,
-                                    "changed_at": None})  # fmt: skip
+            raise ChangeError(422, f"{code} is already the code of {_named(d)}")
     features = {k.upper() for k in (await _short_codes(db, names=False)).values() if k}
     features |= {
         k.upper() for k in await db.scalars(select(Entity.key).where(Entity.type == "feature"))
     }
     if code in features:
-        raise ChangeError(409, {"message": f"{code} is already the code of a Ground Truth feature",
-                                "current": None, "changed_by": None,
-                                "changed_at": None})  # fmt: skip
+        raise ChangeError(422, f"{code} is already the code of a Ground Truth feature")
     return code
 
 

@@ -264,6 +264,23 @@ export function PanelFields({
       className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5"
       data-testid="panel-fields"
     >
+      {/* every-field-editable: the feature code (F-31), so a feature with none can be given one. */}
+      <Field
+        label="Code"
+        testId="card-code"
+        canChange={canChange}
+        value={item.code ?? <span className="text-text2">None</span>}
+        editor={(done) => (
+          <TextEdit
+            label="Code"
+            value={item.code ?? ""}
+            optional
+            max={12}
+            done={done}
+            save={(v) => change("Code changed", "set_code", { code: item.code ?? null }, { code: v || null })}
+          />
+        )}
+      />
       <Field
         label="Outcome"
         testId="card-outcome"
