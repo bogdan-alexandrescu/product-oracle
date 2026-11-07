@@ -54,8 +54,10 @@ from tests.test_roadmap_reasons import SECOND, roadmap_items_check
 # (#723 S3b), read with Oracle's open date suggestions and the goals' open suggestions
 # (inbox-meeting-proposals fix); the minutes of Simple's review meetings one (#723 S8); the
 # company roadmap's features once for every checkpoint's items check (an item may depend on
-# another PRD's, the owner Nov 4).
-MAX_INBOX_READS = 76
+# another PRD's, the owner Nov 4); the track alerts' re-check looks once for a marked track
+# (a fixed one, PR 1414: one EXISTS on the read's session, a second session only when one is
+# marked).
+MAX_INBOX_READS = 77
 # The timing of that call: a warm-up, then enough samples that the p95 is not one outlier.
 WARM_UP = 3
 SAMPLES = 40
