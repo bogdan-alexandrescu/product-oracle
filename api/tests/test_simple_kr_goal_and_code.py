@@ -228,3 +228,79 @@ async def test_the_read_says_where_a_code_comes_from(client):
     shown = by_key(await get(client, ctx, "owner"))
     got = {k: (shown[k]["code"], shown[k]["code_from"]) for k in "abc"}
     assert got == {"a": (None, None), "b": ("F-07", None), "c": ("F-06", "prd")}
+
+
+async def test_undoing_a_code_change_never_gives_its_old_code_to_two_items(client):
+    # protects=Undo of a set_code that would write back a code another item took since is
+    # refused (409) in the words of propose and accept, and nothing changes; fails_when=both
+    # items read F-30 after the undo; no_claim=a Ground Truth feature taking the code.
+    ctx = await make_people()
+    a, b = await coded_pair(ctx, first="F-30 Alerts")
+    body = {"op": "set_code", "target": {"item_id": a}, "before": {"code": "F-30"},
+            "after": {"code": "F-32"}}  # fmt: skip
+    r = await client.post(CHANGES, json=body, headers=ctx.as_("owner"))
+    assert r.status_code == 201, r.text
+    first = r.json()["change"]
+    assert first["status"] == "applied"
+    r = await propose_code(client, ctx, b, "F-30", who="owner")
+    assert r.status_code == 201, r.text
+    assert r.json()["change"]["status"] == "applied"
+    r = await client.post(f"{CHANGES}/{first['id']}/undo", headers=ctx.as_("owner"))
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"] == "F-30 is already the code of F-30 Billing"
+    shown = by_key(await get(client, ctx, "owner"))
+    assert (shown["a"]["code"], shown["b"]["code"]) == ("F-32", "F-30")
+
+
+def rename(client, ctx: Ctx, item: str, seen: str, title: str, who: str = "owner"):
+    body = {"op": "edit_title", "target": {"item_id": item}, "before": {"title": seen},
+            "after": {"title": title}}  # fmt: skip
+    return client.post(CHANGES, json=body, headers=ctx.as_(who))
+
+
+async def test_a_rename_never_takes_a_code_another_item_or_feature_has(client):
+    # protects=a new title leading with a code other than the item's own is checked as
+    # set_code checks it, in its words; a free code is kept; fails_when=a rename gives an item
+    # a code another item or a Ground Truth feature has; no_claim=an item coded by its feature.
+    ctx = await make_people()
+    a, b = await coded_pair(ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        await Seed(s).entity("feature", "F-12")
+        await s.commit()
+    r = await propose_code(client, ctx, b, "F-31", who="owner")
+    assert r.status_code == 201, r.text
+    r = await rename(client, ctx, a, "Alerts", "F-31 Alerts")
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == "F-31 is already the code of F-31 Billing"
+    r = await rename(client, ctx, a, "Alerts", "F-12 Alerts")
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == "F-12 is already the code of a Ground Truth feature"
+    assert by_key(await get(client, ctx, "owner"))["a"]["code"] is None
+    r = await rename(client, ctx, a, "Alerts", "F-35 Alerts")
+    assert r.status_code == 201, r.text
+    shown = by_key(await get(client, ctx, "owner"))["a"]
+    assert (shown["code"], shown["title"]) == ("F-35", "Alerts")
+    # Its own code kept in a rename is no clash.
+    r = await rename(client, ctx, a, "Alerts", "F-35 Smart alerts")
+    assert r.status_code == 201, r.text
+    assert by_key(await get(client, ctx, "owner"))["a"]["title"] == "Smart alerts"
+
+
+async def test_merging_into_a_feature_never_gives_its_code_to_two_items(client):
+    # protects=merge_item into a Ground Truth feature whose code another item shows as its own
+    # is refused in set_code's words; fails_when=two items read the feature's code;
+    # no_claim=items linked to the same feature (its slices).
+    ctx = await make_people()
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        _, pv, _, rv = await seed.roadmap("payments")
+        c = await seed.item(rv, pv, "c", position=0, title="Alerts", draft=True)
+        await seed.item(rv, pv, "b", position=1, title="F-34 Billing")
+        feature = await seed.entity("feature", "F-34")
+        await s.commit()
+    body = {"op": "merge_item", "target": {"item_id": str(c.id), "feature_id": str(feature.id)},
+            "before": {}, "after": {}}  # fmt: skip
+    r = await client.post(CHANGES, json=body, headers=ctx.as_("owner"))
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == "F-34 is already the code of F-34 Billing"
+    assert by_key(await get(client, ctx, "owner"))["c"]["code"] is None
