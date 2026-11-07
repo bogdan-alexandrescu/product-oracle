@@ -170,7 +170,13 @@ test.describe("desktop only", () => {
     await open(page, { scenario: "simple-home" });
     const count = page.getByTestId("simple-nav-roadmap-count");
     await expect(count).toBeVisible();
-    await expect(count).toHaveAttribute("title", /^\d+ on the roadmap waiting on you: \d+ broken links?, \d+ dates? to confirm, \d+ (change or draft|changes or drafts)$/);
+    // roadmap-count: the goals' suggested features Needs a decision lists are counted and named too;
+    // the kinds named add up to the number shown.
+    const words = /^(\d+) on the roadmap waiting on you: (\d+) broken links?, (\d+) dates? to confirm, (\d+) suggested features?, (\d+) (?:change or draft|changes or drafts)$/;
+    await expect(count).toHaveAttribute("title", words);
+    const [all, ...parts] = words.exec((await count.getAttribute("title"))!)!.slice(1).map(Number);
+    await expect(count).toHaveText(String(all));
+    expect(parts.reduce((s, p) => s + p, 0)).toBe(all);
   });
 
   test("qa4-17: Enter with a title but no roadmap moves focus to the roadmap picker", async ({ page }) => {

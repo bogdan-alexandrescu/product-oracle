@@ -87,6 +87,18 @@ const APPROVER = "approver@example.com";
 const COMMENTER = "commenter@example.com";
 const roadmapCount = (page: Page) => page.locator("[data-testid='simple-nav-roadmap-count'], [data-testid='simple-tab-roadmap-count']").filter({ visible: true });
 const num = async (l: ReturnType<Page["locator"]>) => Number((await l.textContent()) ?? "0");
+/** The rail's Roadmap count's words: broken links, dates to confirm, the goals' suggested features
+ * Needs a decision lists (roadmap-count: the menu counts them too) and changes or drafts. */
+const ROADMAP_WORDS = /^(\d+) on the roadmap waiting on you: (\d+) broken links?, (\d+) dates? to confirm, (\d+) suggested features?, (\d+) (?:change or draft|changes or drafts)$/;
+/** The rail's Roadmap count says what it counts and its parts add up to its number; returns its suggested features. */
+async function roadmapWords(page: Page): Promise<number> {
+  await expect(roadmapCount(page)).toHaveAttribute("title", ROADMAP_WORDS);
+  const [all, ...parts] = ROADMAP_WORDS.exec((await roadmapCount(page).getAttribute("title"))!)!.slice(1).map(Number);
+  expect(parts.reduce((s, p) => s + p, 0)).toBe(all);
+  await expect(roadmapCount(page)).toHaveText(String(all));
+  await expect(roadmapCount(page)).toHaveAccessibleName(ROADMAP_WORDS);
+  return parts[2];
+}
 /** Home's "In all" line's words per kind, in its order. */
 const ALL_WORDS: [string, string, string][] = [
   ["run_stop", "run stop", "run stops"],
@@ -232,8 +244,8 @@ for (const phone of [false, true]) {
       await expect(count).toHaveAccessibleName(`${n} waiting on you`);
       // No meeting is live: an upcoming meeting waits on nobody, so Meetings has no count.
       await expect(page.locator("[data-testid='simple-nav-meetings-count'], [data-testid='simple-tab-meetings-count'], [data-testid='simple-more-meetings-count']").filter({ visible: true })).toHaveCount(0);
-      const roadmap = page.locator("[data-testid='simple-nav-roadmap-count'], [data-testid='simple-tab-roadmap-count']").filter({ visible: true });
-      await expect(roadmap).toHaveAttribute("title", /^\d+ on the roadmap waiting on you: \d+ broken links?, \d+ dates? to confirm, \d+ (change or draft|changes or drafts)$/);
+      // The Roadmap count names each kind it counts, the goals' suggested features among them, and they add up to it.
+      expect(await roadmapWords(page)).toBeGreaterThan(0);
     });
 
     test("The plan this quarter is the company roadmap's, its milestones by name", async ({ page }) => {
@@ -409,9 +421,16 @@ for (const phone of [false, true]) {
       await page.goto("/simple/roadmap");
       const button = page.getByTestId("needs-decision");
       await expect(button).toHaveText(/Needs a decision · \d+/);
+      // Needs a decision counts the goals' suggested features it lists too (pre-demo QA S-6, its tiles add up to it), which
+      // arrive after the roadmap: read the button once its tray shows them, as roadmap-decide does.
+      await button.click();
+      const tray = page.getByTestId("decision-tray");
+      await expect(tray.getByTestId("tray-suggested").getByTestId("goal-suggestion").first()).toBeVisible();
       const n = Number((await button.textContent())!.replace(/\D+/g, ""));
+      const suggested = Number(await tray.getByTestId("tray-counter").filter({ hasText: "Suggested features" }).locator("b").innerText());
+      await tray.getByRole("button", { name: "Close" }).click();
       await expect(roadmapCount(page)).toHaveText(String(n));
-      await expect(roadmapCount(page)).toHaveAttribute("title", new RegExp(`^${n} on the roadmap waiting on you: \\d+ broken links?, \\d+ dates? to confirm, \\d+ (change or draft|changes or drafts)$`));
+      expect(await roadmapWords(page)).toBe(suggested);
     });
 
     test("While Oracle drafts a new item Home reads again for a while, then offers Refresh", async ({ page }) => {
