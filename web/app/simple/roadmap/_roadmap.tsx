@@ -38,6 +38,7 @@ import {
   ChangeFailed,
   changedWords,
   closedItem,
+  partsTree,
   decide,
   decisionCounts,
   deciderWords,
@@ -156,7 +157,11 @@ function oneLane(data: Roadmap, group: Lane): Roadmap {
     return own.length ? [{ ...g, item_ids: own }] : [];
   });
   if (pm.length) groups.push({ key: PM_LANE, title: "PM-owned", item_ids: pm });
-  return { ...data, groups };
+  // feature-parts: every live part, at any depth, sits under its live parent in its top
+  // parent's group (partsTree); one whose parent is not shown keeps its own place.
+  const tree = partsTree(groups.map((g) => g.item_ids), byId);
+  const placed = groups.map((g, n) => ({ ...g, item_ids: tree[n].map((x) => x.id) })).filter((g) => g.item_ids.length);
+  return { ...data, groups: placed };
 }
 
 const TODAY_ENTRY: LegendEntry = { key: "today", swatch: <i aria-hidden className="inline-block h-3.5 w-0.5 flex-none bg-crit" />, words: "Today" };
@@ -1229,7 +1234,7 @@ export function SimpleRoadmap() {
 
   /** One change through the engine, its toast (with Undo when it applied) and the reload; null when it failed. */
   const run = useCallback(
-    async (what: Parameters<Act>[0], body: Parameters<Act>[1]): Promise<ChangeResult | null> => {
+    async (what: Parameters<Act>[0], body: Parameters<Act>[1], note?: string): Promise<ChangeResult | null> => {
       try {
         const r = await propose(body);
         const target = latest.current.get(String(body.target?.item_id ?? ""));
@@ -1237,7 +1242,7 @@ export function SimpleRoadmap() {
         const keys = [target?.key, latest.current.get(String(body.target?.subject ?? ""))?.key].filter(Boolean);
         toast({
           avoid: keys.length ? keys.map((k) => `[data-testid="conflict"][data-item="${k}"]`).join(", ") : undefined,
-          message: resultWords(r, what, target?.deciders),
+          message: resultWords(r, what, target?.deciders, note),
           action: r.change.status === "applied" && r.change.can_undo ? { label: "Undo", onClick: () => void undo(r.change.id).then(reloadAfter, (e) => toast({ message: String(e.message) })) } : undefined,
         });
         return r;
@@ -1256,19 +1261,21 @@ export function SimpleRoadmap() {
     [reload, reloadAfter],
   );
   const act: Act = useCallback(
-    async (what, body) => {
-      await run(what, body);
+    async (what, body, note) => {
+      await run(what, body, note);
     },
     [run],
   );
   // trash-features-goals: a Gantt or Timeline row's context menu (a right-click, or the menu
-  // key on a focused bar) offers Delete feature to who decides on it (its own can_decide).
+  // key on a focused bar) offers Delete feature to who decides on it (its own can_decide), and
+  // Propose: delete to others who may change (panel-menu: as the feature panel's menu).
   const [rowMenu, setRowMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const removeFeature = useFeatureDelete(reload, toast, (id) => setCard((c) => (c?.id === id ? null : c)));
   const onRowMenu = (e: ReactMouseEvent) => {
     const el = (e.target as Element).closest("[data-bar-id],[data-item-id]");
     const it = el ? byId.get(el.getAttribute("data-bar-id") ?? el.getAttribute("data-item-id") ?? "") : undefined;
-    if (!el || !it?.can_decide) return;
+    // panel-menu: who decides deletes; who may change proposes it, as in the feature panel.
+    if (!el || !it || !(it.can_decide || canChange)) return;
     e.preventDefault();
     const r = el.getBoundingClientRect();
     // The menu key fires it with no pointer: the menu opens under the row.
@@ -1854,6 +1861,7 @@ export function SimpleRoadmap() {
           <FeatureContextMenu
             at={rowMenu}
             title={rowMenuItem.title}
+            propose={!rowMenuItem.can_decide}
             onClose={() => setRowMenu(null)}
             onDelete={() => {
               void removeFeature(rowMenuItem);

@@ -93,6 +93,8 @@ interface SeedItem {
   /** prio-company: the key of the item whose feature this one is (an item a move on Priorities
    * added to the company roadmap for a feature it did not hold); else its own feature. */
   feature?: string;
+  /** feature-parts: the key of the feature it is a part of (RoadmapItem.parent_key). */
+  parent?: string;
   /** S7: the Ground Truth feature (with no item) this draft was linked to by a merge. */
   // A draft merged with a Ground Truth feature that has no item: linked to it (still a draft).
   linked_feature?: string;
@@ -988,6 +990,13 @@ function dependencyLine(title: string, start: string, depTitle: string, end: str
   return `‘${short(title)}’ ${verb} ${day(start)}, but ‘${short(depTitle)}’${depPrd ? ` (${depPrd})` : ""}, which it depends on, ends ${day(end)}`;
 }
 
+/** feature-parts: the keys of the features an item is part of, its parent first, any depth (a loop stops where it would close). */
+function ancestorKeys(s: SeedItem, all: Map<string, { s: SeedItem }>): string[] {
+  const out: string[] = [];
+  for (let cur: SeedItem | undefined = s; cur?.parent && cur.parent !== s.key && !out.includes(cur.parent); cur = all.get(cur.parent)?.s) out.push(cur.parent);
+  return out;
+}
+
 function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, { s: SeedItem; r: { start: Dated; end: Dated } }>, w: [string, string]): Flag[] {
   const out: Flag[] = [];
   const flag = (kind: Flag["kind"], reason: string, fixes: Flag["fixes"], subject: string | null = null): void => {
@@ -1003,6 +1012,8 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
     const key = all.has(k) ? k : (dependencyOf([...all.values()].map((x) => x.s), k)?.key ?? k);
     const dep = all.get(key);
     if (!dep || key === s.key || closed(dep.s) || closed(s) || dep.s.status === "done" || doneItem(dep.s) || (dep.r.end.estimated && r.start.estimated)) continue;
+    // feature-parts: a part is never a broken link against an ancestor, any depth (constraints.check).
+    if (ancestorKeys(s, all).includes(key) || ancestorKeys(dep.s, all).includes(s.key)) continue;
     const theirs = ownPrd(dep.s).title;
     const depPrd = theirs !== ownPrd(s).title ? prdName(theirs) : null;
     if (r.start.estimated) {
@@ -1361,6 +1372,46 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   const seeds = visibleItems(db, role);
   const all = new Map(seeds.map((s) => [s.key, { s, r: resolve(db, s, w[s.horizon]) }]));
   afterDependencies(all);
+  // feature-parts (service._ancestors): each part's ancestors, its parent first, any depth (a loop
+  // stops where it would close), and its parent's row when that parent is in Trash.
+  const ancestorsOf = (s: SeedItem): SeedItem[] => {
+    const out: SeedItem[] = [];
+    const seen = new Set([s.key]);
+    for (let cur = s; cur.parent && !seen.has(cur.parent); ) {
+      seen.add(cur.parent);
+      const next = all.get(cur.parent)?.s;
+      if (!next) break;
+      out.push(next);
+      cur = next;
+    }
+    return out;
+  };
+  const trashedParent = (s: SeedItem): SeedItem | undefined => {
+    const top = ancestorsOf(s).at(-1) ?? s;
+    return top.parent && !all.has(top.parent) ? reader.full.items.find((y) => y.key === top.parent && y.trashed && y.roadmap === s.roadmap) : undefined;
+  };
+  // service.load: a part with no dates of its own reads its nearest dated ancestor's (a parent in
+  // Trash still lends its own).
+  const undated = (r: { start: Dated; end: Dated }) => r.start.estimated && r.end.estimated;
+  const own = new Map([...all].map(([k, x]) => [k, x.r]));
+  for (const x of all.values()) {
+    if (!undated(x.r)) continue;
+    const lent = ancestorsOf(x.s).map((a) => own.get(a.key)!);
+    const gone = trashedParent(x.s);
+    if (gone) lent.push(resolve(db, gone, w[gone.horizon]));
+    x.r = lent.find((r) => !undated(r)) ?? x.r;
+  }
+  // additions._parts: a parent or a part by its display code ("" when none) and name.
+  const partRef = (x: SeedItem, inTrash = false) => ({ id: db.ids[x.key] ?? reader.full.ids[x.key], code: prdCode(x.section) ?? "", title: x.title, cut: !x.merged_into && x.status === "cut", in_trash: inTrash });
+  const pathOf = (s: SeedItem) => {
+    const gone = trashedParent(s);
+    return [...(gone ? [partRef(gone, true)] : []), ...ancestorsOf(s).reverse().map((a) => partRef(a))];
+  };
+  // additions.item_extras: merged_into's code falls back to the key; a part's is its display code or "".
+  const ref = (k: string, key = true) => {
+    const x = db.items.find((y) => y.key === k);
+    return { id: db.ids[k], code: (x && prdCode(x.section)) ?? (key ? k : ""), title: x?.title ?? k };
+  };
   // The plan-model lane: the plan PRD's items whose code is a plan feature carry its slices.
   const slices = db.plan ? planSlices() : [];
   const slicesOf = (s: SeedItem, prdSlug: string) => {
@@ -1425,7 +1476,13 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       ].slice(0, 3),
       open_decisions: (db.decisions?.[s.key] ?? []).map((d) => ({ id: stableUuid(`simple-decision/${d.number}`), number: d.number, title: d.title })),
       looks_like: s.draft && !s.kept_both && !closed(s) ? matchesOf(db, s.looks_like ?? []) : [],
-      merged_into: s.merged_into ? { id: db.ids[s.merged_into], code: s.merged_into, title: db.items.find((x) => x.key === s.merged_into)?.title ?? s.merged_into } : null,
+      merged_into: s.merged_into ? ref(s.merged_into) : null,
+      // feature-parts: the feature it is a part of (set_parent's before is its key) and its open parts.
+      parent_key: s.parent ?? null,
+      part_of: pathOf(s).at(-1) ?? null,
+      part_path: pathOf(s),
+      // Open parts, then cut ones (below the line); never a merged one.
+      parts: [...seeds.filter((x) => x.parent === s.key && !closed(x)), ...seeds.filter((x) => x.parent === s.key && !x.merged_into && x.status === "cut")].map((x) => partRef(x)),
       drafting: !!s.drafting_until,
       flow: s.draft ? (s.flow ?? null) : (flowFor(db.visuals, "feature", db.ids[s.key]) ?? betFlow(db, s)),
       goal_ids: goalIdsOf(s),

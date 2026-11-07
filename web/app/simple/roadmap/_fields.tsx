@@ -16,6 +16,7 @@ import type { Act } from "./_card";
 import {
   confidenceWord,
   datesFrom,
+  partsWords,
   statusWord,
   yearSpan,
   type Item,
@@ -116,14 +117,18 @@ function Pick({
   options,
   save,
   done,
+  note,
 }: {
   label: string;
   value: string;
   options: { value: string; label: string }[];
   save: (v: string) => Promise<void>;
   done: () => void;
+  /** What the picked value does beyond itself, shown before Save (panel-menu: a cut feature's parts). */
+  note?: (v: string) => string | undefined;
 }) {
   const [v, setV] = useState(value);
+  const said = note?.(v);
   return (
     <form
       onSubmit={(e) => {
@@ -145,6 +150,11 @@ function Pick({
           </option>
         ))}
       </select>
+      {said && (
+        <p className="mt-1 text-sm text-text2" data-testid="pick-note">
+          {said}
+        </p>
+      )}
       <SaveCancel onCancel={done} />
     </form>
   );
@@ -208,7 +218,10 @@ export function PanelFields({
     before: Record<string, unknown>,
     after: Record<string, unknown>,
     more?: Record<string, string>,
-  ) => act(what, { op: op as never, target: { ...target, ...more }, before, after });
+    note?: string,
+  ) => act(what, { op: op as never, target: { ...target, ...more }, before, after }, note);
+  // panel-menu: a feature with parts says, as it is cut or moved, that they stay as they are.
+  const parts = (how: Parameters<typeof partsWords>[1]) => partsWords(item.parts.length, how) || undefined;
   const others = [...items.values()].filter(
     (i) => i.id !== item.id && i.status !== "merged",
   );
@@ -358,12 +371,15 @@ export function PanelFields({
               { value: "done", label: "Done" },
               { value: "cut", label: "Cut" },
             ]}
+            note={(v) => (v === "cut" && item.status !== "cut" ? parts("stay") : undefined)}
             save={(v) =>
               change(
                 "Status changed",
                 "set_status",
                 { status: item.status },
                 { status: v },
+                undefined,
+                v === "cut" && item.status !== "cut" ? parts("stay") : undefined,
               )
             }
           />
@@ -484,6 +500,8 @@ export function PanelFields({
                 "set_goal",
                 { goal_id: item.goal?.id ?? null },
                 { goal_id: v || null },
+                undefined,
+                parts("goal"),
               )
             }
           />
@@ -563,6 +581,8 @@ export function PanelFields({
                 "set_prd",
                 { prd_document_id: item.prd?.id ?? null },
                 { prd_document_id: v || null },
+                undefined,
+                parts("PRD"),
               )
             }
           />

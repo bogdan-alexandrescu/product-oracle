@@ -350,12 +350,28 @@ export const deciderWords = (deciders: string[] | undefined): string =>
 export type ChangeWords = string | { applied: string; proposed: string };
 
 /** The words a change's result says: applied (undo) or proposed (to whom, and where it shows). */
-export function resultWords(r: ChangeResult, what: ChangeWords, deciders?: string[]): string {
+export function resultWords(r: ChangeResult, what: ChangeWords, deciders?: string[], note?: string): string {
   const done = typeof what === "string" ? what : what.applied;
-  if (r.change.status === "applied") return `${done} in your working draft`;
   // Review: nothing was done yet: a proposal says what it asks, then whom it waits for.
-  if (typeof what !== "string") return `Proposed: ${what.proposed}; it waits for ${deciderWords(deciders)} in Needs a decision`;
-  return `${what} proposed: it waits for ${deciderWords(deciders)} in Needs a decision`;
+  const said =
+    r.change.status === "applied"
+      ? `${done} in your working draft`
+      : typeof what !== "string"
+        ? `Proposed: ${what.proposed}; it waits for ${deciderWords(deciders)} in Needs a decision`
+        : `${what} proposed: it waits for ${deciderWords(deciders)} in Needs a decision`;
+  return note ? `${said}. ${note}` : said;
+}
+
+/**
+ * panel-menu: what happens to a feature's parts when it goes to Trash, is cut or moves to
+ * another goal or PRD, said at that moment: they stay on the roadmap, each with its own goal and
+ * PRD ("Its 2 parts stay on the roadmap."). "" when it has none.
+ */
+export function partsWords(n: number, how: "stay" | "goal" | "PRD"): string {
+  if (!n) return "";
+  const its = n === 1 ? "Its 1 part" : `Its ${n} parts`;
+  if (how === "stay") return `${its} ${n === 1 ? "stays" : "stay"} on the roadmap.`;
+  return `${its} ${n === 1 ? "keeps its" : "keep their"} own ${how}.`;
 }
 
 const PHASE_SPLIT: [Item["phases"][number]["key"], number][] = [
@@ -408,6 +424,48 @@ export function nearWords(item: Item, keyDates: KeyDate[]): string | null {
 
 /** S7: an item closed for the plan (cut, or a draft merged into another): drawn below the line. */
 export const closedItem = (i: Item): boolean => i.status === "cut" || i.status === "merged";
+
+/**
+ * feature-parts (any depth, owner's answer Nov 5): lists of item ids (a view's groups, lanes or
+ * columns) put in tree order: each live item followed by its live parts, theirs under them, in
+ * the order given, each with its depth (0: top). A part sits in its top parent's list; a part
+ * whose parent is not among the ids (filtered out, closed, in Trash) stays where it was, at the
+ * top level, so no row is ever lost.
+ */
+export function partsTree(lists: string[][], byId: Map<string, Item>): { id: string; depth: number }[][] {
+  const all = new Set(lists.flat());
+  const parentOf = (id: string): string | null => {
+    const i = byId.get(id);
+    const p = i?.part_of?.id ? byId.get(i.part_of.id) : undefined;
+    return i && p && p.id !== id && all.has(p.id) && !closedItem(i) && !closedItem(p) ? p.id : null;
+  };
+  const kids = new Map<string, string[]>();
+  for (const id of all) {
+    const p = parentOf(id);
+    if (p) kids.set(p, [...(kids.get(p) ?? []), id]);
+  }
+  const placed = new Set<string>();
+  const walk = (id: string, depth: number, out: { id: string; depth: number }[]) => {
+    if (placed.has(id)) return;
+    placed.add(id);
+    out.push({ id, depth });
+    for (const k of kids.get(id) ?? []) walk(k, depth + 1, out);
+  };
+  const out = lists.map((ids) => {
+    const own: { id: string; depth: number }[] = [];
+    for (const id of ids) if (!parentOf(id)) walk(id, 0, own);
+    return own;
+  });
+  // A loop the read cut (never stored): its items at the top level of their own list.
+  lists.forEach((ids, n) => ids.forEach((id) => walk(id, 0, out[n])));
+  return out;
+}
+
+/** panel-menu: "<code> <name>" of the feature a merged one went into, by the kept feature's
+ * display code (never its key), as its panel reads it. */
+export function mergedName(i: Item, find: (id: string) => Item | undefined): string {
+  return i.merged_into ? `${find(i.merged_into.id)?.code ?? ""} ${i.merged_into.title}`.trim() : "";
+}
 
 /** S7: a quarter as the change engine names it ("2026-Q4"). */
 export function quarterValue(start: string): string {

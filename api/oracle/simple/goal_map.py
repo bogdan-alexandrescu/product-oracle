@@ -623,12 +623,18 @@ async def build(db: AsyncSession, principal: Any, can_edit: bool) -> GoalMapOut:
         )
     ).all()
     links = [(link, item) for link, item in links if link.milestone_id in shown]
+    overlays = await drafts.overlays_for(db, principal)
     shipped = await _shipped_on(db, list({item.id: item for _, item in links}.values()))
     goal_of = {m.id: m.goal for m in ms_out}
     around: dict[tuple[uuid.UUID, date], tuple[float | None, float | None]] = {}
     feats: dict[uuid.UUID, GmFeature] = {}
     for link, item in links:
         title = item.title
+        # panel-menu: a feature merged into another (as the reader's draft has it, as the
+        # roadmap reads it) is no longer one of the map's.
+        mine_ = (overlays.get(item.roadmap_document_id) or {}).get(str(link.item_id)) or {}
+        if mine_.get("merged_into", item.merged_into):
+            continue
         f = feats.get(link.item_id)
         goal_id = goal_of[link.milestone_id]
         on = shipped.get(item.id)

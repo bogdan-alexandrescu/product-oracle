@@ -128,6 +128,11 @@ class Entry:
     goal_ids: list[uuid.UUID] | None = None
     # one-feature-panel: who the owner shown is (the item's own, else its track's).
     owner_id: uuid.UUID | None = None
+    # feature-parts: the features it is part of on its roadmap, its parent first, up to the
+    # top (any depth; a loop stops where it would close), and its parent's row when that
+    # parent is in Trash (null: none, or on the roadmap).
+    ancestors: list["Entry"] = field(default_factory=list)
+    trashed_parent: RoadmapItem | None = None
 
 
 @dataclass
@@ -540,6 +545,18 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
     )
     for e in entries:
         e.resolved = moved[e.row.id]
+    # feature-parts: each part's ancestors; with no dates of its own, a part reads its
+    # nearest dated ancestor's (a parent in Trash still lends its own typed dates).
+    await _ancestors(db, entries)
+    own = {e.row.id: e.resolved for e in entries}
+    for e in entries:
+        if not e.resolved.undated:
+            continue
+        lent = [own[a.row.id] for a in e.ancestors]
+        top = e.ancestors[-1] if e.ancestors else e
+        if top.trashed_parent is not None:
+            lent.append(dates.resolve(_candidates(top.trashed_parent, [], {}, {}), e.window))
+        e.resolved = next((r for r in lent if not r.undated), e.resolved)
     nodes = [
         constraints.Node(
             id=str(e.row.id),
@@ -556,6 +573,7 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
             else None,
             accepted_risks=list(e.row.accepted_risks or []),
             prd=company.OnRoadmap("", e.prd.title).prd_name if e.prd is not None else None,
+            ancestors=tuple(str(a.row.id) for a in e.ancestors),
         )
         for e in entries
     ]
@@ -609,6 +627,43 @@ def _candidates(
         if r.target_date is not None and r.state != "cancelled":
             out.append(dates.Candidate(None, r.target_date, "tracker", r.updated_at))
     return out
+
+
+async def _ancestors(db: AsyncSession, entries: list[Entry]) -> None:
+    """feature-parts: sets each entry's ``ancestors`` (parent first, any depth, a loop cut
+    where it would close) and ``trashed_parent``."""
+    from oracle.trash.filter import INCLUDE_TRASHED
+
+    by_key = {(e.roadmap.id, e.row.item_key): e for e in entries}
+    missing: set[tuple[Any, str]] = set()
+    for e in entries:
+        seen, cur = {e.row.item_key}, e
+        while cur.row.parent_key and cur.row.parent_key not in seen:
+            seen.add(cur.row.parent_key)
+            nxt = by_key.get((e.roadmap.id, cur.row.parent_key))
+            if nxt is None:
+                missing.add((e.roadmap.id, cur.row.parent_key))
+                break
+            e.ancestors.append(nxt)
+            cur = nxt
+    if not missing:
+        return
+    trashed: dict[tuple[Any, str], RoadmapItem] = {}
+    rows = await db.scalars(
+        select(RoadmapItem)
+        .where(
+            RoadmapItem.roadmap_document_id.in_({d for d, _ in missing}),
+            RoadmapItem.item_key.in_({k for _, k in missing}),
+            RoadmapItem.deleted_at.is_not(None),
+        )
+        .order_by(RoadmapItem.updated_at)
+        .execution_options(**{INCLUDE_TRASHED: True})
+    )
+    for row in rows:
+        trashed[(row.roadmap_document_id, row.item_key)] = row
+    for e in entries:
+        if e.row.parent_key and (e.roadmap.id, e.row.parent_key) not in by_key:
+            e.trashed_parent = trashed.get((e.roadmap.id, e.row.parent_key))
 
 
 def _status(row: RoadmapItem, recs: list[TrackerRecord], cut: set[str]) -> str:
@@ -1141,6 +1196,7 @@ def item_out(
         depends_keys=list(row.depends_on or []),
         depends_key_of={str(d): k for d, k in e.depends_key_of.items()},
         depends_keys_of={str(d): ks for d, ks in e.depends_keys_of.items()},
+        parent_key=row.parent_key,
         can_decide=may,
         deciders=[names[i] for i in decider_ids(e, deciders) or owners or [] if i in names],
         reasons=_reasons(e),

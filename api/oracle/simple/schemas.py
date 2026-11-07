@@ -363,6 +363,14 @@ class SimpleRoadmapItem(BaseModel):
         description="S7: likely duplicates of a draft not kept both (at most 2, best first).",
     )
     merged_into: "SimpleMergedInto | None" = None
+    # feature-parts: the key of the item this one is part of as stored (set_parent's
+    # ``before``), that item (null: none, or not on the roadmap; in_trash: in Trash), the
+    # path to it from the top (top first, the parent last), and the item's parts (open or
+    # cut, never merged) in the roadmap's order. Any depth; never a loop.
+    parent_key: str | None = None
+    part_of: "SimplePartRef | None" = None
+    part_path: list["SimplePartRef"] = []
+    parts: list["SimplePartRef"] = []
     drafting: bool = Field(
         default=False, description="S7: Oracle's drafting job for this draft is queued or running."
     )
@@ -393,6 +401,13 @@ class SimpleMergedInto(BaseModel):
     id: str
     code: str
     title: str
+
+
+class SimplePartRef(SimpleMergedInto):
+    """feature-parts: a parent or a part, by its display code ("" when none) and name."""
+
+    cut: bool = False
+    in_trash: bool = False
 
 
 class SimpleGroup(BaseModel):
@@ -655,6 +670,8 @@ ChangeOp = Literal[
     "set_status",
     # lane-gt-ui: the Ground Truth feature the item is (Add to Ground Truth, Link to a feature).
     "set_feature",
+    # feature-parts: the item made part of another (any depth, never a loop), or taken out.
+    "set_parent",
     # one-feature-panel: how the goal the item serves is measured (its target and date).
     "set_goal_measure",
     # goal-buckets-tasks: the goals an item serves (into the working draft).
@@ -1118,6 +1135,10 @@ class SimplePriorityRow(BaseModel):
     on_roadmap: bool = False
     # The caller's change applies (else it is proposed).
     applies: bool = False
+    # feature-parts: the feature this one is part of, as the roadmap reads it (its part_of).
+    part_of: "SimplePartRef | None" = None
+    # Its own parts, as the roadmap reads them (open or cut), whether this list shows them or not.
+    parts: "list[SimplePartRef]" = Field(default_factory=list)
     # The feature's active override as override_priority's ``before.override`` wants it.
     before_override: dict[str, Any] | None = None
 

@@ -49,7 +49,7 @@ from oracle.authz import has_role
 from oracle.baseline.models import Entity
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple import drafts, service
-from oracle.simple.models import SimpleChange
+from oracle.simple.models import SimpleChange, SimpleDraft
 from oracle.simple.router import Commenter
 from oracle.simple.schemas import SimpleChangeOut
 from oracle.trash import service as trash
@@ -414,7 +414,9 @@ async def after_restore(
     from oracle.simple import goal_buckets
 
     if entry.root_type == "feature":
-        return await _onto_current(db, entry, principal)
+        dropped = await _onto_current(db, entry, principal)
+        await _parent_back(db, entry)
+        return dropped
     if entry.root_type != "goal":
         return []
     to = uuid.UUID(entry.root["to_goal_id"]) if entry.root.get("to_goal_id") else None
@@ -444,6 +446,56 @@ async def after_restore(
         row.goal_ids = [*now[:at], entry.root_id, *now[at:]]
     await db.flush()
     return []
+
+
+async def _parent_back(db: AsyncSession, entry: TrashEntry) -> None:
+    """feature-parts: a restored part stays under its parent when that parent is still on
+    the roadmap and open (moved meanwhile or not), as the roadmap's open draft has them;
+    else (in Trash, merged, gone) or when going back under it would close a loop, it is a
+    feature of its own, in its row and in the draft. Per version."""
+    key, doc = entry.root.get("slug"), entry.root.get("roadmap_id")
+    if not key or not doc:
+        return
+    rows = list(
+        await db.scalars(
+            select(RoadmapItem)
+            .where(RoadmapItem.roadmap_document_id == uuid.UUID(doc))
+            .execution_options(populate_existing=True)
+        )
+    )
+    seen_rows = await drafts.effective(db, rows)
+    scopes: dict[tuple[Any, ...], dict[str, RoadmapItem]] = {}
+    for r in rows:
+        at = (r.roadmap_version_id, r.simple_draft_id, r.draft_roadmap_id)
+        scopes.setdefault(at, {})[r.item_key] = seen_rows[str(r.id)]
+    gone: list[RoadmapItem] = []
+    for scope in scopes.values():
+        me = scope.get(key)
+        if me is None or not me.parent_key:
+            continue
+        parent = scope.get(me.parent_key)
+        seen, up = {me.parent_key}, parent.parent_key if parent is not None else None
+        while up and up not in seen and up != key:
+            seen.add(up)
+            nxt = scope.get(up)
+            up = nxt.parent_key if nxt is not None else None
+        if parent is None or parent.merged_into or up == key:
+            gone.append(me)
+    ids = {str(m.id) for m in gone}
+    for r in rows:
+        if str(r.id) in ids:
+            r.parent_key = None
+    for d in await db.scalars(
+        select(SimpleDraft).where(
+            SimpleDraft.document_id == uuid.UUID(doc), SimpleDraft.status.in_(drafts.OPEN)
+        )
+    ):
+        ov = dict(d.overlay or {})
+        for i in ids & set(ov):
+            if "parent_key" in ov[i]:
+                ov[i] = {**ov[i], "parent_key": None}
+        d.overlay = ov
+    await db.flush()
 
 
 # Not copied when a restored feature goes onto a version it is not on.

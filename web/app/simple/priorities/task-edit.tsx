@@ -373,6 +373,7 @@ export function TaskRow({
   onOpen,
   feature,
   actions,
+  partOf,
 }: {
   code: string;
   name: string;
@@ -386,6 +387,8 @@ export function TaskRow({
   /** build-feature-panel: the feature its name opens in the one feature panel (its item id, else its key). */
   feature?: string;
   actions?: ReactNode;
+  /** panel-menu: the feature it is part of ("part of Alert rules engine"), beside its name. */
+  partOf?: ReactNode;
 }) {
   return (
     <li
@@ -427,6 +430,7 @@ export function TaskRow({
           name
         )}
         {draft && <span className="ml-1.5 inline-flex h-5 items-center rounded-full border border-line-strong px-1.5 align-[1px] text-[12px] font-[650] text-text2">Draft</span>}
+        {partOf && <span className="ml-1.5">{partOf}</span>}
       </span>
       {milestone && (
         <span className="flex flex-none gap-1 max-sm:order-last max-sm:basis-full max-sm:pl-[60px]">

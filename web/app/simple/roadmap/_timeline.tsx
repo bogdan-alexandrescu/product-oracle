@@ -42,10 +42,11 @@ import {
   whereAttr,
   yearSpan,
   drawnKeyDates,
+  partsTree,
 } from "./_lib";
 
 /** One row of the chart: a group's heading (its metric line) or an item. */
-export type Row = { kind: "group"; key: string; title: string; metric: string | null; below?: boolean; count?: number } | { kind: "item"; item: Item; place?: number };
+export type Row = { kind: "group"; key: string; title: string; metric: string | null; below?: boolean; count?: number } | { kind: "item"; item: Item; place?: number; depth?: number };
 
 export interface Layout {
   rows: Row[];
@@ -103,7 +104,8 @@ export function layout(
     if (!live.length) continue;
     const metric = live.find((i) => i.goal?.metric)?.goal?.metric ?? null;
     rows.push({ kind: "group", key: g.key, title: g.title, metric: lane === "goal" ? metric : null, count: live.length });
-    for (const item of live) rows.push({ kind: "item", item });
+    // feature-parts: the group's parts under their parents (oneLane's order), drawn as a tree.
+    for (const x of partsTree([live.map((i) => i.id)], byId)[0]) rows.push({ kind: "item", item: byId.get(x.id)!, depth: x.depth });
   }
   if (below.length) {
     rows.push({ kind: "group", key: "below-the-line", title: "Below the line", metric: null, below: true });
@@ -782,7 +784,8 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
               data-testid="chart-label"
               data-item-id={r.item.id}
               data-open={open === r.item.id ? "true" : undefined}
-              style={{ height: l.nameH?.get(r.item.id) ?? l.rowH }}
+              data-depth={r.depth || undefined}
+              style={{ height: l.nameH?.get(r.item.id) ?? l.rowH, paddingLeft: r.depth ? (compact ? 8 : 12) + r.depth * (compact ? 10 : 14) : undefined }}
               onClick={() => onOpen(r.item, { x: sc.x((moved[r.item.id] ?? barSpan(r.item))[0]), y: (l.y.get(r.item.id) ?? 0) + l.rowH })}
               className={`flex w-full min-w-0 items-center text-left hover:bg-surface2 ${compact ? "gap-1 px-2 text-[13px]" : "gap-2 px-3 text-[15px]"} ${open === r.item.id ? "bg-accent-soft" : ""}`}
             >
@@ -798,6 +801,12 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
               {/* The Current-state pill follows the name, as chips do, so every name starts at one x.
                   The two wrap as a group (the name takes 60% of the row at least): the pill beside a
                   short name, under a long one, so neither is cut (layout's nameH). */}
+              {/* feature-parts: a part drawn as a branch of its parent's tree. */}
+              {!!r.depth && (
+                <span aria-hidden className="flex-none text-text2">
+                  └
+                </span>
+              )}
               <span className={`flex min-w-[60%] flex-1 flex-wrap items-center ${compact ? "gap-x-1 gap-y-0.5" : "gap-x-2 gap-y-1"}`}>
                 <span
                   data-testid="label-title"

@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 import { MsBoardRow } from "./_milestones";
-import { barKind, broken, brokenLinks, closedItem, spanWords, whereAttr, type Change, type Item, type Roadmap } from "./_lib";
+import { barKind, broken, brokenLinks, closedItem, mergedName, partsTree, spanWords, whereAttr, type Change, type Item, type Roadmap } from "./_lib";
 
 export type Horizon = Item["horizon"];
 
@@ -83,6 +83,8 @@ export interface BoardColumn {
   window: { start: string; end: string };
   groups: { key: string; title: string; items: Item[] }[];
   below: Item[];
+  /** feature-parts: how deep a part each card is in the column (absent: 0). */
+  depth: Map<string, number>;
 }
 
 export function boardColumns(data: Roadmap): BoardColumn[] {
@@ -95,8 +97,12 @@ export function boardColumns(data: Roadmap): BoardColumn[] {
         items: g.item_ids.map((id) => byId.get(id)).filter((i): i is Item => !!i && i.horizon === h.key && !closedItem(i)),
       }))
       .filter((g) => g.items.length);
+    // feature-parts: each group's parts under their parents in the column, as a tree; a part
+    // whose parent is in another column (or not shown) stays a card of its own at the top.
+    const tree = partsTree(groups.map((g) => g.items.map((i) => i.id)), byId);
+    const depth = new Map(tree.flat().map((x) => [x.id, x.depth]));
     const below = data.items.filter((i) => i.horizon === h.key && closedItem(i));
-    return { ...h, window: data.windows[h.key], groups, below };
+    return { ...h, window: data.windows[h.key], groups: groups.map((g, n) => ({ ...g, items: tree[n].map((x) => byId.get(x.id)!) })), below, depth };
   });
 }
 
@@ -346,6 +352,8 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
     }
   };
 
+  const depthOf = new Map(cols.flatMap((c) => [...c.depth]));
+  const byId = new Map(data.items.map((i) => [i.id, i]));
   const card = (item: Item) => {
     const kind = closedItem(item) ? "cut" : barKind(item);
     // fix4 qa-simple-roadmap-7: only a broken link draws the red outline; a draft with no
@@ -355,8 +363,9 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
     const red = links.length > 0;
     const pending = proposals.find((c) => c.op === "change_horizon" && c.target.item_id === item.id);
     const movable = canDrag && !closedItem(item);
+    const depth = depthOf.get(item.id) ?? 0;
     return (
-      <li key={item.id}>
+      <li key={item.id} data-depth={depth || undefined} style={depth ? { marginLeft: depth * 16 } : undefined}>
         <div
           role="button"
           tabIndex={0}
@@ -414,7 +423,7 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
           )}
           {item.merged_into && (
             <p className="mt-1 text-sm text-text2" data-testid="item-merged">
-              Merged into {item.merged_into.code}
+              Merged into {mergedName(item, (id) => byId.get(id))}
             </p>
           )}
           {item.looks_like.length > 0 && (
