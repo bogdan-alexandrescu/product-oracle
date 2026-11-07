@@ -8,11 +8,13 @@ import { expect, test, type Page } from "./test";
  * driven through the UI on a desktop (1366x820) and a phone (390x844), light and dark,
  * against the mock's "simple-walk" scenario (invented data).
  *
- * Card walk-home-strip: protects = Home's "The plan this quarter" draws one row per milestone
- * when its items' milestone texts carry notes ("M1 · Measure it, make it safe (baseline needs
- * the export); ..."): "M1 · Measure it, make it safe · 3 items" once, "M2 · Ship to beta · 2
- * items" once, the items with no milestone in their own row, no note in any label;
- * fails_when = a row per distinct milestone text (the same truncated label repeated) or a
+ * Card walk-home-strip: protects = Home's "The plan this quarter" draws one row per current
+ * milestone of the roadmap, whatever notes its items' milestone texts carry ("M1 · Measure it,
+ * make it safe (baseline needs the export); ..."); home-milestones-current (PR 1424): this
+ * scenario's roadmap has no M1 or M2 (its milestones are the track's "Beta" and "Beta launch"),
+ * so the five items typed "M1 · Measure it, make it safe (...)" or "M2 · Ship to beta (...)" are
+ * under "Not in a milestone", never in a row of their own; no note in any label;
+ * fails_when = a row per distinct milestone text, a row named by a text no milestone has, or a
  * note in a label; no_claim = which PRD Home picks (simple-plan-strip.spec.ts).
  *
  * Card walk-one-pager-timeline: protects = the one-pager's Timeline strip groups the same way
@@ -73,7 +75,14 @@ for (const phone of [false, true]) {
           const texts = await labels.allTextContents();
           // home-waiting-one-list (PR 1235): Home's plan is the company roadmap's, every PRD's
           // items, so a row names its milestone alone (fix4's document name went with one PRD's plan).
-          expect(texts.slice(0, 2)).toEqual(["M1 · Measure it, make it safe · 3 items", "M2 · Ship to beta · 2 items"]);
+          // home-milestones-current (PR 1424): the roadmap has no M1 or M2, so the noted texts
+          // name no current milestone: their items are not in one, and no row is named by them.
+          for (const t of texts) expect(t).not.toMatch(/^M[12]\b|Measure it|Ship to beta/);
+          const loose = labels.filter({ hasText: /^Not in a milestone · \d+ items?$/ });
+          await loose.hover();
+          expect(((await loose.getAttribute("title")) ?? "").split("\n").slice(1)).toEqual(
+            expect.arrayContaining(["Usage export", "Dry run", "Setup audit", "Beta invites", "Beta feedback form"]),
+          );
           expect(texts).toContain("Beta launch · 3 items");
           for (const t of texts) expect(t).not.toMatch(/two teams first|after legal/);
           expect(texts.at(-1)).toMatch(/^Not in a milestone · \d+ items?$/);
