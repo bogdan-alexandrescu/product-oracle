@@ -5,10 +5,12 @@ import { expect, test, type Page } from "./test";
 /**
  * home-draft-in-review (a person always sees what is happening to a roadmap shared with them):
  * Home's draft card keeps a roadmap draft once it is sent for review. Its decider sees it with one
- * action, Open draft to approve, which opens it on the Roadmap; once decided it is gone. The one
+ * action, Open draft to approve, which opens it on the Roadmap, and only there: Also waiting for you
+ * does not list it a second time with another action. Once decided it is gone. The one
  * who sent it sees it as waiting for review, whom it waits on in the tip. A viewer sees nothing.
  *
- * fails_when: Home keeps only working drafts, so the decider never sees the draft in review.
+ * fails_when: Home keeps only working drafts, so the decider never sees the draft in review; or
+ * Also waiting for you lists the same draft again (with Approve).
  */
 
 /** The owner sends the Onboarding roadmap's draft for review (Priya Raman decides it). */
@@ -29,6 +31,7 @@ async function openHome(page: Page) {
 }
 
 const draftRow = (page: Page) => page.getByTestId("home-draft").filter({ hasText: "Onboarding roadmap" });
+const alsoWaitingRow = (page: Page) => page.getByTestId("waiting-item").filter({ hasText: "Onboarding roadmap" });
 
 test("a roadmap draft sent for review shows on Home to its decider until decided, and to its sender as waiting", async ({ page }) => {
   await sendForReview(page);
@@ -38,11 +41,14 @@ test("a roadmap draft sent for review shows on Home to its decider until decided
   await draftRow(page).getByRole("button", { name: "Waiting for review" }).click();
   await expect(page.getByText(/it waits for Priya Raman to approve/)).toBeVisible();
 
-  // The decider: the card with its one action.
+  // The decider: the card with its one action, listed once on Home.
   await signOut(page);
   await login(page, "approver@example.com");
   await openHome(page);
+  await expect(draftRow(page)).toHaveCount(1);
   await expect(draftRow(page)).toContainText("Waiting for your approval");
+  await expect(page.getByTestId("home-sentence")).not.toHaveText(/Checking what waits/);
+  await expect(alsoWaitingRow(page)).toHaveCount(0);
   await draftRow(page).getByRole("link", { name: "Open draft to approve" }).click();
   await expect(page).toHaveURL(/\/simple\/roadmap\?draft=/);
   await page.getByTestId("draft-banner").getByRole("button", { name: "Approve", exact: true }).click();
@@ -51,7 +57,7 @@ test("a roadmap draft sent for review shows on Home to its decider until decided
   // Decided: gone from Home.
   await openHome(page);
   await expect(draftRow(page)).toHaveCount(0);
-  await expect(page.getByTestId("waiting-item").filter({ hasText: "Onboarding roadmap" })).toHaveCount(0);
+  await expect(alsoWaitingRow(page)).toHaveCount(0);
 });
 
 test("a viewer sees no draft in review on Home", async ({ page }) => {
