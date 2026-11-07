@@ -222,11 +222,11 @@ test("a replaced PRD's past meeting keeps its decisions", async ({ page }) => {
   await expect(past.getByTestId("decision-row")).toHaveCount(1);
   await expect(past.getByTestId("decision-row").first()).toContainText("D-9 Moved Weekly alert digest");
 
-  // The meeting page's own links: its decision's code, and "Open the Decisions page".
+  // The meeting page's own links: its decision by its name (visual QA pass F: no code), and "Open the Decisions page".
   await page.goto("/simple/meetings");
   await page.getByTestId("meetings-past").getByRole("link", { name: "Review: Usage alerts" }).click();
   await expect(page).toHaveURL(/\/simple\/meetings\/[^/?]+$/);
-  await page.getByRole("list", { name: "Decisions taken" }).getByRole("link", { name: "D-9 Moved Weekly alert digest" }).click();
+  await page.getByRole("list", { name: "Decisions taken" }).getByRole("link", { name: "Moved Weekly alert digest", exact: true }).click();
   await expect(page).toHaveURL(/\/simple\/decisions#d-9$/);
   await expect(page.getByTestId("decision-row").filter({ hasText: "D-9 Moved Weekly alert digest" }).filter({ visible: true }).first()).toBeVisible();
   await page.goBack();
