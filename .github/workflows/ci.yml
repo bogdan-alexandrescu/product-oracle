@@ -186,7 +186,11 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
+      # Full history, origin/main with it: the prose guard reads its merge base's ceilings and
+      # never fetches itself, so it always runs here.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
