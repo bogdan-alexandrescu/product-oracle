@@ -5,7 +5,7 @@ import { login } from "./helpers";
 // walkb-roadmap 3: Mobile alert push has only an end date and depends on Alert rules engine.
 // Its start is never made up as its window's first day: it starts after Alert rules engine
 // ends, and raises no broken link "starts Oct 1, but ...". hotfix-effort-start: it starts its
-// effort (3 weeks) before its Dec 20 end, Nov 29, well after the rules engine ends (Nov 10).
+// effort (3 weeks, its end included) to its Dec 20 end, Nov 30, well after the rules engine ends (Nov 10).
 
 // build-roadmap (47361c89): the picked Timeline draws a bar per item in its own row, with its
 // dates on it, and lists broken links in the conflicts panel above the chart, not by the bar.
@@ -38,7 +38,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       await expect(page.getByRole("main")).not.toContainText(/‘Mobile alert push’ starts/);
       await expect(page.getByTestId("conflicts")).toBeVisible();
       await expect(page.locator('[data-testid="conflict"][data-item="alert-mobile"]')).toHaveCount(0);
-      if (viewport.width > 600) await startsAfter(page, "alert-rules", "alert-mobile", "2026-11-29");
+      if (viewport.width > 600) await startsAfter(page, "alert-rules", "alert-mobile", "2026-11-30");
     });
 
     // Card entry (walkb-roadmap review): protects = a fully estimated item (Alert routing by

@@ -761,12 +761,12 @@ async def test_moving_an_item_dated_by_its_date_source_takes_the_dates_the_read_
     assert keys_once(out) == ["offline-sync", "route-search", "trip-reports"]
     item = by_key(out)["route-search"]
     shown = {"start_date": item["start"]["date"], "end_date": item["end"]["date"]}
-    assert shown == {"start_date": "2026-12-11", "end_date": "2027-01-08"}
+    assert shown == {"start_date": "2026-12-12", "end_date": "2027-01-08"}
     assert item["end"]["source"] == "engineering"
     await change(client, ctx, "move_dates", {"item_id": item["id"]}, shown,
-                 {"start_date": "2026-12-04", "end_date": "2027-01-01"})  # fmt: skip
+                 {"start_date": "2026-12-05", "end_date": "2027-01-01"})  # fmt: skip
     out = await read(client, ctx)
     assert keys_once(out) == ["offline-sync", "route-search", "trip-reports"]
     item = by_key(out)["route-search"]
-    assert (item["start"]["date"], item["end"]["date"]) == ("2026-12-04", "2027-01-01")
+    assert (item["start"]["date"], item["end"]["date"]) == ("2026-12-05", "2027-01-01")
     assert item["start"]["source"] == item["end"]["source"] == "typed"
