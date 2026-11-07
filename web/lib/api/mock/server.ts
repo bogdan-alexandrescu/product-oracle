@@ -183,7 +183,7 @@ import { onePagerInboxRows, planSlice, prdOnePager, routeOnePager, seedNeedsLook
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
-import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
+import { approvalItems, CANCELLED_DRAFT, draftAct, draftPrdsOut, REPLACED_DRAFT, SAVED_CARTS, seedDraftPrd, seedMeetingDraftDates, WORKSPACES, WORKSPACES_DRAFT } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, seedTwoDependencies, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { groundTruthCheck, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth } from "./ground-truth";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
@@ -2341,7 +2341,32 @@ function seedMeetingDraftDatesScenario(): Db {
   // The fixtures' Saved carts PRD, named as the review shows it.
   const doc = db.documents.find((d) => d.slug === SAVED_CARTS.slug)!;
   doc.title = SAVED_CARTS.title;
-  if (db.simple_roadmap) seedMeetingDraftDates(db.simple_roadmap, doc.id);
+  if (db.simple_roadmap) seedMeetingDraftDates(db.simple_roadmap, doc.id, docVersions(db, doc).at(-1)?.number ?? 1);
+  return db;
+}
+
+/**
+ * RP2 'Draft layer on roadmap' "roadmap-draft-layer" scenario: the meeting-draft-dates data, with
+ * Team workspaces in draft too, Online deposits' draft (its PRD replaced) and Clinic outreach's
+ * (its run cancelled), which the layer leaves out (./meeting-draft.ts).
+ */
+export const DRAFT_LAYER_SCENARIO = "roadmap-draft-layer";
+function seedDraftLayerScenario(): Db {
+  const db = seedMeetingDraftDatesScenario();
+  const rm = db.simple_roadmap;
+  if (!rm) return db;
+  const prd = (slug: string, title?: string) => {
+    const doc = db.documents.find((d) => d.slug === slug)!;
+    if (title) doc.title = title;
+    return { doc, ref: { id: doc.id, slug: doc.slug, title: doc.title }, version: docVersions(db, doc).at(-1)?.number ?? 1 };
+  };
+  const ws = prd(WORKSPACES.slug, WORKSPACES.title);
+  seedDraftPrd(rm, ws.ref, WORKSPACES_DRAFT, { version: ws.version });
+  const dep = prd("online-deposits");
+  dep.doc.replaced_by = [ws.doc.id];
+  seedDraftPrd(rm, dep.ref, REPLACED_DRAFT, { version: dep.version });
+  const out = prd("clinic-outreach");
+  seedDraftPrd(rm, out.ref, CANCELLED_DRAFT, { version: out.version, cancelled: true });
   return db;
 }
 
@@ -3747,6 +3772,8 @@ function load(): Db {
             ? seedPriorityOrderGoalReview
           : scenario === "meeting-draft-dates"
             ? seedMeetingDraftDatesScenario
+          : scenario === DRAFT_LAYER_SCENARIO
+            ? seedDraftLayerScenario
           : scenario === "next-draft" || scenario === "next-draft-costly"
             ? () => seedNextDraft(scenario === "next-draft-costly")
           : scenario === "before-drafting"
@@ -7360,6 +7387,33 @@ async function route(db: Db, req: Request): Promise<Response> {
       const out = appliedVersionOf(db.simple_roadmap!, doc.slug, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames });
       return out ? json(200, out) : json(404, { detail: "No such roadmap" });
     }
+    // RP2 'Draft layer on roadmap': GET /v1/simple/roadmap/draft-prds, and Change dates / Leave out
+    // on a draft item (approvers and up), as oracle.simple.router.
+    if (p[3] === "draft-prds") {
+      const rm = db.simple_roadmap!;
+      const state = (id: string) => {
+        const doc = db.documents.find((d) => d.id === id);
+        return {
+          // docs.visibility.visible_to: a commenter or a viewer sees company documents only.
+          visible: !!doc && canSee(me.role, doc.visibility),
+          replaced: !!doc?.replaced_by?.length,
+          // A version at or after the drafted one approved (roadmap_drafts._drafts).
+          approved: (n: number) => !!doc && docVersions(db, doc).some((v) => v.number >= n && !!v.approved_at),
+        };
+      };
+      if (!p[4] && r.method === "GET") return json(200, draftPrdsOut(rm, state, atLeast(me.role, "approver")));
+      if (p[4] === "items" && p[5] && (p[6] === "dates" || p[6] === "leave-out") && r.method === "POST") {
+        if (!atLeast(me.role, "approver")) return json(403, { detail: "Requires the approver role" });
+        const shown = draftPrdsOut(rm, state, true).flatMap((d) => d.items.map((i) => ({ item: i, prd: d.prd.id })));
+        const hit = shown.find((x) => x.item.id === p[5]);
+        if (!hit) return json(404, { detail: "No such draft item" });
+        const body = p[6] === "dates" ? ((await r.json()) as { start?: string; end?: string }) : {};
+        const done = draftAct(rm, [hit.prd], p[6] === "dates" ? { kind: "dates", id: p[5], start: body.start ?? "", end: body.end ?? "" } : { kind: "leave", id: p[5] });
+        if ("status" in done) return json(done.status, { detail: done.detail });
+        return new Response(null, { status: 204 });
+      }
+      return json(404, { detail: "Not Found" });
+    }
     // removed-tracks: Simple's removed list, its tracks and their change ops (./simple-removed.ts).
     const removedRes = await routeRemoved(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames }, r, p, () => (db.trash ??= emptyTrash()).entries, (id) =>
       !!db.roadmap?.milestones.some((m) => m.track_id === id) || !!db.roadmap?.records.some((x) => x.track_id === id) || !!db.roadmap?.alerts?.some((x) => x.track_id === id) || !!db.launches?.launches.some((l) => l.track_id === id) || !!db.quality?.outcomes.some((o) => o.track_id === id),
@@ -8045,15 +8099,18 @@ async function route(db: Db, req: Request): Promise<Response> {
           r.version === v.number &&
           r.status === "ready",
       );
+      // RP2 'Draft layer on roadmap': a PRD whose run's draft roadmap holds its dated items
+      // (./meeting-draft.ts) gives those, less the ones left out, at their typed dates.
+      const runDraft = row ? [] : approvalItems((db.simple_roadmap ??= seedSimpleRoadmap()), doc.id);
       approvedPrdToDraft(
         (db.simple_roadmap ??= seedSimpleRoadmap()),
         {
           prd: { id: doc.id, slug: doc.slug, title: doc.title },
           version: v.number,
-          roadmap: row?.roadmap ?? null,
+          roadmap: row?.roadmap ?? (runDraft.length ? "onboarding-roadmap" : null),
           // As the API's _dated: the end is the engineering lead's accepted date (the PRD's
           // newest verified basis for the item), else the item's own; the start is its own.
-          items: (row?.items ?? []).map((i) => {
+          items: runDraft.length ? runDraft : (row?.items ?? []).map((i) => {
             const ms = (i.milestone ?? {}) as { date?: unknown; start_date?: unknown };
             const lead = (db.roadmap?.bases ?? [])
               .filter((b) => b.prd_document_id === doc.id && b.item_key === i.item_key && b.status === "verified")
