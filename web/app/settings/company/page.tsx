@@ -631,7 +631,7 @@ function IntakeReadPanel({ canChange }: { canChange: boolean }) {
                 disabled={!canChange || busy}
                 onChange={(e) => void set(e.target.checked)}
               />
-              Oracle reads new intakes ($1.50 each)
+              Oracle reads new briefs ($1.50 each)
             </label>
             {saved && <SavedNote testId="intake-read-saved" />}
           </div>
