@@ -85,6 +85,7 @@ def _cpu(target: str, head: str, piece: str, times: int, tail: str) -> float:
     return float(done.stdout)
 
 
+@pytest.mark.timing  # a CPU budget: runs alone in the api-timing job
 @pytest.mark.parametrize("name", sorted(CRAFTED))
 def test_crafted_text_is_cleaned_in_linear_time(name):
     took = _cpu(*CRAFTED[name])

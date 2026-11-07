@@ -10,7 +10,9 @@ import { expect, test } from "./test";
  * can show, in web/app, web/components or web/lib (the mock API's data included), says
  * "Desired state", "Current state" or "Baseline" for the graph, including text that only shows
  * in a form or an empty state the walk does not open. Reads every string literal, template
- * piece and JSX text (comments aside). And no spec in web/e2e expects a page to say one: the
+ * piece and JSX text (comments aside), every string of the mock's JSON data, and every line of
+ * the API's export and email templates (api/oracle's .j2 and .html, Jinja tags aside: the PDF,
+ * deck and public roadmap exports, the invite emails). And no spec in web/e2e expects a page to say one: the
  * strings given to toHaveText, toContainText, getByText and a role's `name:` (test titles,
  * comments and checks that a text is gone aside).
  * fails_when = a label such as "change it in Baseline" or "Detailed › Baseline" is left, or a
@@ -137,9 +139,50 @@ function expectedOldNames(rel: string, text: string): string[] {
 
 const read = (file: string) => fs.readFileSync(file, "utf8");
 
+/** Every string in a JSON value, keys included. */
+function* jsonStrings(v: unknown): Generator<string> {
+  if (typeof v === "string") yield v;
+  else if (Array.isArray(v)) for (const x of v) yield* jsonStrings(x);
+  else if (v && typeof v === "object") {
+    for (const [k, x] of Object.entries(v)) {
+      yield k;
+      yield* jsonStrings(x);
+    }
+  }
+}
+
+/** Every string of the mock's JSON data file ``rel`` (holding ``text``) that says an old name. */
+const jsonOldNames = (rel: string, text: string) => [...jsonStrings(JSON.parse(text))].filter((s) => saysOld(rel, s)).map((s) => `${rel}: ${JSON.stringify(s.trim().slice(0, 120))}`);
+
+const MOCK = path.join(WEB, "lib", "api", "mock");
+const API = path.resolve(WEB, "..", "api", "oracle");
+/** A Jinja tag, expression or comment: code, not words a person reads. */
+const JINJA = /\{\{[\s\S]*?\}\}|\{%[\s\S]*?%\}|\{#[\s\S]*?#\}/g;
+
+function* templates(dir: string): Generator<string> {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) yield* templates(p);
+    else if (/\.(j2|html)$/.test(e.name)) yield p;
+  }
+}
+
+/** Every line of an export or email template ``rel`` (holding ``text``) that says an old name, its tags aside. */
+function templateOldNames(rel: string, text: string): string[] {
+  // A tag over several lines keeps its line breaks, so each line keeps its number.
+  const lines = text.replace(JINJA, (m) => "{}" + "\n".repeat(m.split("\n").length - 1)).split("\n");
+  return lines.flatMap((line, i) => (saysOld(rel, line) ? [`${rel}:${i + 1}: ${line.trim().slice(0, 120)}`] : []));
+}
+
 test("no string a page can show in web/app, web/components or web/lib says Desired state, Current state or Baseline", () => {
   const found = ["app", "components", "lib"].flatMap((dir) => [...sources(path.join(WEB, dir))].flatMap((f) => oldNames(relOf(f), read(f))));
   expect(found).toEqual([]);
+});
+
+test("no string of the mock's JSON data, nor an export or email template, says Desired state, Current state or Baseline", () => {
+  const mock = fs.readdirSync(MOCK).filter((f) => f.endsWith(".json")).flatMap((f) => jsonOldNames(relOf(path.join(MOCK, f)), read(path.join(MOCK, f))));
+  const sent = [...templates(API)].flatMap((f) => templateOldNames(path.relative(API, f), read(f)));
+  expect([...mock, ...sent]).toEqual([]);
 });
 
 test("no spec in web/e2e expects a page to say Desired state, Current state or Baseline", () => {
@@ -185,6 +228,11 @@ test("the check finds an old name planted in web/lib, the mock and a spec's expe
   ]) {
     expect(expectedOldNames("e2e/x.spec.ts", planted), planted).toHaveLength(1);
   }
+  // fails_when = the check does not read the mock's JSON data or the exports' and emails' templates.
+  expect(jsonOldNames("lib/api/mock/x.json", '{"items": [{"title": "Change it in Baseline", "key": "baseline"}]}')).toHaveLength(1);
+  expect(templateOldNames("export/templates/deck.html.j2", "<h1>{{ title }}</h1>\n<p>Read from the Baseline.</p>\n<p>{{ item.baseline }}</p>")).toEqual(["export/templates/deck.html.j2:2: <p>Read from the Baseline.</p>"]);
+  expect(templateOldNames("members/invite-email.html", '<p class="baseline-row">{# the\nbaseline #}</p>\n<p>Change it in Baseline</p>')).toEqual(["members/invite-email.html:3: <p>Change it in Baseline</p>"]);
+  expect([...templates(API)].length, "the API's export and email templates are found").toBeGreaterThan(0);
   for (const kept of [
     'test("Baseline to PRD reads Ground Truth to PRD", async () => {});',
     '// The heading once read "Baseline to PRD".',

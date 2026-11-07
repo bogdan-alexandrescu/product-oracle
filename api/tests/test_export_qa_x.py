@@ -266,7 +266,10 @@ def test_x8_a_code_in_brackets_after_a_name_is_named_already():
     the version's older name; no_claim=a bracket holding more than the code."""
     w = render_module.with_goal_names
     assert w("Serves Activation (G1).", GOALS) == "Serves Activation (G1)."
-    assert w("Serves Adoption rate (**G1**).", GOALS) == "Serves Adoption rate (**G1**)."
+    assert w("Serves activation (**G1**).", GOALS) == "Serves activation (**G1**)."
+    assert w("Serves **Activation** (G1).", GOALS) == "Serves **Activation** (G1)."
+    names = {"G1": "Adoption rate"}
+    assert w("Serves Adoption rate (**G1**).", names) == "Serves Adoption rate (**G1**)."
     assert w("| Bulk import | Activation (G1) |", GOALS) == "| Bulk import | Activation (G1) |"
     # A bare code beside it still reads with its name, as does a code in a bracket of more.
     assert w("Serves Activation (G1) and G2.", GOALS) == (
@@ -274,6 +277,20 @@ def test_x8_a_code_in_brackets_after_a_name_is_named_already():
     )
     assert w("Two goals (G1, G2).", GOALS) == "Two goals (G1 Activation, G2 Retention)."
     assert w("Goals: (G1).", GOALS) == "Goals: (G1 Activation)."
+
+
+def test_x8_a_code_in_brackets_after_another_word_reads_with_its_name():
+    """protects=X-8: only the goal's own name before the bracket names the code already; a
+    code in brackets after any other word reads with its name; fails_when="see the plan (G1)"
+    or "Retention (G1)" keeps no name, or a word ending in the name counts as the name;
+    no_claim=a bracket holding more than the code."""
+    w = render_module.with_goal_names
+    assert w("Please see the plan (G1).", GOALS) == "Please see the plan (G1 Activation)."
+    assert w("Serves Retention (G1).", GOALS) == "Serves Retention (G1 Activation)."
+    assert w("Serves Reactivation (G1).", GOALS) == "Serves Reactivation (G1 Activation)."
+    assert w("| Bulk import | Bulk import (**G2**) |", GOALS) == (
+        "| Bulk import | Bulk import (**G2 Retention**) |"
+    )
 
 
 DATED_LINKS = (

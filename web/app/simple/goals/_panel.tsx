@@ -112,6 +112,7 @@ export function FeaturePanel({ id, code, name, placed, onClose }: { id: string; 
           onDecide={(c, how) => void onDecide(c, how)}
           onClose={onClose}
           onOpen={setOpened}
+          milestones={roadmap.data.goal_milestones}
         />
         {own && (
           <p data-testid="gm-panel-milestone" className="simple-small mt-1 w-fit rounded-xl border border-line bg-surface px-3 py-1 shadow">

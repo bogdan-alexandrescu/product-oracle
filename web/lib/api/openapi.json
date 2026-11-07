@@ -33927,7 +33927,7 @@
           "roadmaps"
         ],
         "summary": "Act On Roadmap Item Staleness",
-        "description": "Settle potentially stale items: ``review`` (under review) or ``reconcile`` (still\nvalid, with a reason; re-anchored on the PRD's latest approved version). 409 when no\nitem is in a state the action applies to.",
+        "description": "Settle potentially stale items: ``review`` (under review) or ``reconcile`` (still\nvalid, with a reason; re-anchored on the PRD's latest approved version), on the version\nnamed, else the one the tracks follow (the latest approved with items). 409 when no item\nis in a state the action applies to. The tracks that own the changed items are then\nre-checked, so their alerts follow at once.",
         "operationId": "act_on_roadmap_item_staleness",
         "security": [
           {
@@ -115463,6 +115463,14 @@
             "title": "Depends On",
             "default": []
           },
+          "depends_titles": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Depends Titles",
+            "default": {}
+          },
           "validation_gates": {
             "items": {
               "additionalProperties": true,
@@ -126277,6 +126285,18 @@
               }
             ],
             "title": "Start Date"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
           }
         },
         "type": "object",
