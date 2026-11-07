@@ -9770,8 +9770,10 @@ export interface paths {
         /**
          * Act On Roadmap Item Staleness
          * @description Settle potentially stale items: ``review`` (under review) or ``reconcile`` (still
-         *     valid, with a reason; re-anchored on the PRD's latest approved version). 409 when no
-         *     item is in a state the action applies to.
+         *     valid, with a reason; re-anchored on the PRD's latest approved version), on the version
+         *     named, else the one the tracks follow (the latest approved with items). 409 when no item
+         *     is in a state the action applies to. The tracks that own the changed items are then
+         *     re-checked, so their alerts follow at once.
          */
         post: operations["act_on_roadmap_item_staleness"];
         delete?: never;
@@ -38348,6 +38350,13 @@ export interface components {
              * @default []
              */
             depends_on: string[];
+            /**
+             * Depends Titles
+             * @default {}
+             */
+            depends_titles: {
+                [key: string]: string;
+            };
             /**
              * Validation Gates
              * @default []
