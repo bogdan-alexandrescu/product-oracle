@@ -20,6 +20,7 @@ verified basis) and monitors the track again. An approved roadmap version is nev
 rewritten: its old date reads as withdrawn.
 """
 
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
@@ -52,6 +53,7 @@ from oracle.roadmap.schemas import (
     TrackAlertOut,
     TrackAlertPrd,
 )
+from oracle.tenancy import tenant_session
 
 if TYPE_CHECKING:
     from oracle.auth.deps import Principal
@@ -486,35 +488,61 @@ def out(
     )
 
 
+# A track whose re-check failed on a read waits this long before a read tries it again,
+# so a track that keeps raising never reruns on every read and the next one gets its turn.
+RECHECK_BACKOFF_SECONDS = 15 * 60
+
+
 async def recheck_skipped(
     db: AsyncSession, principal: "Principal", track_ids: set[uuid.UUID] | None = None
 ) -> uuid.UUID | None:
     """Re-check one track whose re-check after an action was skipped (it raised:
     :func:`oracle.roadmap.views.monitor_owners` marks it ``recheck``), on a read of its
-    alerts rather than at the hourly pass: one track per read, locked and checked in its
-    own savepoint and committed; one that raises again is rolled back alone and stays
-    marked. ``track_ids``: only these tracks (a read of one track's alerts); None: any
-    of the caller's. Only for a reader who sees everything (owners and approvers), so the
-    check never runs on a narrowed view. Returns the track re-checked."""
-    from oracle.roadmap import views
-
+    alerts rather than at the hourly pass: one track per read, locked, checked and
+    committed in a session of its own, so the read's session is never committed and the
+    read never fails. One that raises again stays marked and is stamped
+    ``recheck_failed_at``: reads pass it over for :data:`RECHECK_BACKOFF_SECONDS`, and
+    the marked track tried longest ago goes first, so every marked track gets its turn.
+    ``track_ids``: only these tracks (a read of one track's alerts); None: any of the
+    caller's. Only for a reader who sees everything (owners and approvers), so the check
+    never runs on a narrowed view. Returns the track re-checked."""
     if principal.user_id is None or visibility.restricted(principal):
         return None
+    from oracle.roadmap import views
+
+    try:
+        async with tenant_session(principal.tenant_id) as own:
+            return await _recheck_one(own, principal, track_ids)
+    except Exception:  # noqa: BLE001 - logged; the read goes on, the hourly pass tries too
+        views.log.exception("a skipped track re-check could not run on a read")
+        return None
+
+
+async def _recheck_one(
+    own: AsyncSession, principal: "Principal", track_ids: set[uuid.UUID] | None
+) -> uuid.UUID | None:
+    from oracle.roadmap import views
+
+    failed_at = ProductTrack.monitor["recheck_failed_at"].as_float()
     query = (
         select(ProductTrack)
-        .where(ProductTrack.status == "active", ProductTrack.monitor["recheck"].as_boolean())
-        .order_by(ProductTrack.created_at, ProductTrack.id)
+        .where(
+            ProductTrack.status == "active",
+            ProductTrack.monitor["recheck"].as_boolean(),
+            failed_at.is_(None) | (failed_at < time.time() - RECHECK_BACKOFF_SECONDS),
+        )
+        .order_by(failed_at.asc().nulls_first(), ProductTrack.created_at, ProductTrack.id)
     )
     if track_ids is not None:
         query = query.where(ProductTrack.id.in_(track_ids))
-    flagged = list(await db.scalars(query))
+    flagged = list(await own.scalars(query))
     if flagged and track_ids is None:
-        leads = await engineering_leads(db)
+        leads = await engineering_leads(own)
         # The caller's tracks: any alert of theirs reaches them (a lead's: slips, overdue).
         flagged = [t for t in flagged if in_audience(principal, t, LEAD_KINDS[0], leads)]
     if not flagged:
         return None
-    track = await db.scalar(
+    track = await own.scalar(
         select(ProductTrack)
         .where(ProductTrack.id == flagged[0].id)
         .with_for_update(skip_locked=True)
@@ -523,12 +551,16 @@ async def recheck_skipped(
         return None
     track_id = track.id
     try:
-        async with db.begin_nested():
-            await views.monitor(db, track, "system")
+        await views.monitor(own, track, "system")
+        await own.commit()
     except Exception:  # noqa: BLE001 - logged; the read goes on, the hourly pass tries too
         views.log.exception("track %s could not be re-checked on a read", track_id)
+        await own.rollback()
+        track = await own.get(ProductTrack, track_id)
+        if track is not None:  # still marked (monitor() clears the mark): back off
+            track.monitor = {**(track.monitor or {}), "recheck_failed_at": time.time()}
+            await own.commit()
         return None
-    await db.commit()
     return track_id
 
 
