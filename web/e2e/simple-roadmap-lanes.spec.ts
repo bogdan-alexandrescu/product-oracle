@@ -87,8 +87,19 @@ for (const scheme of ["light", "dark"] as const) {
       await open(page, scheme);
       await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-view", "zoom");
       const lanes = await page.getByTestId("timeline-lane").allInnerTexts();
-      // P-1: the Goal map's 12 features are roadmap items from the first load; their roadmap items name no goal.
-      expect(lanes).toEqual(["Activation · 5 items", "Reliability · 5 items", "Revenue · 3 items", "Growth · 4 items", "PM-owned · 3 items", "No goal · 12 items"]);
+      // P-1: the Goal map's 12 features are roadmap items from the first load; each names the map goal it
+      // serves (P-6, feature-panel-qa 6bf7dbec7 and its first-load merge 1e1ad87ac), so the map's three goals
+      // lead the lanes in the one goal order and no item is left with No goal.
+      expect(lanes).toEqual([
+        "Sign-ups per rep per day · 4 items",
+        "Revenue per day · 3 items",
+        "Paid conversions per rep per day · 5 items",
+        "Activation · 5 items",
+        "Reliability · 5 items",
+        "Revenue · 3 items",
+        "Growth · 4 items",
+        "PM-owned · 3 items",
+      ]);
       // The Timeline always draws its rows under their goal: no Group by, no stale lanes hint.
       await expect(page.getByTestId("group-milestone")).toHaveCount(0);
       await expect(page.getByTestId("lanes-hint")).toHaveCount(0);
