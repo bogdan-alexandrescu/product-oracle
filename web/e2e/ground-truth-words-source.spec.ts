@@ -12,7 +12,9 @@ import { expect, test } from "./test";
  * in a form or an empty state the walk does not open. Reads every string literal, template
  * piece and JSX text (comments aside), every string of the mock's JSON data, and every line of
  * the API's export and email templates (api/oracle's .j2 and .html, Jinja tags aside: the PDF,
- * deck and public roadmap exports, the invite emails). And no spec in web/e2e expects a page to say one: the
+ * deck and public roadmap exports, the invite emails), and every string the export builders in
+ * Python write (api/oracle/export's .py: the PDF's render.py, the deck; docstrings, comments and
+ * raw-string patterns aside). And no spec in web/e2e expects a page to say one: the
  * strings given to toHaveText, toContainText, getByText and a role's `name:` (test titles,
  * comments and checks that a text is gone aside).
  * fails_when = a label such as "change it in Baseline" or "Detailed › Baseline" is left, or a
@@ -21,7 +23,7 @@ import { expect, test } from "./test";
  * What may still say baseline: an id by its shape (one lowercase word, or joined to "_ / . : -":
  * "baseline", "/baseline", "baseline-tab"), and a measure's starting value: "Baseline value",
  * "Baseline 12", "Success metric and baseline", and the "Baseline" field beside "Predicted" on a
- * decision's or an outcome's prediction.
+ * decision's or an outcome's prediction. And a CSS value ("align-items: baseline").
  */
 
 const WEB = path.resolve(__dirname, "..");
@@ -35,6 +37,8 @@ const OLD = /desired state|current state|(?<![\w/.:\-])baseline(?![\w/:\-]|\.\w)
  */
 const STARTING_VALUE =
   /baseline value|baseline ?[:=]? ?[-+]?\d|success metric and baseline|\| ?baseline ?\||(?:above|below) its baseline\b|between the baseline and|metric's baseline|no baseline for|prediction must be \{\} its baseline/gi;
+/** A CSS property set to baseline ("align-items: baseline", "vertical-align: baseline"): a value, not a word. */
+const CSS_VALUE = /\b(?:vertical-align|(?:align|justify|place)-(?:items|self|content)|(?:alignment|dominant)-baseline)\s*:\s*(?:(?:first|last)\s+)?baseline\b/g;
 /** A lone id or key. */
 const ID = /^[a-z][a-z0-9_]*$/;
 /** The prediction forms' starting-value field, "Baseline" beside "Predicted". */
@@ -55,7 +59,7 @@ function* sources(dir: string): Generator<string> {
 function saysOld(rel: string, said: string): boolean {
   const word = said.trim();
   if (ID.test(word) || PREDICTION_FIELD[rel] === word) return false;
-  return OLD.test(said.replace(STARTING_VALUE, ""));
+  return OLD.test(said.replace(STARTING_VALUE, "").replace(CSS_VALUE, ""));
 }
 
 const relOf = (file: string) => path.relative(WEB, file).split(path.sep).join("/");
@@ -174,15 +178,58 @@ function templateOldNames(rel: string, text: string): string[] {
   return lines.flatMap((line, i) => (saysOld(rel, line) ? [`${rel}:${i + 1}: ${line.trim().slice(0, 120)}`] : []));
 }
 
+const EXPORT = path.join(API, "export");
+
+/** A Python comment, or a string's prefix and opening quote. */
+const PY_TOKEN = /#[^\n]*|(?<!\w)([rRbBuUfF]{0,2})("""|'''|"|')/g;
+
+/**
+ * Every string of the Python file ``text`` a person can read, as [line, text]: an f-string's
+ * {…} reads "{}"; docstrings (a string alone after a "…:" line or at the top), comments, raw
+ * strings (patterns) and bytes are left out.
+ */
+function pythonStrings(text: string): [number, string][] {
+  const out: [number, string][] = [];
+  const lineAt = (i: number) => text.slice(0, i).split("\n").length;
+  let m: RegExpExecArray | null;
+  PY_TOKEN.lastIndex = 0;
+  while ((m = PY_TOKEN.exec(text))) {
+    if (m[0].startsWith("#")) continue;
+    const prefix = m[1].toLowerCase();
+    const quote = m[2];
+    const start = PY_TOKEN.lastIndex;
+    let i = start;
+    while (i < text.length && !text.startsWith(quote, i)) i += text[i] === "\\" ? 2 : 1;
+    PY_TOKEN.lastIndex = i + quote.length;
+    if (prefix.includes("r") || prefix.includes("b")) continue;
+    const lineStart = text.lastIndexOf("\n", m.index) + 1;
+    const lineEnd = text.indexOf("\n", PY_TOKEN.lastIndex);
+    const alone = !text.slice(lineStart, m.index).trim() && /^\s*(#.*)?$/.test(text.slice(PY_TOKEN.lastIndex, lineEnd < 0 ? undefined : lineEnd));
+    const above = text.slice(0, lineStart).split("\n").map((l) => l.replace(/#.*$/, "").trim()).filter(Boolean);
+    if (alone && (!above.length || above[above.length - 1].endsWith(":"))) continue;
+    let body = text.slice(start, i);
+    if (prefix.includes("f")) body = body.replace(/\{\{|\}\}|\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g, (x) => (x === "{{" ? "{" : x === "}}" ? "}" : "{}"));
+    body.split("\n").forEach((l, k) => out.push([lineAt(m!.index) + k, l]));
+  }
+  return out;
+}
+
+/** Every string an export builder in Python ``rel`` (holding ``text``) writes that says an old name. */
+const pythonOldNames = (rel: string, text: string) =>
+  pythonStrings(text).flatMap(([line, said]) => (saysOld(rel, said) ? [`${rel}:${line}: ${said.trim().slice(0, 120)}`] : []));
+
+const builders = () => fs.readdirSync(EXPORT).filter((f) => f.endsWith(".py")).map((f) => path.join(EXPORT, f));
+
 test("no string a page can show in web/app, web/components or web/lib says Desired state, Current state or Baseline", () => {
   const found = ["app", "components", "lib"].flatMap((dir) => [...sources(path.join(WEB, dir))].flatMap((f) => oldNames(relOf(f), read(f))));
   expect(found).toEqual([]);
 });
 
-test("no string of the mock's JSON data, nor an export or email template, says Desired state, Current state or Baseline", () => {
+test("no string of the mock's JSON data, an export or email template, nor an export builder in Python says Desired state, Current state or Baseline", () => {
   const mock = fs.readdirSync(MOCK).filter((f) => f.endsWith(".json")).flatMap((f) => jsonOldNames(relOf(path.join(MOCK, f)), read(path.join(MOCK, f))));
   const sent = [...templates(API)].flatMap((f) => templateOldNames(path.relative(API, f), read(f)));
-  expect([...mock, ...sent]).toEqual([]);
+  const built = builders().flatMap((f) => pythonOldNames(path.relative(API, f), read(f)));
+  expect([...mock, ...sent, ...built]).toEqual([]);
 });
 
 test("no spec in web/e2e expects a page to say Desired state, Current state or Baseline", () => {
@@ -209,6 +256,9 @@ test("the check catches the old names and spares the ids and the starting values
     "the partly-held line lies between the baseline and the prediction",
     "Ask for the metric's baseline before drafting",
     "No baseline for repeat checkout time",
+    ".row { display: flex; align-items: baseline; }",
+    "vertical-align: baseline",
+    "align-self:first baseline",
   ]) {
     expect(saysOld("app/x.tsx", kept), kept).toBe(false);
   }
@@ -233,6 +283,27 @@ test("the check finds an old name planted in web/lib, the mock and a spec's expe
   expect(templateOldNames("export/templates/deck.html.j2", "<h1>{{ title }}</h1>\n<p>Read from the Baseline.</p>\n<p>{{ item.baseline }}</p>")).toEqual(["export/templates/deck.html.j2:2: <p>Read from the Baseline.</p>"]);
   expect(templateOldNames("members/invite-email.html", '<p class="baseline-row">{# the\nbaseline #}</p>\n<p>Change it in Baseline</p>')).toEqual(["members/invite-email.html:3: <p>Change it in Baseline</p>"]);
   expect([...templates(API)].length, "the API's export and email templates are found").toBeGreaterThan(0);
+  // fails_when = the check does not read the strings the export builders in Python write.
+  const py = [
+    '"""The deck: Baseline slides."""',
+    "import re",
+    "_PATTERN = re.compile(r\"\\bBaseline\\b\")  # Read from the Baseline",
+    "def title(where: str) -> str:",
+    '    """Read from the Baseline."""',
+    "    return f\"<h2>{where} {{Baseline}}</h2>\"",
+    "",
+    "CSS = '.kpi { align-items: baseline; }'",
+    'NOTE = ("Kept as is", "Change it in Current state")',
+    'BODY = """',
+    "<p>Read from the Desired state.</p>",
+    '"""',
+  ].join("\n");
+  expect(pythonOldNames("export/deck.py", py)).toEqual([
+    "export/deck.py:6: <h2>{} {Baseline}</h2>",
+    "export/deck.py:9: Change it in Current state",
+    "export/deck.py:11: <p>Read from the Desired state.</p>",
+  ]);
+  expect(builders().map((f) => path.basename(f)), "the PDF's and the deck's builders are read").toEqual(expect.arrayContaining(["render.py", "deck.py"]));
   for (const kept of [
     'test("Baseline to PRD reads Ground Truth to PRD", async () => {});',
     '// The heading once read "Baseline to PRD".',

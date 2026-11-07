@@ -1422,9 +1422,10 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     return [...(gone ? [partRef(gone, true)] : []), ...ancestorsOf(s).reverse().map((a) => partRef(a))];
   };
   // additions.item_extras: merged_into's code falls back to the kept item's name, never its key; a part's is its display code or "".
+  // A kept item in Trash or gone reads "a deleted feature", its id and code empty.
   const ref = (k: string) => {
-    const x = db.items.find((y) => y.key === k);
-    return { id: db.ids[k], code: (x && prdCode(x.section)) || x?.title || "", title: x?.title ?? k };
+    const x = db.items.find((y) => y.key === k && !y.trashed);
+    return x ? { id: db.ids[k], code: prdCode(x.section) || x.title, title: x.title } : { id: "", code: "", title: "a deleted feature" };
   };
   // The plan-model lane: the plan PRD's items whose code is a plan feature carry its slices.
   const slices = db.plan ? planSlices() : [];
