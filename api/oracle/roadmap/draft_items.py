@@ -559,6 +559,14 @@ def _milestone_out(milestone: dict[str, Any] | None) -> dict[str, Any] | None:
 def items_yaml(slug: str, number: int, rows: list[RoadmapItem]) -> str:
     """The draft's items as ``roadmap_items.yaml`` (oracle.runs.roadmap's format), in their
     stored order, so a Build roadmap run's items stop opens on them."""
+    data = {"version": 1, "prd": {"document": slug, "version": number}, "items": entries(rows)}
+    return safe_yaml.dump(data, sort_keys=False, allow_unicode=True)
+
+
+def entries(rows: list[RoadmapItem]) -> list[dict[str, Any]]:
+    """Stored items as the entries of ``roadmap_items.yaml`` (:func:`items_yaml`), in their
+    order: what a roadmap draft's plan tables read without an items file of its own (the
+    feedback loop, oracle.runs.service._loop_plan_inputs)."""
     items: list[dict[str, Any]] = []
     for i in rows:
         raw: dict[str, Any] = {
@@ -585,5 +593,4 @@ def items_yaml(slug: str, number: int, rows: list[RoadmapItem]) -> str:
         if i.economics:
             raw["economics"] = i.economics
         items.append(raw)
-    data = {"version": 1, "prd": {"document": slug, "version": number}, "items": items}
-    return safe_yaml.dump(data, sort_keys=False, allow_unicode=True)
+    return items
