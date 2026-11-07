@@ -398,7 +398,11 @@ export default function SimpleHome() {
   const runStops = revisit && inbox.loading ? undefined : runStopsOf(inbox.data)?.filter((s) => !waitKeys || waitKeys.has(`run_stop:${s.id}`));
   // What else waits on me and has no card of its own here: drafts for my approval, dates to
   // confirm and goal suggestions I decide, each with its action in place.
-  const alsoWaiting = (waiting.data?.items ?? []).filter((i) => i.kind === "draft" || i.kind === "goal_suggestion" || (i.kind === "date" && !i.op));
+  // home-draft-in-review: a draft the drafts card shows lives only there (Home only; other pages keep their rows).
+  const draftIds = new Set(myDrafts.map((d) => d.id));
+  const alsoWaiting = (waiting.data?.items ?? []).filter(
+    (i) => (i.kind === "draft" && !draftIds.has(i.ref_id)) || i.kind === "goal_suggestion" || (i.kind === "date" && !i.op),
+  );
   const stopCount = runStops?.length ?? 0;
   // walkc-roadmap-tasks: the open tasks on roadmap items that wait on me.
   const myTasks = waiting.data?.tasks ?? [];
@@ -927,10 +931,10 @@ export default function SimpleHome() {
                   )}
                 </span>
               ) : (
-              <span>
-                Your working draft of <strong>{draft.document.title}</strong> has {draft.changes} {draft.changes === 1 ? "change" : "changes"}.{" "}
-                {draftNext(draft, (id) => nameOf(id, "a reviewer")).words}.
-              </span>
+                <span>
+                  Your working draft of <strong>{draft.document.title}</strong> has {draft.changes} {draft.changes === 1 ? "change" : "changes"}.{" "}
+                  {draftNext(draft, (id) => nameOf(id, "a reviewer")).words}.
+                </span>
               )}
               <Link href={`/simple/roadmap?draft=${draft.id}`} className="simple-button">
                 {draftNext(draft).action === "approve" || draftNext(draft).action === "publish" ? "Open draft to approve" : draftNext(draft).action === "submit" ? "Open draft to send for review" : "Open draft"}
