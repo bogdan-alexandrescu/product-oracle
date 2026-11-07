@@ -1,5 +1,6 @@
 import { login } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
+import { countRowOf } from "./vxe-counts";
 
 /*
  * Simple priorities, QA pass 4 (qa4-simple-plan-11, the owner's pick "Letters from the
@@ -64,7 +65,9 @@ for (const phone of [false, true]) {
       await expect(code(page, "setup-import")).toHaveText("F-12");
       await page.goto("/simple/priorities?tab=value-effort");
       await expect(mark(page, "alert-sso")).toHaveText("TAR");
-      await expect(mark(page, "setup-import")).toHaveText("F-12");
+      // PV-1: on a phone F-12's mark is in a count (with Alert rules engine): its row in the count's sheet reads the code.
+      if (phone) await expect((await countRowOf(page, "setup-import")).getByTestId("vxe-crowd-code")).toHaveText("F-12");
+      else await expect(mark(page, "setup-import")).toHaveText("F-12");
     });
 
     test(`a name with a number keeps the number in its code (${where})`, async ({ page }) => {

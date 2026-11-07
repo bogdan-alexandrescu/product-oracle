@@ -65,7 +65,9 @@ test.describe("fix4-simple-plan review: Priorities", () => {
   test("a goal value goes down to 0 with the arrow keys", async ({ page }) => {
     await setUp(page);
     await open(page, "?tab=value-effort");
-    const mark = page.locator('[data-testid="vxe-point"][data-code="setup-checklist"]');
+    // PV-1: Alert rules engine (4 wk) passes no other mark on its way down, so it stays its own mark (a mark moved onto
+    // another's spot joins a count).
+    const mark = page.locator('[data-testid="vxe-point"][data-code="alert-rules"]');
     await expect(mark).toBeVisible();
     for (let n = 0; n < 40; n++) {
       const label = (await mark.getAttribute("aria-label")) ?? "";
@@ -76,7 +78,7 @@ test.describe("fix4-simple-plan review: Priorities", () => {
     }
     await expect(mark).toHaveAttribute("aria-label", /goal value 0,/);
     await mark.click();
-    await expect(page.locator('[data-testid="side-row"][data-code="setup-checklist"]').getByTestId("side-numbers")).toHaveText(/^goal value 0 · confidence [\d.]+ · [\d.]+ wk · score 0$/);
+    await expect(page.locator('[data-testid="side-row"][data-code="alert-rules"]').getByTestId("side-numbers")).toHaveText(/^goal value 0 · confidence [\d.]+ · [\d.]+ wk · score 0$/);
   });
 
   /* qa-simple-plan-30: the person who proposed a move takes it back; nothing changes. */

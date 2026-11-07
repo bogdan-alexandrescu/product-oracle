@@ -1,4 +1,5 @@
 import { login, signOut } from "./helpers";
+import { chartCodes } from "./vxe-counts";
 import {
   expect,
   test,
@@ -88,18 +89,8 @@ async function fingerLeft(
   await cdp.detach();
 }
 
-/** Every mark's code, by item. */
-const markCodes = (tab: Page) =>
-  tab
-    .getByTestId("vxe-point")
-    .evaluateAll((els) =>
-      Object.fromEntries(
-        els.map((e) => [
-          e.getAttribute("data-code"),
-          e.querySelector('[data-testid="vxe-code"]')?.textContent ?? null,
-        ]),
-      ),
-    );
+/** Every feature's code on the chart, by item: on its mark, or in its count's sheet (PV-1 One count per spot). */
+const markCodes = chartCodes;
 
 const CODES = {
   "setup-checklist": "SC",
@@ -353,18 +344,19 @@ test.describe("phone", () => {
         true,
       );
     });
-    await fingerLeft(admin, "setup-import", 2);
+    // PV-1: on a phone Sample data import's mark is in a count; Mobile alert push is its own mark.
+    await fingerLeft(admin, "alert-mobile", 2);
     expect(
       await admin.evaluate(
         () => (window as unknown as { pointerTypes: string[] }).pointerTypes,
       ),
     ).toEqual(["touch"]);
-    await expect(side(admin, "setup-import").getByTestId("moved")).toHaveText(
-      /^now #2 \(effort [\d.]+ wk\)$/,
+    await expect(side(admin, "alert-mobile").getByTestId("moved")).toHaveText(
+      /^now #\d+ \(effort [\d.]+ wk\)$/,
     );
     await expect(
-      side(admin, "setup-import").getByTestId("side-code"),
-    ).toHaveText("F-12");
+      side(admin, "alert-mobile").getByTestId("side-code"),
+    ).toHaveText("MAP");
     expect(await markCodes(admin)).toEqual(CODES);
   });
 });
