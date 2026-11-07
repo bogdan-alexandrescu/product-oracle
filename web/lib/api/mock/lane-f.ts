@@ -11,7 +11,7 @@ import { LONG_WORDS_SCENARIO, type NewOrderRow } from "./baseline";
 import { presenterNotes, resolveBrief } from "./brief";
 import { MOCK_SCENARIO_KEY, mockUuid, seeded } from "./ids";
 import { calibration } from "./quality";
-import { cannotApproveNow } from "./runs";
+import { cannotApproveNow, refreshOrderGoals } from "./runs";
 
 import type { Db, DocumentRow, VersionRow } from "./server";
 
@@ -1986,6 +1986,11 @@ function seedState(scenario?: string | null): LaneFState {
  * problems per row, and the run and checkpoint that decide it.
  */
 function compare(db: Db, snap: SnapshotRow): Schemas["CompareOut"] {
+  if (db.runs && snap.status === "proposed") {
+    // As the API: the order's stale-goal problems as of now (gone once the goal is back), as server.ts runsContext reads the goals.
+    const goals = db.baseline.entities.filter((e) => e.type === "goal");
+    refreshOrderGoals({ db: db.runs, goalKeys: () => goals.filter((e) => e.status !== "rejected").map((e) => e.key), goalTitle: (key) => goals.find((e) => e.key === key)?.title }, snap);
+  }
   const live = ranking(snap.method);
   const order = [...(snap.check_result?.order ?? snap.ranking.map((f) => ({ key: f.key, rank: f.rank, explanation: f.run_explanation ?? null })))].sort(
     (a, b) => a.rank - b.rank,

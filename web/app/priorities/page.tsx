@@ -34,7 +34,6 @@ import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { named, namedText, useNames, type Names } from "@/lib/codes";
 import { byGoalOrder } from "@/lib/goal-order";
-import { unknownGoalParts, unknownGoalWords } from "@/lib/order-problems";
 import { formatDateTime, isHttpUrl, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { displayName } from "@/lib/names";
@@ -155,28 +154,18 @@ function withGoalNames(f: RankedFeature, names: Names | null | undefined): Ranke
 /** A goal with no name: "Unknown goal", its key only in the tooltip. */
 function UnknownGoal({ goal }: { goal: string }) {
   return (
-    <Chip kind="crit" title={`${goal} is not a goal in the baseline`} data-testid="unknown-goal">
+    <Chip kind="crit" title={`${goal} is not a goal in the Ground Truth`} data-testid="unknown-goal">
       Unknown goal
     </Chip>
   );
 }
 
-/** A problem's sentence in words: a goal key with no name reads "an unknown goal". */
-const problemWords = (p: PriorityProblem) => (p.code === "unknown_goal" ? unknownGoalWords(p.message) : p.message);
+/** A problem's sentence: the API names a goal by its name, or as a goal that was deleted, never by its key. */
+const problemWords = (p: PriorityProblem) => p.message;
 
-/** A problem's sentence as shown: as problemWords, the unknown goal's key in its tooltip. */
+/** A problem's sentence as shown. */
 function ProblemSentence({ p }: { p: PriorityProblem }) {
-  const m = p.code === "unknown_goal" ? unknownGoalParts(p.message) : null;
-  if (!m) return <>{p.message}</>;
-  return (
-    <>
-      {m.before}
-      <span title={m.key} className="underline decoration-dotted underline-offset-2">
-        an unknown goal
-      </span>
-      , {m.after}
-    </>
-  );
+  return <>{problemWords(p)}</>;
 }
 
 /** A problem's chip; `said`: its sentence is shown beside it, so the chip carries no second copy. */
