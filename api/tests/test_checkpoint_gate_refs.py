@@ -143,8 +143,8 @@ async def test_the_review_screen_reasons_carry_the_gate_refs(client, owner, runt
     assert answered == {refs[0]: True, refs[1]: False}
 
 
-def _label(problem: dict, titles: dict[str, str]) -> str:
-    check = {"problems": [{"feature": "saved-addresses", **problem}], "titles": titles}
+def _label(problem: dict, titles: dict[str, str], **names: dict[str, str]) -> str:
+    check = {"problems": [{"feature": "saved-addresses", **problem}], "titles": titles, **names}
     cp = Checkpoint(kind="feature_set", status="pending", payload={"feature_set_check": check})
     shut = gate.approve_gate(cp, None, [])
     assert shut is not None
@@ -181,3 +181,68 @@ def test_a_gate_row_reads_a_numbered_row_and_an_untitled_dependency():
         {"saved-addresses": "Saved addresses"},
     )
     assert label == "Saved addresses depends on Gift notes, which is excluded"
+
+
+def test_a_gate_row_names_a_requirement_and_a_goal_never_by_its_key():
+    """A requirement reads as its name, quoted; a goal as its name, with its key beside it
+    only when that key is a code ("G-R"); a key with no name reads as words."""
+    titles = {"saved-addresses": "Saved addresses"}
+    reqs = {"checkout-r1": "Pick a saved address at checkout", "bare-r2": ""}
+    goals = {"retention-rate": "Retention rate", "G-R": "Repeat orders"}
+    label = _label(
+        {
+            "code": "unknown_requirement",
+            "message": "requirement checkout-r1 of saved-addresses is neither a Ground Truth "
+            "requirement nor one this run proposed",
+        },
+        titles,
+        requirement_names=reqs,
+    )
+    assert label == (
+        'Requirement "Pick a saved address at checkout" of Saved addresses is neither a '
+        "Ground Truth requirement nor one this run proposed"
+    )
+    label = _label(
+        {"code": "duplicate_key", "message": "requirement key bare-r2 appears 2 times"},
+        titles,
+        requirement_names=reqs,
+    )
+    assert label == 'Requirement key "Bare r2" appears 2 times'
+    label = _label(
+        {
+            "code": "unknown_goal",
+            "message": "saved-addresses: goal retention-rate is not a confirmed goal",
+        },
+        titles,
+        goal_names=goals,
+    )
+    assert label == "Saved addresses: goal Retention rate is not a confirmed goal"
+    label = _label(
+        {"code": "unknown_goal", "message": "saved-addresses: goal G-R is not a confirmed goal"},
+        titles,
+        goal_names=goals,
+    )
+    assert label == "Saved addresses: goal Repeat orders (G-R) is not a confirmed goal"
+
+
+def test_a_gate_row_reads_a_key_with_a_non_ascii_letter_whole():
+    """A key holding a Latin letter outside ASCII ("café-menu") is one key, as the web's mock
+    reads it: its title, never "café" and "menu" apart; a letter outside the Latin ones ends a
+    key in both alike."""
+    titles = {"saved-addresses": "Saved addresses", "café-menu": "Café menu"}
+    label = _label(
+        {"code": "depends_on_excluded", "message": "saved-addresses needs café-menu first"},
+        titles,
+    )
+    assert label == "Saved addresses needs Café menu first"
+    label = _label(
+        {"code": "missing_field", "message": "requirement crème-r1 of saved-addresses lacks text"},
+        titles,
+        requirement_names={"crème-r1": ""},
+    )
+    assert label == 'Requirement "Crème r1" of Saved addresses lacks text'
+    label = _label(
+        {"code": "depends_on_excluded", "message": "saved-addresses needs saved-addressesж"},
+        titles,
+    )
+    assert label == "Saved addresses needs Saved addressesж"
