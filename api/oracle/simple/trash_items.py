@@ -380,9 +380,11 @@ async def trash_goal(
     return await _new_entry(db, principal, goal, [goal], {**extra, "features": served}, reason)
 
 
-async def before_restore(db: AsyncSession, entry: TrashEntry) -> None:
+async def before_restore(db: AsyncSession, entry: TrashEntry, principal: Any = None) -> None:
     """A feature whose key another live item holds is not restored (409): the two would
-    share it and the items that depend on it would point at both."""
+    share it and the items that depend on it would point at both; nor an item whose code
+    another item took while it was in Trash (:func:`_codes_free`)."""
+    await _codes_free(db, entry, principal)
     if entry.root_type != "feature":
         return
     rows = await db.execute(
@@ -400,6 +402,37 @@ async def before_restore(db: AsyncSession, entry: TrashEntry) -> None:
             raise trash.Conflict(
                 f"'{clash}' holds this feature's key now: rename or delete it, then restore"
             )
+
+
+async def _codes_free(db: AsyncSession, entry: TrashEntry, principal: Any) -> None:
+    """every-field: one code, one item. An item coming back whose code another live item
+    took meanwhile (a rename while it was in Trash, in the drafts the restorer sees) is not
+    restored (409, in set_code's words):
+    its title's code is checked as an add checks it, its feature's or PRD's against the codes
+    other items' titles give them. The item deleted, not its rows on other versions."""
+    from types import SimpleNamespace
+
+    from oracle.simple import changes
+
+    rows = list(await db.scalars(
+        select(RoadmapItem).where(RoadmapItem.trash_entry_id == entry.id).execution_options(**ALL)
+    ))  # fmt: skip
+    rows = [r for r in rows if r.id == entry.root_id] or rows
+    if not rows:
+        return
+    seen = await drafts.overlays_for(db, principal) if principal is not None else None
+    read_ = await service.load(db, seen)
+    back = [SimpleNamespace(row=r, code=None) for r in rows]
+    await service.item_codes(db, back)  # type: ignore[arg-type]
+    try:
+        for e in back:
+            code = changes._code_of(e)
+            if code is None:
+                await changes._title_code(db, None, e.row.title or "", read_)
+            else:
+                await changes._not_taken(db, e, code, read_.by_id(), own_only=True)
+    except changes.ChangeError as err:
+        raise trash.Conflict(f"{err}: rename it first") from err
 
 
 async def after_restore(
