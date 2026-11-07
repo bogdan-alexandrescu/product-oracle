@@ -304,3 +304,75 @@ async def test_merging_into_a_feature_never_gives_its_code_to_two_items(client):
     assert r.status_code == 422, r.text
     assert r.json()["detail"] == "F-34 is already the code of F-34 Billing"
     assert by_key(await get(client, ctx, "owner"))["c"]["code"] is None
+
+
+def add(client, ctx: Ctx, roadmap: str, title: str, who: str = "owner"):
+    where = {"kind": "horizon", "value": "next"}
+    body = {"op": "add_item", "target": {"roadmap_id": roadmap, "where": where},
+            "before": {}, "after": {"title": title}}  # fmt: skip
+    return client.post(CHANGES, json=body, headers=ctx.as_(who))
+
+
+async def coded_roadmap(ctx: Ctx) -> tuple[str, str]:
+    """A roadmap with items a "F-30 Alerts" and b "Billing", and the feature F-12."""
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        _, pv, rm, rv = await seed.roadmap("payments")
+        await seed.item(rv, pv, "a", position=0, title="F-30 Alerts")
+        b = await seed.item(rv, pv, "b", position=1, title="Billing")
+        await seed.entity("feature", "F-12")
+        await s.commit()
+    return str(rm.id), str(b.id)
+
+
+async def test_adding_an_item_never_takes_a_code_another_item_or_feature_has(client):
+    # protects=add_item whose title leads with a code another item or a Ground Truth feature
+    # has is refused in set_code's words, and no item is made; a free code is kept;
+    # fails_when=two items read F-30 after the add; no_claim=Oracle's drafting.
+    ctx = await make_people()
+    roadmap, _ = await coded_roadmap(ctx)
+    r = await add(client, ctx, roadmap, "F-30 Night digest")
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == "F-30 is already the code of F-30 Alerts"
+    r = await add(client, ctx, roadmap, "F-12 Night digest")
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == "F-12 is already the code of a Ground Truth feature"
+    titles = [i["title"] for i in (await get(client, ctx, "owner"))["items"]]
+    assert "Night digest" not in titles and "F-30 Night digest" not in titles
+    r = await add(client, ctx, roadmap, "F-37 Night digest")
+    assert r.status_code == 201, r.text
+    shown = {i["title"]: i["code"] for i in (await get(client, ctx, "owner"))["items"]}
+    assert shown["Night digest"] == "F-37"
+
+
+async def test_accepting_an_added_item_whose_code_was_taken_since_is_refused(client):
+    # protects=a proposed add_item whose code another item took since is refused on accept
+    # (409) in set_code's words, the proposal open to decline; fails_when=the accept makes a
+    # second F-36; no_claim=a decider's own add (checked on create).
+    ctx = await make_people()
+    roadmap, b = await coded_roadmap(ctx)
+    r = await add(client, ctx, roadmap, "F-36 Night digest", who="commenter")
+    assert r.status_code == 201, r.text
+    assert r.json()["change"]["status"] == "proposed"
+    cid = r.json()["change"]["id"]
+    r = await rename(client, ctx, b, "Billing", "F-36 Billing")
+    assert r.status_code == 201, r.text
+    r = await client.post(f"{CHANGES}/{cid}/accept", headers=ctx.as_("owner"), json={})
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"] == "F-36 is already the code of F-36 Billing"
+    assert len((await get(client, ctx, "owner"))["items"]) == 2
+    r = await client.post(f"{CHANGES}/{cid}/decline", headers=ctx.as_("owner"), json={})
+    assert r.status_code == 200, r.text
+
+
+async def test_a_rename_checks_any_leading_code_the_read_sees(client):
+    # protects=a leading code the read takes as the item's code ("ABCD-1 Alerts", wider than a
+    # feature code) is checked in a rename too; fails_when=two items read ABCD-1;
+    # no_claim=set_code (feature codes only).
+    ctx = await make_people()
+    a, b = await coded_pair(ctx)
+    r = await rename(client, ctx, b, "Billing", "ABCD-1 Billing")
+    assert r.status_code == 201, r.text
+    r = await rename(client, ctx, a, "Alerts", "ABCD-1 Alerts")
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == "ABCD-1 is already the code of ABCD-1 Billing"
