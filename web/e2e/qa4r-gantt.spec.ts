@@ -48,7 +48,11 @@ test.describe("desktop", () => {
     // The panel sits above the chart, not over its bars.
     expect(box.y + box.height).toBeLessThanOrEqual(chart.y + 1);
     const rows = panel.getByTestId("conflict");
-    await expect(rows.filter({ hasText: "Weekly alert digest" })).toHaveCount(1);
+    // Pre-demo QA S-5 and S-14 (7821685f4, efd457e59): the digest's link to what it depends on
+    // reads once; its end past its milestone sits under it, by name, its sentence behind an (i).
+    const digest = rows.filter({ hasText: "Weekly alert digest" });
+    await expect(digest.filter({ hasText: "which it depends on" })).toHaveCount(1);
+    await expect(digest).toHaveCount(2);
     for (const row of await rows.all()) {
       const key = await row.getAttribute("data-item");
       const words = row.getByRole("button").first();

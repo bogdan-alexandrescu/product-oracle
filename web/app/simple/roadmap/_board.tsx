@@ -2,6 +2,8 @@
 
 import { useEffect, useLayoutEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
+import { LINK_KINDS } from "@/lib/roadmap-links";
+
 import { MsBoardRow } from "./_milestones";
 import { barKind, broken, brokenLinks, closedItem, mergedName, partsTree, spanWords, whereAttr, type Change, type Item, type Roadmap } from "./_lib";
 
@@ -357,9 +359,11 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
   const card = (item: Item) => {
     const kind = closedItem(item) ? "cut" : barKind(item);
     // fix4 qa-simple-roadmap-7: only a broken link draws the red outline; a draft with no
-    // owner (or an end past its milestone) keeps its own outline and says so in amber.
+    // owner keeps its own outline and says so in amber. An end past its milestone counts as a
+    // broken link (pre-demo QA S-5): alone, it is the red line; beside a link between items,
+    // it keeps its amber line, so the card still names both (qa4-30).
     const links = brokenLinks(item);
-    const unowned = broken(item).find((f) => !links.includes(f));
+    const unowned = broken(item).find((f) => f !== links[0] && !LINK_KINDS.includes(f.kind));
     const red = links.length > 0;
     const pending = proposals.find((c) => c.op === "change_horizon" && c.target.item_id === item.id);
     const movable = canDrag && !closedItem(item);
