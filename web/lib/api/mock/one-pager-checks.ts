@@ -458,7 +458,8 @@ function numbers(secs: Sec[]): Look[] {
         if (!TOTAL.test(tt)) continue;
         const tm = new RegExp(`\\b(${NUM})\\s+(?:[a-z]+\\s+){0,2}?(?:${unit.join("|")})`, "i").exec(tt);
         const total = tm ? num(tm[1]) : null;
-        if (total === null || total === per * count[0]) continue;
+        // Equal as written, rounded as plainNum and the API's _round: 0.1 × 3 is 0.3.
+        if (total === null || Number(total.toFixed(6)) === Number((per * count[0]).toFixed(6))) continue;
         const where = [sec, count[1], ts];
         looks.push({
           kind: "numbers",

@@ -705,10 +705,13 @@ def test_look_numbers_read_as_a_person_writes_them():
 def test_a_sum_that_matches_as_written_raises_no_look():
     # Review (Nov 7): "0.1 × 3 teams" against "0.3" company-wide agrees as a person reads it;
     # the float 0.30000000000000004 must not raise "is 0.3, but ... says 0.3".
-    assert _per_unit_text(
-        "Each team saves 0.1 support hours a week. We have 3 teams. "
-        "Company-wide target: 0.3 support hours a week."
-    ) == []
+    assert (
+        _per_unit_text(
+            "Each team saves 0.1 support hours a week. We have 3 teams. "
+            "Company-wide target: 0.3 support hours a week."
+        )
+        == []
+    )
     assert _per_unit_text(
         "Each team saves 0.1 support hours a week. We have 3 teams. "
         "Company-wide target: 0.4 support hours a week."

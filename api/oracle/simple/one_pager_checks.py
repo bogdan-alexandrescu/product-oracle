@@ -25,6 +25,7 @@ as one list, which other checks (the Definition of Done quality checks) can join
 
 import re
 from dataclasses import dataclass, field
+from decimal import ROUND_HALF_UP, Context, Decimal
 from typing import Any
 
 from oracle.docs.models import Section
@@ -589,10 +590,16 @@ def _num(text: str) -> float | None:
         return None
 
 
+def _round(x: float) -> Decimal:
+    """``x`` to 6 places, an exact half away from zero, as the mock's ``toFixed(6)`` rounds it
+    ("0.0078125" -> "0.007813"); a number is compared and written as rounded here."""
+    return Decimal(x).quantize(Decimal("1e-6"), ROUND_HALF_UP, Context(prec=400))
+
+
 def _n(x: float) -> str:
     """``x`` as a person writes it: thousands separators, no float noise, never cut or in
     exponent form ("0.3", not "0.30000000000000004"; "1,234,567.5", not "1.23457e+06")."""
-    return f"{round(x, 6):,f}".rstrip("0").rstrip(".")
+    return f"{_round(x):,f}".rstrip("0").rstrip(".")
 
 
 def _sentences(sec: Section) -> list[str]:
@@ -635,8 +642,8 @@ def _like(before: str, value: float) -> str:
     """``value`` written as ``before`` is: its thousands separators ("1,200,000") and at
     least its places after the point ("2.75" -> "2.50"), more when the value needs them."""
     places = len(before.partition(".")[2])
-    own = f"{round(value, 6):f}".rstrip("0").partition(".")[2]
-    return f"{round(value, 6):{',' if ',' in before else ''}.{max(places, len(own))}f}"
+    own = f"{_round(value):f}".rstrip("0").partition(".")[2]
+    return f"{_round(value):{',' if ',' in before else ''}.{max(places, len(own))}f}"
 
 
 def _fix(
@@ -724,7 +731,8 @@ def _per_unit(sections: list[Section]) -> list[Look]:
                     re.I,
                 )
                 total = _num(t.group("n")) if t else None
-                if total is None or total == per * count[0]:
+                # Equal as written: 0.1 × 3 is 0.3, not 0.30000000000000004.
+                if total is None or _round(total) == _round(per * count[0]):
                     continue
                 looks.append(Look(
                     "numbers",
