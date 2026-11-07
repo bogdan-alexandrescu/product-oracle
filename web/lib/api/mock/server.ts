@@ -6472,13 +6472,16 @@ async function onePagerOf(db: Db, req: Request, p: string[]): Promise<OnePagerDb
   const all = [seeded, ...Object.values(others)];
   const forDoc = (ref: unknown): OnePagerDb | undefined => {
     const known = all.find((o) => o.doc.id === ref || o.doc.slug === ref);
-    if (known) return known;
     const d = db.documents.find((x) => x.kind === "prd" && (x.slug === ref || x.id === ref));
-    if (!d) return undefined;
     // qa4-simple-prd-3/9: as one_pager.published, the version read is the PRD's own latest approved
     // one, else its latest, dated by its approval (none: never published).
-    const vs = docVersions(db, d);
+    const vs = d ? docVersions(db, d) : [];
     const read = [...vs].reverse().find((x) => x.approved_at) ?? vs.at(-1);
+    // Fidelity "Separate Approve step": a page built before a newer version was approved is built
+    // again from that version, as the API reads it on every request (never the one it was first built from).
+    const stale = !!known && known !== seeded && !!d && !!read && read.number > known.version;
+    if (known && !stale) return known;
+    if (!d) return undefined;
     // C-13, vqa B-13: every PRD but the seed reads its own sections (one_pager.extract), never a copy
     // of Guided setup's; a PRD with no version yet reads none of them (every block "missing").
     const cites = Object.fromEntries((read?.citations ?? []).map((c) => [c.cite_key, { title: c.title ?? null, excerpt: c.excerpt ?? null }]));
