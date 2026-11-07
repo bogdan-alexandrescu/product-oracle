@@ -1669,6 +1669,10 @@ async def read(
         for x in b.sections
     ]
     looks = one_pager_checks.annotate(blocks, b.sections, cites, checked)
+    # A draft in review takes no change that applies (_ensure refuses it): who would apply a
+    # fix is offered none until it is approved. Who proposes still proposes, and an open
+    # proposal stays on its item.
+    held_fix = d is not None and d.status == "submitted" and decides(principal, w)
 
     def look_out(x: one_pager_checks.Look) -> OnePagerLook:
         fix = None
@@ -1681,26 +1685,27 @@ async def read(
                  and c.target.get("part", "body") == part),
                 None,
             )  # fmt: skip
-            fix = OnePagerFix(
-                action=NUMBER_OP,
-                target={
-                    "document_id": str(document.id),
-                    "section": f["section"],
-                    "said": f["said"],
-                    **({"part": part} if part == "heading" else {}),
-                },
-                before=f["before"],
-                value=f["value"],
-                words=f"Use {f['value']}",
-                proposal=OnePagerFixProposal(
-                    change_id=p.id,
-                    by_name=names.get(p.by, "someone"),
-                    can_decide=may_decide(principal, p),
-                    can_undo=p.by == me,
+            if not (held_fix and p is None):
+                fix = OnePagerFix(
+                    action=NUMBER_OP,
+                    target={
+                        "document_id": str(document.id),
+                        "section": f["section"],
+                        "said": f["said"],
+                        **({"part": part} if part == "heading" else {}),
+                    },
+                    before=f["before"],
+                    value=f["value"],
+                    words=f"Use {f['value']}",
+                    proposal=OnePagerFixProposal(
+                        change_id=p.id,
+                        by_name=names.get(p.by, "someone"),
+                        can_decide=may_decide(principal, p),
+                        can_undo=p.by == me,
+                    )
+                    if p is not None
+                    else None,
                 )
-                if p is not None
-                else None,
-            )
         return OnePagerLook(
             kind=x.kind, text=x.text, where=x.where, source_keys=x.source_keys, fix=fix
         )
