@@ -88,8 +88,11 @@ async def test_pdf_prints_the_timeline_then_a_page_per_milestone(client):
     assert "M1 Prove it · 100 weekly active teams → M2 Scale volume · 250 weekly active teams" in tl
     assert "Not counted yet" in tl and "PM-owned · no engineering" in tl
     assert tl.count("class='off'") == 4  # the year-end break, hatched in each of the 4 lanes
-    for coded in ("F-05a Team invites, part 1 of 2", "F-05b Team invites, part 2 of 2",
-                  "F-04 Pricing page words"):  # a code is never alone: its name is beside it
+    for coded in (
+        "F-05a Team invites, part 1 of 2",
+        "F-05b Team invites, part 2 of 2",
+        "F-04 Pricing page words",
+    ):  # a code is never alone: its name is beside it
         assert coded in tl
     assert not re.findall(r"F-\d+[a-z]?\b(?! \S)", tl)
     assert not re.findall(r"\bM\d+\b(?! \S)", tl), "bare milestone code"

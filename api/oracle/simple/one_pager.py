@@ -2329,7 +2329,7 @@ def cut_name(name: str, more: int, px: float) -> str:
     """The first feature's name cut to the bar with "…" (and "+N" for the others when it
     fits): a bar never prints a code without its name; the key lists every full name."""
     tail = f" +{more}" if more else ""
-    for tail_ in ([tail, ""] if tail else [""]):
+    for tail_ in [tail, ""] if tail else [""]:
         room = int((px - 10) / NAME_CH) - len(tail_) - 1
         if room >= 3:
             return name[:room].rstrip() + "…" + tail_
