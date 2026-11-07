@@ -305,6 +305,37 @@ export const planInput = (i: Item): PlanInput => ({
 });
 
 /**
+ * home-milestones-current: Home's plan inputs, each item (not cut) in the roadmap's current
+ * milestone as the Simple roadmap's Milestone lanes find it: the roadmap milestone picked in its
+ * panel (by id, its live code and name), else the track milestone it leads to (the one naming it,
+ * its record, its own milestone's by name, else its track's first it ends on or before). An item
+ * whose milestone is gone (removed, renamed away, or a stale text such as a bare "M2") is in none:
+ * "Not in a milestone". A PRD's plan slices are not read (home-waiting-one-list: never one PRD's
+ * plan milestones).
+ */
+export function homePlanInputs(data: Roadmap): PlanInput[] {
+  const live = new Map((data.goal_milestones ?? []).map((m) => [m.id, m]));
+  const tracked = data.milestones.filter((m) => m.date && !(m.start_date && m.end_date)).sort((a, b) => byCodePoint(a.date!, b.date!));
+  const leadsTo = (i: Item) =>
+    tracked.find((m) => m.item_ids.includes(i.id)) ??
+    (i.milestone?.record_id ? tracked.find((m) => m.id === i.milestone!.record_id) : undefined) ??
+    (i.milestone?.name ? tracked.find((m) => m.name === i.milestone!.name && (!i.track || m.track_id === i.track.id)) : undefined) ??
+    tracked.find((m) => !!i.track && m.track_id === i.track.id && i.end.date <= m.date!);
+  return data.items
+    .filter((i) => i.status !== "cut")
+    .map((i) => {
+      const base: PlanInput = { start: i.start.date, end: i.end.date, estimated: i.estimated, milestone: null, milestoneDate: null, id: i.id };
+      const gm = i.milestone?.id ? live.get(i.milestone.id) : undefined;
+      if (gm) {
+        const name = `${gm.code} · ${gm.name}`;
+        return { ...base, milestone: name, milestoneDate: gm.date ?? null, record: { id: `goal:${gm.id}`, name } };
+      }
+      const tm = leadsTo(i);
+      return tm ? { ...base, milestone: tm.name, milestoneDate: tm.date ?? null, record: { id: `track:${tm.id}`, name: tm.name } } : base;
+    });
+}
+
+/**
  * Home's plan: the PRD in play (the only PRD with items this quarter), or the top PRD by
  * priority when several (its best-ranked item), else the one with most items this quarter.
  * With several and the ranking not read yet (`ranked` null), undefined: Home waits for it.

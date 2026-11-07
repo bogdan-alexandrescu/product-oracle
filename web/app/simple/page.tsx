@@ -37,11 +37,11 @@ import {
   fixChange,
   goalTiles,
   greeting,
+  homePlanInputs,
   NEW_FLOW_OPS,
   OP_WORDS,
   opWords,
   planByMonth,
-  planInput,
   waitSentence,
   type BrokenLink,
   type FixOp,
@@ -361,9 +361,10 @@ export default function SimpleHome() {
   const setupFirst = !!setup && tiles !== undefined && tiles.length === 0;
   // home-waiting-one-list: the plan is the company roadmap's (GET /v1/simple/roadmap reads only
   // it once there is one: oracle.roadmap.company feeding_ids), every PRD's items in the
-  // roadmap's own milestones by name, never one PRD's plan milestones.
+  // roadmap's own milestones by name, never one PRD's plan milestones; home-milestones-current:
+  // its current ones only, as the Simple roadmap's lanes find them (homePlanInputs).
   const plan = useMemo(
-    () => (roadmap.data ? planByMonth(roadmap.data.items.filter((i) => i.status !== "cut").map(planInput), roadmap.data.today, roadmap.data.windows.now.end) : null),
+    () => (roadmap.data ? planByMonth(homePlanInputs(roadmap.data), roadmap.data.today, roadmap.data.windows.now.end) : null),
     [roadmap.data],
   );
   // qa4-simple-home-12: every working draft of mine, each with its own count (one roadmap's draft never hides another's).
