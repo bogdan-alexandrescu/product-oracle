@@ -670,7 +670,7 @@ ChangeOp = Literal[
     "set_status",
     # lane-gt-ui: the Ground Truth feature the item is (Add to Ground Truth, Link to a feature).
     "set_feature",
-    # feature-parts: the item made part of another (one level), or taken out.
+    # feature-parts: the item made part of another (any depth, never a loop), or taken out.
     "set_parent",
     # one-feature-panel: how the goal the item serves is measured (its target and date).
     "set_goal_measure",

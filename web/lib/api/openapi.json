@@ -63408,6 +63408,7 @@
                   "set_depends",
                   "set_status",
                   "set_feature",
+                  "set_parent",
                   "set_goal_measure",
                   "set_goals",
                   "set_owner",
@@ -63836,6 +63837,7 @@
               "set_depends",
               "set_status",
               "set_feature",
+              "set_parent",
               "set_goal_measure",
               "set_goals",
               "set_owner",
@@ -88236,6 +88238,7 @@
               "set_depends",
               "set_status",
               "set_feature",
+              "set_parent",
               "set_goal_measure",
               "set_goals",
               "set_owner",
@@ -123113,6 +123116,7 @@
               "set_depends",
               "set_status",
               "set_feature",
+              "set_parent",
               "set_goal_measure",
               "set_goals",
               "set_owner",
@@ -123275,6 +123279,7 @@
               "set_depends",
               "set_status",
               "set_feature",
+              "set_parent",
               "set_goal_measure",
               "set_goals",
               "set_owner",
@@ -127572,6 +127577,40 @@
           "name"
         ],
         "title": "SimpleOwnerRef"
+      },
+      "SimplePartRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "cut": {
+            "type": "boolean",
+            "title": "Cut",
+            "default": false
+          },
+          "in_trash": {
+            "type": "boolean",
+            "title": "In Trash",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "title"
+        ],
+        "title": "SimplePartRef",
+        "description": "feature-parts: a parent or a part, by its display code (\"\" when none) and name."
       },
       "SimplePerson": {
         "properties": {
