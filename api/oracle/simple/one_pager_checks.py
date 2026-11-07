@@ -590,7 +590,9 @@ def _num(text: str) -> float | None:
 
 
 def _n(x: float) -> str:
-    return str(int(x)) if x == int(x) else f"{x:g}"
+    """``x`` as a person writes it: thousands separators, no float noise, never cut or in
+    exponent form ("0.3", not "0.30000000000000004"; "1,234,567.5", not "1.23457e+06")."""
+    return f"{round(x, 6):,f}".rstrip("0").rstrip(".")
 
 
 def _sentences(sec: Section) -> list[str]:
@@ -727,7 +729,7 @@ def _per_unit(sections: list[Section]) -> list[Look]:
                 looks.append(Look(
                     "numbers",
                     f"{_n(per)} {m.group('unit')} per {thing} × {count[2]} is "
-                    f"{_n(per * count[0])}, but the company-wide target says {_n(total)}.",
+                    f"{_n(per * count[0])}, but the company-wide target says {t.group('n')}.",
                     list(dict.fromkeys(_plain(x.heading or "") for x in (sec, count[1], tsec))),
                     list(dict.fromkeys(x.section_key for x in (sec, count[1], tsec))),
                     _fix(tsec, t.group(0), t.group("n"), per * count[0]),

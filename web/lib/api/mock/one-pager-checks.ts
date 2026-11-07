@@ -363,6 +363,8 @@ function marked(text: string, notes: Record<string, string>): [string, string[]]
 const WORDS = "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty".split(" ");
 const NUM = `(?:\\d[\\d,]*(?:\\.\\d+)?|${WORDS.join("|")})`;
 const num = (t: string) => { const w = WORDS.indexOf(t.toLowerCase()); if (w >= 0) return w; const n = Number(t.replace(/,/g, "")); return Number.isNaN(n) ? null : n; };
+/** one_pager_checks._n: `x` as a person writes it: thousands separators, no float noise ("0.3", "1,234,567.5"). */
+const plainNum = (x: number) => Number(x.toFixed(6)).toLocaleString("en-US", { maximumFractionDigits: 6 });
 const COUNT = new RegExp(`\\b(${NUM})\\s+(?:(?:more|other|new|open|big|small|planned)\\s+)?(features|items|bets|ideas|requests|tickets|stories|epics|projects|risks)\\b((?:\\s+[a-z]+){0,3})`, "gi");
 const PER = new RegExp(`\\b(?:each|every|per)\\s+([a-z]+?)s?\\s+(?:[a-z]+\\s+){0,2}?(${NUM})\\s+([a-z]+(?:\\s+[a-z]+)?)`, "gi");
 const FIELD = /^[A-Z][\w ]{0,24}:\s/;
@@ -436,7 +438,7 @@ function numbers(secs: Sec[]): Look[] {
         if (hm === null && fields && !listing.includes(noun)) continue;
         // Every word from the number on ("two more features"), as numberAt reads it.
         const words = m[0].split(/\s+/).filter(Boolean).join(" ");
-        looks.push({ kind: "numbers", text: `“${words}” says ${n}, but “${head}” shows ${target} items.`, where: [head], source_keys: [s.key], fix: fixOf(s, words, m[1], target, t === head) });
+        looks.push({ kind: "numbers", text: `“${words}” says ${plainNum(n)}, but “${head}” shows ${target} items.`, where: [head], source_keys: [s.key], fix: fixOf(s, words, m[1], target, t === head) });
       }
     }
   }
@@ -460,7 +462,7 @@ function numbers(secs: Sec[]): Look[] {
         const where = [sec, count[1], ts];
         looks.push({
           kind: "numbers",
-          text: `${per} ${m[3]} per ${thing} × ${count[2]} is ${per * count[0]}, but the company-wide target says ${total}.`,
+          text: `${plainNum(per)} ${m[3]} per ${thing} × ${count[2]} is ${plainNum(per * count[0])}, but the company-wide target says ${tm![1]}.`,
           where: [...new Set(where.map((x) => plain(x.heading)))],
           source_keys: [...new Set(where.map((x) => x.key))],
           fix: fixOf(ts, tm![0], tm![1], per * count[0]),
