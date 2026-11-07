@@ -115,11 +115,12 @@ for (const [where, use] of [
       await open(page, "viewer@example.com");
       await expect(page.getByRole("button", { name: /^Drag .* to reorder$/ })).toHaveCount(0);
       await page.getByRole("tab", { name: "Value / effort" }).click();
-      await expect(point(page, "setup-import")).toBeVisible();
-      const label = await point(page, "setup-import").getAttribute("aria-label");
-      await dragMarkLeft(page, "setup-import", 2);
+      // PV-1: Mobile alert push is its own mark at both widths (on a phone Sample data import's is in a count).
+      await expect(point(page, "alert-mobile")).toBeVisible();
+      const label = await point(page, "alert-mobile").getAttribute("aria-label");
+      await dragMarkLeft(page, "alert-mobile", 2);
       await expect(page.getByText(/^Re-estimated|^Proposed/)).toHaveCount(0);
-      await expect(point(page, "setup-import")).toHaveAttribute("aria-label", label!);
+      await expect(point(page, "alert-mobile")).toHaveAttribute("aria-label", label!);
     });
 
     /*
@@ -129,10 +130,10 @@ for (const [where, use] of [
      */
     test(`a commenter's drag on the 2x2 proposes the re-estimate (${where})`, async ({ page }) => {
       await open(page, "commenter@example.com", "value-effort");
-      const label = await point(page, "setup-import").getAttribute("aria-label");
-      await dragMarkLeft(page, "setup-import", 2);
+      const label = await point(page, "alert-mobile").getAttribute("aria-label");
+      await dragMarkLeft(page, "alert-mobile", 2);
       await expect(page.getByText(/^Proposed: .* decides$/)).toBeVisible();
-      await expect(point(page, "setup-import")).toHaveAttribute("aria-label", label!);
+      await expect(point(page, "alert-mobile")).toHaveAttribute("aria-label", label!);
     });
 
     /*
