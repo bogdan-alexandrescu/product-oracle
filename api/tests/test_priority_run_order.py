@@ -1311,3 +1311,48 @@ def test_check_a_goal_with_no_name_is_a_deleted_goal():
         "Gift notes names a goal that was deleted: the run must name a goal of the Ground Truth"
     )
     assert "g-old-key" not in message
+
+
+async def test_an_old_worded_deleted_goal_problem_reads_in_the_new_words(client, owner, runtime):  # noqa: F811
+    """Review of the port of PR 1274: a pending order stored before the new words holds a
+    deleted goal's problem by its key ("names the goal activation, which is not a goal in
+    the baseline"). Every read says it with the goal's name and no key, and Approve order
+    leaves one problem for it, not two."""
+    tenant_id, _ = owner
+    run = await at_priority(client, owner, runtime, ORDER_NEW, features=CLEAN)
+    old = (
+        "Bulk edit names the goal activation, which is not a goal in the baseline: "
+        "the run must name one that is"
+    )
+    problem = {"code": "unknown_goal", "blocking": True, "feature": "bulk-edit", "message": old}
+    async with tenant_session(tenant_id) as s:
+        goal = await s.scalar(select(Entity).where(Entity.key == "activation"))
+        for edge in await s.scalars(
+            select(Edge).where((Edge.src_id == goal.id) | (Edge.dst_id == goal.id))
+        ):
+            await s.delete(edge)
+        await s.delete(goal)
+        snap = await s.scalar(select(PrioritySnapshot).where(PrioritySnapshot.run_id == run["id"]))
+        check = {**(snap.check_result or {}), "problems": [problem]}
+        snap.check_result = check
+        cp = await s.get(Checkpoint, snap.checkpoint_id)
+        cp.payload = {**(cp.payload or {}), "priority_check": check}
+        await s.commit()
+    named = (
+        "Bulk edit names the goal Activation, which is not a goal in the Ground Truth: "
+        "the run must name one that is"
+    )
+    texts = await _order_texts(client, tenant_id, run)
+    assert any(named in t for t in texts), texts
+    assert not any("goal activation" in t for t in texts), texts
+    assert not any("in the baseline" in t for t in texts[:-1]), texts
+
+    resp = await _approve(client, tenant_id, run)
+    assert resp.status_code == 409, resp.text
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert snap.status == "proposed"
+    assert [
+        (p["code"], p["feature"], p["message"])
+        for p in snap.check_result["problems"]
+        if p["blocking"]
+    ] == [("unknown_goal", "bulk-edit", named)]
