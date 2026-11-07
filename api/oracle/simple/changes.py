@@ -1619,6 +1619,10 @@ async def decide(
         current = await _current(db, c, c.before)
         if current != c.before:
             raise await _conflict(db, current, _touched(c), "outdated")
+        if c.op == "set_parent":
+            # The roadmap may have changed since the proposal: create's check again (no
+            # loop, an open parent), in its words.
+            await _parent(db, entry, (c.after or {}).get("parent_key"), dict(c.target), read_)
         # Into the decider's working draft (their editing session's, or S8's meeting's).
         session = await _session_for_change(db, me, session_id, True, now)
         await _apply(db, c, c.after, principal, session)  # type: ignore[arg-type]
@@ -1731,6 +1735,14 @@ async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> Simple
             raise await _conflict(db, current, _touched(c), "Changed since")
     elif current != c.after:
         raise await _conflict(db, current, _touched(c), "Changed since")
+    if c.op == "set_parent" and back.get("parent_key"):
+        # The old parent written back is checked as create checks it: putting the item back
+        # may make a loop now, or the parent may be cut, merged or in Trash since.
+        read_ = await service.load(db, await drafts.overlays_for(db, principal))
+        entry = read_.by_id().get(uuid.UUID(c.target["item_id"]))
+        if entry is None:
+            raise ChangeError(404, "The item is gone")
+        await _parent(db, entry, back["parent_key"], dict(c.target), read_)
     u = SimpleChange(session_id=c.session_id, document_id=c.document_id, op=c.op, target=c.target,
                      before=current, after=back, status="undone", by=me, at=now,
                      undoes_id=c.id, routed_to=[], draft_ids=list(c.draft_ids or []))  # fmt: skip
