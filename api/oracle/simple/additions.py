@@ -713,7 +713,8 @@ async def item_extras(
         kept = by_key.get((e.roadmap.id, e.row.merged_into))
         out.setdefault(e.row.id, {})["merged_into"] = SimpleMergedInto(
             id=str(kept.row.id) if kept else "",
-            code=(kept.code if kept else None) or e.row.merged_into,  # type: ignore[arg-type]
+            # The kept item's display code, else its name: never its key.
+            code=(kept.code or kept.row.title) if kept else "",
             title=kept.row.title if kept else e.row.merged_into,  # type: ignore[arg-type]
         )
     return out

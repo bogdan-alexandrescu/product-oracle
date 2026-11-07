@@ -1359,7 +1359,7 @@ const goalSet = (ctx: Pick<RunsContext, "goalKeys">) => (ctx.goalKeys ? new Set(
  */
 function unknownGoalMessage(feature: string, goal: string | undefined | null): string {
   return goal
-    ? `${feature} names the goal ${goal}, which is not a goal in the Ground Truth: the run must name one that is`
+    ? `${feature} names the goal ${goal}, which is not a goal of the Ground Truth: the run must name one that is`
     : `${feature} names a goal that was deleted: the run must name a goal of the Ground Truth`;
 }
 
