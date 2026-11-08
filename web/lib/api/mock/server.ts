@@ -188,7 +188,7 @@ import { approvalItems, CANCELLED_DRAFT, draftAct, draftPrdsOut, REPLACED_DRAFT,
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, seedTwoDependencies, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { groundTruthCheck, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth } from "./ground-truth";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, ITEM_MILESTONE_SCENARIO, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap, seedItemMilestones } from "./one-roadmap";
-import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
+import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, PHOTO_PINS_FEATURE_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { knowPrdOrder } from "./prd-rank";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedPrdCalmPage, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
@@ -1625,8 +1625,9 @@ function seedRoadmapMilestonesHardScenario(): Db {
  * re-planned dates, a shipped item, a new one, one moved to the next PRD and two milestones.
  * Their dates rest on verified bases (./roadmap.ts seedRoadmap), so version 3 may be approved.
  * "crowded-milestones": version 3 already approved, with five milestones in two weeks.
+ * "photo-pins-feature": Photo pins is the Ground Truth feature TR-9.
  */
-function seedApprovedRoadmapScenario(crowded = false): Db {
+function seedApprovedRoadmapScenario(crowded = false, photoPinsFeature = false): Db {
   const db = seed();
   const doc = (slug: string, title: string, kind: "prd" | "roadmap", at: string): DocumentRow => {
     const row: DocumentRow = { id: uuid(), slug, title, status: "approved", kind, template: null, template_version: null, theme: null, created_at: at, updated_at: at };
@@ -1647,6 +1648,12 @@ function seedApprovedRoadmapScenario(crowded = false): Db {
   }
   roadmap.updated_at = "2026-10-20T09:00:00Z";
   db.simple_roadmap = seedTrails(seedSimpleRoadmap());
+  if (photoPinsFeature) {
+    const at = "2026-09-10T09:00:00Z";
+    const id = stableUuid("approved-roadmap/feature/tr-9");
+    db.baseline.entities.push({ id, type: "feature", key: "TR-9", title: "Photo pins", body: null, attrs: {}, status: "confirmed", origin: "user", locked: false, locked_by: null, locked_at: null, confidence: null, run_id: null, created_at: at, updated_at: at });
+    db.simple_roadmap.items.find((x) => x.key === "photo-pins")!.feature_id = id;
+  }
   if (crowded) {
     roadmap.status = "approved";
     applyRoadmapVersion(db, roadmap, db.versions.find((v) => v.document_id === roadmap.id && v.number === 3)!);
@@ -4183,6 +4190,8 @@ function load(): Db {
                 ? () => seedApprovedRoadmapScenario()
               : scenario === CROWDED_MILESTONES_SCENARIO
                 ? () => seedApprovedRoadmapScenario(true)
+              : scenario === PHOTO_PINS_FEATURE_SCENARIO
+                ? () => seedApprovedRoadmapScenario(false, true)
               : scenario === ONE_ROADMAP_SCENARIO
                 ? seedOneRoadmapScenario
               : scenario === HOME_MILESTONES_SCENARIO

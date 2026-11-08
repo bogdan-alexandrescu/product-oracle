@@ -66,23 +66,22 @@ test.describe("a version's row whose code an item has", () => {
   test.use(DESKTOP);
 
   /**
-   * protects = every-field (one code, one item): once a person gives Photo pins the code TR-9 in
-   * its panel, approving version 3, whose new row is "TR-9 Keep improving trail maps", adds no
-   * second item showing TR-9, and the applied-version line says why in the API's words
-   * ("<row> was not added: TR-9 is already the code of TR-9 Photo pins");
-   * fails_when = the row is added as a second TR-9 item, or the line says nothing of it;
-   * no_claim = Edit plan's own refusal (plan-edit.spec.ts).
+   * protects = every-field (one code, one item): Photo pins shows the code TR-9 by its Ground
+   * Truth feature (its title has no code), so approving version 3, whose new row is "TR-9 Keep
+   * improving trail maps", adds no second item showing TR-9, and the applied-version line says
+   * why in the API's words ("<row> was not added: TR-9 is already the code of TR-9 Photo pins");
+   * fails_when = the row is added as a second TR-9 item, or the line says nothing of it (as when
+   * only a title's code counts); no_claim = Edit plan's own refusal (plan-edit.spec.ts).
    */
   test("the line says which row was not added and why", async ({ page }) => {
-    await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "approved-roadmap"] as const);
+    await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "photo-pins-feature"] as const);
     await login(page);
     await page.goto(SIMPLE);
     await openRoadmapItem(page, "photo-pins");
     const panel = page.getByTestId("floating-card");
-    await panel.getByRole("button", { name: "Change the code" }).click();
-    await panel.getByLabel("Code").fill("TR-9");
-    await panel.getByTestId("card-code-edit").getByRole("button", { name: "Save" }).click();
-    await expect(panel.getByTestId("card-code")).toHaveText("TR-9");
+    await expect(panel.getByTestId("card-code")).toContainText("TR-9");
+    await expect(panel.getByTestId("card-code-why")).toHaveCount(1);
+    await expect(panel.getByRole("button", { name: "Change the code" })).toHaveCount(0);
 
     await approveVersion3(page);
     await page.goto(SIMPLE);

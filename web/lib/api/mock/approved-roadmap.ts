@@ -20,6 +20,9 @@ export const APPROVED_ROADMAP_SCENARIO = "approved-roadmap";
 /** The "crowded-milestones" scenario: Example trails with version 3 already approved and five
  * milestones in two weeks (two on Jan 15, then Jan 25, 27 and 29), for the Timeline's labels. */
 export const CROWDED_MILESTONES_SCENARIO = "crowded-milestones";
+/** The "photo-pins-feature" scenario: "approved-roadmap" with Photo pins linked to the Ground
+ * Truth feature TR-9, so it shows TR-9 by its feature (its title stays "Photo pins"). */
+export const PHOTO_PINS_FEATURE_SCENARIO = "photo-pins-feature";
 export const TRAILS_SLUG = "example-trails";
 export const TRAILS_TITLE = "Example trails";
 export const TRAILS_PRD_SLUG = "trail-maps";
