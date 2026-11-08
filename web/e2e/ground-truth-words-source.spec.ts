@@ -515,8 +515,10 @@ test("the check finds an old name planted in web/lib, the mock and a spec's expe
     "shares/render.py:1: Shared from the Baseline",
   ]);
   // fails_when = a brand-new renderer, or a helper it imports from its own package (by name or by a
-  // relative import), says Baseline and is not read; or a log call, a warning, a prompt hook or a
-  // prompt module trips the check.
+  // relative import) or from a sibling package, says Baseline and is not read; a model's own method
+  // named log, or print to the screen, is skipped as a log call; or a real log call (the logging
+  // module, a logger, print to stderr), a warning, a prompt hook, a function whose text goes to the
+  // model or a prompt module trips the check.
   const planted = new Map([
     [
       "digest/email.py",
@@ -549,14 +551,32 @@ test("the check finds an old name planted in web/lib, the mock and a spec's expe
         "class Digest:",
         "    def note(self) -> None:",
         '        self.logger.warning("no Baseline for %s", self)',
-        '        self.log("skipped the Baseline")',
+        '        logging.info("no Baseline for %s", self)',
+        '        self.log.error("the Baseline is late")',
+        '        print("skipped the Baseline", file=sys.stderr)',
         '        warnings.warn("the Baseline is gone")',
+        '        self.log("Moved in the Baseline")',
+        '        print("Printed from the Baseline")',
+        "",
+        "    def log(self, line: str) -> None:",
+        "        self.lines.append(line)",
         "",
         "def signature() -> str:",
         '    return "Signed in the Baseline"',
+        "",
+        "def intro(run: str) -> str:",
+        '    return f"Explain the Baseline of {run}."',
+        "",
+        "def brief(run: str) -> str:",
+        '    return "Sum up the Baseline."',
+        "",
+        "async def ask(db, run: str) -> str:",
+        "    system = intro(run)",
+        '    answer = await gateway.complete(db, system, [{"role": "user", "content": brief(run) + lines.facts()}], 400, job="digest")',
+        "    return answer.text",
       ].join("\n"),
     ],
-    ["digest/lines.py", 'EMPTY = "Nothing moved in the Baseline"\nKEY = "baseline"'],
+    ["digest/lines.py", 'EMPTY = "Nothing moved in the Baseline"\nKEY = "baseline"\ndef facts() -> str:\n    return "Mind the Baseline."'],
     ["digest/store.py", 'NOTE = "Kept in the Baseline"'],
     ["digest/prompts.py", 'SYSTEM = "<p>Read the Baseline.</p>"'],
     [
@@ -564,23 +584,38 @@ test("the check finds an old name planted in web/lib, the mock and a spec's expe
       [
         "from . import footer",
         "from .blocks import header",
+        "from oracle.roadmap.words import label",
+        "from oracle import settings",
         "def post(c):",
         '    c.chat_postMessage(blocks=[{"type": "mrkdwn", "text": f"*{c.name}* moved in the Baseline"}])',
       ].join("\n"),
     ],
     ["slack/blocks.py", 'HEADER = "Moved in the Baseline"'],
     ["slack/footer.py", 'TEXT = "Posted from the Baseline"'],
+    ["roadmap/words.py", 'def label() -> str:\n    return "Planned in the Baseline"'],
+    ["roadmap/store.py", 'NOTE = "Stored in the Baseline"'],
+    ["settings.py", 'NAME = "Set in the Baseline"'],
   ]);
-  expect(shownModules(planted)).toEqual(["digest/email.py", "digest/lines.py", "slack/blocks.py", "slack/footer.py", "slack/weekly.py"]);
-  expect(shownModules(planted).flatMap((rel) => pythonOldNames(rel, planted.get(rel)!))).toEqual([
+  expect(shownModules(planted)).toEqual(["digest/email.py", "digest/lines.py", "roadmap/words.py", "slack/blocks.py", "slack/footer.py", "slack/weekly.py"]);
+  const fed = promptBuilders(planted);
+  expect(shownModules(planted).flatMap((rel) => pythonOldNames(rel, planted.get(rel)!, fed.get(rel)))).toEqual([
     "digest/email.py:8: Hi {}, read what changed in the Baseline.",
     "digest/email.py:18: Sent from the Baseline",
-    "digest/email.py:33: Signed in the Baseline",
+    "digest/email.py:33: Moved in the Baseline",
+    "digest/email.py:34: Printed from the Baseline",
+    "digest/email.py:40: Signed in the Baseline",
     "digest/lines.py:1: Nothing moved in the Baseline",
+    "roadmap/words.py:2: Planned in the Baseline",
     "slack/blocks.py:1: Moved in the Baseline",
     "slack/footer.py:1: Posted from the Baseline",
-    "slack/weekly.py:4: *{}* moved in the Baseline",
+    "slack/weekly.py:6: *{}* moved in the Baseline",
   ]);
+  // fails_when = a function whose returned text goes to the model (by a variable, inside the call, or
+  // from a module it imports) is not found as a prompt builder.
+  expect(Object.fromEntries([...fed].map(([rel, names]) => [rel, [...names].sort()]))).toEqual({
+    "digest/email.py": ["brief", "intro"],
+    "digest/lines.py": ["facts"],
+  });
   for (const kept of [
     'test("Baseline to PRD reads Ground Truth to PRD", async () => {});',
     '// The heading once read "Baseline to PRD".',
