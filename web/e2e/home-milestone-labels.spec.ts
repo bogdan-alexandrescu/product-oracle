@@ -1,4 +1,4 @@
-import { HOME_MILESTONES_SCENARIO } from "../lib/api/mock/home-milestones";
+import { HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONES_SCENARIO } from "../lib/api/mock/home-milestones";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN, login } from "./helpers";
 import { expect, test, type Page } from "./test";
@@ -32,9 +32,9 @@ import { expect, test, type Page } from "./test";
  * ends in an ellipsis, its words run past its box, or is clipped by a box round it.
  */
 
-async function home(page: Page, width: number, email: string = ADMIN.email) {
+async function home(page: Page, width: number, email: string = ADMIN.email, scenario: string = HOME_MILESTONES_SCENARIO) {
   await page.setViewportSize({ width, height: 900 });
-  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, HOME_MILESTONES_SCENARIO] as const);
+  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, scenario] as const);
   await login(page, email);
   await page.goto("/simple");
   await expect(page.getByRole("heading", { name: "The plan this quarter" })).toBeVisible();
@@ -135,6 +135,47 @@ test("a roadmap's own milestone reads whole, one row per milestone, a bare code 
   // Annual billing types a bare "M3": Pricing's M3, never Onboarding's.
   expect(await itemsOf(page, "M3 · Prices live · 2 items")).toEqual([["Annual billing", "Usage meter"]]);
   expect((await itemsOf(page, "M3 · 2 items"))[0]).not.toContain("Annual billing");
+});
+
+/*
+ * Card home-milestones-per-goal (review of PR 1439), on the mock's "home-milestones-goals"
+ * scenario: protects = codes are numbered per goal, so two goals' M1 on one roadmap are two rows,
+ * each with its own name and items, and a bare "M1" an item types is its own goal's; a track
+ * milestone (company-wide) holding items from two roadmaps is one row; a track milestone joining
+ * a roadmap's own milestone with no name keeps the track's name; fails_when = the two M1 share a
+ * row, Welcome video sits under Faster activation's M1, "M2 · Launch (beta)" shows twice, or the
+ * joined row reads a bare "M3".
+ */
+test("two goals' M1 on one roadmap are two rows, a track milestone across roadmaps one", async ({ page }) => {
+  await home(page, 1440, ADMIN.email, HOME_MILESTONE_GOALS_SCENARIO);
+  const labels = (await page.getByTestId("home-strip-label").allTextContents()).map((t) => t.replace(/\s+/g, " ").trim());
+  // Two goals' M1 on Onboarding: two rows, each its own items; the bare "M1" typed on Welcome video (Grow retention's) is Grow retention's.
+  expect(labels.filter((l) => l.startsWith("M1"))).toEqual(["M1 · First run in a day · 1 item", "M1 · Return pilot · 2 items"]);
+  expect(await itemsOf(page, "M1 · First run in a day · 1 item")).toEqual([["Setup checklist"]]);
+  expect(await itemsOf(page, "M1 · Return pilot · 2 items")).toEqual([["Sample data import", "Welcome video"]]);
+  // The Alerts track's "M2 · Launch (beta)" holds an item from each of two roadmaps: one row.
+  expect(labels.filter((l) => l.startsWith("M2 · Launch"))).toEqual(["M2 · Launch (beta) · 2 items"]);
+  expect(await itemsOf(page, "M2 · Launch (beta) · 2 items")).toEqual([["Alert history export", "Partner invite links"]]);
+  // Alerts' own M3 (no name) and the track's "M3 · Rules ready": one row, the track's name kept.
+  expect(labels.filter((l) => l.startsWith("M3"))).toEqual(["M3 · Rules ready · 2 items"]);
+  expect(await itemsOf(page, "M3 · Rules ready · 2 items")).toEqual([["Alert rules engine", "Mobile alert push"]]);
+});
+
+/*
+ * Card home-twin-rows-named (review of PR 1439): protects = two rows that read alike (two PRDs'
+ * "M2 · Pilot") keep the same visible label but their links and (i) buttons have distinct
+ * accessible names; fails_when = a screen reader hears the same name for both.
+ */
+test("two rows that read alike have distinct accessible names", async ({ page }) => {
+  await home(page, 1440);
+  const lines = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: /^M2 · Pilot · 2 items$/ }) });
+  await expect(lines).toHaveCount(2);
+  const links = await Promise.all([0, 1].map((k) => lines.nth(k).getByTestId("home-strip-row").getAttribute("aria-label")));
+  const tips = await Promise.all([0, 1].map((k) => lines.nth(k).getByTestId("home-strip-items-tip").getAttribute("aria-label")));
+  expect(new Set(links).size, links.join(" / ")).toBe(2);
+  expect(new Set(tips).size, tips.join(" / ")).toBe(2);
+  expect(links.join(" ")).toContain("Pilot plan A");
+  expect(links.join(" ")).toContain("Pilot plan B");
 });
 
 test.describe("on a touch screen", () => {

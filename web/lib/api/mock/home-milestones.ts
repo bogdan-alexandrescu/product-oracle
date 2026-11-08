@@ -67,3 +67,47 @@ export function seedHomeMilestones(): SimpleDb {
   rm.record_dates = { ...rm.record_dates, "Old pilot": "2026-11-25" };
   return rm;
 }
+
+export const HOME_MILESTONE_GOALS_SCENARIO = "home-milestones-goals";
+
+/**
+ * home-milestones-goals (review of PR 1439): codes are numbered per goal, so Onboarding has two
+ * goals' M1: Faster activation's "M1 · First run in a day" (Setup checklist) and Grow retention's
+ * "M1 · Return pilot" (Sample data import); Welcome video, now Grow retention's, types a bare "M1".
+ * The Alerts track's "M2 · Launch (beta)" (tracks are company-wide) holds Alert history export
+ * (Alerts) and Partner invite links (Onboarding). Alerts' own M3 has no name and holds Alert
+ * rules engine, beside the track's "M3 · Rules ready" holding Mobile alert push. Two PRDs each
+ * have an Onboarding "M2 · Pilot" on the same day.
+ */
+export function seedHomeMilestoneGoals(): SimpleDb {
+  const rm = seedHomeMilestones();
+  const own = (id: string, roadmap: string, code: string, name: string, goal: string, gates: string[]): MockMilestone => ({
+    id: stableUuid(`simple-gm/goals-${id}`),
+    roadmap,
+    code,
+    name,
+    date: null,
+    goal,
+    gates,
+    counts_when: "",
+    progress: "not_started",
+  });
+  rm.goal_milestones = [
+    own("fa1", "onboarding-roadmap", "M1", "First run in a day", "faster-activation", ["setup-checklist"]),
+    own("gr1", "onboarding-roadmap", "M1", "Return pilot", "grow-retention", ["setup-import"]),
+    own("a3", "alerts-roadmap", "M3", "", "grow-retention", ["alert-rules"]),
+    ...(rm.goal_milestones ?? []).filter((m) => m.prd),
+  ];
+  rm.items.push({ key: "partner-invites", title: "Partner invite links", horizon: "next", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "alerts", confidence: "medium" });
+  rm.ids["partner-invites"] = stableUuid("simple-item/partner-invites");
+  const place: Record<string, NonNullable<SimpleDb["items"][number]["milestone"]>> = { "setup-video": { name: "M1", day: null } };
+  const records: Record<string, string> = { "alert-export": "M2 · Launch (beta)", "partner-invites": "M2 · Launch (beta)", "alert-mobile": "M3 · Rules ready" };
+  rm.items = rm.items.map((s) => {
+    const rest = { ...s };
+    delete rest.milestone;
+    delete rest.record;
+    return { ...rest, ...(place[s.key] ? { milestone: place[s.key] } : {}), ...(records[s.key] ? { record: records[s.key] } : {}), ...(s.key === "setup-video" ? { goal: "grow-retention" } : {}) };
+  });
+  rm.record_dropped = [];
+  return rm;
+}
