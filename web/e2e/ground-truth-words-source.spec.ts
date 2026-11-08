@@ -14,19 +14,25 @@ import { expect, test } from "./test";
  * the API's export and email templates (api/oracle's .j2 and .html, Jinja tags aside: the PDF,
  * deck and public roadmap exports, the invite emails), and every string of the Python that writes
  * shown text, found by itself, none listed by hand (shownModules: each api/oracle module that
- * renders HTML, email or chat, and the modules of its own or a sibling package it imports;
- * docstrings, comments, raw-string patterns, real log calls and the LLM's prompts aside, a prompt
- * found by its name or by its text going to a model call). And no spec in web/e2e
+ * renders HTML, email or chat, and the modules of its own or a sibling package it imports, an
+ * agents' task module aside; docstrings, comments, raw-string patterns, real log calls and the
+ * LLM's prompts aside, a prompt found by its name or by its text going only to model calls).
+ * And no spec in web/e2e
  * expects a page to say one: the strings given to toHaveText, toContainText, getByText and a
  * role's `name:` (test titles, comments and checks that a text is gone aside).
  * fails_when = a label such as "change it in Baseline" or "Detailed › Baseline" is left, a
  * renderer (a brand-new one too) writes "Read from the Baseline", or a spec still waits for
  * "Baseline to PRD".
  *
- * What may still say baseline: an id by its shape (one lowercase word, or joined to "_ / . : -":
- * "baseline", "/baseline", "baseline-tab", or written as code in a sentence: "`oracle baseline pull`"), and a measure's starting value: "Baseline value",
- * "Baseline 12", "Success metric and baseline", and the "Baseline" field beside "Predicted" on a
- * decision's or an outcome's prediction. And a CSS value ("align-items: baseline").
+ * What may still say baseline: an id by its shape (one lowercase word, or joined to
+ * "_ / . : -": "baseline", "/baseline", "baseline-tab"), and a measure's starting value:
+ * "Baseline value", "Baseline 12", "Success metric and baseline", and the "Baseline" field
+ * beside "Predicted" on a decision's or an outcome's prediction. And a CSS value
+ * ("align-items: baseline"). In the Python only, an id written as code in a sentence: a
+ * backtick span of lowercase ids holding "_ . / : < {" or starting "oracle "
+ * ("`oracle baseline pull`"), a quoted id with a placeholder ('"baseline decision <key>"'),
+ * or one named as a word to avoid ('never "baseline"'). 'Open the "baseline" page' and
+ * "Read `Baseline` first" are caught.
  */
 
 const WEB = path.resolve(__dirname, "..");
@@ -43,10 +49,15 @@ const STARTING_VALUE =
 /** A CSS property set to baseline ("align-items: baseline", "vertical-align: baseline"): a value, not a word. */
 const CSS_VALUE = /\b(?:vertical-align|(?:align|justify|place)-(?:items|self|content)|(?:alignment|dominant)-baseline)\s*:\s*(?:(?:first|last)\s+)?baseline\b/g;
 /**
- * An id written as code inside a sentence: anything in backticks ("`oracle baseline pull`"), or a quoted
- * lone id ('never "baseline"') or an id with a placeholder ('"baseline decision <key>"').
+ * In the Python's text, an id written as code in a sentence: a backtick span that is code (lowercase
+ * ids, holding one of "_ . / : < {" or starting "oracle ": "`oracle baseline pull`", "`baseline.yaml`").
  */
-const CODE_ID = /`[^`\n]*`|\\?(["'])(?:[a-z][a-z0-9_]*|[a-z][a-z0-9_]*(?: (?:[a-z][a-z0-9_]*|<\w+>|\{\}))* (?:<\w+>|\{\}))\\?\1/g;
+const CODE_SPAN = /`([^`\n]*)`/g;
+const isCode = (span: string) =>
+  span.split(" ").every((w) => /^[a-z0-9_./:<>{}-]+$/.test(w)) && (/[_./:<{]/.test(span) || span.startsWith("oracle "));
+/** ... or a quoted id with a placeholder ('"baseline decision <key>"') or named as a word to avoid ('never "baseline"'). */
+const QUOTED_ID =
+  /\\?(["'])[a-z][a-z0-9_]*(?: (?:[a-z][a-z0-9_]*|<\w+>|\{\}))* (?:<\w+>|\{\})\\?\1|\b(?:[Nn]ever|[Nn]ot|[Ii]nstead of) \\?(["'])[a-z][a-z0-9_]*\\?\2/g;
 /** A lone id or key. */
 const ID = /^[a-z][a-z0-9_]*$/;
 /** The prediction forms' starting-value field, "Baseline" beside "Predicted". */
@@ -67,7 +78,9 @@ function* sources(dir: string): Generator<string> {
 function saysOld(rel: string, said: string): boolean {
   const word = said.trim();
   if (ID.test(word) || PREDICTION_FIELD[rel] === word) return false;
-  return OLD.test(said.replace(STARTING_VALUE, "").replace(CSS_VALUE, "").replace(CODE_ID, ""));
+  let text = said.replace(STARTING_VALUE, "").replace(CSS_VALUE, "");
+  if (rel.endsWith(".py")) text = text.replace(CODE_SPAN, (m, span) => (isCode(span) ? "" : m)).replace(QUOTED_ID, "");
+  return OLD.test(text);
 }
 
 const relOf = (file: string) => path.relative(WEB, file).split(path.sep).join("/");
@@ -425,10 +438,11 @@ function statementEnd(code: string, from: number): number {
   return code.length;
 }
 
-/** The calls in ``code`` by name: "build(…)" as ["build"], "lines.facts(…)" as ["lines", "facts"]. */
-const callsIn = (code: string) => [...code.matchAll(/(?<![\w.])([A-Za-z_]\w*)(?:\.([A-Za-z_]\w*))?\s*\(/g)].map((m) => [m[1], m[2]] as const);
+/** The calls in ``code`` by name and where each starts: "build(…)" as ["build"], "lines.facts(…)" as ["lines", "facts"]. */
+const callsIn = (code: string) =>
+  [...code.matchAll(/(?<![\w.])([A-Za-z_]\w*)(?:\.([A-Za-z_]\w*))?\s*\(/g)].map((m) => [m[1], m[2], m.index] as const);
 
-/** The arguments of a model call (inside its brackets) that carry text: every positional one and the keywords a prompt goes by (system=, messages=, prompt=…), not model= or job=. */
+/** The arguments of a model call (inside its brackets) with only the text ones kept, the rest blanked: every positional one and the keywords a prompt goes by (system=, messages=, prompt=…), not model= or job=. */
 function textArgs(args: string): string {
   const parts: string[] = [];
   let [depth, at] = [0, 0];
@@ -439,52 +453,79 @@ function textArgs(args: string): string {
     } else if ("([{".includes(args[i])) depth++;
     else if (")]}".includes(args[i])) depth--;
   }
-  return parts.filter((a) => !/^\s*\w+\s*=(?!=)/.test(a) || /^\s*(?:system|messages|prompt|content|user|input)\s*=/.test(a)).join(",");
+  return parts.map((a) => (!/^\s*\w+\s*=(?!=)/.test(a) || /^\s*(?:system|messages|prompt|content|user|input)\s*=/.test(a) ? a : " ".repeat(a.length))).join(",");
 }
 
 /**
  * The functions of ``files`` (path under api/oracle → text) whose returned text goes to the model,
  * by module: each called in a model call's arguments ("complete(db, build_system(run), …)"), or
  * called to set a name given there ("system = intro(run)" in the same function), whether defined in
- * the module itself or imported from another ("from .lines import facts", "lines.facts()").
+ * the module itself or imported from another ("from .lines import facts", "lines.facts()"). Only
+ * when every call to it, in any module, feeds a model: one whose text also goes into an email is read.
  */
 function promptBuilders(files: Map<string, string>): Map<string, Set<string>> {
-  const out = new Map<string, Set<string>>();
-  const add = (rel: string, name: string) => {
-    if (files.has(rel)) (out.get(rel) ?? out.set(rel, new Set()).get(rel)!).add(name);
+  // Each call, as "module:offset", by the function it calls ("module:name").
+  const fedCalls = new Map<string, Set<string>>();
+  // Each module's own functions and its imports, read once.
+  const known = new Map<string, { own: Set<string>; imported: OracleImport[] }>();
+  /** The functions (as "module:name") the call ``a``(…) or ``a.b``(…) in ``rel`` reaches. */
+  const reached = (rel: string, a: string, b: string | undefined): string[] => {
+    let k = known.get(rel);
+    if (!k) {
+      const text = files.get(rel)!;
+      const own = new Set([...parsePython(text).code.matchAll(/^[ \t]*(?:async[ \t]+)?def[ \t]+(\w+)/gm)].map((m) => m[1]));
+      known.set(rel, (k = { own, imported: oracleImportLines(rel, text) }));
+    }
+    if (b === undefined && k.own.has(a)) return [`${rel}:${a}`];
+    if (b !== undefined && a === "self" && k.own.has(b)) return [`${rel}:${b}`];
+    return k.imported.flatMap(({ pkg, names }) =>
+      names.flatMap(([name, as]) =>
+        as !== a ? [] : [b === undefined ? `${pkg.join("/")}.py:${name}` : `${[...pkg, name].join("/")}.py:${b}`],
+      ),
+    );
+  };
+  const feed = (rel: string, calls: ReturnType<typeof callsIn>, offset: number) => {
+    for (const [a, b, at] of calls) {
+      for (const fn of reached(rel, a, b)) {
+        if (files.has(fn.slice(0, fn.lastIndexOf(":")))) (fedCalls.get(fn) ?? fedCalls.set(fn, new Set()).get(fn)!).add(`${rel}:${offset + at}`);
+      }
+    }
   };
   for (const [rel, text] of files) {
     if (!text.includes(".complete(") && !text.includes(".messages.create(")) continue;
     const { code } = parsePython(text);
-    const calls = [...code.matchAll(MODEL_CALL)];
-    if (!calls.length) continue;
-    const own = new Set([...code.matchAll(/^[ \t]*(?:async[ \t]+)?def[ \t]+(\w+)/gm)].map((m) => m[1]));
-    const imported = oracleImportLines(rel, text);
-    const resolve = (a: string, b: string | undefined) => {
-      if (b === undefined && own.has(a)) return add(rel, a);
-      if (b !== undefined && a === "self" && own.has(b)) return add(rel, b);
-      for (const { pkg, names } of imported) {
-        for (const [name, as] of names) {
-          if (as !== a) continue;
-          if (b === undefined) add(pkg.join("/") + ".py", name);
-          else add([...pkg, name].join("/") + ".py", b);
-        }
-      }
-    };
-    for (const m of calls) {
+    for (const m of code.matchAll(MODEL_CALL)) {
       const open = m.index + m[0].length - 1;
       const args = textArgs(code.slice(open + 1, closing(code, open) - 1));
-      for (const [a, b] of callsIn(args)) resolve(a, b);
+      feed(rel, callsIn(args), open + 1);
       // A name given to the call: what set it, in the same function, before the call.
       const fn = Math.max(0, code.lastIndexOf("def ", m.index));
       const before = code.slice(fn, m.index);
       for (const [, name] of args.matchAll(/(?<![\w.])([A-Za-z_]\w*)\b(?!\s*[=(.\w])/g)) {
         for (const set of before.matchAll(new RegExp(`^[ \\t]*(?:\\w+[ \\t]*,[ \\t]*)*${name}(?:[ \\t]*,[ \\t]*\\w+)*[ \\t]*(?::[^=\\n]*)?=(?!=)`, "gm"))) {
           const at = set.index + set[0].length;
-          for (const [a, b] of callsIn(before.slice(at, statementEnd(before, at)))) resolve(a, b);
+          feed(rel, callsIn(before.slice(at, statementEnd(before, at))), fn + at);
         }
       }
     }
+  }
+  // Every call to those functions, in any module that names one: a call that feeds no model keeps it read.
+  const names = new Set([...fedCalls.keys()].map((fn) => fn.slice(fn.lastIndexOf(":") + 1)));
+  const named = new RegExp(`(?<![\\w])(?:${[...names].join("|")})\\s*\\(`);
+  const read = new Set<string>();
+  for (const [rel, text] of files) {
+    if (!names.size || !named.test(text)) continue;
+    const code = parsePython(text).code.replace(/\bdef[ \t]+\w+/g, (d) => " ".repeat(d.length));
+    for (const [a, b, at] of callsIn(code)) {
+      if (!names.has(b ?? a)) continue;
+      for (const fn of reached(rel, a, b)) if (fedCalls.has(fn) && !fedCalls.get(fn)!.has(`${rel}:${at}`)) read.add(fn);
+    }
+  }
+  const out = new Map<string, Set<string>>();
+  for (const fn of fedCalls.keys()) {
+    if (read.has(fn)) continue;
+    const [rel, name] = [fn.slice(0, fn.lastIndexOf(":")), fn.slice(fn.lastIndexOf(":") + 1)];
+    (out.get(rel) ?? out.set(rel, new Set()).get(rel)!).add(name);
   }
   return out;
 }
@@ -495,15 +536,20 @@ function nearby(rel: string, dep: string): boolean {
   return r !== "." && d !== "." && (r === d || path.posix.dirname(r) === path.posix.dirname(d));
 }
 
+/** A module that writes an agents' task (a task= string, a *_TASK constant): its text is a prompt. */
+const AGENT_TASK = /\btask\s*=\s*[rRfFuU]{0,2}["'(]|^[A-Z][A-Z0-9_]*_TASK\s*[:=]/m;
+
 /**
  * The Python modules of ``files`` (path under api/oracle → text) that write text a person reads,
  * found by themselves: each that renders HTML, email or chat (rendersText), and the modules of its
  * own package or a sibling package it imports, which build the text it renders (the roadmap views
- * the public roadmap draws). Tests and prompts aside.
+ * the public roadmap draws). Tests and prompts (agents' tasks among them) aside.
  */
 function shownModules(files: Map<string, string>): string[] {
   const renderers = [...files].filter(([rel, text]) => rendersText(rel, text));
-  const helpers = renderers.flatMap(([rel, text]) => oracleImports(rel, text).filter((dep) => nearby(rel, dep)));
+  const helpers = renderers.flatMap(([rel, text]) =>
+    oracleImports(rel, text).filter((dep) => nearby(rel, dep) && files.has(dep) && !AGENT_TASK.test(files.get(dep)!)),
+  );
   return [...new Set([...renderers.map(([rel]) => rel), ...helpers])].filter((rel) => files.has(rel) && !NOT_SHOWN.test(rel)).sort();
 }
 
