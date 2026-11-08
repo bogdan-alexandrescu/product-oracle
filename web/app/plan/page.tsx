@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 
 import { BuildRoadmapButton } from "@/components/BuildRoadmap";
 import { LinkIssueDialog } from "@/components/LinkIssueDialog";
+import { LinkedDiscussion } from "@/components/discuss/LinkedDiscussion";
 import { Chip, InfoTip, Notice, PageHeader, Panel, SegmentedControl, Sheet, Split, ViewOnly } from "@/components/ds";
 import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -203,6 +204,7 @@ export default function PlanPage() {
 
   return (
     <div className="min-w-0 px-6 pb-6 max-[600px]:px-2.5 max-[600px]:pb-24">
+      <LinkedDiscussion />
       <PageHeader
         title="Plan"
         status={

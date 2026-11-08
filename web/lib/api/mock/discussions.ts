@@ -766,15 +766,159 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
       status,
       created_at: late,
     });
+  // The approver's open goals interview on "Weekly checkout time", Oracle's two versions
+  // proposed: Review changes opens it on the Ground Truth, in a sheet.
+  const open = ctx.uuid();
+  const checkout = ctx.uuid();
+  db.discussions.push({
+    ...db.discussions.find((x) => x.id === interview)!,
+    id: open,
+    subject: { entity_id: checkout, interview: true },
+    subject_key: `entity:${checkout}`,
+    subject_label: "Weekly checkout time",
+    title: "Make “Weekly checkout time” measurable",
+    status: "open",
+  });
+  db.participants.push({ discussion_id: open, user_id: approver, added_via: "started", left_at: null, last_read_at: null, created_at: late });
+  for (const n of [1, 2])
+    db.changes.push({
+      ...change,
+      id: ctx.uuid(),
+      discussion_id: open,
+      kind: "goal_measure",
+      label: `Make Weekly checkout time measurable: version ${n}`,
+      target: { entity_id: checkout, title: "Weekly checkout time" },
+      payload: { entity_id: checkout, metric: "Weekly checkout time", target: 60 * n },
+      proposed_by_kind: "oracle",
+      suggested_by: null,
+      status: "proposed",
+      created_at: late,
+    });
+  // An open discussion on the priority order the approver is not in: the commenter's suggested
+  // move waits on them, and Review changes opens it on the Priorities page.
+  const order = ctx.uuid();
+  db.discussions.push({
+    ...db.discussions.find((x) => x.id === open)!,
+    id: order,
+    subject_kind: "priorities",
+    subject: {},
+    subject_key: "priorities",
+    subject_label: "Priority order",
+    subject_url: "/priorities",
+    title: "Order: put Guest checkout first?",
+    started_by: commenter,
+  });
+  db.participants.push({ discussion_id: order, user_id: commenter, added_via: "started", left_at: null, last_read_at: null, created_at: late });
+  db.changes.push({
+    ...change,
+    id: ctx.uuid(),
+    discussion_id: order,
+    kind: "priority_move",
+    label: "Move Guest checkout above Saved carts",
+    target: {},
+    payload: { feature_id: ctx.uuid(), above_feature_id: ctx.uuid(), reason: "Guests leave at sign-up." },
+    proposed_by_kind: "person",
+    proposed_by: commenter,
+    suggested_by: commenter,
+    status: "suggested",
+    created_at: late,
+  });
+}
+
+/**
+ * "discussion-intake": the approver's open discussion on an intake (its page: Before drafting,
+ * /intakes/<id>), where Oracle proposes one way to measure its goal; Review changes opens it there.
+ */
+export function seedIntakeDiscussion(ctx: Omit<DiscussionsContext, "me" | "db">, intake: { id: string; title: string }): DiscussionsDb {
+  const db = emptyDiscussions();
+  const approver = ctx.members.find((m) => m.email === "approver@example.com")!.id;
+  const id = ctx.uuid();
+  const at = "2026-10-21T08:30:00Z";
+  db.discussions.push({
+    id,
+    subject_kind: "intake",
+    subject: { intake_id: intake.id },
+    subject_key: `intake:${intake.id}`,
+    subject_label: intake.title,
+    subject_url: `/intakes/${intake.id}`,
+    document_id: null,
+    run_id: null,
+    title: "Saved addresses: how do we measure it?",
+    visibility: "open",
+    author_only: false,
+    status: "open",
+    origin: "discuss",
+    started_by: approver,
+    summary: null,
+    summary_status: "none",
+    summary_shared: true,
+    last_message_at: at,
+    lock_version: 1,
+    created_at: at,
+    updated_at: at,
+  });
+  db.participants.push({ discussion_id: id, user_id: approver, added_via: "started", left_at: null, last_read_at: null, created_at: at });
+  db.messages.push({
+    id: ctx.uuid(),
+    discussion_id: id,
+    author_kind: "person",
+    author_id: approver,
+    body: "How will we know repeat checkout got faster?",
+    mentions: [],
+    mentions_oracle: false,
+    reply_to: null,
+    created_at: at,
+    edited_at: null,
+    deleted_at: null,
+  });
+  db.changes!.push({
+    id: ctx.uuid(),
+    discussion_id: id,
+    kind: "goal_measure",
+    label: "Measure repeat checkout time in seconds",
+    target: { title: "Repeat checkout time" },
+    payload: { metric: "Repeat checkout time", unit: "seconds", target: 30 },
+    edited_payload: null,
+    rationale: null,
+    proposed_by_kind: "oracle",
+    proposed_by: null,
+    suggested_by: null,
+    status: "proposed",
+    lock_version: 1,
+    created_at: at,
+  });
+  return db;
+}
+
+/** The API's changes.THREAD_PAGES and THREAD_PATH: the pages that open a thread from a link (?discussion=<id>&changes=1). */
+const THREAD_PAGES = ["document", "section", "roadmap_item", "checkpoint", "checkpoint_item", "entity", "conflict", "intake", "gap", "track", "priorities"];
+const THREAD_PATH = /^\/(documents\/[^/?#]+\/v\/\d+(?:\/[^?#]*)?|runs\/[^/?#]+|intakes\/[^/?#]+|ground-truth|briefs\/[^/?#]+|plan|priorities)(?:[?#]|$)/;
+/** The API's changes.opens_thread: whether the discussion's page opens its thread (and its changes card) from its link; a deleted subject's (its row is missing, Labels.gone) opens nothing. */
+function opensThread(d: DiscussionRow, gone: (d: DiscussionRow) => boolean): boolean {
+  if (gone(d)) return false;
+  if (d.subject_kind === "screen") return THREAD_PATH.test(String((d.subject as { path?: string }).path ?? ""));
+  return THREAD_PAGES.includes(d.subject_kind);
+}
+/** The API's changes.waits_on: an open change of an open discussion whose page opens its card; Oracle's proposals wait on its participants, suggestions on every approver of an open one. */
+function waitsOn(d: DiscussionRow, c: ChangeRow, participant: boolean, gone: (d: DiscussionRow) => boolean): boolean {
+  if (d.status !== "open" || !isOpenStatus(c.status) || !opensThread(d, gone)) return false;
+  return participant || (d.visibility === "open" && c.status === "suggested");
 }
 
 /**
  * G6: my discussion rows for GET /v1/inbox, as the API derives them (oracle.discussions.inbox):
  * Invited and Mentioned rows of discussions I can read, and for approvers the changes waiting
  * on them (participants: proposed and suggested; others, of open discussions: suggested), in
- * open discussions only: a closed one's card offers no action until it is reopened.
+ * open discussions whose page opens their thread only (waitsOn): a closed one's card offers no
+ * action until it is reopened, and a deleted subject's page opens no thread.
  */
-export function discussionInboxRows(db: DiscussionsDb, members: Member[], me: { id: string; role: Role }, seen: string | null): Schemas["InboxDiscussionItem"][] {
+export function discussionInboxRows(
+  db: DiscussionsDb,
+  members: Member[],
+  me: { id: string; role: Role },
+  seen: string | null,
+  gone: (d: DiscussionRow) => boolean = () => false,
+): Schemas["InboxDiscussionItem"][] {
   const name = (id: string | null) => {
     const m = id ? members.find((x) => x.id === id) : undefined;
     return m ? displayName(m.email) : null;
@@ -818,11 +962,9 @@ export function discussionInboxRows(db: DiscussionsDb, members: Member[], me: { 
   }
   if (atLeast(me.role, "approver")) {
     for (const d of db.discussions) {
-      if (!readable(d) || d.status !== "open") continue;
+      if (!readable(d)) continue;
       const inIt = active(d).some((p) => p.user_id === me.id);
-      const waiting = (db.changes ?? []).filter(
-        (c) => c.discussion_id === d.id && (c.status === "suggested" || (inIt && c.status === "proposed")),
-      );
+      const waiting = (db.changes ?? []).filter((c) => c.discussion_id === d.id && waitsOn(d, c, inIt, gone));
       if (!waiting.length) continue;
       const at = waiting.map((c) => c.created_at).sort().at(-1)!;
       out.push({ ...base(d), id: `chg_${d.id}`, kind: "changes_proposed", by: null, excerpt: null, count: waiting.length, at, state: fresh(at) });
@@ -939,6 +1081,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       proposed_by: c.proposed_by ? ref(c.proposed_by) : null,
       suggested_by: c.suggested_by ? ref(c.suggested_by) : null,
       status: c.status,
+      open,
       action: atLeast(me.role, "commenter") ? { verb, allowed, why_not: whyNot } : null,
       can: {
         suggest: writer && c.status === "proposed" && !allowed,

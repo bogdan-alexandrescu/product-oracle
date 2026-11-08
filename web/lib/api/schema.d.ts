@@ -22642,6 +22642,8 @@ export interface components {
              * @enum {string}
              */
             status: "proposed" | "suggested" | "staged" | "done" | "dismissed" | "superseded";
+            /** Open */
+            open: boolean;
             action?: components["schemas"]["ChangeAction"] | null;
             /**
              * @default {
