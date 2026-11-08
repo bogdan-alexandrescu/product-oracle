@@ -1,4 +1,4 @@
-import { AREA_PRDS, OLD_PRD, OLD_ROADMAP, REPLACED_PRD_TRASH_SCENARIO } from "../lib/api/mock/one-roadmap";
+import { AREA_PRDS, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, REPLACED_PRD_TRASH_SCENARIO } from "../lib/api/mock/one-roadmap";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 import { expect, test, type Page } from "./test";
@@ -83,4 +83,42 @@ test("a replaced PRD restored from Trash is read-only history", async ({ page })
   // Its roadmap is read-only history too.
   await page.goto(`/documents/${OLD_ROADMAP[0]}`);
   await expect(page.getByTestId("replaced-by")).toContainText("Replaced by User Safety and Scale");
+});
+
+/**
+ * protects = a replaced PRD and its roadmap offer no Approve or Publish (the API refuses both with
+ * 409): the roadmap's unsent v2 shows no Approve, the PRD's open v2 no Publish link, and its Publish
+ * screen says why in plain words in place of the button; the roadmap's page shows a short
+ * "Read-only" tick, the reason in its tooltip; fails_when = Approve version or Publish shows on
+ * either, or the Publish screen offers "Publish v2"; no_claim = the API's refusals
+ * (test_replaced_prd_history_api.py).
+ */
+test("a replaced PRD and its roadmap show no Approve or Publish", async ({ page }) => {
+  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, ONE_ROADMAP_SCENARIO] as const);
+  await login(page);
+
+  // The history roadmap's unsent version: no Approve version.
+  await page.goto(`/documents/${OLD_ROADMAP[0]}/v/2`);
+  await expect(page.getByTestId("doc-discuss").filter({ visible: true }).first()).toBeVisible();
+  await expect(page.getByTestId("approve-version")).toHaveCount(0);
+  await expect(page.getByTestId("publish-link")).toHaveCount(0);
+
+  // The replaced PRD's open draft: no Publish link.
+  await page.goto(`/documents/${OLD_PRD[0]}/v/2`);
+  await expect(page.getByTestId("doc-discuss").filter({ visible: true }).first()).toBeVisible();
+  await expect(page.getByTestId("publish-link")).toHaveCount(0);
+  await expect(page.getByTestId("approve-version")).toHaveCount(0);
+
+  // Its Publish screen says why, in place of a button that would fail.
+  await page.goto(`/documents/${OLD_PRD[0]}/publish`);
+  await expect(page.getByTestId("publish-read-only")).toHaveText(`${OLD_PRD[1]} is replaced and read-only`);
+  await expect(page.getByTestId("publish-button")).toHaveCount(0);
+
+  // The roadmap's page: a short Read-only tick, the reason in its tooltip, not on the page.
+  await page.goto(`/documents/${OLD_ROADMAP[0]}`);
+  const tick = page.getByTestId("replaced-by").getByRole("button", { name: "Read-only" });
+  await expect(tick).toBeVisible();
+  await expect(page.getByText("Read-only: its items no longer feed the roadmap.")).toHaveCount(0);
+  await tick.hover();
+  await expect(page.getByRole("tooltip")).toContainText(`${OLD_ROADMAP[1]} is the roadmap of a replaced PRD and read-only`);
 });
