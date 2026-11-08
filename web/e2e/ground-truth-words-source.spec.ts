@@ -613,12 +613,26 @@ test("the check catches the old names and spares the ids and the starting values
     "See the `the Baseline view` tab",
     'text you write, never "baseline" (except a starting value)',
     "as get_baseline and `oracle baseline pull` give it",
+    "*Moved:* `build the baseline.`",
+    'Saved to "baseline {}"',
+    'Pick a view, not "baseline"',
   ]) {
     expect(saysOld("app/x.tsx", said), said).toBe(true);
   }
-  // fails_when = shown text in the Python passes as an id: a quoted word with no placeholder and no
-  // "never", or a backtick span that is not code.
-  for (const said of ['Open the "baseline" page', "Open the 'baseline' page", "Read `Baseline` first", "*Moved:* `Build the baseline`", "See the `the Baseline view` tab"]) {
+  // fails_when = shown text in the Python passes as an id: a quoted word with no <placeholder> (an
+  // f-string's fill is no placeholder) and no "never", or a backtick span that is not an id or a command.
+  for (const said of [
+    'Open the "baseline" page',
+    "Open the 'baseline' page",
+    "Read `Baseline` first",
+    "*Moved:* `Build the baseline`",
+    "See the `the Baseline view` tab",
+    "*Moved:* `build the baseline.`",
+    "Ask: `what is the baseline: now?`",
+    'Saved to "baseline {}"',
+    'Pick a view, not "baseline"',
+    "Use the plan instead of 'baseline'",
+  ]) {
     expect(saysOld("slack/pings.py", said), said).toBe(true);
   }
   for (const kept of [
@@ -712,7 +726,9 @@ test("the check finds an old name planted in web/lib, the mock and a spec's expe
     ]),
   );
   expect(shown.filter((rel) => NOT_SHOWN.test(rel)), "no test or prompt module is read").toEqual([]);
-  expect(shown, "the agents' tasks (runs/flows.py) are prompts, not read").not.toContain("runs/flows.py");
+  // fails_when = a module is skipped whole for writing an agents' task: runs/flows.py also holds the
+  // flows' titles people see (FLOWS[...].title, read by members/tokens.py and others).
+  expect(shown, "the flows' titles (runs/flows.py) are read").toContain("runs/flows.py");
   expect(pythonOldNames("shares/render.py", 'TITLE = "Shared from the Baseline"\nKEY = "baseline"\nhref = f"/baseline/{slug}"')).toEqual([
     "shares/render.py:1: Shared from the Baseline",
   ]);
@@ -720,8 +736,8 @@ test("the check finds an old name planted in web/lib, the mock and a spec's expe
   // relative import) or from a sibling package, says Baseline and is not read; a model's own method
   // named log, or print to the screen, is skipped as a log call; or a real log call (the logging
   // module, a logger, print to stderr), a warning, a prompt hook, a function whose text goes to the
-  // model or a prompt module (one named for prompts, or one writing an agent's task, reached from a
-  // sibling package) trips the check.
+  // model or a prompt module (one named for prompts, reached from a sibling package) trips the check;
+  // or a module writing an agent's task (task=, a *_TASK constant) hides the title it also shows.
   const planted = new Map([
     [
       "digest/email.py",
@@ -810,10 +826,10 @@ test("the check finds an old name planted in web/lib, the mock and a spec's expe
     ["slack/footer.py", 'TEXT = "Posted from the Baseline"'],
     ["roadmap/words.py", 'def label() -> str:\n    return "Planned in the Baseline"'],
     ["roadmap/store.py", 'NOTE = "Stored in the Baseline"'],
-    ["runs/tasks.py", 'DIGEST_TASK = "Sum up the week in the Baseline."\nDIGEST = Segment(task="Read the Baseline and write the digest.")'],
+    ["runs/tasks.py", 'DIGEST_TASK = "Sum up the week."\nDIGEST = Segment(task="Read the graph and write the digest.", title="Baseline to digest")'],
     ["settings.py", 'NAME = "Set in the Baseline"'],
   ]);
-  expect(shownModules(planted)).toEqual(["digest/email.py", "digest/lines.py", "roadmap/words.py", "slack/blocks.py", "slack/footer.py", "slack/weekly.py"]);
+  expect(shownModules(planted)).toEqual(["digest/email.py", "digest/lines.py", "roadmap/words.py", "runs/tasks.py", "slack/blocks.py", "slack/footer.py", "slack/weekly.py"]);
   const fed = promptBuilders(planted);
   expect(shownModules(planted).flatMap((rel) => pythonOldNames(rel, planted.get(rel)!, fed.get(rel)))).toEqual([
     "digest/email.py:8: Hi {}, read what changed in the Baseline.",
@@ -825,6 +841,7 @@ test("the check finds an old name planted in web/lib, the mock and a spec's expe
     "digest/email.py:57: Welcome to the Baseline",
     "digest/lines.py:1: Nothing moved in the Baseline",
     "roadmap/words.py:2: Planned in the Baseline",
+    "runs/tasks.py:2: Baseline to digest",
     "slack/blocks.py:1: Moved in the Baseline",
     "slack/footer.py:1: Posted from the Baseline",
     "slack/weekly.py:7: *{}* moved in the Baseline",
