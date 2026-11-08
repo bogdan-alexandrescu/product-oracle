@@ -102,7 +102,7 @@ entities:
   - type: goal
     key: kr-1-1
     title: KR 1.1 [n] of [n] live helpers averaging 50 replied threads a day in March 2027
-    body: Reach [n] live helpers, each replying to [N] threads a day.
+    body: Reach [n] live helpers, each replying to [n] threads a day.
   - type: goal
     key: kr-1-2
     title: KR 1.2 [n] helpers running at the same time, toward 200 replied threads
@@ -148,7 +148,7 @@ async def test_an_agent_update_drops_placeholders(client, ctx):
     assert goal["locked"] is False
     resp = await client.patch(
         f"{B}/entities/{goal['id']}",
-        json={"title": "KR 3.1 Pages load in [X] seconds", "origin": "agent"},
+        json={"title": "KR 3.1 Pages load in [x] seconds", "origin": "agent"},
         headers=ctx.as_("token"),
     )
     assert resp.status_code == 200, resp.text

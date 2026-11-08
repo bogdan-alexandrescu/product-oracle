@@ -535,19 +535,20 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
           )}
           {canWrite && onRename && (
             // On a phone a pencil only, so the row's actions stay one row at 390 px (qa-plan-26);
-            // its name and tooltip still say Rename.
+            // its name and the pencil's tooltip still say Rename (the desktop button reads it).
             <Button
               disabled={busy}
               className={PHONE_ICON}
               data-testid="rename-goal"
               aria-label="Rename"
-              title="Rename"
               onClick={(e: MouseEvent) => {
                 e.stopPropagation();
                 onRename(g);
               }}
             >
-              <Icon name="pencil" size={16} className="hidden max-[600px]:block" />
+              <span title="Rename" className="hidden max-[600px]:block">
+                <Icon name="pencil" size={16} />
+              </span>
               <span className="max-[600px]:hidden">Rename</span>
             </Button>
           )}

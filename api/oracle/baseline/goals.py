@@ -32,10 +32,11 @@ TYPED = (
     "due", "owner", "weight",
 )  # fmt: skip
 NOUN = re.compile(r"[a-z][a-z -]{0,23}")
-# An unfilled template placeholder in a goal's name or description: "[n]", "[N]", "[X]",
-# "[TBD]", "[?]", "[#]", "[number]", and "[n] of [n]" as one.
-_PLACEHOLDER = r"\[(?:n|x|#|\?|tbd|number|num|value)\]"
-PLACEHOLDER = re.compile(rf"(?i){_PLACEHOLDER}(?:\s+(?:of|out of)\s+{_PLACEHOLDER})?")
+# An unfilled template placeholder in a goal's name or description, as an import writes one:
+# lowercase "[n]", "[x]", "[#]", "[?]", "[tbd]", and "[n] of [n]" / "[n] out of [n]" as one. A
+# capitalised or other bracketed word ("Project [X]", "Price [Value]") is a real name and stays.
+_PLACEHOLDER = r"\[(?:n|x|#|\?|tbd)\]"
+PLACEHOLDER = re.compile(rf"{_PLACEHOLDER}(?:\s+(?:of|out of)\s+{_PLACEHOLDER})?")
 STALE_DAYS = 45
 
 MESSAGES = {
