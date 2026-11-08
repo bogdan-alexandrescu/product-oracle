@@ -179,8 +179,11 @@ export function PlanByMonth({
           const when = r.date ? calendarDay(r.date, { month: "short", day: "numeric" }) : null;
           // home-milestones-whole (review of PR 1439): two rows that read alike (two PRDs' or goals'
           // "M2 · Pilot") are told apart by whose they are, in their names alone, not their text.
-          const twin = !!r.of && shown.some((o, j) => j !== k && labelOf(o) === label && o.date === r.date);
-          const heard = twin ? `${label}, ${r.of}` : label;
+          const rowNames = names ? (r.item_ids ?? []).flatMap((id) => (names.has(id) ? [names.get(id)!] : [])) : [];
+          const twins = shown.filter((o, j) => j !== k && labelOf(o) === label && o.date === r.date);
+          // Whose it is; with none known (a goal no loaded item names) or one a twin shares, its first item.
+          const whose = r.of && !twins.some((o) => o.of === r.of) ? r.of : (rowNames[0] ?? r.of);
+          const heard = twins.length && whose ? `${label}, ${whose}` : label;
           const rowLabel = `${heard}${when ? ` · ${when}` : ""}: open the roadmap${prd ? ` filtered to ${prd.title}` : ""}`;
           const words = (
             <span className={`flex min-w-0 flex-col leading-tight max-[600px]:flex-row max-[600px]:flex-wrap max-[600px]:items-baseline max-[600px]:gap-x-2 ${named ? "" : "pointer-events-none relative"}`}>
@@ -223,7 +226,6 @@ export function PlanByMonth({
               {line(k === 0)}
             </span>
           );
-          const rowNames = names ? (r.item_ids ?? []).flatMap((id) => (names.has(id) ? [names.get(id)!] : [])) : [];
           // Two rows may read alike (two PRDs' "M2 · Pilot" on one day): each its own key.
           const rowKey = `${r.name}|${r.date ?? ""}|${r.item_ids?.[0] ?? k}`;
           return (
