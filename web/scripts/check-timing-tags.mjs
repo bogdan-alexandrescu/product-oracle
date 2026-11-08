@@ -5,8 +5,10 @@
 //
 // A test measures elapsed time when its body, or a helper function it calls (of the file, or
 // imported from another file under e2e/; the mock API it drives is not the test), subtracts from the clock or reads performance.now(). The
-// clock is Date.now(), performance.now(), new Date().getTime() / .valueOf(), +new Date(), or a
-// variable set from one of them ("now() - start", "end - start" with const end = Date.now()).
+// clock is Date.now(), performance.now(), new Date().getTime() / .valueOf(), +new Date(), a
+// variable set from one of them in its own scope ("end - start" with const end = Date.now()),
+// or a call of a function that returns one (const now = () => Date.now()); new Date() counts
+// only when another clock read is taken from it ("new Date() - t0"), never in plain date maths.
 // A coarse guard meant for the parallel shards says so with a "timing-check: coarse" comment
 // in the test; it passes only when every bound it sets on a measured value (toBeLessThan,
 // toBeLessThanOrEqual, toBeGreaterThan) is a literal of at least 1000 ms.
@@ -36,18 +38,94 @@ function isNewDate(n) {
   return ts.isNewExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === "Date" && !n.arguments?.length;
 }
 
-/** A read of the clock: Date.now(), performance.now(), new Date().getTime() / .valueOf(), +new Date(), new Date(). */
-function isClock(node) {
+// How surely a value is a clock read: a timestamp, or a `new Date()` that is one only when
+// another clock read is taken from it (or it from one); plain date maths is not timing.
+const STRONG = 2;
+const WEAK = 1;
+
+/**
+ * Whether `node` reads the clock, and how surely: STRONG for Date.now(), performance.now(),
+ * new Date().getTime() / .valueOf(), +new Date(); WEAK for new Date(); 0 for none. A variable
+ * set from a clock read, or a call of a function that returns one, reads as that read.
+ * `clocks` holds the file's checker and its clock variables and functions, by declaration.
+ */
+function clockKind(node, clocks) {
   const n = skipParens(node);
-  if (isNowCall(n) || isNewDate(n)) return true;
-  if (ts.isPrefixUnaryExpression(n) && n.operator === ts.SyntaxKind.PlusToken) return isNewDate(skipParens(n.operand));
-  return (
-    ts.isCallExpression(n) &&
-    !n.arguments.length &&
-    ts.isPropertyAccessExpression(n.expression) &&
-    ["getTime", "valueOf"].includes(n.expression.name.text) &&
-    isNewDate(skipParens(n.expression.expression))
-  );
+  if (isNowCall(n)) return STRONG;
+  if (isNewDate(n)) return WEAK;
+  if (ts.isPrefixUnaryExpression(n) && n.operator === ts.SyntaxKind.PlusToken)
+    return isNewDate(skipParens(n.operand)) ? STRONG : clockKind(n.operand, clocks);
+  if (ts.isCallExpression(n) && !n.arguments.length && ts.isPropertyAccessExpression(n.expression) && ["getTime", "valueOf"].includes(n.expression.name.text)) {
+    const of = skipParens(n.expression.expression);
+    return isNewDate(of) ? STRONG : clockKind(of, clocks);
+  }
+  if (ts.isIdentifier(n)) return clocks.vars.get(symbolOf(n, clocks)) ?? 0;
+  if (ts.isCallExpression(n) && ts.isIdentifier(n.expression)) return clocks.fns.get(symbolOf(n.expression, clocks)) ?? 0;
+  return 0;
+}
+
+function symbolOf(id, clocks) {
+  return clocks.checker.getSymbolAtLocation(id);
+}
+
+/** A checker for `sf` alone: it tells which declaration a name means, scope by scope. */
+function checkerFor(sf) {
+  const host = {
+    getSourceFile: () => sf,
+    fileExists: () => true,
+    readFile: () => undefined,
+    writeFile: () => {},
+    getDefaultLibFileName: () => "lib.d.ts",
+    getCurrentDirectory: () => "/",
+    getCanonicalFileName: (f) => f,
+    useCaseSensitiveFileNames: () => true,
+    getNewLine: () => "\n",
+  };
+  return ts.createProgram({ rootNames: [sf.fileName], options: { noLib: true, noResolve: true, types: [] }, host }).getTypeChecker();
+}
+
+/** The clock reads `fn` returns (the surest of them), or 0. */
+function returnKind(fn, clocks) {
+  if (!fn.body) return 0;
+  if (!ts.isBlock(fn.body)) return clockKind(fn.body, clocks);
+  let kind = 0;
+  const visit = (n) => {
+    if (ts.isFunctionLike(n)) return;
+    if (ts.isReturnStatement(n) && n.expression) kind = Math.max(kind, clockKind(n.expression, clocks));
+    ts.forEachChild(n, visit);
+  };
+  ts.forEachChild(fn.body, visit);
+  return kind;
+}
+
+/**
+ * `sf`'s clock variables (const end = Date.now(); t0 = performance.now()) and clock functions
+ * (const now = () => Date.now()), each by its declaration, so a name in another scope is not one.
+ */
+function findClocks(sf) {
+  const clocks = { checker: checkerFor(sf), vars: new Map(), fns: new Map() };
+  let grew = true;
+  const raise = (map, id, kind) => {
+    const s = kind && symbolOf(id, clocks);
+    if (s && kind > (map.get(s) ?? 0)) {
+      map.set(s, kind);
+      grew = true;
+    }
+  };
+  const visit = (n) => {
+    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer) {
+      const init = skipParens(n.initializer);
+      if (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) raise(clocks.fns, n.name, returnKind(init, clocks));
+      else raise(clocks.vars, n.name, clockKind(init, clocks));
+    } else if (ts.isFunctionDeclaration(n) && n.name) raise(clocks.fns, n.name, returnKind(n, clocks));
+    else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(n.left)) raise(clocks.vars, n.left, clockKind(n.right, clocks));
+    ts.forEachChild(n, visit);
+  };
+  while (grew) {
+    grew = false;
+    visit(sf);
+  }
+  return clocks;
 }
 
 /** The callee's name as `helpers` keys it: `fn` or `ns.fn`, or null. */
@@ -60,15 +138,20 @@ function calleeName(call) {
 
 /**
  * Whether `node` measures time itself. `helpers` names the functions that do (`fn`, `ns.fn`);
- * `clocks` names the variables set from a clock read.
+ * `clocks` is the file's clock reads (findClocks). A clock read less anything ("now() - start")
+ * measures; a deadline less the clock ("until - Date.now()") does not.
  */
 function measures(node, helpers, clocks) {
   let found = false;
   const visit = (n) => {
     if (found) return;
     if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.MinusToken) {
-      const left = skipParens(n.left);
-      if (isClock(left) || (ts.isIdentifier(left) && clocks.has(left.text))) found = true;
+      const left = clockKind(n.left, clocks);
+      if (left === STRONG || (left && clockKind(n.right, clocks))) found = true;
+    } else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+      // -start + Date.now()
+      const negated = (x) => ((x = skipParens(x)), ts.isPrefixUnaryExpression(x) && x.operator === ts.SyntaxKind.MinusToken ? clockKind(x.operand, clocks) : 0);
+      if ((negated(n.left) && clockKind(n.right, clocks)) || (negated(n.right) && clockKind(n.left, clocks))) found = true;
     }
     if (isNowCall(n, ["performance"])) found = true;
     else if (ts.isCallExpression(n) && helpers.has(calleeName(n))) found = true;
@@ -145,14 +228,7 @@ function analyse(sf, fileName, read, root, cache) {
     }
   }
 
-  // Variables set from a clock read: const end = Date.now(); t0 = performance.now().
-  const clocks = new Set();
-  const findClocks = (n) => {
-    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer && isClock(n.initializer)) clocks.add(n.name.text);
-    else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(n.left) && isClock(n.right)) clocks.add(n.left.text);
-    ts.forEachChild(n, findClocks);
-  };
-  findClocks(sf);
+  const clocks = findClocks(sf);
 
   // The file's named functions (declarations and const arrows) that measure, to a fixpoint.
   const fns = new Map();
@@ -238,11 +314,11 @@ function coarseGuard(body, sf, helpers, clocks) {
   // Variables the test sets from a measure: const ms = await paint(page).
   const measured = new Set();
   const findMeasured = (n) => {
-    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer && measures(n.initializer, helpers, clocks)) measured.add(n.name.text);
+    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer && measures(n.initializer, helpers, clocks)) measured.add(symbolOf(n.name, clocks));
     ts.forEachChild(n, findMeasured);
   };
   findMeasured(body);
-  const usesMeasured = (n) => (ts.isIdentifier(n) && measured.has(n.text)) || !!ts.forEachChild(n, usesMeasured);
+  const usesMeasured = (n) => (ts.isIdentifier(n) && measured.has(symbolOf(n, clocks))) || !!ts.forEachChild(n, usesMeasured);
   let bounds = 0;
   let ok = true;
   const visit = (n) => {
@@ -263,11 +339,12 @@ function coarseGuard(body, sf, helpers, clocks) {
 /**
  * The tests of `source` that measure elapsed time without @timing: [{ line, title }].
  * Helpers are followed into files under `root` (the spec's folder by default); `read(path)`
- * gives an imported file's source, or null (the file system by default).
+ * gives an imported file's source, or null (the file system by default); `cache` keeps what
+ * the files imported measure, for specs under the same root.
  */
-export function untaggedTimingTests(source, fileName = "spec.ts", { root = dirname(resolve(fileName)), read = readSource } = {}) {
+export function untaggedTimingTests(source, fileName = "spec.ts", { root = dirname(resolve(fileName)), read = readSource, cache = new Map() } = {}) {
   const sf = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-  const { helpers, clocks } = analyse(sf, resolve(fileName), read, resolve(root), new Map());
+  const { helpers, clocks } = analyse(sf, resolve(fileName), read, resolve(root), cache);
 
   const out = [];
   const walk = (n, tagged) => {
@@ -375,7 +452,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     process.exit(0);
   }
   const web = join(fileURLToPath(import.meta.url), "..", "..");
-  const bad = specs(join(web, "e2e")).flatMap((f) => untaggedTimingTests(readFileSync(f, "utf8"), f, { root: join(web, "e2e") }).map((t) => `${relative(web, f)}:${t.line} ${t.title}`));
+  const cache = new Map();
+  const bad = specs(join(web, "e2e")).flatMap((f) => untaggedTimingTests(readFileSync(f, "utf8"), f, { root: join(web, "e2e"), cache }).map((t) => `${relative(web, f)}:${t.line} ${t.title}`));
   if (bad.length) {
     console.error(`These tests measure elapsed time; add ${TAG} to their titles so they run alone in e2e-timing:\n${bad.join("\n")}`);
     process.exit(1);
