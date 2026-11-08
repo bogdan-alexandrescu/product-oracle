@@ -23328,6 +23328,11 @@ export interface components {
              */
             replaced_by: components["schemas"]["PrdRef"][];
             /**
+             * Replaces
+             * @default []
+             */
+            replaces: components["schemas"]["PrdRef"][];
+            /**
              * Changes In Review
              * @default 0
              */

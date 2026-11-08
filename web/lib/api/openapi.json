@@ -74174,6 +74174,14 @@
             "title": "Replaced By",
             "default": []
           },
+          "replaces": {
+            "items": {
+              "$ref": "#/components/schemas/PrdRef"
+            },
+            "type": "array",
+            "title": "Replaces",
+            "default": []
+          },
           "changes_in_review": {
             "type": "integer",
             "title": "Changes In Review",
