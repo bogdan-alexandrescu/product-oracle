@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -30,7 +30,7 @@ import {
   Split,
   type ChipKind,
 } from "@/components/ds";
-import { DiscussionThread } from "@/components/discuss/DiscussionThread";
+import { LinkedDiscussion } from "@/components/discuss/LinkedDiscussion";
 import { DiscussSubject } from "@/components/discuss/StartDiscussion";
 import { VagueGoalsLine } from "@/components/discuss/VagueGoalsLine";
 import { RawFileSheet } from "@/components/review/RawFileSheet";
@@ -132,30 +132,6 @@ function toDecision() {
   window.history.replaceState(window.history.state, "", "#decide");
   panel.scrollIntoView({ block: "start" });
   panel.focus({ preventScroll: true });
-}
-
-/**
- * G5: a discussion link (`?discussion=<id>`, what the run's agents are given) opens its thread
- * in a sheet; the thread says "This discussion is private" to someone not in a private one.
- */
-function LinkedDiscussion() {
-  const params = useSearchParams();
-  const router = useRouter();
-  const path = usePathname();
-  const id = params.get("discussion");
-  if (!id) return null;
-  const close = () => {
-    const rest = new URLSearchParams(params.toString());
-    rest.delete("discussion");
-    router.replace(rest.size ? `${path}?${rest}` : path, { scroll: false });
-  };
-  return (
-    <Sheet open title="Discussion" onClose={close} testId="run-discussion-sheet">
-      <div className="p-4">
-        <DiscussionThread key={id} id={id} />
-      </div>
-    </Sheet>
-  );
 }
 
 /** A run that is not there, said without its id (the API's 404 names it). */
@@ -306,7 +282,7 @@ export function RunDetail({ id }: { id: string }) {
 
   return (
     <Page>
-      <LinkedDiscussion />
+      <LinkedDiscussion testId="run-discussion-sheet" />
       <PageHeader
         back={back}
         // rirs-24: on a phone the run's name shows in full under the bar, wrapping.

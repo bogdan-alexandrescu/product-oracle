@@ -17,9 +17,10 @@
 """
 
 import dataclasses
+import re
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -417,6 +418,58 @@ async def _supersede(
     await db.flush()
 
 
+# --- what waits on an approver (G6's Inbox and the changes card) --------------------------------
+
+#: The subjects whose page opens a thread from the Inbox's link (``?discussion=<id>&changes=1``)
+#: with its changes card in view: a document's version (and its items), a run (its sheet), and
+#: the Ground Truth (goals, conflicts), an intake's page (it and its gaps; a PRD's own gap: its
+#: version), the plan (its tracks) and the priorities, each in a sheet (web:
+#: components/discuss/LinkedDiscussion).
+THREAD_PAGES = (
+    "document", "section", "roadmap_item", "checkpoint", "checkpoint_item",
+    "entity", "conflict", "intake", "gap", "track", "priorities",
+)  # fmt: skip
+#: A screen discussion's page that opens it: a document's version (or a page under it), a run's
+#: own page (not its checkpoint reviews), an intake's page, the Ground Truth, a
+#: tech brief, the plan or the priorities.
+THREAD_PATH = re.compile(
+    r"^/(documents/[^/?#]+/v/\d+(?:/[^?#]*)?|runs/[^/?#]+|intakes/[^/?#]+|ground-truth"
+    r"|briefs/[^/?#]+|plan|priorities)(?:[?#]|$)"
+)
+
+
+def opens_thread(d: Discussion, gone: bool = False) -> bool:
+    """Whether the discussion's page opens its thread, and so its changes card, from a link.
+    ``gone``: its subject's row is missing (``service.Labels.gone``); a deleted subject's page
+    opens nothing."""
+    if gone:
+        return False
+    if d.subject_kind == "screen":
+        return bool(THREAD_PATH.match(str((d.subject or {}).get("path") or "")))
+    return d.subject_kind in THREAD_PAGES
+
+
+class _Status(Protocol):
+    status: str
+
+
+def is_open(c: _Status) -> bool:
+    """An open change: the changes card lists it under "Open changes" (``DiscussionChangeOut
+    .open``) and only an open one can wait on an approver (``waits_on``)."""
+    return c.status in OPEN
+
+
+def waits_on(d: Discussion, c: _Status, participant: bool, gone: bool = False) -> bool:
+    """The one rule for a change waiting on an approver: what the Inbox's "N changes proposed"
+    counts and its Review changes lands on, an open change in the card's open list. Open
+    (``is_open``) in an open discussion whose page opens the card (``opens_thread``); Oracle's
+    proposals wait on its participants, people's suggestions on every approver of an open one
+    (c6). A closed discussion's card offers no action until it is reopened."""
+    if d.status != "open" or not is_open(c) or not opens_thread(d, gone):
+        return False
+    return participant or (d.visibility == "open" and c.status == "suggested")
+
+
 # --- what the caller may do -------------------------------------------------------------------
 
 
@@ -529,6 +582,7 @@ async def changes_out(
             proposed_by=person(c.proposed_by),
             suggested_by=person(c.suggested_by),
             status=c.status,  # type: ignore[arg-type]
+            open=is_open(c),
             action=action_for(
                 seat, c, decided and c.kind.startswith("item_"), records, locked.get(c.id)
             ),

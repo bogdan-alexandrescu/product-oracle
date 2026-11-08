@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Chip, Icon, LinkButton, NotFoundPanel, Page, PageHeader, Panel, type ChipKind } from "@/components/ds";
+import { LinkedDiscussion } from "@/components/discuss/LinkedDiscussion";
 import { DOCS_ONLY, FRESHNESS, approachParts, readerText, sizeText } from "@/components/tech-brief";
 import { Loading, LoadError } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
@@ -226,6 +227,7 @@ export function BriefDetail({ id }: { id: string }) {
   }
   return (
     <Page>
+      <LinkedDiscussion />
       {q.error && (
         <>
           <PageHeader title="Tech brief" />

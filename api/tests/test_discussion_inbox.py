@@ -15,11 +15,14 @@ Cards shared by the rows (issue #190, 6):
 import uuid
 from datetime import UTC, datetime
 
+import pytest
 from sqlalchemy import select
 
-from oracle.discussions.models import DiscussionChange, DiscussionInboxItem
+from oracle.discussions import changes
+from oracle.discussions.models import Discussion, DiscussionChange, DiscussionInboxItem
 from oracle.tenancy import tenant_session
-from oracle.v2.models import StakeholderQuestion
+from oracle.v2.models import KnowledgeGap, ProductIntake, StakeholderQuestion
+from tests.baseline_helpers import entity
 from tests.test_discussions import company, get, patch, post, section, start, uid
 
 TITLE = "Caps: measure from plan thresholds?"
@@ -336,3 +339,184 @@ async def test_a_closed_discussion_counts_no_changes_until_reopened(client):
     await patch(client, ctx, d["id"], "approver", status="open")
     [row] = rows(await inbox(client, ctx, "approver"), "changes_proposed")
     assert row["count"] == 3
+
+
+# --- the one rule for a change waiting on an approver (changes.waits_on) ------------------
+
+
+def _d(subject_kind: str = "section", subject: dict | None = None, **kw) -> Discussion:
+    return Discussion(
+        subject_kind=subject_kind,
+        subject=subject or {},
+        status=kw.get("status", "open"),
+        visibility=kw.get("visibility", "open"),
+    )
+
+
+def _c(status: str) -> DiscussionChange:
+    return DiscussionChange(status=status, kind="section_edit")
+
+
+# Counting card. protects=the one rule the Inbox's "N changes proposed" and the changes card
+# share: an open change of an open discussion whose page opens its thread waits on its
+# participants (Oracle's proposals) and on every approver of an open one (suggestions);
+# fails_when=a change counts on a page with no thread (the Runs list, a run's checkpoint
+# review, a deleted subject's Home or Runs), a handled change counts, or a closed
+# discussion's leftovers count; no_claim=the pages (the web specs).
+def test_waits_on_is_an_open_change_on_a_page_that_opens_its_thread():
+    for path in (
+        "/documents/saved-carts/v/2", "/documents/saved-carts/v/2/items", "/runs/r1",
+        "/runs/r1?tab=log", "/ground-truth", "/briefs/b1", "/intakes/i1", "/plan",
+        "/priorities",
+    ):  # fmt: skip
+        assert changes.waits_on(_d("screen", {"path": path}), _c("proposed"), True), path
+    for path in ("/documents", "/runs", "/runs/r1/review/cp1", "/plan/dates", "/intakes", "/", ""):
+        assert not changes.waits_on(_d("screen", {"path": path}), _c("proposed"), True), path
+    for status in ("staged", "done", "dismissed", "superseded"):
+        assert not changes.is_open(_c(status)), status
+        assert not changes.waits_on(_d(), _c(status), participant=True), status
+    assert not changes.waits_on(_d(status="closed"), _c("proposed"), participant=True)
+    # Not in it: people's suggestions of an open discussion only.
+    assert changes.waits_on(_d(), _c("suggested"), participant=False)
+    assert not changes.waits_on(_d(), _c("proposed"), participant=False)
+    assert not changes.waits_on(_d(visibility="private"), _c("suggested"), participant=False)
+    # A deleted subject (its row is missing, ``Labels.gone``): no page opens its thread.
+    assert not changes.waits_on(_d(), _c("proposed"), True, gone=True)
+    assert changes.waits_on(_d(), _c("proposed"), True, gone=False)
+
+
+# Counting card. protects=every subject kind's page opens its thread from the Inbox's link, so
+# its open changes wait on its approvers: goals and conflicts (the Ground Truth), briefs and
+# their gaps, the plan's tracks and the priorities as well as documents and runs;
+# fails_when=a subject kind's changes are left out of the Inbox (pending work vanishes);
+# no_claim=each page's sheet (discussion-review-changes-lands.spec.ts).
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "document", "section", "roadmap_item", "checkpoint", "checkpoint_item",
+        "entity", "conflict", "intake", "gap", "track", "priorities",
+    ],
+)  # fmt: skip
+def test_every_subject_kind_counts_its_open_changes(kind):
+    assert changes.opens_thread(_d(kind)), kind
+    assert changes.waits_on(_d(kind), _c("proposed"), participant=True), kind
+    assert changes.waits_on(_d(kind), _c("suggested"), participant=False), kind
+    assert not changes.waits_on(_d(kind), _c("staged"), participant=True), kind
+
+
+# Counting card. protects=a change on the priorities or on a goal is counted, and its row
+# opens the subject's page on the thread, where the card lists the counted changes, each with
+# an action; fails_when=such a discussion makes no row (a commenter's priority move vanishes)
+# or its row's count differs from the card's open changes; no_claim=the screens
+# (discussion-review-changes-lands.spec.ts).
+@pytest.mark.parametrize("kind", ["priorities", "entity"])
+async def test_changes_on_priorities_and_goals_make_a_row_that_opens_the_thread(client, kind):
+    ctx, _doc = await company(client)
+    if kind == "entity":
+        goal = await entity(client, ctx, type="goal", key="checkout", title="Faster checkout")
+        subject, page = {"entity_id": goal["id"]}, "/ground-truth"
+    else:
+        subject, page = {}, "/priorities"
+    d = await start(
+        client, ctx, "approver", subject_kind=kind, subject=subject, title="Order",
+        message={"body": "Move it up?"},
+    )  # fmt: skip
+    await add_change(ctx, d["id"])
+    await add_change(ctx, d["id"], "suggested", by="commenter")
+    [row] = rows(await inbox(client, ctx, "approver"), "changes_proposed")
+    assert row["discussion_id"] == d["id"] and row["count"] == 2
+    assert row["subject_url"] == f"{page}?discussion={d['id']}"
+    # The owner is not in it: the commenter's suggestion waits on them too.
+    [row] = rows(await inbox(client, ctx, "owner"), "changes_proposed")
+    assert row["count"] == 1
+    resp = await client.get(f"/v1/discussions/{d['id']}/changes", headers=ctx.as_("approver"))
+    assert resp.status_code == 200, resp.text
+    shown = [c for c in resp.json() if c["open"]]
+    assert len(shown) == 2 and all(c["action"] for c in shown)
+
+
+async def _intake_and_gaps(ctx, doc: str) -> dict[str, str]:
+    """A shared intake with one gap, and a gap of no intake: ``doc``'s, from its review."""
+    async with tenant_session(ctx.tenant_id) as s:
+        intake = ProductIntake(
+            title="Saved addresses", brief="Returning buyers retype their address.",
+            author_id=ctx.users["commenter"].id,
+        )  # fmt: skip
+        s.add(intake)
+        await s.flush()
+        gaps = [
+            KnowledgeGap(
+                intake_id=intake_id, document_id=None if intake_id else uuid.UUID(doc),
+                category="pain_evidence", statement=statement, impact=[],
+                importance="high", knowledge_state="unknown", status="unknown",
+            )
+            for intake_id, statement in (
+                (intake.id, "Do buyers retype it on every order?"),
+                (None, "Which regions get it first?"),
+            )
+        ]  # fmt: skip
+        s.add_all(gaps)
+        await s.commit()
+        return {"intake": str(intake.id), "gap": str(gaps[0].id), "lone_gap": str(gaps[1].id)}
+
+
+# Counting card. protects=an intake's and its gaps' changes are counted and their row opens
+# the intake's page (Before drafting) on the thread, a PRD's own gap (no intake) the PRD's
+# newest version; fails_when=the row links the Tech brief page (where an intake's id is not
+# found, so the thread never opens) or Home (counted for no one); no_claim=the pages
+# (discussion-review-changes-intake.spec.ts).
+async def test_intake_and_gap_changes_open_the_intake_page(client):
+    ctx, doc = await company(client)
+    ids = await _intake_and_gaps(ctx, doc)
+    slug = (await client.get(f"/v1/documents/{doc}", headers=ctx.as_("owner"))).json()["slug"]
+    pages = {
+        "intake": ({"intake_id": ids["intake"]}, f"/intakes/{ids['intake']}"),
+        "gap": ({"gap_id": ids["gap"]}, f"/intakes/{ids['intake']}"),
+        "lone_gap": ({"gap_id": ids["lone_gap"]}, f"/documents/{slug}/v/1"),
+    }
+    started = {}
+    for name, (subject, _page) in pages.items():
+        d = await start(
+            client, ctx, "approver", subject_kind="intake" if name == "intake" else "gap",
+            subject=subject, title=f"About {name}", message={"body": "Worth a look?"},
+        )  # fmt: skip
+        await add_change(ctx, d["id"])
+        started[name] = d["id"]
+    box = rows(await inbox(client, ctx, "approver"), "changes_proposed")
+    by_id = {r["discussion_id"]: r for r in box}
+    for name, (_subject, page) in pages.items():
+        row = by_id[started[name]]
+        assert row["subject_url"] == f"{page}?discussion={started[name]}", name
+        assert row["count"] == 1, name
+
+
+# Counting card. protects=a discussion counts as deleted when its subject's row is missing,
+# not by its link: a deleted intake's or goal's changes wait on no one, a live gap of no
+# intake's do; fails_when=a live subject's changes vanish because of where it links, or a
+# deleted one's count; no_claim=the pages.
+async def test_a_deleted_subject_is_its_missing_row_not_its_link(client):
+    ctx, doc = await company(client)
+    ids = await _intake_and_gaps(ctx, doc)
+    goal = await entity(client, ctx, type="goal", key="checkout", title="Faster checkout")
+    started = {}
+    for name, kind, subject in (
+        ("intake", "intake", {"intake_id": ids["intake"]}),
+        ("lone_gap", "gap", {"gap_id": ids["lone_gap"]}),
+        ("goal", "entity", {"entity_id": goal["id"]}),
+    ):
+        d = await start(
+            client, ctx, "approver", subject_kind=kind, subject=subject, title=f"About {name}",
+            message={"body": "Worth a look?"},
+        )  # fmt: skip
+        await add_change(ctx, d["id"])
+        started[name] = d["id"]
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.get(Discussion, uuid.UUID(started["goal"]))
+        d.subject = {"entity_id": str(uuid.uuid4())}
+        intake = await s.get(ProductIntake, uuid.UUID(ids["intake"]))
+        for gap in await s.scalars(select(KnowledgeGap).where(KnowledgeGap.intake_id == intake.id)):
+            await s.delete(gap)
+        await s.delete(intake)
+        await s.commit()
+    box = rows(await inbox(client, ctx, "approver"), "changes_proposed")
+    assert [r["discussion_id"] for r in box] == [started["lone_gap"]]

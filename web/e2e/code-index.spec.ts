@@ -98,7 +98,7 @@ test("unknown codes, code blocks and URLs stay plain; the text is unchanged", ()
   ).toBe(text);
 });
 
-test("a 60-section document indexes and splits quickly", () => {
+test("a 60-section document indexes and splits quickly @timing", () => {
   const sections = Array.from({ length: 60 }, (_, i) => ({
     section_key: `f-${i + 1}`,
     heading: `F-${i + 1} Feature ${i + 1}`,
