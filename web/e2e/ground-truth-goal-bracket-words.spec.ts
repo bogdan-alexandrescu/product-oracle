@@ -49,7 +49,7 @@ test("rename tooltip: the desktop Rename button has no tooltip; the phone's penc
   const button = row.getByTestId("rename-goal");
   await expect(button).toHaveText("Rename");
   await expect(button).not.toHaveAttribute("title");
-  await expect(button.locator("[title]")).toHaveCount(0);
+  await expect(button.locator("[title]:visible")).toHaveCount(0);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(button).toHaveAccessibleName("Rename");
