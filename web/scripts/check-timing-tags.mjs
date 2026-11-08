@@ -8,7 +8,8 @@
 // clock is Date.now(), performance.now(), new Date().getTime() / .valueOf(), +new Date(), or a
 // variable set from one of them ("now() - start", "end - start" with const end = Date.now()).
 // A coarse guard meant for the parallel shards says so with a "timing-check: coarse" comment
-// in the test.
+// in the test; it passes only when every bound it sets on a measured value (toBeLessThan,
+// toBeLessThanOrEqual, toBeGreaterThan) is a literal of at least 1000 ms.
 //
 //   node scripts/check-timing-tags.mjs              self-test, then every e2e spec (not e2e/real)
 //   node scripts/check-timing-tags.mjs --self-test  the self-test only
@@ -199,6 +200,66 @@ function measuringExports(path, read, root, cache) {
   return exports;
 }
 
+/** Every comment in `node`'s text (trivia before and after each of its tokens). */
+function comments(node, sf) {
+  const text = sf.text;
+  const seen = new Map();
+  const visit = (n) => {
+    for (const r of [...(ts.getLeadingCommentRanges(text, n.getFullStart()) ?? []), ...(ts.getTrailingCommentRanges(text, n.end) ?? [])])
+      if (r.pos >= node.getFullStart() && r.end <= node.end) seen.set(r.pos, text.slice(r.pos, r.end));
+    for (const c of n.getChildren(sf)) visit(c);
+  };
+  visit(node);
+  return [...seen.values()];
+}
+
+const BOUNDS = ["toBeLessThan", "toBeLessThanOrEqual", "toBeGreaterThan"];
+const COARSE_MIN_MS = 1000;
+
+/** `expect(x)` (or expect.soft(x)) at the root of `call`'s matcher chain: its x, or null. */
+function expected(call) {
+  let e = call.expression;
+  while (ts.isPropertyAccessExpression(e) || ts.isCallExpression(e)) {
+    if (ts.isCallExpression(e)) {
+      const c = e.expression;
+      if ((ts.isIdentifier(c) && c.text === "expect") || (ts.isPropertyAccessExpression(c) && ts.isIdentifier(c.expression) && c.expression.text === "expect")) return e.arguments[0] ?? null;
+      e = c;
+    } else e = e.expression;
+  }
+  return null;
+}
+
+/**
+ * Whether a test's `body` is a coarse guard: a "timing-check: coarse" comment (not text in a
+ * string), and at least one bound on a measured value, each a literal of at least 1000 ms.
+ */
+function coarseGuard(body, sf, helpers, clocks) {
+  if (!comments(body, sf).some((c) => c.includes(COARSE))) return false;
+  // Variables the test sets from a measure: const ms = await paint(page).
+  const measured = new Set();
+  const findMeasured = (n) => {
+    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer && measures(n.initializer, helpers, clocks)) measured.add(n.name.text);
+    ts.forEachChild(n, findMeasured);
+  };
+  findMeasured(body);
+  const usesMeasured = (n) => (ts.isIdentifier(n) && measured.has(n.text)) || !!ts.forEachChild(n, usesMeasured);
+  let bounds = 0;
+  let ok = true;
+  const visit = (n) => {
+    if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && BOUNDS.includes(n.expression.name.text)) {
+      const x = expected(n);
+      if (x && (measures(x, helpers, clocks) || usesMeasured(x))) {
+        bounds++;
+        const b = n.arguments[0] && skipParens(n.arguments[0]);
+        if (!b || !ts.isNumericLiteral(b) || Number(b.text.replace(/_/g, "")) < COARSE_MIN_MS) ok = false;
+      }
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(body);
+  return ok && bounds > 0;
+}
+
 /**
  * The tests of `source` that measure elapsed time without @timing: [{ line, title }].
  * Helpers are followed into files under `root` (the spec's folder by default); `read(path)`
@@ -216,7 +277,7 @@ export function untaggedTimingTests(source, fileName = "spec.ts", { root = dirna
       const isTagged = tagged || title.includes(TAG);
       const body = n.arguments[n.arguments.length - 1];
       if (kind === "test") {
-        const coarse = body && body.getFullText(sf).includes(COARSE);
+        const coarse = body && coarseGuard(body, sf, helpers, clocks);
         if (!isTagged && !coarse && body && measures(body, helpers, clocks)) out.push({ line: sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1, title });
         return;
       }
