@@ -117,20 +117,37 @@ function Inbox() {
   // qa-company-3: each row draws only the actions the signed-in person's role can take.
   const perms = usePerms();
   // I1: webhook notices (paused, failing, a changed address), from my notifications.
-  const webhookRows = useWebhookRows(busy, act, seenBefore);
+  const webhooks = useWebhookRows(busy, act, seenBefore);
   // Remind on a one-pager: a PRD's owner or decider nudged me to review its draft.
   const reminderRows = useReminderRows(seenBefore);
-  const rows = inbox ? [...allNeeds(inbox, asked.rows, busy, act, seenBefore, onActed, false, fixed, requests.rows, perms), ...webhookRows, ...reminderRows, ...proposalRows(inbox.simple_proposals ?? [], busy, act, seenBefore), ...approvalRows(inbox.simple_approvals ?? [], seenBefore), ...dateSuggestionRows(inbox.simple_date_suggestions ?? [], seenBefore), ...goalSuggestionRows(inbox.simple_goal_suggestions ?? [], seenBefore), ...minutesRows(inbox.simple_minutes ?? [])] : null;
+  // counts-wait: every count from the rows waits for each read they add up (the questions asked of
+  // me, the webhook notices), so "N waiting" never shows a lower number first; the rows show at once
+  // (counts-wait review: only the count waits).
+  const counted = (questionsQ.data !== undefined || !!questionsQ.error) && webhooks.rows !== null;
+  // counts-wait review: a part whose read failed: the count says it is not the whole.
+  const partial = !!questionsQ.error || !!webhooks.error;
+  const rows = inbox ? [...allNeeds(inbox, asked.rows, busy, act, seenBefore, onActed, false, fixed, requests.rows, perms), ...(webhooks.rows ?? []), ...reminderRows, ...proposalRows(inbox.simple_proposals ?? [], busy, act, seenBefore), ...approvalRows(inbox.simple_approvals ?? [], seenBefore), ...dateSuggestionRows(inbox.simple_date_suggestions ?? [], seenBefore), ...goalSuggestionRows(inbox.simple_goal_suggestions ?? [], seenBefore), ...minutesRows(inbox.simple_minutes ?? [])] : null;
   const kindRows = rows && kind ? rows.filter((r) => needKind(r.group) === kind.id) : rows;
   // Under ?kind= the header counts that kind only, as Home's chip did.
-  const waiting = kindRows ? waitingNeeds(kindRows).length : undefined;
+  const waiting = kindRows && counted ? waitingNeeds(kindRows).length : undefined;
 
   return (
     <Page>
-      <PageHeader title="Inbox" status={waiting != null && waiting > 0 && <Chip kind="acc">{waiting} waiting</Chip>} />
+      <PageHeader
+        title="Inbox"
+        status={
+          waiting != null &&
+          waiting > 0 && (
+            <Chip kind="acc" title={partial ? `${waiting} waiting; a part could not load` : undefined}>
+              {waiting} waiting
+            </Chip>
+          )
+        }
+      />
       {/* qa4-shell-3: a plain sentence and Try again, as on every list. */}
       {q.error && <LoadError what="your inbox" error={q.error} onRetry={() => void q.reload()} />}
-      {q.loading && !inbox && <Loading />}
+      {webhooks.error && <LoadError what="your webhook notices" error={webhooks.error} onRetry={() => void webhooks.reload()} />}
+      {!q.error && !rows && <Loading />}
       {error && (
         <div className="mb-3">
           <ErrorNote>{error}</ErrorNote>
@@ -153,7 +170,7 @@ function Inbox() {
           // last visit does not hold an emptied New open).
           key={`${arrived ? (arrivalQ.data ?? "first") : "arriving"}|${kind?.id ?? "all"}`}
           rows={kindRows}
-          waiting={waiting ?? 0} questionsError={questionsQ.error} notice={notice} onTabChange={() => {
+          waiting={waiting ?? 0} counted={counted} questionsError={questionsQ.error} notice={notice} onTabChange={() => {
             asked.moveSettled();
           }}
         />
@@ -255,6 +272,7 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
  */
 function InboxTabs({
   rows,
+  counted,
   questionsError,
   notice,
   onTabChange,
@@ -262,6 +280,8 @@ function InboxTabs({
   rows: ReturnType<typeof allNeeds>;
   /** The header's count; Needs you counts each run of a grouped checkpoint from the rows (waitingCount). */
   waiting: number;
+  /** counts-wait: every read the counts add up has answered; until then the rows show without counts. */
+  counted: boolean;
   questionsError: string | null;
   notice: ReactNode;
   /** The tab changed: what was settled in place moves on. */
@@ -286,7 +306,7 @@ function InboxTabs({
   // (the rail badge's count); Staged, Declined and Done are named, with their own counts.
   const live = tab === "new" || tab === "open";
   return (
-    <Panel title={live ? "Needs you" : label} count={live ? waitingCount(rows) : count(tab)} testId="inbox-needs">
+    <Panel title={live ? "Needs you" : label} count={!counted ? undefined : live ? waitingCount(rows) : count(tab)} testId="inbox-needs">
       {/* qa-company-47: on a phone the five tabs keep one line: smaller tabs, no "0" counts. */}
       <div
         className="px-4 pt-1 max-[600px]:overflow-x-auto max-[600px]:px-2 max-[600px]:[&_[role=tab]]:px-1.5 max-[600px]:[&_[role=tablist]]:flex-nowrap"
@@ -295,7 +315,7 @@ function InboxTabs({
         <TabBar
           label="Inbox by state"
           size="sm"
-          tabs={STATE_TABS.map((t) => ({ id: t.id, label: t.label, count: count(t.id) || null }))}
+          tabs={STATE_TABS.map((t) => ({ id: t.id, label: t.label, count: (counted && count(t.id)) || null }))}
           value={tab}
           onChange={pick}
         />

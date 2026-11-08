@@ -47,7 +47,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from oracle import company_time
 from oracle.auth.models import User
 from oracle.baseline.goal_order import sort_goals
-from oracle.baseline.goals import COMPARISONS, meets
+from oracle.baseline.goals import COMPARISONS, goal_name, meets
 from oracle.baseline.models import Entity, GoalMeasurement
 from oracle.docs.models import Document
 from oracle.launches.models import Launch
@@ -540,8 +540,8 @@ async def build(db: AsyncSession, principal: Any, can_edit: bool) -> GoalMapOut:
         goal_out.append(
             GmGoal(
                 id=g.id,
-                name=g.title,
-                measure=a.get("metric") or g.title.lower(),
+                name=goal_name(g.title, g.key),
+                measure=a.get("metric") or goal_name(g.title, g.key).lower(),
                 target=target,
                 current=current,
                 unit=a.get("unit") or "",
@@ -699,7 +699,7 @@ async def build(db: AsyncSession, principal: Any, can_edit: bool) -> GoalMapOut:
         gaps=gaps,
         unplaced=await _unplaced(db, principal, set(feats)),
         off_map=[
-            GmOffMap(id=g.id, key=g.key, name=g.title)
+            GmOffMap(id=g.id, key=g.key, name=goal_name(g.title, g.key))
             for g in sort_goals(g for g in confirmed if not _measurable(g))
             if not _is_guardrail(g)
         ],

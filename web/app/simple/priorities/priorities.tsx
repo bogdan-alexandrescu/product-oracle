@@ -22,7 +22,7 @@ import { ArchiveDialog, ArchivedGoals, BTN, count, dayOf, DeleteArchivedDialog, 
 import { useBucketDrag } from "./goal-drag";
 import { knownCode, TaskRow, useBucketTasks, type Task } from "./task-edit";
 import { CodeTag, featureCount, goalLabel, PlanBucketsHead, planFeatures, planGoals, planSpan } from "./plan-buckets";
-import { CrowdMark, CrowdSheet, MARK_R, markLayout, type Box, type Crowd } from "./mark-counts";
+import { CrowdMark, CrowdSheet, MARK_R, markLayout, weeksWords, type Box, type Crowd } from "./mark-counts";
 
 type Out = Schemas["SimplePrioritiesOut"];
 type Row = Schemas["SimplePriorityRow"];
@@ -376,26 +376,28 @@ export function Priorities() {
   );
 }
 
-/** A goal's key for its shape: its name as a mark's name reads it (the row's goal, else the plan's), any case. */
-const goalKey = (name: string) => name.trim().toLowerCase();
-
-/** Each goal's shape and name (first ranked first), by the goal a mark's name reads; rows with no goal are a neutral dashed circle. */
+/**
+ * Each goal's shape and name (first ranked first), by the goal itself (its key, as goalKeyOfRow gives it), so two
+ * goals with one name draw two shapes and a renamed goal keeps its own; rows with no goal are a neutral dashed circle.
+ */
 function goalShapes(data: Out | undefined): Map<string, { shape: Shape; name: string }> {
   const out = new Map<string, { shape: Shape; name: string }>();
   if (!data) return out;
   const goalOf = goalOfRow(data);
+  const keyOf = goalKeyOfRow(data);
   for (const r of data.rows) {
     const g = goalOf(r);
-    if (g && !out.has(goalKey(g))) out.set(goalKey(g), { shape: SHAPES[out.size % SHAPES.length], name: g });
+    const k = keyOf(r);
+    if (g && k && !out.has(k)) out.set(k, { shape: SHAPES[out.size % SHAPES.length], name: g });
   }
   return out;
 }
 
 type Changed = (r: Sent, done: string, row?: Row, moves?: boolean, why?: string) => Promise<void>;
-/** `why`: a re-estimate's words ("effort 4 wk"); none: a manual move. */
+/** `why`: a re-estimate's words ("effort 4 weeks"); none: a manual move. */
 type Moved = { featureId: string; from: number; why?: string };
 
-/** "moved #8 → #3" for the row just moved, "now #5 (effort 4 wk)" for one re-estimated (its rank now from the read); null for any other row. */
+/** "moved #8 → #3" for the row just moved, "now #5 (effort 4 weeks)" for one re-estimated (its rank now from the read); null for any other row. */
 function movedWords(moved: Moved | null, r: Row): string | null {
   if (moved?.featureId !== r.feature_id) return null;
   if (moved.why) return moved.from === r.rank ? `rank stays #${r.rank} (${moved.why})` : `now #${r.rank} (${moved.why})`;
@@ -1331,10 +1333,10 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
   const counts = [0, 1, 2, 3].map((q) => rows.filter((r) => quadrant(r) === q).length);
   const goalOf = goalOfRow(data);
   // One goal for a mark's shape and its name: the plan's, as the name reads it.
-  const hasGoal = (r: Row) => !!goalOf(r);
+  const keyOf = goalKeyOfRow(data);
   const shapeOf = (r: Row): Shape => {
-    const g = goalOf(r);
-    return g ? (shapes.get(goalKey(g))?.shape ?? "circle") : "none";
+    const k = keyOf(r);
+    return k ? (shapes.get(k)?.shape ?? "circle") : "none";
   };
   const sideRefs = useRef(new Map<string, HTMLLIElement>());
   const markRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -1373,7 +1375,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
   }
 
   async function estimate(r: Row, after: { goal_value?: number; effort?: number }) {
-    const words = after.effort != null ? `effort ${after.effort} wk` : `goal value ${after.goal_value}`;
+    const words = after.effort != null ? `effort ${weeksWords(after.effort)}` : `goal value ${after.goal_value}`;
     await changed(
       await send({
         op: "estimate_feature",
@@ -1560,7 +1562,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                   data-moved={isMoved ? "true" : undefined}
                   data-shape={shapeOf(r)}
                   aria-pressed={isSelected}
-                  aria-label={`#${r.rank} ${nameOf(r)}: goal value ${fmt(r.goal_value)}, ${r.effort == null ? "PM-owned, no effort" : `effort ${fmt(r.effort)} ${r.effort === 1 ? "week" : "weeks"}`}${r.above_line ? "" : ", below the line"}${goalOf(r) ? "" : ", no goal"}`}
+                  aria-label={`#${r.rank} ${nameOf(r)}: goal value ${fmt(r.goal_value)}, ${r.effort == null ? "PM-owned, no effort" : `effort ${weeksWords(r.effort)}`}${r.above_line ? "" : ", below the line"}${goalOf(r) ? "" : ", no goal"}`}
                   className={`group absolute -translate-x-1/2 -translate-y-1/2 rounded-full hover:z-30 focus-visible:z-30 ${isSelected ? "z-20 ring-[3px] ring-accent ring-offset-2 ring-offset-surface" : isMoved ? "z-10 ring-2 ring-accent ring-offset-2 ring-offset-surface" : ""} ${mayChange && r.can_reorder ? "cursor-grab touch-none" : "cursor-pointer"}`}
                   style={{ left, top }}
                   onClick={() => {
@@ -1604,7 +1606,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                 crowd={c}
                 lit={!!selected && c.rows.some((r) => r.feature_id === selected)}
                 moved={c.rows.some((r) => !!movedWords(moved, r))}
-                hasGoal={hasGoal}
+                goalOf={goalOf}
                 onPick={() => setCrowdOpen(c)}
                 buttonRef={(el) => {
                   // A row selected in the side list brings its count into view.
@@ -1622,7 +1624,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                 className="pointer-events-none absolute z-30 -translate-x-1/2 whitespace-nowrap rounded-md bg-text px-2 py-0.5 text-[13px] font-semibold text-bg"
                 style={{ left: (spots.get(dragRow.feature_id)?.[0] ?? 0) + drag.dx, top: (spots.get(dragRow.feature_id)?.[1] ?? 0) + drag.dy - 44 }}
               >
-                {pending?.effort != null ? `effort ${fmt(pending.effort)} wk` : pending?.goal_value != null ? `goal value ${fmt(pending.goal_value)}` : !dragRow.goal && Math.abs(drag.dy) > Math.abs(drag.dx) ? "No goal: no goal value to change" : "no change"}
+                {pending?.effort != null ? `effort ${weeksWords(pending.effort)}` : pending?.goal_value != null ? `goal value ${fmt(pending.goal_value)}` : !dragRow.goal && Math.abs(drag.dy) > Math.abs(drag.dx) ? "No goal: no goal value to change" : "no change"}
               </span>
             )}
           </div>
@@ -1639,7 +1641,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
           crowd={crowdOpen}
           mark={(r) => <ShapeMark shape={shapeOf(r)} hollow={!r.above_line} small />}
           shape={shapeOf}
-          hasGoal={hasGoal}
+          goalOf={goalOf}
           onClose={() => setCrowdOpen(null)}
           onOpen={(r) => {
             setCrowdOpen(null);
@@ -1654,7 +1656,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
               {s.name}
             </li>
           ))}
-          {rows.some((r) => !hasGoal(r)) && (
+          {rows.some((r) => !goalOf(r)) && (
             <li className="flex items-center gap-1" data-testid="vxe-legend-no-goal">
               <LegendMark shape="none" />
               No goal
@@ -1738,7 +1740,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
                 </button>
                 {isSelected && (
                   <span data-testid="side-numbers" className="block px-2 pb-1 pl-[34px] text-[13px] tabular-nums text-text">
-                    {r.effort == null ? `goal value ${fmt(r.goal_value)} · PM-owned, no score` : `goal value ${fmt(r.goal_value)} · confidence ${fmt(r.confidence, 2)} · ${fmt(r.effort)} wk · score ${fmt(r.score, 2)}`}
+                    {r.effort == null ? `goal value ${fmt(r.goal_value)} · PM-owned, no score` : `goal value ${fmt(r.goal_value)} · confidence ${fmt(r.confidence, 2)} · ${weeksWords(r.effort)} · score ${fmt(r.score, 2)}`}
                   </span>
                 )}
                 {/* The badge on a line of its own, so the name stays readable. */}
@@ -1891,6 +1893,21 @@ const lineLabel = (data: Out): string => (!data.line || data.line.kind === "now"
 function goalOfRow(data: Out): (r: Row) => string | null {
   const planGoal = new Map((data.plan?.slices ?? []).filter((x) => x.goal).map((x) => [x.feature_code, goalLabel(x.goal!).name]));
   return (r) => r.goal?.title ?? planGoal.get(r.short_code) ?? null;
+}
+
+/**
+ * The key of a row's goal, as goalOfRow picks it: the item's goal's own key; a goal only the plan gives (by name) takes
+ * the key of a ranked row's goal of that name, else its name, any case.
+ */
+function goalKeyOfRow(data: Out): (r: Row) => string | null {
+  const goalOf = goalOfRow(data);
+  const byName = new Map<string, string>();
+  for (const r of data.rows) if (r.goal && !byName.has(r.goal.title.trim().toLowerCase())) byName.set(r.goal.title.trim().toLowerCase(), r.goal.key);
+  return (r) => {
+    if (r.goal) return r.goal.key;
+    const g = goalOf(r)?.trim().toLowerCase();
+    return g ? (byName.get(g) ?? `name:${g}`) : null;
+  };
 }
 
 /**
@@ -2060,7 +2077,7 @@ function EffortEdit({ r, changed }: { r: Row; changed: Changed }) {
     setBusy(false);
     if (!sent.ok) return setError(sent.message);
     setEditing(false);
-    await changed(sent, `Estimated ${nameOf(r)}: effort ${effort} wk`, r, true, `effort ${effort} wk`);
+    await changed(sent, `Estimated ${nameOf(r)}: effort ${weeksWords(effort)}`, r, true, `effort ${weeksWords(effort)}`);
   }
   if (!editing)
     return (

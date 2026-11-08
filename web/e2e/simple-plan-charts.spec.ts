@@ -396,7 +396,7 @@ test("value / effort: a sideways drag re-estimates effort on the log scale", asy
   await page.mouse.down();
   await page.mouse.move(at.x + at.width / 2 - octave, at.y + at.height / 2 + 3, { steps: 10 });
   await page.mouse.up();
-  await expect(page.getByText("Re-estimated Sample data import (F-12): effort 1.5 wk")).toBeVisible();
+  await expect(page.getByText("Re-estimated Sample data import (F-12): effort 1.5 weeks")).toBeVisible();
   await expect(page.getByRole("button", { name: /Sample data import \(F-12\): goal value 6, effort 1\.5 weeks/ })).toBeVisible();
   // A drag is not a selection.
   await expect(page.locator('[data-testid="side-row"][data-selected="true"]')).toHaveCount(0);

@@ -613,3 +613,14 @@ async def test_a_merged_feature_leaves_the_map(client):
     assert r.json()["change"]["status"] == "applied"
     body = await read(client, ctx)
     assert [f["id"] for f in body["features"]] == [ids["f2"]]
+
+
+async def test_a_goal_name_stored_with_a_placeholder_reads_without_it(client):
+    ctx, ids = await world()
+    async with tenant_session(ctx.tenant_id) as s:
+        g = await s.get(Entity, uuid.UUID(ids["signups"]))
+        g.title = "KR 1.1 [n] of [n] sign-ups per rep"
+        await s.commit()
+    body = await read(client, ctx)
+    goal = next(g for g in body["goals"] if g["id"] == ids["signups"])
+    assert goal["name"] == "KR 1.1 sign-ups per rep"

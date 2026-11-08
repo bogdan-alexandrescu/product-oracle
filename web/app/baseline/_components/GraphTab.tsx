@@ -2,13 +2,14 @@
 
 import { Fragment, useState, type CSSProperties, type FormEvent, type MouseEvent, type ReactNode } from "react";
 
-import { Button, Chip, CodeChip, confirmInPage, DataTable, InfoTip, Panel, type Column } from "@/components/ds";
+import { Button, Chip, CodeChip, confirmInPage, DataTable, Icon, InfoTip, Panel, type Column } from "@/components/ds";
 import type { EdgeOut, EntityOut, GraphOut, TraceFeature, TraceReport } from "@/lib/api/client";
 import { named, namedText, type Named } from "@/lib/codes";
 import { formatPercent } from "@/lib/format";
 import { assess, goalViews, type GoalView } from "@/app/home/_goals";
 import { GoalNum } from "@/components/simple/GoalOrder";
 import { goalNumbers, goalTree } from "@/lib/goal-tree";
+import { shownTitle } from "@/lib/placeholders";
 
 import type { AddKind } from "./AddItem";
 import {
@@ -49,6 +50,8 @@ type Props = {
   goalsNote?: string | null;
   /** #345: add a subgoal under a goal (approvers); resolves true once it is saved. */
   onAddSubgoal?: (parent: EntityOut, title: string) => Promise<boolean>;
+  /** gt-goal-rename: opens a goal's panel on its Edit form, to rename it (proposed or confirmed). */
+  onRename?: (goal: EntityOut) => void;
 };
 
 /** #345: a new subgoal's title, under the goal it is added to. */
@@ -100,9 +103,13 @@ function AddSubgoal({
 
 /**
  * A goal row's actions: one width on a wide screen, so they line up (qa-plan-39); on a phone tighter
- * padding, so Make measurable, Confirm and Add subgoal share one row at 390 px (qa-plan-26).
+ * padding, so Make measurable, Confirm, Rename's pencil and Add subgoal share one row at 390 px (qa-plan-26).
  */
-const PHONE_ACTION = "min-[601px]:w-28 max-[600px]:px-2!";
+const PHONE_ACTION = "min-[601px]:w-28 max-[600px]:px-1.5!";
+/** Make measurable is a ghost (no outline), so on a phone it can go tighter still. */
+const PHONE_GHOST = "min-[601px]:w-28 max-[600px]:px-1!";
+/** Rename on a phone: its pencil only, a square button. */
+const PHONE_ICON = "min-[601px]:w-28 max-[600px]:w-7 max-[600px]:px-0!";
 
 /** A goal's typed cell, or its text in grey with the tooltip saying it is not checked yet. */
 function TextFallback({ attr, text }: { attr: string; text: unknown }) {
@@ -137,9 +144,9 @@ function TitleButton({
         onOpen(entity.id);
       }}
       className={`${className.includes("min-w-") ? "" : "min-w-0"} ${className.includes("line-clamp") ? "" : "truncate"} text-left hover:underline ${className}`}
-      title={name ?? entity.title}
+      title={name ?? shownTitle(entity)}
     >
-      {name ?? entity.title}
+      {name ?? shownTitle(entity)}
     </button>
   );
 }
@@ -200,7 +207,7 @@ function fillAsk(goals: EntityOut[]) {
       const texts = Object.entries(g.attrs ?? {})
         .filter(([k, v]) => k.endsWith("_text") && k !== "owner_text" && g.attrs?.[k.slice(0, -5)] == null && v != null && v !== "")
         .map(([k, v]) => `${k.slice(0, -5).replaceAll("_", " ")} “${String(v)}”`);
-      return texts.length ? `${g.title} (${texts.join(", ")})` : g.title;
+      return texts.length ? `${shownTitle(g)} (${texts.join(", ")})` : shownTitle(g);
     });
   return {
     action: fillLabel(names.length),
@@ -214,7 +221,7 @@ function fillAsk(goals: EntityOut[]) {
  * On a phone the grid becomes a list: each feature's title, then its goal links as small
  * G-tags with their strength.
  */
-export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags, onOpen, onConfirm, onAdd, onFill, onMakeMeasurable, vague = 0, onInterviewVague, goalsNote, onAddSubgoal }: Props) {
+export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags, onOpen, onConfirm, onAdd, onFill, onMakeMeasurable, vague = 0, onInterviewVague, goalsNote, onAddSubgoal, onRename }: Props) {
   const low = trace?.low ?? DEFAULT_LOW;
   const live = graph.entities.filter((e) => e.status !== "rejected");
   const goals = sortedGoals(graph);
@@ -307,7 +314,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
               kind="goal"
               entityId={g.id}
               entityKey={g.key}
-              title={g.title}
+              title={shownTitle(g)}
               code={tree.get(g.id)?.code}
               proposed={g.status === "proposed"}
               codeOnly
@@ -504,7 +511,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
                 variant="ghost"
                 disabled={busy}
                 data-testid="make-measurable"
-                className={PHONE_ACTION}
+                className={PHONE_GHOST}
                 onClick={(e: MouseEvent) => {
                   e.stopPropagation();
                   onMakeMeasurable(g);
@@ -524,6 +531,24 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
               }}
             >
               Confirm
+            </Button>
+          )}
+          {canWrite && onRename && (
+            // On a phone a pencil only, so the row's actions stay one row at 390 px (qa-plan-26);
+            // its name and tooltip still say Rename.
+            <Button
+              disabled={busy}
+              className={PHONE_ICON}
+              data-testid="rename-goal"
+              aria-label="Rename"
+              title="Rename"
+              onClick={(e: MouseEvent) => {
+                e.stopPropagation();
+                onRename(g);
+              }}
+            >
+              <Icon name="pencil" size={16} className="hidden max-[600px]:block" />
+              <span className="max-[600px]:hidden">Rename</span>
             </Button>
           )}
           {canWrite && onAddSubgoal && !tree.get(g.id)?.depth && (
@@ -651,7 +676,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
             adding?.id === g.id && onAddSubgoal ? (
               <AddSubgoal
                 key={adding.id}
-                parent={tree.get(adding.id) ?? named(adding.title, adding.key)}
+                parent={tree.get(adding.id) ?? named(shownTitle(adding), adding.key)}
                 busy={busy}
                 onCancel={() => setAdding(null)}
                 onAdd={async (title) => {
@@ -744,7 +769,7 @@ function Ledger({
             </th>
             {goals.map((g) => {
               const target = goalTarget(g);
-              const name = tags.get(g.id) ?? g.title;
+              const name = tags.get(g.id) ?? shownTitle(g);
               return (
                 <th
                   key={g.id}
@@ -753,7 +778,7 @@ function Ledger({
                 >
                   <span className="flex min-w-0 items-center gap-1.5 max-[600px]:justify-center">
                     <span className="flex-none @max-[900px]:hidden max-[600px]:hidden">
-                      <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={g.title} code={codes.get(g.id)} proposed={g.status === "proposed"} codeOnly />
+                      <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={shownTitle(g)} code={codes.get(g.id)} proposed={g.status === "proposed"} codeOnly />
                     </span>
                     <button
                       type="button"
@@ -939,7 +964,7 @@ function FeatureRow({
             <span className="max-[600px]:hidden">{e ? <LinkCell edge={e} low={low} /> : <Dot />}</span>
             {e && (
               <span className="hidden items-center gap-1.5 rounded-goal border border-line py-0.5 pr-2 pl-1.5 max-[600px]:inline-flex">
-                <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={g.title} code={codes.get(g.id)} proposed={g.status === "proposed"} wrap />
+                <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={shownTitle(g)} code={codes.get(g.id)} proposed={g.status === "proposed"} wrap />
                 <ContributionPips value={contributionOf(e.attrs)} proposed={e.status === "proposed"} />
               </span>
             )}

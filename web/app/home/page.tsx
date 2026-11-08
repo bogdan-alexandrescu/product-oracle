@@ -209,10 +209,12 @@ export default function HomePage() {
   // QA pass D-2: one chip per kind, built from the rows the total counts, so they add up to it.
   // Checkpoints, cost approvals, overruns and a roadmap version waiting for my approval are
   // "Approvals" (qa-shell-6), apart from the decision log's Decisions.
-  const kinds = NEED_KINDS.map((k) => ({ ...k, n: needs.filter((r) => needKind(r.group) === k.id).length })).filter((k) => k.n > 0);
+  // counts-wait: the counts wait for the questions asked of me too, so none shows a lower number first.
+  const counted = !!inbox && (questionsQ.data !== undefined || !!questionsQ.error);
+  const kinds = !counted ? [] : NEED_KINDS.map((k) => ({ ...k, n: needs.filter((r) => needKind(r.group) === k.id).length })).filter((k) => k.n > 0);
   const { rows: shownNeeds, more: moreNeeds } = pickNeeds(visible, MAX_NEEDS);
   // The rail badge's count: the Inbox's New + Open items.
-  const waiting = inbox ? needs.length : undefined;
+  const waiting = counted ? needs.length : undefined;
   const openItems = new Map((inbox?.feedback ?? []).map((d) => [d.document_id, d.open_count]));
 
   // QA pass D-1: while either list failed, In flight says so with Try again, never empty or a table.
