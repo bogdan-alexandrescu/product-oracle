@@ -4,7 +4,8 @@ The one check every write of a roadmap item passes through: before each flush, a
 added, renamed, given another feature or brought back from Trash that would newly show a code
 another live item of the same plan (its version, its draft) shows is refused with 409, in
 set_code's words ("F-31 is already the code of F-31 Alert routing by team"); a copy of an
-item that showed the code already (a new version's, a carried row) is no new claim. Items of
+item that showed the code already on the version or draft it is copied from (its source,
+:func:`copied_from`) is no new claim, and a row with no source claims every code. Items of
 one feature (its slices) share its code. The paths that can say more check first in their
 own words (oracle.simple.changes._not_taken, oracle.roadmap.changeset, Apply approved roadmap
 in oracle.simple.approved_roadmap, Restore in oracle.simple.trash_items)."""
@@ -15,7 +16,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import inspect, select
+from sqlalchemy import inspect, or_, select
 from sqlalchemy.orm import Session
 
 # The read's leading code (oracle.simple.service.coded_title): a code, then the name.
@@ -148,6 +149,24 @@ def clash(
     return None
 
 
+# The version or draft a row is copied from, set by :func:`copied_from`.
+_SOURCE = "_code_source"
+
+
+def copied_from(row: Any, **owner: Any) -> Any:
+    """Marks ``row`` (not yet written) a copy of its item on one version or draft
+    (``roadmap_version_id=``, ``draft_roadmap_id=`` or ``simple_draft_id=``): a code its item
+    shows there is no new claim. Returns ``row``."""
+    [(col, value)] = owner.items()
+    setattr(row, _SOURCE, (col, value))
+    return row
+
+
+def _source(row: Any) -> tuple[str, Any] | None:
+    got = getattr(row, _SOURCE, None)
+    return got if got is not None and got[1] is not None else None
+
+
 def _owner(row: Any) -> tuple[str, Any] | None:
     for col in ("roadmap_version_id", "draft_roadmap_id", "simple_draft_id"):
         if getattr(row, col) is not None:
@@ -231,15 +250,18 @@ def _changed(row: Any) -> bool:
     )
 
 
-def _stored(session: Session, rows: list[Any]) -> dict[tuple[Any, str], list[Any]]:
-    """The stored live rows of the items ``rows`` add, by roadmap and item key: one read for
-    the whole write, whatever its size."""
+def _stored(session: Session, rows: list[Any]) -> dict[tuple[Any, Any, str], list[Any]]:
+    """The stored live rows ``rows`` (added rows) are copied from, by source
+    (:func:`copied_from`), roadmap and item key: one read for the whole write, of the source
+    versions and drafts alone, whatever its size."""
     from oracle.roadmap.models import RoadmapItem
 
-    if not rows:
+    copies = [o for o in rows if _source(o) is not None]
+    if not copies:
         return {}
-    docs = {o.roadmap_document_id for o in rows}
-    keys = {o.item_key for o in rows}
+    sources = {_source(o) for o in copies}
+    docs = {o.roadmap_document_id for o in copies}
+    keys = {o.item_key for o in copies}
     with session.no_autoflush:
         found = session.execute(
             select(
@@ -248,37 +270,30 @@ def _stored(session: Session, rows: list[Any]) -> dict[tuple[Any, str], list[Any
                 RoadmapItem.title,
                 RoadmapItem.feature_id,
                 RoadmapItem.prd_section_key,
-                RoadmapItem.created_at,
                 RoadmapItem.roadmap_version_id,
                 RoadmapItem.draft_roadmap_id,
                 RoadmapItem.simple_draft_id,
             ).where(
+                or_(*(getattr(RoadmapItem, col) == value for col, value in sources)),
                 RoadmapItem.roadmap_document_id.in_(docs),
                 RoadmapItem.item_key.in_(keys),
                 RoadmapItem.deleted_at.is_(None),
             )
         ).all()
-    out: dict[tuple[Any, str], list[Any]] = {}
+    out: dict[tuple[Any, Any, str], list[Any]] = {}
     for o in found:
-        out.setdefault((o.roadmap_document_id, o.item_key), []).append(o)
+        out.setdefault((_owner(o), o.roadmap_document_id, o.item_key), []).append(o)
     return out
 
 
 def _held(
-    row: Any, code: str, by_feature: dict[uuid.UUID, str], stored: dict[tuple[Any, str], list[Any]]
+    row: Any,
+    code: str,
+    by_feature: dict[uuid.UUID, str],
+    stored: dict[tuple[Any, Any, str], list[Any]],
 ) -> bool:
-    """``row``'s item shows ``code`` on the row it is copied from (its latest stored live row
-    of another version or draft of its roadmap): ``row`` is a copy (a new version's, a
-    draft's, a carried row). An older row that showed it does not count: the item gave the
-    code up since."""
-    mine = _owner(row)
-    source = [o for o in stored.get((row.roadmap_document_id, row.item_key), [])
-              if _owner(o) != mine]  # fmt: skip
-    if not source:
-        return False
-    latest = max(o.created_at for o in source)
-    return any(
-        (shown(o, by_feature) or "").upper() == code.upper()
-        for o in source
-        if o.created_at == latest
-    )
+    """``row``'s item shows ``code`` on the version or draft ``row`` is copied from
+    (:func:`copied_from`): ``row`` is a copy (a new version's, a carried row) and no new claim.
+    A row with no source holds no code."""
+    source = stored.get((_source(row), row.roadmap_document_id, row.item_key), [])
+    return any((shown(o, by_feature) or "").upper() == code.upper() for o in source)

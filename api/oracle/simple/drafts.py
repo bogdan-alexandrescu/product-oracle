@@ -1152,7 +1152,7 @@ async def submit(
     caller commits). ``reviewer_ids``: people the sender adds as reviewers; the draft
     waits on them too, after the required reviewers (build-review)."""
     from oracle.docs import service as docs_service
-    from oracle.roadmap import changeset, schedule, views
+    from oracle.roadmap import changeset, codes, schedule, views
     from oracle.roadmap import items as items_mod
 
     d, w = await _get(db, principal, draft_id)
@@ -1285,9 +1285,10 @@ async def submit(
             ),
             note=note,
         )
-        db.add(
-            RoadmapItem(roadmap_document_id=document.id, roadmap_version_id=version.id, **fields)
-        )
+        copy = RoadmapItem(roadmap_document_id=document.id, roadmap_version_id=version.id, **fields)
+        # Each copy keeps the codes its item shows on the draft's version, or on the draft.
+        source = {"simple_draft_id": d.id} if old in added else {"roadmap_version_id": base.id}
+        db.add(codes.copied_from(copy, **source))
     return await _in_review(db, principal, d, document, base, version, live)
 
 

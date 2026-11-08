@@ -42,7 +42,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import safe_yaml
 from oracle.baseline.models import Edge, Entity
 from oracle.docs.models import Document, DocumentVersion, Section
-from oracle.roadmap import schedule
+from oracle.roadmap import codes, schedule
 from oracle.roadmap.models import HORIZONS, DraftRoadmap, RoadmapItem
 from oracle.runs import roadmap as items_file
 from oracle.runs.models import Run, RunSegment
@@ -504,6 +504,8 @@ async def import_items(
             ).all()
         )
     continues = await _continues(db, prd_doc, prd_version)
+    # An item keeps the codes it shows on the version this one builds on (no new claim).
+    built_on = None if draft is not None else await _built_on(db, version)
     track = None if draft is not None else await tracks.track_for_roadmap(db, version, prd_version)
     owner = (
         RoadmapItem.draft_roadmap_id == draft.id
@@ -553,7 +555,7 @@ async def import_items(
             confidence=None if confidence is None else str(confidence),
             **derived,
         )
-        db.add(item)
+        db.add(codes.copied_from(item, roadmap_version_id=built_on))
         result.items.append(item)
     if draft is None:
         # one-roadmap-many-prds: the company roadmap keeps every other PRD's items.
@@ -568,6 +570,18 @@ async def import_items(
             await company.carry_for_version(db, version)
     await db.flush()
     return result
+
+
+async def _built_on(db: AsyncSession, version: DocumentVersion) -> uuid.UUID | None:
+    """The version ``version`` was written on: its base, else the latest earlier one."""
+    q = select(DocumentVersion.id).where(DocumentVersion.document_id == version.document_id)
+    if version.base_number:
+        return await db.scalar(q.where(DocumentVersion.number == version.base_number))
+    return await db.scalar(
+        q.where(DocumentVersion.number < version.number)
+        .order_by(DocumentVersion.number.desc())
+        .limit(1)
+    )
 
 
 # new-prd-from-replaced-prd: an item of a PRD that replaces another keeps a link to the old
@@ -743,17 +757,16 @@ async def carry_forward(db: AsyncSession, version: DocumentVersion) -> int:
     for old in rows:
         if not _named_in(old, version.markdown):
             continue
-        db.add(
-            RoadmapItem(
-                **{c: getattr(old, c) for c in COPIED},
-                milestone=recheck_date(
-                    old.milestone, bases[old.prd_document_id], old.item_key, old.horizon
-                ),
-                roadmap_document_id=version.document_id,
-                roadmap_version_id=version.id,
-                note=f"carried from version {previous.number}",
-            )
+        carry = RoadmapItem(
+            **{c: getattr(old, c) for c in COPIED},
+            milestone=recheck_date(
+                old.milestone, bases[old.prd_document_id], old.item_key, old.horizon
+            ),
+            roadmap_document_id=version.document_id,
+            roadmap_version_id=version.id,
+            note=f"carried from version {previous.number}",
         )
+        db.add(codes.copied_from(carry, roadmap_version_id=previous.id))
         copied += 1
     await db.flush()
     return copied

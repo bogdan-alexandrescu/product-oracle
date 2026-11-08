@@ -29,8 +29,8 @@ from tests.test_roadmap import (  # noqa: F401 - fixtures
 
 SETS = f"/v1/roadmaps/{ROADMAP}/change-sets"
 # Statements one propose runs (test_proposing_a_plan_of_many_coded_items_reads_each_item_once):
-# the same for 5 coded items as for 40; the cap leaves room for other reads a propose adds.
-MAX_PROPOSE_STATEMENTS = 150
+# the same for 5 coded items as for 40 (48 measured); the cap leaves room for other reads.
+MAX_PROPOSE_STATEMENTS = 100
 
 
 async def approved_roadmap(client, auth, runtime) -> None:  # noqa: F811

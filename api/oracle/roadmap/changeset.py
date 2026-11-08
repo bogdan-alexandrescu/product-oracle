@@ -33,9 +33,9 @@ from oracle.auth.deps import Principal
 from oracle.baseline.models import Entity
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
+from oracle.roadmap import codes, schedule, views
 from oracle.roadmap import diff as item_diff
 from oracle.roadmap import items as items_mod
-from oracle.roadmap import schedule, views
 from oracle.roadmap.models import HORIZONS, RoadmapChangeSet, RoadmapItem
 from oracle.roadmap.schemas import (
     AddChange,
@@ -144,8 +144,6 @@ async def _codes(db: AsyncSession, applied: Applied, error: type[ChangeSetError]
     in set_code's words (``error``: 422 when added, 409 when it was taken since, at propose).
     Slices of one feature share its code. oracle.roadmap.codes checks every write too."""
     from types import SimpleNamespace
-
-    from oracle.roadmap import codes
 
     plan = [p for _, p in applied.items()]
     # The item there first holds the code: the base's, then the adds in the order made.
@@ -571,9 +569,10 @@ async def propose(
                 if p.feature_id else [],
                 "note": f"added to version {base_number}'s plan",
             }  # fmt: skip
-        db.add(
-            RoadmapItem(roadmap_document_id=document.id, roadmap_version_id=version.id, **fields)
-        )
+        added = RoadmapItem(roadmap_document_id=document.id, roadmap_version_id=version.id,
+                            **fields)  # fmt: skip
+        # A base item's copy keeps the codes the base (the approved version) shows.
+        db.add(codes.copied_from(added, roadmap_version_id=base.id) if p.base else added)
     row = await db.get(RoadmapChangeSet, set_id, with_for_update=True)
     row.status = "proposed"
     row.proposed_version_id = version.id
