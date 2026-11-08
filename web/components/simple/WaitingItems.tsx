@@ -18,7 +18,7 @@ type Waiting = Schemas["SimpleDecisionsWaitingOut"];
  * Read again whenever an action anywhere changed what waits (waitingChanged), so what I act on
  * leaves every page at once. undefined: not read yet.
  */
-export function useWaitingList(): { data: Waiting | undefined; error: unknown } {
+export function useWaitingList(): { data: Waiting | undefined; error: unknown; reload: () => void } {
   const [data, setData] = useState<Waiting | undefined>(undefined);
   const [error, setError] = useState<unknown>(null);
   const [changes, setChanges] = useState(0);
@@ -32,7 +32,8 @@ export function useWaitingList(): { data: Waiting | undefined; error: unknown } 
       alive = false;
     };
   }, [changes]);
-  return { data, error };
+  // counts-wait review: Try again on a failed read reads the list again.
+  return { data, error, reload: () => setChanges((c) => c + 1) };
 }
 
 type Act = { label: string; run: () => Promise<unknown>; done: string; primary?: boolean };

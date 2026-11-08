@@ -19,17 +19,22 @@ const webhookOf = (n: Notification) => (typeof n.data?.webhook_id === "string" ?
  * revoked" or a member change (owners; Open, Resume, Take over), "<Owner> paused your webhook <name>" and
  * "<Approver> changed where webhook <name> sends" (owners; Open). New until read, then Done.
  * Counted while unread (F-7), as the Inbox API's total counts them for the rail badge; only
- * for a role that can open Settings › Webhooks (F-25).
+ * for a role that can open Settings › Webhooks (F-25). `error`: my notifications could not be read
+ * (counts-wait review), so the Inbox says so and its count is not the whole.
  */
-export function useWebhookRows(busy: string | null, act: Act, seenBefore: string | null | undefined): StatedNeed[] | null {
+export function useWebhookRows(
+  busy: string | null,
+  act: Act,
+  seenBefore: string | null | undefined,
+): { rows: StatedNeed[] | null; error: string | null; reload: () => unknown } {
   const { loading, can } = useMe();
   const q = useQuery("inbox|webhook-notifications", () => unwrap(api.GET("/v1/me/notifications")));
   const read = (n: Notification) => unwrap(api.POST("/v1/notifications/{notification_id}/read", { params: { path: { notification_id: n.id } } }));
   // counts-wait: null until who I am and my notifications are read, so the Inbox's count waits for them.
-  if (loading) return null;
-  if (!can("list_webhooks")) return [];
-  if (q.data === undefined && !q.error) return null;
-  return (q.data ?? [])
+  if (loading) return { rows: null, error: null, reload: q.reload };
+  if (!can("list_webhooks")) return { rows: [], error: null, reload: q.reload };
+  if (q.data === undefined && !q.error) return { rows: null, error: null, reload: q.reload };
+  const rows: StatedNeed[] = (q.data ?? [])
     .filter((n) => KINDS.has(n.kind))
     .map((n) => {
       const id = webhookOf(n);
@@ -109,4 +114,5 @@ export function useWebhookRows(busy: string | null, act: Act, seenBefore: string
         ),
       };
     });
+  return { rows, error: q.error, reload: q.reload };
 }
