@@ -217,6 +217,8 @@ interface SimpleDb {
   /** roadmap-keydates review ("roadmap-keydates-uncoded"): a track milestone record's own day
    * (record name -> day), as a record with a target date reads; none: undated. */
   record_dates?: Record<string, string>;
+  /** home-milestones-current: track milestone records that were dropped (record names). */
+  record_dropped?: string[];
   /** approved-roadmap-to-simple: roadmaps Simple knows besides ROADMAPS (slug -> its title,
    * PRD, track key and track title), known while their items are the roadmap's. */
   extra_roadmaps?: Record<string, { title: string; prd: string; track: string; track_title: string }>;
@@ -1581,7 +1583,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
         : []),
       ...[...new Set(seeds.flatMap((s) => (s.record ? [s.record] : [])))].map((name) => {
         const of = seeds.filter((s) => s.record === name);
-        return { id: recordOf(of[0]).record_id!, track_id: stableUuid(`simple-track/${of[0].track}`), name, date: db.record_dates?.[name] ?? null, horizon: "now" as const, status: "planned" as const, item_ids: of.map((s) => db.ids[s.key]), ...UNDATED };
+        return { id: recordOf(of[0]).record_id!, track_id: stableUuid(`simple-track/${of[0].track}`), name, date: db.record_dates?.[name] ?? null, horizon: "now" as const, status: db.record_dropped?.includes(name) ? ("dropped" as const) : ("planned" as const), item_ids: of.map((s) => db.ids[s.key]), ...UNDATED };
       }),
       // approved-roadmap-to-simple: each shown roadmap's applied version's milestones.
       ...(chosen ? [chosen] : readable).flatMap((slug) => appliedMilestones(db, slug)),
