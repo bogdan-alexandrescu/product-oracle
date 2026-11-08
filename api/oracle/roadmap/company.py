@@ -169,11 +169,11 @@ def _live_replacement(by: Any, prd: Any = Document) -> Any:
     return and_(by.id == any_(prd.replaced_by), by.deleted_at.is_(None))
 
 
-def replaced_now() -> Any:
-    """SQL: a Document a live PRD replaces (:class:`History`), for a query that cannot spare
-    a read of :func:`history`."""
+def replaced_now(prd: Any = Document) -> Any:
+    """SQL: ``prd`` (Document or an alias of it) is a PRD a live PRD replaces
+    (:class:`History`), for a query that cannot spare a read of :func:`history`."""
     by = aliased(Document)
-    return exists().where(_live_replacement(by)).correlate(Document)
+    return exists().where(_live_replacement(by, prd)).correlate(prd)
 
 
 async def _read_history(db: AsyncSession) -> History:
