@@ -33,6 +33,21 @@ function isNowCall(node, objects = ["Date", "performance"]) {
   );
 }
 
+/** `Date.now`, `performance.now`, `process.hrtime` or `process.hrtime.bigint`, uncalled. */
+function isClockRef(n) {
+  n = skipParens(n);
+  if (!ts.isPropertyAccessExpression(n)) return false;
+  const of = skipParens(n.expression);
+  const name = n.name.text;
+  if (ts.isIdentifier(of)) return (name === "now" && ["Date", "performance"].includes(of.text)) || (name === "hrtime" && of.text === "process");
+  return name === "bigint" && ts.isPropertyAccessExpression(of) && of.name.text === "hrtime" && ts.isIdentifier(of.expression) && of.expression.text === "process";
+}
+
+/** `process.hrtime(t0)`: the time since t0, a measure in itself. */
+function isHrtimeSince(n) {
+  return ts.isCallExpression(n) && n.arguments.length > 0 && isClockRef(n.expression) && skipParens(n.expression).name.text === "hrtime";
+}
+
 /** `new Date()`, no arguments. */
 function isNewDate(n) {
   return ts.isNewExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === "Date" && !n.arguments?.length;
@@ -51,8 +66,9 @@ const WEAK = 1;
  */
 function clockKind(node, clocks) {
   const n = skipParens(node);
-  if (isNowCall(n)) return STRONG;
+  if (ts.isCallExpression(n) && isClockRef(n.expression)) return isHrtimeSince(n) ? 0 : STRONG;
   if (isNewDate(n)) return WEAK;
+  if (ts.isElementAccessExpression(n)) return clockKind(n.expression, clocks); // process.hrtime()[0]
   if (ts.isPrefixUnaryExpression(n) && n.operator === ts.SyntaxKind.PlusToken)
     return isNewDate(skipParens(n.operand)) ? STRONG : clockKind(n.operand, clocks);
   if (ts.isCallExpression(n) && !n.arguments.length && ts.isPropertyAccessExpression(n.expression) && ["getTime", "valueOf"].includes(n.expression.name.text)) {
@@ -99,11 +115,12 @@ function returnKind(fn, clocks) {
 }
 
 /**
- * `sf`'s clock variables (const end = Date.now(); t0 = performance.now()) and clock functions
- * (const now = () => Date.now()), each by its declaration, so a name in another scope is not one.
+ * `sf`'s clock variables (const end = Date.now(); t0 = performance.now()), clock functions
+ * (const now = () => Date.now(); const clock = Date.now) and deadlines (const until = Date.now()
+ * + 3000), each by its declaration, so a name in another scope is not one.
  */
 function findClocks(sf) {
-  const clocks = { checker: checkerFor(sf), vars: new Map(), fns: new Map() };
+  const clocks = { checker: checkerFor(sf), vars: new Map(), fns: new Map(), deadlines: new Map() };
   let grew = true;
   const raise = (map, id, kind) => {
     const s = kind && symbolOf(id, clocks);
@@ -116,9 +133,16 @@ function findClocks(sf) {
     if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer) {
       const init = skipParens(n.initializer);
       if (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) raise(clocks.fns, n.name, returnKind(init, clocks));
-      else raise(clocks.vars, n.name, clockKind(init, clocks));
+      else if (isClockAlias(init)) raise(clocks.fns, n.name, STRONG);
+      else {
+        raise(clocks.vars, n.name, clockKind(init, clocks));
+        raise(clocks.deadlines, n.name, isDeadline(init, clocks) ? STRONG : 0);
+      }
     } else if (ts.isFunctionDeclaration(n) && n.name) raise(clocks.fns, n.name, returnKind(n, clocks));
-    else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(n.left)) raise(clocks.vars, n.left, clockKind(n.right, clocks));
+    else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(n.left)) {
+      raise(clocks.vars, n.left, clockKind(n.right, clocks));
+      raise(clocks.deadlines, n.left, isDeadline(n.right, clocks) ? STRONG : 0);
+    }
     ts.forEachChild(n, visit);
   };
   while (grew) {
@@ -126,6 +150,53 @@ function findClocks(sf) {
     visit(sf);
   }
   return clocks;
+}
+
+/** `Date.now` or `performance.now.bind(performance)`: a clock under another name. */
+function isClockAlias(n) {
+  n = skipParens(n);
+  if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && n.expression.name.text === "bind") n = n.expression.expression;
+  return isClockRef(n);
+}
+
+/** A deadline: a timestamp plus or minus a budget (Date.now() + 3000, t0 - 50), or a variable set to one. */
+function isDeadline(node, clocks) {
+  const n = skipParens(node);
+  if (ts.isIdentifier(n)) return clocks.deadlines.has(symbolOf(n, clocks));
+  if (!ts.isBinaryExpression(n)) return false;
+  const [l, r] = [clockKind(n.left, clocks), clockKind(n.right, clocks)];
+  if (n.operatorToken.kind === ts.SyntaxKind.PlusToken) return (l === STRONG && !r) || (r === STRONG && !l);
+  return n.operatorToken.kind === ts.SyntaxKind.MinusToken && l === STRONG && !r;
+}
+
+const COMPARISONS = [ts.SyntaxKind.LessThanToken, ts.SyntaxKind.LessThanEqualsToken, ts.SyntaxKind.GreaterThanToken, ts.SyntaxKind.GreaterThanEqualsToken];
+
+/** Whether `n` (outside nested functions) throws or calls expect(). */
+function asserts(n) {
+  if (!n || ts.isFunctionLike(n)) return false;
+  if (ts.isThrowStatement(n) || (ts.isCallExpression(n) && expected(n) !== null)) return true;
+  return !!ts.forEachChild(n, asserts);
+}
+
+/**
+ * Whether a comparison of the clock with a deadline only waits: it is the condition of a loop,
+ * or of an if (or ?:) none of whose branches throws or calls expect(), so it stops a poll
+ * rather than failing the test on the time.
+ */
+function onlyWaits(cmp) {
+  let c = cmp;
+  let p = c.parent;
+  const passes = (x) =>
+    ts.isParenthesizedExpression(x) ||
+    (ts.isPrefixUnaryExpression(x) && x.operator === ts.SyntaxKind.ExclamationToken) ||
+    (ts.isBinaryExpression(x) && [ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken].includes(x.operatorToken.kind));
+  while (p && passes(p)) [c, p] = [p, p.parent];
+  if (!p) return false;
+  if ((ts.isWhileStatement(p) || ts.isDoStatement(p)) && p.expression === c) return true;
+  if (ts.isForStatement(p) && p.condition === c) return true;
+  if (ts.isIfStatement(p) && p.expression === c) return !asserts(p.thenStatement) && !asserts(p.elseStatement);
+  if (ts.isConditionalExpression(p) && p.condition === c) return !asserts(p.whenTrue) && !asserts(p.whenFalse);
+  return false;
 }
 
 /** The callee's name as `helpers` keys it: `fn` or `ns.fn`, or null. */
@@ -137,28 +208,45 @@ function calleeName(call) {
 }
 
 /**
- * Whether `node` measures time itself. `helpers` names the functions that do (`fn`, `ns.fn`);
- * `clocks` is the file's clock reads (findClocks). A clock read less anything ("now() - start")
- * measures; a deadline less the clock ("until - Date.now()") does not.
+ * Whether the node `n` is itself a measure (not counting what is inside it). `helpers` names
+ * the functions that measure (`fn`, `ns.fn`); `clocks` is the file's clock reads (findClocks).
+ * A clock read less anything ("now() - start") measures; a deadline less the clock ("until -
+ * Date.now()") does not. The clock checked against a deadline measures (expect(Date.now())
+ * .toBeLessThan(until), if (Date.now() > until) throw ...), unless the check only stops a poll.
  */
-function measures(node, helpers, clocks) {
-  let found = false;
-  const visit = (n) => {
-    if (found) return;
-    if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.MinusToken) {
+function measureAt(n, helpers, clocks) {
+  if (ts.isBinaryExpression(n)) {
+    const op = n.operatorToken.kind;
+    if (op === ts.SyntaxKind.MinusToken) {
       const left = clockKind(n.left, clocks);
-      if (left === STRONG || (left && clockKind(n.right, clocks))) found = true;
-    } else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+      if (left === STRONG || (left && clockKind(n.right, clocks))) return true;
+    } else if (op === ts.SyntaxKind.PlusToken) {
       // -start + Date.now()
       const negated = (x) => ((x = skipParens(x)), ts.isPrefixUnaryExpression(x) && x.operator === ts.SyntaxKind.MinusToken ? clockKind(x.operand, clocks) : 0);
-      if ((negated(n.left) && clockKind(n.right, clocks)) || (negated(n.right) && clockKind(n.left, clocks))) found = true;
+      if ((negated(n.left) && clockKind(n.right, clocks)) || (negated(n.right) && clockKind(n.left, clocks))) return true;
+    } else if (COMPARISONS.includes(op)) {
+      const vs = (a, b) => clockKind(a, clocks) && isDeadline(b, clocks);
+      if ((vs(n.left, n.right) || vs(n.right, n.left)) && !onlyWaits(n)) return true;
     }
-    if (isNowCall(n, ["performance"])) found = true;
-    else if (ts.isCallExpression(n) && helpers.has(calleeName(n))) found = true;
-    if (!found) ts.forEachChild(n, visit);
-  };
-  visit(node);
-  return found;
+    return false;
+  }
+  if (!ts.isCallExpression(n)) return false;
+  if (isNowCall(n, ["performance"]) || isHrtimeSince(n) || helpers.has(calleeName(n))) return true;
+  // expect(Date.now()).toBeLessThan(until), expect.poll(() => Date.now())..., expect(t0 + 50).toBeGreaterThan(Date.now())
+  if (ts.isPropertyAccessExpression(n.expression) && [...BOUNDS, "toBeGreaterThanOrEqual"].includes(n.expression.name.text) && n.arguments[0]) {
+    const x = expected(n);
+    if (!x) return false;
+    const subject = ts.isArrowFunction(x) || ts.isFunctionExpression(x) ? returnKind(x, clocks) : clockKind(x, clocks);
+    const b = n.arguments[0];
+    return !!((subject && isDeadline(b, clocks)) || (isDeadline(x, clocks) && clockKind(b, clocks)));
+  }
+  return false;
+}
+
+/** Whether `node`, or anything in it, measures time (measureAt). */
+function measures(node, helpers, clocks) {
+  const visit = (n) => measureAt(n, helpers, clocks) || !!ts.forEachChild(n, visit);
+  return visit(node);
 }
 
 function skipParens(n) {
