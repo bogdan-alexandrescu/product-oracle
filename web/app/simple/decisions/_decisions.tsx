@@ -12,12 +12,12 @@ import { DecisionSheetHost, editedWords, useDecisionSheet } from "@/components/s
 import { FeaturePanel, itemFor, useItemChanged } from "../roadmap/_panel";
 import { QuestionRow, useQuestionActions, useSourceLine, type Question } from "@/components/simple/questions/Questions";
 import { SimpleEmpty, SimplePage } from "@/components/simple/SimplePage";
-import { ErrorNote, Loading } from "@/components/ui";
+import { ErrorNote, LoadError, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { calendarDay, useCompanyZone } from "@/lib/dates";
 import { zoneName } from "@/lib/format";
 import { useMe } from "@/lib/me";
-import { useQuery } from "@/lib/use-query";
+import { errorMessage, useQuery } from "@/lib/use-query";
 import { useWaitingList, WaitingRow } from "@/components/simple/WaitingItems";
 
 import { DeliveryLine, emailWords, slackWords } from "../meetings/_delivery";
@@ -305,13 +305,18 @@ function QuestionList({ d, actions, filtered, onClear, linked }: { d: Schemas["S
   // the filters narrow the PRDs' questions only, so these show unfiltered.
   const waiting = useWaitingList();
   const extra = filtered ? [] : (waiting.data?.items ?? []).filter((i) => i.kind !== "question");
-  const count = Math.min(d.waiting_count, mine.filter((x) => x.status === "proposed").length) + extra.length;
+  // counts-wait: no number until the one list is read too (0 shows none), so it never jumps; and
+  // none when it failed (counts-wait review): the PRDs' questions alone are not the whole count.
+  const failed = !filtered && !!waiting.error;
+  const count = filtered || waiting.data ? Math.min(d.waiting_count, mine.filter((x) => x.status === "proposed").length) + extra.length : 0;
   return (
     <>
       <QuestionCard label="Waiting for you" testId="questions-mine" questions={mine.length ? mine : open} count={count} source>
         <AskQuestion prds={d.prds} questions={d.questions} />
+        {/* counts-wait review: the list's read failed: the shared could-not-load mark, with Try again. */}
+        {failed && <LoadError what="what waits on you" error={errorMessage(waiting.error)} onRetry={waiting.reload} />}
         {mine.length === 0 && extra.length === 0 ? (
-          !filtered && !waiting.data && !waiting.error ? (
+          failed ? null : !filtered && !waiting.data ? (
             <p className="simple-meta" role="status">
               Loading what waits on you…
             </p>

@@ -60,10 +60,14 @@ function isActive(pathname: string, d: Dest): boolean {
  * goal suggestions, one-pager wordings, question proposals) is "Inbox beyond the tabs", which
  * More sums. Read when the rail mounts, on a route change and whenever something waiting changes.
  */
-function useSimpleCounts(enabled: boolean): Record<string, number> | null {
+function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; failed: Set<string> } | null {
   const pathname = usePathname();
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
-  const [live, setLive] = useState(0);
+  // counts-wait review: the labels whose count misses a part whose read failed (none, or only what loaded).
+  const [failed, setFailed] = useState<string[]>([]);
+  // null until the meetings read first answers: the counts wait for it too (counts-wait).
+  const [live, setLive] = useState<number | null>(null);
+  const [meetingsFailed, setMeetingsFailed] = useState(false);
   const [changes, setChanges] = useState(0);
   useEffect(() => onWaitingChanged(() => setChanges((c) => c + 1)), []);
   useEffect(() => {
@@ -74,45 +78,56 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
     // whole working draft as I see it (GET /v1/simple/roadmap/waiting, a light count), the same
     // ones the roadmap's strip, its Needs a decision and Home count, with the dates I may confirm
     // and the proposals and drafts waiting on me.
-    Promise.all([
+    // counts-wait review: each read settles on its own, so one that fails marks the counts it adds to
+    // and the rest still show.
+    void Promise.allSettled([
       loadWaiting(),
       unwrap(api.GET("/v1/simple/roadmap/waiting")).catch(() => undefined),
       loadInbox(),
-      loadMyQuestions().catch(() => []),
-      unwrap(api.GET("/v1/simple/goal-suggestions", { params: { query: { status: "open" } } })).catch(() => undefined),
-    ])
-      .then(([waiting, roadmap, inbox, questions, goalSuggestions]) => {
-        if (!alive) return;
-        const items = waiting.items;
-        // Without the light count, the strip's own rule over the list: each link between items
-        // (a dependency out of order, a cut item others depend on), not an end past its milestone.
-        const links = roadmap?.broken_links ?? items.filter((i) => i.kind === "broken_link" && LINK_KINDS.some((k) => i.key.split(":")[2] === k)).length;
-        const dates = roadmap?.dates_to_confirm ?? items.filter((i) => i.kind === "date" && !i.key.startsWith("proposal:")).length;
-        // The suggested features Needs a decision lists and counts (the same read and filter as its panel).
-        const suggested = (goalSuggestions?.suggestions ?? []).filter((s) => s.can_accept || s.can_reject).length;
-        // PR 1320 re-review: a one-pager number fix (set_section_number) is the one-pager's, not the
-        // roadmap's: it counts in the Inbox beyond the tabs, as a one-pager wording does.
-        const asks = items.filter((i) => (i.kind === "proposal" && i.op !== "set_section_number") || i.kind === "draft" || (i.kind === "date" && i.key.startsWith("proposal:"))).length;
-        // inbox-meeting-proposals fix: the Inbox's part the Roadmap tab counts too (a proposal on a
-        // PRD question or a one-pager line or number is not the roadmap's).
-        const inboxRoadmap =
-          inbox.simple_proposals.filter((x) => !["decide_question", "name_decider", "edit_line", "set_section_number"].includes(x.op)).length +
+      loadMyQuestions(),
+      unwrap(api.GET("/v1/simple/goal-suggestions", { params: { query: { status: "open" } } })),
+    ]).then(([waitingR, roadmapR, inboxR, questionsR, goalR]) => {
+      if (!alive) return;
+      const waiting = waitingR.status === "fulfilled" ? waitingR.value : null;
+      const roadmap = roadmapR.status === "fulfilled" ? roadmapR.value : undefined;
+      const inbox = inboxR.status === "fulfilled" ? inboxR.value : null;
+      const questions = questionsR.status === "fulfilled" ? questionsR.value : null;
+      const goalSuggestions = goalR.status === "fulfilled" ? goalR.value : null;
+      const items = waiting?.items ?? [];
+      // Without the light count, the strip's own rule over the list: each link between items
+      // (a dependency out of order, a cut item others depend on), not an end past its milestone.
+      const links = roadmap?.broken_links ?? items.filter((i) => i.kind === "broken_link" && LINK_KINDS.some((k) => i.key.split(":")[2] === k)).length;
+      const dates = roadmap?.dates_to_confirm ?? items.filter((i) => i.kind === "date" && !i.key.startsWith("proposal:")).length;
+      // The suggested features Needs a decision lists and counts (the same read and filter as its panel).
+      const suggested = (goalSuggestions?.suggestions ?? []).filter((s) => s.can_accept || s.can_reject).length;
+      // PR 1320 re-review: a one-pager number fix (set_section_number) is the one-pager's, not the
+      // roadmap's: it counts in the Inbox beyond the tabs, as a one-pager wording does.
+      const asks = items.filter((i) => (i.kind === "proposal" && i.op !== "set_section_number") || i.kind === "draft" || (i.kind === "date" && i.key.startsWith("proposal:"))).length;
+      // inbox-meeting-proposals fix: the Inbox's part the Roadmap tab counts too (a proposal on a
+      // PRD question or a one-pager line or number is not the roadmap's).
+      const inboxRoadmap = inbox
+        ? inbox.simple_proposals.filter((x) => !["decide_question", "name_decider", "edit_line", "set_section_number"].includes(x.op)).length +
           inbox.simple_approvals.length +
-          inbox.simple_goal_suggestions.length;
-        const all = waitingCount(inbox, questions);
-        setCounts({
-          Decisions: items.length,
-          Roadmap: links + dates + suggested + asks,
-          "Roadmap links": links,
-          "Roadmap dates": dates,
-          "Roadmap suggested": suggested,
-          "Roadmap asks": asks,
-          Inbox: all,
-          // What waits in the Inbox beyond what the tabs count (More sums it).
-          "Inbox beyond the tabs": Math.max(0, all - inboxRoadmap),
-        });
-      })
-      .catch(() => undefined);
+          inbox.simple_goal_suggestions.length
+        : 0;
+      const all = inbox ? waitingCount(inbox, questions ?? []) : 0;
+      setCounts({
+        Decisions: items.length,
+        Roadmap: links + dates + suggested + asks,
+        "Roadmap links": links,
+        "Roadmap dates": dates,
+        "Roadmap suggested": suggested,
+        "Roadmap asks": asks,
+        Inbox: all,
+        // What waits in the Inbox beyond what the tabs count (More sums it).
+        "Inbox beyond the tabs": Math.max(0, all - inboxRoadmap),
+      });
+      setFailed([
+        ...(waiting ? [] : ["Decisions"]),
+        ...(waiting && goalSuggestions ? [] : ["Roadmap"]),
+        ...(inbox && questions ? [] : ["Inbox", "Inbox beyond the tabs"]),
+      ]);
+    });
     return () => {
       alive = false;
     };
@@ -122,14 +137,32 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
     if (!enabled) return;
     let alive = true;
     unwrap(api.GET("/v1/simple/meetings"))
-      .then((m) => alive && setLive(m.live.length))
-      .catch(() => undefined);
+      .then((m) => alive && (setLive(m.live.length), setMeetingsFailed(false)))
+      // counts-wait review: a failed read is marked, never counted as no meeting; the other counts still show.
+      .catch(() => alive && (setLive((n) => n ?? 0), setMeetingsFailed(true)));
     return () => {
       alive = false;
     };
   }, [enabled, changes, meetingsPath]);
+  // counts-wait review: while a part failed, read again in a while, so a failed read never hides or marks a count for good.
+  const retry = meetingsFailed || failed.length > 0;
+  useEffect(() => {
+    if (!enabled || !retry) return;
+    const t = setTimeout(() => setChanges((c) => c + 1), RETRY_MS);
+    return () => clearTimeout(t);
+  }, [enabled, retry, changes]);
   // qa-simple-decide-51: "Meetings live": the yellow count only when one is on now.
-  return counts && { ...counts, Meetings: live, "Meetings live": live };
+  // counts-wait: no count (nor More's sum) shows until every read has answered, so none jumps.
+  if (!counts || live == null) return null;
+  return { counts: { ...counts, Meetings: live, "Meetings live": live }, failed: new Set(meetingsFailed ? [...failed, "Meetings"] : failed) };
+}
+
+/** How long the rail waits to read again a part whose read failed. */
+const RETRY_MS = 15_000;
+
+/** A count whose part failed (counts-wait review): its words say so, or alone when no number shows. */
+function failedWords(words: string, n: number): string {
+  return n > 0 ? `${words}; a part could not load` : "Could not load";
 }
 
 /** What a rail count counts, said in words (its accessible name and tooltip). */
@@ -206,7 +239,10 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
   const pathname = usePathname();
   const router = useRouter();
   const { me, role, capsReady, capsError, simpleMode } = useMe();
-  const counts = useSimpleCounts(!!me);
+  const read = useSimpleCounts(!!me);
+  const counts = read?.counts ?? null;
+  // counts-wait review: a count missing a part whose read failed shows the could-not-load mark (no number) or says it.
+  const failedOf = (label: string) => !!read?.failed.has(label);
   const [more, setMore] = useState(false);
   const [lastPath, setLastPath] = useState(pathname);
   if (lastPath !== pathname) {
@@ -272,10 +308,18 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
   // yellow only when something in it waits on you.
   const quietOf = (d: Dest) => d.label === "Meetings" && !counts?.["Meetings live"];
   const moreQuiet = inboxRest === 0 && summed.every((d) => countOf(d) === 0 || quietOf(d));
-  const tabBadge = (id: string, n: number, words: string, quiet = false) =>
-    n > 0 && (
-      <span id={id} data-testid={id} aria-label={words} title={words} className={`simple-count simple-count-tab tnum${quiet ? " simple-count-quiet" : ""}`}>
-        {n}
+  const moreFailed = summed.some((d) => failedOf(d.label)) || (moreDests.some((d) => d.label === "Inbox") && failedOf("Inbox beyond the tabs"));
+  const shownOf = (d: Dest) => countOf(d) > 0 || failedOf(d.label);
+  const tabBadge = (id: string, n: number, words: string, quiet = false, failed = false) =>
+    (n > 0 || failed) && (
+      <span
+        id={id}
+        data-testid={id}
+        aria-label={failed ? failedWords(words, n) : words}
+        title={failed ? failedWords(words, n) : words}
+        className={`simple-count simple-count-tab tnum${quiet || n === 0 ? " simple-count-quiet" : ""}`}
+      >
+        {n > 0 ? n : <Icon name="alert" size={16} />}
       </span>
     );
 
@@ -298,6 +342,8 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
         <ModeSwitch placement="wide" />
         {SIMPLE_DESTINATIONS.map((d) => {
           const n = counts?.[d.label] ?? 0;
+          const failed = failedOf(d.label);
+          const words = failed ? failedWords(countWords(d.label, n, counts), n) : countWords(d.label, n, counts);
           return (
             <Link
               key={d.href}
@@ -306,14 +352,14 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
               aria-current={isActive(pathname, d) ? "page" : undefined}
               // The destination is the link's name; its count is the description (never "Meetings 3").
               aria-label={d.label}
-              aria-describedby={n > 0 ? `${d.testId}-count` : undefined}
+              aria-describedby={shownOf(d) ? `${d.testId}-count` : undefined}
               className="flex h-12 items-center gap-3 rounded-xl px-3 text-[length:var(--simple-rail-label)] leading-6 font-medium text-rail-text hover:bg-rail-hover hover:text-rail-active-text aria-[current=page]:bg-rail-active aria-[current=page]:font-semibold aria-[current=page]:text-rail-active-text"
             >
               <Icon name={d.icon} stroke={1.7} />
               <span className="min-w-0 flex-1 truncate">{d.label}</span>
-              {n > 0 && (
-                <span id={`${d.testId}-count`} data-testid={`${d.testId}-count`} aria-label={countWords(d.label, n, counts)} title={countWords(d.label, n, counts)} className={`simple-count tnum ${d.label === "Meetings" && !counts?.["Meetings live"] ? "simple-count-quiet" : ""}`}>
-                  {n}
+              {(n > 0 || failed) && (
+                <span id={`${d.testId}-count`} data-testid={`${d.testId}-count`} aria-label={words} title={words} className={`simple-count tnum ${(d.label === "Meetings" && !counts?.["Meetings live"]) || n === 0 ? "simple-count-quiet" : ""}`}>
+                  {n > 0 ? n : <Icon name="alert" size={16} />}
                 </span>
               )}
             </Link>
@@ -374,7 +420,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
                     data-testid={id}
                     aria-current={active ? "page" : undefined}
                     aria-label={d.label}
-                    aria-describedby={n > 0 ? `${id}-count` : undefined}
+                    aria-describedby={shownOf(d) ? `${id}-count` : undefined}
                     className={`relative flex min-w-0 flex-col items-center justify-center gap-[3px] rounded-[10px] text-[13px] leading-4 ${
                       active ? `bg-rail-active font-semibold text-rail-active-text ${TAB_BAR}` : "font-medium text-rail-text"
                     }`}
@@ -382,14 +428,14 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
                     <Icon name={d.icon} stroke={1.7} />
                     {/* fix4 review: "One-pagers" fills a 390 px phone's fifth of the bar to the pixel; a hair tighter it is whole. */}
                     <span className="max-w-full truncate tracking-[-0.02em]">{d.label}</span>
-                    {tabBadge(`${id}-count`, n, countWords(d.label, n, counts), quietOf(d))}
+                    {tabBadge(`${id}-count`, n, countWords(d.label, n, counts), quietOf(d), failedOf(d.label))}
                   </Link>
                 );
               })}
               <button
                 type="button"
                 aria-label="More"
-                aria-describedby={moreCount > 0 ? "simple-tab-more-count" : undefined}
+                aria-describedby={moreCount > 0 || moreFailed ? "simple-tab-more-count" : undefined}
                 aria-expanded={more}
                 aria-controls="simple-more-sheet"
                 data-testid="simple-tab-more"
@@ -400,7 +446,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
               >
                 <Icon name="more" stroke={1.7} />
                 More
-                {tabBadge("simple-tab-more-count", moreCount, `${moreCount} in More`, moreQuiet)}
+                {tabBadge("simple-tab-more-count", moreCount, `${moreCount} in More`, moreQuiet, moreFailed)}
               </button>
             </nav>
             {/* qa-simple-home-19: Detailed's More sheet (its handle, title, close button and dimmed backdrop), sized to its links. */}
@@ -417,12 +463,12 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
                           href={d.href}
                           aria-current={isActive(pathname, d) ? "page" : undefined}
                           aria-label={d.label}
-                          aria-describedby={n > 0 ? id : undefined}
+                          aria-describedby={shownOf(d) ? id : undefined}
                           className="relative flex flex-col items-center gap-1 rounded-xl py-2.5 text-sm font-medium text-text hover:bg-surface2 aria-[current=page]:bg-accent-soft aria-[current=page]:text-accent-ink"
                         >
                           <Icon name={d.icon} />
                           {d.label}
-                          {tabBadge(id, n, countWords(d.label, n, counts), quietOf(d))}
+                          {tabBadge(id, n, countWords(d.label, n, counts), quietOf(d), failedOf(d.label))}
                         </Link>
                       </li>
                     );
