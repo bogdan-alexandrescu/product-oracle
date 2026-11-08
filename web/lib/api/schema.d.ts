@@ -9748,7 +9748,8 @@ export interface paths {
          * @description Store ``roadmap_items.yaml`` as a roadmap version's items (the file a
          *     ``prd_to_roadmap`` run writes), replacing any it had. Refused (422, with the
          *     problems) on any problem, a date without a verified basis included; an approved
-         *     version's items cannot be replaced (409).
+         *     version's items cannot be replaced (409); nor a history roadmap's, a replaced PRD's
+         *     (409, replaced-prd-history).
          */
         put: operations["import_roadmap_items"];
         post?: never;
@@ -23334,6 +23335,8 @@ export interface components {
              * @default []
              */
             replaces: components["schemas"]["PrdRef"][];
+            /** Read Only */
+            read_only?: string | null;
             /**
              * Changes In Review
              * @default 0

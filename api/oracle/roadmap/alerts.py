@@ -842,7 +842,7 @@ async def inbox_rows(
     # replaced-prd-history: a replaced PRD's tracks are history, in no Inbox row or count.
     from oracle.roadmap import company
 
-    if history := await company.history_track_ids(db):
+    if rows and (history := await company.history_track_ids(db)):
         rows = [a for a in rows if a.track_id not in history]
     if not rows:
         return []

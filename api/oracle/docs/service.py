@@ -454,16 +454,20 @@ async def read_document(db: AsyncSession, doc: str) -> DocumentOut:
         changes_in_review=await simple_drafts.changes_in_review(db, document.id),
         replaced_by=await company.refs(db, await _replaced_by(db, document)),
         replaces=await company.refs(db, await _replaces(db, document)),
+        read_only=await company.read_only(db, document),
     )
 
 
 async def _replaced_by(db: AsyncSession, document: Document) -> list[uuid.UUID]:
-    """The PRDs that replace a PRD, or (replaced-prd-history) the PRD its roadmap was of."""
-    if document.kind == "roadmap":
-        from oracle.roadmap import company
+    """The live PRDs that replace a PRD, or (replaced-prd-history) the PRDs that replaced the
+    PRDs its roadmap was of: empty unless it is read-only history (company.History)."""
+    from oracle.roadmap import company
 
+    if document.kind == "roadmap":
         return (await company.history_roadmaps(db)).get(document.id, [])
-    return list(document.replaced_by or [])
+    if document.kind != "prd" or not document.replaced_by:
+        return []
+    return (await company.history(db)).prds.get(document.id, [])
 
 
 async def _replaces(db: AsyncSession, document: Document) -> list[uuid.UUID]:

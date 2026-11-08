@@ -232,6 +232,9 @@ class DocumentOut(DocumentSummary):
     replaced_by: list[PrdRef] = []
     # replaced-prd-history: the PRDs this one replaced, read-only history linked from it.
     replaces: list[PrdRef] = []
+    # replaced-prd-history: why it takes no edit, approval or publication (a replaced PRD
+    # or its roadmap), in plain words; None when it does.
+    read_only: str | None = None
     # Simple S3b (#723): changes waiting in the document's working draft and its open
     # Simple proposals, as a count (the "changes in review" banner; no details).
     changes_in_review: int = 0

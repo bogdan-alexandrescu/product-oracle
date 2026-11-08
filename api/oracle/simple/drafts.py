@@ -1911,8 +1911,9 @@ async def inbox_rows(
     from oracle.roadmap import company
 
     # replaced-prd-history: a replaced PRD's or its roadmap's draft waits on nobody.
-    history = await company.history_ids(db)
-    submitted = [d for d in submitted if d.document_id not in history]
+    if submitted:
+        history = await company.history_ids(db)
+        submitted = [d for d in submitted if d.document_id not in history]
     w = await who(db, {d.document_id for d in submitted})
     ds = [
         d
