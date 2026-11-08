@@ -29,6 +29,7 @@ import {
   type Column,
 } from "@/components/ds";
 import { codeTagRoom } from "@/components/ds/CodeChip";
+import { LinkedDiscussion } from "@/components/discuss/LinkedDiscussion";
 import { usePhone } from "@/components/ds/page-info";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -154,7 +155,7 @@ function withGoalNames(f: RankedFeature, names: Names | null | undefined): Ranke
 /** A goal with no name: "Unknown goal", its key only in the tooltip. */
 function UnknownGoal({ goal }: { goal: string }) {
   return (
-    <Chip kind="crit" title={`${goal} is not a goal in the Ground Truth`} data-testid="unknown-goal">
+    <Chip kind="crit" title={`${goal} is not a goal of the Ground Truth`} data-testid="unknown-goal">
       Unknown goal
     </Chip>
   );
@@ -1512,6 +1513,7 @@ function Priorities() {
 
   return (
     <Page>
+      <LinkedDiscussion />
       <PageHeader
         title="Priorities"
         status={

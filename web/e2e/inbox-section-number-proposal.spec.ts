@@ -11,10 +11,12 @@ import { expect, test, type Page } from "./test";
  * owns the PRD) proposes 6; Dana Decider, the PRD's decider, decides.
  *
  * Card inbox-section-number-proposal: protects = the decider's Inbox row reads "Section number
- * on Guided setup: Use 6" and as proposed; its Open lands on the one-pager at that PRD section;
- * the side menu's Roadmap count is what it was before the proposal; fails_when = the row reads
- * "An item", Open goes to a roadmap, or the Roadmap count goes up by the proposal; no_claim =
- * the API's row (api tests/test_inbox_section_number_proposals.py).
+ * on Guided setup: Use 6" and as proposed; its Open lands on the one-pager at that section's
+ * "Needs a look" item, showing the proposal with Accept and Decline to the decider, who is no
+ * owner (review, Nov 7); Accept there clears it; the side menu's Roadmap count is what it was
+ * before the proposal; fails_when = the row reads "An item", Open goes to a roadmap, Open lands
+ * where no fix shows, or the Roadmap count goes up by the proposal; no_claim = the API's row
+ * (api tests/test_inbox_section_number_proposals.py).
  */
 
 const DESKTOP = { width: 1440, height: 900 };
@@ -70,11 +72,15 @@ test("a proposed section number reads as one in the Inbox, opens on its section 
   await expect(row.getByTestId("meeting-proposal-context")).toContainText("Proposed setting the number in “Not this quarter” to 6 · asked for by Priya Raman");
   await row.getByRole("link", { name: `Open ${NAME} on its one-pager` }).click();
   await expect(page).toHaveURL(/\/simple\/one-pagers\/[^?]+\?section=later$/);
-  const section = page.locator('[data-prd-sec="later"]');
-  await expect(section).toBeInViewport();
-  await expect(section).toContainText("Eight features wait for next quarter");
+  // The decider is no owner, so reads only this item of "Needs a look": the proposal, with Accept and Decline.
+  const proposal = item(page, COUNT);
+  await expect(proposal).toBeInViewport();
+  await expect(proposal.getByTestId("needs-look-proposal")).toHaveText("Priya Raman proposes 6");
+  await expect(proposal.getByRole("button", { name: "Decline" })).toBeVisible();
   // On the one-pager too, the Roadmap count leaves the proposal out.
   const n = page.getByTestId("simple-nav").getByTestId("simple-nav-roadmap-count");
   if (before) await expect(n).toHaveText(String(before));
   else await expect(n).toHaveCount(0);
+  await proposal.getByRole("button", { name: "Accept" }).click();
+  await expect(item(page, COUNT)).toHaveCount(0);
 });

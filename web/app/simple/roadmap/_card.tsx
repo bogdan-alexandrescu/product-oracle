@@ -26,6 +26,7 @@ import {
   storedDates,
   type Change,
   type Flag,
+  type GoalMilestone,
   type Item,
   yearSpan,
 } from "./_lib";
@@ -808,9 +809,12 @@ export function FloatingCard({
   onOpen,
   onSuggestion,
   focus,
+  milestones,
 }: {
   /** one-feature-panel: opens another feature's own panel (what it depends on, what needs it). */
   onOpen?: (id: string) => void;
+  /** item-milestone: the roadmap read's goal milestones, offered by the panel's Milestone field. */
+  milestones?: readonly GoalMilestone[];
   /** Roadmap-plus: the key dates the item ends within 2 weeks of, in words (none: no line). */
   near?: string | null;
   /** home-waiting-one-list: Oracle's open dates for the item, acted on in the panel. */
@@ -1110,21 +1114,11 @@ export function FloatingCard({
               </button>
             </p>
           )}
-          <PanelFields item={item} items={items} act={act} canChange={canChange} onOpen={onOpen} />
+          <PanelFields item={item} items={items} act={act} canChange={canChange} onOpen={onOpen} milestones={milestones} />
           <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
           {item.slices.length > 0 && (
             <>
-              <dt className="text-text2">Milestone</dt>
-              <dd data-testid="card-milestone">
-                {[
-                  ...new Map(
-                    item.slices.map((x) => [
-                      x.milestone,
-                      `${x.milestone} ${x.milestone_name}`,
-                    ]),
-                  ).values(),
-                ].join(", ")}
-              </dd>
+              {/* item-milestone: the Milestone row is one of the panel's fields (PanelFields), for every item. */}
               <dt className="text-text2">Slices</dt>
               <dd>
                 <ul className="space-y-1" data-testid="card-slices">

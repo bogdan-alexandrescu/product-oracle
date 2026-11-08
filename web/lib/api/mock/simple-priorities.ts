@@ -220,6 +220,16 @@ export function estimates(db: SimpleDb, key: string, itemId: string): { value: n
   };
 }
 
+/**
+ * service.efforts: an item's effort for its estimated start, as estimates reads it, but null for a
+ * feature the mock does not list that no person estimated (the API reads no effort, not 1 week).
+ */
+export function startEffort(db: SimpleDb, key: string, itemId: string): number | null {
+  const base = featureOf(db, key);
+  const estimated = typeof stored(db, itemId).effort === "number" || (base !== key && typeof stored(db, db.ids[base]).effort === "number");
+  return estimated || FEATURES[base] || planFeature(base) ? estimates(db, key, itemId).effort : null;
+}
+
 /** targets.py's `before` of estimate_feature and override_priority, as stored now. */
 export function priorityBefore(db: SimpleDb, key: string, op: string, itemId: string): Values {
   if (op === "estimate_feature") {

@@ -9770,8 +9770,10 @@ export interface paths {
         /**
          * Act On Roadmap Item Staleness
          * @description Settle potentially stale items: ``review`` (under review) or ``reconcile`` (still
-         *     valid, with a reason; re-anchored on the PRD's latest approved version). 409 when no
-         *     item is in a state the action applies to.
+         *     valid, with a reason; re-anchored on the PRD's latest approved version), on the version
+         *     named, else the one the tracks follow (the latest approved with items). 409 when no item
+         *     is in a state the action applies to. The tracks that own the changed items are then
+         *     re-checked, so their alerts follow at once.
          */
         post: operations["act_on_roadmap_item_staleness"];
         delete?: never;
@@ -22640,6 +22642,8 @@ export interface components {
              * @enum {string}
              */
             status: "proposed" | "suggested" | "staged" | "done" | "dismissed" | "superseded";
+            /** Open */
+            open: boolean;
             action?: components["schemas"]["ChangeAction"] | null;
             /**
              * @default {
@@ -24934,6 +24938,20 @@ export interface components {
              * @default {}
              */
             titles: {
+                [key: string]: string;
+            };
+            /**
+             * Requirement Names
+             * @default {}
+             */
+            requirement_names: {
+                [key: string]: string;
+            };
+            /**
+             * Goal Names
+             * @default {}
+             */
+            goal_names: {
                 [key: string]: string;
             };
         };
@@ -38349,6 +38367,13 @@ export interface components {
              */
             depends_on: string[];
             /**
+             * Depends Titles
+             * @default {}
+             */
+            depends_titles: {
+                [key: string]: string;
+            };
+            /**
              * Validation Gates
              * @default []
              */
@@ -42352,6 +42377,8 @@ export interface components {
             record_name?: string | null;
             /** Start Date */
             start_date?: string | null;
+            /** Id */
+            id?: string | null;
         };
         /**
          * SimpleItemTask

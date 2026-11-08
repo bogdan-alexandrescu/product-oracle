@@ -41,6 +41,7 @@ import {
   RESEARCH_UNSAFE_LINK_SCENARIO,
   routeDiscussions,
   seedDiscussionInbox,
+  seedIntakeDiscussion,
   seedDiscussionReplies,
   seedDiscussions,
   seedDiscussionRecord,
@@ -104,7 +105,7 @@ import { routeFirefliesBrowse } from "./fireflies";
 import { liveReply, routeLive } from "./live";
 import { sourceBrowseRoute } from "./source-browse";
 import { DRAFT_NEW_ITEMS_SCENARIO, itemsChangedSince, routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
-import { BEFORE_DRAFTING, intakeReadInbox, LATE_ANSWER_WITHHELD, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, seedReadFailedTwice, startedIntakeRun, type IntakeContext, type SubjectLookup } from "./intake";
+import { BEFORE_DRAFTING, gapCategoryLabel, intakeReadInbox, LATE_ANSWER_WITHHELD, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, seedReadFailedTwice, startedIntakeRun, type IntakeContext, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, REPORT_DRAFT_ITEM, REPORT_DRAFT_ITEM_SCENARIO, REPORT_PRD_MOVED_SCENARIO, reportsRoute, type LiveTracks, type ReportsDb } from "./reports";
 import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
 import { addDigest, addMetricsReview, ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
@@ -179,14 +180,14 @@ import { runGroupsOut } from "./simple-runs";
 import { roadmapRead } from "./roadmap-read";
 import { questionInboxRows } from "./simple-questions";
 import { rebuildsOut } from "./rebuilds";
-import { onePagerInboxRows, onePagerProposalsOut, planSlice, prdOnePager, routeOnePager, seedHeadingCountOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { onePagerInboxRows, onePagerProposalsOut, planSlice, prdOnePager, routeOnePager, seedHeadingCountOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedTwoCountsOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { approvalItems, CANCELLED_DRAFT, draftAct, draftPrdsOut, REPLACED_DRAFT, SAVED_CARTS, seedDraftPrd, seedMeetingDraftDates, WORKSPACES, WORKSPACES_DRAFT } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, seedTwoDependencies, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { groundTruthCheck, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth } from "./ground-truth";
-import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
+import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, ITEM_MILESTONE_SCENARIO, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap, seedItemMilestones } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { knowPrdOrder } from "./prd-rank";
@@ -570,6 +571,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * problem (C6, saved-addresses);
  * "feature-set-two" as "feature-set" with a second blocking problem of the same code on the same
  * feature (each waived on its own, with its own reason);
+ * "feature-set-names" as "feature-set" with problems naming a requirement, a goal and a feature whose
+ * key holds a non-ASCII letter (each named in the gate's rows, never by its key);
  * "scope-review" as the default company plus three runs at their feature set (C7: attempt 1
  * with three rows that need a person, attempt 2, and a held console approval);
  * "scope-review-kept" as "scope-review" with the held run's Bulk edit also new and a likely
@@ -2337,9 +2340,9 @@ function seedRunReviewDecider(): Db {
 }
 
 /** The default seed plus a run waiting at its feature set with a blocking problem (C6, ./runs.ts). */
-function seedFeatureSet(twoOfOne = false): Db {
+function seedFeatureSet(twoOfOne = false, named = false): Db {
   const db = seed();
-  seeded(twoOfOne ? "feature-set-two" : "feature-set", () => seedFeatureSetRun(db.runs!, runsContext(db), twoOfOne));
+  seeded(named ? "feature-set-names" : twoOfOne ? "feature-set-two" : "feature-set", () => seedFeatureSetRun(db.runs!, runsContext(db), twoOfOne, named));
   return db;
 }
 
@@ -3832,6 +3835,8 @@ function load(): Db {
             ? () => seedFeatureSet()
           : scenario === "feature-set-two"
             ? () => seedFeatureSet(true)
+          : scenario === "feature-set-names"
+            ? () => seedFeatureSet(false, true)
           : scenario === "baseline-review" || scenario === "baseline-review-console"
             ? () => seedBaselineReview(scenario === "baseline-review-console")
           : scenario === "simple-waits"
@@ -4179,6 +4184,13 @@ function load(): Db {
                     db.simple_roadmap!.goal_milestones = seedOldMilestones(OLD_ROADMAP[0]);
                     return db;
                   }
+              : scenario === ITEM_MILESTONE_SCENARIO
+                ? () => {
+                    // item-milestone: both area PRDs' milestones, each one a feature can be placed in.
+                    const db = seedOneRoadmapScenario();
+                    db.simple_roadmap!.goal_milestones = seedItemMilestones();
+                    return db;
+                  }
               : scenario === TRACKS_CLOSED_SCENARIO
                 ? seedTracksClosedScenario
               : scenario === "simple-500"
@@ -4280,7 +4292,9 @@ function load(): Db {
             ? seedRunDiscussionsScenario(db)
             : scenario === "discussion-record"
               ? seedDiscussionRecordScenario(db)
-              : scenario === "discussion-change-kinds"
+              : scenario === "discussion-intake"
+                ? seedIntakeDiscussion({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, ensureV2(db).intakes[0])
+                : scenario === "discussion-change-kinds"
                 ? seedDiscussionChangeKindsScenario(db)
                 : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
@@ -4628,10 +4642,35 @@ function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): Su
     return { key: `run_item:${run.id}:${cp.kind}:${s.item_key}`, label: `${label} · ${s.item_key}`, url: `/runs/${run.id}`, run_id: run.id };
   }
   if (kind === "priorities") return { key: "priorities", label: "Priority order", url: "/priorities" };
+  // An intake and its gaps open on the intake's page; a PRD's own gap on its newest version (as Labels.of).
+  if (kind === "intake") {
+    const intake = ensureV2(db).intakes.find((i) => i.id === s.intake_id);
+    if (!intake) return { status: 404, detail: "Intake not found" };
+    return { key: `intake:${intake.id}`, label: intake.title, url: `/intakes/${intake.id}` };
+  }
+  if (kind === "gap") {
+    const gap = ensureV2(db).gaps.find((g) => g.id === s.gap_id);
+    if (!gap) return { status: 404, detail: "Gap not found" };
+    const label = `${gapCategoryLabel(gap.category)} gap`;
+    if (gap.intake_id) return { key: `gap:${gap.id}`, label, url: `/intakes/${gap.intake_id}` };
+    const doc = gap.document_id ? findDocument(db, gap.document_id) : undefined;
+    const newest = doc ? docVersions(db, doc).pop() : undefined;
+    if (!doc || !newest) return { status: 404, detail: "Gap not found" };
+    return { key: `gap:${gap.id}`, label, url: `/documents/${doc.slug}/v/${newest.number}` };
+  }
   // ask-page-context: the page's own name, as the API (Labels.of).
   if (kind === "screen") return { key: `screen:${s.path}`, label: (s.view as { name?: string } | undefined)?.name || screenPageName(String(s.path)), url: String(s.path) };
   const id = Object.values(s)[0];
   return { key: `${kind}:${id}`, label: kind.replace("_", " "), url: "/" };
+}
+
+/** As service.Labels.gone: a discussion whose subject's row is missing (deleted); its page opens no thread. */
+function discussionGone(db: Db, d: DiscussionRow): boolean {
+  const s = d.subject as Record<string, unknown>;
+  if (["document", "section", "roadmap_item"].includes(d.subject_kind)) return !findDocument(db, String(s.document_id));
+  if (d.subject_kind === "checkpoint" || d.subject_kind === "checkpoint_item") return !db.runs?.runs.some((r) => r.id === s.run_id);
+  if (d.subject_kind === "intake" || d.subject_kind === "gap") return "status" in discussionSubject(db, d.subject_kind, s);
+  return false;
 }
 
 /** D13: a "general" item on the whole draft, raised on `v` by `authorId` (as create_general_feedback). */
@@ -6465,13 +6504,16 @@ async function onePagerOf(db: Db, req: Request, p: string[]): Promise<OnePagerDb
   const all = [seeded, ...Object.values(others)];
   const forDoc = (ref: unknown): OnePagerDb | undefined => {
     const known = all.find((o) => o.doc.id === ref || o.doc.slug === ref);
-    if (known) return known;
     const d = db.documents.find((x) => x.kind === "prd" && (x.slug === ref || x.id === ref));
-    if (!d) return undefined;
     // qa4-simple-prd-3/9: as one_pager.published, the version read is the PRD's own latest approved
     // one, else its latest, dated by its approval (none: never published).
-    const vs = docVersions(db, d);
+    const vs = d ? docVersions(db, d) : [];
     const read = [...vs].reverse().find((x) => x.approved_at) ?? vs.at(-1);
+    // Fidelity "Separate Approve step": a page built before a newer version was approved is built
+    // again from that version, as the API reads it on every request (never the one it was first built from).
+    const stale = !!known && known !== seeded && !!d && !!read && read.number > known.version;
+    if (known && !stale) return known;
+    if (!d) return undefined;
     // C-13, vqa B-13: every PRD but the seed reads its own sections (one_pager.extract), never a copy
     // of Guided setup's; a PRD with no version yet reads none of them (every block "missing").
     const cites = Object.fromEntries((read?.citations ?? []).map((c) => [c.cite_key, { title: c.title ?? null, excerpt: c.excerpt ?? null }]));
@@ -7428,6 +7470,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     ? seedNotInPrdOnePager()
     : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-heading-count"
     ? seedHeadingCountOnePager()
+    : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-two-counts"
+    ? seedTwoCountsOnePager()
     : seedOnePager(localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-no-owner");
   // Simple S10: the visuals the one-pager, the roadmap and the priorities show.
   db.simple_visuals ??= seedVisuals();
@@ -8000,7 +8044,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     // F2: the track group (the track's owner, else every owner); its new and open alerts count.
     const tracked = inboxTracks(roadmapCtx, db.roadmap, seenBefore);
     // G6: invitations, mentions and changes proposed in discussions; new and open ones count.
-    const discussions = discussionInboxRows(db.discussions ?? emptyDiscussions(), db.members, me, seenBefore);
+    const discussions = discussionInboxRows(db.discussions ?? emptyDiscussions(), db.members, me, seenBefore, (d) => discussionGone(db, d));
     const discussing = discussions.filter((r) => r.state !== "done").length;
     // A5: pending access requests, for owners and approvers; each counts.
     const accessRequestRows = inboxAccessRequests(db, me);
@@ -8577,8 +8621,10 @@ export async function mockFetch(req: Request): Promise<Response> {
     const db = load();
     const marks = db.webhooks?.hooks.length ? runMarks(db.runs?.runs) : null;
     // simple-roadmap-500-paint: the roadmap and its waiting counts read the 500 items once while
-    // the roadmap's data is the same; every other call reads afresh.
-    const roadmapRead = req.method === "GET" && (url.pathname === "/v1/simple/roadmap" || url.pathname === "/v1/simple/roadmap/waiting");
+    // the roadmap's data is the same; every other call reads afresh. The side menu's waiting list
+    // (read first, ahead of the roadmap) reads the roadmap too, so it shares the same build.
+    const roadmapRead =
+      req.method === "GET" && (url.pathname === "/v1/simple/roadmap" || url.pathname === "/v1/simple/roadmap/waiting" || url.pathname === "/v1/simple/decisions/waiting");
     if (req.method !== "GET") forgetRoadmapReads();
     roadmapReadsAt(roadmapRead);
     let res = await route(db, req);

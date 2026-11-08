@@ -100,6 +100,31 @@ CASES = {
             '"\\n" * n',
         ],
     ),
+    # A goal code in brackets after its own name (oracle.export.render, X-8 with G-3): the
+    # opening bracket's pattern, on any text, and the goal names it serves.
+    "bracket_opens": (
+        "from oracle.export.render import _BRACKET_OPENS",
+        "_BRACKET_OPENS.search(s)",
+        [
+            '"_" * n + "x"',
+            '"*" * n + " x"',
+            '" " * n + "x"',
+            '"_ (" * (n // 3) + "x"',
+            '"(" + " " * n + "x"',
+            '"( *" * (n // 3) + "x"',
+        ],
+    ),
+    "goal_names": (
+        "from oracle.export.render import with_goal_names",
+        'with_goal_names(s, {"G1": "Activation"})',
+        [
+            '"G1 " * (n // 3)',
+            '"Activation (G1) " * (n // 16)',
+            '"_" * n + " (G1)"',
+            '"G1" + " " * n',
+            '"x (G1" * (n // 5)',
+        ],
+    ),
 }
 
 
@@ -122,6 +147,7 @@ def cpu_seconds(setup: str, call: str, make: str, n: int) -> float:
 @pytest.mark.parametrize(
     "name,make", [(name, make) for name, (_, _, makes) in CASES.items() for make in makes]
 )
+@pytest.mark.timing  # a CPU budget: runs alone in the api-timing job
 def test_adversarial_input_runs_in_linear_time(name, make, n):
     setup, call, _ = CASES[name]
     assert cpu_seconds(setup, call, make, n) < CPU_LIMIT

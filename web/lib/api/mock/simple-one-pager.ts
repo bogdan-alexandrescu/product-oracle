@@ -29,7 +29,7 @@ import { companyDayIso } from "./connections";
 import { draftDecisionNotes, leftOut } from "./decision-notes";
 import { stableUuid } from "./ids";
 import { changePhrase, changeSentence } from "./simple-change-words";
-import { annotate, resolved, setNumber, type Cites } from "./one-pager-checks";
+import { annotate, asWritten, resolved, setNumber, type Cites } from "./one-pager-checks";
 import { roadmapOut } from "./simple-roadmap";
 import { betSubject, flowFor, onePagerFlow, requestVisual, type VisualsDb } from "./simple-visuals";
 import { madeOrder } from "./made-order";
@@ -276,6 +276,28 @@ export function seedHeadingCountOnePager(): OnePagerDb {
   const later = db.sections.find((x) => x.key === "later")!;
   later.heading = "Later · 8 items";
   later.body = later.body.replace(/^Eight features wait for next quarter\.\n\n/, "");
+  return db;
+}
+
+/**
+ * The "one-pager-two-counts" scenario (review, Nov 7): two numbers to fix in one section, the
+ * heading's "Later · 8 items" over six listed and "Five features wait for next quarter" under
+ * it, so the section takes two fixes, each with its own Undo; its targets in decimals ("300.5"
+ * per region, "1,250.75" company-wide), whose fix keeps them as written, and two whose sums
+ * read as a person writes them ("0.3", "1,234,567.5"), and one whose sum ends in an exact half
+ * past the 6th place ("3.0078125"), which rounds up as the API's does. Invented data.
+ */
+export function seedTwoCountsOnePager(): OnePagerDb {
+  const db = seedHeadingCountOnePager();
+  const later = db.sections.find((x) => x.key === "later")!;
+  later.body = `Five features wait for next quarter.\n\n${later.body}`;
+  const targets = db.sections.find((x) => x.key === "targets")!;
+  targets.body = [
+    "Each region adds 300.5 paid workspaces a month. Each region also adds 246913.5 trial seats.",
+    "Each team saves 0.1 support hours a week. We sell in 5 regions. We have 3 teams.",
+    "Each squad trims 1.50390625 setup minutes a day. We run 2 squads.",
+    "Company-wide target: 1,250.75 paid workspaces a month, 1,000,000 trial seats, 2 support hours a week and 3 setup minutes a day.",
+  ].join(" ");
   return db;
 }
 
@@ -834,6 +856,27 @@ function numberConflict(db: OnePagerDb, ctx: OnePagerCtx, key: string, sees: boo
   return json(409, { detail: { message: by ? `Changed by ${by.name}` : message, current: { section: key, heading: headingNow(db, key, sees), body: sectionNow(db, key, sees) }, changed_by: by, changed_at: last?.at ?? null } });
 }
 
+/** As one_pager._number_undone: the section and its lines as now, with only `c`'s number put back (either of two fixes in one section undoes); null when that number is gone. */
+function numberUndone(c: Change, now: ReturnType<typeof numberValues>): Record<string, unknown> | null {
+  if (held(now) === held(c.after)) return { sections: c.before.sections ?? {}, lines: c.before.lines ?? {} };
+  const key = String(c.target.section), part = (c.target.part ?? "body") as "body" | "heading";
+  const [first, ...rest] = spaces(String(c.target.said)).split(" ");
+  const was = String(c.before.number ?? first);
+  const said = [asWritten(first, String(c.after.number ?? "")), ...rest].join(" ");
+  const sec = { ...now.sections[key] };
+  const put = setNumber(sec[part], said, was);
+  if (put === null) return null;
+  sec[part] = put;
+  const [setBefore, setAfter] = [(c.before.lines ?? {}) as Record<string, string>, (c.after.lines ?? {}) as Record<string, string>];
+  const lines = Object.fromEntries(Object.entries(now.lines).map(([i, x]) => [i, setBefore[i] !== setAfter[i] ? (setNumber(x, said, was) ?? x) : x]));
+  return { sections: { [key]: sec }, lines };
+}
+
+/** Python's str.split() with no argument: as one_pager._create_number collapses the spaces of `said` (" ".join(said.split())), no more. */
+function spaces(s: string): string {
+  return s.split(/[\t\n\v\f\r\x1c-\x1f \x85\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+/).filter(Boolean).join(" ");
+}
+
 function writeNumber(db: OnePagerDb, ctx: OnePagerCtx, values: Record<string, unknown>) {
   db.draft ??= { id: stableUuid(`simple-one-pager-draft-${db.doc.id}-${mockNowMs()}`), base: db.version, participants: [], lines: {}, sections: {} };
   if (!db.draft.participants.includes(ctx.id)) db.draft.participants.push(ctx.id);
@@ -1046,7 +1089,8 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     // PRD's numbers and codes to look at; owners also read the checks a held build failed.
     fixed,
     needs_look: [
-      ...(ctx.role === "owner" || (ctx.trackOwners ?? []).includes(ctx.id) || (!!owner && ctx.id === owner) ? looks : []),
+      // Who is no owner reads only the items holding a proposal of theirs or one they decide (the Inbox's Open lands there).
+      ...(ctx.role === "owner" || (ctx.trackOwners ?? []).includes(ctx.id) || (!!owner && ctx.id === owner) ? looks : looks.filter((x) => !!x.fix?.proposal)),
       ...(held ? held.checks.map((text) => ({ kind: "check", text, where: [], source_keys: [] })) : []),
     ],
   };
@@ -1138,6 +1182,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     const heads = Object.fromEntries(db.sections.map((s) => [s.key, s.heading]));
     const patched = keys.map((k, i) => patch(sectionNow(db, k, sees), cur, next, i === 0));
     if (patched.some((x) => x === null)) return json(409, { detail: "Oracle could not find this line's words in its sections; open the detailed view to edit them" });
+    if (decides(ctx) && inReview(db)) return json(409, { detail: IN_REVIEW });
     const before = { line: cur, sections: Object.fromEntries(keys.map((k) => [k, { heading: heads[k], body: sectionNow(db, k, sees) }])) };
     const after = { line: next, sections: Object.fromEntries(keys.map((k, i) => [k, { heading: heads[k], body: patched[i]! }])) };
     const applies = decides(ctx);
@@ -1173,6 +1218,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
       c.draft_ids = [db.draft!.id];
     } else if (p[4] === "accept") {
       if (lineNow(db, lineId) !== c.before.line) return json(409, { detail: { message: "outdated: the line or its sections changed since the proposal", current: { line: lineNow(db, lineId) }, changed_by: null, changed_at: null } });
+      if (inReview(db)) return json(409, { detail: IN_REVIEW });
       write(db, ctx, lineId, c.after);
       c.draft_ids = [db.draft!.id];
     }
@@ -1196,21 +1242,30 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     if (db.changes.some((u) => u.undoes_id === c.id)) return json(409, { detail: "This change is undone already" });
     if (c.op === NUMBER_OP) {
       const key = String(c.target.section);
-      if (held(numberValues(db, key, true)) !== held(c.after)) return numberConflict(db, ctx, key, true, "Changed since");
-      writeNumber(db, ctx, c.before);
-    } else write(db, ctx, String(c.target.line_id), c.before);
-    const u = { ...c, id: stableUuid(`op-undo-${c.id}`), status: "undone" as const, before: c.after, after: c.before, undoes_id: c.id, at: new Date(mockNowMs()).toISOString() };
-    db.changes.push(u);
-    return json(201, { change: out(db, ctx, u), flags: [] });
+      const now = numberValues(db, key, true);
+      const back = numberUndone(c, now);
+      if (!back) return numberConflict(db, ctx, key, true, "Changed since");
+      writeNumber(db, ctx, back);
+      return undone(db, ctx, c, { ...now, number: c.after.number }, { ...back, number: c.before.number });
+    }
+    write(db, ctx, String(c.target.line_id), c.before);
+    return undone(db, ctx, c, c.after, c.before);
   }
   return null;
+}
+
+/** As one_pager.undo: the undo of `c`, written already, recorded as its own change (`before`: what it found, `after`: what it put back). */
+function undone(db: OnePagerDb, ctx: OnePagerCtx, c: OnePagerDb["changes"][number], before: Change["before"], after: Change["after"]): Response {
+  const u = { ...c, id: stableUuid(`op-undo-${c.id}`), status: "undone" as const, before, after, undoes_id: c.id, at: new Date(mockNowMs()).toISOString() };
+  db.changes.push(u);
+  return json(201, { change: out(db, ctx, u), flags: [] });
 }
 
 /** As one_pager._create_number: the number in the words `said` of one section set, with the lines saying the same words. */
 function createNumber(db: OnePagerDb, ctx: OnePagerCtx, b: Record<string, unknown>): Response {
   const t = (b.target ?? {}) as Record<string, string>;
   if (t.document_id !== db.doc.id) return json(404, { detail: "No such PRD" });
-  const key = String(t.section ?? ""), said = plain(String(t.said ?? ""));
+  const key = String(t.section ?? ""), said = spaces(String(t.said ?? ""));
   const part = (t.part ?? "body") as "body" | "heading";
   const old = String(((b.before ?? {}) as Record<string, unknown>).number ?? "").trim();
   const next = String(((b.after ?? {}) as Record<string, unknown>).number ?? "").trim();

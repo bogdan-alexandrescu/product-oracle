@@ -284,7 +284,8 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   const prd = usePrdSections(q.data?.document.slug ?? null, q.data?.version ?? 0);
   // inbox-meeting-proposals fix: ?line= (the Inbox's Open on a proposed wording) shows the
   // lines and lands on that one, once the page is read; ?section= (its Open on a proposed
-  // number fix, PR 1320 re-review) on that section of the whole PRD under the page, once read.
+  // number fix, PR 1320 re-review) on that section of the whole PRD under the page, once read;
+  // on its "Needs a look" item instead when that holds the proposal, Accept and Decline there.
   const pageRead = !!q.data;
   const landed = useRef(false);
   useEffect(() => {
@@ -297,7 +298,14 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   const prdRead = prd.sections.length > 0;
   useEffect(() => {
     const section = new URLSearchParams(window.location.search).get("section");
-    if (!pageRead || !prdRead || landed.current || !section || sessionId) return;
+    if (!pageRead || landed.current || !section || sessionId) return;
+    const proposed = document.querySelector(`[data-look-proposal="${CSS.escape(section)}"]`);
+    if (proposed) {
+      landed.current = true;
+      requestAnimationFrame(() => proposed.scrollIntoView({ block: "center" }));
+      return;
+    }
+    if (!prdRead) return;
     landed.current = true;
     requestAnimationFrame(() => document.getElementById(`prd-sec-${section}`)?.scrollIntoView({ block: "start" }));
   }, [pageRead, prdRead, sessionId]);
@@ -996,6 +1004,15 @@ function PrdHeader({ v, plan, summary, phone, draft, actions, inMeeting = false,
   // once its second step approves the PRD it reads Approved.
   const [run, setRun] = useState<"waiting" | "done" | null>(null);
   const latestApproved = summary?.latest_version != null && summary.approved_version === summary.latest_version && summary.status === "approved";
+  // Fidelity "Separate Approve step": while a run's review (or the PRD's approval after it) is on
+  // this screen, every line names the version under review, dated by its own day, not the last published one.
+  const reviewed = run && summary?.latest_version != null && summary.latest_version !== v.version ? summary.latest_version : null;
+  const reviewedQ = useQuery(`simple-prd-reviewed|${v.document.slug}|${reviewed ?? "none"}`, () =>
+    reviewed != null ? unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc: v.document.slug, n: reviewed } } })).catch(() => null) : Promise.resolve(null),
+  );
+  const shownVersion = reviewed ?? v.version;
+  const reviewedAt = reviewedQ.data?.approved_at ?? reviewedQ.data?.created_at ?? null;
+  const shownDay = reviewed != null ? (reviewedAt ? dmy(reviewedAt.slice(0, 10)) : null) : published;
   const approved = run === "done" || (run !== "waiting" && ((!!published && (!summary || !!summary.approved_version || summary.status === "approved")) || latestApproved));
   // qa-simple-prd-47: separators at the meta line's own 4.5:1 colour.
   const sep = phone ? null : <span aria-hidden className="text-text2">·</span>;
@@ -1028,7 +1045,7 @@ function PrdHeader({ v, plan, summary, phone, draft, actions, inMeeting = false,
         {/* qa-simple-prd-p3-16: never approved, it shows the status the list shows ("In review", "Draft"). */}
         {!approved && run === "waiting" && <span data-testid="one-pager-status"><DocStatusChip status="in_review" dot /></span>}
         {!approved && run !== "waiting" && summary && <span data-testid="one-pager-status"><PrdStatus d={summary} /></span>}
-        <span>{phone && plan ? `v${v.version}` : `Version ${v.version}`}{published ? ` · ${published}` : ""}</span>
+        <span>{phone && plan ? `v${shownVersion}` : `Version ${shownVersion}`}{shownDay ? ` · ${shownDay}` : ""}</span>
         {sep}
         {v.owner ? <span>Owner <b className="font-[650] text-text">{v.owner.name}</b></span> : <span>No owner yet</span>}
         {!plan && v.decider && (
@@ -1230,7 +1247,7 @@ export function NeedsALook({ items, blocks = [], sections = [], doc, version, co
           const code = codeOf(x);
           const name = code ? codeNames?.get(code) : undefined;
           return (
-            <li key={i} data-kind={x.kind} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <li key={i} data-kind={x.kind} data-look-proposal={x.fix?.proposal ? String(x.fix.target.section ?? "") : undefined} className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span data-testid="needs-look-line">{line}</span>
               {line !== x.text && (
                 <InfoTip label={line} align="start">

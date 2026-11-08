@@ -156,6 +156,8 @@ const CATEGORIES: [Category, string, Importance, Impact[], string, string[]][] =
   ["configurability_scaling", "Configurability and scaling", "low", ["feasibility", "economics"], "What scale must this handle, and what must be configurable?", ["scaling.operations"]],
 ];
 const LABEL = Object.fromEntries(CATEGORIES.map((c) => [c[0], c[1]])) as Record<Category, string>;
+/** A gap category's name (oracle.intake.categories' label), or the key for an unknown one. */
+export const gapCategoryLabel = (key: string): string => LABEL[key as Category] ?? key;
 const IMPACT_WEIGHT: Record<Impact, number> = { goals: 3, feasibility: 3, scope: 2, economics: 2, risks: 2, module_selection: 1 };
 const IMPORTANCE_WEIGHT: Record<Importance, number> = { critical: 4, high: 3, medium: 2, low: 1 };
 const KNOWN: Record<Gap["knowledge_state"], number> = { unknown: 0, hypothesis: 0.1, ai_inference: 0.4, user_decision: 1, verified_fact: 1 };

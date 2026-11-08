@@ -980,21 +980,17 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
   );
 }
 
-/** The agenda shows this many questions before "N more: <codes>". */
-const AGENDA_FIRST = 4;
-
-
 /**
  * prd-questions, kept to the owner's pick A (frame A3): the Decisions step's "On the agenda":
  * the PRD's open questions due by the end of the milestone the soonest one blocks, whoever
- * decides them, soonest first ("Due by Fri Nov 13 · 8 decisions · from <PRD> draft 3"), the
- * first four and "N more: <codes>". Decide passes the meeting's session_id so the decision
- * lands in its minutes; a question decided here stays on the list with Undo.
+ * decides them, soonest first ("Due by Fri Nov 13 · 8 decisions · from <PRD> draft 3"), every one
+ * listed (pick "Waiting for you + agenda"). Another person's decision reads "<name> decides" with
+ * "Decide for <name>" as a secondary button, as on Decisions. Decide passes the meeting's
+ * session_id so the decision lands in its minutes; a question decided here stays on the list with Undo.
  */
 function DecisionsDue({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }) {
   const zone = useCompanyZone();
   const actions = useQuestionActions(reload, m.session_id);
-  const [all, setAll] = useState(false);
   const due = m.decisions_due ?? [];
   const source = sourceName(due);
   const by = due
@@ -1002,7 +998,6 @@ function DecisionsDue({ m, reload }: { m: Meeting; reload: () => Promise<unknown
     .filter((d): d is string => !!d)
     .sort()
     .at(-1);
-  const rest = due.slice(AGENDA_FIRST);
   return (
     <section aria-label="On the agenda" data-testid="decisions-due" className="simple-card">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -1017,15 +1012,10 @@ function DecisionsDue({ m, reload }: { m: Meeting; reload: () => Promise<unknown
         <p className="simple-meta">No decision is due.</p>
       ) : (
         <ul>
-          {(all ? due : due.slice(0, AGENDA_FIRST)).map((q) => (
-            <QuestionRow key={q.id} q={q} mode="due" actions={actions} />
+          {due.map((q) => (
+            <QuestionRow key={q.id} q={q} mode="due" actions={actions} forOthers />
           ))}
         </ul>
-      )}
-      {!all && rest.length > 0 && (
-        <button type="button" className="simple-more" onClick={() => setAll(true)}>
-          {rest.length} more: {rest.map((q) => q.code).join(", ")}
-        </button>
       )}
     </section>
   );
