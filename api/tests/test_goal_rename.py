@@ -13,6 +13,13 @@ Test cards (protects / fails_when / no_claim):
   nothing changes; fails_when=a viewer renames a goal.
 - test_import_writes_goal_names_without_placeholders: protects=a goal imported with "[n]"
   in its name or description is written without it; fails_when="[n]" is stored.
+- test_a_goal_stored_with_a_placeholder_reads_without_it: protects=a goal whose name and
+  description were stored with "[n]" before the guard reads without it in the goal list
+  (Home's proposed goals) while the graph keeps the stored text (the rename form starts
+  from it); fails_when="[n]" is read in the list or the graph loses the stored text.
+- test_a_blank_goal_name_is_refused: protects=a goal's name is stripped, and a blank or
+  whitespace name is refused in plain words (422) on create and rename; fails_when=a blank
+  name is stored or the padding is kept.
 - test_without_placeholders: protects=the placeholder guard drops "[n]", "[n] of [n]",
   "[X]" and "[TBD]" and tidies the spaces; fails_when=a placeholder or a double space is
   left; no_claim=placeholders without square brackets.
@@ -142,6 +149,52 @@ async def test_an_agent_update_drops_placeholders(client, ctx):
     async with tenant_session(ctx.tenant_id) as s:
         row = await s.get(Entity, goal["id"])
         assert row.title == "KR 3.1 Pages load in seconds"
+
+
+async def test_a_goal_stored_with_a_placeholder_reads_without_it(client, ctx):
+    goal = await entity(client, ctx, type="goal", key="kr-helpers", title="KR 4.1 Helpers")
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(Entity, goal["id"])
+        row.title = "KR 4.1 [n] of [n] live helpers by March"
+        row.body = "Reach [n] live helpers."
+        await s.commit()
+    listed = {
+        e["key"]: e
+        for e in (
+            await client.get(f"{B}/entities", params={"type": "goal"}, headers=ctx.as_("viewer"))
+        ).json()
+    }
+    assert listed["kr-helpers"]["title"] == "KR 4.1 live helpers by March"
+    assert listed["kr-helpers"]["body"] == "Reach live helpers."
+    graph = (await client.get(f"{B}/graph", headers=ctx.as_("owner"))).json()
+    stored = next(e for e in graph["entities"] if e["key"] == "kr-helpers")
+    assert stored["title"] == "KR 4.1 [n] of [n] live helpers by March"
+
+
+async def test_a_blank_goal_name_is_refused(client, ctx):
+    goal = await entity(client, ctx, type="goal", key="kr-signups", title="KR 5.1 Sign-ups")
+    resp = await client.patch(
+        f"{B}/entities/{goal['id']}",
+        json={"title": "   ", "origin": "user"},
+        headers=ctx.as_("owner"),
+    )
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["detail"] == "A goal needs a name"
+    resp = await client.patch(
+        f"{B}/entities/{goal['id']}",
+        json={"title": "  KR 5.1 More sign-ups  ", "origin": "user"},
+        headers=ctx.as_("owner"),
+    )
+    assert resp.status_code == 200, resp.text
+    async with tenant_session(ctx.tenant_id) as s:
+        assert (await s.get(Entity, goal["id"])).title == "KR 5.1 More sign-ups"
+    resp = await client.post(
+        f"{B}/entities",
+        json={"type": "goal", "key": "kr-blank", "title": " \t ", "origin": "user"},
+        headers=ctx.as_("owner"),
+    )
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["detail"] == "A goal needs a name"
 
 
 def test_without_placeholders():
