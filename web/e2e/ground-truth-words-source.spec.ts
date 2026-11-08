@@ -12,14 +12,15 @@ import { expect, test } from "./test";
  * in a form or an empty state the walk does not open. Reads every string literal, template
  * piece and JSX text (comments aside), every string of the mock's JSON data, and every line of
  * the API's export and email templates (api/oracle's .j2 and .html, Jinja tags aside: the PDF,
- * deck and public roadmap exports, the invite emails), and every string the export builders in
- * Python write (api/oracle/export's .py: the PDF's render.py, the deck; docstrings, comments and
- * raw-string patterns aside), and the other Python that renders shown text (RENDERERS: the shared
- * page's render.py and public.py, the public roadmap page, the invite and minutes emails). And
- * no spec in web/e2e expects a page to say one: the strings given to toHaveText, toContainText,
- * getByText and a role's `name:` (test titles, comments and checks that a text is gone aside).
- * fails_when = a label such as "change it in Baseline" or "Detailed › Baseline" is left, or a
- * spec still waits for "Baseline to PRD".
+ * deck and public roadmap exports, the invite emails), and every string of the Python that writes
+ * shown text, found by itself, none listed by hand (shownModules: each api/oracle module that
+ * renders HTML, email or chat, and the modules of its own package it imports; docstrings,
+ * comments, raw-string patterns, log calls and the LLM's prompts aside). And no spec in web/e2e
+ * expects a page to say one: the strings given to toHaveText, toContainText, getByText and a
+ * role's `name:` (test titles, comments and checks that a text is gone aside).
+ * fails_when = a label such as "change it in Baseline" or "Detailed › Baseline" is left, a
+ * renderer (a brand-new one too) writes "Read from the Baseline", or a spec still waits for
+ * "Baseline to PRD".
  *
  * What may still say baseline: an id by its shape (one lowercase word, or joined to "_ / . : -":
  * "baseline", "/baseline", "baseline-tab"), and a measure's starting value: "Baseline value",
@@ -179,75 +180,244 @@ function templateOldNames(rel: string, text: string): string[] {
   return lines.flatMap((line, i) => (saysOld(rel, line) ? [`${rel}:${i + 1}: ${line.trim().slice(0, 120)}`] : []));
 }
 
-const EXPORT = path.join(API, "export");
 
 /** A Python comment, or a string's prefix and opening quote. */
 const PY_TOKEN = /#[^\n]*|(?<!\w)([rRbBuUfF]{0,2})("""|'''|"|')/g;
 
-/**
- * Every string of the Python file ``text`` a person can read, as [line, text]: an f-string's
- * {…} reads "{}"; docstrings (a string alone after a "…:" line or at the top), comments, raw
- * strings (patterns) and bytes are left out.
- */
-function pythonStrings(text: string): [number, string][] {
-  const out: [number, string][] = [];
-  const lineAt = (i: number) => text.slice(0, i).split("\n").length;
+/** A Python string (``body`` its text) or comment (``body`` null): where it starts and ends, its prefix, and whether it is a docstring. */
+type PyToken = { at: number; end: number; prefix: string; body: string | null; doc: boolean };
+
+/** Where each line of ``text`` starts, in order. */
+function lineStarts(text: string): number[] {
+  const starts = [0];
+  for (let i = text.indexOf("\n"); i >= 0; i = text.indexOf("\n", i + 1)) starts.push(i + 1);
+  return starts;
+}
+
+/** The line (from 1) of the offset ``at``, by its file's ``starts``. */
+function lineOf(starts: number[], at: number): number {
+  let lo = 0;
+  let hi = starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (starts[mid] <= at) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo + 1;
+}
+
+/** Every string and comment of the Python file ``text``, in one pass. */
+function pythonTokens(text: string): PyToken[] {
+  const out: PyToken[] = [];
+  const re = new RegExp(PY_TOKEN.source, "g");
+  // The last line above the one being read that holds code (its comment aside), and where reading stopped.
+  let above = "";
+  let scanned = 0;
   let m: RegExpExecArray | null;
-  PY_TOKEN.lastIndex = 0;
-  while ((m = PY_TOKEN.exec(text))) {
-    if (m[0].startsWith("#")) continue;
-    const prefix = m[1].toLowerCase();
+  while ((m = re.exec(text))) {
+    if (m[0].startsWith("#")) {
+      out.push({ at: m.index, end: re.lastIndex, prefix: "", body: null, doc: false });
+      continue;
+    }
     const quote = m[2];
-    const start = PY_TOKEN.lastIndex;
+    const start = re.lastIndex;
     let i = start;
     while (i < text.length && !text.startsWith(quote, i)) i += text[i] === "\\" ? 2 : 1;
-    PY_TOKEN.lastIndex = i + quote.length;
-    if (prefix.includes("r") || prefix.includes("b")) continue;
+    re.lastIndex = i + quote.length;
     const lineStart = text.lastIndexOf("\n", m.index) + 1;
-    const lineEnd = text.indexOf("\n", PY_TOKEN.lastIndex);
-    const alone = !text.slice(lineStart, m.index).trim() && /^\s*(#.*)?$/.test(text.slice(PY_TOKEN.lastIndex, lineEnd < 0 ? undefined : lineEnd));
-    const above = text.slice(0, lineStart).split("\n").map((l) => l.replace(/#.*$/, "").trim()).filter(Boolean);
-    if (alone && (!above.length || above[above.length - 1].endsWith(":"))) continue;
-    let body = text.slice(start, i);
-    if (prefix.includes("f")) body = body.replace(/\{\{|\}\}|\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g, (x) => (x === "{{" ? "{" : x === "}}" ? "}" : "{}"));
-    body.split("\n").forEach((l, k) => out.push([lineAt(m!.index) + k, l]));
+    for (; scanned < lineStart; ) {
+      const nl = text.indexOf("\n", scanned);
+      const line = text.slice(scanned, nl).replace(/#.*$/, "").trim();
+      if (line) above = line;
+      scanned = nl + 1;
+    }
+    const lineEnd = text.indexOf("\n", re.lastIndex);
+    const alone = !text.slice(lineStart, m.index).trim() && /^\s*(#.*)?$/.test(text.slice(re.lastIndex, lineEnd < 0 ? undefined : lineEnd));
+    const doc = alone && (!above || above.endsWith(":"));
+    out.push({ at: m.index, end: re.lastIndex, prefix: m[1].toLowerCase(), body: text.slice(start, i), doc });
   }
   return out;
 }
 
-/** Every string an export builder in Python ``rel`` (holding ``text``) writes that says an old name. */
+/** The code of the Python file ``text`` (its ``tokens``), each string and comment a space. */
+function pythonCode(text: string, tokens: PyToken[]): string {
+  const parts: string[] = [];
+  let at = 0;
+  for (const t of tokens) {
+    parts.push(text.slice(at, t.at), " ".repeat(t.end - t.at));
+    at = t.end;
+  }
+  parts.push(text.slice(at));
+  return parts.join("");
+}
+
+/** A Python file read once: its strings and comments, its code (those blanked) and where its lines start. */
+type PyParsed = { tokens: PyToken[]; code: string; starts: number[] };
+
+const parsedPython = new Map<string, PyParsed>();
+
+/** The Python file ``text`` read once, then kept: rendersText, oracleImports and pythonStrings share it. */
+function parsePython(text: string): PyParsed {
+  let parsed = parsedPython.get(text);
+  if (!parsed) {
+    const tokens = pythonTokens(text);
+    parsed = { tokens, code: pythonCode(text, tokens), starts: lineStarts(text) };
+    parsedPython.set(text, parsed);
+  }
+  return parsed;
+}
+
+/**
+ * A log call (log.info(...), logger.warning(...), logging.error(...), self.log(...), self.logger.info(...))
+ * or a warning (warnings.warn(...)): its text goes to the server's log, never to a person.
+ */
+const LOG_CALL =
+  /(?<![\w.])(?:(?:self\.)?_?log(?:ger)?|logging|LOG)\.(?:debug|info|warning|warn|error|exception|critical|log)\s*\(|(?<![\w.])self\._?log\s*\(|(?<![\w.])warnings\.warn\s*\(/g;
+
+/**
+ * A hook that writes an LLM's prompt (a def named for it: prompt_lines, a run's *_prompt_lines, any name
+ * ending in prompt such as system_prompt or build_prompt, or starting with _prompt): the model reads its
+ * text, a person never does.
+ */
+const PROMPT_HOOK = /^([ \t]*)(?:async[ \t]+)?def[ \t]+(?:\w*prompt(?:_lines)?|_prompt\w*)[ \t]*\(/gm;
+
+/** Where the bracket open at ``from`` in ``code`` closes (just past it). */
+function closing(code: string, from: number): number {
+  let depth = 0;
+  for (let i = from; i < code.length; i++) {
+    if ("([{".includes(code[i])) depth++;
+    else if (")]}".includes(code[i]) && --depth === 0) return i + 1;
+  }
+  return code.length;
+}
+
+/** The spans of the log calls in ``code`` (a Python file's code, its strings blanked). */
+const logCalls = (code: string): [number, number][] => [...code.matchAll(LOG_CALL)].map((m) => [m.index, closing(code, m.index + m[0].length - 1)]);
+
+/** The spans of the prompt hooks in ``code`` (a Python file's code, its strings blanked): each def to the next line indented no deeper than it. */
+function promptHooks(code: string): [number, number][] {
+  return [...code.matchAll(PROMPT_HOOK)].map((m) => {
+    const body = closing(code, m.index + m[0].length - 1);
+    const next = code.slice(body).search(new RegExp(`\\n(?!${m[1]}[ \\t]|[ \\t]*\\n)`));
+    return [m.index, next < 0 ? code.length : body + next];
+  });
+}
+
+/**
+ * Every string of the Python file ``text`` a person can read, as [line, text]: an f-string's
+ * {…} reads "{}"; docstrings (a string alone after a "…:" line or at the top), comments, raw
+ * strings (patterns), bytes, and the text of log calls and prompt hooks are left out.
+ */
+function pythonStrings(text: string): [number, string][] {
+  const out: [number, string][] = [];
+  const { tokens, code, starts } = parsePython(text);
+  const unread = [...logCalls(code), ...promptHooks(code)];
+  for (const t of tokens) {
+    if (t.body === null || t.doc || t.prefix.includes("r") || t.prefix.includes("b")) continue;
+    if (unread.some(([a, b]) => a <= t.at && t.at < b)) continue;
+    let body = t.body;
+    if (t.prefix.includes("f")) body = body.replace(/\{\{|\}\}|\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g, (x) => (x === "{{" ? "{" : x === "}}" ? "}" : "{}"));
+    const line = lineOf(starts, t.at);
+    body.split("\n").forEach((l, k) => out.push([line + k, l]));
+  }
+  return out;
+}
+
+/** Every string a Python module ``rel`` (holding ``text``) that shows text writes and that says an old name. */
 const pythonOldNames = (rel: string, text: string) =>
   pythonStrings(text).flatMap(([line, said]) => (saysOld(rel, said) ? [`${rel}:${line}: ${said.trim().slice(0, 120)}`] : []));
 
 /**
- * The other Python that writes text a person reads, each named: the shared page's renderer and
- * its public route, the public roadmap page and the roadmap views they draw, the invite email
- * and its send, and the meeting minutes email (meetings.py's deliver).
+ * What marks a Python module as one that writes text a person reads, in its code: HTML (html or
+ * markupsafe escaping, an HTMLResponse, Jinja, the PDF, the shared page's frame), email (the
+ * mailer, an EmailMessage, smtplib) or chat (the Slack API, its outbox).
  */
-const RENDERERS = [
-  "shares/render.py",
-  "shares/public.py",
-  "roadmap/public.py",
-  "roadmap/variants.py",
-  "members/mailer.py",
-  "members/delivery.py",
-  "simple/meetings.py",
-];
+const RENDERS_IN_CODE =
+  /\bimport html\b|\bfrom html import\b|\bmarkupsafe\b|\bHTMLResponse\b|\bjinja2\b|\b_jinja\(|\bhtml_to_pdf\b|\brender\.page\(|\bmailer\b|\bEmailMessage\b|\bsmtplib\b|\bslack_api\b|\bslack_oauth\b|\bSlackOutbox\b/;
+/**
+ * ... or in its strings (docstrings aside): an HTML page's type or tag ("<p>", '<a href="…">',
+ * "</li>", not a placeholder such as "<section id>"), a Slack post or its mrkdwn.
+ */
+const RENDERS_IN_STRINGS =
+  /text\/html|chat\.postMessage|\bmrkdwn\b|<\/?(?:html|body|head|p|div|span|section|header|footer|main|h[1-6]|table|thead|tbody|tr|td|th|ul|ol|li|strong|em|a|br|style)(?:\s[^<>\n]*=[^<>\n]*)?\s*\/?>/i;
 
-const builders = () => [
-  ...fs.readdirSync(EXPORT).filter((f) => f.endsWith(".py")).map((f) => path.join(EXPORT, f)),
-  ...RENDERERS.map((f) => path.join(API, f)),
-];
+/** Python whose text no person reads: tests, and the LLM's prompts (kept in a prompts folder, or a module named for them). */
+const NOT_SHOWN = /(?:^|\/)(?:tests?|prompts?)\/|(?:^|\/)(?:test_[^/]*|[^/]*_test|conftest|[^/]*prompts?|prompting)\.py$/;
+
+/** Whether the Python module ``rel`` (holding ``text``) writes text a person reads, by what it writes to. */
+function rendersText(rel: string, text: string): boolean {
+  if (NOT_SHOWN.test(rel)) return false;
+  const { tokens, code } = parsePython(text);
+  if (RENDERS_IN_CODE.test(code)) return true;
+  return tokens.some((t) => t.body !== null && !t.doc && RENDERS_IN_STRINGS.test(t.body));
+}
+
+/**
+ * The api/oracle modules (as paths under it, "roadmap/variants.py") the Python module ``rel`` (holding
+ * ``text``) imports from, "from oracle.roadmap import …" and "from .variants import …" alike, and the
+ * names it imports as modules of their own.
+ */
+function oracleImports(rel: string, text: string): string[] {
+  const out: string[] = [];
+  const { code } = parsePython(text);
+  const here = path.posix.dirname(rel).split("/").filter((p) => p !== ".");
+  for (const m of code.matchAll(/^[ \t]*from (?:oracle((?:\.\w+)*)|(\.+)(\w+(?:\.\w+)*)?) import (\([^)]*\)|[^\n]*)/gm)) {
+    // A relative import starts in the module's own package; each dot past the first goes up one.
+    const base = m[2] === undefined ? [] : here.slice(0, Math.max(0, here.length - (m[2].length - 1)));
+    const pkg = [...base, ...(m[2] === undefined ? m[1].slice(1) : (m[3] ?? "")).split(".").filter(Boolean)];
+    if (pkg.length) out.push(pkg.join("/") + ".py");
+    for (const name of m[4].replace(/[()\\]/g, " ").split(",")) {
+      const word = name.trim().split(/\s+/)[0];
+      if (word) out.push([...pkg, word].join("/") + ".py");
+    }
+  }
+  for (const m of code.matchAll(/^[ \t]*import oracle((?:\.\w+)+)/gm)) out.push(m[1].slice(1).split(".").join("/") + ".py");
+  return out;
+}
+
+/**
+ * The Python modules of ``files`` (path under api/oracle → text) that write text a person reads,
+ * found by themselves: each that renders HTML, email or chat (rendersText), and the modules of its
+ * own package it imports, which build the text it renders (the roadmap views the public roadmap
+ * draws). Tests and prompts aside.
+ */
+function shownModules(files: Map<string, string>): string[] {
+  const renderers = [...files].filter(([rel, text]) => rendersText(rel, text));
+  const helpers = renderers.flatMap(([rel, text]) =>
+    oracleImports(rel, text).filter((dep) => path.posix.dirname(dep) !== "." && path.posix.dirname(dep) === path.posix.dirname(rel)),
+  );
+  return [...new Set([...renderers.map(([rel]) => rel), ...helpers])].filter((rel) => files.has(rel) && !NOT_SHOWN.test(rel)).sort();
+}
+
+function* pythonModules(dir: string): Generator<string> {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) {
+      if (e.name !== "__pycache__") yield* pythonModules(p);
+    } else if (e.name.endsWith(".py")) yield p;
+  }
+}
+
+const pyRel = (f: string) => path.relative(API, f).split(path.sep).join("/");
+
+/** Every Python module under api/oracle, path → text, read once. */
+let apiPythonFiles: Map<string, string> | undefined;
+const apiPython = () => (apiPythonFiles ??= new Map([...pythonModules(API)].map((f) => [pyRel(f), read(f)])));
+
+/** The api/oracle modules that write shown text, found once: the word test and its self-test share them. */
+let apiShownModules: string[] | undefined;
+const apiShown = () => (apiShownModules ??= shownModules(apiPython()));
 
 test("no string a page can show in web/app, web/components or web/lib says Desired state, Current state or Baseline", () => {
   const found = ["app", "components", "lib"].flatMap((dir) => [...sources(path.join(WEB, dir))].flatMap((f) => oldNames(relOf(f), read(f))));
   expect(found).toEqual([]);
 });
 
-test("no string of the mock's JSON data, an export or email template, nor a Python export builder, shared page or email says Desired state, Current state or Baseline", () => {
+test("no string of the mock's JSON data, an export or email template, nor the Python that writes shown text (an export, a shared or public page, an email, a Slack post) says Desired state, Current state or Baseline", () => {
   const mock = fs.readdirSync(MOCK).filter((f) => f.endsWith(".json")).flatMap((f) => jsonOldNames(relOf(path.join(MOCK, f)), read(path.join(MOCK, f))));
   const sent = [...templates(API)].flatMap((f) => templateOldNames(path.relative(API, f), read(f)));
-  const built = builders().flatMap((f) => pythonOldNames(path.relative(API, f), read(f)));
+  const python = apiPython();
+  const built = apiShown().flatMap((rel) => pythonOldNames(rel, python.get(rel)!));
   expect([...mock, ...sent, ...built]).toEqual([]);
 });
 
@@ -322,13 +492,94 @@ test("the check finds an old name planted in web/lib, the mock and a spec's expe
     "export/deck.py:9: Change it in Current state",
     "export/deck.py:11: <p>Read from the Desired state.</p>",
   ]);
-  expect(builders().map((f) => path.basename(f)), "the PDF's and the deck's builders are read").toEqual(expect.arrayContaining(["render.py", "deck.py"]));
-  // fails_when = the check does not read the Python that renders shared pages and emails.
-  const named = builders().map((f) => path.relative(API, f));
-  expect(named, "the shared page's and the emails' renderers are read").toEqual(expect.arrayContaining(RENDERERS));
-  for (const f of RENDERERS) expect(fs.existsSync(path.join(API, f)), f).toBe(true);
+  // fails_when = a module that renders HTML, email or chat is missed because no list names it.
+  const shown = apiShown();
+  expect(shown, "the export builders, shared and public pages, emails and Slack posts are found").toEqual(
+    expect.arrayContaining([
+      "export/render.py",
+      "export/deck.py",
+      "shares/render.py",
+      "shares/public.py",
+      "roadmap/public.py",
+      "roadmap/variants.py",
+      "members/mailer.py",
+      "members/delivery.py",
+      "simple/meetings.py",
+      "simple/one_pager.py",
+      "jobs/router.py",
+      "slack/pings.py",
+    ]),
+  );
+  expect(shown.filter((rel) => NOT_SHOWN.test(rel)), "no test or prompt module is read").toEqual([]);
   expect(pythonOldNames("shares/render.py", 'TITLE = "Shared from the Baseline"\nKEY = "baseline"\nhref = f"/baseline/{slug}"')).toEqual([
     "shares/render.py:1: Shared from the Baseline",
+  ]);
+  // fails_when = a brand-new renderer, or a helper it imports from its own package (by name or by a
+  // relative import), says Baseline and is not read; or a log call, a warning, a prompt hook or a
+  // prompt module trips the check.
+  const planted = new Map([
+    [
+      "digest/email.py",
+      [
+        "from email.message import EmailMessage",
+        "from oracle.digest import (",
+        "    lines,",
+        ")",
+        "",
+        "def send(to: str) -> EmailMessage:",
+        "    msg = EmailMessage()",
+        '    msg.set_content(f"Hi {to}, read what changed in the Baseline.")',
+        '    log.info("digest for %s skipped the Baseline", to)',
+        "    return msg",
+        "",
+        "def prompt_lines(",
+        "    run: str,",
+        ") -> list[str]:",
+        '    return [f"Never say Baseline for the graph ({run})."]',
+        "",
+        "def footer() -> str:",
+        '    return "Sent from the Baseline"',
+        "",
+        "def summary_prompt(run: str) -> str:",
+        '    return f"Read the Baseline of {run}."',
+        "",
+        "def _prompt_for(run: str) -> str:",
+        '    return "Keep the Baseline words out."',
+        "",
+        "class Digest:",
+        "    def note(self) -> None:",
+        '        self.logger.warning("no Baseline for %s", self)',
+        '        self.log("skipped the Baseline")',
+        '        warnings.warn("the Baseline is gone")',
+        "",
+        "def signature() -> str:",
+        '    return "Signed in the Baseline"',
+      ].join("\n"),
+    ],
+    ["digest/lines.py", 'EMPTY = "Nothing moved in the Baseline"\nKEY = "baseline"'],
+    ["digest/store.py", 'NOTE = "Kept in the Baseline"'],
+    ["digest/prompts.py", 'SYSTEM = "<p>Read the Baseline.</p>"'],
+    [
+      "slack/weekly.py",
+      [
+        "from . import footer",
+        "from .blocks import header",
+        "def post(c):",
+        '    c.chat_postMessage(blocks=[{"type": "mrkdwn", "text": f"*{c.name}* moved in the Baseline"}])',
+      ].join("\n"),
+    ],
+    ["slack/blocks.py", 'HEADER = "Moved in the Baseline"'],
+    ["slack/footer.py", 'TEXT = "Posted from the Baseline"'],
+  ]);
+  expect(shownModules(planted)).toEqual(["digest/email.py", "digest/lines.py", "slack/blocks.py", "slack/footer.py", "slack/weekly.py"]);
+  expect(shownModules(planted).flatMap((rel) => pythonOldNames(rel, planted.get(rel)!))).toEqual([
+    "digest/email.py:8: Hi {}, read what changed in the Baseline.",
+    "digest/email.py:18: Sent from the Baseline",
+    "digest/email.py:33: Signed in the Baseline",
+    "digest/lines.py:1: Nothing moved in the Baseline",
+    "slack/blocks.py:1: Moved in the Baseline",
+    "slack/footer.py:1: Posted from the Baseline",
+    "slack/weekly.py:4: *{}* moved in the Baseline",
   ]);
   for (const kept of [
     'test("Baseline to PRD reads Ground Truth to PRD", async () => {});',
