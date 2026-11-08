@@ -184,7 +184,7 @@ test.describe("desktop", () => {
     await admin.mouse.down();
     await admin.mouse.move(at.x + at.width / 2 - (plot.width * 0.92 * 2) / 5, at.y + at.height / 2 + 3, { steps: 10 });
     await admin.mouse.up();
-    await expect(admin.getByText("Re-estimated Sample data import (F-12): effort 1 wk")).toBeVisible();
+    await expect(admin.getByText("Re-estimated Sample data import (F-12): effort 1 week")).toBeVisible();
     await expect(admin.getByRole("button", { name: "#2 Sample data import (F-12): goal value 6, effort 1 week" })).toBeVisible();
     expect((await codes(admin, "side-row"))[1]).toBe("setup-import");
     await admin.getByRole("button", { name: "Undo" }).click();
