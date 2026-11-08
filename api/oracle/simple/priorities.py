@@ -442,32 +442,16 @@ async def _short_codes(db: AsyncSession, names: bool = True) -> dict[str, str]:
     PRD section with a code ("f-06") reads as the PRD names it (F-06); one with no code the
     letters of its shown name (``_shown_names``). ``names=False`` skips that lookup for a
     caller that keeps only the real codes (the roadmap's): those never depend on names."""
-    rows = (
-        await db.execute(
-            select(Entity.id, Entity.key, Entity.title)
-            .where(Entity.type == "feature")
-            .order_by(Entity.created_at, Entity.key)
-        )
-    ).all()
+    from oracle.roadmap import codes
+
+    features, sections = codes.feature_reads()
+    rows = (await db.execute(features)).all()
     keys = [k for _, k, _ in rows]
     key_of = {i: k for i, k, _ in rows}
     shown = {k: t for _, k, t in rows if (t or "").strip()}
     if names:
         shown |= await _shown_names(db, key_of)
-    prd: dict[str, str] = {}
-    for fid, section in await db.execute(
-        select(RoadmapItem.feature_id, RoadmapItem.prd_section_key)
-        .where(
-            RoadmapItem.feature_id.is_not(None),
-            RoadmapItem.prd_section_key.is_not(None),
-            # Published roadmaps only: a draft's code is not every reader's.
-            RoadmapItem.roadmap_version_id.is_not(None),
-        )
-        .order_by(RoadmapItem.created_at)
-    ):
-        code = prd_code(section)
-        if code and fid in key_of:
-            prd.setdefault(key_of[fid], code)
+    prd = codes.prd_by_key(key_of, await db.execute(sections))
     return dict(zip(keys, short_codes(keys, prd, shown), strict=True))
 
 

@@ -68,7 +68,9 @@ def named(row: Any, by_feature: dict[uuid.UUID, str]) -> str:
     return f"{code} {name}" if code else name
 
 
-def _feature_reads() -> tuple[Any, Any]:
+def feature_reads() -> tuple[Any, Any]:
+    """The two reads every feature's code comes from: the features, oldest first, and the PRD
+    sections their published items came from (Priorities' _short_codes reads them too)."""
     from oracle.baseline.models import Entity
     from oracle.roadmap.models import RoadmapItem
 
@@ -90,17 +92,25 @@ def _feature_reads() -> tuple[Any, Any]:
     return features, sections
 
 
-def _by_feature(features: list[Any], sections: list[Any]) -> dict[uuid.UUID, str]:
-    """Each feature's code when it is a code (its key, F-12, or its PRD section's, F-06: as
-    Priorities reads it, oracle.simple.priorities._short_codes), by the feature's id."""
-    from oracle.simple.priorities import FEATURE_CODE, prd_code, short_codes
+def prd_by_key(key_of: dict[uuid.UUID, str], sections: Any) -> dict[str, str]:
+    """Each feature's PRD code (F-06) by its key, from the first section that gives one."""
+    from oracle.simple.priorities import prd_code
 
-    key_of = {i: k for i, k, _ in features}
     prd: dict[str, str] = {}
     for fid, section in sections:
         code = prd_code(section)
         if code and fid in key_of:
             prd.setdefault(key_of[fid], code)
+    return prd
+
+
+def _by_feature(features: list[Any], sections: list[Any]) -> dict[uuid.UUID, str]:
+    """Each feature's code when it is a code (its key, F-12, or its PRD section's, F-06: as
+    Priorities reads it, oracle.simple.priorities._short_codes), by the feature's id."""
+    from oracle.simple.priorities import FEATURE_CODE, short_codes
+
+    key_of = {i: k for i, k, _ in features}
+    prd = prd_by_key(key_of, sections)
     names = {k: t for _, k, t in features if (t or "").strip()}
     made = short_codes([k for _, k, _ in features], prd, names)
     return {
@@ -112,13 +122,13 @@ def _by_feature(features: list[Any], sections: list[Any]) -> dict[uuid.UUID, str
 
 async def feature_codes(db: Any) -> dict[uuid.UUID, str]:
     """Every feature's code (:func:`_by_feature`), read with an async session."""
-    features, sections = _feature_reads()
+    features, sections = feature_reads()
     return _by_feature(list((await db.execute(features)).all()),
                        list((await db.execute(sections)).all()))  # fmt: skip
 
 
 def _feature_codes_sync(session: Session) -> dict[uuid.UUID, str]:
-    features, sections = _feature_reads()
+    features, sections = feature_reads()
     with session.no_autoflush:
         return _by_feature(list(session.execute(features).all()),
                            list(session.execute(sections).all()))  # fmt: skip
@@ -150,12 +160,15 @@ def _before(row: Any, name: str) -> Any:
     return history.deleted[0] if history.deleted else getattr(row, name)
 
 
-def _claims(session: Session, row: Any, code: str, by_feature: dict[uuid.UUID, str]) -> bool:
+def _claims(
+    session: Session, row: Any, code: str, by_feature: dict[uuid.UUID, str], stored: Any
+) -> bool:
     """Whether this write newly gives ``row`` the ``code`` it shows: an added row that is no
-    copy of its item showing it already (:func:`_held`), a row brought back from Trash, or one
-    whose title, feature or PRD section now shows another code."""
+    copy of its item showing it already (:func:`_held`, over ``stored``: :func:`_stored`), a
+    row brought back from Trash, or one whose title, feature or PRD section now shows another
+    code."""
     if row in session.new:
-        return not _held(session, row, code, by_feature)
+        return not _held(row, code, by_feature, stored)
     if _before(row, "deleted_at") is not None:
         return True
     before = SimpleNamespace(**{c: _before(row, c) for c in ("title", "feature_id",
@@ -182,12 +195,13 @@ def check_flush(session: Session) -> None:
     if not rows:
         return
     by_feature = _feature_codes_sync(session)
+    stored_rows = _stored(session, [o for o in rows if o in session.new])
     pending = [o for o in session.new if isinstance(o, RoadmapItem)]
     gone = set(session.deleted)
     by_owner: dict[tuple[str, Any], list[Any]] = {}
     for row in rows:
         code = shown(row, by_feature)
-        if code is None or not _claims(session, row, code, by_feature):
+        if code is None or not _claims(session, row, code, by_feature, stored_rows):
             continue
         owner = _owner(row)
         if owner not in by_owner:
@@ -217,18 +231,54 @@ def _changed(row: Any) -> bool:
     )
 
 
-def _held(session: Session, row: Any, code: str, by_feature: dict[uuid.UUID, str]) -> bool:
-    """``row``'s item showed ``code`` already on another live row of its roadmap (as it is
-    stored): ``row`` is a copy of it (a new version's, a draft's, a carried row)."""
+def _stored(session: Session, rows: list[Any]) -> dict[tuple[Any, str], list[Any]]:
+    """The stored live rows of the items ``rows`` add, by roadmap and item key: one read for
+    the whole write, whatever its size."""
     from oracle.roadmap.models import RoadmapItem
 
+    if not rows:
+        return {}
+    docs = {o.roadmap_document_id for o in rows}
+    keys = {o.item_key for o in rows}
     with session.no_autoflush:
-        stored = session.execute(
-            select(RoadmapItem.title, RoadmapItem.feature_id, RoadmapItem.prd_section_key).where(
-                RoadmapItem.roadmap_document_id == row.roadmap_document_id,
-                RoadmapItem.item_key == row.item_key,
+        found = session.execute(
+            select(
+                RoadmapItem.roadmap_document_id,
+                RoadmapItem.item_key,
+                RoadmapItem.title,
+                RoadmapItem.feature_id,
+                RoadmapItem.prd_section_key,
+                RoadmapItem.created_at,
+                RoadmapItem.roadmap_version_id,
+                RoadmapItem.draft_roadmap_id,
+                RoadmapItem.simple_draft_id,
+            ).where(
+                RoadmapItem.roadmap_document_id.in_(docs),
+                RoadmapItem.item_key.in_(keys),
                 RoadmapItem.deleted_at.is_(None),
-                RoadmapItem.id != row.id if row.id is not None else RoadmapItem.id.is_not(None),
             )
         ).all()
-    return any((shown(o, by_feature) or "").upper() == code.upper() for o in stored)
+    out: dict[tuple[Any, str], list[Any]] = {}
+    for o in found:
+        out.setdefault((o.roadmap_document_id, o.item_key), []).append(o)
+    return out
+
+
+def _held(
+    row: Any, code: str, by_feature: dict[uuid.UUID, str], stored: dict[tuple[Any, str], list[Any]]
+) -> bool:
+    """``row``'s item shows ``code`` on the row it is copied from (its latest stored live row
+    of another version or draft of its roadmap): ``row`` is a copy (a new version's, a
+    draft's, a carried row). An older row that showed it does not count: the item gave the
+    code up since."""
+    mine = _owner(row)
+    source = [o for o in stored.get((row.roadmap_document_id, row.item_key), [])
+              if _owner(o) != mine]  # fmt: skip
+    if not source:
+        return False
+    latest = max(o.created_at for o in source)
+    return any(
+        (shown(o, by_feature) or "").upper() == code.upper()
+        for o in source
+        if o.created_at == latest
+    )
