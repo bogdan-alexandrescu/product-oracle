@@ -314,6 +314,15 @@ function selfTest() {
     ["coarse marker in a string, not a comment", `test("parses", () => { const t0 = Date.now(); parse("${COARSE}"); expect(Date.now() - t0).toBeLessThan(1500); });`, 1],
     ["coarse marker, budget through a helper", `async function paint() { const t0 = performance.now(); return 1; }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`, 0],
     ["coarse marker, tight budget in a variable", `async function paint() { const t0 = performance.now(); return 1; }\ntest("draws", async () => { // ${COARSE}\n const ms = await paint(); expect(ms).toBeLessThanOrEqual(200); });`, 1],
+    ["a clock name from another function", `function a() { const start = Date.now(); return start; }\ntest("offsets", () => { const start = 10; expect(start - 1).toBe(9); });`, 0],
+    ["a clock name from another test", `test("a", () => { const start = Date.now(); expect(start).toBeGreaterThan(0); });\ntest("b", () => { const start = 10; expect(start - 1).toBe(9); });`, 0],
+    ["new Date() in plain date maths", `test("dates", () => { const d = new Date(); const other = new Date(2026, 0, 1); expect(d - other).toBeGreaterThan(0); });`, 0],
+    ["new Date() less another clock read", `test("parses", () => { const t0 = new Date(); parse(big); expect(new Date() - t0).toBeLessThan(1500); });`, 1],
+    ["new Date() less Date.now()", `test("parses", () => { const t0 = Date.now(); parse(big); const d = new Date(); expect(d - t0).toBeLessThan(1500); });`, 1],
+    ["a local clock wrapper", `test("parses", () => { const now = () => Date.now(); const a = now(); parse(big); expect(now() - a).toBeLessThan(1500); });`, 1],
+    ["a clock wrapper with a block body", `function now() { return Date.now(); }\ntest("parses", () => { const a = now(); parse(big); const b = now(); expect(b - a).toBeLessThan(1500); });`, 1],
+    ["-start + Date.now()", `test("parses", () => { const start = Date.now(); parse(big); expect(-start + Date.now()).toBeLessThan(1500); });`, 1],
+    ["Math.abs(start - Date.now())", `test("parses", () => { const start = Date.now(); parse(big); expect(Math.abs(start - Date.now())).toBeLessThan(1500); });`, 1],
     ["coarse marker, no budget at all", `test("parses", () => { /* ${COARSE} */ const t0 = Date.now(); parse(big); expect(Date.now() - t0 < 50).toBe(true); });`, 1],
   ];
   // Imported helpers: a spec at /e2e/a.spec.ts and the files it imports.
