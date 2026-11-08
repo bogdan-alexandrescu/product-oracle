@@ -216,13 +216,16 @@ export function EntityDrawer({
   const [notice, setNotice] = useState<string | null>(null);
   // The goal fields the API refused on the last Save, shown under their fields (B5).
   const [problems, setProblems] = useState<GoalProblem[] | null>(null);
-  useEffect(() => {
+  // A goal row's Rename on the goal already open: back to the Edit form (set while rendering, as React advises).
+  const [editAsked, setEditAsked] = useState(edit);
+  if (edit !== editAsked) {
+    setEditAsked(edit);
     if (edit > 0 && canWrite) {
       setNotice(null);
       setPromoting(false);
       setEditing(true);
     }
-  }, [edit, canWrite]);
+  }
   const d = q.data;
   const title = d?.title ?? entity.title;
   // A subgoal's code is its place in the goal tree (#345), as its chip shows: G-B.1, or none.

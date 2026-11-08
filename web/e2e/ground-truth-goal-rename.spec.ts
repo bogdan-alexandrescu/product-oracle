@@ -45,8 +45,11 @@ test("plain words: a proposed goal's Attributes read month first, its parent by 
 
 test("rename: a proposed goal is renamed from its Goals row, and Home's goals show the new name", async ({ page }) => {
   const row = await groundTruth(page);
-  await row.getByRole("button", { name: "Rename" }).click();
+  // The goal's panel already open: its row's Rename turns it to the Edit form.
+  await row.getByRole("button", { name: OKR_IMPORT_GOAL }).click();
   const panel = page.getByTestId("entity-drawer");
+  await expect(panel.getByRole("button", { name: "Edit" })).toBeVisible();
+  await row.getByRole("button", { name: "Rename" }).click();
   const form = panel.getByRole("form", { name: "Edit" });
   await expect(form.getByLabel("Title")).toHaveValue(OKR_IMPORT_GOAL);
   await form.getByLabel("Title").fill(RENAMED);
