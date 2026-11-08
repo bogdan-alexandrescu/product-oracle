@@ -138,8 +138,8 @@ function Inbox() {
         status={
           waiting != null &&
           waiting > 0 && (
-            <Chip kind="acc" title={partial ? `${waiting} waiting; a part could not load` : undefined}>
-              {waiting} waiting
+            <Chip kind="acc">
+              <Partial words={`${waiting} waiting`} partial={partial} />
             </Chip>
           )
         }
@@ -170,7 +170,7 @@ function Inbox() {
           // last visit does not hold an emptied New open).
           key={`${arrived ? (arrivalQ.data ?? "first") : "arriving"}|${kind?.id ?? "all"}`}
           rows={kindRows}
-          waiting={waiting ?? 0} counted={counted} questionsError={questionsQ.error} notice={notice} onTabChange={() => {
+          waiting={waiting ?? 0} counted={counted} partial={partial} questionsError={questionsQ.error} notice={notice} onTabChange={() => {
             asked.moveSettled();
           }}
         />
@@ -273,6 +273,7 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
 function InboxTabs({
   rows,
   counted,
+  partial,
   questionsError,
   notice,
   onTabChange,
@@ -282,6 +283,8 @@ function InboxTabs({
   waiting: number;
   /** counts-wait: every read the counts add up has answered; until then the rows show without counts. */
   counted: boolean;
+  /** counts-failed-part: a part the counts add up could not load, so each count says it is not the whole. */
+  partial: boolean;
   questionsError: string | null;
   notice: ReactNode;
   /** The tab changed: what was settled in place moves on. */
@@ -305,8 +308,9 @@ function InboxTabs({
   // qa-company-16: the heading and its count follow the tab: New and Seen are what needs me
   // (the rail badge's count); Staged, Declined and Done are named, with their own counts.
   const live = tab === "new" || tab === "open";
+  const total = live ? waitingCount(rows) : count(tab);
   return (
-    <Panel title={live ? "Needs you" : label} count={!counted ? undefined : live ? waitingCount(rows) : count(tab)} testId="inbox-needs">
+    <Panel title={live ? "Needs you" : label} count={!counted ? undefined : partial ? <Partial words={String(total)} partial /> : total} testId="inbox-needs">
       {/* qa-company-47: on a phone the five tabs keep one line: smaller tabs, no "0" counts. */}
       <div
         className="px-4 pt-1 max-[600px]:overflow-x-auto max-[600px]:px-2 max-[600px]:[&_[role=tab]]:px-1.5 max-[600px]:[&_[role=tablist]]:flex-nowrap"
@@ -315,7 +319,23 @@ function InboxTabs({
         <TabBar
           label="Inbox by state"
           size="sm"
-          tabs={STATE_TABS.map((t) => ({ id: t.id, label: t.label, count: (counted && count(t.id)) || null }))}
+          tabs={STATE_TABS.map((t) => {
+            const n = (counted && count(t.id)) || null;
+            // counts-failed-part: a partial count carries the mark in its name and tooltip, drawn as the tab bar draws a count.
+            return partial && n
+              ? {
+                  id: t.id,
+                  label: (
+                    <>
+                      {t.label}
+                      <span className={`tnum text-[13px] font-bold ${t.id === tab ? "text-accent-ink" : "text-text2"}`}>
+                        <Partial words={String(n)} partial />
+                      </span>
+                    </>
+                  ),
+                }
+              : { id: t.id, label: t.label, count: n };
+          })}
           value={tab}
           onChange={pick}
         />
@@ -362,5 +382,16 @@ function InboxTabs({
         )}
       </div>
     </Panel>
+  );
+}
+
+/** counts-failed-part: a count missing a part whose read failed says so in its accessible name and tooltip (no visible words). */
+function Partial({ words, partial }: { words: string; partial: boolean }) {
+  if (!partial) return <>{words}</>;
+  const said = `${words}; a part could not load`;
+  return (
+    <span aria-label={said} title={said}>
+      {words}
+    </span>
   );
 }

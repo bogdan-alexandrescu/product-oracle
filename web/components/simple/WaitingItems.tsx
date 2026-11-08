@@ -27,7 +27,8 @@ export function useWaitingList(): { data: Waiting | undefined; error: unknown; r
     let alive = true;
     loadWaiting()
       .then((d) => alive && (setData(d), setError(null)))
-      .catch((e) => alive && setError(e));
+      // counts-failed-part: a failed read drops what the last one read, so no out-of-date number shows beside Could not load.
+      .catch((e) => alive && (setData(undefined), setError(e)));
     return () => {
       alive = false;
     };
