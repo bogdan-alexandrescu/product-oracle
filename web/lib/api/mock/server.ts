@@ -1751,6 +1751,8 @@ function seedOneRoadmapScenario(): Db {
 function seedReplacedPrdTrashScenario(): Db {
   const db = seedOneRoadmapScenario();
   const rm = db.simple_roadmap!;
+  // Oracle's timed suggestions for goals with no item stay out, so the Inbox holds still.
+  rm.auto_done = ["quiet-alerts", ...Object.keys(GOALS)];
   const owner = db.members.find((x) => x.role === "owner" && x.status !== "disabled")!;
   const at = "2026-10-21T09:00:00Z";
   // One renamed item in each draft: a draft with no change shows no banner.
