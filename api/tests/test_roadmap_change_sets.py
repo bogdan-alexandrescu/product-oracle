@@ -581,9 +581,9 @@ async def _two_f31(tenant_id) -> None:
 
     async with tenant_session(tenant_id) as s:
         ship = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "shipping-step"))
-        cols = [c.key for c in RoadmapItem.__mapper__.column_attrs if c.key not in ("id",)]
-        third = RoadmapItem(**{c: getattr(ship, c) for c in cols if c not in ("created_at",
-                                                                               "updated_at")})  # fmt: skip
+        skip = ("id", "created_at", "updated_at")
+        cols = [c.key for c in RoadmapItem.__mapper__.column_attrs if c.key not in skip]
+        third = RoadmapItem(**{c: getattr(ship, c) for c in cols})
         third.item_key, third.title, third.position = "gift-cards", "Gift cards", 9
         s.add(third)
         await s.flush()
