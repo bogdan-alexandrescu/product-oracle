@@ -152,6 +152,14 @@ export function PlanByMonth({
       </div>
     </div>
   );
+  // qa-simple-prd-p3-15: the one-pager names what the items are.
+  const countOf = (r: PlanStrip["rows"][number]) => `${r.items} ${legend ? "roadmap " : ""}${r.items === 1 ? "item" : "items"}`;
+  const labelOf = (r: PlanStrip["rows"][number]) =>
+    named && prd
+      ? `${prd.title} · ${r.milestone ? rowName(r, named) : "no milestone"} · ${countOf(r)}`
+      : named
+        ? `${r.milestone ? rowName(r, named) : "Not in a milestone"} · ${countOf(r)}`
+        : `${rowName(r, named)} · ${countOf(r)}`;
   return (
     <div data-testid={testId} className="flex flex-col gap-1">
       {tipCol ? (
@@ -166,11 +174,14 @@ export function PlanByMonth({
         {shown.map((r, k) => {
           const left = pct(r.start);
           const width = Math.max(1.5, pct(r.end) - left);
-          // qa-simple-prd-p3-15: the one-pager names what the items are.
-          const n = `${r.items} ${legend ? "roadmap " : ""}${r.items === 1 ? "item" : "items"}`;
-          const label = named && prd ? `${prd.title} · ${r.milestone ? rowName(r, named) : "no milestone"} · ${n}` : named ? `${r.milestone ? rowName(r, named) : "Not in a milestone"} · ${n}` : `${rowName(r, named)} · ${n}`;
+          const n = countOf(r);
+          const label = labelOf(r);
           const when = r.date ? calendarDay(r.date, { month: "short", day: "numeric" }) : null;
-          const rowLabel = `${label}${when ? ` · ${when}` : ""}: open the roadmap${prd ? ` filtered to ${prd.title}` : ""}`;
+          // home-milestones-whole (review of PR 1439): two rows that read alike (two PRDs' or goals'
+          // "M2 · Pilot") are told apart by whose they are, in their names alone, not their text.
+          const twin = !!r.of && shown.some((o, j) => j !== k && labelOf(o) === label && o.date === r.date);
+          const heard = twin ? `${label}, ${r.of}` : label;
+          const rowLabel = `${heard}${when ? ` · ${when}` : ""}: open the roadmap${prd ? ` filtered to ${prd.title}` : ""}`;
           const words = (
             <span className={`flex min-w-0 flex-col leading-tight max-[600px]:flex-row max-[600px]:flex-wrap max-[600px]:items-baseline max-[600px]:gap-x-2 ${named ? "" : "pointer-events-none relative"}`}>
               {/* pre-demo QA S-11 (Home, named): the whole label, wrapped between words as the frame shows it, never
@@ -235,7 +246,7 @@ export function PlanByMonth({
                   {tipCol && (
                     <span className="w-6 flex-none">
                       {rowNames.length > 0 && (
-                        <InfoTip label={`the items in ${label}`} testId={`${testId}-items-tip`}>
+                        <InfoTip label={`the items in ${heard}`} testId={`${testId}-items-tip`}>
                           <ul className="flex flex-col gap-0.5">
                             {rowNames.map((x, j) => (
                               <li key={`${x}|${j}`} className="break-words">
