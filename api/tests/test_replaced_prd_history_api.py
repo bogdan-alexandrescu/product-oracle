@@ -11,9 +11,11 @@ approve or a new version of it goes through; no_claim=Trash (restoring keeps wor
 """
 
 import hashlib
+import uuid
 from datetime import UTC, date, datetime
 
 import pytest
+from sqlalchemy import select
 
 from oracle import company_time
 from oracle.docs.models import Document, DocumentVersion
@@ -170,3 +172,89 @@ async def test_replaced_prd_is_reachable_read_only_from_its_replacement(client):
     assert [p["slug"] for p in roadmap["replaced_by"]] == ["user-safety"]
     current = await _get(client, ctx, "/v1/documents/user-safety-roadmap")
     assert current["replaced_by"] == []
+
+
+async def _trash(ctx: Ctx, slug: str) -> None:
+    async with tenant_session(ctx.tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == slug))
+        doc.deleted_at = NOW
+        await s.commit()
+
+
+async def test_replaced_prd_never_trashed_stays_read_only_history(client):
+    ctx, ids = await world(client)
+    old = await _get(client, ctx, "/v1/documents/trust-plan")
+    assert old["read_only"] == "Trust plan is replaced and read-only"
+    roadmap = await _get(client, ctx, f"/v1/documents/{OLD_ROADMAP}")
+    assert (
+        roadmap["read_only"] == "Trust plan roadmap is the roadmap of a replaced PRD and read-only"
+    )
+    assert (await _get(client, ctx, "/v1/documents/user-safety"))["read_only"] is None
+    drafts = await _get(client, ctx, "/v1/simple/drafts")
+    assert ids["new_rm"] in [d["document"]["id"] for d in drafts]
+    assert ids["old_rm"] not in [d["document"]["id"] for d in drafts]
+
+
+async def test_replaced_prd_whose_replacement_is_in_trash_is_live_again(client):
+    """One rule: a PRD is history only while a live PRD replaces it."""
+    ctx, ids = await world(client, old_status="working")
+    await _trash(ctx, "user-safety")
+    old = await _get(client, ctx, "/v1/documents/trust-plan")
+    assert old["replaced_by"] == []
+    assert old["read_only"] is None
+    roadmap = await _get(client, ctx, f"/v1/documents/{OLD_ROADMAP}")
+    assert roadmap["replaced_by"] == []
+    assert roadmap["read_only"] is None
+    drafts = await _get(client, ctx, "/v1/simple/drafts")
+    assert ids["old_rm"] in [d["document"]["id"] for d in drafts]
+    tracks = await _get(client, ctx, "/v1/simple/tracks")
+    assert "Trust plan" in [t["title"] for t in tracks["tracks"]]
+    r = await client.post(f"/v1/documents/{OLD_ROADMAP}/versions", headers={
+        **ctx.as_("owner"), "content-type": "text/markdown"},
+        content=NEW_VERSION)  # fmt: skip
+    assert r.status_code in (200, 201), r.text
+
+
+async def test_history_roadmap_refuses_an_items_import(client):
+    ctx, _ = await world(client)
+    r = await client.put(f"/v1/roadmaps/{OLD_ROADMAP}/versions/2/items",
+                         headers=ctx.as_("owner"), json={"yaml": "items: []\n"})  # fmt: skip
+    assert r.status_code == 409, r.text
+    assert "Trust plan roadmap is the roadmap of a replaced PRD and read-only" in r.text
+
+
+async def test_the_company_roadmap_is_never_history(client):
+    ctx, _ = await world(client, replace=False)
+    async with tenant_session(ctx.tenant_id) as s:
+        trust = await s.scalar(select(Document).where(Document.slug == "trust-plan"))
+        tv = await s.scalar(select(DocumentVersion).where(DocumentVersion.document_id == trust.id))
+        rm = await _add(s, Document(slug="company-roadmap", title="Company roadmap",
+                                    kind="roadmap", status="draft", visibility="company",
+                                    company_roadmap=True))  # fmt: skip
+        body = "# Company roadmap 1"
+        await _add(s, DocumentVersion(
+            document_id=rm.id, number=1, markdown=body, content_hash=_hash(body),
+            source_version_id=tv.id))  # fmt: skip
+        await s.commit()
+    await _replace(client, ctx)
+    out = await _get(client, ctx, "/v1/documents/company-roadmap")
+    assert out["replaced_by"] == []
+    assert out["read_only"] is None
+
+
+async def test_a_roadmap_fed_by_a_replaced_and_a_live_prd_stays_live(client):
+    ctx, ids = await world(client, replace=False, old_status="working")
+    async with tenant_session(ctx.tenant_id) as s:
+        safety = await s.scalar(select(Document).where(Document.slug == "user-safety"))
+        sv = await s.scalar(select(DocumentVersion).where(DocumentVersion.document_id == safety.id))
+        body = "# Trust plan roadmap 3"
+        await _add(s, DocumentVersion(
+            document_id=uuid.UUID(ids["old_rm"]), number=3, markdown=body,
+            content_hash=_hash(body), source_version_id=sv.id))  # fmt: skip
+        await s.commit()
+    await _replace(client, ctx)
+    out = await _get(client, ctx, f"/v1/documents/{OLD_ROADMAP}")
+    assert out["replaced_by"] == []
+    assert out["read_only"] is None
+    drafts = await _get(client, ctx, "/v1/simple/drafts")
+    assert ids["old_rm"] in [d["document"]["id"] for d in drafts]
