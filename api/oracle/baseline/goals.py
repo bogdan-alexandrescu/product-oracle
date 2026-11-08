@@ -32,6 +32,10 @@ TYPED = (
     "due", "owner", "weight",
 )  # fmt: skip
 NOUN = re.compile(r"[a-z][a-z -]{0,23}")
+# An unfilled template placeholder in a goal's name or description: "[n]", "[N]", "[X]",
+# "[TBD]", "[?]", "[#]", "[number]", and "[n] of [n]" as one.
+_PLACEHOLDER = r"\[(?:n|x|#|\?|tbd|number|num|value)\]"
+PLACEHOLDER = re.compile(rf"(?i){_PLACEHOLDER}(?:\s+(?:of|out of)\s+{_PLACEHOLDER})?")
 STALE_DAYS = 45
 
 MESSAGES = {
@@ -463,3 +467,16 @@ def read_text(
 
 def _codes(found: list[dict[str, str]]) -> set[tuple[str, str]]:
     return {(p["code"], p["where"]) for p in found}
+
+
+def without_placeholders(text: str | None) -> str | None:
+    """``text`` with no unfilled placeholder ("[n] of [n] live helpers" -> "live helpers"):
+    a goal's name or description is never written with one; what the number would have
+    said shows as missing on the goal (goal_check)."""
+    if not text or not PLACEHOLDER.search(text):
+        return text
+    out = PLACEHOLDER.sub("", text)
+    out = re.sub(r"[ \t]{2,}", " ", out)
+    out = re.sub(r"[ \t]+([,.;:!?)])", r"\1", out)
+    out = re.sub(r"\([ \t]*\)", "", out)
+    return "\n".join(line.strip() for line in out.split("\n")).strip()
