@@ -2,7 +2,7 @@
 
 import { Fragment, useState, type CSSProperties, type FormEvent, type MouseEvent, type ReactNode } from "react";
 
-import { Button, Chip, CodeChip, confirmInPage, DataTable, InfoTip, Panel, type Column } from "@/components/ds";
+import { Button, Chip, CodeChip, confirmInPage, DataTable, Icon, InfoTip, Panel, type Column } from "@/components/ds";
 import type { EdgeOut, EntityOut, GraphOut, TraceFeature, TraceReport } from "@/lib/api/client";
 import { named, namedText, type Named } from "@/lib/codes";
 import { formatPercent } from "@/lib/format";
@@ -530,16 +530,21 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
             </Button>
           )}
           {canWrite && onRename && (
+            // On a phone a pencil only, so the row's actions stay one row at 390 px (qa-plan-26);
+            // its name and tooltip still say Rename.
             <Button
               disabled={busy}
-              className={PHONE_ACTION}
+              className={`${PHONE_ACTION} max-[600px]:w-8 max-[600px]:px-0!`}
               data-testid="rename-goal"
+              aria-label="Rename"
+              title="Rename"
               onClick={(e: MouseEvent) => {
                 e.stopPropagation();
                 onRename(g);
               }}
             >
-              Rename
+              <Icon name="pencil" size={16} className="hidden max-[600px]:block" />
+              <span className="max-[600px]:hidden">Rename</span>
             </Button>
           )}
           {canWrite && onAddSubgoal && !tree.get(g.id)?.depth && (
