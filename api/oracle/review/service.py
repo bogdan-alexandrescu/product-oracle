@@ -1157,6 +1157,12 @@ async def approve_version(
         if message := await simple_drafts.withdrawn_message(session, version):
             raise ReviewError("conflict", message)
     already = version.approved_at is not None
+    if not already:
+        # replaced-prd-history: a replaced PRD and its roadmap are read-only history.
+        from oracle.roadmap import company
+
+        if why := await company.read_only(session, document):
+            raise ReviewError("conflict", why)
     previous_approver = version.approved_by
     # A re-approval by someone else (the decider set after an earlier approval) is the
     # approval that counts: it records them and when; the same approver's is a no-op.

@@ -27,6 +27,7 @@ from oracle.authz import has_role
 from oracle.baseline.models import Entity
 from oracle.docs.models import Document
 from oracle.members.names import display_name
+from oracle.roadmap import company
 from oracle.roadmap.models import ProductTrack, TrackMilestone
 from oracle.simple import drafts, goal_asks, goal_buckets, plan_changes, service
 from oracle.simple.models import SimpleChange
@@ -172,6 +173,9 @@ async def list_simple_tracks(principal: Reader, db: TenantDB) -> SimpleTracks:
     rows = list(
         await db.scalars(select(ProductTrack).order_by(ProductTrack.created_at, ProductTrack.id))
     )
+    # replaced-prd-history: a replaced PRD's tracks are history, not in Tracks.
+    history = await company.history_track_ids(db)
+    rows = [t for t in rows if t.id not in history]
     prd_ids = {t.prd_document_id for t in rows}
     prds = (
         {d.id: d.title for d in await db.scalars(select(Document).where(Document.id.in_(prd_ids)))}

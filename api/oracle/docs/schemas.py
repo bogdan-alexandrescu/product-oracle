@@ -230,6 +230,8 @@ class DocumentOut(DocumentSummary):
     # one-roadmap-many-prds: the PRDs that replace this one, in order (empty: not
     # replaced). A replaced PRD is read-only and its items no longer feed the roadmap.
     replaced_by: list[PrdRef] = []
+    # replaced-prd-history: the PRDs this one replaced, read-only history linked from it.
+    replaces: list[PrdRef] = []
     # Simple S3b (#723): changes waiting in the document's working draft and its open
     # Simple proposals, as a count (the "changes in review" banner; no details).
     changes_in_review: int = 0

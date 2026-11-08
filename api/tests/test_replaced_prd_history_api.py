@@ -110,7 +110,7 @@ async def test_replaced_prds_roadmap_shows_no_working_draft_in_simple(client):
     assert [d["document"]["id"] for d in drafts] == [ids["new_rm"]]
     out = await _get(client, ctx, "/v1/simple/roadmap")
     assert [d["document_id"] for d in out["drafts"]] == [ids["new_rm"]]
-    assert {r["id"] for r in out["roadmaps"]} == {ids["new_rm"]}
+    assert {r["roadmap"]["id"] for r in out["roadmaps"]} == {ids["new_rm"]}
     assert {i["key"] for i in out["items"]} == {"report-button"}
     r = await client.get(f"/v1/simple/roadmap?roadmap={OLD_ROADMAP}", headers=ctx.as_("owner"))
     assert r.status_code == 404, r.text

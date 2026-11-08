@@ -34,13 +34,14 @@ from typing import Any
 from sqlalchemy import DateTime, String, Uuid, and_, func, literal, or_, select, true, union_all
 from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from oracle import audit, company_time
 from oracle.auth.deps import Principal
 from oracle.baseline.goal_order import goal_sort_key
 from oracle.baseline.models import Edge, Entity
 from oracle.docs.models import Document, DocumentVersion
-from oracle.roadmap.models import RoadmapItem, ScheduleBasis
+from oracle.roadmap.models import ProductTrack, RoadmapItem, ScheduleBasis
 
 TITLE = "Product roadmap"
 SLUG = "product-roadmap"
@@ -93,6 +94,9 @@ async def ensure(db: AsyncSession, principal: Principal) -> tuple[Document, bool
 async def feeding_ids(db: AsyncSession, roadmap_ids: list[uuid.UUID]) -> list[uuid.UUID]:
     """Of ``roadmap_ids``, those that feed Simple: the company roadmap alone while there is
     one (older per-PRD roadmaps are history), else all of them."""
+    # replaced-prd-history: a replaced PRD's own roadmap is history too, never fed.
+    history = await history_roadmaps(db)
+    roadmap_ids = [i for i in roadmap_ids if i not in history]
     company = await active(db)
     if company is None:
         return roadmap_ids
@@ -106,6 +110,77 @@ async def replaced_prd_ids(db: AsyncSession) -> set[uuid.UUID]:
             select(Document.id).where(Document.kind == "prd", Document.replaced_by != [])
         )
     )
+
+
+async def history_roadmaps(db: AsyncSession) -> dict[uuid.UUID, list[uuid.UUID]]:
+    """replaced-prd-history (the owner, Nov 7): each roadmap of a replaced PRD alone (built
+    from its versions, or its track's roadmap), never the company roadmap -> the PRDs that
+    replaced it. Such a roadmap is read-only history, as its PRD: no working draft, track or
+    Inbox row in Simple, and every edit, approve and publish refused."""
+    replaced: dict[uuid.UUID, list[uuid.UUID]] = dict(
+        (
+            await db.execute(
+                select(Document.id, Document.replaced_by).where(
+                    Document.kind == "prd", Document.replaced_by != []
+                )
+            )
+        ).all()
+    )
+    if not replaced:
+        return {}
+    built = aliased(DocumentVersion)
+    roadmap = and_(Document.kind == "roadmap", Document.company_roadmap.is_(False))
+    sources = await db.execute(
+        select(DocumentVersion.document_id, built.document_id)
+        .join(built, built.id == DocumentVersion.source_version_id)
+        .join(Document, Document.id == DocumentVersion.document_id)
+        .where(roadmap)
+    )
+    tracks = await db.execute(
+        select(ProductTrack.roadmap_document_id, ProductTrack.prd_document_id)
+        .join(Document, Document.id == ProductTrack.roadmap_document_id)
+        .where(roadmap)
+    )
+    prds: dict[uuid.UUID, set[uuid.UUID]] = {}
+    for rm, prd in [*sources.all(), *tracks.all()]:
+        prds.setdefault(rm, set()).add(prd)
+    return {
+        rm: list(dict.fromkeys(i for p in sorted(ps, key=str) for i in replaced[p]))
+        for rm, ps in prds.items()
+        if ps <= replaced.keys()
+    }
+
+
+async def history_ids(db: AsyncSession) -> set[uuid.UUID]:
+    """The replaced PRDs and their roadmaps (:func:`history_roadmaps`): read-only history."""
+    return await replaced_prd_ids(db) | set(await history_roadmaps(db))
+
+
+async def history_track_ids(db: AsyncSession) -> set[uuid.UUID]:
+    """The tracks of a replaced PRD or of its roadmap: history, never in Simple's Tracks."""
+    history = await history_ids(db)
+    if not history:
+        return set()
+    return set(
+        await db.scalars(
+            select(ProductTrack.id).where(
+                or_(
+                    ProductTrack.prd_document_id.in_(history),
+                    ProductTrack.roadmap_document_id.in_(history),
+                )
+            )
+        )
+    )
+
+
+async def read_only(db: AsyncSession, doc: Document) -> str | None:
+    """Why ``doc`` takes no edit, approval or publication (a replaced PRD or its roadmap),
+    in plain words; None when it does."""
+    if doc.kind == "prd" and doc.replaced_by:
+        return f"{doc.title} is replaced and read-only"
+    if doc.kind == "roadmap" and doc.id in await history_roadmaps(db):
+        return f"{doc.title} is the roadmap of a replaced PRD and read-only"
+    return None
 
 
 async def refs(db: AsyncSession, ids: list[uuid.UUID]) -> list[dict[str, Any]]:
