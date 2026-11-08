@@ -72286,6 +72286,10 @@
             ],
             "title": "Status"
           },
+          "open": {
+            "type": "boolean",
+            "title": "Open"
+          },
           "action": {
             "anyOf": [
               {
@@ -72388,6 +72392,7 @@
           "proposed_by",
           "suggested_by",
           "status",
+          "open",
           "created_at",
           "lock_version"
         ],

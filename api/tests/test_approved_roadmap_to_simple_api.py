@@ -423,3 +423,32 @@ async def test_a_plan_row_never_gives_a_live_items_code_to_a_second_item(client)
     assert r.status_code == 200, r.text
     assert said in r.json()["differences"]
     assert [i["code"] for i in (await read(client, ctx))["items"]].count("F-31") == 1
+
+
+async def test_a_plan_row_never_gives_the_code_a_live_item_shows_to_a_second_item(client):
+    """protects=(every-field) the code an item shows comes from its feature first: a plan row
+    "F-31 Launch flow" while Photo pins shows F-31 by its feature adds no second item, and the
+    line says so in plain words; fails_when=two items show F-31."""
+    from oracle.baseline.models import Entity
+
+    ctx, ids = await world(person_dates=False)
+    async with tenant_session(ctx.tenant_id) as s:
+        feature = Entity(type="feature", key="F-31", title="Pins", status="confirmed",
+                         origin="user", attrs={})  # fmt: skip
+        s.add(feature)
+        await s.flush()
+        v3 = await s.get(DocumentVersion, ids["v3"])
+        v3.markdown = PLAN.replace("| keep-improving | Keep improving trail maps |",
+                                   "| launch-flow | F-31 Launch flow |")  # fmt: skip
+        for r in await s.scalars(select(RoadmapItem).where(RoadmapItem.item_key == "photo-pins")):
+            r.feature_id = feature.id
+            holder = r.title
+        await s.commit()
+    await approve(client, ctx)
+    out = await read(client, ctx)
+    codes = [i["code"] for i in out["items"]]
+    assert codes.count("F-31") == 1, codes
+    assert "launch-flow" not in by_key(out)
+    said = f"F-31 Launch flow was not added: F-31 is already the code of F-31 {holder}"
+    [line] = out["applied_versions"]
+    assert said in line["differences"], line

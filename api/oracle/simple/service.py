@@ -958,20 +958,12 @@ async def item_codes(db: AsyncSession, entries: list[Entry]) -> None:
     key, F-12, or its PRD section's, F-06; the same as Priorities reads), else the PRD
     code of its own section; None for an item with neither (no initials outside
     Priorities)."""
-    from oracle.simple.priorities import FEATURE_CODE, _short_codes
+    from oracle.roadmap import codes
 
     fids = {e.row.feature_id for e in entries if e.row.feature_id}
-    codes: dict[str, str] = {}
-    keys: dict[uuid.UUID, str] = {}
-    if fids:
-        codes = await _short_codes(db, names=False)  # real codes only: no names needed
-        keys = dict(
-            (await db.execute(select(Entity.id, Entity.key).where(Entity.id.in_(fids)))).all()
-        )
+    by_feature = await codes.feature_codes(db) if fids else {}
     for e in entries:
-        code = codes.get(keys.get(e.row.feature_id, "")) if e.row.feature_id else None
-        e.code = code if code and FEATURE_CODE.fullmatch(code.split(".")[0]) else None
-        e.code = e.code or _prd_code(e.row.prd_section_key)
+        e.code = codes.code_of(e.row, by_feature)
 
 
 async def _bet_flows(db: AsyncSession, principal: Any, shown: list[Any], items: list[Any]) -> None:

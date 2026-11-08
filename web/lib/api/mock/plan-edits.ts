@@ -12,6 +12,7 @@
  * an approver, as in the API.
  */
 import type { Schemas } from "@/lib/api/client";
+import { shownCode, shownName } from "./item-code";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
 type Horizon = "now" | "next" | "later";
@@ -122,21 +123,19 @@ function apply(base: PlanEditItem[], changes: Change[]): Applied {
   return out;
 }
 
-// The read's leading code (oracle.roadmap.codes.title_code): a code, then the name.
-const titleCode = (title: string) => /^([A-Z][A-Z0-9]*-\d+[a-z]?)\s+\S/.exec(title ?? "")?.[1] ?? null;
-
-/** changeset._codes: one code, one item. An added item whose code (its title's, else its picked feature's) another item of the plan
- * reads in its title is refused in set_code's words: 422 when added, 409 at propose (taken since). Slices of one feature share it. */
+/** changeset._codes: one code, one item. An added item whose shown code (shownCode: its picked feature's, else its title's) another
+ * item of the plan shows is refused in set_code's words: 422 when added, 409 at propose (taken since). Slices of one feature share it. */
 function codesFree(ctx: PlanEditsContext, applied: Applied, status: number) {
   const plan = HORIZONS.flatMap((h) => applied.lanes[h]);
+  const featureCode = (id: string) => ctx.featureCode?.(id) ?? null;
   // The item there first holds the code: the base's, then the adds in the order made.
   const added = plan.filter((p) => p.isNew).sort((a, b) => applied.added.indexOf(a.key) - applied.added.indexOf(b.key));
   for (const [n, p] of added.entries()) {
     const before = [...plan.filter((o) => !o.isNew), ...added.slice(0, n)];
-    const code = titleCode(p.title) ?? (p.feature_id ? (ctx.featureCode?.(p.feature_id) ?? null) : null);
+    const code = shownCode(p, featureCode);
     if (!code) continue;
-    const hit = before.find((o) => o.key !== p.key && !(p.feature_id && o.feature_id === p.feature_id) && titleCode(o.title)?.toUpperCase() === code.toUpperCase());
-    if (hit) throw new Refused(status, `${code} is already the code of ${hit.title}`);
+    const hit = before.find((o) => o.key !== p.key && !(p.feature_id && o.feature_id === p.feature_id) && shownCode(o, featureCode)?.toUpperCase() === code.toUpperCase());
+    if (hit) throw new Refused(status, `${code} is already the code of ${shownName(hit, featureCode)}`);
   }
 }
 

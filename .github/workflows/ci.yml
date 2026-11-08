@@ -138,6 +138,9 @@ jobs:
           make openapi
           git diff --exit-code -- web/lib/api || (echo "Run 'make openapi' and commit the result" && exit 1)
       - run: npm run lint
+      # A spec that measures elapsed time is tagged @timing, so it runs alone in e2e-timing.
+      - name: Timing specs are tagged @timing
+        run: node scripts/check-timing-tags.mjs
       - run: npm run build
 
   e2e:

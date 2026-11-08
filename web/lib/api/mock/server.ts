@@ -41,6 +41,7 @@ import {
   RESEARCH_UNSAFE_LINK_SCENARIO,
   routeDiscussions,
   seedDiscussionInbox,
+  seedIntakeDiscussion,
   seedDiscussionReplies,
   seedDiscussions,
   seedDiscussionRecord,
@@ -104,7 +105,7 @@ import { routeFirefliesBrowse } from "./fireflies";
 import { liveReply, routeLive } from "./live";
 import { sourceBrowseRoute } from "./source-browse";
 import { DRAFT_NEW_ITEMS_SCENARIO, itemsChangedSince, routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
-import { BEFORE_DRAFTING, intakeReadInbox, LATE_ANSWER_WITHHELD, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, seedReadFailedTwice, startedIntakeRun, type IntakeContext, type SubjectLookup } from "./intake";
+import { BEFORE_DRAFTING, gapCategoryLabel, intakeReadInbox, LATE_ANSWER_WITHHELD, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, seedReadFailedTwice, startedIntakeRun, type IntakeContext, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, REPORT_DRAFT_ITEM, REPORT_DRAFT_ITEM_SCENARIO, REPORT_PRD_MOVED_SCENARIO, reportsRoute, type LiveTracks, type ReportsDb } from "./reports";
 import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
 import { addDigest, addMetricsReview, ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
@@ -187,12 +188,12 @@ import { approvalItems, CANCELLED_DRAFT, draftAct, draftPrdsOut, REPLACED_DRAFT,
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, seedTwoDependencies, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { groundTruthCheck, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth } from "./ground-truth";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, ITEM_MILESTONE_SCENARIO, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, REPLACED_PRD_TRASH_SCENARIO, seedCompanyRoadmap, seedItemMilestones } from "./one-roadmap";
-import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
+import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, PHOTO_PINS_FEATURE_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { knowPrdOrder } from "./prd-rank";
 import { openDraft } from "./simple-roadmap";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedPrdCalmPage, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
-import { applyFitDate, forgetRoadmapReads, knowGoalMapItems, ownPrd, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
+import { applyFitDate, companyToday, forgetRoadmapReads, knowGoalMapItems, ownPrd, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, MAP_GOALS, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapGoals, goalMapIdOf, goalMapItems, ladderMilestones, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
@@ -201,6 +202,7 @@ import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEn
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 import { waitingItems } from "./waiting-list";
+import { HOME_MILESTONES_SCENARIO, seedHomeMilestones } from "./home-milestones";
 import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience, spansRow, type BoardItem } from "./audience";
 import {
   draftPublicTexts,
@@ -1177,14 +1179,20 @@ function seedMeetingAgendaSheetScenario(): Db {
 
 /**
  * The plan strip's "+N more" (#723 polish): "simple-home" plus ten invented items on the
- * onboarding roadmap (Guided setup, the top PRD by priority), each with its own milestone.
+ * onboarding roadmap (Guided setup, the top PRD by priority), each placed in its own milestone
+ * of that roadmap (home-milestones-current: Home's rows are the roadmap's current milestones).
  */
 function seedSimpleHomeMilestonesScenario(): Db {
   const db = seedSimpleHomeScenario();
   const rm = db.simple_roadmap!;
+  const today = Date.parse(`${companyToday()}T00:00:00Z`);
+  rm.goal_milestones = [...(rm.goal_milestones ?? [])];
   for (let i = 1; i <= 10; i++) {
     const key = `setup-step-${i}`;
-    rm.items.push({ key, title: `Setup step ${i}`, horizon: "now", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", start: 5 * i, end: 5 * i + 20, source: "typed", milestone: { name: `Step ${i}`, day: 5 * i + 20 } });
+    const id = stableUuid(`simple-gm/step-${i}`);
+    const date = new Date(today + (5 * i + 20) * 86_400_000).toISOString().slice(0, 10);
+    rm.goal_milestones.push({ id, roadmap: "onboarding-roadmap", code: `S${i}`, name: `Step ${i}`, date, goal: "faster-activation", gates: [key], counts_when: "", progress: "not_started" });
+    rm.items.push({ key, title: `Setup step ${i}`, horizon: "now", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", start: 5 * i, end: 5 * i + 20, source: "typed", milestone: { id, name: `S${i} · Step ${i}`, day: 5 * i + 20 } });
     rm.ids[key] = stableUuid(`simple-item/${key}`);
   }
   return db;
@@ -1618,8 +1626,9 @@ function seedRoadmapMilestonesHardScenario(): Db {
  * re-planned dates, a shipped item, a new one, one moved to the next PRD and two milestones.
  * Their dates rest on verified bases (./roadmap.ts seedRoadmap), so version 3 may be approved.
  * "crowded-milestones": version 3 already approved, with five milestones in two weeks.
+ * "photo-pins-feature": Photo pins is the Ground Truth feature TR-9.
  */
-function seedApprovedRoadmapScenario(crowded = false): Db {
+function seedApprovedRoadmapScenario(crowded = false, photoPinsFeature = false): Db {
   const db = seed();
   const doc = (slug: string, title: string, kind: "prd" | "roadmap", at: string): DocumentRow => {
     const row: DocumentRow = { id: uuid(), slug, title, status: "approved", kind, template: null, template_version: null, theme: null, created_at: at, updated_at: at };
@@ -1640,6 +1649,12 @@ function seedApprovedRoadmapScenario(crowded = false): Db {
   }
   roadmap.updated_at = "2026-10-20T09:00:00Z";
   db.simple_roadmap = seedTrails(seedSimpleRoadmap());
+  if (photoPinsFeature) {
+    const at = "2026-09-10T09:00:00Z";
+    const id = stableUuid("approved-roadmap/feature/tr-9");
+    db.baseline.entities.push({ id, type: "feature", key: "TR-9", title: "Photo pins", body: null, attrs: {}, status: "confirmed", origin: "user", locked: false, locked_by: null, locked_at: null, confidence: null, run_id: null, created_at: at, updated_at: at });
+    db.simple_roadmap.items.find((x) => x.key === "photo-pins")!.feature_id = id;
+  }
   if (crowded) {
     roadmap.status = "approved";
     applyRoadmapVersion(db, roadmap, db.versions.find((v) => v.document_id === roadmap.id && v.number === 3)!);
@@ -4221,10 +4236,14 @@ function load(): Db {
                 ? () => seedApprovedRoadmapScenario()
               : scenario === CROWDED_MILESTONES_SCENARIO
                 ? () => seedApprovedRoadmapScenario(true)
+              : scenario === PHOTO_PINS_FEATURE_SCENARIO
+                ? () => seedApprovedRoadmapScenario(false, true)
               : scenario === ONE_ROADMAP_SCENARIO
                 ? seedOneRoadmapScenario
               : scenario === REPLACED_PRD_TRASH_SCENARIO
                 ? seedReplacedPrdTrashScenario
+              : scenario === HOME_MILESTONES_SCENARIO
+                ? () => ({ ...seed(), simple_roadmap: seedHomeMilestones() })
               : scenario === OLD_MILESTONES_SCENARIO
                 ? () => {
                     const db = seedOneRoadmapScenario();
@@ -4339,7 +4358,9 @@ function load(): Db {
             ? seedRunDiscussionsScenario(db)
             : scenario === "discussion-record"
               ? seedDiscussionRecordScenario(db)
-              : scenario === "discussion-change-kinds"
+              : scenario === "discussion-intake"
+                ? seedIntakeDiscussion({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, ensureV2(db).intakes[0])
+                : scenario === "discussion-change-kinds"
                 ? seedDiscussionChangeKindsScenario(db)
                 : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
@@ -4687,10 +4708,35 @@ function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): Su
     return { key: `run_item:${run.id}:${cp.kind}:${s.item_key}`, label: `${label} · ${s.item_key}`, url: `/runs/${run.id}`, run_id: run.id };
   }
   if (kind === "priorities") return { key: "priorities", label: "Priority order", url: "/priorities" };
+  // An intake and its gaps open on the intake's page; a PRD's own gap on its newest version (as Labels.of).
+  if (kind === "intake") {
+    const intake = ensureV2(db).intakes.find((i) => i.id === s.intake_id);
+    if (!intake) return { status: 404, detail: "Intake not found" };
+    return { key: `intake:${intake.id}`, label: intake.title, url: `/intakes/${intake.id}` };
+  }
+  if (kind === "gap") {
+    const gap = ensureV2(db).gaps.find((g) => g.id === s.gap_id);
+    if (!gap) return { status: 404, detail: "Gap not found" };
+    const label = `${gapCategoryLabel(gap.category)} gap`;
+    if (gap.intake_id) return { key: `gap:${gap.id}`, label, url: `/intakes/${gap.intake_id}` };
+    const doc = gap.document_id ? findDocument(db, gap.document_id) : undefined;
+    const newest = doc ? docVersions(db, doc).pop() : undefined;
+    if (!doc || !newest) return { status: 404, detail: "Gap not found" };
+    return { key: `gap:${gap.id}`, label, url: `/documents/${doc.slug}/v/${newest.number}` };
+  }
   // ask-page-context: the page's own name, as the API (Labels.of).
   if (kind === "screen") return { key: `screen:${s.path}`, label: (s.view as { name?: string } | undefined)?.name || screenPageName(String(s.path)), url: String(s.path) };
   const id = Object.values(s)[0];
   return { key: `${kind}:${id}`, label: kind.replace("_", " "), url: "/" };
+}
+
+/** As service.Labels.gone: a discussion whose subject's row is missing (deleted); its page opens no thread. */
+function discussionGone(db: Db, d: DiscussionRow): boolean {
+  const s = d.subject as Record<string, unknown>;
+  if (["document", "section", "roadmap_item"].includes(d.subject_kind)) return !findDocument(db, String(s.document_id));
+  if (d.subject_kind === "checkpoint" || d.subject_kind === "checkpoint_item") return !db.runs?.runs.some((r) => r.id === s.run_id);
+  if (d.subject_kind === "intake" || d.subject_kind === "gap") return "status" in discussionSubject(db, d.subject_kind, s);
+  return false;
 }
 
 /** D13: a "general" item on the whole draft, raised on `v` by `authorId` (as create_general_feedback). */
@@ -8136,7 +8182,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     // F2: the track group (the track's owner, else every owner); its new and open alerts count.
     const tracked = inboxTracks(roadmapCtx, db.roadmap, seenBefore);
     // G6: invitations, mentions and changes proposed in discussions; new and open ones count.
-    const discussions = discussionInboxRows(db.discussions ?? emptyDiscussions(), db.members, me, seenBefore);
+    const discussions = discussionInboxRows(db.discussions ?? emptyDiscussions(), db.members, me, seenBefore, (d) => discussionGone(db, d));
     const discussing = discussions.filter((r) => r.state !== "done").length;
     // A5: pending access requests, for owners and approvers; each counts.
     const accessRequestRows = inboxAccessRequests(db, me);

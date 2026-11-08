@@ -89,7 +89,8 @@ test("a mention shows its excerpt in quotes", async ({ page }) => {
 // surface and not another; no_claim=the visual order of groups.
 test("the badge equals New + Open with discussion rows present", async ({ page }) => {
   await inboxAs(page, APPROVER);
-  await expect(group(page, "new").locator("tr[data-row]")).toHaveCount(2);
+  // Saved carts' mention and changes, the goals interview's and the priorities' changes.
+  await expect(group(page, "new").locator("tr[data-row]")).toHaveCount(4);
   const total = (await tabCount(page, "New")) + (await tabCount(page, "Seen"));
   await expect(badge(page)).toHaveText(String(total));
   await expect(page.getByText(`${total} waiting`)).toBeVisible();

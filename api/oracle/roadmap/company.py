@@ -54,6 +54,7 @@ from oracle.auth.deps import Principal
 from oracle.baseline.goal_order import goal_sort_key
 from oracle.baseline.models import Edge, Entity
 from oracle.docs.models import Document, DocumentVersion
+from oracle.roadmap import codes
 from oracle.roadmap.models import ProductTrack, RoadmapItem, ScheduleBasis
 
 TITLE = "Product roadmap"
@@ -538,15 +539,14 @@ async def carry_other_prds(
             continue
         values = {c: getattr(old, c) for c in COPIED}
         values["position"] = start + carried
-        db.add(
-            RoadmapItem(
-                **values,
-                milestone=old.milestone,
-                roadmap_document_id=version.document_id,
-                roadmap_version_id=version.id,
-                note=old.note,
-            )
+        carry = RoadmapItem(
+            **values,
+            milestone=old.milestone,
+            roadmap_document_id=version.document_id,
+            roadmap_version_id=version.id,
+            note=old.note,
         )
+        db.add(codes.copied_from(carry, roadmap_version_id=previous.id))
         carried += 1
     return carried
 

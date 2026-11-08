@@ -291,3 +291,54 @@ async def test_resume_rules(client, clock):
     assert nxt.status_code == 201, nxt.text
     assert nxt.json()["change"]["draft_ids"] == change["draft_ids"]
     assert (await the_draft(client, w))["changes"] == 2
+
+
+async def test_submit_copies_codes_from_the_version_the_draft_is_on(client):
+    """protects=(every-field) a submitted draft's version keeps the codes its base version
+    shows: version 1 holds F-31 on two items, a run's unapproved version 2 drops it from one,
+    and a draft on version 1 is submitted with both F-31 rows; fails_when=the copy source is
+    the item's latest row on any version (version 2), so submit answers 409."""
+    from sqlalchemy import update
+
+    w = await world()
+    assert (await edit_title(client, w, "decider")).status_code == 201
+    one, two = (uuid.UUID(w.ids[k]) for k in ("move_dates-a", "move_dates-b"))
+    cols = [c.key for c in RoadmapItem.__mapper__.column_attrs
+            if c.key not in ("id", "created_at", "updated_at", "roadmap_version_id")]  # fmt: skip
+    async with tenant_session(w.ctx.tenant_id) as s:
+        for rid, title in ((one, "F-31 Night digest"), (two, "F-31 Day digest")):
+            await s.execute(update(RoadmapItem).where(RoadmapItem.id == rid).values(title=title))
+        v1 = await s.scalar(
+            select(DocumentVersion).where(
+                DocumentVersion.document_id == uuid.UUID(w.roadmap_id), DocumentVersion.number == 1
+            )
+        )
+        v2 = DocumentVersion(
+            document_id=v1.document_id,
+            number=2,
+            markdown=v1.markdown,
+            content_hash="example-2",
+            source_version_id=v1.source_version_id,
+        )
+        s.add(v2)
+        await s.flush()
+        for row in list(await s.scalars(select(RoadmapItem).where(
+                RoadmapItem.roadmap_version_id == v1.id))):  # fmt: skip
+            copy = RoadmapItem(**{c: getattr(row, c) for c in cols}, roadmap_version_id=v2.id)
+            if row.id == one:
+                copy.title = "Night digest"
+            s.add(copy)
+        await s.commit()
+    d = await the_draft(client, w)
+    r = await client.post(f"{DRAFTS}/{d['id']}/submit", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    assert r.json()["version"] == 3, r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        v3 = await s.scalar(
+            select(DocumentVersion).where(
+                DocumentVersion.document_id == uuid.UUID(w.roadmap_id), DocumentVersion.number == 3
+            )
+        )
+        titles = set(await s.scalars(select(RoadmapItem.title).where(
+            RoadmapItem.roadmap_version_id == v3.id)))  # fmt: skip
+    assert {"F-31 Night digest", "F-31 Day digest"} <= titles, titles

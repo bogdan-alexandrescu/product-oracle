@@ -54,6 +54,8 @@ import {
   ownPrd,
   pickedName,
   prdCode,
+  shownCode,
+  shownName,
   codedTitle,
   dependencyOf,
   loopOf,
@@ -424,7 +426,7 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
     else if (f === "prd_document_id") out[f] = ownPrd(s).id;
     else if (f === "depends_on") out[f] = [...(s.depends ?? [])];
     else if (f === "parent_key") out[f] = s.parent ?? null;
-    else if (f === "code") out[f] = (s.feature_id && db.feature_codes?.[s.feature_id]) || codedTitle(s.title, prdCode(s.section))[0];
+    else if (f === "code") out[f] = shownCode(s, (id) => db.feature_codes?.[id]);
     else if (f === "status") out[f] = s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned");
     else if (f === "risk") out[f] = (s.risks ?? []).find((r) => r.flag === target.flag && (r.subject ?? null) === (target.subject ?? null)) ?? null;
   }
@@ -1674,7 +1676,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
 /** changes._free_code: who already has ``code`` (another item of the roadmap or a Ground Truth feature), in plain words; null when it is free. */
 function codeTaken(db: SimpleDb, seen: SimpleDb, key: string, code: string): string | null {
   const other = seen.items.find((x) => x.key !== key && !x.trashed && String(read(seen, x.key, ["code"], {}).code ?? "").toUpperCase() === code);
-  if (other) return `${code} is already the code of ${code} ${codedTitle(other.title, prdCode(other.section))[1]}`;
+  if (other) return `${code} is already the code of ${shownName(other, (id) => seen.feature_codes?.[id])}`;
   if (Object.values(db.feature_codes ?? {}).some((k) => k.toUpperCase() === code)) return `${code} is already the code of a Ground Truth feature`;
   return null;
 }

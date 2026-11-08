@@ -19,7 +19,9 @@ import { newCompany, seeded, stableUuid } from "./ids";
 import { milestoneOut, oldMilestonesOut, routeMilestones, type MockMilestone, type OldCtx } from "./simple-milestones";
 import { betSubject, flowFor, type VisualsDb } from "./simple-visuals";
 import type { OnePagerDb } from "./simple-one-pager";
-import { appliedMilestones, rowCodeTaken, type AppliedRecord } from "./approved-roadmap";
+import { appliedMilestones, planRowState, rowCodeTaken, type AppliedRecord } from "./approved-roadmap";
+import { codedTitle, prdCode } from "./item-code";
+export { codedTitle, prdCode, shownCode, shownName } from "./item-code";
 import { PLAN_PRD_SLUG, planMilestones, planSlices, planSpan, type PlanDb } from "./simple-plan";
 import { COMPANY_SLUG, COMPANY_TITLE } from "./one-roadmap";
 import { startEffort } from "./simple-priorities";
@@ -219,6 +221,8 @@ interface SimpleDb {
   /** roadmap-keydates review ("roadmap-keydates-uncoded"): a track milestone record's own day
    * (record name -> day), as a record with a target date reads; none: undated. */
   record_dates?: Record<string, string>;
+  /** home-milestones-current: track milestone records that were dropped (record names). */
+  record_dropped?: string[];
   /** approved-roadmap-to-simple: roadmaps Simple knows besides ROADMAPS (slug -> its title,
    * PRD, track key and track title), known while their items are the roadmap's. */
   extra_roadmaps?: Record<string, { title: string; prd: string; track: string; track_title: string }>;
@@ -382,20 +386,6 @@ export const goalOrderKey = (key: string): string => `0${String(goalRank(key)).p
 export function goalPositionOf(key: string): number | null {
   const g = companyGoals.find((x) => x.key === key);
   return g ? goalPosition(g) : null;
-}
-
-/** The PRD's own code of a section an item came from ("f-06" -> "F-06"); null when the key is no code (service.py). */
-export function prdCode(section: string | null | undefined): string | null {
-  const m = /^([a-z]{1,3})-(\d+)$/i.exec((section ?? "").trim());
-  return m ? `${m[1].toUpperCase()}-${m[2]}` : null;
-}
-
-/** roadmap-edit-fixes (service.coded_title): an item whose title carries its code ("F-07
- * Alpha") reads as code F-07 and name Alpha; else its code and title. */
-export function codedTitle(title: string, code: string | null): [string | null, string] {
-  const m = /^([A-Z][A-Z0-9]*-\d+[a-z]?)\s+(\S.*)$/.exec(title);
-  if (!m || (code && code !== m[1])) return [code, title];
-  return [m[1], m[2].trim()];
 }
 
 /** The item a stored dependency key names: its key, its code, else the key of its feature. */
@@ -1593,7 +1583,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
         : []),
       ...[...new Set(seeds.flatMap((s) => (s.record ? [s.record] : [])))].map((name) => {
         const of = seeds.filter((s) => s.record === name);
-        return { id: recordOf(of[0]).record_id!, track_id: stableUuid(`simple-track/${of[0].track}`), name, date: db.record_dates?.[name] ?? null, horizon: "now" as const, status: "planned" as const, item_ids: of.map((s) => db.ids[s.key]), ...UNDATED };
+        return { id: recordOf(of[0]).record_id!, track_id: stableUuid(`simple-track/${of[0].track}`), name, date: db.record_dates?.[name] ?? null, horizon: "now" as const, status: db.record_dropped?.includes(name) ? ("dropped" as const) : ("planned" as const), item_ids: of.map((s) => db.ids[s.key]), ...UNDATED };
       }),
       // approved-roadmap-to-simple: each shown roadmap's applied version's milestones.
       ...(chosen ? [chosen] : readable).flatMap((slug) => appliedMilestones(db, slug)),
@@ -1669,9 +1659,15 @@ function appliedVersionOut(db: SimpleDb, slug: string, role: Role, all: Map<stri
     else if (endDiffers) differences.push(`${x.s.title} ends ${dayWord(end)}, version ${n} says ${dayWord(row.end)}`);
     else if (startDiffers) differences.push(`${x.s.title} starts ${dayWord(start)}, version ${n} says ${dayWord(row.start)}`);
   }
-  // As lines' _not_added_rows: the version's rows that added no item because their code was taken.
-  const shownKeys = new Set(db.items.filter((s) => s.roadmap === slug).map((s) => s.key));
-  for (const row of a.plan) if (!shownKeys.has(row.key)) differences.push(...[rowCodeTaken(db, slug, row.title)].filter((x): x is string => !!x));
+  // As lines' _not_added_rows: the version's rows with no state that match no item (by key or title) and added none because their code was taken.
+  const mine = db.items.filter((s) => s.roadmap === slug);
+  const shownKeys = new Set(mine.map((s) => s.key));
+  const shownTitles = new Set(mine.map((s) => s.title.trim().toLowerCase()));
+  for (const row of a.plan) {
+    if (planRowState(row.status) || shownKeys.has(row.key) || shownTitles.has(row.title.toLowerCase())) continue;
+    const said = rowCodeTaken(db, slug, row.title);
+    if (said) differences.push(said);
+  }
   return {
     roadmap: { id: roadmapId(slug), slug, title: roadmapTitle(db, slug) },
     version: n, approved_at: a.approved_at, href: a.href,

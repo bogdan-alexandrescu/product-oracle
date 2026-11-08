@@ -1130,14 +1130,15 @@ async def _not_taken(
 ) -> None:
     """One code, one item: 422 when another item of the roadmap reads ``code`` (``own_only``:
     as its own, its title's, not from its feature or PRD) or, but for ``own_only``, a Ground
-    Truth feature has it."""
+    Truth feature has it. The code an item shows is oracle.roadmap.codes.shown_code's."""
+    from oracle.roadmap import codes
     from oracle.simple.priorities import _short_codes
 
     await service.item_codes(db, list(by_id.values()))
     for d in by_id.values():
         if d is entry or d.row.id == entry.row.id or (own_only and _code_of(d)):
             continue
-        shown = service.coded_title(d.row.title, _code_of(d))[0]
+        shown = codes.shown_code(d.row.title, _code_of(d))
         if shown and shown.upper() == code.upper():
             raise ChangeError(422, f"{code} is already the code of {_named(d)}")
     if own_only:
