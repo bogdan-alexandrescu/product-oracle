@@ -1,6 +1,7 @@
-import { expect, test, type Locator, type Page } from "./test";
+import { expect, test, type Page } from "./test";
 
 import { login } from "./helpers";
+import { contrast } from "./contrast-helpers";
 
 /*
  * QA pass 1, docs lane: the Evidence tab of a PRD version (/documents/saved-carts/v/2/evidence),
@@ -17,30 +18,6 @@ async function openEvidence(page: Page) {
 }
 
 /** WCAG contrast of an element's text against the first opaque background behind it. */
-async function contrast(el: Locator): Promise<number> {
-  return el.evaluate((node) => {
-    const rgb = (c: string) => (c.match(/[\d.]+/g) ?? []).map(Number);
-    const lum = ([r, g, b]: number[]) => {
-      const f = (v: number) => {
-        const s = v / 255;
-        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-      };
-      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
-    };
-    const fg = rgb(getComputedStyle(node).color);
-    let bg = [255, 255, 255];
-    for (let n: Element | null = node; n; n = n.parentElement) {
-      const c = rgb(getComputedStyle(n).backgroundColor);
-      if (c.length >= 3 && (c.length < 4 || c[3] > 0.9)) {
-        bg = c;
-        break;
-      }
-    }
-    const [a, b] = [lum(fg), lum(bg)].sort((x, y) => y - x);
-    return (a + 0.05) / (b + 0.05);
-  });
-}
-
 test("qa-docs-29: the coverage matrix shows names only, no section keys or citation ids", async ({ page }) => {
   await openEvidence(page);
   const matrix = page.getByTestId("evidence-matrix");
