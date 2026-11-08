@@ -296,8 +296,9 @@ async def test_resume_rules(client, clock):
 async def test_submit_copies_codes_from_the_version_the_draft_is_on(client):
     """protects=(every-field) a submitted draft's version keeps the codes its base version
     shows: version 1 holds F-31 on two items, a run's unapproved version 2 drops it from one,
-    and a draft on version 1 is submitted with both F-31 rows; fails_when=the copy source is
-    the item's latest row on any version (version 2), so submit answers 409."""
+    and a draft on version 1 is submitted with both F-31 rows, its version recording version 1
+    as its base; fails_when=the copy source is the item's latest row on any version (version
+    2), so submit answers 409, or the base recorded is the latest version (version 2)."""
     from sqlalchemy import update
 
     w = await world()
@@ -342,3 +343,4 @@ async def test_submit_copies_codes_from_the_version_the_draft_is_on(client):
         titles = set(await s.scalars(select(RoadmapItem.title).where(
             RoadmapItem.roadmap_version_id == v3.id)))  # fmt: skip
     assert {"F-31 Night digest", "F-31 Day digest"} <= titles, titles
+    assert v3.base_number == 1
