@@ -14,6 +14,7 @@ import { GOALS_OBSERVE, useGoalsLevel } from "@/lib/goals-autonomy";
 import { api, ApiError, unwrap, type ConflictOut, type EntityOut, type ProposalOut } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { CurrentStateView, DesiredList, ReadyBand, StateTabs, useFeatureStates } from "@/components/current-state/CurrentState";
+import { shownTitle } from "@/lib/placeholders";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { AddItemSheet, type AddKind } from "@/app/baseline/_components/AddItem";
@@ -375,7 +376,7 @@ export default function BaselinePage() {
   const confirmGoal = (goal: EntityOut) =>
     act(async () => {
       await unwrap(api.POST("/v1/baseline/entities/{entity_id}/confirm", { params: { path: { entity_id: goal.id } } }));
-      return `Confirmed “${goal.title}”.`;
+      return `Confirmed “${shownTitle(goal)}”.`;
     });
 
   /** #345: a new subgoal under `parent`, proposed like any goal; its target is set in its drawer. */
@@ -393,7 +394,7 @@ export default function BaselinePage() {
           body: { type: "goal", key, title, attrs: {}, parent_id: parent.id, origin: "user" },
         }),
       );
-      setNotice(`Added “${title}” under “${parent.title}”.`);
+      setNotice(`Added “${title}” under “${shownTitle(parent)}”.`);
       refresh();
       return true;
     } catch (e) {

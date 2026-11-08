@@ -7,7 +7,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { goalPosition, sortGoals } from "@/lib/goal-order";
-import { withoutPlaceholders } from "@/lib/placeholders";
+import { goalName, withoutPlaceholders } from "@/lib/placeholders";
 
 import { DEPOSITS_IDS } from "./blockers";
 import { describe, proposer } from "./describe";
@@ -788,8 +788,10 @@ function updateEntity(
   writer: { origin: "user" | "agent"; userId: string; reason?: string | null; runId?: string | null },
 ): ProposalRow | null {
   if (e.type === "goal") {
-    // As service.update_entity: a goal's name and description are written with no unfilled placeholder.
-    if (typeof changes.title === "string") changes = { ...changes, title: withoutPlaceholders(changes.title) || e.key.replace(/[-_]/g, " ") };
+    // As service.update_entity: a goal's name is stripped and never blank; it and the description are written
+    // with no unfilled placeholder.
+    if (typeof changes.title === "string" && !changes.title.trim()) throw new MockError(422, "A goal needs a name");
+    if (typeof changes.title === "string") changes = { ...changes, title: goalName(changes.title, e.key) };
     if (typeof changes.body === "string") changes = { ...changes, body: withoutPlaceholders(changes.body) };
   }
   const diff = entityDiff(e, changes);
@@ -855,6 +857,7 @@ function canonicalCode(key: string): string | null {
 
 /** A person's new entity, as service.create_entity: confirmed and locked, a goal proposed (B2). */
 function createEntity(s: BaselineState, input: Schemas["EntityCreate"], userId: string): EntityRow {
+  if (input.type === "goal" && typeof input.title === "string" && !input.title.trim()) throw new MockError(422, "A goal needs a name");
   if (!input.title?.trim()) throw new MockError(422, "title must not be empty");
   if (!input.key || input.key.length > 120 || !(KEY_RE.test(input.key) || CODE_KEY_RE.test(input.key))) throw new MockError(422, "key: lowercase letters, digits, . _ -");
   if (CODE_KEY_RE.test(input.key) && input.type !== "feature") throw new MockError(422, "Only a feature's key can be a feature code.");
@@ -874,7 +877,7 @@ function createEntity(s: BaselineState, input: Schemas["EntityCreate"], userId: 
   if (refusal) throw new MockError(422, refusal);
   // A goal's name and description carry no unfilled placeholder, as service.create_entity (_goal_words).
   if (input.type === "goal") {
-    input = { ...input, title: withoutPlaceholders(input.title) || input.key.replace(/[-_]/g, " "), body: withoutPlaceholders(input.body) };
+    input = { ...input, title: goalName(input.title, input.key), body: withoutPlaceholders(input.body) };
   }
   const at = now();
   const e: EntityRow = {
@@ -1481,8 +1484,10 @@ export async function routeBaseline(
       const type = q.get("type");
       const status = q.get("status");
       const rows = s.entities.filter((e) => shown(e) && (!type || e.type === type) && (!status || e.status === status));
-      // goal-order: goals in the one goal order, as the API lists them.
-      return json(200, (type === "goal" ? sortGoals(rows) : rows).map(entityOut));
+      // goal-order: goals in the one goal order, as the API lists them; a goal's name and description as shown
+      // (goals.goal_name): no "[n]" stored before the guard. The graph keeps the stored text.
+      const out = (type === "goal" ? sortGoals(rows) : rows).map(entityOut);
+      return json(200, out.map((o) => (o.type === "goal" ? { ...o, title: goalName(o.title, o.key), body: withoutPlaceholders(o.body) } : o)));
     }
 
     if (head === "entities" && !id && m === "POST") {

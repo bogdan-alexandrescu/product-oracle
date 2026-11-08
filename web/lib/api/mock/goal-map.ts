@@ -19,6 +19,7 @@
  * routeLadderMilestone). Invented people, products and numbers only.
  */
 import type { Schemas } from "@/lib/api/client";
+import { goalName } from "@/lib/placeholders";
 
 import type { TrashDb, TrashEntryRow } from "./trash";
 
@@ -477,7 +478,7 @@ function finish(map: GoalMap, items: { id: string; title: string; status: string
     // One store: a goal that is a Baseline goal reads its name from it.
     const e = baseline.find((x) => x.id === g.id);
     if (e) {
-      g.name = e.title;
+      g.name = goalName(e.title, e.key);
       if (typeof e.attrs.target === "number") g.target = e.attrs.target;
     }
   }
@@ -502,7 +503,7 @@ function finish(map: GoalMap, items: { id: string; title: string; status: string
   // Confirmed goals with no number to aim at, never a guardrail (goal_map.build's off_map).
   const off_map = baseline
     .filter((e) => e.status === "confirmed" && !onMap.has(e.id) && typeof e.attrs.target !== "number" && !e.attrs.guardrail)
-    .map((e) => ({ id: e.id, key: e.key, name: e.title }));
+    .map((e) => ({ id: e.id, key: e.key, name: goalName(e.title, e.key) }));
   return { ...map, goals: inGoalOrder(map.goals, baseline), gaps, unplaced, off_map };
 }
 

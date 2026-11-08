@@ -12,7 +12,7 @@ import { api, unwrap, type EdgeOut, type EntityDetail, type EntityOut, type Grap
 import { formatDate, formatDateRange, formatDateTime } from "@/lib/format";
 import { named } from "@/lib/codes";
 import { useMe } from "@/lib/me";
-import { hasPlaceholder } from "@/lib/placeholders";
+import { hasPlaceholder, shownBody, shownTitle, withoutPlaceholders } from "@/lib/placeholders";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { EvidenceChip } from "./EvidenceChip";
@@ -96,12 +96,16 @@ function attrLabel(key: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-/** The goal a parent attribute names, by id or key ("g-a2-scaling" and "g.a2-scaling" alike), by its name. */
+/**
+ * The goal a parent attribute names, by id or key ("g-a2-scaling" and "g.a2-scaling" alike), by its name; nothing while
+ * the graph loads, "Not in the Ground Truth" only when it is loaded and has no such goal.
+ */
 function parentName(graph: GraphOut | undefined, value: unknown): string {
   if (typeof value !== "string" || !value.trim()) return "—";
+  if (!graph) return "";
   const plain = (k: string) => k.trim().toLowerCase().replace(/[._\s]/g, "-");
   const found = graph?.entities.find((e) => e.type === "goal" && (e.id === value.trim() || plain(e.key) === plain(value)));
-  return found?.title ?? "Not in the Ground Truth";
+  return found ? shownTitle(found) : "Not in the Ground Truth";
 }
 
 /** A day, a moment or a span of days month first: "Mar 31, 2027", "Mar 1 – Mar 31, 2027"; null when it is none. */
@@ -227,7 +231,7 @@ export function EntityDrawer({
     }
   }
   const d = q.data;
-  const title = d?.title ?? entity.title;
+  const title = shownTitle(d ?? entity);
   // A subgoal's code is its place in the goal tree (#345), as its chip shows: G-B.1, or none.
   const treeCode = d?.parent_id ? goalCodes(graph).get(entity.id) : undefined;
   const code = treeCode !== undefined ? treeCode : named(title, d?.key ?? entity.key).code;
@@ -561,10 +565,10 @@ export function EntityDrawer({
               </InspectorSection>
             ) : (
               <>
-                {d.body && (
+                {shownBody(d) && (
                   <InspectorSection label="Description">
-                    <p className="line-clamp-4 whitespace-pre-line text-text2" title={d.body}>
-                      {d.body}
+                    <p className="line-clamp-4 whitespace-pre-line text-text2" title={shownBody(d) ?? undefined}>
+                      {shownBody(d)}
                     </p>
                   </InspectorSection>
                 )}
@@ -620,7 +624,7 @@ export function EntityDrawer({
               <SubgoalActions goal={d} graph={graph} busy={busy} onMove={moveGoal} onArchive={() => setAsking("archive")} />
             )}
 
-            <History entityId={d.id} updatedAt={d.updated_at} graph={graph} />
+            <History entityId={d.id} updatedAt={d.updated_at} graph={graph} goal={d.type === "goal"} />
 
             <Links
               detail={d}
@@ -1140,8 +1144,11 @@ function revisionChanges(
   before: Record<string, unknown> | null | undefined,
   after: Record<string, unknown> | null | undefined,
   graph?: GraphOut,
+  goal = false,
 ) {
   if (!before) return ["Created"];
+  // A goal's name as shown: no "[n]" stored before the guard.
+  const words = (k: string, v: unknown) => (goal && k === "title" ? withoutPlaceholders(asText(v)) : asText(v));
   if (!after) return ["Removed"];
   const out: string[] = [];
   for (const [k, name] of [
@@ -1149,7 +1156,7 @@ function revisionChanges(
     ["body", "Description"],
     ["status", "Status"],
   ] as const) {
-    if (asText(before[k]) !== asText(after[k])) out.push(k === "body" ? "Description changed" : `${name}: ${asText(before[k])} → ${asText(after[k])}`);
+    if (asText(before[k]) !== asText(after[k])) out.push(k === "body" ? "Description changed" : `${name}: ${words(k, before[k])} → ${words(k, after[k])}`);
   }
   const was = (before.attrs ?? {}) as Record<string, unknown>;
   const now = (after.attrs ?? {}) as Record<string, unknown>;
@@ -1164,7 +1171,7 @@ function revisionChanges(
 }
 
 /** The entry's history: its revisions, newest first. Reloads when the entry changes. */
-function History({ entityId, updatedAt, graph }: { entityId: string; updatedAt: string; graph: GraphOut | undefined }) {
+function History({ entityId, updatedAt, graph, goal }: { entityId: string; updatedAt: string; graph: GraphOut | undefined; goal: boolean }) {
   const q = useQuery(`baseline-revisions:${entityId}:${updatedAt}`, () =>
     unwrap(
       api.GET("/v1/baseline/entities/{entity_id}/revisions", {
@@ -1185,7 +1192,7 @@ function History({ entityId, updatedAt, graph }: { entityId: string; updatedAt: 
           {rows.map((r) => (
             <li key={r.id} className="text-sm">
               <span className="tnum text-text2">{formatDateTime(r.created_at)}</span>{" "}
-              {revisionChanges(r.before, r.after, graph).join(" · ")}
+              {revisionChanges(r.before, r.after, graph, goal).join(" · ")}
             </li>
           ))}
         </ul>

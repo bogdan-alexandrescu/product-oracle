@@ -1,5 +1,6 @@
 import { byGoalOrder } from "@/lib/goal-order";
 import { named, type Names } from "@/lib/codes";
+import { goalName } from "@/lib/placeholders";
 
 /** The fields the goal tree reads (an EntityOut is one). */
 type GoalLike = {
@@ -66,7 +67,7 @@ export function goalTree<T extends GoalLike>(entities: T[], numbered: GoalLike[]
     .sort(byGoalOrder)
     .forEach((g, i) => {
       const subs = live.filter((s) => isSub(s) && s.parent_id === g.id).sort(byGoalOrder);
-      const own = named(g.title, g.key);
+      const own = named(goalName(g.title, g.key), g.key);
       out.push({
         goal: g,
         tag: `G${i + 1}`,
@@ -76,7 +77,7 @@ export function goalTree<T extends GoalLike>(entities: T[], numbered: GoalLike[]
         children: subs.length,
       });
       subs.forEach((s, j) => {
-        const sub = named(s.title, s.key);
+        const sub = named(goalName(s.title, s.key), s.key);
         out.push({
           goal: s,
           tag: `G${i + 1}.${j + 1}`,

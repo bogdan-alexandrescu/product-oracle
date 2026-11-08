@@ -87,7 +87,8 @@ test("rename: a goal stored with '[n]' reads without it, is renamed from its Goa
   await signIn(page);
   const row = await groundTruth(page);
   await expect(row.getByRole("button", { name: CLEAN })).toBeVisible();
-  await expect(row).not.toContainText("[n]");
+  // The name: its Target column reads the target as written ("[n] live helpers"), not the name.
+  await expect(row.getByRole("button").filter({ hasText: "[n]" })).toHaveCount(0);
   await row.getByRole("button", { name: CLEAN }).click();
   const panel = page.getByTestId("entity-drawer");
   await expect(panel.getByRole("heading", { name: CLEAN })).toBeVisible();
@@ -97,7 +98,8 @@ test("rename: a goal stored with '[n]' reads without it, is renamed from its Goa
   await page.goto("/home");
   const home = page.getByTestId("home-goals");
   await expect(home).toContainText(CLEAN);
-  await expect(home).not.toContainText("[n]");
+  // The name; the card's target reads as written ("/ [n] live helpers").
+  await expect(home).not.toContainText("KR 1.1 [n]");
 
   const back = await groundTruth(page);
   // The goal's panel already open: its row's Rename turns it to the Edit form.
@@ -121,7 +123,7 @@ test("confirmed: a confirmed goal reads without '[n]' on the Goal map, and its r
   await onGoalMap(page, CLEAN);
 
   const back = await groundTruth(page);
-  await expect(back).not.toContainText("[n]");
+  await expect(back.getByRole("button").filter({ hasText: "[n]" })).toHaveCount(0);
   await rename(page, back, RENAMED);
   await expect(back).not.toContainText(CLEAN);
 
