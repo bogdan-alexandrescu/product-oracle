@@ -111,3 +111,36 @@ export function seedHomeMilestoneGoals(): SimpleDb {
   rm.record_dropped = [];
   return rm;
 }
+
+export const HOME_MILESTONE_TRACKS_SCENARIO = "home-milestones-tracks";
+
+/**
+ * home-milestones-tracks (re-review of PR 1439): the "home-milestones-current" roadmaps, Alerts'
+ * own M2 "[Launch (beta)]" kept, and Partner invite links (Onboarding, Faster activation) placed
+ * in the Alerts track's "M2 · Launch (beta)" too: a track milestone is one row wherever its items
+ * sit. On Pricing, two goals each have their own M3 with no name: Grow retention's holds Seat
+ * bundles, Keep alerts quiet's (a goal no item carries) holds Volume discounts (no goal), beside
+ * the Pricing track's "M3 · Prices live" (Usage meter); Annual billing (no goal) types a bare "M3".
+ */
+export function seedHomeMilestoneTracks(): SimpleDb {
+  const rm = seedHomeMilestones();
+  const own = (id: string, goal: string, gates: string[]): MockMilestone => ({
+    id: stableUuid(`simple-gm/tracks-${id}`),
+    roadmap: "pricing-roadmap",
+    code: "M3",
+    name: "",
+    date: null,
+    goal,
+    gates,
+    counts_when: "",
+    progress: "not_started",
+  });
+  rm.goal_milestones = [...(rm.goal_milestones ?? []), own("gr3", "grow-retention", ["price-seats"]), own("qa3", "quiet-alerts", ["price-discounts"])];
+  rm.items.push(
+    { key: "partner-invites", title: "Partner invite links", horizon: "next", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "alerts", confidence: "medium", record: "M2 · Launch (beta)" },
+    { key: "price-seats", title: "Seat bundles", horizon: "next", roadmap: "pricing-roadmap", goal: "grow-retention", confidence: "medium" },
+    { key: "price-discounts", title: "Volume discounts", horizon: "next", roadmap: "pricing-roadmap", confidence: "medium" },
+  );
+  for (const key of ["partner-invites", "price-seats", "price-discounts"]) rm.ids[key] = stableUuid(`simple-item/${key}`);
+  return rm;
+}

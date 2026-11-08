@@ -201,7 +201,7 @@ import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEn
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 import { waitingItems } from "./waiting-list";
-import { HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONES_SCENARIO, seedHomeMilestoneGoals, seedHomeMilestones } from "./home-milestones";
+import { HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONES_SCENARIO, seedHomeMilestoneGoals, seedHomeMilestones, seedHomeMilestoneTracks } from "./home-milestones";
 import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience, spansRow, type BoardItem } from "./audience";
 import {
   draftPublicTexts,
@@ -4189,6 +4189,8 @@ function load(): Db {
                 ? () => ({ ...seed(), simple_roadmap: seedHomeMilestones() })
               : scenario === HOME_MILESTONE_GOALS_SCENARIO
                 ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneGoals() })
+              : scenario === HOME_MILESTONE_TRACKS_SCENARIO
+                ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneTracks() })
               : scenario === OLD_MILESTONES_SCENARIO
                 ? () => {
                     const db = seedOneRoadmapScenario();

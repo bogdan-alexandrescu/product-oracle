@@ -1,4 +1,4 @@
-import { HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONES_SCENARIO } from "../lib/api/mock/home-milestones";
+import { HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONES_SCENARIO } from "../lib/api/mock/home-milestones";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN, login } from "./helpers";
 import { expect, test, type Page } from "./test";
@@ -159,6 +159,36 @@ test("two goals' M1 on one roadmap are two rows, a track milestone across roadma
   // Alerts' own M3 (no name) and the track's "M3 · Rules ready": one row, the track's name kept.
   expect(labels.filter((l) => l.startsWith("M3"))).toEqual(["M3 · Rules ready · 2 items"]);
   expect(await itemsOf(page, "M3 · Rules ready · 2 items")).toEqual([["Alert rules engine", "Mobile alert push"]]);
+});
+
+/*
+ * Card home-track-milestone-one-row (re-review of PR 1439), on the mock's "home-milestones-tracks"
+ * scenario: protects = a track milestone is company-wide, so it is one row wherever its items sit,
+ * and a roadmap's own milestone of its code joins it there only when it is that roadmap's only
+ * one; two goals' own M3 on Pricing are two rows beside the track's M3, each its own name (none
+ * borrows the track's), and a bare "M3" typed by an item of no goal guesses neither goal's (it is
+ * the track's); fails_when = "M2 · Launch (beta)" shows twice, a goal's nameless M3 reads "M3 ·
+ * Prices live", Annual billing sits under a goal's M3, or the twin M3 rows sound the same.
+ */
+test("a track milestone is one row across roadmaps, two goals' M3 beside it two rows of their own", async ({ page }) => {
+  await home(page, 1440, ADMIN.email, HOME_MILESTONE_TRACKS_SCENARIO);
+  const labels = (await page.getByTestId("home-strip-label").allTextContents()).map((t) => t.replace(/\s+/g, " ").trim());
+  // Alerts' own "[Launch (beta)]" M2 is Alerts' only M2: it joins the track's row, which holds Onboarding's item too.
+  expect(labels.filter((l) => l.startsWith("M2 · Launch"))).toEqual(["M2 · Launch (beta) · 4 items"]);
+  expect(await itemsOf(page, "M2 · Launch (beta) · 4 items")).toEqual([["Alert history export", "Alert routing by team", "Partner invite links", "Weekly alert digest"]]);
+  // Onboarding's two PRDs' M2 stay their own rows.
+  expect(labels.filter((l) => l.startsWith("M2 · Pilot"))).toEqual(["M2 · Pilot · 2 items", "M2 · Pilot · 2 items"]);
+  // Pricing: two goals' M3 (no names) and the track's "M3 · Prices live": three rows, none borrowing the track's name.
+  expect(labels.filter((l) => l.startsWith("M3 · Prices live"))).toEqual(["M3 · Prices live · 2 items"]);
+  expect(await itemsOf(page, "M3 · Prices live · 2 items")).toEqual([["Annual billing", "Usage meter"]]);
+  expect(await itemsOf(page, "M3 · 1 item")).toEqual([["Seat bundles"], ["Volume discounts"]]);
+  // The two look-alike M3 rows sound different, even for a goal no loaded item carries.
+  const lines = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: /^M3 · 1 item$/ }) });
+  await expect(lines).toHaveCount(2);
+  const links = await Promise.all([0, 1].map((k) => lines.nth(k).getByTestId("home-strip-row").getAttribute("aria-label")));
+  const tips = await Promise.all([0, 1].map((k) => lines.nth(k).getByTestId("home-strip-items-tip").getAttribute("aria-label")));
+  expect(new Set(links).size, links.join(" / ")).toBe(2);
+  expect(new Set(tips).size, tips.join(" / ")).toBe(2);
 });
 
 /*
