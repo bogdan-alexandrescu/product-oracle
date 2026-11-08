@@ -386,41 +386,71 @@ function expected(call) {
   while (ts.isPropertyAccessExpression(e) || ts.isCallExpression(e)) {
     if (ts.isCallExpression(e)) {
       const c = e.expression;
-      if ((ts.isIdentifier(c) && c.text === "expect") || (ts.isPropertyAccessExpression(c) && ts.isIdentifier(c.expression) && c.expression.text === "expect")) return e.arguments[0] ?? null;
+      if (isExpect(c)) return e.arguments[0] ?? null;
       e = c;
     } else e = e.expression;
   }
   return null;
 }
 
+/** `expect(...)` or `expect.soft(...)` and the like: whether `callee` is expect's. */
+function isExpect(callee) {
+  return (ts.isIdentifier(callee) && callee.text === "expect") || (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) && callee.expression.text === "expect");
+}
+
+/** The node whose value is `n`'s: `n` past parentheses, await, `as`, `satisfies` and `!`. */
+function valueOf(n) {
+  const passes = (p) => ts.isParenthesizedExpression(p) || ts.isAwaitExpression(p) || ts.isAsExpression(p) || ts.isSatisfiesExpression(p) || ts.isNonNullExpression(p) || ts.isTypeAssertionExpression(p);
+  while (n.parent && passes(n.parent)) n = n.parent;
+  return n;
+}
+
 /**
  * Whether a test's `body` is a coarse guard: a "timing-check: coarse" comment (not text in a
- * string), and at least one bound on a measured value, each a literal of at least 1000 ms.
+ * string), and every use of a measured value in it is one of: set whole into a variable
+ * (const ms = Date.now() - t0; ms = await paint(page)), which is then measured too; or the
+ * subject of a bound that is a literal of at least 1000 ms (expect(ms).toBeLessThan(1500)).
+ * At least one such bound. Anything else (maths on it, a comparison, a throw, a poll, a bound
+ * it is the argument of, a deadline check) makes the test not coarse.
  */
 function coarseGuard(body, sf, helpers, clocks) {
   if (!comments(body, sf).some((c) => c.includes(COARSE))) return false;
-  // Variables the test sets from a measure: const ms = await paint(page).
-  const measured = new Set();
-  const findMeasured = (n) => {
-    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer && measures(n.initializer, helpers, clocks)) measured.add(symbolOf(n.name, clocks));
-    ts.forEachChild(n, findMeasured);
-  };
-  findMeasured(body);
-  const usesMeasured = (n) => (ts.isIdentifier(n) && measured.has(symbolOf(n, clocks))) || !!ts.forEachChild(n, usesMeasured);
-  let bounds = 0;
-  let ok = true;
-  const visit = (n) => {
-    if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && BOUNDS.includes(n.expression.name.text)) {
-      const x = expected(n);
-      if (x && (measures(x, helpers, clocks) || usesMeasured(x))) {
-        bounds++;
-        const b = n.arguments[0] && skipParens(n.arguments[0]);
-        if (!b || !ts.isNumericLiteral(b) || Number(b.text.replace(/_/g, "")) < COARSE_MIN_MS) ok = false;
+  const measured = new Set(); // variables set from a measure: const ms = await paint(page)
+  const isMeasured = (n) => ts.isIdentifier(n) && measured.has(symbolOf(n, clocks));
+  const isTarget = (n) => (ts.isVariableDeclaration(n.parent) && n.parent.name === n) || (ts.isBinaryExpression(n.parent) && n.parent.left === n && n.parent.operatorToken.kind === ts.SyntaxKind.EqualsToken);
+  // Where a measured value goes: the variable it is set into, "bound", or null for anything else.
+  const goesTo = (n) => {
+    const v = valueOf(n);
+    const p = v.parent;
+    if (ts.isVariableDeclaration(p) && p.initializer === v && ts.isIdentifier(p.name)) return p.name;
+    if (ts.isBinaryExpression(p) && p.right === v && p.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(p.left)) return p.left;
+    if (ts.isCallExpression(p) && p.arguments[0] === v && isExpect(p.expression)) {
+      const m = p.parent;
+      if (ts.isPropertyAccessExpression(m) && m.expression === p && BOUNDS.includes(m.name.text) && ts.isCallExpression(m.parent) && m.parent.expression === m) {
+        const b = m.parent.arguments[0] && skipParens(m.parent.arguments[0]);
+        if (b && ts.isNumericLiteral(b) && Number(b.text.replace(/_/g, "")) >= COARSE_MIN_MS) return "bound";
       }
+    }
+    return null;
+  };
+  let bounds, ok, grew;
+  const visit = (n) => {
+    if (!isTarget(n) && (measureAt(n, helpers, clocks) || isMeasured(n))) {
+      const u = goesTo(n);
+      if (u === "bound") bounds++;
+      else if (!u) ok = false;
+      else if (symbolOf(u, clocks) && !isMeasured(u)) {
+        measured.add(symbolOf(u, clocks));
+        grew = true;
+      }
+      return;
     }
     ts.forEachChild(n, visit);
   };
-  visit(body);
+  do {
+    [bounds, ok, grew] = [0, true, false];
+    visit(body);
+  } while (grew);
   return ok && bounds > 0;
 }
 
