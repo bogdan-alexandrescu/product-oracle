@@ -139,33 +139,32 @@ def apply(base: list[RoadmapItem], changes: list[Any]) -> Applied:
 
 
 async def _codes(db: AsyncSession, applied: Applied, error: type[ChangeSetError]) -> None:
-    """every-field: one code, one item. An added item whose code, its title's ("F-31 Launch
-    flow") or else its picked feature's, another item of the plan reads in its title is refused
+    """every-field: one code, one item. An added item whose shown code (its picked feature's,
+    else its title's: oracle.roadmap.codes.shown) another item of the plan shows is refused
     in set_code's words (``error``: 422 when added, 409 when it was taken since, at propose).
     Slices of one feature share its code. oracle.roadmap.codes checks every write too."""
     from types import SimpleNamespace
 
     from oracle.roadmap import codes
-    from oracle.simple import service as simple_service
 
     plan = [p for _, p in applied.items()]
     # The item there first holds the code: the base's, then the adds in the order made.
     added = [p for p in plan if p.base is None]
     added.sort(key=lambda p: applied.added.index(p.key) if p.key in applied.added else 0)
+    by_feature = await codes.feature_codes(db) if added else {}
+
+    def item(p: Planned) -> SimpleNamespace:
+        section = p.base.prd_section_key if p.base is not None else None
+        return SimpleNamespace(item_key=p.key, title=p.title, feature_id=p.feature_id,
+                               prd_section_key=section)  # fmt: skip
+
     for n, p in enumerate(added):
         before = [o for o in plan if o.base is not None] + added[:n]
-        code = codes.title_code(p.title)
-        if code is None and p.feature_id is not None:
-            e = SimpleNamespace(
-                row=SimpleNamespace(feature_id=p.feature_id, prd_section_key=None), code=None
-            )
-            await simple_service.item_codes(db, [e])  # type: ignore[list-item]
-            code = e.code
-        others = [SimpleNamespace(item_key=o.key, title=o.title, feature_id=o.feature_id)
-                  for o in before]  # fmt: skip
-        hit = codes.clash(code, p.key, p.feature_id, others) if code else None
+        code = codes.shown(item(p), by_feature)
+        others = [item(o) for o in before]
+        hit = codes.clash(code, p.key, p.feature_id, others, by_feature) if code else None
         if hit is not None:
-            raise error(codes.taken(code, hit.title))  # type: ignore[arg-type]
+            raise error(codes.taken(code, codes.named(hit, by_feature)))  # type: ignore[arg-type]
 
 
 # --- reads ----------------------------------------------------------------------------------

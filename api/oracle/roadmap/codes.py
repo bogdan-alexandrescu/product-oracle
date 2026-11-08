@@ -1,13 +1,17 @@
-"""every-field: one code, one item. The one check every write of a roadmap item's title or
-code passes through: before each flush, a roadmap item added, renamed, given another feature
-or brought back from Trash whose title leads with a code ("F-31 Launch flow") another live
-item of the same plan (its version, its draft) already reads in its title is refused with
-409, in set_code's words ("F-31 is already the code of F-31 Alert routing by team"). Items of
+"""every-field: one code, one item. The code an item shows (:func:`shown_code`) is its
+feature's, else its PRD section's, else the one its title leads with ("F-31 Launch flow").
+The one check every write of a roadmap item passes through: before each flush, a roadmap item
+added, renamed, given another feature or brought back from Trash that would newly show a code
+another live item of the same plan (its version, its draft) shows is refused with 409, in
+set_code's words ("F-31 is already the code of F-31 Alert routing by team"); a copy of an
+item that showed the code already (a new version's, a carried row) is no new claim. Items of
 one feature (its slices) share its code. The paths that can say more check first in their
 own words (oracle.simple.changes._not_taken, oracle.roadmap.changeset, Apply approved roadmap
 in oracle.simple.approved_roadmap, Restore in oracle.simple.trash_items)."""
 
 import re
+import uuid
+from types import SimpleNamespace
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -36,13 +40,100 @@ def title_code(title: str | None) -> str | None:
     return m.group(0).strip() if m and title[m.end() :].strip() else None  # type: ignore[index]
 
 
-def clash(code: str, key: str, feature_id: Any, others: list[Any]) -> Any:
-    """The first of ``others`` (items: ``item_key``, ``title``, ``feature_id``) that reads
-    ``code`` in its title, other than the item ``key`` and the slices of its feature."""
+def shown_code(title: str | None, code: str | None) -> str | None:
+    """The code a person sees on an item: ``code`` (its feature's, else its PRD section's:
+    :func:`code_of`), else the one its title leads with."""
+    return code or title_code(title)
+
+
+def code_of(row: Any, by_feature: dict[uuid.UUID, str]) -> str | None:
+    """An item's code from its feature (``by_feature``: :func:`feature_codes`), else its PRD
+    section's; None for an item with neither."""
+    from oracle.simple.priorities import prd_code
+
+    got = by_feature.get(row.feature_id) if row.feature_id is not None else None
+    return got or prd_code(getattr(row, "prd_section_key", None))
+
+
+def shown(row: Any, by_feature: dict[uuid.UUID, str]) -> str | None:
+    """The code ``row`` (``title``, ``feature_id``, ``prd_section_key``) shows."""
+    return shown_code(row.title, code_of(row, by_feature))
+
+
+def named(row: Any, by_feature: dict[uuid.UUID, str]) -> str:
+    """An item as a person reads it: the code it shows, then its name ("F-31 Shipping step")."""
+    from oracle.simple.service import coded_title
+
+    code, name = coded_title(row.title, code_of(row, by_feature))
+    return f"{code} {name}" if code else name
+
+
+def _feature_reads() -> tuple[Any, Any]:
+    from oracle.baseline.models import Entity
+    from oracle.roadmap.models import RoadmapItem
+
+    features = (
+        select(Entity.id, Entity.key, Entity.title)
+        .where(Entity.type == "feature")
+        .order_by(Entity.created_at, Entity.key)
+    )
+    sections = (
+        select(RoadmapItem.feature_id, RoadmapItem.prd_section_key)
+        .where(
+            RoadmapItem.feature_id.is_not(None),
+            RoadmapItem.prd_section_key.is_not(None),
+            # Published roadmaps only: a draft's code is not every reader's.
+            RoadmapItem.roadmap_version_id.is_not(None),
+        )
+        .order_by(RoadmapItem.created_at)
+    )
+    return features, sections
+
+
+def _by_feature(features: list[Any], sections: list[Any]) -> dict[uuid.UUID, str]:
+    """Each feature's code when it is a code (its key, F-12, or its PRD section's, F-06: as
+    Priorities reads it, oracle.simple.priorities._short_codes), by the feature's id."""
+    from oracle.simple.priorities import FEATURE_CODE, prd_code, short_codes
+
+    key_of = {i: k for i, k, _ in features}
+    prd: dict[str, str] = {}
+    for fid, section in sections:
+        code = prd_code(section)
+        if code and fid in key_of:
+            prd.setdefault(key_of[fid], code)
+    names = {k: t for _, k, t in features if (t or "").strip()}
+    made = short_codes([k for _, k, _ in features], prd, names)
+    return {
+        fid: code
+        for (fid, _, _), code in zip(features, made, strict=True)
+        if code and FEATURE_CODE.fullmatch(code.split(".")[0])
+    }
+
+
+async def feature_codes(db: Any) -> dict[uuid.UUID, str]:
+    """Every feature's code (:func:`_by_feature`), read with an async session."""
+    features, sections = _feature_reads()
+    return _by_feature(list((await db.execute(features)).all()),
+                       list((await db.execute(sections)).all()))  # fmt: skip
+
+
+def _feature_codes_sync(session: Session) -> dict[uuid.UUID, str]:
+    features, sections = _feature_reads()
+    with session.no_autoflush:
+        return _by_feature(list(session.execute(features).all()),
+                           list(session.execute(sections).all()))  # fmt: skip
+
+
+def clash(
+    code: str, key: str, feature_id: Any, others: list[Any], by_feature: dict[uuid.UUID, str]
+) -> Any:
+    """The first of ``others`` (items: ``item_key``, ``title``, ``feature_id``,
+    ``prd_section_key``) that shows ``code``, other than the item ``key`` and the slices of
+    its feature."""
     for o in others:
         if o.item_key == key or (feature_id is not None and o.feature_id == feature_id):
             continue
-        if (title_code(o.title) or "").upper() == code.upper():
+        if (shown(o, by_feature) or "").upper() == code.upper():
             return o
     return None
 
@@ -54,17 +145,29 @@ def _owner(row: Any) -> tuple[str, Any] | None:
     return None
 
 
-def _touched(row: Any, session: Session) -> bool:
+def _before(row: Any, name: str) -> Any:
+    history = inspect(row).attrs[name].history
+    return history.deleted[0] if history.deleted else getattr(row, name)
+
+
+def _claims(session: Session, row: Any, code: str, by_feature: dict[uuid.UUID, str]) -> bool:
+    """Whether this write newly gives ``row`` the ``code`` it shows: an added row that is no
+    copy of its item showing it already (:func:`_held`), a row brought back from Trash, or one
+    whose title, feature or PRD section now shows another code."""
     if row in session.new:
+        return not _held(session, row, code, by_feature)
+    if _before(row, "deleted_at") is not None:
         return True
-    state = inspect(row)
-    return any(state.attrs[c].history.has_changes() for c in ("title", "deleted_at", "feature_id"))
+    before = SimpleNamespace(**{c: _before(row, c) for c in ("title", "feature_id",
+                                                             "prd_section_key")})  # fmt: skip
+    return (shown(before, by_feature) or "").upper() != code.upper()
 
 
 def check_flush(session: Session) -> None:
-    """Raises :class:`CodeTaken` when a roadmap item about to be written takes a code another
-    live item of its plan reads (what this flush writes counts as written)."""
+    """Raises :class:`CodeTaken` when a roadmap item about to be written newly shows a code
+    another live item of its plan shows (what this flush writes counts as written)."""
     from oracle.roadmap.models import RoadmapItem
+    from oracle.simple.priorities import prd_code
 
     rows = [
         o
@@ -72,16 +175,20 @@ def check_flush(session: Session) -> None:
         if isinstance(o, RoadmapItem)
         and o.roadmap_document_id is not None
         and o.deleted_at is None
-        and title_code(o.title)
+        and (title_code(o.title) or o.feature_id is not None or prd_code(o.prd_section_key))
         and _owner(o) is not None
-        and _touched(o, session)
+        and (o in session.new or _changed(o))
     ]
     if not rows:
         return
+    by_feature = _feature_codes_sync(session)
     pending = [o for o in session.new if isinstance(o, RoadmapItem)]
     gone = set(session.deleted)
     by_owner: dict[tuple[str, Any], list[Any]] = {}
     for row in rows:
+        code = shown(row, by_feature)
+        if code is None or not _claims(session, row, code, by_feature):
+            continue
         owner = _owner(row)
         if owner not in by_owner:
             col, value = owner  # type: ignore[misc]
@@ -97,26 +204,31 @@ def check_flush(session: Session) -> None:
             live = [*stored, *(o for o in pending if _owner(o) == owner and id(o) not in seen)]
             by_owner[owner] = [o for o in live if o not in gone and o.deleted_at is None]
         others = [o for o in by_owner[owner] if o is not row]
-        code = title_code(row.title)
-        hit = clash(code, row.item_key, row.feature_id, others)  # type: ignore[arg-type]
+        hit = clash(code, row.item_key, row.feature_id, others, by_feature)
         if hit is not None:
-            # Two rows written together (a new version's copies): the one that read the code
-            # before, on another version of the roadmap, holds it; the other takes it.
-            if _held(session, row, code) and not _held(session, hit, code):  # type: ignore[arg-type]
-                row, hit = hit, row
-            raise CodeTaken(code, hit.title)  # type: ignore[arg-type]
+            raise CodeTaken(code, named(hit, by_feature))
 
 
-def _held(session: Session, row: Any, code: str) -> bool:
-    """``row``'s item read ``code`` already on another row of its roadmap (as it is stored)."""
+def _changed(row: Any) -> bool:
+    state = inspect(row)
+    return any(
+        state.attrs[c].history.has_changes()
+        for c in ("title", "deleted_at", "feature_id", "prd_section_key")
+    )
+
+
+def _held(session: Session, row: Any, code: str, by_feature: dict[uuid.UUID, str]) -> bool:
+    """``row``'s item showed ``code`` already on another live row of its roadmap (as it is
+    stored): ``row`` is a copy of it (a new version's, a draft's, a carried row)."""
     from oracle.roadmap.models import RoadmapItem
 
     with session.no_autoflush:
-        titles = session.execute(
-            select(RoadmapItem.title).where(
+        stored = session.execute(
+            select(RoadmapItem.title, RoadmapItem.feature_id, RoadmapItem.prd_section_key).where(
                 RoadmapItem.roadmap_document_id == row.roadmap_document_id,
                 RoadmapItem.item_key == row.item_key,
+                RoadmapItem.deleted_at.is_(None),
                 RoadmapItem.id != row.id if row.id is not None else RoadmapItem.id.is_not(None),
             )
-        ).scalars()
-        return any((title_code(t) or "").upper() == code.upper() for t in titles)
+        ).all()
+    return any((shown(o, by_feature) or "").upper() == code.upper() for o in stored)

@@ -284,12 +284,17 @@ async def apply(
 
     # A feature in Trash keeps its key (and its row on this version): a new item never takes it.
     taken = await trash_items.trashed_keys(db, document.id)
+    from oracle.roadmap import codes
+
+    by_feature: dict | None = None
     for p in plan.items:
         row = by_key.get(p.key or "") or by_title.get(p.title.lower())
         if row is None:
             if p.state is not None:
                 continue
-            said = _not_added(p, list(by_key.values()))
+            if by_feature is None:
+                by_feature = await codes.feature_codes(db)
+            said = _not_added(p, list(by_key.values()), by_feature)
             if said:
                 written["not_added"].append(said)
                 continue
@@ -354,20 +359,24 @@ async def apply(
     return True
 
 
-def _not_added(p: PlanItem, rows: list[RoadmapItem]) -> str | None:
+def _not_added(p: PlanItem, rows: list[RoadmapItem], by_feature: dict) -> str | None:
     """every-field: one code, one item. A new row whose title's code a live item of the version
-    reads already adds no second item (the live one stays): why, in plain words; else None."""
+    shows already (oracle.roadmap.codes.shown) adds no second item (the live one stays): why,
+    in plain words; else None."""
     from oracle.roadmap import codes
 
     code = codes.title_code(p.title)
-    hit = codes.clash(code, "", None, rows) if code else None
-    return f"{p.title} was not added: {codes.taken(code, hit.title)}" if hit else None  # type: ignore[arg-type]
+    hit = codes.clash(code, "", None, rows, by_feature) if code else None
+    if hit is None:
+        return None
+    return f"{p.title} was not added: {codes.taken(code, codes.named(hit, by_feature))}"  # type: ignore[arg-type]
 
 
 async def _not_added_rows(db: AsyncSession, version: DocumentVersion) -> list[str]:
     """The version's plan rows that added no item because their code was taken (as
     :func:`apply` leaves them out), in plain words."""
     from oracle import company_time
+    from oracle.roadmap import codes
 
     plan = parse(version.markdown or "", await company_time.company_today(db))
     if plan.empty:
@@ -376,13 +385,18 @@ async def _not_added_rows(db: AsyncSession, version: DocumentVersion) -> list[st
         await db.scalars(select(RoadmapItem).where(RoadmapItem.roadmap_version_id == version.id))
     )
     keys, titles = {r.item_key for r in rows}, {r.title.strip().lower() for r in rows}
-    return [
-        said
+    wanted = [
+        p
         for p in plan.items
-        if p.state is None and (p.key or "") not in keys and p.title.lower() not in titles
-        for said in [_not_added(p, rows)]
-        if said
+        if p.state is None
+        and (p.key or "") not in keys
+        and p.title.lower() not in titles
+        and codes.title_code(p.title)
     ]
+    if not wanted:
+        return []
+    by_feature = await codes.feature_codes(db)
+    return [said for p in wanted for said in [_not_added(p, rows, by_feature)] if said]
 
 
 async def _milestones(
