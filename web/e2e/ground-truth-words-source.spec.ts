@@ -14,8 +14,9 @@ import { expect, test } from "./test";
  * the API's export and email templates (api/oracle's .j2 and .html, Jinja tags aside: the PDF,
  * deck and public roadmap exports, the invite emails), and every string of the Python that writes
  * shown text, found by itself, none listed by hand (shownModules: each api/oracle module that
- * renders HTML, email or chat, and the modules of its own package it imports; docstrings,
- * comments, raw-string patterns, log calls and the LLM's prompts aside). And no spec in web/e2e
+ * renders HTML, email or chat, and the modules of its own or a sibling package it imports;
+ * docstrings, comments, raw-string patterns, real log calls and the LLM's prompts aside, a prompt
+ * found by its name or by its text going to a model call). And no spec in web/e2e
  * expects a page to say one: the strings given to toHaveText, toContainText, getByText and a
  * role's `name:` (test titles, comments and checks that a text is gone aside).
  * fails_when = a label such as "change it in Baseline" or "Detailed › Baseline" is left, a
@@ -23,7 +24,7 @@ import { expect, test } from "./test";
  * "Baseline to PRD".
  *
  * What may still say baseline: an id by its shape (one lowercase word, or joined to "_ / . : -":
- * "baseline", "/baseline", "baseline-tab"), and a measure's starting value: "Baseline value",
+ * "baseline", "/baseline", "baseline-tab", or written as code in a sentence: "`oracle baseline pull`"), and a measure's starting value: "Baseline value",
  * "Baseline 12", "Success metric and baseline", and the "Baseline" field beside "Predicted" on a
  * decision's or an outcome's prediction. And a CSS value ("align-items: baseline").
  */
@@ -41,6 +42,11 @@ const STARTING_VALUE =
   /baseline value|baseline ?[:=]? ?[-+]?\d|success metric and baseline|\| ?baseline ?\||(?:above|below) its baseline\b|between the baseline and|metric's baseline|no baseline for|prediction must be \{\} its baseline/gi;
 /** A CSS property set to baseline ("align-items: baseline", "vertical-align: baseline"): a value, not a word. */
 const CSS_VALUE = /\b(?:vertical-align|(?:align|justify|place)-(?:items|self|content)|(?:alignment|dominant)-baseline)\s*:\s*(?:(?:first|last)\s+)?baseline\b/g;
+/**
+ * An id written as code inside a sentence: anything in backticks ("`oracle baseline pull`"), or a quoted
+ * lone id ('never "baseline"') or an id with a placeholder ('"baseline decision <key>"').
+ */
+const CODE_ID = /`[^`\n]*`|\\?(["'])(?:[a-z][a-z0-9_]*|[a-z][a-z0-9_]*(?: (?:[a-z][a-z0-9_]*|<\w+>|\{\}))* (?:<\w+>|\{\}))\\?\1/g;
 /** A lone id or key. */
 const ID = /^[a-z][a-z0-9_]*$/;
 /** The prediction forms' starting-value field, "Baseline" beside "Predicted". */
@@ -61,7 +67,7 @@ function* sources(dir: string): Generator<string> {
 function saysOld(rel: string, said: string): boolean {
   const word = said.trim();
   if (ID.test(word) || PREDICTION_FIELD[rel] === word) return false;
-  return OLD.test(said.replace(STARTING_VALUE, "").replace(CSS_VALUE, ""));
+  return OLD.test(said.replace(STARTING_VALUE, "").replace(CSS_VALUE, "").replace(CODE_ID, ""));
 }
 
 const relOf = (file: string) => path.relative(WEB, file).split(path.sep).join("/");
@@ -268,18 +274,25 @@ function parsePython(text: string): PyParsed {
 }
 
 /**
- * A log call (log.info(...), logger.warning(...), logging.error(...), self.log(...), self.logger.info(...))
- * or a warning (warnings.warn(...)): its text goes to the server's log, never to a person.
+ * A call on a real logger, its text going to the server's log, never to a person: the logging
+ * module or a logger object (log.info(...), logger.warning(...), logging.error(...), LOG.debug(...),
+ * self.log.info(...), self.logger.info(...)), a warning (warnings.warn(...)), or a print (kept only
+ * when it writes to stderr: printLogs). A bare self.log(...) is a method of its own, and may well
+ * write text a person reads.
  */
 const LOG_CALL =
-  /(?<![\w.])(?:(?:self\.)?_?log(?:ger)?|logging|LOG)\.(?:debug|info|warning|warn|error|exception|critical|log)\s*\(|(?<![\w.])self\._?log\s*\(|(?<![\w.])warnings\.warn\s*\(/g;
+  /(?<![\w.])(?:(?:self\.)?_?log(?:ger)?|logging|LOG)\.(?:debug|info|warning|warn|error|exception|critical|log)\s*\(|(?<![\w.])warnings\.warn\s*\(|(?<![\w.])print\s*\(/g;
 
 /**
- * A hook that writes an LLM's prompt (a def named for it: prompt_lines, a run's *_prompt_lines, any name
- * ending in prompt such as system_prompt or build_prompt, or starting with _prompt): the model reads its
- * text, a person never does.
+ * A hook that writes an LLM's prompt by its name (a def named for it: prompt_lines, a run's *_prompt_lines,
+ * any name ending in prompt such as system_prompt or build_prompt, or starting with _prompt): the model reads
+ * its text, a person never does. A function whose text is passed to a model call is one too, by any name
+ * (promptBuilders).
  */
 const PROMPT_HOOK = /^([ \t]*)(?:async[ \t]+)?def[ \t]+(?:\w*prompt(?:_lines)?|_prompt\w*)[ \t]*\(/gm;
+
+/** A call on the model (the LLM gateway's or a transport's complete, an SDK's messages.create): the text it is given is a prompt. */
+const MODEL_CALL = /(?<![\w.])(?:\w+\.)*(?:gateway|transport|client|llm)\.complete\s*\(|\.messages\.create\s*\(/g;
 
 /** Where the bracket open at ``from`` in ``code`` closes (just past it). */
 function closing(code: string, from: number): number {
@@ -291,12 +304,21 @@ function closing(code: string, from: number): number {
   return code.length;
 }
 
-/** The spans of the log calls in ``code`` (a Python file's code, its strings blanked). */
-const logCalls = (code: string): [number, number][] => [...code.matchAll(LOG_CALL)].map((m) => [m.index, closing(code, m.index + m[0].length - 1)]);
+/** The spans of the log calls in ``code`` (a Python file's code, its strings blanked); a print only when it writes to stderr. */
+const logCalls = (code: string): [number, number][] =>
+  [...code.matchAll(LOG_CALL)].flatMap((m) => {
+    const span: [number, number] = [m.index, closing(code, m.index + m[0].length - 1)];
+    return !m[0].startsWith("print") || /\bfile\s*=\s*(?:\w+\s+or\s+)?sys\.stderr\b/.test(code.slice(...span)) ? [span] : [];
+  });
 
-/** The spans of the prompt hooks in ``code`` (a Python file's code, its strings blanked): each def to the next line indented no deeper than it. */
-function promptHooks(code: string): [number, number][] {
-  return [...code.matchAll(PROMPT_HOOK)].map((m) => {
+/**
+ * The spans of the prompt hooks in ``code`` (a Python file's code, its strings blanked): each def named
+ * for a prompt, or named in ``fed`` (its text goes to the model), to the next line indented no deeper than it.
+ */
+function promptHooks(code: string, fed?: Set<string>): [number, number][] {
+  const hooks = [...code.matchAll(PROMPT_HOOK)];
+  if (fed?.size) hooks.push(...code.matchAll(new RegExp(`^([ \\t]*)(?:async[ \\t]+)?def[ \\t]+(?:${[...fed].join("|")})[ \\t]*\\(`, "gm")));
+  return hooks.map((m) => {
     const body = closing(code, m.index + m[0].length - 1);
     const next = code.slice(body).search(new RegExp(`\\n(?!${m[1]}[ \\t]|[ \\t]*\\n)`));
     return [m.index, next < 0 ? code.length : body + next];
@@ -306,12 +328,13 @@ function promptHooks(code: string): [number, number][] {
 /**
  * Every string of the Python file ``text`` a person can read, as [line, text]: an f-string's
  * {…} reads "{}"; docstrings (a string alone after a "…:" line or at the top), comments, raw
- * strings (patterns), bytes, and the text of log calls and prompt hooks are left out.
+ * strings (patterns), bytes, and the text of log calls and prompt hooks (those named for a prompt,
+ * and the functions ``fed`` names, whose text goes to the model) are left out.
  */
-function pythonStrings(text: string): [number, string][] {
+function pythonStrings(text: string, fed?: Set<string>): [number, string][] {
   const out: [number, string][] = [];
   const { tokens, code, starts } = parsePython(text);
-  const unread = [...logCalls(code), ...promptHooks(code)];
+  const unread = [...logCalls(code), ...promptHooks(code, fed)];
   for (const t of tokens) {
     if (t.body === null || t.doc || t.prefix.includes("r") || t.prefix.includes("b")) continue;
     if (unread.some(([a, b]) => a <= t.at && t.at < b)) continue;
@@ -323,9 +346,9 @@ function pythonStrings(text: string): [number, string][] {
   return out;
 }
 
-/** Every string a Python module ``rel`` (holding ``text``) that shows text writes and that says an old name. */
-const pythonOldNames = (rel: string, text: string) =>
-  pythonStrings(text).flatMap(([line, said]) => (saysOld(rel, said) ? [`${rel}:${line}: ${said.trim().slice(0, 120)}`] : []));
+/** Every string a Python module ``rel`` (holding ``text``, ``fed`` its functions whose text goes to the model) that shows text writes and that says an old name. */
+const pythonOldNames = (rel: string, text: string, fed?: Set<string>) =>
+  pythonStrings(text, fed).flatMap(([line, said]) => (saysOld(rel, said) ? [`${rel}:${line}: ${said.trim().slice(0, 120)}`] : []));
 
 /**
  * What marks a Python module as one that writes text a person reads, in its code: HTML (html or
@@ -352,6 +375,30 @@ function rendersText(rel: string, text: string): boolean {
   return tokens.some((t) => t.body !== null && !t.doc && RENDERS_IN_STRINGS.test(t.body));
 }
 
+/** One "from … import …" of an api/oracle package: the package (as path parts under api/oracle) and each name it imports, with the name it takes. */
+type OracleImport = { pkg: string[]; names: [string, string][] };
+
+/** The "from oracle… import …" and "from .… import …" lines of the Python module ``rel`` (holding ``text``). */
+function oracleImportLines(rel: string, text: string): OracleImport[] {
+  const out: OracleImport[] = [];
+  const { code } = parsePython(text);
+  const here = path.posix.dirname(rel).split("/").filter((p) => p !== ".");
+  for (const m of code.matchAll(/^[ \t]*from (?:oracle((?:\.\w+)*)|(\.+)(\w+(?:\.\w+)*)?) import (\([^)]*\)|[^\n]*)/gm)) {
+    // A relative import starts in the module's own package; each dot past the first goes up one.
+    const base = m[2] === undefined ? [] : here.slice(0, Math.max(0, here.length - (m[2].length - 1)));
+    const pkg = [...base, ...(m[2] === undefined ? m[1].slice(1) : (m[3] ?? "")).split(".").filter(Boolean)];
+    const names = m[4]
+      .replace(/[()\\]/g, " ")
+      .split(",")
+      .flatMap((name): [string, string][] => {
+        const words = name.trim().split(/\s+/);
+        return words[0] ? [[words[0], words[1] === "as" && words[2] ? words[2] : words[0]]] : [];
+      });
+    out.push({ pkg, names });
+  }
+  return out;
+}
+
 /**
  * The api/oracle modules (as paths under it, "roadmap/variants.py") the Python module ``rel`` (holding
  * ``text``) imports from, "from oracle.roadmap import …" and "from .variants import …" alike, and the
@@ -359,33 +406,104 @@ function rendersText(rel: string, text: string): boolean {
  */
 function oracleImports(rel: string, text: string): string[] {
   const out: string[] = [];
-  const { code } = parsePython(text);
-  const here = path.posix.dirname(rel).split("/").filter((p) => p !== ".");
-  for (const m of code.matchAll(/^[ \t]*from (?:oracle((?:\.\w+)*)|(\.+)(\w+(?:\.\w+)*)?) import (\([^)]*\)|[^\n]*)/gm)) {
-    // A relative import starts in the module's own package; each dot past the first goes up one.
-    const base = m[2] === undefined ? [] : here.slice(0, Math.max(0, here.length - (m[2].length - 1)));
-    const pkg = [...base, ...(m[2] === undefined ? m[1].slice(1) : (m[3] ?? "")).split(".").filter(Boolean)];
+  for (const { pkg, names } of oracleImportLines(rel, text)) {
     if (pkg.length) out.push(pkg.join("/") + ".py");
-    for (const name of m[4].replace(/[()\\]/g, " ").split(",")) {
-      const word = name.trim().split(/\s+/)[0];
-      if (word) out.push([...pkg, word].join("/") + ".py");
+    for (const [name] of names) out.push([...pkg, name].join("/") + ".py");
+  }
+  for (const m of parsePython(text).code.matchAll(/^[ \t]*import oracle((?:\.\w+)+)/gm)) out.push(m[1].slice(1).split(".").join("/") + ".py");
+  return out;
+}
+
+/** Where the statement going on at ``from`` in ``code`` ends: the first line end outside brackets. */
+function statementEnd(code: string, from: number): number {
+  let depth = 0;
+  for (let i = from; i < code.length; i++) {
+    if ("([{".includes(code[i])) depth++;
+    else if (")]}".includes(code[i])) depth--;
+    else if (code[i] === "\n" && depth <= 0) return i;
+  }
+  return code.length;
+}
+
+/** The calls in ``code`` by name: "build(…)" as ["build"], "lines.facts(…)" as ["lines", "facts"]. */
+const callsIn = (code: string) => [...code.matchAll(/(?<![\w.])([A-Za-z_]\w*)(?:\.([A-Za-z_]\w*))?\s*\(/g)].map((m) => [m[1], m[2]] as const);
+
+/** The arguments of a model call (inside its brackets) that carry text: every positional one and the keywords a prompt goes by (system=, messages=, prompt=…), not model= or job=. */
+function textArgs(args: string): string {
+  const parts: string[] = [];
+  let [depth, at] = [0, 0];
+  for (let i = 0; i <= args.length; i++) {
+    if (i === args.length || (args[i] === "," && depth === 0)) {
+      parts.push(args.slice(at, i));
+      at = i + 1;
+    } else if ("([{".includes(args[i])) depth++;
+    else if (")]}".includes(args[i])) depth--;
+  }
+  return parts.filter((a) => !/^\s*\w+\s*=(?!=)/.test(a) || /^\s*(?:system|messages|prompt|content|user|input)\s*=/.test(a)).join(",");
+}
+
+/**
+ * The functions of ``files`` (path under api/oracle → text) whose returned text goes to the model,
+ * by module: each called in a model call's arguments ("complete(db, build_system(run), …)"), or
+ * called to set a name given there ("system = intro(run)" in the same function), whether defined in
+ * the module itself or imported from another ("from .lines import facts", "lines.facts()").
+ */
+function promptBuilders(files: Map<string, string>): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  const add = (rel: string, name: string) => {
+    if (files.has(rel)) (out.get(rel) ?? out.set(rel, new Set()).get(rel)!).add(name);
+  };
+  for (const [rel, text] of files) {
+    if (!text.includes(".complete(") && !text.includes(".messages.create(")) continue;
+    const { code } = parsePython(text);
+    const calls = [...code.matchAll(MODEL_CALL)];
+    if (!calls.length) continue;
+    const own = new Set([...code.matchAll(/^[ \t]*(?:async[ \t]+)?def[ \t]+(\w+)/gm)].map((m) => m[1]));
+    const imported = oracleImportLines(rel, text);
+    const resolve = (a: string, b: string | undefined) => {
+      if (b === undefined && own.has(a)) return add(rel, a);
+      if (b !== undefined && a === "self" && own.has(b)) return add(rel, b);
+      for (const { pkg, names } of imported) {
+        for (const [name, as] of names) {
+          if (as !== a) continue;
+          if (b === undefined) add(pkg.join("/") + ".py", name);
+          else add([...pkg, name].join("/") + ".py", b);
+        }
+      }
+    };
+    for (const m of calls) {
+      const open = m.index + m[0].length - 1;
+      const args = textArgs(code.slice(open + 1, closing(code, open) - 1));
+      for (const [a, b] of callsIn(args)) resolve(a, b);
+      // A name given to the call: what set it, in the same function, before the call.
+      const fn = Math.max(0, code.lastIndexOf("def ", m.index));
+      const before = code.slice(fn, m.index);
+      for (const [, name] of args.matchAll(/(?<![\w.])([A-Za-z_]\w*)\b(?!\s*[=(.\w])/g)) {
+        for (const set of before.matchAll(new RegExp(`^[ \\t]*(?:\\w+[ \\t]*,[ \\t]*)*${name}(?:[ \\t]*,[ \\t]*\\w+)*[ \\t]*(?::[^=\\n]*)?=(?!=)`, "gm"))) {
+          const at = set.index + set[0].length;
+          for (const [a, b] of callsIn(before.slice(at, statementEnd(before, at)))) resolve(a, b);
+        }
+      }
     }
   }
-  for (const m of code.matchAll(/^[ \t]*import oracle((?:\.\w+)+)/gm)) out.push(m[1].slice(1).split(".").join("/") + ".py");
   return out;
+}
+
+/** Whether a helper ``dep`` the module ``rel`` imports is in its own package or a sibling one (both in the same parent package). */
+function nearby(rel: string, dep: string): boolean {
+  const [r, d] = [path.posix.dirname(rel), path.posix.dirname(dep)];
+  return r !== "." && d !== "." && (r === d || path.posix.dirname(r) === path.posix.dirname(d));
 }
 
 /**
  * The Python modules of ``files`` (path under api/oracle → text) that write text a person reads,
  * found by themselves: each that renders HTML, email or chat (rendersText), and the modules of its
- * own package it imports, which build the text it renders (the roadmap views the public roadmap
- * draws). Tests and prompts aside.
+ * own package or a sibling package it imports, which build the text it renders (the roadmap views
+ * the public roadmap draws). Tests and prompts aside.
  */
 function shownModules(files: Map<string, string>): string[] {
   const renderers = [...files].filter(([rel, text]) => rendersText(rel, text));
-  const helpers = renderers.flatMap(([rel, text]) =>
-    oracleImports(rel, text).filter((dep) => path.posix.dirname(dep) !== "." && path.posix.dirname(dep) === path.posix.dirname(rel)),
-  );
+  const helpers = renderers.flatMap(([rel, text]) => oracleImports(rel, text).filter((dep) => nearby(rel, dep)));
   return [...new Set([...renderers.map(([rel]) => rel), ...helpers])].filter((rel) => files.has(rel) && !NOT_SHOWN.test(rel)).sort();
 }
 
@@ -408,6 +526,10 @@ const apiPython = () => (apiPythonFiles ??= new Map([...pythonModules(API)].map(
 let apiShownModules: string[] | undefined;
 const apiShown = () => (apiShownModules ??= shownModules(apiPython()));
 
+/** The api/oracle functions whose text goes to the model, by module, found once. */
+let apiPromptBuilders: Map<string, Set<string>> | undefined;
+const apiFed = () => (apiPromptBuilders ??= promptBuilders(apiPython()));
+
 test("no string a page can show in web/app, web/components or web/lib says Desired state, Current state or Baseline", () => {
   const found = ["app", "components", "lib"].flatMap((dir) => [...sources(path.join(WEB, dir))].flatMap((f) => oldNames(relOf(f), read(f))));
   expect(found).toEqual([]);
@@ -417,7 +539,8 @@ test("no string of the mock's JSON data, an export or email template, nor the Py
   const mock = fs.readdirSync(MOCK).filter((f) => f.endsWith(".json")).flatMap((f) => jsonOldNames(relOf(path.join(MOCK, f)), read(path.join(MOCK, f))));
   const sent = [...templates(API)].flatMap((f) => templateOldNames(path.relative(API, f), read(f)));
   const python = apiPython();
-  const built = apiShown().flatMap((rel) => pythonOldNames(rel, python.get(rel)!));
+  const fed = apiFed();
+  const built = apiShown().flatMap((rel) => pythonOldNames(rel, python.get(rel)!, fed.get(rel)));
   expect([...mock, ...sent, ...built]).toEqual([]);
 });
 
@@ -427,7 +550,7 @@ test("no spec in web/e2e expects a page to say Desired state, Current state or B
 });
 
 test("the check catches the old names and spares the ids and the starting values", () => {
-  for (const said of ["in the order; change it in Baseline", "Detailed › Baseline", "Baseline", "Current state", "Desired state", "Build the baseline", "Confirm the baseline."]) {
+  for (const said of ["in the order; change it in Baseline", "Detailed › Baseline", "Baseline", "Current state", "Desired state", "Build the baseline", "Confirm the baseline.", 'Say "build the baseline" to start', "Read the `x` baseline"]) {
     expect(saysOld("app/x.tsx", said), said).toBe(true);
   }
   for (const kept of [
@@ -448,6 +571,10 @@ test("the check catches the old names and spares the ids and the starting values
     ".row { display: flex; align-items: baseline; }",
     "vertical-align: baseline",
     "align-self:first baseline",
+    'text you write, never "baseline" (except a starting value)',
+    'text you write, never \\"baseline\\" (except a starting value)',
+    'e.g. "baseline decision <key>": an identifier Oracle reads',
+    "as get_baseline and `oracle baseline pull` give it",
   ]) {
     expect(saysOld("app/x.tsx", kept), kept).toBe(false);
   }
@@ -572,8 +699,11 @@ test("the check finds an old name planted in web/lib, the mock and a spec's expe
         "",
         "async def ask(db, run: str) -> str:",
         "    system = intro(run)",
-        '    answer = await gateway.complete(db, system, [{"role": "user", "content": brief(run) + lines.facts()}], 400, job="digest")',
+        '    answer = await gateway.complete(db, system, [{"role": "user", "content": brief(run) + lines.facts()}], 400, job="digest", model=chat_model())',
         "    return answer.text",
+        "",
+        "def chat_model() -> str:",
+        '    return "Chosen in the Baseline"',
       ].join("\n"),
     ],
     ["digest/lines.py", 'EMPTY = "Nothing moved in the Baseline"\nKEY = "baseline"\ndef facts() -> str:\n    return "Mind the Baseline."'],
@@ -604,6 +734,7 @@ test("the check finds an old name planted in web/lib, the mock and a spec's expe
     "digest/email.py:33: Moved in the Baseline",
     "digest/email.py:34: Printed from the Baseline",
     "digest/email.py:40: Signed in the Baseline",
+    "digest/email.py:54: Chosen in the Baseline",
     "digest/lines.py:1: Nothing moved in the Baseline",
     "roadmap/words.py:2: Planned in the Baseline",
     "slack/blocks.py:1: Moved in the Baseline",
@@ -611,7 +742,7 @@ test("the check finds an old name planted in web/lib, the mock and a spec's expe
     "slack/weekly.py:6: *{}* moved in the Baseline",
   ]);
   // fails_when = a function whose returned text goes to the model (by a variable, inside the call, or
-  // from a module it imports) is not found as a prompt builder.
+  // from a module it imports) is not found as a prompt builder, or one that only picks the model is.
   expect(Object.fromEntries([...fed].map(([rel, names]) => [rel, [...names].sort()]))).toEqual({
     "digest/email.py": ["brief", "intro"],
     "digest/lines.py": ["facts"],
