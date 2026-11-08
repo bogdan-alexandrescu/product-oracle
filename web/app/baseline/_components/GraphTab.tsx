@@ -49,6 +49,8 @@ type Props = {
   goalsNote?: string | null;
   /** #345: add a subgoal under a goal (approvers); resolves true once it is saved. */
   onAddSubgoal?: (parent: EntityOut, title: string) => Promise<boolean>;
+  /** gt-goal-rename: opens a proposed goal's panel on its Edit form, to rename it before it is confirmed. */
+  onRename?: (goal: EntityOut) => void;
 };
 
 /** #345: a new subgoal's title, under the goal it is added to. */
@@ -214,7 +216,7 @@ function fillAsk(goals: EntityOut[]) {
  * On a phone the grid becomes a list: each feature's title, then its goal links as small
  * G-tags with their strength.
  */
-export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags, onOpen, onConfirm, onAdd, onFill, onMakeMeasurable, vague = 0, onInterviewVague, goalsNote, onAddSubgoal }: Props) {
+export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags, onOpen, onConfirm, onAdd, onFill, onMakeMeasurable, vague = 0, onInterviewVague, goalsNote, onAddSubgoal, onRename }: Props) {
   const low = trace?.low ?? DEFAULT_LOW;
   const live = graph.entities.filter((e) => e.status !== "rejected");
   const goals = sortedGoals(graph);
@@ -524,6 +526,19 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
               }}
             >
               Confirm
+            </Button>
+          )}
+          {canWrite && onRename && g.status === "proposed" && (
+            <Button
+              disabled={busy}
+              className={PHONE_ACTION}
+              data-testid="rename-goal"
+              onClick={(e: MouseEvent) => {
+                e.stopPropagation();
+                onRename(g);
+              }}
+            >
+              Rename
             </Button>
           )}
           {canWrite && onAddSubgoal && !tree.get(g.id)?.depth && (

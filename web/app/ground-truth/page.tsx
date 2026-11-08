@@ -273,6 +273,8 @@ export default function BaselinePage() {
     setDiscuss(null);
     setSteps(null);
   }, []);
+  // gt-goal-rename: a goal row's Rename opens its panel on the Edit form (each press, even on the open goal).
+  const [renaming, setRenaming] = useState<{ id: string; n: number } | null>(null);
   const openItem = useCallback((id: string) => {
     setBlockerId(null);
     setOpenId(id);
@@ -598,6 +600,7 @@ export default function BaselinePage() {
               onOpen={openItem}
               onChanged={refresh}
               promote={promoteId === openEntity.id}
+              edit={renaming?.id === openEntity.id ? renaming.n : 0}
               onOpenBlocker={blockers.data?.some((b) => b.id === openEntity.id) ? () => openBlocker(openEntity.id) : undefined}
               discussionId={discuss?.entityId === openEntity.id ? discuss.discussionId : null}
               stepper={discuss?.entityId === openEntity.id ? stepper : null}
@@ -699,6 +702,14 @@ export default function BaselinePage() {
                   goalsNote={goalsNote}
                   onAdd={setAdding}
                   onAddSubgoal={canWrite ? addSubgoal : undefined}
+                  onRename={
+                    canWrite
+                      ? (g) => {
+                          openItem(g.id);
+                          setRenaming((r) => ({ id: g.id, n: (r?.n ?? 0) + 1 }));
+                        }
+                      : undefined
+                  }
                 />
               )}
             </>
