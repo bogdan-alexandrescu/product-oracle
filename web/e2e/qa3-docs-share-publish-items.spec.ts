@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from "./test";
 
 import { login, sectionStrip } from "./helpers";
+import { contrast } from "./contrast-helpers";
 
 // QA pass 3, docs lane: the Publish page (Saved carts v2: a PRD with a brief, no section
 // reviewed; Visit reminders v1: ready to publish), the version page's review counts (Saved
@@ -32,30 +33,6 @@ async function box(l: Locator) {
 }
 
 /** WCAG contrast of an element's text on the first opaque background behind it. */
-async function contrast(el: Locator): Promise<number> {
-  return el.evaluate((node) => {
-    const rgb = (c: string) => (c.match(/[\d.]+/g) ?? []).map(Number);
-    const lum = ([r, g, b]: number[]) => {
-      const f = (v: number) => {
-        const s = v / 255;
-        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-      };
-      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
-    };
-    const fg = rgb(getComputedStyle(node).color);
-    let bg = [255, 255, 255];
-    for (let n: Element | null = node; n; n = n.parentElement) {
-      const c = rgb(getComputedStyle(n).backgroundColor);
-      if (c.length >= 3 && (c.length < 4 || c[3] > 0.9)) {
-        bg = c;
-        break;
-      }
-    }
-    const [a, b] = [lum(fg), lum(bg)].sort((x, y) => y - x);
-    return (a + 0.05) / (b + 0.05);
-  });
-}
-
 /** "N of M" from the outline's progress line, "N/M" from the Review panel's Reviewed stat. */
 async function counts(page: Page) {
   const outline = await sectionStrip(page).getByTestId("review-progress").innerText();
