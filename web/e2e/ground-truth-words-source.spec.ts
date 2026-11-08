@@ -550,8 +550,30 @@ test("no spec in web/e2e expects a page to say Desired state, Current state or B
 });
 
 test("the check catches the old names and spares the ids and the starting values", () => {
-  for (const said of ["in the order; change it in Baseline", "Detailed › Baseline", "Baseline", "Current state", "Desired state", "Build the baseline", "Confirm the baseline.", 'Say "build the baseline" to start', "Read the `x` baseline"]) {
+  for (const said of [
+    "in the order; change it in Baseline",
+    "Detailed › Baseline",
+    "Baseline",
+    "Current state",
+    "Desired state",
+    "Build the baseline",
+    "Confirm the baseline.",
+    'Say "build the baseline" to start',
+    "Read the `x` baseline",
+    'Open the "baseline" page',
+    "Open the 'baseline' page",
+    "Read `Baseline` first",
+    "*Moved:* `Build the baseline`",
+    "See the `the Baseline view` tab",
+    'text you write, never "baseline" (except a starting value)',
+    "as get_baseline and `oracle baseline pull` give it",
+  ]) {
     expect(saysOld("app/x.tsx", said), said).toBe(true);
+  }
+  // fails_when = shown text in the Python passes as an id: a quoted word with no placeholder and no
+  // "never", or a backtick span that is not code.
+  for (const said of ['Open the "baseline" page', "Open the 'baseline' page", "Read `Baseline` first", "*Moved:* `Build the baseline`", "See the `the Baseline view` tab"]) {
+    expect(saysOld("slack/pings.py", said), said).toBe(true);
   }
   for (const kept of [
     "baseline",
@@ -571,12 +593,18 @@ test("the check catches the old names and spares the ids and the starting values
     ".row { display: flex; align-items: baseline; }",
     "vertical-align: baseline",
     "align-self:first baseline",
+  ]) {
+    expect(saysOld("app/x.tsx", kept), kept).toBe(false);
+  }
+  // An id written as code in the Python's text for agents: the citation ref, a CLI command, a word to avoid.
+  for (const kept of [
     'text you write, never "baseline" (except a starting value)',
     'text you write, never \\"baseline\\" (except a starting value)',
     'e.g. "baseline decision <key>": an identifier Oracle reads',
     "as get_baseline and `oracle baseline pull` give it",
+    "write it to `baseline.yaml`",
   ]) {
-    expect(saysOld("app/x.tsx", kept), kept).toBe(false);
+    expect(saysOld("runs/flows.py", kept), kept).toBe(false);
   }
   expect(saysOld("app/plan/outcomes/page.tsx", "Baseline")).toBe(false);
 });
@@ -638,6 +666,7 @@ test("the check finds an old name planted in web/lib, the mock and a spec's expe
     ]),
   );
   expect(shown.filter((rel) => NOT_SHOWN.test(rel)), "no test or prompt module is read").toEqual([]);
+  expect(shown, "the agents' tasks (runs/flows.py) are prompts, not read").not.toContain("runs/flows.py");
   expect(pythonOldNames("shares/render.py", 'TITLE = "Shared from the Baseline"\nKEY = "baseline"\nhref = f"/baseline/{slug}"')).toEqual([
     "shares/render.py:1: Shared from the Baseline",
   ]);
@@ -645,7 +674,8 @@ test("the check finds an old name planted in web/lib, the mock and a spec's expe
   // relative import) or from a sibling package, says Baseline and is not read; a model's own method
   // named log, or print to the screen, is skipped as a log call; or a real log call (the logging
   // module, a logger, print to stderr), a warning, a prompt hook, a function whose text goes to the
-  // model or a prompt module trips the check.
+  // model or a prompt module (one named for prompts, or one writing an agent's task, reached from a
+  // sibling package) trips the check.
   const planted = new Map([
     [
       "digest/email.py",
@@ -704,6 +734,15 @@ test("the check finds an old name planted in web/lib, the mock and a spec's expe
         "",
         "def chat_model() -> str:",
         '    return "Chosen in the Baseline"',
+        "",
+        "def welcome() -> str:",
+        '    return "Welcome to the Baseline"',
+        "",
+        "async def greet(db, to: str) -> EmailMessage:",
+        '    await gateway.complete(db, welcome(), [], 100, job="digest")',
+        "    msg = EmailMessage()",
+        "    msg.set_content(welcome())",
+        "    return msg",
       ].join("\n"),
     ],
     ["digest/lines.py", 'EMPTY = "Nothing moved in the Baseline"\nKEY = "baseline"\ndef facts() -> str:\n    return "Mind the Baseline."'],
@@ -716,6 +755,7 @@ test("the check finds an old name planted in web/lib, the mock and a spec's expe
         "from .blocks import header",
         "from oracle.roadmap.words import label",
         "from oracle import settings",
+        "from oracle.runs.tasks import DIGEST",
         "def post(c):",
         '    c.chat_postMessage(blocks=[{"type": "mrkdwn", "text": f"*{c.name}* moved in the Baseline"}])',
       ].join("\n"),
@@ -724,6 +764,7 @@ test("the check finds an old name planted in web/lib, the mock and a spec's expe
     ["slack/footer.py", 'TEXT = "Posted from the Baseline"'],
     ["roadmap/words.py", 'def label() -> str:\n    return "Planned in the Baseline"'],
     ["roadmap/store.py", 'NOTE = "Stored in the Baseline"'],
+    ["runs/tasks.py", 'DIGEST_TASK = "Sum up the week in the Baseline."\nDIGEST = Segment(task="Read the Baseline and write the digest.")'],
     ["settings.py", 'NAME = "Set in the Baseline"'],
   ]);
   expect(shownModules(planted)).toEqual(["digest/email.py", "digest/lines.py", "roadmap/words.py", "slack/blocks.py", "slack/footer.py", "slack/weekly.py"]);
@@ -735,14 +776,16 @@ test("the check finds an old name planted in web/lib, the mock and a spec's expe
     "digest/email.py:34: Printed from the Baseline",
     "digest/email.py:40: Signed in the Baseline",
     "digest/email.py:54: Chosen in the Baseline",
+    "digest/email.py:57: Welcome to the Baseline",
     "digest/lines.py:1: Nothing moved in the Baseline",
     "roadmap/words.py:2: Planned in the Baseline",
     "slack/blocks.py:1: Moved in the Baseline",
     "slack/footer.py:1: Posted from the Baseline",
-    "slack/weekly.py:6: *{}* moved in the Baseline",
+    "slack/weekly.py:7: *{}* moved in the Baseline",
   ]);
   // fails_when = a function whose returned text goes to the model (by a variable, inside the call, or
-  // from a module it imports) is not found as a prompt builder, or one that only picks the model is.
+  // from a module it imports) is not found as a prompt builder, or one that only picks the model, or
+  // whose text also goes into an email (welcome), is.
   expect(Object.fromEntries([...fed].map(([rel, names]) => [rel, [...names].sort()]))).toEqual({
     "digest/email.py": ["brief", "intro"],
     "digest/lines.py": ["facts"],
