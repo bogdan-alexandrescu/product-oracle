@@ -92,7 +92,7 @@ export function PlanByMonth({
   items?: { id: string; title: string; code?: string | null }[];
   /** The timeline slide (C-8): each row's items fold to its count, their names on hover and on asking. */
   fold?: boolean;
-  /** Home (home-milestones-current): the roadmap's item names by id; a row's tooltip lists its items under its label. */
+  /** Home (home-milestones-current): the roadmap's item names by id; a row's (i) lists its items (on hover, tap or focus). */
   names?: ReadonlyMap<string, string>;
 }) {
   const open = useOpenFeature();
@@ -138,18 +138,30 @@ export function PlanByMonth({
   const edgeLine = some
     ? `${plan.past_edge} of the ${some.items} roadmap items ${holderText} ${ends} ${after}`
     : `${plan.past_edge} ${plan.past_edge === 1 ? edgeWord[0] : edgeWord[1]}${holderText ? ` ${holderText}` : ""} ${ends} ${after}`;
+  // home-milestones-whole: Home's rows keep a column for their items' (i); the month axis keeps it too.
+  const tipCol = named && !!names;
+  const axis = (
+    <div className={`${rowGrid} items-end ${tipCol ? "min-w-0 flex-1" : ""}`}>
+      <span aria-hidden className="max-[600px]:hidden" />
+      <div className="relative h-6 text-[13px] text-text2">
+        {plan.months.map((m) => (
+          <span key={m} data-testid={`${testId}-month`} className="absolute top-0 truncate border-l border-line pl-1" style={{ left: `${pct(m)}%` }}>
+            {calendarDay(m, { month: "short" })}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
   return (
     <div data-testid={testId} className="flex flex-col gap-1">
-      <div className={`${rowGrid} items-end`}>
-        <span aria-hidden className="max-[600px]:hidden" />
-        <div className="relative h-6 text-[13px] text-text2">
-          {plan.months.map((m) => (
-            <span key={m} data-testid={`${testId}-month`} className="absolute top-0 truncate border-l border-line pl-1" style={{ left: `${pct(m)}%` }}>
-              {calendarDay(m, { month: "short" })}
-            </span>
-          ))}
+      {tipCol ? (
+        <div className="flex items-end gap-1">
+          {axis}
+          <span aria-hidden className="w-6 flex-none" />
         </div>
-      </div>
+      ) : (
+        axis
+      )}
       <ul className="flex flex-col">
         {shown.map((r, k) => {
           const left = pct(r.start);
@@ -200,22 +212,42 @@ export function PlanByMonth({
               {line(k === 0)}
             </span>
           );
+          const rowNames = names ? (r.item_ids ?? []).flatMap((id) => (names.has(id) ? [names.get(id)!] : [])) : [];
           // Two rows may read alike (two PRDs' "M2 · Pilot" on one day): each its own key.
           const rowKey = `${r.name}|${r.date ?? ""}|${r.item_ids?.[0] ?? k}`;
           return (
             <li key={rowKey}>
               {named ? (
-                <Link
-                  href={href}
-                  data-testid={`${testId}-row`}
-                  data-milestone={r.milestone ? "true" : undefined}
-                  aria-label={rowLabel}
-                  title={names ? [label, ...(r.item_ids ?? []).flatMap((id) => (names.has(id) ? [names.get(id)!] : []))].join("\n") : undefined}
-                  className={`${rowGrid} items-center rounded-md py-1 hover:bg-surface2`}
-                >
-                  {words}
-                  {bars}
-                </Link>
+                // home-milestones-whole: the row's items behind its (i), read on tap and keyboard
+                // focus too (a touch screen has no hover); the (i) sits beside the row's link, never in it.
+                <div data-testid={`${testId}-line`} className={tipCol ? "flex items-center gap-1" : undefined}>
+                  <Link
+                    href={href}
+                    data-testid={`${testId}-row`}
+                    data-milestone={r.milestone ? "true" : undefined}
+                    aria-label={rowLabel}
+                    title={names ? [label, ...rowNames].join("\n") : undefined}
+                    className={`${rowGrid} items-center rounded-md py-1 hover:bg-surface2 ${tipCol ? "min-w-0 flex-1" : ""}`}
+                  >
+                    {words}
+                    {bars}
+                  </Link>
+                  {tipCol && (
+                    <span className="w-6 flex-none">
+                      {rowNames.length > 0 && (
+                        <InfoTip label={`the items in ${label}`} testId={`${testId}-items-tip`}>
+                          <ul className="flex flex-col gap-0.5">
+                            {rowNames.map((x, j) => (
+                              <li key={`${x}|${j}`} className="break-words">
+                                {x}
+                              </li>
+                            ))}
+                          </ul>
+                        </InfoTip>
+                      )}
+                    </span>
+                  )}
+                </div>
               ) : (
                 // vqa B-14: the whole row opens the roadmap (a link laid over it), and the label's (i)
                 // sits above that link, never a button inside a link.

@@ -306,12 +306,34 @@ export const planInput = (i: Item): PlanInput => ({
   id: i.id,
 });
 
+/** A name wrapped whole in one pair of brackets ("[Launch (beta)]", "(Pilot)"): its words inside. */
+const unwrap = (name: string) => {
+  const m = /^([[(])(.*)([\])])$/.exec(name);
+  if (!m || (m[1] === "[") !== (m[3] === "]")) return name;
+  // "(Launch) (beta)" is two pairs, not one round it.
+  let depth = 0;
+  for (const c of m[2]) {
+    depth += c === "(" || c === "[" ? 1 : c === ")" || c === "]" ? -1 : 0;
+    if (depth < 0) return name;
+  }
+  return depth === 0 ? m[2].trim() : name;
+};
+
 /** A milestone's name as a person reads it, whole: its code and name ("M1 · Launch (beta)"), its
- * code alone when it has no name ("M2"), never "Milestone M2". */
+ * code alone when it has no name ("M2"), never "Milestone M2" nor "M3 · "; a name wrapped in
+ * brackets reads without them, and one that repeats its code ("M2 · Pilot") reads it once. */
 const wholeName = (code: string | null, name: string) => {
-  const n = name.trim().split(/\s+/).filter(Boolean).join(" ");
+  let n = name.trim().split(/\s+/).filter(Boolean).join(" ");
+  const own = MILESTONE_CODE.exec(n);
+  if (own && (!code || own[1].toUpperCase() === code)) {
+    code = own[1].toUpperCase();
+    n = own[2].trim();
+  }
+  n = unwrap(n);
   return code ? (n ? `${code} · ${n}` : code) : n || "Milestone";
 };
+/** A roadmap's own (goal) milestone's name, whole: "M2 · Pilot", "M3" with no name (never "M3 · "). */
+export const goalMilestoneName = (m: { code: string; name: string }) => wholeName(m.code.trim().toUpperCase() || null, m.name);
 const sameWords = (a: string, b: string) => a.trim().replace(/\s+/g, " ").toLowerCase() === b.trim().replace(/\s+/g, " ").toLowerCase();
 
 /**
@@ -324,6 +346,11 @@ const sameWords = (a: string, b: string) => a.trim().replace(/\s+/g, " ").toLowe
  * name, whole. An item whose milestone is gone (removed, renamed away, or a text no current
  * milestone has) is in none: "Not in a milestone". A PRD's plan slices are not read
  * (home-waiting-one-list: never one PRD's plan milestones).
+ *
+ * home-milestones-whole (review of PR 1424): one row per milestone: a roadmap's own milestones
+ * of one code (and PRD) are one row, and a track milestone of that code on the item's roadmap
+ * joins it; a typed text or bare code is read on the item's own roadmap (the read's roadmap's
+ * when its own has none), never the first roadmap that has it.
  */
 export function homePlanInputs(data: Roadmap): PlanInput[] {
   const goals = data.goal_milestones ?? [];
@@ -334,13 +361,35 @@ export function homePlanInputs(data: Roadmap): PlanInput[] {
   const restOf = (name: string) => (codeOf(name) ? MILESTONE_CODE.exec(name.trim())![2] : name);
   type Gm = (typeof goals)[number];
   type Tm = (typeof tracks)[number];
-  const ofGoal = (gm: Gm) => ({ key: `goal:${gm.id}`, name: wholeName(gm.code.toUpperCase(), gm.name), date: gm.date ?? null });
-  const ofTrack = (tm: Tm) => ({ key: `track:${tm.id}`, name: wholeName(codeOf(tm.name), restOf(tm.name)), date: tm.date ?? null });
+  const goalCode = (gm: Gm) => gm.code.trim().toUpperCase() || codeOf(gm.name);
+  // A track is on the roadmaps of the items in it.
+  const roadmapsOf = new Map<string, Set<string>>();
+  const onto = (track: string, roadmap: string) => roadmapsOf.set(track, (roadmapsOf.get(track) ?? new Set()).add(roadmap));
+  for (const i of data.items) if (i.track) onto(i.track.id, i.roadmap.id);
+  for (const m of tracks) for (const i of data.items) if (m.item_ids.includes(i.id)) onto(m.track_id, i.roadmap.id);
+  const ofGoal = (gm: Gm) => {
+    const code = goalCode(gm);
+    // One row per milestone: a roadmap's own milestones of one code (and PRD) are one.
+    return { key: code ? `goal:${gm.roadmap_id}|${code}|${gm.prd?.slug ?? ""}` : `goal:${gm.id}`, name: goalMilestoneName(gm), date: gm.date ?? null };
+  };
+  const ofTrack = (tm: Tm, roadmap: string) => {
+    const code = codeOf(tm.name);
+    const name = wholeName(code, restOf(tm.name));
+    if (code) {
+      // The roadmap's own milestone of its code is the same milestone: one row (the one of its
+      // whole name when several PRDs have that code, else the roadmap's own, else the only one).
+      const same = goals.filter((g) => g.roadmap_id === roadmap && goalCode(g) === code);
+      const own = same.filter((g) => !g.prd);
+      const gm = same.find((g) => goalMilestoneName(g) === name) ?? (own.length === 1 ? own[0] : same.length === 1 ? same[0] : undefined);
+      if (gm) return ofGoal(gm);
+    }
+    return { key: code ? `track:${roadmap}|${code}` : `track:${tm.id}`, name, date: tm.date ?? null };
+  };
   // A typed text names a current milestone by its code ("M1 · Measure it (a note)") or by its name.
   const named = (text: string, code: string | null, name: string) => {
     const head = text.trim().split(" (")[0].split(";")[0];
     const typed = codeOf(head);
-    return typed ? typed === code : [text, head].some((t) => sameWords(t, name) || (!!code && sameWords(t, `${code} · ${name}`)));
+    return typed ? typed === code : [text, head].some((t) => sameWords(t, name) || sameWords(t, unwrap(name)) || (!!code && sameWords(t, wholeName(code, name))));
   };
   const find = (i: Item) => {
     const own = i.milestone;
@@ -349,19 +398,22 @@ export function homePlanInputs(data: Roadmap): PlanInput[] {
     // Its milestone was picked by id and is gone: in none, whatever its old words say.
     if (own?.id) return null;
     const tm = tracks.find((m) => m.item_ids.includes(i.id)) ?? (own?.record_id ? tracks.find((m) => m.id === own.record_id) : undefined);
-    if (tm) return ofTrack(tm);
+    if (tm) return ofTrack(tm, i.roadmap.id);
     if (own?.name) {
       const text = own.name;
-      const g = goals.find((m) => m.roadmap_id === i.roadmap.id && named(text, m.code.toUpperCase(), m.name));
-      if (g) return ofGoal(g);
-      const t = tracks.find((m) => (!i.track || m.track_id === i.track.id) && named(text, codeOf(m.name), restOf(m.name)));
-      if (t) return ofTrack(t);
+      // Its own roadmap's milestone, else the read's (the company roadmap's), never another roadmap's.
+      for (const roadmap of new Set([i.roadmap.id, ...(data.roadmap ? [data.roadmap.id] : [])])) {
+        const g = goals.find((m) => m.roadmap_id === roadmap && named(text, goalCode(m), restOf(m.name)));
+        if (g) return ofGoal(g);
+        const t = tracks.find((m) => (i.track ? m.track_id === i.track.id : !!roadmapsOf.get(m.track_id)?.has(roadmap)) && named(text, codeOf(m.name), restOf(m.name)));
+        if (t) return ofTrack(t, roadmap);
+      }
       return null;
     }
     const after = tracks
       .filter((m) => m.date && !!i.track && m.track_id === i.track.id && i.end.date <= m.date)
       .sort((a, b) => byCodePoint(a.date!, b.date!))[0];
-    return after ? ofTrack(after) : null;
+    return after ? ofTrack(after, i.roadmap.id) : null;
   };
   return data.items
     .filter((i) => i.status !== "cut")
