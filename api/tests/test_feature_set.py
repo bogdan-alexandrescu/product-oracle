@@ -112,6 +112,9 @@ def test_a_clean_file_has_no_problems():
         "flags": {},
         # The gate names a problem's feature by its title.
         "titles": out.titles,
+        # And a requirement or goal a problem names by its name: none here.
+        "requirement_names": {},
+        "goal_names": {},
     }
     assert set(out.titles) >= {"saved-addresses", "address-lookup"}
     # The parsed set, in file order, is what the scope writer stores.
@@ -183,6 +186,23 @@ def test_missing_requirement_text_and_duplicate_requirement_keys():
     missing = next(p for p in out.problems if p["code"] == "missing_field")
     assert missing["feature"] == "saved-addresses"
     assert missing["requirement"] == "saved-addresses-pick"
+
+
+def test_the_check_names_each_requirement_and_goal_a_problem_names():
+    """The gate names a requirement and a goal by these, never by its key: a requirement by
+    its baseline title, else its text; a goal by its title, else none."""
+    text = MINIMAL["unknown_goal"].replace("key: saved-addresses-pick", "key: ghost-req")
+    k = known(goal_titles={"retention": "Retention rate"})
+    out = check(text, k=k)
+    assert sorted(codes(out)) == ["unknown_goal", "unknown_requirement"]
+    assert out.requirement_names == {
+        "ghost-req": "The buyer picks one of up to five saved addresses"
+    }
+    assert out.goal_names == {"retention": "Retention rate"}
+    assert out.as_json()["goal_names"] == {"retention": "Retention rate"}
+    out = check(MINIMAL["unknown_goal"])
+    assert out.goal_names == {"retention": ""}
+    assert out.requirement_names == {}
 
 
 def test_a_proposed_goal_is_unknown():

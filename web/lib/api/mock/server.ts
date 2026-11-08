@@ -179,14 +179,14 @@ import { runGroupsOut } from "./simple-runs";
 import { roadmapRead } from "./roadmap-read";
 import { questionInboxRows } from "./simple-questions";
 import { rebuildsOut } from "./rebuilds";
-import { onePagerInboxRows, onePagerProposalsOut, planSlice, prdOnePager, routeOnePager, seedHeadingCountOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { onePagerInboxRows, onePagerProposalsOut, planSlice, prdOnePager, routeOnePager, seedHeadingCountOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedTwoCountsOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { approvalItems, CANCELLED_DRAFT, draftAct, draftPrdsOut, REPLACED_DRAFT, SAVED_CARTS, seedDraftPrd, seedMeetingDraftDates, WORKSPACES, WORKSPACES_DRAFT } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, seedTwoDependencies, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { groundTruthCheck, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth } from "./ground-truth";
-import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap } from "./one-roadmap";
+import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, ITEM_MILESTONE_SCENARIO, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap, seedItemMilestones } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { knowPrdOrder } from "./prd-rank";
@@ -570,6 +570,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * problem (C6, saved-addresses);
  * "feature-set-two" as "feature-set" with a second blocking problem of the same code on the same
  * feature (each waived on its own, with its own reason);
+ * "feature-set-names" as "feature-set" with problems naming a requirement, a goal and a feature whose
+ * key holds a non-ASCII letter (each named in the gate's rows, never by its key);
  * "scope-review" as the default company plus three runs at their feature set (C7: attempt 1
  * with three rows that need a person, attempt 2, and a held console approval);
  * "scope-review-kept" as "scope-review" with the held run's Bulk edit also new and a likely
@@ -2337,9 +2339,9 @@ function seedRunReviewDecider(): Db {
 }
 
 /** The default seed plus a run waiting at its feature set with a blocking problem (C6, ./runs.ts). */
-function seedFeatureSet(twoOfOne = false): Db {
+function seedFeatureSet(twoOfOne = false, named = false): Db {
   const db = seed();
-  seeded(twoOfOne ? "feature-set-two" : "feature-set", () => seedFeatureSetRun(db.runs!, runsContext(db), twoOfOne));
+  seeded(named ? "feature-set-names" : twoOfOne ? "feature-set-two" : "feature-set", () => seedFeatureSetRun(db.runs!, runsContext(db), twoOfOne, named));
   return db;
 }
 
@@ -3832,6 +3834,8 @@ function load(): Db {
             ? () => seedFeatureSet()
           : scenario === "feature-set-two"
             ? () => seedFeatureSet(true)
+          : scenario === "feature-set-names"
+            ? () => seedFeatureSet(false, true)
           : scenario === "baseline-review" || scenario === "baseline-review-console"
             ? () => seedBaselineReview(scenario === "baseline-review-console")
           : scenario === "simple-waits"
@@ -4177,6 +4181,13 @@ function load(): Db {
                 ? () => {
                     const db = seedOneRoadmapScenario();
                     db.simple_roadmap!.goal_milestones = seedOldMilestones(OLD_ROADMAP[0]);
+                    return db;
+                  }
+              : scenario === ITEM_MILESTONE_SCENARIO
+                ? () => {
+                    // item-milestone: both area PRDs' milestones, each one a feature can be placed in.
+                    const db = seedOneRoadmapScenario();
+                    db.simple_roadmap!.goal_milestones = seedItemMilestones();
                     return db;
                   }
               : scenario === TRACKS_CLOSED_SCENARIO
@@ -6465,13 +6476,16 @@ async function onePagerOf(db: Db, req: Request, p: string[]): Promise<OnePagerDb
   const all = [seeded, ...Object.values(others)];
   const forDoc = (ref: unknown): OnePagerDb | undefined => {
     const known = all.find((o) => o.doc.id === ref || o.doc.slug === ref);
-    if (known) return known;
     const d = db.documents.find((x) => x.kind === "prd" && (x.slug === ref || x.id === ref));
-    if (!d) return undefined;
     // qa4-simple-prd-3/9: as one_pager.published, the version read is the PRD's own latest approved
     // one, else its latest, dated by its approval (none: never published).
-    const vs = docVersions(db, d);
+    const vs = d ? docVersions(db, d) : [];
     const read = [...vs].reverse().find((x) => x.approved_at) ?? vs.at(-1);
+    // Fidelity "Separate Approve step": a page built before a newer version was approved is built
+    // again from that version, as the API reads it on every request (never the one it was first built from).
+    const stale = !!known && known !== seeded && !!d && !!read && read.number > known.version;
+    if (known && !stale) return known;
+    if (!d) return undefined;
     // C-13, vqa B-13: every PRD but the seed reads its own sections (one_pager.extract), never a copy
     // of Guided setup's; a PRD with no version yet reads none of them (every block "missing").
     const cites = Object.fromEntries((read?.citations ?? []).map((c) => [c.cite_key, { title: c.title ?? null, excerpt: c.excerpt ?? null }]));
@@ -7428,6 +7442,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     ? seedNotInPrdOnePager()
     : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-heading-count"
     ? seedHeadingCountOnePager()
+    : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-two-counts"
+    ? seedTwoCountsOnePager()
     : seedOnePager(localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-no-owner");
   // Simple S10: the visuals the one-pager, the roadmap and the priorities show.
   db.simple_visuals ??= seedVisuals();
@@ -8577,8 +8593,10 @@ export async function mockFetch(req: Request): Promise<Response> {
     const db = load();
     const marks = db.webhooks?.hooks.length ? runMarks(db.runs?.runs) : null;
     // simple-roadmap-500-paint: the roadmap and its waiting counts read the 500 items once while
-    // the roadmap's data is the same; every other call reads afresh.
-    const roadmapRead = req.method === "GET" && (url.pathname === "/v1/simple/roadmap" || url.pathname === "/v1/simple/roadmap/waiting");
+    // the roadmap's data is the same; every other call reads afresh. The side menu's waiting list
+    // (read first, ahead of the roadmap) reads the roadmap too, so it shares the same build.
+    const roadmapRead =
+      req.method === "GET" && (url.pathname === "/v1/simple/roadmap" || url.pathname === "/v1/simple/roadmap/waiting" || url.pathname === "/v1/simple/decisions/waiting");
     if (req.method !== "GET") forgetRoadmapReads();
     roadmapReadsAt(roadmapRead);
     let res = await route(db, req);

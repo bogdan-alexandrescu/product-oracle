@@ -202,7 +202,7 @@ test("the drag shows dates and constraint flags live", async ({ page }) => {
   await expect(tl).toBeVisible();
   await tl.scrollIntoViewIfNeeded();
   // Mobile alert push depends on the rules engine: any span before the rules end is broken.
-  // hotfix-effort-start: it starts its 3 weeks before its Dec 20 end (Nov 29), so it is
+  // hotfix-effort-start: it starts its 3 weeks to its Dec 20 end (Nov 30), so it is
   // dragged back past the rules engine's end (Nov 10).
   const box = (await tl.boundingBox())!;
   const rules = (await page.locator('[data-testid="timeline-row"][data-item="alert-rules"] [data-testid="timeline-bar"]').boundingBox())!;
@@ -419,9 +419,11 @@ test("the keyboard moves and resizes a bar", async ({ page }) => {
   await expect(page.getByText(/Moved 'Alert history export'.*in your working draft/)).toBeVisible();
   await expect(b).toHaveAttribute("data-start", plus(start, 7));
   await expect(b).toHaveAttribute("data-end", plus(end, 7));
+  // effort-reader: its 1-week span is 7 days, its end included, so Shift+arrow lengthens it
+  // (a week shorter would end before it starts).
   await b.focus();
-  await page.keyboard.press("Shift+ArrowLeft");
-  await expect(b).toHaveAttribute("data-end", end);
+  await page.keyboard.press("Shift+ArrowRight");
+  await expect(b).toHaveAttribute("data-end", plus(end, 14));
   await expect(b).toHaveAttribute("data-start", plus(start, 7));
 });
 

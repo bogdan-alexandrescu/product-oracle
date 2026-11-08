@@ -476,3 +476,265 @@ def test_setext_heading_is_patched():
     with pytest.raises(ChangeError) as e:
         one_pager.patched_markdown(SimpleNamespace(markdown=md), [gone], {}, {"later": "Soon · 6"})
     assert "“Soon · 8 items”" in str(e.value.detail)
+
+
+# --------------------------------------------------------------------------- follow-ups
+
+TWO_DOC = "later-two"
+TWO_PRD = HEAD_PRD.replace("title: Later list", "title: Later two").replace(
+    "## Later · 8 items {#later}\n",
+    "## Later · 8 items {#later}\n\nFive features wait for next quarter.\n",
+)
+TWO_BODY = "“Five features wait for next” says 5, but “Later · 6 items” shows 6 items."
+
+
+async def two_world(client):
+    ctx = await make_ctx()
+    r = await client.post(f"/v1/documents/{TWO_DOC}/versions", content=TWO_PRD.encode(),
+                          headers=MD | ctx.as_("owner"))  # fmt: skip
+    assert r.status_code in (200, 201), r.text
+    return ctx
+
+
+async def test_either_of_two_fixes_in_a_section_undoes(client):
+    # Review finding: with two number fixes in one section only the newer could be undone;
+    # the older's Undo said "Changed by <yourself>". Each undoes its own number only.
+    ctx = await two_world(client)
+    head = (await fix(client, ctx, "owner", look(await get(client, ctx, "owner", TWO_DOC),
+                                                 HEAD)["fix"])).json()["change"]  # fmt: skip
+    body_fix = look(await get(client, ctx, "owner", TWO_DOC), TWO_BODY)["fix"]
+    body = (await fix(client, ctx, "owner", body_fix)).json()["change"]
+    view = await get(client, ctx, "owner", TWO_DOC)
+    assert [(x["change_id"], x["can_undo"]) for x in view["fixed"]] == [
+        (head["id"], True),
+        (body["id"], True),
+    ]
+    u = await client.post(f"{CHANGES}/{head['id']}/undo", headers=ctx.as_("owner"))
+    assert u.status_code in (200, 201), u.text
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.scalar(select(SimpleDraft))
+        assert "later" not in (d.overlay.get("headings") or {})
+        assert d.overlay["sections"]["later"].startswith("Six features wait for next quarter.")
+    after = await get(client, ctx, "owner", TWO_DOC)
+    assert [x["change_id"] for x in after["fixed"]] == [body["id"]]
+    u = await client.post(f"{CHANGES}/{body['id']}/undo", headers=ctx.as_("owner"))
+    assert u.status_code in (200, 201), u.text
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.scalar(select(SimpleDraft))
+        assert not d.overlay.get("sections", {}).get("later")
+        assert not (d.overlay.get("headings") or {})
+    assert (await get(client, ctx, "owner", TWO_DOC))["fixed"] == []
+
+
+async def test_undo_whose_number_is_gone_is_refused(client):
+    # The older fix's number was changed again since: its undo is refused, nothing written.
+    ctx = await clear_world(client)
+    f = look(await get(client, ctx, "owner", DOC), COUNT)["fix"]
+    one = (await fix(client, ctx, "owner", f)).json()["change"]
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.scalar(select(SimpleDraft))
+        secs = dict(d.overlay["sections"])
+        secs["later"] = secs["later"].replace("Six features", "Seven features")
+        d.overlay = {**d.overlay, "sections": secs}
+        await s.commit()
+    u = await client.post(f"{CHANGES}/{one['id']}/undo", headers=ctx.as_("owner"))
+    assert u.status_code == 409, u.text
+
+
+async def test_a_decider_who_is_no_owner_sees_the_proposal(client):
+    # Review finding: the Inbox's Open on "Section number on <PRD>" lands the PRD's decider
+    # (no owner) on the one-pager, where "Needs a look" was owners-only: the proposal routed
+    # to them shows on its item, with Accept and Decline; nothing else does.
+    from oracle.docs.models import Document
+    from oracle.review.models import DocumentReviewPolicy
+
+    ctx = await clear_world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == DOC))
+        s.add(DocumentReviewPolicy(document_id=doc.id, decider_id=ctx.users["approver"].id))
+        await s.commit()
+    assert (await get(client, ctx, "approver", DOC))["needs_look"] == []
+    f = look(await get(client, ctx, "owner", DOC), COUNT)["fix"]
+    r = await fix(client, ctx, "commenter", f)
+    assert r.status_code == 201, r.text
+    prop = r.json()["change"]
+    assert prop["routed_to"] == [str(ctx.users["approver"].id)]
+    mine = await get(client, ctx, "approver", DOC)
+    assert [x["text"] for x in mine["needs_look"]] == [COUNT]
+    assert mine["needs_look"][0]["fix"]["proposal"]["change_id"] == prop["id"]
+    assert mine["needs_look"][0]["fix"]["proposal"]["can_decide"] is True
+    acc = await client.post(f"{CHANGES}/{prop['id']}/accept", headers=ctx.as_("approver"))
+    assert acc.status_code == 200, acc.text
+    assert (await get(client, ctx, "approver", DOC))["needs_look"] == []
+
+
+def test_a_fix_keeps_thousands_separators():
+    sec = Section(
+        section_key="targets",
+        heading="Targets",
+        body_md="Company-wide target: 1,200,000 paid seats in total.",
+    )
+    f = one_pager_checks._fix(sec, "1,200,000 paid seats", "1,200,000", 1100000)
+    assert f is not None and f["value"] == "1,100,000"
+    plain = Section(section_key="t", heading="T", body_md="Target: 1200000 paid seats.")
+    assert one_pager_checks._fix(plain, "1200000 paid seats", "1200000", 1100000)["value"] == (
+        "1100000"
+    )
+
+
+def test_a_word_between_number_and_noun_keeps_its_fix():
+    sec = Section(
+        section_key="later",
+        heading="Later",
+        body_md="We plan two more features for spring.\n\n- One\n- Two\n- Three\n",
+    )
+    [x] = one_pager_checks.numbers([sec])
+    assert x.fix is not None
+    assert x.fix["said"] == "two more features for spring"
+    assert one_pager_checks.set_number(sec.body_md, x.fix["said"], x.fix["value"]).startswith(
+        "We plan three more features"
+    )
+
+
+async def _heading_fixed_then_edited(client, heading: str, body_lead: str = ""):
+    """head_world with its heading count fixed (8 to 6), then the section edited in the
+    draft: its heading to ``heading``, ``body_lead`` put before its list."""
+    ctx = await head_world(client)
+    f = look(await get(client, ctx, "owner", HEAD_DOC), HEAD)["fix"]
+    one = (await fix(client, ctx, "owner", f)).json()["change"]
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.scalar(select(SimpleDraft))
+        ov = {**d.overlay, "headings": {"later": heading}}
+        if body_lead:
+            ov["sections"] = {"later": body_lead + one["before"]["sections"]["later"]["body"]}
+        d.overlay = ov
+        await s.commit()
+    return ctx, one
+
+
+async def test_heading_fix_undoes_after_the_heading_was_edited(client):
+    # Review minor (Nov 7): a heading fix undone once the heading was edited around its
+    # number puts only the number back; the edit stays and the body is untouched.
+    ctx, one = await _heading_fixed_then_edited(client, "Later, after spring · 6 items")
+    u = await client.post(f"{CHANGES}/{one['id']}/undo", headers=ctx.as_("owner"))
+    assert u.status_code in (200, 201), u.text
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.scalar(select(SimpleDraft))
+        assert d.overlay["headings"] == {"later": "Later, after spring · 8 items"}
+        assert "later" not in (d.overlay.get("sections") or {})
+
+
+async def test_heading_fix_whose_number_left_the_heading_is_refused(client):
+    # Review minor (Nov 7): once the heading no longer holds the fixed number, the undo does
+    # not look for it in the body (a body number the heading fix never set): it is refused
+    # with the section's words now, and nothing is written.
+    ctx, one = await _heading_fixed_then_edited(
+        client, "Later · 7 items", "About 6 items wait for spring.\n\n"
+    )
+    u = await client.post(f"{CHANGES}/{one['id']}/undo", headers=ctx.as_("owner"))
+    assert u.status_code == 409, u.text
+    assert u.json()["detail"]["current"]["heading"] == "Later · 7 items"
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.scalar(select(SimpleDraft))
+        assert d.overlay["headings"] == {"later": "Later · 7 items"}
+        assert d.overlay["sections"]["later"].startswith("About 6 items wait for spring.")
+        assert [c.status for c in await s.scalars(select(SimpleChange))] == ["applied"]
+
+
+def test_a_fix_keeps_a_decimal_as_written():
+    # Review minor (Nov 7): a decimal keeps its places and separators ("1,200.5" -> "1,502.5",
+    # never "1502.5"; "2.75" -> "2.50"), and a long value is never cut ("1.23457e+06").
+    def value(said: str, before: str, to: float) -> str:
+        sec = Section(section_key="t", heading="T", body_md=f"Company-wide target: {said}.")
+        f = one_pager_checks._fix(sec, said, before, to)
+        assert f is not None
+        return f["value"]
+
+    assert value("1,200.5 paid seats", "1,200.5", 1502.5) == "1,502.5"
+    assert value("1,200.75 paid seats", "1,200.75", 1502.5) == "1,502.50"
+    assert value("1,200.5 paid seats", "1,200.5", 1500) == "1,500.0"
+    assert value("2.75 hours saved", "2.75", 2.5) == "2.50"
+    assert value("2.75 hours saved", "2.75", 3) == "3.00"
+    assert value("2 hours saved", "2", 2.25) == "2.25"
+    assert value("1234567 paid seats", "1234567", 1234567.5) == "1234567.5"
+    assert value("1,000,000 paid seats", "1,000,000", 1234567.5) == "1,234,567.5"
+    assert value("0.5 hours saved", "0.5", 0.1 * 3) == "0.3"
+    sec = Section(section_key="t", heading="T", body_md="Company-wide target: 1,200.5 seats.")
+    assert one_pager_checks.set_number(sec.body_md, "1,200.5 seats", "1,502.50") == (
+        "Company-wide target: 1,502.50 seats."
+    )
+
+
+def _per_unit_text(body: str) -> list[str]:
+    sec = Section(section_key="targets", heading="Targets", body_md=body)
+    return [x.text for x in one_pager_checks.numbers([sec])]
+
+
+def test_the_target_is_quoted_as_written():
+    # Review (Nov 7): the look text quotes the company-wide target as the PRD writes it,
+    # its separators kept ("1,250.75", never "1250.75").
+    [text] = _per_unit_text(
+        "Each region adds 300.5 paid workspaces a month. We sell in 5 regions. "
+        "Company-wide target: 1,250.75 paid workspaces a month."
+    )
+    assert text == (
+        "300.5 paid workspaces per region × 5 regions is 1,502.5, "
+        "but the company-wide target says 1,250.75."
+    )
+
+
+def test_look_numbers_read_as_a_person_writes_them():
+    # Review (Nov 7): a computed number shows plain, as the mock shows it: "0.3", never
+    # "0.30000000000000004"; "1,234,567.5", never "1.23457e+06" or "1234567.5".
+    assert _per_unit_text(
+        "Each team saves 0.1 support hours a week. We have 3 teams. "
+        "Company-wide target: 2 support hours a week."
+    ) == ["0.1 support hours per team × 3 teams is 0.3, but the company-wide target says 2."]
+    assert _per_unit_text(
+        "Each region adds 246913.5 trial seats. We sell in 5 regions. "
+        "Company-wide target: 1,000,000 trial seats."
+    ) == [
+        "246,913.5 trial seats per region × 5 regions is 1,234,567.5, "
+        "but the company-wide target says 1,000,000."
+    ]
+    assert one_pager_checks._n(0.1 * 3) == "0.3"
+    assert one_pager_checks._n(1234567.5) == "1,234,567.5"
+    assert one_pager_checks._n(200.0) == "200"
+
+
+def test_a_sum_that_matches_as_written_raises_no_look():
+    # Review (Nov 7): "0.1 × 3 teams" against "0.3" company-wide agrees as a person reads it;
+    # the float 0.30000000000000004 must not raise "is 0.3, but ... says 0.3".
+    assert (
+        _per_unit_text(
+            "Each team saves 0.1 support hours a week. We have 3 teams. "
+            "Company-wide target: 0.3 support hours a week."
+        )
+        == []
+    )
+    assert _per_unit_text(
+        "Each team saves 0.1 support hours a week. We have 3 teams. "
+        "Company-wide target: 0.4 support hours a week."
+    ) == ["0.1 support hours per team × 3 teams is 0.3, but the company-wide target says 0.4."]
+
+
+def test_an_exact_half_rounds_up_as_the_mock_does():
+    # Review (Nov 7): an exact half in the 7th place rounds away from zero, as the mock's
+    # toFixed(6) does ("0.007813", never the half-even "0.007812"), in the text and the fix.
+    assert one_pager_checks._n(0.0078125) == "0.007813"
+    assert one_pager_checks._n(3.0078125) == "3.007813"
+    assert one_pager_checks._n(-0.0078125) == "-0.007813"
+    assert one_pager_checks._n(0.1 * 3) == "0.3"
+    [look] = one_pager_checks.numbers([
+        Section(
+            section_key="targets",
+            heading="Targets",
+            body_md="Each squad trims 1.50390625 setup minutes a day. We run 2 squads. "
+            "Company-wide target: 3 setup minutes a day.",
+        )
+    ])  # fmt: skip
+    assert look.text == (
+        "1.503906 setup minutes per squad × 2 squads is 3.007813, "
+        "but the company-wide target says 3."
+    )
+    assert look.fix["value"] == "3.007813"

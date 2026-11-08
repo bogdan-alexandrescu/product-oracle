@@ -527,16 +527,23 @@ test("the decider of a draft another owner sent sees it on the rail and on Home"
   await signOut(page);
   await login(page, "approver@example.com");
   await page.goto("/simple");
-  const row = page.getByTestId("home-also-waiting-list").getByTestId("waiting-item").filter({ hasText: "A roadmap draft waits for your approval" });
+  // Home's drafts card holds it, once, with its one action.
+  const row = page.getByTestId("home-draft").filter({ hasText: "Onboarding roadmap" });
   await expect(row).toHaveCount(1);
+  await expect(row).toContainText("Waiting for your approval");
   const asks = async () => ((await badge(page).count()) ? Number(/(\d+) changes? or drafts?/.exec((await badge(page).getAttribute("aria-label")) ?? "")?.[1] ?? 0) : 0);
   await expect.poll(asks).toBeGreaterThan(0);
   const before = await asks();
 
-  // Approving it in place drops it from Home and from the rail's count at once.
-  await row.getByRole("button", { name: "Approve" }).click();
-  await expect(row).toHaveCount(0);
+  // Approving it from the card drops it from Home and from the rail's count.
+  await row.getByRole("link", { name: "Open draft to approve" }).click();
+  await expect(page).toHaveURL(/\/simple\/roadmap\?draft=/);
+  await page.getByTestId("draft-banner").getByRole("button", { name: "Approve", exact: true }).click();
+  await expect(page.getByText(/Approved/).first()).toBeVisible();
   await expect.poll(asks).toBe(before - 1);
+  await page.goto("/simple");
+  await expect(page.getByTestId("home-sentence")).not.toHaveText(/Checking what waits/);
+  await expect(row).toHaveCount(0);
 });
 
 /**

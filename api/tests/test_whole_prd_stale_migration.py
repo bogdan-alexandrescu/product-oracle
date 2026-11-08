@@ -68,7 +68,10 @@ async def test_clears_only_the_whole_prd_reason(client, owner, runtime):  # noqa
     assert got["payment-step"]["freshness"] == "fresh", got["payment-step"]
     assert got["payment-step"]["stale_reasons"] == []
     assert got["shipping-step"]["freshness"] == "potentially_stale"
-    assert got["shipping-step"]["stale_reasons"] == [own]
+    # Read with the section's heading (the stale-marks walk).
+    assert got["shipping-step"]["stale_reasons"] == [
+        "PRD section 5.2 Shipping step changed in version 2"
+    ]
     async with tenant_session(tenant_id) as s:
         cleared = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "payment-step"))
         assert cleared.stale_since is None and cleared.caused_by_change_id is None

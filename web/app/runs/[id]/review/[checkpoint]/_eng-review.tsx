@@ -7,6 +7,7 @@ import { Button, Chip, Page, PageHeader, SegmentedControl } from "@/components/d
 import { Menu } from "@/components/review/parts";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { named, namedText } from "@/lib/codes";
 import { useMe } from "@/lib/me";
 import { sortPrds, usePrds } from "@/lib/prd-order";
 import { errorMessage } from "@/lib/use-query";
@@ -40,6 +41,27 @@ function actionsOf(review: Review, key: string): Action[] {
 }
 const edit = (acts: Action[], field: string) => acts.find((a) => a.kind === "edit" && a.field === field);
 const verdictOf = (acts: Action[]) => edit(acts, "verdict")?.value as { verdict: Verdict; note?: string | null } | undefined;
+
+/** A staged change in words: its feature (code and name) and what it settles ("F-12 Usage export: Feasible"). */
+function stagedLabel(a: Action, feature: Feature | undefined, itemKey: string): string {
+  const name = namedText(named(feature?.title || itemKey.replace(/^f\./, "").replace(/[-_]+/g, " "), itemKey));
+  const field = a.field ?? "";
+  const what =
+    field === "verdict"
+      ? VERDICT_WORDS[(a.value as { verdict: Verdict } | null)?.verdict ?? "feasible"]
+      : field === "size"
+        ? `Size ${String(a.value ?? "").toUpperCase()}`
+        : field.startsWith("answer:")
+          ? feature?.questions.find((q) => `answer:${q.id}` === field)?.blocking
+            ? "Blocking question answered"
+            : "Question answered"
+          : a.kind === "question"
+            ? "Question asked"
+            : "Changed";
+  return `${name}: ${what}`;
+}
+/** Named staged changes shown before the rest are counted. */
+const NAMED_STAGED = 3;
 
 /**
  * F4 Engineering check (`eng_review`): one row per feature of the briefs. The engineering lead
@@ -164,6 +186,7 @@ export function EngReview({
   );
   const gateOpen = !!review.gate?.open;
   const staged = review.items.flatMap((i) => i.actions.filter((a) => a.state === "staged").map((a) => ({ item: i.key, a })));
+  const stagedNames = staged.map(({ item, a }) => stagedLabel(a, check.features.find((f) => f.key === item), item));
   const at = Math.max(0, check.features.findIndex((f) => f.key === selected));
   const feature = check.features[at] ?? null;
   const open = (key: string) => {
@@ -333,7 +356,16 @@ export function EngReview({
           </span>
           {staged.length > 0 && (
             <span className="flex min-w-0 flex-wrap gap-1.5" data-testid="staged-chips">
-              <Chip kind="acc">{plural(staged.length, "change")} staged</Chip>
+              {stagedNames.slice(0, NAMED_STAGED).map((label, i) => (
+                <Chip key={i} kind="acc" wrap data-testid="staged-chip">
+                  {label}
+                </Chip>
+              ))}
+              {stagedNames.length > NAMED_STAGED && (
+                <Chip kind="acc" title={stagedNames.slice(NAMED_STAGED).join("\n")} data-testid="staged-more">
+                  {plural(stagedNames.length - NAMED_STAGED, "more change")}
+                </Chip>
+              )}
             </span>
           )}
           <span className="flex-1" />

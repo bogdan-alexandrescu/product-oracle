@@ -18,6 +18,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from oracle import wording
 from oracle.engineering import check as eng_check
 from oracle.engineering import dates as eng_dates
 from oracle.runs.feature_set import FILE_PROBLEMS
@@ -90,15 +91,56 @@ def _roadmap_items(cp: Checkpoint) -> tuple[list[dict[str, Any]], int]:
     return list(check.get("reasons") or []), int(check.get("file_problems") or 0)
 
 
-_KEY = re.compile(r"(?<![\w-])[a-z0-9]+(?:[-_][a-z0-9]+)+(?![\w-])")
+# A token a C6 message may name a feature by: a key-shaped word or a row the agents left
+# unkeyed ("#2"), after "requirement", "requirement key" or "goal" when it names one of those.
+# Only a feature's, requirement's or goal's key and such a row are rewritten; any other word
+# stays. A key's letters are spelt out (ASCII and the Latin letters), never \w, so the web's
+# mock (web/lib/api/mock/runs.ts gateLabel) splits a message the same way.
+_LETTERS = "A-Za-z0-9_\u00c0-\u00d6\u00d8-\u00f6\u00f8-\u024f"
+_TOKEN = re.compile(
+    rf"(?<![{_LETTERS}-])(?:(?P<kind>requirement key|requirement|goal) )?"
+    rf"(?<![{_LETTERS}-])(?P<token>#[0-9]+|[{_LETTERS}][{_LETTERS}.]*(?:-[{_LETTERS}.]+)*)"
+    rf"(?![{_LETTERS}-])"
+)
+# The one place a message names a feature that is not in the set (unknown_dependency).
+_DEPENDS = re.compile(r"\bdepends on (\S+?)(?=,|\s|$)")
+# A key that is itself a code ("G-B", "R12"), shown beside its name.
+_CODE = re.compile(r"[A-Z][A-Z0-9]*(?:[-.][A-Z0-9]+)+[a-j]?|[A-Z]{1,4}\d+")
 
 
-def _titled(message: str | None, titles: dict[str, str]) -> str | None:
+def _titled(
+    message: str | None,
+    titles: dict[str, str],
+    keys: Iterable[str] = (),
+    requirements: dict[str, str] | None = None,
+    goals: dict[str, str] | None = None,
+) -> str | None:
     """A C6 problem's message as people read it: each feature's key as its title (a key
-    with none in words), as the review screen words it."""
-    if not message or not titles:
+    with none in words), as the review screen words it, and a "#n" row as its number; a
+    requirement (quoted) and a goal by its name, with its key beside it when that is a code.
+    ``keys``: the feature keys the check names beside the titled ones; ``requirements`` and
+    ``goals``: the names of the requirements and goals the check names, by key."""
+    if not message:
         return message
-    text = _KEY.sub(lambda m: titles.get(m.group(0)) or _words(m.group(0)), message)
+    features = set(titles) | set(keys) | set(_DEPENDS.findall(message))
+    names = {"requirement": requirements or {}, "goal": goals or {}}
+
+    def word(m: re.Match[str]) -> str:
+        kind, token = m["kind"], m["token"]
+        lead = f"{kind} " if kind else ""
+        if token.startswith("#"):
+            return lead + token[1:]
+        own = names["goal" if kind == "goal" else "requirement"] if kind else {}
+        if token in own:
+            name = wording.named(
+                own[token] or _words(token), token if _CODE.fullmatch(token) else None
+            )
+            return lead + (wording.quoted(name, name) if kind != "goal" else name)
+        if token in features and (token[0].islower() or token[0].isdigit()):
+            return lead + (titles.get(token) or _words(token))
+        return m.group(0)
+
+    text = _TOKEN.sub(word, message)
     return text[:1].upper() + text[1:]
 
 
@@ -116,6 +158,8 @@ def _problems(check: Any, file_codes: Iterable[str] = ()) -> tuple[list[dict[str
     reasons: list[dict[str, Any]] = []
     file_problems = 0
     titles = check.get("titles") or {}
+    # Every feature of the file has a title or a problem of its own (a missing title is one).
+    keys = {p["feature"] for p in check.get("problems") or [] if p.get("feature")}
     for p in check.get("problems") or []:
         blocking = p.get("blocking", True)
         if not p.get("feature") or p.get("code") in file_codes:
@@ -128,7 +172,13 @@ def _problems(check: Any, file_codes: Iterable[str] = ()) -> tuple[list[dict[str
                 "code": p.get("code"),
                 "ref": problem_ref(p),
                 "severity": BLOCKING if blocking else "advisory",
-                "label": _titled(p.get("message"), titles),
+                "label": _titled(
+                    p.get("message"),
+                    titles,
+                    keys,
+                    check.get("requirement_names"),
+                    check.get("goal_names"),
+                ),
             }
         )
     return reasons, file_problems

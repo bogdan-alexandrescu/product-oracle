@@ -238,6 +238,10 @@ async def test_segment_end_writes_the_proposed_scope_and_the_check(client, owner
             "address-lookup": "Address lookup",
             "bulk-edit": "Bulk edit",
         },
+        # A gate row names each requirement and goal a problem names (PR 1415, 225c06cdb);
+        # this set has no problem, so none is named.
+        "requirement_names": {},
+        "goal_names": {},
     }
     cp = pending(run)
     assert cp["payload"]["feature_set_check"] == check

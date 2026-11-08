@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { Fragment, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { usePickableTable } from "./panel-close";
 
 export type Column<T> = {
@@ -45,6 +45,17 @@ const MID_HIDE = "min-[601px]:@max-[1000px]:hidden";
 const WIDE_HIDE = "min-[601px]:@max-[1320px]:hidden";
 const narrowClass = (n: Column<unknown>["narrow"]) =>
   n === "hide" ? NARROW_HIDE : n === "laptop" ? LAPTOP_HIDE : n === "mid" ? MID_HIDE : n === "wide" ? WIDE_HIDE : "";
+/**
+ * Before the table has measured itself (the server's HTML), a line across it spans every column,
+ * and each narrow column adds a zero-width <col> at the end, drawn only where the column is gone,
+ * so CSS alone keeps the line to the columns drawn without taking their room.
+ */
+const FILLER: Record<NonNullable<Column<unknown>["narrow"]>, string> = {
+  hide: "hidden min-[601px]:@max-[760px]:table-column",
+  laptop: "hidden min-[601px]:@max-[820px]:table-column",
+  mid: "hidden min-[601px]:@max-[1000px]:table-column",
+  wide: "hidden min-[601px]:@max-[1320px]:table-column",
+};
 
 /** Phone-only classes per role; the row itself becomes a wrapping flex block. */
 const PHONE_CELL: Record<PhoneRole, string> = {
@@ -157,11 +168,42 @@ export function DataTable<T>({
   const role = (c: Column<T>, i: number): PhoneRole => (c.hideOnPhone ? "hide" : (c.phone ?? (i === 0 ? "title" : "meta")));
   const phone = (c: Column<T>) =>
     `${c.hideOnPhone || c.phone === "hide" ? "max-[600px]:hidden" : ""} ${narrowClass(c.narrow)}`.trim();
-  const visibleCols = columns.length;
+  // The loading and empty lines span the columns drawn now. The CSS hides a phone's or a narrow
+  // table's columns, but a hidden header cell still takes a column slot, which a span of the
+  // visible count leaves out and a span of all of them gives the visible columns' room to. So
+  // while the table has no rows, the hidden columns (read from their <col>) drop their header
+  // cell. Rows keep every cell (their hidden ones line up with the header's), as do the lines
+  // among them (a group, a row's detail), which span every column. Until the table has read its
+  // <col>s (`hidden` is null: the server's HTML, the first paint), the lines use FILLER instead.
+  const wrap = useRef<HTMLDivElement>(null);
+  const [hidden, setHidden] = useState<ReadonlySet<string> | null>(null);
+  const hides = columns.map((c) => `${c.key}:${phone(c)}`).join("|");
+  useLayoutEffect(() => {
+    const el = wrap.current;
+    if (!el) return;
+    const count = () => {
+      const cols = [...el.querySelectorAll(":scope > table > colgroup > col")];
+      const keys = columns.filter((_, i) => cols[i] && getComputedStyle(cols[i]).display === "none").map((c) => c.key);
+      setHidden((was) => (was && keys.length === was.size && keys.every((k) => was.has(k)) ? was : new Set(keys)));
+    };
+    count();
+    const watch = new ResizeObserver(count);
+    watch.observe(el);
+    return () => watch.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `hides` names every column and how it hides
+  }, [hides]);
+  const bare = list.length === 0;
+  const narrow = columns.some((c) => c.narrow);
+  /** A line across the table: one cell spanning the columns drawn (with FILLER until they are known). */
+  const across = (className: string, children: ReactNode, testId?: string) => (
+    <td role="cell" colSpan={Math.max(1, columns.filter((c) => !hidden?.has(c.key)).length)} className={`${className} max-[600px]:block`} data-testid={testId}>
+      {children}
+    </td>
+  );
 
   const groups = group ? list.map(group) : [];
   return (
-    <div className={`min-w-0 overflow-clip ${columns.some((c) => c.narrow) ? "@container" : ""}`} data-testid={testId}>
+    <div ref={wrap} className={`min-w-0 overflow-clip ${narrow ? "@container" : ""}`} data-testid={testId}>
       <table
         // Roles are explicit because the phone layout changes the rows' CSS display.
         role={selectable ? "grid" : "table"}
@@ -173,40 +215,42 @@ export function DataTable<T>({
           {columns.map((c) => (
             <col key={c.key} style={c.width ? { width: c.width } : undefined} className={phone(c)} />
           ))}
+          {bare && !hidden && columns.map((c) => c.narrow && <col key={`f-${c.key}`} style={{ width: 0 }} className={FILLER[c.narrow]} />)}
         </colgroup>
         {/* On a phone the header is for screen readers only (sr-only: a 1 px clipped box), so
             nothing in it can run off the screen there (qa-work-31); its row wraps inside that
             box rather than laying its headers out wider than the phone (walk-docs-priorities 6). */}
         <thead className={hideHeader ? "sr-only" : "max-[600px]:sr-only"} role="rowgroup">
           <tr role="row" className={hideHeader ? "flex max-w-full flex-wrap" : "max-[600px]:flex max-[600px]:max-w-full max-[600px]:flex-wrap"}>
-            {columns.map((c) => (
-              <th
-                key={c.key}
-                scope="col"
-                role="columnheader"
-                aria-sort={c.ariaSort}
-                className={`sticky top-0 z-[1] h-9 bg-surface2 px-2 text-[13px] leading-4 font-semibold whitespace-nowrap text-text2 first:pl-4 last:pr-4 max-[600px]:first:pl-3 max-[600px]:last:pr-3 ${align(c)} ${phone(c)}`}
-              >
-                {c.header}
-              </th>
-            ))}
+            {columns.map((c) =>
+              bare && hidden?.has(c.key) ? null : (
+                <th
+                  key={c.key}
+                  scope="col"
+                  role="columnheader"
+                  aria-sort={c.ariaSort}
+                  className={`sticky top-0 z-[1] h-9 bg-surface2 px-2 text-[13px] leading-4 font-semibold whitespace-nowrap text-text2 first:pl-4 last:pr-4 max-[600px]:first:pl-3 max-[600px]:last:pr-3 ${align(c)} ${phone(c)}`}
+                >
+                  {c.header}
+                </th>
+              ),
+            )}
           </tr>
         </thead>
         <tbody ref={body} role="rowgroup" className="max-[600px]:block">
           {loading && list.length === 0 &&
             [0, 1, 2].map((i) => (
               <tr key={`l${i}`} aria-hidden className="h-11 border-t border-line max-[600px]:flex max-[600px]:items-center">
-                <td colSpan={visibleCols} className="px-4 max-[600px]:block max-[600px]:w-full max-[600px]:px-3">
-                  {/* qa4-shell-19: line-strong (3:1 on the card), so a loading list never reads as an empty, finished one. */}
-                  <span className="block h-3 w-2/3 animate-pulse rounded bg-line-strong" />
-                </td>
+                {across(
+                  "px-4 max-[600px]:w-full max-[600px]:px-3",
+                  // qa4-shell-19: line-strong (3:1 on the card), so a loading list never reads as an empty, finished one.
+                  <span className="block h-3 w-2/3 animate-pulse rounded bg-line-strong" />,
+                )}
               </tr>
             ))}
           {!loading && list.length === 0 && empty !== null && (
             <tr role="row" className="border-t border-line max-[600px]:block">
-              <td role="cell" colSpan={visibleCols} className="px-4 py-8 max-[600px]:block text-center text-text2" data-testid="table-empty">
-                {empty}
-              </td>
+              {across("px-4 py-8 text-center text-text2", empty, "table-empty")}
             </tr>
           )}
           {list.map((row, i) => {
@@ -224,7 +268,7 @@ export function DataTable<T>({
                   <tr role="row" className="border-t border-line bg-surface2 max-[600px]:block" data-group={g} {...groupProps?.(g)}>
                     <th
                       role="rowheader"
-                      colSpan={visibleCols}
+                      colSpan={columns.length}
                       scope="colgroup"
                       className="h-9 px-4 max-[600px]:flex max-[600px]:items-center max-[600px]:px-3 text-left font-display tracking-heading text-[15px] font-bold"
                     >
@@ -266,7 +310,7 @@ export function DataTable<T>({
                 )}
                 {extra != null && extra !== false && (
                   <tr role="row" data-detail={k} className="max-[600px]:block">
-                    <td role="cell" colSpan={visibleCols} className="px-4 pt-1 pb-3 max-[600px]:block max-[600px]:px-3">
+                    <td role="cell" colSpan={columns.length} className="px-4 pt-1 pb-3 max-[600px]:block max-[600px]:px-3">
                       {extra}
                     </td>
                   </tr>

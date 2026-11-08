@@ -295,7 +295,8 @@ export function zoomPicture(scroll: HTMLElement, today: string): Picture {
     const lead = f.today ? 0 : 12;
     let w = widthOf(words, size, f.today ? 700 : 400) + 12 + lead;
     // After its line, or ending at it where the chart's right edge is near; cut to the room left.
-    let left = f.x + 2;
+    // Today's pill centred on its line, as the page draws it (inside the chart's edges).
+    let left = f.today ? Math.max(labelW + 2, Math.min(f.x - w / 2, width - 2 - w)) : f.x + 2;
     if (left + w > width - 2) left = Math.max(labelW + 2, f.x - w - 2);
     if (left + w > width - 2) {
       words = fit(words, width - 2 - left - 12 - lead, size);
@@ -348,6 +349,13 @@ export function zoomPicture(scroll: HTMLElement, today: string): Picture {
       const words = spanWords(bar.dataset.start ?? "", bar.dataset.end ?? "", today);
       const ww = widthOf(words, 11) + 8;
       if (b > a) out.push(`<rect data-testid="export-bar" x="${a}" y="${y + 8}" width="${b - a}" height="18" rx="9" fill="${esc(fill)}"${stroke}/>`);
+      // A bar the window's edge cuts says it goes on: an arrow on its end at that edge.
+      const later = b > a && x1 > width + 0.5;
+      const earlier = b > a && x0 < labelW - 0.5;
+      const arrow = (side: string, tip: number, back: number) =>
+        `<path data-testid="export-bar-cut" data-side="${side}" d="M${back} ${y + 11.5}L${tip} ${y + 17}L${back} ${y + 22.5}Z" fill="var(--text)" stroke="var(--surface)" stroke-width="1" stroke-linejoin="round"/>`;
+      if (later) out.push(arrow("later", b - 3, b - 10));
+      if (earlier) out.push(arrow("earlier", a + 3, a + 10));
       // The dates beside the bar: after its end, or before its start where the right has no room;
       // over a bar wider than the view (no side in sight), on it.
       let at: number | null = null;
@@ -355,7 +363,7 @@ export function zoomPicture(scroll: HTMLElement, today: string): Picture {
       let place = "after";
       if (x1 + 6 + ww <= width - 2) at = Math.max(x1 + 6, labelW + 4);
       else if (x0 - 6 - ww >= labelW + 2) [at, anchor, place] = [x0 - 6, "end", "before"];
-      else if (b - a >= ww + 8) [at, place] = [a + 6, "inside"];
+      else if (b - a >= ww + 8 + (earlier ? 12 : 0) + (later ? 12 : 0)) [at, place] = [a + 6 + (earlier ? 12 : 0), "inside"];
       // A bar wholly out of the window says where it lies, at that edge.
       const off = b <= a ? (x1 <= labelW ? "Earlier: " : "Later: ") : "";
       if (off) {
@@ -582,9 +590,12 @@ interface PdfPage {
   h: number;
   /** Footer texts: [x, y, size, words, align]. */
   texts: [number, number, number, string, "left" | "right"][];
+  /** The picture's own words, invisible over it (selectable and searchable): [x, baseline, size, words, width], in points. */
+  hidden?: [number, number, number, string, number][];
 }
 
-/** E-2: a PDF of Letter landscape pages, each one picture (FlateDecode, never JPEG) and its footer in Helvetica. */
+/** E-2: a PDF of Letter landscape pages, each one picture (FlateDecode, never JPEG), its words as
+ * invisible text over it, and its footer in Helvetica. */
 export function pdfOf(pages: PdfPage[]): Blob {
   const parts: Uint8Array[] = [];
   const offsets: number[] = [];
@@ -615,7 +626,14 @@ export function pdfOf(pages: PdfPage[]): Blob {
         return `BT /F1 ${size} Tf 0.35 0.4 0.47 rg ${at.toFixed(1)} ${y} Td (${pdfText(t)}) Tj ET`;
       })
       .join("\n");
-    const content = `q ${PAGE_W} 0 0 ${PAGE_H} 0 0 cm /Im0 Do Q\n${words}`;
+    // Each word set stretched (Tz) to the width it takes in the picture, so a selection covers it.
+    const layer = (pg.hidden ?? [])
+      .map(([x, y, size, t, w]) => {
+        const natural = helveticaWidth(t, size);
+        return `BT /F1 ${size.toFixed(2)} Tf ${(natural > 0 ? (100 * w) / natural : 100).toFixed(1)} Tz ${x.toFixed(1)} ${y.toFixed(1)} Td (${pdfText(t)}) Tj ET`;
+      })
+      .join("\n");
+    const content = `q ${PAGE_W} 0 0 ${PAGE_H} 0 0 cm /Im0 Do Q\n${layer ? `q 3 Tr\n${layer}\nQ\n` : ""}${words}`;
     obj(n, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /XObject << /Im0 ${n + 2} 0 R >> /Font << /F1 3 0 R >> >> /Contents ${n + 1} 0 R >>`);
     obj(n + 1, `<< /Length ${bytes(content).length} >>\nstream\n${content}\nendstream`);
     offsets[n + 2] = length;
@@ -632,6 +650,33 @@ export function pdfOf(pages: PdfPage[]): Blob {
   return new Blob(parts as BlobPart[], { type: "application/pdf" });
 }
 
+/** Each word of the framed picture as the browser lays it out: its words, left, baseline,
+ * width and size, in the picture's pixels (for the PDF's text layer). */
+function wordsOf(markup: string): { s: string; x: number; y: number; w: number; size: number }[] {
+  const host = document.createElement("div");
+  host.style.cssText = "position:fixed;left:0;top:0;visibility:hidden;pointer-events:none";
+  host.innerHTML = markup;
+  document.body.append(host);
+  try {
+    // The root's own pixels (a nested <svg> is a viewport of its own: getCTM would stop there).
+    const root = host.querySelector("svg")?.getScreenCTM()?.inverse();
+    if (!root) return [];
+    return [...host.querySelectorAll<SVGTextElement>("text")].flatMap((t) => {
+      const s = (t.textContent ?? "").replace(/\s+/g, " ").trim();
+      const screen = t.getScreenCTM();
+      if (!s || !screen) return [];
+      const m = root.multiply(screen);
+      const b = t.getBBox();
+      const base = Number.parseFloat(t.getAttribute("y") ?? "");
+      const y = Number.isFinite(base) ? base : b.y + b.height * 0.8;
+      const size = (Number.parseFloat(getComputedStyle(t).fontSize) || 12) * m.d;
+      return [{ s, x: m.a * b.x + m.c * y + m.e, y: m.b * b.x + m.d * y + m.f, w: b.width * m.a, size }];
+    });
+  } finally {
+    host.remove();
+  }
+}
+
 /** Past this many pages a PDF is too long to read (or to make: the 500-item day scale is 432):
  * a filter, then. */
 const MAX_PAGES = 200;
@@ -646,6 +691,7 @@ const MIN_PT = 0.45;
  * again at the left of each. */
 async function pagesOf(page: { markup: string; width: number; height: number }, pic: Picture, head: ExportHead, today: string): Promise<PdfPage[]> {
   const img = await imageOf(page.markup);
+  const said = wordsOf(page.markup);
   const pad = 16;
   const top = HEAD + (pic.head ?? 0);
   const left = Math.min(page.width / 2, pad + (pic.left ?? 0));
@@ -698,6 +744,15 @@ async function pagesOf(page: { markup: string; width: number; height: number }, 
       ctx.drawImage(img, 0, y0, left, bandH, m, m + top * g, left * g, bandH * g);
       ctx.drawImage(img, x0, y0, w, bandH, m + left * g, m + top * g, w * g, bandH * g);
       const toPage = (X: number, Y: number): [number, number] => [m + left * g + (X + pad - x0) * g, m + (Y + HEAD) * g];
+      // The words this page draws, where it draws them: the header's and the names column's on
+      // each page, the rest in its own band and column (a word set by where it starts).
+      const hidden: NonNullable<PdfPage["hidden"]> = [];
+      for (const t of said) {
+        const y = t.y < top ? t.y : t.y > y0 && t.y <= y1 ? top + t.y - y0 : null;
+        const x = t.x < left ? t.x : t.x >= x0 - 0.5 && t.x < x1 ? left + t.x - x0 : null;
+        if (x === null || y === null) continue;
+        hidden.push([(m + x * g) / PAGE_PX, PAGE_H - (m + y * g) / PAGE_PX, (t.size * g) / PAGE_PX, t.s, (t.w * g) / PAGE_PX]);
+      }
       if (c > 0 && pic.axis) edgeOfAxis(ctx, pic.axis, x0 - pad, toPage, g);
       // A label the column's right edge cuts ("3" of "30") is left to the next page.
       if (c < cols.length - 1 && pic.axis) clearCut(ctx, pic.axis, x1 - pad, toPage);
@@ -711,6 +766,7 @@ async function pagesOf(page: { markup: string; width: number; height: number }, 
         image: await flate(canvas),
         w: canvas.width,
         h: canvas.height,
+        hidden,
         texts: [
           [MARGIN, MARGIN + 2, 8, cut(head.brand?.disclaimer ?? "", 110), "left"],
           [PAGE_W - MARGIN - helveticaWidth(pageWords(n), 8) - 12, MARGIN + 2, 8, stamp(today, head.brand), "right"],

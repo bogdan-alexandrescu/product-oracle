@@ -99,7 +99,7 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
       return after.parent_key ? `made ${x} part of ${parent || "another feature"}` : `took ${x} out of ${parent || "the feature it was part of"}`;
     }
     case "set_goal_measure": return `changed how the goal of ${x} is measured`;
-    case "set_status": return `marked ${x} ${after.status ?? "planned"}`;
+    case "set_status": return `marked ${x} ${after.cut ? "cut" : after.shipped ? "done" : "planned"}`;
     case "set_decider": return `changed the decider of ${x}`;
     // ask-oracle-actions: a dependency added or removed in the feature talk names it (change_words.py).
     case "set_depends": {

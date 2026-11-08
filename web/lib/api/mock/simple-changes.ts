@@ -52,6 +52,7 @@ import {
   shiftPlan,
   ownDates,
   ownPrd,
+  pickedName,
   prdCode,
   codedTitle,
   dependencyOf,
@@ -410,6 +411,7 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
     else if (f === "horizon") out[f] = s.horizon;
     else if (f === "position") out[f] = s.position ?? db.items.indexOf(s);
     else if (f === "cut") out[f] = s.status === "cut";
+    else if (f === "shipped") out[f] = s.shipped ?? null;
     else if (f === "title") out[f] = s.title;
     else if (f === "outcome") out[f] = s.outcome ?? null;
     else if (f === "note") out[f] = s.note ?? null;
@@ -429,6 +431,15 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
   return out;
 }
 
+/** changes.py PANEL_DONE: the shipped mark the panel's Status set to done leaves. */
+const PANEL_DONE = "Marked done in its panel";
+
+/** changes.py set_status: its stored after, {cut, shipped}; planned clears only the panel's own done mark. */
+function statusAfter(s: ReturnType<typeof seed>, status: string, by: string): Values {
+  const kept = s.shipped?.note === PANEL_DONE ? null : (s.shipped ?? null);
+  return { cut: status === "cut", shipped: status === "done" ? (s.shipped ?? { note: PANEL_DONE, by, on: iso(mockNowMs()).slice(0, 10) }) : kept };
+}
+
 function write(db: SimpleDb, key: string, values: Values, target: Values): void {
   const s = seed(db, key);
   if ("start_date" in values) {
@@ -437,7 +448,8 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
   }
   if ("horizon" in values) s.horizon = values.horizon as typeof s.horizon;
   if ("position" in values) s.position = values.position as number;
-  if ("cut" in values) s.status = values.cut ? "cut" : "planned";
+  // set_status's {cut, shipped} is written below, from the tracker's status read before either is written.
+  if ("cut" in values && !("shipped" in values)) s.status = values.cut ? "cut" : "planned";
   if ("title" in values) s.title = String(values.title);
   if ("draft" in values) s.draft = !!values.draft;
   if ("goal_ids" in values) {
@@ -464,10 +476,11 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
   }
   if ("depends_on" in values) s.depends = [...((values.depends_on as string[]) ?? [])];
   if ("parent_key" in values) s.parent = (values.parent_key as string | null) ?? undefined;
-  if ("status" in values) {
-    // changes.py set_status: planned is the tracker's status again (a shipped mark from elsewhere stays).
-    if (s.tracked === undefined) s.tracked = !s.status || s.status === "cut" || s.status === "draft" ? "planned" : s.status;
-    s.status = values.status === "planned" ? s.tracked : (values.status as typeof s.status);
+  if ("shipped" in values) {
+    // changes.py set_status ({cut, shipped}): it reads as service._status: cut, then its shipped mark, then the tracker's status.
+    s.tracked ??= !s.status || s.status === "cut" || s.status === "draft" || (s.status === "done" && s.shipped) ? "planned" : s.status;
+    s.shipped = (values.shipped as typeof s.shipped) ?? null;
+    s.status = values.cut ? "cut" : s.shipped ? "done" : s.tracked;
   }
   if ("risk" in values) {
     const kept = (s.risks ?? []).filter((r) => !(r.flag === target.flag && (r.subject ?? null) === (target.subject ?? null)));
@@ -767,6 +780,15 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     if (hit) Object.assign(after, { owner_id: hit[0], owner_name: hit[1] });
   }
   if (body.op === "add_item_task" && after.owner_id && !after.owner_name) after.owner_name = ctx.names[String(after.owner_id)] ?? null;
+  // item-milestone (changes._roadmap_milestone): a goal milestone of the item's roadmap picked in
+  // its panel, stored by id with its code and name and no date.
+  const pickedMs = body.op === "set_milestone" ? (after.milestone as Values | null | undefined) : undefined;
+  if (pickedMs && typeof pickedMs === "object" && pickedMs.id) {
+    const refused = pickRefused(db, target.item_id, pickedMs.id);
+    if (refused) return json(422, { detail: refused });
+    const gm = (db.goal_milestones ?? []).find((m) => m.id === pickedMs.id)!;
+    after.milestone = { id: gm.id, name: `${gm.code} ${gm.name}`, date: null, date_source: null };
+  }
   if (body.op === "set_goal_measure") {
     // targets.py: the goal the item's read shows; a measure (target and date may be empty); before as read, else 409.
     if (!target.item_id || read(db, keyOf(db, target.item_id)!, ["goal_id"], target).goal_id !== target.goal_id) return json(422, { detail: "target.goal_id: the goal the item serves" });
@@ -811,9 +833,19 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   return json(201, { change: view(db, ctx, change), flags: [] });
 }
 
-/** A milestone as the item reads it: its name and day (changes._seen_milestone). */
+/** item-milestone (changes._roadmap_milestone): why a goal milestone cannot be picked for the item, in its plain words; null when it can. */
+function pickRefused(db: SimpleDb, itemId: unknown, milestoneId: unknown): string | null {
+  const gm = (db.goal_milestones ?? []).find((m) => m.id === milestoneId);
+  const k = keyOf(db, itemId);
+  if (!gm || !k || gm.roadmap !== seed(db, k).roadmap) return "That milestone is not on this item's roadmap.";
+  return gm.deleted ? "That milestone was deleted." : null;
+}
+
+/** A milestone as the item reads it: the goal milestone picked for it (its id), else its name
+ * and day (changes._seen_milestone). */
 function seenMilestone(m: unknown): string {
   const v = (m ?? {}) as Values;
+  if (v.id) return JSON.stringify(["id", v.id]);
   return v.name || v.date ? JSON.stringify([v.name || null, v.date || null]) : "none";
 }
 
@@ -855,10 +887,12 @@ function writeTarget(db: SimpleDb, c: Change, values: Values, undo = false, ctx?
   if (c.op === "set_milestone") {
     const key = keyOf(db, c.target.item_id);
     const s = key ? db.items.find((x) => x.key === key) : undefined;
-    const m = values.milestone as { name: string; date?: string | null } | null | undefined;
+    const m = values.milestone as { name: string; date?: string | null; id?: string | null } | null | undefined;
     if (s) {
       const w = simpleWindows(companyToday())[s.horizon][0];
-      s.milestone = m ? { name: m.name, day: m.date ? Math.round((Date.parse(`${m.date}T00:00:00Z`) - Date.parse(`${w}T00:00:00Z`)) / DAY) : null } : undefined;
+      s.milestone = m?.id
+        ? { id: m.id, name: m.name, day: null }
+        : m ? { name: m.name, day: m.date ? Math.round((Date.parse(`${m.date}T00:00:00Z`) - Date.parse(`${w}T00:00:00Z`)) / DAY) : null } : undefined;
     }
   }
 }
@@ -872,6 +906,8 @@ function dayIn(horizon: SeedItem["horizon"], date: unknown): number | null {
 /** An item's own milestone as RoadmapItem.milestone stores it: {name, date, date_source}, or null. */
 function ownMilestone(db: SimpleDb, key: string): Values | null {
   const s = db.items.find((x) => x.key === key);
+  // item-milestone: a picked goal milestone is held by its id (no date).
+  if (s?.milestone?.id) return { id: s.milestone.id, name: pickedName(db, s.milestone), date: null, date_source: null };
   if (!s?.milestone || !(s.milestone.name || s.milestone.day != null)) return null;
   const date = s.milestone.day == null ? null : addDays(simpleWindows(companyToday())[s.horizon][0], s.milestone.day);
   // What the date engine stored besides (never shown, never compared).
@@ -1353,7 +1389,8 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       after = { depends_on: clean };
     } else if (body.op === "set_status") {
       if (!["planned", "done", "cut"].includes(String(a.status))) return json(422, { detail: "after.status: planned, done or cut" });
-      after = { status: a.status };
+      after = statusAfter(seed(seen, key), String(a.status), ctx.id);
+      stored = ["cut", "shipped"];
     } else if (body.op === "set_code") {
       // changes._free_code: a feature code no other item or Ground Truth feature has; the title carries it.
       const s = seed(seen, key);
@@ -1547,6 +1584,10 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   if (c.status !== "proposed") return json(409, { detail: `This change is ${c.status} already` });
   const body = (await req.json().catch(() => ({}))) as { reason?: string | null };
   if (p[4] === "accept" && c.op === "set_goal_measure" && !same(goalMeasure(db, c.target.goal_id), c.before)) return conflict(db, ctx, goalMeasure(db, c.target.goal_id)!, [String(c.target.goal_id)], "outdated");
+  // item-milestone: a proposed pick's milestone may be deleted since (changes.decide checks it again).
+  const pickedOnAccept = p[4] === "accept" && c.op === "set_milestone" ? (c.after?.milestone as Values | null | undefined) : undefined;
+  const refusedOnAccept = pickedOnAccept?.id ? pickRefused(db, c.target.item_id, pickedOnAccept.id) : null;
+  if (refusedOnAccept) return json(422, { detail: refusedOnAccept });
   if (p[4] === "accept" && TARGETS[c.op]) writeTarget(db, c, c.after, false, ctx);
   // goal_milestones.decide: a milestone card's change (before.milestone); a change asked of a
   // PRD's milestone (before.date) is decided below.
@@ -1703,10 +1744,10 @@ export function proposeOffAgenda(db: SimpleDb, ctx: SimpleChangesCtx, body: Sche
   const key = keyOf(db, body.target.item_id);
   if (!key) return json(404, { detail: "No such roadmap item" });
   const fields = FIELDS[body.op] ?? Object.keys(body.after ?? {});
-  const after = body.op === "cut" ? { cut: true } : body.op === "restore" ? { cut: false } : { ...(body.after ?? {}) };
+  const after = body.op === "cut" ? { cut: true } : body.op === "restore" ? { cut: false } : body.op === "set_status" ? statusAfter(seed(db, key), String(body.after?.status), ctx.id) : { ...(body.after ?? {}) };
   const c: Change = {
     id: crypto.randomUUID(), session_id: sessionId, document_id: stableUuid(`simple-doc/${seed(db, key).roadmap}`), draft_ids: [],
-    op: body.op, target: { ...body.target }, before: body.before ?? read(db, key, fields, body.target), after, status: "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: iso(mockNowMs()),
+    op: body.op, target: { ...body.target }, before: body.op === "set_status" ? read(db, key, ["cut", "shipped"], body.target) : (body.before ?? read(db, key, fields, body.target)), after, status: "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: iso(mockNowMs()),
     decided_by: null, decided_at: null, reason: body.reason ?? null, decision_reason: null, routed_to: [], undoes_id: null, undone: false, can_decide: false, can_undo: false,
     from_meeting: meeting, off_agenda: true,
   };
@@ -1819,6 +1860,9 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
       // The goal buckets' goals (./goal-buckets.ts) are the same goals, by their name.
       const bucket = db.goal_buckets?.goals.find((g) => g.id === value)?.title;
       goal = Object.keys(GOALS).find((k) => goalId(k) === value || k === value || (!!bucket && GOALS[k] === bucket));
+      // A Goal map goal (the goal-suggestions list names it by its id) is a confirmed goal too.
+      const mapped = Object.values(db.map_goals ?? {}).find((g) => g.id === value);
+      if (!goal && mapped) MAP_GOALS[value] ??= mapped.title;
       if (!goal && !(value in MAP_GOALS)) return json(422, { detail: "target.where.value: a goal's id" });
     } else if (where?.kind === "horizon") {
       if (!["now", "next", "later"].includes(value)) return json(422, { detail: "target.where.value: now, next or later" });

@@ -187,6 +187,7 @@ export function FeaturePanel({
       near={nearWords(item, data.key_dates ?? [])}
       onOpen={setOpened}
       onSuggestion={(how, dates) => void onSuggestion(how, dates)}
+      milestones={data.goal_milestones}
     />
   );
   if (phone && item && !draft) return <div data-testid="item-panel" aria-label={item.title} className="contents">{body}</div>;

@@ -483,7 +483,7 @@ async def after_restore(
 
 async def _parent_back(db: AsyncSession, entry: TrashEntry) -> None:
     """feature-parts: a restored part stays under its parent when that parent is still on
-    the roadmap and open (moved meanwhile or not), as the roadmap's open draft has them;
+    the roadmap, open or cut (moved meanwhile or not), as the roadmap's open draft has them;
     else (in Trash, merged, gone) or when going back under it would close a loop, it is a
     feature of its own, in its row and in the draft. Per version."""
     key, doc = entry.root.get("slug"), entry.root.get("roadmap_id")
