@@ -1387,8 +1387,10 @@ async def create_entity(
 
 
 def _goal_words(title: str, key: str) -> str:
-    """A goal's name with no unfilled placeholder; its key in words when nothing else is left."""
-    return goals.without_placeholders(title) or key.replace("-", " ").replace("_", " ")
+    """A goal's name, stripped, with no unfilled placeholder; a blank name is refused."""
+    if not title.strip():
+        raise InvalidError("A goal needs a name")
+    return goals.goal_name(title, key)
 
 
 def _entity_changes(entity: Entity, changes: dict[str, Any]) -> dict[str, Any]:

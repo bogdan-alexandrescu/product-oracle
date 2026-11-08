@@ -480,3 +480,9 @@ def without_placeholders(text: str | None) -> str | None:
     out = re.sub(r"[ \t]+([,.;:!?)])", r"\1", out)
     out = re.sub(r"\([ \t]*\)", "", out)
     return "\n".join(line.strip() for line in out.split("\n")).strip()
+
+
+def goal_name(title: str, key: str) -> str:
+    """A goal's name as shown: no unfilled placeholder, its key in words when nothing else is
+    left. A name stored before the guard reads the same as one written after it."""
+    return (without_placeholders(title) or "").strip() or key.replace("-", " ").replace("_", " ")
