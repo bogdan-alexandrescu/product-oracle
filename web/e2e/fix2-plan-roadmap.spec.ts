@@ -146,7 +146,7 @@ test.describe("phone", () => {
   });
 });
 
-test("qa-plan-10: Launches and Changelog settle in under 2 s on the mock API", async ({ page }) => {
+test("qa-plan-10: Launches and Changelog settle in under 2 s on the mock API @timing", async ({ page }) => {
   await start(page, { scenario: "launches" });
   // Warm: the first visit seeds the mock's data and loads the route's code.
   await page.goto("/roadmap/launches");
