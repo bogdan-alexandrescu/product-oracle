@@ -573,12 +573,13 @@ async def import_items(
 
 
 async def _built_on(db: AsyncSession, version: DocumentVersion) -> uuid.UUID | None:
-    """The version ``version`` was written on: its base, else the latest earlier one."""
+    """The version ``version`` was written on: its base, else the latest earlier approved
+    one (a run imports its version with no base; an unapproved proposal is never it)."""
     q = select(DocumentVersion.id).where(DocumentVersion.document_id == version.document_id)
     if version.base_number:
         return await db.scalar(q.where(DocumentVersion.number == version.base_number))
     return await db.scalar(
-        q.where(DocumentVersion.number < version.number)
+        q.where(DocumentVersion.number < version.number, DocumentVersion.approved_at.is_not(None))
         .order_by(DocumentVersion.number.desc())
         .limit(1)
     )

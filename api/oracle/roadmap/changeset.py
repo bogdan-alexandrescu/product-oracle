@@ -542,6 +542,8 @@ async def propose(
             DocumentVersion.number == result.version.number,
         )
     )
+    # Imported on the latest number (nothing to merge); written on the change set's base.
+    version.base_number = base_number
     await db.execute(delete(RoadmapItem).where(RoadmapItem.roadmap_version_id == version.id))
     prd_ids = {r.prd_document_id for r in base_rows}
     bases = {p: await schedule.verified_bases(db, p) for p in prd_ids}

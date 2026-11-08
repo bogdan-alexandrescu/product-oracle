@@ -1259,6 +1259,8 @@ async def submit(
             DocumentVersion.number == result.version.number,
         )
     )
+    # Imported on the latest number (nothing to merge); written on the draft's version.
+    version.base_number = base.number
     await db.execute(delete(RoadmapItem).where(RoadmapItem.roadmap_version_id == version.id))
     bases = {
         p: await schedule.verified_bases(db, p)
