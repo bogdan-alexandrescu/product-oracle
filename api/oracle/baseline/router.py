@@ -298,7 +298,20 @@ async def list_entities(
     type: EntityType | None = None,
     status: NodeStatus | None = None,
 ) -> list[EntityOut]:
-    return await _entities_out(db, await service.list_entities(db, type, status), principal)
+    out = await _entities_out(db, await service.list_entities(db, type, status), principal)
+    # A goal's name and description as shown (Home's proposed goals): no "[n]" stored before
+    # the guard. The graph keeps the stored text, so the rename form starts from it.
+    return [
+        o.model_copy(
+            update={
+                "title": goals.goal_name(o.title, o.key),
+                "body": goals.without_placeholders(o.body),
+            }
+        )
+        if o.type == "goal"
+        else o
+        for o in out
+    ]
 
 
 @router.post(

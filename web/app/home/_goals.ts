@@ -1,4 +1,5 @@
 import { goalTree, scoredConfidence } from "@/lib/goal-tree";
+import { goalName } from "@/lib/placeholders";
 import type { EntityOut, Schemas } from "@/lib/api/client";
 
 type RevisionOut = Schemas["RevisionOut"];
@@ -204,7 +205,7 @@ export function goalViews(entities: EntityOut[], numbered: EntityOut[] = entitie
       parentId,
       subgoals: children,
       progress: g.progress ? { value: g.progress.value ?? null, source: g.progress.source ?? null } : null,
-      title: g.title,
+      title: goalName(g.title, g.key),
       code,
       name,
       metric: typeof a.metric === "string" ? a.metric : null,

@@ -9,6 +9,7 @@ import { formatPercent } from "@/lib/format";
 import { assess, goalViews, type GoalView } from "@/app/home/_goals";
 import { GoalNum } from "@/components/simple/GoalOrder";
 import { goalNumbers, goalTree } from "@/lib/goal-tree";
+import { shownTitle } from "@/lib/placeholders";
 
 import type { AddKind } from "./AddItem";
 import {
@@ -49,6 +50,8 @@ type Props = {
   goalsNote?: string | null;
   /** #345: add a subgoal under a goal (approvers); resolves true once it is saved. */
   onAddSubgoal?: (parent: EntityOut, title: string) => Promise<boolean>;
+  /** gt-goal-rename: opens a goal's panel on its Edit form, to rename it (proposed or confirmed). */
+  onRename?: (goal: EntityOut) => void;
 };
 
 /** #345: a new subgoal's title, under the goal it is added to. */
@@ -137,9 +140,9 @@ function TitleButton({
         onOpen(entity.id);
       }}
       className={`${className.includes("min-w-") ? "" : "min-w-0"} ${className.includes("line-clamp") ? "" : "truncate"} text-left hover:underline ${className}`}
-      title={name ?? entity.title}
+      title={name ?? shownTitle(entity)}
     >
-      {name ?? entity.title}
+      {name ?? shownTitle(entity)}
     </button>
   );
 }
@@ -200,7 +203,7 @@ function fillAsk(goals: EntityOut[]) {
       const texts = Object.entries(g.attrs ?? {})
         .filter(([k, v]) => k.endsWith("_text") && k !== "owner_text" && g.attrs?.[k.slice(0, -5)] == null && v != null && v !== "")
         .map(([k, v]) => `${k.slice(0, -5).replaceAll("_", " ")} “${String(v)}”`);
-      return texts.length ? `${g.title} (${texts.join(", ")})` : g.title;
+      return texts.length ? `${shownTitle(g)} (${texts.join(", ")})` : shownTitle(g);
     });
   return {
     action: fillLabel(names.length),
@@ -214,7 +217,7 @@ function fillAsk(goals: EntityOut[]) {
  * On a phone the grid becomes a list: each feature's title, then its goal links as small
  * G-tags with their strength.
  */
-export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags, onOpen, onConfirm, onAdd, onFill, onMakeMeasurable, vague = 0, onInterviewVague, goalsNote, onAddSubgoal }: Props) {
+export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags, onOpen, onConfirm, onAdd, onFill, onMakeMeasurable, vague = 0, onInterviewVague, goalsNote, onAddSubgoal, onRename }: Props) {
   const low = trace?.low ?? DEFAULT_LOW;
   const live = graph.entities.filter((e) => e.status !== "rejected");
   const goals = sortedGoals(graph);
@@ -307,7 +310,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
               kind="goal"
               entityId={g.id}
               entityKey={g.key}
-              title={g.title}
+              title={shownTitle(g)}
               code={tree.get(g.id)?.code}
               proposed={g.status === "proposed"}
               codeOnly
@@ -526,6 +529,19 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
               Confirm
             </Button>
           )}
+          {canWrite && onRename && (
+            <Button
+              disabled={busy}
+              className={PHONE_ACTION}
+              data-testid="rename-goal"
+              onClick={(e: MouseEvent) => {
+                e.stopPropagation();
+                onRename(g);
+              }}
+            >
+              Rename
+            </Button>
+          )}
           {canWrite && onAddSubgoal && !tree.get(g.id)?.depth && (
             <Button
               disabled={busy}
@@ -651,7 +667,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
             adding?.id === g.id && onAddSubgoal ? (
               <AddSubgoal
                 key={adding.id}
-                parent={tree.get(adding.id) ?? named(adding.title, adding.key)}
+                parent={tree.get(adding.id) ?? named(shownTitle(adding), adding.key)}
                 busy={busy}
                 onCancel={() => setAdding(null)}
                 onAdd={async (title) => {
@@ -744,7 +760,7 @@ function Ledger({
             </th>
             {goals.map((g) => {
               const target = goalTarget(g);
-              const name = tags.get(g.id) ?? g.title;
+              const name = tags.get(g.id) ?? shownTitle(g);
               return (
                 <th
                   key={g.id}
@@ -753,7 +769,7 @@ function Ledger({
                 >
                   <span className="flex min-w-0 items-center gap-1.5 max-[600px]:justify-center">
                     <span className="flex-none @max-[900px]:hidden max-[600px]:hidden">
-                      <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={g.title} code={codes.get(g.id)} proposed={g.status === "proposed"} codeOnly />
+                      <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={shownTitle(g)} code={codes.get(g.id)} proposed={g.status === "proposed"} codeOnly />
                     </span>
                     <button
                       type="button"
@@ -939,7 +955,7 @@ function FeatureRow({
             <span className="max-[600px]:hidden">{e ? <LinkCell edge={e} low={low} /> : <Dot />}</span>
             {e && (
               <span className="hidden items-center gap-1.5 rounded-goal border border-line py-0.5 pr-2 pl-1.5 max-[600px]:inline-flex">
-                <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={g.title} code={codes.get(g.id)} proposed={g.status === "proposed"} wrap />
+                <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={shownTitle(g)} code={codes.get(g.id)} proposed={g.status === "proposed"} wrap />
                 <ContributionPips value={contributionOf(e.attrs)} proposed={e.status === "proposed"} />
               </span>
             )}
