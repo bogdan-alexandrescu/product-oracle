@@ -12,11 +12,22 @@ import { expect, test, type Page } from "./test";
  * said; a failed waiting list leaves the rail's every count hidden; Decisions says "Nothing waits
  * on you." when the list did not load; the Inbox hides its list until the questions answer, or
  * shows "N waiting" before its webhook notices are read.
+ *
+ * counts-failed-part follow-ups: a re-read that fails shows no out-of-date number (Decisions'
+ * Waiting for you, the rail's Meetings); every Inbox count missing a part says so in its name and
+ * tooltip; the rail reads again only the failed part, backing off (15 s, then 30 s), and not while
+ * the tab is hidden. fails_when: an old number stays beside Could not load; the Needs you or tab
+ * counts carry no mark; a re-read reads every part, or runs every 15 s, or runs in a hidden tab.
  */
 
 /** Every GET of `path` answers 500 from the first page on. */
 async function failing(page: Page, path: string) {
   await page.addInitScript(([key, p]) => localStorage.setItem(key, p), [MOCK_FAIL_KEY, path] as const);
+}
+
+/** How many GETs of `path` the page has made so far (the mock logs every call). */
+function calls(page: Page, path: string): Promise<number> {
+  return page.evaluate((p) => ((globalThis as { __poMockCalls?: string[] }).__poMockCalls ?? []).filter((c) => c === `GET ${p}`).length, path);
 }
 
 /** `path`'s read answers 2.5 s late from the first page on. */
@@ -127,4 +138,100 @@ test("Inbox: the list shows while the questions asked of me are on their way; on
   await expect(needs).toBeVisible({ timeout: 2_000 });
   await expect(page.getByText(/^\d+ waiting$/)).toHaveCount(0);
   await expect(page.getByText(/^\d+ waiting$/)).toBeVisible({ timeout: 15_000 });
+});
+
+test("Decisions: a re-read of the waiting list that fails drops its number", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await login(page);
+  await page.goto("/simple/decisions");
+  const card = page.getByTestId("questions-mine");
+  await expect(card.getByTestId("questions-mine-count")).toHaveText(/^\d+$/, { timeout: 15_000 });
+  // The list fails from now on; confirming a row reads it again.
+  await page.evaluate((key) => localStorage.setItem(key, "/v1/simple/decisions/waiting"), MOCK_FAIL_KEY);
+  const dates = card.getByRole("listitem", { name: "Dates to confirm: Alert routing by team" });
+  await dates.getByRole("button", { name: "Confirm" }).click();
+  await expect(card.getByTestId("load-error")).toBeVisible({ timeout: 15_000 });
+  await expect(card.getByTestId("questions-mine-count")).toHaveCount(0);
+});
+
+test("the rail: a re-read of the meetings that fails shows no number, not the last one", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await login(page);
+  await startMeeting(page);
+  const meetings = page.getByTestId("simple-nav-meetings-count");
+  await expect(meetings).toHaveText("1", { timeout: 15_000 });
+  // The meetings fail from now on; opening Meetings reads them again.
+  await page.evaluate((key) => localStorage.setItem(key, "/v1/simple/meetings"), MOCK_FAIL_KEY);
+  await page.getByTestId("simple-nav-meetings").click();
+  await expect(page).toHaveURL(/\/simple\/meetings/);
+  await expect(meetings).toHaveAttribute("title", "Could not load", { timeout: 15_000 });
+  await expect(meetings).toHaveAttribute("aria-label", "Could not load");
+  await expect(meetings).not.toHaveText(/\d/);
+});
+
+test("Inbox: failed notifications mark the Needs you count and the tab counts as partial", async ({ page }) => {
+  await failing(page, "/v1/me/notifications");
+  await login(page);
+  await page.goto("/inbox");
+  const needs = page.getByTestId("inbox-needs");
+  await expect(page.getByTestId("load-error")).toBeVisible({ timeout: 15_000 });
+  // The count and the tabs read the same as before; only their names and tooltips say a part is missing.
+  const count = needs.getByTestId("panel-count").locator("[aria-label]");
+  await expect(count).toHaveText(/^\d+$/);
+  await expect(count).toHaveAttribute("aria-label", /^\d+; a part could not load$/);
+  await expect(count).toHaveAttribute("title", /^\d+; a part could not load$/);
+  const tab = needs.getByRole("tab", { selected: true });
+  await expect(tab).toHaveAccessibleName(/\d+; a part could not load$/);
+  await expect(tab.locator("[title]")).toHaveAttribute("title", /^\d+; a part could not load$/);
+  await expect(page.getByText(/^\d+ waiting$/)).toHaveAttribute("aria-label", /^\d+ waiting; a part could not load$/);
+});
+
+test("the rail: a failed part is read again alone, after 15 s, then 30 s", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await failing(page, "/v1/inbox/questions");
+  await login(page);
+  await page.goto("/simple/one-pagers");
+  await expect(page.getByTestId("simple-nav-inbox-count")).toHaveAttribute("title", /could not load/i, { timeout: 15_000 });
+  await page.waitForTimeout(1_000);
+  const before = { questions: await calls(page, "/v1/inbox/questions"), meetings: await calls(page, "/v1/simple/meetings"), list: await calls(page, "/v1/simple/decisions/waiting") };
+  await page.clock.runFor(16_000);
+  await expect.poll(() => calls(page, "/v1/inbox/questions")).toBe(before.questions + 1);
+  await page.waitForTimeout(1_000);
+  // Only the failed part was read again.
+  expect(await calls(page, "/v1/simple/meetings")).toBe(before.meetings);
+  expect(await calls(page, "/v1/simple/decisions/waiting")).toBe(before.list);
+  // The next wait is twice as long: nothing at 20 s, the read again at 30 s.
+  await page.clock.runFor(20_000);
+  await page.waitForTimeout(500);
+  expect(await calls(page, "/v1/inbox/questions")).toBe(before.questions + 1);
+  await page.clock.runFor(11_000);
+  await expect.poll(() => calls(page, "/v1/inbox/questions")).toBe(before.questions + 2);
+  await expect(page.getByTestId("simple-nav-inbox-count")).toHaveAttribute("title", /could not load/i);
+});
+
+test("the rail: a hidden tab reads a failed part again only once it is shown", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await failing(page, "/v1/inbox/questions");
+  await login(page);
+  await page.goto("/simple/one-pagers");
+  await expect(page.getByTestId("simple-nav-inbox-count")).toHaveAttribute("title", /could not load/i, { timeout: 15_000 });
+  await page.waitForTimeout(1_000);
+  const before = await calls(page, "/v1/inbox/questions");
+  // The person switches to another tab.
+  const shown = (hidden: boolean) =>
+    page.evaluate((h) => {
+      Object.defineProperty(document, "hidden", { configurable: true, get: () => h });
+      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => (h ? "hidden" : "visible") });
+      document.dispatchEvent(new Event("visibilitychange"));
+    }, hidden);
+  await shown(true);
+  await page.clock.runFor(60_000);
+  await page.waitForTimeout(500);
+  expect(await calls(page, "/v1/inbox/questions")).toBe(before);
+  // Back on this tab: the failed part is read again at once.
+  await shown(false);
+  await expect.poll(() => calls(page, "/v1/inbox/questions")).toBe(before + 1);
 });
