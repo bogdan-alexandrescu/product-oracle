@@ -249,6 +249,11 @@ function selfTest() {
     ["+new Date() - t0", `test("parses", () => { const t0 = +new Date(); parse(big); expect(+new Date() - t0).toBeLessThan(1500); });`, 1],
     ["date arithmetic, not the clock", `test("dates", () => { const at = new Date(now()); expect(new Date(at).getTime() - at.getTime()).toBe(0); });`, 0],
     ["coarse guard, marked", untagged.replace("parse(big);", `// ${COARSE}: a large regression still fails in the shards\n parse(big);`), 0],
+    ["coarse marker, tight budget", `test("parses", () => { const t0 = Date.now(); // ${COARSE}\n parse(big); expect(Date.now() - t0).toBeLessThan(50); });`, 1],
+    ["coarse marker in a string, not a comment", `test("parses", () => { const t0 = Date.now(); parse("${COARSE}"); expect(Date.now() - t0).toBeLessThan(1500); });`, 1],
+    ["coarse marker, budget through a helper", `async function paint() { const t0 = performance.now(); return 1; }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`, 0],
+    ["coarse marker, tight budget in a variable", `async function paint() { const t0 = performance.now(); return 1; }\ntest("draws", async () => { // ${COARSE}\n const ms = await paint(); expect(ms).toBeLessThanOrEqual(200); });`, 1],
+    ["coarse marker, no budget at all", `test("parses", () => { /* ${COARSE} */ const t0 = Date.now(); parse(big); expect(Date.now() - t0 < 50).toBe(true); });`, 1],
   ];
   // Imported helpers: a spec at /e2e/a.spec.ts and the files it imports.
   const files = {
