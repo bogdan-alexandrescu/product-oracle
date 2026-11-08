@@ -4,14 +4,20 @@
 // parallel mock-e2e shards and flake under load (playwright.config.ts: grepInvert).
 //
 // A test measures elapsed time when its body, or a helper function it calls (of the file, or
-// imported from another file under e2e/; the mock API it drives is not the test), subtracts from the clock or reads performance.now(). The
-// clock is Date.now(), performance.now(), new Date().getTime() / .valueOf(), +new Date(), a
-// variable set from one of them in its own scope ("end - start" with const end = Date.now()),
-// or a call of a function that returns one (const now = () => Date.now()); new Date() counts
-// only when another clock read is taken from it ("new Date() - t0"), never in plain date maths.
+// imported from another file under e2e/; the mock API it drives is not the test), subtracts
+// from the clock, reads performance.now() or process.hrtime(t0), or checks the clock against a
+// deadline (a clock read plus or minus a budget: expect(Date.now()).toBeLessThan(until),
+// if (Date.now() > until) throw ...). A deadline check that only stops a poll (a loop's
+// condition, or an if that neither throws nor calls expect()) waits; it does not measure.
+// The clock is Date.now(), performance.now(), process.hrtime() / .bigint(), new Date().getTime()
+// / .valueOf(), +new Date(), a variable set from one of them in its own scope ("end - start"
+// with const end = Date.now()), a call of a function that returns one (const now = () =>
+// Date.now()) or of one under another name (const clock = Date.now); new Date() counts only
+// when another clock read is taken from it ("new Date() - t0"), never in plain date maths.
 // A coarse guard meant for the parallel shards says so with a "timing-check: coarse" comment
-// in the test; it passes only when every bound it sets on a measured value (toBeLessThan,
-// toBeLessThanOrEqual, toBeGreaterThan) is a literal of at least 1000 ms.
+// in the test; it passes only when every use of a measured value in it is set whole into a
+// variable or is the subject of a bound (expect(ms).toBeLessThan, toBeLessThanOrEqual,
+// toBeGreaterThan) that is a literal of at least 1000 ms, with at least one such bound.
 //
 //   node scripts/check-timing-tags.mjs              self-test, then every e2e spec (not e2e/real)
 //   node scripts/check-timing-tags.mjs --self-test  the self-test only
@@ -352,15 +358,48 @@ function analyse(sf, fileName, read, root, cache) {
   return { helpers, clocks, exports };
 }
 
-/** The exported names of the file at `path` that measure (cycles read as none). */
+// Per cache, the files being read (a stack), what each exports so far, the lowest file on the
+// stack each reaches through a cycle, and whether a later file came back to it.
+const walks = new WeakMap();
+
+/**
+ * The exported names of the file at `path` that measure. A file in an import cycle is read
+ * again until what it exports stops growing; one that reaches back to a file still being read
+ * below it is not cached, since what it saw of that file was partial.
+ */
 function measuringExports(path, read, root, cache) {
   if (cache.has(path)) return cache.get(path);
-  cache.set(path, new Set());
+  if (!walks.has(cache)) walks.set(cache, { stack: [], partial: new Map(), low: [], back: [] });
+  const walk = walks.get(cache);
+  const at = walk.stack.indexOf(path);
+  if (at >= 0) {
+    const top = walk.stack.length - 1;
+    walk.low[top] = Math.min(walk.low[top], at);
+    walk.back[at] = true;
+    return walk.partial.get(path) ?? new Set();
+  }
   const source = read(path);
-  if (source === null) return cache.get(path);
+  if (source === null) {
+    cache.set(path, new Set());
+    return cache.get(path);
+  }
   const sf = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
-  const { exports } = analyse(sf, path, read, root, cache);
-  cache.set(path, exports);
+  const me = walk.stack.push(path) - 1;
+  walk.low[me] = me;
+  let exports = new Set();
+  for (;;) {
+    walk.back[me] = false;
+    const before = exports.size;
+    ({ exports } = analyse(sf, path, read, root, cache));
+    walk.partial.set(path, exports);
+    if (!walk.back[me] || exports.size === before) break;
+  }
+  walk.stack.pop();
+  walk.partial.delete(path);
+  const low = walk.low.pop();
+  walk.back.pop();
+  if (me > 0) walk.low[me - 1] = Math.min(walk.low[me - 1], low);
+  if (low >= me) cache.set(path, exports);
   return exports;
 }
 
