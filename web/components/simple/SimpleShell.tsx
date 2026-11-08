@@ -63,7 +63,8 @@ function isActive(pathname: string, d: Dest): boolean {
 function useSimpleCounts(enabled: boolean): Record<string, number> | null {
   const pathname = usePathname();
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
-  const [live, setLive] = useState(0);
+  // null until the meetings read first answers: the counts wait for it too (counts-wait).
+  const [live, setLive] = useState<number | null>(null);
   const [changes, setChanges] = useState(0);
   useEffect(() => onWaitingChanged(() => setChanges((c) => c + 1)), []);
   useEffect(() => {
@@ -123,13 +124,15 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
     let alive = true;
     unwrap(api.GET("/v1/simple/meetings"))
       .then((m) => alive && setLive(m.live.length))
-      .catch(() => undefined);
+      // A failed read counts no meeting, so the other counts still show.
+      .catch(() => alive && setLive((n) => n ?? 0));
     return () => {
       alive = false;
     };
   }, [enabled, changes, meetingsPath]);
   // qa-simple-decide-51: "Meetings live": the yellow count only when one is on now.
-  return counts && { ...counts, Meetings: live, "Meetings live": live };
+  // counts-wait: no count (nor More's sum) shows until every read has answered, so none jumps.
+  return counts && live != null ? { ...counts, Meetings: live, "Meetings live": live } : null;
 }
 
 /** What a rail count counts, said in words (its accessible name and tooltip). */

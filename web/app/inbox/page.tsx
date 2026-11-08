@@ -120,7 +120,10 @@ function Inbox() {
   const webhookRows = useWebhookRows(busy, act, seenBefore);
   // Remind on a one-pager: a PRD's owner or decider nudged me to review its draft.
   const reminderRows = useReminderRows(seenBefore);
-  const rows = inbox ? [...allNeeds(inbox, asked.rows, busy, act, seenBefore, onActed, false, fixed, requests.rows, perms), ...webhookRows, ...reminderRows, ...proposalRows(inbox.simple_proposals ?? [], busy, act, seenBefore), ...approvalRows(inbox.simple_approvals ?? [], seenBefore), ...dateSuggestionRows(inbox.simple_date_suggestions ?? [], seenBefore), ...goalSuggestionRows(inbox.simple_goal_suggestions ?? [], seenBefore), ...minutesRows(inbox.simple_minutes ?? [])] : null;
+  // counts-wait: the rows and every count from them wait for each read they add up (the questions
+  // asked of me, the webhook notices), so "N waiting" never shows a lower number first.
+  const counted = (questionsQ.data !== undefined || !!questionsQ.error) && webhookRows !== null;
+  const rows = inbox && counted ? [...allNeeds(inbox, asked.rows, busy, act, seenBefore, onActed, false, fixed, requests.rows, perms), ...(webhookRows ?? []), ...reminderRows, ...proposalRows(inbox.simple_proposals ?? [], busy, act, seenBefore), ...approvalRows(inbox.simple_approvals ?? [], seenBefore), ...dateSuggestionRows(inbox.simple_date_suggestions ?? [], seenBefore), ...goalSuggestionRows(inbox.simple_goal_suggestions ?? [], seenBefore), ...minutesRows(inbox.simple_minutes ?? [])] : null;
   const kindRows = rows && kind ? rows.filter((r) => needKind(r.group) === kind.id) : rows;
   // Under ?kind= the header counts that kind only, as Home's chip did.
   const waiting = kindRows ? waitingNeeds(kindRows).length : undefined;
@@ -130,7 +133,7 @@ function Inbox() {
       <PageHeader title="Inbox" status={waiting != null && waiting > 0 && <Chip kind="acc">{waiting} waiting</Chip>} />
       {/* qa4-shell-3: a plain sentence and Try again, as on every list. */}
       {q.error && <LoadError what="your inbox" error={q.error} onRetry={() => void q.reload()} />}
-      {q.loading && !inbox && <Loading />}
+      {!q.error && !rows && <Loading />}
       {error && (
         <div className="mb-3">
           <ErrorNote>{error}</ErrorNote>

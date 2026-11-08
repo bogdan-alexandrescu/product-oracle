@@ -21,11 +21,14 @@ const webhookOf = (n: Notification) => (typeof n.data?.webhook_id === "string" ?
  * Counted while unread (F-7), as the Inbox API's total counts them for the rail badge; only
  * for a role that can open Settings › Webhooks (F-25).
  */
-export function useWebhookRows(busy: string | null, act: Act, seenBefore: string | null | undefined): StatedNeed[] {
-  const { can } = useMe();
+export function useWebhookRows(busy: string | null, act: Act, seenBefore: string | null | undefined): StatedNeed[] | null {
+  const { loading, can } = useMe();
   const q = useQuery("inbox|webhook-notifications", () => unwrap(api.GET("/v1/me/notifications")));
   const read = (n: Notification) => unwrap(api.POST("/v1/notifications/{notification_id}/read", { params: { path: { notification_id: n.id } } }));
+  // counts-wait: null until who I am and my notifications are read, so the Inbox's count waits for them.
+  if (loading) return null;
   if (!can("list_webhooks")) return [];
+  if (q.data === undefined && !q.error) return null;
   return (q.data ?? [])
     .filter((n) => KINDS.has(n.kind))
     .map((n) => {

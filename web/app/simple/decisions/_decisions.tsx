@@ -305,7 +305,8 @@ function QuestionList({ d, actions, filtered, onClear, linked }: { d: Schemas["S
   // the filters narrow the PRDs' questions only, so these show unfiltered.
   const waiting = useWaitingList();
   const extra = filtered ? [] : (waiting.data?.items ?? []).filter((i) => i.kind !== "question");
-  const count = Math.min(d.waiting_count, mine.filter((x) => x.status === "proposed").length) + extra.length;
+  // counts-wait: no number until the one list is read too (0 shows none), so it never jumps.
+  const count = filtered || waiting.data || waiting.error ? Math.min(d.waiting_count, mine.filter((x) => x.status === "proposed").length) + extra.length : 0;
   return (
     <>
       <QuestionCard label="Waiting for you" testId="questions-mine" questions={mine.length ? mine : open} count={count} source>
