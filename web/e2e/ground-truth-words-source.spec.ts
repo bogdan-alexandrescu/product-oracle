@@ -15,7 +15,7 @@ import { expect, test } from "./test";
  * deck and public roadmap exports, the invite emails), and every string of the Python that writes
  * shown text, found by itself, none listed by hand (shownModules: each api/oracle module that
  * renders HTML, email or chat, and the modules of its own or a sibling package it imports, an
- * agents' task module aside; docstrings, comments, raw-string patterns, real log calls and the
+ * agents' task module too; docstrings, comments, raw-string patterns, real log calls and the
  * LLM's prompts aside, a prompt found by its name or by its text going only to model calls).
  * And no spec in web/e2e
  * expects a page to say one: the strings given to toHaveText, toContainText, getByText and a
@@ -29,10 +29,11 @@ import { expect, test } from "./test";
  * "Baseline value", "Baseline 12", "Success metric and baseline", and the "Baseline" field
  * beside "Predicted" on a decision's or an outcome's prediction. And a CSS value
  * ("align-items: baseline"). In the Python only, an id written as code in a sentence: a
- * backtick span of lowercase ids holding "_ . / : < {" or starting "oracle "
- * ("`oracle baseline pull`"), a quoted id with a placeholder ('"baseline decision <key>"'),
- * or one named as a word to avoid ('never "baseline"'). 'Open the "baseline" page' and
- * "Read `Baseline` first" are caught.
+ * backtick span that is one lowercase id holding "_ . / : < {" ("`baseline.yaml`") or a command
+ * starting "oracle " ("`oracle baseline pull`"), a quoted id with a <placeholder>
+ * ('"baseline decision <key>"'), or one named as a word to avoid ('never "baseline"').
+ * 'Open the "baseline" page', "Read `Baseline` first", "`build the baseline.`",
+ * 'Saved to "baseline {q}"' and 'not "baseline"' are caught.
  */
 
 const WEB = path.resolve(__dirname, "..");
@@ -49,15 +50,18 @@ const STARTING_VALUE =
 /** A CSS property set to baseline ("align-items: baseline", "vertical-align: baseline"): a value, not a word. */
 const CSS_VALUE = /\b(?:vertical-align|(?:align|justify|place)-(?:items|self|content)|(?:alignment|dominant)-baseline)\s*:\s*(?:(?:first|last)\s+)?baseline\b/g;
 /**
- * In the Python's text, an id written as code in a sentence: a backtick span that is code (lowercase
- * ids, holding one of "_ . / : < {" or starting "oracle ": "`oracle baseline pull`", "`baseline.yaml`").
+ * In the Python's text, an id written as code in a sentence: a backtick span that is an id (no spaces,
+ * lowercase, holding one of "_ . / : < {": "`baseline.yaml`") or a command (lowercase words starting
+ * "oracle ": "`oracle baseline pull`"). A span of words ("`build the baseline.`") is shown text.
  */
 const CODE_SPAN = /`([^`\n]*)`/g;
 const isCode = (span: string) =>
-  span.split(" ").every((w) => /^[a-z0-9_./:<>{}-]+$/.test(w)) && (/[_./:<{]/.test(span) || span.startsWith("oracle "));
-/** ... or a quoted id with a placeholder ('"baseline decision <key>"') or named as a word to avoid ('never "baseline"'). */
-const QUOTED_ID =
-  /\\?(["'])[a-z][a-z0-9_]*(?: (?:[a-z][a-z0-9_]*|<\w+>|\{\}))* (?:<\w+>|\{\})\\?\1|\b(?:[Nn]ever|[Nn]ot|[Ii]nstead of) \\?(["'])[a-z][a-z0-9_]*\\?\2/g;
+  /^[a-z0-9_./:<>{}-]*[_./:<{][a-z0-9_./:<>{}-]*$/.test(span) || /^oracle(?: [a-z0-9_./:<>{}-]+)+$/.test(span);
+/**
+ * ... or a quoted id with a <placeholder> ('"baseline decision <key>"', a citation's ref; an f-string's fill
+ * is no placeholder), or named as a word to avoid ('never "baseline"', the agents' citation contract in runs/flows.py).
+ */
+const QUOTED_ID = /\\?(["'])[a-z][a-z0-9_]*(?: [a-z][a-z0-9_]*)* <\w+>\\?\1|\b[Nn]ever \\?(["'])[a-z][a-z0-9_]*\\?\2/g;
 /** A lone id or key. */
 const ID = /^[a-z][a-z0-9_]*$/;
 /** The prediction forms' starting-value field, "Baseline" beside "Predicted". */
@@ -536,19 +540,17 @@ function nearby(rel: string, dep: string): boolean {
   return r !== "." && d !== "." && (r === d || path.posix.dirname(r) === path.posix.dirname(d));
 }
 
-/** A module that writes an agents' task (a task= string, a *_TASK constant): its text is a prompt. */
-const AGENT_TASK = /\btask\s*=\s*[rRfFuU]{0,2}["'(]|^[A-Z][A-Z0-9_]*_TASK\s*[:=]/m;
-
 /**
  * The Python modules of ``files`` (path under api/oracle → text) that write text a person reads,
  * found by themselves: each that renders HTML, email or chat (rendersText), and the modules of its
  * own package or a sibling package it imports, which build the text it renders (the roadmap views
- * the public roadmap draws). Tests and prompts (agents' tasks among them) aside.
+ * the public roadmap draws). Tests and prompt modules aside; a module writing an agents' task is read, as it
+ * may also hold titles people see (runs/flows.py, the flows' titles).
  */
 function shownModules(files: Map<string, string>): string[] {
   const renderers = [...files].filter(([rel, text]) => rendersText(rel, text));
   const helpers = renderers.flatMap(([rel, text]) =>
-    oracleImports(rel, text).filter((dep) => nearby(rel, dep) && files.has(dep) && !AGENT_TASK.test(files.get(dep)!)),
+    oracleImports(rel, text).filter((dep) => nearby(rel, dep) && files.has(dep)),
   );
   return [...new Set([...renderers.map(([rel]) => rel), ...helpers])].filter((rel) => files.has(rel) && !NOT_SHOWN.test(rel)).sort();
 }
@@ -628,7 +630,6 @@ test("the check catches the old names and spares the ids and the starting values
     "*Moved:* `Build the baseline`",
     "See the `the Baseline view` tab",
     "*Moved:* `build the baseline.`",
-    "Ask: `what is the baseline: now?`",
     'Saved to "baseline {}"',
     'Pick a view, not "baseline"',
     "Use the plan instead of 'baseline'",
