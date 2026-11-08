@@ -64,5 +64,5 @@ test("rename: a proposed goal is renamed from its Goals row, and Home's goals sh
   await page.goto("/home");
   const goals = page.getByTestId("home-goals");
   await expect(goals).toContainText(RENAMED);
-  await expect(goals).not.toContainText("[n]");
+  await expect(goals).not.toContainText(OKR_IMPORT_GOAL);
 });
