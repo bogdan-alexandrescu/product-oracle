@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Literal
 
-from sqlalchemy import func, select, tuple_
+from sqlalchemy import any_, func, select, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -474,7 +474,7 @@ async def _replaces(db: AsyncSession, document: Document) -> list[uuid.UUID]:
     return list(
         await db.scalars(
             select(Document.id)
-            .where(Document.kind == "prd", Document.replaced_by.any(document.id))
+            .where(Document.kind == "prd", document.id == any_(Document.replaced_by))
             .order_by(Document.created_at, Document.id)
         )
     )
