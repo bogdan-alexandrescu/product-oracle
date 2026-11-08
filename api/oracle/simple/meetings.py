@@ -374,10 +374,12 @@ def _defaults(w: PrdWho, me: uuid.UUID | None) -> list[uuid.UUID]:
 # --------------------------------------------------------------------------- start
 
 
-def _current() -> Any:
-    """Not a PRD marked replaced (simple-replaced-prds): Simple offers only the PRDs that
-    replaced it; the replaced one is history, read in Detailed."""
-    return Document.replaced_by == []
+async def _current(db: AsyncSession) -> Any:
+    """Not a PRD a live PRD replaces (simple-replaced-prds, company.History): Simple offers
+    only the PRDs that replaced it; the replaced one is history, read in Detailed."""
+    from oracle.roadmap import company
+
+    return Document.id.not_in(await company.replaced_prd_ids(db))
 
 
 async def options(
@@ -396,7 +398,7 @@ async def options(
                 db,
                 await db.scalars(
                     select(Document).where(
-                        Document.kind == "prd", Document.deleted_at.is_(None), _current()
+                        Document.kind == "prd", Document.deleted_at.is_(None), await _current(db)
                     )
                 ),
             )
@@ -2752,7 +2754,9 @@ async def decisions_page(
     readable = {i for i, d in docs.items() if await _readable(db, principal, d)}
     # simple-replaced-prds: a replaced PRD leaves the PRD filter and its open questions; its
     # past meetings, their decisions and its decided questions stay as history.
-    replaced = {i for i in readable if docs[i].replaced_by}
+    from oracle.roadmap import company
+
+    replaced = readable & await company.replaced_prd_ids(db)
     ms = [m for m in ms if m.prd_document_id in readable]
     await _settle(db, ms)
     from oracle.simple import questions as prd_questions

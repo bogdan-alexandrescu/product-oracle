@@ -20,7 +20,6 @@ from typing import Any
 from fastapi import HTTPException, status
 from sqlalchemy import or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
 
 from oracle import audit, company_time
 from oracle.authz import has_role
@@ -54,10 +53,9 @@ async def _shown_version(db: AsyncSession, company_id: uuid.UUID) -> uuid.UUID |
     )
 
 
-def _replaced() -> Any:
-    """The PRDs a person marked replaced (oracle.roadmap.company.replaced_prd_ids)."""
-    prd = aliased(Document)
-    return select(prd.id).where(prd.kind == "prd", prd.replaced_by != [])
+async def _replaced(db: AsyncSession) -> set[uuid.UUID]:
+    """The PRDs a live PRD replaces (oracle.roadmap.company.replaced_prd_ids)."""
+    return await company.replaced_prd_ids(db)
 
 
 class _Plan:
@@ -102,7 +100,7 @@ async def _plan(db: AsyncSession, lock: bool = False) -> _Plan:
             RoadmapItem.roadmap_version_id == shown,
             RoadmapItem.plan_state.is_(None),
             RoadmapItem.prd_document_id == TrackMilestone.origin_prd_id,
-            RoadmapItem.prd_document_id.not_in(_replaced()),
+            RoadmapItem.prd_document_id.not_in(await _replaced(db)),
         )
         .exists()
     )
@@ -145,7 +143,7 @@ async def _plan(db: AsyncSession, lock: bool = False) -> _Plan:
                 RoadmapItem.plan_state.is_(None),
                 or_(
                     RoadmapItem.prd_document_id.is_(None),
-                    RoadmapItem.prd_document_id.not_in(_replaced()),
+                    RoadmapItem.prd_document_id.not_in(await _replaced(db)),
                 ),
             )
             .order_by(RoadmapItem.position, RoadmapItem.item_key)

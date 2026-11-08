@@ -350,14 +350,13 @@ async def _home(
     )
     if not tracks:
         return None, None, None
-    replaced = await company.replaced_prd_ids(db)
+    replaced = (await company.history(db)).prds
     if live := next((t for t in tracks if t.prd_document_id not in replaced), None):
         return live, live.prd_document_id, live.current_version_id
     first, prd, seen = tracks[0], tracks[0].prd_document_id, set[uuid.UUID]()
     while prd in replaced and prd not in seen:
         seen.add(prd)
-        d = await db.get(Document, prd)
-        prd = d.replaced_by[0] if d is not None and d.replaced_by else prd
+        prd = replaced[prd][0]
     if prd in replaced:
         return first, first.prd_document_id, first.current_version_id
     own = await db.scalar(select(ProductTrack).where(ProductTrack.prd_document_id == prd))

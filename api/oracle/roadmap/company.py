@@ -38,6 +38,7 @@ from sqlalchemy import (
     and_,
     any_,
     event,
+    exists,
     func,
     literal,
     or_,
@@ -163,11 +164,23 @@ async def history(db: AsyncSession) -> History:
     return cached
 
 
+def _live_replacement(by: Any, prd: Any = Document) -> Any:
+    """``by`` is a live PRD (not in Trash) replacing ``prd``: the one history rule."""
+    return and_(by.id == any_(prd.replaced_by), by.deleted_at.is_(None))
+
+
+def replaced_now() -> Any:
+    """SQL: a Document a live PRD replaces (:class:`History`), for a query that cannot spare
+    a read of :func:`history`."""
+    by = aliased(Document)
+    return exists().where(_live_replacement(by)).correlate(Document)
+
+
 async def _read_history(db: AsyncSession) -> History:
     by = aliased(Document)
     live = (
         select(func.array_agg(by.id))
-        .where(by.id == any_(Document.replaced_by), by.deleted_at.is_(None))
+        .where(_live_replacement(by))
         .correlate(Document)
         .scalar_subquery()
     )
@@ -385,7 +398,7 @@ async def features_on_roadmap(db: AsyncSession) -> dict[str, OnRoadmap]:
                 and_(
                     Document.kind == "prd",
                     Document.deleted_at.is_(None),
-                    Document.replaced_by == [],
+                    ~replaced_now(),
                 ),
             ),
         )
@@ -1050,7 +1063,7 @@ async def replace(
             raise Invalid(f"'{slug}' is not a PRD")
         if doc.id == prd.id:
             raise Invalid("a PRD cannot replace itself")
-        if doc.replaced_by:
+        if doc.id in await replaced_prd_ids(db):
             raise Invalid(f"{doc.title} is itself replaced")
         by.append(doc)
     before = list(prd.replaced_by or [])
@@ -1067,7 +1080,8 @@ async def carry_bases(db: AsyncSession, old: Document) -> list[ScheduleBasis]:
     the replacing PRD it sits under on the company roadmap (the latest version with items),
     once each: same reference, kind, date and item, still verified, with the note
     ``carried from <old title>``. The old PRD keeps its own."""
-    if not old.replaced_by:
+    by = (await history(db)).prds.get(old.id, [])
+    if not by:
         return []
     company = await active(db)
     version = await _items_version(db, company.id) if company else None
@@ -1077,7 +1091,7 @@ async def carry_bases(db: AsyncSession, old: Document) -> list[ScheduleBasis]:
     for r in await db.scalars(
         select(RoadmapItem).where(
             RoadmapItem.roadmap_version_id == version.id,
-            RoadmapItem.prd_document_id.in_(old.replaced_by),
+            RoadmapItem.prd_document_id.in_(by),
         )
     ):
         under.setdefault(r.item_key, r.prd_document_id)
