@@ -58,7 +58,7 @@ test("a link a browser reads as another host (/\\host, //host) does not render",
   }
 });
 
-test("many unclosed image and link openers parse in linear time", () => {
+test("many unclosed image and link openers parse in linear time @timing", () => {
   for (const unit of ["![", "[", "![a](", "[a]("]) {
     const started = Date.now();
     parseBlocks(unit.repeat(50_000));
@@ -69,14 +69,14 @@ test("many unclosed image and link openers parse in linear time", () => {
 // Emphasis is bounded like link text: many unclosed '*' or '_' openers scan a bounded
 // stretch each (60 KB of " *a" took about a second, a megabyte froze the tab).
 for (const unit of [" *a", " _a", " **a", "*a ", "_a ", "** a"]) {
-  test(`many unclosed emphasis openers (${JSON.stringify(unit)}) parse in linear time`, () => {
+  test(`many unclosed emphasis openers (${JSON.stringify(unit)}) parse in linear time @timing`, () => {
     const started = Date.now();
     parseBlocks(unit.repeat(50_000));
     expect(Date.now() - started).toBeLessThan(1500);
   });
 }
 
-test("a megabyte of unclosed emphasis openers parses in linear time", () => {
+test("a megabyte of unclosed emphasis openers parses in linear time @timing", () => {
   const started = Date.now();
   parseBlocks(" *a _b **c".repeat(100_000));
   expect(Date.now() - started).toBeLessThan(1500);
