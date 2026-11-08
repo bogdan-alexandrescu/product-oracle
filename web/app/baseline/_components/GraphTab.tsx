@@ -103,9 +103,13 @@ function AddSubgoal({
 
 /**
  * A goal row's actions: one width on a wide screen, so they line up (qa-plan-39); on a phone tighter
- * padding, so Make measurable, Confirm and Add subgoal share one row at 390 px (qa-plan-26).
+ * padding, so Make measurable, Confirm, Rename's pencil and Add subgoal share one row at 390 px (qa-plan-26).
  */
-const PHONE_ACTION = "min-[601px]:w-28 max-[600px]:px-2!";
+const PHONE_ACTION = "min-[601px]:w-28 max-[600px]:px-1.5!";
+/** Make measurable is a ghost (no outline), so on a phone it can go tighter still. */
+const PHONE_GHOST = "min-[601px]:w-28 max-[600px]:px-1!";
+/** Rename on a phone: its pencil only, a square button. */
+const PHONE_ICON = "min-[601px]:w-28 max-[600px]:w-7 max-[600px]:px-0!";
 
 /** A goal's typed cell, or its text in grey with the tooltip saying it is not checked yet. */
 function TextFallback({ attr, text }: { attr: string; text: unknown }) {
@@ -507,7 +511,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
                 variant="ghost"
                 disabled={busy}
                 data-testid="make-measurable"
-                className={PHONE_ACTION}
+                className={PHONE_GHOST}
                 onClick={(e: MouseEvent) => {
                   e.stopPropagation();
                   onMakeMeasurable(g);
@@ -534,7 +538,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
             // its name and tooltip still say Rename.
             <Button
               disabled={busy}
-              className={`${PHONE_ACTION} max-[600px]:w-8 max-[600px]:px-0!`}
+              className={PHONE_ICON}
               data-testid="rename-goal"
               aria-label="Rename"
               title="Rename"
