@@ -228,6 +228,9 @@ interface SimpleDb {
   /** simple-replaced-prds (api/oracle/roadmap/company.replaced_prd_ids): the ids and slugs of the
    * PRDs marked replaced, set by server.ts from its documents; their items no longer feed Simple. */
   replaced_prds?: string[];
+  /** replaced-prd-history (company.history_roadmaps): the slugs of the roadmaps Simple leaves out,
+   * a replaced PRD's own roadmap (and one in Trash), set by server.ts: no draft, track or Inbox row. */
+  history_roadmaps?: string[];
   /** The current PRD each replaced one (by id and slug) went to: its first "Replaced by",
    * followed while that one is replaced too (additions._home files a new item under it). */
   replaced_with?: Record<string, Schemas["SimpleDocRef"]>;
@@ -1346,7 +1349,9 @@ function readerView(db: SimpleDb, me: { id: string; role: Role }): { db: SimpleD
   let keyDates = db.key_dates ?? {};
   let hidden = 0;
   const visible: Schemas["SimpleDraftBrief"][] = [];
-  for (const d of (db.drafts ?? []).filter((x) => OPEN_DRAFT.includes(x.out.status))) {
+  // replaced-prd-history (drafts.reader): a replaced PRD's roadmap is history: no draft, no count.
+  const history = new Set(db.history_roadmaps ?? []);
+  for (const d of (db.drafts ?? []).filter((x) => OPEN_DRAFT.includes(x.out.status) && !history.has(x.roadmap))) {
     if (seesDraft(d, me, db)) {
       visible.push({ id: d.out.id, document_id: d.out.document.id, status: d.out.status, changes: draftChanges(db, d.out.id) });
       continue;
