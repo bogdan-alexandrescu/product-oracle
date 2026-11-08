@@ -231,6 +231,9 @@ interface SimpleDb {
   /** replaced-prd-history (company.history_roadmaps): the slugs of the roadmaps Simple leaves out,
    * a replaced PRD's own roadmap (and one in Trash), set by server.ts: no draft, track or Inbox row. */
   history_roadmaps?: string[];
+  /** replaced-prd-history (company.history_track_ids): the titles of the PRDs a live PRD replaces,
+   * set by server.ts: their own tracks are history, never in Tracks. */
+  replaced_prd_titles?: string[];
   /** The current PRD each replaced one (by id and slug) went to: its first "Replaced by",
    * followed while that one is replaced too (additions._home files a new item under it). */
   replaced_with?: Record<string, Schemas["SimpleDocRef"]>;

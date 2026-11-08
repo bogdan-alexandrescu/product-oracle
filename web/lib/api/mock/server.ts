@@ -4820,7 +4820,21 @@ export function resetMockData() {
 
 /** A document as GET /v1/documents/{doc} returns it (DocumentOut). */
 function documentOut(db: Db, doc: DocumentRow): Schemas["DocumentOut"] {
-  return { ...documentSummary(db, doc), versions: docVersions(db, doc).map(summary), replaced_by: replacedByRefs(db, doc), replaces: replacesRefs(db, doc), changes_in_review: 0 };
+  return { ...documentSummary(db, doc), versions: docVersions(db, doc).map(summary), replaced_by: replacedByRefs(db, doc), replaces: replacesRefs(db, doc), read_only: readOnlyWhy(db, doc), changes_in_review: 0 };
+}
+
+/** replaced-prd-history (company.History): the live PRDs (not in Trash) that replace `doc`. A PRD
+ * is history only while one replaces it; when every replacement is in Trash it is live again. */
+function liveReplacers(db: Db, doc: DocumentRow): string[] {
+  return (doc.replaced_by ?? []).filter((id) => db.documents.some((x) => x.id === id));
+}
+
+/** replaced-prd-history (company.read_only): why `doc` takes no edit, approval or publication,
+ * in plain words; null when it does. */
+function readOnlyWhy(db: Db, doc: DocumentRow): string | null {
+  if ((doc.kind ?? "prd") === "prd" && liveReplacers(db, doc).length) return `${doc.title} is replaced and read-only`;
+  if (doc.kind === "roadmap" && historyRoadmapRefs(db).has(doc.slug)) return `${doc.title} is the roadmap of a replaced PRD and read-only`;
+  return null;
 }
 
 /** replaced-prd-history (docs.service._replaces): the PRDs `doc` replaced, oldest first. */
@@ -4835,7 +4849,7 @@ function replacesRefs(db: Db, doc: DocumentRow): Schemas["PrdRef"][] {
 /** replaced-prd-history (company.history_roadmaps): each roadmap of a replaced PRD alone (built
  * from its versions, or its track's roadmap), never the company roadmap -> the PRDs that replaced it. */
 function historyRoadmapRefs(db: Db): Map<string, string[]> {
-  const replaced = new Map(db.documents.filter((d) => d.kind === "prd" && d.replaced_by?.length).map((d) => [d.title, d.replaced_by!]));
+  const replaced = new Map(db.documents.filter((d) => d.kind === "prd" && liveReplacers(db, d).length).map((d) => [d.title, liveReplacers(db, d)]));
   const out = new Map<string, string[]>();
   for (const d of db.documents.filter((x) => x.kind === "roadmap" && !x.company_roadmap)) {
     const from = db.versions.filter((v) => v.document_id === d.id).flatMap((v) => {
@@ -4860,7 +4874,7 @@ function historyRoadmaps(db: Db): string[] {
 /** one-roadmap-many-prds: the PRDs that replace `doc`, by name (oracle.roadmap.company.refs). */
 function replacedByRefs(db: Db, doc: DocumentRow | undefined): Schemas["PrdRef"][] {
   // replaced-prd-history: a replaced PRD's roadmap names the PRDs that replaced its PRD.
-  const ids = doc?.kind === "roadmap" ? (historyRoadmapRefs(db).get(doc.slug) ?? []) : (doc?.replaced_by ?? []);
+  const ids = doc?.kind === "roadmap" ? (historyRoadmapRefs(db).get(doc.slug) ?? []) : doc ? liveReplacers(db, doc) : [];
   return ids.flatMap((id) => db.documents.filter((x) => x.id === id).map((x) => ({ id: x.id, slug: x.slug, title: x.title })));
 }
 
@@ -4942,21 +4956,22 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
 function markReplaced(db: Db, simple: SimpleDb): void {
   simple.replaced_prds = replacedPrds(db);
   simple.history_roadmaps = historyRoadmaps(db);
+  simple.replaced_prd_titles = db.documents.filter((d) => d.kind === "prd" && liveReplacers(db, d).length).map((d) => d.title);
   const to: NonNullable<SimpleDb["replaced_with"]> = {};
-  for (const d of db.documents.filter((x) => x.kind === "prd" && x.replaced_by?.length)) {
+  for (const d of db.documents.filter((x) => x.kind === "prd" && liveReplacers(db, x).length)) {
     let at: DocumentRow | undefined = d;
-    for (const seen = new Set<string>(); at?.replaced_by?.length && !seen.has(at.id); ) {
+    for (const seen = new Set<string>(); at && liveReplacers(db, at).length && !seen.has(at.id); ) {
       seen.add(at.id);
-      at = db.documents.find((x) => x.id === at!.replaced_by![0]);
+      at = db.documents.find((x) => x.id === liveReplacers(db, at!)[0]);
     }
-    if (at && !at.replaced_by?.length) to[d.id] = to[d.slug] = { id: at.id, slug: at.slug, title: at.title };
+    if (at && !liveReplacers(db, at).length) to[d.id] = to[d.slug] = { id: at.id, slug: at.slug, title: at.title };
   }
   simple.replaced_with = to;
 }
 
 /** simple-replaced-prds (company.replaced_prd_ids): the ids and slugs of the PRDs marked replaced. */
 function replacedPrds(db: Db): string[] {
-  return db.documents.filter((d) => d.kind === "prd" && d.replaced_by?.length).flatMap((d) => [d.id, d.slug]);
+  return db.documents.filter((d) => d.kind === "prd" && liveReplacers(db, d).length).flatMap((d) => [d.id, d.slug]);
 }
 
 /** new-prd-from-replaced-prd: what a new PRD replacing an approved PRD carries, read off the
@@ -6760,6 +6775,13 @@ async function route(db: Db, req: Request): Promise<Response> {
   // I1: webhooks check roles themselves; seeded before the notifications they write are read.
   const hooks = await webhooksRoute(webhooksContext(db, me), req, p, q);
   if (hooks) return hooks;
+  // replaced-prd-history (review.service.approve_version, review.publish.publish): a replaced
+  // PRD and its roadmap are read-only history, never approved or published (409, in plain words).
+  if (p[1] === "documents" && p[3] === "versions" && (p[5] === "approve" || p[5] === "publish") && req.method === "POST") {
+    const d = db.documents.find((x) => x.slug === p[2] || x.id === p[2]);
+    const why = d && readOnlyWhy(db, d);
+    if (why) return json(409, { detail: why });
+  }
   const reviewV2 = await routeReviewV2(reviewV2Context(db, me.id, me.role), req, p, q);
   if (reviewV2) return reviewV2;
   // O5: share links, the view log, public texts and the public check (./shares.ts).
@@ -7746,6 +7768,14 @@ async function route(db: Db, req: Request): Promise<Response> {
     // simple-replaced-prds: the PRDs marked replaced (their drafts are left out, as drafts.listing).
     // replaced-prd-history: nor its roadmap's (drafts.listing reads company.history_ids).
     const replaced = [...replacedPrds(db), ...historyRoadmaps(db)];
+    // replaced-prd-history (drafts.refuse_history): a replaced PRD's or its roadmap's draft is
+    // never sent or approved (409, in plain words).
+    if (p[2] === "drafts" && r.method === "POST" && (p[4] === "submit" || p[4] === "approve")) {
+      const draft = db.simple_roadmap?.drafts?.find((x) => x.out.id === p[3]);
+      const d = draft && db.documents.find((x) => x.slug === draft.out.document.slug || x.id === draft.out.document.id);
+      const why = d && readOnlyWhy(db, d);
+      if (why) return json(409, { detail: why });
+    }
     return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash, goalBin: bin, ...askFiling, replaced, ladder: ladderMilestones(db, me) }, r, p, q);
   };
   // Simple S8: review meetings, the Decisions page, and changes made through a meeting.

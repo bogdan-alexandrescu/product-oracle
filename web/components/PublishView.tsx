@@ -741,7 +741,7 @@ export function PublishView({ doc }: { doc: string }) {
         <Icon name="check" size={16} />
         Published v{n}
       </Chip>
-    ) : !canPublish ? null : (
+    ) : !canPublish || d?.read_only ? null : (
       <>
         <Button
           variant="primary"
@@ -808,6 +808,8 @@ export function PublishView({ doc }: { doc: string }) {
         </div>
       )}
       {d && n == null && <Notice>No version yet</Notice>}
+      {/* replaced-prd-history: a replaced PRD or its roadmap is never published; say why. */}
+      {d?.read_only && !published && <Notice testId="publish-read-only">{d.read_only}</Notice>}
 
       {readiness && n != null && (
         <Split inspector={phone && selected ? undefined : inspector}>

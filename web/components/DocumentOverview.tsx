@@ -16,6 +16,7 @@ import {
   Button,
   Chip,
   DataTable,
+  Icon,
   InfoTip,
   Inspector,
   InspectorRow,
@@ -493,17 +494,32 @@ export function DocumentOverview({ doc }: { doc: string }) {
             />
             {/* one-roadmap-many-prds: a PRD replaced by area PRDs is read-only and names them at its top. */}
             {replaced && (
-              <p data-testid="replaced-by" className="mb-3 text-sm text-text2">
-                Replaced by{" "}
-                {d.replaced_by!.map((r, i, all) => (
-                  <span key={r.id}>
-                    {i > 0 && (i === all.length - 1 ? " and " : ", ")}
-                    <Link href={`/documents/${r.slug}`} className="font-medium text-text underline">
-                      {r.title}
-                    </Link>
-                  </span>
-                ))}
-                . Read-only: its items no longer feed the roadmap.
+              <p data-testid="replaced-by" className="mb-3 flex flex-wrap items-center gap-2 text-sm text-text2">
+                {/* A short status tick; the reason sits in its tooltip (no visible prose). */}
+                <InfoTip
+                  label="read-only"
+                  align="start"
+                  testId="read-only-tick"
+                  trigger={
+                    <Chip kind="na">
+                      <Icon name="lock" size={16} />
+                      Read-only
+                    </Chip>
+                  }
+                >
+                  {d.read_only ?? "Read-only"}. Its items no longer feed the roadmap.
+                </InfoTip>
+                <span>
+                  Replaced by{" "}
+                  {d.replaced_by!.map((r, i, all) => (
+                    <span key={r.id}>
+                      {i > 0 && (i === all.length - 1 ? " and " : ", ")}
+                      <Link href={`/documents/${r.slug}`} className="font-medium text-text underline">
+                        {r.title}
+                      </Link>
+                    </span>
+                  ))}
+                </span>
               </p>
             )}
             {/* replaced-prd-history: the PRDs this one replaced stay reachable here, read-only history. */}
