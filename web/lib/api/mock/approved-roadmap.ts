@@ -12,6 +12,7 @@
 import type { Schemas } from "@/lib/api/client";
 import type { SectionSeed } from "./fixtures";
 import { stableUuid } from "./ids";
+import { codedTitle, shownCode, shownName } from "./item-code";
 import { slugOf } from "./plan-edits";
 import { companyToday, roadmapKeyOf, simpleWindows, type SeedItem, type SimpleDb } from "./simple-roadmap";
 
@@ -104,19 +105,25 @@ export function parsePlan(markdown: string): { rows: PlanRow[]; milestones: Plan
 const leaves = (status: string): "shipped" | "moved_out" | null =>
   status === "shipped" ? "shipped" : status.replace(/[^a-z]/g, "") === "nextprd" ? "moved_out" : null;
 
+/** approved_roadmap._state: a plan row's state (shipped, done or launched; moved to the next PRD); null for a row still planned. */
+export const planRowState = (status: string): string | null =>
+  ["shipped", "done", "launched"].includes(status) ? "shipped" : leaves(status);
+
 /**
  * Applies a roadmap version's plan to its Simple items: each listed item takes the version's
  * dates and their source words (a person's own typed dates stay), a shipped item and one moved
  * to the next PRD leave the plan, an unknown key is a new item; its milestones replace the
  * ones the last applied version gave. False when the text has no plan table (nothing changes).
  */
-/** approved_roadmap._not_added: why a plan row whose title code a live item of the roadmap reads already adds no item, in plain
- * words ("F-31 Launch flow was not added: F-31 is already the code of F-31 Alert routing by team"); null when it is free. */
+/** approved_roadmap._not_added: why a plan row whose title code a live item of the roadmap shows already (shownCode: its feature's,
+ * its PRD section's, else its title's) adds no item, in plain words ("F-31 Launch flow was not added: F-31 is already the code of
+ * F-31 Alert routing by team"); null when it is free. */
 export function rowCodeTaken(db: SimpleDb, slug: string, title: string): string | null {
-  const code = /^([A-Z][A-Z0-9]*-\d+[a-z]?)\s+\S/.exec(title)?.[1];
+  const code = codedTitle(title, null)[0];
   if (!code) return null;
-  const hit = db.items.find((x) => x.roadmap === slug && !x.trashed && /^([A-Z][A-Z0-9]*-\d+[a-z]?)\s+\S/.exec(x.title)?.[1]?.toUpperCase() === code.toUpperCase());
-  return hit ? `${title} was not added: ${code} is already the code of ${hit.title}` : null;
+  const featureCode = (id: string) => db.feature_codes?.[id];
+  const hit = db.items.find((x) => x.roadmap === slug && !x.trashed && shownCode(x, featureCode)?.toUpperCase() === code.toUpperCase());
+  return hit ? `${title} was not added: ${code} is already the code of ${shownName(hit, featureCode)}` : null;
 }
 
 export function applyApprovedRoadmap(db: SimpleDb, slug: string, version: { number: number; approved_at: string; markdown: string; href: string }): boolean {
@@ -255,7 +262,7 @@ const V3_PLAN = `| Key | Item | Start | End | Dates from | Status |
 | trip-reports | Trip reports | Jan 11, 2027 | Jan 22, 2027 | engineering estimate | planned |
 | photo-pins | Photo pins | Dec 7, 2026 | Dec 18, 2026 | set by Pat Example | planned |
 | offline-sync | Offline sync | | | | shipped |
-| keep-improving | Keep improving trail maps | Feb 1, 2027 | Mar 31, 2027 | engineering estimate | new |
+| keep-improving | TR-9 Keep improving trail maps | Feb 1, 2027 | Mar 31, 2027 | engineering estimate | new |
 | trail-chat | Trail chat | | | | next PRD |`;
 
 const V3_MILESTONES = `| Milestone | Date | Gates | Counts when |
