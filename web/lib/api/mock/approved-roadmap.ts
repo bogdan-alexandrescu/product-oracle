@@ -109,12 +109,6 @@ const leaves = (status: string): "shipped" | "moved_out" | null =>
 export const planRowState = (status: string): string | null =>
   ["shipped", "done", "launched"].includes(status) ? "shipped" : leaves(status);
 
-/**
- * Applies a roadmap version's plan to its Simple items: each listed item takes the version's
- * dates and their source words (a person's own typed dates stay), a shipped item and one moved
- * to the next PRD leave the plan, an unknown key is a new item; its milestones replace the
- * ones the last applied version gave. False when the text has no plan table (nothing changes).
- */
 /** approved_roadmap._not_added: why a plan row whose title code a live item of the roadmap shows already (shownCode: its feature's,
  * its PRD section's, else its title's) adds no item, in plain words ("F-31 Launch flow was not added: F-31 is already the code of
  * F-31 Alert routing by team"); null when it is free. */
@@ -126,6 +120,12 @@ export function rowCodeTaken(db: SimpleDb, slug: string, title: string): string 
   return hit ? `${title} was not added: ${code} is already the code of ${shownName(hit, featureCode)}` : null;
 }
 
+/**
+ * Applies a roadmap version's plan to its Simple items: each listed item takes the version's
+ * dates and their source words (a person's own typed dates stay), a shipped item and one moved
+ * to the next PRD leave the plan, an unknown key is a new item; its milestones replace the
+ * ones the last applied version gave. False when the text has no plan table (nothing changes).
+ */
 export function applyApprovedRoadmap(db: SimpleDb, slug: string, version: { number: number; approved_at: string; markdown: string; href: string }): boolean {
   const plan = parsePlan(version.markdown);
   if (!plan) return false;
