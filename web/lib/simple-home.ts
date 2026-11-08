@@ -162,8 +162,9 @@ export type PlanInput = {
   milestoneDate: string | null;
   /** The day the plan starts the milestone, when the PRD dates it (a plan's M1 2 Nov - 27 Nov). */
   milestoneStart?: string | null;
-  /** The milestone record the item links (a track milestone), when any: its row. */
-  record?: { id: string; name: string | null } | null;
+  /** The milestone record the item links (a track milestone), when any: its row; `label`, when
+   * given, is the row's name as is (Home: the current milestone's code and name, whole). */
+  record?: { id: string; name: string | null; label?: string } | null;
   /** The roadmap item it reads (the one-pager lists a row's items by it). */
   id?: string | null;
 };
@@ -222,7 +223,7 @@ export function planByMonth(items: PlanInput[], today: string, through: string |
       loose.push(i);
       continue;
     }
-    const [key, label] = i.record ? [`record:${i.record.id}`, milestoneOf(i.record.name)[1]] : milestoneOf(i.milestone);
+    const [key, label] = i.record ? [`record:${i.record.id}`, i.record.label ?? milestoneOf(i.record.name)[1]] : milestoneOf(i.milestone);
     keyed.set(key, [...(keyed.get(key) ?? []), { label, i }]);
   }
   const groups = new Map<string, { name: string; date: string | null; begins: string | null; of: PlanInput[] }>();
@@ -235,7 +236,8 @@ export function planByMonth(items: PlanInput[], today: string, through: string |
     const date = dates.length ? maxOf(dates) : null;
     // A dated plan milestone (the PRD dates it): its row spans its start to its end.
     const starts = of.flatMap((x) => (x.i.milestoneStart ? [x.i.milestoneStart] : []));
-    groups.set(`${name}|${date ?? ""}`, { name, date, begins: starts.length ? minOf(starts) : null, of: of.map((x) => x.i) });
+    // A record's row is its own (two PRDs' "M1 · Launch" on one date are two rows); texts by name and date.
+    groups.set(key.startsWith("record:") ? key : `${name}|${date ?? ""}`, { name, date, begins: starts.length ? minOf(starts) : null, of: of.map((x) => x.i) });
   }
   const dated = [...groups.values()].flatMap((g) => (g.date ? [g.date] : []));
   const committed = items.filter((i) => !i.estimated).map((i) => i.end);
@@ -303,6 +305,72 @@ export const planInput = (i: Item): PlanInput => ({
   record: i.milestone?.record_id ? { id: i.milestone.record_id, name: i.milestone.record_name ?? null } : null,
   id: i.id,
 });
+
+/** A milestone's name as a person reads it, whole: its code and name ("M1 · Launch (beta)"), its
+ * code alone when it has no name ("M2"), never "Milestone M2". */
+const wholeName = (code: string | null, name: string) => {
+  const n = name.trim().split(/\s+/).filter(Boolean).join(" ");
+  return code ? (n ? `${code} · ${n}` : code) : n || "Milestone";
+};
+const sameWords = (a: string, b: string) => a.trim().replace(/\s+/g, " ").toLowerCase() === b.trim().replace(/\s+/g, " ").toLowerCase();
+
+/**
+ * home-milestones-current: Home's plan inputs, each item (not cut) in the roadmap's current
+ * milestone, dated or not, a dropped one never (nor a PRD's plan milestone, its start and end
+ * dated): the roadmap milestone picked in its panel (by
+ * id) or naming it, else the track milestone naming it or its record, else the current milestone
+ * its typed text names by code ("M1") or name (its roadmap's, then its track's), else its
+ * track's first dated one it ends on or before. Each row reads that milestone's own code and
+ * name, whole. An item whose milestone is gone (removed, renamed away, or a text no current
+ * milestone has) is in none: "Not in a milestone". A PRD's plan slices are not read
+ * (home-waiting-one-list: never one PRD's plan milestones).
+ */
+export function homePlanInputs(data: Roadmap): PlanInput[] {
+  const goals = data.goal_milestones ?? [];
+  const live = new Map(goals.map((m) => [m.id, m]));
+  // A milestone with a start and an end is a PRD's plan milestone, never read here.
+  const tracks = data.milestones.filter((m) => m.status !== "dropped" && !(m.start_date && m.end_date));
+  const codeOf = (name: string) => MILESTONE_CODE.exec(name.trim())?.[1].toUpperCase() ?? null;
+  const restOf = (name: string) => (codeOf(name) ? MILESTONE_CODE.exec(name.trim())![2] : name);
+  type Gm = (typeof goals)[number];
+  type Tm = (typeof tracks)[number];
+  const ofGoal = (gm: Gm) => ({ key: `goal:${gm.id}`, name: wholeName(gm.code.toUpperCase(), gm.name), date: gm.date ?? null });
+  const ofTrack = (tm: Tm) => ({ key: `track:${tm.id}`, name: wholeName(codeOf(tm.name), restOf(tm.name)), date: tm.date ?? null });
+  // A typed text names a current milestone by its code ("M1 · Measure it (a note)") or by its name.
+  const named = (text: string, code: string | null, name: string) => {
+    const head = text.trim().split(" (")[0].split(";")[0];
+    const typed = codeOf(head);
+    return typed ? typed === code : [text, head].some((t) => sameWords(t, name) || (!!code && sameWords(t, `${code} · ${name}`)));
+  };
+  const find = (i: Item) => {
+    const own = i.milestone;
+    const gm = (own?.id ? live.get(own.id) : undefined) ?? goals.find((m) => m.item_ids.includes(i.id));
+    if (gm) return ofGoal(gm);
+    // Its milestone was picked by id and is gone: in none, whatever its old words say.
+    if (own?.id) return null;
+    const tm = tracks.find((m) => m.item_ids.includes(i.id)) ?? (own?.record_id ? tracks.find((m) => m.id === own.record_id) : undefined);
+    if (tm) return ofTrack(tm);
+    if (own?.name) {
+      const text = own.name;
+      const g = goals.find((m) => m.roadmap_id === i.roadmap.id && named(text, m.code.toUpperCase(), m.name));
+      if (g) return ofGoal(g);
+      const t = tracks.find((m) => (!i.track || m.track_id === i.track.id) && named(text, codeOf(m.name), restOf(m.name)));
+      if (t) return ofTrack(t);
+      return null;
+    }
+    const after = tracks
+      .filter((m) => m.date && !!i.track && m.track_id === i.track.id && i.end.date <= m.date)
+      .sort((a, b) => byCodePoint(a.date!, b.date!))[0];
+    return after ? ofTrack(after) : null;
+  };
+  return data.items
+    .filter((i) => i.status !== "cut")
+    .map((i) => {
+      const base: PlanInput = { start: i.start.date, end: i.end.date, estimated: i.estimated, milestone: null, milestoneDate: null, id: i.id };
+      const m = find(i);
+      return m ? { ...base, milestone: m.name, milestoneDate: m.date, record: { id: m.key, name: m.name, label: m.name } } : base;
+    });
+}
 
 /**
  * Home's plan: the PRD in play (the only PRD with items this quarter), or the top PRD by
