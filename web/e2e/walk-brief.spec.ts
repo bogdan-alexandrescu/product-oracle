@@ -118,7 +118,7 @@ for (const [name, viewport] of VIEWPORTS) {
       await expect(template).not.toContainText("clean-document");
     });
 
-    test(`5: a new brief never shows the previous brief's panel while its own loads (${name})`, async ({ page }) => {
+    test(`5: a new brief never shows the previous brief's panel while its own loads (${name}) @timing`, async ({ page }) => {
       await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "before-drafting"));
       await login(page);
       await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);

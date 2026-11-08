@@ -80,7 +80,11 @@ export function untaggedTimingTests(source, fileName = "spec.ts") {
   const helpers = new Set();
   for (let grew = true; grew; ) {
     grew = false;
-    for (const [name, body] of fns) if (!helpers.has(name) && measures(body, helpers)) (helpers.add(name), (grew = true));
+    for (const [name, body] of fns) {
+      if (helpers.has(name) || !measures(body, helpers)) continue;
+      helpers.add(name);
+      grew = true;
+    }
   }
 
   const out = [];
