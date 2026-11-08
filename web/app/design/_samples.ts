@@ -38,7 +38,7 @@ export const ICONS = [
   "home", "requests", "baseline", "prds", "priorities", "roadmap", "runs", "inbox", "settings", "more",
   "plus", "check", "x", "flag", "coin", "pause", "doc", "comment", "ask", "alert", "arrow", "back",
   "chevron-left", "chevron-right", "chevron-down", "chevron-up", "outline",
-  "search", "clock", "user", "lock", "grip", "sun", "moon", "monitor", "signout", "folder", "link", "sources", "company",
+  "search", "clock", "user", "lock", "grip", "sun", "moon", "monitor", "signout", "folder", "pencil", "link", "sources", "company",
   "target",
 ] as const satisfies readonly IconName[];
 

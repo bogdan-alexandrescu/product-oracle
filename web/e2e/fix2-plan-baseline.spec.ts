@@ -185,8 +185,8 @@ test.describe("phone", () => {
   });
 
   // protects=qa-plan-26: a goal row reads title and badges, then target and progress, then its
-  // actions in one row; fails_when=the badge sits under the gap chip or the buttons float
-  // beside the title; no_claim=other tables.
+  // actions in one row, Rename among them; fails_when=the badge sits under the gap chip, the buttons float
+  // beside the title or Rename wraps to a line of its own; no_claim=other tables.
   test("a goal row: title and badges, then target and progress, then actions", async ({ page }) => {
     await openBaseline(page);
     const churn = page.getByTestId("goal-g.early-churn");
@@ -197,18 +197,24 @@ test.describe("phone", () => {
     const make = churn.getByTestId("make-measurable");
     const confirm = churn.getByRole("button", { name: "Confirm" });
     const add = churn.getByRole("button", { name: "Add subgoal" });
-    for (const l of [title, badge, gap, target, make, confirm, add]) await expect(l).toBeVisible();
+    const rename = churn.getByRole("button", { name: "Rename", exact: true });
+    for (const l of [title, badge, gap, target, make, confirm, add, rename]) await expect(l).toBeVisible();
     const box = async (l: Locator) => (await l.boundingBox())!;
-    const [t, b, g, tg, m, c, a] = await Promise.all([title, badge, gap, target, make, confirm, add].map(box));
+    const [t, b, g, tg, m, c, a, r] = await Promise.all([title, badge, gap, target, make, confirm, add, rename].map(box));
     // Badges beside or right under the title, above the target line.
     expect(b.y + b.height).toBeLessThanOrEqual(tg.y);
     expect(g.y + g.height).toBeLessThanOrEqual(tg.y);
     expect(t.y).toBeLessThan(tg.y);
     // Actions after the target, in one row.
-    for (const x of [m, c, a]) expect(x.y).toBeGreaterThanOrEqual(tg.y + tg.height);
+    for (const x of [m, c, a, r]) expect(x.y).toBeGreaterThanOrEqual(tg.y + tg.height);
     expect(Math.abs(m.y - c.y)).toBeLessThan(4);
     expect(Math.abs(c.y - a.y)).toBeLessThan(4);
+    // Rename in that same row, whole on screen, and it works: it opens the goal's Edit form.
+    expect(Math.abs(c.y - r.y)).toBeLessThan(4);
+    for (const x of [m, c, a, r]) expect(x.x + x.width).toBeLessThanOrEqual(PHONE.width);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await rename.click();
+    await expect(page.getByTestId("entity-drawer").getByRole("form", { name: "Edit" })).toBeVisible();
   });
 
   // protects=qa-plan-27: the Weak evidence label and its (i) are whole; fails_when=the label's
