@@ -4937,7 +4937,7 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
   // company PRD order as list_documents(db, "prd") gives them.
   if (p[1] === "simple" && p[2] === "one-pagers" && !p[3] && m === "GET") {
     const ranks = prdOrder(db);
-    return json(200, db.documents.filter((d) => d.kind === "prd" && !(d.replaced_by ?? []).length && canSee(me.role, d.visibility)).map((d) => documentSummary(db, d, ranks)).sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity)));
+    return json(200, db.documents.filter((d) => d.kind === "prd" && !liveReplacers(db, d).length && canSee(me.role, d.visibility)).map((d) => documentSummary(db, d, ranks)).sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity)));
   }
   if (p[1] === "roadmaps" && p[2] === "company" && !p[3]) {
     if (m === "GET") {
@@ -4959,7 +4959,7 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
   if (p[1] === "roadmaps" && p[2] === "company" && p[3] === "queue" && !p[4] && m === "GET") {
     const cap = (mockSettingValue("team_capacity") ?? { team_size: 1, focus: 1 }) as { team_size: number; focus: number };
     const found = company();
-    const replaced = new Set(db.documents.filter((d) => d.kind === "prd" && (d.replaced_by ?? []).length > 0).map((d) => d.id));
+    const replaced = new Set(db.documents.filter((d) => d.kind === "prd" && liveReplacers(db, d).length > 0).map((d) => d.id));
     const prd = q.get("prd");
     const rm = db.simple_roadmap;
     const items =
@@ -4988,7 +4988,7 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
       const other = db.documents.find((d) => d.slug === slug);
       if (!other || (other.kind ?? "prd") !== "prd") return json(422, { detail: `'${slug}' is not a PRD` });
       if (other.id === doc.id) return json(422, { detail: "a PRD cannot replace itself" });
-      if ((other.replaced_by ?? []).length > 0) return json(422, { detail: `${other.title} is itself replaced` });
+      if (liveReplacers(db, other).length > 0) return json(422, { detail: `${other.title} is itself replaced` });
       by.push(other);
     }
     doc.replaced_by = by.map((d) => d.id);
@@ -7755,7 +7755,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         return {
           // docs.visibility.visible_to: a commenter or a viewer sees company documents only.
           visible: !!doc && canSee(me.role, doc.visibility),
-          replaced: !!doc?.replaced_by?.length,
+          replaced: !!doc && liveReplacers(db, doc).length > 0,
           // A version at or after the drafted one approved (roadmap_drafts._drafts).
           approved: (n: number) => !!doc && docVersions(db, doc).some((v) => v.number >= n && !!v.approved_at),
         };
