@@ -159,12 +159,13 @@ test("the rail: a re-read of the meetings that fails shows no number, not the la
   await page.setViewportSize({ width: 1440, height: 900 });
   await login(page);
   await startMeeting(page);
+  await page.goto("/simple/one-pagers");
   const meetings = page.getByTestId("simple-nav-meetings-count");
   await expect(meetings).toHaveText("1", { timeout: 15_000 });
   // The meetings fail from now on; opening Meetings reads them again.
   await page.evaluate((key) => localStorage.setItem(key, "/v1/simple/meetings"), MOCK_FAIL_KEY);
   await page.getByTestId("simple-nav-meetings").click();
-  await expect(page).toHaveURL(/\/simple\/meetings/);
+  await expect(page).toHaveURL(/\/simple\/meetings$/);
   await expect(meetings).toHaveAttribute("title", "Could not load", { timeout: 15_000 });
   await expect(meetings).toHaveAttribute("aria-label", "Could not load");
   await expect(meetings).not.toHaveText(/\d/);
