@@ -312,7 +312,7 @@ test.describe("QA pass 3: simple-plan, Value / effort", () => {
     await expect(page.locator("#prio-about-text")).toContainText("Each mark shows the feature's code");
     await expect(legend).not.toContainText("Codes stay with the item");
     await page.locator('[data-testid="vxe-point"][data-code="setup-checklist"]').click();
-    await expect(page.locator('[data-testid="side-row"][data-code="setup-checklist"]').getByTestId("side-numbers")).toHaveText(/^goal value [\d.]+ · confidence [\d.]+ · [\d.]+ wk · score [\d.]+$/);
+    await expect(page.locator('[data-testid="side-row"][data-code="setup-checklist"]').getByTestId("side-numbers")).toHaveText(/^goal value [\d.]+ · confidence [\d.]+ · [\d.]+ weeks? · score [\d.]+$/);
     // A goal value of 0 (No goal): ArrowDown and ArrowUp change nothing.
     const noGoal = page.locator('[data-testid="vxe-point"][aria-label*="no goal"]').first();
     const before = await noGoal.getAttribute("aria-label");
@@ -325,7 +325,7 @@ test.describe("QA pass 3: simple-plan, Value / effort", () => {
     const sso = page.locator('[data-testid="vxe-point"][data-code="alert-sso"]');
     await sso.focus();
     await page.keyboard.press("ArrowRight");
-    await expect(page.locator('[data-testid="side-row"][data-code="alert-sso"]').getByTestId("moved")).toHaveText(/^(rank stays #\d+|now #\d+) \(effort [\d.]+ wk\)$/);
+    await expect(page.locator('[data-testid="side-row"][data-code="alert-sso"]').getByTestId("moved")).toHaveText(/^(rank stays #\d+|now #\d+) \(effort [\d.]+ weeks?\)$/);
     // One week reads "1 week" (PV-1: the 1-week features share one count, so a mark is moved there with the keys).
     const sc = page.locator('[data-testid="vxe-point"][data-code="setup-checklist"]');
     await sc.focus();
@@ -345,7 +345,7 @@ test.describe("QA pass 3: simple-plan, Value / effort", () => {
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();
     await page.mouse.move(box.x + box.width / 2 + 120, box.y + box.height / 2, { steps: 8 });
-    await expect(page.getByTestId("vxe-drag-readout")).toHaveText(/^effort [\d.]+ wk$/);
+    await expect(page.getByTestId("vxe-drag-readout")).toHaveText(/^effort [\d.]+ weeks?$/);
     await page.mouse.up();
     await expect(page.getByTestId("vxe-drag-readout")).toHaveCount(0);
   });

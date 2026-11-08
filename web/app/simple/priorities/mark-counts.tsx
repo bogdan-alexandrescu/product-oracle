@@ -91,43 +91,49 @@ export function markLayout<T extends CountRow>(rows: T[], w: number, h: number, 
   return { spots, crowds: out.filter((c) => c.rows.length > 1) };
 }
 
-/** Whether a feature serves a goal (the plan's goal, as its mark's name reads it). */
-export type HasGoal<T> = (r: T) => boolean;
+/** The name of the goal a feature serves (the plan's goal, as its mark's name reads it); null with none. */
+export type GoalOf<T> = (r: T) => string | null;
 
 /** Whether every feature in a count has the same numbers (its title says them; the rows need not). */
 const oneSpot = (rows: CountRow[]) => new Set(rows.map((r) => `${r.effort ?? "pm"}|${r.goal_value ?? "–"}`)).size === 1;
 
 // A span never breaks; lines break only at the dot.
 const span = (xs: number[]) => (Math.min(...xs) === Math.max(...xs) ? fmt(xs[0]) : `${fmt(Math.min(...xs))}⁠–⁠${fmt(Math.max(...xs))}`);
+/** Weeks of effort, one wording everywhere on the chart: "1 week", "2 weeks", "1.5 weeks". */
+export const weeksWords = (n: number) => `${fmt(n)} ${fmt(n) === "1" ? "week" : "weeks"}`;
 /** An effort in a lone mark's words: "effort 1 week", "effort 2 weeks", "PM-owned, no effort". */
-const effortWords = (xs: number[]) => (xs.length === 1 || Math.min(...xs) === Math.max(...xs) ? `effort ${fmt(xs[0])} ${xs[0] === 1 ? "week" : "weeks"}` : `effort ${span(xs)} weeks`);
+const effortWords = (xs: number[]) => (xs.length === 1 || Math.min(...xs) === Math.max(...xs) ? `effort ${weeksWords(xs[0])}` : `effort ${span(xs)} weeks`);
 
 /**
  * What a count's features share, in the lone marks' words: "effort 1 week · goal value 0", the span when they differ
- * ("effort 2⁠–⁠4 weeks"); PM-owned work (no effort) says "PM-owned, no effort"; with no goal (or no goal value) "no goal".
+ * ("effort 2⁠–⁠4 weeks"); PM-owned work (no effort) says "PM-owned, no effort"; a goal with no value its name
+ * ("Grow retention"); only a feature with no goal "no goal".
  */
-export function crowdWhere<T extends CountRow>(rows: T[], hasGoal: HasGoal<T>): string {
+export function crowdWhere<T extends CountRow>(rows: T[], goalOf: GoalOf<T>): string {
   const e = rows.flatMap((r) => (r.effort == null ? [] : [r.effort]));
   const pm = rows.some((r) => r.effort == null);
   const v = rows.flatMap((r) => (r.goal_value == null ? [] : [r.goal_value]));
-  const none = rows.filter((r) => !hasGoal(r) || r.goal_value == null).length;
+  // A goal with no value is read by its name.
+  const named = [...new Set(rows.flatMap((r) => (r.goal_value == null ? (goalOf(r) ?? []) : [])))];
+  const none = rows.filter((r) => !goalOf(r)).length;
   const effort = !e.length ? "PM-owned, no effort" : pm ? `${effortWords(e)} or PM-owned` : effortWords(e);
   // Some with no goal (or none): "goal value 0 or no goal", as PM-owned work joins an effort.
-  const value = none === rows.length ? (v.length ? `goal value ${span(v)} · no goal` : "no goal") : `goal value ${span(v)}${none ? " or no goal" : ""}`;
+  const value =
+    none === rows.length ? (v.length ? `goal value ${span(v)} · no goal` : "no goal") : [v.length ? `goal value ${span(v)}` : null, ...named, none ? "no goal" : null].filter(Boolean).join(" or ");
   return `${effort} · ${value}`;
 }
 
 /** A count's spoken name: what its features share, then its first three features by code and name. */
-export function crowdName<T extends CountRow>(rows: T[], hasGoal: HasGoal<T>): string {
+export function crowdName<T extends CountRow>(rows: T[], goalOf: GoalOf<T>): string {
   const first = rows
     .slice(0, 3)
     .map((r) => `${r.short_code || r.code} ${r.title}`)
     .join(", ");
-  return `${rows.length} features at ${crowdWhere(rows, hasGoal)}: ${first}${rows.length > 3 ? ` and ${rows.length - 3} more` : ""}; show them`;
+  return `${rows.length} features at ${crowdWhere(rows, goalOf)}: ${first}${rows.length > 3 ? ` and ${rows.length - 3} more` : ""}; show them`;
 }
 
 /** A row's own numbers in a count whose features differ: "6 · 2 weeks", "4 · PM-owned" (its mark shows whether it has a goal). */
-const rowNums = (r: CountRow) => `${fmt(r.goal_value)} · ${r.effort == null ? "PM-owned" : `${fmt(r.effort)} ${r.effort === 1 ? "week" : "weeks"}`}`;
+const rowNums = (r: CountRow) => `${fmt(r.goal_value)} · ${r.effort == null ? "PM-owned" : weeksWords(r.effort)}`;
 
 /** One feature in a count's list: rank, its mark (`shape`: its goal's, "none" with no goal), code and name, its numbers; a tap opens the one feature panel. */
 function CountListRow<T extends CountRow>({ r, mark, shape, onOpen, nums }: { r: T; mark: (r: T) => ReactNode; shape: (r: T) => string; onOpen: (r: T) => void; nums: boolean }) {
@@ -145,10 +151,10 @@ function CountListRow<T extends CountRow>({ r, mark, shape, onOpen, nums }: { r:
 }
 
 /** A count's features by rank: a bottom sheet on a phone, a panel at the right edge on a wider screen. */
-export function CrowdSheet<T extends CountRow>({ crowd, mark, shape, hasGoal, onOpen, onClose }: { crowd: Crowd<T> | null; mark: (r: T) => ReactNode; shape: (r: T) => string; hasGoal: HasGoal<T>; onOpen: (r: T) => void; onClose: () => void }) {
+export function CrowdSheet<T extends CountRow>({ crowd, mark, shape, goalOf, onOpen, onClose }: { crowd: Crowd<T> | null; mark: (r: T) => ReactNode; shape: (r: T) => string; goalOf: GoalOf<T>; onOpen: (r: T) => void; onClose: () => void }) {
   if (!crowd) return null;
   return (
-    <Sheet open side title={`${crowd.rows.length} features · ${crowdWhere(crowd.rows, hasGoal)}`} onClose={onClose} testId="vxe-crowd-sheet">
+    <Sheet open side title={`${crowd.rows.length} features · ${crowdWhere(crowd.rows, goalOf)}`} onClose={onClose} testId="vxe-crowd-sheet">
       <ul className="flex flex-col pb-2" data-testid="vxe-crowd-list">
         {crowd.rows.map((r) => (
           <CountListRow key={r.feature_id} r={r} mark={mark} shape={shape} onOpen={onOpen} nums={!oneSpot(crowd.rows)} />
@@ -173,7 +179,7 @@ function CountGlyph({ n }: { n: number }) {
 }
 
 /** A count on the plot; selected when it holds the selected feature, ringed as a lone mark is when it holds the one just moved. */
-export function CrowdMark<T extends CountRow>({ crowd, lit, moved, hasGoal, onPick, buttonRef }: { crowd: Crowd<T>; lit: boolean; moved: boolean; hasGoal: HasGoal<T>; onPick: () => void; buttonRef?: (el: HTMLButtonElement | null) => void }) {
+export function CrowdMark<T extends CountRow>({ crowd, lit, moved, goalOf, onPick, buttonRef }: { crowd: Crowd<T>; lit: boolean; moved: boolean; goalOf: GoalOf<T>; onPick: () => void; buttonRef?: (el: HTMLButtonElement | null) => void }) {
   const n = crowd.rows.length;
   return (
     <button
@@ -182,7 +188,7 @@ export function CrowdMark<T extends CountRow>({ crowd, lit, moved, hasGoal, onPi
       data-testid="vxe-crowd"
       data-count={n}
       data-moved={moved ? "true" : undefined}
-      aria-label={crowdName(crowd.rows, hasGoal)}
+      aria-label={crowdName(crowd.rows, goalOf)}
       aria-haspopup="dialog"
       onClick={onPick}
       style={{ left: crowd.at[0], top: crowd.at[1] }}
