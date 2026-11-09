@@ -739,3 +739,32 @@ async def test_a_key_result_s_items_sit_under_its_parent_goal(client):
     assert set(by_key(await get(client, ctx, goal="grow-revenue"))) == {"invoices", "cards"}
     assert set(by_key(await get(client, ctx, goal=goal_id))) == {"invoices", "cards"}
     assert set(by_key(await get(client, ctx, goal="kr-saved-cards"))) == {"cards"}
+
+
+async def test_a_key_result_s_own_subgoal_s_items_sit_under_the_top_goal(client):
+    """kr-in-goal-card: a subgoal of a key result (a sub-subgoal) folds into the top-level goal
+    too, at any depth: its items group under that goal and its Goal filter keeps them. Fails
+    when the key result is a lane of its own or the top goal's filter drops them."""
+    ctx = await make_ctx()
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        _, pv, rm, rv = await seed.roadmap("payments")
+        goal = await seed.entity("goal", "grow-revenue")
+        kr = await seed.entity("goal", "kr-saved-cards")
+        kr.parent_id = goal.id
+        sub = await seed.entity("goal", "kr-one-click-pay")
+        sub.parent_id = kr.id
+        own = await seed.entity("feature", "invoices")
+        under = await seed.entity("feature", "one-click")
+        await seed.supports(own, goal)
+        await seed.supports(under, sub)
+        await seed.item(rv, pv, "invoices", feature_id=own.id)
+        await seed.item(rv, pv, "one-click", feature_id=under.id)
+        await s.commit()
+        goal_id = str(goal.id)
+
+    body = await get(client, ctx, group="goal")
+    groups = [(g["key"], g["title"], len(g["item_ids"])) for g in body["groups"]]
+    assert groups == [(goal_id, "Grow Revenue", 2)]
+    assert by_key(body)["one-click"]["goal"]["key"] == "kr-one-click-pay"
+    assert set(by_key(await get(client, ctx, goal="grow-revenue"))) == {"invoices", "one-click"}
