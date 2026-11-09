@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { PLAN_SECTION_CODE_SCENARIO } from "../lib/api/mock/roadmap";
+import { PLAN_SECTION_CODE_SCENARIO, PLAN_SECTION_LINKED_SCENARIO } from "../lib/api/mock/roadmap";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login, signOut } from "./helpers";
 
@@ -215,4 +215,23 @@ test("Edit plan: an item linked to the feature an approved item's PRD section co
   // Propose checks the codes again: the linked item goes into version 2.
   await changes(page).getByRole("button", { name: "Propose changes" }).click();
   await expect(changes(page).getByTestId("plan-proposal")).toContainText("Version 2 proposed");
+});
+
+// protects = (codes.clash with section, "unless linked to different features") parts of two features never share a code: the
+// approved item "F-31 Alert routing by team", from the PRD's section f-31 but linked to the Ground Truth feature Alert routing
+// rules, keeps F-31, so an item added linked to the feature F-31 is refused in the API's words and nothing is added (two parts of
+// one feature share it: the test above); fails_when = the mock lets two items of different features show one code;
+// no_claim = the API's rule (api/tests/test_roadmap_change_sets.py).
+test("Edit plan: an item linked to F-31 is refused when the approved item with F-31 is linked to another feature", async ({ page }) => {
+  await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, PLAN_SECTION_LINKED_SCENARIO] as const);
+  await openPlan(page);
+  await page.getByTestId("plan-edit").click();
+  await expect(changes(page)).toContainText(/Changes to approved version 1 of Usage alerts roadmap/);
+  await expect(lane(page, "next")).toContainText("F-31 Alert routing by team");
+
+  await changes(page).getByLabel("Ground Truth feature").selectOption({ label: "Alert routing by team" });
+  await changes(page).getByLabel("Horizon of the new item").selectOption("later");
+  await changes(page).getByRole("button", { name: "Add item" }).click();
+  await expect(changes(page)).toContainText("F-31 is already the code of F-31 Alert routing by team");
+  await expect(lane(page, "later").getByTestId("edit-item").filter({ hasText: "Alert routing by team" })).toHaveCount(0);
 });
