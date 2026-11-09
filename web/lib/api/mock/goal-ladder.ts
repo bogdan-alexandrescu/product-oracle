@@ -19,6 +19,13 @@ export const LADDER_SCENARIO = "goal-ladder";
 export const LADDER = { today: "2026-11-03" } as const;
 /** The feature with no roadmap item. */
 export const BARE = "Pause a plan from the mobile app";
+/**
+ * kr-in-goal-map: the ladder with key results (subgoals: goals with a parent goal). Each of the
+ * four goals has one or two, measured, so the API reads them as goals of the map too (after the
+ * four, as the one goal order puts them); "Mobile check-ins weekly for half of teams" is a
+ * milestone of a key result, with its work.
+ */
+export const LADDER_KR_SCENARIO = "goal-ladder-key-results";
 
 const goal = (id: string, name: string, math: string, current: number | null, target: number, unit: string, status: Status, position: number): GmGoal & { position: number } => ({
   id, name, measure: name.toLowerCase(), target, current, unit, status, math, builds_on: [], history: [], metric: { id: `metric-${id}`, title: name }, missing: null, choices: [], read_on: "Nov 1", position,
@@ -30,6 +37,21 @@ const GOALS = [
   goal("lg3", "Larger teams add paid seats", "Teams over 50 people grow seat revenue without a sales call.", 11200, 20000, "$", "not_measured", 3),
   goal("lg4", "Half the support tickets per team", "People answer their own questions inside the product.", 3.1, 1.5, "", "no_gate", 4),
 ];
+
+/** kr-in-goal-map: each key result (a goal) and its parent goal. */
+const KRS: [GmGoal & { position: number }, string][] = [
+  [goal("lk11", "Weekly active teams at 80%", "Teams active in each of the last four weeks.", 74, 80, "%", "on_track", 0), "lg1"],
+  [goal("lk12", "Half of teams check in from mobile", "Teams with a mobile check-in each week.", null, 50, "%", "not_measured", 0), "lg1"],
+  [goal("lk21", "Imports done with no ticket", "Imports done with no support ticket.", 68, 90, "%", "on_track", 0), "lg2"],
+  [goal("lk31", "Seat changes without a sales call", "Seat changes made in the product.", 40, 80, "%", "at_risk", 0), "lg3"],
+  [goal("lk41", "Tickets answered in the product", "Questions answered by the help panel.", 20, 50, "%", "at_risk", 0), "lg4"],
+];
+/** The key results' names by parent goal, and the milestone a key result holds, for the spec. */
+export const LADDER_KRS = {
+  goals: GOALS.map((g) => g.name),
+  of: (goalName: string) => KRS.filter(([, p]) => GOALS.find((g) => g.id === p)!.name === goalName).map(([k]) => k.name),
+  milestone: "Mobile check-ins weekly for half of teams",
+} as const;
 
 const AREAS = ["Onboarding", "Billing", "Reports", "Mobile", "Platform", "Support"];
 const area = (name: string) => `la-${name.toLowerCase()}`;
@@ -141,7 +163,7 @@ const ALSO: Record<number, string> = { 3: "m10" };
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /** The ladder's goal map (short ids: goal-map.ts gives them the API's UUIDs; features are "f1"...). */
-export function ladderMap(): GoalMap {
+export function ladderMap(keyResults = false): GoalMap {
   const features: GmFeature[] = ROWS.flatMap(([name, g, m, a], i) => {
     if (!g || !m) return [];
     const milestones = [m, ...(ALSO[i + 1] ? [ALSO[i + 1]] : [])].map((x) => `l${x}`);
@@ -152,10 +174,11 @@ export function ladderMap(): GoalMap {
   const link = { milestone: "lm12", expected: "", confidence: "Medium" as const, measured: null, lift: "not_measured" as const, shipped_on: null, before: null, after: null };
   features.push({ id: "bare-feature", name: BARE, area: area("Mobile"), milestones: ["lm12"], lever: "Mobile", expected: "", confidence: "Medium", released: false, measured: null, lift: "not_measured", links: [link] });
   return {
-    goals: GOALS.map(({ position, ...g }) => (void position, { ...g })),
+    goals: [...GOALS, ...(keyResults ? KRS.map(([k]) => k) : [])].map(({ position, ...g }) => (void position, { ...g })),
     areas: AREAS.map((a) => ({ id: area(a), name: a, lever: a })),
     guardrail: { name: "Pages load in under 2 seconds", rule: "for 95% of views", current: 0, days: [0, 0, 0, 0, 0, 0, 0], held: true },
-    milestones: MILESTONES.map((m) => ({ ...m })),
+    // kr-in-goal-map: M3 is a milestone of the key result "Half of teams check in from mobile".
+    milestones: MILESTONES.map((m) => ({ ...m, ...(keyResults && m.id === "lm3" ? { goal: "lk12" } : {}) })),
     features,
     gaps: [],
     unplaced: [],
@@ -170,8 +193,9 @@ export function ladderMap(): GoalMap {
 }
 
 /** The ladder's goals as Baseline goals (one store, the same ids), in priority order. */
-export function ladderGoals(idOf: (k: string) => string): { id: string; key: string; title: string; status: string; attrs: Record<string, unknown> }[] {
-  return GOALS.map((g) => ({ id: idOf(g.id), key: `g.${g.id}`, title: g.name, status: "confirmed", attrs: { metric: g.measure, target: g.target, unit: g.unit, math: g.math, position: g.position } }));
+export function ladderGoals(idOf: (k: string) => string, keyResults = false): { id: string; key: string; title: string; status: string; parent_id: string | null; attrs: Record<string, unknown> }[] {
+  const of = (g: GmGoal & { position: number }, parent: string | null) => ({ id: idOf(g.id), key: `g.${g.id}`, title: g.name, status: "confirmed", parent_id: parent && idOf(parent), attrs: { metric: g.measure, target: g.target, unit: g.unit, math: g.math, ...(g.position ? { position: g.position } : {}) } });
+  return [...GOALS.map((g) => of(g, null)), ...(keyResults ? KRS.map(([k, p]) => of(k, p)) : [])];
 }
 
 /**

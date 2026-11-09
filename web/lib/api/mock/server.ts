@@ -195,7 +195,7 @@ import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInb
 import { applyFitDate, companyToday, forgetRoadmapReads, knowGoalMapItems, ownPrd, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, MAP_GOALS, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapGoals, goalMapIdOf, goalMapItems, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
-import { LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
+import { LADDER_KR_SCENARIO, LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -4184,20 +4184,20 @@ function load(): Db {
                     if (churn) churn.status = "confirmed";
                     return db;
                   }
-              : scenario === LADDER_SCENARIO
+              : scenario === LADDER_SCENARIO || scenario === LADDER_KR_SCENARIO
                 ? () => {
                     // goal-ladder: the ladder's goals are Home's (one store, the same ids); each
                     // feature is its own Simple roadmap item, with its status, dates and what it waits on.
                     const db = seed();
                     const template = db.baseline.entities.find((e) => e.type === "goal")!;
                     for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") e.status = "proposed";
-                    for (const g of ladderGoals(goalMapIdOf)) db.baseline.entities.push({ ...template, ...g, status: "confirmed", body: null, locked: false, locked_by: null, locked_at: null });
+                    for (const g of ladderGoals(goalMapIdOf, scenario === LADDER_KR_SCENARIO)) db.baseline.entities.push({ ...template, ...g, status: "confirmed", body: null, locked: false, locked_by: null, locked_at: null });
                     const rm = (db.simple_roadmap = seedSimpleRoadmap());
                     // goal-map-editing: a feature on no milestone names its goal itself (by the goal's id).
                     rm.items = ladderItems().map(({ goal, ...x }) => ({ ...x, heading: `${x.section.toUpperCase()} ${x.title}`, horizon: "next" as const, roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium" as const, ...(goal ? { map_goal: goalMapIdOf(goal) } : {}) }));
                     // goal-map-editing: one goal store, so a ladder goal goes to Trash as any goal does.
                     const gb = (rm.goal_buckets = seedGoalBuckets());
-                    for (const g of ladderGoals(goalMapIdOf)) gb.goals.push({ id: g.id, key: g.key, title: g.title, order: gb.goals.length + 1, measure: String(g.attrs.metric ?? ""), target: String(g.attrs.target ?? ""), due: null, archived: false });
+                    for (const g of ladderGoals(goalMapIdOf, scenario === LADDER_KR_SCENARIO)) gb.goals.push({ id: g.id, key: g.key, title: g.title, order: gb.goals.length + 1, measure: String(g.attrs.metric ?? ""), target: String(g.attrs.target ?? ""), due: null, archived: false });
                     rm.ids = Object.fromEntries(rm.items.map((x) => [x.key, stableUuid(`simple-item/${x.key}`)]));
                     return db;
                   }
