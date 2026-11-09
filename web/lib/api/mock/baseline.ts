@@ -321,6 +321,16 @@ export function seedBaseline(uuid: () => string): BaselineState {
         ? {
             open_values: ["[n] live helpers", "50 replied threads a day", "[n]% of threads answered within an hour"],
             reply_split: { email_threads: 60, chat_threads: "[n]", review_by: "2027-03-15" },
+            // An object holding objects, a number, a yes or no, a null and an empty list; a list of objects; a list
+            // entry holding a line break; a null and an empty list of their own: each saved as its stored type.
+            reply_targets: { chat: { low: 1, high: 2 }, email: { low: 2, high: 5 }, hours: 4, weekends: false, owner_note: null, tags: [] },
+            review_steps: [
+              { step: "Read the thread", hours: 1 },
+              { step: "Write the reply", hours: 2 },
+            ],
+            saved_replies: ["Thanks for writing in.\nWe will reply within a day.", "Closed after a week"],
+            spare_note: null,
+            old_tags: [],
           }
         : {};
     entity("goal", "kr-1-1", OKR_IMPORT_GOAL, {
@@ -329,6 +339,11 @@ export function seedBaseline(uuid: () => string): BaselineState {
       status: "proposed",
       confidence: null,
     });
+    if (scenario === GOAL_ATTRS_SCENARIO) {
+      // A goal an import stored as its own parent, by its id.
+      const own = entity("goal", "kr-1-2", "Answer chat threads within an hour", { status: "proposed", confidence: null });
+      own.attrs = { parent_goal: own.id };
+    }
   }
   // Activation's value on the first of each month, as people recorded it.
   [31, 33, 32, 35, 34, 36, 38].forEach((value, i) => {
