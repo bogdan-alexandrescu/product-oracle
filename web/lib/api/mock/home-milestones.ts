@@ -242,3 +242,29 @@ export function seedHomeMilestonePrdFold(): SimpleDb {
   rm.items = rm.items.map((s) => (s.key === "setup-health-log" ? { ...s, record: "M1 · Measured and mapped" } : s));
   return rm;
 }
+
+export const HOME_MILESTONE_PRD_GOAL_FOLD_SCENARIO = "home-milestones-prd-goal-fold";
+
+/**
+ * home-milestones-prd-goal-fold (the owner's "One M1 row" and "Keep joining when names match"):
+ * the Setup guide PRD's own M1 "Measured" under Faster activation (Nov 20) holds Setup checklist
+ * and Sample data import, beside the Guided setup track's "M1 · Measured and mapped" (Health
+ * log): its words lead the track's name, so one row, the PRD's name in its (i). Faster
+ * activation's "M3 · Daily scoreboard" (Team digest) beside the track's "M3 · 200 replied
+ * threads" (Reply tracker): names that do not match, two rows.
+ */
+export function seedHomeMilestonePrdGoalFold(): SimpleDb {
+  const rm = seedSimpleRoadmap();
+  const prd = { slug: "setup-guide", title: "Setup guide", owner: "Nora Vance" };
+  rm.goal_milestones = [
+    { id: stableUuid("simple-gm/prd-goal-fold-measured"), roadmap: "onboarding-roadmap", code: "M1", name: "Measured", date: "2026-11-20", goal: "faster-activation", gates: ["setup-checklist", "setup-import"], counts_when: "", progress: "not_started", prd },
+    { id: stableUuid("simple-gm/prd-goal-fold-scoreboard"), roadmap: "onboarding-roadmap", code: "M3", name: "Daily scoreboard", date: null, goal: "faster-activation", gates: ["setup-digest"], counts_when: "", progress: "not_started" },
+  ];
+  rm.items.push(
+    { key: "setup-digest", title: "Team digest", horizon: "next", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "medium" },
+    { key: "setup-replies", title: "Reply tracker", horizon: "next", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", record: "M3 · 200 replied threads" },
+  );
+  for (const key of ["setup-digest", "setup-replies"]) rm.ids[key] = stableUuid(`simple-item/${key}`);
+  rm.items = rm.items.map((s) => (s.key === "setup-health-log" ? { ...s, record: "M1 · Measured and mapped" } : s));
+  return rm;
+}
