@@ -31,8 +31,8 @@ import { expect, test } from "./test";
  * ("align-items: baseline"). In the Python only, an id written as code in a sentence: a
  * backtick span that is one lowercase id holding "_ . / : < {" ("`baseline.yaml`") or a command
  * starting "oracle " ("`oracle baseline pull`"), a quoted id with a <placeholder>
- * ('"baseline decision <key>"'), or, in the agents' prompt line only, one named as a word to avoid
- * ('never "baseline" (except a starting value)').
+ * ('"baseline decision <key>"'), or, in the agents' prompt line in runs/flows.py only, one named as a
+ * word to avoid ('never "baseline" (except a goal's or key result's starting value)').
  * 'Open the "baseline" page', "Read `Baseline` first", "`build the baseline.`",
  * 'Saved to "baseline {q}"', 'not "baseline"' and 'This is never "baseline" data.' are caught.
  */
@@ -61,9 +61,11 @@ const isCode = (span: string) =>
 /**
  * ... or a quoted id with a <placeholder> ('"baseline decision <key>"', a citation's ref; an f-string's fill
  * is no placeholder), or named as a word to avoid in the agents' prompt line, runs/flows.py's GROUND_TRUTH_LINE,
- * by its exact wording ('never "baseline" (except'): any other 'never "baseline"' is shown text.
+ * by its exact wording and in that file only: any other 'never "baseline"' is shown text.
  */
-const QUOTED_ID = /\\?(["'])[a-z][a-z0-9_]*(?: [a-z][a-z0-9_]*)* <\w+>\\?\1|\bnever \\?"baseline\\?" \(except\b/g;
+const QUOTED_ID = /\\?(["'])[a-z][a-z0-9_]*(?: [a-z][a-z0-9_]*)* <\w+>\\?\1/g;
+const PROMPT_LINE_FILE = "runs/flows.py";
+const PROMPT_LINE_AVOID = /\bnever \\?"baseline\\?" \(except a goal's or key result's starting value\)/g;
 /** A lone id or key. */
 const ID = /^[a-z][a-z0-9_]*$/;
 /** The prediction forms' starting-value field, "Baseline" beside "Predicted". */
@@ -86,6 +88,7 @@ function saysOld(rel: string, said: string): boolean {
   if (ID.test(word) || PREDICTION_FIELD[rel] === word) return false;
   let text = said.replace(STARTING_VALUE, "").replace(CSS_VALUE, "");
   if (rel.endsWith(".py")) text = text.replace(CODE_SPAN, (m, span) => (isCode(span) ? "" : m)).replace(QUOTED_ID, "");
+  if (rel === PROMPT_LINE_FILE) text = text.replace(PROMPT_LINE_AVOID, "");
   return OLD.test(text);
 }
 
