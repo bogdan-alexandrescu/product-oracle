@@ -48,6 +48,8 @@ async function area(page: Page) {
   const top = Math.max(c.y, 0);
   return { x: c.x, y: top, width: c.width, height: Math.min(c.y + c.height, page.viewportSize()!.height - 100) - top };
 }
+/** The canvas's pan and zoom, as drawn. */
+const view = (page: Page) => page.locator("[data-ld-canvas]").evaluate((el) => (el as HTMLElement).style.transform);
 /** Zooms out until both fit in the canvas, then pans them into view (the wheel over the canvas). */
 async function showBoth(page: Page, a: Locator, b: Locator) {
   const canvas = await area(page);
@@ -56,13 +58,17 @@ async function showBoth(page: Page, a: Locator, b: Locator) {
     const top = Math.min(A.y, B.y);
     const bottom = Math.max(A.y + A.height, B.y + B.height);
     if (top >= canvas.y && bottom <= canvas.y + canvas.height) return;
+    const before = await view(page);
     if (bottom - top > canvas.height - 40) {
       await page.getByRole("button", { name: "Zoom out" }).click();
+      // At the smallest zoom the click changes nothing; otherwise wait for the canvas to redraw.
+      if (!before.includes("scale(0.3)")) await expect.poll(() => view(page)).not.toBe(before);
       continue;
     }
     await page.mouse.move(canvas.x + canvas.width - 30, canvas.y + canvas.height / 2);
     await page.mouse.wheel(0, -(canvas.y + canvas.height / 2 - (top + bottom) / 2));
-    await page.waitForTimeout(50);
+    // Each wheel step pans the canvas: wait for it to be drawn there before measuring again.
+    await expect.poll(() => view(page)).not.toBe(before);
   }
 }
 async function mid(loc: Locator) {
