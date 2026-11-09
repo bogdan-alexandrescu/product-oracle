@@ -161,11 +161,10 @@ for (const v of VIEWS) {
       // A label shows only where it fits (B leaves a narrow segment blank, its words in its title);
       // named labels ("M2 Scale volume · 3 weeks") fit fewer segments than the code alone did.
       await nothingCut(head.locator('[data-testid="goal-bar-label"], [data-testid="milestone-chip"]'));
-      // The rule, at whatever width the text draws: a label shows only where it fits its segment
-      // with the frame's own margin (8 px a letter and 12 px over, the picked frames' look) and,
-      // as drawn, with 6 px to spare each side, wholly inside it; a hidden one's segment title
-      // holds its words. So text drawn wider hides a label that would be cut, and text drawn
-      // narrower shows no more labels than the frames do.
+      // The rule, at whatever width the text draws: a label shows exactly where its text, as
+      // drawn, fits its segment with 6 px to spare each side, wholly inside it (measured, never
+      // guessed from its letters); a hidden one's segment title holds its words. So text drawn
+      // wider hides a label that would be cut, and one that fits is never hidden.
       const segments = () =>
         head.getByTestId("goal-bar-segment").evaluateAll((els) =>
           els.map((e) => {
@@ -174,7 +173,7 @@ for (const v of VIEWS) {
             return {
               label: text.textContent!,
               shown: text.dataset.testid === "goal-bar-label" && getComputedStyle(text).opacity === "1",
-              fits: text.offsetWidth + 12 <= e.clientWidth && text.textContent!.length * 8 + 12 <= s.width,
+              fits: t.width + 12 <= e.clientWidth,
               inside: t.left >= s.left - 0.5 && t.right <= s.right + 0.5,
               title: e.getAttribute("title")!,
             };
@@ -185,7 +184,7 @@ for (const v of VIEWS) {
         for (const g of all) {
           expect(g.shown, `"${g.label}" shows only where it fits`).toBe(g.fits);
           if (g.shown) expect(g.inside, `"${g.label}" is not cut`).toBe(true);
-          else expect(g.title, `"${g.label}"'s words are in its title`).toBe(g.label.replace(/ · ([\d.]+) weeks?$/, ": $1 engineer-weeks"));
+          else expect(g.title, `"${g.label}"'s words are in its title`).toBe(g.label.replace(/ · ([\d.]+) weeks?$/, (_, n) => `: ${n} engineer-${n === "1" ? "week" : "weeks"}`));
         }
         return all.filter((g) => g.shown).map((g) => g.label);
       };
@@ -193,7 +192,7 @@ for (const v of VIEWS) {
       if (!v.phone) expect(shown.length, "a desktop bar names its milestones").toBeGreaterThan(0);
       // The rule holds at 1440 too, whatever width the text draws (normal, wider, narrower):
       // no count of labels, which follows the system's text, only that each shown label fits its
-      // bar with the frames' margin and each hidden one would not.
+      // bar, as drawn, and each hidden one would not.
       if (!v.phone) {
         await page.setViewportSize({ width: 1440, height: 900 });
         await expect(async () => expect((await holds()).length, "a desktop bar names its milestones at 1440").toBeGreaterThan(0)).toPass();
