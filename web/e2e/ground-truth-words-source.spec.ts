@@ -636,6 +636,10 @@ test("the check catches the old names and spares the ids and the starting values
   ]) {
     expect(saysOld("slack/pings.py", said), said).toBe(true);
   }
+  // fails_when = the 'never "baseline"' allowance spares any shown message, not only the agents' prompt line.
+  for (const said of ['This is never "baseline" data.', 'This is never \\"baseline\\" data.', "Never 'baseline' here"]) {
+    expect(saysOld("runs/flows.py", said), said).toBe(true);
+  }
   for (const kept of [
     "baseline",
     "/baseline",
