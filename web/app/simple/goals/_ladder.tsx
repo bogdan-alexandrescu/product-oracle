@@ -955,7 +955,6 @@ function GoalCard({ g, i, v }: { g: GmGoal; i: number; v: V }) {
         <div data-testid="ld-goal-krs" className="flex flex-col gap-0.5 border-t border-line pt-1">
           <span className="flex items-center gap-1 text-[12px] font-bold tracking-wide text-text2 uppercase">
             Key results
-            <InfoTip label={`${g.name}'s key results`}>Its subgoals. Their milestones and the work behind them sit in this column.</InfoTip>
           </span>
           <ul className="flex flex-col gap-0.5">
             {krs.map((k) => (
