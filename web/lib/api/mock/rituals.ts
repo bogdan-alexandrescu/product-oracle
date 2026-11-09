@@ -848,6 +848,20 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
     }
     return json(200, occurrenceOut(ctx, r, o));
   }
+  if (p.length === 4 && p[3] === "skip" && (m === "PATCH" || m === "DELETE")) {
+    // As the API (rituals.service.edit_skip_reason, unskip): the owner's, on a skipped occurrence.
+    if (ctx.me.id !== r.owner_id) return fail(403, "Only the ritual's owner records it");
+    if (o.status !== "skipped") return fail(409, `This occurrence is ${o.status}`);
+    if (m === "PATCH") {
+      const input = await body<Schemas["SkipIn"]>();
+      if (!input?.reason?.trim()) return fail(422, "reason: say why it was skipped");
+      o.skip_reason = input.reason;
+    } else {
+      const missed = Date.parse(o.ends_at) + MISSED_AFTER_MS <= now().getTime();
+      Object.assign(o, { status: !o.pre_read.built_at ? "failed" : missed ? "missed" : "ready", skip_reason: null });
+    }
+    return json(200, occurrenceOut(ctx, r, o));
+  }
   if (p.length === 4 && m === "POST" && p[3] === "summary") {
     if (!atLeast(role, "approver")) return fail(403, "Requires the approver role");
     // The API's order (oracle.rituals.summaries.on_demand): readiness, a run under way, a
