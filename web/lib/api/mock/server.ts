@@ -151,7 +151,7 @@ import {
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
 import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, seedStoredRefusalDraft, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb, draftItemsRunRetried } from "./draft-roadmap";
-import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, PLAN_SAME_KEY_SCENARIO, PLAN_SECTION_CODE_SCENARIO, PLAN_SECTION_LINKED_SCENARIO, SECTION_LINK_FEATURE, SAME_KEY_ITEM, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, NOT_CLAIMS_LINE, NOT_CLAIMS_SCENARIO, SHARED_DATE_SCENARIO, TWO_WAY_DATES_SCENARIO, TWO_WAY_GA, VERSION_WARNINGS_SCENARIO, dateMarks, dateWarnings, versionWarnings, inboxTracks, planEntityTitle, planFeatureRows, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, PLAN_SAME_KEY_SCENARIO, PLAN_SECTION_CODE_SCENARIO, PLAN_SECTION_LINKED_SCENARIO, PLAN_SECTION_FEATURE_SCENARIO, SECTION_LINK_FEATURE, featureCodes, SAME_KEY_ITEM, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, NOT_CLAIMS_LINE, NOT_CLAIMS_SCENARIO, SHARED_DATE_SCENARIO, TWO_WAY_DATES_SCENARIO, TWO_WAY_GA, VERSION_WARNINGS_SCENARIO, dateMarks, dateWarnings, versionWarnings, inboxTracks, planEntityTitle, planFeatureRows, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecPerson, type SpecsDb } from "./specs";
 import { inboxStrategy, planDrift, routeStrategy, seedNoStrategy, seedPlanDrift, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { seedImpact } from "./impact";
@@ -4375,16 +4375,17 @@ function load(): Db {
   // "track-alerts" scenarios watch its milestones (an accepted slip moves an approved item), and
   // "plan-timeline-edit" changes the plan with the Timeline shown, and "plan-section-code" adds
   // to it an item linked to the feature whose code an approved item's PRD section gives
-  // ("plan-section-linked": that approved item is linked to another feature, Alert routing rules).
+  // ("plan-section-linked": that approved item is linked to another feature, Alert routing rules, created after F-31 so
+  // F-31 keeps its code; "plan-section-feature": with no feature F-31, Alert routing rules takes F-31 from that item).
   const approvedPlan = [
     "launches", "plan-decider", "strategy-plan", "outcomes", DATE_BASES_SCENARIO, SHARED_DATE_SCENARIO, NOT_CLAIMS_SCENARIO, ALERTS_APPROVED_SCENARIO,
     "track-alerts", "track-alerts-many", "track-alerts-actions", "track-alerts-history", PLAN_TIMELINE_EDIT_SCENARIO, PLAN_SECTION_CODE_SCENARIO,
-    PLAN_SECTION_LINKED_SCENARIO,
+    PLAN_SECTION_LINKED_SCENARIO, PLAN_SECTION_FEATURE_SCENARIO,
   ];
   if (scenario === PLAN_SECTION_CODE_SCENARIO || scenario === PLAN_SECTION_LINKED_SCENARIO) baselineEntity(db, "feature", "F-31", "Alert routing by team", "2026-10-01T09:00:00Z");
-  if (scenario === PLAN_SECTION_LINKED_SCENARIO) {
+  if (scenario === PLAN_SECTION_LINKED_SCENARIO || scenario === PLAN_SECTION_FEATURE_SCENARIO) {
     const { id, key, title } = SECTION_LINK_FEATURE;
-    baselineEntity(db, "feature", key, title, "2026-10-01T09:00:00Z").id = id;
+    baselineEntity(db, "feature", key, title, "2026-10-02T09:00:00Z").id = id;
   }
   if (approvedPlan.includes(scenario ?? "")) {
     const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
@@ -6192,6 +6193,7 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
 
 /** #346: the change-set mock's view of the db; a proposal imports the next version, copied from its base. */
 function planEditsContext(db: Db, me: { id: string; role: Role }): PlanEditsContext {
+  let codes: Record<string, string> | undefined;
   return {
     userId: me.id,
     role: me.role,
@@ -6202,10 +6204,8 @@ function planEditsContext(db: Db, me: { id: string; role: Role }): PlanEditsCont
     deciderOf: (id) => db.review_v2?.policies.find((x) => x.document_id === id)?.decider_id ?? null,
     // The roadmap mock's flag (ensureRoadmap ran before the change-set routes), not the scenario read again.
     seededItems: (slug, version) => seededPlanItems(slug, version, db.roadmap?.section_code),
-    featureCode: (id) => {
-      const e = db.baseline.entities.find((x) => x.id === id && x.type === "feature");
-      return e && /^[A-Z]{1,3}-\d+[a-j]?$/.test(e.key) ? e.key : null;
-    },
+    // codes.feature_codes: a feature's key when it is a code, else its published PRD item's section's (prd_by_key).
+    featureCode: (id) => (codes ??= featureCodes(db.baseline.entities.filter((e) => e.type === "feature"), db.roadmap?.section_code, db.plan_edits))[id] ?? null,
     // The Plan mock's usage-alerts-roadmap v1 is its approved plan (./roadmap.ts, ALERTS_APPROVED).
     seededApproved: (slug) => (slug === ALERTS_ROADMAP_SLUG ? 1 : null),
     newVersion: (doc, base, body) => {
