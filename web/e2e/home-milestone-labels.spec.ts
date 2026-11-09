@@ -150,7 +150,8 @@ test("two goals' M1 on one roadmap are two rows, a track milestone across roadma
   await home(page, 1440, ADMIN.email, HOME_MILESTONE_GOALS_SCENARIO);
   const labels = (await page.getByTestId("home-strip-label").allTextContents()).map((t) => t.replace(/\s+/g, " ").trim());
   // Two goals' M1 on Onboarding: two rows, each its own items; the bare "M1" typed on Welcome video (Grow retention's) is Grow retention's.
-  expect(labels.filter((l) => l.startsWith("M1"))).toEqual(["M1 · First run in a day · 1 item", "M1 · Return pilot · 2 items"]);
+  // (The Onboarding track's "M1 · Measured" is a third row of its own.)
+  expect(labels.filter((l) => l.startsWith("M1")).sort()).toEqual(["M1 · First run in a day · 1 item", "M1 · Measured · 3 items", "M1 · Return pilot · 2 items"]);
   expect(await itemsOf(page, "M1 · First run in a day · 1 item")).toEqual([["Setup checklist"]]);
   expect(await itemsOf(page, "M1 · Return pilot · 2 items")).toEqual([["Sample data import", "Welcome video"]]);
   // The Alerts track's "M2 · Launch (beta)" holds an item from each of two roadmaps: one row.
