@@ -116,5 +116,8 @@ test("Ranked: a key result's feature names its goal, and the key result's list f
   await off.getByRole("link", { name: "Open the goal" }).click();
   await expect(page).toHaveURL(/\/simple\/priorities\?goal=kr-setup-day/);
   await expect(page.getByTestId("simple-priorities")).toBeVisible();
-  await expect(page.getByTestId("prio-row").filter({ hasText: FEATURE })).toHaveCount(1);
+  // Wait for the row lifted to its top goal (the key results loaded), so the count tests ?goal's match, not the raw rows.
+  const listed = page.getByTestId("prio-row").filter({ hasText: FEATURE });
+  await expect(listed.getByTestId("prio-goal")).toHaveText(/Faster activation$/);
+  await expect(listed).toHaveCount(1);
 });
