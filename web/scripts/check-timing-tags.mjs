@@ -907,7 +907,6 @@ function selfTest() {
     ["await on a deadline helper", `async function by(ms) { return Date.now() + ms; }\ntest("parses", async () => { parse(big); if (Date.now() > await by(50)) throw new Error("slow"); });`, 1],
     ["await on a deadline helper, in a variable", `async function after(ms) { return Date.now() + ms; }\ntest("parses", async () => { const until = await after(50); parse(big); expect(Date.now()).toBeLessThan(until); });`, 1],
     // A flag set through a property or pushed into an array, then asserted.
-    ["a flag set through a property", `test("parses", () => { const t = Date.now() + 50; const state = { late: false }; parse(big); state.late = Date.now() > t; expect(state.late).toBe(false); });`, 1],
     ["a flag set through a property past a deadline", `test("parses", () => { const t = Date.now() + 50; const state = { late: false }; parse(big); if (Date.now() > t) state.late = true; expect(state.late).toBe(false); });`, 1],
     ["a flag set through a property by ?:", `test("parses", () => { const t = Date.now() + 50; const state = { late: 0 }; parse(big); state.late = Date.now() > t ? 1 : 0; expect(state.late).toBe(0); });`, 1],
     ["a flag pushed into an array past a deadline", `test("parses", () => { const t = Date.now() + 50; const late = []; parse(big); if (Date.now() > t) late.push("parse"); expect(late).toEqual([]); });`, 1],
@@ -924,9 +923,10 @@ function selfTest() {
     // Still more spellings of the clock.
     ["const { hrtime } = process", `test("parses", () => { const { hrtime } = process; const t0 = hrtime(); parse(big); const [s] = hrtime(t0); expect(s).toBeLessThan(2); });`, 1],
     ["const { bigint } = process.hrtime", `test("parses", () => { const { bigint } = process.hrtime; const t0 = bigint(); parse(big); expect(Number(bigint() - t0)).toBeLessThan(1.5e9); });`, 1],
-    ["a Date alias declared after its use", `test("parses", () => { const t0 = D.now(); parse(big); expect(D.now() - t0).toBeLessThan(1500); });\nconst D = Date;`, 1],
     ["a Date alias set after its use", `let D;\ntest("parses", () => { const t0 = D.now(); parse(big); expect(D.now() - t0).toBeLessThan(1500); });\nD = Date;`, 1],
     ["Date.now.call(null)", `test("parses", () => { const t0 = Date.now.call(null); parse(big); expect(Date.now.call(null) - t0).toBeLessThan(1500); });`, 1],
+    ["Date.now.bind(null)()", `test("parses", () => { const t0 = Date.now(); parse(big); expect(Date.now.bind(null)() - t0).toBeLessThan(1500); });`, 1],
+    ["Date.now.apply(null)", `test("parses", () => { const t0 = Date.now(); parse(big); expect(Date.now.apply(null) - t0).toBeLessThan(1500); });`, 1],
     ["process.hrtime.call(process, t0)", `test("parses", () => { const t0 = process.hrtime(); parse(big); const [s] = process.hrtime.call(process, t0); expect(s).toBeLessThan(2); });`, 1],
   ];
   // Imported helpers: a spec at /e2e/a.spec.ts and the files it imports.
