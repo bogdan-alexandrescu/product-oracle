@@ -83,6 +83,26 @@ export function seedPlanGoalCodes(db: SimpleDb): void {
   db.plan.coded_goals = true;
 }
 
+/**
+ * The "priorities-plan-one-week" scenario: "simple-plan" with M1's capacity 1 engineer-week (its planned weeks run
+ * over it, and it has no name) and Self-serve checkout's M2 part 1 week. Invented data.
+ */
+export const PRIORITIES_PLAN_ONE_WEEK_SCENARIO = "priorities-plan-one-week";
+export function seedPlanOneWeek(db: SimpleDb): void {
+  if (!db.plan) throw new Error(`${PRIORITIES_PLAN_ONE_WEEK_SCENARIO}: the seed has no plan to give a 1-week milestone`);
+  db.plan.one_week = true;
+}
+
+/**
+ * The "priorities-plan-goal-twins" scenario: "simple-plan", whose plan names Activation twice with no code (the
+ * owner's pick: one goal, one shape). Invented data.
+ */
+export const PRIORITIES_PLAN_GOAL_TWINS_SCENARIO = "priorities-plan-goal-twins";
+export function seedPlanGoalTwins(db: SimpleDb): void {
+  if (!db.plan) throw new Error(`${PRIORITIES_PLAN_GOAL_TWINS_SCENARIO}: the seed has no plan to name Activation twice`);
+  db.plan.twin_goals = true;
+}
+
 /** The "simple-plan" scenario's existing items the plan names (server.ts seedSimplePlanScenario). */
 const PLAN_EXISTING: Record<string, string> = { "setup-checklist": "F-01", "setup-import": "F-02" };
 
