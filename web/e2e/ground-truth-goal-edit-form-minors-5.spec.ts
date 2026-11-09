@@ -56,10 +56,14 @@ async function stored(page: Page): Promise<Record<string, unknown>> {
 /** The goal kr-1-1 stored with these attributes, as an import may have stored them; the page then reloads. */
 async function storeGoal(page: Page, attrs: Record<string, unknown>) {
   await page.evaluate((a) => {
-    const db = JSON.parse(localStorage.getItem("po-mock-db-v2")!);
-    const goal = db.baseline.entities.find((e: { key: string }) => e.key === "kr-1-1");
-    goal.attrs = { ...goal.attrs, ...a };
-    localStorage.setItem("po-mock-db-v2", JSON.stringify(db));
+    // In the mock's own turn (seedRun): a call of the app's in flight cannot save over the goal.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const write = (globalThis as { __poMockWrite?: (change: (db: any) => void) => Promise<void> }).__poMockWrite;
+    if (!write) throw new Error("The mock API is not loaded: sign in before seeding");
+    return write((db) => {
+      const goal = db.baseline.entities.find((e: { key: string }) => e.key === "kr-1-1");
+      goal.attrs = { ...goal.attrs, ...a };
+    });
   }, attrs);
   await page.reload();
 }

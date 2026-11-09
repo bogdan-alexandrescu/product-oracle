@@ -124,6 +124,7 @@ function VersionCard({
   const [pushback, setPushback] = useState<string | null>(change.pushback?.reason ?? null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const editRef = useRef<HTMLDivElement>(null);
   const sources = sourcesOf(change.rationale);
   const live = editing ? (typeof payloadOf(goal.id, draft) === "string" ? shown : (payloadOf(goal.id, draft) as GoalMeasure)) : shown;
   const owner = live.owner_id ? people.get(live.owner_id) : undefined;
@@ -132,6 +133,9 @@ function VersionCard({
     setError(null);
     let payload: GoalMeasure | null = null;
     if (editing) {
+      // Text the Weight box cannot read ("1e") reads as "": it is refused as on the Edit form, not proposed as emptied.
+      const weightBox = editRef.current?.querySelector('input[name="weight"]');
+      if (weightBox instanceof HTMLInputElement && weightBox.validity.badInput) return setError("Weight must be a number.");
       const p = payloadOf(goal.id, draft);
       if (typeof p === "string") return setError(p);
       payload = p;
@@ -203,7 +207,7 @@ function VersionCard({
         </p>
       )}
       {editing && (
-        <div className="flex min-w-0 flex-col gap-3 border-t border-line pt-3" data-testid="version-edit">
+        <div ref={editRef} className="flex min-w-0 flex-col gap-3 border-t border-line pt-3" data-testid="version-edit">
           <GoalFields
             draft={draft}
             onChange={(d) => {
