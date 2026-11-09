@@ -131,7 +131,8 @@ export function TabBar<T extends string>({
   idFor,
 }: {
   label: string;
-  tabs: { id: T; label: ReactNode; count?: number | null }[];
+  /** countLabel: the count's name and tooltip when its number alone does not say it all ("3; a part could not load"). */
+  tabs: { id: T; label: ReactNode; count?: number | null; countLabel?: string }[];
   value: T;
   onChange: (id: T) => void;
   size?: "sm" | "md";
@@ -168,7 +169,14 @@ export function TabBar<T extends string>({
           >
             {t.label}
             {t.count != null && (
-              <span className={`tnum text-[13px] font-bold ${on ? "text-accent-ink" : "text-text2"}`}>{t.count}</span>
+              <span
+                role={t.countLabel ? "img" : undefined}
+                aria-label={t.countLabel}
+                title={t.countLabel}
+                className={`tnum text-[13px] font-bold ${on ? "text-accent-ink" : "text-text2"}`}
+              >
+                {t.count}
+              </span>
             )}
           </button>
         );
