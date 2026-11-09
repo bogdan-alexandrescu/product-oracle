@@ -359,7 +359,8 @@ const sameWords = (a: string, b: string) => a.trim().replace(/\s+/g, " ").toLowe
  * milestones of one goal, code (and PRD) are one row; a track milestone is one row wherever its
  * items sit, and a roadmap's own milestone joins it only when it is that roadmap's only one of
  * its code, and their whole names match or one has none (no name is ever hidden); one of no goal
- * (nor PRD) joins it whatever its name, the row keeping the track's name and date and its (i)
+ * (a PRD's or the roadmap's own) joins it whatever its name, the row keeping the track's name
+ * (its date, else the joined one's) and its (i)
  * the other name ("Also: M1 Measured and mapped"; the owner's of Nov 9); a typed text
  * or bare code is read on the item's own roadmap (the read's roadmap's when its own has none),
  * never the first roadmap that has it, nor a guess between two goals'.
@@ -454,12 +455,13 @@ export function homePlanInputs(data: Roadmap): PlanInput[] {
     const at = `${h.roadmap}|${code}`;
     if (code && !(holding.get(at) ?? []).includes(h.tm)) holding.set(at, [...(holding.get(at) ?? []), h.tm]);
   }
-  // A goal's (or PRD's) joins only when their whole names match or one of them has none (no name
-  // is ever hidden): a nameless track milestone reads the name of the first that joins it, and one
-  // of another name keeps its own row ("M3 · Billing beta" beside "M3 · Prices live"). The
-  // roadmap's own of no goal joins whatever its name (the owner's of Nov 9: production showed
-  // "M1 · Measured" and "M1 · Measured and mapped"), its name kept in the row's (i).
-  const plain = (g: Gm) => !g.goal_id && !g.prd;
+  // A goal's joins only when their whole names match or one of them has none (no name is ever
+  // hidden): a nameless track milestone reads the name of the first that joins it, and one of
+  // another name keeps its own row ("M3 · Billing beta" beside "M3 · Prices live"). One of no goal
+  // (a PRD's or the roadmap's own) joins whatever its name (the owner's of Nov 9, "One M1 row, as
+  // after train AX": production showed "M1 · Measured" and "M1 · Measured and mapped"), its name
+  // kept in the row's (i).
+  const plain = (g: Gm) => !g.goal_id;
   const into = new Map<Gm, Tm>();
   const folded = new Map<Tm, Gm[]>();
   const rowName = new Map<Tm, string>();
@@ -467,7 +469,7 @@ export function homePlanInputs(data: Roadmap): PlanInput[] {
   for (const gm of goals) {
     const code = goalCode(gm);
     if (!code) continue;
-    // A goal's M1 beside it never stops the roadmap's own M1 joining (it keeps its own row).
+    // A goal's M1 beside it never stops one of no goal joining (it keeps its own row).
     const alike = new Set(goals.filter((g) => g.roadmap_id === gm.roadmap_id && goalCode(g) === code && (!plain(gm) || plain(g))).map(goalKey));
     const there = holding.get(`${gm.roadmap_id}|${code}`) ?? [];
     if (alike.size !== 1 || there.length !== 1) continue;
