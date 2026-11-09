@@ -35,11 +35,12 @@ NOUN = re.compile(r"[a-z][a-z -]{0,23}")
 # An unfilled template placeholder in a goal's name or description, as an import writes one:
 # lowercase "[n]", "[x]", "[#]", "[?]", "[tbd]", and "[n] of [n]" / "[n] out of [n]" as one. A
 # capitalised or other bracketed word ("Project [X]", "Price [Value]") is a real name and stays.
-# A "%", "/" or "Of" whose only operand was a placeholder ("[n]%", "[n]/[n]", "[n] Of [n]")
-# goes with it.
+# A "%", "/" or "of" (any case) whose only operand was a placeholder ("[n]%", "[n]/[n]",
+# "[n] OF [n]", "3/[n]") goes with it. web/lib/placeholders.ts reads the same forms.
 _PLACEHOLDER = r"\[(?:n|x|#|\?|tbd)\]%?"
-_JOIN = r"\s*/\s*|\s+(?:[Oo]f|[Oo]ut [Oo]f)\s+"
-PLACEHOLDER = re.compile(rf"{_PLACEHOLDER}(?:(?:{_JOIN}){_PLACEHOLDER})?")
+_SLASH = r"\s*/\s*"
+_JOIN = rf"{_SLASH}|\s+(?:[Oo][Ff]|[Oo][Uu][Tt] [Oo][Ff])\s+"
+PLACEHOLDER = re.compile(rf"(?:{_SLASH})?{_PLACEHOLDER}(?:(?:{_JOIN}){_PLACEHOLDER})?(?:{_SLASH})?")
 STALE_DAYS = 45
 
 MESSAGES = {
@@ -480,9 +481,10 @@ def without_placeholders(text: str | None) -> str | None:
     if not text or not PLACEHOLDER.search(text):
         return text
     out = PLACEHOLDER.sub("", text)
-    out = re.sub(r"[ \t]{2,}", " ", out)
-    out = re.sub(r"[ \t]+([,.;:!?)])", r"\1", out)
-    out = re.sub(r"\([ \t]*\)", "", out)
+    # Spaces include a non-breaking one; an emptied "( )" goes before the spaces are tidied.
+    out = re.sub(r"\([ \t\u00a0]*\)", "", out)
+    out = re.sub(r"[ \t\u00a0]{2,}", " ", out)
+    out = re.sub(r"[ \t\u00a0]+([,.;:!?)])", r"\1", out)
     return "\n".join(line.strip() for line in out.split("\n")).strip()
 
 
