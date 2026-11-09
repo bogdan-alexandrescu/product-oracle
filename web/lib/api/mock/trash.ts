@@ -75,6 +75,8 @@ export interface TrashContext<D extends TrashDocument, V extends TrashVersion> {
   /** port-an-decisions: Restore of a meeting's agenda item or a request puts it back; the refusal's
    * words when it cannot (409: its meeting has ended), else null. */
   restoreRoot?: (entry: TrashEntryRow) => string | null;
+  /** every-field: the refusal's words when Restore would give an item a code another item took meanwhile (409), else null. */
+  refuseRestore?: (entry: TrashEntryRow) => string | null;
   /** The document's designated decider (its review policy), who regenerates it whatever their role. */
   deciderOf?: (documentId: string) => string | null;
   /** New PRD (4): moving these documents to Trash releases what links to them; the result is kept for Restore. */
@@ -280,7 +282,7 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
     if (!entry) return json(404, { detail: "Not in Trash" });
     if (m === "POST" && p[3] === "restore") {
       if (!mayRestore(entry, ctx.me)) return json(403, { detail: "Only an owner, or whoever deleted it, restores this" });
-      const refused = entry.agenda || entry.request !== undefined ? (ctx.restoreRoot?.(entry) ?? null) : null;
+      const refused = entry.agenda || entry.request !== undefined ? (ctx.restoreRoot?.(entry) ?? null) : (ctx.refuseRestore?.(entry) ?? null);
       if (refused) return json(409, { detail: refused });
       return json(200, restore(ctx, entry, now));
     }

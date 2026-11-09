@@ -170,7 +170,7 @@ import {
   type PricingDb,
 } from "./pricing";
 import { bucketGoalsInOrder, placeBucketGoal, placeBucketGoals, routeGoalBuckets, seedGoalBuckets, seedGoalBucketsHard, seedGoalBucketsWith } from "./goal-buckets";
-import { proposeGoalDelete, routeSimpleChanges, seedFeatureAskProposal, seedSimpleProposal, simpleInboxRows, type SimpleChangesCtx } from "./simple-changes";
+import { proposeGoalDelete, restoreCodeTaken, routeSimpleChanges, seedFeatureAskProposal, seedSimpleProposal, simpleInboxRows, type SimpleChangesCtx } from "./simple-changes";
 import { routeCurrentState, seedCurrentState, type CurrentStateDb } from "./currentstate";
 import { featureKeyOf, prioritiesOut } from "./simple-priorities";
 import { restoreTrack, routeRemoved } from "./simple-removed";
@@ -187,21 +187,22 @@ import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visual
 import { approvalItems, CANCELLED_DRAFT, draftAct, draftPrdsOut, REPLACED_DRAFT, SAVED_CARTS, seedDraftPrd, seedMeetingDraftDates, WORKSPACES, WORKSPACES_DRAFT } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, seedTwoDependencies, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { groundTruthCheck, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth } from "./ground-truth";
-import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, ITEM_MILESTONE_SCENARIO, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, seedCompanyRoadmap, seedItemMilestones } from "./one-roadmap";
-import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
+import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, ITEM_MILESTONE_SCENARIO, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, REPLACED_PRD_TRASH_SCENARIO, seedCompanyRoadmap, seedItemMilestones } from "./one-roadmap";
+import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, PHOTO_PINS_FEATURE_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
 import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { knowPrdOrder } from "./prd-rank";
+import { openDraft } from "./simple-roadmap";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedPrdCalmPage, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, companyToday, forgetRoadmapReads, knowGoalMapItems, ownPrd, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, MAP_GOALS, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
-import { goalMapGoals, goalMapIdOf, goalMapItems, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
+import { goalMapGoals, goalMapIdOf, goalMapItems, ladderMilestones, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 import { waitingItems } from "./waiting-list";
-import { HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONES_SCENARIO, seedHomeMilestoneGoals, seedHomeMilestones, seedHomeMilestoneTracks } from "./home-milestones";
+import { HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONES_SCENARIO, seedHomeMilestoneGoals, seedHomeMilestones, seedHomeMilestoneTracks, seedHomeMilestoneTwinTracks } from "./home-milestones";
 import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience, spansRow, type BoardItem } from "./audience";
 import {
   draftPublicTexts,
@@ -1625,8 +1626,9 @@ function seedRoadmapMilestonesHardScenario(): Db {
  * re-planned dates, a shipped item, a new one, one moved to the next PRD and two milestones.
  * Their dates rest on verified bases (./roadmap.ts seedRoadmap), so version 3 may be approved.
  * "crowded-milestones": version 3 already approved, with five milestones in two weeks.
+ * "photo-pins-feature": Photo pins is the Ground Truth feature TR-9.
  */
-function seedApprovedRoadmapScenario(crowded = false): Db {
+function seedApprovedRoadmapScenario(crowded = false, photoPinsFeature = false): Db {
   const db = seed();
   const doc = (slug: string, title: string, kind: "prd" | "roadmap", at: string): DocumentRow => {
     const row: DocumentRow = { id: uuid(), slug, title, status: "approved", kind, template: null, template_version: null, theme: null, created_at: at, updated_at: at };
@@ -1647,6 +1649,12 @@ function seedApprovedRoadmapScenario(crowded = false): Db {
   }
   roadmap.updated_at = "2026-10-20T09:00:00Z";
   db.simple_roadmap = seedTrails(seedSimpleRoadmap());
+  if (photoPinsFeature) {
+    const at = "2026-09-10T09:00:00Z";
+    const id = stableUuid("approved-roadmap/feature/tr-9");
+    db.baseline.entities.push({ id, type: "feature", key: "TR-9", title: "Photo pins", body: null, attrs: {}, status: "confirmed", origin: "user", locked: false, locked_by: null, locked_at: null, confidence: null, run_id: null, created_at: at, updated_at: at });
+    db.simple_roadmap.items.find((x) => x.key === "photo-pins")!.feature_id = id;
+  }
   if (crowded) {
     roadmap.status = "approved";
     applyRoadmapVersion(db, roadmap, db.versions.find((v) => v.document_id === roadmap.id && v.number === 3)!);
@@ -1744,9 +1752,54 @@ function seedOneRoadmapScenario(): Db {
   const old = doc(oneRoadmapPrd(...OLD_PRD).id, OLD_PRD[0], OLD_PRD[1], "prd", { replaced_by: areas.map((a) => a.id), status: "draft" });
   // Its draft v2, left open when it was replaced: read-only too (nothing writes it a v3).
   db.versions.push(buildVersion(old, { number: 2, created_at: at, sections: [{ key: "summary", level: 2, heading: "Summary", body: `${OLD_PRD[1]}, a draft left open.` }], citations: [] }));
-  doc(uuid(), OLD_ROADMAP[0], OLD_ROADMAP[1], "roadmap");
+  const oldRoadmap = doc(uuid(), OLD_ROADMAP[0], OLD_ROADMAP[1], "roadmap");
+  // replaced-prd-history: its v2, never sent: read-only history, never approved.
+  db.versions.push(buildVersion(oldRoadmap, { number: 2, created_at: at, sections: [{ key: "summary", level: 2, heading: "Summary", body: `${OLD_ROADMAP[1]}, a draft never sent.` }], citations: [] }));
   doc(uuid(), COMPANY_SLUG, COMPANY_TITLE, "roadmap", { company_roadmap: true });
   db.simple_roadmap = seedCompanyRoadmap(seedSimpleRoadmap());
+  return db;
+}
+
+/**
+ * replaced-prd-history ("replaced-prd-trash"): the "one-roadmap" company with a working draft of
+ * the Product roadmap, and Trust plan (replaced by both area PRDs) moved to Trash with its own
+ * roadmap, whose draft was sent for approval and whose track is Trust track. Invented data.
+ */
+function seedReplacedPrdTrashScenario(): Db {
+  const db = seedOneRoadmapScenario();
+  const rm = db.simple_roadmap!;
+  // Oracle's timed suggestions for goals with no item stay out, so the Inbox holds still.
+  rm.auto_done = ["quiet-alerts", ...Object.keys(GOALS)];
+  const owner = db.members.find((x) => x.role === "owner" && x.status !== "disabled")!;
+  const at = "2026-10-21T09:00:00Z";
+  // One renamed item in each draft: a draft with no change shows no banner.
+  const renamed = (d: ReturnType<typeof openDraft>, key: string, title: string) =>
+    (rm.changes ??= []).push({
+      id: stableUuid(`simple-change/${key}`), session_id: null, document_id: d.out.document.id, draft_ids: [d.out.id], op: "edit_title", target: { item_id: rm.ids[key] },
+      before: { title: rm.items.find((x) => x.key === key)!.title }, after: { title }, status: "applied", by: owner.id, by_name: displayName(owner.email, owner.name), at,
+      decided_by: null, decided_at: null, reason: null, decision_reason: null, routed_to: [], undoes_id: null, undone: false, can_decide: false, can_undo: false,
+    } as never);
+  renamed(openDraft(rm, COMPANY_SLUG, owner.id), "block-list", "Block list for every account");
+  const old = openDraft(rm, OLD_ROADMAP[0], owner.id);
+  renamed(old, "trusted-badge", "Trusted seller badge on profiles");
+  Object.assign(old.out, { status: "submitted", version: 2, submitted_at: "2026-10-20T09:00:00Z", submitted_by: owner.id, waiting_on: [owner.id] });
+  const prd = db.documents.find((d) => d.slug === OLD_PRD[0])!;
+  const roadmap = db.documents.find((d) => d.slug === OLD_ROADMAP[0])!;
+  const ids = new Set([prd.id, roadmap.id]);
+  const item = (d: DocumentRow) => ({ type: "document" as const, id: d.id, slug: d.slug, title: d.title, kind: d.kind ?? "prd" });
+  const by = db.documents.filter((d) => prd.replaced_by?.includes(d.id)).map((d) => d.title);
+  (db.trash ??= emptyTrash()).entries.push({
+    out: {
+      id: uuid(), root: item(prd), items: [item(roadmap)], deleted_by: owner.id, deleted_by_name: trashName(owner), deleted_at: at,
+      reason: `Replaced by ${by.join(" and ")}`, published: true, purge_after: new Date(Date.parse(at) + 30 * 86_400_000).toISOString(),
+    },
+    documents: db.documents.filter((d) => ids.has(d.id)),
+    versions: db.versions.filter((v) => ids.has(v.document_id)),
+    runs: [],
+    intakes: [],
+  });
+  db.documents = db.documents.filter((d) => !ids.has(d.id));
+  db.versions = db.versions.filter((v) => !ids.has(v.document_id));
   return db;
 }
 
@@ -4183,14 +4236,20 @@ function load(): Db {
                 ? () => seedApprovedRoadmapScenario()
               : scenario === CROWDED_MILESTONES_SCENARIO
                 ? () => seedApprovedRoadmapScenario(true)
+              : scenario === PHOTO_PINS_FEATURE_SCENARIO
+                ? () => seedApprovedRoadmapScenario(false, true)
               : scenario === ONE_ROADMAP_SCENARIO
                 ? seedOneRoadmapScenario
+              : scenario === REPLACED_PRD_TRASH_SCENARIO
+                ? seedReplacedPrdTrashScenario
               : scenario === HOME_MILESTONES_SCENARIO
                 ? () => ({ ...seed(), simple_roadmap: seedHomeMilestones() })
               : scenario === HOME_MILESTONE_GOALS_SCENARIO
                 ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneGoals() })
               : scenario === HOME_MILESTONE_TRACKS_SCENARIO
                 ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneTracks() })
+              : scenario === HOME_MILESTONE_TWIN_TRACKS_SCENARIO
+                ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneTwinTracks() })
               : scenario === OLD_MILESTONES_SCENARIO
                 ? () => {
                     const db = seedOneRoadmapScenario();
@@ -4813,12 +4872,62 @@ export function resetMockData() {
 
 /** A document as GET /v1/documents/{doc} returns it (DocumentOut). */
 function documentOut(db: Db, doc: DocumentRow): Schemas["DocumentOut"] {
-  return { ...documentSummary(db, doc), versions: docVersions(db, doc).map(summary), replaced_by: replacedByRefs(db, doc), changes_in_review: 0 };
+  return { ...documentSummary(db, doc), versions: docVersions(db, doc).map(summary), replaced_by: replacedByRefs(db, doc), replaces: replacesRefs(db, doc), read_only: readOnlyWhy(db, doc), changes_in_review: 0 };
+}
+
+/** replaced-prd-history (company.History): the live PRDs (not in Trash) that replace `doc`. A PRD
+ * is history only while one replaces it; when every replacement is in Trash it is live again. */
+function liveReplacers(db: Db, doc: DocumentRow): string[] {
+  return (doc.replaced_by ?? []).filter((id) => db.documents.some((x) => x.id === id));
+}
+
+/** replaced-prd-history (company.read_only): why `doc` takes no edit, approval or publication,
+ * in plain words; null when it does. */
+function readOnlyWhy(db: Db, doc: DocumentRow): string | null {
+  if ((doc.kind ?? "prd") === "prd" && liveReplacers(db, doc).length) return `${doc.title} is replaced and read-only`;
+  if (doc.kind === "roadmap" && historyRoadmapRefs(db).has(doc.slug)) return `${doc.title} is the roadmap of a replaced PRD and read-only`;
+  return null;
+}
+
+/** replaced-prd-history (docs.service._replaces): the PRDs `doc` replaced, oldest first. */
+function replacesRefs(db: Db, doc: DocumentRow): Schemas["PrdRef"][] {
+  if ((doc.kind ?? "prd") !== "prd") return [];
+  return db.documents
+    .filter((x) => x.kind === "prd" && x.replaced_by?.includes(doc.id))
+    .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0))
+    .map((x) => ({ id: x.id, slug: x.slug, title: x.title }));
+}
+
+/** replaced-prd-history (company.history_roadmaps): each roadmap of a replaced PRD alone (built
+ * from its versions, or its track's roadmap), never the company roadmap -> the PRDs that replaced it. */
+function historyRoadmapRefs(db: Db): Map<string, string[]> {
+  const replaced = new Map(db.documents.filter((d) => d.kind === "prd" && liveReplacers(db, d).length).map((d) => [d.title, liveReplacers(db, d)]));
+  const out = new Map<string, string[]>();
+  for (const d of db.documents.filter((x) => x.kind === "roadmap" && !x.company_roadmap)) {
+    const from = db.versions.filter((v) => v.document_id === d.id).flatMap((v) => {
+      const src = (v as { source?: { document_id?: string } | null }).source?.document_id;
+      const prd = src ? db.documents.find((x) => x.id === src) : undefined;
+      return prd ? [prd.title] : [];
+    });
+    const track = db.simple_roadmap?.extra_roadmaps?.[d.slug]?.prd;
+    const prds = [...new Set([...from, ...(track ? [track] : [])])];
+    if (prds.length && prds.every((t) => replaced.has(t))) out.set(d.slug, [...new Set(prds.flatMap((t) => replaced.get(t)!))]);
+  }
+  return out;
+}
+
+/** replaced-prd-history: the roadmaps Simple leaves out, by slug: a replaced PRD's own roadmap,
+ * and one in Trash (a trashed row is out of every read). */
+function historyRoadmaps(db: Db): string[] {
+  const trashed = (db.trash?.entries ?? []).flatMap((e) => (e.documents as { kind?: string; slug: string }[]).filter((d) => d.kind === "roadmap").map((d) => d.slug));
+  return [...historyRoadmapRefs(db).keys(), ...trashed];
 }
 
 /** one-roadmap-many-prds: the PRDs that replace `doc`, by name (oracle.roadmap.company.refs). */
 function replacedByRefs(db: Db, doc: DocumentRow | undefined): Schemas["PrdRef"][] {
-  return (doc?.replaced_by ?? []).flatMap((id) => db.documents.filter((x) => x.id === id).map((x) => ({ id: x.id, slug: x.slug, title: x.title })));
+  // replaced-prd-history: a replaced PRD's roadmap names the PRDs that replaced its PRD.
+  const ids = doc?.kind === "roadmap" ? (historyRoadmapRefs(db).get(doc.slug) ?? []) : doc ? liveReplacers(db, doc) : [];
+  return ids.flatMap((id) => db.documents.filter((x) => x.id === id).map((x) => ({ id: x.id, slug: x.slug, title: x.title })));
 }
 
 /**
@@ -4834,7 +4943,7 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
   // company PRD order as list_documents(db, "prd") gives them.
   if (p[1] === "simple" && p[2] === "one-pagers" && !p[3] && m === "GET") {
     const ranks = prdOrder(db);
-    return json(200, db.documents.filter((d) => d.kind === "prd" && !(d.replaced_by ?? []).length && canSee(me.role, d.visibility)).map((d) => documentSummary(db, d, ranks)).sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity)));
+    return json(200, db.documents.filter((d) => d.kind === "prd" && !liveReplacers(db, d).length && canSee(me.role, d.visibility)).map((d) => documentSummary(db, d, ranks)).sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity)));
   }
   if (p[1] === "roadmaps" && p[2] === "company" && !p[3]) {
     if (m === "GET") {
@@ -4856,7 +4965,7 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
   if (p[1] === "roadmaps" && p[2] === "company" && p[3] === "queue" && !p[4] && m === "GET") {
     const cap = (mockSettingValue("team_capacity") ?? { team_size: 1, focus: 1 }) as { team_size: number; focus: number };
     const found = company();
-    const replaced = new Set(db.documents.filter((d) => d.kind === "prd" && (d.replaced_by ?? []).length > 0).map((d) => d.id));
+    const replaced = new Set(db.documents.filter((d) => d.kind === "prd" && liveReplacers(db, d).length > 0).map((d) => d.id));
     const prd = q.get("prd");
     const rm = db.simple_roadmap;
     const items =
@@ -4885,7 +4994,7 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
       const other = db.documents.find((d) => d.slug === slug);
       if (!other || (other.kind ?? "prd") !== "prd") return json(422, { detail: `'${slug}' is not a PRD` });
       if (other.id === doc.id) return json(422, { detail: "a PRD cannot replace itself" });
-      if ((other.replaced_by ?? []).length > 0) return json(422, { detail: `${other.title} is itself replaced` });
+      if (liveReplacers(db, other).length > 0) return json(422, { detail: `${other.title} is itself replaced` });
       by.push(other);
     }
     doc.replaced_by = by.map((d) => d.id);
@@ -4898,21 +5007,23 @@ async function routeOneRoadmap(db: Db, me: MemberRow, req: Request, p: string[],
 /** simple-replaced-prds: the PRDs marked replaced, and the current PRD each went to, on Simple's roadmap. */
 function markReplaced(db: Db, simple: SimpleDb): void {
   simple.replaced_prds = replacedPrds(db);
+  simple.history_roadmaps = historyRoadmaps(db);
+  simple.replaced_prd_titles = db.documents.filter((d) => d.kind === "prd" && liveReplacers(db, d).length).map((d) => d.title);
   const to: NonNullable<SimpleDb["replaced_with"]> = {};
-  for (const d of db.documents.filter((x) => x.kind === "prd" && x.replaced_by?.length)) {
+  for (const d of db.documents.filter((x) => x.kind === "prd" && liveReplacers(db, x).length)) {
     let at: DocumentRow | undefined = d;
-    for (const seen = new Set<string>(); at?.replaced_by?.length && !seen.has(at.id); ) {
+    for (const seen = new Set<string>(); at && liveReplacers(db, at).length && !seen.has(at.id); ) {
       seen.add(at.id);
-      at = db.documents.find((x) => x.id === at!.replaced_by![0]);
+      at = db.documents.find((x) => x.id === liveReplacers(db, at!)[0]);
     }
-    if (at && !at.replaced_by?.length) to[d.id] = to[d.slug] = { id: at.id, slug: at.slug, title: at.title };
+    if (at && !liveReplacers(db, at).length) to[d.id] = to[d.slug] = { id: at.id, slug: at.slug, title: at.title };
   }
   simple.replaced_with = to;
 }
 
 /** simple-replaced-prds (company.replaced_prd_ids): the ids and slugs of the PRDs marked replaced. */
 function replacedPrds(db: Db): string[] {
-  return db.documents.filter((d) => d.kind === "prd" && d.replaced_by?.length).flatMap((d) => [d.id, d.slug]);
+  return db.documents.filter((d) => d.kind === "prd" && liveReplacers(db, d).length).flatMap((d) => [d.id, d.slug]);
 }
 
 /** new-prd-from-replaced-prd: what a new PRD replacing an approved PRD carries, read off the
@@ -6007,6 +6118,10 @@ function planEditsContext(db: Db, me: { id: string; role: Role }): PlanEditsCont
     now,
     deciderOf: (id) => db.review_v2?.policies.find((x) => x.document_id === id)?.decider_id ?? null,
     seededItems: seededPlanItems,
+    featureCode: (id) => {
+      const e = db.baseline.entities.find((x) => x.id === id && x.type === "feature");
+      return e && /^[A-Z]{1,3}-\d+[a-j]?$/.test(e.key) ? e.key : null;
+    },
     // The Plan mock's usage-alerts-roadmap v1 is its approved plan (./roadmap.ts, ALERTS_APPROVED).
     seededApproved: (slug) => (slug === ALERTS_ROADMAP_SLUG ? 1 : null),
     newVersion: (doc, base, body) => {
@@ -6680,6 +6795,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       // As the API: the draft only when the person starting the run may see it.
       roadmapRead: (starter) => roadmapRead(db.documents, db.versions, db.simple_roadmap, String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"), (d) => seesDraft(d, starter, db.simple_roadmap)),
       onRestore: (released) => (db.simple_roadmap && restoreTrack(db.simple_roadmap, released)) || relinkDocuments(ensureRequests(db), released as ReleasedRequest[], (id) => ensureV2(db).intakes.some((i) => i.id === id)),
+      // every-field: as trash_items._codes_free, never one code on two items.
+      refuseRestore: (entry) => (db.simple_roadmap ? restoreCodeTaken(db.simple_roadmap, me, entry) : null),
       // port-an-decisions: Restore puts a meeting's removed agenda item or a deleted request back.
       restoreRoot: (entry) => {
         if (entry.request !== undefined) {
@@ -6710,6 +6827,13 @@ async function route(db: Db, req: Request): Promise<Response> {
   // I1: webhooks check roles themselves; seeded before the notifications they write are read.
   const hooks = await webhooksRoute(webhooksContext(db, me), req, p, q);
   if (hooks) return hooks;
+  // replaced-prd-history (review.service.approve_version, review.publish.publish): a replaced
+  // PRD and its roadmap are read-only history, never approved or published (409, in plain words).
+  if (p[1] === "documents" && p[3] === "versions" && (p[5] === "approve" || p[5] === "publish") && req.method === "POST") {
+    const d = db.documents.find((x) => x.slug === p[2] || x.id === p[2]);
+    const why = d && readOnlyWhy(db, d);
+    if (why) return json(409, { detail: why });
+  }
   const reviewV2 = await routeReviewV2(reviewV2Context(db, me.id, me.role), req, p, q);
   if (reviewV2) return reviewV2;
   // O5: share links, the view log, public texts and the public check (./shares.ts).
@@ -7514,6 +7638,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   db.simple_roadmap.prd_milestones = prdMilestonesOf(db);
   // lane-gt-ui: an item reads its feature's code (service.load's Entry.code).
   db.simple_roadmap.feature_codes = Object.fromEntries(db.baseline.entities.filter((e) => e.type === "feature" && /^[A-Z]{1,3}-\d+[a-j]?$/.test(e.key)).map((e) => [e.id, e.key]));
+  db.simple_roadmap.feature_keys = Object.fromEntries(db.baseline.entities.filter((e) => e.type === "feature").map((e) => [e.id, e.key]));
   // changes.py set_feature: the feature is a baseline feature, not rejected.
   if (p[1] === "simple" && p[2] === "changes" && !p[3] && m === "POST") {
     const c = await req.clone().json().catch(() => null) as { op?: string; after?: { feature_id?: string | null } } | null;
@@ -7636,7 +7761,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         return {
           // docs.visibility.visible_to: a commenter or a viewer sees company documents only.
           visible: !!doc && canSee(me.role, doc.visibility),
-          replaced: !!doc?.replaced_by?.length,
+          replaced: !!doc && liveReplacers(db, doc).length > 0,
           // A version at or after the drafted one approved (roadmap_drafts._drafts).
           approved: (n: number) => !!doc && docVersions(db, doc).some((v) => v.number >= n && !!v.approved_at),
         };
@@ -7666,6 +7791,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       trash: (db.trash ??= emptyTrash()), id: me.id, name: simpleNames[me.id] ?? me.email, now: () => new Date(mockNowMs()).toISOString(), people,
       propose: (g: { id: string; title: string }, to: string | null, reason: string | null) =>
         proposeGoalDelete(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames, trash: db.trash }, g, to, reason),
+      refuseRestore: (entry: TrashEntryRow) => restoreCodeTaken(db.simple_roadmap!, me, entry),
     };
     const bucketsRes = await routeGoalBuckets(db.simple_roadmap!, me.role, r, p, bin);
     if (bucketsRes) return bucketsRes;
@@ -7692,8 +7818,17 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (simpleRes) return simpleRes;
     const companyGoals = db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title }));
     // simple-replaced-prds: the PRDs marked replaced (their drafts are left out, as drafts.listing).
-    const replaced = replacedPrds(db);
-    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash, goalBin: bin, ...askFiling, replaced }, r, p, q);
+    // replaced-prd-history: nor its roadmap's (drafts.listing reads company.history_ids).
+    const replaced = [...replacedPrds(db), ...historyRoadmaps(db)];
+    // replaced-prd-history (drafts.refuse_history): a replaced PRD's or its roadmap's draft is
+    // never sent or approved (409, in plain words).
+    if (p[2] === "drafts" && r.method === "POST" && (p[4] === "submit" || p[4] === "approve")) {
+      const draft = db.simple_roadmap?.drafts?.find((x) => x.out.id === p[3]);
+      const d = draft && db.documents.find((x) => x.slug === draft.out.document.slug || x.id === draft.out.document.id);
+      const why = d && readOnlyWhy(db, d);
+      if (why) return json(409, { detail: why });
+    }
+    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals, trash: bin.trash, goalBin: bin, ...askFiling, replaced, ladder: ladderMilestones(db, me) }, r, p, q);
   };
   // Simple S8: review meetings, the Decisions page, and changes made through a meeting.
   // Seeded on the first meetings or Decisions read, so the other Simple screens keep their data.
@@ -7983,6 +8118,10 @@ async function route(db: Db, req: Request): Promise<Response> {
     };
     inbox.simple_date_suggestions = dateSuggestionInboxRows(db.simple_roadmap, simpleCtx, seenBefore);
     inbox.simple_goal_suggestions = goalSuggestionInboxRows(db.simple_roadmap, simpleCtx, seenBefore);
+    // replaced-prd-history (drafts.inbox_rows): a replaced PRD's roadmap's draft waits on nobody.
+    const history = new Set(historyRoadmaps(db));
+    simpleRows.simple_approvals = simpleRows.simple_approvals.filter((a) => !history.has(a.document.slug));
+    inbox.simple_approvals = simpleRows.simple_approvals;
     const simpleCounted = simpleRows.simple_proposals.length + simpleRows.simple_approvals.length + inbox.simple_date_suggestions.length + inbox.simple_goal_suggestions.length;
     inbox.total += simpleCounted;
     inbox.needs_me = (inbox.needs_me ?? 0) + simpleCounted;

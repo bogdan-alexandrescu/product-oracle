@@ -318,7 +318,9 @@ async def _question_shown(db: TenantDB, principal: Principal, d: Decision) -> bo
         or not await meetings._readable(db, principal, doc)
     ):
         return False
-    return not (doc.replaced_by and d.status == "proposed")
+    from oracle.roadmap import company
+
+    return not (d.status == "proposed" and doc.id in await company.replaced_prd_ids(db))
 
 
 @router.get(

@@ -24,6 +24,7 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion
+from oracle.roadmap import company
 from oracle.roadmap.models import DraftRoadmap, RoadmapItem
 from oracle.runs.models import Run
 from oracle.simple import dates, meeting_draft
@@ -44,7 +45,7 @@ async def _drafts(db: AsyncSession, principal: Any) -> list[tuple[DraftRoadmap, 
         .outerjoin(Run, Run.id == DraftRoadmap.run_id)
         .where(
             DraftRoadmap.status == "ready",
-            func.cardinality(Document.replaced_by) == 0,
+            Document.id.not_in(await company.replaced_prd_ids(db)),
             or_(Run.id.is_(None), Run.status != "cancelled"),
             visibility.visible_to(principal),
         )

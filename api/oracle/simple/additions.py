@@ -328,6 +328,9 @@ async def _plan(db: AsyncSession, principal: Any, body: SimpleChangeIn, read_: s
         day = changes._day(m.get("date"), "after.milestone.date")
         after["milestone"] = {"name": name, "date": changes._iso(day),
                               "date_source": "typed" if day else None}  # fmt: skip
+    # every-field: a title leading with a code ("F-30 Night digest") gives the item that code;
+    # one code, one item, in set_code's words.
+    await changes._title_code(db, None, title, read_)
     return doc, target, after
 
 
@@ -347,14 +350,13 @@ async def _home(
     )
     if not tracks:
         return None, None, None
-    replaced = await company.replaced_prd_ids(db)
+    replaced = (await company.history(db)).prds
     if live := next((t for t in tracks if t.prd_document_id not in replaced), None):
         return live, live.prd_document_id, live.current_version_id
     first, prd, seen = tracks[0], tracks[0].prd_document_id, set[uuid.UUID]()
     while prd in replaced and prd not in seen:
         seen.add(prd)
-        d = await db.get(Document, prd)
-        prd = d.replaced_by[0] if d is not None and d.replaced_by else prd
+        prd = replaced[prd][0]
     if prd in replaced:
         return first, first.prd_document_id, first.current_version_id
     own = await db.scalar(select(ProductTrack).where(ProductTrack.prd_document_id == prd))
@@ -517,6 +519,13 @@ async def decide(
     if c.status != "proposed":
         raise ChangeError(409, f"This change is {c.status} already")
     if action == "accept":
+        # every-field: another item or a Ground Truth feature may have taken its title's code
+        # since the proposal; it stays open, to decline.
+        read_ = await service.load(db, await drafts.overlays_for(db, principal))
+        try:
+            await changes._title_code(db, None, c.after.get("title") or "", read_)
+        except ChangeError as e:
+            raise ChangeError(409, e.detail) from e
         session = await changes._session_for_change(db, me, None, True, now)
         await _place(db, principal, c, session, me)
         session.last_change_at = now  # type: ignore[union-attr]

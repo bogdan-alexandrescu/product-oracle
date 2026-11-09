@@ -20,7 +20,7 @@ import { formatCount } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { GoalLadder } from "./_ladder";
+import { GoalLadder, moveKrGoal, proposeKrGoal } from "./_ladder";
 import { FeaturePanel, type Placement } from "./_panel";
 
 /** one-feature-panel: each feature's code (its roadmap item's), shown before its name. */
@@ -159,6 +159,20 @@ interface Draft {
 }
 
 /** A proposed milestone starts with nothing before it (gm1-a-open): "Nothing: it can start now". */
+/**
+ * A key result's editor, as saved: its goal moves when picked anew; its gate is sent when its
+ * threshold (typed, else the one it has), what it comes after or its confirmation changed, and
+ * only with a threshold above 0. With only the goal changed, only the move is sent.
+ */
+function gatePlan(m: GoalMap["milestones"][number], draft: Draft): { regoal: boolean; gate: boolean; threshold: number; ok: boolean } {
+  const was = m.threshold === null ? "" : String(m.threshold);
+  const typed = draft.threshold.trim();
+  const regoal = !!draft.goal && draft.goal !== m.goal;
+  const gate = !regoal || (!!typed && typed !== was) || draft.after !== (m.depends[0] ?? "") || draft.confirm;
+  const threshold = Number(regoal ? typed || was : typed);
+  return { regoal, gate, threshold, ok: !gate || threshold > 0 };
+}
+
 function emptyDraft(map: GoalMap): Draft {
   return { name: "", goal: map.goals[0]?.id ?? "", threshold: "", areas: [], after: "", target: "", feature: "", search: "", milestone: "", areaName: "", area: "", expected: "", confirm: false, metric: "" };
 }
@@ -200,7 +214,7 @@ export function GoalMapPage() {
     setFlash(null);
     setEdit(e);
     const m = map.milestones.find((x) => x.id === milestone);
-    const gate = e === "gate" && m ? { threshold: m.threshold === null ? "" : String(m.threshold), after: m.depends[0] ?? "" } : {};
+    const gate = e === "gate" && m ? { threshold: m.threshold === null ? "" : String(m.threshold), after: m.depends[0] ?? "", goal: m.goal } : {};
     // An unplaced feature: picked already, found by its name.
     const placing = feature ? { feature, search: map.unplaced.find((f) => f.id === feature)?.name ?? "" } : {};
     setDraft({ ...emptyDraft(map), ...(e === "propose" && goal ? { goal } : {}), milestone: milestone ?? "", area: area ?? "", ...gate, ...placing });
@@ -258,9 +272,23 @@ export function GoalMapPage() {
     }
     if (edit === "gate") {
       const m = map.milestones.find((x) => x.id === draft.milestone)!;
-      const ok = await send(
-        api.PATCH("/v1/simple/goal-map/milestones/{milestone_id}", { params: { path: { milestone_id: m.id } }, body: { threshold: Number(draft.threshold), after: draft.after || null, confirm: draft.confirm } }),
-        () => (draft.confirm ? `Gate confirmed: ${m.name}, at least ${num(Number(draft.threshold), m.unit)} for 7 days.` : `Gate saved: ${m.name}, at least ${num(Number(draft.threshold), m.unit)} for 7 days.`),
+      // every-field-editable: the key result's goal, moved by its owner or decider, else asked for;
+      // the gate is checked first, so a bad gate never follows a move already made.
+      const { regoal, gate, threshold, ok: valid } = gatePlan(m, draft);
+      if (!valid) return;
+      if (regoal) {
+        const to = map.goals.find((g) => g.id === draft.goal)?.name ?? "another goal";
+        try {
+          if (m.can_change) await moveKrGoal(m, draft.goal, `Moved ${m.name} to ${to}`, () => q.reload());
+          else await proposeKrGoal(m, draft.goal, `move ${m.name} to ${to}`, () => q.reload());
+        } catch (e) {
+          setFlash(errorMessage(e));
+          return;
+        }
+      }
+      const ok = !gate || await send(
+        api.PATCH("/v1/simple/goal-map/milestones/{milestone_id}", { params: { path: { milestone_id: m.id } }, body: { threshold, after: draft.after || null, confirm: draft.confirm } }),
+        () => (draft.confirm ? `Gate confirmed: ${m.name}, at least ${num(threshold, m.unit)} for 7 days.` : `Gate saved: ${m.name}, at least ${num(threshold, m.unit)} for 7 days.`),
       );
       if (!ok) return;
     }
@@ -523,6 +551,14 @@ function Editor({ map, edit, draft, setDraft, goal, onClose, onSave, open, onOpe
           <input className={field} inputMode="decimal" value={draft.threshold} onChange={(e) => set({ threshold: e.target.value })} />
         </label>
         <label className={label}>
+          Goal
+          <select className={field} data-testid="gm-kr-goal" value={draft.goal} onChange={(e) => set({ goal: e.target.value })}>
+            {map.goals.map((g) => (
+              <option key={g.id} value={g.id}>{g.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className={label}>
           Comes after
           <select className={field} data-testid="gm-after" value={draft.after} onChange={(e) => set({ after: e.target.value })}>
             <option value="">Nothing: it can start now</option>
@@ -540,7 +576,7 @@ function Editor({ map, edit, draft, setDraft, goal, onClose, onSave, open, onOpe
         )}
         <div className="flex justify-end gap-2">
           <Btn onClick={onClose}>Cancel</Btn>
-          <Btn primary testId="gm-save" disabled={!(Number(draft.threshold) > 0)} onClick={onSave}>Save gate</Btn>
+          <Btn primary testId="gm-save" disabled={!gatePlan(m, draft).ok} onClick={onSave}>Save gate</Btn>
         </div>
       </Drawer>
     );

@@ -54,6 +54,8 @@ import {
   ownPrd,
   pickedName,
   prdCode,
+  shownCode,
+  shownName,
   codedTitle,
   dependencyOf,
   loopOf,
@@ -107,6 +109,15 @@ export interface SimpleChangesCtx {
   /** S9 (targets.py add_feature_ask): files a feature ask in Requests, and drops it on undo. */
   fileAsk?: (input: { id: string; title: string; channel: string; requester_name: string | null; requester_kind: string; filed_by: string }) => void;
   dropAsk?: (id: string) => void;
+  /** every-field-editable: the Goal ladder's key results (goal-map.ts ladderMilestones), the same
+   * track_milestones in the API: an edit_goal_milestone may name one. */
+  ladder?: LadderMilestones;
+}
+
+/** every-field-editable: a Goal ladder key result as an edit_goal_milestone reads and writes it. */
+export interface LadderMilestones {
+  find: (id: string) => { value: Record<string, unknown>; can_change: boolean; name: string; decider: string | null } | null;
+  write: (id: string, goal_id: string) => void;
 }
 
 /** edit-goals-prds (oracle.simple.goal_asks): a goal archived or restored, asked by who may not
@@ -188,6 +199,8 @@ const FIELDS: Record<string, string[]> = {
   remove_dependency: ["depends_on"],
   // feature-parts: the key of the feature it is a part of (changes.py set_parent).
   set_parent: ["parent_key"],
+  // every-field-editable: the item's feature code, stored as its title's lead (changes.py set_code).
+  set_code: ["code"],
 };
 const FIXES = ["shift_dependents", "move_dependency"];
 /** fix5-cut-dependents: the item and everything waiting on it, cut as one change (changes.py CUT_ALL). */
@@ -385,6 +398,9 @@ export function cutRoute(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "r
 }
 
 /** The stored values of one item's fields (the API's changes.read). */
+/** changes.TITLE_MAX: an item's title, its code included. */
+const TITLE_MAX = 200;
+
 function read(db: SimpleDb, key: string, fields: string[], target: Values): Values {
   const s = seed(db, key);
   const own = ownDates(db, s);
@@ -410,6 +426,7 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
     else if (f === "prd_document_id") out[f] = ownPrd(s).id;
     else if (f === "depends_on") out[f] = [...(s.depends ?? [])];
     else if (f === "parent_key") out[f] = s.parent ?? null;
+    else if (f === "code") out[f] = shownCode(s, (id) => db.feature_codes?.[id]);
     else if (f === "status") out[f] = s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned");
     else if (f === "risk") out[f] = (s.risks ?? []).find((r) => r.flag === target.flag && (r.subject ?? null) === (target.subject ?? null)) ?? null;
   }
@@ -742,8 +759,9 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     // an owner's right; then the move is the item's. An estimate is the feature's (stored here
     // under the item standing for it).
     if (body.op === "override_priority" && ctx.role !== "owner") return json(403, { detail: "Only an owner can add a feature to the company roadmap" });
-    const key = body.op === "override_priority" ? addToCompany(db, target.feature_id) : featureItem(db, target.feature_id);
+    const key = body.op === "override_priority" ? addToCompany(db, target.feature_id, readerDb(db, ctx)) : featureItem(db, target.feature_id);
     if (!key) return json(404, { detail: "No such feature" });
+    if (typeof key === "object") return json(422, { detail: key.refused });
     target.item_id = db.ids[key];
   }
   if (spec.adds) target[spec.id] = crypto.randomUUID();
@@ -980,19 +998,23 @@ const MILESTONE_OP = "edit_goal_milestone";
 function createMilestoneChange(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"]): Response {
   if (ctx.role === "viewer") return json(403, { detail: "Viewers may not propose a change" });
   const m = (db.goal_milestones ?? []).find((x) => x.id === body.target.milestone_id && !x.deleted);
-  if (!m) return json(404, { detail: "No such milestone" });
-  if (m.prd) return json(422, { detail: "A PRD's milestone: change it on its card (it asks the PRD's owner)" });
-  if (canEditRoadmap(db, m.roadmap, ctx)) return json(409, { detail: "You change this milestone directly" });
+  const kr = m ? null : ctx.ladder?.find(String(body.target.milestone_id));
+  if (!m && !kr) return json(404, { detail: "No such milestone" });
+  if (m?.prd) return json(422, { detail: "A PRD's milestone: change it on its card (it asks the PRD's owner)" });
+  if (m ? canEditRoadmap(db, m.roadmap, ctx) : kr!.can_change) return json(409, { detail: "You change this milestone directly" });
   if (!("milestone" in body.before) || !("milestone" in (body.after ?? {}))) return json(422, { detail: "before.milestone and after.milestone (null: remove it)" });
-  const current = milestoneValue(m, db.ids);
-  if (!same(body.before.milestone, current)) return json(409, { detail: { message: "Changed since you saw it", current: { milestone: current }, changed_by: null, changed_at: null } });
+  const current = m ? milestoneValue(m, db.ids) : kr!.value;
+  // every-field-editable (goal_milestones.create_change): before.milestone may name only the fields seen.
+  const seenMs = body.before.milestone as Record<string, unknown> | null;
+  if (!seenMs || typeof seenMs !== "object" || !Object.keys(seenMs).length || Object.keys(seenMs).some((k) => !(k in current))) return json(422, { detail: "before.milestone: the milestone as you saw it (name, date, goal_id, item_ids, counts_when)" });
+  if (!same(seenMs, Object.fromEntries(Object.keys(seenMs).map((k) => [k, current[k]])))) return json(409, { detail: { message: "Changed since you saw it", current: { milestone: current }, changed_by: null, changed_at: null } });
   const wanted = body.after?.milestone as Record<string, unknown> | null;
   const after = wanted ? { ...current, ...Object.fromEntries(Object.entries(wanted).filter(([k, v]) => k in current && (v !== null || k === "goal_id"))) } : null;
   if (after && same(after, current)) return json(422, { detail: "after.milestone: nothing changes" });
-  const doc = stableUuid(`simple-doc/${m.roadmap}`);
-  const decider = db.deciders?.[m.roadmap];
+  const doc = m ? stableUuid(`simple-doc/${m.roadmap}`) : null;
+  const decider = m ? db.deciders?.[m.roadmap] : kr!.decider;
   const change: Change = {
-    id: crypto.randomUUID(), session_id: null, document_id: doc, draft_ids: [], op: body.op, target: { milestone_id: m.id, roadmap_id: doc, name: m.name },
+    id: crypto.randomUUID(), session_id: null, document_id: doc, draft_ids: [], op: body.op, target: { milestone_id: String(body.target.milestone_id), roadmap_id: doc, name: m?.name ?? kr!.name },
     before: { milestone: current }, after: { milestone: after }, status: "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: iso(mockNowMs()),
     decided_by: null, decided_at: null, reason: body.reason ?? null, decision_reason: null,
     routed_to: decider ? [decider] : ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,
@@ -1112,7 +1134,25 @@ function restoreItemRoute(db: SimpleDb, ctx: SimpleChangesCtx, itemId: string): 
   const entry = ctx.trash?.entries.find((e) => e.out.root.type === "feature" && e.out.root.id === itemId);
   if (!entry) return json(404, { detail: "No such roadmap item" });
   if (!mayRestore(entry, ctx)) return json(403, { detail: "Only an owner, or whoever deleted it, restores this" });
+  const taken = restoreCodeTaken(db, ctx, entry);
+  if (taken) return json(409, { detail: taken });
   return json(200, restoreFromTrash(ctx.trash!, entry, iso(mockNowMs()), db, ctx.id));
+}
+
+/** trash_items._codes_free: an item coming back whose code another item took while it was in Trash (its title's, as an add
+ * checks it; its feature's or PRD's, against other items' title codes), in set_code's words; null when it is free. Every
+ * restore goes through it, a feature's and a goal's: as the API, it checks the items the entry brings back (a goal's entry
+ * holds the goal alone, so a goal comes back and an item deleted before stays in Trash). */
+export function restoreCodeTaken(db: SimpleDb, me: { id: string; role: Role }, entry: TrashEntryRow): string | null {
+  const root = entry.out.root;
+  const back = root.type === "feature" ? db.items.filter((x) => x.key === root.slug && x.trashed && (!entry.roadmap || x.roadmap === entry.roadmap)).slice(0, 1) : [];
+  const seen = back.length ? readerDb(db, me) : null;
+  for (const s of back) {
+    const own = (s.feature_id && db.feature_codes?.[s.feature_id]) || prdCode(s.section);
+    const taken = own ? ownCodeTaken(seen!, s.key, own) : titleCodeTaken(db, seen!, null, s.title);
+    if (taken) return `${taken}: rename it first`;
+  }
+  return null;
 }
 
 /** add_key_date / edit_key_date / remove_key_date (key_dates.create). */
@@ -1292,11 +1332,19 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     }
     else if (body.op === "edit_title") {
       let title = String(a.title ?? "").trim();
-      if (!title) return json(422, { detail: "after.title: 1 to 200 characters" });
+      if (!title || title.length > TITLE_MAX) return json(422, { detail: `after.title: 1 to ${TITLE_MAX} characters` });
       // roadmap-edit-fixes: a rename changes the name only; a code the title carries stays.
       const s = seed(seen, key);
       const [code, name] = codedTitle(s.title, prdCode(s.section));
-      if (code && name !== s.title && !codedTitle(title, null)[0]) title = `${code} ${title}`;
+      if (code && name !== s.title && !codedTitle(title, null)[0]) {
+        // changes._with_code: the name is never cut.
+        const room = TITLE_MAX - code.length - 1;
+        if (title.length > room) return json(422, { detail: `The name is too long to carry the code ${code}: shorten it to ${room} characters first` });
+        title = `${code} ${title}`;
+      }
+      // changes._title_code: a code the new title leads with is checked as set_code checks it.
+      const taken = titleCodeTaken(db, seen, key, title);
+      if (taken) return json(422, { detail: taken });
       after = { title };
     } else if (body.op === "edit_outcome") after = { outcome: a.outcome ?? null };
     else if (body.op === "edit_note") {
@@ -1345,6 +1393,21 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       if (!["planned", "done", "cut"].includes(String(a.status))) return json(422, { detail: "after.status: planned, done or cut" });
       after = statusAfter(seed(seen, key), String(a.status), ctx.id);
       stored = ["cut", "shipped"];
+    } else if (body.op === "set_code") {
+      // changes._free_code: a feature code no other item or Ground Truth feature has; the title carries it.
+      const s = seed(seen, key);
+      if ((s.feature_id && db.feature_codes?.[s.feature_id]) || prdCode(s.section)) return json(422, { detail: "Its code comes from its Ground Truth feature or its PRD" });
+      const code = a.code == null || !String(a.code).trim() ? null : String(a.code).trim().toUpperCase();
+      if (code && !/^[A-Z]{1,3}-\d+[a-j]?$/.test(code)) return json(422, { detail: "after.code: a feature code, like F-31" });
+      const taken = code ? codeTaken(db, seen, key, code) : null;
+      if (taken) return json(422, { detail: taken });
+      const name = codedTitle(s.title, prdCode(s.section))[1];
+      // changes._with_code: the name is never cut.
+      const room = TITLE_MAX - (code?.length ?? 0) - 1;
+      if (code && name.length > room) return json(422, { detail: `The name is too long to carry the code ${code}: shorten it to ${room} characters first` });
+      target.code = code;
+      after = { title: code ? `${code} ${name}` : name };
+      stored = ["title"];
     } else if (body.op === "set_parent") {
       const v = a.parent_key == null ? null : String(a.parent_key);
       const me = seed(seen, key);
@@ -1507,6 +1570,9 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
       // As changes.undo: the old parent written back is checked as create checks it.
       const refused = c.op === "set_parent" ? parentRefusal(readerDb(db, ctx), keyOf(db, c.target.item_id)!, (c.before.parent_key as string | null) ?? null) : null;
       if (refused) return json(422, { detail: refused });
+      // As changes.undo: the code the old title carries may be another item's or a feature's since.
+      const taken = (c.op === "set_code" || c.op === "edit_title") && c.before.title ? titleCodeTaken(db, readerDb(db, ctx), keyOf(db, c.target.item_id)!, String(c.before.title)) : null;
+      if (taken) return json(409, { detail: taken });
       const drafts = intoDrafts(db, c, s, true);
       if (drafts instanceof Response) return drafts;
       apply(db, c, c.before, true);
@@ -1529,9 +1595,17 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   // PRD's milestone (before.date) is decided below.
   else if (p[4] === "accept" && c.op === MILESTONE_OP && "milestone" in (c.before ?? {})) {
     const ms = (db.goal_milestones ?? []).find((x) => x.id === c.target.milestone_id && !x.deleted);
-    if (!ms) return json(404, { detail: "The milestone is gone" });
+    const kr = ms ? null : ctx.ladder?.find(String(c.target.milestone_id));
+    if (kr) {
+      // every-field-editable: a Goal ladder key result's new goal.
+      if (!same(kr.value, c.before.milestone)) return json(409, { detail: { message: "outdated: the milestone changed since the proposal", current: { milestone: kr.value }, changed_by: null, changed_at: null } });
+      const goal = (c.after.milestone as Record<string, unknown> | null)?.goal_id;
+      if (goal) ctx.ladder!.write(String(c.target.milestone_id), String(goal));
+    } else if (!ms) return json(404, { detail: "The milestone is gone" });
+    else {
     if (!same(milestoneValue(ms, db.ids), c.before.milestone)) return json(409, { detail: { message: "outdated: the milestone changed since the proposal", current: { milestone: milestoneValue(ms, db.ids) }, changed_by: null, changed_at: null } });
     writeMilestone(ms, db.ids, c.after.milestone as Record<string, unknown> | null);
+    }
   }
   else if (p[4] === "accept" && KEY_DATE_OPS.includes(c.op)) {
     const rm = roadmapOfDoc(db, c.target.document_id)!;
@@ -1544,6 +1618,9 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     writeKeyDate(db, c, c.after.key_date);
   } else if (p[4] === "accept" && S7_OPS.includes(c.op)) {
     if (!validS7(db, c)) return json(409, { detail: "outdated: the items changed since it was proposed" });
+    // As additions.decide: a code its title carries that another item or a feature took since; the proposal stays open, to decline.
+    const taken = c.op === "add_item" ? titleCodeTaken(db, readerDb(db, ctx), null, String(c.after.title ?? "")) : null;
+    if (taken) return json(409, { detail: taken });
     const session = openEditing(db, ctx.id) ?? newSession(db, ctx.id, "editing");
     const drafts = intoDrafts(db, anchored(db, c), session);
     if (drafts instanceof Response) return drafts;
@@ -1578,6 +1655,12 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     // As changes.decide: a proposed parent is checked again, as create checks it.
     const refused = c.op === "set_parent" ? parentRefusal(readerDb(db, ctx), keyOf(db, c.target.item_id)!, (c.after.parent_key as string | null) ?? null) : null;
     if (refused) return json(422, { detail: refused });
+    // As changes.decide: a code another item or a Ground Truth feature took since is refused;
+    // the proposal stays open, to decline.
+    const taken = c.op === "set_code" && c.target.code ? codeTaken(db, readerDb(db, ctx), keyOf(db, c.target.item_id)!, String(c.target.code)) : null;
+    if (taken) return json(409, { detail: taken });
+    const renamed = c.op === "edit_title" ? titleCodeTaken(db, readerDb(db, ctx), keyOf(db, c.target.item_id)!, String(c.after.title ?? "")) : null;
+    if (renamed) return json(409, { detail: renamed });
     // Into the decider's working draft (their editing session's).
     const session = openEditing(db, ctx.id) ?? newSession(db, ctx.id, "editing");
     const drafts = intoDrafts(db, c, session);
@@ -1588,6 +1671,29 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   }
   Object.assign(c, { status: p[4] === "accept" ? "accepted" : "declined", decided_by: ctx.id, decided_at: now, decision_reason: body.reason ?? null });
   return json(200, { change: view(db, ctx, c), flags: TARGETS[c.op] || KEY_DATE_OPS.includes(c.op) ? [] : flagsFor(db, touched(c)) });
+}
+
+/** changes._free_code: who already has ``code`` (another item of the roadmap or a Ground Truth feature), in plain words; null when it is free. */
+function codeTaken(db: SimpleDb, seen: SimpleDb, key: string, code: string): string | null {
+  const other = seen.items.find((x) => x.key !== key && !x.trashed && String(read(seen, x.key, ["code"], {}).code ?? "").toUpperCase() === code);
+  if (other) return `${code} is already the code of ${shownName(other, (id) => seen.feature_codes?.[id])}`;
+  if (Object.values(db.feature_codes ?? {}).some((k) => k.toUpperCase() === code)) return `${code} is already the code of a Ground Truth feature`;
+  return null;
+}
+
+/** changes._title_code: a title leading with a code other than the item's own ("F-31 Alerts", any code the read takes from a title) gives the item that code, checked as set_code checks it; an item coded by its feature or PRD keeps that one. ``key`` null: an item being added. */
+function titleCodeTaken(db: SimpleDb, seen: SimpleDb, key: string | null, title: string): string | null {
+  const s = key ? seed(seen, key) : null;
+  if (s && ((s.feature_id && db.feature_codes?.[s.feature_id]) || prdCode(s.section))) return null;
+  const lead = codedTitle(title, null)[0];
+  if (!lead || (s && lead === codedTitle(s.title, null)[0])) return null;
+  return codeTaken(db, seen, key ?? "", lead);
+}
+
+/** changes._merge_plan: another item showing ``code`` as its own (its title's, not its feature's or PRD's), in set_code's words; ``seen``: the items the reader reads. */
+function ownCodeTaken(seen: SimpleDb, key: string, code: string): string | null {
+  const other = seen.items.find((x) => x.key !== key && !x.trashed && !(x.feature_id && seen.feature_codes?.[x.feature_id]) && !prdCode(x.section) && codedTitle(x.title, null)[0]?.toUpperCase() === code.toUpperCase());
+  return other ? `${code} is already the code of ${code} ${codedTitle(other.title, null)[1]}` : null;
 }
 
 /** A proposal whose feature or goal went to Trash meanwhile: closed, not left open. */
@@ -1784,6 +1890,9 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
       if (!name || name.length > 200) return json(422, { detail: "after.milestone.name: 1 to 200 characters" });
       after.milestone = { name, date: typeof m.date === "string" ? m.date : null, date_source: typeof m.date === "string" ? "typed" : null };
     }
+    // As additions._plan: a title leading with a code another item or a feature has is refused, in set_code's words.
+    const taken = titleCodeTaken(db, readerDb(db, ctx), null, title);
+    if (taken) return json(422, { detail: taken });
     return { target, before: {}, after, roadmap, applies: canEditRoadmap(db, roadmap, ctx) };
   }
   const key = keyOf(db, target.item_id);
@@ -1808,6 +1917,14 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
   }
   if (typeof target.feature_id === "string" && target.feature_id) {
     // As the API: the draft becomes the feature's item (linked, kept beside look-alikes), still a draft.
+    // Its code (the feature's key, before any ".", and its short code, a published PRD section's) is no other item's own.
+    const fid = target.feature_id;
+    const short = db.items.find((x) => x.feature_id === fid && !x.draft && prdCode(x.section))?.section;
+    const codes = [db.feature_keys?.[fid] ?? db.feature_codes?.[fid], short ? prdCode(short) : null].map((k) => k?.split(".")[0]);
+    for (const code of new Set(codes.filter((k): k is string => !!k && /^[A-Z]{1,3}-\d+[a-j]?$/.test(k)))) {
+      const taken = ownCodeTaken(readerDb(db, ctx), key, code);
+      if (taken) return json(422, { detail: taken });
+    }
     return { target, before: { [String(target.item_id)]: { feature_id: null, kept_both: !!s.kept_both } }, after: { [String(target.item_id)]: { feature_id: target.feature_id, kept_both: true } }, roadmap: s.roadmap, applies };
   }
   return json(422, { detail: "target: into_id or feature_id" });

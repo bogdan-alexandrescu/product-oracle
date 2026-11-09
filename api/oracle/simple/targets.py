@@ -767,6 +767,7 @@ async def add_to_company(db: AsyncSession, principal: Any, feature_id: Any) -> s
     version (made when it has none) when it has none there, its draft there confirmed rather
     than a second item added; None while there is no company roadmap (a move then ranks the
     feature alone). The caller commits."""
+    from oracle.simple import drafts
     from oracle.simple.additions import _shown_version
 
     fid = changes._uuid(feature_id, "feature_id")
@@ -798,6 +799,14 @@ async def add_to_company(db: AsyncSession, principal: Any, feature_id: Any) -> s
         db.add(v)
         await db.flush()
         base = v.id
+    # every-field: one code, one item: the feature's code is refused, in set_code's words,
+    # when another item's title gives it that code (slices of the feature share it).
+    new = SimpleNamespace(row=SimpleNamespace(id=None, feature_id=fid, prd_section_key=None),
+                          code=None)  # fmt: skip
+    await service.item_codes(db, [new])  # type: ignore[list-item]
+    if changes._code_of(new):
+        seen = await service.load(db, await drafts.overlays_for(db, principal))
+        await changes._not_taken(db, new, changes._code_of(new), seen.by_id(), own_only=True)
     taken = set(
         await db.scalars(select(RoadmapItem.item_key).where(RoadmapItem.roadmap_version_id == base))
     )

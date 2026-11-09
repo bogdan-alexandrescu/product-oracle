@@ -839,6 +839,11 @@ async def inbox_rows(
             .order_by(TrackAlert.opened_at.desc(), TrackAlert.id)
         )
     )
+    # replaced-prd-history: a replaced PRD's tracks are history, in no Inbox row or count.
+    from oracle.roadmap import company
+
+    if rows and (history := await company.history_track_ids(db)):
+        rows = [a for a in rows if a.track_id not in history]
     if not rows:
         return []
     # The caller's alerts first, from the tracks alone; the rest is read for what is shown.

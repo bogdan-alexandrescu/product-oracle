@@ -146,7 +146,15 @@ export async function routeRemoved(db: Db, ctx: RemovedCtx, req: Request, p: str
     return json(200, { items });
   }
   if (p[2] === "tracks" && m === "GET" && !p[3]) {
-    const tracks = Object.entries(TRACKS).map(([k, title]) => {
+    // replaced-prd-history (company.history_track_ids): a replaced PRD's own track and its
+    // roadmap's track are history.
+    const history = new Set(db.history_roadmaps ?? []);
+    const replaced = new Set(db.replaced_prd_titles ?? []);
+    const gone = new Set([
+      ...Object.entries(db.extra_roadmaps ?? {}).filter(([slug]) => history.has(slug)).map(([, r]) => r.track),
+      ...Object.keys(TRACKS).filter((k) => replaced.has(states[k]?.prd)),
+    ]);
+    const tracks = Object.entries(TRACKS).filter(([k]) => !gone.has(k)).map(([k, title]) => {
       const own = db.track_owners?.[k];
       const decides = owner || (own === ctx.id && RANK[ctx.role] >= RANK.approver);
       const st = states[k];

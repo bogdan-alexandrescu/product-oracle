@@ -81,8 +81,12 @@ for (const phone of [false, true]) {
         while (await show.count()) await show.first().click();
         // A feature named on the timeline slide opens the one feature panel, over the slide.
         await slide.getByText("Setup checklist", { exact: true }).first().click();
-        await expect(page.getByTestId("item-panel")).toBeVisible();
-        await expect(page.getByTestId("item-panel")).toBeInViewport();
+        const panel = page.getByTestId("item-panel");
+        await expect(panel).toBeVisible();
+        // On a phone the panel is a display:contents wrapper with no box of its own (its viewport
+        // ratio is 0 once loaded): what a person sees is its card and the feature's name on it.
+        await expect(panel.getByTestId("floating-card")).toBeInViewport();
+        await expect(panel.getByRole("heading", { name: "Setup checklist" })).toBeInViewport();
         // Escape closes the panel and keeps presenting.
         await page.keyboard.press("Escape");
         await expect(page.getByTestId("item-panel")).toHaveCount(0);

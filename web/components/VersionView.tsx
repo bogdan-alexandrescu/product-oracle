@@ -1278,8 +1278,10 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
               {/* H9: an approved pricing memo's Decide (the pricing owner), or who it waits for. */}
               {document_?.kind === "pricing" && n === latest && <PricingDecide slug={document_.slug} />}
               {templateOnly && !replaced && document_ && <DraftWithOracleButton slug={document_.slug} />}
+              {/* replaced-prd-history: a replaced PRD or its roadmap is read-only history (the API's
+                  read_only): no Approve or Publish on a version not yet approved. */}
               {version &&
-                (version.approved_at || canApprove) &&
+                (version.approved_at || (canApprove && !document_?.read_only)) &&
                 (document_?.kind === "prd" && !version.approved_at ? (
                   // T2 publish gate: a PRD is published from the Publish screen, latest version only.
                   <LinkButton

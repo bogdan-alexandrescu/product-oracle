@@ -148,6 +148,16 @@ class DraftError(Exception):
         self.detail = detail
 
 
+async def refuse_history(db: AsyncSession, document_id: uuid.UUID) -> None:
+    """replaced-prd-history: a replaced PRD and its roadmap are read-only history; no draft
+    of theirs is edited, sent, approved or published (409, in plain words)."""
+    from oracle.roadmap import company
+
+    doc = await db.get(Document, document_id)
+    if doc is not None and (why := await company.read_only(db, doc)):
+        raise DraftError(409, why)
+
+
 # --------------------------------------------------------------------------- items
 
 
@@ -598,7 +608,11 @@ class Reader:
 
 
 async def reader(db: AsyncSession, principal: Any) -> Reader:
-    ds = await open_drafts(db)
+    from oracle.roadmap import company
+
+    # replaced-prd-history: a replaced PRD's roadmap is history: no working draft, no count.
+    history = await company.history_ids(db)
+    ds = [d for d in await open_drafts(db) if d.document_id not in history]
     proposals = await _proposals(
         db,
         set(
@@ -606,7 +620,8 @@ async def reader(db: AsyncSession, principal: Any) -> Reader:
                 select(SimpleChange.document_id).where(SimpleChange.status == "proposed").distinct()
             )
         )
-        - {None},
+        - {None}
+        - history,
     )
     w = await who(db, {d.document_id for d in ds} | set(proposals))
     n = await counts(db, ds)
@@ -729,6 +744,7 @@ async def ensure(
     """The roadmap's working draft, opened on the row's version when it has none; the
     session joins it. 409 while a submitted draft of the roadmap waits for approval."""
     doc = row.roadmap_document_id
+    await refuse_history(db, doc)
     d = await db.scalar(
         select(SimpleDraft)
         .where(SimpleDraft.document_id == doc, SimpleDraft.status == "working")
@@ -1051,8 +1067,9 @@ async def listing(
     only that roadmap's (a working draft belongs to one roadmap)."""
     from oracle.roadmap import company
 
-    # simple-replaced-prds: a replaced PRD's open draft is history, never listed in Simple.
-    replaced = await company.replaced_prd_ids(db)
+    # simple-replaced-prds: a replaced PRD's open draft is history, never listed in Simple;
+    # replaced-prd-history: nor its roadmap's.
+    replaced = await company.history_ids(db)
     ds = [d for d in await open_drafts(db) if d.document_id not in replaced]
     if roadmap:
         doc = await db.scalar(
@@ -1116,6 +1133,7 @@ OP_WORDS = {
     "set_feature": "New feature for",
     "set_goals": "Moved to another goal:",
     "set_parent": "Changed what it is part of:",
+    "set_code": "New code for",
 }
 
 
@@ -1151,10 +1169,11 @@ async def submit(
     caller commits). ``reviewer_ids``: people the sender adds as reviewers; the draft
     waits on them too, after the required reviewers (build-review)."""
     from oracle.docs import service as docs_service
-    from oracle.roadmap import changeset, schedule, views
+    from oracle.roadmap import changeset, codes, schedule, views
     from oracle.roadmap import items as items_mod
 
     d, w = await _get(db, principal, draft_id)
+    await refuse_history(db, d.document_id)
     if not can_edit(principal, d.document_id, w):
         raise DraftError(
             403, "Only an owner or the roadmap's decider (with none, its owner) submits"
@@ -1258,6 +1277,8 @@ async def submit(
             DocumentVersion.number == result.version.number,
         )
     )
+    # Imported on the latest number (nothing to merge); written on the draft's version.
+    version.base_number = base.number
     await db.execute(delete(RoadmapItem).where(RoadmapItem.roadmap_version_id == version.id))
     bases = {
         p: await schedule.verified_bases(db, p)
@@ -1284,9 +1305,10 @@ async def submit(
             ),
             note=note,
         )
-        db.add(
-            RoadmapItem(roadmap_document_id=document.id, roadmap_version_id=version.id, **fields)
-        )
+        copy = RoadmapItem(roadmap_document_id=document.id, roadmap_version_id=version.id, **fields)
+        # Each copy keeps the codes its item shows on the draft's version, or on the draft.
+        source = {"simple_draft_id": d.id} if old in added else {"roadmap_version_id": base.id}
+        db.add(codes.copied_from(copy, **source))
     return await _in_review(db, principal, d, document, base, version, live)
 
 
@@ -1588,6 +1610,7 @@ async def _approve(
 ) -> list[str]:
     if d.status != "submitted":
         raise DraftError(409, f"This draft is {d.status}: only a submitted draft is approved")
+    await refuse_history(db, d.document_id)
     document = await db.get(Document, d.document_id)
     version = await db.get(DocumentVersion, d.version_id)
     reviewers = w.reviewers.get(d.document_id, [])
@@ -1637,6 +1660,7 @@ async def approve(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) -
     the decider's approval of a working draft sends it first (Approve and publish), as a
     meeting's approval does."""
     d, w = await _get(db, principal, draft_id)
+    await refuse_history(db, d.document_id)
     if d.status == "working":
         if not can_publish(principal, d, w):
             raise DraftError(403, "Only the roadmap's decider approves and publishes this draft")
@@ -1812,6 +1836,7 @@ async def resume(db: AsyncSession, principal: Principal, draft_id: uuid.UUID):
     from oracle.simple import changes
 
     d, w = await _get(db, principal, draft_id)
+    await refuse_history(db, d.document_id)
     if principal.user_id not in (d.created_by, w.deciders.get(d.document_id)):
         raise DraftError(403, "Only the draft's author or the roadmap's decider resumes it")
     if d.status != "working":
@@ -1886,6 +1911,12 @@ async def inbox_rows(
                 .order_by(SimpleDraft.submitted_at)
             )
         )
+    from oracle.roadmap import company
+
+    # replaced-prd-history: a replaced PRD's or its roadmap's draft waits on nobody.
+    if submitted:
+        history = await company.history_ids(db)
+        submitted = [d for d in submitted if d.document_id not in history]
     w = await who(db, {d.document_id for d in submitted})
     ds = [
         d

@@ -71,13 +71,13 @@ test.describe("desktop 1440x900", () => {
     await expect(card.getByTestId("card-reasons")).not.toContainText("(draft");
     await expect(card.getByTestId("card-reasons")).not.toContainText("F-06");
     await expect(card.getByTestId("card-needed")).toHaveText("None");
-    // BGD (Nov 4): the name's own code chip leads; no other code shows.
+    // BGD (Nov 4): the item's own code shows once (its chip, or since PR 1404 its editable Code field); no other code shows.
     await expect(card).toContainText("Send the digest weekly or daily?");
-    expect((await card.innerText()).replace(/^\s*F-06\s*/, "")).not.toMatch(/\b[FD]-\d/);
+    expect((await card.innerText()).replace(/^\s*F-06\s*/, "").replace(/\bCode\s+F-06\b/, "")).not.toMatch(/\b[FD]-\d/);
     const talk = await openTalk(card);
     await expect(talk.getByRole("heading", { name: "Talk about Weekly alert digest", exact: true })).toBeVisible();
     await expect(talk.getByRole("textbox", { name: "Message Oracle" })).toHaveAttribute("placeholder", "Ask about Weekly alert digest, or ask for a change…");
-    expect((await card.innerText()).replace(/^\s*F-06\s*/, "")).not.toMatch(/\b[FD]-\d/);
+    expect((await card.innerText()).replace(/^\s*F-06\s*/, "").replace(/\bCode\s+F-06\b/, "")).not.toMatch(/\b[FD]-\d/);
 
     await card.getByRole("button", { name: "Close" }).click();
     const rules = await openCard(page, "alert-rules");

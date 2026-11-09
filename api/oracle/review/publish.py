@@ -1194,6 +1194,11 @@ async def publish(
     document_id, number = document.id, version.number
     # Refused at once, before a render, when it would be refused under the lock now.
     check = await publish_check(db, document, version)
+    # replaced-prd-history: a replaced PRD and its roadmap are read-only history.
+    from oracle.roadmap import company
+
+    if why := await company.read_only(db, document):
+        raise PublishRefusedError(check, why)
     if (refused := _refusal(check, version, content_hash)) is not None:
         raise refused
     with offload.place(principal) as held:

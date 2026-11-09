@@ -19,7 +19,9 @@ import { newCompany, seeded, stableUuid } from "./ids";
 import { milestoneOut, oldMilestonesOut, routeMilestones, type MockMilestone, type OldCtx } from "./simple-milestones";
 import { betSubject, flowFor, type VisualsDb } from "./simple-visuals";
 import type { OnePagerDb } from "./simple-one-pager";
-import { appliedMilestones, type AppliedRecord } from "./approved-roadmap";
+import { appliedMilestones, planRowState, rowCodeTaken, type AppliedRecord } from "./approved-roadmap";
+import { codedTitle, prdCode } from "./item-code";
+export { codedTitle, prdCode, shownCode, shownName } from "./item-code";
 import { PLAN_PRD_SLUG, planMilestones, planSlices, planSpan, type PlanDb } from "./simple-plan";
 import { COMPANY_SLUG, COMPANY_TITLE } from "./one-roadmap";
 import { startEffort } from "./simple-priorities";
@@ -212,6 +214,8 @@ interface SimpleDb {
   prd_milestones?: Record<string, PrdMilestone[]>;
   /** lane-gt-ui: each baseline feature's code (F-12), by id: an item reads its feature's code (server.ts). */
   feature_codes?: Record<string, string>;
+  /** Every Ground Truth feature's key by its id (changes._merge_plan reads its code from it). */
+  feature_keys?: Record<string, string>;
   /** build-milestones-on-roadmap: each roadmap's milestones per goal (./simple-milestones.ts). */
   goal_milestones?: MockMilestone[];
   /** roadmap-keydates review ("roadmap-keydates-uncoded"): a track milestone record's own day
@@ -228,6 +232,12 @@ interface SimpleDb {
   /** simple-replaced-prds (api/oracle/roadmap/company.replaced_prd_ids): the ids and slugs of the
    * PRDs marked replaced, set by server.ts from its documents; their items no longer feed Simple. */
   replaced_prds?: string[];
+  /** replaced-prd-history (company.history_roadmaps): the slugs of the roadmaps Simple leaves out,
+   * a replaced PRD's own roadmap (and one in Trash), set by server.ts: no draft, track or Inbox row. */
+  history_roadmaps?: string[];
+  /** replaced-prd-history (company.history_track_ids): the titles of the PRDs a live PRD replaces,
+   * set by server.ts: their own tracks are history, never in Tracks. */
+  replaced_prd_titles?: string[];
   /** The current PRD each replaced one (by id and slug) went to: its first "Replaced by",
    * followed while that one is replaced too (additions._home files a new item under it). */
   replaced_with?: Record<string, Schemas["SimpleDocRef"]>;
@@ -376,20 +386,6 @@ export const goalOrderKey = (key: string): string => `0${String(goalRank(key)).p
 export function goalPositionOf(key: string): number | null {
   const g = companyGoals.find((x) => x.key === key);
   return g ? goalPosition(g) : null;
-}
-
-/** The PRD's own code of a section an item came from ("f-06" -> "F-06"); null when the key is no code (service.py). */
-export function prdCode(section: string | null | undefined): string | null {
-  const m = /^([a-z]{1,3})-(\d+)$/i.exec((section ?? "").trim());
-  return m ? `${m[1].toUpperCase()}-${m[2]}` : null;
-}
-
-/** roadmap-edit-fixes (service.coded_title): an item whose title carries its code ("F-07
- * Alpha") reads as code F-07 and name Alpha; else its code and title. */
-export function codedTitle(title: string, code: string | null): [string | null, string] {
-  const m = /^([A-Z][A-Z0-9]*-\d+[a-z]?)\s+(\S.*)$/.exec(title);
-  if (!m || (code && code !== m[1])) return [code, title];
-  return [m[1], m[2].trim()];
 }
 
 /** The item a stored dependency key names: its key, its code, else the key of its feature. */
@@ -1331,10 +1327,24 @@ export function draftChanges(db: SimpleDb, id: string): number {
   return cs.filter((c) => ["applied", "accepted"].includes(c.status) && (c.draft_ids ?? []).includes(id) && !cs.some((u) => u.undoes_id === c.id)).length;
 }
 
+/**
+ * drafts.who: the owners of a draft's roadmap's tracks, read from its track rows as the API reads
+ * ProductTrack.roadmap_document_id: a track the Tracks sheet keeps for the roadmap's PRD
+ * (track_state), an added roadmap's own track, else a track its published items are on; never a
+ * track an item was moved onto in the draft.
+ */
+export function roadmapTrackOwnerIds(db: SimpleDb, d: MockDraft): string[] {
+  const prd = ROADMAPS[d.roadmap]?.prd ?? db.extra_roadmaps?.[d.roadmap]?.prd;
+  const state = (db as SimpleDb & { track_state?: Record<string, { prd: string }> }).track_state ?? {};
+  const published = new Set(d.published.items.filter((s) => s.roadmap === d.roadmap).flatMap((s) => (s.track ? [s.track] : [])));
+  const ofRoadmap = (k: string) => (state[k] ? !!prd && state[k].prd === prd : db.extra_roadmaps?.[d.roadmap]?.track === k || published.has(k));
+  return Object.entries(db.track_owners ?? {}).flatMap(([k, id]) => (ofRoadmap(k) ? [id] : []));
+}
+
 /** Who sees a draft in the mock: owners, its people, the roadmap's decider and its required reviewers. */
 export function seesDraft(d: MockDraft, me: { id: string; role: Role }, db?: SimpleDb): boolean {
   // drafts.sees: whoever it waits on, its roadmap's required reviewers and the owners of its roadmap's tracks read it too.
-  const ownsTrack = !!db?.items.some((s) => s.roadmap === d.roadmap && !!s.track && db.track_owners?.[s.track] === me.id);
+  const ownsTrack = !!db && roadmapTrackOwnerIds(db, d).includes(me.id);
   return me.role === "owner" || d.out.created_by === me.id || d.out.participant_ids.includes(me.id) || db?.deciders?.[d.roadmap] === me.id || (d.out.waiting_on ?? []).includes(me.id) || (db?.reviewers?.[d.roadmap] ?? []).includes(me.id) || ownsTrack;
 }
 
@@ -1346,7 +1356,9 @@ function readerView(db: SimpleDb, me: { id: string; role: Role }): { db: SimpleD
   let keyDates = db.key_dates ?? {};
   let hidden = 0;
   const visible: Schemas["SimpleDraftBrief"][] = [];
-  for (const d of (db.drafts ?? []).filter((x) => OPEN_DRAFT.includes(x.out.status))) {
+  // replaced-prd-history (drafts.reader): a replaced PRD's roadmap is history: no draft, no count.
+  const history = new Set(db.history_roadmaps ?? []);
+  for (const d of (db.drafts ?? []).filter((x) => OPEN_DRAFT.includes(x.out.status) && !history.has(x.roadmap))) {
     if (seesDraft(d, me, db)) {
       visible.push({ id: d.out.id, document_id: d.out.document.id, status: d.out.status, changes: draftChanges(db, d.out.id) });
       continue;
@@ -1459,6 +1471,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       estimate_pending: !!s.estimate_pending,
       // Its feature's code (F-12), else its own (codedTitle: the title's, else its PRD section's), as service.load's Entry.code.
       code: (s.feature_id && db.feature_codes?.[s.feature_id]) || code,
+      // every-field-editable (service.item_out): a code set_code may not change, and where it comes from.
+      code_from: s.feature_id && db.feature_codes?.[s.feature_id] && db.feature_codes[s.feature_id] !== prdCode(s.section) ? "feature" : prdCode(s.section) ? "prd" : null,
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: ROADMAP_DOC_SLUG[s.roadmap] ?? s.roadmap, title: rm.title },
       prd: ownPrd(s),
       // service.load: the first goal it is linked to directly (goal_ids) that is not in Trash, else its Goal map goal.
@@ -1658,6 +1672,15 @@ function appliedVersionOut(db: SimpleDb, slug: string, role: Role, all: Map<stri
     if (startDiffers && endDiffers) differences.push(`${x.s.title} runs ${dayWord(start)} to ${dayWord(end)}, version ${n} says ${dayWord(row.start)} to ${dayWord(row.end)}`);
     else if (endDiffers) differences.push(`${x.s.title} ends ${dayWord(end)}, version ${n} says ${dayWord(row.end)}`);
     else if (startDiffers) differences.push(`${x.s.title} starts ${dayWord(start)}, version ${n} says ${dayWord(row.start)}`);
+  }
+  // As lines' _not_added_rows: the version's rows with no state that match no item (by key or title) and added none because their code was taken.
+  const mine = db.items.filter((s) => s.roadmap === slug);
+  const shownKeys = new Set(mine.map((s) => s.key));
+  const shownTitles = new Set(mine.map((s) => s.title.trim().toLowerCase()));
+  for (const row of a.plan) {
+    if (planRowState(row.status) || shownKeys.has(row.key) || shownTitles.has(row.title.toLowerCase())) continue;
+    const said = rowCodeTaken(db, slug, row.title);
+    if (said) differences.push(said);
   }
   return {
     roadmap: { id: roadmapId(slug), slug, title: roadmapTitle(db, slug) },

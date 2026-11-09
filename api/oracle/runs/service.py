@@ -2173,7 +2173,7 @@ async def _resolve_inputs(
         assert source is not None
         return source[0].id, {"source_version_id": str(source[1].id)}
     default_slug = None
-    if source is not None and source[0].replaced_by:
+    if source is not None and source[0].id in await roadmap_company.replaced_prd_ids(db):
         # one-roadmap-many-prds: a replaced PRD is read-only and feeds no roadmap.
         raise Invalid(f"{source[0].title} is replaced: run its replacing PRDs instead")
     company_roadmap = await roadmap_company.active(db) if flow.target_kind == "roadmap" else None

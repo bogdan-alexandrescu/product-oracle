@@ -12,6 +12,7 @@ from oracle.auth.service import create_user, make_session_cookie
 from oracle.baseline.models import Entity
 from oracle.config import get_settings
 from oracle.models import AuditEvent
+from oracle.roadmap.models import RoadmapItem
 from oracle.tenancy import tenant_session
 from tests.fixtures import import_draft
 from tests.roadmap_helpers import other_company
@@ -27,6 +28,9 @@ from tests.test_roadmap import (  # noqa: F401 - fixtures
 )
 
 SETS = f"/v1/roadmaps/{ROADMAP}/change-sets"
+# Statements one propose runs (test_proposing_a_plan_of_many_coded_items_reads_each_item_once):
+# the same for 5 coded items as for 40 (48 measured); the cap leaves room for other reads.
+MAX_PROPOSE_STATEMENTS = 100
 
 
 async def approved_roadmap(client, auth, runtime) -> None:  # noqa: F811
@@ -441,3 +445,638 @@ async def test_the_change_set_list_pages(client, owner, runtime):  # noqa: F811
     assert [s["id"] for s in (await client.get(SETS, headers=auth)).json()] == newest_first
     assert (await client.get(SETS, params={"limit": 0}, headers=auth)).status_code == 422
     assert (await client.get(SETS, params={"limit": 101}, headers=auth)).status_code == 422
+
+
+async def test_an_added_item_never_takes_a_code_another_item_has(client, owner, runtime):  # noqa: F811
+    """protects=(every-field) Edit plan's Add an item never gives a code to a second item: a
+    title leading with a live item's code, or a picked Ground Truth feature whose code is a
+    live item's title code, is refused when added (422) in set_code's words; one taken after it
+    was added is refused at propose (409) and no version is made; fails_when=the proposed
+    version holds two items reading F-31; no_claim=Simple's own add (its own test)."""
+    tenant_id, auth = owner
+    await approved_roadmap(client, auth, runtime)
+    async with tenant_session(tenant_id) as s:
+        row = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "shipping-step"))
+        row.title = "F-31 Alert routing by team"
+        feature = Entity(type="feature", key="F-31", title="Launch flow", status="confirmed",
+                         origin="user", attrs={})  # fmt: skip
+        s.add(feature)
+        await s.flush()
+        fid = str(feature.id)
+        await s.commit()
+    out = (await client.post(SETS, headers=auth)).json()
+    taken = "F-31 is already the code of F-31 Alert routing by team"
+    r = await patch(
+        client, auth, out, [{"op": "add", "title": "F-31 Launch flow", "horizon": "next"}]
+    )
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == taken
+    r = await patch(client, auth, out, [{"op": "add", "title": "Launch flow", "horizon": "next",
+                                         "feature_id": fid}])  # fmt: skip
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == taken
+    two = [
+        {"op": "add", "title": t, "horizon": "next"}
+        for t in ("F-33 Night digest", "F-33 Launch flow")
+    ]
+    r = await patch(client, auth, out, two)
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == "F-33 is already the code of F-33 Night digest"
+    r = await patch(
+        client, auth, out, [{"op": "add", "title": "F-32 Launch flow", "horizon": "next"}]
+    )
+    assert r.status_code == 200, r.text
+    async with tenant_session(tenant_id) as s:
+        row = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "shipping-step"))
+        row.title = "F-32 Alert routing by team"
+        await s.commit()
+    r = await client.post(f"{SETS}/{out['id']}/propose", headers=auth)
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"] == "F-32 is already the code of F-32 Alert routing by team"
+    r = await client.get(f"/v1/documents/{ROADMAP}/versions/2", headers=auth)
+    assert r.status_code == 404, r.text
+
+
+async def _feature(tenant_id, key: str = "F-31") -> str:
+    async with tenant_session(tenant_id) as s:
+        feature = Entity(type="feature", key=key, title="Launch flow", status="confirmed",
+                         origin="user", attrs={})  # fmt: skip
+        s.add(feature)
+        await s.flush()
+        fid = str(feature.id)
+        await s.commit()
+    return fid
+
+
+async def test_an_added_item_never_takes_the_code_another_item_shows(client, owner, runtime):  # noqa: F811
+    """protects=(every-field) the code a person sees on an item is its feature's (it wins over
+    its title's), then its PRD section's, then its title's: Edit plan's Add an item that would
+    show a code a live item shows by its feature is refused (422), whether the code is in the
+    added title or comes from the added item's picked feature (which wins over its title's);
+    one linked after it was added is refused at propose (409); fails_when=two items show F-31;
+    no_claim=the Simple paths (their own tests)."""
+    tenant_id, auth = owner
+    await approved_roadmap(client, auth, runtime)
+    fid = await _feature(tenant_id)
+    async with tenant_session(tenant_id) as s:
+        row = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "shipping-step"))
+        row.feature_id = uuid.UUID(fid)
+        await s.commit()
+    out = (await client.post(SETS, headers=auth)).json()
+    taken = "F-31 is already the code of F-31 Shipping step"
+    r = await patch(
+        client, auth, out, [{"op": "add", "title": "F-31 Night digest", "horizon": "next"}]
+    )
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == taken
+    # The picked feature's code is the one it shows, not its title's F-99.
+    async with tenant_session(tenant_id) as s:
+        row = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "shipping-step"))
+        row.feature_id = None
+        row.title = "F-31 Shipping step"
+        await s.commit()
+    r = await patch(client, auth, out, [{"op": "add", "title": "F-99 Launch flow",
+                                         "horizon": "next", "feature_id": fid}])  # fmt: skip
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == taken
+    r = await patch(
+        client, auth, out, [{"op": "add", "title": "F-32 Night digest", "horizon": "next"}]
+    )
+    assert r.status_code == 200, r.text
+    f32 = await _feature(tenant_id, "F-32")
+    async with tenant_session(tenant_id) as s:
+        row = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "payment-step"))
+        row.feature_id = uuid.UUID(f32)
+        await s.commit()
+    r = await client.post(f"{SETS}/{out['id']}/propose", headers=auth)
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"] == "F-32 is already the code of F-32 Payment step"
+
+
+async def test_a_write_never_gives_an_item_the_code_another_item_shows(client, owner, runtime):  # noqa: F811
+    """protects=(every-field) the check on every roadmap item write compares the code each item
+    shows: a title leading with the code another item shows by its feature is refused (409);
+    fails_when=the write is stored and two items show F-31."""
+    from oracle.roadmap.codes import CodeTaken
+
+    tenant_id, auth = owner
+    await approved_roadmap(client, auth, runtime)
+    fid = await _feature(tenant_id)
+    async with tenant_session(tenant_id) as s:
+        row = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "shipping-step"))
+        row.feature_id = uuid.UUID(fid)
+        await s.commit()
+    async with tenant_session(tenant_id) as s:
+        row = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "payment-step"))
+        row.title = "F-31 Payment step"
+        try:
+            await s.flush()
+        except CodeTaken as e:
+            assert e.detail == "F-31 is already the code of F-31 Shipping step"
+        else:
+            raise AssertionError("a second item was given F-31")
+
+
+async def _two_f31(tenant_id) -> None:
+    """Version 1 holds two items showing F-31 (stored before the one-code check) and a third,
+    Gift cards, with no code."""
+    from sqlalchemy import update
+
+    async with tenant_session(tenant_id) as s:
+        ship = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "shipping-step"))
+        skip = ("id", "created_at", "updated_at")
+        cols = [c.key for c in RoadmapItem.__mapper__.column_attrs if c.key not in skip]
+        third = RoadmapItem(**{c: getattr(ship, c) for c in cols})
+        third.item_key, third.title, third.position = "gift-cards", "Gift cards", 9
+        s.add(third)
+        await s.flush()
+        await s.execute(update(RoadmapItem).where(RoadmapItem.item_key == "shipping-step")
+                        .values(title="F-31 Shipping step"))  # fmt: skip
+        await s.execute(update(RoadmapItem).where(RoadmapItem.item_key == "payment-step")
+                        .values(title="F-31 Payment step"))  # fmt: skip
+        await s.commit()
+
+
+async def test_a_version_holding_a_code_twice_can_still_be_changed(client, owner, runtime):  # noqa: F811
+    """protects=(every-field) only a code a write newly gives is refused: a version that holds
+    two items showing F-31 already is proposed with a change set that moves a third item (the
+    copies are no new claim), and a new claim of F-31 is still refused; fails_when=propose
+    answers 409 for a move."""
+    tenant_id, auth = owner
+    await approved_roadmap(client, auth, runtime)
+    await _two_f31(tenant_id)
+    out = (await client.post(SETS, headers=auth)).json()
+    r = await patch(client, auth, out, [{"op": "add", "title": "F-31 Night digest",
+                                         "horizon": "next"}])  # fmt: skip
+    assert r.status_code == 422, r.text
+    r = await patch(client, auth, out, [{"op": "move", "key": "gift-cards", "horizon": "later"}])
+    assert r.status_code == 200, r.text
+    r = await client.post(f"{SETS}/{out['id']}/propose", headers=auth)
+    assert r.status_code == 200, r.text
+    async with tenant_session(tenant_id) as s:
+        row = await s.scalar(
+            select(RoadmapItem).where(
+                RoadmapItem.item_key == "gift-cards", RoadmapItem.horizon == "later"
+            )  # fmt: skip
+        )
+        assert row is not None
+        # A rename that newly gives the code is still refused.
+        from oracle.roadmap.codes import CodeTaken
+
+        row.title = "F-31 Gift cards"
+        try:
+            await s.flush()
+        except CodeTaken:
+            pass
+        else:
+            raise AssertionError("a third item was given F-31")
+
+
+async def test_a_run_imports_a_version_holding_a_code_twice(client, owner, runtime):  # noqa: F811
+    """protects=(every-field) a run's import of a roadmap version copies its items even when
+    the version before holds two items showing one code (a copy is no new claim);
+    fails_when=the import stores no items for the new version."""
+    from oracle.docs.models import Document, DocumentVersion
+    from oracle.review.models import FeedbackItem
+    from tests.test_roadmap import get, start, tick
+
+    tenant_id, auth = owner
+    await approved_roadmap(client, auth, runtime)
+    await _two_f31(tenant_id)
+    async with tenant_session(tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == ROADMAP))
+        s.add(FeedbackItem(document_id=doc.id, raised_on_version=1, kind="general",
+                           summary="Move shipping into now"))  # fmt: skip
+        await s.commit()
+    run = (await client.post("/v1/runs", json={"flow": "feedback_loop", "document": ROADMAP},
+                             headers=auth)).json()  # fmt: skip
+    run = await start(client, auth, run)
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["segments"][0]["draft_import"]["version"] == 2, run
+    async with tenant_session(tenant_id) as s:
+        v2 = await s.scalar(
+            select(DocumentVersion).where(
+                DocumentVersion.document_id == doc.id, DocumentVersion.number == 2
+            )  # fmt: skip
+        )
+        keys = set(await s.scalars(select(RoadmapItem.item_key).where(
+            RoadmapItem.roadmap_version_id == v2.id)))  # fmt: skip
+    assert {"payment-step", "shipping-step"} <= keys, keys
+
+
+async def _coded_items(tenant_id, n: int, first: int = 1) -> None:
+    """Version 1 gets items ``first`` to ``n``, each showing its own code (F-101 Item 1, ...)."""
+    async with tenant_session(tenant_id) as s:
+        ship = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "shipping-step")
+                              .order_by(RoadmapItem.created_at).limit(1))  # fmt: skip
+        cols = [c.key for c in RoadmapItem.__mapper__.column_attrs
+                if c.key not in ("id", "created_at", "updated_at")]  # fmt: skip
+        for i in range(first, n + 1):
+            row = RoadmapItem(**{c: getattr(ship, c) for c in cols})
+            row.item_key, row.title, row.position = f"item-{i}", f"F-{100 + i} Item {i}", 10 + i
+            row.feature_id = None
+            s.add(row)
+        await s.commit()
+
+
+async def _propose_statements(client, auth) -> int:
+    """Statements one propose of a fresh change set moving Item 1 runs."""
+    from sqlalchemy import event
+
+    from oracle.db import get_engine
+
+    out = (await client.post(SETS, headers=auth)).json()
+    r = await patch(client, auth, out, [{"op": "move", "key": "item-1", "horizon": "later"}])
+    assert r.status_code == 200, r.text
+    statements: list[str] = []
+
+    def count(conn, cursor, statement, parameters, *args):
+        if "SAVEPOINT" not in statement:
+            statements.append(statement)
+
+    engine = get_engine().sync_engine
+    event.listen(engine, "before_cursor_execute", count)
+    try:
+        r = await client.post(f"{SETS}/{out['id']}/propose", headers=auth)
+    finally:
+        event.remove(engine, "before_cursor_execute", count)
+    assert r.status_code == 200, r.text
+    return len(statements)
+
+
+async def test_proposing_a_plan_of_many_coded_items_reads_each_item_once(client, owner, runtime):  # noqa: F811
+    """protects=(every-field) the one-code check reads the items a new version copies once per
+    write, not once per item: proposing a plan of 40 coded items runs as many statements as
+    one of 5; fails_when=each copied item that shows a code costs a read of its own."""
+    tenant_id, auth = owner
+    await approved_roadmap(client, auth, runtime)
+    await _coded_items(tenant_id, 5)
+    # A first proposal waits, so each measured one supersedes the one before alike.
+    await _propose_statements(client, auth)
+    few = await _propose_statements(client, auth)
+    await _coded_items(tenant_id, 40, first=6)
+    many = await _propose_statements(client, auth)
+    assert few == many, (few, many)
+    assert many <= MAX_PROPOSE_STATEMENTS, many
+
+
+async def test_a_copy_never_takes_back_a_code_its_item_gave_up(client, owner, runtime):  # noqa: F811
+    """protects=(every-field) a copy keeps a code only when its item shows it on the row it is
+    copied from: Shipping step showed F-31 in version 1, gave it up in version
+    2 where Payment step took it, so a version 3 copy of Shipping step showing F-31 is refused;
+    fails_when=any older version of the item that showed F-31 lets the copy take it back."""
+    from oracle.docs.models import Document, DocumentVersion
+    from oracle.roadmap import codes
+    from oracle.roadmap.codes import CodeTaken
+
+    tenant_id, auth = owner
+    await approved_roadmap(client, auth, runtime)
+    cols = [c.key for c in RoadmapItem.__mapper__.column_attrs
+            if c.key not in ("id", "created_at", "updated_at", "roadmap_version_id")]  # fmt: skip
+
+    async def version(number: int, titles: dict[str, str]) -> None:
+        async with tenant_session(tenant_id) as s:
+            doc = await s.scalar(select(Document).where(Document.slug == ROADMAP))
+            v = DocumentVersion(document_id=doc.id, number=number, markdown=f"v{number}",
+                                content_hash=f"example-{number}")  # fmt: skip
+            s.add(v)
+            await s.flush()
+            # Each version copies the one before.
+            before = await s.scalar(select(DocumentVersion.id).where(
+                DocumentVersion.document_id == doc.id,
+                DocumentVersion.number == number - 1))  # fmt: skip
+            for row in list(await s.scalars(select(RoadmapItem).where(
+                    RoadmapItem.roadmap_version_id == before))):  # fmt: skip
+                copy = RoadmapItem(**{c: getattr(row, c) for c in cols}, roadmap_version_id=v.id)
+                copy.title = titles[row.item_key]
+                s.add(codes.copied_from(copy, roadmap_version_id=before))
+            await s.commit()
+
+    from sqlalchemy import update
+
+    async with tenant_session(tenant_id) as s:
+        await s.execute(update(RoadmapItem).where(RoadmapItem.item_key == "shipping-step")
+                        .values(title="F-31 Shipping step"))  # fmt: skip
+        await s.commit()
+    await version(2, {"shipping-step": "Shipping step", "payment-step": "F-31 Payment step"})
+    try:
+        await version(3, {"shipping-step": "F-31 Shipping step",
+                          "payment-step": "F-31 Payment step"})  # fmt: skip
+    except CodeTaken as e:
+        assert e.detail == "F-31 is already the code of F-31 Payment step"
+    else:
+        raise AssertionError("Shipping step took F-31 back from Payment step")
+
+
+async def _proposal(
+    tenant_id, number: int, titles: dict[str, str], *, approved: bool = False
+) -> uuid.UUID:
+    """An unapproved version ``number`` holding version 1's items with ``titles`` (a run's
+    proposal, written after version 1); ``approved``: approved as well."""
+    from datetime import UTC, datetime
+
+    from oracle.docs.models import Document, DocumentVersion
+
+    cols = [c.key for c in RoadmapItem.__mapper__.column_attrs
+            if c.key not in ("id", "created_at", "updated_at", "roadmap_version_id")]  # fmt: skip
+    async with tenant_session(tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == ROADMAP))
+        v1 = await s.scalar(select(DocumentVersion).where(
+            DocumentVersion.document_id == doc.id, DocumentVersion.number == 1))  # fmt: skip
+        v = DocumentVersion(document_id=doc.id, number=number, markdown=v1.markdown,
+                            content_hash=f"example-{number}",
+                            source_version_id=v1.source_version_id,
+                            approved_at=datetime.now(UTC) if approved else None)  # fmt: skip
+        s.add(v)
+        await s.flush()
+        for row in list(await s.scalars(select(RoadmapItem).where(
+                RoadmapItem.roadmap_version_id == v1.id))):  # fmt: skip
+            copy = RoadmapItem(**{c: getattr(row, c) for c in cols}, roadmap_version_id=v.id)
+            copy.title = titles.get(row.item_key, row.title)
+            s.add(copy)
+        await s.commit()
+        return v.id
+
+
+async def _version_titles(tenant_id, number: int) -> dict[str, str]:
+    from oracle.docs.models import Document, DocumentVersion
+
+    async with tenant_session(tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == ROADMAP))
+        v = await s.scalar(select(DocumentVersion).where(
+            DocumentVersion.document_id == doc.id, DocumentVersion.number == number))  # fmt: skip
+        return {r.item_key: r.title for r in await s.scalars(
+            select(RoadmapItem).where(RoadmapItem.roadmap_version_id == v.id))}  # fmt: skip
+
+
+async def test_propose_copies_codes_from_its_base_not_a_newer_proposal(client, owner, runtime):  # noqa: F811
+    """protects=(every-field) a proposed version's copies keep the codes the change set's base
+    (the approved version) shows: version 1 holds F-31 on Shipping step and Payment step, a
+    run's unapproved version 2 drops it from Shipping step, and a change set on version 1 that
+    moves Gift cards is proposed with both F-31 rows; fails_when=the copy source is the item's
+    latest row on any version (version 2), so propose answers 409."""
+    tenant_id, auth = owner
+    await approved_roadmap(client, auth, runtime)
+    await _two_f31(tenant_id)
+    await _proposal(tenant_id, 2, {"shipping-step": "Shipping step"})
+    out = (await client.post(SETS, headers=auth)).json()
+    assert out["base_version"] == 1, out
+    r = await patch(client, auth, out, [{"op": "move", "key": "gift-cards", "horizon": "later"}])
+    assert r.status_code == 200, r.text
+    r = await client.post(f"{SETS}/{out['id']}/propose", headers=auth)
+    assert r.status_code == 200, r.text
+    titles = await _version_titles(tenant_id, 3)
+    assert titles["shipping-step"] == "F-31 Shipping step", titles
+    assert titles["payment-step"] == "F-31 Payment step", titles
+
+
+async def test_a_proposed_version_records_the_change_sets_base(client, owner, runtime):  # noqa: F811
+    """protects=(every-field) a proposed version's base number is the change set's base
+    (version 1), not the latest version when it was proposed (a run's unapproved version 2),
+    so a later read of what the version was written on reads version 1;
+    fails_when=propose stores the latest version's number as its base."""
+    from oracle.docs.models import Document, DocumentVersion
+
+    tenant_id, auth = owner
+    await approved_roadmap(client, auth, runtime)
+    await _proposal(tenant_id, 2, {})
+    out = (await client.post(SETS, headers=auth)).json()
+    assert out["base_version"] == 1, out
+    r = await patch(client, auth, out, [{"op": "move", "key": "shipping-step", "horizon": "later"}])
+    assert r.status_code == 200, r.text
+    r = await client.post(f"{SETS}/{out['id']}/propose", headers=auth)
+    assert r.status_code == 200, r.text
+    async with tenant_session(tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == ROADMAP))
+        base = await s.scalar(select(DocumentVersion.base_number).where(
+            DocumentVersion.document_id == doc.id, DocumentVersion.number == 3))  # fmt: skip
+    assert base == 1
+
+
+async def test_a_run_import_copies_codes_from_the_version_it_builds_on(client, owner, runtime):  # noqa: F811
+    """protects=(every-field) a run's items file stored on a version keeps the codes the
+    version it builds on (its base) shows: version 1 holds F-31 twice, an unapproved version 2
+    drops it from Shipping step, and version 3, built on version 1, stores both F-31 rows;
+    fails_when=the copy source is the item's latest row on any version (version 2)."""
+    from oracle.docs.models import Document, DocumentVersion
+    from oracle.roadmap import items as items_mod
+    from tests.test_roadmap import ITEMS
+
+    tenant_id, auth = owner
+    await approved_roadmap(client, auth, runtime)
+    await _two_f31(tenant_id)
+    await _proposal(tenant_id, 2, {"shipping-step": "Shipping step"})
+    text = ITEMS.replace("title: Payment step", "title: F-31 Payment step").replace(
+        "title: Shipping step", "title: F-31 Shipping step")  # fmt: skip
+    async with tenant_session(tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == ROADMAP))
+        v1 = await s.scalar(select(DocumentVersion).where(
+            DocumentVersion.document_id == doc.id, DocumentVersion.number == 1))  # fmt: skip
+        v3 = DocumentVersion(document_id=doc.id, number=3, markdown=v1.markdown,
+                             content_hash="example-3", source_version_id=v1.source_version_id,
+                             base_number=1)  # fmt: skip
+        s.add(v3)
+        await s.flush()
+        result = await items_mod.import_items(s, v3, text)
+        await s.commit()
+    assert {i.item_key for i in result.items} == {"payment-step", "shipping-step"}
+    titles = await _version_titles(tenant_id, 3)
+    assert titles["shipping-step"] == "F-31 Shipping step", titles
+
+
+async def _run_version(tenant_id, number: int, text: str):
+    """Version ``number`` stored as a prd_to_roadmap run imports it (docs.service.import_draft
+    with no base_version: base_number None), and the run's items file ``text`` on it."""
+    from oracle.docs.models import Document, DocumentVersion
+    from oracle.roadmap import items as items_mod
+
+    async with tenant_session(tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == ROADMAP))
+        v1 = await s.scalar(select(DocumentVersion).where(
+            DocumentVersion.document_id == doc.id, DocumentVersion.number == 1))  # fmt: skip
+        v = DocumentVersion(document_id=doc.id, number=number, markdown=v1.markdown,
+                            content_hash=f"example-{number}",
+                            source_version_id=v1.source_version_id, base_number=None)  # fmt: skip
+        s.add(v)
+        await s.flush()
+        result = await items_mod.import_items(s, v, text)
+        await s.commit()
+    return result
+
+
+def _f31_items() -> str:
+    from tests.test_roadmap import ITEMS
+
+    return ITEMS.replace("title: Payment step", "title: F-31 Payment step").replace(
+        "title: Shipping step", "title: F-31 Shipping step")  # fmt: skip
+
+
+async def test_a_run_with_no_base_copies_codes_from_the_last_approved(client, owner, runtime):  # noqa: F811
+    """protects=(every-field) a run's version imported with no base (base_number None, as
+    every prd_to_roadmap run imports it) keeps the codes the latest approved version shows:
+    approved version 1 holds F-31 twice, an unapproved version 2 (a proposal) drops it from
+    Shipping step, and the run's version 3 stores both F-31 rows; fails_when=the version it
+    builds on is the latest earlier one whatever its approval (version 2), so 409 and the
+    run's items are lost."""
+    tenant_id, auth = owner
+    await approved_roadmap(client, auth, runtime)
+    await _two_f31(tenant_id)
+    await _proposal(tenant_id, 2, {"shipping-step": "Shipping step"})
+    result = await _run_version(tenant_id, 3, _f31_items())
+    assert {i.item_key for i in result.items} == {"payment-step", "shipping-step"}
+    titles = await _version_titles(tenant_id, 3)
+    assert titles["shipping-step"] == "F-31 Shipping step", titles
+    assert titles["payment-step"] == "F-31 Payment step", titles
+
+
+async def test_a_run_with_no_base_builds_on_the_latest_approved_version(client, owner, runtime):  # noqa: F811
+    """protects=(every-field) a run's version with no base builds on the latest approved
+    version when it is the latest earlier one: approved version 1 holds F-31 twice, approved
+    version 2 drops it from Shipping step, and the run's version 3 giving Shipping step F-31
+    again is refused (409); fails_when=it builds on an older approved version (version 1)."""
+    from oracle.roadmap.codes import CodeTaken
+
+    tenant_id, auth = owner
+    await approved_roadmap(client, auth, runtime)
+    await _two_f31(tenant_id)
+    await _proposal(tenant_id, 2, {"shipping-step": "Shipping step"}, approved=True)
+    try:
+        await _run_version(tenant_id, 3, _f31_items())
+    except CodeTaken as e:
+        assert e.detail == "F-31 is already the code of F-31 Payment step"
+    else:
+        raise AssertionError("Shipping step took F-31 back from Payment step")
+
+
+async def test_carrying_items_forward_keeps_a_code_the_version_before_held(client, owner, runtime):  # noqa: F811
+    """protects=(every-field) a version imported without items keeps the items of the version
+    before as they were, a code held twice there included; fails_when=the carried copies of
+    Shipping step and Payment step showing F-31 are refused."""
+    from oracle.docs.models import Document, DocumentVersion
+    from oracle.roadmap import items as items_mod
+
+    tenant_id, auth = owner
+    await approved_roadmap(client, auth, runtime)
+    await _two_f31(tenant_id)
+    async with tenant_session(tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == ROADMAP))
+        v1 = await s.scalar(select(DocumentVersion).where(
+            DocumentVersion.document_id == doc.id, DocumentVersion.number == 1))  # fmt: skip
+        v2 = DocumentVersion(
+            document_id=doc.id,
+            number=2,
+            content_hash="example-2",
+            markdown=v1.markdown + "\npayment-step shipping-step gift-cards\n",
+        )
+        s.add(v2)
+        await s.flush()
+        assert await items_mod.carry_forward(s, v2) == 3
+        await s.commit()
+    titles = await _version_titles(tenant_id, 2)
+    assert titles["shipping-step"] == "F-31 Shipping step", titles
+    assert titles["payment-step"] == "F-31 Payment step", titles
+
+
+async def test_company_carry_keeps_a_code_the_version_before_held(client, owner, runtime):  # noqa: F811
+    """protects=(every-field) a company roadmap version written from one PRD keeps every other
+    PRD's items as the version before has them, a code held twice there included;
+    fails_when=the carried copies of Shipping step and Payment step showing F-31 are refused."""
+    from oracle.docs.models import Document, DocumentVersion
+    from oracle.roadmap import company
+
+    tenant_id, auth = owner
+    await approved_roadmap(client, auth, runtime)
+    await _two_f31(tenant_id)
+    async with tenant_session(tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == ROADMAP))
+        v1 = await s.scalar(select(DocumentVersion).where(
+            DocumentVersion.document_id == doc.id, DocumentVersion.number == 1))  # fmt: skip
+        v2 = DocumentVersion(document_id=doc.id, number=2, content_hash="example-2",
+                             markdown=v1.markdown)  # fmt: skip
+        s.add(v2)
+        await s.flush()
+        # Written from another PRD: each of version 1's items is carried.
+        assert await company.carry_other_prds(s, v2, uuid.uuid4(), 0) == 3
+        await s.flush()
+        await s.commit()
+    titles = await _version_titles(tenant_id, 2)
+    assert titles["shipping-step"] == "F-31 Shipping step", titles
+    assert titles["payment-step"] == "F-31 Payment step", titles
+
+
+async def test_slices_of_one_feature_share_its_code(client, owner, runtime):  # noqa: F811
+    """protects=(every-field) one code, one item counts the items of one feature as one: an item
+    linked to F-31 and an item of no feature whose PRD section is F-31's (slices or parts of
+    F-31) both show F-31, on a write, an Edit plan add and a propose; a run's items of F-31
+    share it too; an item whose title alone claims F-31 is still refused on each;
+    fails_when=two slices of F-31 are refused as a clash (409 or 422), or the title claim is
+    stored."""
+    from oracle.docs.models import Document, DocumentVersion
+    from oracle.roadmap import items as items_mod
+    from oracle.roadmap.codes import CodeTaken
+    from tests.test_roadmap import ITEMS
+
+    tenant_id, auth = owner
+    await approved_roadmap(client, auth, runtime)
+    fid = await _feature(tenant_id)
+    # A write: Shipping step is F-31's, Payment step F-31's by its PRD section.
+    async with tenant_session(tenant_id) as s:
+        ship = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "shipping-step"))
+        ship.feature_id = uuid.UUID(fid)
+        await s.commit()
+    async with tenant_session(tenant_id) as s:
+        pay = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "payment-step"))
+        pay.feature_id, pay.prd_section_key = None, "f-31"
+        await s.commit()
+    # Edit plan: a third part of F-31 is added; Night digest's title alone claims F-31.
+    out = (await client.post(SETS, headers=auth)).json()
+    r = await patch(
+        client, auth, out, [{"op": "add", "title": "F-31 Night digest", "horizon": "next"}]
+    )
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"].startswith("F-31 is already the code of F-31 "), r.text
+    r = await patch(client, auth, out, [{"op": "add", "title": "Launch flow end",
+                                         "horizon": "later", "feature_id": fid}])  # fmt: skip
+    assert r.status_code == 200, r.text
+    # Propose: version 2 holds the three parts of F-31.
+    r = await client.post(f"{SETS}/{out['id']}/propose", headers=auth)
+    assert r.status_code == 200, r.text
+    titles = await _version_titles(tenant_id, 2)
+    assert "Launch flow end" in titles.values(), titles
+    # A run's items, built on version 1 (a run's file names a feature, not a section the PRD
+    # lacks): Payment step and a new item, Launch flow end, both of F-31; a new item whose
+    # title alone claims F-31 is refused.
+    new = ITEMS.replace("prd_section: s-5-1", "prd_section: s-5-1\n    feature: F-31").replace(
+        "id: shipping-step", "id: launch-end")  # fmt: skip
+    text = new.replace("title: Shipping step", "title: Launch flow end").replace(
+        "prd_section: s-5-2", "prd_section: s-5-2\n    feature: F-31")  # fmt: skip
+    claim = new.replace("title: Shipping step", "title: F-31 Night digest")
+    async with tenant_session(tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == ROADMAP))
+        v1 = await s.scalar(select(DocumentVersion).where(
+            DocumentVersion.document_id == doc.id, DocumentVersion.number == 1))  # fmt: skip
+        v3 = DocumentVersion(document_id=doc.id, number=3, markdown=v1.markdown,
+                             content_hash="example-3", source_version_id=v1.source_version_id,
+                             base_number=1)  # fmt: skip
+        s.add(v3)
+        await s.flush()
+        v3_id = v3.id
+        await s.commit()
+    async with tenant_session(tenant_id) as s:
+        try:
+            await items_mod.import_items(s, await s.get(DocumentVersion, v3_id), claim)
+            await s.flush()
+        except CodeTaken as e:
+            assert e.detail.startswith("F-31 is already the code of F-31 "), e.detail
+        else:
+            raise AssertionError("Night digest's title took F-31 from Payment step")
+    async with tenant_session(tenant_id) as s:
+        result = await items_mod.import_items(s, await s.get(DocumentVersion, v3_id), text)
+        await s.commit()
+    assert {i.item_key for i in result.items} == {"payment-step", "launch-end"}
+    async with tenant_session(tenant_id) as s:
+        rows = list(await s.scalars(select(RoadmapItem).where(
+            RoadmapItem.roadmap_version_id == v3_id)))  # fmt: skip
+    by = {r.item_key: r for r in rows}
+    assert by["launch-end"].feature_id == by["payment-step"].feature_id == uuid.UUID(fid)

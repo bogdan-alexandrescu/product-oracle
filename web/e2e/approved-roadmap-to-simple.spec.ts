@@ -1,5 +1,5 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { login, openRoadmapItem } from "./helpers";
 import { expect, test, type Page } from "./test";
 
 /*
@@ -59,6 +59,40 @@ test.describe("a person's change after the version", () => {
     await expect(line.getByRole("button", { name: "Apply version 3 again" })).toBeEnabled();
     await expect(line.getByTestId("applied-differences")).toHaveText("Trail photo tips was added after version 3");
     await expect(line.getByTestId("applied-off-plan")).toHaveText("Shipped, off the plan: Offline sync. Moved to the next PRD: Trail chat.");
+  });
+});
+
+test.describe("a version's row whose code an item has", () => {
+  test.use(DESKTOP);
+
+  /**
+   * protects = every-field (one code, one item): Photo pins shows the code TR-9 by its Ground
+   * Truth feature (its title has no code), so approving version 3, whose new row is "TR-9 Keep
+   * improving trail maps", adds no second item showing TR-9, and the applied-version line says
+   * why in the API's words ("<row> was not added: TR-9 is already the code of TR-9 Photo pins");
+   * fails_when = the row is added as a second TR-9 item, or the line says nothing of it (as when
+   * only a title's code counts); no_claim = Edit plan's own refusal (plan-edit.spec.ts).
+   */
+  test("the line says which row was not added and why", async ({ page }) => {
+    await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "photo-pins-feature"] as const);
+    await login(page);
+    await page.goto(SIMPLE);
+    await openRoadmapItem(page, "photo-pins");
+    const panel = page.getByTestId("floating-card");
+    await expect(panel.getByTestId("card-code")).toContainText("TR-9");
+    await expect(panel.getByTestId("card-code-why")).toHaveCount(1);
+    await expect(panel.getByRole("button", { name: "Change the code" })).toHaveCount(0);
+
+    await approveVersion3(page);
+    await page.goto(SIMPLE);
+    const line = page.getByTestId("applied-version");
+    await expect(line).toHaveAttribute("data-matches", "false");
+    await expect(line.getByTestId("applied-differences")).toContainText(
+      "TR-9 Keep improving trail maps was not added: TR-9 is already the code of TR-9 Photo pins",
+    );
+    await view(page, "gantt");
+    await expect(bar(page, "keep-improving")).toHaveCount(0);
+    await expect(bar(page, "photo-pins")).toHaveCount(1);
   });
 });
 

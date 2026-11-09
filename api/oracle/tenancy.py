@@ -118,6 +118,14 @@ def _stamp_and_check(session: Session, flush_context, instances) -> None:
             raise TenantMismatchError(f"{type(obj).__name__} belongs to another tenant")
 
 
+@event.listens_for(TenantSession, "before_flush")
+def _one_code_one_item(session: Session, flush_context, instances) -> None:
+    # every-field: the one check every write of a roadmap item's title or code passes through.
+    from oracle.roadmap import codes
+
+    codes.check_flush(session)
+
+
 @asynccontextmanager
 async def tenant_session(tenant_id: uuid.UUID) -> AsyncIterator[AsyncSession]:
     """A session scoped to ``tenant_id``. Commit is the caller's job."""

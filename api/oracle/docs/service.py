@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Literal
 
-from sqlalchemy import func, select, tuple_
+from sqlalchemy import any_, func, select, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -452,7 +452,35 @@ async def read_document(db: AsyncSession, doc: str) -> DocumentOut:
         ),
         versions=versions,
         changes_in_review=await simple_drafts.changes_in_review(db, document.id),
-        replaced_by=await company.refs(db, list(document.replaced_by or [])),
+        replaced_by=await company.refs(db, await _replaced_by(db, document)),
+        replaces=await company.refs(db, await _replaces(db, document)),
+        read_only=await company.read_only(db, document),
+    )
+
+
+async def _replaced_by(db: AsyncSession, document: Document) -> list[uuid.UUID]:
+    """The live PRDs that replace a PRD, or (replaced-prd-history) the PRDs that replaced the
+    PRDs its roadmap was of: empty unless it is read-only history (company.History)."""
+    from oracle.roadmap import company
+
+    if document.kind == "roadmap":
+        return (await company.history_roadmaps(db)).get(document.id, [])
+    if document.kind != "prd" or not document.replaced_by:
+        return []
+    return (await company.history(db)).prds.get(document.id, [])
+
+
+async def _replaces(db: AsyncSession, document: Document) -> list[uuid.UUID]:
+    """replaced-prd-history: the PRDs this PRD replaced, oldest first, read-only history
+    reached from here."""
+    if document.kind != "prd":
+        return []
+    return list(
+        await db.scalars(
+            select(Document.id)
+            .where(Document.kind == "prd", document.id == any_(Document.replaced_by))
+            .order_by(Document.created_at, Document.id)
+        )
     )
 
 
@@ -1270,9 +1298,12 @@ async def import_draft(
     held: dict[str, HeldSection] = {}
 
     document = await find_document(db, doc, for_update=True)
-    if document is not None and document.replaced_by:
+    from oracle.roadmap import company
+
+    if document is not None and (why := await company.read_only(db, document)):
         # one-roadmap-many-prds: a replaced PRD is read-only; its history stays.
-        raise ReplacedError(f"{document.title} is replaced and read-only")
+        # replaced-prd-history: its roadmap too.
+        raise ReplacedError(why)
     if (
         run_creates
         and document is not None

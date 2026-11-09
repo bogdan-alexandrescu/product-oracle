@@ -55,9 +55,9 @@ async def _shown_version(db: AsyncSession, company_id: uuid.UUID) -> uuid.UUID |
 
 
 def _replaced() -> Any:
-    """The PRDs a person marked replaced (oracle.roadmap.company.replaced_prd_ids)."""
+    """The PRDs a live PRD replaces (oracle.roadmap.company.replaced_prd_ids)."""
     prd = aliased(Document)
-    return select(prd.id).where(prd.kind == "prd", prd.replaced_by != [])
+    return select(prd.id).where(prd.kind == "prd", company.replaced_now(prd))
 
 
 class _Plan:

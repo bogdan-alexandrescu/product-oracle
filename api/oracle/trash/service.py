@@ -626,7 +626,7 @@ async def restore_entry(
         raise Forbidden("Only an owner, or whoever deleted it, restores this")
     from oracle.simple import trash_items
 
-    await trash_items.before_restore(db, entry)
+    await trash_items.before_restore(db, entry, principal)
     if entry.root_type == "agenda_item":
         # port-an-decisions: the row goes back onto its meeting's agenda.
         from oracle.simple import meetings

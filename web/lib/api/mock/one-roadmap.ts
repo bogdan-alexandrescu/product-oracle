@@ -13,6 +13,9 @@ import type { MockMilestone } from "./simple-milestones";
 import type { SeedItem, SimpleDb } from "./simple-roadmap";
 
 export const ONE_ROADMAP_SCENARIO = "one-roadmap";
+/** replaced-prd-history: "one-roadmap" with Trust plan and its roadmap in Trash (its draft sent for
+ * approval, its track) and a working draft of the company roadmap (server.ts). */
+export const REPLACED_PRD_TRASH_SCENARIO = "replaced-prd-trash";
 /** old-milestones: "one-roadmap" with goal milestones still on the older Trust plan roadmap. */
 export const OLD_MILESTONES_SCENARIO = "old-milestones";
 /** item-milestone: "one-roadmap" with both area PRDs' milestones on the company roadmap. */

@@ -33,9 +33,9 @@ from oracle.auth.deps import Principal
 from oracle.baseline.models import Entity
 from oracle.docs import service as docs_service
 from oracle.docs.models import Document, DocumentVersion, Section
+from oracle.roadmap import codes, schedule, views
 from oracle.roadmap import diff as item_diff
 from oracle.roadmap import items as items_mod
-from oracle.roadmap import schedule, views
 from oracle.roadmap.models import HORIZONS, RoadmapChangeSet, RoadmapItem
 from oracle.roadmap.schemas import (
     AddChange,
@@ -82,6 +82,8 @@ class Applied:
     # Per horizon, in order.
     lanes: dict[str, list[Planned]]
     cut: list[tuple[Planned, str]] = field(default_factory=list)
+    # The keys of the items added, in the order the changes add them.
+    added: list[str] = field(default_factory=list)
 
     def items(self) -> list[tuple[int, Planned]]:
         out: list[tuple[int, Planned]] = []
@@ -120,6 +122,7 @@ def apply(base: list[RoadmapItem], changes: list[Any]) -> Applied:
             if key in cut or any(p.key == key for lane in lanes.values() for p in lane):
                 raise ChangeSetError(f"the plan has an item {key} already")
             lanes[c.horizon].append(Planned(key, c.title, c.horizon, c.outcome, c.feature_id))
+            out.added.append(key)
             continue
         item = find(c.key)
         lanes[item.horizon].remove(item)
@@ -133,6 +136,37 @@ def apply(base: list[RoadmapItem], changes: list[Any]) -> Applied:
         elif isinstance(c, ReorderChange):
             lanes[item.horizon].insert(min(c.position, len(lanes[item.horizon])), item)
     return out
+
+
+async def _codes(db: AsyncSession, applied: Applied, error: type[ChangeSetError]) -> None:
+    """every-field: one code, one item. An added item whose shown code (its picked feature's,
+    else its title's: oracle.roadmap.codes.shown) another item of the plan shows is refused
+    in set_code's words (``error``: 422 when added, 409 when it was taken since, at propose).
+    Slices of one feature share its code. oracle.roadmap.codes checks every write too."""
+    from types import SimpleNamespace
+
+    plan = [p for _, p in applied.items()]
+    # The item there first holds the code: the base's, then the adds in the order made.
+    added = [p for p in plan if p.base is None]
+    added.sort(key=lambda p: applied.added.index(p.key) if p.key in applied.added else 0)
+    by_feature = await codes.feature_codes(db) if added else {}
+
+    def item(p: Planned) -> SimpleNamespace:
+        section = p.base.prd_section_key if p.base is not None else None
+        return SimpleNamespace(item_key=p.key, title=p.title, feature_id=p.feature_id,
+                               prd_section_key=section)  # fmt: skip
+
+    for n, p in enumerate(added):
+        before = [o for o in plan if o.base is not None] + added[:n]
+        code = codes.shown(item(p), by_feature)
+        others = [item(o) for o in before]
+        hit = (
+            codes.clash(code, p.key, p.feature_id, others, by_feature, item(p).prd_section_key)
+            if code
+            else None
+        )
+        if hit is not None:
+            raise error(codes.taken(code, codes.named(hit, by_feature)))  # type: ignore[arg-type]
 
 
 # --- reads ----------------------------------------------------------------------------------
@@ -371,7 +405,7 @@ async def update(
     await check_base(db, document, row)
     stored = await _stored(db, changes)
     base = await db.get(DocumentVersion, row.base_version_id)
-    apply(await views.version_items(db, base), _parse(stored))
+    await _codes(db, apply(await views.version_items(db, base), _parse(stored)), ChangeSetError)
     before = list(row.changes)
     row.changes = stored
     row.lock_version += 1
@@ -488,6 +522,7 @@ async def propose(
     base = await db.get(DocumentVersion, row.base_version_id)
     base_rows = await views.version_items(db, base)
     applied = apply(base_rows, changes)
+    await _codes(db, applied, Conflict)
     titles = {r.item_key: r.title for r in base_rows}
     cut = {c.key for c in changes if isinstance(c, CutChange)}
     markdown = await _markdown(db, base, _summary_lines(base.number, changes, titles), cut)
@@ -511,6 +546,8 @@ async def propose(
             DocumentVersion.number == result.version.number,
         )
     )
+    # Imported on the latest number (nothing to merge); written on the change set's base.
+    version.base_number = base_number
     await db.execute(delete(RoadmapItem).where(RoadmapItem.roadmap_version_id == version.id))
     prd_ids = {r.prd_document_id for r in base_rows}
     bases = {p: await schedule.verified_bases(db, p) for p in prd_ids}
@@ -538,9 +575,10 @@ async def propose(
                 if p.feature_id else [],
                 "note": f"added to version {base_number}'s plan",
             }  # fmt: skip
-        db.add(
-            RoadmapItem(roadmap_document_id=document.id, roadmap_version_id=version.id, **fields)
-        )
+        added = RoadmapItem(roadmap_document_id=document.id, roadmap_version_id=version.id,
+                            **fields)  # fmt: skip
+        # A base item's copy keeps the codes the base (the approved version) shows.
+        db.add(codes.copied_from(added, roadmap_version_id=base.id) if p.base else added)
     row = await db.get(RoadmapChangeSet, set_id, with_for_update=True)
     row.status = "proposed"
     row.proposed_version_id = version.id
