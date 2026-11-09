@@ -603,7 +603,9 @@ function onReplacedPrd(db: SimpleDb, c: Change): boolean {
 function sees(db: SimpleDb, ctx: SimpleChangesCtx, c: Change): boolean {
   if (ctx.role === "owner" || c.by === ctx.id || route(db, ctx, c).includes(ctx.id)) return true;
   if ((db.drafts ?? []).some((d) => (c.draft_ids ?? []).includes(d.out.id) && seesDraft(d, ctx, db))) return true;
-  return (db.sessions ?? []).some((s) => s.id === c.session_id && s.started_by === ctx.id);
+  if ((db.sessions ?? []).some((s) => s.id === c.session_id && s.started_by === ctx.id)) return true;
+  // changes.sees: the document's owners and who decides it; a PRD milestone's ask is its PRD owner's.
+  return c.op === MILESTONE_OP && !!c.before && !("milestone" in c.before) && decidesChange(db, ctx, c);
 }
 
 /** The drafts a change writes (drafts.write_items): the roadmaps' working drafts, opened on
