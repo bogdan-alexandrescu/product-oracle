@@ -37,6 +37,7 @@ import {
   fixChange,
   goalTiles,
   greeting,
+  goalMilestoneName,
   homePlanInputs,
   NEW_FLOW_OPS,
   OP_WORDS,
@@ -1284,10 +1285,11 @@ export default function SimpleHome() {
           <HomeCard id="next-milestone" icon="flag" title="What the next milestone delivers" all="/simple/roadmap" allLabel="All of the roadmap">
             <Block q={roadmap} testId="home-milestone">
               {(r) => {
-                // home-milestones-current: the roadmap's own (goal) milestones count as its track ones do.
+                // home-milestones-current: the roadmap's own (goal) milestones count as its track ones do,
+                // each named whole as the quarter plan's rows read it ("M2 · Pilot", "M3", never "M3 · ").
                 const ahead = [
                   ...r.milestones.filter((x) => x.status === "planned").map((x) => ({ name: x.name, date: x.date ?? null, has: (i: (typeof r.items)[number]) => x.item_ids.includes(i.id) })),
-                  ...(r.goal_milestones ?? []).filter((x) => x.progress !== "met").map((x) => ({ name: `${x.code} · ${x.name}`, date: x.date ?? null, has: (i: (typeof r.items)[number]) => x.item_ids.includes(i.id) || i.milestone?.id === x.id })),
+                  ...(r.goal_milestones ?? []).filter((x) => x.progress !== "met").map((x) => ({ name: goalMilestoneName(x), date: x.date ?? null, has: (i: (typeof r.items)[number]) => x.item_ids.includes(i.id) || i.milestone?.id === x.id })),
                 ];
                 const m = ahead.filter((x) => x.date && x.date >= r.today).sort((a, b) => a.date!.localeCompare(b.date!))[0];
                 if (!m) return <p className="simple-small">No milestone ahead yet.</p>;
