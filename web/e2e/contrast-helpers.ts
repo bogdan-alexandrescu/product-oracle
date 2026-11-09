@@ -29,6 +29,10 @@ function readColours(el: Locator, timeout: number): Promise<Read> {
     // starts at delay + k * cycle: on the from keyframe for every k when it runs normal, for even
     // k when alternate and odd k when alternate-reverse; reverse starts each on its to keyframe
     // and so reaches the from keyframe only as it ends, read a hundredth of a millisecond before.
+    // The others are read a hundredth of a millisecond after their iteration starts: the browser
+    // seeks in seconds, so a seek exactly onto the start can land at the end of the iteration
+    // before, on its to keyframe. A steps(n, start) easing jumps a step as each iteration starts,
+    // so it never shows its from keyframe: it is read on the step nearest it, one step in.
     const restAt = (a: CSSAnimation) => {
       const timing = a.effect?.getComputedTiming();
       const delay = Number(timing?.delay ?? 0);
@@ -39,7 +43,7 @@ function readColours(el: Locator, timeout: number): Promise<Read> {
       if (timing?.direction === "reverse") k = Math.max(1, Math.ceil((end - delay) / cycle));
       if (timing?.direction === "alternate" && k % 2 === 1) k++;
       if (timing?.direction === "alternate-reverse" && k % 2 === 0) k++;
-      return delay + k * cycle - (timing?.direction === "reverse" ? end : 0);
+      return delay + k * cycle + (timing?.direction === "reverse" ? -end : end);
     };
     const moving: string[] = [];
     const rested: { a: Animation; was: CSSNumberish | null }[] = [];

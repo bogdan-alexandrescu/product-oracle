@@ -58,7 +58,7 @@ for (const [what, timing] of [
 
 // Every direction, over a few cycles and negative delays, rests on its from keyframe.
 for (const direction of ["normal", "alternate", "alternate-reverse", "reverse"]) {
-  test(`a ${direction} glow is read at its from keyframe over cycles and negative delays`, async ({ page }) => {
+  test(`${direction} glows are read at their from keyframe over cycles and negative delays`, async ({ page }) => {
     const cases = [0.3, 0.8, 1.3, 2].flatMap((cycle) =>
       [-0.1, -0.7, -1.7, -2.1].flatMap((delay) =>
         ["linear", "ease-in-out"].map((easing) => `${cycle}s ${easing} ${delay}s infinite ${direction}`),
