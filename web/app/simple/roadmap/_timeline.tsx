@@ -1006,7 +1006,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                   TICK_H), so it never draws through them on its way down to the Today pill. */}
               <line x1={today} x2={today} y1={compact && !todayMark ? l.top - 4 : lineTop(today, 0, Math.max(TICK_H + 2, baseline(0) - 25))} y2={l.height} stroke="var(--crit)" strokeWidth={1.5} data-testid="today-line" />
               {todayMark?.words && (
-                <g data-testid="today-pill">
+                <g data-testid="today-pill" data-keep-clear>
                   {/* fix4 qa-simple-roadmap-54: 11 px words (were 10), clear of the header above. */}
                   <rect x={todayMark.side === "after" ? today + 2 : today - 44} y={baseline(0) - 18} width={42} height={16} rx={8} fill="var(--crit)" />
                   <text x={todayMark.side === "after" ? today + 23 : today - 23} y={baseline(0) - 6.5} fontSize={11} fontWeight={700} fill="var(--surface)" textAnchor="middle">
@@ -1156,7 +1156,7 @@ function Axis({ ticks, sc, height, format, drop, compact, monthly = false, view 
             {drop && <rect data-testid="quarter-drop" data-add-where={whereAttr("quarter", quarterValue(t.day))} data-add-label={t.label} x={x} y={0} width={next - x} height={height} fill="transparent" />}
             <line x1={x} x2={x} y1={0} y2={height} stroke="var(--line)" strokeWidth={t.major ? 1 : 0.5} />
             {(yearMark || monthMark) && (
-              <text x={x + 3} y={11} fontSize={10} fontWeight={600} fill="var(--text2)" data-testid={yearMark ? "axis-year" : "axis-month"}>
+              <text x={x + 3} y={11} fontSize={10} fontWeight={600} fill="var(--text2)" data-testid={yearMark ? "axis-year" : "axis-month"} data-keep-clear>
                 {yearMark || monthMark}
               </text>
             )}
@@ -1170,6 +1170,7 @@ function Axis({ ticks, sc, height, format, drop, compact, monthly = false, view 
                 textAnchor={anchorEnd ? "end" : "start"}
                 // A label left out of the part in view keeps its place (for the export) under another name.
                 data-testid={text ? "axis-tick" : "axis-tick-out"}
+                data-keep-clear={text ? "" : undefined}
                 data-whole={moved ? whole : undefined}
                 data-whole-x={moved ? wholeX : undefined}
                 data-whole-anchor={moved ? (clipped ? "end" : "start") : undefined}

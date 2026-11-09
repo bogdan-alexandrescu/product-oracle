@@ -110,9 +110,12 @@ async function badgesClear(page: Page, months: Locator) {
     if (!box) continue;
     for (const one of b) expect(overlaps(one, box), `a badge over "${await m.textContent()}"`).toBe(false);
   }
-  // Each still names its own day.
-  await expect(badges.filter({ hasText: "on Nov 20" })).toHaveCount(1);
-  await expect(badges.filter({ hasText: "on Nov 21" })).toHaveCount(1);
+  // Each still names its own day and sits by its own diamond.
+  for (const d of ["20", "21"]) {
+    const one = await boxOf(badges.filter({ hasText: `on Nov ${d}` }));
+    const own = await boxOf(page.locator(`[data-testid="ms-diamond"][title$="Nov ${d}, 2026"]`));
+    expect(Math.abs(one.x + one.width / 2 - (own.x + own.width / 2))).toBeLessThan(40);
+  }
 }
 
 for (const zoom of ["3m", "6m", "1y", "all"] as const) {

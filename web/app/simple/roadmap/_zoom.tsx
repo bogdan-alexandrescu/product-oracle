@@ -851,6 +851,7 @@ function DayChart(props: TimelineProps) {
                   <span
                     key={m.day}
                     data-testid="timeline-month"
+                    data-keep-clear
                     className="absolute top-1 text-xs whitespace-nowrap text-text2"
                     style={{ left: (m.day === pinned ? sl : x(m.day)) + 4 }}
                   >
@@ -861,6 +862,7 @@ function DayChart(props: TimelineProps) {
                 <span
                   key={day}
                   data-testid="timeline-week"
+                  data-keep-clear
                   title={`Week of ${shortDay(day)}`}
                   className="absolute top-1 text-xs whitespace-nowrap text-text2/80"
                   style={{ left: x(day) + 4 }}
@@ -877,6 +879,7 @@ function DayChart(props: TimelineProps) {
           />
           <span
             data-testid="today-pill"
+            data-keep-clear
             className="absolute top-[21px] z-30 rounded-full px-2 text-xs leading-5 font-bold whitespace-nowrap text-white"
             style={{
               left: Math.max(
