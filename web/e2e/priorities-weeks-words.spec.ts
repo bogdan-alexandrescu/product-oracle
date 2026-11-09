@@ -11,18 +11,21 @@ import { expect, test, type Page } from "./test";
  * the Value / effort chart (the owner's pick). On the mock's "simple-plan" scenarios (invented data).
  */
 
-/** "simple-plan" with M1's capacity 1 engineer-week and Revenue's M2 work 1 week (simple-priorities.ts). */
+/** "simple-plan" with M1's capacity 1 engineer-week and no name, and Revenue's M2 work 1 week (simple-priorities.ts). */
 const ONE_WEEK = "priorities-plan-one-week";
 /** "simple-plan" whose plan names Activation twice, with no code (simple-priorities.ts). */
 const GOAL_TWINS = "priorities-plan-goal-twins";
 
 type Tab = "ranked" | "value-effort" | "buckets";
 
-async function open(page: Page, tab: Tab, scenario: string, width = 1440, theme: "light" | "dark" = "light"): Promise<void> {
+/** The mock's default company: no dated plan, so Goal buckets lists each goal's features without one. */
+const NO_PLAN = null;
+
+async function open(page: Page, tab: Tab, scenario: string | null, width = 1440, theme: "light" | "dark" = "light"): Promise<void> {
   await page.setViewportSize({ width, height: 900 });
   await page.context().addInitScript(
     ([key, value, themeKey, t]) => {
-      localStorage.setItem(key, value);
+      if (value) localStorage.setItem(key, value);
       localStorage.setItem(themeKey, t);
     },
     [MOCK_SCENARIO_KEY, scenario, THEME_KEY, theme] as const,
@@ -51,6 +54,10 @@ test("a 1-week segment says '1 engineer-week', and a caption's noun follows its 
   await expect(revenue).toHaveAttribute("title", "M2 Scale volume: 1 engineer-week");
   await expect(revenue.locator("[data-label]")).toHaveText("M2 Scale volume · 1 week");
   await expect(segment(page, "Revenue", "M3")).toHaveAttribute("title", "M3 Open to all: 9 engineer-weeks");
+  // M1 has no name: its code alone, no stray space, in its title as in its label.
+  const m1 = page.locator('[data-testid="goal-bar-segment"][data-milestone="M1"]').first();
+  await expect(m1).toHaveAttribute("title", /^M1: \d+ engineer-weeks?$/);
+  await expect(m1.locator("[data-label]")).toHaveText(/^M1 · \d+ weeks?$/);
   // M1 plans 13 weeks of its 1-week capacity; M2 and M3 read as before.
   const chips = head.getByTestId("milestone-chip");
   await expect(chips.nth(0)).toHaveText(/ · 13 weeks of 1 week$/);
@@ -103,6 +110,28 @@ for (const width of [1440, 768, 390])
           expect(box.x + box.width, "a goal's card ends inside the page").toBeLessThanOrEqual(main.x + main.width + 1);
         }
       }
+    });
+
+for (const width of [1440, 768, 390])
+  for (const theme of ["light", "dark"] as const)
+    test(`no dated plan, ${width} px (${theme}): Goal buckets' cards hold their feature rows whole`, async ({ page }) => {
+      await open(page, "buckets", NO_PLAN, width, theme);
+      await expect(page.getByTestId("goal-bucket").first()).toBeVisible();
+      const wide = await page.evaluate(() => ({ page: document.documentElement.scrollWidth, window: document.documentElement.clientWidth }));
+      expect(wide.page, "the page is no wider than the window").toBeLessThanOrEqual(wide.window);
+      // Every row's buttons stay inside its card: none spills past the card's edge.
+      const spill = await page.getByTestId("goal-bucket").evaluateAll((cards) =>
+        cards.flatMap((card) => {
+          const edge = card.getBoundingClientRect().right;
+          return [...card.querySelectorAll<HTMLElement>('[data-testid="plan-feature"]')]
+            .filter((row) => row.scrollWidth > row.clientWidth + 1 || [...row.querySelectorAll("button")].some((b) => b.getBoundingClientRect().right > edge + 1))
+            .map((row) => row.innerText.replace(/\s+/g, " ").trim());
+        }),
+      );
+      expect(spill, "feature rows wider than their card").toEqual([]);
+      // The owner's pick: two columns at 1440, one where a feature row has no room beside another.
+      const lefts = new Set((await page.getByTestId("goal-bucket").evaluateAll((cards) => cards.map((c) => Math.round(c.getBoundingClientRect().left)))));
+      expect(lefts.size, "columns").toBe(width === 1440 ? 2 : 1);
     });
 
 test("two plan goals with one name and no code are one goal: one legend entry, one shape", async ({ page }) => {

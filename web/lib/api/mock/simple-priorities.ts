@@ -85,7 +85,7 @@ export function seedPlanGoalCodes(db: SimpleDb): void {
 
 /**
  * The "priorities-plan-one-week" scenario: "simple-plan" with M1's capacity 1 engineer-week (its planned weeks run
- * over it) and Self-serve checkout's M2 part 1 week. Invented data.
+ * over it, and it has no name) and Self-serve checkout's M2 part 1 week. Invented data.
  */
 export const PRIORITIES_PLAN_ONE_WEEK_SCENARIO = "priorities-plan-one-week";
 export function seedPlanOneWeek(db: SimpleDb): void {

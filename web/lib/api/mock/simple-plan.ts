@@ -250,7 +250,7 @@ export interface PlanDb {
   coded_goals?: boolean;
   /**
    * prio-weeks-words ("priorities-plan-one-week"): M1 holds 1 engineer-week of capacity (its 13 planned run over), and
-   * Self-serve checkout's M2 part is 1 week, so Revenue's M2 segment is 1 week.
+   * Self-serve checkout's M2 part is 1 week, so Revenue's M2 segment is 1 week; M1 has no name.
    */
   one_week?: boolean;
   /** prio-weeks-words ("priorities-plan-goal-twins"): the plan names Activation twice, with no code: one goal. */
@@ -351,7 +351,7 @@ export function planOut(plan: PlanDb | undefined, prd: Schemas["SimpleDocRef"], 
     milestones: planMilestones(dated).map((m) => ({
       ...m,
       ...(undatedCodes.includes(m.code) ? { start_date: null, end_date: null } : {}),
-      ...(plan.one_week && m.code === "M1" ? { effort_weeks: 1 } : {}),
+      ...(plan.one_week && m.code === "M1" ? { effort_weeks: 1, name: "" } : {}),
       planned_weeks: slices.filter((s) => s.milestone === m.code).reduce((n, s) => n + (s.effort_weeks ?? 0), 0),
       feature_codes: [...new Set(slices.filter((s) => s.milestone === m.code).map((s) => s.feature_code))],
       source: "prd" as const,
