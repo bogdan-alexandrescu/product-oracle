@@ -19,10 +19,14 @@ import { expect, test, type Page } from "./test";
  * the tab is hidden. fails_when: an old number stays beside Could not load; the Needs you or tab
  * counts carry no mark; a re-read reads every part, or runs every 15 s, or runs in a hidden tab.
  *
- * counts-failed-part review: a page change starts the back-off again at 15 s and drops a re-read
- * already waiting; each partial mark sits on an element with a role. fails_when: after a page
- * change the next re-read keeps the long wait, or runs beside the page change's read; a mark is
- * an aria-label on a plain span.
+ * counts-failed-part review: a page change drops a re-read already waiting; each partial mark
+ * sits on an element with a role. fails_when: after a page change a re-read runs beside the page
+ * change's read; a mark is an aria-label on a plain span.
+ *
+ * counts-failed-part back-off: a part's wait starts again at 15 s only once that part reads
+ * again; a page change or a change to what waits reads it too, and while it keeps failing the
+ * wait keeps growing. fails_when: a page change, an action or a meetings read sends the failed
+ * part's wait back to 15 s; the wait stays long after the part read again.
  */
 
 /** Every GET of `path` answers 500 from the first page on. */
@@ -248,8 +252,8 @@ test("the rail: a hidden tab reads a failed part again only once it is shown", a
   await expect.poll(() => calls(page, "/v1/inbox/questions")).toBe(before + 1);
 });
 
-test("the rail: a page change starts the back-off again at 15 s", async ({ page }) => {
-  test.setTimeout(120_000);
+test("the rail: a page change reads the failed part too, and while it fails the wait keeps growing", async ({ page }) => {
+  test.setTimeout(150_000);
   await page.setViewportSize({ width: 1440, height: 900 });
   await failing(page, "/v1/inbox/questions");
   await login(page);
@@ -257,7 +261,7 @@ test("the rail: a page change starts the back-off again at 15 s", async ({ page 
   await expect(page.getByTestId("simple-nav-inbox-count")).toHaveAttribute("title", /could not load/i, { timeout: 15_000 });
   await page.waitForTimeout(1_000);
   const before = await calls(page, "/v1/inbox/questions");
-  // Two failed re-reads: the next wait would be 60 s.
+  // Two failed re-reads: the next wait is 60 s.
   await page.clock.runFor(16_000);
   await expect.poll(() => calls(page, "/v1/inbox/questions")).toBe(before + 1);
   await page.clock.runFor(31_000);
@@ -267,9 +271,69 @@ test("the rail: a page change starts the back-off again at 15 s", async ({ page 
   await expect(page).toHaveURL(/\/simple\/goals$/);
   await expect.poll(() => calls(page, "/v1/inbox/questions")).toBe(before + 3);
   await page.waitForTimeout(1_000);
-  // The next re-read comes after the first step again, 15 s, not 60 s.
-  await page.clock.runFor(16_000);
+  // The fourth failure in a row: the next re-read waits 120 s, not 15 s nor 60 s.
+  await page.clock.runFor(61_000);
+  await page.waitForTimeout(500);
+  expect(await calls(page, "/v1/inbox/questions")).toBe(before + 3);
+  await page.clock.runFor(60_000);
   await expect.poll(() => calls(page, "/v1/inbox/questions")).toBe(before + 4);
+});
+
+test("the rail: changes and meetings reads keep the failed part's wait growing; it starts again once the part reads", async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await failing(page, "/v1/inbox/questions");
+  await login(page);
+  await page.goto("/simple/decisions");
+  const count = page.getByTestId("simple-nav-inbox-count");
+  await expect(count).toHaveAttribute("title", /could not load/i, { timeout: 15_000 });
+  const rows = page.getByTestId("waiting-item").filter({ has: page.getByRole("button", { name: "Not this" }) });
+  await expect(rows.first()).toBeVisible();
+  await page.waitForTimeout(1_000);
+  const questions = () => calls(page, "/v1/inbox/questions");
+  const meetings = () => calls(page, "/v1/simple/meetings");
+  /** The person sets a suggestion aside: what waits changed, so the rail reads every part again. */
+  const setAside = async () => {
+    const q = await questions();
+    const m = await meetings();
+    await rows.first().getByRole("button", { name: "Not this" }).click();
+    await expect.poll(questions).toBeGreaterThan(q);
+    await expect.poll(meetings).toBeGreaterThan(m);
+    await page.waitForTimeout(1_000);
+  };
+  // The first re-read after 15 s fails: the next wait is 30 s.
+  let n = await questions();
+  await page.clock.runFor(16_000);
+  await expect.poll(questions).toBe(n + 1);
+  await page.waitForTimeout(1_000);
+  // A change arrives; meetings read fine, the questions fail again: the next wait is 60 s.
+  await setAside();
+  await expect(count).toHaveAttribute("title", /could not load/i);
+  await expect(page.getByTestId("simple-nav-meetings-count").and(page.locator('[title*="could not load" i]'))).toHaveCount(0);
+  n = await questions();
+  await page.clock.runFor(31_000);
+  await page.waitForTimeout(500);
+  expect(await questions()).toBe(n);
+  // Another change before the 60 s are up: the questions fail again, and the wait grows to 120 s.
+  await setAside();
+  n = await questions();
+  await page.clock.runFor(61_000);
+  await page.waitForTimeout(500);
+  expect(await questions()).toBe(n);
+  await page.clock.runFor(60_000);
+  await expect.poll(questions).toBe(n + 1);
+  await page.waitForTimeout(1_000);
+  // The questions answer again: the next change reads them, and the Inbox's count is whole.
+  await page.evaluate((key) => localStorage.removeItem(key), MOCK_FAIL_KEY);
+  await setAside();
+  await expect(count).not.toHaveAttribute("title", /could not load/i);
+  // They fail once more: the wait starts again at 15 s.
+  await page.evaluate(([key, p]) => localStorage.setItem(key, p), [MOCK_FAIL_KEY, "/v1/inbox/questions"] as const);
+  await setAside();
+  await expect(count).toHaveAttribute("title", /could not load/i);
+  n = await questions();
+  await page.clock.runFor(16_000);
+  await expect.poll(questions).toBe(n + 1);
 });
 
 test("the rail: a page change drops the re-read already waiting, so the failed part is never read twice at once", async ({ page }) => {
