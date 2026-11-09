@@ -26,6 +26,8 @@ const words = (m: { code: string; name: string }) => `${m.code} ${m.name}`;
 
 /** The rules a milestone counts by, offered on the card (its own one kept when it differs). */
 const RULES = ["Holds 7 days in a row", "Holds 14 days in a row", "Holds 4 weeks in a row", "Holds 7 days in a row on one live team", "Holds 14 days in a row on all teams"];
+/** How far (px) past its corner a same-day count may move to keep clear: farther, it reads as another day's. */
+const BADGE_NEAR = 24;
 
 type Draft = { id: string | null; code: string; name: string; date: string; goal_id: string | null; item_ids: string[]; counts_when: string; second: boolean; prd: boolean };
 type Toast = { words: string; undo: (() => Promise<unknown>) | null };
@@ -361,6 +363,8 @@ export function MsLayer(props: MsLayerProps) {
   // nearest place along the axis clear of the other counts, the diamonds and the header's words
   // (the month and week names, the Today pill: data-keep-clear). At 1 year and All 3 years two
   // such days side by side are a few pixels apart, so their counts would draw over each other.
+  // It stays within BADGE_NEAR of its diamond (else on its corner) and never under the
+  // Timeline's names column: a diamond scrolled under it hides its count too.
   useLayoutEffect(() => {
     const layer = ref.current;
     const badges = layer ? [...layer.querySelectorAll<HTMLElement>("[data-ms-badge]")] : [];
@@ -377,20 +381,27 @@ export function MsLayer(props: MsLayerProps) {
     const place = () => {
       const lx = layer.getBoundingClientRect().left;
       const keep = [...chart.querySelectorAll("[data-keep-clear], [data-testid=ms-diamond], [data-testid=ms-prd-diamond]")].map(boxOf).filter((o) => o.r > o.l && o.b > o.t);
+      const names = chart.querySelector("[data-testid=timeline-names-head]");
+      const floor = names ? boxOf(names).r : -Infinity;
       const taken: Box[] = [];
       for (const el of badges.sort((a, b) => Number(a.dataset.mx) - Number(b.dataset.mx))) {
         el.style.left = `${Number(el.dataset.mx) + 3}px`;
+        el.style.visibility = "";
         const at = boxOf(el);
         const w = at.r - at.l;
         const mx = lx + Number(el.dataset.mx);
+        if (mx + 3 < floor) {
+          el.style.visibility = "hidden";
+          continue;
+        }
         const free = (l: number) => {
           const o = { ...at, l, r: l + w };
-          return !keep.some((k) => meets(o, k)) && !taken.some((k) => meets(o, k));
+          return l >= floor && !keep.some((k) => meets(o, k)) && !taken.some((k) => meets(o, k));
         };
         let l = mx + 3;
         if (!free(l)) {
           const near = [mx - 3 - w];
-          for (let d = 1; d <= 160; d++) near.push(mx + 3 + d, mx - 3 - w - d);
+          for (let d = 1; d <= BADGE_NEAR; d++) near.push(mx + 3 + d, mx - 3 - w - d);
           l = near.find(free) ?? l;
         }
         el.style.left = `${l - lx}px`;
