@@ -361,8 +361,11 @@ export function zoomPicture(scroll: HTMLElement, today: string): Picture {
       let at: number | null = null;
       let anchor = "start";
       let place = "after";
-      if (x1 + 6 + ww <= width - 2) at = Math.max(x1 + 6, labelW + 4);
-      else if (x0 - 6 - ww >= labelW + 2) [at, anchor, place] = [x0 - 6, "end", "before"];
+      // A sliver's arrow reaches past its end: the dates (and their white) keep clear of it.
+      const after = Math.max(x1 + 6, labelW + 4, earlier ? a + 16 : -Infinity);
+      const before = Math.min(x0 - 6, later ? b - 16 : Infinity);
+      if (after + ww <= width - 2) at = after;
+      else if (before - ww >= labelW + 2) [at, anchor, place] = [before, "end", "before"];
       else if (b - a >= ww + 8 + (earlier ? 12 : 0) + (later ? 12 : 0)) [at, place] = [a + 6 + (earlier ? 12 : 0), "inside"];
       // A bar wholly out of the window says where it lies, at that edge.
       const off = b <= a ? (x1 <= labelW ? "Earlier: " : "Later: ") : "";
