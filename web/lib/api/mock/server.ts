@@ -151,7 +151,7 @@ import {
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
 import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, seedStoredRefusalDraft, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb, draftItemsRunRetried } from "./draft-roadmap";
-import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, PLAN_SAME_KEY_SCENARIO, SAME_KEY_ITEM, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, NOT_CLAIMS_LINE, NOT_CLAIMS_SCENARIO, SHARED_DATE_SCENARIO, TWO_WAY_DATES_SCENARIO, TWO_WAY_GA, VERSION_WARNINGS_SCENARIO, dateMarks, dateWarnings, versionWarnings, inboxTracks, planEntityTitle, planFeatureRows, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, PLAN_SAME_KEY_SCENARIO, PLAN_SECTION_CODE_SCENARIO, SAME_KEY_ITEM, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, NOT_CLAIMS_LINE, NOT_CLAIMS_SCENARIO, SHARED_DATE_SCENARIO, TWO_WAY_DATES_SCENARIO, TWO_WAY_GA, VERSION_WARNINGS_SCENARIO, dateMarks, dateWarnings, versionWarnings, inboxTracks, planEntityTitle, planFeatureRows, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecPerson, type SpecsDb } from "./specs";
 import { inboxStrategy, planDrift, routeStrategy, seedNoStrategy, seedPlanDrift, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { seedImpact } from "./impact";
@@ -4322,11 +4322,13 @@ function load(): Db {
   // "date-bases" verifies its dates, "strategy-plan" reviews its items against the strategy,
   // "outcomes" tracks outcomes of its items, "alerts-approved" is the approved plan alone, the
   // "track-alerts" scenarios watch its milestones (an accepted slip moves an approved item), and
-  // "plan-timeline-edit" changes the plan with the Timeline shown.
+  // "plan-timeline-edit" changes the plan with the Timeline shown, and "plan-section-code" adds
+  // to it an item linked to the feature whose code an approved item's PRD section gives.
   const approvedPlan = [
     "launches", "plan-decider", "strategy-plan", "outcomes", DATE_BASES_SCENARIO, SHARED_DATE_SCENARIO, NOT_CLAIMS_SCENARIO, ALERTS_APPROVED_SCENARIO,
-    "track-alerts", "track-alerts-many", "track-alerts-actions", "track-alerts-history", PLAN_TIMELINE_EDIT_SCENARIO,
+    "track-alerts", "track-alerts-many", "track-alerts-actions", "track-alerts-history", PLAN_TIMELINE_EDIT_SCENARIO, PLAN_SECTION_CODE_SCENARIO,
   ];
+  if (scenario === PLAN_SECTION_CODE_SCENARIO) baselineEntity(db, "feature", "F-31", "Alert routing by team", "2026-10-01T09:00:00Z");
   if (approvedPlan.includes(scenario ?? "")) {
     const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
     const v1 = roadmap && db.versions.find((v) => v.document_id === roadmap.id && v.number === 1);
@@ -6141,7 +6143,7 @@ function planEditsContext(db: Db, me: { id: string; role: Role }): PlanEditsCont
     uuid,
     now,
     deciderOf: (id) => db.review_v2?.policies.find((x) => x.document_id === id)?.decider_id ?? null,
-    seededItems: seededPlanItems,
+    seededItems: (slug, version) => seededPlanItems(slug, version, localStorage.getItem(MOCK_SCENARIO_KEY)),
     featureCode: (id) => {
       const e = db.baseline.entities.find((x) => x.id === id && x.type === "feature");
       return e && /^[A-Z]{1,3}-\d+[a-j]?$/.test(e.key) ? e.key : null;

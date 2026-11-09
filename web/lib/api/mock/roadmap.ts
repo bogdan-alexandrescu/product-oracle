@@ -61,6 +61,8 @@ export interface RoadmapDb {
   freshness?: Record<string, Item["freshness"]>;
   /** plan-open-from-simple "plan-same-key": the Checkout redesign roadmap draft holds a key Usage alerts' roadmap holds too. */
   same_key?: boolean;
+  /** "plan-section-code": the approved plan has an item from the PRD's section f-31 (SECTION_CODE_ITEM). */
+  section_code?: boolean;
   /** F2: tracker record history, one row per changed field. */
   recordEvents?: (TrackerRecordEventOut & { record_id: string })[];
   /** F2: dates accepted from the tracker, by item key, with the reference of the basis they rest on (the Plan row reads them). */
@@ -144,6 +146,12 @@ export const PLAN_STALE_SCENARIO = "plan-stale";
 export const APPROVED_PLAN_SCENARIO = "approved-plan";
 /** Only usage-alerts-roadmap v1 approved (it is in review by default): specs on the approved plan. */
 export const ALERTS_APPROVED_SCENARIO = "alerts-approved";
+/**
+ * Edit plan's codes (codes.clash, section=...): "alerts-approved" with one more approved item,
+ * "F-31 Alert routing by team", imported from the PRD's section f-31, and a Ground Truth
+ * feature F-31 Alert routing by team to link an added item to.
+ */
+export const PLAN_SECTION_CODE_SCENARIO = "plan-section-code";
 /** qa5-plan-at-risk: "alignment-report" with the Plan's track off track for a critical blocker, nothing slipping. */
 export const REPORT_OFF_TRACK_SCENARIO = "report-off-track";
 /** qa5-plan-at-risk review: "alignment-report" with no First release track milestone; the Plan's Now items name it. */
@@ -237,9 +245,12 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
   const simpleItemBasis = scenario === SIMPLE_ITEM_BASIS_SCENARIO;
   const trails = scenario === APPROVED_ROADMAP_SCENARIO;
   const sameKey = scenario === PLAN_SAME_KEY_SCENARIO;
-  const key = withItems || withDiff || noGaBasis || planStale || simpleItemBasis || trails || sameKey ? `roadmap:${scenario}` : "roadmap";
+  const sectionCode = scenario === PLAN_SECTION_CODE_SCENARIO;
+  const key = withItems || withDiff || noGaBasis || planStale || simpleItemBasis || trails || sameKey || sectionCode ? `roadmap:${scenario}` : "roadmap";
   return seeded(key, () => {
-    const db: RoadmapDb = { items: {}, tracks: [], milestones: [], bases: [], records: [], changes: [], ...(sameKey ? { same_key: true } : {}) };
+    const db: RoadmapDb = {
+      items: {}, tracks: [], milestones: [], bases: [], records: [], changes: [], ...(sameKey ? { same_key: true } : {}), ...(sectionCode ? { section_code: true } : {}),
+    };
     const prd = ctx.documents.find((d) => d.slug === "usage-alerts");
     const roadmap = ctx.documents.find((d) => d.slug === "usage-alerts-roadmap");
     const accepted = prd && latest(ctx, prd.id, true);
@@ -1446,6 +1457,12 @@ const ALERTS_APPROVED: PlanSeedItem[] = [
     next: { action: "link_issue", who: "approver" } },
   { key: "team-budgets", title: "Budgets per team", horizon: "later", goals: ["g.early-churn"], state: "planned", section: "behaviour" },
 ];
+/** "plan-section-code": an approved item whose code is its PRD section's (f-31), its title leading with it. */
+const SECTION_CODE_ITEM: PlanSeedItem = { key: "alert-routing", title: "F-31 Alert routing by team", horizon: "next", state: "planned", section: "f-31" };
+
+/** The approved plan's items: SECTION_CODE_ITEM too in "plan-section-code". */
+const alertsApproved = (sectionCode?: boolean): PlanSeedItem[] => (sectionCode ? [...ALERTS_APPROVED, SECTION_CODE_ITEM] : ALERTS_APPROVED);
+
 /**
  * Running today: the baseline features the Plan's items trace (as GET /v1/feature-states lists
  * every confirmed feature, each with its roadmap items), so the Plan's item names carry their
@@ -1580,10 +1597,10 @@ export function planEntityTitle(id: string): string | null {
   return null;
 }
 
-/** The seeded approved plan's items (usage-alerts-roadmap v1), for a change set's base (#346). */
-export function seededPlanItems(slug: string, version: number): PlanEditItem[] | null {
+/** The seeded approved plan's items (usage-alerts-roadmap v1), for a change set's base (#346), each with its PRD section. */
+export function seededPlanItems(slug: string, version: number, scenario?: string | null): PlanEditItem[] | null {
   if (slug !== ALERTS_ROADMAP_SLUG || version !== 1) return null;
-  return ALERTS_APPROVED.map((i) => ({ key: i.key, title: i.title, horizon: i.horizon }));
+  return alertsApproved(scenario === PLAN_SECTION_CODE_SCENARIO).map((i) => ({ key: i.key, title: i.title, horizon: i.horizon, section: i.section }));
 }
 
 /** The latest approved version a change set proposed, with its items (#346). */
@@ -1816,11 +1833,11 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
   if (alerts && edited) {
     // #346: a proposed version the decider approved is the live plan (draft 2 is superseded).
     for (const e of edited.items) {
-      const s: PlanSeedItem = { ...(ALERTS_APPROVED.find((a) => a.key === e.key) ?? { section: "behaviour" }), key: e.key, title: e.title, horizon: e.horizon };
+      const s: PlanSeedItem = { ...(alertsApproved(db.section_code).find((a) => a.key === e.key) ?? { section: e.section ?? "behaviour" }), key: e.key, title: e.title, horizon: e.horizon };
       items.push(row(s, alerts, 1, { slug: ALERTS_ROADMAP_SLUG, version: edited.version }, "approved", null));
     }
   } else if (alerts && roadmapState.approved) {
-    for (const s of ALERTS_APPROVED) {
+    for (const s of alertsApproved(db.section_code)) {
       // Draft 2's twins only while the roadmap document has an unapproved version 2.
       const d = scope === "all" && roadmapState.draft2 ? ALERTS_DRAFT[s.key] : undefined;
       if (d && d.change.kind !== "dropped") items.push(row(s, alerts, 1, { slug: ALERTS_ROADMAP_SLUG, version: 2 }, "draft", d.change, d.horizon));
