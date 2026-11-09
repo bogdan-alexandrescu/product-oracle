@@ -4410,13 +4410,13 @@ function load(): Db {
                     const db = seedOneRoadmapScenario();
                     const rm = db.simple_roadmap!;
                     rm.goal_milestones = seedItemMilestones();
-                    // Each PRD's owner (drafts.who: its tracks' owners) is Lena Moss, an invented approver who owns
+                    // Each PRD's owner (drafts.who: its tracks' owners) is Marta Moss, an invented approver who owns
                     // the User Safety track and a Scale track its items are on.
-                    const lena = { email: "lena.moss@example.com", name: "Lena Moss", role: "approver" as const, engineering_lead: false, created_at: "2026-09-10T09:00:00Z", id: stableUuid("member/lena.moss@example.com"), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0 };
-                    db.members.push(lena);
+                    const marta = { email: "marta.moss@example.com", name: "Marta Moss", role: "approver" as const, engineering_lead: false, created_at: "2026-09-10T09:00:00Z", id: stableUuid("member/marta.moss@example.com"), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0 };
+                    db.members.push(marta);
                     rm.extra_tracks = { scale: "Scale track" };
                     for (const x of rm.items) if (x.roadmap === COMPANY_SLUG) x.track = x.prd_doc?.slug === AREA_PRDS[1][0] ? "scale" : rm.extra_roadmaps![COMPANY_SLUG].track;
-                    rm.track_owners = { [rm.extra_roadmaps![COMPANY_SLUG].track]: lena.id, scale: lena.id };
+                    rm.track_owners = { [rm.extra_roadmaps![COMPANY_SLUG].track]: marta.id, scale: marta.id };
                     return db;
                   }
               : scenario === TRACKS_CLOSED_SCENARIO
