@@ -38,7 +38,7 @@ export function seedHomeMilestones(): SimpleDb {
     gates,
     counts_when: "",
     progress: "not_started",
-    prd: { slug, title, owner: "Nora Vance" },
+    prd: { slug, title },
   });
   rm.goal_milestones = [
     ...seedOwnMilestones().filter((m) => m.id !== stableUuid("simple-gm/m2")),
