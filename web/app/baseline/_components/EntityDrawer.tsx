@@ -1034,11 +1034,15 @@ function Links({
  * date; never its raw key or JSON. `start` is what the form first showed, so an untouched value is saved as stored.
  */
 type Draft =
-  | { kind: "text" | "number" | "day" | "bool" | "parent"; was: unknown; start: string; text: string }
+  | { kind: "text" | "number" | "day" | "bool" | "parent"; was: unknown; start: string; text: string; multi?: boolean; loose?: boolean }
   | { kind: "lines"; was: unknown; start: string; text: string; numbers: boolean }
   | { kind: "object"; was: unknown; fields: Field[] }
   | { kind: "entries"; was: unknown; entries: Draft[] };
-/** An object's field: its key and draft; a field the person added has `fresh` set and its name typed as the key. */
+/**
+ * An object's field: its key and draft; a field the person added has `fresh` set and its name typed as the key. A text
+ * that is `multi` reads in a box of lines (a new entry among entries that do); one that is `loose` is stored as a
+ * number when one is typed (a new field among numbers), as text otherwise.
+ */
 type Field = [key: string, draft: Draft, fresh?: true];
 type AttrField = { key: string; label: string; numeric?: boolean };
 
@@ -1093,7 +1097,8 @@ function blankOf(d: Draft): Draft {
   if (d.kind === "object") return { kind: "object", was: undefined, fields: d.fields.filter((f) => !f[2]).map(([k, p]) => [k, blankOf(p)]) };
   if (d.kind === "entries") return { kind: "entries", was: undefined, entries: [] };
   if (d.kind === "lines") return { ...d, was: undefined, start: "", text: "" };
-  return { kind: d.kind === "parent" ? "text" : d.kind, was: undefined, start: "", text: "" };
+  const multi = d.kind === "text" && (d.multi || d.start.includes("\n"));
+  return { kind: d.kind === "parent" ? "text" : d.kind, was: undefined, start: "", text: "", ...(multi ? { multi } : {}) };
 }
 
 /** A field's key from the name typed for it: "Weekend hours" is stored as weekend_hours. */
@@ -1106,7 +1111,8 @@ const fieldKey = (name: string) =>
 
 /**
  * A value emptied in the form: an attribute is removed, a field or a list entry left out. An object or a list is never
- * left out for being emptied, only when removed with its x; one the person added and left empty is.
+ * left out for being emptied, only when removed with its x; one the person added and left empty is, and so is a list
+ * entry the person emptied.
  */
 const GONE = Symbol("gone");
 
@@ -1135,17 +1141,17 @@ function storedOf(d: Draft, label: string, group?: string): unknown {
       if (v === GONE) continue;
       const key = fresh ? fieldKey(k) : k;
       if (!key) throw new Error(`${within(group, label)}: a new field needs a name.`);
-      if (key in next || (fresh && d.fields.some(([o, , f]) => !f && o === key)))
+      if (Object.prototype.hasOwnProperty.call(next, key) || (fresh && d.fields.some(([o, , f]) => !f && o === key)))
         throw new Error(`${within(group, label)}: ${name} is already a field.`);
       next[key] = v;
     }
     const keys = Object.keys(next);
     if (!keys.length && d.was === undefined) return GONE;
-    const same = d.was !== undefined && keys.length === Object.keys(was).length && keys.every((k) => k in was && next[k] === was[k]);
+    const same = d.was !== undefined && keys.length === Object.keys(was).length && keys.every((k) => Object.prototype.hasOwnProperty.call(was, k) && next[k] === was[k]);
     return same ? d.was : next;
   }
   if (d.kind === "entries") {
-    const next = d.entries.map((e, i) => storedOf(e, `${label} ${i + 1}`, group)).filter((v) => v !== GONE);
+    const next = d.entries.map((e, i) => emptied(e, storedOf(e, `${label} ${i + 1}`, group))).filter((v) => v !== GONE);
     if (!next.length && d.was === undefined) return GONE;
     const was = (d.was ?? []) as unknown[];
     const same = d.was !== undefined && next.length === was.length && next.every((v, i) => v === was[i]);
@@ -1154,13 +1160,22 @@ function storedOf(d: Draft, label: string, group?: string): unknown {
   if (d.kind === "lines") {
     if (d.text === d.start) return d.was === undefined ? GONE : d.was;
     const list = storedList(d.text, d.was, d.numbers, within(group, label));
+    // Only an added empty line: the list as it was.
+    if (Array.isArray(d.was) && list.length === d.was.length && list.every((v, i) => v === (d.was as unknown[])[i])) return d.was;
     return list.length ? list : GONE;
   }
   const typed = d.text.trim();
   if (typed === d.start.trim()) return d.was === undefined ? GONE : d.was;
   if (!typed) return GONE;
   if (d.kind === "bool") return typed === "yes";
+  if (d.loose) return Number.isFinite(Number(typed)) ? Number(typed) : typed;
   return d.kind === "number" ? numberOf(typed, within(group, label)) : typed;
+}
+
+/** A list entry the person emptied (an object with no field left, a list with no entry) is left out. */
+function emptied(d: Draft, v: unknown): unknown {
+  if (v === d.was || v == null || typeof v !== "object") return v;
+  return Object.keys(v).length ? v : GONE;
 }
 
 /**
@@ -1328,11 +1343,24 @@ function EditForm({
   );
 }
 
-/** A small icon button in the Edit form: adds or removes a list entry, an object field or an attribute. */
-function EditIcon({ icon, name, onClick, className = "self-start" }: { icon: "plus" | "x"; name: string; onClick: () => void; className?: string }) {
-  // Named by its title, in words that never hold the field's own name, so a field or a button found by its name (a
-  // field "Saved replies", the Save button) never also finds this one; where it sits says which it adds to or removes.
-  return <Button variant="ghost" icon={icon} title={name} className={`h-7 flex-none px-1.5 ${className}`} onClick={onClick} />;
+/**
+ * A small icon button in the Edit form: adds or removes a list entry, an object field or an attribute. Its title is
+ * the short action; its name says which group and entry it acts on ("Remove Reply targets entry 2").
+ */
+function EditIcon({
+  icon,
+  name,
+  of,
+  onClick,
+  className = "self-start",
+}: {
+  icon: "plus" | "x";
+  name: string;
+  of: string;
+  onClick: () => void;
+  className?: string;
+}) {
+  return <Button variant="ghost" icon={icon} title={name} aria-label={of} className={`h-7 flex-none px-1.5 ${className}`} onClick={onClick} />;
 }
 
 /**
@@ -1350,6 +1378,7 @@ function DraftField({
   onRemove,
   removeName = "Remove field",
   part,
+  path = name,
 }: {
   /** The top-level attribute's key; none for a field or an entry in one. */
   attr?: string;
@@ -1362,12 +1391,15 @@ function DraftField({
   removeName?: string;
   /** The field's key, or the entry's number, in its object or list: marks the field with its controls. */
   part?: string;
+  /** Its name with the groups it is in, naming its buttons: "Reply targets entry 2". */
+  path?: string;
 }) {
   const lines = useRef<HTMLTextAreaElement>(null);
+  const box = useRef<HTMLFieldSetElement>(null);
   const label = `flex flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2${attr ? "" : " pl-3"}`;
   // Beside a group's name, or beside a field's input.
   const grouped = d.kind === "object" || d.kind === "entries";
-  const remove = onRemove && <EditIcon icon="x" name={removeName} onClick={onRemove} className={grouped ? "self-start" : "mb-1 self-end"} />;
+  const remove = onRemove && <EditIcon icon="x" name={removeName} of={`Remove ${path}`} onClick={onRemove} className={grouped ? "self-start" : "mb-1 self-end"} />;
   if (grouped) {
     const parts: [string, string, Draft, boolean][] =
       d.kind === "object"
@@ -1381,19 +1413,29 @@ function DraftField({
       );
     const drop = (i: number) =>
       onChange(d.kind === "object" ? { ...d, fields: d.fields.filter((_, j) => j !== i) } : { ...d, entries: d.entries.filter((_, j) => j !== i) });
+    const typedName = (i: number) => (d.kind === "object" ? d.fields[i][0].trim() : "");
     const rename = (i: number, key: string) =>
       d.kind === "object" && onChange({ ...d, fields: d.fields.map((x, j): Field => (j === i ? [key, x[1], true] : x)) });
-    // A new field's value is a number when every other plain field is one; a new entry is shaped like the first.
+    // A new field's value is a number when typed as one and every other plain field is one, text otherwise; a new
+    // entry is shaped like the first, in a box of lines where any other entry is.
     const plainKinds = d.kind === "object" ? d.fields.filter(([, p, f]) => !f && "text" in p && p.kind !== "lines").map(([, p]) => p.kind) : [];
     const numbers = plainKinds.length > 0 && plainKinds.every((k) => k === "number");
-    const add = () =>
+    const entry = (): Draft => {
+      const blank = blankOf(d.kind === "entries" && d.entries[0] ? d.entries[0] : draftOf(Array.isArray(d.was) ? d.was[0] : ""));
+      const multi = d.kind === "entries" && d.entries.some((e) => e.kind === "text" && (e.multi || e.start.includes("\n")));
+      return blank.kind === "text" && multi ? { ...blank, multi } : blank;
+    };
+    const add = () => {
       onChange(
         d.kind === "object"
-          ? { ...d, fields: [...d.fields, ["", { kind: numbers ? "number" : "text", was: undefined, start: "", text: "" }, true]] }
-          : { ...d, entries: [...d.entries, blankOf(d.entries[0] ?? draftOf(Array.isArray(d.was) ? d.was[0] : ""))] },
+          ? { ...d, fields: [...d.fields, ["", { kind: "text", was: undefined, start: "", text: "", ...(numbers ? { loose: true } : {}) }, true]] }
+          : { ...d, entries: [...d.entries, entry()] },
       );
+      // The cursor on the new field's name, or the new entry's first input.
+      requestAnimationFrame(() => box.current?.lastElementChild?.previousElementSibling?.querySelector<HTMLElement>("input, textarea, select")?.focus());
+    };
     const group = (
-      <fieldset data-attr-field={attr} className={`flex min-w-0 flex-1 flex-col gap-2${attr ? "" : " pl-3"}`}>
+      <fieldset ref={box} data-attr-field={attr} className={`flex min-w-0 flex-1 flex-col gap-2${attr ? "" : " pl-3"}`}>
         <legend className={`${label} mb-1`}>
           <span>
             {name}
@@ -1414,11 +1456,10 @@ function DraftField({
                 className={`${INPUT} min-w-0 flex-1`}
                 aria-label="Field value"
                 placeholder="Value"
-                inputMode={p.kind === "number" ? "decimal" : undefined}
                 value={"text" in p ? p.text : ""}
                 onChange={(e) => "text" in p && set(i, { ...p, text: e.target.value })}
               />
-              <EditIcon icon="x" name="Remove field" onClick={() => drop(i)} />
+              <EditIcon icon="x" name="Remove field" of={`Remove ${path} ${typedName(i) ? `field ${typedName(i)}` : "new field"}`} onClick={() => drop(i)} />
             </div>
           ) : (
             <DraftField
@@ -1430,10 +1471,16 @@ function DraftField({
               onRemove={() => drop(i)}
               removeName={d.kind === "entries" ? "Remove entry" : undefined}
               part={d.kind === "entries" ? partLabel : k}
+              path={`${path} ${d.kind === "entries" ? "entry" : "field"} ${partLabel}`}
             />
           ),
         )}
-        <EditIcon icon="plus" name={d.kind === "object" ? "Add field" : "Add entry"} onClick={add} />
+        <EditIcon
+          icon="plus"
+          name={d.kind === "object" ? "Add field" : "Add entry"}
+          of={`${d.kind === "object" ? "Add field" : "Add entry"} to ${path}`}
+          onClick={add}
+        />
       </fieldset>
     );
     return remove ? (
@@ -1478,7 +1525,7 @@ function DraftField({
           <option value="yes">Yes</option>
           <option value="no">No</option>
         </select>
-      ) : d.kind === "lines" || d.start.includes("\n") ? (
+      ) : d.kind === "lines" || d.start.includes("\n") || ("multi" in d && d.multi) ? (
         <textarea ref={lines} className={INPUT} rows={Math.max(2, d.text.split("\n").length)} value={d.text} onChange={(e) => set(e.target.value)} />
       ) : (
         <input
@@ -1498,7 +1545,7 @@ function DraftField({
         <div className="flex min-w-0 flex-1 flex-col">{field}</div>
         {remove}
       </div>
-      {d.kind === "lines" && <EditIcon icon="plus" name="Add entry" onClick={addLine} />}
+      {d.kind === "lines" && <EditIcon icon="plus" name="Add entry" of={`Add entry to ${path}`} onClick={addLine} />}
     </div>
   );
 }
