@@ -38,6 +38,10 @@ for (const [what, timing] of [
   ["an alternate-reverse glow", "0.8s linear infinite alternate-reverse"],
   ["a reverse glow", "0.8s linear infinite reverse"],
   ["a reverse glow with a negative delay", "0.8s linear -0.3s infinite reverse"],
+  // A negative delay a whole number of steps from a cycle's end lands the seek on an
+  // iteration's very start, where seconds rounding can show the iteration before's to keyframe.
+  ["a glow with a negative delay on an iteration's start", "0.8s linear -0.1s infinite"],
+  ["a glow with a positive delay", "0.8s linear 0.2s infinite"],
 ]) {
   test(`${what} is read at its from keyframe, not its to keyframe`, async ({ page }) => {
     await page.setContent(`
@@ -49,6 +53,43 @@ for (const [what, timing] of [
     `);
     expect(await contrast(page.getByTestId("glowing"), 1_500)).toBeCloseTo(21, 1);
     expect(await page.locator(".glow").evaluate((n) => n.getAnimations()[0].playState)).toBe("running");
+  });
+}
+
+// Every direction, over a few cycles and negative delays, rests on its from keyframe.
+for (const direction of ["normal", "alternate", "alternate-reverse", "reverse"]) {
+  test(`a ${direction} glow is read at its from keyframe over cycles and negative delays`, async ({ page }) => {
+    const cases = [0.3, 0.8, 1.3, 2].flatMap((cycle) =>
+      [-0.1, -0.7, -1.7, -2.1].flatMap((delay) =>
+        ["linear", "ease-in-out"].map((easing) => `${cycle}s ${easing} ${delay}s infinite ${direction}`),
+      ),
+    );
+    await page.setContent(`
+      <style>@keyframes example-glow { from { background-color: #fff } to { background-color: #333 } }</style>
+      ${cases.map((t, i) => `<div style="animation: example-glow ${t}"><p data-testid="glow-${i}" style="color: #000">Example text</p></div>`).join("")}
+    `);
+    const misread: string[] = [];
+    for (const [i, t] of cases.entries()) {
+      const r = await contrast(page.getByTestId(`glow-${i}`), 1_500);
+      if (Math.abs(r - 21) > 0.05) misread.push(`${t} read ${r.toFixed(2)}`);
+    }
+    expect(misread).toEqual([]);
+  });
+}
+
+// A steps(n, start) animation jumps one step as each iteration starts, so no time in its run
+// shows its from keyframe: it is read on the step nearest it, one step in (#ccc on a four-step
+// glow from #fff to #333, black on it about 13.1), whatever its direction.
+for (const direction of ["normal", "reverse"]) {
+  test(`a ${direction} steps(4, start) glow is read one step off its from keyframe`, async ({ page }) => {
+    await page.setContent(`
+      <style>
+        @keyframes example-glow { from { background-color: #fff } to { background-color: #333 } }
+        .glow { animation: example-glow 0.8s steps(4, start) -0.3s infinite ${direction}; }
+      </style>
+      <div class="glow"><p data-testid="glowing" style="color: #000">Example text</p></div>
+    `);
+    expect(await contrast(page.getByTestId("glowing"), 1_500)).toBeCloseTo(13.08, 1);
   });
 }
 
