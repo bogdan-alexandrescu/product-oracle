@@ -102,7 +102,8 @@ export function layout(
     const live = items.filter((i) => !closedItem(i));
     below.push(...items.filter((i) => closedItem(i)));
     if (!live.length) continue;
-    const metric = live.find((i) => i.goal?.metric)?.goal?.metric ?? null;
+    // kr-in-goal-card: a goal's lane holds its key results' items too; its own metric first.
+    const metric = (live.find((i) => i.goal?.id === g.key && i.goal.metric) ?? live.find((i) => i.goal?.metric))?.goal?.metric ?? null;
     rows.push({ kind: "group", key: g.key, title: g.title, metric: lane === "goal" ? metric : null, count: live.length });
     // feature-parts: the group's parts under their parents (oneLane's order), drawn as a tree.
     for (const x of partsTree([live.map((i) => i.id)], byId)[0]) rows.push({ kind: "item", item: byId.get(x.id)!, depth: x.depth });

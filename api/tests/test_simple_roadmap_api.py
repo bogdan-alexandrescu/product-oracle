@@ -709,3 +709,33 @@ async def test_migration_columns():
         row.date_source = "guessed"
         with pytest.raises(IntegrityError):
             await s.commit()
+
+
+async def test_a_key_result_s_items_sit_under_its_parent_goal(client):
+    """kr-in-goal-card: a confirmed subgoal (a key result, parent_id set) is never a goal of
+    its own on the roadmap: its items group under the parent goal and the parent's Goal
+    filter keeps them, the item still naming its key result. Fails when the subgoal is a lane
+    or the parent's filter drops its items."""
+    ctx = await make_ctx()
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        _, pv, rm, rv = await seed.roadmap("payments")
+        goal = await seed.entity("goal", "grow-revenue")
+        kr = await seed.entity("goal", "kr-saved-cards")
+        kr.parent_id = goal.id
+        own = await seed.entity("feature", "invoices")
+        under = await seed.entity("feature", "saved-cards")
+        await seed.supports(own, goal)
+        await seed.supports(under, kr)
+        await seed.item(rv, pv, "invoices", feature_id=own.id)
+        await seed.item(rv, pv, "cards", feature_id=under.id)
+        await s.commit()
+        goal_id = str(goal.id)
+
+    body = await get(client, ctx, group="goal")
+    groups = [(g["key"], g["title"], len(g["item_ids"])) for g in body["groups"]]
+    assert groups == [(goal_id, "Grow Revenue", 2)]
+    assert by_key(body)["cards"]["goal"]["key"] == "kr-saved-cards"
+    assert set(by_key(await get(client, ctx, goal="grow-revenue"))) == {"invoices", "cards"}
+    assert set(by_key(await get(client, ctx, goal=goal_id))) == {"invoices", "cards"}
+    assert set(by_key(await get(client, ctx, goal="kr-saved-cards"))) == {"cards"}

@@ -352,6 +352,9 @@ const GOAL_ORDER_GOALS: Record<string, string> = {
   "guided-week": "Make the first week feel guided for every new team, from sign-up to their first shared report",
   "mid-size": "Win more mid-size teams",
   "page-speed": "Faster page loads",
+  // kr-in-goal-card: "goal-key-results"'s two key results (subgoals) of Faster activation.
+  "kr-setup-day": "KR 1 Half of new teams set up in one day",
+  "kr-first-alert": "KR 2 New teams send a first alert in week one",
 };
 let goalOrderAdded: string[] = [];
 export function knowGoalOrderGoals(entities: { key: string; status: string }[]): void {
@@ -374,6 +377,12 @@ export function knowGoalOrderGoals(entities: { key: string; status: string }[]):
 let companyGoals: (OrderedGoal & { key: string })[] = [];
 export function knowCompanyGoals(goals: (OrderedGoal & { key: string })[]): void {
   companyGoals = sortGoals(goals);
+}
+/** kr-in-goal-card: each key result's (a subgoal's) confirmed parent goal key, by its key (service._parent_goals). */
+let goalParents = new Map<string, string>();
+export function knowGoalParents(goals: { id: string; key: string; type: string; status: string; parent_id?: string | null }[]): void {
+  const parents = new Map(goals.filter((g) => g.type === "goal" && g.status === "confirmed").map((g) => [g.id, g.key]));
+  goalParents = new Map(goals.flatMap((g) => (g.type === "goal" && g.parent_id && parents.has(g.parent_id) ? [[g.key, parents.get(g.parent_id)!] as const] : [])));
 }
 /** A goal's place in the one goal order (by key). */
 export function goalRank(key: string): number {
@@ -1557,12 +1566,17 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   const from = q.get("from");
   const to = q.get("to");
   const onDraft = new Set(db.items.filter((s) => s.draft_roadmap).map((s) => db.ids[s.key]));
+  // kr-in-goal-card (service._lane_goal): a key result's items sit under its parent goal.
+  const laneGoal = (i: Item): Item["goal"] => {
+    const parent = i.goal ? goalParents.get(i.goal.key) : undefined;
+    return parent ? { id: stableUuid(`simple-goal/${parent}`), key: parent, ...roadmapGoal(reader.full, parent), position: goalPositionOf(parent), ...READINGS[parent] } : i.goal;
+  };
   const shown = items.filter(
     (i) =>
       (q.get("draft_roadmap") === "1" || !onDraft.has(i.id)) &&
       (!q.get("roadmap") || i.roadmap.slug === (ROADMAP_DOC_SLUG[chosen ?? ""] ?? chosen)) &&
       (!prd || i.prd?.slug === prd || i.prd?.id === prd) &&
-      (!goal || i.goal?.key === goal || i.goal?.id === goal) &&
+      (!goal || [i.goal, laneGoal(i)].some((g) => g?.key === goal || g?.id === goal)) &&
       (!track || i.track?.id === track) &&
       (!from || i.end.date >= from) &&
       (!to || i.start.date <= to),
@@ -1570,7 +1584,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   const groups = new Map<string, { title: string; sort: string; item_ids: string[] }>();
   const prdRank = prdRanker();
   for (const i of shown) {
-    const ref = group === "goal" ? i.goal : group === "track" ? i.track : i.prd;
+    const ref = group === "goal" ? laneGoal(i) : group === "track" ? i.track : i.prd;
     const none = { goal: "No goal", track: "No track", prd: "No PRD" }[group];
     const key = ref?.id ?? "none";
     // goal-order: goal groups in the one goal order (then by key); prd-order: PRD groups in the company PRD order; No goal last.

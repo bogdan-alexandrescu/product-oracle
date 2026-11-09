@@ -192,7 +192,7 @@ import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROW
 import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
 import { knowPrdOrder } from "./prd-rank";
 import { openDraft } from "./simple-roadmap";
-import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedPrdCalmPage, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowGoalParents, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedPrdCalmPage, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, companyToday, forgetRoadmapReads, knowGoalMapItems, ownPrd, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, MAP_GOALS, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapGoals, goalMapIdOf, goalMapItems, ladderMilestones, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
@@ -1864,6 +1864,26 @@ function seedGoalOrderScenario(hard = false): Db {
     rm.items.push(i);
     rm.ids[i.key] = stableUuid(`simple-item/${i.key}`);
   }
+  return db;
+}
+
+/**
+ * kr-in-goal-card, the "goal-key-results" scenario: "goal-order" with two confirmed key results
+ * (subgoals) under Faster activation: KR 1 has a roadmap item, KR 2 none yet and a feature
+ * someone suggested for it. Invented data.
+ */
+function seedGoalKeyResultsScenario(): Db {
+  const db = seedGoalOrderScenario();
+  const rm = db.simple_roadmap!;
+  const parent = db.baseline.entities.find((e) => e.key === "faster-activation")!;
+  const kr = (key: string, title: string, at: string) =>
+    db.baseline.entities.push({ ...parent, id: stableUuid(`simple-goal/${key}`), key, title, parent_id: parent.id, attrs: { metric: "teams", weight: 1 }, created_at: at, updated_at: at });
+  kr("kr-setup-day", "KR 1 Half of new teams set up in one day", "2026-10-01T09:00:00Z");
+  kr("kr-first-alert", "KR 2 New teams send a first alert in week one", "2026-10-02T09:00:00Z");
+  const item: SimpleDb["items"][number] = { key: "kr-setup-list", title: "Guided setup checklist", horizon: "now", roadmap: "onboarding-roadmap", goal: "kr-setup-day", confidence: "medium", start: 5, end: 45, source: "typed" };
+  rm.items.push(item);
+  rm.ids[item.key] = stableUuid(`simple-item/${item.key}`);
+  rm.goal_suggestions = [...(rm.goal_suggestions ?? []), seedPersonGoalSuggestion("kr-first-alert", "First alert wizard", "New teams send an alert on day one", stableUuid("mock-user/kr-teammate"))];
   return db;
 }
 
@@ -4009,6 +4029,8 @@ function load(): Db {
                 ? seedSimpleHomeMoveScenario
               : scenario === "goal-order"
                 ? () => seedGoalOrderScenario()
+              : scenario === "goal-key-results"
+                ? seedGoalKeyResultsScenario
               : scenario === "goal-order-hard"
                 ? () => seedGoalOrderScenario(true)
               : scenario === "simple-home-same-name"
@@ -7677,6 +7699,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     knowCompanyGoals([...baselineGoals, ...(db.simple_roadmap ? bucketGoalsInOrder(db.simple_roadmap, new Set(baselineGoals.map((e) => e.key))) : [])]);
     // build-goal-order-control: the "goal-order" scenarios' added goals name their roadmap work on every load.
     knowGoalOrderGoals(db.baseline.entities);
+    knowGoalParents(db.baseline.entities);
     // Every mock PRD has a one-pager (Definition of Done 2): another PRD than the seeded one is
     // served a page built from its own sections (vqa B-13), with its own draft and changes.
     const onePagerDb = await onePagerOf(db, r, p);

@@ -1348,12 +1348,39 @@ def _matches(e: Entry, value: str | None, *refs: Any) -> bool:
     return any(r is not None and value in (str(r), getattr(r, "slug", None)) for r in refs)
 
 
-def _group_of(e: Entry, group: str, prd_ranks: dict[uuid.UUID, int]) -> tuple[str, str, tuple]:
+async def _parent_goals(db: AsyncSession, entries: list[Entry]) -> dict[uuid.UUID, Entity]:
+    """kr-in-goal-card: the confirmed parent goals of the key results (subgoals) items serve."""
+    ids = {e.goal.parent_id for e in entries if e.goal is not None and e.goal.parent_id}
+    if not ids:
+        return {}
+    rows = await db.scalars(
+        select(Entity).where(
+            Entity.id.in_(ids), Entity.type == "goal", Entity.status == "confirmed"
+        )
+    )
+    return {g.id: g for g in rows}
+
+
+def _lane_goal(e: Entry, parents: dict[uuid.UUID, Entity]) -> Entity | None:
+    """kr-in-goal-card: the goal an item sits under: its key result's parent goal, else its own."""
+    if e.goal is None:
+        return None
+    return parents.get(e.goal.parent_id) if e.goal.parent_id in parents else e.goal
+
+
+def _group_of(
+    e: Entry,
+    group: str,
+    prd_ranks: dict[uuid.UUID, int],
+    parents: dict[uuid.UUID, Entity] | None = None,
+) -> tuple[str, str, tuple]:
     """(key, title, sort key) of the item's group; goals in the one goal order, PRDs in the
-    company PRD order (``prd_ranks``, oracle.docs.prd_order), each "No ..." group last."""
+    company PRD order (``prd_ranks``, oracle.docs.prd_order), each "No ..." group last. A key
+    result's items sit in its parent goal's group (kr-in-goal-card)."""
     if group == "goal":
-        if e.goal is not None:
-            return str(e.goal.id), e.goal.title, (0, goal_sort_key(e.goal))
+        goal = _lane_goal(e, parents or {})
+        if goal is not None:
+            return str(goal.id), goal.title, (0, goal_sort_key(goal))
         return NONE, "No goal", (1,)
     if group == "track":
         if e.track is not None:
@@ -1396,12 +1423,19 @@ async def build(
             raise HTTPException(status.HTTP_404_NOT_FOUND, "No such roadmap")
     seen = await drafts.reader(db, principal)
     read = await load(db, seen.overlays)
+    parents = await _parent_goals(db, read.entries)
     shown = [
         e
         for e in read.entries
         if (chosen is None or e.roadmap.id == chosen.id)
         and _matches(e, prd, e.prd, e.prd.id if e.prd else None)
-        and (not goal or (e.goal is not None and goal in (str(e.goal.id), e.goal.key)))
+        and (
+            not goal
+            or any(
+                g is not None and goal in (str(g.id), g.key)
+                for g in (e.goal, _lane_goal(e, parents))
+            )
+        )
         and (not track or (e.track is not None and track == str(e.track.id)))
         and (start is None or e.resolved.end.date >= start)
         and (end is None or e.resolved.start.date <= end)
@@ -1409,7 +1443,7 @@ async def build(
     groups: dict[str, tuple[tuple, str, list[uuid.UUID]]] = {}
     ranks = await prd_order.prd_ranks(db) if group == "prd" else {}
     for e in shown:
-        key, title, sort = _group_of(e, group, ranks)
+        key, title, sort = _group_of(e, group, ranks, parents)
         groups.setdefault(key, (sort, title, []))[2].append(e.row.id)
     ordered = sorted(groups.items(), key=lambda kv: kv[1][0])
     owners = list(
