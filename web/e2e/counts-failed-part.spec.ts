@@ -18,6 +18,11 @@ import { expect, test, type Page } from "./test";
  * tooltip; the rail reads again only the failed part, backing off (15 s, then 30 s), and not while
  * the tab is hidden. fails_when: an old number stays beside Could not load; the Needs you or tab
  * counts carry no mark; a re-read reads every part, or runs every 15 s, or runs in a hidden tab.
+ *
+ * counts-failed-part review: a page change starts the back-off again at 15 s and drops a re-read
+ * already waiting; each partial mark sits on an element with a role. fails_when: after a page
+ * change the next re-read keeps the long wait, or runs beside the page change's read; a mark is
+ * an aria-label on a plain span.
  */
 
 /** Every GET of `path` answers 500 from the first page on. */
@@ -107,6 +112,10 @@ test("the rail: failed questions asked of me mark the Inbox's count as partial",
   const inbox = page.getByTestId("simple-nav-inbox-count");
   await expect(inbox).toBeVisible({ timeout: 15_000 });
   await expect(inbox).toHaveAttribute("title", /could not load/i);
+  // The mark is on an element with a role, so the link's description reads it.
+  await expect(inbox).toHaveRole("img");
+  await expect(inbox).toHaveAccessibleName(/could not load/i);
+  await expect(page.getByTestId("simple-nav-inbox")).toHaveAccessibleDescription(/could not load/i);
 });
 
 test("Inbox: failed notifications show Could not load and mark N waiting as partial", async ({ page }) => {
@@ -177,15 +186,17 @@ test("Inbox: failed notifications mark the Needs you count and the tab counts as
   await page.goto("/inbox");
   const needs = page.getByTestId("inbox-needs");
   await expect(page.getByTestId("load-error")).toBeVisible({ timeout: 15_000 });
-  // The count and the tabs read the same as before; only their names and tooltips say a part is missing.
-  const count = needs.getByTestId("panel-count").locator("[aria-label]");
+  // The count and the tabs read the same as before; only their names and tooltips say a part is missing,
+  // each on an element with a role, so assistive tech reads the mark.
+  const count = needs.getByTestId("panel-count").getByRole("img", { name: /^\d+; a part could not load$/ });
   await expect(count).toHaveText(/^\d+$/);
-  await expect(count).toHaveAttribute("aria-label", /^\d+; a part could not load$/);
   await expect(count).toHaveAttribute("title", /^\d+; a part could not load$/);
   const tab = needs.getByRole("tab", { selected: true });
   await expect(tab).toHaveAccessibleName(/\d+; a part could not load$/);
-  await expect(tab.locator("[title]")).toHaveAttribute("title", /^\d+; a part could not load$/);
-  await expect(page.getByText(/^\d+ waiting$/)).toHaveAttribute("aria-label", /^\d+ waiting; a part could not load$/);
+  const tabCount = tab.getByRole("img", { name: /^\d+; a part could not load$/ });
+  await expect(tabCount).toHaveText(/^\d+$/);
+  await expect(tabCount).toHaveAttribute("title", /^\d+; a part could not load$/);
+  await expect(page.getByRole("img", { name: /^\d+ waiting; a part could not load$/ })).toHaveText(/^\d+ waiting$/);
 });
 
 test("the rail: a failed part is read again alone, after 15 s, then 30 s", async ({ page }) => {
@@ -235,4 +246,54 @@ test("the rail: a hidden tab reads a failed part again only once it is shown", a
   // Back on this tab: the failed part is read again at once.
   await shown(false);
   await expect.poll(() => calls(page, "/v1/inbox/questions")).toBe(before + 1);
+});
+
+test("the rail: a page change starts the back-off again at 15 s", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await failing(page, "/v1/inbox/questions");
+  await login(page);
+  await page.goto("/simple/one-pagers");
+  await expect(page.getByTestId("simple-nav-inbox-count")).toHaveAttribute("title", /could not load/i, { timeout: 15_000 });
+  await page.waitForTimeout(1_000);
+  const before = await calls(page, "/v1/inbox/questions");
+  // Two failed re-reads: the next wait would be 60 s.
+  await page.clock.runFor(16_000);
+  await expect.poll(() => calls(page, "/v1/inbox/questions")).toBe(before + 1);
+  await page.clock.runFor(31_000);
+  await expect.poll(() => calls(page, "/v1/inbox/questions")).toBe(before + 2);
+  // The person opens another page: every part is read again, and the questions fail again.
+  await page.getByTestId("simple-nav-goals").click();
+  await expect(page).toHaveURL(/\/simple\/goals$/);
+  await expect.poll(() => calls(page, "/v1/inbox/questions")).toBe(before + 3);
+  await page.waitForTimeout(1_000);
+  // The next re-read comes after the first step again, 15 s, not 60 s.
+  await page.clock.runFor(16_000);
+  await expect.poll(() => calls(page, "/v1/inbox/questions")).toBe(before + 4);
+});
+
+test("the rail: a page change drops the re-read already waiting, so the failed part is never read twice at once", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await failing(page, "/v1/inbox/questions");
+  // The goal suggestions answer 5 s late, so a full read stays on its way that long.
+  await page.addInitScript(
+    ([slowKey, msKey]) => {
+      localStorage.setItem(slowKey, "/v1/simple/goal-suggestions");
+      localStorage.setItem(msKey, "5000");
+    },
+    [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY] as const,
+  );
+  await login(page);
+  await page.goto("/simple/one-pagers");
+  await expect(page.getByTestId("simple-nav-inbox-count")).toHaveAttribute("title", /could not load/i, { timeout: 30_000 });
+  // The re-read is due in about 3 s; the person opens another page now, whose full read takes 5 s.
+  await page.clock.runFor(12_000);
+  const before = await calls(page, "/v1/inbox/questions");
+  await page.getByTestId("simple-nav-goals").click();
+  await expect(page).toHaveURL(/\/simple\/goals$/);
+  await expect.poll(() => calls(page, "/v1/inbox/questions")).toBe(before + 1);
+  // The re-read that was waiting does not run beside the page change's read.
+  await page.waitForTimeout(6_000);
+  expect(await calls(page, "/v1/inbox/questions")).toBe(before + 1);
 });
