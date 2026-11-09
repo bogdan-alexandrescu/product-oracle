@@ -33,16 +33,17 @@ const labels = (page: Page) => page.locator('[data-testid="ms-label"], [data-tes
 
 /** Every milestone the band names (a folded count's names after its host), by day: [code, name]. */
 async function bandCodes(page: Page): Promise<[string, string][]> {
-  const shown: { day: string; words: string[] }[] = [];
-  for (const l of await labels(page).all()) shown.push({ day: (await l.getAttribute("data-day")) ?? "", words: [(await l.innerText()).trim()] });
+  const shown: { day: string; words: string }[] = [];
+  for (const l of await labels(page).all()) shown.push({ day: (await l.getAttribute("data-day")) ?? "", words: (await l.innerText()).trim() });
   for (const more of await page.getByTestId("ms-band-more").all()) {
-    const title = (await more.getAttribute("title")) ?? "";
-    shown.push({ day: "9999", words: title.split(", ").map((t) => t.split(" · ")[0].trim()) });
+    const days = ((await more.getAttribute("data-days")) ?? "").split(",");
+    ((await more.getAttribute("title")) ?? "").split(", ").forEach((t, k) => shown.push({ day: days[k] ?? "", words: t.split(" · ")[0].trim() }));
   }
+  // By day; on one day, by code (the band may stack or fold a day's labels in any order).
+  const num = (w: string) => Number(/^M(\d+)/.exec(w)?.[1] ?? 0);
   return shown
-    .sort((a, b) => a.day.localeCompare(b.day))
-    .flatMap((s) => s.words)
-    .map((w) => [w.split(" ")[0], w.slice(w.indexOf(" ") + 1)] as [string, string]);
+    .sort((a, b) => a.day.localeCompare(b.day) || num(a.words) - num(b.words))
+    .map(({ words: w }) => [w.split(" ")[0], w.slice(w.indexOf(" ") + 1)] as [string, string]);
 }
 
 async function linesSpanEveryGroup(page: Page, layer: Locator) {

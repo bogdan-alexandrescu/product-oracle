@@ -669,7 +669,7 @@ export function MsLayer(props: MsLayerProps) {
       );
       if (p.more.length)
         out.push(
-          <span key={`rbm-${m.id}`} data-testid="ms-band-more" title={p.more.map((o) => `${words(o)} · ${day(o.date!)}`).join(", ")} className="absolute z-[14] h-5 rounded-full border border-line-strong bg-surface px-1.5 text-xs leading-[18px] font-semibold text-text" style={{ left: p.left + Math.max(p.w, 40) + 3, top }}>
+          <span key={`rbm-${m.id}`} data-testid="ms-band-more" data-days={p.more.map((o) => o.date).join(",")} title={p.more.map((o) => `${words(o)} · ${day(o.date!)}`).join(", ")} className="absolute z-[14] h-5 rounded-full border border-line-strong bg-surface px-1.5 text-xs leading-[18px] font-semibold text-text" style={{ left: p.left + Math.max(p.w, 40) + 3, top }}>
             +{p.more.length}
           </span>,
         );
