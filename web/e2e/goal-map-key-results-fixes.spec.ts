@@ -16,6 +16,9 @@ import { expect, test, type Locator, type Page } from "./test";
  * Card kr-feature-stays: protects = a feature taken off a key result's milestone into its own goal
  * ("Not on a key result" in that goal) keeps serving the key result; fails_when = its roadmap item
  * moves onto the goal.
+ * Card kr-free-stays-free: protects = a feature serving its goal itself, put on a key result's
+ * milestone and dragged back to "Not on a key result" in that goal, still serves the goal itself;
+ * fails_when = its roadmap item is moved onto the key result.
  * Card kr-onto-goal: protects = Move to… moves a key result's milestone onto its own goal;
  * fails_when = the goal is taken as where it already is and nothing moves.
  * Card kr-undo: protects = Undo after a key result's milestone moved to another goal puts it back
@@ -111,6 +114,37 @@ test.describe("Goal map: key results after edits", () => {
     await card.getByTestId("ld-open").click();
     const panel = page.getByTestId("gm-feature-panel");
     await expect(panel.getByTestId("card-goal")).toHaveText(LADDER_KRS.of(FIRST)[1]);
+  });
+
+  test("a feature of a goal put on a key result's milestone and taken back to Not on a key result still serves the goal", async ({ page }) => {
+    await open(page);
+    // A feature on Goal 1's own first milestone: its item serves Goal 1 itself.
+    const feature = column(page, FIRST).locator("[data-ld-group]").filter({ hasText: "Weekly active teams first measured" }).getByTestId("ld-feature").first();
+    const id = (await feature.getAttribute("data-ld-card"))!;
+    const card = page.locator(`[data-ld-card="${id}"]`);
+    const sheet = page.getByTestId("ld-move-sheet");
+    const moveTo = async (option: string | RegExp) => {
+      await menu(page, card, "Move to…");
+      await sheet.locator("label").filter({ hasText: option }).first().click();
+      await page.getByTestId("ld-move-go").click();
+    };
+
+    await page.getByTestId("ld-edit").click();
+    // Off its milestone, free in Goal 1.
+    await moveTo("Not on a key result");
+    await expect(toast(page, "Not on a key result")).toBeVisible();
+    await expect(column(page, FIRST).getByTestId("ld-free").locator(`[data-ld-card="${id}"]`)).toHaveCount(1);
+    // On the key result's milestone (only linked: its item still serves Goal 1).
+    await moveTo(LADDER_KRS.milestone);
+    await expect(column(page, FIRST).locator("[data-ld-group]").filter({ hasText: LADDER_KRS.milestone }).locator(`[data-ld-card="${id}"]`)).toHaveCount(1);
+    // Back to Goal 1's "Not on a key result": it stays on Goal 1, not on the key result.
+    await moveTo("Not on a key result");
+    await expect(column(page, FIRST).getByTestId("ld-free").locator(`[data-ld-card="${id}"]`)).toHaveCount(1);
+
+    await page.getByTestId("ld-edit").click();
+    await card.click();
+    await card.getByTestId("ld-open").click();
+    await expect(page.getByTestId("gm-feature-panel").getByTestId("card-goal")).toHaveText(FIRST);
   });
 
   test("Move to… moves a key result's milestone onto its own goal", async ({ page }) => {
