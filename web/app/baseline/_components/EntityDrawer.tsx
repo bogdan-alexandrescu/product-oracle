@@ -1028,34 +1028,32 @@ function Links({
 }
 
 /**
- * gt-goal-attr-shapes: how the form offers an attribute: a parent goal as a picker of goals by name, a list one line
- * per entry, an object one field per field, a day as a date; never its raw key or JSON.
+ * gt-goal-attr-shapes: how the form offers an attribute, or a field or entry in one, keeping the type it is stored as:
+ * a parent goal as a picker of goals by name, a list of words or of numbers one line per entry, any other list entry
+ * by entry, an object one field per field (each in turn as its type), a yes or no as a two-choice picker, a day as a
+ * date; never its raw key or JSON. `start` is what the form first showed, so an untouched value is saved as stored.
  */
-type AttrKind = "text" | "number" | "day" | "parent" | "list" | "object";
-type AttrField = { key: string; label: string; kind: AttrKind };
-
-function kindOf(key: string, v: unknown): AttrKind {
-  if (PARENT_ATTRS.has(key) && (v == null || typeof v === "string")) return "parent";
-  if (typeof v === "number") return "number";
-  if (Array.isArray(v)) return "list";
-  if (v != null && typeof v === "object") return "object";
-  return typeof v === "string" && DAY.test(v) ? "day" : "text";
-}
+type Draft =
+  | { kind: "text" | "number" | "day" | "bool" | "parent"; was: unknown; start: string; text: string }
+  | { kind: "lines"; was: unknown; start: string; text: string; numbers: boolean }
+  | { kind: "object"; was: unknown; fields: [string, Draft][] }
+  | { kind: "entries"; was: unknown; entries: Draft[] };
+type AttrField = { key: string; label: string; numeric?: boolean };
 
 /** The labelled fields for the type, then every other attribute the entry has (the suggested-blocker mark aside). */
 function attrFields(entity: EntityDetail): AttrField[] {
-  const fields: AttrField[] = (EDIT_ATTRS[entity.type] ?? []).map((f) => ({ key: f.key, label: f.label, kind: f.numeric ? "number" : "text" }));
-  for (const [key, v] of Object.entries(entity.attrs ?? {})) {
+  const fields: AttrField[] = (EDIT_ATTRS[entity.type] ?? []).map((f) => ({ key: f.key, label: f.label, numeric: f.numeric }));
+  for (const [key] of Object.entries(entity.attrs ?? {})) {
     if (key === "proposed_blocker" || fields.some((f) => f.key === key)) continue;
     if (entity.type === "goal" && GOAL_TYPED.has(key)) continue;
-    fields.push({ key, label: attrLabel(key), kind: kindOf(key, v) });
+    fields.push({ key, label: attrLabel(key) });
   }
   return fields;
 }
 
 const asText = (v: unknown) => (v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v));
 
-/** A value, list entry or object field as the form shows it: no unfilled placeholder, a list or an object in words. */
+/** A value or list entry as the form shows it in a line: no unfilled placeholder. */
 function formText(v: unknown): string {
   if (v == null) return "";
   if (typeof v === "string") return withoutPlaceholders(v);
@@ -1069,42 +1067,91 @@ function holdsPlaceholder(v: unknown): boolean {
   return hasPlaceholder(v);
 }
 
-/** What the form shows for an attribute: one line per list entry; an object's fields go in their own inputs. */
-function draftText(f: AttrField, v: unknown): string {
-  if (f.kind === "list") return (Array.isArray(v) ? v : []).map(formText).join("\n");
-  if (f.kind === "parent") return typeof v === "string" ? v : "";
-  return formText(v);
+/** The form's draft of a stored value; `key` names a top-level attribute (a parent goal is picked), "" a part of one. */
+function draftOf(v: unknown, key = "", numeric = false): Draft {
+  const plain = (kind: "text" | "number" | "day" | "bool" | "parent", start: string): Draft => ({ kind, was: v, start, text: start });
+  if (PARENT_ATTRS.has(key) && (v == null || typeof v === "string")) return plain("parent", typeof v === "string" ? v : "");
+  if (numeric || typeof v === "number") return plain("number", formText(v));
+  if (typeof v === "boolean") return plain("bool", v ? "yes" : "no");
+  if (Array.isArray(v)) {
+    const numbers = v.length > 0 && v.every((x) => typeof x === "number");
+    // A list of words (none holding a line break) or of numbers reads one line per entry; any other entry by entry.
+    if (numbers || v.every((x) => typeof x === "string" && !x.includes("\n"))) {
+      const start = v.map(formText).join("\n");
+      return { kind: "lines", was: v, start, text: start, numbers };
+    }
+    return { kind: "entries", was: v, entries: v.map((x) => draftOf(x)) };
+  }
+  if (v != null && typeof v === "object") return { kind: "object", was: v, fields: Object.entries(v).map(([k, x]) => [k, draftOf(x)]) };
+  return plain(typeof v === "string" && DAY.test(v) ? "day" : "text", formText(v));
 }
 
-/** A typed line or field back as stored: what it was when it reads as before, a number where one was. */
-function storedValue(typed: string, was: unknown): unknown {
-  if (was !== undefined && typed === formText(was).trim()) return was;
-  if (typeof was === "number" && typed && Number.isFinite(Number(typed))) return Number(typed);
-  return typed;
+/** A value emptied in the form: an attribute is removed, a field or a list entry dropped. */
+const GONE = Symbol("gone");
+
+/** A typed number, or the error a top-level number field shows. */
+function numberOf(typed: string, label: string): number {
+  const n = Number(typed);
+  if (!Number.isFinite(n)) throw new Error(`${label} must be a number.`);
+  return n;
+}
+
+/**
+ * A draft back as stored, keeping each value's type: what it was when untouched (the same value, a placeholder kept),
+ * a number where one was, a yes or no as true or false, an object or a list as one; throws a field's error.
+ */
+function storedOf(d: Draft, label: string): unknown {
+  if (d.kind === "object") {
+    const was = d.was as Record<string, unknown>;
+    const next: Record<string, unknown> = {};
+    for (const [k, part] of d.fields) {
+      const v = storedOf(part, attrLabel(k));
+      if (v !== GONE) next[k] = v;
+    }
+    const same = d.fields.every(([k]) => next[k] === was[k] && k in next);
+    return same ? d.was : Object.keys(next).length ? next : GONE;
+  }
+  if (d.kind === "entries") {
+    const next = d.entries.map((e, i) => storedOf(e, `${label} ${i + 1}`)).filter((v) => v !== GONE);
+    const was = d.was as unknown[];
+    const same = next.length === was.length && next.every((v, i) => v === was[i]);
+    return same ? d.was : next.length ? next : GONE;
+  }
+  if (d.kind === "lines") {
+    if (d.text === d.start) return d.was;
+    const list = storedList(d.text, d.was, d.numbers, label);
+    return list.length ? list : GONE;
+  }
+  const typed = d.text.trim();
+  if (typed === d.start.trim()) return d.was;
+  if (d.kind === "bool") return typed === "yes";
+  if (!typed) return GONE;
+  return d.kind === "number" ? numberOf(typed, label) : typed;
 }
 
 /**
  * A list's lines back as stored: each untouched entry as it was (its placeholder kept, an entry that was only a
- * placeholder too, on its empty line), one entry per line; an empty line of its own is dropped.
+ * placeholder too, on its empty line), one entry per line, a number in a list of numbers; an empty line is dropped.
  */
-function storedList(raw: string, was: unknown): unknown[] {
+function storedList(raw: string, was: unknown, numbers: boolean, label: string): unknown[] {
   const left = Array.isArray(was) ? [...was] : [];
-  const numbers = left.length > 0 && left.every((x) => typeof x === "number");
   const out: unknown[] = [];
   for (const line of raw.split("\n").map((l) => l.trim())) {
     const i = left.findIndex((x) => formText(x).trim() === line);
     if (i >= 0) out.push(left.splice(i, 1)[0]);
-    else if (line) out.push(numbers && Number.isFinite(Number(line)) ? Number(line) : line);
+    else if (line) out.push(numbers ? numberOf(line, label) : line);
   }
   return out;
 }
 
 /** The goals a parent goal may be picked from, by name, as the stored value names them (by key, or by id). */
 function parentOptions(graph: GraphOut | undefined, entity: EntityDetail, current: string): { value: string; label: string }[] {
-  const goals = sortedGoals(graph).filter((g) => g.id !== entity.id);
+  const plain = (k: string) => k.trim().toLowerCase().replace(/[._\s]/g, "-");
+  const own = (g: EntityOut) => g.id === current.trim() || plain(g.key) === plain(current);
+  // The goal itself only when it is stored as its own parent, so it reads by its name.
+  const goals = sortedGoals(graph).filter((g) => g.id !== entity.id || (current.trim() && own(g)));
   const byId = goals.some((g) => g.id === current.trim());
   const out = goals.map((g) => ({ value: byId ? g.id : g.key, label: shownTitle(g) }));
-  const plain = (k: string) => k.trim().toLowerCase().replace(/[._\s]/g, "-");
   const found = out.find((o) => o.value === current || plain(o.value) === plain(current));
   if (found) found.value = current;
   else if (current) out.unshift({ value: current, label: graph ? "Not in the Ground Truth" : "…" });
@@ -1130,16 +1177,9 @@ function EditForm({
   const [fields, setFields] = useState(() => attrFields(entity));
   const [title, setTitle] = useState(entity.title);
   const [body, setBody] = useState(entity.body ?? "");
-  const [attrs, setAttrs] = useState<Record<string, string>>(() =>
-    Object.fromEntries(fields.map((f) => [f.key, draftText(f, entity.attrs?.[f.key])])),
-  );
-  // An object attribute's fields, each as the form shows it.
-  const [parts, setParts] = useState<Record<string, Record<string, string>>>(() =>
-    Object.fromEntries(
-      fields
-        .filter((f) => f.kind === "object")
-        .map((f) => [f.key, Object.fromEntries(Object.entries(entity.attrs?.[f.key] as object).map(([k, v]) => [k, formText(v)]))]),
-    ),
+  // Each attribute's draft, its lists, objects and their fields each as their stored type.
+  const [drafts, setDrafts] = useState<Record<string, Draft>>(() =>
+    Object.fromEntries(fields.map((f) => [f.key, draftOf(entity.attrs?.[f.key], f.key, f.numeric)])),
   );
   const [invalid, setInvalid] = useState<string | null>(null);
   const isGoal = entity.type === "goal";
@@ -1152,37 +1192,15 @@ function EditForm({
     const out: Record<string, unknown> = {};
     for (const f of fields) {
       const was = entity.attrs?.[f.key];
-      if (f.kind === "object") {
-        // Each field as stored: an untouched one as it was, an emptied one gone.
-        const obj = (was ?? {}) as Record<string, unknown>;
-        const next: Record<string, unknown> = {};
-        for (const [k, typed] of Object.entries(parts[f.key] ?? {})) {
-          const v = storedValue(typed.trim(), obj[k]);
-          if (v !== "") next[k] = v;
-        }
-        if (asText(next) !== asText(obj)) out[f.key] = Object.keys(next).length ? next : null;
-        continue;
+      let v: unknown;
+      try {
+        v = storedOf(drafts[f.key], f.label);
+      } catch (err) {
+        setInvalid((err as Error).message);
+        return;
       }
-      if (f.kind === "list") {
-        if (attrs[f.key] === draftText(f, was)) continue;
-        const list = storedList(attrs[f.key], was);
-        out[f.key] = list.length ? list : null;
-        continue;
-      }
-      const raw = attrs[f.key].trim();
-      if (raw === draftText(f, was).trim()) continue;
-      if (!raw) {
-        out[f.key] = null; // removes the key
-      } else if (f.kind === "number") {
-        const n = Number(raw);
-        if (!Number.isFinite(n)) {
-          setInvalid(`${f.label} must be a number.`);
-          return;
-        }
-        out[f.key] = n;
-      } else {
-        out[f.key] = raw;
-      }
+      if (v === was) continue;
+      out[f.key] = v === GONE ? null : v; // null removes the key
     }
     if (isGoal) {
       for (const [label, raw] of [["Value", goal.target], ["Start value", goal.start], ["Weight", goal.weight]]) {
@@ -1203,8 +1221,8 @@ function EditForm({
 
   function add(key: string) {
     if (!key) return;
-    setFields((fs) => [...fs, { key, label: attrLabel(key), kind: "text" }]);
-    setAttrs((a) => ({ ...a, [key]: "" }));
+    setFields((fs) => [...fs, { key, label: attrLabel(key) }]);
+    setDrafts((a) => ({ ...a, [key]: draftOf(undefined, key) }));
   }
 
   const label = "flex flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2";
@@ -1219,71 +1237,23 @@ function EditForm({
         <textarea className={INPUT} rows={3} value={body} onChange={(e) => setBody(e.target.value)} />
       </label>
       {isGoal && <GoalFields draft={goal} onChange={setGoal} problems={problems} horizons={entity.goal_check?.horizons as PlanningHorizons | null | undefined} />}
-      {fields.map((f) => {
-        const set = (v: string) => setAttrs((a) => ({ ...a, [f.key]: v }));
-        const missing = holdsPlaceholder(entity.attrs?.[f.key]) && (
-          <Chip kind="warn" className="ml-1.5">
-            Missing
-          </Chip>
-        );
-        if (f.kind === "object") {
-          const obj = (entity.attrs?.[f.key] ?? {}) as Record<string, unknown>;
-          return (
-            <fieldset key={f.key} data-attr-field={f.key} className="flex flex-col gap-2">
-              <legend className={`${label} mb-1`}>
-                <span>
-                  {f.label}
-                  {missing}
-                </span>
-              </legend>
-              {Object.keys(parts[f.key] ?? {}).map((k) => (
-                <label key={k} className={`${label} pl-3`}>
-                  {attrLabel(k)}
-                  <input
-                    className={INPUT}
-                    type={typeof obj[k] === "string" && DAY.test(obj[k] as string) ? "date" : "text"}
-                    inputMode={typeof obj[k] === "number" ? "decimal" : undefined}
-                    value={parts[f.key][k]}
-                    onChange={(e) => setParts((p) => ({ ...p, [f.key]: { ...p[f.key], [k]: e.target.value } }))}
-                  />
-                </label>
-              ))}
-            </fieldset>
-          );
-        }
-        return (
-          <label key={f.key} className={label} data-attr-field={f.key}>
-            <span>
-              {f.label}
-              {missing}
-            </span>
-            {f.kind === "parent" ? (
-              <select className={INPUT} value={attrs[f.key]} onChange={(e) => set(e.target.value)}>
-                {parentOptions(graph, entity, attrs[f.key]).map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            ) : f.kind === "list" ? (
-              <textarea
-                className={INPUT}
-                rows={Math.max(2, attrs[f.key].split("\n").length)}
-                value={attrs[f.key]}
-                onChange={(e) => set(e.target.value)}
-              />
-            ) : (
-              <input
-                className={INPUT}
-                type={f.kind === "day" ? "date" : "text"}
-                inputMode={f.kind === "number" ? "decimal" : undefined}
-                value={attrs[f.key]}
-                onChange={(e) => set(e.target.value)}
-              />
-            )}
-          </label>
-        );
-      })}
+      {fields.map((f) => (
+        <DraftField
+          key={f.key}
+          attr={f.key}
+          label={f.label}
+          draft={drafts[f.key]}
+          onChange={(d) => setDrafts((a) => ({ ...a, [f.key]: d }))}
+          parents={(current) => parentOptions(graph, entity, current)}
+          missing={
+            holdsPlaceholder(entity.attrs?.[f.key]) && (
+              <Chip kind="warn" className="ml-1.5">
+                Missing
+              </Chip>
+            )
+          }
+        />
+      ))}
       {addable.length > 0 && (
         <label className={label}>
           Add attribute
@@ -1310,6 +1280,85 @@ function EditForm({
         </InfoTip>
       </div>
     </form>
+  );
+}
+
+/**
+ * One attribute, field or list entry in the Edit form, as its draft's type: an object or a list entry by entry as a
+ * group of its own fields (in turn), a list of words one line per entry, a yes or no as a two-choice picker.
+ */
+function DraftField({
+  attr,
+  label: name,
+  draft: d,
+  onChange,
+  parents,
+  missing,
+}: {
+  /** The top-level attribute's key; none for a field or an entry in one. */
+  attr?: string;
+  label: string;
+  draft: Draft;
+  onChange: (d: Draft) => void;
+  parents: (current: string) => { value: string; label: string }[];
+  missing?: ReactNode;
+}) {
+  const label = `flex flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2${attr ? "" : " pl-3"}`;
+  if (d.kind === "object" || d.kind === "entries") {
+    const parts: [string, string, Draft][] =
+      d.kind === "object" ? d.fields.map(([k, p]) => [k, attrLabel(k), p]) : d.entries.map((p, i) => [String(i), `${i + 1}`, p]);
+    const set = (i: number, p: Draft) =>
+      onChange(
+        d.kind === "object"
+          ? { ...d, fields: d.fields.map((x, j) => (j === i ? [x[0], p] : x)) }
+          : { ...d, entries: d.entries.map((x, j) => (j === i ? p : x)) },
+      );
+    return (
+      <fieldset data-attr-field={attr} className={`flex flex-col gap-2${attr ? "" : " pl-3"}`}>
+        <legend className={`${label} mb-1`}>
+          <span>
+            {name}
+            {missing}
+          </span>
+        </legend>
+        {parts.map(([k, partLabel, p], i) => (
+          <DraftField key={k} label={partLabel} draft={p} onChange={(next) => set(i, next)} parents={parents} />
+        ))}
+      </fieldset>
+    );
+  }
+  const set = (text: string) => onChange({ ...d, text });
+  return (
+    <label className={label} data-attr-field={attr}>
+      <span>
+        {name}
+        {missing}
+      </span>
+      {d.kind === "parent" ? (
+        <select className={INPUT} value={d.text} onChange={(e) => set(e.target.value)}>
+          {parents(d.text).map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      ) : d.kind === "bool" ? (
+        <select className={INPUT} value={d.text} onChange={(e) => set(e.target.value)}>
+          <option value="yes">Yes</option>
+          <option value="no">No</option>
+        </select>
+      ) : d.kind === "lines" || d.start.includes("\n") ? (
+        <textarea className={INPUT} rows={Math.max(2, d.text.split("\n").length)} value={d.text} onChange={(e) => set(e.target.value)} />
+      ) : (
+        <input
+          className={INPUT}
+          type={d.kind === "day" ? "date" : "text"}
+          inputMode={d.kind === "number" ? "decimal" : undefined}
+          value={d.text}
+          onChange={(e) => set(e.target.value)}
+        />
+      )}
+    </label>
   );
 }
 
