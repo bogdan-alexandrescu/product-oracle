@@ -229,6 +229,9 @@ interface SimpleDb {
   /** approved-roadmap-to-simple: roadmaps Simple knows besides ROADMAPS (slug -> its title,
    * PRD, track key and track title), known while their items are the roadmap's. */
   extra_roadmaps?: Record<string, { title: string; prd: string; track: string; track_title: string }>;
+  /** item-milestone: tracks Simple knows besides TRACKS and the added roadmaps' own (key -> title),
+   * known as knowExtraRoadmaps knows theirs. */
+  extra_tracks?: Record<string, string>;
   /** one-roadmap-many-prds (api/oracle/roadmap/company.feeding_ids): the company roadmap's slug;
    * while set, its items alone feed Simple and older per-PRD roadmaps' items are history. */
   company_roadmap?: string;
@@ -706,7 +709,7 @@ export function knowManyPlans(db: { items: { key: string; roadmap: string }[] } 
  * while it is the roadmap's, as knowManyPlans; taken out again once it is not.
  */
 let extraAdded: { roadmaps: string[]; tracks: string[] } = { roadmaps: [], tracks: [] };
-export function knowExtraRoadmaps(db: { extra_roadmaps?: SimpleDb["extra_roadmaps"] } | undefined): void {
+export function knowExtraRoadmaps(db: { extra_roadmaps?: SimpleDb["extra_roadmaps"]; extra_tracks?: SimpleDb["extra_tracks"] } | undefined): void {
   for (const k of extraAdded.roadmaps) delete ROADMAPS[k];
   for (const k of extraAdded.tracks) delete TRACKS[k];
   extraAdded = { roadmaps: [], tracks: [] };
@@ -718,6 +721,12 @@ export function knowExtraRoadmaps(db: { extra_roadmaps?: SimpleDb["extra_roadmap
     if (!(r.track in TRACKS)) {
       TRACKS[r.track] = r.track_title;
       extraAdded.tracks.push(r.track);
+    }
+  }
+  for (const [k, title] of Object.entries(db?.extra_tracks ?? {})) {
+    if (!(k in TRACKS)) {
+      TRACKS[k] = title;
+      extraAdded.tracks.push(k);
     }
   }
 }
@@ -1127,9 +1136,14 @@ export const namedOn = (db: SimpleDb, key: string, field: "owner_id" | "decider_
   return t && field in t ? ((t[field] as string | null) ?? null) : undefined;
 };
 
-/** The owners of a PRD's tracks (the API's one_pager.who track_owners): the tracks of the items its roadmap holds. */
+/** The owners of a PRD's tracks (the API's one_pager.who track_owners): the tracks of the items whose own
+ * PRD it is (prd_doc, else their roadmap's; one company roadmap holds many PRDs' items), and the tracks
+ * the Tracks sheet keeps for it (track_state). */
 export function prdTrackOwnerIds(db: SimpleDb, prdSlug: string): string[] {
-  const tracks = new Set(db.items.filter((s) => ROADMAPS[s.roadmap]?.prd.toLowerCase().replace(/ /g, "-") === prdSlug).flatMap((s) => (s.track ? [s.track] : [])));
+  const slug = (title: string | undefined) => title?.toLowerCase().replace(/ /g, "-");
+  const state = (db as SimpleDb & { track_state?: Record<string, { prd: string }> }).track_state ?? {};
+  const tracks = new Set(db.items.filter((s) => (s.prd_doc?.slug ?? slug(ROADMAPS[s.roadmap]?.prd)) === prdSlug).flatMap((s) => (s.track ? [s.track] : [])));
+  for (const [k, t] of Object.entries(state)) if (slug(t.prd) === prdSlug) tracks.add(k);
   return [...tracks].flatMap((t) => (db.track_owners?.[t] ? [db.track_owners[t]] : []));
 }
 

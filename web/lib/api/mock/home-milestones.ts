@@ -48,6 +48,9 @@ export function seedHomeMilestones(): SimpleDb {
     { id: stableUuid("simple-gm/a3"), roadmap: "onboarding-roadmap", code: "M3", name: "", date: null, goal: "faster-activation", gates: ["setup-reminders"], counts_when: "", progress: "not_started" },
   ];
   TRACKS.pricing ??= "Pricing track";
+  // Pilot plan A's own track (no item on it yet): its owner (server.ts) is the PRD's owner.
+  TRACKS.pilot ??= "Pilot track";
+  (rm as SimpleDb & { track_state?: Record<string, { status: string; prd: string }> }).track_state = { pilot: { status: "active", prd: "Pilot plan A" } };
   rm.items.push(
     { key: "setup-reminders", title: "Setup reminders", horizon: "next", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "medium" },
     { key: "price-meter", title: "Usage meter", horizon: "next", roadmap: "pricing-roadmap", track: "pricing", confidence: "medium", record: "M3 · Prices live" },
