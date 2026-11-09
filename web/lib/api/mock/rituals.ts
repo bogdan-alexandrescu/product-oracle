@@ -671,14 +671,37 @@ const DIGEST_TEXT = [
   "- **Proof points:** time to first roadmap.",
 ].join("\n");
 
+/** A body that is not JSON: the API's 422 (FastAPI's json_invalid, before the route runs). */
+class BadJson extends Error {
+  constructor(readonly pos: number) {
+    super("JSON decode error");
+  }
+}
+
 /** Handles /v1/rituals* and /v1/ritual-occurrences*; null for any other path. */
 export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
+  try {
+    return await route(ctx, db, req, p, q);
+  } catch (e) {
+    if (!(e instanceof BadJson)) throw e;
+    return json(422, { detail: [{ type: "json_invalid", loc: ["body", e.pos], msg: "JSON decode error", input: {}, ctx: { error: e.message } }] });
+  }
+}
+
+async function route(ctx: RitualsContext, db: RitualsDb, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   if (p[1] !== "rituals" && p[1] !== "ritual-occurrences") return null;
   tick(db, ctx);
   followZone(ctx, db);
   const m = req.method;
   const role = ctx.me.role;
-  const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
+  const body = async <T>() => {
+    const text = await req.text();
+    try {
+      return JSON.parse(text || "null") as T;
+    } catch (e) {
+      throw new BadJson(Number(/position (\d+)/.exec(String(e))?.[1] ?? 0));
+    }
+  };
   const owner = atLeast(role, "owner");
   const notOwner = () => fail(403, "Requires the owner role");
   const memberIds = new Set(ctx.members.filter((x) => x.status !== "disabled").map((x) => x.id));
@@ -804,6 +827,13 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
     return fail(404, "Route not found");
   }
 
+  // As the API's SkipIn (1 to 2,000 characters, counted in code points as Pydantic does, kept
+  // as typed): FastAPI checks the body before the service finds the occurrence, checks the
+  // owner and the status.
+  const isSkip = p.length === 4 && p[3] === "skip" && (m === "POST" || m === "PATCH");
+  const skipIn = isSkip ? await body<Schemas["SkipIn"] | null>() : null;
+  const reasonLength = typeof skipIn?.reason === "string" ? [...skipIn.reason].length : 0;
+  if (isSkip && !(reasonLength >= 1 && reasonLength <= 2000)) return fail(422, "reason: say why it was skipped, in at most 2,000 characters");
   const o = db.occurrences.find((x) => x.id === p[2]);
   if (!o) return fail(404, "Occurrence not found");
   const r = db.rituals.find((x) => x.id === o.ritual_id)!;
@@ -829,11 +859,6 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
     if (!o.read_by.includes(ctx.me.id)) o.read_by.push(ctx.me.id);
     return new Response(null, { status: 204 });
   }
-  // As the API's SkipIn (1 to 2,000 characters, kept as typed): FastAPI checks the body
-  // before the service checks the owner and the status.
-  const skipIn = p.length === 4 && p[3] === "skip" && (m === "POST" || m === "PATCH") ? await body<Schemas["SkipIn"]>() : null;
-  if (skipIn !== null && !(typeof skipIn?.reason === "string" && skipIn.reason.length >= 1 && skipIn.reason.length <= 2000))
-    return fail(422, "reason: say why it was skipped, in at most 2,000 characters");
   if (p.length === 4 && m === "POST" && (p[3] === "held" || p[3] === "skip")) {
     if (ctx.me.id !== r.owner_id) return fail(403, "Only the ritual's owner records it");
     // As the API (rituals.service.hold): held when its Simple review ended, nothing recorded yet, the owner records it.
