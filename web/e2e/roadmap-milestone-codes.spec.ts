@@ -1,0 +1,129 @@
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { login } from "./helpers";
+import { expect, test, type Locator, type Page } from "./test";
+
+/*
+ * roadmap-milestone-codes (the owner, Nov 9: "milestones cut across the entire rows of the roadmap"
+ * and "milestones should have a unique number (m1, m2, m3) and shouldn't show up more than once"),
+ * on invented data (the mock's "roadmap-milestones" scenario: 4 goals, milestones from Nov to Feb,
+ * two on Dec 22, a PRD's own one, work of no goal; the mock's today is Nov 3, 2026).
+ *
+ * Card roadmap-milestone-band: protects = on the Timeline and the Gantt every milestone's line
+ * runs through every group, and one Milestones band under the date axis names each milestone
+ * once, coded M1..Mn by date across the roadmap; fails_when = a line stops at its own goal's rows,
+ * a code repeats, has a suffix or is out of date order.
+ * Card roadmap-milestone-renumber: protects = moving a milestone earlier gives it the earlier
+ * code and renumbers the ones it passed; fails_when = it keeps its old code.
+ * Card home-roadmap-codes: protects = Home's "The plan this quarter" rows read a milestone by
+ * the code the roadmap shows; fails_when = Home shows a goal's own code.
+ */
+
+const SCENARIO = "roadmap-milestones";
+
+async function open(page: Page, scenario = SCENARIO) {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, scenario] as const);
+  await login(page);
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  await expect(page.getByTestId("ms-band")).toBeVisible();
+}
+
+const labels = (page: Page) => page.locator('[data-testid="ms-label"], [data-testid="ms-prd-label"]');
+
+/** Every milestone the band names (a folded count's names after its host), by day: [code, name]. */
+async function bandCodes(page: Page): Promise<[string, string][]> {
+  const shown: { day: string; words: string[] }[] = [];
+  for (const l of await labels(page).all()) shown.push({ day: (await l.getAttribute("data-day")) ?? "", words: [(await l.innerText()).trim()] });
+  for (const more of await page.getByTestId("ms-band-more").all()) {
+    const title = (await more.getAttribute("title")) ?? "";
+    shown.push({ day: "9999", words: title.split(", ").map((t) => t.split(" · ")[0].trim()) });
+  }
+  return shown
+    .sort((a, b) => a.day.localeCompare(b.day))
+    .flatMap((s) => s.words)
+    .map((w) => [w.split(" ")[0], w.slice(w.indexOf(" ") + 1)] as [string, string]);
+}
+
+async function linesSpanEveryGroup(page: Page, layer: Locator) {
+  const box = (await layer.boundingBox())!;
+  const lines = layer.getByTestId("ms-line");
+  const n = await lines.count();
+  expect(n).toBeGreaterThan(4);
+  // The rows of every group: the last one ends near the layer's foot, the first starts under the band.
+  for (const line of await lines.all()) {
+    const b = (await line.boundingBox())!;
+    expect(b.y).toBeLessThan(box.y + 120);
+    expect(b.y + b.height).toBeGreaterThan(box.y + box.height - 4);
+  }
+  return n;
+}
+
+test("on the Timeline every milestone's line runs through every group and the band codes them M1..Mn by date", async ({ page }) => {
+  await open(page);
+  const n = await linesSpanEveryGroup(page, page.getByTestId("ms-layer").first());
+  const codes = await bandCodes(page);
+  const nums = codes.map(([c]) => {
+    expect(c).toMatch(/^M\d+$/);
+    return Number(c.slice(1));
+  });
+  // Each once, in date order, no suffix, no repeat: M1..Mn.
+  expect(new Set(nums).size).toBe(nums.length);
+  expect(nums).toEqual([...nums].sort((a, b) => a - b));
+  expect(nums.length).toBe(n);
+  // With the track milestones the Timeline names over its axis ("◆ M6 Beta · Dec 31"): M1..Mn, each once.
+  const tracks = (await page.getByTestId("timeline-milestone").allInnerTexts()).map((t) => Number(/M(\d+)/.exec(t)?.[1]));
+  const all = [...nums, ...tracks].sort((a, b) => a - b);
+  expect(all).toEqual(all.map((_, k) => k + 1));
+  // Two on Dec 22 get two numbers in a row.
+  const dec22 = codes.filter(([, name]) => name === "60% of teams active at day 90" || name === "Half of new teams invite a teammate").map(([c]) => Number(c.slice(1)));
+  expect(dec22).toHaveLength(2);
+  expect(Math.abs(dec22[0] - dec22[1])).toBe(1);
+  // The PRD's milestone is drawn like the others, its tip naming its PRD and the goal it advances.
+  const prd = page.getByTestId("ms-prd-label").first();
+  await prd.hover();
+  await expect(page.getByTestId("ms-band-tip")).toContainText("From the PRD Usage alerts");
+  await expect(page.getByTestId("ms-band-tip")).toContainText("Advances");
+});
+
+test("on the Gantt every milestone's line runs through every group, each named once in the band", async ({ page }) => {
+  await open(page);
+  await page.getByTestId("format-gantt").click();
+  await expect(page.getByTestId("ms-band")).toBeVisible();
+  await linesSpanEveryGroup(page, page.getByTestId("ms-layer").first());
+  const nums = (await bandCodes(page)).map(([c]) => Number(c.slice(1)));
+  expect(new Set(nums).size).toBe(nums.length);
+  expect(nums).toEqual([...nums].sort((a, b) => a - b));
+});
+
+test("moving a milestone earlier renumbers it and the ones it passed", async ({ page }) => {
+  await open(page);
+  const before = new Map((await bandCodes(page)).map(([c, name]) => [name, c]));
+  const last = before.get("Digest opened by 70%")!;
+  const first = before.get("Alerts live for 50 teams")!;
+  expect(Number(last.slice(1))).toBeGreaterThan(Number(first.slice(1)));
+  await labels(page).filter({ hasText: "Digest opened by 70%" }).click();
+  const card = page.getByTestId("ms-card");
+  await expect(card).toBeVisible();
+  await card.getByLabel("Date").fill("2026-11-10");
+  await card.getByTestId("ms-save").click();
+  await expect(card).toBeHidden();
+  await expect(labels(page).filter({ hasText: "Digest opened by 70%" })).toHaveText(/^M1 /);
+  await expect(labels(page).filter({ hasText: "Alerts live for 50 teams" })).toHaveText(new RegExp(`^M${Number(first.slice(1)) + 1} `));
+});
+
+test("Home's plan rows read each milestone by the code the roadmap shows", async ({ page }) => {
+  await open(page);
+  const onRoadmap = new Map((await bandCodes(page)).map(([c, name]) => [name, c]));
+  await page.goto("/simple");
+  await expect(page.getByRole("heading", { name: "The plan this quarter" })).toBeVisible();
+  await expect(page.getByTestId("home-strip-label").first()).toBeVisible();
+  let matched = 0;
+  for (const t of await page.getByTestId("home-strip-label").allTextContents()) {
+    const m = /^(M\d+) · (.+?) · \d+ items?$/.exec(t.replace(/\s+/g, " ").trim());
+    if (!m || !onRoadmap.has(m[2])) continue;
+    expect(m[1]).toBe(onRoadmap.get(m[2]));
+    matched += 1;
+  }
+  expect(matched).toBeGreaterThan(0);
+});
