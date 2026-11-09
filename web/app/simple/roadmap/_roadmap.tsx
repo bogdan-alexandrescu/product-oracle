@@ -1241,7 +1241,7 @@ export function SimpleRoadmap() {
     });
   }
   // kr-in-goal-card: the Goal filter lists a key result's goal, never the key result.
-  const goalOptions = useMemo(() => [...new Map(seen.goal.map(([k, t]): [string, string] => { const p = krs.parentOf(k); return p ? [p.key, p.title] : [k, t]; }))], [seen.goal, krs]);
+  const goalOptions = useMemo(() => [...new Map(seen.goal.map(([k, t]): [string, string] => { const p = krs.parentOf(k); return p ? [p.key, seen.goal.find(([x]) => x === p.key)?.[1] ?? p.title] : [k, t]; }))], [seen.goal, krs]);
   // RP2: the draft PRDs the layer shows, and the PRD filter's "(draft)" entries for those not on the roadmap.
   const [showDrafts, setShowDrafts] = useShowDrafts(me?.user_id ?? me?.email);
   const draftList = useMemo(() => draftPrds.data ?? NO_DRAFTS, [draftPrds.data]);

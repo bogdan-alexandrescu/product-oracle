@@ -42,8 +42,8 @@ test.describe("Simple roadmap: key results sit inside their goal's card", () => 
     await expect(tip).toBeVisible();
     await expect(tip).toContainText(KR2);
     // No key result is a goal card of its own, with items or without.
-    await expect(strip.locator("li").filter({ hasText: KR1 }).filter({ hasNotText: "Faster activation" })).toHaveCount(0);
-    await expect(strip.locator("li").filter({ hasText: KR2 }).filter({ hasNotText: "Faster activation" })).toHaveCount(0);
+    await expect(strip.locator("> li").filter({ hasText: KR1 }).filter({ hasNotText: "Faster activation" })).toHaveCount(0);
+    await expect(strip.locator("> li").filter({ hasText: KR2 }).filter({ hasNotText: "Faster activation" })).toHaveCount(0);
     // The key result's item counts on its goal's card and draws in its goal's lane.
     await expect(page.getByText("Guided setup checklist").first()).toBeVisible();
     await expect(page.getByTestId("timeline-lane").filter({ hasText: KR1 })).toHaveCount(0);
