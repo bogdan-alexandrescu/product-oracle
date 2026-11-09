@@ -358,7 +358,8 @@ const sameWords = (a: string, b: string) => a.trim().replace(/\s+/g, " ").toLowe
  * home-milestones-whole (reviews of PRs 1424 and 1439): one row per milestone: a roadmap's own
  * milestones of one goal, code (and PRD) are one row; a track milestone is one row wherever its
  * items sit, and a roadmap's own milestone joins it only when it is that roadmap's only one of
- * its code, and their whole names match or one has none (no name is ever hidden); one of no goal
+ * its code, and their names match (one's words lead the other's) or one has none (no name is
+ * ever hidden); one of no goal
  * (a PRD's or the roadmap's own) joins it whatever its name, the row keeping the track's name
  * (its date, else the joined one's) and its (i)
  * the other name ("Also: M1 Measured and mapped"; the owner's of Nov 9); a typed text
@@ -455,13 +456,21 @@ export function homePlanInputs(data: Roadmap): PlanInput[] {
     const at = `${h.roadmap}|${code}`;
     if (code && !(holding.get(at) ?? []).includes(h.tm)) holding.set(at, [...(holding.get(at) ?? []), h.tm]);
   }
-  // A goal's joins only when their whole names match or one of them has none (no name is ever
-  // hidden): a nameless track milestone reads the name of the first that joins it, and one of
-  // another name keeps its own row ("M3 · Billing beta" beside "M3 · Prices live"). One of no goal
-  // (a PRD's or the roadmap's own) joins whatever its name (the owner's of Nov 9, "One M1 row, as
-  // after train AX": production showed "M1 · Measured" and "M1 · Measured and mapped"), its name
-  // kept in the row's (i).
+  // A goal's (or a goal's PRD's) joins only when their names match or one of them has none (no
+  // name is ever hidden). Names match when, word by word, one's words are the first words of the
+  // other's ("Measured" and "Measured and mapped"; not "Daily scoreboard" and "200 replied
+  // threads"); case and extra spaces never count. A nameless track milestone reads the name of the
+  // first that joins it, and one of another name keeps its own row ("M3 · Billing beta" beside
+  // "M3 · Prices live"). One of no goal (a PRD's or the roadmap's own) joins whatever its name.
+  // When the names differ the row keeps the track's name and lists the other in its (i) (the
+  // owner's of Nov 9, "One M1 row" and "Keep joining when names match": production showed
+  // "M1 · Measured" and "M1 · Measured and mapped").
   const plain = (g: Gm) => !g.goal_id;
+  const words = (n: string) => n.trim().toLowerCase().split(/\s+/);
+  const leads = (a: string, b: string) => {
+    const [x, y] = [words(a), words(b)].sort((p, q) => p.length - q.length);
+    return x.every((w, k) => w === y[k]);
+  };
   const into = new Map<Gm, Tm>();
   const folded = new Map<Tm, Gm[]>();
   const rowName = new Map<Tm, string>();
@@ -477,7 +486,7 @@ export function homePlanInputs(data: Roadmap): PlanInput[] {
     const name = goalMilestoneName(gm);
     const at = rowName.get(tm) ?? wholeName(code, restOf(tm.name));
     const differs = name !== code && at !== code && !sameWords(name, at);
-    if (differs && !plain(gm)) continue;
+    if (differs && !plain(gm) && !leads(name, at)) continue;
     if (differs) also.set(tm, [...(also.get(tm) ?? []), name.replace(" · ", " ")]);
     else if (at === code) rowName.set(tm, name);
     into.set(gm, tm);
