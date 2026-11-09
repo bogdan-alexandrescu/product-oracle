@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { Mark } from "@/components/ds/Brand";
@@ -62,103 +62,175 @@ function isActive(pathname: string, d: Dest): boolean {
  */
 function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; failed: Set<string> } | null {
   const pathname = usePathname();
-  const [counts, setCounts] = useState<Record<string, number> | null>(null);
-  // counts-wait review: the labels whose count misses a part whose read failed (none, or only what loaded).
-  const [failed, setFailed] = useState<string[]>([]);
-  // null until the meetings read first answers: the counts wait for it too (counts-wait).
-  const [live, setLive] = useState<number | null>(null);
-  const [meetingsFailed, setMeetingsFailed] = useState(false);
+  // Each part's last answer, or that its last read failed (counts-wait review).
+  const [got, setGot] = useState<Got>({});
   const [changes, setChanges] = useState(0);
+  // counts-failed-part: a read's answer older than the part's latest read is dropped; reads in flight
+  // hold the next wait until they finish; fails counts each part's failed reads in a row, which back
+  // its re-reads off, and only that part's own read that answers sets it back to 0.
+  const seq = useRef<Record<string, number>>({});
+  const inflight = useRef(0);
+  const fails = useRef<Partial<Record<Part, number>>>({});
+  // The re-read waiting to run (its cancel), and the reads' abort on unmount.
+  const pending = useRef<(() => void) | null>(null);
+  const aborts = useRef(new AbortController());
+  const [settled, setSettled] = useState(0);
   useEffect(() => onWaitingChanged(() => setChanges((c) => c + 1)), []);
   useEffect(() => {
-    if (!enabled) return;
-    let alive = true;
-    // home-waiting-one-list: Decisions counts the one list of what waits on me. The Roadmap's
-    // count is its "Needs a decision" count; roadmap-decide: its broken links are those of the
-    // whole working draft as I see it (GET /v1/simple/roadmap/waiting, a light count), the same
-    // ones the roadmap's strip, its Needs a decision and Home count, with the dates I may confirm
-    // and the proposals and drafts waiting on me.
-    // counts-wait review: each read settles on its own, so one that fails marks the counts it adds to
-    // and the rest still show.
-    void Promise.allSettled([
-      loadWaiting(),
-      unwrap(api.GET("/v1/simple/roadmap/waiting")).catch(() => undefined),
-      loadInbox(),
-      loadMyQuestions(),
-      unwrap(api.GET("/v1/simple/goal-suggestions", { params: { query: { status: "open" } } })),
-    ]).then(([waitingR, roadmapR, inboxR, questionsR, goalR]) => {
-      if (!alive) return;
-      const waiting = waitingR.status === "fulfilled" ? waitingR.value : null;
-      const roadmap = roadmapR.status === "fulfilled" ? roadmapR.value : undefined;
-      const inbox = inboxR.status === "fulfilled" ? inboxR.value : null;
-      const questions = questionsR.status === "fulfilled" ? questionsR.value : null;
-      const goalSuggestions = goalR.status === "fulfilled" ? goalR.value : null;
-      const items = waiting?.items ?? [];
-      // Without the light count, the strip's own rule over the list: each link between items
-      // (a dependency out of order, a cut item others depend on), not an end past its milestone.
-      const links = roadmap?.broken_links ?? items.filter((i) => i.kind === "broken_link" && LINK_KINDS.some((k) => i.key.split(":")[2] === k)).length;
-      const dates = roadmap?.dates_to_confirm ?? items.filter((i) => i.kind === "date" && !i.key.startsWith("proposal:")).length;
-      // The suggested features Needs a decision lists and counts (the same read and filter as its panel).
-      const suggested = (goalSuggestions?.suggestions ?? []).filter((s) => s.can_accept || s.can_reject).length;
-      // PR 1320 re-review: a one-pager number fix (set_section_number) is the one-pager's, not the
-      // roadmap's: it counts in the Inbox beyond the tabs, as a one-pager wording does.
-      const asks = items.filter((i) => (i.kind === "proposal" && i.op !== "set_section_number") || i.kind === "draft" || (i.kind === "date" && i.key.startsWith("proposal:"))).length;
-      // inbox-meeting-proposals fix: the Inbox's part the Roadmap tab counts too (a proposal on a
-      // PRD question or a one-pager line or number is not the roadmap's).
-      const inboxRoadmap = inbox
-        ? inbox.simple_proposals.filter((x) => !["decide_question", "name_decider", "edit_line", "set_section_number"].includes(x.op)).length +
-          inbox.simple_approvals.length +
-          inbox.simple_goal_suggestions.length
-        : 0;
-      const all = inbox ? waitingCount(inbox, questions ?? []) : 0;
-      setCounts({
-        Decisions: items.length,
-        Roadmap: links + dates + suggested + asks,
-        "Roadmap links": links,
-        "Roadmap dates": dates,
-        "Roadmap suggested": suggested,
-        "Roadmap asks": asks,
-        Inbox: all,
-        // What waits in the Inbox beyond what the tabs count (More sums it).
-        "Inbox beyond the tabs": Math.max(0, all - inboxRoadmap),
+    const ctrl = (aborts.current = new AbortController());
+    return () => ctrl.abort();
+  }, []);
+  // fresh: a page change or a change to what waits (not a re-read of a failed part): it drops the
+  // re-read waiting to run, so no part is read twice at once; the back-off goes on.
+  const read = useCallback((parts: Part[], fresh: boolean) => {
+    if (fresh) {
+      pending.current?.();
+      pending.current = null;
+    }
+    const { signal } = aborts.current;
+    const mine = parts.map((p) => (seq.current[p] = (seq.current[p] ?? 0) + 1));
+    inflight.current += 1;
+    void Promise.allSettled(parts.map((p) => PART_READS[p](signal))).then((results) => {
+      inflight.current -= 1;
+      if (signal.aborted) return;
+      const next: Got = {};
+      results.forEach((r, i) => {
+        const p = parts[i]!;
+        if (seq.current[p] !== mine[i]) return;
+        fails.current[p] = r.status === "fulfilled" ? 0 : (fails.current[p] ?? 0) + 1;
+        Object.assign(next, { [p]: r.status === "fulfilled" ? { ok: true, value: r.value } : { ok: false } });
       });
-      setFailed([
-        ...(waiting ? [] : ["Decisions"]),
-        ...(waiting && goalSuggestions ? [] : ["Roadmap"]),
-        ...(inbox && questions ? [] : ["Inbox", "Inbox beyond the tabs"]),
-      ]);
+      setGot((g) => ({ ...g, ...next }));
+      setSettled((n) => n + 1);
     });
-    return () => {
-      alive = false;
-    };
-  }, [enabled, pathname, changes]);
+  }, []);
+  // home-waiting-one-list: Decisions counts the one list of what waits on me. The Roadmap's
+  // count is its "Needs a decision" count; roadmap-decide: its broken links are those of the
+  // whole working draft as I see it (GET /v1/simple/roadmap/waiting, a light count), the same
+  // ones the roadmap's strip, its Needs a decision and Home count, with the dates I may confirm
+  // and the proposals and drafts waiting on me.
+  // counts-wait review: each read settles on its own, so one that fails marks the counts it adds to
+  // and the rest still show.
+  useEffect(() => {
+    if (enabled) read(["waiting", "roadmap", "inbox", "questions", "goals"], true);
+  }, [enabled, pathname, changes, read]);
   const meetingsPath = pathname.startsWith("/simple/meetings") ? pathname : "";
   useEffect(() => {
-    if (!enabled) return;
-    let alive = true;
-    unwrap(api.GET("/v1/simple/meetings"))
-      .then((m) => alive && (setLive(m.live.length), setMeetingsFailed(false)))
-      // counts-wait review: a failed read is marked, never counted as no meeting; the other counts still show.
-      .catch(() => alive && (setLive((n) => n ?? 0), setMeetingsFailed(true)));
-    return () => {
-      alive = false;
-    };
-  }, [enabled, changes, meetingsPath]);
-  // counts-wait review: while a part failed, read again in a while, so a failed read never hides or marks a count for good.
-  const retry = meetingsFailed || failed.length > 0;
+    if (enabled) read(["meetings"], true);
+  }, [enabled, changes, meetingsPath, read]);
+  // counts-failed-part: while a part failed, read that part again once the reads have finished, after
+  // a wait that doubles with each of its failed reads in a row, whatever started them (15 s, 30 s,
+  // 60 s, ... up to 5 min), and never while the tab is hidden.
+  const failedParts = PARTS.filter((p) => got[p]?.ok === false).join(",");
   useEffect(() => {
-    if (!enabled || !retry) return;
-    const t = setTimeout(() => setChanges((c) => c + 1), RETRY_MS);
-    return () => clearTimeout(t);
-  }, [enabled, retry, changes]);
-  // qa-simple-decide-51: "Meetings live": the yellow count only when one is on now.
+    if (!enabled || !failedParts || inflight.current > 0) return;
+    let onShow: (() => void) | null = null;
+    const cancel = () => {
+      clearTimeout(t);
+      if (onShow) document.removeEventListener("visibilitychange", onShow);
+    };
+    // The failed parts are read again together, after the wait of the one that failed most.
+    const tries = Math.max(...(failedParts.split(",") as Part[]).map((p) => fails.current[p] ?? 1));
+    const again = () => {
+      pending.current = null;
+      read(failedParts.split(",") as Part[], false);
+    };
+    // A hidden tab holds the read back until it is shown again, while the wait keeps counting:
+    // a tab hidden past its wait reads at once when shown.
+    const t = setTimeout(() => {
+      if (!document.hidden) return again();
+      onShow = () => {
+        if (document.hidden) return;
+        document.removeEventListener("visibilitychange", onShow!);
+        again();
+      };
+      document.addEventListener("visibilitychange", onShow);
+    }, retryWait(tries - 1));
+    pending.current = cancel;
+    return () => {
+      cancel();
+      if (pending.current === cancel) pending.current = null;
+    };
+  }, [enabled, failedParts, settled, read]);
   // counts-wait: no count (nor More's sum) shows until every read has answered, so none jumps.
-  if (!counts || live == null) return null;
-  return { counts: { ...counts, Meetings: live, "Meetings live": live }, failed: new Set(meetingsFailed ? [...failed, "Meetings"] : failed) };
+  if (PARTS.some((p) => !got[p])) return null;
+  const value = <P extends Part>(p: P): Reads[P] | null => {
+    const r = got[p];
+    return r?.ok ? (r.value as Reads[P]) : null;
+  };
+  const waiting = value("waiting");
+  const roadmap = value("roadmap");
+  const inbox = value("inbox");
+  const questions = value("questions");
+  const goalSuggestions = value("goals");
+  const meetings = value("meetings");
+  const items = waiting?.items ?? [];
+  // Without the light count, the strip's own rule over the list: each link between items
+  // (a dependency out of order, a cut item others depend on), not an end past its milestone.
+  const links = roadmap?.broken_links ?? items.filter((i) => i.kind === "broken_link" && LINK_KINDS.some((k) => i.key.split(":")[2] === k)).length;
+  const dates = roadmap?.dates_to_confirm ?? items.filter((i) => i.kind === "date" && !i.key.startsWith("proposal:")).length;
+  // The suggested features Needs a decision lists and counts (the same read and filter as its panel).
+  const suggested = (goalSuggestions?.suggestions ?? []).filter((s) => s.can_accept || s.can_reject).length;
+  // PR 1320 re-review: a one-pager number fix (set_section_number) is the one-pager's, not the
+  // roadmap's: it counts in the Inbox beyond the tabs, as a one-pager wording does.
+  const asks = items.filter((i) => (i.kind === "proposal" && i.op !== "set_section_number") || i.kind === "draft" || (i.kind === "date" && i.key.startsWith("proposal:"))).length;
+  // inbox-meeting-proposals fix: the Inbox's part the Roadmap tab counts too (a proposal on a
+  // PRD question or a one-pager line or number is not the roadmap's).
+  const inboxRoadmap = inbox
+    ? inbox.simple_proposals.filter((x) => !["decide_question", "name_decider", "edit_line", "set_section_number"].includes(x.op)).length +
+      inbox.simple_approvals.length +
+      inbox.simple_goal_suggestions.length
+    : 0;
+  const all = inbox ? waitingCount(inbox, questions ?? []) : 0;
+  // qa-simple-decide-51: "Meetings live": the yellow count only when one is on now.
+  // counts-failed-part: a failed meetings read shows no number, never the last one it read.
+  const live = meetings?.live.length ?? 0;
+  return {
+    counts: {
+      Decisions: items.length,
+      Roadmap: links + dates + suggested + asks,
+      "Roadmap links": links,
+      "Roadmap dates": dates,
+      "Roadmap suggested": suggested,
+      "Roadmap asks": asks,
+      Inbox: all,
+      // What waits in the Inbox beyond what the tabs count (More sums it).
+      "Inbox beyond the tabs": Math.max(0, all - inboxRoadmap),
+      Meetings: live,
+      "Meetings live": live,
+    },
+    failed: new Set([
+      ...(waiting ? [] : ["Decisions"]),
+      ...(waiting && goalSuggestions ? [] : ["Roadmap"]),
+      ...(inbox && questions ? [] : ["Inbox", "Inbox beyond the tabs"]),
+      ...(meetings ? [] : ["Meetings"]),
+    ]),
+  };
 }
 
-/** How long the rail waits to read again a part whose read failed. */
+/**
+ * The parts the rail's counts add up, each read on its own. The rail's own reads stop when it
+ * unmounts (`signal`); the reads it shares with the page (the one list, the Inbox and the questions,
+ * lib/waiting) run on for the page, and the rail only drops their answers.
+ */
+const PART_READS = {
+  waiting: () => loadWaiting(),
+  // A failed light count falls back to the one list (never a failed part).
+  roadmap: (signal: AbortSignal) => unwrap(api.GET("/v1/simple/roadmap/waiting", { signal })).catch(() => null),
+  inbox: () => loadInbox(),
+  questions: () => loadMyQuestions(),
+  goals: (signal: AbortSignal) => unwrap(api.GET("/v1/simple/goal-suggestions", { params: { query: { status: "open" } }, signal })),
+  meetings: (signal: AbortSignal) => unwrap(api.GET("/v1/simple/meetings", { signal })),
+};
+type Part = keyof typeof PART_READS;
+type Reads = { [P in Part]: Awaited<ReturnType<(typeof PART_READS)[P]>> };
+type Got = { [P in Part]?: { ok: true; value: Reads[P] } | { ok: false } };
+const PARTS = Object.keys(PART_READS) as Part[];
+
+/** How long the rail waits to read again a part whose read failed: 15 s, doubling with each failure in a row, at most 5 min. */
 const RETRY_MS = 15_000;
+const RETRY_MAX_MS = 5 * 60_000;
+const retryWait = (tries: number) => Math.min(RETRY_MS * 2 ** tries, RETRY_MAX_MS);
 
 /** A count whose part failed (counts-wait review): its words say so, or alone when no number shows. */
 function failedWords(words: string, n: number): string {
@@ -315,6 +387,8 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
       <span
         id={id}
         data-testid={id}
+        // A count's words are its name: on an element with a role, so assistive tech reads them.
+        role="img"
         aria-label={failed ? failedWords(words, n) : words}
         title={failed ? failedWords(words, n) : words}
         className={`simple-count simple-count-tab tnum${quiet || n === 0 ? " simple-count-quiet" : ""}`}
@@ -358,7 +432,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
               <Icon name={d.icon} stroke={1.7} />
               <span className="min-w-0 flex-1 truncate">{d.label}</span>
               {(n > 0 || failed) && (
-                <span id={`${d.testId}-count`} data-testid={`${d.testId}-count`} aria-label={words} title={words} className={`simple-count tnum ${(d.label === "Meetings" && !counts?.["Meetings live"]) || n === 0 ? "simple-count-quiet" : ""}`}>
+                <span id={`${d.testId}-count`} data-testid={`${d.testId}-count`} role="img" aria-label={words} title={words} className={`simple-count tnum ${(d.label === "Meetings" && !counts?.["Meetings live"]) || n === 0 ? "simple-count-quiet" : ""}`}>
                   {n > 0 ? n : <Icon name="alert" size={16} />}
                 </span>
               )}

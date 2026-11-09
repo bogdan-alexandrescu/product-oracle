@@ -20,9 +20,17 @@ Test cards (protects / fails_when / no_claim):
 - test_a_blank_goal_name_is_refused: protects=a goal's name is stripped, and a blank or
   whitespace name is refused in plain words (422) on create and rename; fails_when=a blank
   name is stored or the padding is kept.
-- test_without_placeholders: protects=the placeholder guard drops "[n]", "[n] of [n]",
-  "[X]" and "[TBD]" and tidies the spaces; fails_when=a placeholder or a double space is
-  left; no_claim=placeholders without square brackets.
+- test_an_empty_goal_name_reads_the_same_as_a_blank_one: protects=an empty name ("") is
+  refused with the same plain words as a whitespace one, on create and rename; fails_when=the
+  API answers pydantic's "at least 1 character" detail.
+- test_without_placeholders: protects=the placeholder guard drops the forms an import writes
+  ("[n]", "[n] of [n]", "[n] out of [n]", "[x]", "[#]", "[?]", "[tbd]", lowercase), with a "%",
+  "/", "of" or "out of" (any case) whose only operand it was ("3/[n]" -> "3"), and tidies the
+  spaces and an emptied "( )", also with a non-breaking space inside; fails_when=a
+  placeholder, a stray "%", "/", "OF" or "( )", or a double space is left; no_claim=placeholders
+  without square brackets.
+- test_a_real_bracketed_word_stays_in_a_goal_name: protects=a capitalised or other bracketed
+  word ("Project [X]", "Price [Value]", "Launch [beta]") is kept; fails_when=it is stripped.
 """
 
 import pytest
@@ -96,7 +104,7 @@ entities:
   - type: goal
     key: kr-1-1
     title: KR 1.1 [n] of [n] live helpers averaging 50 replied threads a day in March 2027
-    body: Reach [n] live helpers, each replying to [N] threads a day.
+    body: Reach [n] live helpers, each replying to [n] threads a day.
   - type: goal
     key: kr-1-2
     title: KR 1.2 [n] helpers running at the same time, toward 200 replied threads
@@ -142,7 +150,7 @@ async def test_an_agent_update_drops_placeholders(client, ctx):
     assert goal["locked"] is False
     resp = await client.patch(
         f"{B}/entities/{goal['id']}",
-        json={"title": "KR 3.1 Pages load in [X] seconds", "origin": "agent"},
+        json={"title": "KR 3.1 Pages load in [x] seconds", "origin": "agent"},
         headers=ctx.as_("token"),
     )
     assert resp.status_code == 200, resp.text
@@ -197,13 +205,55 @@ async def test_a_blank_goal_name_is_refused(client, ctx):
     assert resp.json()["detail"] == "A goal needs a name"
 
 
+async def test_an_empty_goal_name_reads_the_same_as_a_blank_one(client, ctx):
+    goal = await entity(client, ctx, type="goal", key="kr-trials", title="KR 6.1 Trials")
+    resp = await client.patch(
+        f"{B}/entities/{goal['id']}",
+        json={"title": "", "origin": "user"},
+        headers=ctx.as_("owner"),
+    )
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["detail"] == "A goal needs a name"
+    resp = await client.post(
+        f"{B}/entities",
+        json={"type": "goal", "key": "kr-empty", "title": "", "origin": "user"},
+        headers=ctx.as_("owner"),
+    )
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["detail"] == "A goal needs a name"
+
+
 def test_without_placeholders():
     assert goals.without_placeholders("KR 1.1 [n] of [n] live helpers") == "KR 1.1 live helpers"
-    assert goals.without_placeholders("Reach [N] people by [TBD].") == "Reach people by."
-    assert goals.without_placeholders("Ship [X] releases, then [?] more") == (
-        "Ship releases, then more"
+    assert goals.without_placeholders("KR [n] of [n] agents") == "KR agents"
+    assert goals.without_placeholders("Reach [n] out of [n] people by [tbd].") == "Reach people by."
+    assert goals.without_placeholders("Ship [x] releases, then [?] more, [#] in all") == (
+        "Ship releases, then more, in all"
     )
     assert goals.without_placeholders("Keep [optional] notes [1] here") == (
         "Keep [optional] notes [1] here"
     )
+    # A symbol or joining word whose only operand was a placeholder goes with it.
+    assert goals.without_placeholders("Cut churn by [n]% this year") == "Cut churn by this year"
+    assert goals.without_placeholders("Close [n]/[n] tickets") == "Close tickets"
+    assert goals.without_placeholders("KR [n] Of [n] Agents") == "KR Agents"
+    assert goals.without_placeholders("Reach [x] Out Of [x] teams") == "Reach teams"
+    assert (
+        goals.without_placeholders("Grow 10% to [n] users, 3/4 done")
+        == "Grow 10% to users, 3/4 done"
+    )
+    # The "/" of a real figure whose other operand was a placeholder goes too; "of" and "out
+    # of" go in any case; an emptied "( )" goes with a non-breaking space inside.
+    assert goals.without_placeholders("3/[n] done") == "3 done"
+    assert goals.without_placeholders("[n]/4 done") == "4 done"
+    assert goals.without_placeholders("KR [n] OF [n] AGENTS") == "KR AGENTS"
+    assert goals.without_placeholders("Reach [x] OUT OF [x] teams") == "Reach teams"
+    assert goals.without_placeholders("Ship it (\u00a0[n]\u00a0) soon") == "Ship it soon"
+    assert goals.without_placeholders("Ship it (\u00a0) [n] soon") == "Ship it soon"
     assert goals.without_placeholders(None) is None
+
+
+def test_a_real_bracketed_word_stays_in_a_goal_name():
+    for name in ("Project [X]", "Price [Value]", "Launch [beta]", "Reach [N] by [TBD]"):
+        assert goals.without_placeholders(name) == name
+        assert goals.goal_name(name, "kr-x") == name

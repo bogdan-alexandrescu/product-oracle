@@ -76,8 +76,14 @@ export const HOME_MILESTONE_GOALS_SCENARIO = "home-milestones-goals";
  * "M1 · Return pilot" (Sample data import); Welcome video, now Grow retention's, types a bare "M1".
  * The Alerts track's "M2 · Launch (beta)" (tracks are company-wide) holds Alert history export
  * (Alerts) and Partner invite links (Onboarding). Alerts' own M3 has no name and holds Alert
- * rules engine, beside the track's "M3 · Rules ready" holding Mobile alert push. Two PRDs each
- * have an Onboarding "M2 · Pilot" on the same day.
+ * rules engine, beside the track's "M3 · Rules ready" holding Mobile alert push.
+ *
+ * The reviews of PR 1439 (the PRDs' two "M2 · Pilot" left out, so every row fits Home's eight):
+ * Usage report and Usage map (Keep alerts quiet, a goal with no M1, on the Alerts track) type "M1"
+ * and "M1 Measured and mapped" on Onboarding, whose two other goals each have an M1; the
+ * Onboarding track's "M1 · Measured" holds Health log. Alerts' own M2 "[Fleet pilot]" (Grow
+ * retention, Nov 18, Alerts' only M2) holds Alert routing by team, beside the Alerts track's
+ * "M2 · Launch (beta)"; Alert sound settings (Faster activation, no M2 of its own) types "M2".
  */
 export function seedHomeMilestoneGoals(): SimpleDb {
   const rm = seedHomeMilestones();
@@ -96,12 +102,22 @@ export function seedHomeMilestoneGoals(): SimpleDb {
     own("fa1", "onboarding-roadmap", "M1", "First run in a day", "faster-activation", ["setup-checklist"]),
     own("gr1", "onboarding-roadmap", "M1", "Return pilot", "grow-retention", ["setup-import"]),
     own("a3", "alerts-roadmap", "M3", "", "grow-retention", ["alert-rules"]),
-    ...(rm.goal_milestones ?? []).filter((m) => m.prd),
+    { ...own("gr2", "alerts-roadmap", "M2", "[Fleet pilot]", "grow-retention", ["alert-sso"]), date: "2026-11-18" },
   ];
-  rm.items.push({ key: "partner-invites", title: "Partner invite links", horizon: "next", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "alerts", confidence: "medium" });
-  rm.ids["partner-invites"] = stableUuid("simple-item/partner-invites");
-  const place: Record<string, NonNullable<SimpleDb["items"][number]["milestone"]>> = { "setup-video": { name: "M1", day: null } };
-  const records: Record<string, string> = { "alert-export": "M2 · Launch (beta)", "partner-invites": "M2 · Launch (beta)", "alert-mobile": "M3 · Rules ready" };
+  rm.items.push(
+    { key: "partner-invites", title: "Partner invite links", horizon: "next", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "alerts", confidence: "medium" },
+    { key: "usage-report", title: "Usage report", horizon: "next", roadmap: "onboarding-roadmap", goal: "quiet-alerts", track: "alerts", confidence: "medium" },
+    { key: "usage-map", title: "Usage map", horizon: "next", roadmap: "onboarding-roadmap", goal: "quiet-alerts", track: "alerts", confidence: "medium" },
+    { key: "alert-sounds", title: "Alert sound settings", horizon: "next", roadmap: "alerts-roadmap", goal: "faster-activation", track: "alerts", confidence: "medium" },
+  );
+  for (const key of ["partner-invites", "usage-report", "usage-map", "alert-sounds"]) rm.ids[key] = stableUuid(`simple-item/${key}`);
+  const place: Record<string, NonNullable<SimpleDb["items"][number]["milestone"]>> = {
+    "setup-video": { name: "M1", day: null },
+    "usage-report": { name: "M1", day: null },
+    "usage-map": { name: "M1 Measured and mapped", day: null },
+    "alert-sounds": { name: "M2", day: null },
+  };
+  const records: Record<string, string> = { "alert-export": "M2 · Launch (beta)", "partner-invites": "M2 · Launch (beta)", "alert-mobile": "M3 · Rules ready", "setup-health-log": "M1 · Measured" };
   rm.items = rm.items.map((s) => {
     const rest = { ...s };
     delete rest.milestone;
@@ -121,7 +137,13 @@ export const HOME_MILESTONE_TRACKS_SCENARIO = "home-milestones-tracks";
  * sit. On Pricing, two goals each have their own M3 with no name: Grow retention's holds Seat
  * bundles, Keep alerts quiet's (a goal no item carries) holds Volume discounts (no goal), beside
  * the Pricing track's "M3 · Prices live" (Usage meter); Annual billing (no goal) types a bare "M3".
- * Onboarding's M3 (its own and the track's) is left out.
+ *
+ * The reviews of PR 1439 (the PRDs' two "M2 · Pilot" and the M1s left out, so every row fits
+ * Home's eight): a third goal's M3 with no name on Pricing, Fewer refunds' (a goal no item
+ * carries), holds Refund rules, so two look-alike M3 rows have no goal a loaded item names. The
+ * Onboarding track's "M3" (no name) holds Health log (Onboarding) and Alert snooze (Alerts);
+ * Onboarding's only M3 is "M3 · Guided tour" (Setup reminders), Alerts' only M3 "M3 · Quiet
+ * hours" (Mobile alert push).
  */
 export function seedHomeMilestoneTracks(): SimpleDb {
   const rm = seedHomeMilestones();
@@ -136,14 +158,22 @@ export function seedHomeMilestoneTracks(): SimpleDb {
     counts_when: "",
     progress: "not_started",
   });
-  // Onboarding's M3 (own and track) left out, so every row fits Home's eight.
-  rm.goal_milestones = [...(rm.goal_milestones ?? []).filter((m) => m.id !== stableUuid("simple-gm/a3")), own("gr3", "grow-retention", ["price-seats"]), own("qa3", "quiet-alerts", ["price-discounts"])];
-  rm.items = rm.items.map((s) => (s.key === "setup-health-log" ? { ...s, record: undefined } : s));
+  const gone = ["a3", "m1", "a1"].map((k) => stableUuid(`simple-gm/${k}`));
+  rm.goal_milestones = [
+    ...(rm.goal_milestones ?? []).filter((m) => !m.prd && !gone.includes(m.id)),
+    own("gr3", "grow-retention", ["price-seats"]),
+    own("qa3", "quiet-alerts", ["price-discounts"]),
+    own("fr3", "fewer-refunds", ["price-refunds"]),
+    { ...own("tour", "faster-activation", ["setup-reminders"]), roadmap: "onboarding-roadmap", name: "Guided tour" },
+    { ...own("quiet", "grow-retention", ["alert-mobile"]), roadmap: "alerts-roadmap", name: "Quiet hours" },
+  ];
   rm.items.push(
     { key: "partner-invites", title: "Partner invite links", horizon: "next", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "alerts", confidence: "medium", record: "M2 · Launch (beta)" },
     { key: "price-seats", title: "Seat bundles", horizon: "next", roadmap: "pricing-roadmap", goal: "grow-retention", confidence: "medium" },
     { key: "price-discounts", title: "Volume discounts", horizon: "next", roadmap: "pricing-roadmap", confidence: "medium" },
+    { key: "price-refunds", title: "Refund rules", horizon: "next", roadmap: "pricing-roadmap", confidence: "medium" },
+    { key: "alert-snooze", title: "Alert snooze", horizon: "next", roadmap: "alerts-roadmap", goal: "grow-retention", track: "onboarding", confidence: "medium", record: "M3" },
   );
-  for (const key of ["partner-invites", "price-seats", "price-discounts"]) rm.ids[key] = stableUuid(`simple-item/${key}`);
+  for (const key of ["partner-invites", "price-seats", "price-discounts", "price-refunds", "alert-snooze"]) rm.ids[key] = stableUuid(`simple-item/${key}`);
   return rm;
 }

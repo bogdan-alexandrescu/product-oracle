@@ -1,7 +1,7 @@
 import { MOCK_FAIL_ONCE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN, login } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
-import { countRowOf } from "./vxe-counts";
+import { countRowTexts } from "./vxe-counts";
 
 /*
  * Review of fix2-simple-plan (/simple/priorities): with a dated plan the Ranked list shows what
@@ -115,9 +115,11 @@ test.describe("fix2-simple-plan review: Value / effort, proposals, the goal draw
     for (const code of withGoal.filter((c) => lone.includes(c))) await expect(page.locator(`[data-testid="vxe-point"][data-code="${code}"]`)).not.toHaveAttribute("aria-label", /no goal/);
     const counted = withGoal.filter((c) => !lone.includes(c));
     expect(counted.length).toBeGreaterThan(0);
+    // Each count's sheet opened once (not once per feature, which ran past the test's time on CI).
+    const sheetRows = await countRowTexts(page);
     for (const code of counted) {
-      await expect(await countRowOf(page, code)).not.toContainText(/no goal/i);
-      await page.keyboard.press("Escape");
+      expect(sheetRows[code], `${code} is in a count's sheet`).toBeDefined();
+      expect(sheetRows[code], code).not.toMatch(/no goal/i);
     }
   });
 

@@ -75924,7 +75924,6 @@
           },
           "title": {
             "type": "string",
-            "minLength": 1,
             "title": "Title"
           },
           "body": {
@@ -76455,8 +76454,7 @@
           "title": {
             "anyOf": [
               {
-                "type": "string",
-                "minLength": 1
+                "type": "string"
               },
               {
                 "type": "null"

@@ -41,3 +41,21 @@ export async function chartCodes(page: Page): Promise<Record<string, string | nu
   }
   return out;
 }
+
+/** Every feature's row text in the counts' sheets, by item, each count opened and closed once. */
+export async function countRowTexts(page: Page): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  const counts = page.getByTestId("vxe-crowd");
+  const sheet = page.getByTestId("vxe-crowd-sheet");
+  for (let i = 0; i < (await counts.count()); i++) {
+    await counts.nth(i).click();
+    await expect(sheet).toBeVisible();
+    Object.assign(
+      out,
+      await sheet.getByTestId("vxe-crowd-row").evaluateAll((els) => Object.fromEntries(els.map((e) => [e.getAttribute("data-code"), e.textContent ?? ""]))),
+    );
+    await page.keyboard.press("Escape");
+    await expect(sheet).toHaveCount(0);
+  }
+  return out;
+}

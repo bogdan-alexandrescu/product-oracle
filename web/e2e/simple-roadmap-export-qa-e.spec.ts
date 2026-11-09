@@ -263,6 +263,29 @@ test.describe("desktop", () => {
     expect(texts[at + 1]).toMatch(new RegExp(` · ${note}$`));
   });
 
+  test("the Board's and the Gantt's PDF keep their words as text, to select and search", async ({ page }) => {
+    // The PDF is the page's picture with its words laid over it as invisible text (3 Tr): each
+    // card's or row's name is a word set in the file, not only pixels.
+    const ascii = (names: string[]) => names.map((t) => t.trim()).filter((t) => /^[ -~]+$/.test(t) && !/[()\\]/.test(t));
+    await open(page, { format: "board" });
+    await expect(page.getByTestId("board-card").first()).toBeVisible();
+    const cards = ascii(await page.locator('[data-testid="board-card"] > p:first-child').allInnerTexts());
+    const columns = ascii(await page.locator('[data-testid="board-column"] h2').allInnerTexts());
+    expect(cards.length).toBeGreaterThan(1);
+    const board = (await exported(page, "PDF")).bytes.toString("latin1");
+    expect(board).toContain("3 Tr");
+    expect(board).toMatch(/\(Roadmap \S [^)]+\) Tj/);
+    for (const c of [...cards, ...columns]) expect(board, c).toContain(`(${c.slice(0, 12)}`);
+
+    await page.getByTestId("format-gantt").click();
+    await expect(page.getByTestId("chart-svg")).toBeVisible();
+    const rows = ascii(await page.locator('[data-testid="chart-labels"] [data-testid="label-title"]').allInnerTexts());
+    expect(rows.length).toBeGreaterThan(1);
+    const gantt = (await exported(page, "PDF")).bytes.toString("latin1");
+    expect(gantt).toContain("3 Tr");
+    for (const r of rows) expect(gantt, r).toContain(`(${r.slice(0, 12)}`);
+  });
+
   test("E-3: the Gantt's week axis names the year on its first tick and each January, page and export", async ({ page }) => {
     await open(page, { format: "gantt" });
     await page.getByTestId("unit-week").click();

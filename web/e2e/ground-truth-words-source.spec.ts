@@ -31,9 +31,11 @@ import { expect, test } from "./test";
  * ("align-items: baseline"). In the Python only, an id written as code in a sentence: a
  * backtick span that is one lowercase id holding "_ . / : < {" ("`baseline.yaml`") or a command
  * starting "oracle " ("`oracle baseline pull`"), a quoted id with a <placeholder>
- * ('"baseline decision <key>"'), or one named as a word to avoid ('never "baseline"').
+ * ('"baseline decision <key>"'), or, in api/oracle/runs/flows.py only, these exact words in any of
+ * its strings: 'never "baseline" (except a goal's or key result's starting value)', the quotes
+ * escaped or not (the rest of the string is still read).
  * 'Open the "baseline" page', "Read `Baseline` first", "`build the baseline.`",
- * 'Saved to "baseline {q}"' and 'not "baseline"' are caught.
+ * 'Saved to "baseline {q}"', 'not "baseline"' and 'This is never "baseline" data.' are caught.
  */
 
 const WEB = path.resolve(__dirname, "..");
@@ -59,9 +61,12 @@ const isCode = (span: string) =>
   /^[a-z0-9_./:<>{}-]*[_./:<{][a-z0-9_./:<>{}-]*$/.test(span) || /^oracle(?: [a-z0-9_./:<>{}-]+)+$/.test(span);
 /**
  * ... or a quoted id with a <placeholder> ('"baseline decision <key>"', a citation's ref; an f-string's fill
- * is no placeholder), or named as a word to avoid ('never "baseline"', the agents' citation contract in runs/flows.py).
+ * is no placeholder), or, in api/oracle/runs/flows.py only, the exact words of PROMPT_LINE_AVOID in any of its
+ * strings (the quotes escaped or not; the rest of the string is still read): any other 'never "baseline"' is shown text.
  */
-const QUOTED_ID = /\\?(["'])[a-z][a-z0-9_]*(?: [a-z][a-z0-9_]*)* <\w+>\\?\1|\b[Nn]ever \\?(["'])[a-z][a-z0-9_]*\\?\2/g;
+const QUOTED_ID = /\\?(["'])[a-z][a-z0-9_]*(?: [a-z][a-z0-9_]*)* <\w+>\\?\1/g;
+const PROMPT_LINE_FILE = "runs/flows.py";
+const PROMPT_LINE_AVOID = /\bnever \\?"baseline\\?" \(except a goal's or key result's starting value\)/g;
 /** A lone id or key. */
 const ID = /^[a-z][a-z0-9_]*$/;
 /** The prediction forms' starting-value field, "Baseline" beside "Predicted". */
@@ -84,6 +89,7 @@ function saysOld(rel: string, said: string): boolean {
   if (ID.test(word) || PREDICTION_FIELD[rel] === word) return false;
   let text = said.replace(STARTING_VALUE, "").replace(CSS_VALUE, "");
   if (rel.endsWith(".py")) text = text.replace(CODE_SPAN, (m, span) => (isCode(span) ? "" : m)).replace(QUOTED_ID, "");
+  if (rel === PROMPT_LINE_FILE) text = text.replace(PROMPT_LINE_AVOID, "");
   return OLD.test(text);
 }
 
@@ -636,6 +642,17 @@ test("the check catches the old names and spares the ids and the starting values
   ]) {
     expect(saysOld("slack/pings.py", said), said).toBe(true);
   }
+  // fails_when = the prompt line's wording is spared in every Python module, not only in runs/flows.py.
+  for (const said of [
+    'text you write, never "baseline" (except a starting value)',
+    'Your roadmap is never "baseline" (except when imported).',
+  ]) {
+    expect(saysOld("slack/pings.py", said), said).toBe(true);
+  }
+  // fails_when = the 'never "baseline"' allowance spares any shown message, not only the agents' prompt line.
+  for (const said of ['This is never "baseline" data.', 'This is never \\"baseline\\" data.', "Never 'baseline' here"]) {
+    expect(saysOld("runs/flows.py", said), said).toBe(true);
+  }
   for (const kept of [
     "baseline",
     "/baseline",
@@ -659,8 +676,8 @@ test("the check catches the old names and spares the ids and the starting values
   }
   // An id written as code in the Python's text for agents: the citation ref, a CLI command, a word to avoid.
   for (const kept of [
-    'text you write, never "baseline" (except a starting value)',
-    'text you write, never \\"baseline\\" (except a starting value)',
+    'text you write, never "baseline" (except a goal\'s or key result\'s starting value).',
+    'text you write, never \\"baseline\\" (except a goal\'s or key result\'s starting value).',
     'e.g. "baseline decision <key>": an identifier Oracle reads',
     "as get_baseline and `oracle baseline pull` give it",
     "write it to `baseline.yaml`",

@@ -114,10 +114,13 @@ async def feedback(client, ctx: Ctx, **params) -> list[dict]:
 
 
 async def actions(ctx: Ctx) -> list[str]:
+    """The tenant's audit actions, request by request. Events one request writes share its
+    transaction's created_at (now()), and an audit event has no sequence of its own to break
+    the tie: its id is a random uuid4 and Postgres's ctid is not insert order. So a tie reads
+    by action name, which is stable however the rows were written."""
     async with tenant_session(ctx.tenant_id) as s:
-        return list(
-            (await s.scalars(select(AuditEvent.action).order_by(AuditEvent.created_at))).all()
-        )
+        query = select(AuditEvent.action).order_by(AuditEvent.created_at, AuditEvent.action)
+        return list((await s.scalars(query)).all())
 
 
 # --- Comments ----------------------------------------------------------------------------

@@ -321,6 +321,7 @@ async def list_entities(
     responses=_ENTITY_WRITE_RESPONSES,
 )
 async def create_entity(body: EntityCreate, principal: ApproverNow, db: TenantDB) -> JSONResponse:
+    _title_not_empty(body.type, body.title)
     try:
         result = await service.create_entity(
             db,
@@ -341,6 +342,12 @@ async def create_entity(body: EntityCreate, principal: ApproverNow, db: TenantDB
         await db.rollback()
         raise _fail(exc) from exc
     return await _entity_write(db, result, created=True)
+
+
+def _title_not_empty(type_: str, title: str | None) -> None:
+    """An empty name is refused (422); a goal's in the same plain words as a blank one."""
+    if title == "" and type_ != "goal":
+        raise HTTPException(422, "title must not be empty")
 
 
 @router.get("/entities/{entity_id}", response_model=EntityDetail)
@@ -372,6 +379,7 @@ async def update_entity(
     changes = body.model_dump(exclude_unset=True, exclude={"origin", "run_id", "reason"})
     try:
         entity = await service.get_entity(db, entity_id)
+        _title_not_empty(entity.type, changes.get("title"))
         result = await service.update_entity(db, _writer(principal, body), entity, changes)
     except service.BaselineError as exc:
         raise _fail(exc) from exc
