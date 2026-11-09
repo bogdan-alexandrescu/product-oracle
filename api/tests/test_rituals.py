@@ -543,6 +543,42 @@ async def test_the_owner_edits_a_skip_reason(client, ctx, at):
     assert event.data == {"from": "Team offsit", "to": "Team offsite"}
 
 
+async def test_an_unchanged_skip_reason_writes_nothing(client, ctx, at):
+    """protects=saving the same skip reason changes nothing and audits nothing;
+    fails_when=a ritual.skip_reason_changed row with from == to is written;
+    no_claim=the screen."""
+    occ = await ready_occurrence(client, ctx, at)
+    url = f"/v1/ritual-occurrences/{occ['id']}/skip"
+    owner = ctx.as_("owner")
+    await client.post(url, json={"reason": "Team offsite"}, headers=owner)
+    resp = await client.patch(url, json={"reason": "Team offsite"}, headers=owner)
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "skipped" and resp.json()["skip_reason"] == "Team offsite"
+    async with tenant_session(ctx.tenant_id) as db:
+        events = list(
+            await db.scalars(
+                select(AuditEvent).where(AuditEvent.action == "ritual.skip_reason_changed")
+            )
+        )
+    assert events == []
+
+
+async def test_a_held_occurrence_takes_no_skip_edit_or_undo(client, ctx, at):
+    """protects=Edit reason and Undo skip are only for a skipped occurrence; fails_when=a
+    held occurrence takes a skip reason or is put back by Undo skip; no_claim=the screen."""
+    occ = await ready_occurrence(client, ctx, at)
+    owner = ctx.as_("owner")
+    resp = await client.post(f"/v1/ritual-occurrences/{occ['id']}/held",
+                             json={"notes": "Agreed to cut scope."}, headers=owner)  # fmt: skip
+    assert resp.status_code == 200 and resp.json()["status"] == "held"
+    url = f"/v1/ritual-occurrences/{occ['id']}/skip"
+    resp = await client.patch(url, json={"reason": "Team offsite"}, headers=owner)
+    assert resp.status_code == 409
+    assert (await client.delete(url, headers=owner)).status_code == 409
+    got = (await client.get(f"/v1/ritual-occurrences/{occ['id']}", headers=owner)).json()
+    assert got["status"] == "held" and got["skip_reason"] is None
+
+
 async def test_the_owner_undoes_a_skip(client, ctx, at):
     """protects=Undo skip puts the occurrence back as it was (ready, or missed a week
     after its end) without the reason, so it can be held; fails_when=it stays skipped,
