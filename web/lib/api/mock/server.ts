@@ -217,7 +217,7 @@ import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEn
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 import { waitingItems } from "./waiting-list";
-import { HOME_MILESTONE_FOLD_SCENARIO, HOME_MILESTONE_GOALS_FOLD_SCENARIO, HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_PRD_FOLD_SCENARIO, HOME_MILESTONE_PLAIN_FOLD_SCENARIO, HOME_MILESTONE_PRD_GOAL_FOLD_SCENARIO, HOME_MILESTONE_PRDS_FOLD_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONES_SCENARIO, seedHomeMilestoneFold, seedHomeMilestoneGoals, seedHomeMilestoneGoalsFold, seedHomeMilestonePrdFold, seedHomeMilestonePlainFold, seedHomeMilestonePrdGoalFold, seedHomeMilestonePrdsFold, seedHomeMilestones, seedHomeMilestoneTracks, seedHomeMilestoneTwinTracks } from "./home-milestones";
+import { HOME_MILESTONE_BARE_TRACK_SCENARIO, HOME_MILESTONE_FOLD_SCENARIO, HOME_MILESTONE_GOALS_FOLD_SCENARIO, HOME_MILESTONE_LEAD_GOALS_SCENARIO, HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_PRD_FOLD_SCENARIO, HOME_MILESTONE_PLAIN_FOLD_SCENARIO, HOME_MILESTONE_PRD_GOAL_FOLD_SCENARIO, HOME_MILESTONE_PRDS_FOLD_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONE_TWO_ROADMAPS_SCENARIO, HOME_MILESTONE_TWO_ROADMAPS_SWAPPED_SCENARIO, HOME_MILESTONES_SCENARIO, seedHomeMilestoneBareTrack, seedHomeMilestoneFold, seedHomeMilestoneGoals, seedHomeMilestoneGoalsFold, seedHomeMilestoneLeadGoals, seedHomeMilestonePrdFold, seedHomeMilestonePlainFold, seedHomeMilestonePrdGoalFold, seedHomeMilestonePrdsFold, seedHomeMilestones, seedHomeMilestoneTracks, seedHomeMilestoneTwinTracks, seedHomeMilestoneTwoRoadmaps } from "./home-milestones";
 import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience, spansRow, type BoardItem } from "./audience";
 import {
   draftPublicTexts,
@@ -813,7 +813,7 @@ function seedEmpty(): Db {
   };
   db.members = MOCK_MEMBERS.map((m) => ({
     ...m,
-    id: m.email === MOCK_LOGIN.email ? db.user_id : uuid(),
+    id: m.email === MOCK_LOGIN.email ? db.user_id : stableUuid(`member/${m.email}`),
     disabled_at: null,
     disabled_by: null,
     status: "active" as const,
@@ -2754,7 +2754,7 @@ function seed(): Db {
   };
   db.members = MOCK_MEMBERS.map((m) => ({
     ...m,
-    id: m.email === MOCK_LOGIN.email ? db.user_id : uuid(),
+    id: m.email === MOCK_LOGIN.email ? db.user_id : stableUuid(`member/${m.email}`),
     disabled_at: null,
     disabled_by: null,
     status: "active" as const,
@@ -4132,7 +4132,10 @@ function load(): Db {
                       rm.track_owners = { alerts: join("rowan.pike@example.com", "Rowan Pike"), welcome: join("jun.park@example.com", "Jun Park") };
                       join("priya.r@example.com", "Priya Raman");
                     }
-                    rm.changes = seedStuckPrdAsk(ms, (slug) => prdOwnerIdsOf(rm, slug), (id) => db.members.find((m) => m.id === id)?.name ?? null);
+                    rm.changes = seedStuckPrdAsk(ms, (slug) => prdOwnerIdsOf(rm, slug), (id) => {
+                      const m = db.members.find((x) => x.id === id);
+                      return m ? displayName(m.email, m.name) : null;
+                    });
                     rm.prd_reviewers = { "usage-alerts": [at("commenter@example.com")] };
                     if (scenario === "simple-prd-milestones-gone") {
                       // stuck-ask-minors: every Usage alerts milestone is gone; approver@example.com owns its track.
@@ -4347,9 +4350,10 @@ function load(): Db {
                     const rm = (db.simple_roadmap = seedSimpleRoadmap());
                     // goal-map-editing: a feature on no milestone names its goal itself (by the goal's id).
                     rm.items = ladderItems(scenario === LADDER_KR_CODES_SCENARIO).map(({ goal, ...x }) => ({ ...x, heading: `${x.section.toUpperCase()} ${x.title}`, horizon: "next" as const, roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium" as const, ...(goal ? { map_goal: goalMapIdOf(goal) } : {}) }));
-                    // goal-map-editing: one goal store, so a ladder goal goes to Trash as any goal does.
+                    // goal-map-editing: one goal store, so a ladder goal goes to Trash as any goal does; every goal not
+                    // rejected is a bucket, proposed ones too (GET /v1/simple/goal-buckets).
                     const gb = (rm.goal_buckets = seedGoalBuckets());
-                    for (const g of ladderGoals(goalMapIdOf, scenario !== LADDER_SCENARIO, scenario === LADDER_KR_CODES_SCENARIO).filter((g) => g.status === "confirmed")) gb.goals.push({ id: g.id, key: g.key, title: g.title, order: gb.goals.length + 1, measure: String(g.attrs.metric ?? ""), target: String(g.attrs.target ?? ""), due: null, archived: false });
+                    for (const g of ladderGoals(goalMapIdOf, scenario !== LADDER_SCENARIO, scenario === LADDER_KR_CODES_SCENARIO)) gb.goals.push({ id: g.id, key: g.key, title: g.title, order: gb.goals.length + 1, measure: String(g.attrs.metric ?? ""), target: String(g.attrs.target ?? ""), due: null, archived: false });
                     rm.ids = Object.fromEntries(rm.items.map((x) => [x.key, stableUuid(`simple-item/${x.key}`)]));
                     return db;
                   }
@@ -4364,7 +4368,14 @@ function load(): Db {
               : scenario === REPLACED_PRD_TRASH_SCENARIO
                 ? seedReplacedPrdTrashScenario
               : scenario === HOME_MILESTONES_SCENARIO
-                ? () => ({ ...seed(), simple_roadmap: seedHomeMilestones() })
+                ? () => {
+                    const db = { ...seed(), simple_roadmap: seedHomeMilestones() };
+                    // Pilot plan A's owner (drafts.who: its track's owner) is Ivo Lindqvist, an invented approver.
+                    const ivo = { email: "ivo.lindqvist@example.com", name: "Ivo Lindqvist", role: "approver" as const, engineering_lead: false, created_at: "2026-09-10T09:00:00Z", id: stableUuid("member/ivo.lindqvist@example.com"), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0 };
+                    db.members.push(ivo);
+                    db.simple_roadmap.track_owners = { pilot: ivo.id };
+                    return db;
+                  }
               : scenario === HOME_MILESTONE_GOALS_SCENARIO
                 ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneGoals() })
               : scenario === HOME_MILESTONE_TRACKS_SCENARIO
@@ -4383,6 +4394,12 @@ function load(): Db {
                 ? () => ({ ...seed(), simple_roadmap: seedHomeMilestonePlainFold() })
               : scenario === HOME_MILESTONE_GOALS_FOLD_SCENARIO
                 ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneGoalsFold() })
+              : scenario === HOME_MILESTONE_BARE_TRACK_SCENARIO
+                ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneBareTrack() })
+              : scenario === HOME_MILESTONE_LEAD_GOALS_SCENARIO
+                ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneLeadGoals() })
+              : scenario === HOME_MILESTONE_TWO_ROADMAPS_SCENARIO || scenario === HOME_MILESTONE_TWO_ROADMAPS_SWAPPED_SCENARIO
+                ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneTwoRoadmaps(scenario === HOME_MILESTONE_TWO_ROADMAPS_SWAPPED_SCENARIO) })
               : scenario === OLD_MILESTONES_SCENARIO
                 ? () => {
                     const db = seedOneRoadmapScenario();
@@ -4393,7 +4410,15 @@ function load(): Db {
                 ? () => {
                     // item-milestone: both area PRDs' milestones, each one a feature can be placed in.
                     const db = seedOneRoadmapScenario();
-                    db.simple_roadmap!.goal_milestones = seedItemMilestones();
+                    const rm = db.simple_roadmap!;
+                    rm.goal_milestones = seedItemMilestones();
+                    // Each PRD's owner (drafts.who: its tracks' owners) is Marta Moss, an invented approver who owns
+                    // the User Safety track and a Scale track its items are on.
+                    const marta = { email: "marta.moss@example.com", name: "Marta Moss", role: "approver" as const, engineering_lead: false, created_at: "2026-09-10T09:00:00Z", id: stableUuid("member/marta.moss@example.com"), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0 };
+                    db.members.push(marta);
+                    rm.extra_tracks = { scale: "Scale track" };
+                    for (const x of rm.items) if (x.roadmap === COMPANY_SLUG) x.track = x.prd_doc?.slug === AREA_PRDS[1][0] ? "scale" : rm.extra_roadmaps![COMPANY_SLUG].track;
+                    rm.track_owners = { [rm.extra_roadmaps![COMPANY_SLUG].track]: marta.id, scale: marta.id };
                     return db;
                   }
               : scenario === TRACKS_CLOSED_SCENARIO
