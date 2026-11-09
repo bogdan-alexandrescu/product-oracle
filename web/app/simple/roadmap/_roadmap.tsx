@@ -18,6 +18,8 @@ import { CARD_CHANGED_EVENT } from "@/lib/api/simple-chat";
 import { displayZone, formatInZone } from "@/lib/dates";
 import { formatDate } from "@/lib/format";
 import { goalNumbers } from "@/lib/goal-tree";
+import { keyResults, topGoalSuggestions, type KeyResults } from "@/lib/key-results";
+import { InfoTip } from "@/components/ds/InfoTip";
 import { useMe } from "@/lib/me";
 import { byPrdOrderOf, usePrdOrder } from "@/lib/prd-order";
 import { useQuery } from "@/lib/use-query";
@@ -103,9 +105,10 @@ const PICKS = ["prd", "goal", "track"] as const;
 /** roadmap-stale-filters: the PRDs, goals and tracks a roadmap's items are on (what its filters may pick). */
 /** RP2: no draft PRDs, one shared empty list (memoised reads keep their identity). */
 const NO_DRAFTS: DraftPrd[] = [];
-const picksOf = (items: Roadmap["items"]): Picks => ({
+const picksOf = (items: Roadmap["items"], krs: KeyResults): Picks => ({
   prd: new Set(items.flatMap((i) => (i.prd ? [i.prd.slug] : []))),
-  goal: new Set(items.flatMap((i) => (i.goal ? [i.goal.key] : []))),
+  // kr-in-goal-card: a key result's items are on its parent goal's pick.
+  goal: new Set(items.flatMap((i) => (i.goal ? [krs.parentOf(i.goal.id)?.key ?? i.goal.key] : []))),
   track: new Set(items.flatMap((i) => (i.track ? [i.track.id] : []))),
 });
 /** Saved picks with those `gone` says left blank. */
@@ -227,7 +230,7 @@ function ganttLegend(data: Roadmap, noWork: { start: string; end: string; label?
  * QA2 cld-1: a goal's tile counts the items its lane shows: the chart's goal grouping (lanes(),
  * an item with no goal of its own under the goal its plan moves), live work only, PM-owned
  * work in its own lane as the chart draws it. */
-function GoalCounters({ data, byGoal, suggestions, onGoal, only }: { data: Roadmap; byGoal: boolean; suggestions: GoalSuggestionsApi; onGoal: (g: GoalBrief) => void; only: { key: string; title: string } | null }) {
+function GoalCounters({ data, byGoal, suggestions, onGoal, only, krs }: { data: Roadmap; byGoal: boolean; suggestions: GoalSuggestionsApi; onGoal: (g: GoalBrief) => void; only: { key: string; title: string } | null; krs: KeyResults }) {
   const numbers = useContext(GoalNumbers);
   // pre-demo QA G-8: asking for suggestions is a commenter's and up (the API refuses a viewer); reading them is anyone's.
   const suggests = useMe().can("create_goal_suggestion");
@@ -238,7 +241,8 @@ function GoalCounters({ data, byGoal, suggestions, onGoal, only }: { data: Roadm
   const shown = (i: Item | undefined): i is Item => !!i && !closedItem(i) && !pmItem(i);
   const goals = new Map<string, { title: string; metric: string | null; items: number; broken: number }>();
   const add = (key: string, title: string, i: Item) => {
-    const g = goals.get(key) ?? { title, metric: i.goal?.metric ?? null, items: 0, broken: 0 };
+    // kr-in-goal-card: a key result's item counts on its parent goal's card, which reads its own metric.
+    const g = goals.get(key) ?? { title, metric: i.goal && krs.parentOf(i.goal.id) ? krs.metricOf(key) : (i.goal?.metric ?? null), items: 0, broken: 0 };
     g.items += 1;
     // fix4 qa-simple-roadmap-8: "broken" is a broken link only (a draft with no owner is not one).
     if (brokenLinks(i).length) g.broken += 1;
@@ -251,7 +255,9 @@ function GoalCounters({ data, byGoal, suggestions, onGoal, only }: { data: Roadm
     for (const i of data.items) {
       if (!shown(i)) continue;
       const planGoal = i.slices.find((x) => x.goal)?.goal;
-      if (i.goal) add(i.goal.id, i.goal.title, i);
+      const top = krs.parentOf(i.goal?.id);
+      if (top) add(top.id, top.title, i);
+      else if (i.goal) add(i.goal.id, i.goal.title, i);
       else if (planGoal) add(suggestions.data?.goals.find((g) => g.goal.title === planGoal)?.goal.id ?? `plan-goal:${planGoal}`, planGoal, i);
     }
   const titles = new Set([...goals.values()].map((g) => g.title));
@@ -278,6 +284,22 @@ function GoalCounters({ data, byGoal, suggestions, onGoal, only }: { data: Roadm
     ) : null;
   };
   const numberOf = (id: string, title: string) => numbers.get(id) ?? numbers.get(title) ?? null;
+  // kr-in-goal-card: a goal's key results, one short line on its card; the (i) names each.
+  const keyResultsLine = (id: string, title: string) => {
+    const list = krs.of(id).length ? krs.of(id) : krs.of(title);
+    return list.length ? (
+      <p className="flex items-center gap-1 text-sm text-text2" data-testid="goal-counter-krs">
+        Key results · <b className="tnum">{list.length}</b>
+        <InfoTip label={`${title}'s key results`} testId="goal-counter-krs-tip">
+          <ul>
+            {list.map((k) => (
+              <li key={k.id}>{k.code ? `${k.code} ${k.name}` : k.name}</li>
+            ))}
+          </ul>
+        </InfoTip>
+      </p>
+    ) : null;
+  };
   const counterCard = (id: string, g: (typeof cards)[number][1]) => (
     <li key={id} data-testid="goal-counter" className="rounded-xl border border-line bg-surface px-3 py-2">
       <p className="truncate text-[15px] font-semibold" title={g.title}>
@@ -297,6 +319,7 @@ function GoalCounters({ data, byGoal, suggestions, onGoal, only }: { data: Roadm
           </span>
         )}
       </p>
+      {keyResultsLine(id, g.title)}
       {open(id, g.title)}
     </li>
   );
@@ -307,6 +330,7 @@ function GoalCounters({ data, byGoal, suggestions, onGoal, only }: { data: Roadm
         {g.goal.title}
       </p>
       <p className="truncate text-sm text-text2">{g.empty ? "No items yet" : "No items in these filters"}</p>
+      {keyResultsLine(g.goal.id, g.goal.title)}
       {open(g.goal.id, g.goal.title)}
     </li>
   );
@@ -1023,6 +1047,8 @@ export function SimpleRoadmap() {
   // build-goal-order-control: each goal's number (1 to n, Home's order) on its card and its lane.
   const goalList = useQuery("simple-roadmap-goal-order", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })));
   const numbers = useMemo(() => goalNumbers(goalList.data ?? []), [goalList.data]);
+  // kr-in-goal-card: only top-level goals are goals here; a key result sits in its goal's card.
+  const krs = useMemo(() => keyResults(goalList.data ?? []), [goalList.data]);
   const proposals = useQuery("simple-proposals", () => unwrap(api.GET("/v1/simple/changes", { params: { query: { status: "proposed" } } })));
   // A working draft belongs to one roadmap: a chosen roadmap's page lists its own drafts only.
   const drafts = useQuery(`simple-drafts:${f.roadmap ?? ""}`, () =>
@@ -1090,7 +1116,8 @@ export function SimpleRoadmap() {
     return () => window.removeEventListener(CARD_CHANGED_EVENT, on);
   }, [reloadAfter]);
   // S7: Oracle's suggested features by goal; an accept (or its undo) changes the roadmap.
-  const suggestions = useGoalSuggestions(reload);
+  const allSuggestions = useGoalSuggestions(reload);
+  const suggestions = useMemo(() => ({ ...allSuggestions, data: topGoalSuggestions(allSuggestions.data, krs) }), [allSuggestions, krs]);
   const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
   const [goalStart, setGoalStart] = useState<GoalPanelStart | undefined>(undefined);
   // S7: while Oracle drafts a quick-added item, the roadmap reads again until it is done.
@@ -1113,7 +1140,7 @@ export function SimpleRoadmap() {
   const [cleaned, setCleaned] = useState<Schemas["SimpleFilters"] | null>(null);
   const known = roadmap.data?.roadmaps;
   const savedPicks = !restored && known && (prefs.data || prefs.error) ? prefs.data?.simple_filters : undefined;
-  const onRoadmap = savedPicks && !f.prd && !f.goal && !f.track ? picksOf(roadmap.data!.items) : null;
+  const onRoadmap = savedPicks && !f.prd && !f.goal && !f.track ? picksOf(roadmap.data!.items, krs) : null;
   // RP2: only a saved PRD pick the roadmap does not hold waits for the draft layer's read (it may be a draft PRD's).
   if (!restored && known && (prefs.data || prefs.error) && (draftPrds.data || draftPrds.error || !(savedPicks?.prd && onRoadmap && !onRoadmap.prd.has(savedPicks.prd)))) {
     setRestored(true);
@@ -1149,7 +1176,7 @@ export function SimpleRoadmap() {
   const emptied = restored && !!(f.prd || f.goal || f.track) && !!roadmap.data && !roadmap.loading && !roadmap.data.items.length;
   const wideQs = useMemo(() => ({ group: qs.group, ...(qs.roadmap ? { roadmap: qs.roadmap } : {}) }), [qs]);
   const wide = useQuery(`simple-roadmap-picks:${emptied ? JSON.stringify(wideQs) : ""}`, () =>
-    emptied ? unwrap(api.GET("/v1/simple/roadmap", { params: { query: wideQs as never } })).then((d) => picksOf(d.items)) : Promise.resolve(null),
+    emptied ? unwrap(api.GET("/v1/simple/roadmap", { params: { query: wideQs as never } })).then((d) => picksOf(d.items, krs)) : Promise.resolve(null),
   );
   // RP2: a draft PRD has nothing on the roadmap yet; its pick stays (the draft layer shows it).
   const isDraftPrd = (k: string, v: string) => k === "prd" && !!draftPrds.data?.some((d) => d.prd.slug === v);
@@ -1213,6 +1240,8 @@ export function SimpleRoadmap() {
       track: add(seen.track, data.items.flatMap((i) => (i.track ? [[i.track.id, i.track.title] as [string, string]] : []))),
     });
   }
+  // kr-in-goal-card: the Goal filter lists a key result's goal, never the key result.
+  const goalOptions = useMemo(() => [...new Map(seen.goal.map(([k, t]): [string, string] => { const p = krs.parentOf(k); return p ? [p.key, p.title] : [k, t]; }))], [seen.goal, krs]);
   // RP2: the draft PRDs the layer shows, and the PRD filter's "(draft)" entries for those not on the roadmap.
   const [showDrafts, setShowDrafts] = useShowDrafts(me?.user_id ?? me?.email);
   const draftList = useMemo(() => draftPrds.data ?? NO_DRAFTS, [draftPrds.data]);
@@ -1441,7 +1470,7 @@ export function SimpleRoadmap() {
     const qName = (v: string) => (data ? quarters(data.windows.now.start, data.windows.later.end).find((q) => q.start === v || q.end === v)?.label : null) ?? shortDay(v);
     const parts = [`Grouped by ${f.group === "prd" ? "PRD" : f.group}`];
     if (f.prd) parts.push(`PRD: ${named(seen.prd, f.prd)}`);
-    if (f.goal) parts.push(`Goal: ${named(seen.goal, f.goal)}`);
+    if (f.goal) parts.push(`Goal: ${named(goalOptions, f.goal)}`);
     if (f.track) parts.push(`Track: ${named(seen.track, f.track)}`);
     if (f.from) parts.push(`From ${qName(f.from)}`);
     if (f.to) parts.push(`To ${qName(f.to)}`);
@@ -1691,7 +1720,7 @@ export function SimpleRoadmap() {
         options={[...[...seen.prd].sort(([a, at], [b, bt]) => byPrd({ slug: a, title: at }, { slug: b, title: bt })), ...draftOnly.map((d) => [d.prd.slug, `${d.prd.title} (draft)`] as [string, string])]}
         onChange={(prd) => pickFilter("prd", prd)}
       />
-      <Select label="Goal" value={f.goal} options={seen.goal} onChange={(goal) => pickFilter("goal", goal)} />
+      <Select label="Goal" value={f.goal} options={goalOptions} onChange={(goal) => pickFilter("goal", goal)} />
       <Select label="Track" value={f.track} options={seen.track} onChange={(track) => pickFilter("track", track)} />
       <Select label="From" value={f.from} options={qList.map((q) => [q.start, q.label])} onChange={(from) => setRange(from, f.to)} testId="filter-from" />
       <Select label="To" value={f.to} options={qList.map((q) => [q.end, q.label])} onChange={(to) => setRange(f.from, to)} testId="filter-to" />
@@ -1745,7 +1774,7 @@ export function SimpleRoadmap() {
       )}
     </div>
   );
-  const pickedGoal = f.goal ? { key: f.goal, title: seen.goal.find(([k]) => k === f.goal)?.[1] ?? f.goal } : null;
+  const pickedGoal = f.goal ? { key: f.goal, title: goalOptions.find(([k]) => k === f.goal)?.[1] ?? f.goal } : null;
   // fix4 qa-simple-roadmap-17: a card's "N suggested features" opens the drawer on the tab that holds them.
   const openCounted = (g: GoalBrief) => {
     const { people, oracle } = goalRows(suggestions, g);
@@ -1753,7 +1782,7 @@ export function SimpleRoadmap() {
     setGoalPanel(g);
   };
   // RP2: a draft PRD alone has nothing on the roadmap yet, so no goal tiles.
-  const goalCounters = pickedDraft ? null : <GoalCounters data={data} byGoal={f.group === "goal" || f.group === "milestone"} suggestions={suggestions} onGoal={openCounted} only={pickedGoal} />;
+  const goalCounters = pickedDraft ? null : <GoalCounters data={data} byGoal={f.group === "goal" || f.group === "milestone"} suggestions={suggestions} onGoal={openCounted} only={pickedGoal} krs={krs} />;
   const draftBanner = (
     <DraftBanner
       drafts={drafts.data ?? []}
