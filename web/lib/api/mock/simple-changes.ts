@@ -300,7 +300,7 @@ const slugOf = (id: unknown): string | undefined => ROADMAP_SLUGS().find((r) => 
 
 /** Whether the caller applies (or accepts) this change: a key date's by the roadmap's rule
  * (drafts.can_edit), an add_item's by its roadmap's editors, else the item's deciders. */
-function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target"> & Partial<Pick<Change, "routed_to" | "after" | "before">>): boolean {
+function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target"> & Partial<Pick<Change, "routed_to" | "after" | "before" | "document_id">>): boolean {
   // Review major (changes.decides_all): a cut with its dependents needs rights on every item it cuts.
   if (c.op === CUT_ALL && c.after) return Object.keys(c.after).every((id) => decides(db, ctx, id));
   // A goal ask is decided by the owners it is sent to (goal_asks.may_decide).
@@ -308,8 +308,10 @@ function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op"
   // roadmap-decide: a change asked of a PRD's milestone (before.date) is the PRD owner's (or a company owner's).
   if (c.op === "edit_goal_milestone" && c.before && !("milestone" in c.before)) {
     const m = (db.goal_milestones ?? []).find((x) => x.id === c.target.milestone_id);
-    // A milestone that is gone: the company's owner still declines it (goal_milestones.decide).
-    return m ? decidesAsk(m, { role: ctx.role, name: ctx.names[ctx.id] }) : ctx.role === "owner";
+    // A milestone that is gone: its PRD's owner (looked up from the change's document, as
+    // drafts.who) or the company's owner still declines it (goal_milestones.decide).
+    const prd = m ?? (db.goal_milestones ?? []).find((x) => !!x.prd && stableUuid(`simple-doc/${x.prd.slug}`) === c.document_id);
+    return prd ? decidesAsk(prd, { role: ctx.role, name: ctx.names[ctx.id] }) : ctx.role === "owner";
   }
   if (KEY_DATE_OPS.includes(c.op) || c.op === MILESTONE_OP) {
     const rm = roadmapOfDoc(db, c.target.document_id);
