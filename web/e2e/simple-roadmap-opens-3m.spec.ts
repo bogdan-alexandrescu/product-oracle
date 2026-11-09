@@ -7,7 +7,8 @@ import { expect, test, type Page } from "./test";
  * weeks from just before today; a person's own pick holds for the rest of the visit. And the
  * Timeline always reaches at least the end of Q1 2027 (Mar 31, 2027), at every zoom, even when
  * no item runs that late: scrolling right reaches March 2027, and a milestone dated in it is
- * drawn as a line. Driven against the mock's invented data (the mock's today is Oct 22, 2026).
+ * drawn as a line. The pick is the signed-in person's own: when someone else is signed in by
+ * the time the tab comes back to the roadmap, it opens on 3 months. Driven against the mock's invented data (the mock's today is Oct 22, 2026).
  */
 
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
@@ -62,8 +63,12 @@ test.describe("desktop", () => {
     const weeks = (v.right - v.left) / (await perDay(page)) / 7;
     expect(weeks).toBeGreaterThan(12);
     expect(weeks).toBeLessThan(14);
+  });
 
-    // A person's own pick holds: 6 months stays picked after going back to today.
+  test("a person's own pick holds after Back to today and a trip to the Gantt; a new visit opens on 3 months", async ({ page }) => {
+    await open(page);
+    await expect(page.getByTestId("zoom-3m")).toHaveAttribute("aria-pressed", "true");
+    // 6 months stays picked after going back to today.
     await page.getByRole("button", { name: "6 months", exact: true }).click();
     await expect(page.getByTestId("zoom-6m")).toHaveAttribute("aria-pressed", "true");
     await page.getByRole("button", { name: "Back to today" }).click();
@@ -76,6 +81,26 @@ test.describe("desktop", () => {
     // A new visit opens on 3 months again.
     await page.reload();
     await expect(page.getByTestId("zoom-3m")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("someone else signed in when the tab comes back to the roadmap opens on 3 months, not on the last person's pick", async ({ page }) => {
+    await open(page);
+    await page.getByRole("button", { name: "1 year", exact: true }).click();
+    await expect(page.getByTestId("zoom-1y")).toHaveAttribute("aria-pressed", "true");
+    // Signs out from the account menu (the page stays loaded: no reload)...
+    await page.getByTestId("user-menu").click();
+    await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Sign out" }).click();
+    await expect(page).toHaveURL(/\/login/);
+    // ...someone else signs in on a second tab...
+    const other = await page.context().newPage();
+    await login(other, "approver@example.com");
+    await other.close();
+    // ...and the first tab goes back to the roadmap, now as them.
+    await page.goBack();
+    await expect(page).toHaveURL(/\/simple\/roadmap/);
+    await expect(page.getByTestId("zoom-timeline")).toBeVisible();
+    await expect(page.getByTestId("zoom-3m")).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("zoom-1y")).toHaveAttribute("aria-pressed", "false");
   });
 
   test("scrolling right reaches the end of March 2027, where a milestone on Mar 15, 2027 is drawn as a line", async ({ page }) => {

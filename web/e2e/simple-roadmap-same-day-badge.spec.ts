@@ -10,6 +10,10 @@ import { expect, test, type Locator, type Page } from "./test";
  * in its tooltip, clear of every other diamond. Mock scenario "simple-prd-milestones" (invented
  * goals and people): its own "M1 First alert within a day" is moved to Nov 20 and a second one
  * added that day, a week before the PRD's hollow "M1 Rules in beta" on Nov 27.
+ *
+ * At 1 year and All 3 years a day is a few pixels wide: the badges of two such pairs a day
+ * apart (Nov 20 and Nov 21) drew over each other. Now each keeps clear of the others, of the
+ * month names and of the Today pill, at every zoom and on a phone's Gantt (boxes compared).
  */
 
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -25,7 +29,11 @@ async function twoOnNov20(page: Page) {
   await card(page).getByLabel("Date").fill("2026-11-20");
   await card(page).getByTestId("ms-save").click();
   await expect(card(page)).toBeHidden();
-  // A click on the time axis, on a part of it in sight, opens a new one.
+  await addOn(page, "Setup checks for new teams", "2026-11-20");
+}
+
+/** A click on the time axis, on a part of it in sight, opens a new milestone, saved on `date`. */
+async function addOn(page: Page, name: string, date: string) {
   const axis = page.getByTestId("ms-axis").first();
   await axis.evaluate((el) => window.scrollBy(0, el.getBoundingClientRect().top - 300));
   const box = (await axis.boundingBox())!;
@@ -39,8 +47,8 @@ async function twoOnNov20(page: Page) {
   const at = { x: seen.left + 150, y: box.y + box.height / 2 };
   await page.mouse.move(at.x, at.y);
   await page.mouse.click(at.x, at.y);
-  await card(page).getByLabel("Name").fill("Setup checks for new teams");
-  await card(page).getByLabel("Date").fill("2026-11-20");
+  await card(page).getByLabel("Name").fill(name);
+  await card(page).getByLabel("Date").fill(date);
   await card(page).getByLabel("Goal").selectOption({ index: 1 });
   await card(page).getByTestId("ms-save").click();
   await expect(card(page)).toBeHidden();
@@ -80,3 +88,49 @@ for (const [zoom, name] of [
     await expect(page.getByTestId("ms-prd-card")).toContainText("From the PRD Usage alerts");
   });
 }
+
+/** Two more on Nov 21, the day after the pair on Nov 20. */
+async function twoPairs(page: Page) {
+  await twoOnNov20(page);
+  await addOn(page, "Trial teams onboarded", "2026-11-21");
+  await addOn(page, "Help pages written", "2026-11-21");
+  await expect(page.getByTestId("ms-same-day")).toHaveCount(2);
+}
+
+/** Every same-day badge is clear of the others, of each month's name and of the Today pill. */
+async function badgesClear(page: Page, months: Locator) {
+  const badges = page.getByTestId("ms-same-day");
+  await expect(badges).toHaveCount(2);
+  const b = [await boxOf(badges.nth(0)), await boxOf(badges.nth(1))];
+  expect(overlaps(b[0], b[1])).toBe(false);
+  const marks = [...(await months.all()), page.getByTestId("today-pill")];
+  expect(marks.length).toBeGreaterThan(2);
+  for (const m of marks) {
+    const box = await m.boundingBox();
+    if (!box) continue;
+    for (const one of b) expect(overlaps(one, box), `a badge over "${await m.textContent()}"`).toBe(false);
+  }
+  // Each still names its own day and sits by its own diamond.
+  for (const d of ["20", "21"]) {
+    const one = await boxOf(badges.filter({ hasText: `on Nov ${d}` }));
+    const own = await boxOf(page.locator(`[data-testid="ms-diamond"][title$="Nov ${d}, 2026"]`));
+    expect(Math.abs(one.x + one.width / 2 - (own.x + own.width / 2))).toBeLessThan(40);
+  }
+}
+
+for (const zoom of ["3m", "6m", "1y", "all"] as const) {
+  test(`${zoom}: same-day badges on neighbouring days keep apart, clear of the month names and the Today pill`, async ({ page }) => {
+    await twoPairs(page);
+    await page.getByTestId(`zoom-${zoom}`).click();
+    await expect(page.getByTestId(`zoom-${zoom}`)).toHaveAttribute("aria-pressed", "true");
+    await badgesClear(page, page.getByTestId("timeline-month"));
+  });
+}
+
+test("phone: on the Gantt, same-day badges on neighbouring days keep apart, clear of the month names and the Today pill", async ({ page }) => {
+  await twoPairs(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByTestId("format-gantt").click();
+  await expect(page.getByTestId("today-pill")).toBeVisible();
+  await badgesClear(page, page.locator('[data-testid="axis-tick"], [data-testid="axis-month"], [data-testid="axis-year"]'));
+});
