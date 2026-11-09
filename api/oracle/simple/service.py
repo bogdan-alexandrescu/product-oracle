@@ -1540,17 +1540,18 @@ async def build(
             if pm is not None and pm.end_date is not None:
                 it.milestone.start_date = pm.start_date
                 it.milestone.date = it.milestone.date or pm.end_date
-    # item-milestone: a picked roadmap milestone reads its live code and name (a PRD may rename it).
-    live = {m.id: m for m in shown_goal_milestones}
-    for it in items:
-        gm = live.get(it.milestone.id) if it.milestone is not None and it.milestone.id else None
-        if gm is not None:
-            it.milestone.name = " ".join(f"{gm.code} {gm.name}".split())
     track_outs = [
         _milestone_out(m, keyed, ids, views.get(track_prd.get(m.track_id)))  # type: ignore[arg-type]
         for m in read.milestones
     ]
     await _roadmap_codes(db, shown_goal_milestones, track_outs, items)
+    # item-milestone: a picked roadmap milestone reads its live code (the roadmap's one,
+    # roadmap-milestone-codes) and name (a PRD may rename it).
+    live = {m.id: m for m in shown_goal_milestones}
+    for it in items:
+        gm = live.get(it.milestone.id) if it.milestone is not None and it.milestone.id else None
+        if gm is not None:
+            it.milestone.name = " ".join(f"{gm.roadmap_code or gm.code} {gm.name}".split())
     shown_prds = {e.prd.id for e in shown if e.prd}
     span = plans.current_span([v for p, v in views.items() if p in shown_prds], read.today)
     return SimpleRoadmapOut(

@@ -11,6 +11,7 @@
 import { byPrdRank, prdRanker } from "./prd-rank";
 import type { Schemas } from "@/lib/api/client";
 import { goalPosition, sortGoals, type OrderedGoal } from "@/lib/goal-order";
+import { withRoadmapCodes } from "./roadmap-codes";
 import { plainFlow } from "./simple-visuals";
 import { leftOut } from "./decision-notes";
 import { mockNowMs } from "./clock";
@@ -314,8 +315,6 @@ const ROADMAP_DOC_SLUG: Record<string, string> = { "alerts-roadmap": "usage-aler
 /** The Simple roadmap whose items a roadmap document holds (its own slug, or alerts-roadmap for usage-alerts-roadmap). */
 export const roadmapKeyOf = (docSlug: string): string => Object.keys(ROADMAP_DOC_SLUG).find((k) => ROADMAP_DOC_SLUG[k] === docSlug) ?? docSlug;
 /** S7 adds Keep alerts quiet, a goal with no items yet (Oracle suggested features for it on its own). */
-let rm1PmOwned = false; // MOCK-HOOK
-export const setRm1PmOwned = (on: boolean) => (rm1PmOwned = on); // MOCK-HOOK
 export const GOALS: Record<string, string> = { "grow-retention": "Grow retention", "faster-activation": "Faster activation", "quiet-alerts": "Keep alerts quiet" };
 /** roadmap-talk's goals (the "roadmap-talk" scenario's items name them); known once such an item is seeded. */
 export const TALK_GOALS: Record<string, string> = { reliability: "Reliability", growth: "Growth", activation: "Activation", revenue: "Revenue" };
@@ -1587,7 +1586,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   const prdRank = prdRanker();
   for (const i of shown) {
     const ref = group === "goal" ? laneGoal(i) : group === "track" ? i.track : i.prd;
-    const none = rm1PmOwned && group === "goal" ? "PM-owned" : { goal: "No goal", track: "No track", prd: "No PRD" }[group]; // MOCK-HOOK
+    const none = { goal: "No goal", track: "No track", prd: "No PRD" }[group];
     const key = ref?.id ?? "none";
     // goal-order: goal groups in the one goal order (then by key); prd-order: PRD groups in the company PRD order; No goal last.
     const sort = !ref
@@ -1601,7 +1600,9 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     g.item_ids.push(i.id);
     groups.set(key, g);
   }
-  return {
+  // roadmap-milestone-codes: each milestone's one code across the read (oracle.simple.roadmap_codes).
+  const goalRanks = new Map(Object.keys(GOALS).sort((a, b) => (goalOrderKey(a) < goalOrderKey(b) ? -1 : 1)).map((k, n) => [goalId(k), n]));
+  return withRoadmapCodes({
     today, group,
     windows: { now: { start: w.now[0], end: w.now[1] }, next: { start: w.next[0], end: w.next[1] }, later: { start: w.later[0], end: w.later[1] } },
     groups: [...groups.entries()].sort((a, b) => (a[1].sort < b[1].sort ? -1 : 1)).map(([key, g]) => ({ key, title: g.title, item_ids: g.item_ids })),
@@ -1652,7 +1653,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       const a = appliedVersionOut(db, slug, role, all);
       return a ? [a] : [];
     }),
-  };
+  }, (id) => goalRanks.get(id) ?? Number.MAX_SAFE_INTEGER);
 }
 
 /** "Dec 2" (Simple's dates in a difference line). */

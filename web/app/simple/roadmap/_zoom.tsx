@@ -3,7 +3,7 @@
 // state has its own look with the key on top (QR2 A), broken links sit in a panel above the
 // chart (QR3 A) and an item opens in a side panel (QR4 A; a sheet on a phone).
 
-import { MsLayer, rm1, rm1Band, rm1Renum, useMsCtl, type MsLane, type MsRow } from "./_milestones"; // MOCK-HOOK rm1, rm1Band, rm1Renum, useMsCtl
+import { MsLayer, msCode, useMsBand, useMsCtl, type MsLane, type MsRow } from "./_milestones";
 import {
   memo,
   useContext,
@@ -45,7 +45,8 @@ import {
   type Roadmap,
   whereAttr,
 } from "./_lib";
-import { DRAG_PX, grabAt, LONG_PRESS_MS, msEdge, msInk, planned } from "./_timeline"; // MOCK-HOOK msEdge, msInk
+import { DRAG_PX, grabAt, LONG_PRESS_MS, msEdge, msInk, planned } from "./_timeline";
+import { trackWords } from "@/lib/milestone-code";
 
 type Zoom = "3m" | "6m" | "1y" | "all";
 /** Days in sight at each zoom (All fits the whole plan). */
@@ -540,7 +541,7 @@ function DayChart(props: TimelineProps) {
     .sort((a, b) => (a.date as string).localeCompare(b.date as string))
     .map((m) => {
       const at = x(m.date as string);
-      const words = `◆ ${m.name} · ${shortDay(m.date as string)}`;
+      const words = `◆ ${trackWords(m)} · ${shortDay(m.date as string)}`;
       const left = fit ? at : Math.max(at, sl);
       return { m, at, words, left, gone: !fit && at + 26 + words.length * 7 < sl };
     });
@@ -602,8 +603,10 @@ function DayChart(props: TimelineProps) {
     setMsTip(null);
   };
   useEffect(() => () => cancelAnimationFrame(tipFrame.current), []);
+  // roadmap-milestone-codes: the milestone band's row under the date axis.
+  const msBandH = useMsBand(phone);
   const msWords = (m: (typeof marks)[number]["m"]) =>
-    `${m.name}, ${fullDay(m.date as string)}${m.done_when.length ? ` · counts when ${m.done_when.join("; ")}` : ""}`;
+    `${trackWords(m)}, ${fullDay(m.date as string)}${m.done_when.length ? ` · counts when ${m.done_when.join("; ")}` : ""}`;
   // A tip or a card stays inside the chart's view, right of the names column.
   const inView = (l: number, width: number) => Math.max(labelW + sl + 6, Math.min(l, sl + w - width - 6));
   const openMs = (id: string, from: HTMLElement | null) => {
@@ -868,11 +871,13 @@ function DayChart(props: TimelineProps) {
               ))}
             </div>
           </div>
-          {rm1Band(phone) > 0 && ( // MOCK-HOOK RM1: the milestone band's row under the date axis
-            <div className="flex" style={{ height: rm1Band(phone) }}> {/* MOCK-HOOK */}
-              <div className="sticky left-0 z-20 flex flex-none items-center border-r border-b border-line bg-surface px-3 text-xs font-semibold text-text2" style={{ width: labelW }}>Milestones</div> {/* MOCK-HOOK */}
-            </div> // MOCK-HOOK
-          )} {/* MOCK-HOOK */}
+          {msBandH > 0 && (
+            <div className="flex" style={{ height: msBandH }}>
+              <div className="sticky left-0 z-20 flex flex-none items-center border-r border-b border-line bg-surface px-3 text-xs font-semibold text-text2" style={{ width: labelW }}>
+                Milestones
+              </div>
+            </div>
+          )}
           <div
             className="pointer-events-none absolute top-11 bottom-0 z-10"
             style={{ left: labelW + xt, width: 2, background: TODAY }}
@@ -941,7 +946,7 @@ function DayChart(props: TimelineProps) {
                   <button
                     type="button"
                     data-testid="timeline-milestone-more"
-                    aria-label={`${more.length} more ${more.length === 1 ? "milestone" : "milestones"}: ${more.map((k) => k.m.name).join(", ")}`}
+                    aria-label={`${more.length} more ${more.length === 1 ? "milestone" : "milestones"}: ${more.map((k) => trackWords(k.m)).join(", ")}`}
                     aria-expanded={msList === m.id}
                     onClick={() => setMsList((l) => (l === m.id ? null : m.id))}
                     className="block cursor-pointer rounded-full border border-line bg-surface px-1.5 text-xs leading-4 font-semibold text-text2 hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
@@ -997,12 +1002,12 @@ function DayChart(props: TimelineProps) {
                   tabIndex={-1}
                   data-testid="timeline-milestone-card"
                   role="dialog"
-                  aria-label={`${m.name}, ${fullDay(m.date as string)}`}
+                  aria-label={`${trackWords(m)}, ${fullDay(m.date as string)}`}
                   className="absolute top-12 z-40 flex w-72 flex-col gap-2 rounded-xl border border-line bg-surface p-3 text-sm shadow-xl outline-none"
                   style={{ left: inView(labelW + at + 4, 288) }}
                 >
                   <div className="flex items-start gap-2">
-                    <span className="min-w-0 flex-1 font-semibold text-text">◆ {m.name}</span>
+                    <span className="min-w-0 flex-1 font-semibold text-text">◆ {trackWords(m)}</span>
                     <button
                       type="button"
                       aria-label="Close"
@@ -1139,7 +1144,7 @@ function DayChart(props: TimelineProps) {
 
 /** build-milestones-on-roadmap: each row's place, for the milestone layer over the Timeline. */
 function TimelineMilestones({ rows, moved, x, labelW, trackW, phone, span, keepOff }: { rows: Row[]; moved: Record<string, [string, string]>; x: (d: string) => number; labelW: number; trackW: number; phone: boolean; span: [number, number]; keepOff: [number, number][] }) {
-  let y = 44 + rm1Band(phone); // MOCK-HOOK
+  let y = 44 + useMsBand(phone);
   const out: MsRow[] = [];
   const lanes: MsLane[] = [];
   for (const r of rows) {
@@ -1153,7 +1158,7 @@ function TimelineMilestones({ rows, moved, x, labelW, trackW, phone, span, keepO
     y += ROW_H;
     if (lanes.length) lanes[lanes.length - 1].y1 = y;
   }
-  return <MsLayer view="timeline" x={x} left={labelW} top={44} axisY={33} height={y} width={labelW + trackW} rows={out} lanes={lanes} phone={phone} span={span} keepOff={keepOff} bandTop={44} /* MOCK-HOOK */ />;
+  return <MsLayer view="timeline" x={x} left={labelW} top={44} axisY={33} height={y} width={labelW + trackW} rows={out} lanes={lanes} phone={phone} span={span} keepOff={keepOff} bandTop={44} />;
 }
 
 const NO_WARN: string[] = [];
@@ -1390,31 +1395,25 @@ const TimelineRow = memo(function TimelineRow({
   );
 });
 
-/** MOCK-HOOK RM1 A, C, D on a phone: the quarter's milestones across the roadmap, one line each, by date. */
-function Rm1QuarterMilestones({ from, to }: { from: string; to: string }) { // MOCK-HOOK
-  const ms = useMsCtl(); // MOCK-HOOK
-  const nums = useContext(GoalNumbers); // MOCK-HOOK
-  if (!ms) return null; // MOCK-HOOK
-  const v = rm1(); // MOCK-HOOK
-  const renum = rm1Renum(ms.list, nums); // MOCK-HOOK
-  const list = ms.list.filter((m) => m.date && from <= m.date && m.date <= to).sort((a, b) => a.date!.localeCompare(b.date!) || (nums.get(a.goal_id ?? "") ?? 99) - (nums.get(b.goal_id ?? "") ?? 99)); // MOCK-HOOK
-  if (!list.length) return null; // MOCK-HOOK
-  return ( // MOCK-HOOK
-    <ul data-testid="rm1-quarter-milestones" className="border-b border-line/60 bg-surface2/60 px-3 py-1.5 text-xs"> {/* MOCK-HOOK */}
-      {list.map((m) => { // MOCK-HOOK
-        const code = v === "c" ? (renum.get(m.id) ?? m.code) : m.code; // MOCK-HOOK
-        return ( // MOCK-HOOK
-          <li key={m.id} className="flex items-center gap-1.5 py-0.5"> {/* MOCK-HOOK */}
-            <i aria-hidden className="h-2 w-2 flex-none rotate-45 rounded-[1px]" style={{ background: msEdge(code) }} /> {/* MOCK-HOOK */}
-            {v === "d" && <GoalNum n={nums.get(m.goal_id ?? "")} />} {/* MOCK-HOOK */}
-            <span className="min-w-0 truncate font-semibold" style={{ color: msInk(code) }}>{code} {m.name}</span> {/* MOCK-HOOK */}
-            <span className="ml-auto flex-none text-text2">{shortDay(m.date!)}</span> {/* MOCK-HOOK */}
-          </li> // MOCK-HOOK
-        ); // MOCK-HOOK
-      })} {/* MOCK-HOOK */}
-    </ul> // MOCK-HOOK
-  ); // MOCK-HOOK
-} // MOCK-HOOK
+/** roadmap-milestone-codes: on a phone, the quarter's milestones across the roadmap, one line each, by date. */
+function QuarterMilestones({ from, to }: { from: string; to: string }) {
+  const ms = useMsCtl();
+  const list = (ms?.band ?? []).filter((m) => from <= m.date! && m.date! <= to);
+  if (!list.length) return null;
+  return (
+    <ul data-testid="ms-quarter" className="border-b border-line/60 bg-surface2/60 px-3 py-1.5 text-xs">
+      {list.map((m) => (
+        <li key={m.id} className="flex items-center gap-1.5 py-0.5">
+          <i aria-hidden className="h-2 w-2 flex-none rotate-45 rounded-[1px]" style={{ background: msEdge(msCode(m)) }} />
+          <span className="min-w-0 truncate font-semibold" style={{ color: msInk(msCode(m)) }}>
+            {msCode(m)} {m.name}
+          </span>
+          <span className="ml-auto flex-none text-text2">{shortDay(m.date!)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 /** A phone's Timeline: a list by quarter; an item sits in the quarter it starts in (or in
  * this one, when it started before and runs on). */
@@ -1471,11 +1470,11 @@ function QuarterList(props: TimelineProps) {
                   data-testid="timeline-milestone"
                   className="border-b border-line/60 px-3 py-1 text-xs text-text2"
                 >
-                  ◆ {m.name} · {shortDay(m.date as string)}
+                  ◆ {trackWords(m)} · {shortDay(m.date as string)}
                   {m.done_when.length > 0 && ` · counts when ${m.done_when.join("; ")}`}
                 </p>
               ))}
-            {rm1() && rm1() !== "b" && <Rm1QuarterMilestones from={q.start} to={q.end} />} {/* MOCK-HOOK */}
+            <QuarterMilestones from={q.start} to={q.end} />
             <ul className="divide-y divide-line/60">
               {items.map((i) => {
                 const lk = lookOf(i);

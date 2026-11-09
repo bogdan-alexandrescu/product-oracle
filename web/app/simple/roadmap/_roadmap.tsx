@@ -27,7 +27,7 @@ import { useQuery } from "@/lib/use-query";
 import { QuickAdd } from "./_add";
 import { RemovedButton } from "./_removed";
 import { TracksButton } from "./_tracks";
-import { MsCard, MsKey, MsLayer, MsProvider, MsToast, rm1, rm1Band, useMilestones, type MsLane, type MsRow } from "./_milestones"; // MOCK-HOOK rm1Band
+import { MsCard, MsKey, MsLayer, MsProvider, MsToast, useMilestones, useMsBand, type MsLane, type MsRow } from "./_milestones";
 import { Board, boardColumns, boardLegend, HORIZONS, LEGEND_SWATCH, LegendKeys, MARK_WORDS, PM_LANE, type Horizon, type LegendEntry } from "./_board";
 import { useKeyBurst } from "./_burst";
 import { FeatureContextMenu, useFeatureDelete } from "@/components/simple/FeatureDelete";
@@ -677,6 +677,7 @@ function TileWords({ n, label }: { n: number; label: string }) {
 function DecisionTray({
   items,
   byId,
+  milestones = [],
   proposals,
   act,
   canChange,
@@ -694,6 +695,8 @@ function DecisionTray({
 }: {
   items: Item[];
   byId: Map<string, Item>;
+  /** roadmap-milestone-codes: the roadmap's milestones, an ask names one by its roadmap code. */
+  milestones?: Roadmap["goal_milestones"];
   proposals: Change[];
   act: Act;
   canChange: boolean;
@@ -781,10 +784,14 @@ function DecisionTray({
   ];
   const kd = (c: Change) => (c.after.key_date ?? c.before.key_date) as { name?: string } | null | undefined;
   // roadmap-decide: a change the roadmap asked of a PRD names its milestone.
-  const asked = (c: Change) => (c.op === "edit_goal_milestone" && !("milestone" in c.before) ? `PRD milestone ‘${String(c.target.name ?? "")}’` : null);
+  const msName = (c: Change) => {
+    const code = milestones.find((m) => m.id === c.target.milestone_id)?.roadmap_code;
+    return `${code ? `${code} ` : ""}${String(c.target.name ?? "")}`;
+  };
+  const asked = (c: Change) => (c.op === "edit_goal_milestone" && !("milestone" in c.before) ? `PRD milestone ‘${msName(c)}’` : null);
   // milestone-rights: a goal milestone's proposal names the milestone and says change or remove.
   const ms = (c: Change) => c.op === "edit_goal_milestone" && typeof c.target.name === "string" && !asked(c);
-  const title = (c: Change) => asked(c) ?? (ms(c) ? `Milestone '${String(c.target.name)}'` : kd(c)?.name ? `Key date '${kd(c)!.name}'` : (byId.get(String(c.target.item_id))?.title ?? (typeof c.after.title === "string" ? c.after.title : "An item")));
+  const title = (c: Change) => asked(c) ?? (ms(c) ? `Milestone '${msName(c)}'` : kd(c)?.name ? `Key date '${kd(c)!.name}'` : (byId.get(String(c.target.item_id))?.title ?? (typeof c.after.title === "string" ? c.after.title : "An item")));
   const asks = (c: Change) => (ms(c) ? ("milestone" in c.before && c.after.milestone === null ? "remove it" : "change it") : opWords(c.op).toLowerCase());
   const row = (c: Change) => (
     <li key={c.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-proposal">
@@ -1046,16 +1053,7 @@ export function SimpleRoadmap() {
   );
   // build-goal-order-control: each goal's number (1 to n, Home's order) on its card and its lane.
   const goalList = useQuery("simple-roadmap-goal-order", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })));
-  const numbers0 = useMemo(() => goalNumbers(goalList.data ?? []), [goalList.data]); // MOCK-HOOK numbers0
-  // MOCK-HOOK RM1: the scenario's goals have no order in the mock: number its goal groups in their order.
-  const numbers = useMemo(() => { // MOCK-HOOK
-    const rmData = roadmap.data; // MOCK-HOOK
-    if (!rm1() || !rmData) return numbers0; // MOCK-HOOK
-    const m = new Map<string, number>(); // MOCK-HOOK
-    let n = 0; // MOCK-HOOK
-    for (const g of rmData.groups) if (g.key !== "none") m.set(g.key, ++n); // MOCK-HOOK
-    return m; // MOCK-HOOK
-  }, [numbers0, roadmap.data]); // MOCK-HOOK
+  const numbers = useMemo(() => goalNumbers(goalList.data ?? []), [goalList.data]);
   // kr-in-goal-card: only top-level goals are goals here; a key result sits in its goal's card.
   const krs = useMemo(() => keyResults(goalList.data ?? []), [goalList.data]);
   const proposals = useQuery("simple-proposals", () => unwrap(api.GET("/v1/simple/changes", { params: { query: { status: "proposed" } } })));
@@ -2234,6 +2232,7 @@ export function SimpleRoadmap() {
         <DecisionTray
           items={data.items}
           byId={byId}
+          milestones={data.goal_milestones}
           proposals={allProposals}
           act={act}
           canChange={canChange}
@@ -2276,6 +2275,6 @@ function GanttMilestones({ l, sc, data, phone, keepOff }: { l: Layout; sc: Chart
     }
   }
   // pre-demo QA S-12: "+ Milestone" steps past the key dates' and milestones' names over the axis.
-  const band = rm1Band(phone); // MOCK-HOOK
-  return <MsLayer view="gantt" x={(d) => sc.x(d) + sc.px / 2} top={l.top} axisY={l.top - 2 - band /* MOCK-HOOK */} height={l.height} width={sc.width} rows={rows} lanes={lanes} phone={phone} keepOff={keepOff} bandTop={l.top - band /* MOCK-HOOK */} />;
+  const band = useMsBand(phone);
+  return <MsLayer view="gantt" x={(d) => sc.x(d) + sc.px / 2} top={l.top} axisY={l.top - 2 - band} height={l.height} width={sc.width} rows={rows} lanes={lanes} phone={phone} keepOff={keepOff} bandTop={l.top - band} />;
 }

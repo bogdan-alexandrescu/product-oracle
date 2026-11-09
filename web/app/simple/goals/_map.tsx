@@ -81,13 +81,14 @@ function Guardrail({ map }: { map: GoalMap }) {
 
 
 /** The goal and milestone (with its ladder code, M1...) the ladder puts a feature's card under. */
-function placement(map: GoalMap, feature: string): Placement | null {
+function placement(map: GoalMap, feature: string, codes?: Map<string, string>): Placement | null {
   const m = map.milestones.find((x) => x.id === map.features.find((f) => f.id === feature)?.milestones[0]);
   const gi = map.goals.findIndex((g) => g.id === m?.goal);
   const g = map.goals[gi];
   if (!m || !g) return null;
   const n = map.goals.flatMap((x) => map.milestones.filter((y) => y.goal === x.id)).findIndex((y) => y.id === m.id) + 1;
-  return { goal: { id: g.id, title: g.name, metric: g.metric?.title ?? null, target: num(g.target, g.unit), position: gi + 1 }, milestone: `M${n} ${m.name}` };
+  // roadmap-milestone-codes: its one code across the roadmap, else its ladder place.
+  return { goal: { id: g.id, title: g.name, metric: g.metric?.title ?? null, target: num(g.target, g.unit), position: gi + 1 }, milestone: `${codes?.get(m.id) ?? `M${n}`} ${m.name}` };
 }
 
 const msName = (map: GoalMap, id: string) => map.milestones.find((m) => m.id === id)?.name ?? "";
@@ -232,6 +233,7 @@ export function GoalMapPage() {
   // Read after the map: its features are roadmap items once the map is read.
   const roadmap = useQuery(`simple-roadmap:goal-map-codes:${map ? 1 : 0}`, () => (map ? unwrap(api.GET("/v1/simple/roadmap", { params: { query: {} } })) : Promise.resolve(null)));
   const codes = useMemo(() => new Map((roadmap.data?.items ?? []).flatMap((i) => (i.code ? [[i.id, i.code] as [string, string]] : []))), [roadmap.data]);
+  const msCodes = useMemo(() => new Map((roadmap.data?.goal_milestones ?? []).flatMap((m) => (m.roadmap_code ? [[m.id, m.roadmap_code] as [string, string]] : []))), [roadmap.data]);
   const units = useMemo(() => new Map((map?.milestones ?? []).map((m) => [m.id, m.unit])), [map]);
   // goal-map-scoreboard: a Home goal card opens the map on its goal (by id; else by its name).
   const params = useSearchParams();
@@ -403,7 +405,7 @@ export function GoalMapPage() {
       {edit && draft && (
         <Editor map={map} edit={edit} draft={draft} setDraft={setDraft} goal={map.goals.find((g) => g.id === goalId) ?? map.goals[0]} onClose={close} onSave={() => void save()} open={open} onOpen={(f) => setPanel(f)} />
       )}
-      {panel && <FeaturePanel id={panel.id} code={codes.get(panel.id)} name={panel.name} placed={placement(map, panel.id)} onClose={() => setPanel(null)} />}
+      {panel && <FeaturePanel id={panel.id} code={codes.get(panel.id)} name={panel.name} placed={placement(map, panel.id, msCodes)} onClose={() => setPanel(null)} />}
       {prd && (
         <NewPrdSheet
           prefill={prd}

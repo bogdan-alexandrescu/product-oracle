@@ -229,7 +229,11 @@ export function GoalLadder(props: LadderProps) {
 
   const goals = map.goals;
   const ms = useMemo(() => goals.flatMap((g) => map.milestones.filter((m) => m.goal === g.id)), [goals, map.milestones]);
-  const msCode = useMemo(() => new Map(ms.map((m, i) => [m.id, `M${i + 1}`])), [ms]);
+  // roadmap-milestone-codes: a milestone's one code across the roadmap (its ladder place while the roadmap has none).
+  const msCode = useMemo(() => {
+    const onRoadmap = new Map((roadmap.data?.goal_milestones ?? []).flatMap((m) => (m.roadmap_code ? [[m.id, m.roadmap_code] as const] : [])));
+    return new Map(ms.map((m, i) => [m.id, onRoadmap.get(m.id) ?? `M${i + 1}`]));
+  }, [ms, roadmap.data]);
   const feats = useMemo(() => {
     // goal-map-editing: the features on no milestone are cards too, under the goal their item serves.
     const loose: GmFeature[] = map.unplaced.map((u) => ({ id: u.id, name: u.name, area: null, milestones: [], lever: "", expected: "", confidence: "Medium", released: false, measured: null, lift: "not_measured", links: [] }));
