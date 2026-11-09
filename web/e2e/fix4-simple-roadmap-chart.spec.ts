@@ -97,6 +97,8 @@ test.describe("desktop", () => {
 
   test("qa-30: the month axis reads three-letter months, the first in sight with its year", async ({ page }) => {
     await open(page);
+    // At 6 months the axis has no week marks (the Timeline opens on 3 months).
+    await page.getByTestId("zoom-6m").click();
     const scroll = page.getByTestId("timeline-scroll");
     const months = scroll.locator("div.sticky.top-0 span");
     await expect(months.first()).toBeAttached();

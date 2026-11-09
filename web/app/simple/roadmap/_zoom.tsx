@@ -52,6 +52,8 @@ type Zoom = "3m" | "6m" | "1y" | "all";
 const ZOOM_DAYS: Record<Exclude<Zoom, "all">, number> = { "3m": 91, "6m": 182, "1y": 365 };
 /** The owner (Nov 9): every zoom reaches at least the end of Q1 2027, item or not. */
 const REACH = "2027-03-31";
+/** The zoom a person picked on this visit (the page's own, gone on a reload). */
+let visitZoom: Zoom = "3m";
 
 const MONTHS = [
   "Jan",
@@ -437,8 +439,13 @@ function DayChart(props: TimelineProps) {
   // build-goal-order-control: a goal lane's header leads with the goal's number.
   const numbers = useContext(GoalNumbers);
   const rows = useMemo(() => rowsOf(data), [data]);
-  // The owner (Nov 9): the Timeline opens on 3 months; a person's pick holds for the visit.
-  const [zoom, setZoom] = useState<Zoom>("3m");
+  // The owner (Nov 9): the Timeline opens on 3 months; a person's pick holds for the visit
+  // (back from the Gantt too), never stored: a new visit opens on 3 months again.
+  const [zoom, pickZoom] = useState<Zoom>(() => visitZoom);
+  const setZoom = (z: Zoom) => {
+    visitZoom = z;
+    pickZoom(z);
+  };
   const fit = zoom === "all";
   const box = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(1000);

@@ -69,6 +69,13 @@ test.describe("desktop", () => {
     await page.getByRole("button", { name: "Back to today" }).click();
     await expect(page.getByTestId("zoom-6m")).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByTestId("zoom-3m")).toHaveAttribute("aria-pressed", "false");
+    // ...and after a look at the Gantt.
+    await page.getByTestId("format-gantt").click();
+    await page.getByTestId("format-timeline").click();
+    await expect(page.getByTestId("zoom-6m")).toHaveAttribute("aria-pressed", "true");
+    // A new visit opens on 3 months again.
+    await page.reload();
+    await expect(page.getByTestId("zoom-3m")).toHaveAttribute("aria-pressed", "true");
   });
 
   test("scrolling right reaches the end of March 2027, where a milestone on Mar 15, 2027 is drawn as a line", async ({ page }) => {

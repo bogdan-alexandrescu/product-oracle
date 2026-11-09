@@ -62,6 +62,8 @@ test.describe("milestones on the Timeline", () => {
 
   test("pointing at the axis shows where; a click opens the card; tapped bars are what it waits on; Add draws it with the Ends-after tag", async ({ page }) => {
     await open(page);
+    // Six months shows the new milestone's day, Jan 20 (the Timeline opens on 3 months).
+    await page.getByTestId("zoom-6m").click();
     await expect(label(page, "M1 Alerts live for 50 teams · Nov 20")).toBeVisible();
     await shot(page, "ms1-a-rest");
     const at = await pointAtAxis(page);
@@ -91,6 +93,7 @@ test.describe("milestones on the Timeline", () => {
 
   test("Add and place another saves it and keeps adding on the next click", async ({ page }) => {
     await open(page);
+    await page.getByTestId("zoom-6m").click();
     const at = await pointAtAxis(page, 0.6);
     await page.mouse.click(at.x, at.y);
     await card(page).getByLabel("Name").fill("Teams set 3 rules in week 1");
