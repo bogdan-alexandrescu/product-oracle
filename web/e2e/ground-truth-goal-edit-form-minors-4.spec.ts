@@ -75,7 +75,8 @@ test("goal numbers: 0x10 and 1e3 in Value, Start value and Weight say it needs a
   const before = await stored(page);
   const value = form.getByRole("textbox", { name: "Value", exact: true });
   const start = form.getByRole("textbox", { name: "Start value", exact: true });
-  const weight = form.getByRole("spinbutton", { name: /^Weight/ });
+  // Weight's box has no name of its own: it sits in the label with the "About weight" tip.
+  const weight = form.locator("label").filter({ has: page.getByRole("button", { name: "About weight" }) }).getByRole("spinbutton");
   // A number box takes no letters but "e": Weight is only tried with "1e3".
   const cases: [Locator, string, string[]][] = [
     [value, "Value", ["0x10", "1e3"]],
@@ -93,9 +94,12 @@ test("goal numbers: 0x10 and 1e3 in Value, Start value and Weight say it needs a
     }
     await box.fill(was);
   }
+  // A target saves with which way is success and its unit.
+  await form.getByRole("combobox", { name: "Comparison" }).selectOption("At least");
+  await form.getByRole("combobox", { name: "Unit" }).selectOption("%");
   await value.fill("60");
   await start.fill("12.5");
   await weight.fill("2");
   await save(panel, form);
-  expect(await stored(page)).toMatchObject({ target: 60, start: 12.5, weight: 2 });
+  expect(await stored(page)).toMatchObject({ comparison: "at_least", unit: "%", target: 60, start: 12.5, weight: 2 });
 });
