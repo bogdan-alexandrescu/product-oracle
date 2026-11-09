@@ -160,7 +160,11 @@ async def _codes(db: AsyncSession, applied: Applied, error: type[ChangeSetError]
         before = [o for o in plan if o.base is not None] + added[:n]
         code = codes.shown(item(p), by_feature)
         others = [item(o) for o in before]
-        hit = codes.clash(code, p.key, p.feature_id, others, by_feature) if code else None
+        hit = (
+            codes.clash(code, p.key, p.feature_id, others, by_feature, item(p).prd_section_key)
+            if code
+            else None
+        )
         if hit is not None:
             raise error(codes.taken(code, codes.named(hit, by_feature)))  # type: ignore[arg-type]
 
