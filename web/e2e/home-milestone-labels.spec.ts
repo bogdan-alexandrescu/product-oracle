@@ -1,4 +1,4 @@
-import { HOME_MILESTONE_FOLD_SCENARIO, HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONES_SCENARIO } from "../lib/api/mock/home-milestones";
+import { HOME_MILESTONE_FOLD_SCENARIO, HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_PRD_FOLD_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONES_SCENARIO } from "../lib/api/mock/home-milestones";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN, login } from "./helpers";
 import { expect, test, type Page } from "./test";
@@ -263,6 +263,24 @@ test("a roadmap's own milestone of another name folds into the track's row of it
   await expect(line.getByRole("tooltip")).toContainText("Also: M1 Measured and mapped");
   await page.keyboard.press("Escape");
   expect(await itemsOf(page, "M1 · Return pilot · 1 item")).toEqual([["Welcome video"]]);
+});
+
+/*
+ * Card home-milestone-prd-fold (the owner's "One M1 row, as after train AX"), on
+ * "home-milestones-prd-fold": protects = a PRD's own milestone of no goal folds into the track
+ * milestone of its code whatever its name: one row "M1 · Measured and mapped" with the PRD's date
+ * (Nov 20), its (i) listing both milestones' items and naming the PRD's ("Also: M1 Measured");
+ * fails_when = "M1 · Measured" is a row of its own, or the PRD's name shows nowhere.
+ */
+test("a PRD's own milestone of another name folds into the track's row of its code", async ({ page }) => {
+  await home(page, 1440, ADMIN.email, HOME_MILESTONE_PRD_FOLD_SCENARIO);
+  const labels = (await page.getByTestId("home-strip-label").allTextContents()).map((t) => t.replace(/\s+/g, " ").trim());
+  expect(labels.filter((l) => l.startsWith("M1"))).toEqual(["M1 · Measured and mapped · 3 items"]);
+  expect(await itemsOf(page, "M1 · Measured and mapped · 3 items")).toEqual([["Health log", "Sample data import", "Setup checklist"]]);
+  const line = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: /^M1 · Measured and mapped · 3 items$/ }) });
+  await expect(line).toContainText("Nov 20");
+  await line.getByTestId("home-strip-items-tip").click();
+  await expect(line.getByRole("tooltip")).toContainText("Also: M1 Measured");
 });
 
 /*
