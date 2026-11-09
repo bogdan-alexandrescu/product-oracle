@@ -53,7 +53,10 @@ const ZOOM_DAYS: Record<Exclude<Zoom, "all">, number> = { "3m": 91, "6m": 182, "
 /** The owner (Nov 9): every zoom reaches at least the end of Q1 2027, item or not. */
 const REACH = "2027-03-31";
 /** The zoom a person picked on this visit (the page's own, gone on a reload). */
-let visitZoom: Zoom = "3m";
+const visit: { zoom: Zoom } = { zoom: "3m" };
+const pickForVisit = (z: Zoom) => {
+  visit.zoom = z;
+};
 
 const MONTHS = [
   "Jan",
@@ -441,9 +444,9 @@ function DayChart(props: TimelineProps) {
   const rows = useMemo(() => rowsOf(data), [data]);
   // The owner (Nov 9): the Timeline opens on 3 months; a person's pick holds for the visit
   // (back from the Gantt too), never stored: a new visit opens on 3 months again.
-  const [zoom, pickZoom] = useState<Zoom>(() => visitZoom);
+  const [zoom, pickZoom] = useState<Zoom>(() => visit.zoom);
   const setZoom = (z: Zoom) => {
-    visitZoom = z;
+    pickForVisit(z);
     pickZoom(z);
   };
   const fit = zoom === "all";
