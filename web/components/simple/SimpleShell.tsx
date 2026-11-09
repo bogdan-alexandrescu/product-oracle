@@ -66,10 +66,11 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
   const [got, setGot] = useState<Got>({});
   const [changes, setChanges] = useState(0);
   // counts-failed-part: a read's answer older than the part's latest read is dropped; reads in flight
-  // hold the next wait until they finish; tries backs the re-reads off.
+  // hold the next wait until they finish; fails counts each part's failed reads in a row, which back
+  // its re-reads off, and only that part's own read that answers sets it back to 0.
   const seq = useRef<Record<string, number>>({});
   const inflight = useRef(0);
-  const tries = useRef(0);
+  const fails = useRef<Partial<Record<Part, number>>>({});
   // The re-read waiting to run (its cancel), and the reads' abort on unmount.
   const pending = useRef<(() => void) | null>(null);
   const aborts = useRef(new AbortController());
@@ -80,12 +81,11 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
     return () => ctrl.abort();
   }, []);
   // fresh: a page change or a change to what waits (not a re-read of a failed part): it drops the
-  // re-read waiting to run, so no part is read twice at once, and starts the back-off again.
+  // re-read waiting to run, so no part is read twice at once; the back-off goes on.
   const read = useCallback((parts: Part[], fresh: boolean) => {
     if (fresh) {
       pending.current?.();
       pending.current = null;
-      tries.current = 0;
     }
     const { signal } = aborts.current;
     const mine = parts.map((p) => (seq.current[p] = (seq.current[p] ?? 0) + 1));
@@ -97,6 +97,7 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
       results.forEach((r, i) => {
         const p = parts[i]!;
         if (seq.current[p] !== mine[i]) return;
+        fails.current[p] = r.status === "fulfilled" ? 0 : (fails.current[p] ?? 0) + 1;
         Object.assign(next, { [p]: r.status === "fulfilled" ? { ok: true, value: r.value } : { ok: false } });
       });
       setGot((g) => ({ ...g, ...next }));
@@ -118,11 +119,9 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
     if (enabled) read(["meetings"], true);
   }, [enabled, changes, meetingsPath, read]);
   // counts-failed-part: while a part failed, read that part again once the reads have finished, after
-  // a wait that doubles each time (15 s, 30 s, 60 s, ... up to 5 min) and never while the tab is hidden.
+  // a wait that doubles with each of its failed reads in a row, whatever started them (15 s, 30 s,
+  // 60 s, ... up to 5 min), and never while the tab is hidden.
   const failedParts = PARTS.filter((p) => got[p]?.ok === false).join(",");
-  useEffect(() => {
-    if (!failedParts) tries.current = 0;
-  }, [failedParts]);
   useEffect(() => {
     if (!enabled || !failedParts || inflight.current > 0) return;
     let onShow: (() => void) | null = null;
@@ -130,9 +129,10 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
       clearTimeout(t);
       if (onShow) document.removeEventListener("visibilitychange", onShow);
     };
+    // The failed parts are read again together, after the wait of the one that failed most.
+    const tries = Math.max(...(failedParts.split(",") as Part[]).map((p) => fails.current[p] ?? 1));
     const again = () => {
       pending.current = null;
-      tries.current += 1;
       read(failedParts.split(",") as Part[], false);
     };
     // A hidden tab holds the read back until it is shown again, while the wait keeps counting:
@@ -145,7 +145,7 @@ function useSimpleCounts(enabled: boolean): { counts: Record<string, number>; fa
         again();
       };
       document.addEventListener("visibilitychange", onShow);
-    }, retryWait(tries.current));
+    }, retryWait(tries - 1));
     pending.current = cancel;
     return () => {
       cancel();
@@ -227,7 +227,7 @@ type Reads = { [P in Part]: Awaited<ReturnType<(typeof PART_READS)[P]>> };
 type Got = { [P in Part]?: { ok: true; value: Reads[P] } | { ok: false } };
 const PARTS = Object.keys(PART_READS) as Part[];
 
-/** How long the rail waits to read again a part whose read failed: 15 s, doubling each time, at most 5 min. */
+/** How long the rail waits to read again a part whose read failed: 15 s, doubling with each failure in a row, at most 5 min. */
 const RETRY_MS = 15_000;
 const RETRY_MAX_MS = 5 * 60_000;
 const retryWait = (tries: number) => Math.min(RETRY_MS * 2 ** tries, RETRY_MAX_MS);
