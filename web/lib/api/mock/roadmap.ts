@@ -1666,9 +1666,11 @@ const FEATURE_CODE = /^[A-Z]{1,3}-\d+[a-j]?$/;
 /**
  * Each Ground Truth feature's code by its id, as codes._by_feature reads it: in the features' creation order, its key when that
  * is a code (F-12), else the PRD code of the section its first published item came from (codes.prd_by_key: an item of
- * usage-alerts-roadmap v1 or of a version a change set proposed, made with its version: codes.feature_reads orders them by
- * creation across roadmaps); a key whose code an older feature has reads it with a digit (F-31.2), a PRD code taken already gives
- * none. ``sectionCode``: the roadmap mock's RoadmapDb.section_code; ``ctx``: the versions' rows, for when each was made.
+ * usage-alerts-roadmap v1 or of a version a change set proposed, across roadmaps); a key whose code an older feature has reads it
+ * with a digit (F-31.2), a PRD code taken already gives none. codes.feature_reads orders published items by RoadmapItem.created_at;
+ * the mock stores no item rows, so it orders them by their version row's created_at as a stand-in. The two agree because a
+ * proposed version's copied items keep their base's section and its added items carry none, so a later version never first gives
+ * a feature a section. ``sectionCode``: the roadmap mock's RoadmapDb.section_code; ``ctx``: the versions' rows, for when each was made.
  */
 export function featureCodes(
   features: { id: string; key: string; created_at: string }[],
@@ -1680,15 +1682,19 @@ export function featureCodes(
     { slug: ALERTS_ROADMAP_SLUG, number: 1, items: seededPlanItems(ALERTS_ROADMAP_SLUG, 1, sectionCode) ?? [] },
     ...Object.entries(edits?.versions ?? {}).flatMap(([slug, by]) => Object.keys(by).map(Number).map((number) => ({ slug, number, items: by[number] }))),
   ];
-  // A version's row: when it was made, then its place among the rows (made in that order).
-  const made = ({ slug, number }: { slug: string; number: number }): [string, number] => {
+  // A version's row: when it was made, then its place among the rows (made in that order); a version with no row sorts last.
+  const made = ({ slug, number }: { slug: string; number: number }): [string | null, number] => {
     const doc = ctx?.documents.find((d) => d.slug === slug);
     const at = ctx?.versions.findIndex((v) => v.document_id === doc?.id && v.number === number) ?? -1;
-    return [(at < 0 ? null : ctx?.versions[at].created_at) ?? "", at];
+    return at < 0 ? [null, Infinity] : [ctx!.versions[at].created_at, at];
   };
   const published = stored
     .map((v) => ({ ...v, made: made(v) }))
-    .sort((a, b) => a.made[0].localeCompare(b.made[0]) || a.made[1] - b.made[1])
+    .sort((a, b) => {
+      const [x, y] = [a.made[0], b.made[0]];
+      if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1;
+      return x.localeCompare(y) || a.made[1] - b.made[1];
+    })
     .flatMap((v) => v.items);
   const prd = new Map<string, string>();
   for (const i of published) {
