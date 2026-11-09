@@ -217,7 +217,7 @@ import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEn
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 import { waitingItems } from "./waiting-list";
-import { HOME_MILESTONE_BARE_TRACK_SCENARIO, HOME_MILESTONE_FOLD_SCENARIO, HOME_MILESTONE_GOALS_FOLD_SCENARIO, HOME_MILESTONE_LEAD_GOALS_SCENARIO, HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_PRD_FOLD_SCENARIO, HOME_MILESTONE_PLAIN_FOLD_SCENARIO, HOME_MILESTONE_PRD_GOAL_FOLD_SCENARIO, HOME_MILESTONE_PRDS_FOLD_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONES_SCENARIO, seedHomeMilestoneBareTrack, seedHomeMilestoneFold, seedHomeMilestoneGoals, seedHomeMilestoneGoalsFold, seedHomeMilestoneLeadGoals, seedHomeMilestonePrdFold, seedHomeMilestonePlainFold, seedHomeMilestonePrdGoalFold, seedHomeMilestonePrdsFold, seedHomeMilestones, seedHomeMilestoneTracks, seedHomeMilestoneTwinTracks } from "./home-milestones";
+import { HOME_MILESTONE_BARE_TRACK_SCENARIO, HOME_MILESTONE_FOLD_SCENARIO, HOME_MILESTONE_GOALS_FOLD_SCENARIO, HOME_MILESTONE_LEAD_GOALS_SCENARIO, HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_PRD_FOLD_SCENARIO, HOME_MILESTONE_PLAIN_FOLD_SCENARIO, HOME_MILESTONE_PRD_GOAL_FOLD_SCENARIO, HOME_MILESTONE_PRDS_FOLD_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONE_TWO_ROADMAPS_SCENARIO, HOME_MILESTONE_TWO_ROADMAPS_SWAPPED_SCENARIO, HOME_MILESTONES_SCENARIO, seedHomeMilestoneBareTrack, seedHomeMilestoneFold, seedHomeMilestoneGoals, seedHomeMilestoneGoalsFold, seedHomeMilestoneLeadGoals, seedHomeMilestonePrdFold, seedHomeMilestonePlainFold, seedHomeMilestonePrdGoalFold, seedHomeMilestonePrdsFold, seedHomeMilestones, seedHomeMilestoneTracks, seedHomeMilestoneTwinTracks, seedHomeMilestoneTwoRoadmaps } from "./home-milestones";
 import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience, spansRow, type BoardItem } from "./audience";
 import {
   draftPublicTexts,
@@ -813,7 +813,7 @@ function seedEmpty(): Db {
   };
   db.members = MOCK_MEMBERS.map((m) => ({
     ...m,
-    id: m.email === MOCK_LOGIN.email ? db.user_id : uuid(),
+    id: m.email === MOCK_LOGIN.email ? db.user_id : stableUuid(`member/${m.email}`),
     disabled_at: null,
     disabled_by: null,
     status: "active" as const,
@@ -2754,7 +2754,7 @@ function seed(): Db {
   };
   db.members = MOCK_MEMBERS.map((m) => ({
     ...m,
-    id: m.email === MOCK_LOGIN.email ? db.user_id : uuid(),
+    id: m.email === MOCK_LOGIN.email ? db.user_id : stableUuid(`member/${m.email}`),
     disabled_at: null,
     disabled_by: null,
     status: "active" as const,
@@ -4398,6 +4398,8 @@ function load(): Db {
                 ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneBareTrack() })
               : scenario === HOME_MILESTONE_LEAD_GOALS_SCENARIO
                 ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneLeadGoals() })
+              : scenario === HOME_MILESTONE_TWO_ROADMAPS_SCENARIO || scenario === HOME_MILESTONE_TWO_ROADMAPS_SWAPPED_SCENARIO
+                ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneTwoRoadmaps(scenario === HOME_MILESTONE_TWO_ROADMAPS_SWAPPED_SCENARIO) })
               : scenario === OLD_MILESTONES_SCENARIO
                 ? () => {
                     const db = seedOneRoadmapScenario();

@@ -366,3 +366,26 @@ export function seedHomeMilestoneLeadGoals(): SimpleDb {
   rm.items = rm.items.map((s) => (s.key === "setup-health-log" ? { ...s, record: "M1 · Measured and mapped" } : s.key === "setup-video" ? { ...s, goal: "grow-retention" } : s));
   return rm;
 }
+
+export const HOME_MILESTONE_TWO_ROADMAPS_SCENARIO = "home-milestones-two-roadmaps";
+export const HOME_MILESTONE_TWO_ROADMAPS_SWAPPED_SCENARIO = "home-milestones-two-roadmaps-swapped";
+
+/**
+ * home-milestones-two-roadmaps (review of the home fold): the Guided setup track's bare "M1"
+ * holds Health log (Onboarding) and Alert snooze (Alerts). Onboarding's own M1 of no goal,
+ * "Measured" (Setup checklist), and Grow retention's "M1 · Rules ready" on Alerts (Alert rules
+ * engine) each join it on their own roadmap: one row, the other name in its (i), whichever
+ * roadmap's milestones come first (`swapped` lists Alerts' first).
+ */
+export function seedHomeMilestoneTwoRoadmaps(swapped = false): SimpleDb {
+  const rm = seedSimpleRoadmap();
+  const milestones: MockMilestone[] = [
+    { id: stableUuid("simple-gm/two-roadmaps-measured"), roadmap: "onboarding-roadmap", code: "M1", name: "Measured", date: null, goal: null, gates: ["setup-checklist"], counts_when: "", progress: "not_started" },
+    { id: stableUuid("simple-gm/two-roadmaps-rules"), roadmap: "alerts-roadmap", code: "M1", name: "Rules ready", date: null, goal: "grow-retention", gates: ["alert-rules"], counts_when: "", progress: "not_started" },
+  ];
+  rm.goal_milestones = swapped ? milestones.reverse() : milestones;
+  rm.items.push({ key: "alert-snooze", title: "Alert snooze", horizon: "next", roadmap: "alerts-roadmap", track: "onboarding", confidence: "medium", record: "M1" });
+  rm.ids["alert-snooze"] = stableUuid("simple-item/alert-snooze");
+  rm.items = rm.items.map((s) => (s.key === "setup-health-log" ? { ...s, record: "M1" } : s));
+  return rm;
+}
