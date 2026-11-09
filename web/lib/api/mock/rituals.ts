@@ -829,6 +829,11 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
     if (!o.read_by.includes(ctx.me.id)) o.read_by.push(ctx.me.id);
     return new Response(null, { status: 204 });
   }
+  // As the API's SkipIn (1 to 2,000 characters, kept as typed): FastAPI checks the body
+  // before the service checks the owner and the status.
+  const skipIn = p.length === 4 && p[3] === "skip" && (m === "POST" || m === "PATCH") ? await body<Schemas["SkipIn"]>() : null;
+  if (skipIn !== null && !(typeof skipIn?.reason === "string" && skipIn.reason.length >= 1 && skipIn.reason.length <= 2000))
+    return fail(422, "reason: say why it was skipped, in at most 2,000 characters");
   if (p.length === 4 && m === "POST" && (p[3] === "held" || p[3] === "skip")) {
     if (ctx.me.id !== r.owner_id) return fail(403, "Only the ritual's owner records it");
     // As the API (rituals.service.hold): held when its Simple review ended, nothing recorded yet, the owner records it.
@@ -842,9 +847,7 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
       if (unknown.length) return fail(422, `decision_ids: no such decision: ${unknown.join(", ")}`);
       Object.assign(o, { status: "held", notes: input.notes || null, decision_ids: decisions.map((d) => d.id) });
     } else {
-      const input = await body<Schemas["SkipIn"]>();
-      if (!input?.reason?.trim()) return fail(422, "reason: say why it was skipped");
-      Object.assign(o, { status: "skipped", skip_reason: input.reason });
+      Object.assign(o, { status: "skipped", skip_reason: skipIn!.reason });
     }
     return json(200, occurrenceOut(ctx, r, o));
   }
@@ -853,9 +856,7 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
     if (ctx.me.id !== r.owner_id) return fail(403, "Only the ritual's owner records it");
     if (o.status !== "skipped") return fail(409, `This occurrence is ${o.status}`);
     if (m === "PATCH") {
-      const input = await body<Schemas["SkipIn"]>();
-      if (!input?.reason?.trim()) return fail(422, "reason: say why it was skipped");
-      o.skip_reason = input.reason;
+      o.skip_reason = skipIn!.reason;
     } else {
       const missed = Date.parse(o.ends_at) + MISSED_AFTER_MS <= now().getTime();
       Object.assign(o, { status: !o.pre_read.built_at ? "failed" : missed ? "missed" : "ready", skip_reason: null });

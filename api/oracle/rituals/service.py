@@ -901,6 +901,8 @@ async def edit_skip_reason(db: AsyncSession, principal: Principal, occ_id: uuid.
     occ, ritual = await get_occurrence(db, occ_id, lock=True)
     _owner_only(principal, ritual)
     _skipped(occ)
+    if reason == occ.skip_reason:
+        return occ, ritual
     before, occ.skip_reason = occ.skip_reason, reason
     await audit.record(db, principal, "ritual.skip_reason_changed", "ritual_occurrence", occ.id,
                        {"from": before, "to": reason})  # fmt: skip
