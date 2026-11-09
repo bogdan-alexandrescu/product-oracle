@@ -36,7 +36,8 @@ const metric = (attrs: Record<string, unknown> | undefined): string | null => {
 export function keyResults(entities: GoalLike[]): KeyResults {
   const goals = entities.filter((e) => e.type === "goal");
   const confirmed = new Map(goals.filter((e) => e.status === "confirmed").map((g) => [g.id, g]));
-  const tree = goalTree([...confirmed.values()]);
+  // Numbered over every goal, archived and proposed ones too, so a code stays when a sibling comes or goes.
+  const tree = goalTree([...confirmed.values()], goals);
   const parents = new Map<string, GoalRef>();
   const lists = new Map<string, KeyResult[]>();
   const metrics = new Map<string, string | null>();
@@ -58,22 +59,21 @@ export function keyResults(entities: GoalLike[]): KeyResults {
     for (const k of [g.id, g.key, g.title]) if (k) parents.set(k, ref);
   }
   // The listed key results: the tree's confirmed subgoals, each followed by its own confirmed
-  // subgoals at any depth (code: its parent's and its number, as goalTree numbers a subgoal).
-  const below = (id: string) => [...confirmed.values()].filter((s) => s.parent_id === id);
+  // subgoals at any depth (code: its parent's and its number, as goalTree numbers a subgoal: its
+  // place among every subgoal of its parent by age, archived and proposed ones counted).
   const oldest = (a: GoalLike, b: GoalLike) => (a.created_at ?? "").localeCompare(b.created_at ?? "") || a.id.localeCompare(b.id);
+  const below = (id: string) => goals.filter((s) => s.parent_id === id).sort(oldest);
   for (const n of tree) {
     if (!n.parentId) continue;
     const top = tree.find((p) => p.goal.id === n.parentId)!.goal;
     const list = lists.get(top.id) ?? [];
     const walk = (g: GoalLike, code: string | null, name: string, seen: Set<string>) => {
       list.push({ id: g.id, code, name });
-      below(g.id)
-        .sort(oldest)
-        .forEach((s, i) => {
-          if (seen.has(s.id)) return;
-          const own = named(goalName(s.title, s.key), s.key);
-          walk(s, own.code ?? (code ? `${code}.${i + 1}` : null), own.name, new Set([...seen, s.id]));
-        });
+      below(g.id).forEach((s, i) => {
+        if (seen.has(s.id) || !confirmed.has(s.id)) return;
+        const own = named(goalName(s.title, s.key), s.key);
+        walk(s, own.code ?? (code ? `${code}.${i + 1}` : null), own.name, new Set([...seen, s.id]));
+      });
     };
     walk(n.goal, n.code, n.name, new Set([top.id, n.goal.id]));
     for (const k of [top.id, top.key, top.title]) if (k) lists.set(k, list);
@@ -84,6 +84,9 @@ export function keyResults(entities: GoalLike[]): KeyResults {
     metricOf: (id) => metrics.get(id) ?? null,
   };
 }
+
+/** The goal a suggestion serves as people read it: its key result's name (kr_title) when it serves one. */
+export const servedName = (goal: { title: string; kr_title?: string }): string => goal.kr_title ?? goal.title;
 
 type SuggestionsOut<B extends GoalRef> = {
   goals: { goal: B; pending: boolean; empty: boolean }[];
@@ -105,8 +108,8 @@ export function topGoalSuggestions<B extends GoalRef, T extends SuggestionsOut<B
   const goals = data.goals
     .filter((g) => top(g.goal).id === g.goal.id)
     .map((g) => (subs(g.goal.id).length ? { ...g, pending: g.pending || subs(g.goal.id).some((s) => s.pending), empty: g.empty && subs(g.goal.id).every((s) => s.empty) } : g));
-  // kr-name-kept: a key result's suggestion is listed under its parent goal (its home) but still
-  // names the key result it serves.
-  const home = (b: B): B => (top(b).id === b.id ? b : { ...top(b), title: b.title });
+  // kr-name-kept: a key result's suggestion is listed under its parent goal (its home, whose id,
+  // key and title its goal carries) and keeps the key result it serves as kr_title (servedName).
+  const home = (b: B): B => (top(b).id === b.id ? b : ({ ...top(b), kr_title: b.title } as B));
   return { ...data, goals, suggestions: data.suggestions.map((s) => ({ ...s, goal: home(s.goal) })) };
 }

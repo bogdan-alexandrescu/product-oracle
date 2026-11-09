@@ -388,6 +388,7 @@ export function GoalMapPage() {
         onPrd={canPrd ? (m) => open("prd", undefined, m) : null}
         picked={picked}
         keyResults={folded?.lines}
+        topOf={folded?.top}
         head={
           <div className="flex flex-col gap-1">
             <h1 className="simple-h1 max-[600px]:sr-only">Goal map</h1>

@@ -174,6 +174,8 @@ export interface LadderProps {
   picked: string | null;
   /** kr-in-goal-map: each goal's key results, by goal id (shown in its card, never as goals). */
   keyResults?: Map<string, KrLine[]>;
+  /** kr-in-goal-map: the goal on the map a goal folds into (a key result's at any depth, proposed too; a goal's own id). */
+  topOf?: (goal: string | null) => string | null;
   /** The page's title block, and the guardrail strip under the header. */
   head: ReactNode;
   guardrail: ReactNode;
@@ -516,10 +518,12 @@ export function GoalLadder(props: LadderProps) {
         // Off its milestones it serves its item's own goal: set it when that is not the one dropped on.
         const read = await unwrap(api.GET("/v1/simple/roadmap", { params: { query: {} } }));
         const now = read.items.find((i) => i.id === feature)?.goal?.id ?? null;
-        // kr-in-goal-map: off a key result's milestone into its own goal, it keeps serving the key result.
-        const kr = goal ? x.f.milestones.map((id) => map.milestones.find((m) => m.id === id) as (GmMilestone & { kr?: string }) | undefined).find((m) => m?.kr && m.goal === goal)?.kr : undefined;
-        const want = kr ?? goal;
-        const c = now !== want ? (await propose({ op: "set_goal", target: { item_id: feature }, before: { goal_id: now }, after: { goal_id: want } })).change : null;
+        // kr-in-goal-map: an item already serving the goal dropped on, or one of its key results, keeps
+        // what it serves (off a key result's milestone it stays on that key result, the one its item
+        // serves, whichever milestones it was on); otherwise it serves the goal itself.
+        // "Not on a key result" never puts an item onto a key result.
+        const folds = (props.topOf?.(now) ?? now) === goal;
+        const c = folds ? null : (await propose({ op: "set_goal", target: { item_id: feature }, before: { goal_id: now }, after: { goal_id: goal } })).change;
         await reload();
         setFresh(feature);
         toast({
