@@ -1289,8 +1289,13 @@ function EditForm({
       out[f.key] = v === GONE ? null : v; // null removes the key
     }
     if (isGoal) {
-      for (const [label, raw] of [["Value", goal.target], ["Start value", goal.start], ["Weight", goal.weight]]) {
-        if (raw.trim() && decimalOf(raw.trim()) === undefined) {
+      // A stored number shown as it reads ("1e-7") saves untouched; Value and Start value take only what a number holds exactly.
+      for (const [label, key, exact] of [["Value", "target", true], ["Start value", "start", true], ["Weight", "weight", false]] as const) {
+        const raw = goal[key].trim();
+        const was = entity.attrs?.[key];
+        if (!raw || (typeof was === "number" && raw === String(was))) continue;
+        const n = decimalOf(raw);
+        if (n === undefined || (exact && digitsOf(String(n)) !== digitsOf(raw))) {
           setInvalid(`${label} must be a number.`);
           return;
         }
