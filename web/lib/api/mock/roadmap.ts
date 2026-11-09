@@ -1682,18 +1682,19 @@ export function featureCodes(
     { slug: ALERTS_ROADMAP_SLUG, number: 1, items: seededPlanItems(ALERTS_ROADMAP_SLUG, 1, sectionCode) ?? [] },
     ...Object.entries(edits?.versions ?? {}).flatMap(([slug, by]) => Object.keys(by).map(Number).map((number) => ({ slug, number, items: by[number] }))),
   ];
-  // A version's row: when it was made, then its place among the rows (made in that order); a version with no row sorts last.
-  const made = ({ slug, number }: { slug: string; number: number }): [string | null, number] => {
+  // A version's row: when it was made, then its place among the rows (made in that order); a version with no row (or no
+  // created_at) sorts last, and those keep their place: a row's index, past the rows the stored version's own index.
+  const rows = ctx?.versions ?? [];
+  const made = ({ slug, number }: { slug: string; number: number }, i: number): [string | null, number] => {
     const doc = ctx?.documents.find((d) => d.slug === slug);
-    const at = ctx?.versions.findIndex((v) => v.document_id === doc?.id && v.number === number) ?? -1;
-    return at < 0 ? [null, Infinity] : [ctx!.versions[at].created_at ?? null, at];
+    const at = rows.findIndex((v) => v.document_id === doc?.id && v.number === number);
+    return at < 0 ? [null, rows.length + i] : [rows[at].created_at ?? null, at];
   };
   const published = stored
-    .map((v) => ({ ...v, made: made(v) }))
+    .map((v, i) => ({ ...v, made: made(v, i) }))
     .sort((a, b) => {
       const [x, y] = [a.made[0], b.made[0]];
-      if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1;
-      return x.localeCompare(y) || a.made[1] - b.made[1];
+      return (x === y ? 0 : x === null ? 1 : y === null ? -1 : x.localeCompare(y)) || a.made[1] - b.made[1];
     })
     .flatMap((v) => v.items);
   const prd = new Map<string, string>();
