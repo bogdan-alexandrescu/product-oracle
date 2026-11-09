@@ -31,9 +31,10 @@ import { expect, test } from "./test";
  * ("align-items: baseline"). In the Python only, an id written as code in a sentence: a
  * backtick span that is one lowercase id holding "_ . / : < {" ("`baseline.yaml`") or a command
  * starting "oracle " ("`oracle baseline pull`"), a quoted id with a <placeholder>
- * ('"baseline decision <key>"'), or one named as a word to avoid ('never "baseline"').
+ * ('"baseline decision <key>"'), or, in the agents' prompt line only, one named as a word to avoid
+ * ('never "baseline" (except a starting value)').
  * 'Open the "baseline" page', "Read `Baseline` first", "`build the baseline.`",
- * 'Saved to "baseline {q}"' and 'not "baseline"' are caught.
+ * 'Saved to "baseline {q}"', 'not "baseline"' and 'This is never "baseline" data.' are caught.
  */
 
 const WEB = path.resolve(__dirname, "..");
@@ -59,9 +60,10 @@ const isCode = (span: string) =>
   /^[a-z0-9_./:<>{}-]*[_./:<{][a-z0-9_./:<>{}-]*$/.test(span) || /^oracle(?: [a-z0-9_./:<>{}-]+)+$/.test(span);
 /**
  * ... or a quoted id with a <placeholder> ('"baseline decision <key>"', a citation's ref; an f-string's fill
- * is no placeholder), or named as a word to avoid ('never "baseline"', the agents' citation contract in runs/flows.py).
+ * is no placeholder), or named as a word to avoid in the agents' prompt line, runs/flows.py's GROUND_TRUTH_LINE,
+ * by its exact wording ('never "baseline" (except'): any other 'never "baseline"' is shown text.
  */
-const QUOTED_ID = /\\?(["'])[a-z][a-z0-9_]*(?: [a-z][a-z0-9_]*)* <\w+>\\?\1|\b[Nn]ever \\?(["'])[a-z][a-z0-9_]*\\?\2/g;
+const QUOTED_ID = /\\?(["'])[a-z][a-z0-9_]*(?: [a-z][a-z0-9_]*)* <\w+>\\?\1|\bnever \\?"baseline\\?" \(except\b/g;
 /** A lone id or key. */
 const ID = /^[a-z][a-z0-9_]*$/;
 /** The prediction forms' starting-value field, "Baseline" beside "Predicted". */
