@@ -577,7 +577,8 @@ async def decide(db: AsyncSession, principal: Any, c: SimpleChange, action: str,
                  reason: str | None) -> Any:  # fmt: skip
     """Wired from ``oracle.simple.changes.decide``: the PRD owner accepts or declines a
     goal milestone's proposed date/counts_when. Accepting writes it onto the milestone and
-    clears ``pending_change``; declining only clears it."""
+    clears ``pending_change``; declining only clears it (or, when the milestone is gone or
+    its ``pending_change`` names another change, only closes the proposal)."""
     from oracle.simple.changes import ChangeError, one_out
 
     if c.status != "proposed":
@@ -591,10 +592,14 @@ async def decide(db: AsyncSession, principal: Any, c: SimpleChange, action: str,
         raise ChangeError(403, "Only the PRD's owner decides this")
     milestone_id = uuid.UUID(c.target["milestone_id"])
     row = await db.get(TrackMilestone, milestone_id, with_for_update=True)
-    if row is None:
+    pending = (row.pending_change if row is not None else None) or {}
+    waits = str(pending.get("change_id")) == str(c.id)
+    # A proposal whose milestone is gone or moved on to another change is still declined
+    # (only the proposal closes; the milestone and its other change are left as they are),
+    # so it never waits forever; accepting it is refused.
+    if action == "accept" and row is None:
         raise ChangeError(404, "The milestone is gone")
-    pending = row.pending_change or {}
-    if str(pending.get("change_id")) != str(c.id):
+    if action == "accept" and not waits:
         raise ChangeError(409, {"message": "This proposal no longer waits on this milestone",
                                 "current": None, "changed_by": None,
                                 "changed_at": None})  # fmt: skip
@@ -602,7 +607,8 @@ async def decide(db: AsyncSession, principal: Any, c: SimpleChange, action: str,
         after = c.after
         row.target_date = date.fromisoformat(after["date"]) if after.get("date") else None
         row.counts_when = after.get("counts_when") or ""
-    row.pending_change = None
+    if waits:
+        row.pending_change = None
     c.status = "accepted" if action == "accept" else "declined"
     c.decided_by, c.decided_at, c.decision_reason = me, now, reason
     await db.flush()
