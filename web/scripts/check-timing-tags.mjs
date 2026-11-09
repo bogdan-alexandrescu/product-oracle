@@ -546,7 +546,7 @@ function selfTest() {
     ["coarse guard, marked", untagged.replace("parse(big);", `// ${COARSE}: a large regression still fails in the shards\n parse(big);`), 0],
     ["coarse marker, tight budget", `test("parses", () => { const t0 = Date.now(); // ${COARSE}\n parse(big); expect(Date.now() - t0).toBeLessThan(50); });`, 1],
     ["coarse marker in a string, not a comment", `test("parses", () => { const t0 = Date.now(); parse("${COARSE}"); expect(Date.now() - t0).toBeLessThan(1500); });`, 1],
-    ["coarse marker, budget through a helper", `async function paint() { const t0 = performance.now(); return 1; }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`, 0],
+    ["coarse marker, budget through a helper", `async function paint() { const t0 = performance.now(); await draw(); return performance.now() - t0; }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`, 0],
     ["coarse marker, tight budget in a variable", `async function paint() { const t0 = performance.now(); return 1; }\ntest("draws", async () => { // ${COARSE}\n const ms = await paint(); expect(ms).toBeLessThanOrEqual(200); });`, 1],
     ["a clock name from another function", `function a() { const start = Date.now(); return start; }\ntest("offsets", () => { const start = 10; expect(start - 1).toBe(9); });`, 0],
     ["a clock name from another test", `test("a", () => { const start = Date.now(); expect(start).toBeGreaterThan(0); });\ntest("b", () => { const start = 10; expect(start - 1).toBe(9); });`, 0],
@@ -568,7 +568,7 @@ function selfTest() {
       ["the measure polled", "await expect.poll(() => Date.now() - t0).toBeLessThan(1500);"],
     ].map(([name, extra]) => [`coarse decoy, ${name}`, `test("parses", async () => { // ${COARSE}\n const t0 = Date.now(); parse(big); expect(Date.now() - t0).toBeLessThan(1500); ${extra} });`, 1]),
     ["coarse, the measure in a variable", `test("parses", () => { // ${COARSE}\n const t0 = Date.now(); parse(big); let ms = 0; ms = Date.now() - t0; expect(ms).toBeLessThan(1500); });`, 0],
-    ["coarse, walk-brief's copy", `async function shownFor(page) { const t0 = performance.now(); return 1; }\ntest("5: shown for long", async ({ page }) => {\n // ${COARSE} (under load; the tight bound is the @timing test above)\n expect(await shownFor(page)).toBeLessThan(1500);\n });`, 0],
+    ["coarse, walk-brief's copy", `async function shownFor(page) { const seen = await page.evaluate(() => [performance.now()]); return seen.length ? seen[seen.length - 1] - seen[0] : 0; }\ntest("5: shown for long", async ({ page }) => {\n // ${COARSE} (under load; the tight bound is the @timing test above)\n expect(await shownFor(page)).toBeLessThan(1500);\n });`, 0],
     // The clock against a deadline (a clock read plus or minus a budget).
     ["the clock bounded by a deadline", `test("parses", () => { const deadline = Date.now() + 50; parse(big); expect(Date.now()).toBeLessThan(deadline); });`, 1],
     ["the clock polled against a deadline", `test("parses", async () => { const deadline = Date.now() + 50; await expect.poll(() => Date.now()).toBeLessThan(deadline); });`, 1],
@@ -581,6 +581,35 @@ function selfTest() {
     ["process.hrtime.bigint()", `test("parses", () => { const t0 = process.hrtime.bigint(); parse(big); expect(Number(process.hrtime.bigint() - t0)).toBeLessThan(1.5e9); });`, 1],
     ["process.hrtime(t0)", `test("parses", () => { const t0 = process.hrtime(); parse(big); const [s] = process.hrtime(t0); expect(s).toBeLessThan(2); });`, 1],
     ["an aliased clock", `test("parses", () => { const clock = Date.now; const t0 = clock(); parse(big); expect(clock() - t0).toBeLessThan(1500); });`, 1],
+    // Other spellings of a clock read.
+    ...[
+      ["const { now } = Date", "const { now } = Date;", "now()"],
+      ["const { now: clock } = performance", "const { now: clock } = performance;", "clock()"],
+      ["Date['now']()", "", 'Date["now"]()'],
+      ["globalThis.Date.now()", "", "globalThis.Date.now()"],
+      ["window.performance.now()", "", "window.performance.now()"],
+      ["const D = Date; D.now()", "const D = Date;", "D.now()"],
+      ["const D = globalThis.Date; new D().getTime()", "const D = globalThis.Date;", "new D().getTime()"],
+    ].map(([name, pre, read]) => [`the clock as ${name}`, `test("parses", () => { ${pre} const t0 = ${read}; parse(big); expect(${read} - t0).toBeLessThan(1500); });`, 1]),
+    ["a Date alias in plain date maths", `test("dates", () => { const D = Date; const a = new D(2026, 0, 1); expect(new D(2026, 0, 2) - a).toBe(864e5); });`, 0],
+    // Deadlines made by a helper.
+    ["a deadline from a helper", `test("parses", () => { const by = (ms) => Date.now() + ms; parse(big); expect(Date.now()).toBeLessThan(by(50)); });`, 1],
+    ["a deadline from a helper, in a variable", `function after(ms) { return Date.now() + ms; }\ntest("parses", () => { const until = after(50); parse(big); if (Date.now() > until) throw new Error("slow"); });`, 1],
+    ["a deadline from a helper that only stops a loop", `const by = (ms) => Date.now() + ms;\ntest("waits", async () => { const until = by(5000); while (Date.now() < until) { if (await done()) break; await sleep(100); } expect(await done()).toBe(true); });`, 0],
+    // A flag set when the clock passes a deadline, then asserted.
+    ["a flag set past a deadline, then asserted", `test("parses", () => { const d = Date.now() + 50; let late = false; parse(big); if (Date.now() > d) late = true; expect(late).toBe(false); });`, 1],
+    ["a flag set in time, then asserted", `test("parses", () => { const d = Date.now() + 50; let ok = false; parse(big); if (Date.now() < d) { ok = true; } else { ok = false; } expect(ok).toBeTruthy(); });`, 1],
+    ["a flag set by ?:, then asserted", `test("parses", () => { const d = Date.now() + 50; parse(big); const late = Date.now() > d ? 1 : 0; expect(late).toBe(0); });`, 1],
+    ["a flag set past a deadline, then thrown on", `test("parses", () => { const d = Date.now() + 50; let late = false; parse(big); if (Date.now() > d) late = true; if (late) throw new Error("slow"); });`, 1],
+    ["a flag that only stops a poll", `test("waits", async () => { const d = Date.now() + 5000; let gaveUp = false; while (!gaveUp) { if (await done()) break; if (Date.now() > d) gaveUp = true; await sleep(100); } expect(await done()).toBe(true); });`, 0],
+    // A coarse bound counts only on an elapsed value in ms, as measured.
+    ["coarse, a helper that scales its measure", `async function paint() { const t0 = performance.now(); await draw(); return (performance.now() - t0) * 100; }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`, 1],
+    ["coarse, a scaled helper's measure in a variable", `async function paint() { const t0 = performance.now(); await draw(); const ms = performance.now() - t0; return ms / 0.01; }\ntest("draws", async () => { // ${COARSE}\n const ms = await paint(); expect(ms).toBeLessThan(1500); });`, 1],
+    ["coarse, a helper that returns no measure", `async function paint() { const t0 = performance.now(); await draw(); return 1; }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`, 1],
+    ["coarse, a helper that returns a timestamp", `async function paint() { await draw(); return performance.now(); }\ntest("draws", async () => { // ${COARSE}\n expect(await paint()).toBeLessThan(1500); });`, 1],
+    ["coarse, a timestamp bounded", `test("draws", async () => { // ${COARSE}\n await draw(); expect(performance.now()).toBeLessThan(1500); });`, 1],
+    ["coarse, nanoseconds bounded", `test("draws", async () => { // ${COARSE}\n const t0 = process.hrtime.bigint(); await draw(); const ns = process.hrtime.bigint() - t0; expect(ns).toBeLessThan(1500); });`, 1],
+    ["coarse, a helper's measure through another helper", `async function paint() { const t0 = Date.now(); await draw(); const ms = Date.now() - t0; return ms; }\nasync function twice() { return Math.round(await paint()); }\ntest("draws", async () => { // ${COARSE}\n expect(await twice()).toBeLessThan(1500); });`, 0],
   ];
   // Imported helpers: a spec at /e2e/a.spec.ts and the files it imports.
   const files = {
@@ -588,8 +617,9 @@ function selfTest() {
       export const timed = async (fn) => { const t0 = new Date().getTime(); await fn(); return new Date().getTime() - t0; };
       function stamp() { const end = Date.now(); return end - started; }
       export { stamp as lap };
-      export function open(page) { return page.goto("/"); }`,
-    "/e2e/again.ts": `export { paint } from "./clock";`,
+      export function open(page) { return page.goto("/"); }
+      export async function scaled(page) { const t0 = Date.now(); await page.goto("/"); return (Date.now() - t0) * 100; }`,
+    "/e2e/again.ts": `export { paint, scaled } from "./clock";`,
     "/e2e/vqa/a.spec.ts": "",
     "/lib/mock.ts": `export function due(job) { return Date.now() - job.started >= 2000; }`,
     // An import cycle: viaA measures only through a.ts, which measures only through b.ts.
@@ -609,6 +639,9 @@ function selfTest() {
     ["imported from a folder above", spec(`import { paint } from "../clock";`, "paint(page)"), 1, "/e2e/vqa/a.spec.ts"],
     ["the mock API, not the test", spec(`import { due } from "../lib/mock";`, "due(job)"), 0],
     ["imported helper, test tagged", spec(`import { paint } from "./clock";`, "paint(page)").replace('"draws"', '"draws @timing"'), 0],
+    ["coarse, an imported helper", spec(`import { paint } from "./clock";`, "paint(page)").replace("expect(", `// ${COARSE}\n expect(`).replace("2000", "1500"), 0],
+    ["coarse, an imported helper that scales", spec(`import { scaled } from "./clock";`, "scaled(page)").replace("expect(", `// ${COARSE}\n expect(`).replace("2000", "1500"), 1],
+    ["coarse, an imported, re-exported helper that scales", spec(`import { scaled as s } from "./again";`, "s(page)").replace("expect(", `// ${COARSE}\n expect(`).replace("2000", "1500"), 1],
   ];
   const failed = [
     ...cases.filter(([, src, want]) => untaggedTimingTests(src).length !== want).map(([name, src, want]) => [name, want, untaggedTimingTests(src).length]),
