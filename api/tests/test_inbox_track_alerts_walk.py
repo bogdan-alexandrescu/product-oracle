@@ -559,6 +559,30 @@ async def test_a_recheck_on_a_read_commits_only_the_track(client, monkeypatch):
         assert len(marked) == 1  # the re-checked track's clearing stands
 
 
+async def test_a_read_with_nothing_marked_opens_no_second_connection(client, monkeypatch):
+    """protects=the read's re-check looks for a marked track on the read's own session first
+    and opens a session of its own only when one is there; fails_when=every Inbox read opens
+    a second connection though no track is marked; no_claim=a marked track's re-check."""
+    ctx, tracks = await monitored(client)
+    real, opened = alerts.tenant_session, []
+
+    def counting(tenant_id):
+        opened.append(tenant_id)
+        return real(tenant_id)
+
+    monkeypatch.setattr(alerts, "tenant_session", counting)
+    rows = await inbox_tracks(client, ctx)
+    assert set(rows) == set(tracks.values())
+    assert opened == []
+    # A marked track does open one, so the spy sees the re-check's session.
+    async with tenant_session(ctx.tenant_id) as s:
+        track = await s.get(ProductTrack, uuid.UUID(tracks["scale"]))
+        track.monitor = {**(track.monitor or {}), "recheck": True}
+        await s.commit()
+    await inbox_tracks(client, ctx)
+    assert opened == [ctx.tenant_id]
+
+
 async def test_a_track_with_no_owner_is_owned_by_nobody(client):
     """protects=a track with no owner reaches every company owner, as people; an API token
     (no person, no id) is not taken for its owner; fails_when=the owner-role token is offered
