@@ -103,6 +103,28 @@ test("Home's plan groups by the roadmap's current milestones, a removed one's it
   await expect(page.getByText("M1 Alerts live for 50 teams", { exact: true }).first()).toBeVisible();
 });
 
+/*
+ * protects = a pilot PRD's milestone, opened on the roadmap, names the PRD's owner (its track's
+ * owner, Ivo Lindqvist); fails_when = it reads "the PRD's owner".
+ */
+test("a pilot PRD's milestone names its owner on the roadmap", async ({ page }) => {
+  await home(page, 1440);
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+  const labels = page.getByTestId("ms-prd-label").filter({ hasText: "M2 Pilot" });
+  await expect(labels).toHaveCount(2);
+  const owned: string[] = [];
+  for (let i = 0; i < 2; i++) {
+    await labels.nth(i).click();
+    const prd = page.getByTestId("ms-prd-card");
+    await expect(prd).toContainText("From the PRD Pilot plan");
+    owned.push((await prd.locator("p").first().textContent()) ?? "");
+    await prd.getByRole("button", { name: "Cancel" }).click();
+    await expect(prd).toHaveCount(0);
+  }
+  expect(owned).toContain("From the PRD Pilot plan A · owned by Ivo Lindqvist");
+});
+
 test("What the next milestone delivers reads the roadmap's own milestones too", async ({ page }) => {
   // A reader's Home has the card: Alerts' own M1 (Nov 20) comes before the track's Beta (Nov 30).
   await home(page, 1440, "viewer@example.com");

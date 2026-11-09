@@ -161,3 +161,31 @@ for (const [name, device] of [["desktop", DESKTOP], ["phone", PHONE]] as const) 
     });
   });
 }
+
+/**
+ * protects = each of the company roadmap's PRD milestones (User Safety's and Scale's), opened on
+ * the roadmap, names the PRD's owner (its track's owner, Lena Moss); fails_when = a card reads
+ * "the PRD's owner" (no track owner found, or every item read as one PRD's); no_claim = who
+ * decides an ask (milestone-asks.spec.ts).
+ */
+test("each PRD milestone on the company roadmap names its owner", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize(DESKTOP.viewport);
+  await open(page);
+  const label = (name: string) => page.getByTestId("ms-prd-label").filter({ hasText: new RegExp(`^PRD · ${name}$`) });
+  for (const [name, nth, prdTitle] of [
+    ["M1 Reports reach a person", 0, "User Safety"],
+    ["M2 Blocks hold everywhere", 0, "User Safety"],
+    ["M1 Load measured", 0, "Scale"],
+    ["M2 Twice the load", 0, "Scale"],
+    // Both M3s (one day, one name) share one label.
+    ["M3 Ready for launch", 0, null],
+  ] as const) {
+    await label(name).nth(nth).click();
+    const prd = page.getByTestId("ms-prd-card");
+    await expect(prd).toContainText(prdTitle ? `From the PRD ${prdTitle} · owned by Lena Moss` : /From the PRD (User Safety|Scale) · owned by Lena Moss/);
+    await expect(prd).toContainText("A change here goes to Lena Moss as a change to the PRD");
+    await prd.getByRole("button", { name: "Cancel" }).click();
+    await expect(prd).toHaveCount(0);
+  }
+});
