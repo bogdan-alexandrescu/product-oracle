@@ -1,4 +1,4 @@
-import { HOME_MILESTONE_BARE_TRACK_SCENARIO, HOME_MILESTONE_FOLD_SCENARIO, HOME_MILESTONE_GOALS_FOLD_SCENARIO, HOME_MILESTONE_LEAD_GOALS_SCENARIO, HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_PRD_FOLD_SCENARIO, HOME_MILESTONE_PLAIN_FOLD_SCENARIO, HOME_MILESTONE_PRD_GOAL_FOLD_SCENARIO, HOME_MILESTONE_PRDS_FOLD_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONES_SCENARIO } from "../lib/api/mock/home-milestones";
+import { HOME_MILESTONE_BARE_TRACK_SCENARIO, HOME_MILESTONE_FOLD_SCENARIO, HOME_MILESTONE_GOALS_FOLD_SCENARIO, HOME_MILESTONE_LEAD_GOALS_SCENARIO, HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_PRD_FOLD_SCENARIO, HOME_MILESTONE_PLAIN_FOLD_SCENARIO, HOME_MILESTONE_PRD_GOAL_FOLD_SCENARIO, HOME_MILESTONE_PRDS_FOLD_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONE_TWO_ROADMAPS_SCENARIO, HOME_MILESTONE_TWO_ROADMAPS_SWAPPED_SCENARIO, HOME_MILESTONES_SCENARIO } from "../lib/api/mock/home-milestones";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN, login } from "./helpers";
 import { expect, test, type Page } from "./test";
@@ -407,6 +407,25 @@ test("two goals' milestones whose names lead the track's join its one row, each 
 });
 
 /*
+ * Card home-milestone-two-roadmaps, on "home-milestones-two-roadmaps" (and "-swapped", Alerts'
+ * milestones first): protects = each roadmap's milestones join the Guided setup track's bare "M1"
+ * on their own, so Onboarding's "M1 · Measured" and Alerts' "M1 · Rules ready" both join its one
+ * row, the other name in its (i), whichever roadmap comes first; fails_when = a name one roadmap
+ * lent the track decides the other roadmap's (Rules ready its own row, or the rows differ by order).
+ */
+for (const scenario of [HOME_MILESTONE_TWO_ROADMAPS_SCENARIO, HOME_MILESTONE_TWO_ROADMAPS_SWAPPED_SCENARIO]) {
+  test(`each roadmap's milestone joins a bare-code track on its own, whichever roadmap comes first (${scenario})`, async ({ page }) => {
+    await home(page, 1440, ADMIN.email, scenario);
+    const labels = (await page.getByTestId("home-strip-label").allTextContents()).map((t) => t.replace(/\s+/g, " ").trim());
+    expect(labels.filter((l) => l.startsWith("M1"))).toEqual(["M1 · Measured · 4 items"]);
+    expect(await itemsOf(page, "M1 · Measured · 4 items")).toEqual([["Alert rules engine", "Alert snooze", "Health log", "Setup checklist"]]);
+    const line = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: /^M1 · Measured · 4 items$/ }) });
+    await line.getByTestId("home-strip-items-tip").click();
+    await expect(line.getByRole("tooltip").getByText(/^Also: /)).toHaveText("Also: M1 Rules ready");
+  });
+}
+
+/*
  * Card home-next-milestone-whole (review of PR 1439), on "home-milestones-goals": protects = "What
  * the next milestone delivers" names the next milestone as the quarter plan's rows do (Alerts'
  * "[Fleet pilot]" M2, Nov 18, reads "M2 · Fleet pilot"); fails_when = it reads "M2 · [Fleet pilot]"
@@ -425,14 +444,16 @@ test("the next milestone card reads the milestone's whole name, as the plan rows
 /*
  * Card home-nameless-track-names-kept (reviews of PR 1439), on "home-milestones-tracks": protects =
  * a nameless track milestone ("M3", holding items on Onboarding and Alerts) takes the name of a
- * roadmap milestone that joins it, but a second roadmap's of another name keeps its own row:
- * Onboarding's "M3 · Guided tour" joins it, Alerts' "M3 · Quiet hours" stays apart; fails_when =
- * "Quiet hours" shows nowhere on Home.
+ * roadmap milestone that joins it on each roadmap, a name one roadmap lent never deciding the
+ * other's: Onboarding's "M3 · Guided tour" and Alerts' "M3 · Quiet hours" both join its one row,
+ * the other name in its (i); fails_when = "Quiet hours" shows nowhere on Home.
  */
-test("a nameless track milestone takes one joined name; another roadmap's other name keeps its row", async ({ page }) => {
+test("a nameless track milestone takes one joined name; another roadmap's other name is in its (i)", async ({ page }) => {
   await home(page, 1440, ADMIN.email, HOME_MILESTONE_TRACKS_SCENARIO);
-  expect(await itemsOf(page, "M3 · Guided tour · 3 items")).toEqual([["Alert snooze", "Health log", "Setup reminders"]]);
-  expect(await itemsOf(page, "M3 · Quiet hours · 1 item")).toEqual([["Mobile alert push"]]);
+  expect(await itemsOf(page, "M3 · Guided tour · 4 items")).toEqual([["Alert snooze", "Health log", "Mobile alert push", "Setup reminders"]]);
+  const line = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: /^M3 · Guided tour · 4 items$/ }) });
+  await line.getByTestId("home-strip-items-tip").click();
+  await expect(line.getByRole("tooltip").getByText(/^Also: /)).toHaveText("Also: M3 Quiet hours");
 });
 
 /*
