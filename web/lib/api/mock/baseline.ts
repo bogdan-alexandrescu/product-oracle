@@ -118,6 +118,11 @@ export const LONG_WORDS_SCENARIO = "long-words";
  */
 export const OKR_IMPORT_SCENARIO = "okr-import";
 export const OKR_IMPORT_GOAL = "KR 1.1 [n] of [n] live helpers averaging 50 replied threads a day in March 2027";
+/**
+ * gt-goal-attr-shapes: the same imported goal, also holding a list and an object as the file wrote them, each with an
+ * unfilled "[n]": the panel reads them in words, the Edit form one line per entry and one field per field.
+ */
+export const GOAL_ATTRS_SCENARIO = "goal-attr-shapes";
 const REVIEW_CHECKPOINT = "0b7e5d4c-3a29-4118-9f07-e6d5c4b3a2c1";
 
 /**
@@ -309,10 +314,18 @@ export function seedBaseline(uuid: () => string): BaselineState {
     status: "proposed",
     confidence: 0.45,
   });
-  if (typeof localStorage !== "undefined" && localStorage.getItem(MOCK_SCENARIO_KEY) === OKR_IMPORT_SCENARIO) {
+  const scenario = typeof localStorage !== "undefined" ? localStorage.getItem(MOCK_SCENARIO_KEY) : null;
+  if (scenario === OKR_IMPORT_SCENARIO || scenario === GOAL_ATTRS_SCENARIO) {
+    const shapes =
+      scenario === GOAL_ATTRS_SCENARIO
+        ? {
+            open_values: ["[n] live helpers", "50 replied threads a day", "[n]% of threads answered within an hour"],
+            reply_split: { email_threads: 60, chat_threads: "[n]", review_by: "2027-03-15" },
+          }
+        : {};
     entity("goal", "kr-1-1", OKR_IMPORT_GOAL, {
       body: "Reach [n] live helpers, each replying to 50 threads a day.",
-      attrs: { target_text: "[n] live helpers", due: "2027-03-31", period: "2027-03-01..2027-03-31", parent_goal: "g.paid-conversion" },
+      attrs: { target_text: "[n] live helpers", due: "2027-03-31", period: "2027-03-01..2027-03-31", parent_goal: "g.paid-conversion", ...shapes },
       status: "proposed",
       confidence: null,
     });
