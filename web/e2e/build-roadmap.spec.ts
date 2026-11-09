@@ -37,7 +37,7 @@ for (const [name, use] of [
   test.describe(name, () => {
     test.use(use);
 
-    test("QR1 A: the Timeline on six months around today, one row per item, names fixed on the left", async ({ page }) => {
+    test("QR1 A: the Timeline opens on 3 months around today, then 6 months, one row per item, names fixed on the left", async ({ page }) => {
       await open(page);
       const scroll = page.getByTestId("timeline-scroll");
       // Today is in sight when the page opens, on 3 months (the owner, Nov 9).
