@@ -1131,6 +1131,25 @@ function decimalOf(typed: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+/**
+ * A typed plain decimal as a number only when the number holds it exactly: none past Number.MAX_SAFE_INTEGER, and
+ * none that reads back as other digits ("12345678901234567890", or a tiny decimal read as 0).
+ */
+function exactOf(typed: string): number | undefined {
+  const n = decimalOf(typed);
+  return n !== undefined && Math.abs(n) <= Number.MAX_SAFE_INTEGER && digitsOf(String(n)) === digitsOf(typed) ? n : undefined;
+}
+
+/** A decimal as its sign, significant digits and where its point falls: "0.050" and "5e-2" both read "5@-1". */
+function digitsOf(s: string): string {
+  const [mantissa, exp = "0"] = s.replace(/^[+-]/, "").split("e");
+  const [whole, frac = ""] = mantissa.split(".");
+  const all = whole + frac;
+  const lead = all.length - all.replace(/^0+/, "").length;
+  const sig = all.slice(lead).replace(/0+$/, "");
+  return sig ? `${s.startsWith("-") ? "-" : ""}${sig}@${whole.length - lead + Number(exp)}` : "0";
+}
+
 /** A typed number, or the error its field shows. */
 function numberOf(typed: string, label: string): number {
   const n = decimalOf(typed);
@@ -1180,7 +1199,7 @@ function storedOf(d: Draft, label: string, group?: string): unknown {
   if (typed === d.start.trim()) return d.was === undefined ? GONE : d.was;
   if (!typed) return GONE;
   if (d.kind === "bool") return typed === "yes";
-  if (d.loose) return ZEROS.test(typed) ? typed : (decimalOf(typed) ?? typed);
+  if (d.loose) return ZEROS.test(typed) ? typed : (exactOf(typed) ?? typed);
   return d.kind === "number" ? numberOf(typed, within(group, label)) : typed;
 }
 
@@ -1271,7 +1290,7 @@ function EditForm({
     }
     if (isGoal) {
       for (const [label, raw] of [["Value", goal.target], ["Start value", goal.start], ["Weight", goal.weight]]) {
-        if (raw.trim() && !Number.isFinite(Number(raw))) {
+        if (raw.trim() && decimalOf(raw.trim()) === undefined) {
           setInvalid(`${label} must be a number.`);
           return;
         }
