@@ -1651,7 +1651,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved, featureOpen }: {
         />
         <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 pl-6 text-[15px] leading-[22px] text-text2" aria-label="Legend">
           {[...shapes.entries()].map(([k, s]) => (
-            <li key={k} className="flex items-center gap-1">
+            <li key={k} className="flex items-center gap-1" data-shape={s.shape}>
               <LegendMark shape={s.shape} />
               {s.name}
             </li>
@@ -1897,18 +1897,20 @@ function goalOfRow(data: Out): (r: Row) => string | null {
 
 /**
  * The key of a row's goal, as goalOfRow picks it: the item's goal's own key; a goal only the plan gives, the plan goal's
- * own (its code, else its place in the plan's goals), never a name, so two goals with one name keep two keys and a
- * renamed goal keeps its own.
+ * own (its code, else its place in the plan's goals), never a name, so a goal record and a plan goal with one name keep
+ * two keys (the owner, Nov 8), as do two plan goals with their own codes. A slice names its plan goal by its words
+ * only, so two plan goals with one name and no code cannot be told apart: a slice takes the first one's place.
  */
 function goalKeyOfRow(data: Out): (r: Row) => string | null {
-  const goals = (data.plan?.goals ?? []).map((g) => g.name);
+  const place = new Map<string, number>();
+  (data.plan?.goals ?? []).forEach((g, at) => !place.has(g.name) && place.set(g.name, at));
   const planKey = new Map(
     (data.plan?.slices ?? [])
       .filter((x) => x.goal)
       .map((x) => {
         const code = goalLabel(x.goal!).code;
-        const at = goals.indexOf(x.goal!);
-        return [x.feature_code, code ? `plan:${code}` : at >= 0 ? `plan:${at}` : `plan-goal:${x.goal}`];
+        const at = place.get(x.goal!);
+        return [x.feature_code, code ? `plan:${code}` : at != null ? `plan:${at}` : `plan-goal:${x.goal}`];
       }),
   );
   return (r) => r.goal?.key ?? planKey.get(r.short_code) ?? null;

@@ -7,12 +7,16 @@ import { expect, test, type Page } from "./test";
  * Simple's Priorities after PRs 1420 and 1432 (the mock's default company, and a feature whose goal has no value):
  * effort reads "1 week" / "N weeks" on the Ranked tab too (a row's numbers, the effort box, a proposal); a feature the
  * mock does not list has no effort, as the API reads it; a feature whose goal has no value is counted by its goal's
- * name, never "no goal"; and a mark shrinks from the keyboard. (Shapes keyed by a goal's id:
- * value-effort-wording.spec.ts renames a goal to another's name.)
+ * name, never "no goal"; a mark shrinks from the keyboard; and a plan goal and a goal of the same name are two goals with
+ * two shapes, as are two plan goals of one name with their own codes. (Shapes keyed by a goal's id: value-effort-wording.spec.ts renames a goal to another's name.)
  */
 
 /** The mock's scenario with an invented feature whose goal has no value (simple-priorities.ts). */
 const GOAL_NO_VALUE = "priorities-goal-no-value";
+/** The mock's plan scenario whose plan names a goal "Activation" while Alert rules' own goal is also "Activation". */
+const PLAN_GOAL_NAMES = "priorities-plan-goal-names";
+/** The mock's plan scenario whose plan has two goals named Activation with their own codes, G1 and G3. */
+const PLAN_GOAL_CODES = "priorities-plan-goal-codes";
 
 const DESKTOP = { width: 1440, height: 900 };
 
@@ -105,4 +109,36 @@ test("a feature whose goal has no value is counted by its goal's name, not 'no g
   // Its mark is Grow retention's shape, as Weekly alert digest's (a lone mark), never the no-goal one.
   await expect(quiet).toHaveAttribute("data-shape", (await mark(page, "alert-digest").getAttribute("data-shape"))!);
   await expect(quiet).not.toHaveAttribute("data-shape", "none");
+});
+
+test("a plan goal and a goal with the same name are two goals: two legend entries, two shapes, each mark its own", async ({ page }) => {
+  await open(page, "value-effort", PLAN_GOAL_NAMES);
+  const activation = page.getByRole("list", { name: "Legend" }).getByRole("listitem").filter({ hasText: /^Activation$/ });
+  await expect(activation).toHaveCount(2);
+  const [first, second] = await Promise.all([activation.nth(0).getAttribute("data-shape"), activation.nth(1).getAttribute("data-shape")]);
+  expect(first).toBeTruthy();
+  expect(second).toBeTruthy();
+  expect(first).not.toBe(second);
+  // Alert rules engine serves its own goal record "Activation"; Onboarding emails (F-16) serves the plan's "Activation".
+  const rules = await mark(page, "alert-rules").getAttribute("data-shape");
+  const emails = await mark(page, "plan-f-16").getAttribute("data-shape");
+  expect([rules, emails].sort()).toEqual([first, second].sort());
+  expect(rules).not.toBe(emails);
+});
+
+test("two plan goals with one name and their own codes are two goals: two legend entries, two shapes, each mark its own", async ({ page }) => {
+  await open(page, "value-effort", PLAN_GOAL_CODES);
+  const activation = page.getByRole("list", { name: "Legend" }).getByRole("listitem").filter({ hasText: /^Activation$/ });
+  await expect(activation).toHaveCount(2);
+  const [g1, g3] = await Promise.all([activation.nth(0).getAttribute("data-shape"), activation.nth(1).getAttribute("data-shape")]);
+  expect(g1).toBeTruthy();
+  expect(g3).toBeTruthy();
+  expect(g1).not.toBe(g3);
+  // Onboarding emails (F-16) serves G3 Activation, a lone mark; Bulk import (F-07) serves G1 Activation, in a count with
+  // Plan limits (F-14): its row in the count's sheet carries its shape.
+  const emails = await mark(page, "plan-f-16").getAttribute("data-shape");
+  await page.locator('[data-testid="vxe-crowd"][aria-label*="Bulk import"]').click();
+  const bulk = await page.getByTestId("vxe-crowd-sheet").locator('[data-testid="vxe-crowd-row"][data-code="plan-f-07"]').getAttribute("data-shape");
+  expect(emails).not.toBe(bulk);
+  expect([bulk, emails].sort()).toEqual([g1, g3].sort());
 });
