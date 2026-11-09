@@ -7,13 +7,16 @@ import { expect, test, type Page } from "./test";
 
 /*
  * kr-in-priorities, on the mock's "goal-key-results" scenario (invented: Faster activation has two confirmed key
- * results, KR 1 with a feature on it, Guided setup checklist, and a target, and KR 2 with none yet), and on
+ * results, KR 1 with a feature on it, Guided setup checklist, and a target, and KR 2 with none yet; KR 1's own confirmed
+ * subgoal, Setup takes ten minutes, and a proposed key result, Teams share a first report, kr-fold), and on
  * "priorities-plan-key-results" (a dated plan whose goal Activation is a key result of Growth).
  *
  * Card kr-buckets: protects = Goal buckets draws one bucket for the goal, never one per key result; both key results
- * are listed inside it, each with its code once and its target behind an (i); the key result's feature is counted,
- * listed with its weeks and its grip under the goal; a goal with no key results lists none; fails_when = a key result
- * has a bucket of its own, is missing from its goal's bucket, reads two codes, or its feature is not under the goal.
+ * are listed inside it, each with its code once and its target behind an (i), KR 1's confirmed subgoal after KR 1 and
+ * the proposed key result not listed (as the API lists them: confirmed subgoals at any depth); the key result's feature
+ * is counted, listed with its weeks and its grip under the goal; a goal with no key results lists none; fails_when = a
+ * key result has a bucket of its own, is missing from its goal's bucket, reads two codes, a proposed one is listed, or
+ * its feature is not under the goal.
  * Card kr-plan-buckets: protects = with a dated plan, the key result is listed in its goal's card, a slice naming it
  * sits under that goal, and the goals are numbered 1 to n; fails_when = a key result has a card, its slice loses its
  * goal, or the numbers skip the key result's.
@@ -25,6 +28,8 @@ import { expect, test, type Page } from "./test";
 
 const KR1 = "Half of new teams set up in one day";
 const KR2 = "New teams send a first alert in week one";
+const SUB = "Setup takes ten minutes";
+const PROPOSED = "Teams share a first report";
 const FEATURE = "Guided setup checklist";
 
 async function open(page: Page, tab: "buckets" | "value-effort" | "ranked", scenario = "goal-key-results", query = "") {
@@ -49,13 +54,16 @@ test("Goal buckets: one bucket for the goal, its key results inside it, a key re
   await expect(goal).toHaveCount(1);
   // No bucket is a key result's.
   await expect(buckets.getByRole("heading", { name: new RegExp(`${KR1}|${KR2}`) })).toHaveCount(0);
-  // Both key results inside the goal's bucket, by name, each with its code once.
+  // Both key results inside the goal's bucket, by name, each with its code once; KR 1's confirmed subgoal after it
+  // (kr-fold, as the API folds it in), the proposed key result not listed.
   const krs = goal.getByRole("list", { name: "Faster activation's key results" }).getByTestId("goal-kr");
-  await expect(krs).toHaveCount(2);
+  await expect(krs).toHaveCount(3);
   await expect(krs.nth(0).getByText(KR1)).toHaveText(`KR 1 ${KR1}`);
-  await expect(krs.nth(1).getByText(KR2)).toHaveText(`KR 2 ${KR2}`);
+  await expect(krs.nth(1).getByText(SUB)).toHaveText(`G-A.1.1 ${SUB}`);
+  await expect(krs.nth(2).getByText(KR2)).toHaveText(`KR 2 ${KR2}`);
+  await expect(krs.filter({ hasText: PROPOSED })).toHaveCount(0);
   // KR 1's target behind its (i); KR 2 has none.
-  await expect(krs.nth(1).getByTestId("goal-kr-tip")).toHaveCount(0);
+  await expect(krs.nth(2).getByTestId("goal-kr-tip")).toHaveCount(0);
   await krs.nth(0).getByTestId("goal-kr-tip").click();
   await expect(page.getByText("New teams set up in one day: 50%")).toBeVisible();
   // The key result's feature is listed under its goal, with its weeks and its grip.
