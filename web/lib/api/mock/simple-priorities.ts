@@ -55,6 +55,23 @@ const GOAL_NO_VALUE: SeedItem = { key: "alert-quiet-hours", title: "Quiet hours 
 export const PRIORITIES_GOAL_NO_VALUE_SCENARIO = "priorities-goal-no-value";
 const INVENTED: Record<string, { value: number | null; effort: number }> = { [GOAL_NO_VALUE.key]: { value: null, effort: 1 } };
 
+/** The "priorities-goal-no-value" scenario's seed (server.ts): the roadmap holds its invented feature from the start. */
+export function seedGoalNoValue(db: SimpleDb): void {
+  db.items.push({ ...GOAL_NO_VALUE });
+  db.ids[GOAL_NO_VALUE.key] = stableUuid(`simple-item/${GOAL_NO_VALUE.key}`);
+}
+
+/**
+ * The "priorities-plan-goal-names" scenario (the owner, Nov 8: a plan goal and a goal record with one name are two
+ * goals): "simple-plan", whose plan names a goal "Activation", where Alert rules' own goal record is also
+ * "Activation". Invented data.
+ */
+export const PRIORITIES_PLAN_GOAL_NAMES_SCENARIO = "priorities-plan-goal-names";
+export function seedPlanGoalNames(db: SimpleDb): void {
+  const rules = db.items.find((s) => s.key === "alert-rules");
+  if (rules) rules.goal = "activation";
+}
+
 /** The "simple-plan" scenario's existing items the plan names (server.ts seedSimplePlanScenario). */
 const PLAN_EXISTING: Record<string, string> = { "setup-checklist": "F-01", "setup-import": "F-02" };
 
@@ -397,10 +414,6 @@ export function prioritiesOut(
   lineKey: string | null = null,
 ): Schemas["SimplePrioritiesOut"] {
   const today = companyToday();
-  if (typeof localStorage !== "undefined" && localStorage.getItem(MOCK_SCENARIO_KEY) === PRIORITIES_GOAL_NO_VALUE_SCENARIO && !db.items.some((s) => s.key === GOAL_NO_VALUE.key)) {
-    db.items.push({ ...GOAL_NO_VALUE });
-    db.ids[GOAL_NO_VALUE.key] = stableUuid(`simple-item/${GOAL_NO_VALUE.key}`);
-  }
   const read = roadmapOut(db, ctx.role, new URLSearchParams(), { id: ctx.id, role: ctx.role })!;
   const { lines, same } = linesOf(read);
   const line = pickLine(lineKey, lines, same);
