@@ -1,4 +1,4 @@
-import { HOME_MILESTONE_FOLD_SCENARIO, HOME_MILESTONE_GOALS_FOLD_SCENARIO, HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_PRD_FOLD_SCENARIO, HOME_MILESTONE_PLAIN_FOLD_SCENARIO, HOME_MILESTONE_PRD_GOAL_FOLD_SCENARIO, HOME_MILESTONE_PRDS_FOLD_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONES_SCENARIO } from "../lib/api/mock/home-milestones";
+import { HOME_MILESTONE_BARE_TRACK_SCENARIO, HOME_MILESTONE_FOLD_SCENARIO, HOME_MILESTONE_GOALS_FOLD_SCENARIO, HOME_MILESTONE_LEAD_GOALS_SCENARIO, HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_PRD_FOLD_SCENARIO, HOME_MILESTONE_PLAIN_FOLD_SCENARIO, HOME_MILESTONE_PRD_GOAL_FOLD_SCENARIO, HOME_MILESTONE_PRDS_FOLD_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONES_SCENARIO } from "../lib/api/mock/home-milestones";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN, login } from "./helpers";
 import { expect, test, type Page } from "./test";
@@ -372,6 +372,38 @@ test("a goal milestone whose name matches joins the track's row beside another g
   const line = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: /^M1 · Measured and mapped · 3 items$/ }) });
   await line.getByTestId("home-strip-items-tip").click();
   await expect(line.getByRole("tooltip")).toContainText("Also: M1 Measured");
+});
+
+/*
+ * Card home-milestone-bare-track (review of PR 1489), on "home-milestones-bare-track": protects =
+ * a bare-code track milestone ("M1") takes a goal's milestone only as the roadmap's only one of
+ * its code, even after a milestone of no goal joined first and named its row: "M1 · Measured"
+ * (Health log, Setup checklist) and Faster activation's "M1 · Measured and mapped" (Sample data
+ * import) are two rows; fails_when = the goal's joins the row named by the one of no goal.
+ */
+test("a bare-code track takes a goal's milestone only as its roadmap's only one, whatever joined first", async ({ page }) => {
+  await home(page, 1440, ADMIN.email, HOME_MILESTONE_BARE_TRACK_SCENARIO);
+  const labels = (await page.getByTestId("home-strip-label").allTextContents()).map((t) => t.replace(/\s+/g, " ").trim());
+  expect(labels.filter((l) => l.startsWith("M1")).sort()).toEqual(["M1 · Measured and mapped · 1 item", "M1 · Measured · 2 items"]);
+  expect(await itemsOf(page, "M1 · Measured · 2 items")).toEqual([["Health log", "Setup checklist"]]);
+  expect(await itemsOf(page, "M1 · Measured and mapped · 1 item")).toEqual([["Sample data import"]]);
+});
+
+/*
+ * Card home-milestone-lead-goals (review of PR 1489), on "home-milestones-lead-goals": protects =
+ * two goals' milestones whose names both lead the track's ("M1 · Measured", "M1 · Measured and"
+ * beside "M1 · Measured and mapped") join its one row, each other name once in its (i);
+ * fails_when = either is a row of its own, or a name is listed twice or not at all.
+ */
+test("two goals' milestones whose names lead the track's join its one row, each name once in its (i)", async ({ page }) => {
+  await home(page, 1440, ADMIN.email, HOME_MILESTONE_LEAD_GOALS_SCENARIO);
+  const labels = (await page.getByTestId("home-strip-label").allTextContents()).map((t) => t.replace(/\s+/g, " ").trim());
+  expect(labels.filter((l) => l.startsWith("M1"))).toEqual(["M1 · Measured and mapped · 3 items"]);
+  expect(await itemsOf(page, "M1 · Measured and mapped · 3 items")).toEqual([["Health log", "Setup checklist", "Welcome video"]]);
+  const line = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: /^M1 · Measured and mapped · 3 items$/ }) });
+  await line.getByTestId("home-strip-items-tip").click();
+  const also = (await line.getByRole("tooltip").getByText(/^Also: /).textContent())!.replace(/^Also: /, "").split(", ").sort();
+  expect(also).toEqual(["M1 Measured", "M1 Measured and"]);
 });
 
 /*

@@ -331,3 +331,38 @@ export function seedHomeMilestoneGoalsFold(): SimpleDb {
   rm.items = rm.items.map((s) => (s.key === "setup-health-log" ? { ...s, record: "M1 · Measured and mapped" } : s.key === "setup-video" ? { ...s, goal: "grow-retention" } : s));
   return rm;
 }
+
+export const HOME_MILESTONE_BARE_TRACK_SCENARIO = "home-milestones-bare-track";
+
+/**
+ * home-milestones-bare-track (review of PR 1489): Onboarding's own M1 of no goal, "Measured"
+ * (Setup checklist), joins the Guided setup track's bare "M1" (Health log) and names its row;
+ * Faster activation's "M1 · Measured and mapped" (Sample data import) is a goal's beside another
+ * of its code, so it keeps its own row: the bare track takes a goal's only as the only one.
+ */
+export function seedHomeMilestoneBareTrack(): SimpleDb {
+  const rm = seedSimpleRoadmap();
+  rm.goal_milestones = [
+    { id: stableUuid("simple-gm/bare-track-measured"), roadmap: "onboarding-roadmap", code: "M1", name: "Measured", date: null, goal: null, gates: ["setup-checklist"], counts_when: "", progress: "not_started" },
+    { id: stableUuid("simple-gm/bare-track-mapped"), roadmap: "onboarding-roadmap", code: "M1", name: "Measured and mapped", date: null, goal: "faster-activation", gates: ["setup-import"], counts_when: "", progress: "not_started" },
+  ];
+  rm.items = rm.items.map((s) => (s.key === "setup-health-log" ? { ...s, record: "M1" } : s));
+  return rm;
+}
+
+export const HOME_MILESTONE_LEAD_GOALS_SCENARIO = "home-milestones-lead-goals";
+
+/**
+ * home-milestones-lead-goals (review of PR 1489): Faster activation's "M1 · Measured" (Setup
+ * checklist) and Grow retention's "M1 · Measured and" (Welcome video) both lead the Guided setup
+ * track's "M1 · Measured and mapped" (Health log): one row, each other name once in its (i).
+ */
+export function seedHomeMilestoneLeadGoals(): SimpleDb {
+  const rm = seedSimpleRoadmap();
+  rm.goal_milestones = [
+    { id: stableUuid("simple-gm/lead-goals-measured"), roadmap: "onboarding-roadmap", code: "M1", name: "Measured", date: null, goal: "faster-activation", gates: ["setup-checklist"], counts_when: "", progress: "not_started" },
+    { id: stableUuid("simple-gm/lead-goals-and"), roadmap: "onboarding-roadmap", code: "M1", name: "Measured and", date: null, goal: "grow-retention", gates: ["setup-video"], counts_when: "", progress: "not_started" },
+  ];
+  rm.items = rm.items.map((s) => (s.key === "setup-health-log" ? { ...s, record: "M1 · Measured and mapped" } : s.key === "setup-video" ? { ...s, goal: "grow-retention" } : s));
+  return rm;
+}
