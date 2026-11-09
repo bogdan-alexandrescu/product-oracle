@@ -517,6 +517,67 @@ async def test_skip_needs_a_reason(client, ctx, at):
     assert resp.status_code == 200 and resp.json()["status"] == "skipped"
 
 
+async def test_the_owner_edits_a_skip_reason(client, ctx, at):
+    """protects=a skipped occurrence's reason can be corrected by the ritual's owner, and
+    the change is audited with who made it; fails_when=the wrong reason stays, someone
+    else edits it, an empty reason is saved or a not-skipped occurrence takes a reason;
+    no_claim=the screen (Playwright)."""
+    occ = await ready_occurrence(client, ctx, at)
+    url = f"/v1/ritual-occurrences/{occ['id']}/skip"
+    owner = ctx.as_("owner")
+    resp = await client.patch(url, json={"reason": "Too early"}, headers=owner)
+    assert resp.status_code == 409
+    await client.post(url, json={"reason": "Team offsit"}, headers=owner)
+    resp = await client.patch(url, json={"reason": "Too early"}, headers=ctx.as_("approver"))
+    assert resp.status_code == 403
+    resp = await client.patch(url, json={"reason": ""}, headers=owner)
+    assert resp.status_code == 422
+    resp = await client.patch(url, json={"reason": "Team offsite"}, headers=owner)
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "skipped" and resp.json()["skip_reason"] == "Team offsite"
+    async with tenant_session(ctx.tenant_id) as db:
+        event = await db.scalar(
+            select(AuditEvent).where(AuditEvent.action == "ritual.skip_reason_changed")
+        )
+    assert event is not None and event.actor == f"user:{ctx.users['owner'].id}"
+    assert event.data == {"from": "Team offsit", "to": "Team offsite"}
+
+
+async def test_the_owner_undoes_a_skip(client, ctx, at):
+    """protects=Undo skip puts the occurrence back as it was (ready, or missed a week
+    after its end) without the reason, so it can be held; fails_when=it stays skipped,
+    keeps the reason, comes back in another state or someone else undoes it;
+    no_claim=the screen (Playwright)."""
+    occ = await ready_occurrence(client, ctx, at)
+    url = f"/v1/ritual-occurrences/{occ['id']}/skip"
+    owner = ctx.as_("owner")
+    assert (await client.delete(url, headers=owner)).status_code == 409
+    await client.post(url, json={"reason": "Team offsite"}, headers=owner)
+    assert (await client.delete(url, headers=ctx.as_("approver"))).status_code == 403
+    resp = await client.delete(url, headers=owner)
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ready" and resp.json()["skip_reason"] is None
+    async with tenant_session(ctx.tenant_id) as db:
+        event = await db.scalar(select(AuditEvent).where(AuditEvent.action == "ritual.unskipped"))
+    assert event is not None and event.actor == f"user:{ctx.users['owner'].id}"
+    assert event.data == {"reason": "Team offsite"}
+    resp = await client.post(f"/v1/ritual-occurrences/{occ['id']}/held",
+                             json={"notes": "Held after all."}, headers=owner)  # fmt: skip
+    assert resp.status_code == 200 and resp.json()["status"] == "held"
+
+
+async def test_an_undone_skip_a_week_after_the_end_is_missed(client, ctx, at):
+    """protects=Undo skip a week after the meeting's end gives it back as missed, as the
+    ticker would have left it; fails_when=it comes back ready; no_claim=the screen."""
+    occ = await ready_occurrence(client, ctx, at)
+    url = f"/v1/ritual-occurrences/{occ['id']}/skip"
+    owner = ctx.as_("owner")
+    await client.post(url, json={"reason": "Team offsite"}, headers=owner)
+    at(rituals.parse_time(occ["ends_at"]) + rituals.MISSED_AFTER)
+    resp = await client.delete(url, headers=owner)
+    assert resp.status_code == 200 and resp.json()["status"] == "missed"
+
+
 async def test_summarize_with_oracle_starts_one_quick_run(client, ctx, at):
     """protects=criterion 9: POST …/summary creates one ritual_summary run estimated at
     $3.00 (quick depth) and links it (running); a second call while it runs is 409; a
@@ -661,6 +722,8 @@ async def test_another_companys_ids_are_404(client, ctx, at):
         ("POST", f"/v1/ritual-occurrences/{oid}/read", None),
         ("POST", f"/v1/ritual-occurrences/{oid}/held", {"notes": "x"}),
         ("POST", f"/v1/ritual-occurrences/{oid}/skip", {"reason": "x"}),
+        ("PATCH", f"/v1/ritual-occurrences/{oid}/skip", {"reason": "x"}),
+        ("DELETE", f"/v1/ritual-occurrences/{oid}/skip", None),
         ("POST", f"/v1/ritual-occurrences/{oid}/summary", None),
     ]
     for method, url, body in calls:
