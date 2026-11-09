@@ -4,11 +4,11 @@ import { ADMIN, login } from "./helpers";
 import { expect, test, type Page } from "./test";
 
 /*
- * Simple's Priorities after PRs 1420 and 1432 (the mock's default company, its dated plan, and a feature whose goal has
- * no value): effort reads "1 week" / "N weeks" on the Ranked tab too (a row's numbers, the effort box, a proposal); a
- * feature the mock does not list has no effort, as the API reads it; a feature whose goal has no value is counted by
- * its goal's name, never "no goal"; each shape is keyed by its goal's id, so renaming a goal changes no shape; and a
- * mark shrinks from the keyboard.
+ * Simple's Priorities after PRs 1420 and 1432 (the mock's default company, and a feature whose goal has no value):
+ * effort reads "1 week" / "N weeks" on the Ranked tab too (a row's numbers, the effort box, a proposal); a feature the
+ * mock does not list has no effort, as the API reads it; a feature whose goal has no value is counted by its goal's
+ * name, never "no goal"; and a mark shrinks from the keyboard. (Shapes keyed by a goal's id:
+ * value-effort-wording.spec.ts renames a goal to another's name.)
  */
 
 /** The mock's scenario with an invented feature whose goal has no value (simple-priorities.ts). */
@@ -105,25 +105,4 @@ test("a feature whose goal has no value is counted by its goal's name, not 'no g
   // Its mark is Grow retention's shape, as Weekly alert digest's (a lone mark), never the no-goal one.
   await expect(quiet).toHaveAttribute("data-shape", (await mark(page, "alert-digest").getAttribute("data-shape"))!);
   await expect(quiet).not.toHaveAttribute("data-shape", "none");
-});
-
-test("the dated plan: renaming a goal to a plan goal's name changes no shape", async ({ page }) => {
-  await open(page, "value-effort", "simple-plan");
-  const shapes = () => page.getByTestId("vxe-point").evaluateAll((es) => Object.fromEntries(es.map((e) => [e.getAttribute("data-code"), e.getAttribute("data-shape")])));
-  const before = await shapes();
-  const legend = page.getByRole("list", { name: "Legend" });
-  await expect(legend.getByRole("listitem").filter({ hasText: /^Activation$/ })).toHaveCount(1);
-  // Faster activation (Setup checklist's goal) is renamed Activation, the name of a goal only the plan gives.
-  await page.getByRole("tab", { name: "Goal buckets" }).click();
-  await page.getByRole("button", { name: "Edit Faster activation" }).click();
-  const form = page.getByTestId("goal-form");
-  await form.getByLabel("Goal").fill("Activation");
-  await form.getByRole("button", { name: "Save goal" }).click();
-  await expect(form).toHaveCount(0);
-  await page.getByRole("tab", { name: "Value / effort" }).click();
-  await expect(page.getByTestId("vxe-point").first()).toBeVisible();
-  await page.waitForTimeout(300);
-  // Two goals named Activation, each keeping its own shape.
-  await expect(legend.getByRole("listitem").filter({ hasText: /^Activation$/ })).toHaveCount(2);
-  expect(await shapes()).toEqual(before);
 });
