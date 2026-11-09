@@ -32,8 +32,19 @@ def split(name: str) -> tuple[str | None, str]:
     return (m[1].upper(), m[2].strip()) if m else (None, name.strip())
 
 
+def _unwrap(name: str) -> str:
+    """A name with one pair of brackets round it, read without them ("[Launch (beta)]")."""
+    n = name.strip()
+    if len(n) > 1 and (n[0], n[-1]) in (("[", "]"), ("(", ")")) and _CLOSE.fullmatch(n[1:-1]):
+        return n[1:-1].strip()
+    return n
+
+
+_CLOSE = re.compile(r"[^\[\]()]*(?:(?:\[[^\[\]]*\]|\([^()]*\))[^\[\]()]*)*")
+
+
 def _words(name: str) -> list[str]:
-    return name.strip().lower().split()
+    return _unwrap(name).lower().split()
 
 
 def _match(a: str, b: str) -> bool:

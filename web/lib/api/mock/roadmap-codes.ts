@@ -16,7 +16,13 @@ const split = (name: string): [string | null, string] => {
   const m = CODE.exec(name.trim());
   return m ? [m[1].toUpperCase(), m[2].trim()] : [null, name.trim()];
 };
-const words = (n: string) => n.trim().toLowerCase().split(/\s+/).filter(Boolean);
+// A name with one pair of brackets round it reads without them ("[Launch (beta)]"), as the API's _unwrap.
+const unwrap = (name: string) => {
+  const n = name.trim();
+  const pair = (n[0] === "[" && n.endsWith("]")) || (n[0] === "(" && n.endsWith(")"));
+  return n.length > 1 && pair && /^[^[\]()]*(?:(?:\[[^[\]]*\]|\([^()]*\))[^[\]()]*)*$/.test(n.slice(1, -1)) ? n.slice(1, -1).trim() : n;
+};
+const words = (n: string) => unwrap(n).toLowerCase().split(/\s+/).filter(Boolean);
 const match = (a: string, b: string) => {
   const [x, y] = [words(a), words(b)].sort((p, q) => p.length - q.length);
   return x.every((w, k) => w === y[k]);
