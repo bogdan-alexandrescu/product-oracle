@@ -449,8 +449,9 @@ export function homePlanInputs(data: Roadmap): PlanInput[] {
   const hits = new Map(kept.map((i) => [i.id, find(i)] as const));
   // A track milestone is company-wide: always one row (by its id), wherever its items sit. A
   // roadmap's own milestone joins it only when that track milestone is the only one of the code
-  // holding items on that roadmap and, for a goal's, it is the roadmap's only milestone of the code;
-  // otherwise each is its own row (two goals' M2 and the track's M2: three rows).
+  // holding items on that roadmap; a goal's then joins when the names match, whatever else of the
+  // code is there, and, when either is a bare code ("M1"), only as the roadmap's only one of the
+  // code; otherwise each is its own row (two goals' M2 and the track's M2 of other names: three rows).
   const holding = new Map<string, Tm[]>();
   for (const h of hits.values()) {
     if (!h || !("tm" in h)) continue;
@@ -491,8 +492,10 @@ export function homePlanInputs(data: Roadmap): PlanInput[] {
     if (there.length !== 1) continue;
     const tm = there[0];
     const name = goalMilestoneName(gm);
-    const at = rowName.get(tm) ?? wholeName(code, restOf(tm.name));
-    if (!plain(gm) && alike.size !== 1 && (name === code || at === code)) continue;
+    const own = wholeName(code, restOf(tm.name));
+    const at = rowName.get(tm) ?? own;
+    // A bare-code track's own name, never one a joined milestone lent it: the same rows whatever the order.
+    if (!plain(gm) && alike.size !== 1 && (name === code || own === code)) continue;
     const differs = name !== code && at !== code && !sameWords(name, at);
     if (differs && !plain(gm) && !leads(name, at)) continue;
     const listed = also.get(tm) ?? [];
