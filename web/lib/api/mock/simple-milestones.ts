@@ -132,13 +132,13 @@ export function seedPrdMilestones(): MockMilestone[] {
 }
 
 /** roadmap-decide: a change asked of a PRD's milestone (goal_milestones._propose_prd_change), waiting on the PRD's owner. */
-function prdAsk(m: MockMilestone, id: string, after: { date: string | null; counts_when: string | null }, by: string, byName: string, at: string): Schemas["SimpleChangeOut"] {
+function prdAsk(m: MockMilestone, id: string, after: { date: string | null; counts_when: string | null }, by: string, byName: string, at: string, routed: string[]): Schemas["SimpleChangeOut"] {
   return {
     id, session_id: null, document_id: stableUuid(`simple-doc/${m.prd!.slug}`), op: "edit_goal_milestone", draft_ids: [],
     target: { milestone_id: m.id, roadmap_id: stableUuid(`simple-doc/${m.roadmap}`), name: m.name },
     before: { date: m.date, counts_when: m.counts_when }, after,
     status: "proposed", by, by_name: byName, at,
-    decided_by: null, decided_at: null, reason: null, decision_reason: null, routed_to: [], undoes_id: null, undone: false,
+    decided_by: null, decided_at: null, reason: null, decision_reason: null, routed_to: routed, undoes_id: null, undone: false,
     can_decide: false, can_undo: false, words: "", from_meeting: null, off_agenda: false,
   } as unknown as Schemas["SimpleChangeOut"];
 }
@@ -147,18 +147,19 @@ function prdAsk(m: MockMilestone, id: string, after: { date: string | null; coun
  * stuck-milestone-decline ("simple-prd-milestone-stuck" scenario): M2's first ask (Jan 5, Nov 4)
  * still waits though the milestone now waits on a second (Jan 12): only declining closes it.
  * M4 Routing by team is gone (its row deleted) with an ask on it (Mar 15, Nov 3) still waiting.
- * Here Usage alerts is owned by Priya Raman (approver@example.com), who is not a company owner.
+ * Here Usage alerts is owned by Priya Raman (approver@example.com), who is not a company owner;
+ * `routed`: her id, whom the asks are sent to.
  */
-export function seedStuckPrdAsk(milestones: MockMilestone[]): Schemas["SimpleChangeOut"][] {
+export function seedStuckPrdAsk(milestones: MockMilestone[], routed: string[] = []): Schemas["SimpleChangeOut"][] {
   const m = milestones.find((x) => x.id === stableUuid("simple-gm/p2"))!;
   m.prd!.owner = "Priya Raman";
   const by = stableUuid("simple-user/sam-lee");
-  const stuck = prdAsk(m, stableUuid("simple-gm-change/stuck/first"), { date: "2027-01-05", counts_when: m.counts_when }, by, "Sam Lee", "2026-11-04T17:00:00Z");
-  const next = prdAsk(m, stableUuid("simple-gm-change/stuck/second"), { date: "2027-01-12", counts_when: m.counts_when }, by, "Sam Lee", "2026-11-05T17:00:00Z");
+  const stuck = prdAsk(m, stableUuid("simple-gm-change/stuck/first"), { date: "2027-01-05", counts_when: m.counts_when }, by, "Sam Lee", "2026-11-04T17:00:00Z", routed);
+  const next = prdAsk(m, stableUuid("simple-gm-change/stuck/second"), { date: "2027-01-12", counts_when: m.counts_when }, by, "Sam Lee", "2026-11-05T17:00:00Z", routed);
   m.pending = { date: "2027-01-12", counts_when: null, asked_of: m.prd!.owner, change_id: next.id, can_decide: false };
   const at = milestones.findIndex((x) => x.id === stableUuid("simple-gm/p4"));
   const [gone] = milestones.splice(at, 1);
-  const orphan = prdAsk(gone, stableUuid("simple-gm-change/stuck/gone"), { date: "2027-03-15", counts_when: gone.counts_when }, by, "Sam Lee", "2026-11-03T17:00:00Z");
+  const orphan = prdAsk(gone, stableUuid("simple-gm-change/stuck/gone"), { date: "2027-03-15", counts_when: gone.counts_when }, by, "Sam Lee", "2026-11-03T17:00:00Z", routed);
   return [orphan, stuck, next];
 }
 
@@ -229,7 +230,7 @@ const json = (status: number, body: unknown): Response => new Response(status ==
 /** POST/PATCH/DELETE /v1/simple/roadmap/milestones[/{id}[/restore]], as oracle.simple.router. */
 export async function routeMilestones(
   db: { goal_milestones?: MockMilestone[]; ids: Record<string, string>; changes?: Schemas["SimpleChangeOut"][] },
-  me: { id?: string; role: string; name?: string; names?: Record<string, string> },
+  me: { id?: string; role: string; name?: string; names?: Record<string, string>; owners?: string[] },
   req: Request,
   p: string[],
   slugOf: (id: string) => string | null,
@@ -270,13 +271,20 @@ export async function routeMilestones(
       if (sent.some((k) => k === "name" || k === "goal_id" || k === "item_ids") || !sent.some((k) => k === "date" || k === "counts_when"))
         return json(422, { detail: "A PRD's milestone: only date and counts_when may be proposed (name, goal and items are the roadmap's own)" });
       // A change to the PRD's milestone asks its owner (a proposed change to the PRD); it stays put.
-      m.pending = b.date === m.date && !b.counts_when ? null : { date: b.date ?? m.date, counts_when: b.counts_when ?? null, asked_of: m.prd.owner, change_id: stableUuid(`simple-gm-change/${m.id}/${b.date}`), can_decide: false };
+      m.pending = null;
       // roadmap-decide: the ask is a proposed change on the PRD (goal_milestones.create), the PRD owner's to decide.
       // As goal_milestones._propose_prd_change, an older ask on it stays proposed (it waits no more: only declining closes it).
-      if (m.pending) {
+      if (b.date !== m.date || b.counts_when) {
         const changes = (db.changes ??= []);
-        const id = m.pending.change_id!;
-        changes.push(prdAsk(m, id, { date: m.pending.date ?? null, counts_when: m.pending.counts_when ?? m.counts_when }, me.id ?? "", (me.id && me.names?.[me.id]) || me.name || "someone", new Date().toISOString()));
+        // Each ask its own id (two asks of one date too), so each is decided on its own.
+        let n = changes.length;
+        while (changes.some((c) => c.id === stableUuid(`simple-gm-change/${m.id}/${b.date}/${n}`))) n += 1;
+        const id = stableUuid(`simple-gm-change/${m.id}/${b.date}/${n}`);
+        m.pending = { date: b.date ?? m.date, counts_when: b.counts_when ?? null, asked_of: m.prd.owner, change_id: id, can_decide: false };
+        // Sent to the PRD's owners, else the company's owners (_propose_prd_change's routed_to).
+        const owners = Object.keys(me.names ?? {}).filter((k) => me.names![k] === m.prd!.owner);
+        const routed = owners.length ? owners : (me.owners ?? []);
+        changes.push(prdAsk(m, id, { date: m.pending.date ?? null, counts_when: m.pending.counts_when ?? m.counts_when }, me.id ?? "", (me.id && me.names?.[me.id]) || me.name || "someone", new Date().toISOString(), routed));
       }
       return json(200, milestoneOut(m, db.ids, true, false, me));
     }

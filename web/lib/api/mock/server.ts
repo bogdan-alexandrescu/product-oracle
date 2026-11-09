@@ -4077,12 +4077,21 @@ function load(): Db {
                     (db.simple_roadmap = seedSimpleRoadmap()).goal_milestones = scenario === "simple-milestones" ? seedOwnMilestones() : seedPrdMilestones();
                     return db;
                   }
-              : scenario === "simple-prd-milestone-stuck"
+              : scenario === "simple-prd-milestone-stuck" || scenario === "simple-prd-milestones-gone"
                 ? () => {
                     // stuck-milestone-decline: a PRD milestone's ask that its milestone no longer waits on.
+                    // Usage alerts' required reviewer is commenter@example.com; its asks go to its owner, approver@example.com.
                     const db = seed();
-                    const ms = ((db.simple_roadmap = seedSimpleRoadmap()).goal_milestones = seedPrdMilestones());
-                    db.simple_roadmap.changes = seedStuckPrdAsk(ms);
+                    const at = (email: string) => db.members.find((m) => m.email === email)!.id;
+                    const rm = (db.simple_roadmap = seedSimpleRoadmap());
+                    const ms = (rm.goal_milestones = seedPrdMilestones());
+                    rm.changes = seedStuckPrdAsk(ms, [at("approver@example.com")]);
+                    rm.reviewers = { "usage-alerts": [at("commenter@example.com")] };
+                    if (scenario === "simple-prd-milestones-gone") {
+                      // stuck-ask-minors: every Usage alerts milestone is gone; approver@example.com owns its track.
+                      rm.goal_milestones = ms.filter((m) => !m.prd);
+                      rm.track_owners = { alerts: at("approver@example.com") };
+                    }
                     return db;
                   }
               : scenario === ROADMAP_MILESTONES_HARD_SCENARIO
