@@ -12,6 +12,8 @@ Test cards (protects / fails_when / no_claim):
   milestone with one code; fails_when=they get two codes.
 - test_a_goal_milestone_of_another_name_keeps_its_own_code: protects=a goal's milestone whose
   name does not match the track's is its own milestone.
+- test_a_goal_milestone_named_in_brackets_folds_into_its_track_milestone: protects=a name
+  in brackets ("[Launch (beta)]") matches the track's "M2 · Launch (beta)", as Home read it.
 - test_roadmap_read_codes_and_renumber_on_move: protects=``GET /v1/simple/roadmap`` gives each
   goal milestone its roadmap code across goals, and moving one earlier renumbers the later
   ones; fails_when=codes stay per goal or do not follow a move; no_claim=the web.
@@ -100,6 +102,13 @@ def test_a_goal_milestone_of_another_name_keeps_its_own_code():
     own = gm("M1", "Daily scoreboard", "2026-11-20")
     assign([own], [track], [item(track.id), i], RANK)
     assert (own.roadmap_code, track.roadmap_code) == ("M1", "M2")
+
+
+def test_a_goal_milestone_named_in_brackets_folds_into_its_track_milestone():
+    track = tm("M2 · Launch (beta)", None, [])
+    own = gm("M2", "[Launch (beta)]", None)
+    assign([own], [track], [item(track.id)], RANK)
+    assert own.roadmap_code == track.roadmap_code == "M1"
 
 
 @pytest.fixture
