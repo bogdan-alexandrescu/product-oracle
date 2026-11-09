@@ -164,7 +164,7 @@ for (const [name, device] of [["desktop", DESKTOP], ["phone", PHONE]] as const) 
 
 /**
  * protects = each of the company roadmap's PRD milestones (User Safety's and Scale's), opened on
- * the roadmap, names the PRD's owner (its track's owner, Lena Moss); fails_when = a card reads
+ * the roadmap, names the PRD's owner (its track's owner, Marta Moss); fails_when = a card reads
  * "the PRD's owner" (no track owner found, or every item read as one PRD's); no_claim = who
  * decides an ask (milestone-asks.spec.ts).
  */
@@ -183,9 +183,36 @@ test("each PRD milestone on the company roadmap names its owner", async ({ page 
   ] as const) {
     await label(name).nth(nth).click();
     const prd = page.getByTestId("ms-prd-card");
-    await expect(prd).toContainText(prdTitle ? `From the PRD ${prdTitle} · owned by Lena Moss` : /From the PRD (User Safety|Scale) · owned by Lena Moss/);
-    await expect(prd).toContainText("A change here goes to Lena Moss as a change to the PRD");
+    await expect(prd).toContainText(prdTitle ? `From the PRD ${prdTitle} · owned by Marta Moss` : /From the PRD (User Safety|Scale) · owned by Marta Moss/);
+    await expect(prd).toContainText("A change here goes to Marta Moss as a change to the PRD");
     await prd.getByRole("button", { name: "Cancel" }).click();
     await expect(prd).toHaveCount(0);
   }
+});
+
+/**
+ * protects = the Tracks sheet reads the Scale track's own PRD (Scale, the PRD of the items on
+ * it), and an owner who gives the Scale track a new owner there leaves User Safety's PRD owner
+ * as it was; fails_when = the Scale track reads the company roadmap's PRD (User Safety), so its
+ * new owner is named as (and decides for) User Safety too; no_claim = the API's track rows (api
+ * pytest).
+ */
+test("the Scale track keeps its own PRD in the Tracks sheet and its owner is not User Safety's", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize(DESKTOP.viewport);
+  await open(page);
+  await page.getByTestId("tracks-open").click();
+  const sheet = page.getByTestId("tracks-sheet");
+  const row = sheet.getByTestId("track-row").filter({ has: page.getByText("Scale track", { exact: true }) });
+  await sheet.getByRole("button", { name: "Change Scale track" }).click();
+  await expect(row.getByRole("definition").last()).toHaveText("Scale");
+  await row.getByLabel("Owner").selectOption({ label: "Priya Raman" });
+  await expect(row).toContainText("Priya Raman ·");
+  await page.getByRole("button", { name: "Close" }).first().click();
+  await expect(sheet).toHaveCount(0);
+
+  await page.getByTestId("ms-prd-label").filter({ hasText: /^PRD · M1 Reports reach a person$/ }).first().click();
+  const prd = page.getByTestId("ms-prd-card");
+  await expect(prd).toContainText("From the PRD User Safety · owned by Marta Moss");
+  await expect(prd).not.toContainText("Priya Raman");
 });
