@@ -1358,6 +1358,7 @@ async def create_entity(
     kept: tuple[str, ...] = ()
     if type_ == "goal":
         attrs, kept = await _goal_attrs(db, writer, dict(attrs or {}))
+        title, body = _goal_words(title, key), goals.without_placeholders(body)
     if writer.must_propose(None):
         fields = {"type": type_, "key": key, "title": title, "body": body,
                   "attrs": dict(attrs or {}), "status": status}  # fmt: skip
@@ -1383,6 +1384,13 @@ async def create_entity(
     _revision(db, writer, None, entity_snapshot(entity), entity=entity)
     await db.flush()
     return WriteResult(entity=entity, kept_as_text=kept)
+
+
+def _goal_words(title: str, key: str) -> str:
+    """A goal's name, stripped, with no unfilled placeholder; a blank name is refused."""
+    if not title.strip():
+        raise InvalidError("A goal needs a name")
+    return goals.goal_name(title, key)
 
 
 def _entity_changes(entity: Entity, changes: dict[str, Any]) -> dict[str, Any]:
@@ -1413,6 +1421,11 @@ async def update_entity(
         if changes["parent_id"] != entity.parent_id:
             await check_parent(db, entity.type, changes["parent_id"], entity)
     kept: tuple[str, ...] = ()
+    if entity.type == "goal":
+        if isinstance(changes.get("title"), str):
+            changes = {**changes, "title": _goal_words(changes["title"], entity.key)}
+        if isinstance(changes.get("body"), str):
+            changes = {**changes, "body": goals.without_placeholders(changes["body"])}
     if entity.type == "goal" and isinstance(changes.get("attrs"), dict):
         merged = merge_attrs(entity.attrs, changes["attrs"])
         if merged != (entity.attrs or {}):
@@ -1443,6 +1456,21 @@ async def update_entity(
     lock(entity, writer)
     await db.flush()
     _revision(db, writer, before, entity_snapshot(entity), entity=entity)
+    if entity.type == "goal" and ("title" in diff or "body" in diff):
+        # A goal's name or description changed (the goal panel's Edit): who, from what, to what.
+        await audit.record(
+            db,
+            writer.principal or writer.actor,
+            "baseline.goal.renamed",
+            "entity",
+            entity.id,
+            {
+                "before": {"title": before["title"], "body": before.get("body")},
+                "after": {"title": entity.title, "body": entity.body},
+                "status": entity.status,
+                "origin": writer.origin,
+            },
+        )
     if "status" in diff:
         await scoring.rescore_around(db, [entity.id], include_supporters=True)
     await db.flush()

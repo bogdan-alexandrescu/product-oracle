@@ -7,6 +7,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { goalPosition, sortGoals } from "@/lib/goal-order";
+import { goalName, withoutPlaceholders } from "@/lib/placeholders";
 
 import { DEPOSITS_IDS } from "./blockers";
 import { describe, proposer } from "./describe";
@@ -110,6 +111,13 @@ export const LONG_GOAL_NAME = "Grow paid conversion for small teams on the yearl
  * wraps each between words, never inside one. The features' names are lane-f.ts's.
  */
 export const LONG_WORDS_SCENARIO = "long-words";
+/**
+ * gt-goal-rename: a key-result goal from an OKR import, still proposed, its name and target as
+ * the file wrote them, an unfilled "[n]" kept as it was stored before the placeholder guard,
+ * dates as written and its parent goal by key (paid conversion's).
+ */
+export const OKR_IMPORT_SCENARIO = "okr-import";
+export const OKR_IMPORT_GOAL = "KR 1.1 [n] of [n] live helpers averaging 50 replied threads a day in March 2027";
 const REVIEW_CHECKPOINT = "0b7e5d4c-3a29-4118-9f07-e6d5c4b3a2c1";
 
 /**
@@ -301,6 +309,14 @@ export function seedBaseline(uuid: () => string): BaselineState {
     status: "proposed",
     confidence: 0.45,
   });
+  if (typeof localStorage !== "undefined" && localStorage.getItem(MOCK_SCENARIO_KEY) === OKR_IMPORT_SCENARIO) {
+    entity("goal", "kr-1-1", OKR_IMPORT_GOAL, {
+      body: "Reach [n] live helpers, each replying to 50 threads a day.",
+      attrs: { target_text: "[n] live helpers", due: "2027-03-31", period: "2027-03-01..2027-03-31", parent_goal: "g.paid-conversion" },
+      status: "proposed",
+      confidence: null,
+    });
+  }
   // Activation's value on the first of each month, as people recorded it.
   [31, 33, 32, 35, 34, 36, 38].forEach((value, i) => {
     const measured_on = `2026-${String(4 + i).padStart(2, "0")}-01`;
@@ -771,6 +787,13 @@ function updateEntity(
   changes: Changes,
   writer: { origin: "user" | "agent"; userId: string; reason?: string | null; runId?: string | null },
 ): ProposalRow | null {
+  if (e.type === "goal") {
+    // As service.update_entity: a goal's name is stripped and never blank; it and the description are written
+    // with no unfilled placeholder.
+    if (typeof changes.title === "string" && !changes.title.trim()) throw new MockError(422, "A goal needs a name");
+    if (typeof changes.title === "string") changes = { ...changes, title: goalName(changes.title, e.key) };
+    if (typeof changes.body === "string") changes = { ...changes, body: withoutPlaceholders(changes.body) };
+  }
   const diff = entityDiff(e, changes);
   if (Object.keys(diff).length === 0) return null;
   if (e.type === "goal" && diff.status === "confirmed") throw new MockError(422, "confirm a goal with POST .../confirm");
@@ -834,6 +857,7 @@ function canonicalCode(key: string): string | null {
 
 /** A person's new entity, as service.create_entity: confirmed and locked, a goal proposed (B2). */
 function createEntity(s: BaselineState, input: Schemas["EntityCreate"], userId: string): EntityRow {
+  if (input.type === "goal" && typeof input.title === "string" && !input.title.trim()) throw new MockError(422, "A goal needs a name");
   if (!input.title?.trim()) throw new MockError(422, "title must not be empty");
   if (!input.key || input.key.length > 120 || !(KEY_RE.test(input.key) || CODE_KEY_RE.test(input.key))) throw new MockError(422, "key: lowercase letters, digits, . _ -");
   if (CODE_KEY_RE.test(input.key) && input.type !== "feature") throw new MockError(422, "Only a feature's key can be a feature code.");
@@ -851,6 +875,10 @@ function createEntity(s: BaselineState, input: Schemas["EntityCreate"], userId: 
   }
   const refusal = parentRefusal(s, input.type, input.parent_id);
   if (refusal) throw new MockError(422, refusal);
+  // A goal's name and description carry no unfilled placeholder, as service.create_entity (_goal_words).
+  if (input.type === "goal") {
+    input = { ...input, title: goalName(input.title, input.key), body: withoutPlaceholders(input.body) };
+  }
   const at = now();
   const e: EntityRow = {
     id: newId(),
@@ -1456,8 +1484,10 @@ export async function routeBaseline(
       const type = q.get("type");
       const status = q.get("status");
       const rows = s.entities.filter((e) => shown(e) && (!type || e.type === type) && (!status || e.status === status));
-      // goal-order: goals in the one goal order, as the API lists them.
-      return json(200, (type === "goal" ? sortGoals(rows) : rows).map(entityOut));
+      // goal-order: goals in the one goal order, as the API lists them; a goal's name and description as shown
+      // (goals.goal_name): no "[n]" stored before the guard. The graph keeps the stored text.
+      const out = (type === "goal" ? sortGoals(rows) : rows).map(entityOut);
+      return json(200, out.map((o) => (o.type === "goal" ? { ...o, title: goalName(o.title, o.key), body: withoutPlaceholders(o.body) } : o)));
     }
 
     if (head === "entities" && !id && m === "POST") {

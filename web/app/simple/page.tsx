@@ -48,6 +48,7 @@ import {
   type GoalTile,
 } from "@/lib/simple-home";
 import { errorMessage, useQuery } from "@/lib/use-query";
+import { shownTitle } from "@/lib/placeholders";
 import { loadInbox } from "@/lib/waiting";
 import { invalidateWaiting, loadWaiting, onWaitingChanged, waitingChanged } from "@/lib/simple-waiting";
 import { WAITING_KIND, WaitingRow } from "@/components/simple/WaitingItems";
@@ -849,17 +850,17 @@ export default function SimpleHome() {
             <ul className="mt-1" aria-label="Proposed goals">
               {proposedGoals.map((g) => (
                 // Read as Decisions reads it (WaitingRow): "Proposed goal · <name>", Confirm and Not this.
-                <li key={g.id} data-testid="home-goal-proposed" aria-label={`${WAITING_KIND.goal}: ${g.title}`} className="flex flex-wrap items-center gap-2 border-t border-line py-2 first:border-t-0">
+                <li key={g.id} data-testid="home-goal-proposed" aria-label={`${WAITING_KIND.goal}: ${shownTitle(g)}`} className="flex flex-wrap items-center gap-2 border-t border-line py-2 first:border-t-0">
                   <span className="min-w-0 flex-1 break-words">
                     <span className="text-text2">{WAITING_KIND.goal} · </span>
-                    {g.title}
+                    {shownTitle(g)}
                   </span>
                   {can("confirm_entity") && (
                     <span className="flex gap-2">
-                      <button type="button" className="simple-button simple-button-primary" onClick={() => void act(() => unwrap(api.POST("/v1/baseline/entities/{entity_id}/confirm", { params: { path: { entity_id: g.id } } })), `${g.title} confirmed`)}>
+                      <button type="button" className="simple-button simple-button-primary" onClick={() => void act(() => unwrap(api.POST("/v1/baseline/entities/{entity_id}/confirm", { params: { path: { entity_id: g.id } } })), `${shownTitle(g)} confirmed`)}>
                         Confirm
                       </button>
-                      <button type="button" className="simple-button" onClick={() => void act(() => unwrap(api.POST("/v1/baseline/entities/{entity_id}/reject", { params: { path: { entity_id: g.id } } })), `${g.title} set aside`)}>
+                      <button type="button" className="simple-button" onClick={() => void act(() => unwrap(api.POST("/v1/baseline/entities/{entity_id}/reject", { params: { path: { entity_id: g.id } } })), `${shownTitle(g)} set aside`)}>
                         Not this
                       </button>
                     </span>

@@ -20,7 +20,8 @@ import { login } from "./helpers";
  *   no_claim=how Oracle matches goals to a brief (api tests/test_intake.py).
  * - item 5: protects=a new brief never shows the brief before it (its title, counts or
  *   critical questions) while its own load; fails_when=the previous brief's panel stays up
- *   under the new brief's address; no_claim=how long the summary takes.
+ *   under the new brief's address (over 500 ms in the @timing test, run alone; over 1500 ms in
+ *   its coarse copy, run in the parallel shards); no_claim=how long the summary takes.
  * - item 7: protects=a drafted brief's open questions in the Inbox say the PRD's stage, not
  *   "Before drafting"; fails_when=the old label stays; no_claim=the API's own labels
  *   (api tests/test_questions_people.py).
@@ -53,6 +54,52 @@ async function openNewPrd(page: Page) {
   await expect(page).toHaveURL(/\/documents$/);
   await page.getByRole("link", { name: "New PRD" }).click();
   await expect(page).toHaveURL(/\/documents\/new\?kind=prd$/);
+}
+
+/**
+ * Opens a brief, then a new one whose reads take 2 s; how long, in ms, the previous brief's
+ * title or panel showed under the new brief's address.
+ */
+async function oldBriefShownFor(page: Page): Promise<number> {
+  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "before-drafting"));
+  await login(page);
+  await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
+  await expect(page.getByRole("heading", { level: 1, name: BEFORE_DRAFTING.title })).toBeVisible();
+  await expect(page.getByText("3 open · 2 answered").or(page.getByTestId("stat-open").filter({ visible: true })).first()).toBeVisible();
+
+  // Watch each painted frame for what a person sees while the address is the new brief's:
+  // the old brief may last while the router switches pages, never while the new
+  // brief's own reads are under way (it stood for seconds on production).
+  await page.evaluate(
+    ({ oldId, oldTitle }) => {
+      const w = window as unknown as { __seen: number[] };
+      w.__seen = [];
+      const look = () => {
+        if (location.pathname.startsWith("/intakes/") && !location.pathname.endsWith(oldId)) {
+          const h1 = document.querySelector("h1")?.textContent ?? "";
+          const panel = [...document.querySelectorAll('[data-testid="intake-inspector"], [data-testid="intake-readiness-counts"]')].map((e) => e.textContent ?? "").join(" ");
+          if (h1.includes(oldTitle) || panel.includes("Blockers: not known yet") || panel.includes("3 open · 2 answered")) w.__seen.push(performance.now());
+        }
+        requestAnimationFrame(look);
+      };
+      requestAnimationFrame(look);
+    },
+    { oldId: BEFORE_DRAFTING.intakeId, oldTitle: BEFORE_DRAFTING.title },
+  );
+  await openNewPrd(page);
+  await writeBrief(page, "Example gift cards");
+  // The new brief's reads take 2 s, as production's took seconds.
+  await page.evaluate(() => {
+    localStorage.setItem("po-mock-slow", "/v1/intakes/*");
+    localStorage.setItem("po-mock-slow-ms", "2000");
+  });
+  await page.getByRole("button", { name: "Continue" }).first().click();
+  await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Example gift cards" })).toBeVisible({ timeout: 10_000 });
+  const panel = await sidePanel(page);
+  await expect(panel.getByTestId("stat-open")).toHaveText(/^Open\s*5$/);
+  const seen = await page.evaluate(() => (window as unknown as { __seen: number[] }).__seen);
+  return seen.length ? seen[seen.length - 1] - seen[0] : 0;
 }
 
 for (const [name, viewport] of VIEWPORTS) {
@@ -119,45 +166,13 @@ for (const [name, viewport] of VIEWPORTS) {
     });
 
     test(`5: a new brief never shows the previous brief's panel while its own loads (${name}) @timing`, async ({ page }) => {
-      await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "before-drafting"));
-      await login(page);
-      await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
-      await expect(page.getByRole("heading", { level: 1, name: BEFORE_DRAFTING.title })).toBeVisible();
-      await expect(page.getByText("3 open · 2 answered").or(page.getByTestId("stat-open").filter({ visible: true })).first()).toBeVisible();
+      expect(await oldBriefShownFor(page)).toBeLessThan(500);
+    });
 
-      // Watch each painted frame for what a person sees while the address is the new brief's:
-      // the old brief may last while the router switches pages, never while the new
-      // brief's own reads are under way (it stood for seconds on production).
-      await page.evaluate(
-        ({ oldId, oldTitle }) => {
-          const w = window as unknown as { __seen: number[] };
-          w.__seen = [];
-          const look = () => {
-            if (location.pathname.startsWith("/intakes/") && !location.pathname.endsWith(oldId)) {
-              const h1 = document.querySelector("h1")?.textContent ?? "";
-              const panel = [...document.querySelectorAll('[data-testid="intake-inspector"], [data-testid="intake-readiness-counts"]')].map((e) => e.textContent ?? "").join(" ");
-              if (h1.includes(oldTitle) || panel.includes("Blockers: not known yet") || panel.includes("3 open · 2 answered")) w.__seen.push(performance.now());
-            }
-            requestAnimationFrame(look);
-          };
-          requestAnimationFrame(look);
-        },
-        { oldId: BEFORE_DRAFTING.intakeId, oldTitle: BEFORE_DRAFTING.title },
-      );
-      await openNewPrd(page);
-      await writeBrief(page, "Example gift cards");
-      // The new brief's reads take 2 s, as production's took seconds.
-      await page.evaluate(() => {
-        localStorage.setItem("po-mock-slow", "/v1/intakes/*");
-        localStorage.setItem("po-mock-slow-ms", "2000");
-      });
-      await page.getByRole("button", { name: "Continue" }).first().click();
-      await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
-      await expect(page.getByRole("heading", { level: 1, name: "Example gift cards" })).toBeVisible({ timeout: 10_000 });
-      const panel = await sidePanel(page);
-      await expect(panel.getByTestId("stat-open")).toHaveText(/^Open\s*5$/);
-      const seen = await page.evaluate(() => (window as unknown as { __seen: number[] }).__seen);
-      expect(seen.length ? seen[seen.length - 1] - seen[0] : 0).toBeLessThan(500);
+    // The same guard, coarse, in the parallel shards: a large regression fails there too.
+    test(`5: a new brief never shows the previous brief's panel for long (${name})`, async ({ page }) => {
+      // timing-check: coarse (under load; the tight bound is the @timing test above)
+      expect(await oldBriefShownFor(page)).toBeLessThan(1500);
     });
 
     test(`7: a drafted brief's open questions in the Inbox say the PRD's stage (${name})`, async ({ page }) => {

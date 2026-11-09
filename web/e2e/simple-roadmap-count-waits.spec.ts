@@ -1,4 +1,4 @@
-import { MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
+import { MOCK_SCENARIO_KEY, MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 import { expect, test, type Page } from "./test";
 
@@ -8,8 +8,11 @@ import { expect, test, type Page } from "./test";
  * it never shows a lower number first; and a working draft whose last change is undone (0 changes)
  * shows no banner and no Approve.
  *
+ * The side menu's Roadmap badge says the button's number, and at 0 shows no badge (a 0 is hidden).
+ *
  * fails_when: the button shows a number before the suggested features arrive (a jump such as
- * 20 then 23), or a draft with 0 changes still shows its banner or Approve and publish.
+ * 20 then 23), the side menu shows a 0 badge or another number than the button, or a draft with
+ * 0 changes still shows its banner or Approve and publish.
  */
 
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -37,14 +40,29 @@ test("Needs a decision shows one number: none until the suggested features are r
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   // While the suggested features are on their way, the button names no number.
   await expect(button(page)).toHaveText("Needs a decision");
-  // The side menu waits for every read; the button then says the same number.
-  await expect(badge(page)).toBeVisible({ timeout: 15_000 });
-  const n = await badge(page).innerText();
-  await expect(button(page)).toHaveText(`Needs a decision · ${n}`);
+  // Once every part is read the button names its number; the side menu says the same one, or,
+  // at 0, shows no badge (the product hides a 0).
+  await expect(button(page)).not.toHaveAttribute("aria-busy", "true", { timeout: 15_000 });
+  const n = /·\s*(\d+)$/.exec(await button(page).innerText())![1];
+  if (n === "0") await expect(badge(page)).toHaveCount(0);
+  else await expect(badge(page)).toHaveText(n);
   // It never showed another number on the way.
   const seen = await page.evaluate(() => (window as unknown as { seen: string[] }).seen);
   const numbers = [...new Set(seen.flatMap((t) => /·\s*(\d+)/.exec(t)?.[1] ?? []))];
   expect(numbers).toEqual([n]);
+});
+
+test("at 0 the side menu shows no Roadmap badge, never a 0", async ({ page }) => {
+  // A new company: nothing waits on the roadmap.
+  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "empty"] as const);
+  await login(page);
+  await page.goto("/simple/roadmap");
+  await expect(page.getByTestId("simple-nav-roadmap")).toBeVisible();
+  // Past every read the side menu makes, still no badge, and no "0" anywhere in it.
+  await page.waitForTimeout(3_000);
+  await expect(badge(page)).toHaveCount(0);
+  await expect(page.getByTestId("simple-nav-roadmap")).not.toHaveAttribute("aria-describedby", /./);
+  await expect(page.getByTestId("simple-nav").getByText(/^0$/)).toHaveCount(0);
 });
 
 test("a working draft with 0 changes shows no banner and no Approve", async ({ page }) => {

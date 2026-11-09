@@ -78,7 +78,7 @@ test.describe("fix4-simple-plan review: Priorities", () => {
     }
     await expect(mark).toHaveAttribute("aria-label", /goal value 0,/);
     await mark.click();
-    await expect(page.locator('[data-testid="side-row"][data-code="alert-rules"]').getByTestId("side-numbers")).toHaveText(/^goal value 0 · confidence [\d.]+ · [\d.]+ wk · score 0$/);
+    await expect(page.locator('[data-testid="side-row"][data-code="alert-rules"]').getByTestId("side-numbers")).toHaveText(/^goal value 0 · confidence [\d.]+ · [\d.]+ weeks? · score 0$/);
   });
 
   /* qa-simple-plan-30: the person who proposed a move takes it back; nothing changes. */

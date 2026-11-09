@@ -13,7 +13,7 @@ import {
  * highlight"). Each mark shows a short code that never changes with rank (the feature's code,
  * F-12 for setup-import in the mock, else the letters of the item's name: ARB for Alert routing by team); the
  * ranked side list shows the same code beside the rank; the item just moved stays highlighted
- * on the chart and in the list with "moved #a → #b" ("now #b (effort n wk)" for a re-estimate) until the next move (an accepted proposal
+ * on the chart and in the list with "moved #a → #b" ("now #b (effort n weeks)" for a re-estimate) until the next move (an accepted proposal
  * included). Every action is driven through the UI (a mouse drag, a finger's touch drag, the
  * arrow keys, the Accept button).
  */
@@ -146,7 +146,7 @@ test.describe("desktop", () => {
 
     await dragLeft(admin, "setup-import", 2);
     await expect(
-      admin.getByText("Re-estimated Sample data import (F-12): effort 1 wk"),
+      admin.getByText("Re-estimated Sample data import (F-12): effort 1 week"),
     ).toBeVisible();
     await expect(
       side(admin, "setup-import").getByTestId("side-rank"),
@@ -156,7 +156,7 @@ test.describe("desktop", () => {
       side(admin, "setup-import").getByTestId("side-code"),
     ).toHaveText("F-12");
     await expect(side(admin, "setup-import").getByTestId("moved")).toHaveText(
-      /^now #2 \(effort [\d.]+ wk\)$/,
+      /^now #2 \(effort [\d.]+ weeks?\)$/,
     );
     await expect(side(admin, "setup-import")).toHaveAttribute(
       "data-moved",
@@ -185,7 +185,7 @@ test.describe("desktop", () => {
     const admin = await open(page, "admin@example.com");
     await dragLeft(admin, "setup-import", 2);
     await expect(side(admin, "setup-import").getByTestId("moved")).toHaveText(
-      /^now #2 \(effort [\d.]+ wk\)$/,
+      /^now #2 \(effort [\d.]+ weeks?\)$/,
     );
     await expect(
       side(admin, "alert-mobile").getByTestId("side-rank"),
@@ -193,7 +193,7 @@ test.describe("desktop", () => {
     await point(admin, "alert-mobile").focus();
     await admin.keyboard.press("ArrowLeft");
     await expect(side(admin, "alert-mobile").getByTestId("moved")).toHaveText(
-      /^now #4 \(effort [\d.]+ wk\)$/,
+      /^now #4 \(effort [\d.]+ weeks?\)$/,
     );
     await expect(side(admin, "setup-import").getByTestId("moved")).toHaveCount(
       0,
@@ -289,7 +289,7 @@ test.describe("desktop", () => {
     const admin = await open(page, "admin@example.com");
     await dragLeft(admin, "setup-import", 2);
     await expect(side(admin, "setup-import").getByTestId("moved")).toHaveText(
-      /^now #2 \(effort [\d.]+ wk\)$/,
+      /^now #2 \(effort [\d.]+ weeks?\)$/,
     );
     await expect(
       side(admin, "alert-mobile").getByTestId("side-rank"),
@@ -353,7 +353,7 @@ test.describe("phone", () => {
       ),
     ).toEqual(["touch"]);
     await expect(side(admin, "alert-mobile").getByTestId("moved")).toHaveText(
-      /^now #2 \(effort 1 wk\)$/,
+      /^now #2 \(effort 1 week\)$/,
     );
     await expect(
       side(admin, "alert-mobile").getByTestId("side-code"),

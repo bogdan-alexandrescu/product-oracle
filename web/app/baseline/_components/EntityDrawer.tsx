@@ -9,9 +9,10 @@ import { inTextField, useSplitPanel } from "@/components/ds/panel-close";
 import { Button, Chip, CodeChip, InfoTip, Inspector, InspectorSection, Notice } from "@/components/ds";
 import { INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type EdgeOut, type EntityDetail, type EntityOut, type GraphOut, type Schemas } from "@/lib/api/client";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { formatDate, formatDateRange, formatDateTime } from "@/lib/format";
 import { named } from "@/lib/codes";
 import { useMe } from "@/lib/me";
+import { hasPlaceholder, shownBody, shownTitle, withoutPlaceholders } from "@/lib/placeholders";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { EvidenceChip } from "./EvidenceChip";
@@ -75,7 +76,18 @@ const ATTR_LABEL: Record<string, string> = {
   start_text: "Start (as written)",
   current_text: "Current (as written)",
   owner_confidence: "Owner confidence",
+  parent: "Parent goal",
+  parent_goal: "Parent goal",
+  parent_key: "Parent goal",
+  parent_ref: "Parent goal",
 };
+
+/** gt-goal-rename: attributes an import names a parent goal in, by key or id: read by the goal's name. */
+const PARENT_ATTRS = new Set(["parent", "parent_goal", "parent_key", "parent_ref"]);
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const MOMENT = /^\d{4}-\d{2}-\d{2}T[\d:.]+(?:Z|[+-]\d{2}:?\d{2})?$/;
+/** A span of days as an import writes it: "2027-03-01..2027-03-31", "2027-03-01/2027-03-31", "2027-03-01 to 2027-03-31". */
+const SPAN = /^(\d{4}-\d{2}-\d{2})(?:\s*(?:\.\.\.?|\/|–|—)\s*|\s+(?:to|-)\s+)(\d{4}-\d{2}-\d{2})$/;
 
 /** An attribute's key in words, capitalized: "status" -> "Status", "priority_note" -> "Priority note". */
 function attrLabel(key: string): string {
@@ -84,10 +96,45 @@ function attrLabel(key: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-/** An attribute's value as a person reads it: a 0-1 confidence as a percentage. */
-function attrValue(key: string, value: unknown): string {
+/**
+ * The goal a parent attribute names, by id or key ("g-a2-scaling" and "g.a2-scaling" alike), by its name; nothing while
+ * the graph loads, "Not in the Ground Truth" only when it is loaded and has no such goal.
+ */
+function parentName(graph: GraphOut | undefined, value: unknown): string {
+  if (typeof value !== "string" || !value.trim()) return "—";
+  if (!graph) return "";
+  const plain = (k: string) => k.trim().toLowerCase().replace(/[._\s]/g, "-");
+  const found = graph?.entities.find((e) => e.type === "goal" && (e.id === value.trim() || plain(e.key) === plain(value)));
+  return found ? shownTitle(found) : "Not in the Ground Truth";
+}
+
+/** A day, a moment or a span of days month first: "Mar 31, 2027", "Mar 1 – Mar 31, 2027"; null when it is none. */
+function dateWords(value: unknown): string | null {
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (DAY.test(text)) return formatDate(text);
+    if (MOMENT.test(text)) return formatDateTime(text);
+    const span = SPAN.exec(text);
+    if (span) return formatDateRange(span[1], span[2]);
+    return null;
+  }
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const v = value as Record<string, unknown>;
+    const [from, to] = [v.start ?? v.from, v.end ?? v.to];
+    if (typeof from === "string" && typeof to === "string" && DAY.test(from) && DAY.test(to)) return formatDateRange(from, to);
+  }
+  return null;
+}
+
+/**
+ * An attribute's value as a person reads it: a 0-1 confidence as a percentage, dates month first, a parent goal by
+ * its name, and a value holding an unfilled placeholder ("[n] live helpers") as missing.
+ */
+function attrValue(key: string, value: unknown, graph?: GraphOut): string {
+  if (hasPlaceholder(value)) return "Missing";
+  if (PARENT_ATTRS.has(key)) return parentName(graph, value);
   if (key.endsWith("_confidence") && typeof value === "number" && value >= 0 && value <= 1) return `${Math.round(value * 100)}%`;
-  return valueWords(key, value);
+  return dateWords(value) ?? valueWords(key, value, graph);
 }
 
 /** Attributes the edit form offers to add when the entry lacks them, per entity type. */
@@ -111,6 +158,8 @@ type Props = {
   onChanged: () => void;
   /** Open on the Promote to blocker form (a suggested blocker's Promote, B4). */
   promote?: boolean;
+  /** gt-goal-rename: opens on the Edit form, again each time it grows (a goal row's Rename). */
+  edit?: number;
   /** For a blocker: opens its blocker inspector (#340). */
   onOpenBlocker?: () => void;
   /** B6: the goals interview shown in the Discuss view, and the stepper over the vague goals. */
@@ -142,6 +191,7 @@ export function EntityDrawer({
   onOpen,
   onChanged,
   promote = false,
+  edit = 0,
   onOpenBlocker,
   discussionId,
   stepper,
@@ -158,7 +208,7 @@ export function EntityDrawer({
   // The one name rule (display_name, GET /v1/people); "a person" when it cannot be read.
   const lockerName = lockedBy ? (locker.data?.get(lockedBy)?.name ?? (locker.loading ? "…" : "a person")) : undefined;
   const onAuth = useAuthRedirect();
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(edit > 0 && canWrite);
   const [promoting, setPromoting] = useState(promote && canWrite);
   // Reject (a proposed item) or Archive (a confirmed one) asks for the reason first.
   const [asking, setAsking] = useState<"reject" | "archive" | null>(null);
@@ -170,8 +220,18 @@ export function EntityDrawer({
   const [notice, setNotice] = useState<string | null>(null);
   // The goal fields the API refused on the last Save, shown under their fields (B5).
   const [problems, setProblems] = useState<GoalProblem[] | null>(null);
+  // A goal row's Rename on the goal already open: back to the Edit form (set while rendering, as React advises).
+  const [editAsked, setEditAsked] = useState(edit);
+  if (edit !== editAsked) {
+    setEditAsked(edit);
+    if (edit > 0 && canWrite) {
+      setNotice(null);
+      setPromoting(false);
+      setEditing(true);
+    }
+  }
   const d = q.data;
-  const title = d?.title ?? entity.title;
+  const title = shownTitle(d ?? entity);
   // A subgoal's code is its place in the goal tree (#345), as its chip shows: G-B.1, or none.
   const treeCode = d?.parent_id ? goalCodes(graph).get(entity.id) : undefined;
   const code = treeCode !== undefined ? treeCode : named(title, d?.key ?? entity.key).code;
@@ -505,10 +565,10 @@ export function EntityDrawer({
               </InspectorSection>
             ) : (
               <>
-                {d.body && (
+                {shownBody(d) && (
                   <InspectorSection label="Description">
-                    <p className="line-clamp-4 whitespace-pre-line text-text2" title={d.body}>
-                      {d.body}
+                    <p className="line-clamp-4 whitespace-pre-line text-text2" title={shownBody(d) ?? undefined}>
+                      {shownBody(d)}
                     </p>
                   </InspectorSection>
                 )}
@@ -545,7 +605,7 @@ export function EntityDrawer({
                     </p>
                   </InspectorSection>
                 )}
-                <Attrs attrs={d.attrs} />
+                <Attrs attrs={d.attrs} graph={graph} />
               </>
             )}
 
@@ -564,7 +624,7 @@ export function EntityDrawer({
               <SubgoalActions goal={d} graph={graph} busy={busy} onMove={moveGoal} onArchive={() => setAsking("archive")} />
             )}
 
-            <History entityId={d.id} updatedAt={d.updated_at} />
+            <History entityId={d.id} updatedAt={d.updated_at} graph={graph} goal={d.type === "goal"} />
 
             <Links
               detail={d}
@@ -779,7 +839,7 @@ function AskReason({
   );
 }
 
-function Attrs({ attrs }: { attrs: Record<string, unknown> }) {
+function Attrs({ attrs, graph }: { attrs: Record<string, unknown>; graph: GraphOut | undefined }) {
   // The suggested-blocker mark has its own section.
   const entries = Object.entries(attrs ?? {}).filter(([k]) => k !== "proposed_blocker");
   if (entries.length === 0) return null;
@@ -789,8 +849,8 @@ function Attrs({ attrs }: { attrs: Record<string, unknown> }) {
         {entries.map(([k, v]) => (
           <div key={k} className="contents">
             <dt className="text-text2">{attrLabel(k)}</dt>
-            <dd className="tnum truncate font-semibold" data-attr={k} title={attrValue(k, v)}>
-              {k === "status" ? <DeliveryChip value={v} /> : attrValue(k, v)}
+            <dd className="tnum truncate font-semibold" data-attr={k} title={attrValue(k, v, graph)}>
+              {k === "status" ? <DeliveryChip value={v} /> : attrValue(k, v, graph)}
             </dd>
           </div>
         ))}
@@ -1080,8 +1140,15 @@ function EditForm({
 }
 
 /** What one revision changed: "milestone: Beta → GA", "Title: A → B". */
-function revisionChanges(before: Record<string, unknown> | null | undefined, after: Record<string, unknown> | null | undefined) {
+function revisionChanges(
+  before: Record<string, unknown> | null | undefined,
+  after: Record<string, unknown> | null | undefined,
+  graph?: GraphOut,
+  goal = false,
+) {
   if (!before) return ["Created"];
+  // A goal's name as shown: no "[n]" stored before the guard.
+  const words = (k: string, v: unknown) => (goal && k === "title" ? withoutPlaceholders(asText(v)) : asText(v));
   if (!after) return ["Removed"];
   const out: string[] = [];
   for (const [k, name] of [
@@ -1089,7 +1156,7 @@ function revisionChanges(before: Record<string, unknown> | null | undefined, aft
     ["body", "Description"],
     ["status", "Status"],
   ] as const) {
-    if (asText(before[k]) !== asText(after[k])) out.push(k === "body" ? "Description changed" : `${name}: ${asText(before[k])} → ${asText(after[k])}`);
+    if (asText(before[k]) !== asText(after[k])) out.push(k === "body" ? "Description changed" : `${name}: ${words(k, before[k])} → ${words(k, after[k])}`);
   }
   const was = (before.attrs ?? {}) as Record<string, unknown>;
   const now = (after.attrs ?? {}) as Record<string, unknown>;
@@ -1097,14 +1164,14 @@ function revisionChanges(before: Record<string, unknown> | null | undefined, aft
     if (asText(was[k]) === asText(now[k])) continue;
     const label = attrLabel(k);
     if (!(k in now)) out.push(`${label} removed`);
-    else if (!(k in was)) out.push(`${label}: ${attrValue(k, now[k])}`);
-    else out.push(`${label}: ${attrValue(k, was[k])} → ${attrValue(k, now[k])}`);
+    else if (!(k in was)) out.push(`${label}: ${attrValue(k, now[k], graph)}`);
+    else out.push(`${label}: ${attrValue(k, was[k], graph)} → ${attrValue(k, now[k], graph)}`);
   }
   return out;
 }
 
 /** The entry's history: its revisions, newest first. Reloads when the entry changes. */
-function History({ entityId, updatedAt }: { entityId: string; updatedAt: string }) {
+function History({ entityId, updatedAt, graph, goal }: { entityId: string; updatedAt: string; graph: GraphOut | undefined; goal: boolean }) {
   const q = useQuery(`baseline-revisions:${entityId}:${updatedAt}`, () =>
     unwrap(
       api.GET("/v1/baseline/entities/{entity_id}/revisions", {
@@ -1125,7 +1192,7 @@ function History({ entityId, updatedAt }: { entityId: string; updatedAt: string 
           {rows.map((r) => (
             <li key={r.id} className="text-sm">
               <span className="tnum text-text2">{formatDateTime(r.created_at)}</span>{" "}
-              {revisionChanges(r.before, r.after).join(" · ")}
+              {revisionChanges(r.before, r.after, graph, goal).join(" · ")}
             </li>
           ))}
         </ul>
