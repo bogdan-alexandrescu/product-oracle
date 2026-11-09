@@ -167,6 +167,9 @@ interface SimpleDb {
    * DocumentReviewPolicy.mandatory_reviewer_ids; roadmap-decide and inbox-meeting-proposals reviews):
    * a submitted draft waits on them after its decider. */
   reviewers?: Record<string, string[]>;
+  /** Each PRD's required reviewers (PRD slug -> person ids: its review policy's
+   * mandatory_reviewer_ids): they see the changes asked of its milestones (changes.sees). */
+  prd_reviewers?: Record<string, string[]>;
   /** agenda-sheet ("meeting-agenda-sheet"): a PRD's designated decider (PRD slug -> person id). */
   prd_deciders?: Record<string, string>;
   /** agenda-sheet ("meeting-agenda-sheet"): a review of Usage alerts starts mid-agenda (one item decided, a topic added, one skipped). */
@@ -1117,6 +1120,13 @@ export function prdTrackOwnerIds(db: SimpleDb, prdSlug: string): string[] {
   return [...tracks].flatMap((t) => (db.track_owners?.[t] ? [db.track_owners[t]] : []));
 }
 
+/** A PRD's owners (drafts.who on its document), by person id: the owners of its tracks and the
+ * member its milestones name as its owner. An ask of its milestones is sent to them and theirs to decide. */
+export function prdOwnerIdsOf(db: SimpleDb, prdSlug: string): string[] {
+  const named = (db.goal_milestones ?? []).flatMap((m) => (m.prd?.slug === prdSlug && m.prd.owner_id ? [m.prd.owner_id] : []));
+  return [...new Set([...prdTrackOwnerIds(db, prdSlug), ...named])];
+}
+
 /** The item's owner: the one a chat card named, else its track's owner. */
 export function itemOwnerId(db: SimpleDb, key: string): string | null {
   const named = namedOn(db, key, "owner_id");
@@ -1633,7 +1643,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     ],
     // build-milestones-on-roadmap: the shown roadmaps' milestones per goal (a PRD's among them);
     // while the company roadmap exists, its own alone (older roadmaps are history, company.feeding_ids).
-    goal_milestones: (db.goal_milestones ?? []).filter((m) => !m.deleted && (!db.company_roadmap || m.roadmap === db.company_roadmap) && (chosen ? m.roadmap === chosen : readable.includes(m.roadmap))).map((x) => milestoneOut(x, db.ids, x.prd ? role !== "viewer" : role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)), role !== "viewer", me && { role: me.role, name: me.names?.[me.id] }, (slug) => roadmapTitle(db, slug))),
+    goal_milestones: (db.goal_milestones ?? []).filter((m) => !m.deleted && (!db.company_roadmap || m.roadmap === db.company_roadmap) && (chosen ? m.roadmap === chosen : readable.includes(m.roadmap))).map((x) => milestoneOut(x, db.ids, x.prd ? role !== "viewer" : role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)), role !== "viewer", me && { role: me.role, id: me.id, prdOwners: (slug) => prdOwnerIdsOf(db, slug) }, (slug) => roadmapTitle(db, slug))),
     old_milestones: oldMilestonesOut(db.goal_milestones ?? [], role, oldCtx(db)),
     // service.build: the span of the shown items' PRDs' plans only (a replaced plan PRD's goes with its items).
     span: db.plan && shown.some((i) => !!i.prd && (i.prd.slug === PLAN_PRD_SLUG || !!db.plan?.prds?.includes(i.prd.slug))) ? planSpan() : null,
@@ -1920,7 +1930,7 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
     return json(200, { broken_links: links.length, dates_to_confirm: items.filter((i) => !!i.suggestion?.can_decide).length });
   }
   const slugOf = (id: string) => Object.keys(ROADMAPS).find((r) => roadmapId(r) === id) ?? null;
-  const ms = await routeMilestones(db, me, req, p, slugOf, (r) => canEditRoadmap(db, r, me), (r) => !!db.company_roadmap && r !== db.company_roadmap, oldCtx(db));
+  const ms = await routeMilestones(db, { ...me, prdOwners: (slug) => prdOwnerIdsOf(db, slug) }, req, p, slugOf, (r) => canEditRoadmap(db, r, me), (r) => !!db.company_roadmap && r !== db.company_roadmap, oldCtx(db));
   if (ms) return ms;
   if (p[3] !== "date-suggestions") return null;
   if (!p[4] && m === "GET") {

@@ -27,7 +27,7 @@ import { mockNowMs } from "./clock";
 import { draftDecisionNotes } from "./decision-notes";
 import { stableUuid } from "./ids";
 import { changePhrase, changeSentence } from "./simple-change-words";
-import { decidesAsk, milestoneValue, writeMilestone } from "./simple-milestones";
+import { milestoneValue, writeMilestone } from "./simple-milestones";
 import { addToCompany, featureItem, featureKeyOf, priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
 import { archiveGoal, goalBucketsDb, trashGoal, unarchiveGoal, type GoalBucketsTrash } from "./goal-buckets";
 import {
@@ -61,7 +61,7 @@ import {
   loopOf,
   ROADMAP_SLUGS,
   ROADMAPS,
-  prdTrackOwnerIds,
+  prdOwnerIdsOf,
   readerDb,
   readsRoadmap,
   roadmapId,
@@ -319,12 +319,10 @@ function prdSlugOf(db: SimpleDb, docId: unknown): string | undefined {
   return slugs.find((x) => stableUuid(`simple-doc/${x}`) === docId);
 }
 
-/** drafts.who on a PRD's document: its owners, the owners of its tracks and whom its milestones name as its owner. */
-function prdOwnerIds(db: SimpleDb, ctx: SimpleChangesCtx, docId: unknown): string[] {
+/** drafts.who on a PRD's document (./simple-roadmap.ts prdOwnerIdsOf), by its id. */
+function prdOwnerIds(db: SimpleDb, docId: unknown): string[] {
   const slug = prdSlugOf(db, docId);
-  if (!slug) return [];
-  const named = new Set((db.goal_milestones ?? []).flatMap((m) => (m.prd?.slug === slug ? [m.prd.owner] : [])));
-  return [...new Set([...prdTrackOwnerIds(db, slug), ...Object.keys(ctx.names).filter((id) => named.has(ctx.names[id]))])];
+  return slug ? prdOwnerIdsOf(db, slug) : [];
 }
 
 /** Whether the caller applies (or accepts) this change: a key date's by the roadmap's rule
@@ -334,14 +332,10 @@ function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op"
   if (c.op === CUT_ALL && c.after) return Object.keys(c.after).every((id) => decides(db, ctx, id));
   // A goal ask is decided by the owners it is sent to (goal_asks.may_decide).
   if (GOAL_ASK_OPS.includes(c.op)) return ctx.role === "owner";
-  // roadmap-decide: a change asked of a PRD's milestone (before.date) is the PRD owner's (or a company owner's).
-  if (c.op === "edit_goal_milestone" && c.before && !("milestone" in c.before)) {
-    const m = (db.goal_milestones ?? []).find((x) => x.id === c.target.milestone_id);
-    if (m) return decidesAsk(m, { role: ctx.role, name: ctx.names[ctx.id] });
-    // A milestone that is gone: its PRD's owners (drafts.who on the change's document) or the
-    // company's owner still decline it (goal_milestones.decide), its other milestones gone too.
-    return ctx.role === "owner" || prdOwnerIds(db, ctx, c.document_id).includes(ctx.id);
-  }
+  // roadmap-decide: a change asked of a PRD's milestone (before.date) is any of the PRD's owners'
+  // (drafts.who on the change's document) or a company owner's (goal_milestones.decide), its
+  // milestone live or gone (its other milestones gone too).
+  if (c.op === "edit_goal_milestone" && c.before && !("milestone" in c.before)) return ctx.role === "owner" || prdOwnerIds(db, c.document_id).includes(ctx.id);
   if (KEY_DATE_OPS.includes(c.op) || c.op === MILESTONE_OP) {
     const rm = roadmapOfDoc(db, c.target.document_id);
     return ctx.role === "owner" || (c.routed_to ?? []).includes(ctx.id) || (!!rm && canEditRoadmap(db, rm, ctx));
@@ -624,7 +618,7 @@ function sees(db: SimpleDb, ctx: SimpleChangesCtx, c: Change): boolean {
   if (c.op !== MILESTONE_OP || !c.before || "milestone" in c.before) return false;
   // changes.sees: and the PRD's reviewers, its decider among them (its review policy's), and its owners (drafts.who).
   const slug = prdSlugOf(db, c.document_id);
-  const people = slug ? [...(db.reviewers?.[slug] ?? []), db.prd_deciders?.[slug], ...prdOwnerIds(db, ctx, c.document_id)] : [];
+  const people = slug ? [...(db.prd_reviewers?.[slug] ?? []), db.prd_deciders?.[slug], ...prdOwnerIdsOf(db, slug)] : [];
   return people.includes(ctx.id) || decidesChange(db, ctx, c);
 }
 
