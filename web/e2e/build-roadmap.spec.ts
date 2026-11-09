@@ -37,8 +37,10 @@ for (const [name, use] of [
   test.describe(name, () => {
     test.use(use);
 
-    test("QR1 A: the Timeline opens on six months around today, one row per item, names fixed on the left", async ({ page }) => {
+    test("QR1 A: the Timeline on six months around today, one row per item, names fixed on the left", async ({ page }) => {
       await open(page);
+      // The owner (Nov 9): it opens on 3 months; a person picks 6 months.
+      await page.getByTestId("zoom-6m").click();
       await expect(page.getByTestId("zoom-6m")).toHaveAttribute("aria-pressed", "true");
       const scroll = page.getByTestId("timeline-scroll");
       // Today is in sight when the page opens.

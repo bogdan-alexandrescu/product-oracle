@@ -340,6 +340,8 @@ test.describe("desktop, a commenter adds", () => {
   test("a commenter drops a title on a quarter: a proposed addition", async ({ page }) => {
     await open(page, "commenter@example.com");
     await page.getByTestId("format-timeline").click();
+    // Six months shows Q1 2027's drop target (the Timeline opens on 3 months).
+    await page.getByTestId("zoom-6m").click();
     await page.getByLabel("Add an item").fill("Quiet hours setting");
     await page.getByTestId("quick-add-roadmap").selectOption({ label: "Alerts roadmap" });
     const chip = page.getByTestId("quick-add-chip");

@@ -366,7 +366,7 @@ export function MsLayer(props: MsLayerProps) {
   const own = ms.list.filter((m) => !m.prd && m.date);
   const prd = ms.list.filter((m) => m.prd && m.date);
   const shown = own.map((m) => (ms.moving?.id === m.id ? { ...m, date: ms.moving.date } : m));
-  // Two on one day share one diamond, with their count on the axis.
+  // Two on one day share one diamond, with their count on its corner.
   const byDay = new Map<string, number>();
   for (const m of shown) byDay.set(m.date!, (byDay.get(m.date!) ?? 0) + 1);
   const seenDay = new Map<string, number>();
@@ -441,17 +441,26 @@ export function MsLayer(props: MsLayerProps) {
     seenDay.set(date, n + 1);
     const many = byDay.get(date) ?? 1;
     if (n === 0) {
-      out.push(<Diamond key={`d-${m.id}`} x={mx} y={axisY} code={m.code} title={`${words(m)}, ${fullDay(date)}`} onPointerDown={grab(m)} />);
+      // Their count, a small badge on the diamond's top-right corner: it sits wholly above the
+      // diamonds' own boxes, so it never covers the next one at any zoom (its names in its tooltip).
       if (many > 1)
         out.push(
-          <Chip key={`c-${m.id}`} testid="ms-same-day" className="z-[26] bg-text text-surface" style={{ left: mx + 8, top: axisY - 10 }}>
-            {many} on {day(date)}
-          </Chip>,
+          <span
+            key={`c-${m.id}`}
+            data-testid="ms-same-day"
+            title={`${many} milestones on ${day(date)}: ${shown.filter((o) => o.date === date).map(words).join(", ")}`}
+            className="absolute z-[25] h-3 min-w-3 rounded-full bg-text px-1 text-center text-[10px] leading-3 font-bold text-surface"
+            style={{ left: mx + 3, top: axisY - 22 }}
+          >
+            {many}
+            <span className="sr-only"> on {day(date)}</span>
+          </span>,
         );
+      out.push(<Diamond key={`d-${m.id}`} x={mx} y={axisY} code={m.code} title={`${words(m)}, ${fullDay(date)}`} onPointerDown={grab(m)} />);
     }
     if (!lane) continue;
     // A line across the goal's own rows, its words in the goal's header row.
-    out.push(<div key={`v-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: lane.y0, height: lane.y1 - lane.y0, borderLeft: `1.5px solid ${msEdge(m.code)}` }} />);
+    out.push(<div key={`v-${m.id}`} data-testid="ms-line" data-day={date} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: lane.y0, height: lane.y1 - lane.y0, borderLeft: `1.5px solid ${msEdge(m.code)}` }} />);
     out.push(<div key={`s-${m.id}`} aria-hidden className="pointer-events-none absolute z-[12]" style={{ left: mx - 0.75, top: axisY + 6, height: lane.y0 - axisY - 6, borderLeft: `1px dotted ${msEdge(m.code)}`, opacity: 0.6 }} />);
     out.push(
       <Chip key={`f-${m.id}`} testid="ms-label" mx={mx} title={`${words(m)} · ${day(date)}`} onClick={() => ms.edit(m)} style={{ ...at.get(m.id), background: msFill(m.code), color: msInk(m.code), border: `1px solid ${msEdge(m.code)}` }}>

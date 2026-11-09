@@ -112,6 +112,8 @@ for (const scheme of ["light", "dark"] as const) {
       await openRoadmap(page);
       // Quick add drops on the Timeline's quarters (mk-qa4-roadmap); the drawn bar is then read on the Gantt.
       await page.getByTestId("format-timeline").click();
+      // Six months shows Q1 2027's drop target (the Timeline opens on 3 months); the pick holds.
+      await page.getByTestId("zoom-6m").click();
       await dragAdd(page, "Quiet hours setting", page.locator('[data-testid="quarter-drop"][data-add-where="quarter:2027-Q1"]'), "top");
       await expect(toastWith(page, "Added Quiet hours setting as a draft")).toBeVisible();
       // The draft's row on the Timeline says so (its Draft chip by the name).

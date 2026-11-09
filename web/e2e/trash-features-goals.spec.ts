@@ -286,6 +286,8 @@ test("a feature added in the draft and restored while the draft is in review sta
   const title = "Quiet hours digest";
   await page.goto("/simple/roadmap");
   await expect(page.getByTestId("simple-chart")).toBeVisible();
+  // Six months shows Q1 2027's drop target (the Timeline opens on 3 months).
+  await page.getByTestId("zoom-6m").click();
   await page.getByLabel("Add an item").fill(title);
   await page.getByTestId("quick-add-roadmap").selectOption({ label: "Alerts roadmap" });
   const chip = page.getByTestId("quick-add-chip");
@@ -350,6 +352,8 @@ test("a feature added in the draft and restored after the draft was approved wit
   const title = "Quiet hours digest";
   await page.goto("/simple/roadmap");
   await expect(page.getByTestId("simple-chart")).toBeVisible();
+  // Six months shows Q1 2027's drop target (the Timeline opens on 3 months).
+  await page.getByTestId("zoom-6m").click();
   await page.getByLabel("Add an item").fill(title);
   await page.getByTestId("quick-add-roadmap").selectOption({ label: "Alerts roadmap" });
   const chip = page.getByTestId("quick-add-chip");
@@ -413,6 +417,8 @@ test("a feature added in the draft and restored after the draft was approved wit
 async function addInDraft(page: Page, title: string): Promise<RoadmapItem> {
   await page.goto("/simple/roadmap");
   await expect(page.getByTestId("simple-chart")).toBeVisible();
+  // Six months shows Q1 2027's drop target (the Timeline opens on 3 months).
+  await page.getByTestId("zoom-6m").click();
   await page.getByLabel("Add an item").fill(title);
   await page.getByTestId("quick-add-roadmap").selectOption({ label: "Alerts roadmap" });
   const chip = page.getByTestId("quick-add-chip");

@@ -189,20 +189,20 @@ import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStray
 import { groundTruthCheck, GROUND_TRUTH_FLAGS_SCENARIO, routeGroundTruthFixes, seedGroundTruth } from "./ground-truth";
 import { AREA_PRDS, COMPANY_SLUG, COMPANY_TITLE, ITEM_MILESTONE_SCENARIO, OLD_MILESTONES_SCENARIO, OLD_PRD, OLD_ROADMAP, ONE_ROADMAP_SCENARIO, prdRef as oneRoadmapPrd, REPLACED_PRD_TRASH_SCENARIO, seedCompanyRoadmap, seedItemMilestones } from "./one-roadmap";
 import { APPROVED_ROADMAP_SCENARIO, applyApprovedRoadmap, applyPlanChanges, CROWDED_MILESTONES_SCENARIO, PHOTO_PINS_FEATURE_SCENARIO, seedTrails, trailSections, TRAILS_PRD_SECTIONS, TRAILS_PRD_SLUG, TRAILS_PRD_TITLE, TRAILS_SLUG, TRAILS_TITLE } from "./approved-roadmap";
-import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones } from "./simple-milestones";
+import { seedOldMilestones, seedOwnMilestones, seedPrdMilestones, seedStuckPrdAsk } from "./simple-milestones";
 import { knowPrdOrder } from "./prd-rank";
 import { openDraft } from "./simple-roadmap";
-import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedPrdCalmPage, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowGoalParents, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedPrdCalmPage, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, companyToday, forgetRoadmapReads, knowGoalMapItems, ownPrd, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
 import { closed, GOALS, MAP_GOALS, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapGoals, goalMapIdOf, goalMapItems, ladderMilestones, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
-import { LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
+import { LADDER_KR_SCENARIO, LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 import { waitingItems } from "./waiting-list";
-import { HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONES_SCENARIO, seedHomeMilestoneGoals, seedHomeMilestones, seedHomeMilestoneTracks, seedHomeMilestoneTwinTracks } from "./home-milestones";
+import { HOME_MILESTONE_FOLD_SCENARIO, HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONES_SCENARIO, seedHomeMilestoneFold, seedHomeMilestoneGoals, seedHomeMilestones, seedHomeMilestoneTracks, seedHomeMilestoneTwinTracks } from "./home-milestones";
 import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience, spansRow, type BoardItem } from "./audience";
 import {
   draftPublicTexts,
@@ -1864,6 +1864,26 @@ function seedGoalOrderScenario(hard = false): Db {
     rm.items.push(i);
     rm.ids[i.key] = stableUuid(`simple-item/${i.key}`);
   }
+  return db;
+}
+
+/**
+ * kr-in-goal-card, the "goal-key-results" scenario: "goal-order" with two confirmed key results
+ * (subgoals) under Faster activation: KR 1 has a roadmap item, KR 2 none yet and a feature
+ * someone suggested for it. Invented data.
+ */
+function seedGoalKeyResultsScenario(): Db {
+  const db = seedGoalOrderScenario();
+  const rm = db.simple_roadmap!;
+  const parent = db.baseline.entities.find((e) => e.key === "faster-activation")!;
+  const kr = (key: string, title: string, at: string) =>
+    db.baseline.entities.push({ ...parent, id: stableUuid(`simple-goal/${key}`), key, title, parent_id: parent.id, attrs: { metric: "teams", weight: 1 }, created_at: at, updated_at: at });
+  kr("kr-setup-day", "KR 1 Half of new teams set up in one day", "2026-10-01T09:00:00Z");
+  kr("kr-first-alert", "KR 2 New teams send a first alert in week one", "2026-10-02T09:00:00Z");
+  const item: SimpleDb["items"][number] = { key: "kr-setup-list", title: "Guided setup checklist", horizon: "now", roadmap: "onboarding-roadmap", goal: "kr-setup-day", confidence: "medium", start: 5, end: 45, source: "typed" };
+  rm.items.push(item);
+  rm.ids[item.key] = stableUuid(`simple-item/${item.key}`);
+  rm.goal_suggestions = [...(rm.goal_suggestions ?? []), seedPersonGoalSuggestion("kr-first-alert", "First alert wizard", "New teams send an alert on day one", stableUuid("mock-user/kr-teammate"))];
   return db;
 }
 
@@ -4009,6 +4029,8 @@ function load(): Db {
                 ? seedSimpleHomeMoveScenario
               : scenario === "goal-order"
                 ? () => seedGoalOrderScenario()
+              : scenario === "goal-key-results"
+                ? seedGoalKeyResultsScenario
               : scenario === "goal-order-hard"
                 ? () => seedGoalOrderScenario(true)
               : scenario === "simple-home-same-name"
@@ -4053,6 +4075,14 @@ function load(): Db {
                     // build-milestones-on-roadmap: the roadmaps' own milestones per goal; with a PRD's (Usage alerts).
                     const db = seed();
                     (db.simple_roadmap = seedSimpleRoadmap()).goal_milestones = scenario === "simple-milestones" ? seedOwnMilestones() : seedPrdMilestones();
+                    return db;
+                  }
+              : scenario === "simple-prd-milestone-stuck"
+                ? () => {
+                    // stuck-milestone-decline: a PRD milestone's ask that its milestone no longer waits on.
+                    const db = seed();
+                    const ms = ((db.simple_roadmap = seedSimpleRoadmap()).goal_milestones = seedPrdMilestones());
+                    db.simple_roadmap.changes = seedStuckPrdAsk(ms);
                     return db;
                   }
               : scenario === ROADMAP_MILESTONES_HARD_SCENARIO
@@ -4215,20 +4245,20 @@ function load(): Db {
                     if (churn) churn.status = "confirmed";
                     return db;
                   }
-              : scenario === LADDER_SCENARIO
+              : scenario === LADDER_SCENARIO || scenario === LADDER_KR_SCENARIO
                 ? () => {
                     // goal-ladder: the ladder's goals are Home's (one store, the same ids); each
                     // feature is its own Simple roadmap item, with its status, dates and what it waits on.
                     const db = seed();
                     const template = db.baseline.entities.find((e) => e.type === "goal")!;
                     for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") e.status = "proposed";
-                    for (const g of ladderGoals(goalMapIdOf)) db.baseline.entities.push({ ...template, ...g, status: "confirmed", body: null, locked: false, locked_by: null, locked_at: null });
+                    for (const g of ladderGoals(goalMapIdOf, scenario === LADDER_KR_SCENARIO)) db.baseline.entities.push({ ...template, ...g, status: "confirmed", body: null, locked: false, locked_by: null, locked_at: null });
                     const rm = (db.simple_roadmap = seedSimpleRoadmap());
                     // goal-map-editing: a feature on no milestone names its goal itself (by the goal's id).
                     rm.items = ladderItems().map(({ goal, ...x }) => ({ ...x, heading: `${x.section.toUpperCase()} ${x.title}`, horizon: "next" as const, roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium" as const, ...(goal ? { map_goal: goalMapIdOf(goal) } : {}) }));
                     // goal-map-editing: one goal store, so a ladder goal goes to Trash as any goal does.
                     const gb = (rm.goal_buckets = seedGoalBuckets());
-                    for (const g of ladderGoals(goalMapIdOf)) gb.goals.push({ id: g.id, key: g.key, title: g.title, order: gb.goals.length + 1, measure: String(g.attrs.metric ?? ""), target: String(g.attrs.target ?? ""), due: null, archived: false });
+                    for (const g of ladderGoals(goalMapIdOf, scenario === LADDER_KR_SCENARIO)) gb.goals.push({ id: g.id, key: g.key, title: g.title, order: gb.goals.length + 1, measure: String(g.attrs.metric ?? ""), target: String(g.attrs.target ?? ""), due: null, archived: false });
                     rm.ids = Object.fromEntries(rm.items.map((x) => [x.key, stableUuid(`simple-item/${x.key}`)]));
                     return db;
                   }
@@ -4250,6 +4280,8 @@ function load(): Db {
                 ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneTracks() })
               : scenario === HOME_MILESTONE_TWIN_TRACKS_SCENARIO
                 ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneTwinTracks() })
+              : scenario === HOME_MILESTONE_FOLD_SCENARIO
+                ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneFold() })
               : scenario === OLD_MILESTONES_SCENARIO
                 ? () => {
                     const db = seedOneRoadmapScenario();
@@ -7675,6 +7707,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     knowCompanyGoals([...baselineGoals, ...(db.simple_roadmap ? bucketGoalsInOrder(db.simple_roadmap, new Set(baselineGoals.map((e) => e.key))) : [])]);
     // build-goal-order-control: the "goal-order" scenarios' added goals name their roadmap work on every load.
     knowGoalOrderGoals(db.baseline.entities);
+    knowGoalParents(db.baseline.entities);
     // Every mock PRD has a one-pager (Definition of Done 2): another PRD than the seeded one is
     // served a page built from its own sections (vqa B-13), with its own draft and changes.
     const onePagerDb = await onePagerOf(db, r, p);
