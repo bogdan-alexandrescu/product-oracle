@@ -8,11 +8,14 @@ import { expect, test, type Page } from "./test";
  * Vance, who is not a member; "simple-prd-milestone-stuck": owned by Priya Raman
  * (approver@example.com), Theo Brandt (commenter@example.com) its required reviewer, asks on Nov 3,
  * 4 and 5 waiting; "simple-prd-milestones-gone": the same with every Usage alerts milestone gone
- * and Priya Raman owning its track).
+ * and Priya Raman owning its track; "simple-prd-milestone-track-owner": the stuck one with Rowan
+ * Pike (rowan.pike@example.com) owning its track and a second member also named Priya Raman).
  *
  * fails_when: a second ask of one date shares the first's id, so it cannot be declined; asking
  * again closes the older ask; an ask names no one it waits for; the PRD's required reviewer does
  * not see an ask decided; the PRD's owner may not decline an ask once all its milestones are gone;
+ * an ask is sent to the member named as the PRD's owner (both of one name) and not to its track's
+ * owner; the PRD's track owner may not decide a live milestone's ask;
  * no_claim: the API's own rules (api/tests/test_simple_goal_milestones_api.py).
  */
 
@@ -112,4 +115,29 @@ test("the PRD's owner declines an ask on Home when all its milestones are gone",
   await page.reload();
   await expect(proposals.getByRole("heading", { name: "Proposals on your items" })).toBeVisible();
   await expect(gone).toHaveCount(0);
+});
+
+test("an ask is sent to the PRD's owners: its named owner and its track's owner", async ({ page }) => {
+  await open(page, "simple-prd-milestone-track-owner", "/simple/roadmap", "commenter@example.com");
+  await ask(page, "2027-01-20");
+  await page.goto("/simple");
+  const proposals = page.getByTestId("home-proposals");
+  await expect(proposals.getByRole("heading", { name: "Your proposals waiting" })).toBeVisible();
+  await expect(proposals.getByTestId("home-proposal")).toHaveCount(1);
+  await expect(proposals.getByTestId("home-proposal")).toContainText("Waiting for Rowan Pike, Priya Raman");
+  await expect(proposals.getByTestId("home-proposal")).not.toContainText("Priya Raman, Priya Raman");
+});
+
+test("the PRD's track owner, not its named owner, declines a live milestone's ask on Home", async ({ page }) => {
+  await open(page, "simple-prd-milestone-track-owner", "/simple", "rowan.pike@example.com");
+  const proposals = page.getByTestId("home-proposals");
+  await expect(proposals.getByRole("heading", { name: "Proposals on your items" })).toBeVisible();
+  const stuck = homeAsks(page).filter({ hasText: "Nov 4," });
+  await expect(stuck).toHaveCount(1);
+  await stuck.getByRole("button", { name: "Decline" }).click();
+  await expect(page.getByText("Declined", { exact: true })).toBeVisible();
+  await expect(stuck).toHaveCount(0);
+  await page.reload();
+  await expect(proposals.getByRole("heading", { name: "Proposals on your items" })).toBeVisible();
+  await expect(stuck).toHaveCount(0);
 });

@@ -4077,7 +4077,7 @@ function load(): Db {
                     (db.simple_roadmap = seedSimpleRoadmap()).goal_milestones = scenario === "simple-milestones" ? seedOwnMilestones() : seedPrdMilestones();
                     return db;
                   }
-              : scenario === "simple-prd-milestone-stuck" || scenario === "simple-prd-milestones-gone"
+              : scenario === "simple-prd-milestone-stuck" || scenario === "simple-prd-milestones-gone" || scenario === "simple-prd-milestone-track-owner"
                 ? () => {
                     // stuck-milestone-decline: a PRD milestone's ask that its milestone no longer waits on.
                     // Usage alerts' required reviewer is commenter@example.com; its asks go to its owner, approver@example.com.
@@ -4085,6 +4085,17 @@ function load(): Db {
                     const at = (email: string) => db.members.find((m) => m.email === email)!.id;
                     const rm = (db.simple_roadmap = seedSimpleRoadmap());
                     const ms = (rm.goal_milestones = seedPrdMilestones());
+                    if (scenario === "simple-prd-milestone-track-owner") {
+                      // stuck-ask-minors: Rowan Pike (an invented approver) owns Usage alerts' track, and a
+                      // second member shares its named owner's name (Priya Raman).
+                      const join = (email: string, name: string) => {
+                        const m = { email, name, role: "approver" as const, engineering_lead: false, created_at: "2026-09-10T09:00:00Z", id: uuid(), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0 };
+                        db.members.push(m);
+                        return m.id;
+                      };
+                      rm.track_owners = { alerts: join("rowan.pike@example.com", "Rowan Pike") };
+                      join("priya.r@example.com", "Priya Raman");
+                    }
                     rm.changes = seedStuckPrdAsk(ms, [at("approver@example.com")]);
                     rm.reviewers = { "usage-alerts": [at("commenter@example.com")] };
                     if (scenario === "simple-prd-milestones-gone") {
