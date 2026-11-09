@@ -5811,10 +5811,18 @@ export interface paths {
          * @description The ritual's owner: Skip, with a reason.
          */
         post: operations["skip_ritual_occurrence"];
-        delete?: never;
+        /**
+         * Undo Ritual Occurrence Skip
+         * @description The ritual's owner: Undo skip, back to its state before (ready, missed or failed).
+         */
+        delete: operations["undo_ritual_occurrence_skip"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Edit Ritual Occurrence Skip
+         * @description The ritual's owner: Edit the reason of a skipped occurrence.
+         */
+        patch: operations["edit_ritual_occurrence_skip"];
         trace?: never;
     };
     "/v1/ritual-occurrences/{occurrence_id}/summary": {
@@ -62276,6 +62284,110 @@ export interface operations {
         };
     };
     skip_ritual_occurrence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                occurrence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkipIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OccurrenceOut"];
+                };
+            };
+            /** @description Role too low, or not the ritual's owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such ritual or occurrence in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a built-in deleted, or a summary under way */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid schedule, length, lead time or attendees */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    undo_ritual_occurrence_skip: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                occurrence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OccurrenceOut"];
+                };
+            };
+            /** @description Role too low, or not the ritual's owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such ritual or occurrence in this company */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, a built-in deleted, or a summary under way */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid schedule, length, lead time or attendees */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    edit_ritual_occurrence_skip: {
         parameters: {
             query?: never;
             header?: never;
