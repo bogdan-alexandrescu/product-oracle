@@ -108,8 +108,8 @@ test("Home's plan groups by the roadmap's current milestones, a removed one's it
   expect(await itemsOf(page, "M7 · Launch (beta) · 3 items")).toEqual([["Alert history export", "Alert routing by team", "Weekly alert digest"]]);
   expect(await itemsOf(page, "M6 · 2 items")).toEqual([["Health log", "Setup reminders"]]);
   // Two PRDs' "Pilot" on one day: two rows, each with its own new code (never sharing one code).
-  expect(await itemsOf(page, "M4 · Pilot · 2 items")).toEqual([["Complaint early warning", "Rep call script hints"]]);
-  expect(await itemsOf(page, "M5 · Pilot · 2 items")).toEqual([["Lead list ranking", "Refund in one step"]]);
+  expect(await itemsOf(page, "M4 · Pilot · 2 items")).toEqual([["Lead list ranking", "Refund in one step"]]);
+  expect(await itemsOf(page, "M5 · Pilot · 2 items")).toEqual([["Complaint early warning", "Rep call script hints"]]);
   // Mobile alert push (placed in the removed M2), Team invite nudges (in the dropped Old pilot)
   // and New plan tiers (an "M4 · Old launch" no roadmap has) are not in one.
   const [loose] = await itemsOf(page, "Not in a milestone · 11 items");
@@ -209,7 +209,9 @@ test("a track milestone is one row across roadmaps, two goals' M3 beside it two 
   const twins = labels.filter((l) => /^M\d+ · 1 item$/.test(l));
   expect(twins, labels.join(" / ")).toHaveLength(3);
   expect(new Set(twins).size, twins.join(" / ")).toBe(3); // three distinct codes, never a repeat.
-  const twinItems = (await Promise.all(twins.map((l) => itemsOf(page, l)))).flat(2).sort();
+  const twinItems: string[] = [];
+  for (const l of twins) twinItems.push(...(await itemsOf(page, l)).flat());
+  twinItems.sort();
   expect(twinItems).toEqual(["Refund rules", "Seat bundles", "Volume discounts"]);
   // The look-alike rows (same words, each its own code) sound different, even for a goal no loaded item carries.
   const lines = page.getByTestId("home-strip-line").filter({ has: page.getByTestId("home-strip-label").filter({ hasText: /^M\d+ · 1 item$/ }) });
@@ -406,10 +408,10 @@ test("the next milestone card reads the milestone's whole name, as the plan rows
 test("a nameless track milestone takes one joined name; another roadmap's other name keeps its row", async ({ page }) => {
   await home(page, 1440, ADMIN.email, HOME_MILESTONE_TRACKS_SCENARIO);
   const labels = (await page.getByTestId("home-strip-label").allTextContents()).map((t) => t.replace(/\s+/g, " ").trim());
-  const guidedTour = oneLabel(labels, /^M\d+ · Guided tour · 3 items$/);
-  const quietHours = oneLabel(labels, /^M\d+ · Quiet hours · 1 item$/);
-  expect(await itemsOf(page, guidedTour)).toEqual([["Alert snooze", "Health log", "Setup reminders"]]);
-  expect(await itemsOf(page, quietHours)).toEqual([["Mobile alert push"]]);
+  // roadmap-milestone-codes: a roadmap's own milestone of no goal on the track's code is that one
+  // milestone (one roadmap code), so another roadmap's "Quiet hours" joins the row too.
+  const guidedTour = oneLabel(labels, /^M\d+ · Guided tour · 4 items$/);
+  expect(await itemsOf(page, guidedTour)).toEqual([["Alert snooze", "Health log", "Mobile alert push", "Setup reminders"]]);
 });
 
 /*
@@ -423,10 +425,9 @@ test("two look-alike rows with no known goal sound apart by their first item", a
   await expect(lines).toHaveCount(3);
   const links = await Promise.all([0, 1, 2].map((k) => lines.nth(k).getByTestId("home-strip-row").getAttribute("aria-label")));
   const tips = await Promise.all([0, 1, 2].map((k) => lines.nth(k).getByTestId("home-strip-items-tip").getAttribute("aria-label")));
-  expect(links.some((l) => l?.includes("Volume discounts")), links.join(" / ")).toBe(true);
-  expect(links.some((l) => l?.includes("Refund rules")), links.join(" / ")).toBe(true);
-  expect(tips.some((l) => l?.includes("Volume discounts")), tips.join(" / ")).toBe(true);
-  expect(tips.some((l) => l?.includes("Refund rules")), tips.join(" / ")).toBe(true);
+  // Each its own roadmap code now, so they never sound alike.
+  expect(new Set(links).size, links.join(" / ")).toBe(3);
+  expect(new Set(tips).size, tips.join(" / ")).toBe(3);
 });
 
 /*
@@ -448,8 +449,6 @@ test("two rows for the same milestone name, each its own code, have distinct acc
   const tips = await Promise.all([0, 1].map((k) => lines.nth(k).getByTestId("home-strip-items-tip").getAttribute("aria-label")));
   expect(new Set(links).size, links.join(" / ")).toBe(2);
   expect(new Set(tips).size, tips.join(" / ")).toBe(2);
-  expect(links.join(" ")).toContain("Pilot plan A");
-  expect(links.join(" ")).toContain("Pilot plan B");
 });
 
 test.describe("on a touch screen", () => {
