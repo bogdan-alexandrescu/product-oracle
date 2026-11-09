@@ -1,7 +1,7 @@
 import type { Locator } from "./test";
 
 /** The colours one read saw: as CSS gave them and as painted sRGB (r, g, b, a in 0..255). */
-type Read = { fgCss: string; bgCss: string; fg: number[]; bg: number[]; moving: string[]; forever: string[] };
+type Read = { fgCss: string; bgCss: string; fg: number[]; bg: number[]; moving: string[] };
 
 /**
  * One read of an element's text colour and the first opaque background behind it. Waits at most
@@ -24,16 +24,24 @@ function readColours(el: Locator, timeout: number): Promise<Read> {
     const paints = (p: string) => /^(color|background|background-color|opacity|all)$/.test(p);
     const name = (n: Element) =>
       n.tagName.toLowerCase() + (n.id ? `#${n.id}` : "") + [...n.classList].map((c) => `.${c}`).join("");
-    // The time an endless animation starts a cycle on (its first keyframe, at or after 0), or
-    // null if it has none: such an animation is read there, as it rests, and then put back.
+    // The time, at or after 0, an endless animation shows its from keyframe, or null if its cycle
+    // has no length: such an animation is read there, as it rests, and then put back. Iteration k
+    // starts at delay + k * cycle: on the from keyframe for every k when it runs normal, for even
+    // k when alternate and odd k when alternate-reverse; reverse starts each on its to keyframe
+    // and so reaches the from keyframe only as it ends, read a hundredth of a millisecond before.
     const restAt = (a: CSSAnimation) => {
-      const delay = Number(a.effect?.getTiming().delay ?? 0);
-      const cycle = Number(a.effect?.getComputedTiming().duration);
+      const timing = a.effect?.getComputedTiming();
+      const delay = Number(timing?.delay ?? 0);
+      const cycle = Number(timing?.duration);
       if (!Number.isFinite(delay) || !Number.isFinite(cycle) || cycle <= 0) return null;
-      return delay >= 0 ? delay : delay + Math.ceil(-delay / cycle) * cycle;
+      const end = 0.01;
+      let k = Math.max(0, Math.ceil(-delay / cycle));
+      if (timing?.direction === "reverse") k = Math.max(1, Math.ceil((end - delay) / cycle));
+      if (timing?.direction === "alternate" && k % 2 === 1) k++;
+      if (timing?.direction === "alternate-reverse" && k % 2 === 0) k++;
+      return delay + k * cycle - (timing?.direction === "reverse" ? end : 0);
     };
     const moving: string[] = [];
-    const forever: string[] = [];
     const rested: { a: Animation; was: CSSNumberish | null }[] = [];
     try {
       for (let n: Element | null = node; n; n = n.parentElement) {
@@ -50,15 +58,14 @@ function readColours(el: Locator, timeout: number): Promise<Read> {
               moving.push(what);
               continue;
             }
+            // A zero-length cycle (its only endless kind with no rest) is still waiting out its
+            // delay: it counts as running, as any other unsettled colour.
             const at = restAt(a);
-            try {
-              if (at === null) throw new Error("no cycle");
-              const was = a.currentTime;
-              a.currentTime = at;
-              rested.push({ a, was });
-            } catch {
+            if (at === null) {
               moving.push(what);
-              forever.push(what);
+            } else {
+              rested.push({ a, was: a.currentTime });
+              a.currentTime = at;
             }
           }
         }
@@ -76,7 +83,7 @@ function readColours(el: Locator, timeout: number): Promise<Read> {
           break;
         }
       }
-      return { fgCss, bgCss, fg: paint(fgCss), bg, moving, forever };
+      return { fgCss, bgCss, fg: paint(fgCss), bg, moving };
     } finally {
       for (const { a, was } of rested) a.currentTime = was;
     }
@@ -101,11 +108,11 @@ const same = (a: Read, b: Read) => a.fg.join() === b.fg.join() && a.bg.join() ==
 /**
  * The WCAG contrast ratio of an element's text on its background, read once both colours have
  * settled: finite, no colour, background or opacity transition or animation running, and the
- * same on two reads in a row. An endless animation is read at rest, on the keyframe each cycle
- * starts on. Every read and pause fits in the one `timeout`. Throws at once if the locator matches
- * more than one element; if the colours never settle within `timeout`, throws naming an endless
- * animation with no resting state, else with the read's own error (a missing element) as the
- * cause, else naming both colours. It never returns NaN.
+ * same on two reads in a row. An endless animation is read at rest, on its from keyframe, whatever
+ * its direction. Every read and pause fits in the one `timeout`. Throws at once if the locator
+ * matches more than one element; if the colours never settle within `timeout`, throws with the
+ * read's own error (a missing element) as the cause, else naming both colours and what still runs.
+ * It never returns NaN.
  */
 export async function contrast(el: Locator, timeout = 5_000): Promise<number> {
   const deadline = Date.now() + timeout;
@@ -141,11 +148,6 @@ export async function contrast(el: Locator, timeout = 5_000): Promise<number> {
   }
   if (failed) {
     throw new Error(`The contrast could not be read within ${timeout} ms: ${failed.message}`, { cause: failed });
-  }
-  if (last?.forever.length) {
-    throw new Error(
-      `The contrast cannot be read: ${last.forever.join(" and ")} runs forever with no resting state, so the colours never settle.`,
-    );
   }
   throw new Error(
     `The contrast never settled within ${timeout} ms: text colour "${last?.fgCss}" on background "${last?.bgCss}"` +

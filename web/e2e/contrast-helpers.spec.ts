@@ -52,7 +52,7 @@ for (const [what, timing] of [
   });
 }
 
-test("an endless opacity pulse (a loading dot) is read at rest, not reported as running forever", async ({ page }) => {
+test("an endless opacity pulse (a loading dot) is read at its rest point, not reported as still running", async ({ page }) => {
   // The pulse dims the text colour with its opacity, so only its rest point (#111) reads 18.9 on white.
   await page.setContent(`
     <style>
