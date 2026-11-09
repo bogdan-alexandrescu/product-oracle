@@ -495,6 +495,7 @@ const OP_WORDS: Record<string, string> = {
   set_goal: "Change the goal",
   set_depends: "Change what it depends on",
   set_parent: "Change what it is part of",
+  set_code: "Give it a code",
   set_status: "Change the status",
   set_goals: "Move it to another goal",
   remove_dependency: "Remove the dependency",

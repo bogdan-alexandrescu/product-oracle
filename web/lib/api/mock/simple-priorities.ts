@@ -11,7 +11,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { PLAN_PRD_SLUG, planOut, planSlices } from "./simple-plan";
-import { closed, companyToday, goalRank, roadmapOut, type SeedItem, type SimpleDb } from "./simple-roadmap";
+import { closed, codedTitle, companyToday, goalRank, prdCode, roadmapOut, type SeedItem, type SimpleDb } from "./simple-roadmap";
 import { flowFor } from "./simple-visuals";
 import { madeOrder } from "./made-order";
 import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
@@ -101,7 +101,7 @@ export function featureItem(db: SimpleDb, fid: string): string | undefined {
  * draft there confirmed rather than a second item added); the feature's own item while there is no
  * company roadmap (a move then ranks the feature alone); undefined for no such feature.
  */
-export function addToCompany(db: SimpleDb, fid: string): string | undefined {
+export function addToCompany(db: SimpleDb, fid: string, seen: SimpleDb = db): string | { refused: string } | undefined {
   const base = featureItem(db, fid);
   const src = base ? db.items.find((s) => s.key === base) : undefined;
   if (!base || !src) return undefined;
@@ -113,6 +113,10 @@ export function addToCompany(db: SimpleDb, fid: string): string | undefined {
     kept.draft = false;
     return kept.key;
   }
+  // every-field (targets.add_to_company): its code is no other item's own, a title's (its slices share it), in set_code's words.
+  const code = (src.feature_id && db.feature_codes?.[src.feature_id]) || codedTitle(src.title, prdCode(src.section))[0];
+  const other = code ? seen.items.find((x) => x.roadmap === slug && !x.trashed && x.key !== base && x.feature !== base && !(x.feature_id && seen.feature_codes?.[x.feature_id]) && !prdCode(x.section) && codedTitle(x.title, null)[0]?.toUpperCase() === code.toUpperCase()) : undefined;
+  if (code && other) return { refused: `${code} is already the code of ${code} ${codedTitle(other.title, null)[1]}` };
   let key = base;
   for (let n = 2; db.ids[key]; n++) key = `${base}-${n}`;
   const row: SeedItem = { key, title: src.title, horizon: "later", roadmap: slug, feature: base, confidence: src.confidence, source: "engineering", goal: src.goal };

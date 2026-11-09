@@ -30,6 +30,10 @@ Test cards (protects / fails_when / no_claim):
 - test_a_move_reuses_the_features_draft_item: protects=moving a feature whose only item on
   the company roadmap is a draft confirms that item, never a second one; fails_when=a second
   item is added for the feature.
+- test_a_move_never_gives_the_features_code_to_a_second_item: protects=adding a feature to
+  the company roadmap from Priorities is refused in set_code's words when another item shows
+  the feature's code as its own title's, and no item is added; fails_when=two items read
+  F-40; no_claim=items linked to the same feature (its slices).
 """
 
 import uuid
@@ -177,3 +181,22 @@ async def test_a_move_reuses_the_features_draft_item(client):
         assert items[0].draft is False
     row = by_feature(await w.read(client), w)["widgets"]
     assert row["on_roadmap"] is True and row["item_id"] == w.ids["pay-5"]
+
+
+async def test_a_move_never_gives_the_features_code_to_a_second_item(client):
+    w = await company_world()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        (await s.get(Entity, uuid.UUID(w.ids["insights"]))).key = "F-40"
+        (await s.get(RoadmapItem, uuid.UUID(w.ids["pay-6"]))).title = "F-40 Night digest"
+        await s.commit()
+    body = {"op": "override_priority", "target": {"feature_id": w.ids["insights"]},
+            "before": {"override": None},
+            "after": {"position": 1, "reason": REASON, "confirm": True}}  # fmt: skip
+    r = await client.post(CHANGES, json=body, headers=w.ctx.as_("owner"))
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == "F-40 is already the code of F-40 Night digest"
+    async with tenant_session(w.ctx.tenant_id) as s:
+        found = await s.scalar(
+            select(RoadmapItem.id).where(RoadmapItem.feature_id == uuid.UUID(w.ids["insights"]))
+        )
+        assert found is None

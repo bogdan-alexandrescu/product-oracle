@@ -63547,6 +63547,7 @@
                   "set_status",
                   "set_feature",
                   "set_parent",
+                  "set_code",
                   "set_goal_measure",
                   "set_goals",
                   "set_owner",
@@ -63977,6 +63978,7 @@
               "set_status",
               "set_feature",
               "set_parent",
+              "set_code",
               "set_goal_measure",
               "set_goals",
               "set_owner",
@@ -88398,6 +88400,7 @@
               "set_status",
               "set_feature",
               "set_parent",
+              "set_code",
               "set_goal_measure",
               "set_goals",
               "set_owner",
@@ -123440,6 +123443,7 @@
               "set_status",
               "set_feature",
               "set_parent",
+              "set_code",
               "set_goal_measure",
               "set_goals",
               "set_owner",
@@ -123604,6 +123608,7 @@
               "set_status",
               "set_feature",
               "set_parent",
+              "set_code",
               "set_goal_measure",
               "set_goals",
               "set_owner",
@@ -129975,6 +129980,21 @@
               }
             ],
             "title": "Code"
+          },
+          "code_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "feature",
+                  "prd"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code From"
           },
           "title": {
             "type": "string",

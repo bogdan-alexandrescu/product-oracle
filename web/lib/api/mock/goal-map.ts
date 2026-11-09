@@ -21,6 +21,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { goalName } from "@/lib/placeholders";
 
+import type { LadderMilestones } from "./simple-changes";
 import type { TrashDb, TrashEntryRow } from "./trash";
 
 import { FIT_COMPANY_SCENARIO } from "./fit-date";
@@ -818,6 +819,26 @@ export async function routeLadderMilestone(
     return out();
   }
   return json(405, { detail: "Method not allowed" });
+}
+
+/**
+ * every-field-editable: the map's key results as Simple's change engine reads them (an
+ * edit_goal_milestone proposal names one, as goal_milestones._value; the decider accepts it).
+ */
+export function ladderMilestones(db: { goal_map?: GoalMap; goal_map_decider?: string | null }, me: { id: string; role: string }): LadderMilestones {
+  const live = (id: string) => (db.goal_map?.milestones as Held[] | undefined)?.find((x) => x.id === id && !x.trashed);
+  return {
+    find: (id) => {
+      const m = live(id);
+      if (!m) return null;
+      return { value: { name: m.name, date: m.due_on ?? null, goal_id: m.goal, item_ids: [], counts_when: "" }, can_change: mayChangeMilestone(me, db.goal_map_decider), name: m.name, decider: db.goal_map_decider ?? null };
+    },
+    write: (id, goal_id) => {
+      const m = live(id);
+      const g = db.goal_map?.goals.find((x) => x.id === goal_id);
+      if (m && g) Object.assign(m, { goal: g.id, measure: g.measure, unit: g.unit });
+    },
+  };
 }
 
 /** Days back from today for a new milestone's 7 readings, oldest first. */

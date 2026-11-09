@@ -261,6 +261,17 @@ async def _next_code(db: AsyncSession, roadmap_id: uuid.UUID, goal_id: uuid.UUID
     return f"M{n + 1}"
 
 
+async def _regoal(db: AsyncSession, row: TrackMilestone, goal_id: uuid.UUID | None) -> None:
+    """every-field-editable: a milestone moved to another goal takes that goal's next code
+    (M<n> is numbered per goal, so the code it had may be the new goal's already)."""
+    if goal_id == row.goal_id:
+        return
+    if row.roadmap_id is not None and row.code:
+        with db.no_autoflush:
+            row.code = await _next_code(db, row.roadmap_id, goal_id)
+    row.goal_id = goal_id
+
+
 async def _roadmap_or_404(db: AsyncSession, roadmap_id: uuid.UUID) -> Document:
     doc = await db.get(Document, roadmap_id)
     if doc is None or doc.kind != "roadmap":
@@ -327,7 +338,7 @@ async def patch(
     if "date" in fields:
         row.target_date = body.date
     if "goal_id" in fields:
-        row.goal_id = body.goal_id
+        await _regoal(db, row, body.goal_id)
     if "item_ids" in fields and body.item_ids is not None:
         row.item_ids = body.item_ids
     if "counts_when" in fields and body.counts_when is not None:
@@ -494,7 +505,12 @@ async def create_change(db: AsyncSession, principal: Any, body: Any) -> Any:
     if "milestone" not in body.before or "milestone" not in body.after:
         raise _error(422, "before.milestone and after.milestone (null: remove it)")
     current = _value(row)
-    if body.before["milestone"] != current:
+    # every-field-editable: ``before.milestone`` may name only the fields the caller saw (the
+    # Goal ladder moves a key result by its goal alone); each one named is checked.
+    seen_ = body.before["milestone"]
+    if not isinstance(seen_, dict) or not seen_ or set(seen_) - set(FIELDS):
+        raise _error(422, f"before.milestone: the milestone as you saw it ({', '.join(FIELDS)})")
+    if seen_ != {k: current[k] for k in seen_}:
         raise _error(status.HTTP_409_CONFLICT,
                      {"message": "Changed since you saw it", "current": {"milestone": current},
                       "changed_by": None, "changed_at": None})  # fmt: skip
@@ -561,7 +577,7 @@ async def _decide_own(db: AsyncSession, principal: Any, c: SimpleChange, action:
         else:
             row.name = after["name"]
             row.target_date = date.fromisoformat(after["date"]) if after["date"] else None
-            row.goal_id = uuid.UUID(after["goal_id"]) if after["goal_id"] else None
+            await _regoal(db, row, uuid.UUID(after["goal_id"]) if after["goal_id"] else None)
             row.item_ids = [uuid.UUID(i) for i in after["item_ids"]]
             row.counts_when = after["counts_when"]
     c.status = "accepted" if action == "accept" else "declined"

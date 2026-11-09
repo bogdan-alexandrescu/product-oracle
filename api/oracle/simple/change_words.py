@@ -149,6 +149,9 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             if not dep:
                 return f"changed what {x} depends on"
             return f"{x} no longer depends on {dep}" if gone else f"{x} now depends on {dep}"
+        case "set_code":
+            code = target.get("code")
+            return f"gave {x} the code {code}" if code else f"took the code off {x}"
         case "set_feature":
             return f"linked {x} to a feature" if after.get("feature_id") else f"unlinked {x}"
         # feature-parts: target names the parent (the new one, else the one left).

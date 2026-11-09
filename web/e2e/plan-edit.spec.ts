@@ -162,3 +162,27 @@ test("Edit plan: a later proposal supersedes the waiting one, which can't be app
   await expect(rows(page).filter({ hasText: "Budgets per team" })).toHaveCount(0);
   expect((await horizonOf(page))["Usage dashboard"]).toBe("Now");
 });
+
+// protects = (every-field) Edit plan's Add an item never gives a code to a second item: with "F-31 Alert routing by team" on the
+// plan, adding "F-31 Launch flow" is refused in plain words and nothing is added; a free code is added; fails_when = two items on
+// the plan read F-31 (the mock's codesFree, as changeset._codes); no_claim = a picked feature's code (api/tests/test_roadmap_change_sets.py).
+test("Edit plan: an item whose code another item has is refused in plain words", async ({ page }) => {
+  await withDecider(page);
+  await openPlan(page);
+  await page.getByTestId("plan-edit").click();
+  await expect(changes(page)).toContainText(BASE_1);
+  const addItem = async (title: string) => {
+    await changes(page).getByLabel("New item title").fill(title);
+    await changes(page).getByRole("button", { name: "Add item" }).click();
+  };
+  await addItem("F-31 Alert routing by team");
+  await expect(editItem(page, "F-31 Alert routing by team")).toContainText("New");
+
+  await addItem("F-31 Launch flow");
+  await expect(changes(page)).toContainText("F-31 is already the code of F-31 Alert routing by team");
+  await expect(editItem(page, "F-31 Launch flow")).toHaveCount(0);
+
+  await addItem("F-32 Launch flow");
+  await expect(editItem(page, "F-32 Launch flow")).toContainText("New");
+  await expect(changes(page)).not.toContainText("is already the code of");
+});

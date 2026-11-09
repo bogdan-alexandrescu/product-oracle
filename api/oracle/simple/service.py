@@ -958,20 +958,12 @@ async def item_codes(db: AsyncSession, entries: list[Entry]) -> None:
     key, F-12, or its PRD section's, F-06; the same as Priorities reads), else the PRD
     code of its own section; None for an item with neither (no initials outside
     Priorities)."""
-    from oracle.simple.priorities import FEATURE_CODE, _short_codes
+    from oracle.roadmap import codes
 
     fids = {e.row.feature_id for e in entries if e.row.feature_id}
-    codes: dict[str, str] = {}
-    keys: dict[uuid.UUID, str] = {}
-    if fids:
-        codes = await _short_codes(db, names=False)  # real codes only: no names needed
-        keys = dict(
-            (await db.execute(select(Entity.id, Entity.key).where(Entity.id.in_(fids)))).all()
-        )
+    by_feature = await codes.feature_codes(db) if fids else {}
     for e in entries:
-        code = codes.get(keys.get(e.row.feature_id, "")) if e.row.feature_id else None
-        e.code = code if code and FEATURE_CODE.fullmatch(code.split(".")[0]) else None
-        e.code = e.code or _prd_code(e.row.prd_section_key)
+        e.code = codes.code_of(e.row, by_feature)
 
 
 async def _bet_flows(db: AsyncSession, principal: Any, shown: list[Any], items: list[Any]) -> None:
@@ -1148,11 +1140,13 @@ def item_out(
     row, r = e.row, e.resolved
     names = names or {}
     may = can_decide(principal, e, deciders) if principal is not None else False
-    code, title = coded_title(row.title, e.code or _prd_code(row.prd_section_key))
+    prd = _prd_code(row.prd_section_key)
+    code, title = coded_title(row.title, e.code or prd)
     return SimpleRoadmapItem(
         id=row.id,
         key=row.item_key,
         code=code,
+        code_from=("feature" if e.code and e.code != prd else "prd") if e.code or prd else None,
         title=title,
         outcome=row.outcome,
         note=row.note,

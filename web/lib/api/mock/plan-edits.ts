@@ -12,6 +12,7 @@
  * an approver, as in the API.
  */
 import type { Schemas } from "@/lib/api/client";
+import { shownCode, shownName } from "./item-code";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
 type Horizon = "now" | "next" | "later";
@@ -57,6 +58,8 @@ export interface PlanEditsContext {
   seededApproved: (slug: string) => number | null;
   /** A new version of `doc` copied from `base`, with a Plan changes section. */
   newVersion: (doc: Doc, base: VersionLike, body: string) => VersionLike;
+  /** every-field: a Ground Truth feature's code (its key, F-31), as simple.service.item_codes reads it; null when it has none. */
+  featureCode?: (featureId: string) => string | null;
 }
 
 const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
@@ -92,18 +95,19 @@ class Refused extends Error {
   }
 }
 
-type Applied = { lanes: Record<Horizon, (PlanEditItem & { isNew: boolean; deferred: boolean })[]>; cut: { item: PlanEditItem; reason: string }[] };
+type Applied = { lanes: Record<Horizon, (PlanEditItem & { isNew: boolean; deferred: boolean })[]>; cut: { item: PlanEditItem; reason: string }[]; added: string[] };
 
 function apply(base: PlanEditItem[], changes: Change[]): Applied {
   const lanes: Applied["lanes"] = { now: [], next: [], later: [] };
   for (const i of base) lanes[i.horizon].push({ ...i, isNew: false, deferred: false });
-  const out: Applied = { lanes, cut: [] };
+  const out: Applied = { lanes, cut: [], added: [] };
   const all = () => HORIZONS.flatMap((h) => lanes[h]);
   for (const c of changes) {
     if (c.op === "add") {
       const key = c.key ?? slugOf(c.title);
       if (all().some((i) => i.key === key) || out.cut.some((x) => x.item.key === key)) throw new Refused(422, `the plan has an item ${key} already`);
       lanes[c.horizon].push({ key, title: c.title, horizon: c.horizon, outcome: c.outcome ?? null, feature_id: c.feature_id ?? null, isNew: true, deferred: false });
+      out.added.push(key);
       continue;
     }
     const item = all().find((i) => i.key === c.key);
@@ -117,6 +121,22 @@ function apply(base: PlanEditItem[], changes: Change[]): Applied {
     } else if (c.op === "reorder") lanes[item.horizon].splice(Math.min(c.position, lanes[item.horizon].length), 0, item);
   }
   return out;
+}
+
+/** changeset._codes: one code, one item. An added item whose shown code (shownCode: its picked feature's, else its title's) another
+ * item of the plan shows is refused in set_code's words: 422 when added, 409 at propose (taken since). Slices of one feature share it. */
+function codesFree(ctx: PlanEditsContext, applied: Applied, status: number) {
+  const plan = HORIZONS.flatMap((h) => applied.lanes[h]);
+  const featureCode = (id: string) => ctx.featureCode?.(id) ?? null;
+  // The item there first holds the code: the base's, then the adds in the order made.
+  const added = plan.filter((p) => p.isNew).sort((a, b) => applied.added.indexOf(a.key) - applied.added.indexOf(b.key));
+  for (const [n, p] of added.entries()) {
+    const before = [...plan.filter((o) => !o.isNew), ...added.slice(0, n)];
+    const code = shownCode(p, featureCode);
+    if (!code) continue;
+    const hit = before.find((o) => o.key !== p.key && !(p.feature_id && o.feature_id === p.feature_id) && shownCode(o, featureCode)?.toUpperCase() === code.toUpperCase());
+    if (hit) throw new Refused(status, `${code} is already the code of ${shownName(hit, featureCode)}`);
+  }
 }
 
 function view(ctx: PlanEditsContext, db: PlanEditsDb, doc: Doc, row: ChangeSetRow): Schemas["ChangeSetOut"] {
@@ -234,7 +254,7 @@ export async function routeChangeSets(ctx: PlanEditsContext, db: PlanEditsDb, re
       checkBase(ctx, doc, row);
       const changes = input.changes.map((c) => (c.op === "add" ? { ...c, key: c.key ?? slugOf(c.title) } : c));
       for (const c of changes) if (c.op === "cut" && !c.reason?.trim()) throw new Refused(422, "a cut needs its reason");
-      apply(itemsOf(ctx, db, doc.slug, row.base_version), changes);
+      codesFree(ctx, apply(itemsOf(ctx, db, doc.slug, row.base_version), changes), 422);
       row.changes = changes;
       stamp(row);
       return json(200, view(ctx, db, doc, row));
@@ -251,6 +271,7 @@ export async function routeChangeSets(ctx: PlanEditsContext, db: PlanEditsDb, re
       if (!row.changes.length) throw new Refused(422, "Nothing to propose: the change set has no changes");
       const baseItems = itemsOf(ctx, db, doc.slug, row.base_version);
       const applied = apply(baseItems, row.changes);
+      codesFree(ctx, applied, 409);
       const base = ctx.versions.find((v) => v.document_id === doc.id && v.number === row.base_version);
       if (!base) throw new Refused(404, `version ${row.base_version} of '${doc.slug}' not found`);
       const body = linesOf(row.base_version, row.changes, new Map(baseItems.map((i) => [i.key, i.title])));
