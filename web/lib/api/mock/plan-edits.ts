@@ -12,12 +12,13 @@
  * an approver, as in the API.
  */
 import type { Schemas } from "@/lib/api/client";
-import { shownCode, shownName } from "./item-code";
+import { prdCode, shownCode, shownName } from "./item-code";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
 type Horizon = "now" | "next" | "later";
 type Change = Schemas["ChangeSetOut"]["changes"][number];
-export type PlanEditItem = { key: string; title: string; horizon: Horizon; outcome?: string | null; feature_id?: string | null };
+/** An item of a plan version; ``section`` is the PRD section it came from (RoadmapItem.prd_section_key), none for an added one. */
+export type PlanEditItem = { key: string; title: string; horizon: Horizon; outcome?: string | null; feature_id?: string | null; section?: string | null };
 
 export interface ChangeSetRow {
   id: string;
@@ -124,17 +125,26 @@ function apply(base: PlanEditItem[], changes: Change[]): Applied {
 }
 
 /** changeset._codes: one code, one item. An added item whose shown code (shownCode: its picked feature's, else its title's) another
- * item of the plan shows is refused in set_code's words: 422 when added, 409 at propose (taken since). Slices of one feature share it. */
+ * item of the plan shows is refused in set_code's words: 422 when added, 409 at propose (taken since). Slices of one feature share it:
+ * as codes.clash, items whose own feature or PRD section gives the code are parts of one feature unless linked to different
+ * features; a code from a title alone still clashes. */
 function codesFree(ctx: PlanEditsContext, applied: Applied, status: number) {
   const plan = HORIZONS.flatMap((h) => applied.lanes[h]);
   const featureCode = (id: string) => ctx.featureCode?.(id) ?? null;
+  // codes.code_of: an item's code from its feature, else its PRD section's.
+  const codeOf = (i: PlanEditItem) => (i.feature_id ? featureCode(i.feature_id) : null) || prdCode(i.section);
+  const reads = (got: string | null | undefined, code: string) => (got ?? "").toUpperCase() === code.toUpperCase();
   // The item there first holds the code: the base's, then the adds in the order made.
   const added = plan.filter((p) => p.isNew).sort((a, b) => applied.added.indexOf(a.key) - applied.added.indexOf(b.key));
   for (const [n, p] of added.entries()) {
     const before = [...plan.filter((o) => !o.isNew), ...added.slice(0, n)];
     const code = shownCode(p, featureCode);
     if (!code) continue;
-    const hit = before.find((o) => o.key !== p.key && !(p.feature_id && o.feature_id === p.feature_id) && shownCode(o, featureCode)?.toUpperCase() === code.toUpperCase());
+    const part = reads(codeOf(p), code);
+    const hit = before.find((o) => {
+      if (o.key === p.key || (p.feature_id && o.feature_id === p.feature_id) || !reads(shownCode(o, featureCode), code)) return false;
+      return !(part && reads(codeOf(o), code) && (!p.feature_id || !o.feature_id)); // a slice of the same feature, by its code
+    });
     if (hit) throw new Refused(status, `${code} is already the code of ${shownName(hit, featureCode)}`);
   }
 }
@@ -277,7 +287,7 @@ export async function routeChangeSets(ctx: PlanEditsContext, db: PlanEditsDb, re
       const body = linesOf(row.base_version, row.changes, new Map(baseItems.map((i) => [i.key, i.title])));
       const version = ctx.newVersion(doc, base, body);
       (db.versions[doc.slug] ??= {})[version.number] = HORIZONS.flatMap((h) => applied.lanes[h]).map((i) => ({
-        key: i.key, title: i.title, horizon: i.horizon, outcome: i.outcome ?? null, feature_id: i.feature_id ?? null,
+        key: i.key, title: i.title, horizon: i.horizon, outcome: i.outcome ?? null, feature_id: i.feature_id ?? null, section: i.section ?? null,
       }));
       row.status = "proposed";
       row.proposed_version = version.number;

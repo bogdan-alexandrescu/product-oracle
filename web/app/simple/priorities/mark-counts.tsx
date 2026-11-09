@@ -7,6 +7,8 @@ import type { ReactNode } from "react";
 
 import { Sheet } from "@/components/ds";
 
+import { weeksWords } from "./plan-buckets";
+
 /** A rectangle on the plot, in pixels: left, top, right, bottom. */
 export type Box = [number, number, number, number];
 type Pt = [number, number];
@@ -99,8 +101,6 @@ const oneSpot = (rows: CountRow[]) => new Set(rows.map((r) => `${r.effort ?? "pm
 
 // A span never breaks; lines break only at the dot.
 const span = (xs: number[]) => (Math.min(...xs) === Math.max(...xs) ? fmt(xs[0]) : `${fmt(Math.min(...xs))}⁠–⁠${fmt(Math.max(...xs))}`);
-/** Weeks of effort, one wording everywhere on the chart: "1 week", "2 weeks", "1.5 weeks". */
-export const weeksWords = (n: number) => `${fmt(n)} ${fmt(n) === "1" ? "week" : "weeks"}`;
 /** An effort in a lone mark's words: "effort 1 week", "effort 2 weeks", "PM-owned, no effort". */
 const effortWords = (xs: number[]) => (xs.length === 1 || Math.min(...xs) === Math.max(...xs) ? `effort ${weeksWords(xs[0])}` : `effort ${span(xs)} weeks`);
 

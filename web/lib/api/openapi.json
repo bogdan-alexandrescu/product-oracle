@@ -20079,6 +20079,122 @@
           }
         },
         "x-min-role": "viewer"
+      },
+      "patch": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Edit Ritual Occurrence Skip",
+        "description": "The ritual's owner: Edit the reason of a skipped occurrence.",
+        "operationId": "edit_ritual_occurrence_skip",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "occurrence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Occurrence Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkipIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        },
+        "x-min-role": "viewer"
+      },
+      "delete": {
+        "tags": [
+          "rituals"
+        ],
+        "summary": "Undo Ritual Occurrence Skip",
+        "description": "The ritual's owner: Undo skip, back to its state before (ready, missed or failed).",
+        "operationId": "undo_ritual_occurrence_skip",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "occurrence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Occurrence Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OccurrenceOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role too low, or not the ritual's owner"
+          },
+          "404": {
+            "description": "No such ritual or occurrence in this company"
+          },
+          "409": {
+            "description": "Stale lock_version, a built-in deleted, or a summary under way"
+          },
+          "422": {
+            "description": "Invalid schedule, length, lead time or attendees"
+          }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/ritual-occurrences/{occurrence_id}/summary": {

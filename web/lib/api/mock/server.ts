@@ -151,7 +151,7 @@ import {
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
 import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, seedStoredRefusalDraft, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb, draftItemsRunRetried } from "./draft-roadmap";
-import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, PLAN_SAME_KEY_SCENARIO, SAME_KEY_ITEM, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, NOT_CLAIMS_LINE, NOT_CLAIMS_SCENARIO, SHARED_DATE_SCENARIO, TWO_WAY_DATES_SCENARIO, TWO_WAY_GA, VERSION_WARNINGS_SCENARIO, dateMarks, dateWarnings, versionWarnings, inboxTracks, planEntityTitle, planFeatureRows, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, PLAN_SAME_KEY_SCENARIO, PLAN_SECTION_CODE_SCENARIO, PLAN_SECTION_LINKED_SCENARIO, PLAN_SECTION_FEATURE_SCENARIO, SECTION_LINK_FEATURE, featureCodes, seedTwoRoadmaps, SAME_KEY_ITEM, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, NOT_CLAIMS_LINE, NOT_CLAIMS_SCENARIO, SHARED_DATE_SCENARIO, TWO_WAY_DATES_SCENARIO, TWO_WAY_GA, VERSION_WARNINGS_SCENARIO, dateMarks, dateWarnings, versionWarnings, inboxTracks, planEntityTitle, planFeatureRows, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecPerson, type SpecsDb } from "./specs";
 import { inboxStrategy, planDrift, routeStrategy, seedNoStrategy, seedPlanDrift, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { seedImpact } from "./impact";
@@ -172,7 +172,22 @@ import {
 import { bucketGoalsInOrder, placeBucketGoal, placeBucketGoals, routeGoalBuckets, seedGoalBuckets, seedGoalBucketsHard, seedGoalBucketsWith } from "./goal-buckets";
 import { proposeGoalDelete, restoreCodeTaken, routeSimpleChanges, seedFeatureAskProposal, seedSimpleProposal, simpleInboxRows, type SimpleChangesCtx } from "./simple-changes";
 import { routeCurrentState, seedCurrentState, type CurrentStateDb } from "./currentstate";
-import { featureKeyOf, prioritiesOut } from "./simple-priorities";
+import {
+  featureKeyOf,
+  PRIORITIES_GOAL_NO_VALUE_SCENARIO,
+  PRIORITIES_PLAN_GOAL_CODES_SCENARIO,
+  PRIORITIES_PLAN_GOAL_NAMES_SCENARIO,
+  PRIORITIES_PLAN_GOAL_TWINS_SCENARIO,
+  PRIORITIES_PLAN_KEY_RESULTS_SCENARIO,
+  PRIORITIES_PLAN_ONE_WEEK_SCENARIO,
+  prioritiesOut,
+  seedGoalNoValue,
+  seedPlanGoalCodes,
+  seedPlanGoalNames,
+  seedPlanGoalTwins,
+  seedPlanKeyResults,
+  seedPlanOneWeek,
+} from "./simple-priorities";
 import { restoreTrack, routeRemoved } from "./simple-removed";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, restoreAgendaItem, sheetDecisionMade, sheetProposals, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { goalSuggestionInboxRows, seedGoalSuggestions, seedHeldGoalSuggestion, seedPersonGoalSuggestion } from "./simple-suggestions";
@@ -194,15 +209,15 @@ import { knowPrdOrder } from "./prd-rank";
 import { openDraft } from "./simple-roadmap";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowGoalParents, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedPrdCalmPage, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, companyToday, forgetRoadmapReads, knowGoalMapItems, ownPrd, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
-import { closed, GOALS, MAP_GOALS, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
+import { closed, GOALS, MAP_GOALS, prdOwnerIdsOf, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapGoals, goalMapIdOf, goalMapItems, ladderMilestones, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
-import { LADDER_KR_SCENARIO, LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
+import { LADDER_KR_CODES_SCENARIO, LADDER_KR_SCENARIO, LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, entryOut, routeTrash, trashName, type TrashDb, type TrashEntryRow } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 import { waitingItems } from "./waiting-list";
-import { HOME_MILESTONE_FOLD_SCENARIO, HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_PRD_FOLD_SCENARIO, HOME_MILESTONE_PLAIN_FOLD_SCENARIO, HOME_MILESTONE_PRD_GOAL_FOLD_SCENARIO, HOME_MILESTONE_PRDS_FOLD_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONES_SCENARIO, seedHomeMilestoneFold, seedHomeMilestoneGoals, seedHomeMilestonePrdFold, seedHomeMilestonePlainFold, seedHomeMilestonePrdGoalFold, seedHomeMilestonePrdsFold, seedHomeMilestones, seedHomeMilestoneTracks, seedHomeMilestoneTwinTracks } from "./home-milestones";
+import { HOME_MILESTONE_BARE_TRACK_SCENARIO, HOME_MILESTONE_FOLD_SCENARIO, HOME_MILESTONE_GOALS_FOLD_SCENARIO, HOME_MILESTONE_LEAD_GOALS_SCENARIO, HOME_MILESTONE_GOALS_SCENARIO, HOME_MILESTONE_PRD_FOLD_SCENARIO, HOME_MILESTONE_PLAIN_FOLD_SCENARIO, HOME_MILESTONE_PRD_GOAL_FOLD_SCENARIO, HOME_MILESTONE_PRDS_FOLD_SCENARIO, HOME_MILESTONE_TRACKS_SCENARIO, HOME_MILESTONE_TWIN_TRACKS_SCENARIO, HOME_MILESTONE_TWO_ROADMAPS_SCENARIO, HOME_MILESTONE_TWO_ROADMAPS_SWAPPED_SCENARIO, HOME_MILESTONES_SCENARIO, seedHomeMilestoneBareTrack, seedHomeMilestoneFold, seedHomeMilestoneGoals, seedHomeMilestoneGoalsFold, seedHomeMilestoneLeadGoals, seedHomeMilestonePrdFold, seedHomeMilestonePlainFold, seedHomeMilestonePrdGoalFold, seedHomeMilestonePrdsFold, seedHomeMilestones, seedHomeMilestoneTracks, seedHomeMilestoneTwinTracks, seedHomeMilestoneTwoRoadmaps } from "./home-milestones";
 import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience, spansRow, type BoardItem } from "./audience";
 import {
   draftPublicTexts,
@@ -798,7 +813,7 @@ function seedEmpty(): Db {
   };
   db.members = MOCK_MEMBERS.map((m) => ({
     ...m,
-    id: m.email === MOCK_LOGIN.email ? db.user_id : uuid(),
+    id: m.email === MOCK_LOGIN.email ? db.user_id : stableUuid(`member/${m.email}`),
     disabled_at: null,
     disabled_by: null,
     status: "active" as const,
@@ -1901,19 +1916,29 @@ function seedGoalOrderScenario(hard = false): Db {
 /**
  * kr-in-goal-card, the "goal-key-results" scenario: "goal-order" with two confirmed key results
  * (subgoals) under Faster activation: KR 1 has a roadmap item, KR 2 none yet and a feature
- * someone suggested for it. Invented data.
+ * someone suggested for it; a proposed key result and KR 1's own subgoal, each with an item
+ * (kr-fold). Invented data.
  */
 function seedGoalKeyResultsScenario(): Db {
   const db = seedGoalOrderScenario();
   const rm = db.simple_roadmap!;
   const parent = db.baseline.entities.find((e) => e.key === "faster-activation")!;
-  const kr = (key: string, title: string, at: string) =>
-    db.baseline.entities.push({ ...parent, id: stableUuid(`simple-goal/${key}`), key, title, parent_id: parent.id, attrs: { metric: "teams", weight: 1 }, created_at: at, updated_at: at });
+  const kr = (key: string, title: string, at: string, under = parent.id, status: "confirmed" | "proposed" = "confirmed") =>
+    db.baseline.entities.push({ ...parent, id: stableUuid(`simple-goal/${key}`), key, title, parent_id: under, status, attrs: { metric: "teams", weight: 1 }, created_at: at, updated_at: at });
   kr("kr-setup-day", "KR 1 Half of new teams set up in one day", "2026-10-01T09:00:00Z");
   kr("kr-first-alert", "KR 2 New teams send a first alert in week one", "2026-10-02T09:00:00Z");
-  const item: SimpleDb["items"][number] = { key: "kr-setup-list", title: "Guided setup checklist", horizon: "now", roadmap: "onboarding-roadmap", goal: "kr-setup-day", confidence: "medium", start: 5, end: 45, source: "typed" };
-  rm.items.push(item);
-  rm.ids[item.key] = stableUuid(`simple-item/${item.key}`);
+  // kr-fold: a proposed key result, and a key result's own subgoal: both fold into Faster activation.
+  kr("kr-first-report", "Teams share a first report", "2026-10-03T09:00:00Z", parent.id, "proposed");
+  kr("kr-setup-ten", "Setup takes ten minutes", "2026-10-04T09:00:00Z", stableUuid("simple-goal/kr-setup-day"));
+  const items: SimpleDb["items"] = [
+    { key: "kr-setup-list", title: "Guided setup checklist", horizon: "now", roadmap: "onboarding-roadmap", goal: "kr-setup-day", confidence: "medium", start: 5, end: 45, source: "typed" },
+    { key: "kr-report-start", title: "Starter report template", horizon: "now", roadmap: "onboarding-roadmap", goal: "kr-first-report", confidence: "medium", start: 10, end: 50, source: "typed" },
+    { key: "kr-setup-bar", title: "Setup progress bar", horizon: "now", roadmap: "onboarding-roadmap", goal: "kr-setup-ten", confidence: "medium", start: 15, end: 55, source: "typed" },
+  ];
+  for (const item of items) {
+    rm.items.push(item);
+    rm.ids[item.key] = stableUuid(`simple-item/${item.key}`);
+  }
   rm.goal_suggestions = [...(rm.goal_suggestions ?? []), seedPersonGoalSuggestion("kr-first-alert", "First alert wizard", "New teams send an alert on day one", stableUuid("mock-user/kr-teammate"))];
   return db;
 }
@@ -2760,7 +2785,7 @@ function seed(): Db {
   };
   db.members = MOCK_MEMBERS.map((m) => ({
     ...m,
-    id: m.email === MOCK_LOGIN.email ? db.user_id : uuid(),
+    id: m.email === MOCK_LOGIN.email ? db.user_id : stableUuid(`member/${m.email}`),
     disabled_at: null,
     disabled_by: null,
     status: "active" as const,
@@ -4105,15 +4130,48 @@ function load(): Db {
                 ? () => {
                     // build-milestones-on-roadmap: the roadmaps' own milestones per goal; with a PRD's (Usage alerts).
                     const db = seed();
-                    (db.simple_roadmap = seedSimpleRoadmap()).goal_milestones = scenario === "simple-milestones" ? seedOwnMilestones() : seedPrdMilestones();
+                    const rm = (db.simple_roadmap = seedSimpleRoadmap());
+                    rm.goal_milestones = scenario === "simple-milestones" ? seedOwnMilestones() : seedPrdMilestones();
+                    if (scenario === "simple-prd-milestones") {
+                      // Usage alerts' owner (drafts.who: its track's owner) is Nora Vance, an invented approver.
+                      const nora = { email: "nora.vance@example.com", name: "Nora Vance", role: "approver" as const, engineering_lead: false, created_at: "2026-09-10T09:00:00Z", id: stableUuid("member/nora.vance@example.com"), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0 };
+                      db.members.push(nora);
+                      rm.track_owners = { alerts: nora.id };
+                    }
                     return db;
                   }
-              : scenario === "simple-prd-milestone-stuck"
+              : scenario === "simple-prd-milestone-stuck" || scenario === "simple-prd-milestones-gone" || scenario === "simple-prd-milestone-track-owner"
                 ? () => {
                     // stuck-milestone-decline: a PRD milestone's ask that its milestone no longer waits on.
+                    // Usage alerts' required reviewer is commenter@example.com; its asks go to its owner (its track's),
+                    // approver@example.com.
                     const db = seed();
-                    const ms = ((db.simple_roadmap = seedSimpleRoadmap()).goal_milestones = seedPrdMilestones());
-                    db.simple_roadmap.changes = seedStuckPrdAsk(ms);
+                    const at = (email: string) => db.members.find((m) => m.email === email)!.id;
+                    const rm = (db.simple_roadmap = seedSimpleRoadmap());
+                    const ms = (rm.goal_milestones = seedPrdMilestones());
+                    rm.track_owners = { alerts: at("approver@example.com") };
+                    if (scenario === "simple-prd-milestone-track-owner") {
+                      // stuck-ask-minors: Rowan Pike (an invented approver) owns Usage alerts' track instead, and a
+                      // second member shares approver@example.com's name (Priya Raman). Jun Park owns the welcome
+                      // track, where Alert routing by team moves: the PRD's second owner, after Rowan Pike by id.
+                      const join = (email: string, name: string) => {
+                        const m = { email, name, role: "approver" as const, engineering_lead: false, created_at: "2026-09-10T09:00:00Z", id: stableUuid(`member/${email}`), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0 };
+                        db.members.push(m);
+                        return m.id;
+                      };
+                      rm.items.find((s) => s.key === "alert-sso")!.track = "welcome";
+                      rm.track_owners = { alerts: join("rowan.pike@example.com", "Rowan Pike"), welcome: join("jun.park@example.com", "Jun Park") };
+                      join("priya.r@example.com", "Priya Raman");
+                    }
+                    rm.changes = seedStuckPrdAsk(ms, (slug) => prdOwnerIdsOf(rm, slug), (id) => {
+                      const m = db.members.find((x) => x.id === id);
+                      return m ? displayName(m.email, m.name) : null;
+                    });
+                    rm.prd_reviewers = { "usage-alerts": [at("commenter@example.com")] };
+                    if (scenario === "simple-prd-milestones-gone") {
+                      // stuck-ask-minors: every Usage alerts milestone is gone; approver@example.com owns its track.
+                      rm.goal_milestones = ms.filter((m) => !m.prd);
+                    }
                     return db;
                   }
               : scenario === "roadmap-milestones"
@@ -4126,6 +4184,42 @@ function load(): Db {
                 ? seedGoalBucketsUndatedScenario
               : scenario === "simple-plan"
                 ? () => seedSimplePlanScenario()
+              : scenario === PRIORITIES_PLAN_GOAL_NAMES_SCENARIO
+                ? () => {
+                    const db = seedSimplePlanScenario();
+                    seedPlanGoalNames(db.simple_roadmap!);
+                    return db;
+                  }
+              : scenario === PRIORITIES_PLAN_GOAL_CODES_SCENARIO
+                ? () => {
+                    const db = seedSimplePlanScenario();
+                    seedPlanGoalCodes(db.simple_roadmap!);
+                    return db;
+                  }
+              : scenario === PRIORITIES_PLAN_ONE_WEEK_SCENARIO
+                ? () => {
+                    const db = seedSimplePlanScenario();
+                    seedPlanOneWeek(db.simple_roadmap!);
+                    return db;
+                  }
+              : scenario === PRIORITIES_PLAN_GOAL_TWINS_SCENARIO
+                ? () => {
+                    const db = seedSimplePlanScenario();
+                    seedPlanGoalTwins(db.simple_roadmap!);
+                    return db;
+                  }
+              : scenario === PRIORITIES_PLAN_KEY_RESULTS_SCENARIO
+                ? () => {
+                    const db = seedSimplePlanScenario();
+                    seedPlanKeyResults(db.baseline.entities, db.simple_roadmap!);
+                    return db;
+                  }
+              : scenario === PRIORITIES_GOAL_NO_VALUE_SCENARIO
+                ? () => {
+                    const db = seed();
+                    seedGoalNoValue((db.simple_roadmap = seedSimpleRoadmap()));
+                    return db;
+                  }
               : scenario === "roadmap-keydates"
                 ? seedRoadmapKeyDatesScenario
               : scenario === "one-pager-heading-count"
@@ -4278,20 +4372,21 @@ function load(): Db {
                     if (churn) churn.status = "confirmed";
                     return db;
                   }
-              : scenario === LADDER_SCENARIO || scenario === LADDER_KR_SCENARIO
+              : scenario === LADDER_SCENARIO || scenario === LADDER_KR_SCENARIO || scenario === LADDER_KR_CODES_SCENARIO
                 ? () => {
                     // goal-ladder: the ladder's goals are Home's (one store, the same ids); each
                     // feature is its own Simple roadmap item, with its status, dates and what it waits on.
                     const db = seed();
                     const template = db.baseline.entities.find((e) => e.type === "goal")!;
                     for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") e.status = "proposed";
-                    for (const g of ladderGoals(goalMapIdOf, scenario === LADDER_KR_SCENARIO)) db.baseline.entities.push({ ...template, ...g, status: "confirmed", body: null, locked: false, locked_by: null, locked_at: null });
+                    for (const g of ladderGoals(goalMapIdOf, scenario !== LADDER_SCENARIO, scenario === LADDER_KR_CODES_SCENARIO)) db.baseline.entities.push({ ...template, ...g, body: null, locked: false, locked_by: null, locked_at: null });
                     const rm = (db.simple_roadmap = seedSimpleRoadmap());
                     // goal-map-editing: a feature on no milestone names its goal itself (by the goal's id).
-                    rm.items = ladderItems().map(({ goal, ...x }) => ({ ...x, heading: `${x.section.toUpperCase()} ${x.title}`, horizon: "next" as const, roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium" as const, ...(goal ? { map_goal: goalMapIdOf(goal) } : {}) }));
-                    // goal-map-editing: one goal store, so a ladder goal goes to Trash as any goal does.
+                    rm.items = ladderItems(scenario === LADDER_KR_CODES_SCENARIO).map(({ goal, ...x }) => ({ ...x, heading: `${x.section.toUpperCase()} ${x.title}`, horizon: "next" as const, roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium" as const, ...(goal ? { map_goal: goalMapIdOf(goal) } : {}) }));
+                    // goal-map-editing: one goal store, so a ladder goal goes to Trash as any goal does; every goal not
+                    // rejected is a bucket, proposed ones too (GET /v1/simple/goal-buckets).
                     const gb = (rm.goal_buckets = seedGoalBuckets());
-                    for (const g of ladderGoals(goalMapIdOf, scenario === LADDER_KR_SCENARIO)) gb.goals.push({ id: g.id, key: g.key, title: g.title, order: gb.goals.length + 1, measure: String(g.attrs.metric ?? ""), target: String(g.attrs.target ?? ""), due: null, archived: false });
+                    for (const g of ladderGoals(goalMapIdOf, scenario !== LADDER_SCENARIO, scenario === LADDER_KR_CODES_SCENARIO)) gb.goals.push({ id: g.id, key: g.key, title: g.title, order: gb.goals.length + 1, measure: String(g.attrs.metric ?? ""), target: String(g.attrs.target ?? ""), due: null, archived: false });
                     rm.ids = Object.fromEntries(rm.items.map((x) => [x.key, stableUuid(`simple-item/${x.key}`)]));
                     return db;
                   }
@@ -4306,7 +4401,14 @@ function load(): Db {
               : scenario === REPLACED_PRD_TRASH_SCENARIO
                 ? seedReplacedPrdTrashScenario
               : scenario === HOME_MILESTONES_SCENARIO
-                ? () => ({ ...seed(), simple_roadmap: seedHomeMilestones() })
+                ? () => {
+                    const db = { ...seed(), simple_roadmap: seedHomeMilestones() };
+                    // Pilot plan A's owner (drafts.who: its track's owner) is Ivo Lindqvist, an invented approver.
+                    const ivo = { email: "ivo.lindqvist@example.com", name: "Ivo Lindqvist", role: "approver" as const, engineering_lead: false, created_at: "2026-09-10T09:00:00Z", id: stableUuid("member/ivo.lindqvist@example.com"), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0 };
+                    db.members.push(ivo);
+                    db.simple_roadmap.track_owners = { pilot: ivo.id };
+                    return db;
+                  }
               : scenario === HOME_MILESTONE_GOALS_SCENARIO
                 ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneGoals() })
               : scenario === HOME_MILESTONE_TRACKS_SCENARIO
@@ -4323,6 +4425,14 @@ function load(): Db {
                 ? () => ({ ...seed(), simple_roadmap: seedHomeMilestonePrdsFold() })
               : scenario === HOME_MILESTONE_PLAIN_FOLD_SCENARIO
                 ? () => ({ ...seed(), simple_roadmap: seedHomeMilestonePlainFold() })
+              : scenario === HOME_MILESTONE_GOALS_FOLD_SCENARIO
+                ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneGoalsFold() })
+              : scenario === HOME_MILESTONE_BARE_TRACK_SCENARIO
+                ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneBareTrack() })
+              : scenario === HOME_MILESTONE_LEAD_GOALS_SCENARIO
+                ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneLeadGoals() })
+              : scenario === HOME_MILESTONE_TWO_ROADMAPS_SCENARIO || scenario === HOME_MILESTONE_TWO_ROADMAPS_SWAPPED_SCENARIO
+                ? () => ({ ...seed(), simple_roadmap: seedHomeMilestoneTwoRoadmaps(scenario === HOME_MILESTONE_TWO_ROADMAPS_SWAPPED_SCENARIO) })
               : scenario === OLD_MILESTONES_SCENARIO
                 ? () => {
                     const db = seedOneRoadmapScenario();
@@ -4333,7 +4443,15 @@ function load(): Db {
                 ? () => {
                     // item-milestone: both area PRDs' milestones, each one a feature can be placed in.
                     const db = seedOneRoadmapScenario();
-                    db.simple_roadmap!.goal_milestones = seedItemMilestones();
+                    const rm = db.simple_roadmap!;
+                    rm.goal_milestones = seedItemMilestones();
+                    // Each PRD's owner (drafts.who: its tracks' owners) is Marta Moss, an invented approver who owns
+                    // the User Safety track and a Scale track its items are on.
+                    const marta = { email: "marta.moss@example.com", name: "Marta Moss", role: "approver" as const, engineering_lead: false, created_at: "2026-09-10T09:00:00Z", id: stableUuid("member/marta.moss@example.com"), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0 };
+                    db.members.push(marta);
+                    rm.extra_tracks = { scale: "Scale track" };
+                    for (const x of rm.items) if (x.roadmap === COMPANY_SLUG) x.track = x.prd_doc?.slug === AREA_PRDS[1][0] ? "scale" : rm.extra_roadmaps![COMPANY_SLUG].track;
+                    rm.track_owners = { [rm.extra_roadmaps![COMPANY_SLUG].track]: marta.id, scale: marta.id };
                     return db;
                   }
               : scenario === TRACKS_CLOSED_SCENARIO
@@ -4371,11 +4489,20 @@ function load(): Db {
   // "date-bases" verifies its dates, "strategy-plan" reviews its items against the strategy,
   // "outcomes" tracks outcomes of its items, "alerts-approved" is the approved plan alone, the
   // "track-alerts" scenarios watch its milestones (an accepted slip moves an approved item), and
-  // "plan-timeline-edit" changes the plan with the Timeline shown.
+  // "plan-timeline-edit" changes the plan with the Timeline shown, and "plan-section-code" adds
+  // to it an item linked to the feature whose code an approved item's PRD section gives
+  // ("plan-section-linked": that approved item is linked to another feature, Alert routing rules, created after F-31 so
+  // F-31 keeps its code; "plan-section-feature": with no feature F-31, Alert routing rules takes F-31 from that item).
   const approvedPlan = [
     "launches", "plan-decider", "strategy-plan", "outcomes", DATE_BASES_SCENARIO, SHARED_DATE_SCENARIO, NOT_CLAIMS_SCENARIO, ALERTS_APPROVED_SCENARIO,
-    "track-alerts", "track-alerts-many", "track-alerts-actions", "track-alerts-history", PLAN_TIMELINE_EDIT_SCENARIO,
+    "track-alerts", "track-alerts-many", "track-alerts-actions", "track-alerts-history", PLAN_TIMELINE_EDIT_SCENARIO, PLAN_SECTION_CODE_SCENARIO,
+    PLAN_SECTION_LINKED_SCENARIO, PLAN_SECTION_FEATURE_SCENARIO,
   ];
+  if (scenario === PLAN_SECTION_CODE_SCENARIO || scenario === PLAN_SECTION_LINKED_SCENARIO) baselineEntity(db, "feature", "F-31", "Alert routing by team", "2026-10-01T09:00:00Z");
+  if (scenario === PLAN_SECTION_LINKED_SCENARIO || scenario === PLAN_SECTION_FEATURE_SCENARIO) {
+    const { id, key, title } = SECTION_LINK_FEATURE;
+    baselineEntity(db, "feature", key, title, "2026-10-02T09:00:00Z").id = id;
+  }
   if (approvedPlan.includes(scenario ?? "")) {
     const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
     const v1 = roadmap && db.versions.find((v) => v.document_id === roadmap.id && v.number === 1);
@@ -6182,6 +6309,10 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
 
 /** #346: the change-set mock's view of the db; a proposal imports the next version, copied from its base. */
 function planEditsContext(db: Db, me: { id: string; role: Role }): PlanEditsContext {
+  const guided = db.roadmap?.two_roadmaps && db.baseline.entities.find((e) => e.type === "feature" && e.key === "f.guided-setup");
+  // Seeded lazily, on the first change-set request: a page opened before Edit plan shows usage-alerts-roadmap v1 not yet approved.
+  if (guided) seedTwoRoadmaps(db, (db.plan_edits ??= emptyPlanEdits()), guided.id);
+  let codes: Record<string, string> | undefined;
   return {
     userId: me.id,
     role: me.role,
@@ -6190,11 +6321,10 @@ function planEditsContext(db: Db, me: { id: string; role: Role }): PlanEditsCont
     uuid,
     now,
     deciderOf: (id) => db.review_v2?.policies.find((x) => x.document_id === id)?.decider_id ?? null,
-    seededItems: seededPlanItems,
-    featureCode: (id) => {
-      const e = db.baseline.entities.find((x) => x.id === id && x.type === "feature");
-      return e && /^[A-Z]{1,3}-\d+[a-j]?$/.test(e.key) ? e.key : null;
-    },
+    // The roadmap mock's flag (ensureRoadmap ran before the change-set routes), not the scenario read again.
+    seededItems: (slug, version) => seededPlanItems(slug, version, db.roadmap?.section_code),
+    // codes.feature_codes: a feature's key when it is a code, else its published PRD item's section's (prd_by_key).
+    featureCode: (id) => (codes ??= featureCodes(db.baseline.entities.filter((e) => e.type === "feature"), db.roadmap?.section_code, db.plan_edits, db))[id] ?? null,
     // The Plan mock's usage-alerts-roadmap v1 is its approved plan (./roadmap.ts, ALERTS_APPROVED).
     seededApproved: (slug) => (slug === ALERTS_ROADMAP_SLUG ? 1 : null),
     newVersion: (doc, base, body) => {
@@ -6714,7 +6844,17 @@ async function onePagerOf(db: Db, req: Request, p: string[]): Promise<OnePagerDb
     // C-13, vqa B-13: every PRD but the seed reads its own sections (one_pager.extract), never a copy
     // of Guided setup's; a PRD with no version yet reads none of them (every block "missing").
     const cites = Object.fromEntries((read?.citations ?? []).map((c) => [c.cite_key, { title: c.title ?? null, excerpt: c.excerpt ?? null }]));
-    return (others[d.id] = { ...prdOnePager({ id: d.id, slug: d.slug, title: d.title }, read?.sections ?? [], cites), visuals: db.simple_visuals, roadmap: db.simple_roadmap, flowKey: d.slug, ...(read ? { version: read.number, published_at: read.approved_at ?? null } : {}) });
+    // As the API, whose drafts, changes and decisions are rows of their own: a rebuilt page keeps
+    // its draft (working or submitted, with its reviewers) and its notes, never only what the
+    // version holds. Only the approval of the version a draft was submitted as settles it
+    // (drafts.on_version_approved, _submitted_for): then it is gone, as publishOnePager.
+    const was = known?.draft?.status === "submitted" ? known.draft.submitted_as ?? known.version + 1 : undefined;
+    const settled = was !== undefined && vs.some((x) => x.number === was && !!x.approved_at);
+    const kept = stale ? {
+      draft: settled ? null : known.draft, approval: settled ? null : known.approval, decisions: known.decisions,
+      changes: settled ? known.changes.filter((c) => c.status === "proposed") : known.changes,
+    } : {};
+    return (others[d.id] = { ...prdOnePager({ id: d.id, slug: d.slug, title: d.title }, read?.sections ?? [], cites), visuals: db.simple_visuals, roadmap: db.simple_roadmap, flowKey: d.slug, ...(read ? { version: read.number, published_at: read.approved_at ?? null } : {}), ...kept });
   };
   if (p[1] !== "simple") return seeded;
   if (p[2] === "one-pagers") return forDoc(p[3]) ?? seeded;
@@ -7772,14 +7912,17 @@ async function route(db: Db, req: Request): Promise<Response> {
         imported: (sections, version) => {
           const doc = db.documents.find((d) => d.id === onePagerDb.doc.id);
           const last = doc ? docVersions(db, doc).at(-1) : undefined;
-          if (!doc || !last || last.number >= version) return;
+          if (!doc || !last) return;
+          // The PRD's next version after its latest (a run's version in review included), as the API's.
+          const number = Math.max(version, last.number + 1);
           const drafted = new Map(sections.map((x) => [x.key, x]));
           db.versions.push(buildVersion(doc, {
-            number: version, created_at: now(), citations: [], by: { id: me.id, name: displayName(me.email, me.name) },
+            number, created_at: now(), citations: [], by: { id: me.id, name: displayName(me.email, me.name) },
             sections: last.sections.map((x) => ({ key: x.section_key, level: x.level, heading: drafted.get(x.section_key)?.heading ?? x.heading, body: drafted.get(x.section_key)?.body ?? x.body_md })),
           }));
           doc.status = "in_review";
           doc.updated_at = now();
+          return number;
         },
         notify: (user_id, kind, title, data, version) =>
           ensureReviewV2(db).notifications.push({

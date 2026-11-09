@@ -168,6 +168,9 @@ interface SimpleDb {
    * DocumentReviewPolicy.mandatory_reviewer_ids; roadmap-decide and inbox-meeting-proposals reviews):
    * a submitted draft waits on them after its decider. */
   reviewers?: Record<string, string[]>;
+  /** Each PRD's required reviewers (PRD slug -> person ids: its review policy's
+   * mandatory_reviewer_ids): they see the changes asked of its milestones (changes.sees). */
+  prd_reviewers?: Record<string, string[]>;
   /** agenda-sheet ("meeting-agenda-sheet"): a PRD's designated decider (PRD slug -> person id). */
   prd_deciders?: Record<string, string>;
   /** agenda-sheet ("meeting-agenda-sheet"): a review of Usage alerts starts mid-agenda (one item decided, a topic added, one skipped). */
@@ -227,6 +230,9 @@ interface SimpleDb {
   /** approved-roadmap-to-simple: roadmaps Simple knows besides ROADMAPS (slug -> its title,
    * PRD, track key and track title), known while their items are the roadmap's. */
   extra_roadmaps?: Record<string, { title: string; prd: string; track: string; track_title: string }>;
+  /** item-milestone: tracks Simple knows besides TRACKS and the added roadmaps' own (key -> title),
+   * known as knowExtraRoadmaps knows theirs. */
+  extra_tracks?: Record<string, string>;
   /** one-roadmap-many-prds (api/oracle/roadmap/company.feeding_ids): the company roadmap's slug;
    * while set, its items alone feed Simple and older per-PRD roadmaps' items are history. */
   company_roadmap?: string;
@@ -356,11 +362,14 @@ const GOAL_ORDER_GOALS: Record<string, string> = {
   // kr-in-goal-card: "goal-key-results"'s two key results (subgoals) of Faster activation.
   "kr-setup-day": "KR 1 Half of new teams set up in one day",
   "kr-first-alert": "KR 2 New teams send a first alert in week one",
+  "kr-first-report": "Teams share a first report",
+  "kr-setup-ten": "Setup takes ten minutes",
 };
 let goalOrderAdded: string[] = [];
 export function knowGoalOrderGoals(entities: { key: string; status: string }[]): void {
   const scenario = entities.some((e) => e.key === "support-load");
-  const want = Object.keys(GOAL_ORDER_GOALS).filter((k) => scenario && entities.some((e) => e.key === k && e.status === "confirmed"));
+  // kr-fold: a proposed key result's work names it too (its parent's lane holds it).
+  const want = Object.keys(GOAL_ORDER_GOALS).filter((k) => scenario && entities.some((e) => e.key === k && e.status !== "rejected"));
   for (const k of goalOrderAdded) if (!want.includes(k)) delete GOALS[k];
   goalOrderAdded = goalOrderAdded.filter((k) => want.includes(k));
   for (const k of want)
@@ -379,11 +388,21 @@ let companyGoals: (OrderedGoal & { key: string })[] = [];
 export function knowCompanyGoals(goals: (OrderedGoal & { key: string })[]): void {
   companyGoals = sortGoals(goals);
 }
-/** kr-in-goal-card: each key result's (a subgoal's) confirmed parent goal key, by its key (service._parent_goals). */
+/** kr-in-goal-card: each key result's (a subgoal's) top confirmed parent goal key, by its key, up its
+ * confirmed parents at any depth (service._parent_goals, service._lane_goal). */
 let goalParents = new Map<string, string>();
 export function knowGoalParents(goals: { id: string; key: string; type: string; status: string; parent_id?: string | null }[]): void {
-  const parents = new Map(goals.filter((g) => g.type === "goal" && g.status === "confirmed").map((g) => [g.id, g.key]));
-  goalParents = new Map(goals.flatMap((g) => (g.type === "goal" && g.parent_id && parents.has(g.parent_id) ? [[g.key, parents.get(g.parent_id)!] as const] : [])));
+  type G = (typeof goals)[number];
+  const parents = new Map(goals.filter((g) => g.type === "goal" && g.status === "confirmed").map((g) => [g.id, g]));
+  const top = (g: G): G => {
+    const seen = new Set([g.id]);
+    while (g.parent_id && parents.has(g.parent_id) && !seen.has(g.parent_id)) {
+      g = parents.get(g.parent_id)!;
+      seen.add(g.id);
+    }
+    return g;
+  };
+  goalParents = new Map(goals.flatMap((g) => (g.type === "goal" && g.parent_id && parents.has(g.parent_id) ? [[g.key, top(g).key] as const] : [])));
 }
 /** A goal's place in the one goal order (by key). */
 export function goalRank(key: string): number {
@@ -691,7 +710,7 @@ export function knowManyPlans(db: { items: { key: string; roadmap: string }[] } 
  * while it is the roadmap's, as knowManyPlans; taken out again once it is not.
  */
 let extraAdded: { roadmaps: string[]; tracks: string[] } = { roadmaps: [], tracks: [] };
-export function knowExtraRoadmaps(db: { extra_roadmaps?: SimpleDb["extra_roadmaps"] } | undefined): void {
+export function knowExtraRoadmaps(db: { extra_roadmaps?: SimpleDb["extra_roadmaps"]; extra_tracks?: SimpleDb["extra_tracks"] } | undefined): void {
   for (const k of extraAdded.roadmaps) delete ROADMAPS[k];
   for (const k of extraAdded.tracks) delete TRACKS[k];
   extraAdded = { roadmaps: [], tracks: [] };
@@ -703,6 +722,12 @@ export function knowExtraRoadmaps(db: { extra_roadmaps?: SimpleDb["extra_roadmap
     if (!(r.track in TRACKS)) {
       TRACKS[r.track] = r.track_title;
       extraAdded.tracks.push(r.track);
+    }
+  }
+  for (const [k, title] of Object.entries(db?.extra_tracks ?? {})) {
+    if (!(k in TRACKS)) {
+      TRACKS[k] = title;
+      extraAdded.tracks.push(k);
     }
   }
 }
@@ -1112,10 +1137,21 @@ export const namedOn = (db: SimpleDb, key: string, field: "owner_id" | "decider_
   return t && field in t ? ((t[field] as string | null) ?? null) : undefined;
 };
 
-/** The owners of a PRD's tracks (the API's one_pager.who track_owners): the tracks of the items its roadmap holds. */
+/** The owners of a PRD's tracks (the API's one_pager.who track_owners): the tracks of the items whose own
+ * PRD it is (prd_doc, else their roadmap's; one company roadmap holds many PRDs' items), and the tracks
+ * the Tracks sheet keeps for it (track_state). */
 export function prdTrackOwnerIds(db: SimpleDb, prdSlug: string): string[] {
-  const tracks = new Set(db.items.filter((s) => ROADMAPS[s.roadmap]?.prd.toLowerCase().replace(/ /g, "-") === prdSlug).flatMap((s) => (s.track ? [s.track] : [])));
+  const slug = (title: string | undefined) => title?.toLowerCase().replace(/ /g, "-");
+  const state = (db as SimpleDb & { track_state?: Record<string, { prd: string }> }).track_state ?? {};
+  const tracks = new Set(db.items.filter((s) => (s.prd_doc?.slug ?? slug(ROADMAPS[s.roadmap]?.prd)) === prdSlug).flatMap((s) => (s.track ? [s.track] : [])));
+  for (const [k, t] of Object.entries(state)) if (slug(t.prd) === prdSlug) tracks.add(k);
   return [...tracks].flatMap((t) => (db.track_owners?.[t] ? [db.track_owners[t]] : []));
+}
+
+/** A PRD's owners (drafts.who on its document), by person id in id order: the owners of its tracks
+ * only. An ask of its milestones is sent to them (with none, the company's owners) and theirs to decide. */
+export function prdOwnerIdsOf(db: SimpleDb, prdSlug: string): string[] {
+  return [...new Set(prdTrackOwnerIds(db, prdSlug))].sort();
 }
 
 /** The item's owner: the one a chat card named, else its track's owner. */
@@ -1636,7 +1672,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     ],
     // build-milestones-on-roadmap: the shown roadmaps' milestones per goal (a PRD's among them);
     // while the company roadmap exists, its own alone (older roadmaps are history, company.feeding_ids).
-    goal_milestones: (db.goal_milestones ?? []).filter((m) => !m.deleted && (!db.company_roadmap || m.roadmap === db.company_roadmap) && (chosen ? m.roadmap === chosen : readable.includes(m.roadmap))).map((x) => milestoneOut(x, db.ids, x.prd ? role !== "viewer" : role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)), role !== "viewer", me && { role: me.role, name: me.names?.[me.id] }, (slug) => roadmapTitle(db, slug))),
+    goal_milestones: (db.goal_milestones ?? []).filter((m) => !m.deleted && (!db.company_roadmap || m.roadmap === db.company_roadmap) && (chosen ? m.roadmap === chosen : readable.includes(m.roadmap))).map((x) => milestoneOut(x, db.ids, x.prd ? role !== "viewer" : role !== "viewer" && role !== "commenter" && (!me || canEditRoadmap(db, x.roadmap, me)), role !== "viewer", me && { role: me.role, id: me.id, names: me.names, prdOwners: (slug) => prdOwnerIdsOf(db, slug) }, (slug) => roadmapTitle(db, slug))),
     old_milestones: oldMilestonesOut(db.goal_milestones ?? [], role, oldCtx(db)),
     // service.build: the span of the shown items' PRDs' plans only (a replaced plan PRD's goes with its items).
     span: db.plan && shown.some((i) => !!i.prd && (i.prd.slug === PLAN_PRD_SLUG || !!db.plan?.prds?.includes(i.prd.slug))) ? planSpan() : null,
@@ -1923,7 +1959,7 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
     return json(200, { broken_links: links.length, dates_to_confirm: items.filter((i) => !!i.suggestion?.can_decide).length });
   }
   const slugOf = (id: string) => Object.keys(ROADMAPS).find((r) => roadmapId(r) === id) ?? null;
-  const ms = await routeMilestones(db, me, req, p, slugOf, (r) => canEditRoadmap(db, r, me), (r) => !!db.company_roadmap && r !== db.company_roadmap, oldCtx(db));
+  const ms = await routeMilestones(db, { ...me, prdOwners: (slug) => prdOwnerIdsOf(db, slug) }, req, p, slugOf, (r) => canEditRoadmap(db, r, me), (r) => !!db.company_roadmap && r !== db.company_roadmap, oldCtx(db));
   if (ms) return ms;
   if (p[3] !== "date-suggestions") return null;
   if (!p[4] && m === "GET") {

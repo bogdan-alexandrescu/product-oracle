@@ -1366,23 +1366,31 @@ def _matches(e: Entry, value: str | None, *refs: Any) -> bool:
 
 
 async def _parent_goals(db: AsyncSession, entries: list[Entry]) -> dict[uuid.UUID, Entity]:
-    """kr-in-goal-card: the confirmed parent goals of the key results (subgoals) items serve."""
+    """kr-in-goal-card: the confirmed parent goals of the key results (subgoals) items serve,
+    up their confirmed parents at any depth (a key result's own subgoal folds in too)."""
+    found: dict[uuid.UUID, Entity] = {}
     ids = {e.goal.parent_id for e in entries if e.goal is not None and e.goal.parent_id}
-    if not ids:
-        return {}
-    rows = await db.scalars(
-        select(Entity).where(
-            Entity.id.in_(ids), Entity.type == "goal", Entity.status == "confirmed"
+    while ids:
+        rows = await db.scalars(
+            select(Entity).where(
+                Entity.id.in_(ids), Entity.type == "goal", Entity.status == "confirmed"
+            )
         )
-    )
-    return {g.id: g for g in rows}
+        new = {g.id: g for g in rows}
+        found.update(new)
+        ids = {g.parent_id for g in new.values() if g.parent_id and g.parent_id not in found}
+    return found
 
 
 def _lane_goal(e: Entry, parents: dict[uuid.UUID, Entity]) -> Entity | None:
-    """kr-in-goal-card: the goal an item sits under: its key result's parent goal, else its own."""
-    if e.goal is None:
-        return None
-    return parents.get(e.goal.parent_id) if e.goal.parent_id in parents else e.goal
+    """kr-in-goal-card: the goal an item sits under: its key result's top parent goal (up its
+    confirmed parents, at any depth), else its own."""
+    goal = e.goal
+    seen: set[uuid.UUID] = set()
+    while goal is not None and goal.parent_id in parents and goal.id not in seen:
+        seen.add(goal.id)
+        goal = parents[goal.parent_id]
+    return goal
 
 
 def _group_of(

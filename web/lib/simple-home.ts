@@ -234,15 +234,17 @@ export function planByMonth(items: PlanInput[], today: string, through: string |
   for (const [key, of] of keyed) {
     const counts = new Map<string, number>();
     for (const x of of) counts.set(x.label, (counts.get(x.label) ?? 0) + 1);
-    // A named label ("M4 · Rollout") before the bare code ("M4"), then the commonest.
-    const name = [...counts].sort((a, b) => Number(a[0] === key) - Number(b[0] === key) || b[1] - a[1] || byCodePoint(a[0], b[0]))[0][0];
+    // A named label ("M4 · Rollout") before the bare code ("M4"), a record's too, then the commonest.
+    const bare = (label: string) => Number(/^M\d{1,2}$/i.test(label.trim()));
+    const name = [...counts].sort((a, b) => bare(a[0]) - bare(b[0]) || b[1] - a[1] || byCodePoint(a[0], b[0]))[0][0];
     const dates = of.flatMap((x) => (x.i.milestoneDate ? [x.i.milestoneDate] : []));
     const date = dates.length ? maxOf(dates) : null;
     // A dated plan milestone (the PRD dates it): its row spans its start to its end.
     const starts = of.flatMap((x) => (x.i.milestoneStart ? [x.i.milestoneStart] : []));
     // A record's row is its own (two PRDs' "M1 · Launch" on one date are two rows); texts by name and date.
     const whose = of.find((x) => x.i.record?.of)?.i.record?.of ?? null;
-    const also = [...new Set(of.flatMap((x) => x.i.record?.also ?? []))];
+    // Names its items' records read beside the row's own (a track's on two roadmaps), the row's own never.
+    const also = [...new Set(of.flatMap((x) => x.i.record?.also ?? []))].filter((n) => !sameWords(n, name.replace(" · ", " ")));
     groups.set(key.startsWith("record:") ? key : `${name}|${date ?? ""}`, { name, date, begins: starts.length ? minOf(starts) : null, of: of.map((x) => x.i), whose, also });
   }
   const dated = [...groups.values()].flatMap((g) => (g.date ? [g.date] : []));
@@ -458,14 +460,20 @@ export function homePlanInputs(data: Roadmap): PlanInput[] {
   const also = new Map<Tm, string[]>();
   // roadmap-milestone-codes: a goal's (or a PRD's) milestone that is a track milestone shares its
   // roadmap code (the API's rule, oracle.simple.roadmap_codes): one row.
-  for (const gm of goals) {
+  // Read by whole name (then id), never in the read's order: a bare-code track takes the same
+  // name, and lists the same others, whichever roadmap comes first (home-milestones-two-roadmaps).
+  const byName = [...goals].sort((a, b) => byCodePoint(goalMilestoneName(a), goalMilestoneName(b)) || byCodePoint(a.id, b.id));
+  for (const gm of byName) {
     const code = gm.roadmap_code;
     const tm = code ? tracks.find((t) => t.roadmap_code === code) : undefined;
     if (!code || !tm) continue;
     const name = goalMilestoneName(gm);
     const at = rowName.get(tm) ?? wholeName(code, restOf(tm.name));
     const differs = name !== code && at !== code && !sameWords(name, at);
-    if (differs) also.set(tm, [...new Set([...(also.get(tm) ?? []), name.replace(" · ", " ")])]);
+    // Each other name once, case and spaces never counting.
+    const listed = also.get(tm) ?? [];
+    const other = name.replace(" · ", " ");
+    if (differs) also.set(tm, listed.some((n) => sameWords(n, other)) ? listed : [...listed, other]);
     else if (at === code) rowName.set(tm, name);
     into.set(gm, tm);
     folded.set(tm, [...(folded.get(tm) ?? []), gm]);

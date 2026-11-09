@@ -37,17 +37,21 @@ for (const [name, use] of [
   test.describe(name, () => {
     test.use(use);
 
-    test("QR1 A: the Timeline on six months around today, one row per item, names fixed on the left", async ({ page }) => {
+    test("QR1 A: the Timeline opens on 3 months around today, then 6 months, one row per item, names fixed on the left", async ({ page }) => {
       await open(page);
-      // The owner (Nov 9): it opens on 3 months; a person picks 6 months.
-      await page.getByTestId("zoom-6m").click();
-      await expect(page.getByTestId("zoom-6m")).toHaveAttribute("aria-pressed", "true");
       const scroll = page.getByTestId("timeline-scroll");
-      // Today is in sight when the page opens.
+      // Today is in sight when the page opens, on 3 months (the owner, Nov 9).
+      await expect(page.getByTestId("zoom-3m")).toHaveAttribute("aria-pressed", "true");
       const view = (await scroll.boundingBox())!;
       const today = await box(page, "today-line");
       expect(today.x).toBeGreaterThan(view.x);
       expect(today.x).toBeLessThan(view.x + view.width);
+      // A person picks 6 months: Today stays in sight.
+      await page.getByTestId("zoom-6m").click();
+      await expect(page.getByTestId("zoom-6m")).toHaveAttribute("aria-pressed", "true");
+      const at6 = await box(page, "today-line");
+      expect(at6.x).toBeGreaterThan(view.x);
+      expect(at6.x).toBeLessThan(view.x + view.width);
       // One row per item, under its goal.
       await expect(page.getByTestId("timeline-lane").filter({ hasText: "Below the line" })).toBeVisible();
       const name = row(page, "alert-rules").getByRole("button", { name: "Alert rules engine", exact: true });

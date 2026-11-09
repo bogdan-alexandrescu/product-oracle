@@ -263,6 +263,70 @@ test("Edit with a bad value shows B5's message on the card and proposes nothing"
   await expect(page.getByTestId("proposal").filter({ hasText: "From discussion" })).toHaveCount(0);
 });
 
+// protects=gt-goal-edit-minors-8: text the card's Weight box cannot read ("1e") refuses to propose
+// with "Weight must be a number.", as the goal's Edit form does, and an emptied Weight still
+// proposes with no weight; fails_when=it proposes as if the Weight were emptied;
+// no_claim=Value and Start value (their own checks), the weight Oracle stores.
+test("Edit with text the Weight box cannot read says Weight must be a number and proposes nothing", async ({ page }) => {
+  await openBaseline(page);
+  await makeChurnMeasurable(page);
+  const card = cards(page).first();
+  await card.getByRole("button", { name: "Edit", exact: true }).click();
+  // Weight's box has no name of its own: it sits in the label with the "About weight" tip.
+  const weight = card
+    .getByTestId("version-edit")
+    .locator("label")
+    .filter({ has: page.getByRole("button", { name: "About weight" }) })
+    .getByRole("spinbutton");
+  // A number box takes the keys "1e" but cannot read them: its value then reads as "".
+  await weight.pressSequentially("1e");
+  await card.getByRole("button", { name: "Propose", exact: true }).click();
+  await expect(card.getByText("Weight must be a number.", { exact: true })).toBeVisible();
+  await expect(card.getByTestId("version-proposed")).toHaveCount(0);
+  await expect(card).toHaveAttribute("data-status", "proposed");
+
+  await weight.clear();
+  await card.getByRole("button", { name: "Propose", exact: true }).click();
+  await expect(card.getByTestId("version-proposed")).toContainText("Proposed");
+});
+
+// protects=gt-goal-edit-minors-8 with two cards open: each version card reads its own Weight
+// box, so "1e" in the second card's Weight refuses the second card only and the first, open at
+// the same time, still proposes; fails_when=a card reads the other card's Weight box (the second
+// proposes, or the first is refused); no_claim=the weight Oracle stores.
+test("two cards open for Edit: only the card whose Weight box cannot be read is refused", async ({ page }) => {
+  await openBaseline(page);
+  await makeChurnMeasurable(page);
+  const [first, second] = [cards(page).first(), cards(page).nth(1)];
+  await first.getByRole("button", { name: "Edit", exact: true }).click();
+  await second.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(first.getByTestId("version-edit")).toBeVisible();
+  await expect(second.getByTestId("version-edit")).toBeVisible();
+  // Weight's box has no name of its own: it sits in the label with the "About weight" tip.
+  const weight = (card: typeof first) =>
+    card
+      .getByTestId("version-edit")
+      .locator("label")
+      .filter({ has: page.getByRole("button", { name: "About weight" }) })
+      .getByRole("spinbutton");
+  await weight(second).pressSequentially("1e");
+
+  // The second card first, while the first card's readable Weight box is still open.
+  await second.getByRole("button", { name: "Propose", exact: true }).click();
+  await expect(second.getByText("Weight must be a number.", { exact: true })).toBeVisible();
+  await expect(second.getByTestId("version-proposed")).toHaveCount(0);
+  await expect(first.getByText("Weight must be a number.", { exact: true })).toHaveCount(0);
+
+  // The first card, while the second card's unreadable Weight box is still open.
+  await first.getByRole("button", { name: "Propose", exact: true }).click();
+  await expect(first.getByTestId("version-proposed")).toContainText("Proposed");
+  await expect(first.getByText("Weight must be a number.", { exact: true })).toHaveCount(0);
+  await expect(second.getByTestId("version-proposed")).toHaveCount(0);
+  await expect(second).toHaveAttribute("data-status", "proposed");
+  await page.getByRole("tab", { name: /^Proposals/ }).click();
+  await expect(page.getByTestId("proposal").filter({ hasText: "From discussion" })).toHaveCount(1);
+});
+
 // protects=#370: a viewer sees no control they can never use: no Make measurable, no Interview
 // vague goals; fails_when=either shows; no_claim=the API's 403 (pytest).
 test("a viewer sees neither Make measurable nor Interview vague goals", async ({ page }) => {

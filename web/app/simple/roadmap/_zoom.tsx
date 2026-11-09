@@ -21,6 +21,7 @@ import {
 import { GoalNum, GoalNumbers } from "@/components/simple/GoalOrder";
 import { InfoTip } from "@/components/ds/InfoTip";
 import { addMonths, calendarDay } from "@/lib/dates";
+import { useMe } from "@/lib/me";
 import { LINK_KINDS } from "@/lib/roadmap-links";
 
 import { FixButtons, fixCount, type Act } from "./_card";
@@ -51,13 +52,11 @@ import { trackWords } from "@/lib/milestone-code";
 type Zoom = "3m" | "6m" | "1y" | "all";
 /** Days in sight at each zoom (All fits the whole plan). */
 const ZOOM_DAYS: Record<Exclude<Zoom, "all">, number> = { "3m": 91, "6m": 182, "1y": 365 };
-/** The owner (Nov 9): every zoom reaches at least the end of Q1 2027, item or not. */
-const REACH = "2027-03-31";
-/** The zoom a person picked on this visit (the page's own, gone on a reload). */
-const visit: { zoom: Zoom } = { zoom: "3m" };
-const pickForVisit = (z: Zoom) => {
-  visit.zoom = z;
-};
+/** The owner (Nov 9): every zoom reaches at least this day, item or not. */
+const Q1_2027_END = "2027-03-31";
+/** The zoom each person picked on this visit (the page's own, gone on a reload), by who is
+ * signed in: someone else signing in on the same tab opens on 3 months, not on its pick. */
+const visit = new Map<string, Zoom>();
 
 const MONTHS = [
   "Jan",
@@ -445,10 +444,13 @@ function DayChart(props: TimelineProps) {
   const rows = useMemo(() => rowsOf(data), [data]);
   // The owner (Nov 9): the Timeline opens on 3 months; a person's pick holds for the visit
   // (back from the Gantt too), never stored: a new visit opens on 3 months again.
-  const [zoom, pickZoom] = useState<Zoom>(() => visit.zoom);
+  const { me } = useMe();
+  const who = me?.user_id ?? me?.token_id ?? "";
+  const [, redraw] = useState(0);
+  const zoom = visit.get(who) ?? "3m";
   const setZoom = (z: Zoom) => {
-    pickForVisit(z);
-    pickZoom(z);
+    visit.set(who, z);
+    redraw((n) => n + 1);
   };
   const fit = zoom === "all";
   const box = useRef<HTMLDivElement>(null);
@@ -470,7 +472,7 @@ function DayChart(props: TimelineProps) {
     .sort();
   const t0 = addDays(days[0].slice(0, 8) + "01", 0);
   const last = addDays(days[days.length - 1], 20);
-  const t1 = last > REACH ? last : REACH;
+  const t1 = last > Q1_2027_END ? last : Q1_2027_END;
   const span = daysBetween(t0, t1);
   const visible = Math.max(200, w - labelW - 2);
   const ppd = fit ? visible / span : visible / ZOOM_DAYS[zoom];
@@ -852,6 +854,7 @@ function DayChart(props: TimelineProps) {
                   <span
                     key={m.day}
                     data-testid="timeline-month"
+                    data-keep-clear
                     className="absolute top-1 text-xs whitespace-nowrap text-text2"
                     style={{ left: (m.day === pinned ? sl : x(m.day)) + 4 }}
                   >
@@ -862,6 +865,7 @@ function DayChart(props: TimelineProps) {
                 <span
                   key={day}
                   data-testid="timeline-week"
+                  data-keep-clear
                   title={`Week of ${shortDay(day)}`}
                   className="absolute top-1 text-xs whitespace-nowrap text-text2/80"
                   style={{ left: x(day) + 4 }}
@@ -884,6 +888,8 @@ function DayChart(props: TimelineProps) {
             data-testid="today-line"
           />
           <span
+            data-testid="today-pill"
+            data-keep-clear
             className="absolute top-[21px] z-30 rounded-full px-2 text-xs leading-5 font-bold whitespace-nowrap text-white"
             style={{
               left: Math.max(

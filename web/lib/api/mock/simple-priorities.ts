@@ -16,6 +16,7 @@ import { flowFor } from "./simple-visuals";
 import { madeOrder } from "./made-order";
 import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
 import { COMPANY_TITLE } from "./one-roadmap";
+import { seedGoalBuckets } from "./goal-buckets";
 
 type Row = Schemas["SimplePriorityRow"];
 type Item = Schemas["SimpleRoadmapItem"];
@@ -46,7 +47,80 @@ const FEATURES: Record<string, { value: number; effort: number; code?: string }>
   "setup-import": { value: 6, effort: 3, code: "F-12" },
   "setup-video": { value: 0, effort: 1 },
   "price-tiers": { value: 0, effort: 3 },
+  // kr-in-priorities: the "goal-key-results" scenario's feature on a key result (server.ts).
+  "kr-setup-list": { value: 5, effort: 3 },
 };
+/**
+ * The "priorities-goal-no-value" scenario's invented feature: it serves a goal, but Oracle has no goal value for it (as
+ * the API sends when the feature's goal has none), so it has no score and is drawn at goal value 0.
+ */
+const GOAL_NO_VALUE: SeedItem = { key: "alert-quiet-hours", title: "Quiet hours for alerts", horizon: "next", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium" };
+export const PRIORITIES_GOAL_NO_VALUE_SCENARIO = "priorities-goal-no-value";
+const INVENTED: Record<string, { value: number | null; effort: number }> = { [GOAL_NO_VALUE.key]: { value: null, effort: 1 } };
+
+/** The "priorities-goal-no-value" scenario's seed (server.ts): the roadmap holds its invented feature from the start. */
+export function seedGoalNoValue(db: SimpleDb): void {
+  db.items.push({ ...GOAL_NO_VALUE });
+  db.ids[GOAL_NO_VALUE.key] = stableUuid(`simple-item/${GOAL_NO_VALUE.key}`);
+}
+
+/**
+ * The "priorities-plan-goal-names" scenario (the owner, Nov 8: a plan goal and a goal record with one name are two
+ * goals): "simple-plan", whose plan names a goal "Activation", where Alert rules' own goal record is also
+ * "Activation". Invented data.
+ */
+export const PRIORITIES_PLAN_GOAL_NAMES_SCENARIO = "priorities-plan-goal-names";
+export function seedPlanGoalNames(db: SimpleDb): void {
+  const rules = db.items.find((s) => s.key === "alert-rules");
+  if (!rules) throw new Error(`${PRIORITIES_PLAN_GOAL_NAMES_SCENARIO}: the seed has no Alert rules engine (alert-rules) to give the goal "Activation"`);
+  rules.goal = "activation";
+}
+
+/**
+ * The "priorities-plan-goal-codes" scenario: "simple-plan", whose plan has two goals named Activation with their own
+ * codes (G1 Activation: Bulk import, Help center search; G3 Activation: Onboarding emails), two goals. Invented data.
+ */
+export const PRIORITIES_PLAN_GOAL_CODES_SCENARIO = "priorities-plan-goal-codes";
+export function seedPlanGoalCodes(db: SimpleDb): void {
+  if (!db.plan) throw new Error(`${PRIORITIES_PLAN_GOAL_CODES_SCENARIO}: the seed has no plan to give two Activation goals`);
+  db.plan.coded_goals = true;
+}
+
+/**
+ * The "priorities-plan-one-week" scenario: "simple-plan" with M1's capacity 1 engineer-week (its planned weeks run
+ * over it, and it has no name) and Self-serve checkout's M2 part 1 week. Invented data.
+ */
+export const PRIORITIES_PLAN_ONE_WEEK_SCENARIO = "priorities-plan-one-week";
+export function seedPlanOneWeek(db: SimpleDb): void {
+  if (!db.plan) throw new Error(`${PRIORITIES_PLAN_ONE_WEEK_SCENARIO}: the seed has no plan to give a 1-week milestone`);
+  db.plan.one_week = true;
+}
+
+/**
+ * The "priorities-plan-goal-twins" scenario: "simple-plan", whose plan names Activation twice with no code (the
+ * owner's pick: one goal, one shape). Invented data.
+ */
+export const PRIORITIES_PLAN_GOAL_TWINS_SCENARIO = "priorities-plan-goal-twins";
+export function seedPlanGoalTwins(db: SimpleDb): void {
+  if (!db.plan) throw new Error(`${PRIORITIES_PLAN_GOAL_TWINS_SCENARIO}: the seed has no plan to name Activation twice`);
+  db.plan.twin_goals = true;
+}
+
+/**
+ * kr-in-priorities, the "priorities-plan-key-results" scenario: "simple-plan" whose Ground Truth holds Growth as a goal
+ * and Activation, a plan goal, as its key result (a subgoal); Help center search (F-20, an Activation slice) is not a
+ * goal-bucket feature yet, so only its slice names its goal. Invented data.
+ */
+export const PRIORITIES_PLAN_KEY_RESULTS_SCENARIO = "priorities-plan-key-results";
+export function seedPlanKeyResults<E extends { id: string; key: string; title: string; type: string; status: string; parent_id?: string | null; attrs?: Record<string, unknown> | null }>(entities: E[], db: SimpleDb): void {
+  const template = entities.find((e) => e.type === "goal" && e.status === "confirmed");
+  if (!template || !db.plan) throw new Error(`${PRIORITIES_PLAN_KEY_RESULTS_SCENARIO}: the seed has no goal or no plan`);
+  const growth = { ...template, id: stableUuid("simple-goal/plan-growth"), key: "plan-growth", title: "Growth", parent_id: null, attrs: { metric: "Weekly active teams", weight: 1 } };
+  entities.push(growth, { ...template, id: stableUuid("simple-goal/plan-activation"), key: "plan-activation", title: "Activation", parent_id: growth.id, attrs: { metric: "Teams that finish setup in a day", weight: 1 } });
+  const gb = (db.goal_buckets = seedGoalBuckets());
+  gb.features = gb.features.filter((f) => f.key !== "F-20");
+}
+
 /** The "simple-plan" scenario's existing items the plan names (server.ts seedSimplePlanScenario). */
 const PLAN_EXISTING: Record<string, string> = { "setup-checklist": "F-01", "setup-import": "F-02" };
 
@@ -199,7 +273,7 @@ function stored(db: SimpleDb, itemId: string): Values {
 }
 
 /** A person's estimates, else the feature's: [goal value, effort, whether the value is a person's]. */
-export function estimates(db: SimpleDb, key: string, itemId: string): { value: number; effort: number | null; valueEstimated: boolean } {
+export function estimates(db: SimpleDb, key: string, itemId: string): { value: number | null; effort: number | null; valueEstimated: boolean } {
   // An item added for another's feature (SeedItem.feature) reads that feature's estimates, its own over them.
   const base = featureOf(db, key);
   if (base !== key) {
@@ -208,7 +282,8 @@ export function estimates(db: SimpleDb, key: string, itemId: string): { value: n
     const value = typeof s.goal_value === "number" ? s.goal_value : null;
     return { value: value ?? was.value, effort: typeof s.effort === "number" ? s.effort : was.effort, valueEstimated: value !== null || was.valueEstimated };
   }
-  const own = FEATURES[key] ?? planFeature(key) ?? { value: 0, effort: 1 };
+  // A feature the mock does not list has no effort until a person estimates it (the API reads none, not 1 week).
+  const own = FEATURES[key] ?? planFeature(key) ?? INVENTED[key] ?? { value: 0, effort: null };
   // With a plan, an existing item the plan names takes the plan's engineer-weeks (one effort on every tab).
   const code = db.plan ? PLAN_EXISTING[key] : undefined;
   const f = code ? { ...own, effort: planWeeks(code) ?? own.effort } : own;
@@ -221,13 +296,11 @@ export function estimates(db: SimpleDb, key: string, itemId: string): { value: n
 }
 
 /**
- * service.efforts: an item's effort for its estimated start, as estimates reads it, but null for a
- * feature the mock does not list that no person estimated (the API reads no effort, not 1 week).
+ * service.efforts: an item's effort for its estimated start, as estimates reads it (null for a
+ * feature the mock does not list that no person estimated: the API reads no effort, not 1 week).
  */
 export function startEffort(db: SimpleDb, key: string, itemId: string): number | null {
-  const base = featureOf(db, key);
-  const estimated = typeof stored(db, itemId).effort === "number" || (base !== key && typeof stored(db, db.ids[base]).effort === "number");
-  return estimated || FEATURES[base] || planFeature(base) ? estimates(db, key, itemId).effort : null;
+  return estimates(db, key, itemId).effort;
 }
 
 /** targets.py's `before` of estimate_feature and override_priority, as stored now. */
@@ -415,7 +488,8 @@ export function prioritiesOut(
   for (const i of ranked) {
     const e = estimates(db, keyOf(i), i.id);
     // No effort (PM-owned work): no score (scoring.py's missing_inputs), ranked after the scored.
-    if (e.effort) score.set(i.id, round((e.value * (CONFIDENCE[i.confidence ?? ""] ?? 0.5)) / e.effort));
+    // No goal value (a goal Oracle has none for): no score either.
+    if (e.effort && e.value != null) score.set(i.id, round((e.value * (CONFIDENCE[i.confidence ?? ""] ?? 0.5)) / e.effort));
   }
   const sc = (id: string): number => score.get(id) ?? -1;
   const sorted = [...ranked].sort((a, b) => Number(!a.goal) - Number(!b.goal) || sc(b.id) - sc(a.id) || a.title.localeCompare(b.title));

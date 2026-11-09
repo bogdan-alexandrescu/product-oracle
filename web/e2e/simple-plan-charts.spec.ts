@@ -11,15 +11,15 @@ import { countRowOf } from "./vxe-counts";
  * it. Driven through the UI on a desktop (1366x820) and a phone (390x844), light and dark.
  *
  * Goal buckets run on the mock's "simple-plan" scenario (invented: Guided setup's plan, M1 Prove
- * it 2 Nov - 27 Nov 13 of 16 wk, M2 Scale volume 30 Nov - 25 Dec 15 of 16 wk, M3 Open to all
- * 28 Dec - 12 Feb 23 of 24 wk; Reliability 4 + 3 + 4, Growth 3 + 7 + 6, Activation 6 + 3 + 4,
+ * it 2 Nov - 27 Nov 13 of 16 weeks, M2 Scale volume 30 Nov - 25 Dec 15 of 16 weeks, M3 Open to all
+ * 28 Dec - 12 Feb 23 of 24 weeks; Reliability 4 + 3 + 4, Growth 3 + 7 + 6, Activation 6 + 3 + 4,
  * Revenue 0 + 2 + 9). Value / effort runs on the default company (nine features: values 0-6,
  * efforts 1-4 weeks; alert-export and setup-video both at value 0, effort 1).
  *
  * Card plan-charts-buckets: protects = the header reads "Where each goal's work lands", the
  * plan's capacity, planned and spare weeks in one line, a legend entry per milestone (B: a
  * swatch, the code, its dates "Nov 2 – Nov 27" and how full it is, its name in the title), one
- * stacked bar per goal in B's strong milestone colours with a segment per milestone ("M1 · 4 wk",
+ * stacked bar per goal in B's strong milestone colours with a segment per milestone ("M1 · 4 weeks",
  * blank when too narrow) and its total, B's footnote, every total equal to the plan's, goal
  * cards as B (the name, "n features in the plan", a row per feature: code, name, a chip per
  * milestone, its weeks or PM-owned) with "+ Suggest a feature" and "✦ Ask Oracle to suggest"
@@ -72,10 +72,10 @@ async function setUp(page: Page, scheme: "light" | "dark", scenario: string | nu
 }
 
 const GOALS = [
-  { goal: "Reliability", parts: ["M1 Prove it · 4 wk", "M2 Scale volume · 3 wk", "M3 Open to all · 4 wk"], total: "11 wk" },
-  { goal: "Growth", parts: ["M1 Prove it · 3 wk", "M2 Scale volume · 7 wk", "M3 Open to all · 6 wk"], total: "16 wk" },
-  { goal: "Activation", parts: ["M1 Prove it · 6 wk", "M2 Scale volume · 3 wk", "M3 Open to all · 4 wk"], total: "13 wk" },
-  { goal: "Revenue", parts: ["M2 Scale volume · 2 wk", "M3 Open to all · 9 wk"], total: "11 wk" },
+  { goal: "Reliability", parts: ["M1 Prove it · 4 weeks", "M2 Scale volume · 3 weeks", "M3 Open to all · 4 weeks"], total: "11 weeks" },
+  { goal: "Growth", parts: ["M1 Prove it · 3 weeks", "M2 Scale volume · 7 weeks", "M3 Open to all · 6 weeks"], total: "16 weeks" },
+  { goal: "Activation", parts: ["M1 Prove it · 6 weeks", "M2 Scale volume · 3 weeks", "M3 Open to all · 4 weeks"], total: "13 weeks" },
+  { goal: "Revenue", parts: ["M2 Scale volume · 2 weeks", "M3 Open to all · 9 weeks"], total: "11 weeks" },
 ];
 
 /** The labels whose text reads under 4.5:1 on their own background (the nearest painted one). */
@@ -129,11 +129,11 @@ for (const v of VIEWS) {
       await expect(head.getByTestId("buckets-summary")).toHaveText(
         "This plan, Nov 2 – Feb 12: 56 engineer-weeks over three milestones (51 planned + 5 spare). Bars are engineer-weeks.",
       );
-      // B's legend: a swatch, the code in bold, its dates and how full ("M1 Oct 19 – Nov 13 · 14 of 14 wk").
+      // B's legend: a swatch, the code in bold, its dates and how full ("M1 Oct 19 – Nov 13 · 14 of 14 weeks").
       await expect(head.getByTestId("milestone-chip")).toHaveText([
-        "M1 Nov 2 – Nov 27 · 13 of 16 wk",
-        "M2 Nov 30 – Dec 25 · 15 of 16 wk",
-        "M3 Dec 28 – Feb 12 · 23 of 24 wk",
+        "M1 Nov 2 – Nov 27 · 13 of 16 weeks",
+        "M2 Nov 30 – Dec 25 · 15 of 16 weeks",
+        "M3 Dec 28 – Feb 12 · 23 of 24 weeks",
       ]);
       // The milestone's name is in its title (hover), not its words.
       await expect(head.getByTestId("milestone-chip").nth(1)).toHaveAttribute("title", "M2 Scale volume");
@@ -159,13 +159,12 @@ for (const v of VIEWS) {
       const fills = await head.getByTestId("goal-bar-segment").evaluateAll((els) => [...new Set(els.map((e) => getComputedStyle(e).backgroundColor))]);
       expect(fills).toHaveLength(3);
       // A label shows only where it fits (B leaves a narrow segment blank, its words in its title);
-      // named labels ("M2 Scale volume · 3 wk") fit fewer segments than the code alone did.
+      // named labels ("M2 Scale volume · 3 weeks") fit fewer segments than the code alone did.
       await nothingCut(head.locator('[data-testid="goal-bar-label"], [data-testid="milestone-chip"]'));
-      // The rule, at whatever width the text draws: a label shows only where it fits its segment
-      // with the frame's own margin (8 px a letter and 12 px over, the picked frames' look) and,
-      // as drawn, with 6 px to spare each side, wholly inside it; a hidden one's segment title
-      // holds its words. So text drawn wider hides a label that would be cut, and text drawn
-      // narrower shows no more labels than the frames do.
+      // The rule, at whatever width the text draws: a label shows exactly where its text, as
+      // drawn, fits its segment with 6 px to spare each side, wholly inside it (measured, never
+      // guessed from its letters); a hidden one's segment title holds its words. So text drawn
+      // wider hides a label that would be cut, and one that fits is never hidden.
       const segments = () =>
         head.getByTestId("goal-bar-segment").evaluateAll((els) =>
           els.map((e) => {
@@ -174,7 +173,7 @@ for (const v of VIEWS) {
             return {
               label: text.textContent!,
               shown: text.dataset.testid === "goal-bar-label" && getComputedStyle(text).opacity === "1",
-              fits: text.offsetWidth + 12 <= e.clientWidth && text.textContent!.length * 8 + 12 <= s.width,
+              fits: t.width + 12 <= e.clientWidth,
               inside: t.left >= s.left - 0.5 && t.right <= s.right + 0.5,
               title: e.getAttribute("title")!,
             };
@@ -185,7 +184,7 @@ for (const v of VIEWS) {
         for (const g of all) {
           expect(g.shown, `"${g.label}" shows only where it fits`).toBe(g.fits);
           if (g.shown) expect(g.inside, `"${g.label}" is not cut`).toBe(true);
-          else expect(g.title, `"${g.label}"'s words are in its title`).toBe(g.label.replace(/ · ([\d.]+) wk$/, ": $1 engineer-weeks"));
+          else expect(g.title, `"${g.label}"'s words are in its title`).toBe(g.label.replace(/ · ([\d.]+) weeks?$/, (_, n) => `: ${n} engineer-${n === "1" ? "week" : "weeks"}`));
         }
         return all.filter((g) => g.shown).map((g) => g.label);
       };
@@ -193,7 +192,7 @@ for (const v of VIEWS) {
       if (!v.phone) expect(shown.length, "a desktop bar names its milestones").toBeGreaterThan(0);
       // The rule holds at 1440 too, whatever width the text draws (normal, wider, narrower):
       // no count of labels, which follows the system's text, only that each shown label fits its
-      // bar with the frames' margin and each hidden one would not.
+      // bar, as drawn, and each hidden one would not.
       if (!v.phone) {
         await page.setViewportSize({ width: 1440, height: 900 });
         await expect(async () => expect((await holds()).length, "a desktop bar names its milestones at 1440").toBeGreaterThan(0)).toPass();
@@ -211,8 +210,8 @@ for (const v of VIEWS) {
       const invites = growth.locator('[data-testid="plan-feature"][data-code="F-05"]');
       await expect(invites).toContainText("F-05 Team invites");
       await expect(invites.getByTestId("plan-chip")).toHaveText(["M1 Prove it", "M2 Scale volume"]);
-      await expect(invites.getByTestId("plan-chip").first()).toHaveAttribute("title", "M1 Prove it: 3 wk");
-      await expect(invites.getByTestId("plan-feature-total")).toHaveText("5 wk");
+      await expect(invites.getByTestId("plan-chip").first()).toHaveAttribute("title", "M1 Prove it: 3 weeks");
+      await expect(invites.getByTestId("plan-feature-total")).toHaveText("5 weeks");
       const launch = growth.locator('[data-testid="plan-feature"][data-code="F-10"]');
       await expect(launch.getByTestId("plan-chip")).toHaveText(["M2 Scale volume"]);
       await expect(launch.getByTestId("plan-feature-total")).toHaveText("PM-owned");
@@ -290,16 +289,19 @@ for (const v of VIEWS) {
       expect(Math.abs((await centreX(mark(page, "alert-sso"))) - xs[2])).toBeLessThan(4);
 
       // The quadrants at the medians, each with its name and count (P-1: 22 with the Goal map's 12 features, ranked as on Priorities).
-      await expect(page.getByTestId("vxe-quadrant")).toHaveText(["Quick wins · 5", "Big bets · 6", "Fill-ins · 6", "Later · 5"]);
+      await expect(page.getByTestId("vxe-quadrant")).toHaveText(["Quick wins · 4", "Big bets · 7", "Fill-ins · 7", "Later · 4"]);
       const plot = (await page.getByTestId("vxe-plot").boundingBox())!;
       const split = (await page.getByTestId("vxe-median-effort").boundingBox())!;
-      // The effort median is 1 week (P-1: with the Goal map's 12 features; 2 weeks without): the line runs through the 1 wk tick, not the plot's middle.
-      expect(Math.abs(split.x + split.width / 2 - xs[1])).toBeLessThan(4);
+      // The effort median is PM-owned work's spot, left of the 0.5 week tick (P-1: the Goal map's 12 features and Health log
+      // have no effort, as the API reads a feature the mock does not list): the line is not the plot's middle.
+      expect(split.x + split.width / 2).toBeLessThan(xs[0] - 4);
       expect(Math.abs(split.x + split.width / 2 - (plot.x + plot.width / 2))).toBeGreaterThan(10);
 
-      // PV-1 One count per spot: the 15 features at value 0, effort 1 (alert-export and setup-video among them) are one count.
-      const count = page.locator('[data-testid="vxe-crowd"][data-count="15"]');
-      await expect(count).toHaveAccessibleName(/^15 features at effort 1 week · goal value 0 or no goal: AHE Alert history export, .* and 12 more; show them$/);
+      // PV-1 One count per spot: the 13 features at value 0 with no effort (setup-health-log among them) are one count, and
+      // alert-export and setup-video (value 0, effort 1) another.
+      const count = page.locator('[data-testid="vxe-crowd"][data-count="13"]');
+      await expect(count).toHaveAccessibleName(/^13 features at PM-owned, no effort · goal value 0 or no goal: F-110 Annual plan offer, .* and 10 more; show them$/);
+      await expect(page.getByRole("button", { name: "2 features at effort 1 week · goal value 0 · no goal: AHE Alert history export, WV Welcome video; show them" })).toBeVisible();
       for (const code of ["alert-export", "setup-video", "setup-health-log"]) await expect(mark(page, code)).toHaveCount(0);
       // The median lines say what they are ("middle effort", "middle value"), never under a mark or a count.
       const marks = await page.locator('[data-testid="vxe-point"], [data-testid="vxe-crowd"]').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON() as DOMRect));
@@ -313,7 +315,9 @@ for (const v of VIEWS) {
       // A feature with no goal is never a cross: a neutral dashed circle, named in the legend (in a count's sheet too).
       await expect(mark(page, "price-tiers")).toHaveAttribute("data-shape", "none");
       await expect((await countRowOf(page, "alert-export")).getByTestId("vxe-crowd-code")).toHaveText("AHE");
-      for (const code of ["alert-export", "setup-video", "setup-health-log"]) await expect(page.locator(`[data-testid="vxe-crowd-row"][data-code="${code}"]`)).toHaveAttribute("data-shape", "none");
+      for (const code of ["alert-export", "setup-video"]) await expect(page.locator(`[data-testid="vxe-crowd-row"][data-code="${code}"]`)).toHaveAttribute("data-shape", "none");
+      await page.keyboard.press("Escape");
+      await expect(await countRowOf(page, "setup-health-log")).toHaveAttribute("data-shape", "none");
       await page.keyboard.press("Escape");
       // On a phone Alert rules engine shares a count with Sample data import.
       if (v.phone) {

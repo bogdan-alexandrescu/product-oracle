@@ -114,16 +114,16 @@ for (const scheme of ["light", "dark"] as const) {
         await expect(pricing.getByTestId("prio-pm-owned")).toBeVisible();
         await pricing.getByRole("button", { name: "Add effort" }).click();
         const input = pricing.getByLabel("Effort for Pricing page words, in engineer-weeks");
-        // "Effort" and "wk" stand apart from the box.
+        // "Effort" and "weeks" stand apart from the box.
         const edit = pricing.getByTestId("prio-effort-edit");
-        const [word, box, unit] = [await edit.getByText("Effort", { exact: true }).boundingBox(), await input.boundingBox(), await edit.getByText("wk", { exact: true }).boundingBox()];
+        const [word, box, unit] = [await edit.getByText("Effort", { exact: true }).boundingBox(), await input.boundingBox(), await edit.getByText("weeks", { exact: true }).boundingBox()];
         expect(box!.x - (word!.x + word!.width)).toBeGreaterThanOrEqual(6);
         expect(unit!.x - (box!.x + box!.width)).toBeGreaterThanOrEqual(6);
         await input.fill("2");
         await pricing.getByRole("button", { name: "Save" }).click();
         await expect(pricing.getByTestId("prio-pm-owned")).toHaveCount(0);
         await expect(pricing.getByTestId("prio-score")).toBeVisible();
-        await expect(pricing.getByTestId("prio-numbers")).toContainText("2 wk");
+        await expect(pricing.getByTestId("prio-numbers")).toContainText("2 weeks");
       });
 
       test("the Line picker lists each PRD's milestones under its name, each once", async ({ page }) => {

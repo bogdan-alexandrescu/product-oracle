@@ -38,7 +38,7 @@ export function seedHomeMilestones(): SimpleDb {
     gates,
     counts_when: "",
     progress: "not_started",
-    prd: { slug, title, owner: "Nora Vance" },
+    prd: { slug, title },
   });
   rm.goal_milestones = [
     ...seedOwnMilestones().filter((m) => m.id !== stableUuid("simple-gm/m2")),
@@ -48,6 +48,9 @@ export function seedHomeMilestones(): SimpleDb {
     { id: stableUuid("simple-gm/a3"), roadmap: "onboarding-roadmap", code: "M3", name: "", date: null, goal: "faster-activation", gates: ["setup-reminders"], counts_when: "", progress: "not_started" },
   ];
   TRACKS.pricing ??= "Pricing track";
+  // Pilot plan A's own track (no item on it yet): its owner (server.ts) is the PRD's owner.
+  TRACKS.pilot ??= "Pilot track";
+  (rm as SimpleDb & { track_state?: Record<string, { status: string; prd: string }> }).track_state = { pilot: { status: "active", prd: "Pilot plan A" } };
   rm.items.push(
     { key: "setup-reminders", title: "Setup reminders", horizon: "next", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "medium" },
     { key: "price-meter", title: "Usage meter", horizon: "next", roadmap: "pricing-roadmap", track: "pricing", confidence: "medium", record: "M3 · Prices live" },
@@ -235,7 +238,7 @@ export const HOME_MILESTONE_PRD_FOLD_SCENARIO = "home-milestones-prd-fold";
  */
 export function seedHomeMilestonePrdFold(): SimpleDb {
   const rm = seedSimpleRoadmap();
-  const prd = { slug: "setup-guide", title: "Setup guide", owner: "Nora Vance" };
+  const prd = { slug: "setup-guide", title: "Setup guide" };
   rm.goal_milestones = [
     { id: stableUuid("simple-gm/prd-fold-measured"), roadmap: "onboarding-roadmap", code: "M1", name: "Measured", date: "2026-11-20", goal: null, gates: ["setup-checklist", "setup-import"], counts_when: "", progress: "not_started", prd },
   ];
@@ -255,7 +258,7 @@ export const HOME_MILESTONE_PRD_GOAL_FOLD_SCENARIO = "home-milestones-prd-goal-f
  */
 export function seedHomeMilestonePrdGoalFold(): SimpleDb {
   const rm = seedSimpleRoadmap();
-  const prd = { slug: "setup-guide", title: "Setup guide", owner: "Nora Vance" };
+  const prd = { slug: "setup-guide", title: "Setup guide" };
   rm.goal_milestones = [
     { id: stableUuid("simple-gm/prd-goal-fold-measured"), roadmap: "onboarding-roadmap", code: "M1", name: "Measured", date: "2026-11-20", goal: "faster-activation", gates: ["setup-checklist", "setup-import"], counts_when: "", progress: "not_started", prd },
     { id: stableUuid("simple-gm/prd-goal-fold-scoreboard"), roadmap: "onboarding-roadmap", code: "M3", name: "Daily scoreboard", date: null, goal: "faster-activation", gates: ["setup-digest"], counts_when: "", progress: "not_started" },
@@ -289,7 +292,7 @@ export function seedHomeMilestonePrdsFold(): SimpleDb {
     gates: [gate],
     counts_when: "",
     progress: "not_started",
-    prd: { slug, title, owner: "Nora Vance" },
+    prd: { slug, title },
   });
   rm.goal_milestones = [plain("measured", "Measured", "2026-11-20", "setup-checklist", "setup-guide", "Setup guide"), plain("mapped", "Mapped", "2026-11-12", "setup-import", "import-guide", "Import guide")];
   rm.items = rm.items.map((s) => (s.key === "setup-health-log" ? { ...s, record: "M1 · Measured and mapped" } : s));
@@ -306,5 +309,83 @@ export const HOME_MILESTONE_PLAIN_FOLD_SCENARIO = "home-milestones-plain-fold";
 export function seedHomeMilestonePlainFold(): SimpleDb {
   const rm = seedHomeMilestonePrdsFold();
   rm.goal_milestones = rm.goal_milestones!.map((m, k) => (k === 0 ? { ...m, prd: null } : m));
+  return rm;
+}
+
+export const HOME_MILESTONE_GOALS_FOLD_SCENARIO = "home-milestones-goals-fold";
+
+/**
+ * home-milestones-goals-fold (the owner's "Join whenever names match"): the Setup guide PRD's own
+ * M1 "Measured" under Faster activation (Setup checklist, Sample data import) and Grow
+ * retention's ladder "M1 · First wins" (Welcome video), beside the Guided setup track's "M1 ·
+ * Measured and mapped" (Health log): the PRD's joins the track's row (names match), the other
+ * goal's keeps its own; two M1 rows.
+ */
+export function seedHomeMilestoneGoalsFold(): SimpleDb {
+  const rm = seedSimpleRoadmap();
+  const prd = { slug: "setup-guide", title: "Setup guide" };
+  rm.goal_milestones = [
+    { id: stableUuid("simple-gm/goals-fold-measured"), roadmap: "onboarding-roadmap", code: "M1", name: "Measured", date: "2026-11-20", goal: "faster-activation", gates: ["setup-checklist", "setup-import"], counts_when: "", progress: "not_started", prd },
+    { id: stableUuid("simple-gm/goals-fold-wins"), roadmap: "onboarding-roadmap", code: "M1", name: "First wins", date: null, goal: "grow-retention", gates: ["setup-video"], counts_when: "", progress: "not_started" },
+  ];
+  rm.items = rm.items.map((s) => (s.key === "setup-health-log" ? { ...s, record: "M1 · Measured and mapped" } : s.key === "setup-video" ? { ...s, goal: "grow-retention" } : s));
+  return rm;
+}
+
+export const HOME_MILESTONE_BARE_TRACK_SCENARIO = "home-milestones-bare-track";
+
+/**
+ * home-milestones-bare-track (review of PR 1489): Onboarding's own M1 of no goal, "Measured"
+ * (Setup checklist), joins the Guided setup track's bare "M1" (Health log) and names its row;
+ * Faster activation's "M1 · Measured and mapped" (Sample data import) is a goal's beside another
+ * of its code, so it keeps its own row: the bare track takes a goal's only as the only one.
+ */
+export function seedHomeMilestoneBareTrack(): SimpleDb {
+  const rm = seedSimpleRoadmap();
+  rm.goal_milestones = [
+    { id: stableUuid("simple-gm/bare-track-measured"), roadmap: "onboarding-roadmap", code: "M1", name: "Measured", date: null, goal: null, gates: ["setup-checklist"], counts_when: "", progress: "not_started" },
+    { id: stableUuid("simple-gm/bare-track-mapped"), roadmap: "onboarding-roadmap", code: "M1", name: "Measured and mapped", date: null, goal: "faster-activation", gates: ["setup-import"], counts_when: "", progress: "not_started" },
+  ];
+  rm.items = rm.items.map((s) => (s.key === "setup-health-log" ? { ...s, record: "M1" } : s));
+  return rm;
+}
+
+export const HOME_MILESTONE_LEAD_GOALS_SCENARIO = "home-milestones-lead-goals";
+
+/**
+ * home-milestones-lead-goals (review of PR 1489): Faster activation's "M1 · Measured" (Setup
+ * checklist) and Grow retention's "M1 · Measured and" (Welcome video) both lead the Guided setup
+ * track's "M1 · Measured and mapped" (Health log): one row, each other name once in its (i).
+ */
+export function seedHomeMilestoneLeadGoals(): SimpleDb {
+  const rm = seedSimpleRoadmap();
+  rm.goal_milestones = [
+    { id: stableUuid("simple-gm/lead-goals-measured"), roadmap: "onboarding-roadmap", code: "M1", name: "Measured", date: null, goal: "faster-activation", gates: ["setup-checklist"], counts_when: "", progress: "not_started" },
+    { id: stableUuid("simple-gm/lead-goals-and"), roadmap: "onboarding-roadmap", code: "M1", name: "Measured and", date: null, goal: "grow-retention", gates: ["setup-video"], counts_when: "", progress: "not_started" },
+  ];
+  rm.items = rm.items.map((s) => (s.key === "setup-health-log" ? { ...s, record: "M1 · Measured and mapped" } : s.key === "setup-video" ? { ...s, goal: "grow-retention" } : s));
+  return rm;
+}
+
+export const HOME_MILESTONE_TWO_ROADMAPS_SCENARIO = "home-milestones-two-roadmaps";
+export const HOME_MILESTONE_TWO_ROADMAPS_SWAPPED_SCENARIO = "home-milestones-two-roadmaps-swapped";
+
+/**
+ * home-milestones-two-roadmaps (review of the home fold): the Guided setup track's bare "M1"
+ * holds Health log (Onboarding) and Alert snooze (Alerts). Onboarding's own M1 of no goal,
+ * "Measured" (Setup checklist), and Grow retention's "M1 · Rules ready" on Alerts (Alert rules
+ * engine) each join it on their own roadmap: one row, the other name in its (i), whichever
+ * roadmap's milestones come first (`swapped` lists Alerts' first).
+ */
+export function seedHomeMilestoneTwoRoadmaps(swapped = false): SimpleDb {
+  const rm = seedSimpleRoadmap();
+  const milestones: MockMilestone[] = [
+    { id: stableUuid("simple-gm/two-roadmaps-measured"), roadmap: "onboarding-roadmap", code: "M1", name: "Measured", date: null, goal: null, gates: ["setup-checklist"], counts_when: "", progress: "not_started" },
+    { id: stableUuid("simple-gm/two-roadmaps-rules"), roadmap: "alerts-roadmap", code: "M1", name: "Rules ready", date: null, goal: "grow-retention", gates: ["alert-rules"], counts_when: "", progress: "not_started" },
+  ];
+  rm.goal_milestones = swapped ? milestones.reverse() : milestones;
+  rm.items.push({ key: "alert-snooze", title: "Alert snooze", horizon: "next", roadmap: "alerts-roadmap", track: "onboarding", confidence: "medium", record: "M1" });
+  rm.ids["alert-snooze"] = stableUuid("simple-item/alert-snooze");
+  rm.items = rm.items.map((s) => (s.key === "setup-health-log" ? { ...s, record: "M1" } : s));
   return rm;
 }

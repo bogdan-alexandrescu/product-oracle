@@ -82,8 +82,9 @@ const setTitle = (db: Db, k: string, title: string) => {
 const trackStates = (db: Db): Record<string, TrackState> => {
   db.track_state ??= {};
   for (const k of Object.keys(TRACKS)) {
+    // The PRD of its first item: the item's own (prd_doc), else its roadmap's; one company roadmap holds many PRDs' items.
     const on = db.items.find((s) => s.track === k);
-    db.track_state[k] ??= { status: k === "welcome" ? "paused" : "active", prd: on ? ROADMAPS[on.roadmap]?.prd ?? "" : "" };
+    db.track_state[k] ??= { status: k === "welcome" ? "paused" : "active", prd: on ? (on.prd_doc?.title ?? ROADMAPS[on.roadmap]?.prd ?? "") : "" };
   }
   return db.track_state;
 };

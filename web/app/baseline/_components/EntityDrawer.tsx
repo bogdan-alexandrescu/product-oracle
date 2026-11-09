@@ -39,6 +39,7 @@ import {
   goalCodes,
   LockBadge,
   NodeStatusBadge,
+  sortedGoals,
   titleOf,
 } from "./common";
 
@@ -91,7 +92,7 @@ const SPAN = /^(\d{4}-\d{2}-\d{2})(?:\s*(?:\.\.\.?|\/|–|—)\s*|\s+(?:to|-)\s+
 
 /** An attribute's key in words, capitalized: "status" -> "Status", "priority_note" -> "Priority note". */
 function attrLabel(key: string): string {
-  if (ATTR_LABEL[key]) return ATTR_LABEL[key];
+  if (Object.prototype.hasOwnProperty.call(ATTR_LABEL, key)) return ATTR_LABEL[key];
   const words = key.replace(/_/g, " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
@@ -127,12 +128,25 @@ function dateWords(value: unknown): string | null {
 }
 
 /**
+ * gt-goal-attr-shapes: a list's entries, or an object's fields in words ("Email threads: 60"), one per line, each read
+ * as attrValue reads a value; null for any other value (a span of days included).
+ */
+function attrLines(value: unknown, graph?: GraphOut): string[] | null {
+  if (Array.isArray(value)) return value.map((v) => attrValue("", v, graph));
+  if (value && typeof value === "object" && dateWords(value) == null)
+    return Object.entries(value).map(([k, v]) => `${attrLabel(k)}: ${attrValue(k, v, graph)}`);
+  return null;
+}
+
+/**
  * An attribute's value as a person reads it: a 0-1 confidence as a percentage, dates month first, a parent goal by
- * its name, and a value holding an unfilled placeholder ("[n] live helpers") as missing.
+ * its name, a value holding an unfilled placeholder ("[n] live helpers") as missing, and a list or an object in words.
  */
 function attrValue(key: string, value: unknown, graph?: GraphOut): string {
   if (hasPlaceholder(value)) return "Missing";
   if (PARENT_ATTRS.has(key)) return parentName(graph, value);
+  const lines = attrLines(value, graph);
+  if (lines) return lines.join(", ") || "—";
   if (key.endsWith("_confidence") && typeof value === "number" && value >= 0 && value <= 1) return `${Math.round(value * 100)}%`;
   return dateWords(value) ?? valueWords(key, value, graph);
 }
@@ -554,6 +568,7 @@ export function EntityDrawer({
               <InspectorSection label="Edit">
                 <EditForm
                   entity={d}
+                  graph={graph}
                   busy={busy}
                   problems={problems ?? d.goal_check?.problems ?? []}
                   onCancel={() => {
@@ -846,14 +861,29 @@ function Attrs({ attrs, graph }: { attrs: Record<string, unknown>; graph: GraphO
   return (
     <InspectorSection label="Attributes">
       <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1.5" aria-label="Attributes">
-        {entries.map(([k, v]) => (
-          <div key={k} className="contents">
-            <dt className="text-text2">{attrLabel(k)}</dt>
-            <dd className="tnum truncate font-semibold" data-attr={k} title={attrValue(k, v, graph)}>
-              {k === "status" ? <DeliveryChip value={v} /> : attrValue(k, v, graph)}
-            </dd>
-          </div>
-        ))}
+        {entries.map(([k, v]) => {
+          const lines = PARENT_ATTRS.has(k) ? null : attrLines(v, graph);
+          return (
+            <div key={k} className="contents">
+              <dt className="text-text2">{attrLabel(k)}</dt>
+              {lines?.length ? (
+                <dd className="tnum font-semibold" data-attr={k}>
+                  <ul>
+                    {lines.map((line, i) => (
+                      <li key={i} className="truncate" title={line}>
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+                </dd>
+              ) : (
+                <dd className="tnum truncate font-semibold" data-attr={k} title={attrValue(k, v, graph)}>
+                  {k === "status" ? <DeliveryChip value={v} /> : attrValue(k, v, graph)}
+                </dd>
+              )}
+            </div>
+          );
+        })}
       </dl>
     </InspectorSection>
   );
@@ -997,29 +1027,231 @@ function Links({
   );
 }
 
-type AttrField = { key: string; label: string; numeric?: boolean; json?: boolean };
+/**
+ * gt-goal-attr-shapes: how the form offers an attribute, or a field or entry in one, keeping the type it is stored as:
+ * a parent goal as a picker of goals by name, a list of words or of numbers one line per entry, any other list entry
+ * by entry, an object one field per field (each in turn as its type), a yes or no as a two-choice picker, a day as a
+ * date; never its raw key or JSON. `start` is what the form first showed, so an untouched value is saved as stored.
+ */
+type Draft =
+  | { kind: "text" | "number" | "day" | "bool" | "parent"; was: unknown; start: string; text: string; multi?: boolean; loose?: boolean }
+  | { kind: "lines"; was: unknown; start: string; text: string; numbers: boolean }
+  | { kind: "object"; was: unknown; fields: Field[] }
+  | { kind: "entries"; was: unknown; entries: Draft[] };
+/**
+ * An object's field: its key and draft; a field the person added has `fresh` set and its name typed as the key. A text
+ * that is `multi` reads in a box of lines (a new entry among entries that do); one that is `loose` is stored as a
+ * number when one is typed (a new field among numbers), as text otherwise.
+ */
+type Field = [key: string, draft: Draft, fresh?: true];
+type AttrField = { key: string; label: string; numeric?: boolean };
 
 /** The labelled fields for the type, then every other attribute the entry has (the suggested-blocker mark aside). */
 function attrFields(entity: EntityDetail): AttrField[] {
-  const fields: AttrField[] = [...(EDIT_ATTRS[entity.type] ?? [])];
-  for (const [key, v] of Object.entries(entity.attrs ?? {})) {
+  const fields: AttrField[] = (EDIT_ATTRS[entity.type] ?? []).map((f) => ({ key: f.key, label: f.label, numeric: f.numeric }));
+  for (const [key] of Object.entries(entity.attrs ?? {})) {
     if (key === "proposed_blocker" || fields.some((f) => f.key === key)) continue;
     if (entity.type === "goal" && GOAL_TYPED.has(key)) continue;
-    fields.push({ key, label: key, numeric: typeof v === "number", json: v != null && typeof v === "object" });
+    fields.push({ key, label: attrLabel(key) });
   }
   return fields;
 }
 
 const asText = (v: unknown) => (v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v));
 
+/** A value or list entry as the form shows it in a line: no unfilled placeholder. */
+function formText(v: unknown): string {
+  if (v == null) return "";
+  if (typeof v === "string") return withoutPlaceholders(v);
+  return typeof v === "object" ? attrValue("", v) : String(v);
+}
+
+/** Whether a value, or any entry or field in it, holds an unfilled placeholder. */
+function holdsPlaceholder(v: unknown): boolean {
+  if (Array.isArray(v)) return v.some(holdsPlaceholder);
+  if (v != null && typeof v === "object") return Object.values(v).some(holdsPlaceholder);
+  return hasPlaceholder(v);
+}
+
+/** The form's draft of a stored value; `key` names a top-level attribute (a parent goal is picked), "" a part of one. */
+function draftOf(v: unknown, key = "", numeric = false): Draft {
+  const plain = (kind: "text" | "number" | "day" | "bool" | "parent", start: string): Draft => ({ kind, was: v, start, text: start });
+  if (PARENT_ATTRS.has(key) && (v == null || typeof v === "string")) return plain("parent", typeof v === "string" ? v : "");
+  if (numeric || typeof v === "number") return plain("number", formText(v));
+  if (typeof v === "boolean") return plain("bool", v ? "yes" : "no");
+  if (Array.isArray(v)) {
+    const numbers = v.length > 0 && v.every((x) => typeof x === "number");
+    // A list of words (none holding a line break) or of numbers reads one line per entry; any other entry by entry.
+    if (numbers || v.every((x) => typeof x === "string" && !x.includes("\n"))) {
+      const start = v.map(formText).join("\n");
+      return { kind: "lines", was: v, start, text: start, numbers };
+    }
+    return { kind: "entries", was: v, entries: v.map((x) => draftOf(x)) };
+  }
+  if (v != null && typeof v === "object") return { kind: "object", was: v, fields: Object.entries(v).map(([k, x]) => [k, draftOf(x)]) };
+  return plain(typeof v === "string" && DAY.test(v) ? "day" : "text", formText(v));
+}
+
+/** A new entry shaped like `d`: the same fields, each of its type, left empty. */
+function blankOf(d: Draft): Draft {
+  if (d.kind === "object") return { kind: "object", was: undefined, fields: d.fields.filter((f) => !f[2]).map(([k, p]) => [k, blankOf(p)]) };
+  if (d.kind === "entries") return { kind: "entries", was: undefined, entries: [] };
+  if (d.kind === "lines") return { ...d, was: undefined, start: "", text: "" };
+  const multi = d.kind === "text" && (d.multi || d.start.includes("\n"));
+  return { kind: d.kind === "parent" ? "text" : d.kind, was: undefined, start: "", text: "", ...(multi ? { multi } : {}) };
+}
+
+/** A field's key from the name typed for it: "Weekend hours" is stored as weekend_hours. */
+const fieldKey = (name: string) =>
+  name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+/**
+ * A value emptied in the form: an attribute is removed, a field or a list entry left out. An object or a list is never
+ * left out for being emptied, only when removed with its x; one the person added and left empty is, and so is a list
+ * entry the person emptied.
+ */
+const GONE = Symbol("gone");
+
+/** A label inside its group, for an error: "Reply targets: Hours". */
+const within = (group: string | undefined, label: string) => (group ? `${group}: ${label}` : label);
+
+/** A number as a person types one: plain decimal digits, no hex ("0x10") or exponent ("1e3"). */
+const DECIMAL = /^[+-]?(?:\d+\.?\d*|\.\d+)$/;
+
+/** Typed with leading zeros ("007"), as a code is, not "0" or "0.5". */
+const ZEROS = /^[+-]?0\d/;
+
+/** A typed plain decimal as a number, or undefined (one too long to hold, 309 digits or more, included). */
+function decimalOf(typed: string): number | undefined {
+  const n = DECIMAL.test(typed) ? Number(typed) : NaN;
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/**
+ * A typed plain decimal as a number only when the number holds it exactly: none past Number.MAX_SAFE_INTEGER, and
+ * none that reads back as other digits ("12345678901234567890", or a tiny decimal read as 0).
+ */
+function exactOf(typed: string): number | undefined {
+  const n = decimalOf(typed);
+  return n !== undefined && Math.abs(n) <= Number.MAX_SAFE_INTEGER && digitsOf(String(n)) === digitsOf(typed) ? n : undefined;
+}
+
+/** A decimal as its sign, significant digits and where its point falls: "0.050" and "5e-2" both read "5@-1". */
+function digitsOf(s: string): string {
+  const [mantissa, exp = "0"] = s.replace(/^[+-]/, "").split("e");
+  const [whole, frac = ""] = mantissa.split(".");
+  const all = whole + frac;
+  const lead = all.length - all.replace(/^0+/, "").length;
+  const sig = all.slice(lead).replace(/0+$/, "");
+  return sig ? `${s.startsWith("-") ? "-" : ""}${sig}@${whole.length - lead + Number(exp)}` : "0";
+}
+
+/** A typed number, or the error its field shows. */
+function numberOf(typed: string, label: string): number {
+  const n = decimalOf(typed);
+  if (n === undefined) throw new Error(`${label} must be a number.`);
+  return n;
+}
+
+/**
+ * A draft back as stored, keeping each value's type: what it was when untouched (the same value, a placeholder kept),
+ * a number where one was, a yes or no as true or false, an object or a list as one; throws a field's error, naming
+ * the group it is in.
+ */
+function storedOf(d: Draft, label: string, group?: string): unknown {
+  if (d.kind === "object") {
+    const was = (d.was ?? {}) as Record<string, unknown>;
+    const next: Record<string, unknown> = {};
+    for (const [k, part, fresh] of d.fields) {
+      const name = fresh ? k.trim() : attrLabel(k);
+      const v = storedOf(part, name || "New field", within(group, label));
+      if (v === GONE) continue;
+      const key = fresh ? fieldKey(k) : k;
+      if (!key) throw new Error(`${within(group, label)}: a new field needs a name.`);
+      if (Object.prototype.hasOwnProperty.call(next, key) || (fresh && d.fields.some(([o, , f]) => !f && o === key)))
+        throw new Error(`${within(group, label)}: ${name} is already a field.`);
+      next[key] = v;
+    }
+    const keys = Object.keys(next);
+    if (!keys.length && d.was === undefined) return GONE;
+    const same = d.was !== undefined && keys.length === Object.keys(was).length && keys.every((k) => Object.prototype.hasOwnProperty.call(was, k) && next[k] === was[k]);
+    return same ? d.was : next;
+  }
+  if (d.kind === "entries") {
+    const next = d.entries.map((e, i) => emptied(e, storedOf(e, `${label} ${i + 1}`, group))).filter((v) => v !== GONE);
+    if (!next.length && d.was === undefined) return GONE;
+    const was = (d.was ?? []) as unknown[];
+    const same = d.was !== undefined && next.length === was.length && next.every((v, i) => v === was[i]);
+    return same ? d.was : next;
+  }
+  if (d.kind === "lines") {
+    if (d.text === d.start) return d.was === undefined ? GONE : d.was;
+    const list = storedList(d.text, d.was, d.numbers, within(group, label));
+    // Only an added empty line: the list as it was.
+    if (Array.isArray(d.was) && list.length === d.was.length && list.every((v, i) => v === (d.was as unknown[])[i])) return d.was;
+    return list.length ? list : GONE;
+  }
+  const typed = d.text.trim();
+  if (typed === d.start.trim()) return d.was === undefined ? GONE : d.was;
+  if (!typed) return GONE;
+  if (d.kind === "bool") return typed === "yes";
+  if (d.loose) return ZEROS.test(typed) ? typed : (exactOf(typed) ?? typed);
+  return d.kind === "number" ? numberOf(typed, within(group, label)) : typed;
+}
+
+/** A list entry the person emptied (an object or a list with nothing left in it, at any depth) is left out. */
+function emptied(d: Draft, v: unknown): unknown {
+  return v !== d.was && hollow(v) ? GONE : v;
+}
+
+/** An object or a list holding no value but nulls and empty objects and lists. */
+function hollow(v: unknown): boolean {
+  return v === null || (typeof v === "object" && Object.values(v as object).every(hollow));
+}
+
+/**
+ * A list's lines back as stored: each untouched entry as it was (its placeholder kept, an entry that was only a
+ * placeholder too, on its empty line), one entry per line, a number in a list of numbers; an empty line is dropped.
+ */
+function storedList(raw: string, was: unknown, numbers: boolean, label: string): unknown[] {
+  const left = Array.isArray(was) ? [...was] : [];
+  const out: unknown[] = [];
+  for (const line of raw.split("\n").map((l) => l.trim())) {
+    const i = left.findIndex((x) => formText(x).trim() === line);
+    if (i >= 0) out.push(left.splice(i, 1)[0]);
+    else if (line) out.push(numbers ? numberOf(line, label) : line);
+  }
+  return out;
+}
+
+/** The goals a parent goal may be picked from, by name, as the stored value names them (by key, or by id). */
+function parentOptions(graph: GraphOut | undefined, entity: EntityDetail, current: string): { value: string; label: string }[] {
+  const plain = (k: string) => k.trim().toLowerCase().replace(/[._\s]/g, "-");
+  const own = (g: EntityOut) => g.id === current.trim() || plain(g.key) === plain(current);
+  // The goal itself only when it is stored as its own parent, so it reads by its name.
+  const goals = sortedGoals(graph).filter((g) => g.id !== entity.id || (current.trim() && own(g)));
+  const byId = goals.some((g) => g.id === current.trim());
+  const out = goals.map((g) => ({ value: byId ? g.id : g.key, label: shownTitle(g) }));
+  const found = out.find((o) => o.value === current || plain(o.value) === plain(current));
+  if (found) found.value = current;
+  else if (current) out.unshift({ value: current, label: graph ? "Not in the Ground Truth" : "…" });
+  return [{ value: "", label: "None" }, ...out];
+}
+
 function EditForm({
   entity,
+  graph,
   busy,
   problems,
   onCancel,
   onSave,
 }: {
   entity: EntityDetail;
+  graph: GraphOut | undefined;
   busy: boolean;
   /** The goal fields' problems, from the last Save's 422 or the goal's goal_check. */
   problems: GoalProblem[];
@@ -1029,10 +1261,13 @@ function EditForm({
   const [fields, setFields] = useState(() => attrFields(entity));
   const [title, setTitle] = useState(entity.title);
   const [body, setBody] = useState(entity.body ?? "");
-  const [attrs, setAttrs] = useState<Record<string, string>>(() =>
-    Object.fromEntries(fields.map((f) => [f.key, asText(entity.attrs?.[f.key])])),
+  // Each attribute's draft, its lists, objects and their fields each as their stored type.
+  const [drafts, setDrafts] = useState<Record<string, Draft>>(() =>
+    Object.fromEntries(fields.map((f) => [f.key, draftOf(entity.attrs?.[f.key], f.key, f.numeric)])),
   );
   const [invalid, setInvalid] = useState<string | null>(null);
+  // The attributes removed with their x.
+  const [gone, setGone] = useState<string[]>([]);
   const isGoal = entity.type === "goal";
   const [goal, setGoal] = useState<GoalDraft>(() => goalDraft(entity.attrs ?? {}));
   const addable = (KNOWN_ATTRS[entity.type] ?? []).filter((k) => !fields.some((f) => f.key === k));
@@ -1040,38 +1275,39 @@ function EditForm({
   function submit(e: FormEvent) {
     e.preventDefault();
     // Only the attributes that changed: an untouched one is not rewritten.
-    const out: Record<string, unknown> = {};
+    const out: Record<string, unknown> = Object.fromEntries(gone.filter((k) => entity.attrs?.[k] !== undefined).map((k) => [k, null]));
     for (const f of fields) {
-      const raw = attrs[f.key].trim();
-      if (raw === asText(entity.attrs?.[f.key]).trim()) continue;
-      if (!raw) {
-        out[f.key] = null; // removes the key
-      } else if (f.numeric) {
-        const n = Number(raw);
-        if (!Number.isFinite(n)) {
-          setInvalid(`${f.label} must be a number.`);
-          return;
-        }
-        out[f.key] = n;
-      } else if (f.json) {
-        try {
-          out[f.key] = JSON.parse(raw);
-        } catch {
-          setInvalid(`${f.label} must be valid JSON.`);
-          return;
-        }
-      } else {
-        out[f.key] = raw;
+      const was = entity.attrs?.[f.key];
+      let v: unknown;
+      try {
+        v = storedOf(drafts[f.key], f.label);
+      } catch (err) {
+        setInvalid((err as Error).message);
+        return;
       }
+      if (v === was || (v === GONE && was === undefined)) continue;
+      out[f.key] = v === GONE ? null : v; // null removes the key
     }
     if (isGoal) {
-      for (const [label, raw] of [["Value", goal.target], ["Start value", goal.start], ["Weight", goal.weight]]) {
-        if (raw.trim() && !Number.isFinite(Number(raw))) {
+      // A stored value left as the form showed it ("1e-7", a number or text) saves untouched, not rewritten; a changed
+      // Value, Start value or Weight takes only what a number holds exactly, as a new number field does.
+      // Text the Weight box cannot read ("1e") reads as "": it is refused as an unreadable Value is, not saved as emptied.
+      const weightBox = e.currentTarget instanceof HTMLFormElement ? e.currentTarget.elements.namedItem("weight") : null;
+      if (weightBox instanceof HTMLInputElement && weightBox.validity.badInput) {
+        setInvalid("Weight must be a number.");
+        return;
+      }
+      const shown = goalDraft(entity.attrs ?? {});
+      const patch = goalPatch(goal, entity.attrs ?? {});
+      for (const [label, key] of [["Value", "target"], ["Start value", "start"], ["Weight", "weight"]] as const) {
+        const raw = goal[key].trim();
+        if (raw === shown[key].trim()) delete patch[key];
+        else if (raw && exactOf(raw) === undefined) {
           setInvalid(`${label} must be a number.`);
           return;
         }
       }
-      Object.assign(out, goalPatch(goal, entity.attrs ?? {}));
+      Object.assign(out, patch);
     }
     if (!title.trim()) {
       setInvalid("Title cannot be empty.");
@@ -1081,10 +1317,17 @@ function EditForm({
     onSave({ title: title.trim(), body: body.trim() ? body : null, attrs: out });
   }
 
+  // An object or a list of entries is removed only with its x: emptying it keeps it, as an empty object or list.
+  function removeAttr(key: string) {
+    setFields((fs) => fs.filter((f) => f.key !== key));
+    setGone((g) => [...g, key]);
+  }
+
   function add(key: string) {
     if (!key) return;
-    setFields((fs) => [...fs, { key, label: key }]);
-    setAttrs((a) => ({ ...a, [key]: "" }));
+    setFields((fs) => [...fs, { key, label: attrLabel(key) }]);
+    setGone((g) => g.filter((k) => k !== key));
+    setDrafts((a) => ({ ...a, [key]: draftOf(undefined, key) }));
   }
 
   const label = "flex flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2";
@@ -1100,15 +1343,23 @@ function EditForm({
       </label>
       {isGoal && <GoalFields draft={goal} onChange={setGoal} problems={problems} horizons={entity.goal_check?.horizons as PlanningHorizons | null | undefined} />}
       {fields.map((f) => (
-        <label key={f.key} className={label}>
-          {f.label}
-          <input
-            className={INPUT}
-            inputMode={f.numeric ? "decimal" : undefined}
-            value={attrs[f.key]}
-            onChange={(e) => setAttrs((a) => ({ ...a, [f.key]: e.target.value }))}
-          />
-        </label>
+        <DraftField
+          key={f.key}
+          attr={f.key}
+          label={f.label}
+          draft={drafts[f.key]}
+          onChange={(d) => setDrafts((a) => ({ ...a, [f.key]: d }))}
+          parents={(current) => parentOptions(graph, entity, current)}
+          onRemove={drafts[f.key].kind === "object" || drafts[f.key].kind === "entries" ? () => removeAttr(f.key) : undefined}
+          removeName="Remove attribute"
+          missing={
+            holdsPlaceholder(entity.attrs?.[f.key]) && (
+              <Chip kind="warn" className="ml-1.5">
+                Missing
+              </Chip>
+            )
+          }
+        />
       ))}
       {addable.length > 0 && (
         <label className={label}>
@@ -1117,7 +1368,7 @@ function EditForm({
             <option value="">Choose…</option>
             {addable.map((k) => (
               <option key={k} value={k}>
-                {k}
+                {attrLabel(k)}
               </option>
             ))}
           </select>
@@ -1132,10 +1383,217 @@ function EditForm({
           Cancel
         </Button>
         <InfoTip label="saving" align="start">
-          Saving locks this item: agents can then only propose changes to it.
+          Saving locks this item: agents can then only propose changes to it. Empty entries are left out.
         </InfoTip>
       </div>
     </form>
+  );
+}
+
+/**
+ * A small icon button in the Edit form: adds or removes a list entry, an object field or an attribute. Its title is
+ * the short action; its name says which group and entry it acts on ("Remove Reply targets entry 2").
+ */
+function EditIcon({
+  icon,
+  name,
+  of,
+  onClick,
+  className = "self-start",
+}: {
+  icon: "plus" | "x";
+  name: string;
+  of: string;
+  onClick: () => void;
+  className?: string;
+}) {
+  return <Button variant="ghost" icon={icon} title={name} aria-label={of} className={`h-7 flex-none px-1.5 ${className}`} onClick={onClick} />;
+}
+
+/**
+ * One attribute, field or list entry in the Edit form, as its draft's type: an object or a list entry by entry as a
+ * group of its own fields (in turn), a list of words one line per entry, a yes or no as a two-choice picker. A list
+ * adds an entry shaped like the others and an object a field (name and value); `onRemove` puts an x beside it.
+ */
+function DraftField({
+  attr,
+  label: name,
+  draft: d,
+  onChange,
+  parents,
+  missing,
+  onRemove,
+  removeName = "Remove field",
+  part,
+  path = name,
+}: {
+  /** The top-level attribute's key; none for a field or an entry in one. */
+  attr?: string;
+  label: string;
+  draft: Draft;
+  onChange: (d: Draft) => void;
+  parents: (current: string) => { value: string; label: string }[];
+  missing?: ReactNode;
+  onRemove?: () => void;
+  removeName?: string;
+  /** The field's key, or the entry's number, in its object or list: marks the field with its controls. */
+  part?: string;
+  /** Its name with the groups it is in, naming its buttons: "Reply targets entry 2". */
+  path?: string;
+}) {
+  const lines = useRef<HTMLTextAreaElement>(null);
+  const box = useRef<HTMLFieldSetElement>(null);
+  const label = `flex flex-col gap-1 text-[13px] font-semibold tracking-[0.02em] text-text2${attr ? "" : " pl-3"}`;
+  // Beside a group's name, or beside a field's input.
+  const grouped = d.kind === "object" || d.kind === "entries";
+  const remove = onRemove && <EditIcon icon="x" name={removeName} of={`Remove ${path}`} onClick={onRemove} className={grouped ? "self-start" : "mb-1 self-end"} />;
+  if (grouped) {
+    const parts: [string, string, Draft, boolean][] =
+      d.kind === "object"
+        ? d.fields.map(([k, p, fresh], i) => [fresh ? `new-${i}` : k, fresh ? "" : attrLabel(k), p, !!fresh])
+        : d.entries.map((p, i) => [String(i), `${i + 1}`, p, false]);
+    const set = (i: number, p: Draft) =>
+      onChange(
+        d.kind === "object"
+          ? { ...d, fields: d.fields.map((x, j): Field => (j === i ? (x[2] ? [x[0], p, true] : [x[0], p]) : x)) }
+          : { ...d, entries: d.entries.map((x, j) => (j === i ? p : x)) },
+      );
+    const drop = (i: number) =>
+      onChange(d.kind === "object" ? { ...d, fields: d.fields.filter((_, j) => j !== i) } : { ...d, entries: d.entries.filter((_, j) => j !== i) });
+    const typedName = (i: number) => (d.kind === "object" ? d.fields[i][0].trim() : "");
+    const rename = (i: number, key: string) =>
+      d.kind === "object" && onChange({ ...d, fields: d.fields.map((x, j): Field => (j === i ? [key, x[1], true] : x)) });
+    // A new field's value is a number when typed as one and every other plain field is one, text otherwise; a new
+    // entry is shaped like the first, in a box of lines where any other entry is.
+    const plainKinds = d.kind === "object" ? d.fields.filter(([, p, f]) => !f && "text" in p && p.kind !== "lines").map(([, p]) => p.kind) : [];
+    const numbers = plainKinds.length > 0 && plainKinds.every((k) => k === "number");
+    const entry = (): Draft => {
+      const blank = blankOf(d.kind === "entries" && d.entries[0] ? d.entries[0] : draftOf(Array.isArray(d.was) ? d.was[0] : ""));
+      const multi = d.kind === "entries" && d.entries.some((e) => e.kind === "text" && (e.multi || e.start.includes("\n")));
+      return blank.kind === "text" && multi ? { ...blank, multi } : blank;
+    };
+    const add = () => {
+      onChange(
+        d.kind === "object"
+          ? { ...d, fields: [...d.fields, ["", { kind: "text", was: undefined, start: "", text: "", ...(numbers ? { loose: true } : {}) }, true]] }
+          : { ...d, entries: [...d.entries, entry()] },
+      );
+      // The cursor on the new field's name, or the new entry's first input.
+      requestAnimationFrame(() => box.current?.lastElementChild?.previousElementSibling?.querySelector<HTMLElement>("input, textarea, select")?.focus());
+    };
+    const group = (
+      <fieldset ref={box} data-attr-field={attr} className={`flex min-w-0 flex-1 flex-col gap-2${attr ? "" : " pl-3"}`}>
+        <legend className={`${label} mb-1`}>
+          <span>
+            {name}
+            {missing}
+          </span>
+        </legend>
+        {parts.map(([k, partLabel, p, fresh], i) =>
+          fresh ? (
+            <div key={k} className="flex items-start gap-1 pl-3">
+              <input
+                className={`${INPUT} min-w-0 flex-1`}
+                aria-label="Field name"
+                placeholder="Name"
+                value={d.kind === "object" ? d.fields[i][0] : ""}
+                onChange={(e) => rename(i, e.target.value)}
+              />
+              <input
+                className={`${INPUT} min-w-0 flex-1`}
+                aria-label="Field value"
+                placeholder="Value"
+                value={"text" in p ? p.text : ""}
+                onChange={(e) => "text" in p && set(i, { ...p, text: e.target.value })}
+              />
+              <EditIcon icon="x" name="Remove field" of={`Remove ${path} ${typedName(i) ? `field ${typedName(i)}` : "new field"}`} onClick={() => drop(i)} />
+            </div>
+          ) : (
+            <DraftField
+              key={k}
+              label={partLabel}
+              draft={p}
+              onChange={(next) => set(i, next)}
+              parents={parents}
+              onRemove={() => drop(i)}
+              removeName={d.kind === "entries" ? "Remove entry" : undefined}
+              part={d.kind === "entries" ? partLabel : k}
+              path={`${path} ${d.kind === "entries" ? "entry" : "field"} ${partLabel}`}
+            />
+          ),
+        )}
+        <EditIcon
+          icon="plus"
+          name={d.kind === "object" ? "Add field" : "Add entry"}
+          of={`${d.kind === "object" ? "Add field" : "Add entry"} to ${path}`}
+          onClick={add}
+        />
+      </fieldset>
+    );
+    return remove ? (
+      <div className="flex items-start gap-1" data-attr-part={part ?? attr}>
+        {group}
+        {remove}
+      </div>
+    ) : (
+      group
+    );
+  }
+  const set = (text: string) => onChange({ ...d, text });
+  // A new line for a list of words; the person types the entry on it.
+  const addLine = () => {
+    const text = d.text && !d.text.endsWith("\n") ? `${d.text}\n` : d.text;
+    set(text);
+    requestAnimationFrame(() => {
+      const el = lines.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(text.length, text.length);
+    });
+  };
+  const wrapped = !!remove || d.kind === "lines";
+  const field = (
+    <label className={wrapped ? label.replace(" pl-3", "") : label} data-attr-field={attr}>
+      <span>
+        {name}
+        {missing}
+      </span>
+      {d.kind === "parent" ? (
+        <select className={INPUT} value={d.text} onChange={(e) => set(e.target.value)}>
+          {parents(d.text).map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      ) : d.kind === "bool" ? (
+        <select className={INPUT} value={d.text} onChange={(e) => set(e.target.value)}>
+          {!d.text && <option value="">Choose…</option>}
+          <option value="yes">Yes</option>
+          <option value="no">No</option>
+        </select>
+      ) : d.kind === "lines" || d.start.includes("\n") || ("multi" in d && d.multi) ? (
+        <textarea ref={lines} className={INPUT} rows={Math.max(2, d.text.split("\n").length)} value={d.text} onChange={(e) => set(e.target.value)} />
+      ) : (
+        <input
+          className={INPUT}
+          type={d.kind === "day" ? "date" : "text"}
+          inputMode={d.kind === "number" ? "decimal" : undefined}
+          value={d.text}
+          onChange={(e) => set(e.target.value)}
+        />
+      )}
+    </label>
+  );
+  if (!wrapped) return field;
+  return (
+    <div className={`flex flex-col gap-1${attr ? "" : " pl-3"}`} data-attr-part={part ?? attr}>
+      <div className="flex items-end gap-1">
+        <div className="flex min-w-0 flex-1 flex-col">{field}</div>
+        {remove}
+      </div>
+      {d.kind === "lines" && <EditIcon icon="plus" name="Add entry" of={`Add entry to ${path}`} onClick={addLine} />}
+    </div>
   );
 }
 

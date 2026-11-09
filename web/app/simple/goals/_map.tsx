@@ -228,6 +228,8 @@ export function GoalMapPage() {
   // kr-in-goal-map: the goals' parents, read before the map is drawn so no key result shows as a goal.
   const goalList = useQuery("simple-goal-map-goal-tree", () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })));
   const krs = useMemo(() => keyResults(goalList.data ?? []), [goalList.data]);
+  // After the map's own edits the goal tree is read again too, so a key result added or renamed shows.
+  const refresh = () => Promise.all([q.reload(), goalList.reload()]);
   const folded = useMemo(() => (q.data && (goalList.data || goalList.error) ? withKeyResults(q.data, krs, goalList.data ?? []) : null), [q.data, goalList.data, goalList.error, krs]);
   const map = folded?.map;
   // Read after the map: its features are roadmap items once the map is read.
@@ -269,6 +271,7 @@ export function GoalMapPage() {
     try {
       const next = await unwrap(call);
       q.setData(() => next);
+      void goalList.reload();
       setFlash(words(next));
       return true;
     } catch (e) {
@@ -319,9 +322,11 @@ export function GoalMapPage() {
       if (!valid) return;
       if (regoal) {
         const to = map.goals.find((g) => g.id === draft.goal)?.name ?? "another goal";
+        // kr-in-goal-map: a key result's milestone is on the key result (its Undo puts it back there).
+        const own = { ...m, goal: (m as typeof m & { kr?: string }).kr ?? m.goal };
         try {
-          if (m.can_change) await moveKrGoal(m, draft.goal, `Moved ${m.name} to ${to}`, () => q.reload());
-          else await proposeKrGoal(m, draft.goal, `move ${m.name} to ${to}`, () => q.reload());
+          if (m.can_change) await moveKrGoal(own, draft.goal, `Moved ${m.name} to ${to}`, refresh);
+          else await proposeKrGoal(own, draft.goal, `move ${m.name} to ${to}`, refresh);
         } catch (e) {
           setFlash(errorMessage(e));
           return;
@@ -371,8 +376,11 @@ export function GoalMapPage() {
       {/* goal-ladder: the ladder on a pan-and-zoom canvas (a phone: one goal at a time). */}
       <GoalLadder
         map={map}
-        setMap={(m) => q.setData(() => m)}
-        reloadMap={() => q.reload()}
+        setMap={(m) => {
+          q.setData(() => m);
+          void goalList.reload();
+        }}
+        reloadMap={refresh}
         onOpen={setPanel}
         onAddMilestone={(goal) => open("propose", goal)}
         onGate={(m) => open("gate", undefined, m)}
@@ -382,6 +390,7 @@ export function GoalMapPage() {
         onPrd={canPrd ? (m) => open("prd", undefined, m) : null}
         picked={picked}
         keyResults={folded?.lines}
+        topOf={folded?.top}
         head={
           <div className="flex flex-col gap-1">
             <h1 className="simple-h1 max-[600px]:sr-only">Goal map</h1>

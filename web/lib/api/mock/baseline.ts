@@ -118,6 +118,11 @@ export const LONG_WORDS_SCENARIO = "long-words";
  */
 export const OKR_IMPORT_SCENARIO = "okr-import";
 export const OKR_IMPORT_GOAL = "KR 1.1 [n] of [n] live helpers averaging 50 replied threads a day in March 2027";
+/**
+ * gt-goal-attr-shapes: the same imported goal, also holding a list and an object as the file wrote them, each with an
+ * unfilled "[n]": the panel reads them in words, the Edit form one line per entry and one field per field.
+ */
+export const GOAL_ATTRS_SCENARIO = "goal-attr-shapes";
 const REVIEW_CHECKPOINT = "0b7e5d4c-3a29-4118-9f07-e6d5c4b3a2c1";
 
 /**
@@ -309,13 +314,41 @@ export function seedBaseline(uuid: () => string): BaselineState {
     status: "proposed",
     confidence: 0.45,
   });
-  if (typeof localStorage !== "undefined" && localStorage.getItem(MOCK_SCENARIO_KEY) === OKR_IMPORT_SCENARIO) {
+  const scenario = typeof localStorage !== "undefined" ? localStorage.getItem(MOCK_SCENARIO_KEY) : null;
+  if (scenario === OKR_IMPORT_SCENARIO || scenario === GOAL_ATTRS_SCENARIO) {
+    const shapes =
+      scenario === GOAL_ATTRS_SCENARIO
+        ? {
+            open_values: ["[n] live helpers", "50 replied threads a day", "[n]% of threads answered within an hour"],
+            reply_split: { email_threads: 60, chat_threads: "[n]", review_by: "2027-03-15" },
+            // An object holding objects, a number, a yes or no, a null and an empty list; a list of objects; a list
+            // entry holding a line break; a null and an empty list of their own: each saved as its stored type.
+            reply_targets: { chat: { low: 1, high: 2 }, email: { low: 2, high: 5 }, hours: 4, weekends: false, owner_note: null, tags: [] },
+            review_steps: [
+              { step: "Read the thread", hours: 1 },
+              { step: "Write the reply", hours: 2 },
+            ],
+            saved_replies: ["Thanks for writing in.\nWe will reply within a day.", "Closed after a week"],
+            // A list of objects of one field each: emptying that field keeps the entry (gt-goal-attr-add-remove).
+            handoffs: [{ team: "Front desk" }, { team: "Night shift" }],
+            // A list of objects each holding an object: emptying the inner one leaves the entry out (gt-goal-edit-minors).
+            // A stored null beside it counts as empty (gt-goal-edit-minors-3).
+            on_call: [{ lead: { name: "Sam Example" }, note: null }, { lead: { name: "Kit Example" } }],
+            spare_note: null,
+            old_tags: [],
+          }
+        : {};
     entity("goal", "kr-1-1", OKR_IMPORT_GOAL, {
       body: "Reach [n] live helpers, each replying to 50 threads a day.",
-      attrs: { target_text: "[n] live helpers", due: "2027-03-31", period: "2027-03-01..2027-03-31", parent_goal: "g.paid-conversion" },
+      attrs: { target_text: "[n] live helpers", due: "2027-03-31", period: "2027-03-01..2027-03-31", parent_goal: "g.paid-conversion", ...shapes },
       status: "proposed",
       confidence: null,
     });
+    if (scenario === GOAL_ATTRS_SCENARIO) {
+      // A goal an import stored as its own parent, by its id.
+      const own = entity("goal", "kr-1-2", "Answer chat threads within an hour", { status: "proposed", confidence: null });
+      own.attrs = { parent_goal: own.id };
+    }
   }
   // Activation's value on the first of each month, as people recorded it.
   [31, 33, 32, 35, 34, 36, 38].forEach((value, i) => {

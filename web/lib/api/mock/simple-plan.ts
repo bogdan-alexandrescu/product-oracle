@@ -243,6 +243,18 @@ export interface PlanDb {
   stuck?: boolean;
   /** walkb-onepager review ("simple-plan-by-job-down"): the API fails while the job reads. */
   down?: boolean;
+  /**
+   * prio-weeks-goal-ids ("priorities-plan-goal-codes"): Activation is two plan goals with their own codes, G1 Activation
+   * and G3 Activation; Onboarding emails (F-16) serves G3, the plan's other Activation features G1.
+   */
+  coded_goals?: boolean;
+  /**
+   * prio-weeks-words ("priorities-plan-one-week"): M1 holds 1 engineer-week of capacity (its 13 planned run over), and
+   * Self-serve checkout's M2 part is 1 week, so Revenue's M2 segment is 1 week; M1 has no name.
+   */
+  one_week?: boolean;
+  /** prio-weeks-words ("priorities-plan-goal-twins"): the plan names Activation twice, with no code: one goal. */
+  twin_goals?: boolean;
 }
 
 /**
@@ -317,6 +329,12 @@ export function planOut(plan: PlanDb | undefined, prd: Schemas["SimpleDocRef"], 
       effort_weeks: 2, goal: null, pm_owned: false, kind: "New for people", what: "Lists partner integrations a team can turn on", flow_steps: [],
     });
   }
+  const goals = plan.coded_goals
+    ? GOALS.flatMap((g) => (g.name === "Activation" ? [{ ...g, name: "G1 Activation" }, { name: "G3 Activation", targets: g.targets }] : [g]))
+    : [...GOALS];
+  if (plan.coded_goals) for (const s of slices) if (s.goal === "Activation") s.goal = s.feature_code === "F-16" ? "G3 Activation" : "G1 Activation";
+  if (plan.twin_goals) goals.splice(goals.findIndex((g) => g.name === "Activation") + 1, 0, { name: "Activation", targets: [["M3", "70% finish setup in a day"]] });
+  if (plan.one_week) for (const s of slices) if (s.feature_code === "F-11" && s.milestone === "M2") s.effort_weeks = 1;
   const weeks = new Map<string, number>();
   for (const s of slices) {
     if (s.effort_weeks == null || !s.goal) continue;
@@ -333,13 +351,14 @@ export function planOut(plan: PlanDb | undefined, prd: Schemas["SimpleDocRef"], 
     milestones: planMilestones(dated).map((m) => ({
       ...m,
       ...(undatedCodes.includes(m.code) ? { start_date: null, end_date: null } : {}),
+      ...(plan.one_week && m.code === "M1" ? { effort_weeks: 1, name: "" } : {}),
       planned_weeks: slices.filter((s) => s.milestone === m.code).reduce((n, s) => n + (s.effort_weeks ?? 0), 0),
       feature_codes: [...new Set(slices.filter((s) => s.milestone === m.code).map((s) => s.feature_code))],
       source: "prd" as const,
     })),
     slices,
-    goals: GOALS.map((g) => ({ name: g.name, targets: g.targets.map(([milestone, target]) => ({ milestone, target })), measured: g.measured ?? null, on_track: g.on_track ?? null })),
-    goal_weeks: GOALS.flatMap((g) => MILESTONES.flatMap((m) => {
+    goals: goals.map((g) => ({ name: g.name, targets: g.targets.map(([milestone, target]) => ({ milestone, target })), measured: g.measured ?? null, on_track: g.on_track ?? null })),
+    goal_weeks: goals.flatMap((g) => MILESTONES.flatMap((m) => {
       const w = weeks.get(`${g.name}|${m.code}`);
       return w ? [{ goal: g.name, milestone: m.code, weeks: w }] : [];
     })),
