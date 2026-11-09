@@ -136,3 +136,35 @@ async def test_roadmap_read_codes_and_renumber_on_move(client, clock):
     )  # fmt: skip
     assert r.status_code == 200, r.text
     assert await codes() == {"Scale volume": "M1", "Prove it": "M2", "Keep teams": "M3"}
+
+
+async def test_an_items_picked_milestone_reads_its_roadmap_code(client):
+    """protects=an item placed in a PRD's "M1 Prove it" reads it by its roadmap code ("M2 Prove
+    it" once the roadmap's own milestone is dated before it); fails_when=the item's milestone
+    keeps the PRD's own code."""
+    from datetime import date as day
+
+    from oracle.roadmap.models import RoadmapItem
+    from oracle.simple.models import SimplePrdPlan
+    from tests.test_simple_changes_api import World, make_people
+    from tests.test_simple_item_milestone_api import _item, _plan, _post, _read
+
+    ctx = await make_people()
+    w = await World(ctx).build(decider=True, ops=["im"])
+    a = w.ids["im-a"]
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(RoadmapItem, uuid.UUID(a))
+        s.add(SimplePrdPlan(document_id=row.prd_document_id, version_id=row.prd_version_id,
+                            status="ready", source="prd",
+                            data=_plan(("M1", "Prove it", "2026-11-27"))))  # fmt: skip
+        await s.commit()
+    body = {"roadmap_id": w.roadmap_id, "name": "Kickoff", "date": str(day(2026, 11, 10))}
+    r = await client.post(MILESTONES, json=body, headers=ctx.as_("owner"))
+    assert r.status_code == 201, r.text
+    read = await _read(client, ctx, "decider")
+    prd = next(m for m in read["goal_milestones"] if m["prd"] and m["code"] == "M1")
+    assert prd["roadmap_code"] == "M2", read["goal_milestones"]
+    r = await _post(client, ctx, "decider", a, None, {"id": prd["id"], "name": "M1 Prove it"})
+    assert r.status_code == 201, r.text
+    it = _item(await _read(client, ctx, "decider"), a)
+    assert it["milestone"]["name"] == "M2 Prove it"
