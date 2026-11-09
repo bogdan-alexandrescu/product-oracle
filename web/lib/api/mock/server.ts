@@ -1870,19 +1870,29 @@ function seedGoalOrderScenario(hard = false): Db {
 /**
  * kr-in-goal-card, the "goal-key-results" scenario: "goal-order" with two confirmed key results
  * (subgoals) under Faster activation: KR 1 has a roadmap item, KR 2 none yet and a feature
- * someone suggested for it. Invented data.
+ * someone suggested for it; a proposed key result and KR 1's own subgoal, each with an item
+ * (kr-fold). Invented data.
  */
 function seedGoalKeyResultsScenario(): Db {
   const db = seedGoalOrderScenario();
   const rm = db.simple_roadmap!;
   const parent = db.baseline.entities.find((e) => e.key === "faster-activation")!;
-  const kr = (key: string, title: string, at: string) =>
-    db.baseline.entities.push({ ...parent, id: stableUuid(`simple-goal/${key}`), key, title, parent_id: parent.id, attrs: { metric: "teams", weight: 1 }, created_at: at, updated_at: at });
+  const kr = (key: string, title: string, at: string, under = parent.id, status: "confirmed" | "proposed" = "confirmed") =>
+    db.baseline.entities.push({ ...parent, id: stableUuid(`simple-goal/${key}`), key, title, parent_id: under, status, attrs: { metric: "teams", weight: 1 }, created_at: at, updated_at: at });
   kr("kr-setup-day", "KR 1 Half of new teams set up in one day", "2026-10-01T09:00:00Z");
   kr("kr-first-alert", "KR 2 New teams send a first alert in week one", "2026-10-02T09:00:00Z");
-  const item: SimpleDb["items"][number] = { key: "kr-setup-list", title: "Guided setup checklist", horizon: "now", roadmap: "onboarding-roadmap", goal: "kr-setup-day", confidence: "medium", start: 5, end: 45, source: "typed" };
-  rm.items.push(item);
-  rm.ids[item.key] = stableUuid(`simple-item/${item.key}`);
+  // kr-fold: a proposed key result, and a key result's own subgoal: both fold into Faster activation.
+  kr("kr-first-report", "Teams share a first report", "2026-10-03T09:00:00Z", parent.id, "proposed");
+  kr("kr-setup-ten", "Setup takes ten minutes", "2026-10-04T09:00:00Z", stableUuid("simple-goal/kr-setup-day"));
+  const items: SimpleDb["items"] = [
+    { key: "kr-setup-list", title: "Guided setup checklist", horizon: "now", roadmap: "onboarding-roadmap", goal: "kr-setup-day", confidence: "medium", start: 5, end: 45, source: "typed" },
+    { key: "kr-report-start", title: "Starter report template", horizon: "now", roadmap: "onboarding-roadmap", goal: "kr-first-report", confidence: "medium", start: 10, end: 50, source: "typed" },
+    { key: "kr-setup-bar", title: "Setup progress bar", horizon: "now", roadmap: "onboarding-roadmap", goal: "kr-setup-ten", confidence: "medium", start: 15, end: 55, source: "typed" },
+  ];
+  for (const item of items) {
+    rm.items.push(item);
+    rm.ids[item.key] = stableUuid(`simple-item/${item.key}`);
+  }
   rm.goal_suggestions = [...(rm.goal_suggestions ?? []), seedPersonGoalSuggestion("kr-first-alert", "First alert wizard", "New teams send an alert on day one", stableUuid("mock-user/kr-teammate"))];
   return db;
 }
