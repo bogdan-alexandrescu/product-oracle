@@ -21,8 +21,8 @@ import { FeatureMenu, useFeatureDelete } from "@/components/simple/FeatureDelete
 import { ArchiveDialog, ArchivedGoals, BTN, count, dayOf, DeleteArchivedDialog, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type GoalFeatures, type Note } from "./goal-buckets";
 import { useBucketDrag } from "./goal-drag";
 import { knownCode, TaskRow, useBucketTasks, type Task } from "./task-edit";
-import { CodeTag, featureCount, goalLabel, PlanBucketsHead, planFeatures, planGoals, planSpan } from "./plan-buckets";
-import { CrowdMark, CrowdSheet, MARK_R, markLayout, weeksWords, type Box, type Crowd } from "./mark-counts";
+import { CodeTag, featureCount, goalLabel, PlanBucketsHead, planFeatures, planGoals, planSpan, weeksWords } from "./plan-buckets";
+import { CrowdMark, CrowdSheet, MARK_R, markLayout, type Box, type Crowd } from "./mark-counts";
 
 type Out = Schemas["SimplePrioritiesOut"];
 type Row = Schemas["SimplePriorityRow"];
@@ -2565,7 +2565,8 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
       <p aria-live="assertive" className="sr-only" data-testid="bucket-live">
         {drag.said}
       </p>
-      <ul className="mt-4 grid items-start gap-4 sm:grid-cols-2">
+      {/* Two columns only where a feature's row fits a card (31rem); beside a 768 px window's sidebar one, as on a phone. */}
+      <ul className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(min(100%,31rem),1fr))] items-start gap-4">
         {goals.map((g) => {
           const state = suggestionGoal(suggestions, g);
           const code = codeOf(g);
@@ -2704,7 +2705,7 @@ function PlanBuckets({ data, plan: read, suggestions, reload }: { data: Out; pla
           </li>
         )}
         {outside.length > 0 && (
-          <li data-testid="plan-outside" className="rounded-[var(--simple-card-radius)] border border-line bg-surface p-4 sm:col-span-2">
+          <li data-testid="plan-outside" className="rounded-[var(--simple-card-radius)] border border-line bg-surface p-4 col-span-full">
             <h3 className="text-[21px] font-[650] leading-7">Also this quarter, outside the plan</h3>
             <ul className="mt-2">
               {outside.map(({ b, rows }) => (

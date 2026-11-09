@@ -11,8 +11,12 @@ type Slice = Schemas["SimpleSlice"];
 
 /** Engineer-weeks as the rest of the page writes them: "4", "5.5" (no trailing ".0"). */
 export const wk = (n: number): string => Number(n.toFixed(1)).toString();
-/** Engineer-weeks in words, as the Value / effort chart and the Ranked tab say them: "1 week", "4 weeks", "5.5 weeks". */
-export const weeksWords = (n: number): string => `${wk(n)} ${wk(n) === "1" ? "week" : "weeks"}`;
+/** "week" for 1, else "weeks": the noun that follows `n`. */
+const weekNoun = (n: number): string => (wk(n) === "1" ? "week" : "weeks");
+/** Engineer-weeks in words, one wording across Priorities (the bars, the Value / effort chart, the Ranked tab): "1 week", "4 weeks", "5.5 weeks". */
+export const weeksWords = (n: number): string => `${wk(n)} ${weekNoun(n)}`;
+/** Engineer-weeks with the hyphenated noun, as the summary and a segment's title say them: "1 engineer-week", "4 engineer-weeks". */
+const engineerWeeks = (n: number): string => `${wk(n)} engineer-${weekNoun(n)}`;
 
 const NUMBER_WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 const count = (n: number, one: string, many: string) => `${NUMBER_WORDS[n] ?? n} ${n === 1 ? one : many}`;
@@ -38,10 +42,15 @@ export function milestoneColour(plan: Plan, code: string): { bar: string; tag: s
   return { bar: `var(--simple-m${k}-bar)`, tag: `var(--simple-m${k}-tag)`, ink: `var(--simple-m${k}-tag-ink)` };
 }
 
-/** "Nov 2 – Nov 27" and "13 of 16 weeks" (no dates or capacity: left out). */
+/**
+ * "Nov 2 – Nov 27" and "13 of 16 weeks" (no dates or capacity: left out); when the two numbers take different nouns,
+ * each its own: "2 weeks of 1 week", never "2 of 1 week".
+ */
 function legendParts(m: Milestone): { dates: string | null; full: string } {
   const dates = m.start_date && m.end_date ? `${day(m.start_date)} – ${day(m.end_date)}` : null;
-  const full = m.effort_weeks != null ? `${wk(m.planned_weeks ?? 0)} of ${weeksWords(m.effort_weeks)}` : `${weeksWords(m.planned_weeks ?? 0)} planned`;
+  const planned = m.planned_weeks ?? 0;
+  const of = m.effort_weeks == null ? null : weekNoun(planned) === weekNoun(m.effort_weeks) ? wk(planned) : weeksWords(planned);
+  const full = m.effort_weeks != null ? `${of} of ${weeksWords(m.effort_weeks)}` : `${weeksWords(planned)} planned`;
   return { dates, full };
 }
 
@@ -54,11 +63,11 @@ function summary(plan: Plan): string {
   const span = plan.span ? `This plan, ${planSpan(plan.span)}` : "This plan";
   const planned = ms.reduce((n, m) => n + (m.planned_weeks ?? 0), 0);
   const over = count(ms.length, "milestone", "milestones");
-  if (ms.some((m) => m.effort_weeks == null)) return `${span}: ${wk(planned)} engineer-weeks planned over ${over}. Bars are engineer-weeks.`;
+  if (ms.some((m) => m.effort_weeks == null)) return `${span}: ${engineerWeeks(planned)} planned over ${over}. Bars are engineer-weeks.`;
   const capacity = ms.reduce((n, m) => n + (m.effort_weeks ?? 0), 0);
   const spare = capacity - planned;
   const split = spare >= 0 ? `${wk(planned)} planned + ${wk(spare)} spare` : `${wk(planned)} planned, ${wk(-spare)} over`;
-  return `${span}: ${wk(capacity)} engineer-weeks over ${over} (${split}). Bars are engineer-weeks.`;
+  return `${span}: ${engineerWeeks(capacity)} over ${over} (${split}). Bars are engineer-weeks.`;
 }
 
 /** The goals in the plan's order (then any only the weeks name). */
@@ -106,11 +115,9 @@ export function CodeTag({ code, title }: { code: string; title?: string }) {
 }
 
 /**
- * A segment's label shows when it fits the segment by the picked frames' own margin (13 px type
- * taken at 8 px a letter, plus 12 px) and, measured as drawn, with 6 px to spare each side; a
- * narrower segment is blank, its words in its title. The measure catches the same font drawn a
- * few percent wider on another system, which would cut a label at the segment's edge; the
- * frames' margin keeps the frames' look where text draws as wide or narrower.
+ * A segment's label shows when its text, measured as drawn, fits the segment with 6 px to spare each side; a
+ * narrower segment is blank, its words in its title. Measured, never guessed from the letter count, so a label
+ * that fits is shown and one drawn wider on another system is never cut at the segment's edge.
  */
 const LABEL_PAD = 12;
 
@@ -132,8 +139,7 @@ function useFittingLabels(track: React.RefObject<HTMLDivElement | null>, width: 
     const next = new Set<string>();
     for (const seg of t.querySelectorAll<HTMLElement>("[data-milestone]")) {
       const text = seg.querySelector<HTMLElement>("[data-label]");
-      const room = seg.getBoundingClientRect().width;
-      if (text && text.textContent!.length * 8 + LABEL_PAD <= room && text.offsetWidth + LABEL_PAD <= seg.clientWidth) next.add(seg.dataset.milestone!);
+      if (text && text.getBoundingClientRect().width + LABEL_PAD <= seg.clientWidth) next.add(seg.dataset.milestone!);
     }
     // A measurement of the drawn labels, set only when the set changes.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -162,7 +168,7 @@ function GoalBar({ plan, goal, code, parts, total, max }: { plan: Plan; goal: st
               key={p.milestone}
               data-testid="goal-bar-segment"
               data-milestone={p.milestone}
-              title={`${p.milestone} ${m?.name ?? ""}: ${wk(p.weeks)} engineer-weeks`}
+              title={`${p.milestone} ${m?.name ?? ""}: ${engineerWeeks(p.weeks)}`}
               className="relative flex h-[30px] flex-none items-center justify-center overflow-hidden border-r-2 border-surface text-[13px] font-[650] text-on-accent tabular-nums"
               style={{ width: `${(p.weeks / max) * 100}%`, background: milestoneColour(plan, p.milestone).bar }}
             >

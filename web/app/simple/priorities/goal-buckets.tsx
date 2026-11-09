@@ -609,7 +609,7 @@ export function ArchivedGoals({ gb, year, open, onToggle, restore, del, onRestor
   const list = gb.archived ?? [];
   if (!list.length) return null;
   return (
-    <li data-testid="archived-goals" className="rounded-[var(--simple-card-radius)] border border-line bg-surface sm:col-span-2">
+    <li data-testid="archived-goals" className="rounded-[var(--simple-card-radius)] border border-line bg-surface col-span-full">
       <details open={open} onToggle={(e) => onToggle((e.target as HTMLDetailsElement).open)}>
         <summary className="cursor-pointer px-4 py-3 text-[17px] font-[650]">
           Archived goals <span className="font-normal text-text2">· {list.length}</span>
