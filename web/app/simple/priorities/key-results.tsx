@@ -11,7 +11,13 @@ import { goalLabel } from "./plan-buckets";
 
 type Out = Schemas["SimplePrioritiesOut"];
 type Buckets = Schemas["GoalBucketsOut"];
+type Plan = Schemas["SimplePlanOut"];
 type GoalRef = { key: string; title: string; position?: number | null };
+/** A row's goal as Priorities reads it: its top-level goal, and the key result it names (`kr_key`), if any. */
+type PlacedGoal = GoalRef & { kr_key?: string };
+
+/** A row's own goal key and, when that goal is a key result, its top-level goal's: a goal's list (?goal=) matches either. */
+export const goalKeysOf = (g: GoalRef): string[] => [g.key, ...((g as PlacedGoal).kr_key ? [(g as PlacedGoal).kr_key!] : [])];
 
 /** A goal's key result as its bucket lists it: its name (with its code) and its target line, if it has one. */
 export type BucketKeyResult = { id: string; name: string; line: string | null };
@@ -20,9 +26,13 @@ export type PriorityKeyResults = {
   krs: KeyResults;
   /** A goal's key results by its id, key or name (its bucket's list); `gb`: the goal buckets as read, for each one's target. */
   of: (refs: (string | null | undefined)[], gb?: Buckets) => BucketKeyResult[];
+  /** The top-level goal of a key result named by its id, key, title or name; null for a goal. */
+  top: (ref: string | null | undefined) => { id: string; key: string; title: string } | null;
 };
 
 const text = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
+/** A key result's name that starts with a code of its own ("KR 1 Half of …") reads without the goal tree's code too. */
+const OWN_CODE = /^(KR|O)[\s-]?\d+(\.\d+)*\b/i;
 
 /**
  * kr-in-priorities: the confirmed goals as Priorities shows them, as the roadmap does (lib/key-results):
@@ -41,14 +51,15 @@ export function usePriorityKeyResults(): PriorityKeyResults {
     };
     const of = (refs: (string | null | undefined)[], gb?: Buckets): BucketKeyResult[] =>
       find(refs).map((k) => {
-        // Its target line: the goal buckets' own (measure, target), else the Ground Truth's.
-        const rec = gb?.goals.find((g) => g.id === k.id);
+        // Its target line: the goal buckets' own (measure, target; by id, else by name), else the Ground Truth's.
+        const rec = gb?.goals.find((g) => g.id === k.id) ?? gb?.goals.find((g) => goalLabel(g.title).name.toLowerCase() === k.name.toLowerCase());
         const attrs = list.find((e) => e.id === k.id)?.attrs;
         const measure = text(rec?.measure) ?? krs.metricOf(k.id);
         const target = text(rec?.target) ?? text(attrs?.target_text) ?? text(attrs?.target);
-        return { id: k.id, name: k.code ? `${k.code} ${k.name}` : k.name, line: target && (measure ? `${measure}: ${target}` : target) };
+        return { id: k.id, name: k.code && !OWN_CODE.test(k.name) ? `${k.code} ${k.name}` : k.name, line: target && (measure ? `${measure}: ${target}` : target) };
       });
-    return { krs, of };
+    const top = (ref: string | null | undefined) => (ref ? (krs.parentOf(ref) ?? krs.parentOf(named(ref))) : null);
+    return { krs, of, top };
   }, [goals.data]);
 }
 
@@ -72,7 +83,8 @@ export function topGoalPriorities(data: Out | undefined, krs: KeyResults): Out |
   for (const b of data.buckets) if (!b.no_goal && !krs.parentOf(b.key)) position.set(b.key, b.position ?? null);
   const placed = <G extends GoalRef>(g: G | null | undefined): G | null => {
     const t = top(g);
-    return t && g && t.key !== g.key ? { ...t, position: position.get(t.key) ?? t.position ?? null } : t;
+    // Its own goal's key stays as `kr_key`, so a key result's list (?goal=) still finds it.
+    return t && g && t.key !== g.key ? { ...t, position: position.get(t.key) ?? t.position ?? null, kr_key: g.key } : t;
   };
   const buckets: Out["buckets"] = [];
   for (const b of data.buckets) {
@@ -106,7 +118,7 @@ export function topGoalPriorities(data: Out | undefined, krs: KeyResults): Out |
 }
 
 /**
- * The goal buckets as Priorities draws them: top-level goals only (each keeps its number), each
+ * The goal buckets as Priorities draws them: top-level goals only (numbered 1 to n), each
  * feature linked to a key result linked to its goal instead. A key result whose goal has no
  * bucket stays a goal of its own, so nothing is lost.
  */
@@ -122,8 +134,35 @@ export function topGoalBuckets(gb: Buckets | undefined, krs: KeyResults): Bucket
   const lift = (ids: string[] | undefined) => [...new Set((ids ?? []).map((id) => parent.get(id) ?? id))];
   return {
     ...gb,
-    goals: gb.goals.filter((g) => !parent.has(g.id)),
+    // The API's numbers count key results too: the goals left are numbered again, without gaps.
+    goals: gb.goals.filter((g) => !parent.has(g.id)).map((g, i) => ({ ...g, order: i + 1 })),
     features: gb.features.map((f) => ({ ...f, goal_ids: lift(f.goal_ids), assumed_goal_ids: lift(f.assumed_goal_ids) })),
+  };
+}
+
+/**
+ * A dated plan with each slice that names a key result under its top-level goal (a plan goal that is
+ * a key result is left out when its goal is listed), so placedPlan finds the goal among the buckets.
+ */
+export function topGoalPlan(plan: Plan, top: PriorityKeyResults["top"]): Plan {
+  const same = (a: string, b: string) => goalLabel(a).name.toLowerCase() === goalLabel(b).name.toLowerCase();
+  const listed = (name: string) => plan.goals.some((g) => same(g.name, name));
+  const up = (name: string) => {
+    const t = top(name);
+    return t && (listed(t.title) || !listed(name)) ? (plan.goals.find((g) => same(g.name, t.title))?.name ?? t.title) : name;
+  };
+  if (!plan.slices.some((s) => s.goal && up(s.goal) !== s.goal) && !plan.goals.some((g) => up(g.name) !== g.name)) return plan;
+  const weeks = new Map<string, Plan["goal_weeks"][number]>();
+  for (const w of plan.goal_weeks) {
+    const k = `${up(w.goal)}|${w.milestone}`;
+    const was = weeks.get(k);
+    weeks.set(k, was ? { ...was, weeks: was.weeks + w.weeks } : { ...w, goal: up(w.goal) });
+  }
+  return {
+    ...plan,
+    slices: plan.slices.map((s) => (s.goal ? { ...s, goal: up(s.goal) } : s)),
+    goals: plan.goals.filter((g) => up(g.name) === g.name),
+    goal_weeks: [...weeks.values()],
   };
 }
 

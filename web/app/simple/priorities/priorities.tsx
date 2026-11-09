@@ -21,7 +21,7 @@ import { FeaturePanel, useItemChanged } from "../roadmap/_panel";
 import { FeatureMenu, useFeatureDelete } from "@/components/simple/FeatureDelete";
 import { ArchiveDialog, ArchivedGoals, BTN, count, dayOf, DeleteArchivedDialog, FeatureRows, featureOf, GoalForm, GoalMenu, OrderBadge, placedPlan, UndoNote, useBucketRights, useBucketWrites, useGoalBuckets, type GoalFeatures, type Note } from "./goal-buckets";
 import { useBucketDrag } from "./goal-drag";
-import { KeyResultList, liftedMoves, topGoalBuckets, topGoalPriorities, usePriorityKeyResults, type PriorityKeyResults } from "./key-results";
+import { goalKeysOf, KeyResultList, liftedMoves, topGoalBuckets, topGoalPlan, topGoalPriorities, usePriorityKeyResults, type PriorityKeyResults } from "./key-results";
 import { knownCode, TaskRow, useBucketTasks, type Task } from "./task-edit";
 import { CodeTag, featureCount, goalLabel, PlanBucketsHead, planFeatures, planGoals, planSpan, weeksWords } from "./plan-buckets";
 import { CrowdMark, CrowdSheet, MARK_R, markLayout, type Box, type Crowd } from "./mark-counts";
@@ -532,7 +532,8 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved, onDel
   const open = useContext(OpenRow);
   const goal = params.get("goal");
   const goalName = params.get("name") ?? goal;
-  const rows = byLine(data).filter((r) => !goal || (r.goal ? r.goal.key === goal : goalOfRow(data)(r) === goalName));
+  // kr-in-priorities: a key result's list finds its rows too (each row reads its top-level goal).
+  const rows = byLine(data).filter((r) => !goal || (r.goal ? goalKeysOf(r.goal).includes(goal) : goalOfRow(data)(r) === goalName));
   const setParams = useSetParams();
   const refs = useRef<(HTMLLIElement | null)[]>([]);
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
@@ -2449,7 +2450,7 @@ function PlanBuckets({ data, plan: read, suggestions, reload, kr }: { data: Out;
   const readGb = bucketsQ.data;
   const gb = useMemo(() => topGoalBuckets(readGb, kr.krs), [readGb, kr.krs]);
   // mk-goalbuckets: each feature under the first goal its links name, the goals in the owner's order.
-  const plan = placedPlan(read, gb);
+  const plan = placedPlan(topGoalPlan(read, kr.top), gb);
   const goals = planGoals(plan);
   const noGoal = plan.slices.some((x) => !x.goal);
   const [panel, setPanel] = useState<{ goal: GoalBrief; start?: GoalPanelStart } | null>(null);
