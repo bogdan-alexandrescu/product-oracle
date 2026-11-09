@@ -56,7 +56,6 @@ test("Goal buckets says weeks: the bars, the caption, a feature, the drag chip a
 
   // Docs refresh is 1 week of work: one week, not "1 weeks" or "1 wk".
   const docs = page.locator('[data-code="F-21"]').first();
-  await expect(docs).toContainText(/\b1 week\b/);
-  await expect(docs).not.toContainText(/1 weeks|\bwk\b/);
+  await expect(docs.getByTestId("plan-feature-total")).toHaveText("1 week");
   await expect(page.locator("main")).not.toContainText(/\d\s?wk\b/);
 });
