@@ -6665,7 +6665,17 @@ async function onePagerOf(db: Db, req: Request, p: string[]): Promise<OnePagerDb
     // C-13, vqa B-13: every PRD but the seed reads its own sections (one_pager.extract), never a copy
     // of Guided setup's; a PRD with no version yet reads none of them (every block "missing").
     const cites = Object.fromEntries((read?.citations ?? []).map((c) => [c.cite_key, { title: c.title ?? null, excerpt: c.excerpt ?? null }]));
-    return (others[d.id] = { ...prdOnePager({ id: d.id, slug: d.slug, title: d.title }, read?.sections ?? [], cites), visuals: db.simple_visuals, roadmap: db.simple_roadmap, flowKey: d.slug, ...(read ? { version: read.number, published_at: read.approved_at ?? null } : {}) });
+    // As the API, whose drafts, changes and decisions are rows of their own: a rebuilt page keeps
+    // its draft (working or submitted, with its reviewers) and its notes, never only what the
+    // version holds. Only the approval of the version a draft was submitted as settles it
+    // (drafts.on_version_approved, _submitted_for): then it is gone, as publishOnePager.
+    const was = known?.draft?.status === "submitted" ? known.draft.submitted_as ?? known.version + 1 : undefined;
+    const settled = was !== undefined && vs.some((x) => x.number === was && !!x.approved_at);
+    const kept = stale ? {
+      draft: settled ? null : known.draft, approval: settled ? null : known.approval, decisions: known.decisions,
+      changes: settled ? known.changes.filter((c) => c.status === "proposed") : known.changes,
+    } : {};
+    return (others[d.id] = { ...prdOnePager({ id: d.id, slug: d.slug, title: d.title }, read?.sections ?? [], cites), visuals: db.simple_visuals, roadmap: db.simple_roadmap, flowKey: d.slug, ...(read ? { version: read.number, published_at: read.approved_at ?? null } : {}), ...kept });
   };
   if (p[1] !== "simple") return seeded;
   if (p[2] === "one-pagers") return forDoc(p[3]) ?? seeded;
@@ -7721,14 +7731,17 @@ async function route(db: Db, req: Request): Promise<Response> {
         imported: (sections, version) => {
           const doc = db.documents.find((d) => d.id === onePagerDb.doc.id);
           const last = doc ? docVersions(db, doc).at(-1) : undefined;
-          if (!doc || !last || last.number >= version) return;
+          if (!doc || !last) return;
+          // The PRD's next version after its latest (a run's version in review included), as the API's.
+          const number = Math.max(version, last.number + 1);
           const drafted = new Map(sections.map((x) => [x.key, x]));
           db.versions.push(buildVersion(doc, {
-            number: version, created_at: now(), citations: [], by: { id: me.id, name: displayName(me.email, me.name) },
+            number, created_at: now(), citations: [], by: { id: me.id, name: displayName(me.email, me.name) },
             sections: last.sections.map((x) => ({ key: x.section_key, level: x.level, heading: drafted.get(x.section_key)?.heading ?? x.heading, body: drafted.get(x.section_key)?.body ?? x.body_md })),
           }));
           doc.status = "in_review";
           doc.updated_at = now();
+          return number;
         },
         notify: (user_id, kind, title, data, version) =>
           ensureReviewV2(db).notifications.push({
