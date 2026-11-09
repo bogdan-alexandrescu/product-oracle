@@ -17,6 +17,7 @@ import type { AcceptDateOut, InboxTrack, TrackAlertAction, TrackAlertOut, Tracke
 
 import { companyDayIso } from "./connections";
 import { mockUuid, seeded, stableUuid } from "./ids";
+import { prdCode } from "./item-code";
 import type { PlanEditItem, PlanEditsDb } from "./plan-edits";
 import { diffItems, snapshot } from "./roadmap-diff";
 import itemsFixture from "./roadmap-items.json";
@@ -62,7 +63,7 @@ export interface RoadmapDb {
   /** plan-open-from-simple "plan-same-key": the Checkout redesign roadmap draft holds a key Usage alerts' roadmap holds too. */
   same_key?: boolean;
   /**
-   * "plan-section-code" and "plan-section-linked": the approved plan has an item from the PRD's section f-31
+   * "plan-section-code", "plan-section-linked" and "plan-section-feature": the approved plan has an item from the PRD's section f-31
    * (SECTION_CODE_ITEM), "linked" to SECTION_LINK_FEATURE too. The one source the plan and Edit plan's base read.
    */
   section_code?: "plain" | "linked";
@@ -157,6 +158,8 @@ export const ALERTS_APPROVED_SCENARIO = "alerts-approved";
 export const PLAN_SECTION_CODE_SCENARIO = "plan-section-code";
 /** "plan-section-code" with the approved item from section f-31 linked to another Ground Truth feature, Alert routing rules. */
 export const PLAN_SECTION_LINKED_SCENARIO = "plan-section-linked";
+/** "plan-section-linked" with no Ground Truth feature F-31: Alert routing rules takes F-31 from its approved item's section. */
+export const PLAN_SECTION_FEATURE_SCENARIO = "plan-section-feature";
 /** qa5-plan-at-risk: "alignment-report" with the Plan's track off track for a critical blocker, nothing slipping. */
 export const REPORT_OFF_TRACK_SCENARIO = "report-off-track";
 /** qa5-plan-at-risk review: "alignment-report" with no First release track milestone; the Plan's Now items name it. */
@@ -250,7 +253,7 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
   const simpleItemBasis = scenario === SIMPLE_ITEM_BASIS_SCENARIO;
   const trails = scenario === APPROVED_ROADMAP_SCENARIO;
   const sameKey = scenario === PLAN_SAME_KEY_SCENARIO;
-  const sectionCode = scenario === PLAN_SECTION_CODE_SCENARIO ? "plain" : scenario === PLAN_SECTION_LINKED_SCENARIO ? "linked" : null;
+  const sectionCode = scenario === PLAN_SECTION_CODE_SCENARIO ? "plain" : scenario === PLAN_SECTION_LINKED_SCENARIO || scenario === PLAN_SECTION_FEATURE_SCENARIO ? "linked" : null;
   const key = withItems || withDiff || noGaBasis || planStale || simpleItemBasis || trails || sameKey || sectionCode ? `roadmap:${scenario}` : "roadmap";
   return seeded(key, () => {
     const db: RoadmapDb = {
@@ -1618,6 +1621,42 @@ export function seededPlanItems(slug: string, version: number, sectionCode?: Roa
   return alertsApproved(sectionCode).map((i) => ({
     key: i.key, title: i.title, horizon: i.horizon, section: i.section, feature_id: i.feature ? entityRef("feature", i.feature).id : null,
   }));
+}
+
+const FEATURE_CODE = /^[A-Z]{1,3}-\d+[a-j]?$/;
+
+/**
+ * Each Ground Truth feature's code by its id, as codes._by_feature reads it: in the features' creation order, its key when that
+ * is a code (F-12), else the PRD code of the section its first published item came from (codes.prd_by_key: an item of
+ * usage-alerts-roadmap v1 or of a version a change set proposed); a key whose code an older feature has reads it with a digit
+ * (F-31.2), a PRD code taken already gives none. ``sectionCode``: the roadmap mock's RoadmapDb.section_code.
+ */
+export function featureCodes(
+  features: { id: string; key: string; created_at: string }[],
+  sectionCode?: RoadmapDb["section_code"],
+  edits?: PlanEditsDb,
+): Record<string, string> {
+  const published = [
+    ...(seededPlanItems(ALERTS_ROADMAP_SLUG, 1, sectionCode) ?? []),
+    ...Object.values(edits?.versions ?? {}).flatMap((by) => Object.keys(by).map(Number).sort((a, b) => a - b).flatMap((n) => by[n])),
+  ];
+  const prd = new Map<string, string>();
+  for (const i of published) {
+    const code = prdCode(i.section);
+    if (i.feature_id && code && !prd.has(i.feature_id)) prd.set(i.feature_id, code);
+  }
+  const out: Record<string, string> = {};
+  const taken = new Set<string>();
+  const order = [...features].sort((a, b) => a.created_at.localeCompare(b.created_at) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  for (const f of order) {
+    const own = FEATURE_CODE.test(f.key) ? f.key : prd.get(f.id);
+    if (!own || (taken.has(own) && !FEATURE_CODE.test(f.key))) continue;
+    let code = own;
+    for (let n = 2; taken.has(code); n += 1) code = `${own}.${n}`;
+    taken.add(code);
+    out[f.id] = code;
+  }
+  return out;
 }
 
 /** The latest approved version a change set proposed, with its items (#346). */

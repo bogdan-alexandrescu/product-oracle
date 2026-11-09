@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { PLAN_SECTION_CODE_SCENARIO, PLAN_SECTION_LINKED_SCENARIO } from "../lib/api/mock/roadmap";
+import { PLAN_SECTION_CODE_SCENARIO, PLAN_SECTION_FEATURE_SCENARIO, PLAN_SECTION_LINKED_SCENARIO } from "../lib/api/mock/roadmap";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login, signOut } from "./helpers";
 
@@ -234,4 +234,32 @@ test("Edit plan: an item linked to F-31 is refused when the approved item with F
   await changes(page).getByRole("button", { name: "Add item" }).click();
   await expect(changes(page)).toContainText("F-31 is already the code of F-31 Alert routing by team");
   await expect(lane(page, "later").getByTestId("edit-item").filter({ hasText: "Alert routing by team" })).toHaveCount(0);
+});
+
+// protects = (codes.prd_by_key) a feature with no code of its own takes the code of the PRD section its published item came from:
+// with no feature F-31, Alert routing rules reads F-31 from the approved item "F-31 Alert routing by team" (section f-31) it is
+// linked to, so with that item cut, an item added linked to Alert routing rules holds F-31 and "F-31 Launch flow" is refused in
+// the API's words, naming it by that code; fails_when = the mock reads a feature's code from its key alone, so the linked item
+// shows no code and the title-only F-31 is added; no_claim = the API's rule (api/tests/test_roadmap_change_sets.py).
+test("Edit plan: a feature takes the code of its approved item's PRD section", async ({ page }) => {
+  await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, PLAN_SECTION_FEATURE_SCENARIO] as const);
+  await openPlan(page);
+  await page.getByTestId("plan-edit").click();
+  await expect(changes(page)).toContainText(/Changes to approved version 1 of Usage alerts roadmap/);
+  await expect(lane(page, "next")).toContainText("F-31 Alert routing by team");
+
+  await editItem(page, "F-31 Alert routing by team").getByRole("button", { name: "Cut", exact: true }).click();
+  await page.getByLabel("Why cut F-31 Alert routing by team").fill("Split into smaller items");
+  await editItem(page, "F-31 Alert routing by team").getByRole("button", { name: "Cut item" }).click();
+  await expect(editItem(page, "F-31 Alert routing by team")).toHaveCount(0);
+
+  await changes(page).getByLabel("Ground Truth feature").selectOption({ label: "Alert routing rules" });
+  await changes(page).getByLabel("Horizon of the new item").selectOption("later");
+  await changes(page).getByRole("button", { name: "Add item" }).click();
+  await expect(lane(page, "later").getByTestId("edit-item").filter({ hasText: "Alert routing rules" })).toContainText("New");
+
+  await changes(page).getByLabel("New item title").fill("F-31 Launch flow");
+  await changes(page).getByRole("button", { name: "Add item" }).click();
+  await expect(changes(page)).toContainText("F-31 is already the code of F-31 Alert routing rules");
+  await expect(editItem(page, "F-31 Launch flow")).toHaveCount(0);
 });
