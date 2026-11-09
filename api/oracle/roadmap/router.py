@@ -1152,7 +1152,9 @@ async def create_track_roadmap_run(
     version into its roadmap. Nothing runs or is spent until it is estimated and started
     (the $50 owner approval and the 1.5x pause apply as for every run)."""
     track = await _track(db, track_id)
-    prd = await db.get(Document, track.prd_document_id)
+    prd = await db.get(Document, track.prd_document_id) if track.prd_document_id else None
+    if prd is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"{track.title} has no PRD to draft from")
     roadmap = (
         await db.get(Document, track.roadmap_document_id) if track.roadmap_document_id else None
     )

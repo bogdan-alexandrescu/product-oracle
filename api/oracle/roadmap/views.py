@@ -894,7 +894,7 @@ def owner_of(item: RoadmapItem, sharing: list[ProductTrack]) -> uuid.UUID | None
     if not sharing:
         return None
     for t in sharing:
-        if t.prd_document_id == item.prd_document_id:
+        if t.prd_document_id is not None and t.prd_document_id == item.prd_document_id:
             return t.id
     if any(t.id == item.track_id for t in sharing):
         return item.track_id

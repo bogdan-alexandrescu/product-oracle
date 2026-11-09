@@ -112,6 +112,9 @@ class SimpleGoalRef(BaseModel):
 class SimpleTrackRef(BaseModel):
     id: uuid.UUID
     title: str
+    # tracks-goal: the company goal the track replaces as the Roadmap's band.
+    goal_id: uuid.UUID | None = None
+    goal_name: str | None = None
 
 
 class SimpleItemMilestone(BaseModel):
@@ -2712,8 +2715,11 @@ class SimpleTrackRow(BaseModel):
     status: Literal["active", "paused", "closed"]
     owner_id: uuid.UUID | None = None
     owner_name: str | None = None
-    prd_id: uuid.UUID
+    # tracks-goal: a track may have no PRD, and may be tied to one company goal.
+    prd_id: uuid.UUID | None = None
     prd_title: str | None = None
+    goal_id: uuid.UUID | None = None
+    goal_name: str | None = None
     # The reader edits or deletes it directly; else it is proposed to ``decider_name``.
     can_decide: bool = False
     decider_name: str | None = None
@@ -2742,6 +2748,13 @@ class SimpleTracks(BaseModel):
     # Who can own a track (enabled members), and the PRDs a new track can take.
     people: list[SimplePerson]
     prds: list[SimplePrdRef]
+    # tracks-goal: the company's goals a track may be tied to, by name.
+    goals: list["SimpleTrackGoal"] = []
+
+
+class SimpleTrackGoal(BaseModel):
+    id: uuid.UUID
+    name: str
 
 
 class InboxSimpleDateSuggestion(BaseModel):

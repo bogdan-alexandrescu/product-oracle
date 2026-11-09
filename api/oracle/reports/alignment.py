@@ -278,7 +278,8 @@ async def _track_content(
     """One track's part of the report, and its Now items without a tracker issue."""
     o = await views.overview(db, track)
     prd = await db.get(Document, track.prd_document_id)
-    slug = prd.slug if prd else str(track.prd_document_id)
+    # tracks-goal: a track with no PRD reads by its name.
+    slug = prd.slug if prd else track.title
     counts = {"aligned": 0, "drift": 0, "untracked": 0, "done": 0}
     untracked_now = 0
     # Every roadmap item's name as the Plan shows it (qa-plan-41), for drift on items that

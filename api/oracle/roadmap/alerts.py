@@ -692,6 +692,10 @@ async def accept_date(
     if reason and reason.strip():
         note += f": {reason.strip()}"
 
+    if track.prd_document_id is None:
+        # tracks-goal: a date's basis is a PRD's; a track with no PRD takes its dates on
+        # the roadmap.
+        raise Conflict(f"{track.title} has no PRD to hold this date; change it on the roadmap")
     basis = ScheduleBasis(
         kind="estimate", reference=record.external_ref, supports_date=new_date,
         detail=note, prd_document_id=track.prd_document_id,

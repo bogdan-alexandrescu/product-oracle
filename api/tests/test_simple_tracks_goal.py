@@ -22,10 +22,10 @@ Test cards (protects / fails_when / no_claim):
 import pytest
 
 from oracle import company_time
+from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
 from tests.test_simple_removed_tracks import read_tracks
 from tests.test_simple_roadmap_api import NOW, URL, Seed
-from oracle.tenancy import tenant_session
 
 CHANGES = "/v1/simple/changes"
 
@@ -84,15 +84,21 @@ async def test_a_track_adds_with_no_prd(client):
     assert r.status_code == 200, r.text
     r = await client.post(f"{CHANGES}/{added['id']}/undo", headers=ctx.as_("owner"))
     assert r.status_code == 201, r.text
-    assert "Account Management" not in [t["title"] for t in (await read_tracks(client, ctx))["tracks"]]
+    assert "Account Management" not in [
+        t["title"] for t in (await read_tracks(client, ctx))["tracks"]
+    ]
     # One who does not decide proposes it; an owner accepts.
-    prop = (await change(client, ctx, "approver", "add_track", {},
-                         {"title": "Account Management", "goal_id": ids["goal_id"]}))["change"]  # fmt: skip
+    after = {"title": "Account Management", "goal_id": ids["goal_id"]}
+    prop = (await change(client, ctx, "approver", "add_track", {}, after))["change"]
     assert prop["status"] == "proposed"
     r = await client.post(f"{CHANGES}/{prop['id']}/accept", json={}, headers=ctx.as_("owner"))
     assert r.status_code == 200, r.text
     t = row(await read_tracks(client, ctx), "Account Management")
-    assert (t["prd_id"], t["goal_id"], t["goal_name"]) == (None, ids["goal_id"], "Keep more accounts")
+    assert (t["prd_id"], t["goal_id"], t["goal_name"]) == (
+        None,
+        ids["goal_id"],
+        "Keep more accounts",
+    )
 
 
 async def test_edit_track_sets_and_clears_the_goal_and_the_prd(client):

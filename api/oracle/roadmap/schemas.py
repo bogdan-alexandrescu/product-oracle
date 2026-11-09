@@ -599,7 +599,8 @@ class TrackOut(BaseModel):
     title: str
     status: TrackStatus
     owner_id: uuid.UUID | None
-    prd: DocumentRef
+    # tracks-goal: a track may have no PRD.
+    prd: DocumentRef | None
     started_version: int | None
     current_version: int | None
     latest_approved_version: int | None

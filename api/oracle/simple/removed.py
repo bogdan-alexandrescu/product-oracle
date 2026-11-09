@@ -37,6 +37,7 @@ from oracle.simple.schemas import (
     SimplePrdRef,
     SimpleRemovedItem,
     SimpleRemovedList,
+    SimpleTrackGoal,
     SimpleTrackRow,
     SimpleTracks,
 )
@@ -176,7 +177,10 @@ async def list_simple_tracks(principal: Reader, db: TenantDB) -> SimpleTracks:
     # replaced-prd-history: a replaced PRD's tracks are history, not in Tracks.
     history = await company.history_track_ids(db)
     rows = [t for t in rows if t.id not in history]
-    prd_ids = {t.prd_document_id for t in rows}
+    prd_ids = {t.prd_document_id for t in rows if t.prd_document_id}
+    # tracks-goal: the goals a track may be tied to (live ones), and a tied one's name.
+    goals = await goal_buckets._goals(db)
+    goal_names = {g.id: g.title for g in goals}
     prds = (
         {d.id: d.title for d in await db.scalars(select(Document).where(Document.id.in_(prd_ids)))}
         if prd_ids
@@ -197,7 +201,9 @@ async def list_simple_tracks(principal: Reader, db: TenantDB) -> SimpleTracks:
         out.append(SimpleTrackRow(
             id=t.id, title=t.title, status=t.status, owner_id=t.owner_id,  # type: ignore[arg-type]
             owner_name=names.get(t.owner_id) if t.owner_id else None, prd_id=t.prd_document_id,
-            prd_title=prds.get(t.prd_document_id), can_decide=decides,
+            prd_title=prds.get(t.prd_document_id) if t.prd_document_id else None,
+            goal_id=t.goal_id if t.goal_id in goal_names else None,
+            goal_name=goal_names.get(t.goal_id) if t.goal_id else None, can_decide=decides,
             decider_name=names.get(route[0]) if route else None,
             feature_count=features[t.id], moves_count=moves[t.id],
         ))  # fmt: skip
@@ -215,4 +221,5 @@ async def list_simple_tracks(principal: Reader, db: TenantDB) -> SimpleTracks:
         add_decider_name=None if is_owner or not owners else names.get(owners[0]),
         people=people,
         prds=[SimplePrdRef(id=d.id, title=d.title) for d in await plan_changes.free_prds(db)],
+        goals=[SimpleTrackGoal(id=g.id, name=g.title) for g in goals],
     )

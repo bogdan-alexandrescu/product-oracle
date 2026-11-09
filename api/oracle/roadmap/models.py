@@ -84,7 +84,10 @@ class ProductTrack(Trashable, TenantScoped, Base):
         trashed_index("product_tracks"),
     )
 
-    prd_document_id: Mapped[uuid.UUID] = _fk("documents", nullable=False)
+    # tracks-goal: a track may have no PRD (a PRD still has at most one track).
+    prd_document_id: Mapped[uuid.UUID | None] = _fk("documents")
+    # tracks-goal: the company goal the track replaces as the Roadmap's band (none: null).
+    goal_id: Mapped[uuid.UUID | None] = _fk("entities", "SET NULL")
     # The accepted PRD version that started the track, and the one it follows now.
     started_version_id: Mapped[uuid.UUID | None] = _fk("document_versions", "SET NULL")
     current_version_id: Mapped[uuid.UUID | None] = _fk("document_versions", "SET NULL")

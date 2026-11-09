@@ -7,10 +7,12 @@ the change engine (``POST /v1/simple/changes``, wired in ``oracle.simple.changes
   back, any time after it was removed. Who changes the roadmap directly
   (``drafts.can_edit``) applies it; else it is proposed as a key date's change is
   (``key_dates.route``).
-- ``add_track`` (after ``{title, prd_id, owner_id?}``): a track for an accepted PRD with
-  none (a track is its PRD's: ``prd_id`` is required). An owner applies it; else it is
-  proposed to the company's owners.
-- ``edit_track`` (target ``{track_id}``, after any of ``{title, owner_id, status}``) and
+- ``add_track`` (after ``{title, prd_id?, owner_id?, goal_id?}``): a track, for an accepted
+  PRD with none or for no PRD (tracks-goal: a PRD has at most one track; a track may have
+  none), tied to a company goal or none. An owner applies it; else it is proposed to the
+  company's owners.
+- ``edit_track`` (target ``{track_id}``, after any of ``{title, owner_id, status, prd_id,
+  goal_id}``) and
   ``delete_track`` (target ``{track_id}``; the track goes to Settings > Trash, its
   features to no track): an owner, or the track's own owner while an approver or owner,
   applies it; else it is proposed to the track's owner (an approver or owner), else to
@@ -30,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.baseline.models import Entity
 from oracle.docs.models import Document
 from oracle.members.names import display_name
 from oracle.roadmap.models import TRACK_STATUSES, ProductTrack, TrackMilestone
@@ -40,7 +43,7 @@ OPS: frozenset[str] = frozenset(
     {"restore_goal_milestone", "add_track", "edit_track", "delete_track"}
 )
 TRACK_OPS = ("edit_track", "delete_track")
-TRACK_FIELDS = ("title", "owner_id", "status")
+TRACK_FIELDS = ("title", "owner_id", "status", "prd_id", "goal_id")
 
 
 def _err(code: int, detail: Any) -> Exception:
@@ -131,9 +134,24 @@ def _iso(at: datetime | None) -> str | None:
     return at.isoformat() if at else None
 
 
+def _str(v: uuid.UUID | None) -> str | None:
+    return str(v) if v else None
+
+
 def _track_value(t: ProductTrack) -> dict[str, Any]:
-    return {"title": t.title, "owner_id": str(t.owner_id) if t.owner_id else None,
-            "status": t.status}  # fmt: skip
+    return {"title": t.title, "owner_id": _str(t.owner_id), "status": t.status,
+            "prd_id": _str(t.prd_document_id), "goal_id": _str(t.goal_id)}  # fmt: skip
+
+
+async def goal_of(db: AsyncSession, goal_id: uuid.UUID | None) -> Entity | None:
+    """A live company goal (not archived, not in Trash), or None."""
+    if goal_id is None:
+        return None
+    return await db.scalar(
+        select(Entity).where(
+            Entity.id == goal_id, Entity.type == "goal", Entity.status != "rejected"
+        )  # fmt: skip
+    )
 
 
 async def _wanted_track(db: AsyncSession, after: dict[str, Any]) -> dict[str, Any]:
@@ -155,7 +173,37 @@ async def _wanted_track(db: AsyncSession, after: dict[str, Any]) -> dict[str, An
         if after["status"] not in TRACK_STATUSES:
             raise _err(422, f"after.status: one of {', '.join(TRACK_STATUSES)}")
         out["status"] = after["status"]
+    if "goal_id" in after:
+        if after["goal_id"] is None:
+            out["goal_id"] = None
+        else:
+            goal = await goal_of(db, _id(after["goal_id"], "after.goal_id"))
+            if goal is None:
+                raise _err(422, "after.goal_id: not one of this company's goals")
+            out["goal_id"] = str(goal.id)
+    if "prd_id" in after:
+        out["prd_id"] = (
+            None if after["prd_id"] is None else str(_id(after["prd_id"], "after.prd_id"))
+        )
     return out
+
+
+async def _check_prd(db: AsyncSession, prd_id: str | None) -> None:
+    """A PRD set on a track is accepted and has no track (one in Trash too)."""
+    if prd_id is not None and uuid.UUID(prd_id) not in {d.id for d in await free_prds(db)}:
+        raise _err(409, "That PRD has a track already, or is not accepted yet")
+
+
+async def _named(db: AsyncSession, target: dict[str, Any], wanted: dict[str, Any]) -> None:
+    """The names a change's words read (never an id)."""
+    if wanted.get("owner_id"):
+        target["owner_name"] = await name_of(db, uuid.UUID(wanted["owner_id"]))
+    if wanted.get("prd_id"):
+        prd = await db.get(Document, uuid.UUID(wanted["prd_id"]))
+        target["prd_title"] = prd.title if prd else None
+    if wanted.get("goal_id"):
+        goal = await goal_of(db, uuid.UUID(wanted["goal_id"]))
+        target["goal_name"] = goal.title if goal else None
 
 
 async def free_prds(db: AsyncSession) -> list[Document]:
@@ -166,7 +214,9 @@ async def free_prds(db: AsyncSession) -> list[Document]:
 
     taken = set(
         await db.scalars(
-            select(ProductTrack.prd_document_id).execution_options(**{INCLUDE_TRASHED: True})
+            select(ProductTrack.prd_document_id)
+            .where(ProductTrack.prd_document_id.is_not(None))
+            .execution_options(**{INCLUDE_TRASHED: True})
         )
     )
     approved = select(DocumentVersion.document_id).where(DocumentVersion.approved_at.is_not(None))
@@ -207,20 +257,15 @@ async def create_change(db: AsyncSession, principal: Any, body: Any) -> Any:
         applies = drafts.can_edit(principal, row.roadmap_id, w)  # type: ignore[arg-type]
         route = [] if applies else await key_dates.route(db, row.roadmap_id, w)  # type: ignore[arg-type]
     elif body.op == "add_track":
-        wanted = await _wanted_track(db, {k: body.after[k] for k in ("title", "owner_id")
-                                          if k in body.after})  # fmt: skip
+        # tracks-goal: its PRD and its goal are optional.
+        wanted = await _wanted_track(db, {k: body.after[k] for k in ("title", "owner_id",
+                                          "prd_id", "goal_id") if body.after.get(k)})  # fmt: skip
         if "title" not in wanted:
             raise _err(422, "after.title: the track's name")
-        if not body.after.get("prd_id"):
-            raise _err(422, "after.prd_id: a track is its PRD's; pick an accepted PRD")
-        prd_id = _id(body.after["prd_id"], "after.prd_id")
-        if prd_id not in {d.id for d in await free_prds(db)}:
-            raise _err(409, "That PRD has a track already, or is not accepted yet")
-        prd = await db.get(Document, prd_id)
-        target = {"prd_id": str(prd_id), "prd_title": prd.title if prd else None}
-        after = {**wanted, "prd_id": str(prd_id)}
-        if wanted.get("owner_id"):
-            target["owner_name"] = await name_of(db, uuid.UUID(wanted["owner_id"]))
+        await _check_prd(db, wanted.get("prd_id"))
+        target = {"prd_id": wanted.get("prd_id")}
+        await _named(db, target, wanted)
+        after = {**wanted, "prd_id": wanted.get("prd_id")}
         applies = has_role(principal.role, "owner")
         route = [] if applies else await company_owners(db)
     else:
@@ -232,11 +277,12 @@ async def create_change(db: AsyncSession, principal: Any, body: Any) -> Any:
             current = _track_value(t)
             wanted = {k: v for k, v in wanted.items() if current[k] != v}
             if not wanted:
-                raise _err(422, "after: nothing changes (title, owner_id or status)")
+                raise _err(422, "after: nothing changes (title, owner_id, status, prd_id or "
+                                "goal_id)")  # fmt: skip
+            await _check_prd(db, wanted.get("prd_id"))
             before = {k: current[k] for k in wanted}
             after = wanted
-            if wanted.get("owner_id"):
-                target["owner_name"] = await name_of(db, uuid.UUID(wanted["owner_id"]))
+            await _named(db, target, wanted)
         applies = decides_track(principal, t)
         route = [] if applies else await track_decider(db, t)
     c = SimpleChange(document_id=document_id, op=body.op, target=target, before=before,
@@ -269,17 +315,25 @@ async def _apply(db: AsyncSession, principal: Any, c: SimpleChange) -> None:
         await goal_milestones.put_back(db, row)
         await trash.milestone_restored(db, row.id)
     elif c.op == "add_track":
-        prd_id = uuid.UUID(c.after["prd_id"])
-        prd = await db.get(Document, prd_id)
-        version = await tracks.latest_approved(db, prd_id) if prd is not None else None
-        if prd is None or version is None:
-            raise _err(409, "outdated: the PRD is gone or has no accepted version")
-        if await tracks.any_track_of_prd(db, prd_id) is not None:
-            raise _err(409, "outdated: that PRD has a track already")
-        t, _ = await tracks.ensure_track(db, prd, version, actor=principal, cause="started")
+        if c.after.get("prd_id"):
+            prd_id = uuid.UUID(c.after["prd_id"])
+            prd = await db.get(Document, prd_id)
+            version = await tracks.latest_approved(db, prd_id) if prd is not None else None
+            if prd is None or version is None:
+                raise _err(409, "outdated: the PRD is gone or has no accepted version")
+            if await tracks.any_track_of_prd(db, prd_id) is not None:
+                raise _err(409, "outdated: that PRD has a track already")
+            t, _ = await tracks.ensure_track(db, prd, version, actor=principal, cause="started")
+        else:
+            t = ProductTrack(title=c.after["title"], status="active", created_by=_me(principal))
+            db.add(t)
         t.title = c.after["title"]
         if c.after.get("owner_id"):
             t.owner_id = uuid.UUID(c.after["owner_id"])
+        if c.after.get("goal_id"):
+            if await goal_of(db, uuid.UUID(c.after["goal_id"])) is None:
+                raise _err(409, "outdated: that goal is archived or gone")
+            t.goal_id = uuid.UUID(c.after["goal_id"])
         await db.flush()
         c.after = {**c.after, "track_id": str(t.id)}
     elif c.op == "edit_track":
@@ -288,7 +342,10 @@ async def _apply(db: AsyncSession, principal: Any, c: SimpleChange) -> None:
         if any(current[k] != v for k, v in c.before.items()):
             raise _err(409, {"message": "outdated: the track changed since", "current": current,
                              "changed_by": None, "changed_at": None})  # fmt: skip
-        _write_track(t, c.after)
+        await _check_prd(db, c.after.get("prd_id"))
+        if c.after.get("goal_id") and await goal_of(db, uuid.UUID(c.after["goal_id"])) is None:
+            raise _err(409, "outdated: that goal is archived or gone")
+        await _write_track(db, t, c.after)
     elif c.op == "delete_track":
         t = await _track(db, uuid.UUID(c.target["track_id"]))
         entry = await trash.delete_track(db, principal, t)
@@ -315,9 +372,18 @@ async def _holds_anything(db: AsyncSession, track_id: uuid.UUID) -> bool:
     return False
 
 
-def _write_track(t: ProductTrack, values: dict[str, Any]) -> None:
+async def _write_track(db: AsyncSession, t: ProductTrack, values: dict[str, Any]) -> None:
+    from oracle.roadmap import tracks
+
     for k, v in values.items():
-        setattr(t, k, uuid.UUID(v) if k == "owner_id" and v else v)
+        if k == "prd_id":
+            # tracks-goal: the track follows its new PRD's accepted version (none: none).
+            t.prd_document_id = uuid.UUID(v) if v else None
+            version = await tracks.latest_approved(db, t.prd_document_id) if v else None
+            t.current_version_id = version.id if version else None
+            t.started_version_id = t.current_version_id
+        else:
+            setattr(t, k, uuid.UUID(v) if k in ("owner_id", "goal_id") and v else v)
     t.lock_version += 1
 
 
@@ -382,7 +448,13 @@ async def undo(db: AsyncSession, principal: Any, c: SimpleChange) -> Any:
         if any(current[k] != v for k, v in c.after.items()):
             raise _err(409, {"message": "Changed since", "current": current,
                              "changed_by": None, "changed_at": None})  # fmt: skip
-        _write_track(t, c.before)
+        # A PRD put back is one no other track took since; a goal put back may be archived
+        # since (it reads as no goal until restored).
+        if c.before.get("prd_id") and uuid.UUID(c.before["prd_id"]) not in {
+            d.id for d in await free_prds(db)
+        }:
+            raise _err(409, "Changed since: that PRD has another track now")
+        await _write_track(db, t, c.before)
     elif c.op == "delete_track":
         from oracle.trash.models import TrashEntry
 
@@ -428,5 +500,13 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None = 
             if "status" in after:
                 verb = {"paused": "paused", "closed": "closed"}.get(after["status"], "reopened")
                 parts.append(f"{verb} the track {title}")
+            if "prd_id" in after:
+                prd = target.get("prd_title") if after.get("prd_id") else None
+                parts.append(f"set {title}'s PRD to {prd}" if prd
+                             else f"took the PRD off {title}")  # fmt: skip
+            if "goal_id" in after:
+                goal = target.get("goal_name") if after.get("goal_id") else None
+                parts.append(f"tied {title} to the goal {goal}" if goal
+                             else f"took the goal off {title}")  # fmt: skip
             return ", ".join(parts) or f"changed the track {title}"
     return "changed something"

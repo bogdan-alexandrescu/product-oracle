@@ -133,6 +133,8 @@ class Entry:
     # parent is in Trash (null: none, or on the roadmap).
     ancestors: list["Entry"] = field(default_factory=list)
     trashed_parent: RoadmapItem | None = None
+    # tracks-goal: the company goal the item's track is tied to.
+    track_goal: Entity | None = None
 
 
 @dataclass
@@ -395,7 +397,18 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
             )
         ).all()
     }
-    track_of_prd = {t.prd_document_id: t for t in tracks.values()}
+    track_of_prd = {t.prd_document_id: t for t in tracks.values() if t.prd_document_id}
+    # tracks-goal: the company goal each track is tied to (a live one).
+    track_goals = {
+        g.id: g
+        for g in await db.scalars(
+            select(Entity).where(
+                Entity.id.in_({t.goal_id for t in tracks.values() if t.goal_id}),
+                Entity.type == "goal",
+                Entity.status != "rejected",
+            )
+        )
+    }
     milestones = list(
         await db.scalars(
             select(TrackMilestone).order_by(
@@ -485,6 +498,7 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 roadmap=roadmap,
                 prd=prd,
                 track=track,
+                track_goal=track_goals.get(track.goal_id) if track and track.goal_id else None,
                 # one-feature-panel: a goal the item is linked to directly (set in its
                 # panel, dropped on, suggested for) wins over its feature's.
                 goal=next((linked[g] for g in row.goal_ids or [] if g in linked), None)
@@ -1166,7 +1180,14 @@ def item_out(
         )
         if e.goal
         else None,
-        track=SimpleTrackRef(id=e.track.id, title=e.track.title) if e.track else None,
+        track=SimpleTrackRef(
+            id=e.track.id,
+            title=e.track.title,
+            goal_id=e.track_goal.id if e.track_goal else None,
+            goal_name=e.track_goal.title if e.track_goal else None,
+        )
+        if e.track
+        else None,
         confidence=row.confidence,
         status=e.status,  # type: ignore[arg-type]
         draft=row.draft,
