@@ -98,7 +98,7 @@ for (const v of SIZES) {
       await expect(rows.first()).toBeVisible();
       for (const r of await rows.all()) {
         const numbers = r.getByTestId("prio-numbers");
-        const m = /^·value ([\d.]+)·confidence ([\d.]+)·([\d.]+) wk·score ([\d.]+)$/.exec((await numbers.textContent()) ?? "");
+        const m = /^·value ([\d.]+)·confidence ([\d.]+)·([\d.]+) weeks?·score ([\d.]+)$/.exec((await numbers.textContent()) ?? "");
         expect(m, (await r.textContent()) ?? "").not.toBeNull();
         const [, value, conf, effort, score] = m!.map(Number);
         expect(Math.abs((value * conf) / effort - score)).toBeLessThan(0.011);

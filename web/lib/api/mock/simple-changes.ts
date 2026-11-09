@@ -27,7 +27,7 @@ import { mockNowMs } from "./clock";
 import { draftDecisionNotes } from "./decision-notes";
 import { stableUuid } from "./ids";
 import { changePhrase, changeSentence } from "./simple-change-words";
-import { decidesAsk, milestoneValue, writeMilestone } from "./simple-milestones";
+import { milestoneValue, writeMilestone } from "./simple-milestones";
 import { addToCompany, featureItem, featureKeyOf, priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
 import { archiveGoal, goalBucketsDb, trashGoal, unarchiveGoal, type GoalBucketsTrash } from "./goal-buckets";
 import {
@@ -60,6 +60,8 @@ import {
   dependencyOf,
   loopOf,
   ROADMAP_SLUGS,
+  ROADMAPS,
+  prdOwnerIdsOf,
   readerDb,
   readsRoadmap,
   roadmapId,
@@ -311,6 +313,18 @@ function decides(db: SimpleDb, ctx: SimpleChangesCtx, itemId: unknown): boolean 
 /** S7: the roadmap (slug) an add_item change writes. */
 const slugOf = (id: unknown): string | undefined => ROADMAP_SLUGS().find((r) => roadmapId(r) === id);
 
+/** A PRD's slug by its document's id (simple-doc/<slug>): a roadmap's PRD's, or a milestone's. */
+function prdSlugOf(db: SimpleDb, docId: unknown): string | undefined {
+  const slugs = [...ROADMAP_SLUGS().map((r) => ROADMAPS[r].prd.toLowerCase().replace(/ /g, "-")), ...(db.goal_milestones ?? []).flatMap((m) => (m.prd ? [m.prd.slug] : []))];
+  return slugs.find((x) => stableUuid(`simple-doc/${x}`) === docId);
+}
+
+/** drafts.who on a PRD's document (./simple-roadmap.ts prdOwnerIdsOf), by its id. */
+function prdOwnerIds(db: SimpleDb, docId: unknown): string[] {
+  const slug = prdSlugOf(db, docId);
+  return slug ? prdOwnerIdsOf(db, slug) : [];
+}
+
 /** Whether the caller applies (or accepts) this change: a key date's by the roadmap's rule
  * (drafts.can_edit), an add_item's by its roadmap's editors, else the item's deciders. */
 function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target"> & Partial<Pick<Change, "routed_to" | "after" | "before" | "document_id">>): boolean {
@@ -318,14 +332,10 @@ function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op"
   if (c.op === CUT_ALL && c.after) return Object.keys(c.after).every((id) => decides(db, ctx, id));
   // A goal ask is decided by the owners it is sent to (goal_asks.may_decide).
   if (GOAL_ASK_OPS.includes(c.op)) return ctx.role === "owner";
-  // roadmap-decide: a change asked of a PRD's milestone (before.date) is the PRD owner's (or a company owner's).
-  if (c.op === "edit_goal_milestone" && c.before && !("milestone" in c.before)) {
-    const m = (db.goal_milestones ?? []).find((x) => x.id === c.target.milestone_id);
-    // A milestone that is gone: its PRD's owner (looked up from the change's document, as
-    // drafts.who) or the company's owner still declines it (goal_milestones.decide).
-    const prd = m ?? (db.goal_milestones ?? []).find((x) => !!x.prd && stableUuid(`simple-doc/${x.prd.slug}`) === c.document_id);
-    return prd ? decidesAsk(prd, { role: ctx.role, name: ctx.names[ctx.id] }) : ctx.role === "owner";
-  }
+  // roadmap-decide: a change asked of a PRD's milestone (before.date) is any of the PRD's owners'
+  // (drafts.who on the change's document) or a company owner's (goal_milestones.decide), its
+  // milestone live or gone (its other milestones gone too).
+  if (c.op === "edit_goal_milestone" && c.before && !("milestone" in c.before)) return ctx.role === "owner" || prdOwnerIds(db, c.document_id).includes(ctx.id);
   if (KEY_DATE_OPS.includes(c.op) || c.op === MILESTONE_OP) {
     const rm = roadmapOfDoc(db, c.target.document_id);
     return ctx.role === "owner" || (c.routed_to ?? []).includes(ctx.id) || (!!rm && canEditRoadmap(db, rm, ctx));
@@ -603,7 +613,13 @@ function onReplacedPrd(db: SimpleDb, c: Change): boolean {
 function sees(db: SimpleDb, ctx: SimpleChangesCtx, c: Change): boolean {
   if (ctx.role === "owner" || c.by === ctx.id || route(db, ctx, c).includes(ctx.id)) return true;
   if ((db.drafts ?? []).some((d) => (c.draft_ids ?? []).includes(d.out.id) && seesDraft(d, ctx, db))) return true;
-  return (db.sessions ?? []).some((s) => s.id === c.session_id && s.started_by === ctx.id);
+  if ((db.sessions ?? []).some((s) => s.id === c.session_id && s.started_by === ctx.id)) return true;
+  // changes.sees: the document's owners and who decides it; a PRD milestone's ask is its PRD owner's.
+  if (c.op !== MILESTONE_OP || !c.before || "milestone" in c.before) return false;
+  // changes.sees: and the PRD's reviewers, its decider among them (its review policy's), and its owners (drafts.who).
+  const slug = prdSlugOf(db, c.document_id);
+  const people = slug ? [...(db.prd_reviewers?.[slug] ?? []), db.prd_deciders?.[slug], ...prdOwnerIdsOf(db, slug)] : [];
+  return people.includes(ctx.id) || decidesChange(db, ctx, c);
 }
 
 /** The drafts a change writes (drafts.write_items): the roadmaps' working drafts, opened on
@@ -1632,11 +1648,11 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     applyS7(db, c);
   } else if (c.op === "edit_goal_milestone") {
     // roadmap-decide: accepting writes the PRD milestone's date and rule; either way it waits no more.
-    // As goal_milestones.decide: one whose milestone is gone or waits on another change is only
-    // declined (the milestone left as it is); accepting it is refused.
+    // As goal_milestones.decide: one whose milestone is gone (or in the Trash) or waits on another
+    // change is only declined (the milestone left as it is); accepting it is refused.
     const m = (db.goal_milestones ?? []).find((x) => x.id === c.target.milestone_id);
     const waits = !!m && m.pending?.change_id === c.id;
-    if (p[4] === "accept" && !m) return json(404, { detail: "The milestone is gone" });
+    if (p[4] === "accept" && (!m || m.deleted)) return json(404, { detail: "The milestone is gone" });
     if (p[4] === "accept" && !waits) return json(409, { detail: { message: "This proposal no longer waits on this milestone", current: null, changed_by: null, changed_at: null } });
     if (m && p[4] === "accept") Object.assign(m, { date: (c.after.date as string | null) ?? m.date, counts_when: (c.after.counts_when as string | null) ?? m.counts_when });
     if (m && waits) m.pending = null;

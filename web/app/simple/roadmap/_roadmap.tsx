@@ -16,7 +16,7 @@ import { draftNext } from "@/lib/simple-home";
 import { invalidateWaiting, reloadWaiting, waitingChanged } from "@/lib/simple-waiting";
 import { CARD_CHANGED_EVENT } from "@/lib/api/simple-chat";
 import { displayZone, formatInZone } from "@/lib/dates";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatShortDate } from "@/lib/format";
 import { goalNumbers } from "@/lib/goal-tree";
 import { keyResults, topGoalSuggestions, type KeyResults } from "@/lib/key-results";
 import { InfoTip } from "@/components/ds/InfoTip";
@@ -790,6 +790,13 @@ function DecisionTray({
     <li key={c.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-proposal">
       <span className="min-w-0 flex-1 text-[15px]">
         {!asked(c) && !ms(c) && !kd(c)?.name && byId.get(String(c.target.item_id)) ? named(byId.get(String(c.target.item_id))!) : title(c)}: {asks(c)} · <span className="text-text2">{c.by_name}</span>
+        {/* Two on one milestone read alike: each says the day it was proposed, month first, as Home does (its year when not this one). */}
+        {c.op === "edit_goal_milestone" && (
+          <span className="text-text2" data-testid="tray-proposal-day">
+            {" · "}
+            {formatShortDate(c.at)}
+          </span>
+        )}
         {c.op === "remove_dependency" && waitsFor && waitsFor(c) && <span className="text-text2"> · waits for {waitsFor(c)}</span>}
         {c.from_meeting && <span className="block text-sm text-text2" data-testid="proposal-from-meeting">Asked for by the meeting {c.from_meeting.title}</span>}
       </span>

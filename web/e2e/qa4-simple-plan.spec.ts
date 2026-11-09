@@ -105,8 +105,10 @@ test.describe("QA pass 4: simple-plan, desktop", () => {
     await setUp(page);
     await open(page);
     await moveSetupDown(page);
-    // Every row keeps its details on its title's line; Oracle's rank sits under the row.
+    // Every row keeps its details on its title's line; Oracle's rank sits under the row. (A PM-owned row's longer words,
+    // with its Add effort, may take the next line: the Goal map's features have no effort, as the API reads them.)
     for (const r of await page.getByTestId("prio-row").all()) {
+      if (await r.getByTestId("prio-pm-owned").count()) continue;
       const t = (await r.getByTestId("prio-title").boundingBox())!;
       const d = (await r.getByTestId("prio-details").boundingBox())!;
       expect(Math.abs(t.y + t.height / 2 - (d.y + d.height / 2))).toBeLessThan(14);

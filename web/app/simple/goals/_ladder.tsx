@@ -139,8 +139,11 @@ interface Acts {
   waitsOn: (feature: string) => void;
   /** goal-map-editing: a feature dropped on "ms:<id>", "free:<goal|none>", "goal:<id>" or "col:<id>". */
   dropFeature: (feature: string, target: string) => Promise<void>;
-  /** A milestone into a goal, before another of its milestones (null: last). */
-  moveKr: (milestone: string, goal: string, before: string | null) => Promise<void>;
+  /**
+   * A milestone into a goal, before another of its milestones (null: last). `regoal` (Move to…):
+   * a key result's milestone picked onto its own goal leaves the key result for the goal itself.
+   */
+  moveKr: (milestone: string, goal: string, before: string | null, regoal?: boolean) => Promise<void>;
   stepKr: (milestone: string, dir: -1 | 1) => Promise<void>;
   krTo: (milestone: string) => void;
   /** A goal to its place in the one goal order (0: first). */
@@ -171,6 +174,8 @@ export interface LadderProps {
   picked: string | null;
   /** kr-in-goal-map: each goal's key results, by goal id (shown in its card, never as goals). */
   keyResults?: Map<string, KrLine[]>;
+  /** kr-in-goal-map: the goal on the map a goal folds into (a key result's at any depth, proposed too; a goal's own id). */
+  topOf?: (goal: string | null) => string | null;
   /** The page's title block, and the guardrail strip under the header. */
   head: ReactNode;
   guardrail: ReactNode;
@@ -513,7 +518,19 @@ export function GoalLadder(props: LadderProps) {
         // Off its milestones it serves its item's own goal: set it when that is not the one dropped on.
         const read = await unwrap(api.GET("/v1/simple/roadmap", { params: { query: {} } }));
         const now = read.items.find((i) => i.id === feature)?.goal?.id ?? null;
-        const c = now !== goal ? (await propose({ op: "set_goal", target: { item_id: feature }, before: { goal_id: now }, after: { goal_id: goal } })).change : null;
+        // kr-in-goal-map: an item already serving the goal dropped on, or one of its key results, keeps
+        // what it serves: "Not on a key result" never moves it onto a key result. An item serving
+        // no goal or another one, taken off a key result's milestone into its own goal, serves that
+        // key result: the one first by code when it was on milestones of two (not the first listed).
+        const folds = (props.topOf?.(now) ?? now) === goal;
+        const lines = goal ? (props.keyResults?.get(goal) ?? []) : [];
+        const code = (id: string) => lines.find((k) => k.id === id)?.code ?? "￿";
+        const kr = x.f.milestones
+          .map((id) => map.milestones.find((m) => m.id === id) as (GmMilestone & { kr?: string }) | undefined)
+          .flatMap((m) => (m?.kr && m.goal === goal ? [m.kr] : []))
+          .sort((a, b) => code(a).localeCompare(code(b), undefined, { numeric: true }) || a.localeCompare(b))[0];
+        const want = kr ?? goal;
+        const c = folds ? null : (await propose({ op: "set_goal", target: { item_id: feature }, before: { goal_id: now }, after: { goal_id: want } })).change;
         await reload();
         setFresh(feature);
         toast({
@@ -532,14 +549,18 @@ export function GoalLadder(props: LadderProps) {
         await reload();
       }
     },
-    moveKr: async (milestone, goal, before) => {
+    moveKr: async (milestone, goal, before, regoal = false) => {
       const m = map.milestones.find((x) => x.id === milestone);
       if (!m) return;
+      // kr-in-goal-map: the goal it is on (a key result's milestone: the key result, drawn under its goal).
+      const own = (m as GmMilestone & { kr?: string }).kr ?? m.goal;
+      // Onto another goal; from Move to…, a key result's milestone onto its own goal too.
+      const onto = goal !== m.goal || (regoal && goal !== own);
       if (!krCan(milestone)) {
-        if (goal === m.goal) return refuse("Only an owner or the roadmap's decider moves milestones");
+        if (!onto) return refuse("Only an owner or the roadmap's decider moves milestones");
         // every-field-editable: who may not move it (an approver who is not the decider) asks to.
         try {
-          await proposeKrGoal(m, goal, `move ${krName(milestone)} to ${goalName(goal)}`, reload);
+          await proposeKrGoal({ ...m, goal: own }, goal, `move ${krName(milestone)} to ${goalName(goal)}`, reload);
           setMenu(null);
         } catch (e) {
           failed(e);
@@ -551,23 +572,23 @@ export function GoalLadder(props: LadderProps) {
       const ids = krsOf(goal).filter((x) => x !== milestone);
       const at = before ? ids.indexOf(before) : -1;
       ids.splice(at < 0 ? ids.length : at, 0, milestone);
-      if (goal === m.goal && ids.join() === from.join()) return;
+      if (!onto && ids.join() === from.join()) return;
       const name = krName(milestone);
       const a0 = was.get(ids[0]) ?? null;
       const first = ids[0] !== milestone && a0 && !ids.includes(a0) ? a0 : null;
       try {
-        if (goal !== m.goal) await unwrap(api.PATCH("/v1/simple/roadmap/milestones/{milestone_id}", { params: { path: { milestone_id: milestone } }, body: { goal_id: goal } }));
+        if (onto) await unwrap(api.PATCH("/v1/simple/roadmap/milestones/{milestone_id}", { params: { path: { milestone_id: milestone } }, body: { goal_id: goal } }));
         await chain(ids, first);
         await reload();
         setMenu(null);
         toast({
-          message: goal === m.goal ? `Moved ${name}` : `Moved ${name} to ${goalName(goal)}`,
+          message: onto ? `Moved ${name} to ${goalName(goal)}` : `Moved ${name}`,
           action: {
             label: "Undo",
             onClick: () =>
               void (async () => {
                 // kr-in-goal-map: back onto its own goal (a key result's milestone, onto the key result).
-                if (goal !== m.goal) await unwrap(api.PATCH("/v1/simple/roadmap/milestones/{milestone_id}", { params: { path: { milestone_id: milestone } }, body: { goal_id: (m as GmMilestone & { kr?: string }).kr ?? m.goal } }));
+                if (onto) await unwrap(api.PATCH("/v1/simple/roadmap/milestones/{milestone_id}", { params: { path: { milestone_id: milestone } }, body: { goal_id: own } }));
                 await putBack(was, [...from, ...ids.filter((x) => !from.includes(x))]);
               })().then(reload, failed),
           },
@@ -1829,7 +1850,8 @@ function Sheet({ v, sheet, onClose }: { v: V; sheet: { kind: "move" | "waits" | 
   const x = v.byId.get(sheet.feature);
   const kr = sheet.kind === "kr" ? v.map.milestones.find((m) => m.id === sheet.feature) : undefined;
   // goal-map-editing: a feature's place: a milestone ("ms:<id>"), a goal's "Not on a key result" ("free:<goal>") or No goal ("free:none").
-  const from = x ? (x.free ? `free:${x.goal ?? "none"}` : `ms:${x.f.milestones[0]}`) : `goal:${kr?.goal ?? ""}`;
+  // kr-in-goal-map: a key result's milestone is on the key result, not its goal (which it can be moved onto).
+  const from = x ? (x.free ? `free:${x.goal ?? "none"}` : `ms:${x.f.milestones[0]}`) : `goal:${(kr as (GmMilestone & { kr?: string }) | undefined)?.kr ?? kr?.goal ?? ""}`;
   const [to, setTo] = useState(from);
   const [q, setQ] = useState("");
   if (!x && !kr) return null;
@@ -1907,7 +1929,7 @@ function Sheet({ v, sheet, onClose }: { v: V; sheet: { kind: "move" | "waits" | 
               onClick={() => {
                 onClose();
                 if (to === from) return;
-                if (kr) void v.act.moveKr(kr.id, to.slice(5), null);
+                if (kr) void v.act.moveKr(kr.id, to.slice(5), null, true);
                 else void v.act.dropFeature(x!.f.id, to);
               }}
             >

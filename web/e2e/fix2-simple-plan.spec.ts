@@ -97,7 +97,7 @@ test.describe("QA pass 2: simple-plan, the Ranked list", () => {
       const digest = row(page, "alert-digest");
       const numbers = digest.getByTestId("prio-numbers");
       // build-plan QP2 "Numbers, no bar": value · confidence · weeks · score, each number kept whole.
-      await expect(numbers).toHaveText(/^·value 5·confidence [\d.]+·2 wk·score 1\.25$/);
+      await expect(numbers).toHaveText(/^·value 5·confidence [\d.]+·2 weeks·score 1\.25$/);
       expect(await numbers.locator(":scope > span > span").evaluateAll((els) => els.every((e) => getComputedStyle(e).whiteSpace === "nowrap"))).toBe(true);
       const box = (await numbers.boundingBox())!;
       expect(box.height).toBeLessThan(30);

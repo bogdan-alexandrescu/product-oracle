@@ -38,7 +38,7 @@ async function joinCount(page: Page) {
   await sc.focus();
   await page.keyboard.press("ArrowDown");
   await expect(sc).toHaveCount(0);
-  return page.locator('[data-testid="vxe-crowd"][data-count="2"]');
+  return page.getByRole("button", { name: /^2 features at effort 2 weeks · goal value 3: / });
 }
 
 test("desktop: a row in the Ranked list beside the chart opens the feature panel and stays selected", async ({ page }) => {
@@ -90,15 +90,17 @@ test("the dated plan: a count says what its features share in the lone marks' wo
 
 test("the default company: a count's name gives weeks as lone marks do and names its first three features", async ({ page }) => {
   await open(page, null);
-  const count = page.locator('[data-testid="vxe-crowd"][data-count="15"]');
-  await expect(count).toHaveAccessibleName(/^15 features at effort 1 week · goal value 0 or no goal: \S+ [^,]+, \S+ [^,]+, \S+ [^,]+ and 12 more; show them$/);
+  await expect(page.getByRole("button", { name: /^2 features at effort 1 week · goal value 0 · no goal: / })).toBeVisible();
+  // The features the mock does not list have no effort (as the API reads them): PM-owned, one count.
+  const count = page.locator('[data-testid="vxe-crowd"][data-count="13"]');
+  await expect(count).toHaveAccessibleName(/^13 features at PM-owned, no effort · goal value 0 or no goal: \S+ [^,]+, \S+ [^,]+, \S+ [^,]+ and 10 more; show them$/);
   await count.click();
   const rows = page.getByTestId("vxe-crowd-sheet").getByTestId("vxe-crowd-row");
   const first = await rows.evaluateAll((es) =>
     es.slice(0, 3).map((e) => `${e.querySelector('[data-testid="vxe-crowd-code"]')?.textContent} ${e.querySelector("span.truncate")?.textContent}`),
   );
   await page.keyboard.press("Escape");
-  await expect(count).toHaveAccessibleName(new RegExp(`: ${first.join(", ").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} and 12 more; show them$`));
+  await expect(count).toHaveAccessibleName(new RegExp(`: ${first.join(", ").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} and 10 more; show them$`));
 });
 
 test("desktop: a count holding the feature just re-estimated rings as the lone mark did", async ({ page }) => {

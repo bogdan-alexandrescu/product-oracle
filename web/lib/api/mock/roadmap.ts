@@ -17,6 +17,7 @@ import type { AcceptDateOut, InboxTrack, TrackAlertAction, TrackAlertOut, Tracke
 
 import { companyDayIso } from "./connections";
 import { mockUuid, seeded, stableUuid } from "./ids";
+import { prdCode } from "./item-code";
 import type { PlanEditItem, PlanEditsDb } from "./plan-edits";
 import { diffItems, snapshot } from "./roadmap-diff";
 import itemsFixture from "./roadmap-items.json";
@@ -61,6 +62,13 @@ export interface RoadmapDb {
   freshness?: Record<string, Item["freshness"]>;
   /** plan-open-from-simple "plan-same-key": the Checkout redesign roadmap draft holds a key Usage alerts' roadmap holds too. */
   same_key?: boolean;
+  /**
+   * "plan-section-code", "plan-section-linked" and "plan-section-feature": the approved plan has an item from the PRD's section f-31
+   * (SECTION_CODE_ITEM), "linked" to SECTION_LINK_FEATURE too. The one source the plan and Edit plan's base read.
+   */
+  section_code?: "plain" | "linked";
+  /** "plan-two-roadmaps": Edit plan's mock seeds TWO_ROADMAPS (seedTwoRoadmaps). */
+  two_roadmaps?: boolean;
   /** F2: tracker record history, one row per changed field. */
   recordEvents?: (TrackerRecordEventOut & { record_id: string })[];
   /** F2: dates accepted from the tracker, by item key, with the reference of the basis they rest on (the Plan row reads them). */
@@ -144,6 +152,22 @@ export const PLAN_STALE_SCENARIO = "plan-stale";
 export const APPROVED_PLAN_SCENARIO = "approved-plan";
 /** Only usage-alerts-roadmap v1 approved (it is in review by default): specs on the approved plan. */
 export const ALERTS_APPROVED_SCENARIO = "alerts-approved";
+/**
+ * Edit plan's codes (codes.clash, section=...): "alerts-approved" with one more approved item,
+ * "F-31 Alert routing by team", imported from the PRD's section f-31, and a Ground Truth
+ * feature F-31 Alert routing by team to link an added item to.
+ */
+export const PLAN_SECTION_CODE_SCENARIO = "plan-section-code";
+/** "plan-section-code" with the approved item from section f-31 linked to another Ground Truth feature, Alert routing rules. */
+export const PLAN_SECTION_LINKED_SCENARIO = "plan-section-linked";
+/** "plan-section-linked" with no Ground Truth feature F-31: Alert routing rules takes F-31 from its approved item's section. */
+export const PLAN_SECTION_FEATURE_SCENARIO = "plan-section-feature";
+/**
+ * Edit plan's codes (codes.feature_reads): "alerts-approved" and two more roadmaps, each with a published version whose item of the
+ * Ground Truth feature Guided setup comes from another PRD section: the Billing roadmap's from f-41, then the Invoices roadmap's
+ * from f-42 (TWO_ROADMAPS).
+ */
+export const PLAN_TWO_ROADMAPS_SCENARIO = "plan-two-roadmaps";
 /** qa5-plan-at-risk: "alignment-report" with the Plan's track off track for a critical blocker, nothing slipping. */
 export const REPORT_OFF_TRACK_SCENARIO = "report-off-track";
 /** qa5-plan-at-risk review: "alignment-report" with no First release track milestone; the Plan's Now items name it. */
@@ -237,9 +261,14 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
   const simpleItemBasis = scenario === SIMPLE_ITEM_BASIS_SCENARIO;
   const trails = scenario === APPROVED_ROADMAP_SCENARIO;
   const sameKey = scenario === PLAN_SAME_KEY_SCENARIO;
-  const key = withItems || withDiff || noGaBasis || planStale || simpleItemBasis || trails || sameKey ? `roadmap:${scenario}` : "roadmap";
+  const sectionCode = scenario === PLAN_SECTION_CODE_SCENARIO ? "plain" : scenario === PLAN_SECTION_LINKED_SCENARIO || scenario === PLAN_SECTION_FEATURE_SCENARIO ? "linked" : null;
+  const twoRoadmaps = scenario === PLAN_TWO_ROADMAPS_SCENARIO;
+  const key = withItems || withDiff || noGaBasis || planStale || simpleItemBasis || trails || sameKey || sectionCode || twoRoadmaps ? `roadmap:${scenario}` : "roadmap";
   return seeded(key, () => {
-    const db: RoadmapDb = { items: {}, tracks: [], milestones: [], bases: [], records: [], changes: [], ...(sameKey ? { same_key: true } : {}) };
+    const db: RoadmapDb = {
+      items: {}, tracks: [], milestones: [], bases: [], records: [], changes: [], ...(sameKey ? { same_key: true } : {}), ...(sectionCode ? { section_code: sectionCode } : {}),
+      ...(twoRoadmaps ? { two_roadmaps: true } : {}),
+    };
     const prd = ctx.documents.find((d) => d.slug === "usage-alerts");
     const roadmap = ctx.documents.find((d) => d.slug === "usage-alerts-roadmap");
     const accepted = prd && latest(ctx, prd.id, true);
@@ -1446,6 +1475,19 @@ const ALERTS_APPROVED: PlanSeedItem[] = [
     next: { action: "link_issue", who: "approver" } },
   { key: "team-budgets", title: "Budgets per team", horizon: "later", goals: ["g.early-churn"], state: "planned", section: "behaviour" },
 ];
+/** "plan-section-code": an approved item whose code is its PRD section's (f-31), its title leading with it. */
+const SECTION_CODE_ITEM: PlanSeedItem = { key: "alert-routing", title: "F-31 Alert routing by team", horizon: "next", state: "planned", section: "f-31" };
+
+/** "plan-section-linked": the Ground Truth feature SECTION_CODE_ITEM is linked to, with no code of its own. */
+export const SECTION_LINK_FEATURE = entityRef("feature", ["alert-routing-rules", "Alert routing rules"]);
+
+/** The approved plan's items: SECTION_CODE_ITEM too in "plan-section-code", linked to SECTION_LINK_FEATURE in "plan-section-linked". */
+function alertsApproved(sectionCode?: RoadmapDb["section_code"]): PlanSeedItem[] {
+  if (!sectionCode) return ALERTS_APPROVED;
+  const linked: Partial<PlanSeedItem> = sectionCode === "linked" ? { feature: [SECTION_LINK_FEATURE.key, SECTION_LINK_FEATURE.title] } : {};
+  return [...ALERTS_APPROVED, { ...SECTION_CODE_ITEM, ...linked }];
+}
+
 /**
  * Running today: the baseline features the Plan's items trace (as GET /v1/feature-states lists
  * every confirmed feature, each with its roadmap items), so the Plan's item names carry their
@@ -1580,10 +1622,98 @@ export function planEntityTitle(id: string): string | null {
   return null;
 }
 
-/** The seeded approved plan's items (usage-alerts-roadmap v1), for a change set's base (#346). */
-export function seededPlanItems(slug: string, version: number): PlanEditItem[] | null {
+/**
+ * The seeded approved plan's items (usage-alerts-roadmap v1), for a change set's base (#346), each with its PRD section and
+ * its Ground Truth feature; ``sectionCode``: the roadmap mock's RoadmapDb.section_code.
+ */
+export function seededPlanItems(slug: string, version: number, sectionCode?: RoadmapDb["section_code"]): PlanEditItem[] | null {
   if (slug !== ALERTS_ROADMAP_SLUG || version !== 1) return null;
-  return ALERTS_APPROVED.map((i) => ({ key: i.key, title: i.title, horizon: i.horizon }));
+  return alertsApproved(sectionCode).map((i) => ({
+    key: i.key, title: i.title, horizon: i.horizon, section: i.section, feature_id: i.feature ? entityRef("feature", i.feature).id : null,
+  }));
+}
+
+/**
+ * "plan-two-roadmaps": two roadmaps' published versions, stored in the order listed (Invoices first) but made the other way round,
+ * each with an item of Guided setup from its own PRD section.
+ */
+const TWO_ROADMAPS = [
+  { slug: "invoices-roadmap", title: "Invoices roadmap", created_at: "2026-10-12T09:00:00Z", section: "f-42" },
+  { slug: "billing-roadmap", title: "Billing roadmap", created_at: "2026-10-11T09:00:00Z", section: "f-41" },
+];
+
+/**
+ * "plan-two-roadmaps": usage-alerts-roadmap v1 approved, and the roadmaps of TWO_ROADMAPS, copied from it, each with version 1
+ * published (``edits``), its item linked to ``feature`` (Guided setup's id).
+ */
+export function seedTwoRoadmaps<D extends Doc, V extends Version>(ctx: { documents: D[]; versions: V[] }, edits: PlanEditsDb, feature: string) {
+  const doc = ctx.documents.find((d) => d.slug === ALERTS_ROADMAP_SLUG);
+  const v1 = doc && ctx.versions.find((v) => v.document_id === doc.id && v.number === 1);
+  if (!doc || !v1 || ctx.documents.some((d) => d.slug === TWO_ROADMAPS[0].slug)) return;
+  // The approved plan, as "alerts-approved".
+  v1.approved_at = "2026-10-05T09:00:00Z";
+  doc.status = "approved";
+  for (const r of TWO_ROADMAPS) {
+    const id = stableUuid(`doc:${r.slug}`);
+    ctx.documents.push({ ...structuredClone(doc), id, slug: r.slug, title: r.title });
+    ctx.versions.push({ ...structuredClone(v1), id: stableUuid(`version:${r.slug}:1`), document_id: id, created_at: r.created_at, approved_at: null });
+    edits.versions[r.slug] = { 1: [{ key: "guided-setup", title: "Guided setup", horizon: "now", feature_id: feature, section: r.section }] };
+  }
+}
+
+const FEATURE_CODE = /^[A-Z]{1,3}-\d+[a-j]?$/;
+
+/**
+ * Each Ground Truth feature's code by its id, as codes._by_feature reads it: in the features' creation order, its key when that
+ * is a code (F-12), else the PRD code of the section its first published item came from (codes.prd_by_key: an item of
+ * usage-alerts-roadmap v1 or of a version a change set proposed, across roadmaps); a key whose code an older feature has reads it
+ * with a digit (F-31.2), a PRD code taken already gives none. codes.feature_reads orders published items by RoadmapItem.created_at;
+ * the mock stores no item rows, so it orders them by their version row's created_at as a stand-in. The two agree because a
+ * proposed version's copied items keep their base's section and its added items carry none, so a later version never first gives
+ * a feature a section. ``sectionCode``: the roadmap mock's RoadmapDb.section_code; ``ctx``: the versions' rows, for when each was made.
+ */
+export function featureCodes(
+  features: { id: string; key: string; created_at: string }[],
+  sectionCode?: RoadmapDb["section_code"],
+  edits?: PlanEditsDb,
+  ctx?: Pick<RoadmapContext, "documents" | "versions">,
+): Record<string, string> {
+  const stored = [
+    { slug: ALERTS_ROADMAP_SLUG, number: 1, items: seededPlanItems(ALERTS_ROADMAP_SLUG, 1, sectionCode) ?? [] },
+    ...Object.entries(edits?.versions ?? {}).flatMap(([slug, by]) => Object.keys(by).map(Number).map((number) => ({ slug, number, items: by[number] }))),
+  ];
+  // A version's row: when it was made, then its place among the rows (made in that order); a version with no row (or no
+  // created_at) sorts last, and those keep their place: a row's index, past the rows the stored version's own index.
+  const rows = ctx?.versions ?? [];
+  const made = ({ slug, number }: { slug: string; number: number }, i: number): [string | null, number] => {
+    const doc = ctx?.documents.find((d) => d.slug === slug);
+    const at = rows.findIndex((v) => v.document_id === doc?.id && v.number === number);
+    return at < 0 ? [null, rows.length + i] : [rows[at].created_at ?? null, at];
+  };
+  const published = stored
+    .map((v, i) => ({ ...v, made: made(v, i) }))
+    .sort((a, b) => {
+      const [x, y] = [a.made[0], b.made[0]];
+      return (x === y ? 0 : x === null ? 1 : y === null ? -1 : x.localeCompare(y)) || a.made[1] - b.made[1];
+    })
+    .flatMap((v) => v.items);
+  const prd = new Map<string, string>();
+  for (const i of published) {
+    const code = prdCode(i.section);
+    if (i.feature_id && code && !prd.has(i.feature_id)) prd.set(i.feature_id, code);
+  }
+  const out: Record<string, string> = {};
+  const taken = new Set<string>();
+  const order = [...features].sort((a, b) => a.created_at.localeCompare(b.created_at) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  for (const f of order) {
+    const own = FEATURE_CODE.test(f.key) ? f.key : prd.get(f.id);
+    if (!own || (taken.has(own) && !FEATURE_CODE.test(f.key))) continue;
+    let code = own;
+    for (let n = 2; taken.has(code); n += 1) code = `${own}.${n}`;
+    taken.add(code);
+    out[f.id] = code;
+  }
+  return out;
 }
 
 /** The latest approved version a change set proposed, with its items (#346). */
@@ -1816,11 +1946,11 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
   if (alerts && edited) {
     // #346: a proposed version the decider approved is the live plan (draft 2 is superseded).
     for (const e of edited.items) {
-      const s: PlanSeedItem = { ...(ALERTS_APPROVED.find((a) => a.key === e.key) ?? { section: "behaviour" }), key: e.key, title: e.title, horizon: e.horizon };
+      const s: PlanSeedItem = { ...(alertsApproved(db.section_code).find((a) => a.key === e.key) ?? { section: e.section ?? "behaviour" }), key: e.key, title: e.title, horizon: e.horizon };
       items.push(row(s, alerts, 1, { slug: ALERTS_ROADMAP_SLUG, version: edited.version }, "approved", null));
     }
   } else if (alerts && roadmapState.approved) {
-    for (const s of ALERTS_APPROVED) {
+    for (const s of alertsApproved(db.section_code)) {
       // Draft 2's twins only while the roadmap document has an unapproved version 2.
       const d = scope === "all" && roadmapState.draft2 ? ALERTS_DRAFT[s.key] : undefined;
       if (d && d.change.kind !== "dropped") items.push(row(s, alerts, 1, { slug: ALERTS_ROADMAP_SLUG, version: 2 }, "draft", d.change, d.horizon));

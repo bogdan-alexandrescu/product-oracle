@@ -50,7 +50,7 @@ test.describe("fix4-simple-plan review: Priorities", () => {
       for (const r of await rows.all()) {
         const conf = Number(/^confidence ([\d.]+)$/.exec((await r.getByTestId("prio-confidence").textContent()) ?? "")?.[1]);
         // build-plan QP2: value · confidence · weeks · score, no bar.
-        const m = /^·value ([\d.]+)·confidence [\d.]+·([\d.]+) wk·score ([\d.]+)$/.exec((await r.getByTestId("prio-numbers").textContent()) ?? "");
+        const m = /^·value ([\d.]+)·confidence [\d.]+·([\d.]+) weeks?·score ([\d.]+)$/.exec((await r.getByTestId("prio-numbers").textContent()) ?? "");
         expect(m, (await r.textContent()) ?? "").not.toBeNull();
         const [, value, effort, score] = m!.map(Number);
         expect(conf).toBeGreaterThan(0);

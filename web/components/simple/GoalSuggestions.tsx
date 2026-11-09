@@ -7,6 +7,7 @@ import { Button, Sheet, toast } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { askWith } from "@/components/hop/open-state";
 import { useCompanyZone, zoneDateTime } from "@/lib/dates";
+import { servedName } from "@/lib/key-results";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { reloadWaiting } from "@/lib/waiting";
@@ -155,7 +156,7 @@ function RejectDialog({ s, onReject, onClose }: { s: GoalSuggestion; onReject: (
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-[length:var(--simple-h2)] leading-[var(--simple-h2-leading)] font-semibold">Reject {s.title}</h2>
-        <p className="mb-2 text-[length:var(--simple-small)] text-text2">Oracle will not suggest it again for {s.goal.title}. Saying why is optional.</p>
+        <p className="mb-2 text-[length:var(--simple-small)] text-text2">Oracle will not suggest it again for {servedName(s.goal)}. Saying why is optional.</p>
         <form
           onSubmit={(e) => {
             e.preventDefault();

@@ -11,13 +11,14 @@ import { expect, test, type BrowserContext, type Locator, type Page } from "./te
  */
 
 // roadmap-edit-fixes round 1: F-03 Health log is a live, planned roadmap item (not done, cut or in
-// Trash), so Priorities lists it as the roadmap does.
+// Trash), so Priorities lists it as the roadmap does; the mock lists no effort for it (nor does the API), so it has no
+// score and ranks last.
 // P-1: the Goal map's features (gm-f1 ...) are roadmap items from the first load, ranked among the rest;
 // P-6: each serves its goal on the map, so they rank with the goal rows, before the rows with no goal.
 const ORACLE = [
   "setup-checklist", "alert-rules", "alert-digest", "alert-mobile", "setup-import", "alert-export", "alert-sso",
   "gm-f10", "gm-f4", "gm-f9", "gm-f3", "gm-f1", "gm-f7", "gm-f8", "gm-f5", "gm-f2", "gm-f12", "gm-f11", "gm-f6",
-  "setup-health-log", "price-tiers", "setup-video",
+  "price-tiers", "setup-video", "setup-health-log",
 ];
 const PHONE = { width: 390, height: 844 };
 
@@ -293,8 +294,8 @@ test.describe("desktop", () => {
     await admin.getByRole("tab", { name: "Goal buckets" }).click();
     await expect(admin.getByTestId("bucket-bar")).toBeVisible();
     const b = (key: string) => admin.locator(`[data-testid="goal-bucket"][data-key="${key}"]`);
-    await expect(b("grow-retention")).toContainText("9 wk · 64%");
-    await expect(b("faster-activation")).toContainText("5 wk · 36%");
+    await expect(b("grow-retention")).toContainText("9 weeks · 64%");
+    await expect(b("faster-activation")).toContainText("5 weeks · 36%");
     // Nothing this quarter serves no goal: no warning card.
     await expect(b("none")).toHaveCount(0);
   });

@@ -227,7 +227,7 @@ for (const size of SIZES) {
       await bucket(page, "Revenue").locator('[data-code="F-14"]').getByRole("button", { name: "Plan limits", exact: true }).click();
       await expect(page.getByTestId("item-panel").getByTestId("floating-card")).toContainText("Plan limits");
       for (const t of await page.getByTestId("plan-chip").allInnerTexts()) expect(t.replace(/\s+/g, " ")).toMatch(/^M\d (Prove it|Scale volume|Open to all)$/);
-      for (const t of await page.getByTestId("goal-bar-label").allInnerTexts()) expect(t).toMatch(/^M\d (Prove it|Scale volume|Open to all) · [\d.]+ wk$/);
+      for (const t of await page.getByTestId("goal-bar-label").allInnerTexts()) expect(t).toMatch(/^M\d (Prove it|Scale volume|Open to all) · [\d.]+ weeks?$/);
     });
   });
 }

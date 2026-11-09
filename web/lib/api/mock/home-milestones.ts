@@ -38,7 +38,7 @@ export function seedHomeMilestones(): SimpleDb {
     gates,
     counts_when: "",
     progress: "not_started",
-    prd: { slug, title, owner: "Nora Vance" },
+    prd: { slug, title },
   });
   rm.goal_milestones = [
     ...seedOwnMilestones().filter((m) => m.id !== stableUuid("simple-gm/m2")),
@@ -235,7 +235,7 @@ export const HOME_MILESTONE_PRD_FOLD_SCENARIO = "home-milestones-prd-fold";
  */
 export function seedHomeMilestonePrdFold(): SimpleDb {
   const rm = seedSimpleRoadmap();
-  const prd = { slug: "setup-guide", title: "Setup guide", owner: "Nora Vance" };
+  const prd = { slug: "setup-guide", title: "Setup guide" };
   rm.goal_milestones = [
     { id: stableUuid("simple-gm/prd-fold-measured"), roadmap: "onboarding-roadmap", code: "M1", name: "Measured", date: "2026-11-20", goal: null, gates: ["setup-checklist", "setup-import"], counts_when: "", progress: "not_started", prd },
   ];
@@ -255,7 +255,7 @@ export const HOME_MILESTONE_PRD_GOAL_FOLD_SCENARIO = "home-milestones-prd-goal-f
  */
 export function seedHomeMilestonePrdGoalFold(): SimpleDb {
   const rm = seedSimpleRoadmap();
-  const prd = { slug: "setup-guide", title: "Setup guide", owner: "Nora Vance" };
+  const prd = { slug: "setup-guide", title: "Setup guide" };
   rm.goal_milestones = [
     { id: stableUuid("simple-gm/prd-goal-fold-measured"), roadmap: "onboarding-roadmap", code: "M1", name: "Measured", date: "2026-11-20", goal: "faster-activation", gates: ["setup-checklist", "setup-import"], counts_when: "", progress: "not_started", prd },
     { id: stableUuid("simple-gm/prd-goal-fold-scoreboard"), roadmap: "onboarding-roadmap", code: "M3", name: "Daily scoreboard", date: null, goal: "faster-activation", gates: ["setup-digest"], counts_when: "", progress: "not_started" },
@@ -289,7 +289,7 @@ export function seedHomeMilestonePrdsFold(): SimpleDb {
     gates: [gate],
     counts_when: "",
     progress: "not_started",
-    prd: { slug, title, owner: "Nora Vance" },
+    prd: { slug, title },
   });
   rm.goal_milestones = [plain("measured", "Measured", "2026-11-20", "setup-checklist", "setup-guide", "Setup guide"), plain("mapped", "Mapped", "2026-11-12", "setup-import", "import-guide", "Import guide")];
   rm.items = rm.items.map((s) => (s.key === "setup-health-log" ? { ...s, record: "M1 · Measured and mapped" } : s));
@@ -306,5 +306,25 @@ export const HOME_MILESTONE_PLAIN_FOLD_SCENARIO = "home-milestones-plain-fold";
 export function seedHomeMilestonePlainFold(): SimpleDb {
   const rm = seedHomeMilestonePrdsFold();
   rm.goal_milestones = rm.goal_milestones!.map((m, k) => (k === 0 ? { ...m, prd: null } : m));
+  return rm;
+}
+
+export const HOME_MILESTONE_GOALS_FOLD_SCENARIO = "home-milestones-goals-fold";
+
+/**
+ * home-milestones-goals-fold (the owner's "Join whenever names match"): the Setup guide PRD's own
+ * M1 "Measured" under Faster activation (Setup checklist, Sample data import) and Grow
+ * retention's ladder "M1 · First wins" (Welcome video), beside the Guided setup track's "M1 ·
+ * Measured and mapped" (Health log): the PRD's joins the track's row (names match), the other
+ * goal's keeps its own; two M1 rows.
+ */
+export function seedHomeMilestoneGoalsFold(): SimpleDb {
+  const rm = seedSimpleRoadmap();
+  const prd = { slug: "setup-guide", title: "Setup guide" };
+  rm.goal_milestones = [
+    { id: stableUuid("simple-gm/goals-fold-measured"), roadmap: "onboarding-roadmap", code: "M1", name: "Measured", date: "2026-11-20", goal: "faster-activation", gates: ["setup-checklist", "setup-import"], counts_when: "", progress: "not_started", prd },
+    { id: stableUuid("simple-gm/goals-fold-wins"), roadmap: "onboarding-roadmap", code: "M1", name: "First wins", date: null, goal: "grow-retention", gates: ["setup-video"], counts_when: "", progress: "not_started" },
+  ];
+  rm.items = rm.items.map((s) => (s.key === "setup-health-log" ? { ...s, record: "M1 · Measured and mapped" } : s.key === "setup-video" ? { ...s, goal: "grow-retention" } : s));
   return rm;
 }
