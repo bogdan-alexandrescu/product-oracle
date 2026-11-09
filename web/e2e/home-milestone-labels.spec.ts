@@ -231,8 +231,8 @@ test("an item typed M1 never lands on a guessed track M1 when two tracks have on
 
 /*
  * Card home-milestone-names-kept (reviews of PR 1439), on "home-milestones-goals": protects = a
- * roadmap's only milestone of a code joins a track's row only when their whole names match or one
- * has none, so Alerts' "M2 · Fleet pilot" stays its own row beside the track's "M2 · Launch (beta)";
+ * goal's milestone, its roadmap's only one of a code, joins a track's row only when their whole
+ * names match or one has none (one of no goal joins whatever its name: home-milestone-fold), so Alerts' "M2 · Fleet pilot" stays its own row beside the track's "M2 · Launch (beta)";
  * an item whose own goal has no M2 (Alert sound settings) stays on its track's row, never joining
  * the one other goal's; fails_when = "Fleet pilot" shows nowhere on Home, or Alert sound settings
  * sits under it.
