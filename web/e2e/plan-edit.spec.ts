@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "./test";
 
+import { PLAN_SECTION_CODE_SCENARIO } from "../lib/api/mock/roadmap";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login, signOut } from "./helpers";
 
@@ -185,4 +186,33 @@ test("Edit plan: an item whose code another item has is refused in plain words",
   await addItem("F-32 Launch flow");
   await expect(editItem(page, "F-32 Launch flow")).toContainText("New");
   await expect(changes(page)).not.toContainText("is already the code of");
+});
+
+// protects = (every-field, codes.clash with section) an item added linked to the Ground Truth feature F-31 shares its code with the
+// approved item "F-31 Alert routing by team" from the PRD's section f-31: both are parts of one feature, so it is added and proposed;
+// a code from a title alone still clashes; fails_when = the mock refuses the linked add (the old "same feature only" rule) or lets
+// the title-only one through; no_claim = the API's rule (api/tests/test_roadmap_change_sets.py).
+test("Edit plan: an item linked to the feature an approved item's PRD section codes shares its code", async ({ page }) => {
+  await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, PLAN_SECTION_CODE_SCENARIO] as const);
+  await openPlan(page);
+  await page.getByTestId("plan-edit").click();
+  await expect(changes(page)).toContainText(/Changes to approved version 1 of Usage alerts roadmap/);
+  await expect(lane(page, "next")).toContainText("F-31 Alert routing by team");
+
+  await changes(page).getByLabel("Ground Truth feature").selectOption({ label: "Alert routing by team" });
+  await changes(page).getByLabel("Horizon of the new item").selectOption("later");
+  await changes(page).getByRole("button", { name: "Add item" }).click();
+  const added = lane(page, "later").getByTestId("edit-item").filter({ hasText: "Alert routing by team" });
+  await expect(added).toContainText("New");
+  await expect(changes(page)).not.toContainText("is already the code of");
+
+  // A code from a title alone is no part of the feature: refused in plain words, nothing added.
+  await changes(page).getByLabel("New item title").fill("F-31 Launch flow");
+  await changes(page).getByRole("button", { name: "Add item" }).click();
+  await expect(changes(page)).toContainText("F-31 is already the code of F-31 Alert routing by team");
+  await expect(editItem(page, "F-31 Launch flow")).toHaveCount(0);
+
+  // Propose checks the codes again: the linked item goes into version 2.
+  await changes(page).getByRole("button", { name: "Propose changes" }).click();
+  await expect(changes(page).getByTestId("plan-proposal")).toContainText("Version 2 proposed");
 });

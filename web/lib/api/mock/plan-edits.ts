@@ -17,7 +17,8 @@ import { shownCode, shownName } from "./item-code";
 type Role = "viewer" | "commenter" | "approver" | "owner";
 type Horizon = "now" | "next" | "later";
 type Change = Schemas["ChangeSetOut"]["changes"][number];
-export type PlanEditItem = { key: string; title: string; horizon: Horizon; outcome?: string | null; feature_id?: string | null };
+/** An item of a plan version; ``section`` is the PRD section it came from (RoadmapItem.prd_section_key), none for an added one. */
+export type PlanEditItem = { key: string; title: string; horizon: Horizon; outcome?: string | null; feature_id?: string | null; section?: string | null };
 
 export interface ChangeSetRow {
   id: string;
