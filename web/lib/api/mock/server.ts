@@ -172,7 +172,7 @@ import {
 import { bucketGoalsInOrder, placeBucketGoal, placeBucketGoals, routeGoalBuckets, seedGoalBuckets, seedGoalBucketsHard, seedGoalBucketsWith } from "./goal-buckets";
 import { proposeGoalDelete, restoreCodeTaken, routeSimpleChanges, seedFeatureAskProposal, seedSimpleProposal, simpleInboxRows, type SimpleChangesCtx } from "./simple-changes";
 import { routeCurrentState, seedCurrentState, type CurrentStateDb } from "./currentstate";
-import { featureKeyOf, PRIORITIES_GOAL_NO_VALUE_SCENARIO, PRIORITIES_PLAN_GOAL_NAMES_SCENARIO, prioritiesOut, seedGoalNoValue, seedPlanGoalNames } from "./simple-priorities";
+import { featureKeyOf, PRIORITIES_GOAL_NO_VALUE_SCENARIO, PRIORITIES_PLAN_GOAL_CODES_SCENARIO, PRIORITIES_PLAN_GOAL_NAMES_SCENARIO, prioritiesOut, seedGoalNoValue, seedPlanGoalCodes, seedPlanGoalNames } from "./simple-priorities";
 import { restoreTrack, routeRemoved } from "./simple-removed";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, restoreAgendaItem, sheetDecisionMade, sheetProposals, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { goalSuggestionInboxRows, seedGoalSuggestions, seedHeldGoalSuggestion, seedPersonGoalSuggestion } from "./simple-suggestions";
@@ -4067,6 +4067,12 @@ function load(): Db {
                 ? () => {
                     const db = seedSimplePlanScenario();
                     seedPlanGoalNames(db.simple_roadmap!);
+                    return db;
+                  }
+              : scenario === PRIORITIES_PLAN_GOAL_CODES_SCENARIO
+                ? () => {
+                    const db = seedSimplePlanScenario();
+                    seedPlanGoalCodes(db.simple_roadmap!);
                     return db;
                   }
               : scenario === PRIORITIES_GOAL_NO_VALUE_SCENARIO

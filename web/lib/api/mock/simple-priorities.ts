@@ -69,7 +69,18 @@ export function seedGoalNoValue(db: SimpleDb): void {
 export const PRIORITIES_PLAN_GOAL_NAMES_SCENARIO = "priorities-plan-goal-names";
 export function seedPlanGoalNames(db: SimpleDb): void {
   const rules = db.items.find((s) => s.key === "alert-rules");
-  if (rules) rules.goal = "activation";
+  if (!rules) throw new Error(`${PRIORITIES_PLAN_GOAL_NAMES_SCENARIO}: the seed has no Alert rules engine (alert-rules) to give the goal "Activation"`);
+  rules.goal = "activation";
+}
+
+/**
+ * The "priorities-plan-goal-codes" scenario: "simple-plan", whose plan has two goals named Activation with their own
+ * codes (G1 Activation: Bulk import, Help center search; G3 Activation: Onboarding emails), two goals. Invented data.
+ */
+export const PRIORITIES_PLAN_GOAL_CODES_SCENARIO = "priorities-plan-goal-codes";
+export function seedPlanGoalCodes(db: SimpleDb): void {
+  if (!db.plan) throw new Error(`${PRIORITIES_PLAN_GOAL_CODES_SCENARIO}: the seed has no plan to give two Activation goals`);
+  db.plan.coded_goals = true;
 }
 
 /** The "simple-plan" scenario's existing items the plan names (server.ts seedSimplePlanScenario). */
