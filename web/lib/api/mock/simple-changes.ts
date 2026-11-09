@@ -1632,11 +1632,11 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     applyS7(db, c);
   } else if (c.op === "edit_goal_milestone") {
     // roadmap-decide: accepting writes the PRD milestone's date and rule; either way it waits no more.
-    // As goal_milestones.decide: one whose milestone is gone or waits on another change is only
-    // declined (the milestone left as it is); accepting it is refused.
+    // As goal_milestones.decide: one whose milestone is gone (or in the Trash) or waits on another
+    // change is only declined (the milestone left as it is); accepting it is refused.
     const m = (db.goal_milestones ?? []).find((x) => x.id === c.target.milestone_id);
     const waits = !!m && m.pending?.change_id === c.id;
-    if (p[4] === "accept" && !m) return json(404, { detail: "The milestone is gone" });
+    if (p[4] === "accept" && (!m || m.deleted)) return json(404, { detail: "The milestone is gone" });
     if (p[4] === "accept" && !waits) return json(409, { detail: { message: "This proposal no longer waits on this milestone", current: null, changed_by: null, changed_at: null } });
     if (m && p[4] === "accept") Object.assign(m, { date: (c.after.date as string | null) ?? m.date, counts_when: (c.after.counts_when as string | null) ?? m.counts_when });
     if (m && waits) m.pending = null;
