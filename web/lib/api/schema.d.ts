@@ -44478,6 +44478,16 @@ export interface components {
              */
             late: boolean;
         };
+        /** SimpleTrackGoal */
+        SimpleTrackGoal: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
         /** SimpleTrackRef */
         SimpleTrackRef: {
             /**
@@ -44487,6 +44497,10 @@ export interface components {
             id: string;
             /** Title */
             title: string;
+            /** Goal Id */
+            goal_id?: string | null;
+            /** Goal Name */
+            goal_name?: string | null;
         };
         /** SimpleTrackRow */
         SimpleTrackRow: {
@@ -44506,13 +44520,14 @@ export interface components {
             owner_id?: string | null;
             /** Owner Name */
             owner_name?: string | null;
-            /**
-             * Prd Id
-             * Format: uuid
-             */
-            prd_id: string;
+            /** Prd Id */
+            prd_id?: string | null;
             /** Prd Title */
             prd_title?: string | null;
+            /** Goal Id */
+            goal_id?: string | null;
+            /** Goal Name */
+            goal_name?: string | null;
             /**
              * Can Decide
              * @default false
@@ -44546,6 +44561,11 @@ export interface components {
             people: components["schemas"]["SimplePerson"][];
             /** Prds */
             prds: components["schemas"]["SimplePrdRef"][];
+            /**
+             * Goals
+             * @default []
+             */
+            goals: components["schemas"]["SimpleTrackGoal"][];
         };
         /**
          * SimpleUpcomingMeeting
@@ -47881,7 +47901,7 @@ export interface components {
             status: "active" | "paused" | "closed";
             /** Owner Id */
             owner_id: string | null;
-            prd: components["schemas"]["DocumentRef"];
+            prd: components["schemas"]["DocumentRef"] | null;
             /** Started Version */
             started_version: number | null;
             /** Current Version */
@@ -47948,7 +47968,7 @@ export interface components {
             status: "active" | "paused" | "closed";
             /** Owner Id */
             owner_id: string | null;
-            prd: components["schemas"]["DocumentRef"];
+            prd: components["schemas"]["DocumentRef"] | null;
             /** Started Version */
             started_version: number | null;
             /** Current Version */

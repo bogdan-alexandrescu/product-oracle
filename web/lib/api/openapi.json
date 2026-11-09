@@ -131406,6 +131406,25 @@
         "title": "SimpleTaskWaiting",
         "description": "An open task waiting on the reader (Home's \"Waiting for you\"), with its item."
       },
+      "SimpleTrackGoal": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "SimpleTrackGoal"
+      },
       "SimpleTrackRef": {
         "properties": {
           "id": {
@@ -131416,6 +131435,29 @@
           "title": {
             "type": "string",
             "title": "Title"
+          },
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "goal_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Name"
           }
         },
         "type": "object",
@@ -131469,8 +131511,15 @@
             "title": "Owner Name"
           },
           "prd_id": {
-            "type": "string",
-            "format": "uuid",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Prd Id"
           },
           "prd_title": {
@@ -131483,6 +131532,29 @@
               }
             ],
             "title": "Prd Title"
+          },
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "goal_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Name"
           },
           "can_decide": {
             "type": "boolean",
@@ -131515,8 +131587,7 @@
         "required": [
           "id",
           "title",
-          "status",
-          "prd_id"
+          "status"
         ],
         "title": "SimpleTrackRow"
       },
@@ -131558,6 +131629,14 @@
             },
             "type": "array",
             "title": "Prds"
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleTrackGoal"
+            },
+            "type": "array",
+            "title": "Goals",
+            "default": []
           }
         },
         "type": "object",
@@ -141031,7 +141110,14 @@
             "title": "Owner Id"
           },
           "prd": {
-            "$ref": "#/components/schemas/DocumentRef"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "started_version": {
             "anyOf": [
@@ -141275,7 +141361,14 @@
             "title": "Owner Id"
           },
           "prd": {
-            "$ref": "#/components/schemas/DocumentRef"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "started_version": {
             "anyOf": [
