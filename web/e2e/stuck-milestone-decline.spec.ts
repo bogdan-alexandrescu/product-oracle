@@ -49,7 +49,7 @@ test("the company's owner declines a stuck milestone ask in the roadmap's Needs 
   await open(page, "/simple/roadmap");
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   const tray = page.getByTestId("decision-tray");
-  const asks = tray.getByTestId("tray-proposal").filter({ hasText: "PRD milestone ‘Digest for all teams’: change a milestone" });
+  const asks = tray.getByTestId("tray-proposal").filter({ hasText: /PRD milestone ‘M\d+ Digest for all teams’: change a milestone/ });
   await page.getByTestId("needs-decision").click();
   await expect(tray).toBeVisible();
   await expect(asks).toHaveCount(2);
