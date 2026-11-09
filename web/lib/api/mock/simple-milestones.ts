@@ -20,8 +20,9 @@ export interface MockMilestone {
   gates: string[];
   counts_when: string;
   progress: Progress;
-  /** The PRD it comes from (slug), drawn hollow; a change to it asks the PRD's owner. */
-  prd?: { slug: string; title: string; owner: string } | null;
+  /** The PRD it comes from (slug), drawn hollow; a change to it asks the PRD's owners. `owner`:
+   * the owner it names; `owner_id`: that person's id, when they are a member (by id, never by name). */
+  prd?: { slug: string; title: string; owner: string; owner_id?: string } | null;
   pending?: Schemas["SimpleMilestonePending"] | null;
   deleted?: boolean;
   /** old-milestones: carried onto the company roadmap (its copy's id), or dropped by an owner. */
@@ -131,7 +132,7 @@ export function seedPrdMilestones(): MockMilestone[] {
   ];
 }
 
-/** roadmap-decide: a change asked of a PRD's milestone (goal_milestones._propose_prd_change), waiting on the PRD's owner. */
+/** roadmap-decide: a change asked of a PRD's milestone (goal_milestones._propose_prd_change), waiting on the PRD's owners. */
 function prdAsk(m: MockMilestone, id: string, after: { date: string | null; counts_when: string | null }, by: string, byName: string, at: string, routed: string[]): Schemas["SimpleChangeOut"] {
   return {
     id, session_id: null, document_id: stableUuid(`simple-doc/${m.prd!.slug}`), op: "edit_goal_milestone", draft_ids: [],
@@ -147,12 +148,14 @@ function prdAsk(m: MockMilestone, id: string, after: { date: string | null; coun
  * stuck-milestone-decline ("simple-prd-milestone-stuck" scenario): M2's first ask (Jan 5, Nov 4)
  * still waits though the milestone now waits on a second (Jan 12): only declining closes it.
  * M4 Routing by team is gone (its row deleted) with an ask on it (Mar 15, Nov 3) still waiting.
- * Here Usage alerts is owned by Priya Raman (approver@example.com), who is not a company owner;
- * `routed`: her id, whom the asks are sent to.
+ * Here Usage alerts is owned by Priya Raman (approver@example.com, `ownerId`), who is not a company
+ * owner; `routedOf`: the PRD's owners (drafts.who), whom the asks are sent to.
  */
-export function seedStuckPrdAsk(milestones: MockMilestone[], routed: string[] = []): Schemas["SimpleChangeOut"][] {
+export function seedStuckPrdAsk(milestones: MockMilestone[], ownerId: string, routedOf: (prdSlug: string) => string[]): Schemas["SimpleChangeOut"][] {
   const m = milestones.find((x) => x.id === stableUuid("simple-gm/p2"))!;
   m.prd!.owner = "Priya Raman";
+  m.prd!.owner_id = ownerId;
+  const routed = routedOf(m.prd!.slug);
   const by = stableUuid("simple-user/sam-lee");
   const stuck = prdAsk(m, stableUuid("simple-gm-change/stuck/first"), { date: "2027-01-05", counts_when: m.counts_when }, by, "Sam Lee", "2026-11-04T17:00:00Z", routed);
   const next = prdAsk(m, stableUuid("simple-gm-change/stuck/second"), { date: "2027-01-12", counts_when: m.counts_when }, by, "Sam Lee", "2026-11-05T17:00:00Z", routed);
@@ -163,9 +166,16 @@ export function seedStuckPrdAsk(milestones: MockMilestone[], routed: string[] = 
   return [orphan, stuck, next];
 }
 
-/** roadmap-decide: whether the reader decides a change asked of the milestone's PRD (its owner, or a company owner). */
-export const decidesAsk = (m: Pick<MockMilestone, "prd">, me: { role: string; name?: string } | undefined): boolean =>
-  !!m.prd && !!me && (me.role === "owner" || me.name === m.prd.owner);
+/** Who reads or asks of a PRD's milestone: `prdOwners`, the PRD's owners by its slug (drafts.who, ./simple-roadmap.ts prdOwnerIdsOf). */
+export interface MilestoneReader {
+  role: string;
+  id?: string;
+  prdOwners?: (prdSlug: string) => string[];
+}
+
+/** roadmap-decide: whether the reader decides a change asked of the milestone's PRD (one of its owners, or a company owner). */
+export const decidesAsk = (m: Pick<MockMilestone, "prd">, me: MilestoneReader | undefined): boolean =>
+  !!m.prd && !!me && (me.role === "owner" || (!!me.id && (me.prdOwners?.(m.prd.slug) ?? []).includes(me.id)));
 
 /**
  * old-milestones ("old-milestones" scenario, on top of "one-roadmap"): the older Trust plan
@@ -181,7 +191,7 @@ export function seedOldMilestones(oldRoadmap: string): MockMilestone[] {
   ];
 }
 
-export function milestoneOut(m: MockMilestone, ids: Record<string, string>, canChange: boolean, canPropose = false, me?: { role: string; name?: string }, titleOf: (slug: string) => string = (slug) => slug): Schemas["SimpleGoalMilestone"] {
+export function milestoneOut(m: MockMilestone, ids: Record<string, string>, canChange: boolean, canPropose = false, me?: MilestoneReader, titleOf: (slug: string) => string = (slug) => slug): Schemas["SimpleGoalMilestone"] {
   return {
     id: m.id,
     roadmap_id: stableUuid(`simple-doc/${m.roadmap}`),
@@ -230,7 +240,7 @@ const json = (status: number, body: unknown): Response => new Response(status ==
 /** POST/PATCH/DELETE /v1/simple/roadmap/milestones[/{id}[/restore]], as oracle.simple.router. */
 export async function routeMilestones(
   db: { goal_milestones?: MockMilestone[]; ids: Record<string, string>; changes?: Schemas["SimpleChangeOut"][] },
-  me: { id?: string; role: string; name?: string; names?: Record<string, string>; owners?: string[] },
+  me: MilestoneReader & { name?: string; names?: Record<string, string>; owners?: string[] },
   req: Request,
   p: string[],
   slugOf: (id: string) => string | null,
@@ -282,7 +292,7 @@ export async function routeMilestones(
         const id = stableUuid(`simple-gm-change/${m.id}/${b.date}/${n}`);
         m.pending = { date: b.date ?? m.date, counts_when: b.counts_when ?? null, asked_of: m.prd.owner, change_id: id, can_decide: false };
         // Sent to the PRD's owners, else the company's owners (_propose_prd_change's routed_to).
-        const owners = Object.keys(me.names ?? {}).filter((k) => me.names![k] === m.prd!.owner);
+        const owners = me.prdOwners?.(m.prd.slug) ?? [];
         const routed = owners.length ? owners : (me.owners ?? []);
         changes.push(prdAsk(m, id, { date: m.pending.date ?? null, counts_when: m.pending.counts_when ?? m.counts_when }, me.id ?? "", (me.id && me.names?.[me.id]) || me.name || "someone", new Date().toISOString(), routed));
       }

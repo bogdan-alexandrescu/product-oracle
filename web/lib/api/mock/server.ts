@@ -209,7 +209,7 @@ import { knowPrdOrder } from "./prd-rank";
 import { openDraft } from "./simple-roadmap";
 import { appliedVersionOf, approvedPrdToDraft, dateSourceItem, dateSuggestionInboxRows, dependOnOtherPrd, itemOfOtherPrd, itemSubjectName, knowCompanyGoals, knowExtraRoadmaps, knowGoalOrderGoals, knowGoalParents, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedPrdCalmPage, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { applyFitDate, companyToday, forgetRoadmapReads, knowGoalMapItems, ownPrd, roadmapReadsAt, seedFitDateRoadmap } from "./simple-roadmap";
-import { closed, GOALS, MAP_GOALS, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
+import { closed, GOALS, MAP_GOALS, prdOwnerIdsOf, prdTrackOwnerIds, seesDraft, shownDates, storedDates } from "./simple-roadmap";
 import { goalMapGoals, goalMapIdOf, goalMapItems, ladderMilestones, routeGoalMap, routeLadderMilestone, seedGoalMap, SCOREBOARD, SCOREBOARD_SCENARIO, scoreboardGoals, type GoalMap } from "./goal-map";
 import { LADDER_KR_SCENARIO, LADDER_SCENARIO, ladderGoals, ladderItems } from "./goal-ladder";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
@@ -4102,7 +4102,7 @@ function load(): Db {
                     (db.simple_roadmap = seedSimpleRoadmap()).goal_milestones = scenario === "simple-milestones" ? seedOwnMilestones() : seedPrdMilestones();
                     return db;
                   }
-              : scenario === "simple-prd-milestone-stuck" || scenario === "simple-prd-milestones-gone"
+              : scenario === "simple-prd-milestone-stuck" || scenario === "simple-prd-milestones-gone" || scenario === "simple-prd-milestone-track-owner"
                 ? () => {
                     // stuck-milestone-decline: a PRD milestone's ask that its milestone no longer waits on.
                     // Usage alerts' required reviewer is commenter@example.com; its asks go to its owner, approver@example.com.
@@ -4110,8 +4110,19 @@ function load(): Db {
                     const at = (email: string) => db.members.find((m) => m.email === email)!.id;
                     const rm = (db.simple_roadmap = seedSimpleRoadmap());
                     const ms = (rm.goal_milestones = seedPrdMilestones());
-                    rm.changes = seedStuckPrdAsk(ms, [at("approver@example.com")]);
-                    rm.reviewers = { "usage-alerts": [at("commenter@example.com")] };
+                    if (scenario === "simple-prd-milestone-track-owner") {
+                      // stuck-ask-minors: Rowan Pike (an invented approver) owns Usage alerts' track, and a
+                      // second member shares its named owner's name (Priya Raman).
+                      const join = (email: string, name: string) => {
+                        const m = { email, name, role: "approver" as const, engineering_lead: false, created_at: "2026-09-10T09:00:00Z", id: uuid(), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0 };
+                        db.members.push(m);
+                        return m.id;
+                      };
+                      rm.track_owners = { alerts: join("rowan.pike@example.com", "Rowan Pike") };
+                      join("priya.r@example.com", "Priya Raman");
+                    }
+                    rm.changes = seedStuckPrdAsk(ms, at("approver@example.com"), (slug) => prdOwnerIdsOf(rm, slug));
+                    rm.prd_reviewers = { "usage-alerts": [at("commenter@example.com")] };
                     if (scenario === "simple-prd-milestones-gone") {
                       // stuck-ask-minors: every Usage alerts milestone is gone; approver@example.com owns its track.
                       rm.goal_milestones = ms.filter((m) => !m.prd);
