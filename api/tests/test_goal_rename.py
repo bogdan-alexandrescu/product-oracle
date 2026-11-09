@@ -24,8 +24,9 @@ Test cards (protects / fails_when / no_claim):
   refused with the same plain words as a whitespace one, on create and rename; fails_when=the
   API answers pydantic's "at least 1 character" detail.
 - test_without_placeholders: protects=the placeholder guard drops the forms an import writes
-  ("[n]", "[n] of [n]", "[n] out of [n]", "[x]", "[#]", "[?]", "[tbd]", lowercase) and tidies
-  the spaces; fails_when=a placeholder or a double space is left; no_claim=placeholders
+  ("[n]", "[n] of [n]", "[n] out of [n]", "[x]", "[#]", "[?]", "[tbd]", lowercase), with a "%",
+  "/", "Of" or "Out Of" whose only operand it was, and tidies the spaces; fails_when=a
+  placeholder, a stray "%", "/" or "Of", or a double space is left; no_claim=placeholders
   without square brackets.
 - test_a_real_bracketed_word_stays_in_a_goal_name: protects=a capitalised or other bracketed
   word ("Project [X]", "Price [Value]", "Launch [beta]") is kept; fails_when=it is stripped.
@@ -230,6 +231,15 @@ def test_without_placeholders():
     )
     assert goals.without_placeholders("Keep [optional] notes [1] here") == (
         "Keep [optional] notes [1] here"
+    )
+    # A symbol or joining word whose only operand was a placeholder goes with it.
+    assert goals.without_placeholders("Cut churn by [n]% this year") == "Cut churn by this year"
+    assert goals.without_placeholders("Close [n]/[n] tickets") == "Close tickets"
+    assert goals.without_placeholders("KR [n] Of [n] Agents") == "KR Agents"
+    assert goals.without_placeholders("Reach [x] Out Of [x] teams") == "Reach teams"
+    assert (
+        goals.without_placeholders("Grow 10% to [n] users, 3/4 done")
+        == "Grow 10% to users, 3/4 done"
     )
     assert goals.without_placeholders(None) is None
 
