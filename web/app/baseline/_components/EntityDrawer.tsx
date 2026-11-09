@@ -1122,10 +1122,19 @@ const within = (group: string | undefined, label: string) => (group ? `${group}:
 /** A number as a person types one: plain decimal digits, no hex ("0x10") or exponent ("1e3"). */
 const DECIMAL = /^[+-]?(?:\d+\.?\d*|\.\d+)$/;
 
+/** Typed with leading zeros ("007"), as a code is, not "0" or "0.5". */
+const ZEROS = /^[+-]?0\d/;
+
+/** A typed plain decimal as a number, or undefined (one too long to hold, 309 digits or more, included). */
+function decimalOf(typed: string): number | undefined {
+  const n = DECIMAL.test(typed) ? Number(typed) : NaN;
+  return Number.isFinite(n) ? n : undefined;
+}
+
 /** A typed number, or the error its field shows. */
 function numberOf(typed: string, label: string): number {
-  const n = Number(typed);
-  if (!Number.isFinite(n)) throw new Error(`${label} must be a number.`);
+  const n = decimalOf(typed);
+  if (n === undefined) throw new Error(`${label} must be a number.`);
   return n;
 }
 
@@ -1171,7 +1180,7 @@ function storedOf(d: Draft, label: string, group?: string): unknown {
   if (typed === d.start.trim()) return d.was === undefined ? GONE : d.was;
   if (!typed) return GONE;
   if (d.kind === "bool") return typed === "yes";
-  if (d.loose) return DECIMAL.test(typed) ? Number(typed) : typed;
+  if (d.loose) return ZEROS.test(typed) ? typed : (decimalOf(typed) ?? typed);
   return d.kind === "number" ? numberOf(typed, within(group, label)) : typed;
 }
 
@@ -1180,9 +1189,9 @@ function emptied(d: Draft, v: unknown): unknown {
   return v !== d.was && hollow(v) ? GONE : v;
 }
 
-/** An object or a list holding no value but empty objects and lists. */
+/** An object or a list holding no value but nulls and empty objects and lists. */
 function hollow(v: unknown): boolean {
-  return v != null && typeof v === "object" && Object.values(v).every(hollow);
+  return v === null || (typeof v === "object" && Object.values(v as object).every(hollow));
 }
 
 /**
