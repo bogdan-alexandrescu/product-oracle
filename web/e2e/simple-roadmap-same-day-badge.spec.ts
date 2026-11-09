@@ -71,8 +71,9 @@ for (const [zoom, name] of [
     const own = await boxOf(page.locator('[data-testid="ms-diamond"][title$="Nov 20, 2026"]'));
     expect(b.x).toBeGreaterThan(own.x);
     expect(b.x).toBeLessThan(own.x + own.width);
-    // Its count alone in sight, the names of both in its tooltip.
-    expect((await badge.innerText()).trim()).toBe("2");
+    // Its count alone in sight (a screen reader also hears the day), the names of both in its tooltip.
+    expect(await badge.evaluate((e) => e.firstChild?.textContent)).toBe("2");
+    expect(b.width).toBeLessThanOrEqual(20);
     await expect(badge).toHaveAttribute("title", /^2 milestones on Nov 20: .*M1 First alert within a day.*Setup checks for new teams|^2 milestones on Nov 20: .*Setup checks for new teams.*M1 First alert within a day/);
     await next.click();
     await expect(page.getByTestId("ms-prd-card")).toBeVisible();
